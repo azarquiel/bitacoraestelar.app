@@ -195,7 +195,7 @@
     pointer-events: none;
     transition: opacity 0.6s ease;
     white-space: nowrap;
-  ">Arrastra para explorar · rueda para zoom · pulsa un objeto para ver su ficha</div>
+  ">Arrastra para explorar · rueda o pellizca para zoom · pulsa un objeto para ver su ficha</div>
 
   <div style="
     position: absolute;
@@ -277,14 +277,18 @@
     z-index: 99999;
     align-items: center;
     justify-content: center;
-    padding: 18px;
+    padding: clamp(6px, 2vw, 18px);
+    box-sizing: border-box;
     cursor: default;
+    touch-action: none;
   ">
     <div id="m1-pdf-window" style="
       position: relative;
       width: min(1200px, 100%);
+      max-width: 100%;
       height: 100%;
       max-height: 100%;
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       background: #0b0e14;
@@ -364,14 +368,18 @@
     z-index: 99999;
     align-items: center;
     justify-content: center;
-    padding: 18px;
+    padding: clamp(6px, 2vw, 18px);
+    box-sizing: border-box;
     cursor: default;
+    touch-action: none;
   ">
   <div style="
       position: relative;
       width: min(1100px, 100%);
+      max-width: 100%;
       height: auto;
       max-height: 100%;
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       background: rgba(0, 0, 0, 0.55);
@@ -380,7 +388,8 @@
       border: 1px solid rgba(126, 200, 255, 0.45);
       border-radius: 10px;
       box-shadow: 0 0 40px rgba(126, 200, 255, 0.25);
-      overflow: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     ">
     <div style="
         display: flex;
@@ -453,7 +462,7 @@
            diseño más homogéneo entre imagen y texto. -->
       <div style="
           flex: 1 1 540px;
-          min-width: 510px;
+          min-width: 0;
           display: flex;
           flex-wrap: wrap;
           border-left: 1px solid rgba(126, 200, 255, 0.15);
@@ -466,8 +475,9 @@
             font-family: Georgia, 'Times New Roman', serif;
             font-size: 15px;
             line-height: 1.6;
-            max-height: 70vh;
+            max-height: min(70vh, 520px);
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             background: transparent;
           "></div>
 
@@ -883,7 +893,7 @@
   }
 
   viewer.addEventListener('mousedown', function (e) {
-    if (pdfOverlay.style.display === 'flex') return;
+    if (overlayOpen()) return;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     isDragging = true;
     viewer.style.cursor = 'grabbing';
@@ -908,33 +918,116 @@
     viewer.style.cursor = 'grab';
   });
 
+  // --------------------------------------------------------------------------
+  // GESTOS TÁCTILES (tablet/móvil)
+  //  - 1 dedo: arrastrar para desplazar el mapa.
+  //  - 2 dedos: "pellizcar" (pinch) para hacer zoom, centrado entre los dedos,
+  //    y arrastrar simultáneamente para desplazar.
+  // Los listeners son passive:false para poder llamar a preventDefault() y
+  // evitar que el navegador interprete el gesto como scroll de la página.
+  // --------------------------------------------------------------------------
+
+  // Devuelve true si CUALQUIER ventana modal (ficha en PDF o ficha interactiva)
+  // está abierta. Cuando lo está, el visor ignora todos los gestos para que el
+  // dedo controle la ventana (scroll del texto, etc.) y no el mapa de fondo.
+  function overlayOpen() {
+    var pdfO = document.getElementById('m1-pdf-overlay');
+    var fichaO = document.getElementById('ficha-overlay');
+    return (pdfO && pdfO.style.display === 'flex') ||
+           (fichaO && fichaO.style.display === 'flex');
+  }
+
+  var pinchStartDist = 0;     // distancia entre los dos dedos al iniciar el pinch
+  var pinchStartScale = 1;    // escala del mapa al iniciar el pinch
+  var isPinching = false;
+
+  function touchDistance(t1, t2) {
+    var dx = t2.clientX - t1.clientX;
+    var dy = t2.clientY - t1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function touchMidpoint(t1, t2) {
+    return {
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2
+    };
+  }
+
   viewer.addEventListener('touchstart', function (e) {
-    if (pdfOverlay.style.display === 'flex') return;
+    if (overlayOpen()) return;
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+
     if (e.touches.length === 1) {
-      if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+      // Arrastre con un dedo
+      isPinching = false;
       isDragging = true;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       startPosX = posX;
       startPosY = posY;
       hideHint();
+    } else if (e.touches.length === 2) {
+      // Inicio de pinch-zoom con dos dedos
+      isPinching = true;
+      isDragging = false;
+      pinchStartDist = touchDistance(e.touches[0], e.touches[1]);
+      pinchStartScale = scale;
+      var mid = touchMidpoint(e.touches[0], e.touches[1]);
+      startX = mid.x;
+      startY = mid.y;
+      startPosX = posX;
+      startPosY = posY;
+      hideHint();
+      e.preventDefault();
     }
-  }, { passive: true });
+  }, { passive: false });
 
   viewer.addEventListener('touchmove', function (e) {
-    if (!isDragging || e.touches.length !== 1) return;
-    posX = startPosX + (e.touches[0].clientX - startX);
-    posY = startPosY + (e.touches[0].clientY - startY);
-    clampPosition();
-    applyTransform();
-  }, { passive: true });
+    if (overlayOpen()) return;
 
-  viewer.addEventListener('touchend', function () {
-    isDragging = false;
+    if (isPinching && e.touches.length === 2) {
+      e.preventDefault();
+      var dist = touchDistance(e.touches[0], e.touches[1]);
+      if (pinchStartDist > 0) {
+        var targetScale = Math.min(maxScale, Math.max(minScale,
+          pinchStartScale * (dist / pinchStartDist)));
+        // Punto medio actual: el zoom se centra ahí y además permite
+        // desplazar el mapa mientras se hace el pellizco.
+        var mid = touchMidpoint(e.touches[0], e.touches[1]);
+        // Primero aplicamos el desplazamiento del punto medio (pan)
+        posX = startPosX + (mid.x - startX);
+        posY = startPosY + (mid.y - startY);
+        // Luego el zoom centrado en el punto medio actual
+        zoomAt(mid.x, mid.y, targetScale);
+      }
+    } else if (isDragging && e.touches.length === 1) {
+      e.preventDefault();
+      posX = startPosX + (e.touches[0].clientX - startX);
+      posY = startPosY + (e.touches[0].clientY - startY);
+      clampPosition();
+      applyTransform();
+    }
+  }, { passive: false });
+
+  viewer.addEventListener('touchend', function (e) {
+    if (e.touches.length === 0) {
+      // Se han levantado todos los dedos
+      isDragging = false;
+      isPinching = false;
+    } else if (e.touches.length === 1) {
+      // Queda un dedo: pasamos de pinch a arrastre con ese dedo
+      isPinching = false;
+      isDragging = true;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startPosX = posX;
+      startPosY = posY;
+    }
   });
 
   viewer.addEventListener('wheel', function (e) {
-    if (pdfOverlay.style.display === 'flex') return;
+    if (overlayOpen()) return;
     e.preventDefault();
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     var factor = e.deltaY > 0 ? 0.85 : 1.18;
@@ -1023,6 +1116,8 @@
     // El aviso de respaldo queda DETRÁS del iframe y no bloquea eventos
     pdfFallback.style.display = 'flex';
     pdfOverlay.style.display = 'flex';
+    isDragging = false;
+    isPinching = false;
     hideHint();
   }
 
@@ -2063,6 +2158,8 @@
     fichaPdfLink.href = f.pdf;
     buildFichaButtons(f);
     fichaOverlay.style.display = 'flex';
+    isDragging = false;
+    isPinching = false;
     hideHint();
     selectFichaEntry(f, f.defaultIndex || 0);
   }
