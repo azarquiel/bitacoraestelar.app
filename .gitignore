@@ -2,3 +2,6 @@
 
 # Ignorar un archivo pesado específico
 Gaia_s_sky_in_colour.png
+
+# Ignorar ficheros creados por MacOS
+.DS_Store
