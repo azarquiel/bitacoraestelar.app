@@ -37,30 +37,30 @@
 ">
   <div id="mw-content" style="
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(1);
-    display: inline-block;
+    inset: 0;
+    transform-origin: center center;
+    transform: translate(0px, 0px) scale(1);
   ">
     <img id="mw-image" src="https://www.esa.int/var/esa/storage/images/esa_multimedia/images/2025/01/the_best_milky_way_map_by_gaia/26530986-1-eng-GB/The_best_Milky_Way_map_by_Gaia.jpg" alt="Mapa cenital de la Vía Láctea (Gaia)"
       style="
-        display: block;
-        max-width: none;
-        width: auto;
-        height: auto;
-        max-width: 100%;
-        max-height: 100%;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center;
         pointer-events: none;
       " draggable="false" />
 #https://www.esa.int/var/esa/storage/images/esa_multimedia/images/2025/01/the_best_milky_way_map_by_gaia_edge-on/26531727-1-eng-GB/The_best_Milky_Way_map_by_Gaia_edge-on.jpg"
     <img id="mw-image-edge" src="resources/images/MilkyWay_25J14_40KPC_Edge_10K.webp" alt="Vía Láctea vista de canto (Gaia)"
       style="
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center;
         display: none;
-        max-width: none;
-        width: auto;
-        height: auto;
-        max-width: 100%;
-        max-height: 100%;
         pointer-events: none;
       " draggable="false" />
 
@@ -68,8 +68,8 @@
     <div id="sun-edge-anchor" style="
       position: absolute;
       display: none;
-      top: 51.15%;
-      left: 26.75%;
+      top: 0;
+      left: 0;
       width: 0;
       height: 0;
     ">
@@ -124,8 +124,8 @@
     <!-- MARCADOR DEL SOL EN VISTA CENITAL -->
     <div id="mw-sun-anchor" style="
       position: absolute;
-      top: 68.25%;
-      left: 52.25%;
+      top: 0;
+      left: 0;
       width: 0;
       height: 0;
     ">
@@ -523,6 +523,50 @@
 <script>
 (function () {
   // ===========================================================================
+  // ██████████████████████████████████████████████████████████████████████████
+  //  CONFIGURACIÓN GLOBAL — todos los parámetros que puedes querer ajustar
+  //  están aquí. No necesitas tocar nada más en el resto del código.
+  // ██████████████████████████████████████████████████████████████████████████
+  // ===========================================================================
+
+  var CONFIG = {
+
+    // -------------------------------------------------------------------------
+    // POSICIÓN DEL SOL EN CADA VISTA
+    //   Valores en % (0-100) sobre la imagen real de la galaxia.
+    //   x = eje horizontal (0 = borde izquierdo, 100 = borde derecho)
+    //   y = eje vertical   (0 = borde superior,  100 = borde inferior)
+    // -------------------------------------------------------------------------
+    sol: {
+      cenital: { x: 52.35, y: 71.15 }, // vista desde el polo norte galáctico
+      canto:   { x: 26.75, y: 49.00 }  // vista lateral del disco
+    },
+
+    // -------------------------------------------------------------------------
+    // TAMAÑO DE LOS MARCADORES DE OBJETOS EN EL MAPA
+    //   puntoDiametro : diámetro del punto de color en píxeles
+    //   textoTamano   : tamaño de la etiqueta junto al punto (CSS font-size)
+    // -------------------------------------------------------------------------
+    marcadores: {
+      puntoDiametro: 5,        // px — prueba valores entre 4 y 10
+      textoTamano:   '11px'    // CSS — p.ej. '10px', '12px', '0.8rem'
+    },
+
+    // -------------------------------------------------------------------------
+    // VELOCIDAD DEL FUNDIDO AL CAMBIAR DE IMAGEN EN LAS FICHAS
+    //   Tiempo en milisegundos. 800 = lento y elegante; 200 = casi instantáneo.
+    //   Todo lo demás (transiciones CSS, pausas internas) se calcula solo.
+    // -------------------------------------------------------------------------
+    fundido: {
+      duracionMs: 600
+    }
+
+  };
+  // ===========================================================================
+  //  FIN DE CONFIGURACIÓN — no modifiques nada por debajo de esta línea
+  //  salvo que sepas lo que haces.
+  // ===========================================================================
+  // ===========================================================================
   // TABLA DE OBJETOS: añade aquí nuevos objetos Messier.
   //   id     : identificador único, sin espacios
   //   name   : título que aparece en la ventana del PDF
@@ -541,64 +585,64 @@
       color: '#7ec8ff', ficha: 'm1',
       coords: 'l ≈ 184,6°, b ≈ -5,8° · ~6.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m1_inv.pdf',
-      top:  { x: 52.9, y: 71.8 },
-      edge: { x: 20.1, y: 51.4 }
+      top:  { x: 53.0, y: 74.7 },
+      edge: { x: 20.1, y: 49.3 }
     },
     {
       id: 'm2', name: 'M2 · Cúmulo globular (Acuario)', label: 'M2',
 		color: '#d7a4ff', ficha: 'm2',
       coords: 'l ≈ 53,4°, b ≈ -35,8° · ~37.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m2_inv.pdf',
-      top:  { x: 37.7, y: 59.4 },
-      edge: { x: 45.5, y: 61.2 }
+      top:  { x: 37.8, y: 62.3 },
+      edge: { x: 45.5, y: 59.0 }
     },
     {
       id: 'm4', name: 'M4 · Cúmulo globular (Escorpio)', label: 'M4',
       color: '#d7a4ff', ficha: 'm4',
       coords: 'l ≈ 351,0°, b ≈ +16,0° · ~6.200 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m4_inv.pdf',
-      top:  { x: 52.5, y: 64.9 },
-      edge: { x: 32.9, y: 50.4 }
+      top:  { x: 52.6, y: 67.8 },
+      edge: { x: 32.9, y: 48.2 }
     },
     {
       id: 'm5', name: 'M5 · Cúmulo globular (Serpens)', label: 'M5',
       color: '#d7a4ff', ficha: 'm5',
       coords: 'l ≈ 3,9°, b ≈ +46,8° · ~24.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m5_inv.pdf',
-      top:  { x: 50.7, y: 59.0 },
-      edge: { x: 44.1, y: 43.1 }
+      top:  { x: 50.9, y: 61.9 },
+      edge: { x: 44.1, y: 40.9 }
     },
     {
       id: 'm8', name: 'M8 · Nebulosa de la Laguna (Sagitario)', label: 'M8',
       color: '#ff8a80', ficha: 'm8',
       coords: 'l ≈ 6,0°, b ≈ -1,2° · ~4.100 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m8_inv.pdf',
-      top:  { x: 51.8, y: 66.0 },
-      edge: { x: 31.0, y: 51.2 }
+      top:  { x: 51.9, y: 68.9 },
+      edge: { x: 31.0, y: 49.0 }
     },
     {
       id: 'm9', name: 'M9 · Cúmulo globular (Ofiuco)', label: 'M9',
       color: '#d7a4ff', ficha: 'm9',
       coords: 'l ≈ 5,5°, b ≈ +10,3° · ~25.800 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m9_inv.pdf',
-      top:  { x: 49.6, y: 54.3 },
-      edge: { x: 53.0, y: 49.1 }
+      top:  { x: 49.7, y: 57.2 },
+      edge: { x: 53.0, y: 47.0 }
     },
     {
       id: 'm10', name: 'M10 · Cúmulo globular (Ofiuco)', label: 'M10',
       color: '#d7a4ff', ficha: 'm10',
       coords: 'l ≈ 15,1°, b ≈ +23,1° · ~14.400 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m10_inv.pdf',
-      top:  { x: 49.7, y: 61.3 },
-      edge: { x: 40.0, y: 48.6 }
+      top:  { x: 49.8, y: 64.2 },
+      edge: { x: 40.0, y: 46.5 }
     },
     {
       id: 'm11', name: 'M11 · Cúmulo del Pato Salvaje (Scutum)', label: 'M11',
       color: '#8aff9e', ficha: 'm11',
       coords: 'l ≈ 27,3°, b ≈ -2,8° · ~6.200 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m11_inv.pdf',
-      top:  { x: 50.4, y: 65.3 },
-      edge: { x: 32.5, y: 51.3 }
+      top:  { x: 50.5, y: 68.2 },
+      edge: { x: 32.5, y: 49.2 }
     },
     // NOTA: las posiciones top/edge de M12-M15 son una primera estimación
     // (a partir de l, b y distancia aproximadas) pendiente de ajuste visual
@@ -608,72 +652,72 @@
       color: '#d7a4ff', ficha: 'm12',
       coords: 'l ≈ 15,7°, b ≈ +26,3° · ~16.000 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m12_inv.pdf',
-      top:  { x: 49.4, y: 60.7 },
-      edge: { x: 41.1, y: 48.0 }
+      top:  { x: 49.5, y: 63.7 },
+      edge: { x: 41.1, y: 45.8 }
     },
     {
       id: 'm13', name: 'M13 · Gran cúmulo de Hércules', label: 'M13',
       color: '#d7a4ff', ficha: 'm13',
       coords: 'l ≈ 59,0°, b ≈ +40,9° · ~22.200 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m13_inv.pdf',
-      top:  { x: 43.8, y: 64.2 },
-      edge: { x: 35.8, y: 44.6 }
+      top:  { x: 43.9, y: 67.1 },
+      edge: { x: 35.6, y: 42.5 }
     },
     {
       id: 'm14', name: 'M14 · Cúmulo globular (Ofiuco)', label: 'M14',
       color: '#d7a4ff', ficha: 'm14',
       coords: 'l ≈ 21,3°, b ≈ +14,8° · ~30.300 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m14_inv.pdf',
-      top:  { x: 44.9, y: 53.6 },
-      edge: { x: 55.1, y: 47.7 }
+      top:  { x: 45.0, y: 56.5 },
+      edge: { x: 55.0, y: 45.6 }
     },
     {
       id: 'm15', name: 'M15 · Gran cúmulo globular de Pegaso', label: 'M15',
       color: '#d7a4ff', ficha: 'm15',
       coords: 'l ≈ 65,0°, b ≈ -27,3° · ~33.600 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m15_inv.pdf',
-      top:  { x: 36.5, y: 62.6 },
-      edge: { x: 39.8, y: 58.2 }
+      top:  { x: 36.6, y: 65.5 },
+      edge: { x: 39.7, y: 56.1 }
     },
     {
       id: 'ngc40', name: 'NGC 40 · Nebulosa de la Pajarita (Cefeo)', label: 'NGC 40',
       color: '#5fe0c8', ficha: 'ngc40',
       coords: 'l ≈ 120,0°, b ≈ +9,8° · ~5.300 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/ngc40_inv.pdf',
-      top:  { x: 49.9, y: 69.9 },
-      edge: { x: 24.1, y: 50.8 }
+      top:  { x: 50.0, y: 72.8 },
+      edge: { x: 24.0, y: 48.6 }
     },
     {
       id: 'ngc6826', name: 'NGC 6826 · Nebulosa Parpadeante (Cisne)', label: 'NGC 6826',
       color: '#5fe0c8', ficha: 'ngc6826',
       coords: 'l ≈ 83,5°, b ≈ +12,7° · ~2.200 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/ngc6826_inv.pdf',
-      top:  { x: 51.0, y: 68.2 },
-      edge: { x: 27.0, y: 50.9 }
+      top:  { x: 51.1, y: 71.1 },
+      edge: { x: 27.0, y: 48.8 }
     },
     {
       id: 'ngc6905', name: 'NGC 6905 · Nebulosa del Fogonazo Azul (Delfín)', label: 'NGC 6905',
       color: '#5fe0c8', ficha: 'ngc6905',
       coords: 'l ≈ 61,5°, b ≈ -9,6° · ~7.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/ngc6905_inv.pdf',
-      top:  { x: 48.4, y: 66.6 },
-      edge: { x: 30.4, y: 51.7 }
+      top:  { x: 48.5, y: 69.5 },
+      edge: { x: 30.4, y: 49.6 }
     },
     {
       id: 'm17', name: 'M17 · Nebulosa Omega (Sagitario)', label: 'M17',
       color: '#ff8a80', ficha: 'm17',
       coords: 'l ≈ 15,1°, b ≈ -0,7° · ~5.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m17_inv.pdf',
-      top:  { x: 51.2, y: 65.4 },
-      edge: { x: 32.3, y: 51.2 }
+      top:  { x: 51.3, y: 68.3 },
+      edge: { x: 32.3, y: 49.0 }
     },
     {
       id: 'm20', name: 'M20 · Nebulosa Trífida (Sagitario)', label: 'M20',
       color: '#ff8a80', ficha: 'm20',
       coords: 'l ≈ 7,0°, b ≈ -0,3° · ~4.100 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m20_inv.pdf',
-      top:  { x: 51.8, y: 66.0 },
-      edge: { x: 31.0, y: 51.2 }
+      top:  { x: 51.9, y: 68.9 },
+      edge: { x: 31.0, y: 49.0 }
     }
   ];
 
@@ -693,6 +737,72 @@
   var animFrame = null;
 
   // --------------------------------------------------------------------------
+  // CONVERSIÓN PORCENTAJE → PÍXEL ABSOLUTO
+  // Con object-fit:contain la imagen renderizada puede no llenar todo el
+  // contenedor: hay bandas negras a los lados o arriba/abajo según la
+  // relación de aspecto. getImgRect() devuelve el rect de la imagen real
+  // dentro del contenedor, y repositionAnchors() convierte los porcentajes
+  // data-x/data-y (que son % de la imagen, no del contenedor) a px absolutos
+  // dentro del contenedor. Así las posiciones son idénticas en cualquier
+  // pantalla o resolución.
+  // --------------------------------------------------------------------------
+  function getImgRect(imgEl) {
+    var cW = img.clientWidth;
+    var cH = img.clientHeight;
+    var nW = imgEl.naturalWidth  || cW;
+    var nH = imgEl.naturalHeight || cH;
+    var ratio = nW / nH;
+    var rW, rH;
+    if (cW / cH > ratio) {
+      // el contenedor es más ancho que la imagen: bandas a los lados
+      rH = cH;
+      rW = cH * ratio;
+    } else {
+      // el contenedor es más alto que la imagen: bandas arriba/abajo
+      rW = cW;
+      rH = cW / ratio;
+    }
+    return {
+      left:   (cW - rW) / 2,
+      top:    (cH - rH) / 2,
+      width:  rW,
+      height: rH
+    };
+  }
+
+  function repositionAnchors() {
+    var activeImg = isEdgeView
+      ? document.getElementById('mw-image-edge')
+      : document.getElementById('mw-image');
+    if (!activeImg || !activeImg.naturalWidth) return;
+
+    var r = getImgRect(activeImg);
+
+    // Sol cenital
+    var sunTop = document.getElementById('mw-sun-anchor');
+    if (sunTop) {
+      sunTop.style.left = (r.left + r.width  * (CONFIG.sol.cenital.x / 100)) + 'px';
+      sunTop.style.top  = (r.top  + r.height * (CONFIG.sol.cenital.y / 100)) + 'px';
+    }
+    // Sol de canto
+    var sunEdge = document.getElementById('sun-edge-anchor');
+    if (sunEdge) {
+      sunEdge.style.left = (r.left + r.width  * (CONFIG.sol.canto.x / 100)) + 'px';
+      sunEdge.style.top  = (r.top  + r.height * (CONFIG.sol.canto.y / 100)) + 'px';
+    }
+
+    // Todos los demás marcadores
+    var anchors = img.querySelectorAll('.mw-object-anchor');
+    for (var i = 0; i < anchors.length; i++) {
+      var a = anchors[i];
+      var xPct = parseFloat(a.getAttribute('data-x')) / 100;
+      var yPct = parseFloat(a.getAttribute('data-y')) / 100;
+      a.style.left = (r.left + r.width  * xPct) + 'px';
+      a.style.top  = (r.top  + r.height * yPct) + 'px';
+    }
+  }
+
+  // --------------------------------------------------------------------------
   // GENERACIÓN AUTOMÁTICA DE MARCADORES (ambas vistas) desde OBJECTS
   // --------------------------------------------------------------------------
   var topAnchors = [document.getElementById('mw-sun-anchor')];
@@ -709,6 +819,7 @@
     var pos = (view === 'edge') ? obj.edge : obj.top;
     var anchor = document.createElement('div');
     anchor.id = obj.id + (view === 'edge' ? '-edge' : '') + '-anchor';
+    // Posición inicial en % del contenedor; repositionAnchors() la corrige a px.
     anchor.style.cssText = 'position:absolute;width:0;height:0;' +
       'top:' + pos.y + '%;left:' + pos.x + '%;' +
       (view === 'edge' ? 'display:none;' : '');
@@ -744,7 +855,9 @@
     dot.setAttribute('data-title', obj.name);
     dot.setAttribute('data-coords', obj.coords);
     if (obj.ficha) dot.setAttribute('data-ficha', obj.ficha);
-    dot.style.cssText = 'position:absolute;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;' +
+    var pd = CONFIG.marcadores.puntoDiametro;
+    var ph = (pd / 2).toFixed(1);
+    dot.style.cssText = 'position:absolute;width:' + pd + 'px;height:' + pd + 'px;margin:-' + ph + 'px 0 0 -' + ph + 'px;' +
       'border-radius:50%;background:' + obj.color + ';' +
       'box-shadow:0 0 5px 1.5px ' + hexToRgba(obj.color, 0.9) + ';' +
       'pointer-events:auto;cursor:pointer;';
@@ -752,8 +865,16 @@
     var label = document.createElement('div');
     label.textContent = obj.label;
     label.style.cssText = 'position:absolute;transform:translate(6px,-6px);' +
-      'color:' + obj.color + ';font-family:sans-serif;font-size:10px;font-weight:500;' +
-      'text-shadow:0 0 4px rgba(0,0,0,0.9);pointer-events:none;white-space:nowrap;';
+      'color:' + obj.color + ';font-family:sans-serif;font-size:' + CONFIG.marcadores.textoTamano + ';font-weight:500;' +
+      'text-shadow:0 0 4px rgba(0,0,0,0.9);pointer-events:auto;cursor:pointer;white-space:nowrap;';
+
+    // La etiqueta comparte los mismos atributos que el punto para que al
+    // pulsarla dispare exactamente el mismo manejador (openObjectPdf).
+    label.setAttribute('data-pdf',    obj.pdf);
+    label.setAttribute('data-title',  obj.name);
+    label.setAttribute('data-coords', obj.coords);
+    if (obj.ficha) label.setAttribute('data-ficha', obj.ficha);
+    label.className = 'mw-pdf-dot'; // reutiliza la clase para el listener global
 
     content.appendChild(dot);
     content.appendChild(label);
@@ -815,7 +936,7 @@
   // --------------------------------------------------------------------------
   function applyTransform() {
     img.style.transform =
-      'translate(-50%, -50%) translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ')';
+      'translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ')';
 
     // Contraescala de los marcadores: al ampliar se encogen un poco en pantalla
     // (no del todo) para no tapar el mapa, manteniéndose legibles y pulsables.
@@ -868,8 +989,14 @@
 
   function clampPosition() {
     var viewerRect = viewer.getBoundingClientRect();
-    var limitX = (img.clientWidth * scale - viewerRect.width) / 2;
-    var limitY = (img.clientHeight * scale - viewerRect.height) / 2;
+    var activeImg = isEdgeView
+      ? document.getElementById('mw-image-edge')
+      : document.getElementById('mw-image');
+    var r = (activeImg && activeImg.naturalWidth)
+      ? getImgRect(activeImg)
+      : { width: viewerRect.width, height: viewerRect.height };
+    var limitX = (r.width  * scale - viewerRect.width)  / 2;
+    var limitY = (r.height * scale - viewerRect.height) / 2;
     posX = limitX > 0 ? Math.min(limitX, Math.max(-limitX, posX)) : 0;
     posY = limitY > 0 ? Math.min(limitY, Math.max(-limitY, posY)) : 0;
   }
@@ -1997,13 +2124,11 @@
   var fichaImgWrap = document.getElementById('ficha-img-wrap');
 
   // -------------------------------------------------------------------------
-  // VELOCIDAD DEL FUNDIDO ENTRE IMÁGENES (único valor a tocar).
-  // Cambia FADE_MS para hacer el tránsito más lento o más rápido (en ms).
-  // Todo lo demás (transiciones CSS y pausas de intercambio) se calcula solo.
+  // FUNDIDO (valores derivados de CONFIG — no tocar)
   // -------------------------------------------------------------------------
-  var FADE_MS = 600;
-  var FADE_CSS = 'opacity ' + (FADE_MS / 1000) + 's ease'; // p.ej. "opacity 0.8s ease"
-  var FADE_HALF = Math.round(FADE_MS / 2);                  // pausa antes de intercambiar
+  var FADE_MS   = CONFIG.fundido.duracionMs;
+  var FADE_CSS  = 'opacity ' + (FADE_MS / 1000) + 's ease';
+  var FADE_HALF = Math.round(FADE_MS / 2);
 
   function renderImgMosaic(f, entry, imgs) {
     fichaImgWrap.style.flexDirection = 'row';
@@ -2320,13 +2445,16 @@
     if (isEdgeView) {
       imgTop.style.display = 'none';
       imgEdge.style.display = 'block';
+      imgEdge.style.position = 'absolute';
       toggleBtn.textContent = '🔄 Vista cenital';
     } else {
       imgTop.style.display = 'block';
+      imgTop.style.position = 'absolute';
       imgEdge.style.display = 'none';
       toggleBtn.textContent = '🔄 Vista de canto';
     }
     refreshAnchors();
+    repositionAnchors();
 
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     scale = 1;
@@ -2334,6 +2462,27 @@
     posY = 0;
     applyTransform();
     hideHint();
+  });
+
+  // Reposicionar cuando carga cada imagen (la cenital es remota y puede tardar)
+  [imgTop, imgEdge].forEach(function (el) {
+    if (!el) return;
+    if (el.complete && el.naturalWidth) {
+      repositionAnchors();
+    } else {
+      el.addEventListener('load', function () { repositionAnchors(); });
+    }
+  });
+
+  // Reposicionar al redimensionar la ventana (cambia el tamaño del visor)
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      repositionAnchors();
+      clampPosition();
+      applyTransform();
+    }, 80);
   });
 
   // Leyenda interactiva: pulsar un tipo lo oculta/muestra en el mapa.
@@ -2355,6 +2504,7 @@
   }
 
   applyTransform();
+  repositionAnchors();
 })();
 </script>
 </li>
