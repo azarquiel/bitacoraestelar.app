@@ -319,6 +319,13 @@
 
   viewer.addEventListener('mousedown', function (e) {
     if (overlayOpen()) return;
+    // No arrastrar el mapa si el clic se originó en un control de la interfaz
+    // superpuesta (buscador, botones, leyenda). Sin esto, el preventDefault()
+    // de más abajo impediría enfocar el campo de búsqueda.
+    if (e.target.closest &&
+        e.target.closest('#mw-search, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
+      return;
+    }
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     isDragging = true;
     viewer.style.cursor = 'grabbing';
@@ -385,6 +392,12 @@
 
   viewer.addEventListener('touchstart', function (e) {
     if (overlayOpen()) return;
+    // No capturar el gesto si el toque empezó en un control de la interfaz
+    // (buscador, botones, leyenda), para que el campo pueda recibir el foco.
+    if (e.target.closest &&
+        e.target.closest('#mw-search, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
+      return;
+    }
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
     if (e.touches.length === 1) {
@@ -1337,8 +1350,14 @@
     searchInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
     });
-    // Evita que al escribir en el campo se disparen atajos del visor.
-    searchInput.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    // Evita que al interactuar con el campo se disparen los gestos del visor,
+    // y garantiza el foco al tocar/pulsar en ratón y en pantallas táctiles.
+    ['mousedown', 'touchstart', 'pointerdown', 'click'].forEach(function (ev) {
+      searchInput.addEventListener(ev, function (e) {
+        e.stopPropagation();
+        searchInput.focus();
+      });
+    });
   }
 
   applyTransform();
