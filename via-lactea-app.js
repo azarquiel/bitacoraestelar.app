@@ -1177,6 +1177,170 @@
     });
   }
 
+  // ===========================================================================
+  // BUSCADOR DE OBJETOS
+  //   - Centra el mapa en el objeto y aplica el zoom configurado.
+  //   - Hace parpadear su punto y su etiqueta durante unos segundos.
+  //   - Si no existe, muestra un aviso temporal (pop-up) que se autocierra.
+  // ===========================================================================
+  var searchInput = document.getElementById('mw-search');
+  var searchToast = document.getElementById('mw-search-toast');
+  var toastTimer = null;
+  var blinkTimer = null;
+
+  // Índice color → fila de la leyenda, para poder reactivar un tipo desde la
+  // búsqueda (restaurar su estilo y leer su nombre legible).
+  var legendByColor = {};
+  for (var lk = 0; lk < legendItems.length; lk++) {
+    legendByColor[legendItems[lk].getAttribute('data-color')] = legendItems[lk];
+  }
+
+  // Si el tipo (color) del objeto está oculto, lo vuelve a mostrar: actualiza
+  // el filtro, restaura la fila de la leyenda y refresca el mapa. Devuelve el
+  // nombre legible del tipo si hubo que reactivarlo, o null si ya era visible.
+  function revealTypeIfHidden(color) {
+    if (!hiddenColors[color]) return null;
+    hiddenColors[color] = false;
+
+    var fila = legendByColor[color];
+    var nombreTipo = 'este tipo de objeto';
+    if (fila) {
+      fila.style.opacity = '1';
+      var textEl = fila.querySelector('.mw-legend-text');
+      if (textEl) {
+        textEl.style.textDecoration = 'none';
+        nombreTipo = textEl.textContent.trim();
+      }
+    }
+    refreshAnchors();
+    return nombreTipo;
+  }
+
+  // Normaliza un texto para comparar: minúsculas, sin acentos, sin espacios
+  // ni signos, para que "M 13", "m13" y "M13" se consideren iguales.
+  function normalize(s) {
+    return (s || '')
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita acentos
+      .replace(/[^a-z0-9]/g, '');                        // quita espacios/signos
+  }
+
+  // Construye un índice de búsqueda a partir de OBJECTS (id, label y nombre).
+  var searchIndex = OBJECTS.map(function (o) {
+    return {
+      obj: o,
+      claves: [normalize(o.id), normalize(o.label), normalize(o.name)]
+    };
+  });
+
+  function findObject(query) {
+    var q = normalize(query);
+    if (!q) return null;
+    // 1) coincidencia exacta por id o label
+    for (var i = 0; i < searchIndex.length; i++) {
+      if (searchIndex[i].claves.indexOf(q) >= 0) return searchIndex[i].obj;
+    }
+    // 2) coincidencia por comienzo del nombre completo (p. ej. "cangrejo")
+    for (var j = 0; j < searchIndex.length; j++) {
+      var nombre = normalize(searchIndex[j].obj.name);
+      if (nombre.indexOf(q) >= 0) return searchIndex[j].obj;
+    }
+    return null;
+  }
+
+  function showToast(mensaje) {
+    if (!searchToast) return;
+    searchToast.textContent = mensaje;
+    searchToast.style.opacity = '1';
+    searchToast.style.transform = 'translate(-50%, 0)';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      searchToast.style.opacity = '0';
+      searchToast.style.transform = 'translate(-50%, -14px)';
+    }, CONFIG.busqueda.avisoSegundos * 1000);
+  }
+
+  // Centra el mapa en un ancla concreta (posición en % de la imagen) y aplica
+  // el zoom pedido. Reutiliza la misma geometría que repositionAnchors().
+  function centerOnAnchor(xPct, yPct, targetScale) {
+    var activeImg = isEdgeView
+      ? document.getElementById('mw-image-edge')
+      : document.getElementById('mw-image');
+    if (!activeImg || !activeImg.naturalWidth) return;
+
+    var r = getImgRect(activeImg);
+    var W = img.clientWidth, H = img.clientHeight;
+    // Posición del objeto en px dentro del contenedor.
+    var ax = r.left + r.width  * (xPct / 100);
+    var ay = r.top  + r.height * (yPct / 100);
+
+    scale = Math.min(maxScale, Math.max(minScale, targetScale));
+    // Para que (ax,ay) quede en el centro del visor:
+    //   posición_en_pantalla = (ax - W/2) * scale + posX = 0  →  posX = -(ax-W/2)*scale
+    posX = -(ax - W / 2) * scale;
+    posY = -(ay - H / 2) * scale;
+
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+    clampPosition();
+    applyTransform();
+  }
+
+  // Aplica un parpadeo temporal al punto y la etiqueta de un objeto.
+  function blinkObject(objId) {
+    // Localiza el ancla de la vista activa (los de canto llevan sufijo -edge).
+    var anchorId = objId + (isEdgeView ? '-edge' : '') + '-anchor';
+    var anchor = document.getElementById(anchorId);
+    if (!anchor) return;
+    var dot = anchor.querySelector('.mw-pdf-dot');           // el punto
+    var content = anchor.querySelector('.mw-marker-content'); // punto+etiqueta
+
+    // Cancela un parpadeo anterior si lo hubiera.
+    if (blinkTimer) { clearInterval(blinkTimer.iv); clearTimeout(blinkTimer.to);
+      if (blinkTimer.content) blinkTimer.content.style.visibility = 'visible'; }
+
+    var visible = true;
+    var iv = setInterval(function () {
+      visible = !visible;
+      if (content) content.style.visibility = visible ? 'visible' : 'hidden';
+    }, 450);
+    var to = setTimeout(function () {
+      clearInterval(iv);
+      if (content) content.style.visibility = 'visible';
+      blinkTimer = null;
+    }, CONFIG.busqueda.parpadeoSegundos * 1000);
+
+    blinkTimer = { iv: iv, to: to, content: content };
+  }
+
+  function doSearch() {
+    var obj = findObject(searchInput.value);
+    if (!obj) {
+      showToast('Ese objeto no ha sido observado o no pertenece a la Vía Láctea.');
+      return;
+    }
+    hideHint();
+
+    // Si el tipo de este objeto estaba oculto por el filtro de la leyenda,
+    // lo reactivamos (si no, el objeto seguiría invisible) y avisamos.
+    var tipoReactivado = revealTypeIfHidden(obj.color);
+    if (tipoReactivado) {
+      showToast('Se ha reactivado la visualización de: ' + tipoReactivado + '.');
+    }
+
+    var pos = isEdgeView ? obj.edge : obj.top;
+    centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom);
+    // El parpadeo se lanza tras un instante para que el centrado ya esté hecho.
+    setTimeout(function () { blinkObject(obj.id); }, 60);
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+    });
+    // Evita que al escribir en el campo se disparen atajos del visor.
+    searchInput.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+  }
+
   applyTransform();
   repositionAnchors();
 })();

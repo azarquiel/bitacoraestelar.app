@@ -64,6 +64,19 @@
     // -------------------------------------------------------------------------
     zoomFicha: {
       maximo: 5
+    },
+
+    // -------------------------------------------------------------------------
+    // BUSCADOR DE OBJETOS
+    //   parpadeoSegundos : cuánto tiempo parpadea el objeto encontrado (seg).
+    //   avisoSegundos    : cuánto se muestra el pop-up de "no encontrado" (seg).
+    //   zoom             : nivel de aumento del mapa al centrar en el objeto
+    //                      (se recorta al máximo permitido por el mapa).
+    // -------------------------------------------------------------------------
+    busqueda: {
+      parpadeoSegundos: 3,
+      avisoSegundos: 4,
+      zoom: 20
     }
 
   };

@@ -223,7 +223,36 @@
       border:none;border-radius:20px;background:rgba(255,255,255,0.85);
       font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
     ">🔄 Vista de canto</button>
+
+    <!-- BUSCADOR DE OBJETOS -->
+    <div style="position:relative;display:flex;align-items:center;">
+      <span style="position:absolute;left:10px;font-size:12px;pointer-events:none;opacity:0.6;">🔍</span>
+      <input id="mw-search" type="text" autocomplete="off" spellcheck="false"
+        placeholder="Buscar objeto…"
+        style="
+          border:none;border-radius:20px;background:rgba(255,255,255,0.85);
+          font-size:13px;padding:8px 12px 8px 30px;width:150px;
+          font-family:sans-serif;outline:none;color:#111;
+        " />
+    </div>
   </div>
+
+  <!-- POP-UP DE AVISO DE BÚSQUEDA (objeto no encontrado) -->
+  <div id="mw-search-toast" style="
+    position:absolute;
+    top:16px;left:50%;
+    transform:translate(-50%, -14px);
+    background:rgba(20,24,33,0.95);
+    color:#e6eef7;
+    font-family:sans-serif;font-size:13px;line-height:1.4;
+    padding:12px 18px;border-radius:10px;
+    border:1px solid rgba(126,200,255,0.35);
+    box-shadow:0 4px 20px rgba(0,0,0,0.5);
+    max-width:min(340px, 80%);text-align:center;
+    z-index:100;
+    opacity:0;pointer-events:none;
+    transition:opacity 0.3s ease, transform 0.3s ease;
+  "></div>
 
   <!-- LEYENDA DE COLORES POR TIPO DE OBJETO -->
   <div id="mw-legend" style="
