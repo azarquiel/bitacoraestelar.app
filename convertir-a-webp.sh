@@ -30,7 +30,7 @@
 
 set -euo pipefail
 
-CALIDAD=90
+CALIDAD=95
 CARPETA="${1:-.}"
 
 if [ ! -d "$CARPETA" ]; then
