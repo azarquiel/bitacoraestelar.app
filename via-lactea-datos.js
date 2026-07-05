@@ -41,64 +41,64 @@
       color: '#7ec8ff', ficha: 'm1',
       coords: 'l ≈ 184,6°, b ≈ -5,8° · ~6.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m1_inv.pdf',
-      top:  { x: 53.0, y: 74.7 },
-      edge: { x: 20.1, y: 49.3 }
+      top:  { x: 50.4, y: 74.9 },
+      edge: { x: 25.1, y: 50.3 }
     },
     {
       id: 'm2', name: 'M2 · Cúmulo globular (Acuario)', label: 'M2',
 		color: '#d7a4ff', ficha: 'm2',
       coords: 'l ≈ 53,4°, b ≈ -35,8° · ~37.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m2_inv.pdf',
-      top:  { x: 37.8, y: 62.3 },
-      edge: { x: 45.5, y: 59.0 }
+      top:  { x: 31.3, y: 56.0 },
+      edge: { x: 44.0, y: 59.9 }
     },
     {
       id: 'm4', name: 'M4 · Cúmulo globular (Escorpio)', label: 'M4',
       color: '#d7a4ff', ficha: 'm4',
       coords: 'l ≈ 351,0°, b ≈ +16,0° · ~6.200 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m4_inv.pdf',
-      top:  { x: 52.6, y: 67.8 },
-      edge: { x: 32.9, y: 48.2 }
+      top:  { x: 50.7, y: 65.4 },
+      edge: { x: 34.6, y: 49.2 }
     },
     {
       id: 'm5', name: 'M5 · Cúmulo globular (Serpens)', label: 'M5',
       color: '#d7a4ff', ficha: 'm5',
       coords: 'l ≈ 3,9°, b ≈ +46,8° · ~24.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m5_inv.pdf',
-      top:  { x: 50.9, y: 61.9 },
-      edge: { x: 44.1, y: 40.9 }
+      top:  { x: 49.1, y: 57.1 },
+      edge: { x: 42.9, y: 41.9 }
     },
     {
       id: 'm8', name: 'M8 · Nebulosa de la Laguna (Sagitario)', label: 'M8',
       color: '#ff8a80', ficha: 'm8',
       coords: 'l ≈ 6,0°, b ≈ -1,2° · ~4.100 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m8_inv.pdf',
-      top:  { x: 51.9, y: 68.9 },
-      edge: { x: 31.0, y: 49.0 }
+      top:  { x: 49.7, y: 66.8 },
+      edge: { x: 33.2, y: 50.0 }
     },
     {
       id: 'm9', name: 'M9 · Cúmulo globular (Ofiuco)', label: 'M9',
       color: '#d7a4ff', ficha: 'm9',
       coords: 'l ≈ 5,5°, b ≈ +10,3° · ~25.800 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m9_inv.pdf',
-      top:  { x: 49.7, y: 57.2 },
-      edge: { x: 53.0, y: 47.0 }
+      top:  { x: 48.1, y: 50.6 },
+      edge: { x: 49.4, y: 47.9 }
     },
     {
       id: 'm10', name: 'M10 · Cúmulo globular (Ofiuco)', label: 'M10',
       color: '#d7a4ff', ficha: 'm10',
       coords: 'l ≈ 15,1°, b ≈ +23,1° · ~14.400 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m10_inv.pdf',
-      top:  { x: 49.8, y: 64.2 },
-      edge: { x: 40.0, y: 46.5 }
+      top:  { x: 47.4, y: 60.1 },
+      edge: { x: 39.9, y: 47.4 }
     },
     {
       id: 'm11', name: 'M11 · Cúmulo del Pato Salvaje (Scutum)', label: 'M11',
       color: '#8aff9e', ficha: 'm11',
       coords: 'l ≈ 27,3°, b ≈ -2,8° · ~6.200 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m11_inv.pdf',
-      top:  { x: 50.5, y: 68.2 },
-      edge: { x: 32.5, y: 49.2 }
+      top:  { x: 47.8, y: 65.7 },
+      edge: { x: 34.3, y: 50.1 }
     },
     // NOTA: las posiciones top/edge de M12-M15 son una primera estimación
     // (a partir de l, b y distancia aproximadas) pendiente de ajuste visual
@@ -108,104 +108,104 @@
       color: '#d7a4ff', ficha: 'm12',
       coords: 'l ≈ 15,7°, b ≈ +26,3° · ~16.000 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m12_inv.pdf',
-      top:  { x: 49.5, y: 63.7 },
-      edge: { x: 41.1, y: 45.8 }
+      top:  { x: 47.0, y: 59.3 },
+      edge: { x: 40.7, y: 46.8 }
     },
     {
       id: 'm13', name: 'M13 · Gran cúmulo de Hércules', label: 'M13',
       color: '#d7a4ff', ficha: 'm13',
       coords: 'l ≈ 59,0°, b ≈ +40,9° · ~22.200 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m13_inv.pdf',
-      top:  { x: 43.9, y: 67.1 },
-      edge: { x: 35.6, y: 42.5 }
+      top:  { x: 39.0, y: 63.3 },
+      edge: { x: 36.7, y: 43.4 }
     },
     {
       id: 'm14', name: 'M14 · Cúmulo globular (Ofiuco)', label: 'M14',
       color: '#d7a4ff', ficha: 'm14',
       coords: 'l ≈ 21,3°, b ≈ +14,8° · ~30.300 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m14_inv.pdf',
-      top:  { x: 45.0, y: 56.5 },
-      edge: { x: 55.0, y: 45.6 }
+      top:  { x: 41.8, y: 49.0 },
+      edge: { x: 51.0, y: 46.5 }
     },
     {
       id: 'm15', name: 'M15 · Gran cúmulo globular de Pegaso', label: 'M15',
       color: '#d7a4ff', ficha: 'm15',
       coords: 'l ≈ 65,0°, b ≈ -27,3° · ~33.600 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m15_inv.pdf',
-      top:  { x: 36.6, y: 65.5 },
-      edge: { x: 39.7, y: 56.1 }
+      top:  { x: 29.3, y: 60.3 },
+      edge: { x: 39.7, y: 56.9 }
     },
     {
       id: 'ngc40', name: 'NGC 40 · Nebulosa de la Pajarita (Cefeo)', label: 'NGC 40',
       color: '#5fe0c8', ficha: 'ngc40',
       coords: 'l ≈ 120,0°, b ≈ +9,8° · ~5.300 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/ngc40_inv.pdf',
-      top:  { x: 50.0, y: 72.8 },
-      edge: { x: 24.0, y: 48.6 }
+      top:  { x: 46.5, y: 71.9 },
+      edge: { x: 28.1, y: 49.6 }
     },
     {
       id: 'ngc6826', name: 'NGC 6826 · Nebulosa Parpadeante (Cisne)', label: 'NGC 6826',
       color: '#5fe0c8', ficha: 'ngc6826',
       coords: 'l ≈ 83,5°, b ≈ +12,7° · ~2.200 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/ngc6826_inv.pdf',
-      top:  { x: 51.1, y: 71.1 },
-      edge: { x: 27.0, y: 48.8 }
+      top:  { x: 48.4, y: 69.7 },
+      edge: { x: 30.3, y: 49.8 }
     },
     {
       id: 'ngc6905', name: 'NGC 6905 · Nebulosa del Fogonazo Azul (Delfín)', label: 'NGC 6905',
       color: '#5fe0c8', ficha: 'ngc6905',
       coords: 'l ≈ 61,5°, b ≈ -9,6° · ~7.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/ngc6905_inv.pdf',
-      top:  { x: 48.5, y: 69.5 },
-      edge: { x: 30.4, y: 49.6 }
+      top:  { x: 45.0, y: 67.2 },
+      edge: { x: 32.8, y: 50.5 }
     },
     {
       id: 'm17', name: 'M17 · Nebulosa Omega (Sagitario)', label: 'M17',
       color: '#ff8a80', ficha: 'm17',
       coords: 'l ≈ 15,1°, b ≈ -0,7° · ~5.500 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m17_inv.pdf',
-      top:  { x: 51.3, y: 68.3 },
-      edge: { x: 32.3, y: 49.0 }
+      top:  { x: 48.9, y: 65.9 },
+      edge: { x: 34.1, y: 50.0 }
     },
     {
       id: 'm20', name: 'M20 · Nebulosa Trífida (Sagitario)', label: 'M20',
       color: '#ff8a80', ficha: 'm20',
       coords: 'l ≈ 7,0°, b ≈ -0,3° · ~4.100 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m20_inv.pdf',
-      top:  { x: 51.9, y: 68.9 },
-      edge: { x: 31.0, y: 49.0 }
+      top:  { x: 49.6, y: 66.8 },
+      edge: { x: 33.2, y: 50.0 }
     },
     {
       id: 'm22', name: 'M22 · Gran cúmulo de Sagitario', label: 'M22',
       color: '#d7a4ff', ficha: 'm22',
       coords: 'l ≈ 9,9°, b ≈ -7,6° · ~10.400 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m22_inv.pdf',
-      top:  { x: 50.8, y: 65.6 },
-      edge: { x: 37.3, y: 49.6 }
+      top:  { x: 48.6, y: 62.1 },
+      edge: { x: 37.9, y: 50.6 }
     },
     {
       id: 'm27', name: 'M27 · Nebulosa Dumbbell (Zorra)', label: 'M27',
       color: '#5fe0c8', ficha: 'm27',
       coords: 'l ≈ 60,8°, b ≈ -3,7° · ~1.360 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m27_inv.pdf',
-      top:  { x: 51.7, y: 70.8 },
-      edge: { x: 27.4, y: 49.0 }
+      top:  { x: 49.1, y: 69.4 },
+      edge: { x: 30.6, y: 50.0 }
     },
     {
       id: 'm30', name: 'M30 · Cúmulo globular de Capricornio', label: 'M30',
       color: '#d7a4ff', ficha: 'm30',
       coords: 'l ≈ 27,2°, b ≈ -46,8° · ~27.100 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m30_inv.pdf',
-      top:  { x: 46.8, y: 62.4 },
-      edge: { x: 43.9, y: 58.0 }
+      top:  { x: 43.5, y: 57.3 },
+      edge: { x: 42.7, y: 58.9 }
     },
     {
       id: 'm29', name: 'M29 · Cúmulo de la Torre de Enfriamiento (Cisne)', label: 'M29',
       color: '#8aff9e', ficha: 'm29',
       coords: 'l ≈ 76,9°, b ≈ 0,6° · ~5.240 años luz del Sol',
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m29_inv.pdf',
-      top:  { x: 49.4, y: 70.7 },
-      edge: { x: 28.0, y: 49.0 }
+      top:  { x: 46.1, y: 69.0 },
+      edge: { x: 31.0, y: 50.0 }
     }
   ];
 

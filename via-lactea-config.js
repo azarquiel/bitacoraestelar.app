@@ -32,8 +32,11 @@
     },
 
     sol: {
-      cenital: { x: 52.35, y: 71.15 }, // vista desde el polo norte galáctico
-      canto:   { x: 26.75, y: 49.00 }  // vista lateral del disco
+      // Posiciones derivadas anclando el NÚCLEO GALÁCTICO en (50, 50) en ambas
+      // vistas, con escala física de 40 kpc de ancho de imagen y distancia
+      // Sol-núcleo de 26.000 años luz (l=0º0'5'', b=-0º5'46'').
+      cenital: { x: 50.00, y: 69.93 }, // vista desde el polo norte galáctico
+      canto:   { x: 30.07, y: 49.98 }  // vista lateral del disco
     },
 
     // -------------------------------------------------------------------------
@@ -74,9 +77,9 @@
     //                      (se recorta al máximo permitido por el mapa).
     // -------------------------------------------------------------------------
     busqueda: {
-      parpadeoSegundos: 3,
+      parpadeoSegundos: 10,
       avisoSegundos: 4,
-      zoom: 20
+      zoom: 25
     }
 
   };
