@@ -28,6 +28,7 @@
   var maxScale = 25;
   var posX = 0;
   var posY = 0;
+  var rotation = 0; // grados de giro de la vista cenital (0 = orientación base)
 
   var isDragging = false;
   var startX, startY;
@@ -233,8 +234,26 @@
   // NAVEGACIÓN: arrastre, zoom y reseteo
   // --------------------------------------------------------------------------
   function applyTransform() {
+    // El giro (solo en vista cenital) rota el contenedor alrededor del núcleo
+    // galáctico. Fijamos transform-origin en el punto del núcleo (en px del
+    // contenedor) y añadimos rotate() al final para que gire imagen + marcadores
+    // juntos manteniendo el pan/zoom.
+    var rot = (!isEdgeView) ? rotation : 0;
+    if (rot) {
+      var activeImg = document.getElementById('mw-image');
+      if (activeImg && activeImg.naturalWidth) {
+        var r = getImgRect(activeImg);
+        var nx = r.left + r.width  * (CONFIG.nucleo.cenital.x / 100);
+        var ny = r.top  + r.height * (CONFIG.nucleo.cenital.y / 100);
+        img.style.transformOrigin = nx + 'px ' + ny + 'px';
+      }
+    } else {
+      img.style.transformOrigin = 'center center';
+    }
+
     img.style.transform =
-      'translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ')';
+      'translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ')' +
+      (rot ? ' rotate(' + rot + 'deg)' : '');
 
     // Contraescala de los marcadores: al ampliar se encogen un poco en pantalla
     // (no del todo) para no tapar el mapa, manteniéndose legibles y pulsables.
@@ -242,9 +261,13 @@
     if (counter > 1) counter = 1;
     if (counter < 0.12) counter = 0.12;
 
+    // Contra-rotación: cada marcador (punto + etiqueta) se gira en sentido
+    // opuesto al mapa para que los nombres y el Sol se lean siempre horizontales.
+    var counterRot = rot ? (' rotate(' + (-rot) + 'deg)') : '';
+
     var scales = img.querySelectorAll('.mw-counter-scale');
     for (var i = 0; i < scales.length; i++) {
-      scales[i].style.transform = 'scale(' + counter + ')';
+      scales[i].style.transform = 'scale(' + counter + ')' + counterRot;
     }
 
     // Posiciona el contenido abanicado y su línea-guía en cada marcador.
@@ -293,8 +316,20 @@
     var r = (activeImg && activeImg.naturalWidth)
       ? getImgRect(activeImg)
       : { width: viewerRect.width, height: viewerRect.height };
-    var limitX = (r.width  * scale - viewerRect.width)  / 2;
-    var limitY = (r.height * scale - viewerRect.height) / 2;
+
+    var effW = r.width, effH = r.height;
+    // Con la vista girada, la "huella" del contenido rotado es mayor que el
+    // rectángulo original. Usamos la caja envolvente del rectángulo rotado
+    // para que el clamp no impida ver zonas que sí están dentro del encuadre.
+    var rot = (!isEdgeView) ? rotation : 0;
+    if (rot) {
+      var a = rot * Math.PI / 180;
+      var c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+      effW = r.width * c + r.height * s;
+      effH = r.width * s + r.height * c;
+    }
+    var limitX = (effW * scale - viewerRect.width)  / 2;
+    var limitY = (effH * scale - viewerRect.height) / 2;
     posX = limitX > 0 ? Math.min(limitX, Math.max(-limitX, posX)) : 0;
     posY = limitY > 0 ? Math.min(limitY, Math.max(-limitY, posY)) : 0;
   }
@@ -1143,6 +1178,11 @@
     refreshAnchors();
     repositionAnchors();
 
+    // El giro solo tiene sentido en la vista cenital: ocultamos el control
+    // en la de canto (el valor de rotación se conserva para cuando se vuelva).
+    var rotControl = document.getElementById('mw-rotate-control');
+    if (rotControl) rotControl.style.display = isEdgeView ? 'none' : 'flex';
+
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     scale = 1;
     posX = 0;
@@ -1287,6 +1327,18 @@
     var ax = r.left + r.width  * (xPct / 100);
     var ay = r.top  + r.height * (yPct / 100);
 
+    // Si la vista está girada, el objeto aparece rotado alrededor del núcleo:
+    // aplicamos la misma rotación al punto antes de calcular el desplazamiento.
+    var rot = (!isEdgeView) ? rotation : 0;
+    if (rot) {
+      var nx = r.left + r.width  * (CONFIG.nucleo.cenital.x / 100);
+      var ny = r.top  + r.height * (CONFIG.nucleo.cenital.y / 100);
+      var a = rot * Math.PI / 180;
+      var dx = ax - nx, dy = ay - ny;
+      ax = nx + dx * Math.cos(a) - dy * Math.sin(a);
+      ay = ny + dx * Math.sin(a) + dy * Math.cos(a);
+    }
+
     scale = Math.min(maxScale, Math.max(minScale, targetScale));
     // Para que (ax,ay) quede en el centro del visor:
     //   posición_en_pantalla = (ax - W/2) * scale + posX = 0  →  posX = -(ax-W/2)*scale
@@ -1358,6 +1410,31 @@
         searchInput.focus();
       });
     });
+  }
+
+  // ===========================================================================
+  // CONTROL DE GIRO DE LA VISTA CENITAL
+  // El deslizador fija el ángulo (0-360°); el mapa rota alrededor del núcleo
+  // galáctico y las etiquetas se mantienen horizontales (ver applyTransform).
+  // ===========================================================================
+  var rotateInput = document.getElementById('mw-rotate');
+  var rotateValue = document.getElementById('mw-rotate-value');
+  var rotateReset = document.getElementById('mw-rotate-reset');
+
+  function setRotation(deg) {
+    rotation = ((deg % 360) + 360) % 360; // normaliza a 0-360
+    if (rotateInput) rotateInput.value = rotation;
+    if (rotateValue) rotateValue.textContent = Math.round(rotation) + '°';
+    applyTransform();
+  }
+
+  if (rotateInput) {
+    rotateInput.addEventListener('input', function () {
+      setRotation(parseFloat(rotateInput.value) || 0);
+    });
+  }
+  if (rotateReset) {
+    rotateReset.addEventListener('click', function () { setRotation(0); });
   }
 
   applyTransform();

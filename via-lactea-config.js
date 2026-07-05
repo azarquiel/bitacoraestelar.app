@@ -40,6 +40,14 @@
     },
 
     // -------------------------------------------------------------------------
+    // NÚCLEO GALÁCTICO (en % de la imagen). Es el centro alrededor del cual
+    // gira la vista cenital cuando el usuario usa el control de rotación.
+    // -------------------------------------------------------------------------
+    nucleo: {
+      cenital: { x: 50.00, y: 50.00 }
+    },
+
+    // -------------------------------------------------------------------------
     // TAMAÑO DE LOS MARCADORES DE OBJETOS EN EL MAPA
     //   puntoDiametro : diámetro del punto de color en píxeles
     //   textoTamano   : tamaño de la etiqueta junto al punto (CSS font-size)
@@ -77,9 +85,9 @@
     //                      (se recorta al máximo permitido por el mapa).
     // -------------------------------------------------------------------------
     busqueda: {
-      parpadeoSegundos: 10,
-      avisoSegundos: 4,
-      zoom: 25
+      parpadeoSegundos: 4,
+      avisoSegundos: 3,
+		zoom: 15
     }
 
   };

@@ -235,9 +235,21 @@
           font-family:sans-serif;outline:none;color:#111;
         " />
     </div>
-  </div>
 
-  <!-- POP-UP DE AVISO DE BÚSQUEDA (objeto no encontrado) -->
+    <!-- CONTROL DE GIRO (solo visible en vista cenital) -->
+    <div id="mw-rotate-control" class="mw-ui-control" style="
+      display:flex;align-items:center;gap:8px;
+      background:rgba(255,255,255,0.85);border-radius:20px;
+      padding:6px 12px;font-family:sans-serif;font-size:12px;color:#111;
+    ">
+      <span title="Girar la vista" style="pointer-events:none;">🧭</span>
+      <input id="mw-rotate" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
+        style="width:120px;cursor:pointer;" />
+      <span id="mw-rotate-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
+      <button id="mw-rotate-reset" class="mw-ui-control" title="Volver a la orientación original"
+        style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;">⟲</button>
+    </div>
+  </div>
   <div id="mw-search-toast" style="
     position:absolute;
     top:16px;left:50%;
@@ -564,7 +576,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/wp-content/uploads/via-lactea/via-lactea-config.js?v=20260705_1114"></script>
-<script src="/wp-content/uploads/via-lactea/via-lactea-datos.js?v=20260705_1114"></script>
-<script src="/wp-content/uploads/via-lactea/via-lactea-app.js?v=20260704_1858"></script>
+<script src="/wp-content/uploads/via-lactea/via-lactea-config.js?v=20260705_1357"></script>
+<script src="/wp-content/uploads/via-lactea/via-lactea-datos.js?v=20260705_1343"></script>
+<script src="/wp-content/uploads/via-lactea/via-lactea-app.js?v=20260705_1343"></script>
 </li>
