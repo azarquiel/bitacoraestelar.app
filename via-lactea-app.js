@@ -29,6 +29,69 @@
   var posX = 0;
   var posY = 0;
   var rotation = 0; // grados de giro de la vista cenital (0 = orientación base)
+  var edgePlaneRotation = 0; // giro en el plano de pantalla de la vista de canto
+                             // (opción experimental: CONFIG.giros.giroPlanoCanto)
+
+  // Giro en plano vigente según la vista activa. La vista de canto solo gira
+  // en plano si el interruptor CONFIG.giros.giroPlanoCanto está activado.
+  function currentPlaneRotation() {
+    if (isEdgeView) {
+      return (CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? edgePlaneRotation : 0;
+    }
+    return rotation;
+  }
+
+  // Punto del núcleo (centro de giro) de la vista activa, en % de la imagen.
+  function currentNucleo() {
+    return isEdgeView ? CONFIG.nucleo.canto : CONFIG.nucleo.cenital;
+  }
+
+  // --------------------------------------------------------------------------
+  // ROTACIÓN AZIMUTAL DE LA VISTA DE CANTO
+  // edgeRotation gira el PUNTO DE VISTA alrededor del eje polar de la galaxia:
+  // los marcadores se reproyectan según su posición 3D real, mientras la imagen
+  // de fondo se mantiene (aprox. válida: un disco de canto es casi igual desde
+  // cualquier azimut). Las coordenadas galácticas (l, b, d) de cada objeto se
+  // extraen una única vez de su campo "coords".
+  // --------------------------------------------------------------------------
+  var edgeRotation = 0; // grados de azimut (0 = punto de vista original)
+  var GAL = {};         // id -> { l, b, d } en grados y años luz
+  (function buildGalIndex() {
+    var re = /l ≈ ([-+\d,.]+)°,\s*b ≈ ([-+\d,.]+)°.*?~([\d.]+)\s*años/;
+    for (var i = 0; i < OBJECTS.length; i++) {
+      var m = re.exec(OBJECTS[i].coords || '');
+      if (m) {
+        GAL[OBJECTS[i].id] = {
+          l: parseFloat(m[1].replace(',', '.')),
+          b: parseFloat(m[2].replace(',', '.')),
+          d: parseFloat(m[3].split('.').join(''))
+        };
+      }
+    }
+  })();
+
+  // Posición horizontal (en % de la imagen) de un objeto en la vista de canto
+  // para un azimut dado. Geometría: u apunta del Sol al núcleo, v es la
+  // perpendicular en el plano; el núcleo está fijo en x=50 y todo gira a su
+  // alrededor. En phi=0 reproduce exactamente las posiciones del archivo.
+  function edgeXAt(g, phiDeg) {
+    var S = 100 / CONFIG.fisica.anchoImagenAl;
+    var R0 = CONFIG.fisica.distanciaSolNucleoAl;
+    var a = phiDeg * Math.PI / 180;
+    var lr = g.l * Math.PI / 180;
+    var cb = Math.cos(g.b * Math.PI / 180);
+    var u = g.d * cb * Math.cos(lr);
+    var v = g.d * cb * Math.sin(lr);
+    return 50 + S * ((u - R0) * Math.cos(a) + v * Math.sin(a));
+  }
+
+  // Posición horizontal del Sol en la vista de canto para un azimut dado
+  // (el Sol orbita el núcleo a distancia R0).
+  function sunEdgeXAt(phiDeg) {
+    var S = 100 / CONFIG.fisica.anchoImagenAl;
+    var R0 = CONFIG.fisica.distanciaSolNucleoAl;
+    return 50 - S * R0 * Math.cos(phiDeg * Math.PI / 180);
+  }
 
   var isDragging = false;
   var startX, startY;
@@ -83,10 +146,13 @@
       sunTop.style.left = (r.left + r.width  * (CONFIG.sol.cenital.x / 100)) + 'px';
       sunTop.style.top  = (r.top  + r.height * (CONFIG.sol.cenital.y / 100)) + 'px';
     }
-    // Sol de canto
+    // Sol de canto (su x depende del azimut: orbita el núcleo)
     var sunEdge = document.getElementById('sun-edge-anchor');
     if (sunEdge) {
-      sunEdge.style.left = (r.left + r.width  * (CONFIG.sol.canto.x / 100)) + 'px';
+      var sunEdgeX = (edgeRotation !== 0)
+        ? sunEdgeXAt(edgeRotation)
+        : CONFIG.sol.canto.x;
+      sunEdge.style.left = (r.left + r.width  * (sunEdgeX / 100)) + 'px';
       sunEdge.style.top  = (r.top  + r.height * (CONFIG.sol.canto.y / 100)) + 'px';
     }
 
@@ -94,7 +160,16 @@
     var anchors = img.querySelectorAll('.mw-object-anchor');
     for (var i = 0; i < anchors.length; i++) {
       var a = anchors[i];
-      var xPct = parseFloat(a.getAttribute('data-x')) / 100;
+      var xPct;
+      // En la vista de canto con azimut girado, la x se reproyecta desde las
+      // coordenadas galácticas reales; la altura (y) no cambia con el azimut.
+      if (a.getAttribute('data-view') === 'edge' && edgeRotation !== 0) {
+        var g = GAL[a.getAttribute('data-id')];
+        xPct = g ? edgeXAt(g, edgeRotation) / 100
+                 : parseFloat(a.getAttribute('data-x')) / 100;
+      } else {
+        xPct = parseFloat(a.getAttribute('data-x')) / 100;
+      }
       var yPct = parseFloat(a.getAttribute('data-y')) / 100;
       a.style.left = (r.left + r.width  * xPct) + 'px';
       a.style.top  = (r.top  + r.height * yPct) + 'px';
@@ -234,17 +309,19 @@
   // NAVEGACIÓN: arrastre, zoom y reseteo
   // --------------------------------------------------------------------------
   function applyTransform() {
-    // El giro (solo en vista cenital) rota el contenedor alrededor del núcleo
-    // galáctico. Fijamos transform-origin en el punto del núcleo (en px del
-    // contenedor) y añadimos rotate() al final para que gire imagen + marcadores
-    // juntos manteniendo el pan/zoom.
-    var rot = (!isEdgeView) ? rotation : 0;
+    // El giro en plano rota el contenedor alrededor del núcleo galáctico de la
+    // vista activa (cenital siempre disponible; canto solo si el interruptor
+    // CONFIG.giros.giroPlanoCanto está activo). Fijamos transform-origin en el
+    // punto del núcleo y añadimos rotate() al final para que gire imagen +
+    // marcadores juntos manteniendo el pan/zoom.
+    var rot = currentPlaneRotation();
     if (rot) {
-      var activeImg = document.getElementById('mw-image');
+      var activeImg = document.getElementById(isEdgeView ? 'mw-image-edge' : 'mw-image');
       if (activeImg && activeImg.naturalWidth) {
         var r = getImgRect(activeImg);
-        var nx = r.left + r.width  * (CONFIG.nucleo.cenital.x / 100);
-        var ny = r.top  + r.height * (CONFIG.nucleo.cenital.y / 100);
+        var nuc = currentNucleo();
+        var nx = r.left + r.width  * (nuc.x / 100);
+        var ny = r.top  + r.height * (nuc.y / 100);
         img.style.transformOrigin = nx + 'px ' + ny + 'px';
       }
     } else {
@@ -321,7 +398,7 @@
     // Con la vista girada, la "huella" del contenido rotado es mayor que el
     // rectángulo original. Usamos la caja envolvente del rectángulo rotado
     // para que el clamp no impida ver zonas que sí están dentro del encuadre.
-    var rot = (!isEdgeView) ? rotation : 0;
+    var rot = currentPlaneRotation();
     if (rot) {
       var a = rot * Math.PI / 180;
       var c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
@@ -352,6 +429,33 @@
     applyTransform();
   }
 
+  // --------------------------------------------------------------------------
+  // ROTACIÓN CON RATÓN: Ctrl o Shift + arrastre (convención de mapas web).
+  //  - Cenital: gira el mapa alrededor del núcleo (movimiento angular).
+  //  - Canto: mueve el azimut con el desplazamiento horizontal; si el giro en
+  //    plano está activado (CONFIG.giros.giroPlanoCanto), el gesto angular
+  //    controla ese giro en su lugar.
+  // --------------------------------------------------------------------------
+  var isRotateDragging = false;
+  var rotDragStartAngle = 0;   // ángulo cursor-núcleo al iniciar (grados)
+  var rotDragStartValue = 0;   // valor de rotación/azimut al iniciar
+  var rotDragStartX = 0;       // para el azimut (horizontal)
+  var rotDragMode = '';        // 'cenital' | 'plano-canto' | 'azimut'
+
+  function nucleusScreenPoint() {
+    // Posición en pantalla del núcleo de la vista activa. Con transform-origin
+    // en el núcleo, la rotación no lo mueve; translate sí: pantalla = O + pos.
+    var activeImg = document.getElementById(isEdgeView ? 'mw-image-edge' : 'mw-image');
+    if (!activeImg || !activeImg.naturalWidth) return null;
+    var r = getImgRect(activeImg);
+    var nuc = currentNucleo();
+    var vr = viewer.getBoundingClientRect();
+    return {
+      x: vr.left + r.left + r.width  * (nuc.x / 100) + posX,
+      y: vr.top  + r.top  + r.height * (nuc.y / 100) + posY
+    };
+  }
+
   viewer.addEventListener('mousedown', function (e) {
     if (overlayOpen()) return;
     // No arrastrar el mapa si el clic se originó en un control de la interfaz
@@ -362,6 +466,39 @@
       return;
     }
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+
+    // Ctrl/Shift + arrastre: modo rotación en lugar de desplazamiento.
+    if (e.ctrlKey || e.shiftKey) {
+      if (!isEdgeView) {
+        var np = nucleusScreenPoint();
+        if (np) {
+          isRotateDragging = true;
+          rotDragMode = 'cenital';
+          rotDragStartAngle = Math.atan2(e.clientY - np.y, e.clientX - np.x) * 180 / Math.PI;
+          rotDragStartValue = rotation;
+        }
+      } else if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
+        var np2 = nucleusScreenPoint();
+        if (np2) {
+          isRotateDragging = true;
+          rotDragMode = 'plano-canto';
+          rotDragStartAngle = Math.atan2(e.clientY - np2.y, e.clientX - np2.x) * 180 / Math.PI;
+          rotDragStartValue = edgePlaneRotation;
+        }
+      } else if (CONFIG.giros && CONFIG.giros.giroAzimutalCanto) {
+        isRotateDragging = true;
+        rotDragMode = 'azimut';
+        rotDragStartX = e.clientX;
+        rotDragStartValue = edgeRotation;
+      }
+      if (isRotateDragging) {
+        viewer.style.cursor = 'alias';
+        hideHint();
+        e.preventDefault();
+        return;
+      }
+    }
+
     isDragging = true;
     viewer.style.cursor = 'grabbing';
     startX = e.clientX;
@@ -373,6 +510,21 @@
   });
 
   window.addEventListener('mousemove', function (e) {
+    if (isRotateDragging) {
+      if (rotDragMode === 'azimut') {
+        // 0,4° por píxel horizontal: un barrido de pantalla ≈ media vuelta
+        setEdgeRotation(rotDragStartValue + (e.clientX - rotDragStartX) * 0.4);
+      } else {
+        var np = nucleusScreenPoint();
+        if (np) {
+          var ang = Math.atan2(e.clientY - np.y, e.clientX - np.x) * 180 / Math.PI;
+          var val = rotDragStartValue + (ang - rotDragStartAngle);
+          if (rotDragMode === 'cenital') setRotation(val);
+          else setEdgePlaneRotation(val);
+        }
+      }
+      return;
+    }
     if (!isDragging) return;
     posX = startPosX + (e.clientX - startX);
     posY = startPosY + (e.clientY - startY);
@@ -382,6 +534,7 @@
 
   window.addEventListener('mouseup', function () {
     isDragging = false;
+    isRotateDragging = false;
     viewer.style.cursor = 'grab';
   });
 
@@ -411,6 +564,20 @@
   var pinchAnchorX = 0;       // punto del mapa (sin escala) bajo el punto medio
   var pinchAnchorY = 0;
   var isPinching = false;
+  var pinchPrevAngle = 0;     // ángulo entre los dos dedos en el paso anterior
+
+  function touchAngle(t1, t2) {
+    return Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * 180 / Math.PI;
+  }
+
+  // Diferencia angular normalizada a (-180, 180] para acumular giros continuos
+  // sin saltos al cruzar el límite de atan2.
+  function angleDelta(now, prev) {
+    var d = now - prev;
+    while (d > 180) d -= 360;
+    while (d <= -180) d += 360;
+    return d;
+  }
 
   function touchDistance(t1, t2) {
     var dx = t2.clientX - t1.clientX;
@@ -459,6 +626,7 @@
       pinchStartScale = scale;
       pinchStartPosX = posX;
       pinchStartPosY = posY;
+      pinchPrevAngle = touchAngle(e.touches[0], e.touches[1]);
 
       var rect = viewer.getBoundingClientRect();
       var mid = touchMidpoint(e.touches[0], e.touches[1]);
@@ -500,6 +668,22 @@
 
         clampPosition();
         applyTransform();
+
+        // Giro de dos dedos (twist): acumulamos el incremento angular entre
+        // pasos. En cenital gira el mapa; en canto mueve el azimut (o el giro
+        // en plano si esa opción está activada).
+        var angNow = touchAngle(e.touches[0], e.touches[1]);
+        var dAng = angleDelta(angNow, pinchPrevAngle);
+        pinchPrevAngle = angNow;
+        if (dAng) {
+          if (!isEdgeView) {
+            setRotation(rotation + dAng);
+          } else if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
+            setEdgePlaneRotation(edgePlaneRotation + dAng);
+          } else if (CONFIG.giros && CONFIG.giros.giroAzimutalCanto) {
+            setEdgeRotation(edgeRotation + dAng);
+          }
+        }
       }
     } else if (isDragging && e.touches.length === 1) {
       e.preventDefault();
@@ -1162,7 +1346,8 @@
     }
   }
 
-  toggleBtn.addEventListener('click', function () {
+  // Cambia efectivamente de vista (imágenes, marcadores, controles y estado).
+  function performViewSwap() {
     isEdgeView = !isEdgeView;
     if (isEdgeView) {
       imgTop.style.display = 'none';
@@ -1178,10 +1363,20 @@
     refreshAnchors();
     repositionAnchors();
 
-    // El giro solo tiene sentido en la vista cenital: ocultamos el control
-    // en la de canto (el valor de rotación se conserva para cuando se vuelva).
+    // Visibilidad de los controles de giro según la vista.
     var rotControl = document.getElementById('mw-rotate-control');
     if (rotControl) rotControl.style.display = isEdgeView ? 'none' : 'flex';
+    var rotEdgeControl = document.getElementById('mw-rotate-edge-control');
+    if (rotEdgeControl) {
+      rotEdgeControl.style.display =
+        (isEdgeView && CONFIG.giros && CONFIG.giros.giroAzimutalCanto) ? 'flex' : 'none';
+    }
+    // El control de giro en plano de canto solo si el interruptor está activo.
+    var rotPlaneControl = document.getElementById('mw-rotate-plane-control');
+    if (rotPlaneControl) {
+      rotPlaneControl.style.display =
+        (isEdgeView && CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? 'flex' : 'none';
+    }
 
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     scale = 1;
@@ -1189,6 +1384,50 @@
     posY = 0;
     applyTransform();
     hideHint();
+  }
+
+  // Voltereta 3D entre vistas: la vista actual se abate sobre su eje horizontal
+  // (como inclinar el disco galáctico) hasta desaparecer de perfil; en ese
+  // instante se intercambian las imágenes y la nueva vista se levanta desde el
+  // otro lado. Desactivable con CONFIG.giros.transicion3D = false.
+  var isFlipping = false;
+  var FLIP_MS = 350; // duración de cada mitad de la voltereta
+
+  toggleBtn.addEventListener('click', function () {
+    if (!(CONFIG.giros && CONFIG.giros.transicion3D)) {
+      performViewSwap();
+      return;
+    }
+    if (isFlipping) return;
+    isFlipping = true;
+
+    viewer.style.perspective = '1200px';
+    img.style.transformOrigin = 'center center';
+    img.style.transition = 'transform ' + (FLIP_MS / 1000) + 's ease-in';
+    img.style.transform =
+      'translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ') rotateX(90deg)';
+
+    setTimeout(function () {
+      // Mitad de la voltereta: cambiamos de vista con el mapa "de perfil".
+      performViewSwap(); // deja transform = base (translate 0, scale 1)
+
+      // La nueva vista entra levantándose desde el otro lado. Si la vista de
+      // destino tiene un giro en plano activo, lo incluimos en la animación
+      // para que no haya un salto al terminar.
+      var destRot = currentPlaneRotation();
+      var rotSuffix = destRot ? ' rotate(' + destRot + 'deg)' : '';
+      img.style.transition = 'none';
+      img.style.transform = 'translate(0px, 0px) scale(1) rotateX(-90deg)' + rotSuffix;
+      void img.offsetWidth; // forzar reflow para que la transición aplique
+      img.style.transition = 'transform ' + (FLIP_MS / 1000) + 's ease-out';
+      img.style.transform = 'translate(0px, 0px) scale(1) rotateX(0deg)' + rotSuffix;
+
+      setTimeout(function () {
+        img.style.transition = 'none';
+        applyTransform(); // transform definitivo sin restos de la animación
+        isFlipping = false;
+      }, FLIP_MS + 30);
+    }, FLIP_MS + 30);
   });
 
   // Reposicionar cuando carga cada imagen (la cenital es remota y puede tardar)
@@ -1329,10 +1568,11 @@
 
     // Si la vista está girada, el objeto aparece rotado alrededor del núcleo:
     // aplicamos la misma rotación al punto antes de calcular el desplazamiento.
-    var rot = (!isEdgeView) ? rotation : 0;
+    var rot = currentPlaneRotation();
     if (rot) {
-      var nx = r.left + r.width  * (CONFIG.nucleo.cenital.x / 100);
-      var ny = r.top  + r.height * (CONFIG.nucleo.cenital.y / 100);
+      var nuc = currentNucleo();
+      var nx = r.left + r.width  * (nuc.x / 100);
+      var ny = r.top  + r.height * (nuc.y / 100);
       var a = rot * Math.PI / 180;
       var dx = ax - nx, dy = ay - ny;
       ax = nx + dx * Math.cos(a) - dy * Math.sin(a);
@@ -1392,7 +1632,17 @@
       showToast('Se ha reactivado la visualización de: ' + tipoReactivado + '.');
     }
 
-    var pos = isEdgeView ? obj.edge : obj.top;
+    var pos;
+    if (isEdgeView) {
+      // Con el punto de vista girado, la x del objeto es la reproyectada.
+      var g = GAL[obj.id];
+      pos = {
+        x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : obj.edge.x,
+        y: obj.edge.y
+      };
+    } else {
+      pos = obj.top;
+    }
     centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom);
     // El parpadeo se lanza tras un instante para que el centrado ya esté hecho.
     setTimeout(function () { blinkObject(obj.id); }, 60);
@@ -1435,6 +1685,58 @@
   }
   if (rotateReset) {
     rotateReset.addEventListener('click', function () { setRotation(0); });
+  }
+
+  // ===========================================================================
+  // CONTROL DE AZIMUT DE LA VISTA DE CANTO
+  // El deslizador gira el punto de vista alrededor del eje polar de la galaxia:
+  // los marcadores se reproyectan (el Sol orbita el núcleo, los objetos se
+  // deslizan según su posición 3D real); las alturas no cambian.
+  // ===========================================================================
+  var rotateEdgeInput = document.getElementById('mw-rotate-edge');
+  var rotateEdgeValue = document.getElementById('mw-rotate-edge-value');
+  var rotateEdgeReset = document.getElementById('mw-rotate-edge-reset');
+
+  function setEdgeRotation(deg) {
+    edgeRotation = ((deg % 360) + 360) % 360;
+    if (rotateEdgeInput) rotateEdgeInput.value = edgeRotation;
+    if (rotateEdgeValue) rotateEdgeValue.textContent = Math.round(edgeRotation) + '°';
+    repositionAnchors();
+  }
+
+  if (rotateEdgeInput) {
+    rotateEdgeInput.addEventListener('input', function () {
+      setEdgeRotation(parseFloat(rotateEdgeInput.value) || 0);
+    });
+  }
+  if (rotateEdgeReset) {
+    rotateEdgeReset.addEventListener('click', function () { setEdgeRotation(0); });
+  }
+
+  // ===========================================================================
+  // GIRO EN PLANO DE LA VISTA DE CANTO (opción experimental)
+  // Solo activo si CONFIG.giros.giroPlanoCanto es true. Gira la imagen de canto
+  // en el plano de la pantalla alrededor del núcleo, con etiquetas legibles.
+  // ===========================================================================
+  var rotatePlaneInput = document.getElementById('mw-rotate-plane');
+  var rotatePlaneValue = document.getElementById('mw-rotate-plane-value');
+  var rotatePlaneReset = document.getElementById('mw-rotate-plane-reset');
+
+  function setEdgePlaneRotation(deg) {
+    edgePlaneRotation = ((deg % 360) + 360) % 360;
+    if (rotatePlaneInput) rotatePlaneInput.value = edgePlaneRotation;
+    if (rotatePlaneValue) rotatePlaneValue.textContent = Math.round(edgePlaneRotation) + '°';
+    clampPosition();
+    applyTransform();
+  }
+
+  if (rotatePlaneInput) {
+    rotatePlaneInput.addEventListener('input', function () {
+      setEdgePlaneRotation(parseFloat(rotatePlaneInput.value) || 0);
+    });
+  }
+  if (rotatePlaneReset) {
+    rotatePlaneReset.addEventListener('click', function () { setEdgePlaneRotation(0); });
   }
 
   applyTransform();

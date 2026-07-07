@@ -44,7 +44,39 @@
     // gira la vista cenital cuando el usuario usa el control de rotación.
     // -------------------------------------------------------------------------
     nucleo: {
-      cenital: { x: 50.00, y: 50.00 }
+      cenital: { x: 50.00, y: 50.00 },
+      canto:   { x: 50.00, y: 50.00 }
+    },
+
+    // -------------------------------------------------------------------------
+    // GIROS Y TRANSICIONES (interruptores de funcionalidades)
+    //   giroAzimutalCanto : true/false. Control 🛰️ de la vista de canto que gira
+    //                       el punto de vista alrededor del eje polar de la
+    //                       galaxia (los objetos se reproyectan en 3D real).
+    //                       Desactivado; ponlo a true para reactivarlo.
+    //   giroPlanoCanto    : true/false. Control 🌀 de la vista de canto para
+    //                       girar la imagen en el plano de la pantalla (giro
+    //                       "de foto", alrededor del núcleo).
+    //   transicion3D      : true/false. Voltereta 3D al cambiar entre la vista
+    //                       cenital y la de canto (el disco se abate sobre sí).
+    // -------------------------------------------------------------------------
+    giros: {
+      giroAzimutalCanto: false,
+      giroPlanoCanto: true,
+      transicion3D: true
+    },
+
+    // -------------------------------------------------------------------------
+    // CONSTANTES FÍSICAS DEL MAPA
+    //   anchoImagenAl        : ancho físico de las imágenes en años luz
+    //                          (40 kpc = 130.462 al).
+    //   distanciaSolNucleoAl : distancia Sol - núcleo galáctico en años luz.
+    //   Se usan para la rotación azimutal de la vista de canto (girar el punto
+    //   de vista alrededor del eje polar de la galaxia).
+    // -------------------------------------------------------------------------
+    fisica: {
+      anchoImagenAl: 130462,
+      distanciaSolNucleoAl: 26000
     },
 
     // -------------------------------------------------------------------------
@@ -85,7 +117,7 @@
     //                      (se recorta al máximo permitido por el mapa).
     // -------------------------------------------------------------------------
     busqueda: {
-      parpadeoSegundos: 4,
+      parpadeoSegundos: 3,
       avisoSegundos: 3,
 		zoom: 15
     }
