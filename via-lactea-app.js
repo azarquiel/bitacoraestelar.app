@@ -485,7 +485,7 @@
           rotDragStartAngle = Math.atan2(e.clientY - np2.y, e.clientX - np2.x) * 180 / Math.PI;
           rotDragStartValue = edgePlaneRotation;
         }
-      } else {
+      } else if (CONFIG.giros && CONFIG.giros.giroAzimutalCanto) {
         isRotateDragging = true;
         rotDragMode = 'azimut';
         rotDragStartX = e.clientX;
@@ -680,7 +680,7 @@
             setRotation(rotation + dAng);
           } else if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
             setEdgePlaneRotation(edgePlaneRotation + dAng);
-          } else {
+          } else if (CONFIG.giros && CONFIG.giros.giroAzimutalCanto) {
             setEdgeRotation(edgeRotation + dAng);
           }
         }
@@ -1367,7 +1367,10 @@
     var rotControl = document.getElementById('mw-rotate-control');
     if (rotControl) rotControl.style.display = isEdgeView ? 'none' : 'flex';
     var rotEdgeControl = document.getElementById('mw-rotate-edge-control');
-    if (rotEdgeControl) rotEdgeControl.style.display = isEdgeView ? 'flex' : 'none';
+    if (rotEdgeControl) {
+      rotEdgeControl.style.display =
+        (isEdgeView && CONFIG.giros && CONFIG.giros.giroAzimutalCanto) ? 'flex' : 'none';
+    }
     // El control de giro en plano de canto solo si el interruptor está activo.
     var rotPlaneControl = document.getElementById('mw-rotate-plane-control');
     if (rotPlaneControl) {

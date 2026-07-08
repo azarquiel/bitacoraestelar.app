@@ -50,14 +50,18 @@
 
     // -------------------------------------------------------------------------
     // GIROS Y TRANSICIONES (interruptores de funcionalidades)
-    //   giroPlanoCanto : true/false. Muestra en la vista de canto un control
-    //                    extra para girar la imagen en el plano de la pantalla
-    //                    (giro "de foto", alrededor del núcleo). Experimental:
-    //                    ponlo a false para desactivarlo sin tocar nada más.
-    //   transicion3D   : true/false. Voltereta 3D al cambiar entre la vista
-    //                    cenital y la de canto (el disco se abate sobre sí).
+    //   giroAzimutalCanto : true/false. Control 🛰️ de la vista de canto que gira
+    //                       el punto de vista alrededor del eje polar de la
+    //                       galaxia (los objetos se reproyectan en 3D real).
+    //                       Desactivado; ponlo a true para reactivarlo.
+    //   giroPlanoCanto    : true/false. Control 🌀 de la vista de canto para
+    //                       girar la imagen en el plano de la pantalla (giro
+    //                       "de foto", alrededor del núcleo).
+    //   transicion3D      : true/false. Voltereta 3D al cambiar entre la vista
+    //                       cenital y la de canto (el disco se abate sobre sí).
     // -------------------------------------------------------------------------
     giros: {
+      giroAzimutalCanto: false,
       giroPlanoCanto: true,
       transicion3D: true
     },
