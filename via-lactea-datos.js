@@ -206,6 +206,46 @@
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m29_inv.pdf',
       top:  { x: 46.1, y: 69.0 },
       edge: { x: 31.0, y: 50.0 }
+    },
+    {
+      id: 'm35', name: 'M35 · Cúmulo de Géminis', label: 'M35',
+      color: '#8aff9e', ficha: 'm35',
+      coords: 'l ≈ 186,6°, b ≈ 2,2° · ~3.870 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m35_inv.pdf',
+      top:  { x: 50.3, y: 72.9 },
+      edge: { x: 27.1, y: 49.9 }
+    },
+    {
+      id: 'm36', name: 'M36 · Cúmulo Pinwheel (Auriga)', label: 'M36',
+      color: '#8aff9e', ficha: 'm36',
+      coords: 'l ≈ 174,5°, b ≈ 1,1° · ~4.340 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m36_inv.pdf',
+      top:  { x: 49.7, y: 73.2 },
+      edge: { x: 26.8, y: 49.9 }
+    },
+    {
+      id: 'm37', name: 'M37 · Cúmulo de Auriga', label: 'M37',
+      color: '#8aff9e', ficha: 'm37',
+      coords: 'l ≈ 177,6°, b ≈ 3,1° · ~4.511 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m37_inv.pdf',
+      top:  { x: 49.9, y: 73.4 },
+      edge: { x: 26.6, y: 49.9 }
+    },
+    {
+      id: 'm38', name: 'M38 · Cúmulo Starfish (Auriga)', label: 'M38',
+      color: '#8aff9e', ficha: 'm38',
+      coords: 'l ≈ 172,3°, b ≈ 0,7° · ~3.480 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m38_inv.pdf',
+      top:  { x: 49.6, y: 72.6 },
+      edge: { x: 27.4, y: 50.0 }
+    },
+    {
+      id: 'm39', name: 'M39 · Cúmulo de Cygnus', label: 'M39',
+      color: '#8aff9e', ficha: 'm39',
+      coords: 'l ≈ 92,2°, b ≈ -2,4° · ~1.010 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m39_inv.pdf',
+      top:  { x: 49.2, y: 70.0 },
+      edge: { x: 30.0, y: 50.0 }
     }
   ];
 
@@ -1309,6 +1349,200 @@
           boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
           img: 'm29_216x.webp',
           html: '<p>Creo que no le voy a dedicar ni más aumentos ni más tiempo a este objeto, quitando a M73 creo que es el objeto Messier más soso de los que he visto. Bueno al menos puedo dejar constancia de que lo he visto con el 18". Si con M57 me llevé casi 1h de observación aquí llevo 5min y ya me parecen muchos.</p>'
+        }
+      ]
+    }],
+    m35: [{
+      // ── Observación 1 (M35) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.20 · IR -16 · 1º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m35_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M35. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre este cúmulo abierto de Géminis se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>Tamaño</li><li>Brillo general</li><li>NGC 2158</li><li>5 Gem K0III mag 5.83</li><li>Forma alargada en el eje NO-SE</li><li>Contar decenas de estrellas</li><li>Cayado que termina en HD 41996 (G0 mag 7.42)</li><li>HD 252260 (K5 mag 8.57)</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Gemini · 6h 08m, +24º 20’. Orientación: N a las 6, O a las 9, S a las 12 y E a las 3.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm35_70x.webp',
+          html: '<p>M35 siempre sorprende por lo brillante que es, sin embargo en este telescopio creo que desluce bastante. Me explicaré en su momento.</p><p>Primero empiezo como siempre describiendo el campo en el que se encuentra el objeto, rico de estrellas en el que llama la atención NGC 2158, otro cúmulo abierto mucho más pequeño y tenue que se coloca al suroeste del cúmulo principal M35. Se aprecia claramente la separación de ambos, pero quizás por ello también M35 parece menos compacto. Sin embargo la imagen es bastante bella colocando a M35 en el centro del ocular y a NGC 2158 en un extremo del mismo sin llegar al borde con decenas de estrellas en el campo que contiene a ambos. Destaca 5 Gem, brillante (mag 5.83) justo al este, es de tipo K0III, una gigante naranja.</p><p>El tamaño de M35 es enorme. Normalmente estoy acostumbrado a ver los objetos de un tamaño pequeño con este ocular puesto que me proporciona un grado de campo, sin embargo M35 ocupa más de un tercio del mismo, lo que es prueba de su gran tamaño (más de 20’ de arco diría).</p><p>La forma es compleja de definir, no puedo decir que sea esférica puesto que parece más alargado en su eje N-O / S-E.</p><p>Es muy brillante pues todas sus estrellas son de una magnitud importante pudiendo contarse decenas de ellas fácilmente.</p><p>Por identificar algunos detalles, destaca en su interior una forma peculiar de “cayado” que termina en una estrella rojiza más brillante (HD 41996 G0 mag 7.42). Muy abierto y con estrellas muy brillantes de color blanco, azuladas. Sin embargo en este telescopio desluce porque uno pierde la sensación de conjunto. No parece que esté observando un objeto único sino una acumulación de estrellas.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm35_98x.webp',
+          html: '<p>Me gusta mucho más cuando paso al 22mm. El contraste de colores se ve de una forma más llamativa. Es como si hubieran ganado en intensidad. Probablemente lo que esté pasando sea lo contrario. El fondo de estrellas se haya oscurecido un poco más lo que me ha llevado a que, por contraste, las estrellas se vean más llamativas, y lo que es más hermoso, sus tonos distintos.</p><p>Por ejemplo, me llama la atención una estrella dorada en la zona al sureste del cúmulo (lo que se correspondería con la 1:00 en mi ocular), HD 252260 K5 mag 8.57. También la estrella que determina el final del cayado, que tiene un color rojizo precioso, comparado con el resto de las estrellas del cúmulo.</p><p>Como en el mismo campo entra también NGC 2158 no puedo evitar mirarlo con detalle y describirlo. Lo primero que me llama la atención es su forma, me recuerda a la constelación de Capricornio, ese triángulo que parece una gran sonrisa. Sin embargo, en lo que debería ser el lado horizontal del triángulo (que corresponde con mis 12 en el ocular, tal y como lo observo) aparece un hueco que se hunde en el cúmulo abierto. Otro aspecto a destacar es la uniformidad de brillo en las estrellas de NGC 2158. Son todas de una magnitud muy similar excepto unas 3 ó 4 más brillantes. Se pueden resolver perfectamente, pero son muchísimo más tenues que las estrellas de M35.</p>'
+        },
+        {
+          boton: '154x - 28’ - 3mm', titulo: 'Delos 14mm',
+          img: 'm35_154x.webp',
+          html: '<p>Con este ocular llego a sumergirme totalmente en el cúmulo abierto lo que por un lado hace que pueda disfrutar del objeto en más detalle pero también disminuye la sensación de un objeto compacto al que comparar con el fondo de cielo.</p><p>El primer detalle respecto al ocular anterior es la diferencia en los colores de las estrellas. Se siguen apreciando las distintas tonalidades, la gran mayoría blancas azuladas brillando en oposición a las pocas doradas rojizas, sin embargo el contraste ahora es menor. Como si la magnitud de todas ellas se hubiera visto disminuido y hubieran palidecido ligeramente.</p><p>A continuación aprecias que la separación entre estrellas es mucho mayor, creándose incluso espacios en los que no ves ninguna estrella e identificando por tanto regiones desiertas de estrellas. Sobre todo en su parte central que sirve como contraposición a la serie de estrellas que se suceden en una curva que da forma al mango del cayado.</p>'
+        },
+        {
+          boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
+          img: 'm35_216x.webp',
+          html: '<p>¡Qué agradable sorpresa! Dudaba si pasar al Ethos de 10mm puesto que el objeto no parecía dar más de sí, ya que no había ninguna región que me llamara la atención, ni ningún detalle que quisiera observar. No obstante he optado por poner el siguiente ocular en mi telescopio simplemente para compararlos y el resultado ha sido más que aceptable.</p><p>A pesar de que ahora tenga mayores aumentos, como he ganado también en campo aparente, mantengo el mismo campo real y eso hace que pueda observarlo con mayor comodidad y menor sensación de “claustrofobia”. Es una gozada poder pasear la vista de un extremo a otro y ser consciente que el objeto ocupa todo ese tamaño. No me es fácil de explicar pero es como pasar de estar mirando algo por el hueco de una cerradura a, de pronto, no tener límites en los que mirar y tener que mover la pupila de un extremo al otro de tu ojo para poder abarcar el conjunto al completo.</p><p>La sensación de inmersión es mucho mayor en este caso y además el contraste parece acentuarse mucho más con lo que las estrellas destacan más aún. Creo que un buen símil puede ser que con el 14mm parecía que entraba en el objeto a través de un estrecho pasillo cuando ahora con el 10mm es como si me rodeara a derecha e izquierda, arriba y a abajo. Como si realmente te estuvieras dentro del cúmulo y no observándolo desde el exterior.</p><p>No ha estado mal el ejercicio aunque no sigo subiendo de aumentos pues imagino que no voy a conseguir nada más.</p>'
+        }
+      ]
+    }],
+    m36: [{
+      // ── Observación 1 (M36) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.5 · IR -38 · 2º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m36_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M36. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre este cúmulo abierto de Auriga se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>Número de estrellas</li><li>Forma irregular · largos brazos</li><li>Diferencia de magnitud de estrellas en su parte más central</li><li>Colores uniformes</li><li>Comparar la impresión a bajos y a altos aumentos</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Auriga · 5h 36m, +34º 08’. Orientación: N a las 6, O a las 9, S a las 12 y E a las 3.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm36_70x.webp',
+          html: '<p>Tras pasar por M38, M36 no te llamará mucho la atención, al menos no a bajos aumentos, o eso es lo que yo he sentido. El número de estrellas que componen el objeto es muy bajo, cuento entre 15 - 20 estrellas de una magnitud similar. Si acaso llama la atención que todas mantengan una magnitud muy similar, sin embargo no llama mucho la atención. Respecto a su forma es irregular, no puedo definirla más allá que una agrupación de estrellas con algunas de ellas separándose de la parte central formando brazos en paralelo, bastante largos ambos.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm36_98x.webp',
+          html: '<p>Con el 22mm (98x) el objeto gana mucho, primero se ha expandido hasta ocupar casi la mitad del ocular. Segundo aparecen varias estrellas de menor magnitud agrupándose en el cúmulo, con lo que parece un objeto más completo y no tan simple como la visión anterior. Especialmente en la parte central donde hay un par de estrellas de una magnitud similar que anteriormente me llamó la atención y a la que se le suman algunas estrellas más de menor magnitud.</p><p>Sin lugar a duda merece la pena emplear un poco más de tiempo y seguir creciendo en aumentos para contemplar el mismo objeto. Una vez más descubro el valor de no quedarte con la primera impresión.</p>'
+        },
+        {
+          boton: '154x - 28’ - 3mm', titulo: 'Delos 14mm',
+          img: 'm36_154x.webp',
+          html: '<p>Este ocular siempre me reduce muchísimo el campo al pasar de 82º de campo aparente a los 72º del Delos pero no me desagrada. El objeto ha ganado bastante en tamaño pero lo que más me llama la atención es como siguen apareciendo nuevas estrellas más tenues que ahora se descubren fácilmente.</p><p>Hay que tener en cuenta que los cúmulos abiertos pueden ser muy generosos con los aumentos pues no van a perder prácticamente brillo y sin embargo su campo alrededor sí que se va a oscurecer destacándose aún más del cielo.</p><p>El único problema que encuentro en estas situaciones es que el objeto deja de tener un sentido como conjunto. Empieza a ser tan grande que casi ocupa todo el ocular con lo que pierdo la referencia del resto del campo. Sin embargo aún no he llegado a ese momento con los 28 minutos de arco que me da mi ocular. Sigo pudiendo comparar el objeto con el cielo que lo rodea, con lo que lo contemplo en su plenitud. Además siguen apareciendo más estrellas tenues. Creo que este objeto es uno que puede empezar por desilusionar y volverse más interesante cuantos más aumentos añades. Porque realmente tengo una sensación más placentera observando este objeto a mayores aumentos que con el 31mm. Es más rico en detalles, con muchas más estrellas tenues completándolo, a la misma vez que las estrellas visibles en aumentos anteriores no pierden belleza ni presencia.</p>'
+        },
+        {
+          boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
+          img: 'm36_216x.webp',
+          html: '<p>Con el Ethos de 10mm no consigo una mejor imagen la verdad, es cierto que ahora es mucho más cómodo de observar y que el tamaño del objeto se ha visto incrementado pero la sensación que he tenido en el salto anterior del ocular de 22mm al de 14mm, lamentablemente, esta vez no la he tenido. Es verdad que aparecían algunas estrellas más tenues pero era un poco más de lo mismo con lo que no me he entretenido mucho y he pasado al último ocular con el que observaré este objeto.</p>'
+        },
+        {
+          boton: '270x - 22’ - 1.7mm', titulo: 'Ethos 8mm',
+          img: 'm36_270x.webp',
+          html: '<p>El último cambio de ocular para este objeto y me reafirmo en que M36 es un objeto que mejora con mayores aumentos. La cantidad de estrellas tenues que se perciben en el interior del cúmulo abierto, no como una nube difusa, sino como estrellas individuales, te hace mirarlo con ojos totalmente distintos. Porque ahora juegas al contraste entre magnitudes de estrellas. Las principales que dan forma al cúmulo y las secundarias y menos brillantes que lo completan. Es un bonito y curioso objeto.</p><p>Lamentablemente con este ocular ocurría lo ya comentado que te adentras tanto en el objeto que dejas de tener una referencia del mismo. Quitando esa sensación la imagen es muy sugerente con tantas estrellas de diversas magnitud.</p>'
+        }
+      ]
+    }],
+    m37: [{
+      // ── Observación 1 (M37) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.5 · IR -38 · 2º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m37_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M37. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre este cúmulo abierto de Auriga se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>Tamaño</li><li>Número de estrellas que lo componen</li><li>Color de la estrella central (rojiza)</li><li>Magnitud de la estrella central</li><li>Forma triangular</li><li>Hueco de estrellas S-N</li><li>Contraste con un fondo negro terciopelo</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Auriga · 5h 52m, +32º 33’. Orientación: N a las 6, O a las 9, S a las 12 y E a las 3.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm37_70x.webp',
+          html: '<p>Observo este cúmulo tras pasar por M36 y eso conlleva que su belleza se vea incrementada pues la diferencia con este otro cúmulo abierto es notable.</p><p>Lo primero que llama la atención es la cantidad de estrellas que lo componen, a diferencia de M36 hay multitud de ellas en vez de un par de decenas, además con una estrella central de una tonalidad distinta al resto. Si a esto le sumas el hecho de que todas ellas aparecen puntuales como cabezas de alfiler, el resultado es una imagen sorprendente. Diría además que la estrella central es más rojiza y además de una magnitud menor lo que conlleva que destaque aún más en el cúmulo, pues a su distinto color le suma un mayor brillo.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm37_98x.webp',
+          html: '<p>Con este nuevo ocular el objeto gana en belleza pues sigue manteniendo su forma destacando del fondo de cielo pero creciendo en tamaño y brillo de las estrellas. Ahora la estrella central me parece que destaca incluso más y su color me captura dejándome algunos segundos embelesado con ella.</p><p>Las estrellas se ven más separadas unas de otras a pesar de contarse por decenas. La forma es lo que más me cuesta definir, claramente no tiene forma redonda sino más bien triangular, con una especie de hueco o entrante originado por falta de estrellas de la misma magnitud en su parte superior y llegando hasta la zona central donde está la estrella rojiza.</p><p>De los tres cúmulos abiertos de Auriga este es el que más disfruto y el que más captura mi mirada, por la sutileza del mismo, la cantidad de estrellas y la variación de brillo y colores entre ellas. Un precioso cúmulo abierto.</p>'
+        },
+        {
+          boton: '154x - 28’ - 3mm', titulo: 'Delos 14mm',
+          img: 'm37_154x.webp',
+          html: '<p>De nuevo el 14mm con sus 72º de campo aparente me arroja a esa visión de estar encerrando el objeto. No consigo muchos más detalles que el ocular anterior, quizás indicar que merece la pena ver el objeto a mayores aumentos. No vas a perder definición ni brillo y vas a poder contemplarlo con más comodidad, disfrutando de los detalles que lo hacen único. Es decir, la gran cantidad de estrellas de brillo uniforme distribuidas de forma triangular por todo el cúmulo y la estrella central rojiza. Quizás con este ocular los colores empiezan a ser más uniformes, atenuándose la diferencia entre ellos pero aún viéndose claramente como estrellas de distinta tonalidad.</p><p>Le dedico algunos segundos más imaginando los mundos que pueden existir en tal cantidad de estrellas y la vista que se debe tener desde ellos en una noche oscura. Debe ser un cielo precioso pues se verían decenas de “Vegas” en su firmamento repartidas aleatoriamente. Debe ser espectacular.</p>'
+        },
+        {
+          boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
+          img: 'm37_216x.webp',
+          html: '<p>Un detalle que me llama la atención es que los colores han vuelto a destacar con este ocular. Creo que entre los Delos y Ethos existe una clara diferencia en el tratamiento de los colores, respetándolos mucho más los últimos que los primeros.</p><p>Excepto por ese detalle la imagen no difiere mucho a lo ya observado solamente que con mucho más campo, con un aumento mayor y con una mayor comodidad de observación. Ha merecido la pena poner también este ocular sobre todo por compararlo con el anterior y descubrir las diferencias entre ellos. El objeto sigue siendo una preciosidad, aunque con cada aumento te mantiene más entretenido mirando cada detalle del mismo.</p>'
+        },
+        {
+          boton: '270x - 22’ - 1.7mm', titulo: 'Ethos 8mm',
+          img: 'm37_270x.webp',
+          html: '<p>El mejor ocular para observar este objeto en mi telescopio sin lugar a dudas es el Ethos de 8mm. Es IMPRESIONANTE cómo el objeto ocupa casi la totalidad del ocular y encima con una sensación de campo amplio que otorgan los 100º de campo aparente. Es una maravilla. Primero el fondo del cielo se ha oscurecido más aún al incrementar los aumentos y reducir la pupila de salida, segundo es posible observar las estrellas individual y absolutamente puntuales. Como diamantes brillando en la oscuridad de un tapiz de terciopelo negro profundo. Tercero y último, el contraste de colores entre la estrella central de menor magnitud y el resto de sus compañeras se acentúa hasta niveles que no imaginabas a bajos aumentos.</p><p>Todo un disfrute para la vista relajarse contemplando este cúmulo a tales aumentos, con un seeing bueno y un telescopio bien colimado.</p>'
+        }
+      ]
+    }],
+    m38: [{
+      // ── Observación 1 (M38) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.5 · IR -38 · 1º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m38_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M38. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre este cúmulo abierto de Auriga se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>Tamaño</li><li>Densidad de estrellas</li><li>NGC 1907</li><li>Puntualidad de las estrellas</li><li>Color de HD 35878 (mag 8.41, G5) frente al resto de estrellas</li><li>Cayado que se extiende sur-norte</li><li>Ríos de oscuridad</li><li>Bajar al máximo la pupila de salida sin dejar de observar el cúmulo como un conjunto (sin bajar de 25’ de campo real), consiguiendo el máximo contraste</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Auriga · 5h 28m, +35º 51’. Orientación: N a las 6, O a las 9, S a las 12 y E a las 3.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm38_70x.webp',
+          html: '<p>Es el primer cúmulo abierto de los tres cúmulos abiertos de Auriga que observo esta noche. La noche es muy buena con una Vía Láctea muy contrastada.</p><p>M38 es un cúmulo abierto muy extenso y muy brillante pero como los aumentos son bajos y el campo es de más de 1º puedo observar también NGC 1907 en el borde del campo, lo que da una imagen muy sugerente. M38 es uniforme con estrellas muy puntuales y de una magnitud similar, ocupando más de un 20% del campo del ocular, mientras que NGC 1907 es un objeto pequeño, más compacto pero que permite también la observación individual de sus estrellas pues son fácilmente resolubles. Sin embargo su brillo es bastante menor.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm38_98x.webp',
+          html: '<p>La puntualidad de las estrellas me llama muchísimo la atención, es lo que hace que el objeto sea tan bello. Recomiendo encarecidamente una colimación correcta para conseguir a bajos aumentos esta visión. No es complicado pues no he llegado a pasar de los 100x. También hay una estrella rojiza, con un brillo un poco superior al resto de sus compañeras, en el borde del cúmulo a las 4:00 si seguimos la famosa orientación que nos da un reloj. Se trata de HD 35878 mag 8.41 G5.</p><p>De la forma de M38 destaco aquellas estrellas que están en el centro haciendo una especie de semicírculo, veo que debajo de las mismas sigue una línea más o menos recta. A esto lo llamo yo “el cayado” de M38, pues me recuerda a ese tipo de bastón tan utilizado por los pastores en las zonas rurales tanto para andar como para defenderse.</p>'
+        },
+        {
+          boton: '154x - 28’ - 3mm', titulo: 'Delos 14mm',
+          img: 'm38_154x.webp',
+          html: '<p>Sigue siendo un placer observar el cúmulo al que además empiezo a descubrir algunos detalles curiosos.</p><p>El primero de ellos es que, acompañando a estas estrellas brillantes, individuales de una magnitud similar hay claramente otras mucho menos brillantes que provoca una sensación de nubosidad de fondo. Sin embargo, estas estrellas más tenues, no están repartidas de forma uniforme en el cúmulo, sino que, curiosamente, sigue la misma distribución de las estrellas más brillantes, lo que origina “huecos” negros en el propio cúmulo. Lo describo como ríos de oscuridad recorriendo el cúmulo. Es un ejercicio muy gratificante el hecho de buscar contrastes de oscuridad dentro del propio cúmulo.</p><p>Pero, sin lugar a duda lo que más llama la atención es el brillo tan uniforme y puntual de sus estrellas principales y la gran cantidad de las mismas. De un color blanco-azulado parecen gotas de rocío o granos de cuarzo brillando en el tapiz negro del firmamento.</p>'
+        },
+        {
+          boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
+          img: 'm38_216x.webp',
+          html: '<p>Qué preciosidad observar tanto campo con el objeto tan grande. A pesar de los aumentos, como estoy observando cerca de 28 minutos de arco de campo real, M38 sigue conservando su coherencia y se puede observar como un todo frente al firmamento que lo rodea.</p><p>Ya lo he indicado en anteriores oculares pero lo que más llama la atención sin duda es la puntualidad de las estrellas, su brillo similar y el gran número de las mismas esparcidas por el cúmulo.</p><p>Una imagen que se te queda grabada en el cerebro. Es, simplemente, un objeto bello. Lo suficiente compacto para identificarlo como un objeto en sí mismo, pero también lo suficientemente abierto para deleitarse con cada estrella del mismo.</p>'
+        },
+        {
+          boton: '270x - 22’ - 1.7mm', titulo: 'Ethos 8mm',
+          img: 'm38_270x.webp',
+          html: '<p>Me ha sorprendido tanto la visión con este ocular que por un momento he vuelto al 31mm para confrontar la imagen que da un ocular y el otro. Y sin lugar a dudas, al menos para mi criterio de belleza, gana por goleada los grandes aumentos, a bajos aumentos es una visión más pobre. A bajos aumentos el objeto es bonito, pero el brillo del firmamento es tal que le roba algo de belleza (me imagino lo que debe ser observar desde cielos realmente negros y me estremezco) al no contrastarlo tanto. También el tamaño del objeto a bajos aumentos es, a pesar de ser un cúmulo abierto grande, ridículo si lo comparamos con el Ethos de 8mm. Simplemente, a grandes aumentos, las estrellas están esparcidas por todo el ocular y te imaginas acercándose a ese cúmulo desde el espacio y simplemente sueñas con los ojos abiertos. El cielo de fondo además es mucho más negro pues tu pupila de salida se ha visto muy reducida, y el contraste que logra percibir tu cerebro es sobrecogedor.</p><p>Puro gozo en estado real. Maravilloso.</p>'
+        }
+      ]
+    }],
+    m39: [{
+      // ── Observación 1 (M39) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.25 · IR -7.2 · 16º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m39_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M39. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre este cúmulo abierto de Cygnus se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>Tamaño</li><li>Forma “de copa”</li><li>Contar 20 estrellas</li><li>Color de las estrellas</li><li>Arcos de estrellas de baja magnitud cerca de HD 205116 y HD 205210</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Cygnus · 21h 31m, +48º 25’. Orientación: N a la 1, O a las 4, S a las 7 y E a las 10.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm39_70x.webp',
+          html: '<p>Enorme cúmulo abierto. Este cúmulo abierto está situado en un campo rico de estrellas tenues. Su tamaño es tan grande que ya incluso en el ocular de 31mm con 1º y 10min de campo real el objeto ocupa casi la mitad del campo.</p><p>Respecto a su forma no soy muy capaz de establecer ningún patrón, quizás una especie de triángulo o copa extraña.</p><p>El cúmulo es muy brillante y se distingue perfectamente incluso en el buscador. En el ocular de 31mm con 6.6mm de pupila de salida y 70x es un bonito espectáculo. Todas sus estrellas tienen un color blanco-azulado y cuento fácilmente entre 15 y 20 de ellas. Las principales son tres que están situado en la parte superior del cúmulo tal y como lo veo en mi ocular, el resto tienen una magnitud un poco mayor (es decir son un poco menos brillantes).</p><p>Es curioso de observar pero creo que dará una mejor imagen con un telescopio de menor diámetro.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm39_98x.webp',
+          html: '<p>Con el 22mm consigo una imagen mejor, llega a ocupar casi todo el campo del ocular, y el brillo de ellas te llama mucho la atención. Paso a describirlo ya que es la mejor imagen que he obtenido, y no creo que merezca la pena dedicar más esfuerzo a un objeto que, debido a su tamaño, no podré observar completamente a mayores aumentos.</p><p>Las tres estrellas principales del cúmulo forman una especie de línea en la parte superior del mismo. Aunque la tercera estrella, la que se encuentra en lado derecho del ocular, en realidad está un poco desviada de la línea que forma las otras dos estrellas. Estaría como a las dos y media de la estrella central. Si fijamos nuestra vista en la estrella central de estas tres estrellas principales podemos apreciar que a las 4 hay una pareja de estrellas de la cual la más alejada es levemente más brillante. Encima de estas dos estrellas, y a las dos de la estrella central hay otra estrella de magnitud similar a las anteriores que te lleva hasta otra cuarta estrella situada a las 12 de la estrella más alejada del trío de estrellas principales. Esta cuarta estrella te lleva hasta una quinta que ya está mucho más alejada de las estrellas principales. Con esto recorremos la región entre las 12 y las 3 del cúmulo.</p><p>Volviendo a partir de la estrella central pero ahora mirando hacia la zona de las 7, nos encontramos con una serie de tres estrellas que forman un arco que lleva hacia una cuarta estrella más separada. Desde esta cuarta estrella podemos explorar la región de las 6 del cúmulo dónde se aprecian tres estrellas de una magnitud similar y que forman una especie de triángulo rectángulo.</p><p>Por último destacar algún grupo curioso de estrellas de mayor magnitud y de brillo mucho más tenue formando una especie de arcos. Un arco estaría situado a las 3 de la estrella central, y el otro a las 6 de la estrella situada más a la derecha.</p>',
+          anexos: [
+            { img: 'm39_98x_principales.webp', titulo: 'Estrellas principales (Main stars) y recorrido región 12-3', pos: 'right' },
+            { img: 'm39_98x_arcos.webp', titulo: 'Arcos de estrellas de baja magnitud (regiones 3 y 6)', pos: 'right' }
+          ]
         }
       ]
     }]
