@@ -12,6 +12,7 @@ Renombra archivos (en una carpeta y TODAS sus subcarpetas) aplicando:
         28min_100º     -> 216x
         21min_100º     -> 270x
         9min           -> 480x
+        4,5min_72º     -> 960x
 
 USO:
     python3 renombrar.py [carpeta]
@@ -41,6 +42,8 @@ REEMPLAZOS = [
     ("28min_72º",  "154x"),
     ("28min_100º", "216x"),
     ("21min_100º", "270x"),
+    ("9min_72º",   "480x"),
+    ("4,5min_72º", "960x"),
     ("70min",      "70x"),
     ("50min",      "98x"),
     ("9min",       "480x"),

@@ -246,6 +246,30 @@
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m39_inv.pdf',
       top:  { x: 49.2, y: 70.0 },
       edge: { x: 30.0, y: 50.0 }
+    },
+    {
+      id: 'm52', name: 'M52 · Cúmulo de Cassiopeia', label: 'M52',
+      color: '#8aff9e', ficha: 'm52',
+      coords: 'l ≈ 112,7°, b ≈ 0,4° · ~5.000 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m52_inv.pdf',
+      top:  { x: 46.5, y: 71.4 },
+      edge: { x: 28.6, y: 50.0 }
+    },
+    {
+      id: 'm55', name: 'M55 · Cúmulo globular de Sagitario', label: 'M55',
+      color: '#d7a4ff', ficha: 'm55',
+      coords: 'l ≈ 8,8°, b ≈ -23,3° · ~17.600 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m55_inv.pdf',
+      top:  { x: 48.1, y: 57.7 },
+      edge: { x: 42.3, y: 53.1 }
+    },
+    {
+      id: 'm57', name: 'M57 · Nebulosa del Anillo (Lira)', label: 'M57',
+      color: '#5fe0c8', ficha: 'm57',
+      coords: 'l ≈ 63,2°, b ≈ 14,0° · ~2.567 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m57_inv.pdf',
+      top:  { x: 48.3, y: 69.1 },
+      edge: { x: 30.9, y: 49.7 }
     }
   ];
 
@@ -1543,6 +1567,147 @@
             { img: 'm39_98x_principales.webp', titulo: 'Estrellas principales (Main stars) y recorrido región 12-3', pos: 'right' },
             { img: 'm39_98x_arcos.webp', titulo: 'Arcos de estrellas de baja magnitud (regiones 3 y 6)', pos: 'right' }
           ]
+        }
+      ]
+    }],
+    m52: [{
+      // ── Observación 1 (M52) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.5 · IR -25 · 7º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m52_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M52. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre este cúmulo abierto de Cassiopeia se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>Tamaño</li><li>Identificar las estrellas HD 220770, BD+60 2537, BD+60 2534 y BD+60 2531</li><li>Contraste de color y brillo de BD+60 2532</li><li>Contar las estrellas que lo componen (alrededor de 60)</li><li>Forma de polilla</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Cassiopeia · 23h 24m, +61º 35’. Orientación: N a las 12, O a las 3, S a las 6 y E a las 9.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm52_70x.webp',
+          html: '<p>Es un cúmulo abierto bastante bonito, grande, ocupa cerca de un cuarto del campo del ocular con una estrella rojiza destacable en uno de los extremos. También tiene una serie de estrellas brillantes que no forman parte del mismo, un poco alejadas, pero que crean una línea imaginaria en la que se apoya el cúmulo. Son las estrellas HD 220770 (magnitud 8.56), BD+60 2537 (magnitud 10.92), BD+60 2534 (magnitud 11.07) y BD+60 2531 (magnitud 9.62).</p><p>Las estrellas del cúmulo son todas de una magnitud similar (destacando esta rojiza como levemente más brillante, es la estrella BD+60 2532 de magnitud rondando la 9, mientras el resto ronda la magnitud 11). De su forma no puedo destacar mucho, es bastante irregular aunque diría que lo caracterizaría de redondo.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm52_98x.webp',
+          html: '<p>Con este ocular mejora la visión, el cúmulo se ve mucho más abierto y grande, la estrella rojiza (BD+60 2532) destaca mucho más sobre el resto. En un conteo rápido estimo unas 40 ó 50 estrellas de magnitud similar. No hay mucho más que le pueda sacar, es bastante abierto y poco más. Si acaso, a base de insistir, me imagino que tiene forma de polilla, con un par de antenas que llegan a una parte central donde hay una acumulación mayor de estrellas y sería lo que formaría la parte del cuerpo de la polilla. De las alas la que veo a mi izquierda es la que mejor se define y la estrella rojiza formaría la punta del ala de la derecha, y me parece que el mismo patrón de estrellas se repite al otro extremo del "cuerpo" de la polilla con lo que quedaría dibujadas las dos alas de la misma.</p>'
+        },
+        {
+          boton: '154x - 28’ - 3mm', titulo: 'Delos 14mm',
+          img: 'm52_154x.webp',
+          html: '<p>Me reitero por enésima vez en la buena sensación que me da el pasar a este ocular con objetos que encajan enteros en su campo. El salto es tan grande desde los 22mm que parece como si me sumergiera en el objeto.</p><p>Sugestionado con la imagen anterior ahora veo con más claridad la polilla aunque para ello debo obviar algunas estrellas del cúmulo. Lo describo de la siguiente forma en mis notas de voz: partiendo desde la gigante roja BD+60 2532 parten dos hileras de estrellas, una hacia abajo, otra hacia la izquierda. Estas son las que dan forma a esta "ala" tan bien definida. Encima de la línea de estrellas que parten hacia la izquierda hay otra agrupación de estrellas que debes ignorar. Esta línea se une a otra línea de estrellas más compactas que son las que forman el cuerpo del animal y que puedes continuar bajando hasta llegar a lo que sería el final del cuerpo. Es fácil reproducir el mismo patrón en la zona izquierda del cuerpo de la polilla. Para darle más fuerza a esta imagen, encima justo de esta zona de concentración de estrellas que formaría la cabecita de la polilla parten dos hileras de estrellas en arco que serían las antenas de la misma. En fin... es lo que mi imaginación dibuja y así lo reflejo en mis notas de voz. Y lo mejor de este ocular es que prácticamente todo el objeto entra en el mismo.</p>'
+        },
+        {
+          boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
+          img: 'm52_216x.webp',
+          html: '<p>El salto al 10mm es una gozada al subir de aumento sin disminuir el campo ya que el Ethos tiene 100º de campo aparente. Además con estos aumentos empiezo a ver estrellas más tenues formando parte también del cúmulo abierto, aunque es imposible quitarme la forma de la polilla que se me ha dibujado en la mente.</p>'
+        },
+        {
+          boton: '270x - 22’ - 1.7mm', titulo: 'Ethos 8mm',
+          img: 'm52_270x.webp',
+          html: '<p>Con este ocular ya me paso un poco, el objeto entra perfecto en el ocular pero no contemplo ningún campo más alrededor con lo que pierdo la imagen de conjunto. No veo mucho más detalle de lo ya explicado. No pasé de estos aumentos porque tampoco vi nada que me llamara la atención para ser observado con detalle.</p>'
+        }
+      ]
+    }],
+    m55: [{
+      // ── Observación 1 (M55) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.8 · IR -10 · 14º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m55_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M55. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre este cúmulo globular de Sagittarius se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>Tamaño</li><li>Resolver estrellas hasta el núcleo</li><li>Brillo uniforme en todo el objeto (sin diferencia de brillo entre el núcleo y el halo exterior)</li><li>Tonalidad rojiza de las estrellas más brillantes</li><li>“Ganchos” saliendo del cúmulo en su halo exterior</li><li>Identificar en su interior ríos oscuros e islas brillantes</li><li>Arco brillante en el centro en su región E</li><li>Formas curiosas en su interior, como una “mariposa”</li><li>Asombrarse con la falta de núcleo abigarrado y más brillante</li><li>A grandes aumentos (> 450x): ríos oscuros que desembocan en una laguna central; islas brillantes; montañas brillantes que rodean a la laguna oscura central; sensación de volumen o tridimensionalidad en el centro del cúmulo</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Sagittarius · 19h 40m, -30º 57’. Orientación: N a las 12, O a las 3, S a las 6 y E a las 9.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm55_70x.webp',
+          html: '<p>Cúmulo globular bastante grande donde se resuelven todas las estrellas, más complicado en el núcleo. Respecto a su brillo es bastante uniforme, no destaca una zona central mucho más brillante que el halo exterior de otros cúmulos (como por ejemplo en M75), sino que todo el objeto tiene una agradable uniformidad de brillo el cual no es muy intenso. Es de los cúmulos globulares que he observado menos “compacto” que recuerdo, casi parece estar viendo un cúmulo abierto por lo fácilmente que se resuelven sus estrellas si no fuera por la evidente forma de acumulación de las mismas en una bola. Las estrellas más brillantes parecen tener una tonalidad rojiza que contrasta con el resto de las estrellas más pálidas y grisáceas. Como las estrellas del exterior también se resuelven uno puede imaginar formas con las mismas, a mí me da la sensación de estar viendo brazos curvos de estrellas, es decir sería una especie de pequeños ganchos que salen del cúmulo. Esta primera impresión ha sido muy buena con un objeto GRANDE, compensado (mejor que uniforme porque sí que hay variación de brillo pero muy poco, es como un gradiente muy natural) y fácil de resolver y observar.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm55_98x.webp',
+          html: '<p>El cúmulo gana mucho en tamaño, llega a ocupar más de una quinta parte del ocular. Se va complicando su descripción porque empiezan a intuirse estructuras en la zona central. Describiendo el objeto desde el exterior hacia el interior del cúmulo, primero destacan estas estrellas sueltas que definen caminos curvados que se acercan a la zona más central del cúmulo, luego tenemos el centro del cúmulo en sí mismo, grande y con un brillo muy similar y no intenso. Pero en la parte central se distinguen algunas regiones más pobres en estrellas que aparecen a la vista como ríos oscuros que separan islas o zonas de estrellas más brillantes en la zona central. Esta estructura compleja es un reto para la observación. La forma que aprecio es parecida a una flecha con la punta muy abierta, o más bien como una onda con un pináculo por detrás, sería algo parecido a una D pero eliminando el palo izquierdo que une la curva de la D; además esta curva no tiene un grosor uniforme, es decir, son dos lóbulos más oscuros que se estrechan en el centro. Ojo que todo esto ocurre en la parte central del cúmulo donde se supone que el brillo es más uniforme pero claramente no lo es, con estas regiones más ricas y pobres en estrellas más o menos luminosas. En concreto en la zona este del núcleo del cúmulo.</p>'
+        },
+        {
+          boton: '154x - 28’ - 3mm', titulo: 'Delos 14mm',
+          img: 'm55_154x.webp',
+          html: '<p>Es una maravilla ponerle aumentos a este tipo de objetos porque tu visión va cambiando con cada salto en el ocular, ganando en detalles, resolviendo más estrellas y sin embargo sin parecer que pierdas brillo.</p><p>Ahora el cúmulo casi entra en todo el ocular y no veo nada más allá del propio cúmulo cuando lo coloco en el centro del ocular. Me vuelvo a fijar más en la parte central del cúmulo y estas regiones de diferencia de brillo. Me parece ver incluso otra zona más con un poco de menos brillo, pegado a este arco de la D, en la zona más central del mismo. De nuevo me llama la atención la uniformidad del cúmulo, pero no en tanto a anodino, es decir que sea aburrido, sino todo lo contrario, la cantidad de estrellas individuales que se observan están repartidas por igual en todo el cúmulo, no veo ninguna zona de concentración especial, tampoco existe un halo claramente definido sino que existen estrellas más brillantes que destacan en la parte más externa del cúmulo pero todo él tiene un brillo bastante similar. Es un objeto complejo, porque se le ven estructuras distintas pero a su misma vez muy caótico y, en ese caos, existe cierta uniformidad. La palabra que más me viene a la mente es compensado, sin regiones que destaquen sobre las demás.</p>'
+        },
+        {
+          boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
+          img: 'm55_216x.webp',
+          html: '<p>Ya lo he comentado muchas veces pero me encanta el juego de oculares Delos 14mm y Ethos 10mm, porque el campo se mantiene prácticamente igual pero los aumentos crecen. Ahora al ver con más detalle esta zona central me parece ver cuatro zonas más oscuras respecto al resto de la zona central un poco más brillante. Como estas cuatro zonas parece que se juntan en el centro que a su vez se estrecha, la imagen que me viene a la mente es la de una mariposa pero una mariposa sencilla, esa que dibujamos para los más peques con cuatro lóbulos, dos más anchos en la parte de abajo y otros dos más estrechos en la parte de arriba, pues algo así. Es complicado de observar porque estoy viendo zonas de distintos brillos en el núcleo mismo del cúmulo globular pero es realmente sugerente y llama la atención. Es imposible no intentar describirlo y sacarle más detalle. Sigo añadiendo aumentos para poder describir mejor esta zona central.</p>'
+        },
+        {
+          boton: '270x - 22’ - 1.7mm', titulo: 'Ethos 8mm',
+          img: 'm55_270x.webp',
+          html: '<p>A estos aumentos entro dentro del cúmulo, y debo moverme con los motores levemente para observarlo desde el exterior hasta el interior. También me ha ocurrido algo curioso y es que dejo de ver los colores tan definidos en las estrellas, ahora son todas de un color más uniforme.</p><p>Partiendo desde el área externa del cúmulo, me doy cuenta que he perdido algunas estrellas y ya solamente quedan las más brillantes por lo que me da la sensación de que el cúmulo se ha contraído un poco o no es tan rico en su parte externa, y la zona central me parece más esférica que con los otros aumentos. Pero lo que me llama poderosamente la atención es la región central del núcleo. Ojo que todo lo que comento a continuación debéis imaginarlo no como una región central super-brillante como el resto de los cúmulos globulares, sino más bien como la continuación natural de una agrupación de estrellas bastante uniforme. Lo he repetido muchas veces pero es que una de las cosas que más me ha llamado la atención es la falta de "núcleo abigarrado y super-brillante" típico de los cúmulos globulares, así que todo es más sutil y difícil de observar.</p><p>Con estos aumentos ya no imagino una mariposa sino que me parece ver ríos que se unen en el centro del objeto, me digo a mí mismo que merece muchísimo la pena los detalles que estoy intentando ver y describir pero a la misma vez me siento incapaz de explicar la complejidad del núcleo del cúmulo, con estas regiones, así que salto al 4.5 para intentar verlo con más detalle y poder dar una descripción más acertada.</p>'
+        },
+        {
+          boton: '480x - 9’ - 1mm', titulo: 'Delos 4.5mm',
+          img: 'm55_480x.webp',
+          html: '<p>BUAAAAAAAHHHHH, BRUTAL la imagen con el 4.5. Lo que me digo a mí mismo es que he destrozado el objeto. Con estos aumentos el cúmulo aparece un cúmulo abierto en vez de un cúmulo globular, es simplemente ESPECTACULAR e INCREÍBLE.</p><p>Veo el núcleo perfectamente pero a un tamaño increíble con muchísimo detalle. Describo lo que veo. En principio ya he desechado la idea de mariposa y me pongo a ver estas regiones de ríos oscuros que confluyen en el interior del cúmulo. Es muy sugerente porque pareciera como si todos ellos fueran a desembocar a una laguna central donde en un lateral de la misma hay una isla de estrellas más brillantes. Para poder entenderlo un poco mejor no es que vea zonas realmente oscuras, es que claramente veo regiones con estrellas individuales brillantes (levemente más brillantes que el resto) que además se agrupan formando hileras, y a los bordes de estas hileras es donde se quedan estas regiones, como zonas de menor brillo o ríos oscuros, pero no es negro ni nada parecido, sigue siendo gris pero un gris más tenue.</p><p>Así que fijándome en estas estrellas que resuelvo incluso en el mismo centro del cúmulo, me pongo a hacer el ejercicio contrario, es decir, en vez de fijarme en estos "ríos más oscuros" fijarme en las zonas brillantes que los delimitan y entonces la imagen que se forma en mi mente es maravillosa. Ahora en vez de ver ríos oscuros lo que veo son montañas, cordilleras o islas de estrellas. Las zonas más brillantes del núcleo, en su contraste con estas menos brillantes, parecen elevarse por encima del resto con lo que en tu mente se dibuja una ilusión de tridimensionalidad preciosa.</p><p>Es un placer pasar los minutos mirando tranquilamente la misma parte del objeto fijándote unas veces en un aspecto y luego en el otro, forzando la vista hasta el límite. Sugiero enormemente que se haga ese ejercicio. No te quedes simplemente con la visión general de lo que ves, sino toma un punto e intenta describirlo para ti mismo. Preguntad a vuestro cerebro: ¿pero qué estás viendo? ¿dónde está la diferencia que veo? ¿cómo le pongo palabras? Y la imagen se transforma casi por arte de magia. Empiezan a verse detalles que te dejan enganchado al objeto. En concreto, esa parte central del cúmulo, con esas zonas oscuras o brillantes depende dónde mires, es una gozada. Eso sí, necesitas llegar al menos a los 400x para disfrutar bien de esta imagen, porque con esos aumentos está todo perfectamente separado y es fácil de observar. Entonces aparecen claramente estas regiones, que antes se intuían, esa maravillosa complejidad que le da un aspecto tan bello en su interior. De verdad que es un ejercicio muy interesante de realizar y de disfrutar. Eso sí, creo que en total le he dedicado 1h de observación al objeto, pero merece la pena.</p>'
+        }
+      ]
+    }],
+    m57: [{
+      // ── Observación 1 (M57) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.95 · IR -14 · 12º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m57_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M57. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre la Nebulosa del Anillo (Lyra) se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>Forma</li><li>Descubrir la diferencia entre el arco noreste y suroeste (el arco noreste se extiende más “lejos” que el sureste)</li><li>Establecer la diferencia de grosor del anillo en su eje corto y eje largo</li><li>Velo tenue alrededor del anillo (a bajos aumentos)</li><li>Pelos en la parte externa del anillo</li><li>Diferenciar el grosor del anillo en sus cuatro regiones</li><li>Sensación de volumen o tridimensionalidad en el toro que define al anillo</li><li>Degradado del interior del anillo formando acantilados de brillo que se precipitan al interior de la nebulosa</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Lyra · 18h 53m, +33º 02’. Orientación: N a las 6, O a las 9, S a las 12 y E a las 3.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm57_70x.webp',
+          html: '<p>Lo primero que me sorprende a estos bajos aumentos es la forma de la nebulosa. Es archiconocida su forma de anillo con la parte central brillante además del anillo exterior, pero esta vez, además de verla más luminosa, lo que me llama la atención es su forma en los bordes más estrechos de la nebulosa. Como bien es sabido tiene forma ovalada, y si nos fijamos en el eje mayor del óvalo, en su cierre o giro hay una estrella muy brillante; en el extremo contrario me parece ver que la nebulosa no es uniforme en esa parte, sino que pierde un poco de brillo al hacer el giro y además se extiende hacia afuera. Es como la imagen que provoca la nebulosa de Saturno, que tiene una especie de salientes por ambos lados del círculo que es la nebulosa. Pues algo así pero solamente en uno de sus extremos, como un pequeño halo más tenue que sobresale de la nebulosa en su extremo. En la zona cercana a la estrella la visión es similar sin embargo aquí la estrella brillante dificulta ver con atención este halo más tenue.</p><p>Además ambos extremos aparecen como si el anillo no llegara a cerrarse, es decir, la forma de la nebulosa es claramente este anillo, sin embargo el anillo tiene un brillo y grosor muy definido en el eje corto pero en el eje largo del óvalo el anillo parece perder brillo y aunque se ve perfectamente transmite la sensación que no termina de cerrarse con el mismo brillo, como si en esa zona la nebulosa fuera más tenue. Además tenemos estas "extensiones" en los bordes exteriores del anillo en su eje mayor que aún le da una estructura más compleja.</p><p>También me llama mucho la atención el brillo del interior del anillo, siempre lo había visto como significativamente menor y jugando con la visión lateral y la visión directa, en mi antiguo Visac 200L incluso lo hacía desaparecer viendo solamente el anillo. Ahora es imposible, es tremendamente brillante toda la parte interior del anillo aunque no se ven más detalles.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm57_98x.webp',
+          html: '<p>La imagen no varía mucho de la anterior, el objeto ha ganado en tamaño, obviamente, pero la imagen sigue siendo muy parecida. Quizás ahora los bordes de la nebulosa los veo un poco más complejos, me da la sensación que tuviera un suave pañuelo de seda semitransparente por encima de la parte más brillante del borde del anillo, de forma que cuando este "velo" sobresale de la zona brillante se ve como una especie de onda muy tenue que se extiende un poco más allá de la nebulosa, muy poco, casi la mitad o incluso una cuarta parte que el ancho de la zona brillante de la nebulosa que le da su forma de anillo. Es más significativo en la zona más alejada de la estrella brillante cercana a la nebulosa.</p><p>También me llama la atención el contorno de la nebulosa porque aparece rodeada por unas estrellas que creo antes jamás había visto o no con tanta atención. Intento describirlo. Primero veo la estrella brillante que en la posición en la que está el objeto y como lo estoy viendo queda en mi parte más baja de la nebulosa a la derecha, luego en la parte de "arriba" de la nebulosa y en la zona izquierda veo como un primer punto borroso que al centrar un poco mejor la vista descubro son 2 estrellas cercanas a la nebulosa. Pero es que en la misma zona a la izquierda pero más hacia abajo, acercándose a la estrella brillante veo otra estrella más que encuadra la nebulosa. Es solamente la zona más "arriba" de la nebulosa donde no veo estrella alguna cercana a la nebulosa.</p>'
+        },
+        {
+          boton: '154x - 28’ - 3mm', titulo: 'Delos 14mm',
+          img: 'm57_154x.webp',
+          html: '<p>Increíble cómo gana la imagen al añadir aumento. Primero me llama la atención los "alrededores" de la nebulosa. Las dos estrellas que me costó trabajo identificar en el ocular anterior aquí son evidentes. Para intentar describirlo mejor, en mis notas de voz uso la distribución del reloj, y anoto: si colocamos la estrella más brillante a las 6 de la nebulosa las dos estrellas cercanas estarían a sus 10 y 11, aparece otra nueva estrella a las 3, y otra más, un poco más separada del anillo a las 8. Además me parece ver una estrella más en la zona que indicaba que el anillo estaba como "desdibujado", como a su 1 o cerca de las 12, pero esta estrella es mucho más débil y está muy pegada a la nebulosa.</p><p>Respecto al anillo en sí, además de confirmar su forma ovalada, y que en los extremos se muestra desdibujado, es decir, sin continuar con la misma intensidad de brillo, la parte externa del anillo me parece realmente compleja. En particular en la zona que sería las 9 del anillo tomando como referencia la estrella brillante a las 6, y la zona de las 3. La zona de las 9 lo que veo (o creo ver) es esa especie de onda que comentaba anteriormente como un velo de seda muy suave que sobresale un poco más del anillo dándole una forma aún más ovalada. Pero en la zona de las 3 lo que me da la sensación es ver un doble anillo, mucho más tenue el segundo, de un grosor mínimo, diría que la quinta parte del grosor del anillo principal, sobresaliendo del anillo principal.</p><p>Respecto al interior del anillo, con estos aumentos el brillo ya no es tan intenso y me parece que el mismo no es uniforme, con lo que aparecen una especie de gránulos en su interior, es decir, soy incapaz de ver una superficie "plana" y "homogénea" de brillo en el interior de la nebulosa, sino que más bien es un borrón de distintos brillos pero sin poderlo definir correctamente.</p>'
+        },
+        {
+          boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
+          img: 'm57_216x.webp',
+          html: '<p>Con cada salto de ocular gano más detalles. Además un ejercicio que me encanta al ir pasando de un ocular a otro es que te fuerzas a querer ver las diferencias y, por ello mismo, vas descubriendo nuevos detalles que antes no veías o que te saltabas. Cada vez el objeto es más grande y con este ocular, sin perder campo, he ganado en tamaño. Sigo viendo más o menos las mismas estrellas alrededor de la nebulosa pero no aprecio ningún detalle extra a los ya descritos.</p>'
+        },
+        {
+          boton: '270x - 22’ - 1.7mm', titulo: 'Ethos 8mm',
+          img: 'm57_270x.webp',
+          html: '<p>Es precioso el hecho de poner más y más aumento al objeto. Ahora las estrellas que veía alrededor del anillo han quedado realmente separadas del objeto porque he ganado bastante en aumento, y confirmo totalmente la estrella que estaba a la 1 o a las 12, que es realmente tenue pero se confirma muy pegada al anillo. También aparece una nueva estrella que está más o menos a las 2 pero más separada del anillo. Ahora me parece que soy capaz de ver la estrella central de la nebulosa como un puntito que aparece de mayor brillo. Tengo que usar la visión lateral para confirmarlo pero efectivamente ahí está.</p><p>Lo que me llama la atención con tantos aumentos es que las zonas externas del anillo tienen como una especie de "pelos", es decir el borde exterior del anillo no me parece que sea uniforme y totalmente recto, sino que posee una serie de imperfecciones que hace que sea difícil indicar dónde termina EXACTAMENTE el anillo en su parte exterior.</p><p>También observo claramente cómo el tamaño del anillo brillante es mucho más estrecho en sus 9 y sus 3 que a sus 6 ó 12 (tomando como referencia esta estrella brillante), es decir, el anillo es claramente ovalado pero es que además, el grosor del anillo brillante externo varía según la zona que veamos. La más estrecha de todas es la región de las 9, luego sería la región de las 3, luego es significativamente más ancho a las 12 (aunque desdibujado) y por último a las 6 es donde muestra su mayor anchura aunque de nuevo desdibujado y sobresaliendo un poco hacia la estrella más brillante.</p>'
+        },
+        {
+          boton: '480x - 9’ - 1mm', titulo: 'Delos 4.5mm',
+          img: 'm57_480x.webp',
+          html: '<p>Aunque pudiera parecerme que me estoy pasando de aumentos es impresionante ver el anillo con estos aumentos y con este tamaño. Me cuesta mucho más trabajo enfocar las pocas estrellas que ya veo pero la imagen merece muchísimo la pena.</p><p>Por un lado me llama la atención la estrella tenue que está a las 12 - 1 de la nebulosa porque me parece que la misma intentara atraparla, es decir me parece ver como una especie de "chorro" que saliera desde la nebulosa para intentar alcanzar esta estrella. Aunque dudo de esta imagen porque el hecho de tener una estrella tan cerca de la nebulosa a veces te distorsiona la imagen que ves. Pero diría que existe esa "extensión" de la nebulosa hacia la estrella.</p><p>Otro detalle que me llama la atención con este ocular es la sensación de volumen que me da la nebulosa. Como describí con el ocular anterior el grosor del anillo no es el mismo en todo su recorrido, sumado a esto ahora veo la nebulosa más grande y un poco más desdibujada en general (el enfoque es más complejo y el seeing afectará más supongo) con lo que la impresión general es más de volumen que no de una imagen plana, es decir que parece más en 3D y eso le da un aspecto precioso. Confirmo todo lo anteriormente descrito, y me deleito con esta imagen en 3D tan sugerente.</p>'
+        },
+        {
+          boton: '960x - 4.5’ - 0.5mm', titulo: 'Delos 4.5mm + Powermate 2x',
+          img: 'm57_960x.webp',
+          html: '<p>VAYA LOCURA. Se me ha ido totalmente la pinza y he puesto la Powermate con el 4.5, por simple curiosidad, y me he quedado de PIEDRA. Es INCREÍBLE cómo se ve el anillo a estos aumentos tan extremos. Recomiendo encarecidamente que hagáis este esfuerzo y esta locura. Lástima que no me está haciendo bien el seguimiento el telescopio.</p><p>A estos aumentos he perdido mucho del brillo de la nebulosa, en particular en su parte más central, pero cuando me refiero a la parte central, no es que sea simplemente la zona de "dentro" del anillo brillante, sino la parte central de la zona de dentro del anillo. Porque en la parte que está cerca del anillo brillante hay zonas con brillo, y con un gradiente tal que parece que estuviera viendo "acantilados". ES IMPRESIONANTE. El anillo es muy brillante, y el interior del anillo su zona central es totalmente oscura (quitando la acumulación de brillo por la estrella central) y por ello es muy fácil delimitar si realmente hay un salto brusco de brillo de un negro a una zona prácticamente blanca. Y eso no ocurre ni de lejos, sino que hay un gradiente, un gradiente casi del mismo grosor que el propio anillo o quizás un poco más pequeño pero significativamente grande. Ese gradiente gris, que anticipa la zona negra, y viniendo desde la región brillante es una GOZADA, porque te transmite esa sensación de estar hundiéndote en la profundidad de la nebulosa. Como si estuvieras navegando hacia su interior y es una imagen simplemente ESPECTACULAR.</p><p>El tamaño del objeto es BRUTAL también a estos aumentos. La estructura exterior no he conseguido definirla mejor, pero es que la imagen en su conjunto de la zona central es increíble. Y lo más impresionante es que JAMÁS, JAMÁS, JAMÁS había visto así la Nebulosa del Anillo. Ahora me da la sensación que antes solamente "rascaba" su imagen, ahora realmente la contemplo en su real complejidad y belleza. De verdad que es alucinante. Estoy muy contento de haber repasado los objetos Messier. Qué sensación de volumen tengo en el objeto y qué sensación de profundidad. Es algo alucinante.</p><p>También indicar que obviamente las 18" del telescopio ayudan muchísimo a tener esta imagen por la cantidad de luz que recoge, pero por favor, si tienes la oportunidad de usar un telescopio de tamaño considerable con M57, ponerle todos los aumentos que tengáis. Creo que es algo que os marcará. Yo me he quedado alucinado viendo M57 como jamás la había visto en mi vida. Antes tenía la sensación de estar viendo algo "de alguna forma" irreal, porque parecía demasiado plano en el ocular. Con estos aumentos es como si estuviera sobrevolando la nebulosa y todo se volviera mucho más real. Sin lugar a dudas es por esa sensación de tridimensionalidad de los distintos niveles de brillo. Entre el brillo intensísimo del anillo que parece un donut, o toro para ser más precisos, ya que sin duda tiene volumen, y la zona de "acantilados" o "pendientes" que además no son uniformes sino que son de un gris tenue que es recorrido por líneas más oscuras que te llevan hasta una zona central totalmente negra, en la que en el centro hay una concentración de brillo que jugando con la visión directa y periférica se puede reducir hasta verse como un puntito. Es ese conjunto, ocupando TODO tu campo de visión, el que hace que alucines y veas la nebulosa como jamás la habías visto antes. Qué maravilla.</p>'
         }
       ]
     }]
