@@ -456,6 +456,76 @@
   // el formulario funciona en modo local: solo muestra el JSON, sin guardar.
   var WP = window.BITACORA_WP || null;
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // MODO EDICIÓN
+  // Si la URL trae ?editar=12, cargamos esa observación y el formulario
+  // pasa a modificarla (PUT) en lugar de crear una nueva (POST).
+  // ═══════════════════════════════════════════════════════════════════════
+  var editandoId = null;
+  (function detectarEdicion(){
+    var m = window.location.search.match(/[?&]editar=(\d+)/);
+    if(m) editandoId = parseInt(m[1],10);
+  })();
+
+  function aplicarModoEdicion(){
+    if(!editandoId) return;
+    submitBtn.textContent = 'Guardar cambios';
+    var titulo = document.querySelector('#mw-obs-form h1');
+    if(titulo){
+      var sub = titulo.querySelector('.sub');
+      titulo.childNodes[0].nodeValue = 'Editar observación nº ' + editandoId + ' ';
+      if(sub) sub.textContent = 'Modifica lo que necesites. El cielo se recalcula solo.';
+    }
+  }
+
+  // Vuelca una observación del servidor en los campos del formulario.
+  function precargar(obs){
+    objInput.value   = obs.objeto_etiqueta || obs.objeto || '';
+    $('observer').value = obs.observador || '';
+    $('scope').value    = obs.telescopio || '';
+    if(obs.fecha_hora_local) whenInput.value = obs.fecha_hora_local;
+
+    // Si no es Messier, necesitamos rellenar RA/Dec antes de resolver.
+    if(obs.tipo !== 'messier'){
+      raManual.value  = obs.ra;
+      decManual.value = obs.decl;
+    }
+    resolveObject();
+
+    var la = parseFloat(obs.lat), lo = parseFloat(obs.lon);
+    if(!isNaN(la) && !isNaN(lo)) setLatLon(la, lo, true);
+    recompute();
+  }
+
+  function cargarParaEditar(){
+    if(!editandoId || !WP) return;
+    $('outNote').textContent = 'Cargando la observación nº ' + editandoId + '…';
+    fetch(WP.endpoint + '/' + editandoId, {
+      credentials:'same-origin',
+      headers:{ 'X-WP-Nonce': WP.nonce }
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, status:r.status, data:d}; }); })
+    .then(function(res){
+      if(!res.ok){
+        $('outNote').innerHTML = '<span style="color:var(--rojo)">✗ No se pudo cargar la observación nº ' + editandoId + '.</span>';
+        editandoId = null;
+        return;
+      }
+      precargar(res.data);
+      $('outNote').textContent = 'Observación cargada. Modifica lo que necesites.';
+    })
+    .catch(function(){
+      $('outNote').innerHTML = '<span style="color:var(--rojo)">✗ No se pudo contactar con el servidor.</span>';
+      editandoId = null;
+    });
+  }
+
+  aplicarModoEdicion();
+  cargarParaEditar();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ENVÍO: crea (POST) o modifica (PUT) según el modo
+  // ═══════════════════════════════════════════════════════════════════════
   $('obsForm').addEventListener('submit',function(e){
     e.preventDefault();
     if(!lastComputed) return;
@@ -470,11 +540,15 @@
       return;
     }
 
-    submitBtn.disabled=true;
-    $('outNote').textContent='Guardando…';
+    var editando = !!editandoId;
+    var url      = editando ? (WP.endpoint + '/' + editandoId) : WP.endpoint;
+    var metodo   = editando ? 'PUT' : 'POST';
 
-    fetch(WP.endpoint,{
-      method:'POST',
+    submitBtn.disabled=true;
+    $('outNote').textContent = editando ? 'Guardando cambios…' : 'Guardando…';
+
+    fetch(url,{
+      method:metodo,
       credentials:'same-origin',          // envía la cookie de sesión
       headers:{
         'Content-Type':'application/json',
@@ -488,11 +562,15 @@
     .then(function(res){
       submitBtn.disabled=false;
       if(res.ok && res.data && res.data.ok){
-        $('outNote').innerHTML='<span style="color:var(--verde)">✓ Observación guardada (registro nº '+res.data.id+').</span>';
+        var txt = editando
+          ? '✓ Cambios guardados en la observación nº ' + res.data.id + '.'
+          : '✓ Observación guardada (registro nº ' + res.data.id + ').';
+        $('outNote').innerHTML='<span style="color:var(--verde)">'+txt+'</span>';
         return;
       }
       var msg=(res.data && res.data.message) ? res.data.message : 'Error '+res.status;
       if(res.status===401) msg='Debes iniciar sesión para registrar observaciones.';
+      if(res.status===403) msg='Solo puedes modificar tus propias observaciones.';
       $('outNote').innerHTML='<span style="color:var(--rojo)">✗ '+msg+'</span>';
     })
     .catch(function(){

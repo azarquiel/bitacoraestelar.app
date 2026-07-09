@@ -1,0 +1,49 @@
+<!-- ============================================================
+     LISTADO DE OBSERVACIONES · Bitácora Messier
+
+     Pega este bloque en un bloque "HTML personalizado" de Gutenberg,
+     en una página nueva (por ejemplo, "Mis observaciones").
+
+     IMPORTANTE: los archivos .css y .js van subidos por FTP a
+     /wp-content/uploads/bitacora/  (WordPress no admite .js en la
+     biblioteca de medios). No pegues su contenido aquí: el editor
+     escapa los caracteres "&" y rompería el JavaScript.
+
+     AJUSTA data-form si la página del formulario no está en
+     /observaciones-visuales/  — es la ruta a la que llevan los
+     botones "Editar".
+
+     Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
+     ============================================================ -->
+
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-listado.css?v=1" />
+
+<div id="mw-obs-list" data-form="/index.php/observaciones-visuales/">
+  <div class="wrap">
+
+    <header class="masthead">
+      <p class="eyebrow">Bitácora · Catálogo Messier</p>
+      <h1>Mis observaciones
+        <span class="sub">Lo que has registrado bajo el cielo. Edita o retira lo que necesites.</span>
+      </h1>
+    </header>
+
+    <div class="flash" id="flash"></div>
+
+    <div class="bar">
+      <div class="tabs">
+        <button type="button" class="tab active" id="tabActivas">Registradas</button>
+        <button type="button" class="tab" id="tabPapelera">Papelera</button>
+      </div>
+      <div class="spacer"></div>
+      <a class="new-btn" href="/index.php/observaciones-visuales/">+ Nueva observación</a>
+    </div>
+
+    <div class="cards" id="cards">
+      <div class="msg">Cargando observaciones…</div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/wp-content/uploads/bitacora/bitacora-listado.js?v=1" defer></script>
