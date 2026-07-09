@@ -270,6 +270,14 @@
       pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m57_inv.pdf',
       top:  { x: 48.3, y: 69.1 },
       edge: { x: 30.9, y: 49.7 }
+    },
+    {
+      id: 'm62', name: 'M62 · Cúmulo globular de Ophiuchus', label: 'M62',
+      color: '#d7a4ff', ficha: 'm62',
+      coords: 'l ≈ 353,6°, b ≈ 7,3° · ~22.500 años luz del Sol',
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m62_inv.pdf',
+      top:  { x: 51.9, y: 52.9 },
+      edge: { x: 47.1, y: 48.7 }
     }
   ];
 
@@ -1708,6 +1716,51 @@
           boton: '960x - 4.5’ - 0.5mm', titulo: 'Delos 4.5mm + Powermate 2x',
           img: 'm57_960x.webp',
           html: '<p>VAYA LOCURA. Se me ha ido totalmente la pinza y he puesto la Powermate con el 4.5, por simple curiosidad, y me he quedado de PIEDRA. Es INCREÍBLE cómo se ve el anillo a estos aumentos tan extremos. Recomiendo encarecidamente que hagáis este esfuerzo y esta locura. Lástima que no me está haciendo bien el seguimiento el telescopio.</p><p>A estos aumentos he perdido mucho del brillo de la nebulosa, en particular en su parte más central, pero cuando me refiero a la parte central, no es que sea simplemente la zona de "dentro" del anillo brillante, sino la parte central de la zona de dentro del anillo. Porque en la parte que está cerca del anillo brillante hay zonas con brillo, y con un gradiente tal que parece que estuviera viendo "acantilados". ES IMPRESIONANTE. El anillo es muy brillante, y el interior del anillo su zona central es totalmente oscura (quitando la acumulación de brillo por la estrella central) y por ello es muy fácil delimitar si realmente hay un salto brusco de brillo de un negro a una zona prácticamente blanca. Y eso no ocurre ni de lejos, sino que hay un gradiente, un gradiente casi del mismo grosor que el propio anillo o quizás un poco más pequeño pero significativamente grande. Ese gradiente gris, que anticipa la zona negra, y viniendo desde la región brillante es una GOZADA, porque te transmite esa sensación de estar hundiéndote en la profundidad de la nebulosa. Como si estuvieras navegando hacia su interior y es una imagen simplemente ESPECTACULAR.</p><p>El tamaño del objeto es BRUTAL también a estos aumentos. La estructura exterior no he conseguido definirla mejor, pero es que la imagen en su conjunto de la zona central es increíble. Y lo más impresionante es que JAMÁS, JAMÁS, JAMÁS había visto así la Nebulosa del Anillo. Ahora me da la sensación que antes solamente "rascaba" su imagen, ahora realmente la contemplo en su real complejidad y belleza. De verdad que es alucinante. Estoy muy contento de haber repasado los objetos Messier. Qué sensación de volumen tengo en el objeto y qué sensación de profundidad. Es algo alucinante.</p><p>También indicar que obviamente las 18" del telescopio ayudan muchísimo a tener esta imagen por la cantidad de luz que recoge, pero por favor, si tienes la oportunidad de usar un telescopio de tamaño considerable con M57, ponerle todos los aumentos que tengáis. Creo que es algo que os marcará. Yo me he quedado alucinado viendo M57 como jamás la había visto en mi vida. Antes tenía la sensación de estar viendo algo "de alguna forma" irreal, porque parecía demasiado plano en el ocular. Con estos aumentos es como si estuviera sobrevolando la nebulosa y todo se volviera mucho más real. Sin lugar a dudas es por esa sensación de tridimensionalidad de los distintos niveles de brillo. Entre el brillo intensísimo del anillo que parece un donut, o toro para ser más precisos, ya que sin duda tiene volumen, y la zona de "acantilados" o "pendientes" que además no son uniformes sino que son de un gris tenue que es recorrido por líneas más oscuras que te llevan hasta una zona central totalmente negra, en la que en el centro hay una concentración de brillo que jugando con la visión directa y periférica se puede reducir hasta verse como un puntito. Es ese conjunto, ocupando TODO tu campo de visión, el que hace que alucines y veas la nebulosa como jamás la habías visto antes. Qué maravilla.</p>'
+        }
+      ]
+    }],
+    m62: [{
+      // ── Observación 1 (M62) ──
+      observador: 'autor',
+      fecha: null,
+      lugar: 'SQM-L 21.0 · IR -18 · 16º amb.',
+      instrumento: 'Stargate 18”',
+
+      pdf: 'https://theferretofcomets.com/wp-content/uploads/fichas/m62_inv.pdf',
+      defaultIndex: 1,
+      entries: [
+        {
+          boton: 'Exploración', titulo: 'M62. Exploración',
+          img: null,
+          html: '<p>Síntesis de la observación. Sobre este cúmulo globular de Ophiuchus se identifican los rasgos descritos a lo largo de la sesión:</p><ul style="margin:8px 0;padding-left:20px;"><li>3 regiones de brillo, con un núcleo puntual</li><li>Tamaño de las regiones</li><li>Estrellas HD 153484 y HD 153515 como compañeras a bajo aumento</li><li>Estrella HD 153516 y la línea de estrellas que cortan abruptamente la región este</li><li>Forma desigual en el núcleo</li><li>A grandes aumentos, ¿forma de cangrejo?</li></ul><p style="font-size:13px;color:#9fb6c9;">Catálogo Messier · Ophiuchus · 17h 01m, -30º 06’. Orientación: N a las 6, O a las 9, S a las 12 y E a las 3.</p>'
+        },
+        {
+          boton: '70x - 1º 10’ - 6.6mm', titulo: 'Nagler 31mm',
+          img: 'm62_70x.webp',
+          html: '<p>El campo estelar en el que se encuentra M62 es rico en estrellas, pues a pesar de encontrarse cerca de la cola del escorpión está dentro de la región del núcleo de la Vía Láctea. Llama la atención un par de estrellas brillantes situadas al norte del objeto (a las 6:00 tal y como lo estoy viendo en mi ocular), se tratan de HD 153484 y HD 153515 con magnitudes de 7.48 y 8.04 respectivamente y clase espectral M4III y G0II. Por tanto se trata de dos estrellas de color rojizo-dorado. Respecto al tamaño del objeto, con estos aumentos y este campo aparece de tamaño mediano, centrado dentro del ocular. El núcleo es bastante menor que el resto del halo exterior, diría que en una proporción de 1:5 (es decir el núcleo es como la quinta parte del tamaño del objeto). Su forma es redondeada aunque no perfectamente esférica, con un halo exterior desordenado, mostrando zonas con mayor densidad de estrellas.</p><p>Es brillante, no requiere visión lateral ni ningún artefacto para observarlo y concentra su brillo en la región central, sin embargo este aumento de brillo no es pronunciado sino que es bastante suave y paulatino. Es decir se percibe que en su interior es más brillante que en su halo exterior pero ambas zonas son bastante brillantes y no hay una diferencia muy marcada. Incluso a estos bajos aumentos se resuelven muchas de sus estrellas, sobre todo en el halo exterior. Respecto a sus particularidades, con estos bajos aumentos parece mostrar algo de color, especialmente en el interior del cúmulo que aparece como más dorado/amarillento, frente al gris-plateado que muestra el halo exterior, mucho más extenso.</p>'
+        },
+        {
+          boton: '98x - 50’ - 4.7mm', titulo: 'Nagler 22mm',
+          img: 'm62_98x.webp',
+          html: '<p>Ahora el cúmulo ha ganado un poco más de presencia, con el halo exterior destacando especialmente por la extensión del mismo. Con diferencia al ocular anterior destacaría que ahora veo el núcleo dividido en dos partes, una mucho más concentrada y puntual en el interior, rodeada de otra más extensa y un poco menos brillante. Por establecer algunas proporciones nos encontraríamos un núcleo muy interior y puntual, muy brillante, después un halo interno con una proporción de 1/4 del tamaño total del objeto, menos brillante pero más brillante que el halo externo. Y la otra 3/4 parte del objeto es mucho más extenso, difuso y con estrellas que se resuelven más sencillamente. No presenta ninguna forma peculiar de brazos, al menos yo no consigo identificarlo, porque su halo externo me parece bastante uniforme y caótico en esa uniformidad.</p>'
+        },
+        {
+          boton: '154x - 28’ - 3mm', titulo: 'Delos 14mm',
+          img: 'm62_154x.webp',
+          html: '<p>Estamos observando Juan Antonio Páez y yo en una noche bastante ventosa y eso dificulta que podamos observar el objeto a nuestro placer pero algunos nuevos detalles se observan. El primero lo ha puesto de manifiesto Juan Antonio Páez, destacando que el objeto no es uniforme en su distribución sino que difiere en su eje este-oeste mostrando una región mucho más rica que la otra. Siendo la región del oeste más rica en estrellas que la región del este.</p><p>En mis notas de voz me digo que es totalmente posible porque al sur-este del cúmulo existe una estrella HD 153516, de color anaranjado y magnitud 11.08, que si la tomas como referencia y sigues subiendo hacia el norte (bajando tal y como yo veía el objeto con el sur a las 12, así que pasar del sur, a las 12, al norte, a las 6, para mí era bajar por el ocular) se observa una serie de estrellas de magnitud similar que forma una especie de línea (sobre todo a partir de las 5 tal y como yo lo veo en mi ocular) y a su este (mi derecha), no se observa nada. Mientras que en la región contraria (al oeste) no existe nada parecido, sino todo lo contrario, el halo externo parece que se extiende paulatinamente sin llegar a ninguna zona que marque claramente su final. Tan abrupto es la diferencia que incluso pareciera que el cúmulo es una especie de 9 con el palo recto. Además con el 14mm he perdido toda imagen de color, y el núcleo me parece muy esférico.</p>',
+          anexos: [
+            { img: 'm62_154x_linea.webp', titulo: 'HD 153516 y la línea de estrellas que corta la región este', pos: 'right' }
+          ]
+        },
+        {
+          boton: '216x - 27’ - 2.1mm', titulo: 'Ethos 10mm',
+          img: 'm62_216x.webp',
+          html: '<p>Con el 10mm no consigo más detalles pero sí que confirmo todo lo observado anteriormente, con especial referencia a esa línea de estrellas que tan bien delimita al cúmulo por su región este. El núcleo me parece mucho más esférico y se resuelven muy bien sus estrellas, sobre todo aquellas que están en el borde del núcleo (además de todas las que se resuelven en su halo exterior). Un objeto bastante curioso.</p>'
+        },
+        {
+          boton: '270x - 22’ - 1.7mm', titulo: 'Ethos 8mm',
+          img: 'm62_270x.webp',
+          html: '<p>Con el 8mm voy perdiendo el halo exterior del cúmulo, además el viento no nos deja tener una observación tranquila. Con todo creemos ver alguna estructura de brazos en el objeto, de forma que llegamos a imaginar que vemos una especie de cangrejo.</p><p>Su forma sería, el cuerpo obviamente, la parte central del cúmulo más brillante. En la región este, dónde una línea corta abruptamente la extensión del halo exterior estarían las patas traseras del cangrejo y las pinzas en la ubicación contraria. El cuerpo (la región central brillante del cúmulo) no sería uniforme sino que se estrecharía (como un trapecio) hacia las pinzas, es decir hacia el oeste, y algunas estrellas brillantes de esa región serían los ojos del cangrejo saliendo de su cuerpo. Un objeto curioso sin lugar a dudas, sobre todo por su diferencia este-oeste.</p>'
         }
       ]
     }]

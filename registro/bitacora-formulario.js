@@ -1,0 +1,514 @@
+/* ===========================================================================
+ * BITÁCORA MESSIER · Formulario de registro de observaciones
+ * ---------------------------------------------------------------------------
+ * Este archivo va SUBIDO POR FTP a /wp-content/uploads/bitacora/
+ * y NO se pega en el editor de WordPress.
+ *
+ * Motivo: el editor de bloques escapa los caracteres "&" del código
+ * (convierte && en &#038;&#038;), lo que rompe el JavaScript. Sirviéndolo
+ * como archivo .js, el servidor lo entrega intacto.
+ *
+ * Al actualizar este archivo, incrementa el ?v=N en el fragmento HTML
+ * para que los navegadores no usen la copia cacheada.
+ * =========================================================================== */
+
+(function(){
+  'use strict';
+
+  // Espera a que el HTML del formulario exista antes de tocarlo. Sin esto, si
+  // el script corre demasiado pronto, getElementById devuelve null y todo falla.
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', arrancar);
+  } else {
+    arrancar();
+  }
+
+  function arrancar(){
+   try{
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CATÁLOGO MESSIER (M1–M110) · coordenadas J2000, RA/Dec en grados
+  // ═══════════════════════════════════════════════════════════════════════
+  var MESSIER = {
+    1:{n:'Nebulosa del Cangrejo',ra:83.6287,de:22.0147,c:'Tau'},
+    2:{n:'',ra:323.3626,de:-0.8233,c:'Aqr'},
+    3:{n:'',ra:205.5484,de:28.3773,c:'CVn'},
+    4:{n:'',ra:245.8967,de:-26.5256,c:'Sco'},
+    5:{n:'',ra:229.6384,de:2.0810,c:'Ser'},
+    6:{n:'Cúmulo de la Mariposa',ra:265.0833,de:-32.2533,c:'Sco'},
+    7:{n:'Cúmulo de Ptolomeo',ra:268.4633,de:-34.7928,c:'Sco'},
+    8:{n:'Nebulosa de la Laguna',ra:270.9042,de:-24.3867,c:'Sgr'},
+    9:{n:'',ra:259.7992,de:-18.5164,c:'Oph'},
+    10:{n:'',ra:254.2877,de:-4.1003,c:'Oph'},
+    11:{n:'Cúmulo del Pato Salvaje',ra:282.7700,de:-6.2711,c:'Sct'},
+    12:{n:'',ra:251.8092,de:-1.9483,c:'Oph'},
+    13:{n:'Gran Cúmulo de Hércules',ra:250.4235,de:36.4613,c:'Her'},
+    14:{n:'',ra:264.4008,de:-3.2458,c:'Oph'},
+    15:{n:'',ra:322.4930,de:12.1670,c:'Peg'},
+    16:{n:'Nebulosa del Águila',ra:274.7000,de:-13.8067,c:'Ser'},
+    17:{n:'Nebulosa Omega',ra:275.1963,de:-16.1772,c:'Sgr'},
+    18:{n:'',ra:274.9983,de:-17.1017,c:'Sgr'},
+    19:{n:'',ra:255.6571,de:-26.2678,c:'Oph'},
+    20:{n:'Nebulosa Trífida',ra:270.6742,de:-23.0300,c:'Sgr'},
+    21:{n:'',ra:275.9225,de:-22.5000,c:'Sgr'},
+    22:{n:'',ra:279.0997,de:-23.9047,c:'Sgr'},
+    23:{n:'',ra:269.2667,de:-19.0167,c:'Sgr'},
+    24:{n:'Nube Estelar de Sagitario',ra:274.2083,de:-18.5500,c:'Sgr'},
+    25:{n:'',ra:277.9375,de:-19.1153,c:'Sgr'},
+    26:{n:'',ra:281.3208,de:-9.3861,c:'Sct'},
+    27:{n:'Nebulosa Dumbbell',ra:299.9015,de:22.7212,c:'Vul'},
+    28:{n:'',ra:276.1370,de:-24.8697,c:'Sgr'},
+    29:{n:'',ra:305.9917,de:38.5228,c:'Cyg'},
+    30:{n:'',ra:325.0922,de:-23.1799,c:'Cap'},
+    31:{n:'Galaxia de Andrómeda',ra:10.6847,de:41.2687,c:'And'},
+    32:{n:'',ra:10.6743,de:40.8652,c:'And'},
+    33:{n:'Galaxia del Triángulo',ra:23.4621,de:30.6600,c:'Tri'},
+    34:{n:'',ra:40.5313,de:42.7614,c:'Per'},
+    35:{n:'',ra:92.2708,de:24.3358,c:'Gem'},
+    36:{n:'',ra:84.0846,de:34.1353,c:'Aur'},
+    37:{n:'',ra:88.0742,de:32.5453,c:'Aur'},
+    38:{n:'',ra:81.9250,de:35.8342,c:'Aur'},
+    39:{n:'',ra:322.9375,de:48.4344,c:'Cyg'},
+    40:{n:'Winnecke 4',ra:185.5521,de:58.0828,c:'UMa'},
+    41:{n:'',ra:101.5042,de:-20.7167,c:'CMa'},
+    42:{n:'Nebulosa de Orión',ra:83.8221,de:-5.3911,c:'Ori'},
+    43:{n:'',ra:83.8804,de:-5.2700,c:'Ori'},
+    44:{n:'El Pesebre',ra:130.0958,de:19.6722,c:'Cnc'},
+    45:{n:'Las Pléyades',ra:56.7500,de:24.1167,c:'Tau'},
+    46:{n:'',ra:115.4375,de:-14.8167,c:'Pup'},
+    47:{n:'',ra:114.1479,de:-14.4989,c:'Pup'},
+    48:{n:'',ra:123.4292,de:-5.7500,c:'Hya'},
+    49:{n:'',ra:187.4447,de:8.0004,c:'Vir'},
+    50:{n:'',ra:105.6708,de:-8.3378,c:'Mon'},
+    51:{n:'Galaxia del Remolino',ra:202.4696,de:47.1952,c:'CVn'},
+    52:{n:'',ra:351.2000,de:61.5931,c:'Cas'},
+    53:{n:'',ra:198.2304,de:18.1681,c:'Com'},
+    54:{n:'',ra:283.7638,de:-30.4797,c:'Sgr'},
+    55:{n:'',ra:294.9988,de:-30.9647,c:'Sgr'},
+    56:{n:'',ra:289.1483,de:30.1834,c:'Lyr'},
+    57:{n:'Nebulosa del Anillo',ra:283.3963,de:33.0293,c:'Lyr'},
+    58:{n:'',ra:189.4315,de:11.8181,c:'Vir'},
+    59:{n:'',ra:190.5097,de:11.6469,c:'Vir'},
+    60:{n:'',ra:190.9166,de:11.5526,c:'Vir'},
+    61:{n:'',ra:185.4788,de:4.4736,c:'Vir'},
+    62:{n:'',ra:255.3033,de:-30.1122,c:'Oph'},
+    63:{n:'Galaxia del Girasol',ra:198.9556,de:42.0292,c:'CVn'},
+    64:{n:'Galaxia del Ojo Negro',ra:194.1821,de:21.6828,c:'Com'},
+    65:{n:'',ra:169.7331,de:13.0923,c:'Leo'},
+    66:{n:'',ra:170.0625,de:12.9916,c:'Leo'},
+    67:{n:'',ra:132.8250,de:11.8139,c:'Cnc'},
+    68:{n:'',ra:189.8666,de:-26.7442,c:'Hya'},
+    69:{n:'',ra:277.8463,de:-32.3481,c:'Sgr'},
+    70:{n:'',ra:280.8030,de:-32.2921,c:'Sgr'},
+    71:{n:'',ra:298.4438,de:18.7792,c:'Sge'},
+    72:{n:'',ra:313.3654,de:-12.5372,c:'Aqr'},
+    73:{n:'',ra:314.7500,de:-12.6333,c:'Aqr'},
+    74:{n:'',ra:24.1741,de:15.7836,c:'Psc'},
+    75:{n:'',ra:301.5202,de:-21.9223,c:'Sgr'},
+    76:{n:'Nebulosa Little Dumbbell',ra:25.5821,de:51.5753,c:'Per'},
+    77:{n:'',ra:40.6696,de:-0.0133,c:'Cet'},
+    78:{n:'',ra:86.6908,de:0.0792,c:'Ori'},
+    79:{n:'',ra:81.0442,de:-24.5242,c:'Lep'},
+    80:{n:'',ra:244.2600,de:-22.9761,c:'Sco'},
+    81:{n:'Galaxia de Bode',ra:148.8882,de:69.0653,c:'UMa'},
+    82:{n:'Galaxia del Cigarro',ra:148.9684,de:69.6797,c:'UMa'},
+    83:{n:'',ra:204.2538,de:-29.8656,c:'Hya'},
+    84:{n:'',ra:186.2656,de:12.8870,c:'Vir'},
+    85:{n:'',ra:186.3503,de:18.1912,c:'Com'},
+    86:{n:'',ra:186.5492,de:12.9463,c:'Vir'},
+    87:{n:'',ra:187.7059,de:12.3911,c:'Vir'},
+    88:{n:'',ra:187.9967,de:14.4204,c:'Com'},
+    89:{n:'',ra:188.9160,de:12.5563,c:'Vir'},
+    90:{n:'',ra:189.2076,de:13.1629,c:'Vir'},
+    91:{n:'',ra:188.8600,de:14.4964,c:'Com'},
+    92:{n:'',ra:259.2808,de:43.1361,c:'Her'},
+    93:{n:'',ra:116.1167,de:-23.8567,c:'Pup'},
+    94:{n:'',ra:192.7213,de:41.1203,c:'CVn'},
+    95:{n:'',ra:160.9902,de:11.7037,c:'Leo'},
+    96:{n:'',ra:161.6906,de:11.8199,c:'Leo'},
+    97:{n:'Nebulosa del Búho',ra:168.6987,de:55.0190,c:'UMa'},
+    98:{n:'',ra:183.4514,de:14.9003,c:'Com'},
+    99:{n:'',ra:184.7067,de:14.4164,c:'Com'},
+    100:{n:'',ra:185.7286,de:15.8225,c:'Com'},
+    101:{n:'Galaxia del Molinete',ra:210.8025,de:54.3488,c:'UMa'},
+    102:{n:'Galaxia del Huso',ra:226.6231,de:55.7633,c:'Dra'},
+    103:{n:'',ra:23.3417,de:60.6583,c:'Cas'},
+    104:{n:'Galaxia del Sombrero',ra:189.9976,de:-11.6231,c:'Vir'},
+    105:{n:'',ra:161.9569,de:12.5817,c:'Leo'},
+    106:{n:'',ra:184.7397,de:47.3040,c:'CVn'},
+    107:{n:'',ra:248.1329,de:-13.0537,c:'Oph'},
+    108:{n:'',ra:167.8792,de:55.6742,c:'UMa'},
+    109:{n:'',ra:179.4001,de:53.3747,c:'UMa'},
+    110:{n:'',ra:10.0919,de:41.6853,c:'And'}
+  };
+  // ═══════════════════════════════════════════════════════════════════════
+  // ASTRONOMÍA DE POSICIÓN (algoritmos de Meeus, sin dependencias externas)
+  // ═══════════════════════════════════════════════════════════════════════
+  var D2R=Math.PI/180, R2D=180/Math.PI;
+  function rev(x){ return ((x%360)+360)%360; }
+
+  function julianDay(date){ // date = objeto Date (en UTC)
+    var Y=date.getUTCFullYear(), M=date.getUTCMonth()+1,
+        D=date.getUTCDate()+(date.getUTCHours()+date.getUTCMinutes()/60+date.getUTCSeconds()/3600)/24;
+    if(M<=2){Y-=1;M+=12;}
+    var A=Math.floor(Y/100), B=2-A+Math.floor(A/4);
+    return Math.floor(365.25*(Y+4716))+Math.floor(30.6001*(M+1))+D+B-1524.5;
+  }
+  function sunPos(jd){
+    var T=(jd-2451545)/36525;
+    var L0=rev(280.46646+36000.76983*T+0.0003032*T*T);
+    var M=rev(357.52911+35999.05029*T-0.0001537*T*T)*D2R;
+    var C=(1.914602-0.004817*T-0.000014*T*T)*Math.sin(M)+(0.019993-0.000101*T)*Math.sin(2*M)+0.000289*Math.sin(3*M);
+    var tl=(L0+C)*D2R, eps=(23.439291-0.0130042*T)*D2R;
+    return { ra:rev(Math.atan2(Math.cos(eps)*Math.sin(tl),Math.cos(tl))*R2D),
+             dec:Math.asin(Math.sin(eps)*Math.sin(tl))*R2D };
+  }
+  function moonPos(jd){
+    var T=(jd-2451545)/36525;
+    var Lp=rev(218.3164477+481267.88123421*T),
+        D=rev(297.8501921+445267.1114034*T)*D2R,
+        M=rev(357.5291092+35999.0502909*T)*D2R,
+        Mp=rev(134.9633964+477198.8675055*T)*D2R,
+        F=rev(93.272095+483202.0175233*T)*D2R;
+    var lon=Lp+(6.288774*Math.sin(Mp)+1.274027*Math.sin(2*D-Mp)+0.658314*Math.sin(2*D)
+              +0.213618*Math.sin(2*Mp)-0.185116*Math.sin(M)-0.114332*Math.sin(2*F));
+    var lat=(5.128122*Math.sin(F)+0.280602*Math.sin(Mp+F)+0.277693*Math.sin(Mp-F)
+            +0.173237*Math.sin(2*D-F)+0.055413*Math.sin(2*D+F-Mp));
+    lon=rev(lon)*D2R; lat=lat*D2R; var eps=(23.439291-0.0130042*T)*D2R;
+    return { ra:rev(Math.atan2(Math.sin(lon)*Math.cos(eps)-Math.tan(lat)*Math.sin(eps),Math.cos(lon))*R2D),
+             dec:Math.asin(Math.sin(lat)*Math.cos(eps)+Math.cos(lat)*Math.sin(eps)*Math.sin(lon))*R2D };
+  }
+  function gmst(jd){
+    var T=(jd-2451545)/36525;
+    return rev(280.46061837+360.98564736629*(jd-2451545)+0.000387933*T*T-T*T*T/38710000);
+  }
+  // Devuelve {alt, az} en grados. az medido desde el Norte hacia el Este.
+  function altAz(ra,dec,jd,lat,lon){
+    var lst=rev(gmst(jd)+lon), H=rev(lst-ra)*D2R;
+    var la=lat*D2R, de=dec*D2R;
+    var alt=Math.asin(Math.sin(la)*Math.sin(de)+Math.cos(la)*Math.cos(de)*Math.cos(H));
+    var az=Math.atan2(-Math.cos(de)*Math.sin(H), Math.sin(de)*Math.cos(la)-Math.cos(de)*Math.sin(la)*Math.cos(H));
+    return { alt:alt*R2D, az:rev(az*R2D) };
+  }
+  // Refracción atmosférica aproximada (Bennett) para altitudes ≳ -1°
+  function refract(alt){
+    if(alt<-1) return alt;
+    return alt + (1/60)*(1.02/Math.tan((alt+10.3/(alt+5.11))*D2R));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PARSERS DE COORDENADAS Y NOMBRE DE OBJETO
+  // ═══════════════════════════════════════════════════════════════════════
+  // "M30", "Messier 30", "m 30" -> 30 ; si no es Messier -> null
+  function messierNumber(txt){
+    var m=txt.trim().toLowerCase().replace(/\s+/g,'').match(/^(?:m|messier)(\d{1,3})$/);
+    return m ? parseInt(m[1],10) : null;
+  }
+  // RA aceptando "21h40m22s", "21 40 22", "21:40:22" ó decimal en grados "325.09"
+  function parseRA(txt){
+    txt=txt.trim(); if(txt==='') return null;
+    var hms=txt.match(/(-?\d+(?:\.\d+)?)\s*[h: ]\s*(\d+(?:\.\d+)?)\s*[m: ]?\s*(\d+(?:\.\d+)?)?/i);
+    if(hms && /[h:]/i.test(txt)){
+      var h=parseFloat(hms[1]),mi=parseFloat(hms[2]||0),s=parseFloat(hms[3]||0);
+      return rev((h+mi/60+s/3600)*15);
+    }
+    var d=parseFloat(txt); return isNaN(d)?null:rev(d);
+  }
+  // Dec aceptando "-23°10'47\"", "-23 10 47", ó decimal "-23.18"
+  function parseDec(txt){
+    txt=txt.trim(); if(txt==='') return null;
+    var dms=txt.match(/(-?\+?\d+(?:\.\d+)?)\s*[°d: ]\s*(\d+(?:\.\d+)?)?\s*['′m: ]?\s*(\d+(?:\.\d+)?)?/i);
+    if(dms && /[°d'′"]/i.test(txt)){
+      var sign=/^\s*-/.test(txt)?-1:1, dg=Math.abs(parseFloat(dms[1])),mi=parseFloat(dms[2]||0),s=parseFloat(dms[3]||0);
+      var v=sign*(dg+mi/60+s/3600); return (v<-90||v>90)?null:v;
+    }
+    var d=parseFloat(txt); return (isNaN(d)||d<-90||d>90)?null:d;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ESTADO Y REFERENCIAS AL DOM
+  // ═══════════════════════════════════════════════════════════════════════
+  var $=function(id){return document.getElementById(id);};
+  var objInput=$('obj'), suggestBox=$('suggest'), objStatus=$('objStatus'),
+      radecBox=$('radecBox'), raManual=$('raManual'), decManual=$('decManual'),
+      whenInput=$('when'), latInput=$('lat'), lonInput=$('lon'),
+      submitBtn=$('submitBtn'), jsonOut=$('jsonOut'), jsonArea=$('jsonArea');
+
+  var resolved=null; // {tipo:'messier'|'ncgic', num, nombre, ra, dec, etiqueta}
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // RESOLUCIÓN + VALIDACIÓN DEL OBJETO
+  // ═══════════════════════════════════════════════════════════════════════
+  function setStatus(el,cls,txt){ el.className='status '+cls; el.textContent=txt; }
+
+  function resolveObject(){
+    var txt=objInput.value.trim();
+    resolved=null; radecBox.classList.remove('show');
+    if(txt===''){ setStatus(objStatus,'info','Escribe un objeto Messier (M1–M110) o un NGC/IC.'); recompute(); return; }
+
+    var mn=messierNumber(txt);
+    if(mn!==null){
+      if(mn>=1 && mn<=110 && MESSIER[mn]){
+        var o=MESSIER[mn];
+        var et='M'+mn+(o.n?' · '+o.n:'')+' ('+o.c+')';
+        resolved={tipo:'messier',num:mn,nombre:o.n,ra:o.ra,dec:o.de,cons:o.c,etiqueta:et};
+        setStatus(objStatus,'ok','✓ '+et);
+      } else {
+        setStatus(objStatus,'err','✗ M'+mn+' no existe: el catálogo Messier llega hasta M110.');
+      }
+      recompute(); return;
+    }
+    // No es Messier: aceptamos como NGC/IC/otro y pedimos RA/Dec
+    radecBox.classList.add('show');
+    var ra=parseRA(raManual.value), dec=parseDec(decManual.value);
+    if(ra!==null && dec!==null){
+      resolved={tipo:'otro',num:null,nombre:txt,ra:ra,dec:dec,cons:null,etiqueta:txt+' (coordenadas manuales)'};
+      setStatus(objStatus,'ok','✓ '+txt+' — usando las coordenadas introducidas.');
+    } else {
+      setStatus(objStatus,'info','“'+txt+'” no es Messier. Introduce su RA y Dec para poder calcular su posición.');
+    }
+    recompute();
+  }
+
+  // ── Autocompletado ──
+  var activeIdx=-1, currentMatches=[];
+  function buildSuggestions(){
+    var txt=objInput.value.trim().toLowerCase();
+    suggestBox.style.display='none'; currentMatches=[]; activeIdx=-1;
+    if(txt.length<1) return;
+    var num=txt.replace(/[^0-9]/g,'');
+    var matches=[];
+    for(var k=1;k<=110;k++){
+      var o=MESSIER[k], label='M'+k, hay=(o.n||'').toLowerCase();
+      if((num && String(k).indexOf(num)===0) ||
+         (hay && hay.indexOf(txt)>=0) ||
+         label.toLowerCase().indexOf(txt.replace(/\s/g,''))===0){
+        matches.push({k:k,label:label,n:o.n,c:o.c});
+        if(matches.length>=7) break;
+      }
+    }
+    if(!matches.length) return;
+    currentMatches=matches;
+    suggestBox.innerHTML='';
+    matches.forEach(function(m,i){
+      var b=document.createElement('button'); b.type='button';
+      b.innerHTML='<span>'+m.label+(m.n?' · '+m.n:'')+'</span><span class="cons">'+m.c+'</span>';
+      b.addEventListener('mousedown',function(e){ e.preventDefault(); objInput.value='M'+m.k;
+        suggestBox.style.display='none'; resolveObject(); });
+      suggestBox.appendChild(b);
+    });
+    suggestBox.style.display='block';
+  }
+  objInput.addEventListener('input',function(){ buildSuggestions(); resolveObject(); });
+  objInput.addEventListener('keydown',function(e){
+    if(suggestBox.style.display!=='block') return;
+    var btns=suggestBox.querySelectorAll('button');
+    if(e.key==='ArrowDown'){e.preventDefault();activeIdx=Math.min(activeIdx+1,btns.length-1);}
+    else if(e.key==='ArrowUp'){e.preventDefault();activeIdx=Math.max(activeIdx-1,0);}
+    else if(e.key==='Enter'&&activeIdx>=0){e.preventDefault();btns[activeIdx].dispatchEvent(new MouseEvent('mousedown'));return;}
+    else if(e.key==='Escape'){suggestBox.style.display='none';return;}
+    btns.forEach(function(b,i){b.classList.toggle('active',i===activeIdx);});
+  });
+  objInput.addEventListener('blur',function(){ setTimeout(function(){suggestBox.style.display='none';},150); });
+  raManual.addEventListener('input',resolveObject);
+  decManual.addEventListener('input',resolveObject);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MAPA (Leaflet)
+  //
+  // Se carga dinámicamente y de forma aislada. Si Leaflet no estuviera
+  // disponible (sin conexión, bloqueado por el navegador, filtrado por
+  // WordPress...), el formulario SIGUE FUNCIONANDO: basta escribir la latitud
+  // y la longitud a mano. El mapa es una comodidad, no un requisito.
+  // ═══════════════════════════════════════════════════════════════════════
+  var map=null, marker=null;
+
+  function setLatLon(la,lo,recenter){
+    latInput.value=la.toFixed(4); lonInput.value=lo.toFixed(4);
+    if(map){
+      if(marker) marker.setLatLng([la,lo]); else marker=L.marker([la,lo]).addTo(map);
+      if(recenter) map.setView([la,lo], Math.max(map.getZoom(),9));
+    }
+    recompute();
+  }
+
+  // Carga un recurso externo (CSS o JS) y avisa cuando esté listo.
+  function cargarCSS(url){
+    var l=document.createElement('link');
+    l.rel='stylesheet'; l.href=url; document.head.appendChild(l);
+  }
+  function cargarJS(url,alCargar,alFallar){
+    var s=document.createElement('script');
+    s.src=url; s.async=true;
+    s.onload=alCargar; s.onerror=alFallar;
+    document.head.appendChild(s);
+  }
+
+  function iniciarMapa(){
+    try{
+      map=L.map('map',{worldCopyJump:true}).setView([37.371,-6.070],5);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        {attribution:'© OpenStreetMap © CARTO',maxZoom:19}).addTo(map);
+      map.on('click',function(e){ setLatLon(e.latlng.lat,e.latlng.lng,false); });
+      // Si el contenedor estaba oculto al crearse, forzamos el redibujado.
+      setTimeout(function(){ map.invalidateSize(); },200);
+    }catch(err){
+      mapaNoDisponible();
+    }
+  }
+  function mapaNoDisponible(){
+    var cont=$('map');
+    if(!cont) return;
+    cont.style.display='grid';
+    cont.style.placeItems='center';
+    cont.style.textAlign='center';
+    cont.style.padding='20px';
+    cont.innerHTML='<div style="color:#8ea0bd;font-size:13.5px;line-height:1.5">'+
+      'No se pudo cargar el mapa.<br>Escribe la latitud y la longitud a mano: '+
+      'el resto del formulario funciona igual.</div>';
+  }
+
+  // Arranque del mapa: si Leaflet ya está presente, úsalo; si no, cárgalo.
+  if(window.L && window.L.map){
+    iniciarMapa();
+  }else{
+    cargarCSS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+    cargarJS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', iniciarMapa, mapaNoDisponible);
+  }
+
+  latInput.addEventListener('input',function(){ var la=parseFloat(latInput.value),lo=parseFloat(lonInput.value);
+    if(!isNaN(la)&&!isNaN(lo)) setLatLon(la,lo,true); else recompute(); });
+  lonInput.addEventListener('input',function(){ var la=parseFloat(latInput.value),lo=parseFloat(lonInput.value);
+    if(!isNaN(la)&&!isNaN(lo)) setLatLon(la,lo,true); else recompute(); });
+  $('geoBtn').addEventListener('click',function(){
+    if(!navigator.geolocation){ alert('Tu navegador no permite geolocalización.'); return; }
+    navigator.geolocation.getCurrentPosition(function(p){ setLatLon(p.coords.latitude,p.coords.longitude,true); },
+      function(){ alert('No se pudo obtener la ubicación. Escríbela a mano o pincha en el mapa.'); });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CÁLCULO EN TIEMPO REAL
+  // ═══════════════════════════════════════════════════════════════════════
+  function fmtDeg(v){ return (v>=0?'+':'−')+Math.abs(v).toFixed(1)+'°'; }
+  function fmtAz(v){
+    var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
+    return v.toFixed(1)+'° <small>'+dirs[Math.round(v/22.5)%16]+'</small>';
+  }
+  var lastComputed=null;
+  function recompute(){
+    lastComputed=null; submitBtn.disabled=true; jsonOut.classList.remove('show');
+    var la=parseFloat(latInput.value), lo=parseFloat(lonInput.value), whenVal=whenInput.value;
+    var haveWhere=!isNaN(la)&&!isNaN(lo), haveWhen=!!whenVal, haveObj=resolved!==null;
+
+    if(!(haveObj&&haveWhen&&haveWhere)){
+      $('compTitle').textContent='A la espera de datos';
+      $('compSub').textContent='Completa el objeto, la fecha/hora y el lugar para ver la posición.';
+      ['objAlt','objAz','sunAlt','moonAlt'].forEach(function(id){$(id).textContent='—';});
+      $('visibility').className='visibility';
+      return;
+    }
+    var date=new Date(whenVal); // interpretada en hora local del navegador
+    var jd=julianDay(date);
+    var obj=altAz(resolved.ra,resolved.dec,jd,la,lo);
+    var s=sunPos(jd),  sun=altAz(s.ra,s.dec,jd,la,lo);
+    var m=moonPos(jd), moon=altAz(m.ra,m.dec,jd,la,lo);
+    var objAltR=refract(obj.alt);
+
+    $('compTitle').textContent=resolved.etiqueta;
+    $('compSub').textContent='Posición calculada para la fecha, hora y lugar indicados.';
+    $('objAlt').innerHTML=fmtDeg(objAltR);
+    $('objAz').innerHTML=fmtAz(obj.az);
+    $('sunAlt').innerHTML=fmtDeg(sun.alt);
+    $('moonAlt').innerHTML=fmtDeg(moon.alt);
+
+    var vis=$('visibility');
+    if(objAltR<0){ vis.className='visibility down';
+      vis.textContent='⚠ El objeto estaba bajo el horizonte en ese momento (altitud negativa). Revisa la fecha/hora o el lugar.'; }
+    else if(sun.alt>0){ vis.className='visibility down';
+      vis.textContent='⚠ El Sol estaba por encima del horizonte: era de día. Revisa la fecha/hora.'; }
+    else { vis.className='visibility up';
+      var cond = sun.alt<-18 ? 'noche astronómica' : (sun.alt<-12 ? 'crepúsculo astronómico' : (sun.alt<-6?'crepúsculo náutico':'crepúsculo civil'));
+      vis.textContent='✓ Objeto a '+objAltR.toFixed(1)+'° sobre el horizonte · '+cond+'.'; }
+
+    lastComputed={
+      objeto:resolved.etiqueta, tipo:resolved.tipo, num:resolved.num,
+      ra:resolved.ra, dec:resolved.dec,
+      observador:$('observer').value.trim(), telescopio:$('scope').value.trim(),
+      fechaHoraLocal:whenVal, fechaHoraUTC:date.toISOString(),
+      lat:la, lon:lo,
+      objAlt:+objAltR.toFixed(2), objAz:+obj.az.toFixed(2),
+      sunAlt:+sun.alt.toFixed(2), moonAlt:+moon.alt.toFixed(2)
+    };
+    submitBtn.disabled=false;
+  }
+  whenInput.addEventListener('input',recompute);
+  $('observer').addEventListener('input',recompute);
+  $('scope').addEventListener('input',recompute);
+
+  // Fecha/hora por defecto: ahora
+  (function(){ var n=new Date(); n.setMinutes(n.getMinutes()-n.getTimezoneOffset());
+    whenInput.value=n.toISOString().slice(0,16); })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ENVÍO: por ahora, genera el bloque de datos de la observación
+  // ═══════════════════════════════════════════════════════════════════════
+  // Datos que WordPress inyecta en la página (ver el plugin). Si no existen,
+  // el formulario funciona en modo local: solo muestra el JSON, sin guardar.
+  var WP = window.BITACORA_WP || null;
+
+  $('obsForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    if(!lastComputed) return;
+
+    // Siempre mostramos el bloque de datos: sirve de comprobante.
+    jsonArea.value=JSON.stringify(lastComputed,null,2);
+    jsonOut.classList.add('show');
+
+    if(!WP){
+      $('outNote').textContent='Modo local: no hay conexión con WordPress, la observación no se ha guardado.';
+      jsonOut.scrollIntoView({behavior:'smooth',block:'nearest'});
+      return;
+    }
+
+    submitBtn.disabled=true;
+    $('outNote').textContent='Guardando…';
+
+    fetch(WP.endpoint,{
+      method:'POST',
+      credentials:'same-origin',          // envía la cookie de sesión
+      headers:{
+        'Content-Type':'application/json',
+        'X-WP-Nonce':WP.nonce             // demuestra que la petición sale de esta página
+      },
+      body:JSON.stringify(lastComputed)
+    })
+    .then(function(r){
+      return r.json().then(function(data){ return {ok:r.ok, status:r.status, data:data}; });
+    })
+    .then(function(res){
+      submitBtn.disabled=false;
+      if(res.ok && res.data && res.data.ok){
+        $('outNote').innerHTML='<span style="color:var(--verde)">✓ Observación guardada (registro nº '+res.data.id+').</span>';
+        return;
+      }
+      var msg=(res.data && res.data.message) ? res.data.message : 'Error '+res.status;
+      if(res.status===401) msg='Debes iniciar sesión para registrar observaciones.';
+      $('outNote').innerHTML='<span style="color:var(--rojo)">✗ '+msg+'</span>';
+    })
+    .catch(function(){
+      submitBtn.disabled=false;
+      $('outNote').innerHTML='<span style="color:var(--rojo)">✗ No se pudo contactar con el servidor.</span>';
+    });
+
+    jsonOut.scrollIntoView({behavior:'smooth',block:'nearest'});
+  });
+
+   }catch(err){
+     // Si algo falla, lo decimos en la página en vez de morir en silencio.
+     console.error('[Bitácora] Error al iniciar el formulario:', err);
+     var aviso=document.getElementById('outNote');
+     if(aviso){ aviso.textContent='Error al iniciar el formulario: '+err.message; }
+   }
+  } // fin de arrancar()
+
+})();

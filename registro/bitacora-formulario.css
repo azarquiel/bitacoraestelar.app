@@ -1,0 +1,116 @@
+/* ===========================================================================
+ * BITÁCORA MESSIER · Estilos del formulario de registro
+ * ---------------------------------------------------------------------------
+ * Subir por FTP a /wp-content/uploads/bitacora/
+ * Todos los selectores están encapsulados bajo #mw-obs-form: no afectan
+ * al resto de la web.
+ * =========================================================================== */
+
+#mw-obs-form {
+    background:
+      radial-gradient(1200px 700px at 80% -10%, #16203a 0%, transparent 60%),
+      radial-gradient(900px 600px at 0% 110%, #131a2e 0%, transparent 55%),
+      #0a0e1a;
+    color:#e8eef7;
+    font-family:'Iowan Old Style',Georgia,'Times New Roman',serif;
+    line-height:1.55;
+    border-radius:16px;
+    overflow:hidden;
+    --noche:#0a0e1a;         /* fondo cielo profundo */
+    --noche-2:#111725;       /* paneles */
+    --tinta:#e8eef7;         /* texto principal */
+    --tinta-tenue:#8ea0bd;   /* texto secundario */
+    --linea:#25304a;         /* bordes/hairlines */
+    --ambar:#f4c76b;         /* acento: luz de estrella / linterna roja-ámbar */
+    --ambar-suave:rgba(244,199,107,0.14);
+    --verde:#7ee0a8;         /* validación correcta */
+    --rojo:#ff8a80;          /* error */
+    --azul:#7ec8ff;          /* dato calculado */
+  }
+#mw-obs-form * {box-sizing:border-box;}
+#mw-obs-form {
+    margin:0;background:
+      radial-gradient(1200px 700px at 80% -10%, #16203a 0%, transparent 60%),
+      radial-gradient(900px 600px at 0% 110%, #131a2e 0%, transparent 55%),
+      var(--noche);
+    color:var(--tinta);
+    font-family:'Iowan Old Style',Georgia,'Times New Roman',serif;
+    line-height:1.55;min-height:100vh;
+  }
+#mw-obs-form .wrap {max-width:760px;margin:0 auto;padding:40px 22px 80px;}
+#mw-obs-form header.masthead {border-bottom:1px solid var(--linea);padding-bottom:20px;margin-bottom:8px;}
+#mw-obs-form .eyebrow {font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.28em;
+    text-transform:uppercase;color:var(--ambar);margin:0 0 10px;}
+#mw-obs-form h1 {font-size:34px;line-height:1.05;margin:0;font-weight:600;letter-spacing:-0.01em;}
+#mw-obs-form h1 .sub {display:block;font-size:16px;color:var(--tinta-tenue);font-weight:400;margin-top:8px;letter-spacing:0;}
+#mw-obs-form form {margin-top:36px;}
+#mw-obs-form fieldset {border:none;border-top:1px solid var(--linea);margin:0 0 34px;padding:26px 0 0;}
+#mw-obs-form legend {padding:0;}
+#mw-obs-form .leg {display:flex;align-items:baseline;gap:12px;margin-bottom:20px;}
+#mw-obs-form .leg .num {font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--ambar);
+    border:1px solid var(--linea);border-radius:50%;width:26px;height:26px;display:grid;place-items:center;flex:none;}
+#mw-obs-form .leg h2 {font-size:19px;margin:0;font-weight:600;}
+#mw-obs-form .leg p {margin:2px 0 0;font-size:13px;color:var(--tinta-tenue);}
+#mw-obs-form label.field {display:block;margin-bottom:18px;}
+#mw-obs-form label.field > span.lab {display:block;font-size:13px;color:var(--tinta-tenue);margin-bottom:6px;
+    font-family:ui-monospace,Menlo,monospace;letter-spacing:0.02em;}
+#mw-obs-form input[type=text], #mw-obs-form input[type=number], #mw-obs-form input[type=datetime-local] {
+    width:100%;background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
+    color:var(--tinta);font-family:inherit;font-size:16px;padding:11px 13px;transition:border-color .15s,box-shadow .15s;}
+#mw-obs-form input:focus {outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
+#mw-obs-form input::placeholder {color:#54617d;}
+#mw-obs-form .row {display:flex;gap:14px;flex-wrap:wrap;}
+#mw-obs-form .row > * {flex:1 1 160px;}
+#mw-obs-form .obj-wrap {position:relative;}
+#mw-obs-form .suggest {position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--noche-2);
+    border:1px solid var(--linea);border-radius:8px;overflow:hidden;z-index:20;
+    box-shadow:0 10px 30px rgba(0,0,0,.5);display:none;}
+#mw-obs-form .suggest button {display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;
+    background:none;border:none;color:var(--tinta);font-family:inherit;font-size:15px;
+    padding:10px 13px;cursor:pointer;border-bottom:1px solid var(--linea);}
+#mw-obs-form .suggest button:last-child {border-bottom:none;}
+#mw-obs-form .suggest button:hover, #mw-obs-form .suggest button.active {background:var(--ambar-suave);}
+#mw-obs-form .suggest .cons {color:var(--tinta-tenue);font-family:ui-monospace,Menlo,monospace;font-size:12px;}
+#mw-obs-form .status {font-size:13.5px;margin-top:7px;min-height:20px;display:flex;align-items:center;gap:7px;}
+#mw-obs-form .status.ok {color:var(--verde);}
+#mw-obs-form .status.err {color:var(--rojo);}
+#mw-obs-form .status.info {color:var(--tinta-tenue);}
+#mw-obs-form .radec {display:none;margin-top:6px;padding:16px;border:1px dashed var(--linea);border-radius:8px;background:rgba(126,200,255,0.04);}
+#mw-obs-form .radec.show {display:block;}
+#mw-obs-form .radec .hint {font-size:12.5px;color:var(--tinta-tenue);margin:0 0 12px;}
+#mw-obs-form #map {height:300px;border-radius:10px;border:1px solid var(--linea);margin-bottom:14px;z-index:1;}
+#mw-obs-form .coord-note {font-size:12.5px;color:var(--tinta-tenue);margin:-6px 0 16px;}
+#mw-obs-form .geo-btn {background:none;border:1px solid var(--linea);color:var(--ambar);font-family:ui-monospace,Menlo,monospace;
+    font-size:12px;letter-spacing:0.04em;padding:8px 14px;border-radius:20px;cursor:pointer;margin-bottom:16px;transition:border-color .15s;}
+#mw-obs-form .geo-btn:hover {border-color:var(--ambar);}
+#mw-obs-form /* Panel de resultados calculados */
+  .computed {border:1px solid var(--linea);border-radius:12px;background:
+     linear-gradient(180deg,rgba(126,200,255,0.05),transparent);padding:22px;margin-top:8px;}
+#mw-obs-form .computed h3 {margin:0 0 4px;font-size:15px;font-family:ui-monospace,Menlo,monospace;
+    letter-spacing:0.04em;color:var(--azul);font-weight:600;}
+#mw-obs-form .computed .sub {font-size:12.5px;color:var(--tinta-tenue);margin:0 0 18px;}
+#mw-obs-form .grid {display:grid;grid-template-columns:repeat(2,1fr);gap:14px 18px;}
+#mw-obs-form .cell {border-top:1px solid var(--linea);padding-top:10px;}
+#mw-obs-form .cell .k {font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:0.06em;
+    text-transform:uppercase;color:var(--tinta-tenue);margin-bottom:3px;}
+#mw-obs-form .cell .v {font-size:22px;font-variant-numeric:tabular-nums;letter-spacing:-0.01em;}
+#mw-obs-form .cell .v small {font-size:13px;color:var(--tinta-tenue);}
+#mw-obs-form .cell.dim .v {color:var(--tinta-tenue);}
+#mw-obs-form .visibility {margin-top:16px;font-size:13.5px;padding:10px 14px;border-radius:8px;display:none;}
+#mw-obs-form .visibility.up {display:block;background:rgba(126,224,168,0.1);color:var(--verde);border:1px solid rgba(126,224,168,0.25);}
+#mw-obs-form .visibility.down {display:block;background:rgba(255,138,128,0.08);color:var(--rojo);border:1px solid rgba(255,138,128,0.22);}
+#mw-obs-form .actions {display:flex;gap:14px;align-items:center;margin-top:30px;flex-wrap:wrap;}
+#mw-obs-form button.primary {background:var(--ambar);color:#1a1206;border:none;font-family:ui-monospace,Menlo,monospace;
+    font-weight:600;font-size:14px;letter-spacing:0.03em;padding:14px 26px;border-radius:10px;cursor:pointer;transition:filter .15s;}
+#mw-obs-form button.primary:hover {filter:brightness(1.08);}
+#mw-obs-form button.primary:disabled {opacity:.4;cursor:not-allowed;filter:none;}
+#mw-obs-form .out-note {font-size:13px;color:var(--tinta-tenue);}
+#mw-obs-form .json-out {display:none;margin-top:24px;}
+#mw-obs-form .json-out.show {display:block;}
+#mw-obs-form .json-out textarea {width:100%;height:230px;background:#060911;border:1px solid var(--linea);border-radius:10px;
+    color:var(--azul);font-family:ui-monospace,Menlo,monospace;font-size:12.5px;padding:16px;resize:vertical;line-height:1.5;}
+@media(max-width:520px) {
+#mw-obs-form h1 {font-size:27px;}
+#mw-obs-form .grid {grid-template-columns:1fr;}
+
+}
