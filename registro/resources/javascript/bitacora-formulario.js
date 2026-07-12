@@ -432,18 +432,25 @@
 
     lastComputed={
       objeto:resolved.etiqueta, tipo:resolved.tipo, num:resolved.num,
+      cons:resolved.cons||'', nombre:resolved.nombre||'',
       ra:resolved.ra, dec:resolved.dec,
       observador:$('observer').value.trim(), telescopio:$('scope').value.trim(),
       fechaHoraLocal:whenVal, fechaHoraUTC:date.toISOString(),
       lat:la, lon:lo,
       objAlt:+objAltR.toFixed(2), objAz:+obj.az.toFixed(2),
-      sunAlt:+sun.alt.toFixed(2), moonAlt:+moon.alt.toFixed(2)
+      sunAlt:+sun.alt.toFixed(2), moonAlt:+moon.alt.toFixed(2),
+      sqm:($('sqm').value.trim()!==''?parseFloat($('sqm').value):null),
+      ir:($('ir').value.trim()!==''?parseFloat($('ir').value):null),
+      temp:($('temp').value.trim()!==''?parseFloat($('temp').value):null)
     };
     submitBtn.disabled=false;
   }
   whenInput.addEventListener('input',recompute);
   $('observer').addEventListener('input',recompute);
   $('scope').addEventListener('input',recompute);
+  $('sqm').addEventListener('input',recompute);
+  $('ir').addEventListener('input',recompute);
+  $('temp').addEventListener('input',recompute);
 
   // Fecha/hora por defecto: ahora
   (function(){ var n=new Date(); n.setMinutes(n.getMinutes()-n.getTimezoneOffset());
@@ -479,13 +486,23 @@
   }
 
   // Vuelca una observación del servidor en los campos del formulario.
+  //
+  // OJO con el campo del objeto: hay que escribir el IDENTIFICADOR limpio
+  // ("M30"), no la etiqueta ("M30 · Cúmulo de la medusa (Cap)"). El validador
+  // solo reconoce identificadores; con la etiqueta lo daría por no-Messier,
+  // pediría RA/Dec y el botón nunca se activaría.
   function precargar(obs){
-    objInput.value   = obs.objeto_etiqueta || obs.objeto || '';
+    objInput.value      = obs.objeto || '';
     $('observer').value = obs.observador || '';
     $('scope').value    = obs.telescopio || '';
     if(obs.fecha_hora_local) whenInput.value = obs.fecha_hora_local;
+    if(obs.sqm !== null && obs.sqm !== undefined && obs.sqm !== '') $('sqm').value = obs.sqm;
+    if(obs.ir !== null && obs.ir !== undefined && obs.ir !== '') $('ir').value = obs.ir;
+    if(obs.temp !== null && obs.temp !== undefined && obs.temp !== '') $('temp').value = obs.temp;
 
-    // Si no es Messier, necesitamos rellenar RA/Dec antes de resolver.
+    // MySQL devuelve todo como texto; los campos de RA/Dec aceptan decimales.
+    // Para los no-Messier hay que rellenarlos ANTES de resolver, porque
+    // resolveObject() los lee para poder validar el objeto.
     if(obs.tipo !== 'messier'){
       raManual.value  = obs.ra;
       decManual.value = obs.decl;
@@ -493,8 +510,11 @@
     resolveObject();
 
     var la = parseFloat(obs.lat), lo = parseFloat(obs.lon);
-    if(!isNaN(la) && !isNaN(lo)) setLatLon(la, lo, true);
-    recompute();
+    if(!isNaN(la) && !isNaN(lo)){
+      setLatLon(la, lo, true);   // ya llama a recompute()
+    } else {
+      recompute();
+    }
   }
 
   function cargarParaEditar(){

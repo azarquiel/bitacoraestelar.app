@@ -1,0 +1,13 @@
+{
+  "observacion": {
+    "objeto": "M30 · Cúmulo de la medusa (Cap)",
+    "tipo": "messier", "num": 30, "cons": "Capricornus",
+    "coordsTexto": "21h 40m -23º 11’",
+    "ra": 325.0922, "dec": -23.1799,
+    "observador": "Israel Pérez de Tudela Vázquez", "telescopio": "Stargate 18\"",
+    "fechaHoraLocal": "2023-10-21T23:30",
+    "objAlt": 25.5, "objAz": 201.6, "sunAlt": -47.9, "moonAlt": -40.8,
+    "sqm": 21.40, "ir": -1.3, "temp": 18,
+    "catalogo": "Catálogo Messier"
+  }
+}

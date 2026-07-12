@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.1.0' );
+define( 'BITACORA_VERSION', '1.2.0' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 
 /**
@@ -64,6 +64,9 @@ function bitacora_crear_tabla() {
         obj_az double NOT NULL,
         sun_alt double NOT NULL,
         moon_alt double NOT NULL,
+        sqm double DEFAULT NULL,
+        ir double DEFAULT NULL,
+        temp double DEFAULT NULL,
         usuario_id bigint(20) unsigned NOT NULL,
         creado_en datetime NOT NULL,
         actualizado_en datetime DEFAULT NULL,
@@ -188,6 +191,24 @@ function bitacora_validar_datos( $d ) {
         return new WP_Error( 'campo_invalido', 'El número Messier debe estar entre 1 y 110.', array( 'status' => 400 ) );
     }
 
+    // --- Datos de cielo (opcionales): null, o número en rango razonable ---
+    $cielo = array();
+    $rangos_cielo = array(
+        'sqm'  => array( 0, 25 ),    // magnitudes por segundo de arco al cuadrado
+        'ir'   => array( -50, 50 ),  // temperatura del cielo (infrarrojo), ºC
+        'temp' => array( -50, 60 ),  // temperatura ambiente, ºC
+    );
+    foreach ( $rangos_cielo as $campo => $rango ) {
+        $valor = $d[ $campo ] ?? null;
+        if ( null === $valor || '' === $valor ) {
+            $cielo[ $campo ] = null;
+        } elseif ( is_numeric( $valor ) && $valor >= $rango[0] && $valor <= $rango[1] ) {
+            $cielo[ $campo ] = floatval( $valor );
+        } else {
+            return new WP_Error( 'campo_invalido', "El campo '$campo' está fuera de rango.", array( 'status' => 400 ) );
+        }
+    }
+
     return array(
         'objeto'           => bitacora_identificador_objeto( $etiqueta, $tipo, $num ),
         'objeto_etiqueta'  => $etiqueta,
@@ -205,12 +226,27 @@ function bitacora_validar_datos( $d ) {
         'obj_az'           => $v['objAz'],
         'sun_alt'          => $v['sunAlt'],
         'moon_alt'         => $v['moonAlt'],
+        'sqm'              => $cielo['sqm'],
+        'ir'               => $cielo['ir'],
+        'temp'             => $cielo['temp'],
     );
 }
 
-/** Formatos de $wpdb para los 16 campos que devuelve bitacora_validar_datos(). */
-function bitacora_formatos_datos() {
-    return array( '%s','%s','%s','%d','%f','%f','%s','%s','%s','%s','%f','%f','%f','%f','%f','%f' );
+/**
+ * Formatos de $wpdb para los datos de bitacora_validar_datos().
+ *
+ * Los campos opcionales (sqm, ir, temp) pueden ser null: para que $wpdb
+ * guarde NULL de verdad —y no 0— el formato de un valor null debe ser '%s'
+ * (así WordPress lo trata como NULL en vez de convertirlo a 0.0 con '%f').
+ */
+function bitacora_formatos_datos( $datos ) {
+    // 16 campos fijos: los 13 primeros y los 3 de cielo al final.
+    $base = array( '%s','%s','%s','%d','%f','%f','%s','%s','%s','%s','%f','%f','%f','%f','%f','%f' );
+    // Ajuste para sqm, ir, temp: si son null, formato '%s' (=> NULL).
+    foreach ( array( 'sqm', 'ir', 'temp' ) as $campo ) {
+        $base[] = ( null === $datos[ $campo ] ) ? '%s' : '%f';
+    }
+    return $base;
 }
 
 /**
@@ -326,7 +362,7 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     $datos['usuario_id'] = get_current_user_id();
     $datos['creado_en']  = current_time( 'mysql', true );
 
-    $formatos   = bitacora_formatos_datos();
+    $formatos   = bitacora_formatos_datos( $datos );
     $formatos[] = '%d'; // usuario_id
     $formatos[] = '%s'; // creado_en
 
@@ -382,7 +418,7 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
     }
     $datos['actualizado_en'] = current_time( 'mysql', true );
 
-    $formatos   = bitacora_formatos_datos();
+    $formatos   = bitacora_formatos_datos( $datos );
     $formatos[] = '%s'; // actualizado_en
 
     $ok = $wpdb->update(
