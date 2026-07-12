@@ -24,6 +24,7 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `listado-observaciones-wordpress.html` | Fragmento del listado | Editor de WordPress |
 | `bitacora-listado.js` | Lógica del listado | Servidor, por FTP |
 | `bitacora-listado.css` | Estilos del listado | Servidor, por FTP |
+| `…/bitacora-messier/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
 | `registrar-observacion.html` | Versión autónoma, para probar en local | — |
 
 **Por qué el `.js` y el `.css` van por FTP y no pegados en el editor.** El
@@ -83,6 +84,65 @@ Muestra las observaciones como tarjetas, con dos pestañas: **Registradas** y
   la papelera.
 - Cada usuario ve todas las observaciones, pero **solo puede editar o borrar
   las suyas**. Las ajenas aparecen sin botones.
+
+---
+
+## La ficha en Word (.docx)
+
+Cada tarjeta del listado tiene un botón **Ficha** que descarga la observación
+como documento de Word. El archivo se llama como el objeto, en minúscula y sin
+espacios, seguido de `_inv`: `m30_inv.docx`, `ngc6826_inv.docx`, `ic1396_inv.docx`.
+
+**El documento se genera en el servidor, en PHP puro.** El botón pide la ficha a
+la API (con el mismo *nonce* que el resto de acciones); el plugin **no
+reconstruye** el documento: abre la plantilla original `ficha/plantilla_ficha.docx`
+como ZIP con la clase `ZipArchive` de PHP, sustituye las marcas `[entre corchetes]`
+(`[Nombre_objeto]`, `[altitud_objeto]`…) por los datos de la observación —incluso
+si Word ha partido un texto en varios fragmentos— y vuelve a comprimirla,
+conservando **exactamente** el diseño (tipografías, colores, brújula, márgenes).
+La ficha se puede generar de cualquier observación; editar y borrar siguen siendo
+solo para las propias.
+
+La ficha rellena el objeto, el observador, el telescopio, el catálogo, la
+altitud y el azimut, las condiciones del cielo (SQM-L, IR y temperatura, que
+captura el formulario) y la línea de constelación con sus coordenadas. La
+constelación no se guarda en la tabla: se deduce del número Messier. En objetos
+NGC/IC (coordenadas manuales) esa línea muestra solo la coordenada.
+
+### Dónde va la plantilla en el servidor
+
+La recomendación es dejar el generador y la plantilla **dentro de la carpeta del
+plugin**, en una subcarpeta `ficha/`:
+
+```
+wp-content/plugins/bitacora-messier/
+├── bitacora-messier.php
+└── ficha/
+    └── plantilla_ficha.docx      ← aquí subes tu plantilla
+```
+
+Así el plugin la encuentra sola (por su propia ruta), viaja con él cuando lo
+empaquetas en `.zip` y queda versionada junto al código. Para cambiar el diseño
+más adelante, basta con reemplazar ese `plantilla_ficha.docx` por FTP; como las
+marcas `[entre corchetes]` van dentro, puedes editarlo en Word con total libertad.
+
+Si prefieres tenerla en otro sitio (por ejemplo, junto al `.css` y el `.js` en
+`/wp-content/uploads/bitacora/`), indícale la ruta en `wp-config.php`:
+
+```php
+define( 'BITACORA_PLANTILLA', '/ruta/absoluta/a/plantilla_ficha.docx' );
+```
+
+### Requisitos del servidor
+
+Solo la extensión **`ZipArchive`** de PHP, activa por defecto en la práctica
+totalidad de los WordPress. **No** hace falta Node.js, ni `unzip`/`zip`, ni
+`proc_open`, ni `npm install`.
+
+Puedes comprobar que todo está listo en el escritorio: menú **Bitácora** →
+panel *«Generador de fichas (.docx)»*, que verifica `ZipArchive` y que la
+plantilla esté subida. Si algo falta, el botón muestra además un aviso claro en
+lugar de fallar en silencio.
 
 ---
 
@@ -157,6 +217,7 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/` y requieren sesión.
 | `PUT` | `/observaciones/{id}` | La modifica *(solo el autor)* |
 | `DELETE` | `/observaciones/{id}` | Borrado suave *(solo el autor)* |
 | `POST` | `/observaciones/{id}/restaurar` | Deshace el borrado *(solo el autor)* |
+| `GET` | `/observaciones/{id}/ficha` | Genera y **descarga** la ficha `.docx` de la observación |
 
 ---
 

@@ -172,3 +172,6 @@
   #mw-obs-list .pos { order: 3; width: 100%; justify-content: flex-start; }
   #mw-obs-list .acts { order: 4; width: 100%; }
 }
+
+/* Botón de generar la ficha .docx */
+#mw-obs-list .act.ficha:hover { color: var(--azul); border-color: var(--azul); }
