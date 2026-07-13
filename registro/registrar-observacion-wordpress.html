@@ -11,14 +11,14 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=2" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=5" />
 
 <div id="mw-obs-form">
 <div class="wrap">
   <header class="masthead">
     <p class="eyebrow">Bitácora · Catálogo Messier</p>
     <h1>Registrar una observación
-      <span class="sub">Anota lo que viste. El cielo de esa noche lo reconstruimos nosotros.</span>
+      <span class="sub">Registra el objeto y lo que viste, por ocular. Los datos para la ficha (fecha, lugar, altitud…) se añaden después, desde el listado.</span>
     </h1>
   </header>
 
@@ -53,56 +53,9 @@
         <input type="text" id="scope" placeholder="Stargate 18”" /></label>
     </fieldset>
 
-    <!-- 2 · CUÁNDO Y DÓNDE -->
+    <!-- 2 · LO QUE VISTE, POR OCULAR -->
     <fieldset>
       <legend><div class="leg"><span class="num">2</span>
-        <div><h2>Cuándo y dónde</h2><p>Con la fecha, la hora y el lugar, el resto se calcula solo.</p></div></div></legend>
-
-      <label class="field"><span class="lab">Fecha y hora de la observación (hora local)</span>
-        <input type="datetime-local" id="when" /></label>
-
-      <button type="button" class="geo-btn" id="geoBtn">◎ Usar mi ubicación actual</button>
-      <div id="map"></div>
-      <p class="coord-note">Pincha en el mapa para fijar el lugar, o escribe las coordenadas a mano.</p>
-      <div class="row">
-        <label class="field"><span class="lab">Latitud</span>
-          <input type="number" id="lat" step="0.0001" placeholder="37.3710" /></label>
-        <label class="field"><span class="lab">Longitud</span>
-          <input type="number" id="lon" step="0.0001" placeholder="-6.0700" /></label>
-      </div>
-
-      <p class="coord-note" style="margin-top:22px">Condiciones del cielo esa noche (opcional, para la ficha):</p>
-      <div class="row">
-        <label class="field"><span class="lab">SQM-L</span>
-          <input type="number" id="sqm" step="0.01" placeholder="21.40" /></label>
-        <label class="field"><span class="lab">IR (º)</span>
-          <input type="number" id="ir" step="0.1" placeholder="-1.3" /></label>
-        <label class="field"><span class="lab">Temp. ambiente (º)</span>
-          <input type="number" id="temp" step="0.1" placeholder="18" /></label>
-      </div>
-    </fieldset>
-
-    <!-- 3 · EL CIELO DE ESA NOCHE (calculado) -->
-    <fieldset>
-      <legend><div class="leg"><span class="num">3</span>
-        <div><h2>El cielo de esa noche</h2><p>Calculado a partir de lo anterior. No hay que rellenar nada.</p></div></div></legend>
-
-      <div class="computed">
-        <h3 id="compTitle">A la espera de datos</h3>
-        <p class="sub" id="compSub">Completa el objeto, la fecha/hora y el lugar para ver la posición.</p>
-        <div class="grid">
-          <div class="cell"><div class="k">Altitud del objeto</div><div class="v" id="objAlt">—</div></div>
-          <div class="cell"><div class="k">Azimut del objeto</div><div class="v" id="objAz">—</div></div>
-          <div class="cell dim"><div class="k">Altitud del Sol</div><div class="v" id="sunAlt">—</div></div>
-          <div class="cell dim"><div class="k">Altitud de la Luna</div><div class="v" id="moonAlt">—</div></div>
-        </div>
-        <div class="visibility" id="visibility"></div>
-      </div>
-    </fieldset>
-
-    <!-- 4 · LO QUE VISTE, POR OCULAR -->
-    <fieldset>
-      <legend><div class="leg"><span class="num">4</span>
         <div><h2>Lo que viste, por ocular</h2><p>Una entrada por cada aumento con el que observaste. El aumento, el campo real y la descripción son obligatorios.</p></div></div></legend>
 
       <div id="entradas"></div>
@@ -121,4 +74,4 @@
 </div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=2" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=5" defer></script>

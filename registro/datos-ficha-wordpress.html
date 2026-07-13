@@ -1,0 +1,86 @@
+<!-- ============================================================
+     DATOS DE FICHA (astrometría) · Bitácora Messier
+
+     Segundo formulario de la división. Se abre para una observación
+     ya creada, con ?ficha=ID en la URL (los botones "Ficha: datos"
+     del listado ya la añaden). Captura fecha, lugar y, a partir de
+     ellos, la altitud/azimut del objeto, Sol y Luna, más SQM/IR/temp
+     y el enlace al PDF. Guarda en la tabla de fichas.
+
+     Pega este bloque en un bloque "HTML personalizado" de Gutenberg,
+     en una página nueva (por ejemplo, "Datos de ficha").
+     Sube bitacora-ficha.js por FTP a /wp-content/uploads/bitacora/.
+     ============================================================ -->
+
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=4" />
+
+<div id="mw-obs-form">
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Bitácora · Datos de ficha</p>
+    <h1>Datos para la ficha
+      <span class="sub" id="fichaObjeto">Cargando la observación…</span>
+    </h1>
+  </header>
+
+  <form id="fichaForm" autocomplete="off">
+
+    <!-- 1 · CUÁNDO Y DÓNDE -->
+    <fieldset>
+      <legend><div class="leg"><span class="num">1</span>
+        <div><h2>Cuándo y dónde</h2><p>Con la fecha, la hora y el lugar, la posición del objeto se calcula sola.</p></div></div></legend>
+
+      <label class="field"><span class="lab">Fecha y hora de la observación (hora local)</span>
+        <input type="datetime-local" id="when" /></label>
+
+      <button type="button" class="geo-btn" id="geoBtn">◎ Usar mi ubicación actual</button>
+      <div id="map"></div>
+      <p class="coord-note">Pincha en el mapa para fijar el lugar, o escribe las coordenadas a mano.</p>
+      <div class="row">
+        <label class="field"><span class="lab">Latitud</span>
+          <input type="number" id="lat" step="0.0001" placeholder="37.3710" /></label>
+        <label class="field"><span class="lab">Longitud</span>
+          <input type="number" id="lon" step="0.0001" placeholder="-6.0700" /></label>
+      </div>
+
+      <p class="coord-note" style="margin-top:22px">Condiciones del cielo esa noche (opcional):</p>
+      <div class="row">
+        <label class="field"><span class="lab">SQM-L</span>
+          <input type="number" id="sqm" step="0.01" placeholder="21.40" /></label>
+        <label class="field"><span class="lab">IR (º)</span>
+          <input type="number" id="ir" step="0.1" placeholder="-1.3" /></label>
+        <label class="field"><span class="lab">Temp. ambiente (º)</span>
+          <input type="number" id="temp" step="0.1" placeholder="18" /></label>
+      </div>
+
+      <label class="field" style="margin-top:14px"><span class="lab">Enlace a la ficha publicada (PDF, opcional)</span>
+        <input type="url" id="pdf" placeholder="https://…/m30_inv.pdf" /></label>
+    </fieldset>
+
+    <!-- 2 · EL CIELO DE ESA NOCHE (calculado) -->
+    <fieldset>
+      <legend><div class="leg"><span class="num">2</span>
+        <div><h2>El cielo de esa noche</h2><p>Calculado a partir de lo anterior y del objeto de la observación.</p></div></div></legend>
+
+      <div class="computed">
+        <h3 id="compTitle">A la espera de datos</h3>
+        <p class="sub" id="compSub">Indica la fecha/hora y el lugar para ver la posición.</p>
+        <div class="grid">
+          <div class="cell"><div class="k">Altitud del objeto</div><div class="v" id="objAlt">—</div></div>
+          <div class="cell"><div class="k">Azimut del objeto</div><div class="v" id="objAz">—</div></div>
+          <div class="cell dim"><div class="k">Altitud del Sol</div><div class="v" id="sunAlt">—</div></div>
+          <div class="cell dim"><div class="k">Altitud de la Luna</div><div class="v" id="moonAlt">—</div></div>
+        </div>
+        <div class="visibility" id="visibility"></div>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" class="primary" id="submitBtn" disabled>Guardar datos de ficha</button>
+      <span class="out-note" id="outNote">Los datos se guardan en la ficha de esta observación.</span>
+    </div>
+  </form>
+</div>
+</div>
+
+<script src="/wp-content/uploads/bitacora/bitacora-ficha.js?v=1" defer></script>

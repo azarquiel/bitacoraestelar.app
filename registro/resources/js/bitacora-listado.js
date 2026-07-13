@@ -32,6 +32,7 @@
       // Se toma del atributo data-form del contenedor; si falta, se asume esta ruta.
       var contenedor = $('mw-obs-list');
       var URL_FORM = (contenedor && contenedor.getAttribute('data-form')) || '/observaciones-visuales/';
+      var URL_FICHA = (contenedor && contenedor.getAttribute('data-ficha')) || '/datos-de-ficha/';
 
       var viendoPapelera = false;
 
@@ -171,6 +172,7 @@
         var ficha = '<button type="button" class="act ficha" data-accion="ficha">Ficha</button>';
         if (obs.mia) {
           return '<a class="act" href="' + esc(URL_FORM) + '?editar=' + esc(obs.id) + '">Editar</a>' +
+                 '<a class="act" href="' + esc(URL_FICHA) + '?ficha=' + esc(obs.id) + '">Datos ficha</a>' +
                  ficha +
                  '<button type="button" class="act danger" data-accion="borrar">Borrar</button>';
         }

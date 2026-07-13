@@ -231,7 +231,6 @@
   var $=function(id){return document.getElementById(id);};
   var objInput=$('obj'), suggestBox=$('suggest'), objStatus=$('objStatus'),
       radecBox=$('radecBox'), raManual=$('raManual'), decManual=$('decManual'),
-      whenInput=$('when'), latInput=$('lat'), lonInput=$('lon'),
       submitBtn=$('submitBtn'), jsonOut=$('jsonOut'), jsonArea=$('jsonArea');
 
   var resolved=null; // {tipo:'messier'|'ncgic', num, nombre, ra, dec, etiqueta}
@@ -313,78 +312,8 @@
   raManual.addEventListener('input',resolveObject);
   decManual.addEventListener('input',resolveObject);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // MAPA (Leaflet)
-  //
-  // Se carga dinámicamente y de forma aislada. Si Leaflet no estuviera
-  // disponible (sin conexión, bloqueado por el navegador, filtrado por
-  // WordPress...), el formulario SIGUE FUNCIONANDO: basta escribir la latitud
-  // y la longitud a mano. El mapa es una comodidad, no un requisito.
-  // ═══════════════════════════════════════════════════════════════════════
-  var map=null, marker=null;
-
-  function setLatLon(la,lo,recenter){
-    latInput.value=la.toFixed(4); lonInput.value=lo.toFixed(4);
-    if(map){
-      if(marker) marker.setLatLng([la,lo]); else marker=L.marker([la,lo]).addTo(map);
-      if(recenter) map.setView([la,lo], Math.max(map.getZoom(),9));
-    }
-    recompute();
-  }
-
-  // Carga un recurso externo (CSS o JS) y avisa cuando esté listo.
-  function cargarCSS(url){
-    var l=document.createElement('link');
-    l.rel='stylesheet'; l.href=url; document.head.appendChild(l);
-  }
-  function cargarJS(url,alCargar,alFallar){
-    var s=document.createElement('script');
-    s.src=url; s.async=true;
-    s.onload=alCargar; s.onerror=alFallar;
-    document.head.appendChild(s);
-  }
-
-  function iniciarMapa(){
-    try{
-      map=L.map('map',{worldCopyJump:true}).setView([37.371,-6.070],5);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-        {attribution:'© OpenStreetMap © CARTO',maxZoom:19}).addTo(map);
-      map.on('click',function(e){ setLatLon(e.latlng.lat,e.latlng.lng,false); });
-      // Si el contenedor estaba oculto al crearse, forzamos el redibujado.
-      setTimeout(function(){ map.invalidateSize(); },200);
-    }catch(err){
-      mapaNoDisponible();
-    }
-  }
-  function mapaNoDisponible(){
-    var cont=$('map');
-    if(!cont) return;
-    cont.style.display='grid';
-    cont.style.placeItems='center';
-    cont.style.textAlign='center';
-    cont.style.padding='20px';
-    cont.innerHTML='<div style="color:#8ea0bd;font-size:13.5px;line-height:1.5">'+
-      'No se pudo cargar el mapa.<br>Escribe la latitud y la longitud a mano: '+
-      'el resto del formulario funciona igual.</div>';
-  }
-
-  // Arranque del mapa: si Leaflet ya está presente, úsalo; si no, cárgalo.
-  if(window.L && window.L.map){
-    iniciarMapa();
-  }else{
-    cargarCSS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
-    cargarJS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', iniciarMapa, mapaNoDisponible);
-  }
-
-  latInput.addEventListener('input',function(){ var la=parseFloat(latInput.value),lo=parseFloat(lonInput.value);
-    if(!isNaN(la)&&!isNaN(lo)) setLatLon(la,lo,true); else recompute(); });
-  lonInput.addEventListener('input',function(){ var la=parseFloat(latInput.value),lo=parseFloat(lonInput.value);
-    if(!isNaN(la)&&!isNaN(lo)) setLatLon(la,lo,true); else recompute(); });
-  $('geoBtn').addEventListener('click',function(){
-    if(!navigator.geolocation){ alert('Tu navegador no permite geolocalización.'); return; }
-    navigator.geolocation.getCurrentPosition(function(p){ setLatLon(p.coords.latitude,p.coords.longitude,true); },
-      function(){ alert('No se pudo obtener la ubicación. Escríbela a mano o pincha en el mapa.'); });
-  });
+  // (El mapa, la fecha y el cálculo del cielo se han movido al formulario de
+  // datos de ficha. Aquí solo se registra el CONTENIDO de la observación.)
 
   // ═══════════════════════════════════════════════════════════════════════
   // CÁLCULO EN TIEMPO REAL
@@ -395,66 +324,23 @@
     return v.toFixed(1)+'° <small>'+dirs[Math.round(v/22.5)%16]+'</small>';
   }
   var lastComputed=null;
+  // En este formulario (solo contenido) la observación está lista cuando hay
+  // objeto resuelto y observador. La astrometría (fecha, lugar, altitud/azimut)
+  // se captura aparte, en el formulario de datos de ficha.
   function recompute(){
     lastComputed=null; submitBtn.disabled=true; jsonOut.classList.remove('show');
-    var la=parseFloat(latInput.value), lo=parseFloat(lonInput.value), whenVal=whenInput.value;
-    var haveWhere=!isNaN(la)&&!isNaN(lo), haveWhen=!!whenVal, haveObj=resolved!==null;
-
-    if(!(haveObj&&haveWhen&&haveWhere)){
-      $('compTitle').textContent='A la espera de datos';
-      $('compSub').textContent='Completa el objeto, la fecha/hora y el lugar para ver la posición.';
-      ['objAlt','objAz','sunAlt','moonAlt'].forEach(function(id){$(id).textContent='—';});
-      $('visibility').className='visibility';
-      return;
-    }
-    var date=new Date(whenVal); // interpretada en hora local del navegador
-    var jd=julianDay(date);
-    var obj=altAz(resolved.ra,resolved.dec,jd,la,lo);
-    var s=sunPos(jd),  sun=altAz(s.ra,s.dec,jd,la,lo);
-    var m=moonPos(jd), moon=altAz(m.ra,m.dec,jd,la,lo);
-    var objAltR=refract(obj.alt);
-
-    $('compTitle').textContent=resolved.etiqueta;
-    $('compSub').textContent='Posición calculada para la fecha, hora y lugar indicados.';
-    $('objAlt').innerHTML=fmtDeg(objAltR);
-    $('objAz').innerHTML=fmtAz(obj.az);
-    $('sunAlt').innerHTML=fmtDeg(sun.alt);
-    $('moonAlt').innerHTML=fmtDeg(moon.alt);
-
-    var vis=$('visibility');
-    if(objAltR<0){ vis.className='visibility down';
-      vis.textContent='⚠ El objeto estaba bajo el horizonte en ese momento (altitud negativa). Revisa la fecha/hora o el lugar.'; }
-    else if(sun.alt>0){ vis.className='visibility down';
-      vis.textContent='⚠ El Sol estaba por encima del horizonte: era de día. Revisa la fecha/hora.'; }
-    else { vis.className='visibility up';
-      var cond = sun.alt<-18 ? 'noche astronómica' : (sun.alt<-12 ? 'crepúsculo astronómico' : (sun.alt<-6?'crepúsculo náutico':'crepúsculo civil'));
-      vis.textContent='✓ Objeto a '+objAltR.toFixed(1)+'° sobre el horizonte · '+cond+'.'; }
-
+    var haveObj=resolved!==null, haveObs=$('observer').value.trim()!=='';
+    if(!(haveObj&&haveObs)){ return; }
     lastComputed={
       objeto:resolved.etiqueta, tipo:resolved.tipo, num:resolved.num,
       cons:resolved.cons||'', nombre:resolved.nombre||'',
       ra:resolved.ra, dec:resolved.dec,
-      observador:$('observer').value.trim(), telescopio:$('scope').value.trim(),
-      fechaHoraLocal:whenVal, fechaHoraUTC:date.toISOString(),
-      lat:la, lon:lo,
-      objAlt:+objAltR.toFixed(2), objAz:+obj.az.toFixed(2),
-      sunAlt:+sun.alt.toFixed(2), moonAlt:+moon.alt.toFixed(2),
-      sqm:($('sqm').value.trim()!==''?parseFloat($('sqm').value):null),
-      ir:($('ir').value.trim()!==''?parseFloat($('ir').value):null),
-      temp:($('temp').value.trim()!==''?parseFloat($('temp').value):null)
+      observador:$('observer').value.trim(), telescopio:$('scope').value.trim()
     };
     submitBtn.disabled=false;
   }
-  whenInput.addEventListener('input',recompute);
   $('observer').addEventListener('input',recompute);
   $('scope').addEventListener('input',recompute);
-  $('sqm').addEventListener('input',recompute);
-  $('ir').addEventListener('input',recompute);
-  $('temp').addEventListener('input',recompute);
-
-  // Fecha/hora por defecto: ahora
-  (function(){ var n=new Date(); n.setMinutes(n.getMinutes()-n.getTimezoneOffset());
-    whenInput.value=n.toISOString().slice(0,16); })();
 
   // ═══════════════════════════════════════════════════════════════════════
   // ENVÍO: por ahora, genera el bloque de datos de la observación
@@ -495,10 +381,6 @@
     objInput.value      = obs.objeto || '';
     $('observer').value = obs.observador || '';
     $('scope').value    = obs.telescopio || '';
-    if(obs.fecha_hora_local) whenInput.value = obs.fecha_hora_local;
-    if(obs.sqm !== null && obs.sqm !== undefined && obs.sqm !== '') $('sqm').value = obs.sqm;
-    if(obs.ir !== null && obs.ir !== undefined && obs.ir !== '') $('ir').value = obs.ir;
-    if(obs.temp !== null && obs.temp !== undefined && obs.temp !== '') $('temp').value = obs.temp;
 
     // MySQL devuelve todo como texto; los campos de RA/Dec aceptan decimales.
     // Para los no-Messier hay que rellenarlos ANTES de resolver, porque
@@ -516,12 +398,7 @@
       if(Array.isArray(obs.entradas)){ obs.entradas.forEach(function(en){ crearEntrada(en); }); }
     }
 
-    var la = parseFloat(obs.lat), lo = parseFloat(obs.lon);
-    if(!isNaN(la) && !isNaN(lo)){
-      setLatLon(la, lo, true);   // ya llama a recompute()
-    } else {
-      recompute();
-    }
+    recompute();
   }
 
   function cargarParaEditar(){
@@ -553,9 +430,11 @@
   // ═══════════════════════════════════════════════════════════════════════
   // ENTRADAS POR OCULAR (una por aumento)
   //
-  // Cada entrada: aumento y campo real (obligatorios), pupila de salida
-  // (opcional), descripción (obligatoria) e imagen (opcional). La imagen se
-  // sube a la biblioteca de medios de WordPress y se guarda su id/URL.
+  // Cada entrada: aumento y campo real (obligatorios), pupila de salida y
+  // nombre del ocular (opcionales), descripción con formato (obligatoria),
+  // varias imágenes principales (con etiqueta para pestañas) e imágenes de
+  // apoyo (anexos, con título y posición). Las imágenes se suben a la
+  // biblioteca de medios de WordPress; se guarda su id/URL.
   // ═══════════════════════════════════════════════════════════════════════
   var entradasBox = $('entradas'), addEntryBtn = $('addEntry');
 
@@ -568,13 +447,13 @@
     if(mm){ return parseFloat(mm[1].replace(',','.'))/60; }
     var d = parseFloat(txt.replace(',','.')); return isNaN(d)?null:d;
   }
-  // grados decimales -> "1º 10′"
   function fmtCampo(deg){
     if(deg===null||isNaN(deg)) return '';
     var d=Math.floor(deg), m=Math.round((deg-d)*60);
     if(m===60){ d+=1; m=0; }
     return d+'º '+m+'′';
   }
+  function textoPlano(html){ var d=document.createElement('div'); d.innerHTML=html||''; return (d.textContent||'').trim(); }
 
   function renumerarEntradas(){
     var i=0;
@@ -583,51 +462,10 @@
     });
   }
 
-  function crearEntrada(datos){
-    datos = datos || {};
-    var el = document.createElement('div');
-    el.className='entry';
-    if(datos.imagen_id) el.setAttribute('data-img-id', datos.imagen_id);
-    if(datos.imagen_url) el.setAttribute('data-img-url', datos.imagen_url);
-    el.innerHTML =
-      '<div class="entry-head"><span class="entry-title">Ocular</span>'+
-        '<button type="button" class="entry-del">Quitar</button></div>'+
-      '<div class="row">'+
-        '<label class="field"><span class="lab">Aumento (✕) *</span>'+
-          '<input type="number" class="e-aumento" step="1" min="1" placeholder="70"></label>'+
-        '<label class="field"><span class="lab">Campo real *</span>'+
-          '<input type="text" class="e-campo" placeholder="1º 10′ · ó 1.17 · ó 70′"></label>'+
-        '<label class="field"><span class="lab">Pupila de salida (mm)</span>'+
-          '<input type="number" class="e-pupila" step="0.1" min="0" placeholder="6.6"></label>'+
-      '</div>'+
-      '<label class="field"><span class="lab">Descripción *</span>'+
-        '<textarea class="e-desc" rows="3" placeholder="Qué se veía a este aumento…"></textarea></label>'+
-      '<label class="field"><span class="lab">Imagen (opcional) — orientación: Norte abajo, Oeste a la izquierda</span>'+
-        '<input type="file" class="e-img" accept="image/*"></label>'+
-      '<div class="e-imgstatus"></div>';
-
-    el.querySelector('.e-aumento').value = (datos.aumento!==undefined&&datos.aumento!==null)?datos.aumento:'';
-    el.querySelector('.e-campo').value   = (datos.campo_real!==undefined&&datos.campo_real!==null&&datos.campo_real!=='')?fmtCampo(parseFloat(datos.campo_real)):'';
-    el.querySelector('.e-pupila').value  = (datos.pupila_salida!==undefined&&datos.pupila_salida!==null&&datos.pupila_salida!=='')?datos.pupila_salida:'';
-    el.querySelector('.e-desc').value    = datos.descripcion||'';
-    if(datos.imagen_url){
-      el.querySelector('.e-imgstatus').innerHTML='Imagen actual: <a href="'+datos.imagen_url+'" target="_blank" rel="noopener">ver</a> · elige otra para reemplazarla.';
-    }
-
-    el.querySelector('.entry-del').addEventListener('click',function(){ el.remove(); renumerarEntradas(); });
-    el.querySelector('.e-img').addEventListener('change',function(ev){
-      var f=ev.target.files&&ev.target.files[0]; if(f) subirImagen(f, el, el.querySelector('.e-imgstatus'));
-    });
-
-    entradasBox.appendChild(el);
-    renumerarEntradas();
-    return el;
-  }
-
-  // Sube un archivo a la biblioteca de medios y guarda su id/URL en la entrada.
-  function subirImagen(file, el, statusEl){
-    if(!WP || !WP.media){ statusEl.textContent='(sin sesión de WordPress no se puede subir la imagen)'; return; }
-    statusEl.textContent='Subiendo imagen…';
+  // ── Subida de un archivo a la biblioteca de medios ──
+  function subirImagen(file, rowEl, statusEl){
+    if(!WP || !WP.media){ statusEl.textContent='(sin sesión de WordPress no se puede subir)'; return; }
+    statusEl.textContent='Subiendo…';
     fetch(WP.media, {
       method:'POST', credentials:'same-origin',
       headers:{
@@ -640,35 +478,164 @@
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,status:r.status,data:d}; }); })
     .then(function(res){
       if(res.ok && res.data && res.data.id){
-        el.setAttribute('data-img-id', res.data.id);
-        el.setAttribute('data-img-url', res.data.source_url||'');
-        statusEl.innerHTML='<span style="color:var(--verde)">✓ Imagen subida.</span>';
+        rowEl.setAttribute('data-img-id', res.data.id);
+        rowEl.setAttribute('data-img-url', res.data.source_url||'');
+        statusEl.innerHTML='<span style="color:var(--verde)">✓ subida</span>';
       } else {
         var msg=(res.data&&res.data.message)?res.data.message:('error '+res.status);
-        statusEl.innerHTML='<span style="color:var(--rojo)">No se pudo subir la imagen: '+msg+'</span>';
+        statusEl.innerHTML='<span style="color:var(--rojo)">'+msg+'</span>';
       }
     })
-    .catch(function(){ statusEl.innerHTML='<span style="color:var(--rojo)">No se pudo contactar para subir la imagen.</span>'; });
+    .catch(function(){ statusEl.innerHTML='<span style="color:var(--rojo)">sin conexión</span>'; });
   }
 
-  // Recoge las entradas del DOM en el formato que espera el servidor.
+  // ── Una fila de imagen (principal o anexo) ──
+  function crearImagen(listEl, tipo, datos){
+    datos = datos || {};
+    var row = document.createElement('div');
+    row.className='img-row'; row.setAttribute('data-tipo', tipo);
+    if(datos.imagen_id) row.setAttribute('data-img-id', datos.imagen_id);
+    if(datos.imagen_url) row.setAttribute('data-img-url', datos.imagen_url);
+
+    var posSel = (tipo==='anexo')
+      ? '<select class="img-pos"><option value="right">Derecha</option><option value="left">Izquierda</option></select>'
+      : '';
+    var placeholder = (tipo==='anexo') ? 'Título del anexo' : 'Etiqueta (p. ej. Sin filtro)';
+    row.innerHTML =
+      '<input type="file" class="img-file" accept="image/*">'+
+      '<input type="text" class="img-etiqueta" placeholder="'+placeholder+'">'+
+      posSel+
+      '<button type="button" class="img-del" title="Quitar">×</button>'+
+      '<div class="img-status"></div>';
+
+    row.querySelector('.img-etiqueta').value = datos.etiqueta || '';
+    if(tipo==='anexo' && datos.pos){ row.querySelector('.img-pos').value = datos.pos; }
+    if(datos.imagen_url){
+      row.querySelector('.img-status').innerHTML='<a href="'+datos.imagen_url+'" target="_blank" rel="noopener">imagen actual</a>';
+    }
+
+    row.querySelector('.img-del').addEventListener('click',function(){ row.remove(); });
+    row.querySelector('.img-file').addEventListener('change',function(ev){
+      var f=ev.target.files&&ev.target.files[0]; if(f) subirImagen(f, row, row.querySelector('.img-status'));
+    });
+    listEl.appendChild(row);
+    return row;
+  }
+
+  // ── Una entrada (ocular) completa ──
+  function crearEntrada(datos){
+    datos = datos || {};
+    var el = document.createElement('div');
+    el.className='entry';
+    el.innerHTML =
+      '<div class="entry-head"><span class="entry-title">Ocular</span>'+
+        '<button type="button" class="entry-del">Quitar</button></div>'+
+      '<div class="row">'+
+        '<label class="field"><span class="lab">Aumento (✕) *</span>'+
+          '<input type="number" class="e-aumento" step="1" min="1" placeholder="70"></label>'+
+        '<label class="field"><span class="lab">Campo real *</span>'+
+          '<input type="text" class="e-campo" placeholder="1º 10′ · ó 1.17 · ó 70′"></label>'+
+        '<label class="field"><span class="lab">Pupila de salida (mm)</span>'+
+          '<input type="number" class="e-pupila" step="0.1" min="0" placeholder="6.6"></label>'+
+      '</div>'+
+      '<label class="field"><span class="lab">Nombre del ocular</span>'+
+        '<input type="text" class="e-titulo" placeholder="Nagler 31mm"></label>'+
+      '<div class="field"><span class="lab">Descripción *</span>'+
+        '<div class="rt-toolbar">'+
+          '<button type="button" data-cmd="bold" title="Negrita"><b>B</b></button>'+
+          '<button type="button" data-cmd="italic" title="Cursiva"><i>i</i></button>'+
+          '<button type="button" data-cmd="insertUnorderedList" title="Lista">• lista</button>'+
+          '<button type="button" data-cmd="formatBlock" data-arg="p" title="Párrafo">¶</button>'+
+        '</div>'+
+        '<div class="e-desc rt-editor" contenteditable="true"></div></div>'+
+      '<div class="imgs-block">'+
+        '<div class="imgs-head">Imágenes principales <span>(el boceto/foto a este aumento; varias = pestañas)</span></div>'+
+        '<div class="lista-principales"></div>'+
+        '<button type="button" class="add-img" data-tipo="principal">+ Añadir imagen</button>'+
+      '</div>'+
+      '<div class="imgs-block">'+
+        '<div class="imgs-head">Imágenes de apoyo (anexos) <span>(refuerzan lo que describes)</span></div>'+
+        '<div class="lista-anexos"></div>'+
+        '<button type="button" class="add-img" data-tipo="anexo">+ Añadir anexo</button>'+
+      '</div>';
+
+    // Valores iniciales (modo edición)
+    el.querySelector('.e-aumento').value = (datos.aumento!==undefined&&datos.aumento!==null)?datos.aumento:'';
+    el.querySelector('.e-campo').value   = (datos.campo_real!==undefined&&datos.campo_real!==null&&datos.campo_real!=='')?fmtCampo(parseFloat(datos.campo_real)):'';
+    el.querySelector('.e-pupila').value  = (datos.pupila_salida!==undefined&&datos.pupila_salida!==null&&datos.pupila_salida!=='')?datos.pupila_salida:'';
+    el.querySelector('.e-titulo').value  = datos.titulo||'';
+    el.querySelector('.e-desc').innerHTML = datos.descripcion||'';
+
+    // Editor con formato: Enter crea párrafos <p>.
+    try{ document.execCommand('defaultParagraphSeparator', false, 'p'); }catch(_e){}
+    el.querySelectorAll('.rt-toolbar button').forEach(function(btn){
+      btn.addEventListener('mousedown', function(ev){
+        ev.preventDefault();  // no perder el foco del editor
+        var cmd=btn.getAttribute('data-cmd'), arg=btn.getAttribute('data-arg')||null;
+        el.querySelector('.e-desc').focus();
+        try{ document.execCommand(cmd, false, arg); }catch(_e){}
+      });
+    });
+
+    // Botones de añadir imágenes
+    var listaP=el.querySelector('.lista-principales'), listaA=el.querySelector('.lista-anexos');
+    el.querySelectorAll('.add-img').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var tipo=btn.getAttribute('data-tipo');
+        crearImagen(tipo==='anexo'?listaA:listaP, tipo);
+      });
+    });
+
+    // Imágenes existentes (modo edición)
+    if(Array.isArray(datos.imagenes)){
+      datos.imagenes.forEach(function(img){
+        crearImagen(img.tipo==='anexo'?listaA:listaP, img.tipo==='anexo'?'anexo':'principal', img);
+      });
+    }
+
+    el.querySelector('.entry-del').addEventListener('click',function(){ el.remove(); renumerarEntradas(); });
+
+    entradasBox.appendChild(el);
+    renumerarEntradas();
+    return el;
+  }
+
+  // ── Recogida y validación ──
+  function recogerImagenes(el){
+    var out=[];
+    el.querySelectorAll('.img-row').forEach(function(row){
+      var id=row.getAttribute('data-img-id'), url=row.getAttribute('data-img-url');
+      if(!id && !url) return;
+      var tipo=row.getAttribute('data-tipo')||'principal';
+      var posSel=row.querySelector('.img-pos');
+      out.push({
+        tipo:tipo,
+        imagenId: id?parseInt(id,10):null,
+        imagenUrl: url||'',
+        etiqueta: (row.querySelector('.img-etiqueta').value||'').trim(),
+        pos: (tipo==='anexo' && posSel)?posSel.value:''
+      });
+    });
+    return out;
+  }
+
   function recogerEntradas(){
     var out=[];
     entradasBox.querySelectorAll('.entry').forEach(function(el){
       var aum=el.querySelector('.e-aumento').value.trim();
       var campo=el.querySelector('.e-campo').value.trim();
       var pup=el.querySelector('.e-pupila').value.trim();
-      var desc=el.querySelector('.e-desc').value.trim();
-      var imgId=el.getAttribute('data-img-id');
-      var imgUrl=el.getAttribute('data-img-url');
-      if(aum==='' && campo==='' && pup==='' && desc==='' && !imgId) return; // fila vacía: se ignora
+      var titulo=el.querySelector('.e-titulo').value.trim();
+      var descHtml=el.querySelector('.e-desc').innerHTML.trim();
+      var imagenes=recogerImagenes(el);
+      if(aum==='' && campo==='' && pup==='' && titulo==='' && textoPlano(descHtml)==='' && !imagenes.length) return;
       out.push({
         aumento: aum==='' ? null : parseFloat(aum),
         campoReal: parseCampo(campo),
         pupilaSalida: pup==='' ? null : parseFloat(pup),
-        descripcion: desc,
-        imagenId: imgId ? parseInt(imgId,10) : null,
-        imagenUrl: imgUrl || ''
+        titulo: titulo,
+        descripcion: descHtml,
+        imagenes: imagenes
       });
     });
     return out;
@@ -679,7 +646,7 @@
       var e=lista[i], n=i+1;
       if(!(e.aumento>0)) return {ok:false, error:'Ocular '+n+': falta el aumento (un número mayor que 0).'};
       if(!(e.campoReal>0)) return {ok:false, error:'Ocular '+n+': el campo real no es válido (p. ej. 1º 10′, 1.17 ó 70′).'};
-      if(!e.descripcion) return {ok:false, error:'Ocular '+n+': falta la descripción.'};
+      if(textoPlano(e.descripcion)==='') return {ok:false, error:'Ocular '+n+': falta la descripción.'};
     }
     return {ok:true};
   }
