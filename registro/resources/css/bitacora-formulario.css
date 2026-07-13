@@ -114,3 +114,39 @@
 #mw-obs-form .grid {grid-template-columns:1fr;}
 
 }
+
+/* ===========================================================================
+ * ENTRADAS POR OCULAR (una por aumento)
+ * =========================================================================== */
+#mw-obs-form #entradas {display:flex;flex-direction:column;gap:14px;margin-bottom:14px;}
+#mw-obs-form .entry {
+    border:1px solid var(--linea);border-radius:12px;
+    background:linear-gradient(180deg,rgba(126,200,255,0.04),transparent);
+    padding:16px 16px 18px;
+  }
+#mw-obs-form .entry-head {display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+#mw-obs-form .entry-title {
+    font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:0.06em;
+    text-transform:uppercase;color:var(--ambar);
+  }
+#mw-obs-form .entry-del {
+    background:none;border:1px solid var(--linea);color:var(--tinta-tenue);
+    font-family:ui-monospace,Menlo,monospace;font-size:11.5px;letter-spacing:0.03em;
+    padding:5px 12px;border-radius:8px;cursor:pointer;transition:all .15s;
+  }
+#mw-obs-form .entry-del:hover {color:var(--rojo);border-color:var(--rojo);}
+#mw-obs-form .entry textarea {
+    width:100%;resize:vertical;min-height:64px;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
+    color:var(--tinta);font-family:inherit;font-size:15px;padding:10px 12px;
+  }
+#mw-obs-form .entry textarea:focus {outline:none;border-color:var(--ambar);}
+#mw-obs-form .entry input[type=file] {font-size:13px;color:var(--tinta-tenue);}
+#mw-obs-form .e-imgstatus {font-size:12.5px;color:var(--tinta-tenue);margin-top:6px;min-height:1em;}
+#mw-obs-form .add-entry {
+    background:var(--ambar-suave);border:1px solid var(--ambar);color:var(--ambar);
+    font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:13px;
+    letter-spacing:0.03em;padding:10px 18px;border-radius:10px;cursor:pointer;
+    transition:filter .15s;
+  }
+#mw-obs-form .add-entry:hover {filter:brightness(1.1);}

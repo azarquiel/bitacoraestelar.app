@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Messier
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.3.0
+ * Version:     1.4.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,8 +22,9 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.3.0' );
+define( 'BITACORA_VERSION', '1.4.0' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
+define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 
 /**
  * Nombre real de la tabla, con el prefijo que use esta instalación
@@ -32,6 +33,12 @@ define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 function bitacora_nombre_tabla() {
     global $wpdb;
     return $wpdb->prefix . BITACORA_TABLA;
+}
+
+/** Nombre real de la tabla de entradas (una observación tiene varias). */
+function bitacora_nombre_tabla_entradas() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_ENTRADAS;
 }
 
 /* ===========================================================================
@@ -78,8 +85,26 @@ function bitacora_crear_tabla() {
         KEY borrada_en (borrada_en)
     ) $collate;";
 
+    // Tabla hija: las entradas de una observación, una por ocular/aumento.
+    $tabla_entradas = bitacora_nombre_tabla_entradas();
+    $sql_entradas = "CREATE TABLE $tabla_entradas (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        observacion_id bigint(20) unsigned NOT NULL,
+        orden smallint(6) NOT NULL DEFAULT 0,
+        aumento double NOT NULL,
+        campo_real double NOT NULL,
+        pupila_salida double DEFAULT NULL,
+        descripcion longtext NOT NULL,
+        imagen_id bigint(20) unsigned DEFAULT NULL,
+        imagen_url varchar(255) NOT NULL DEFAULT '',
+        creado_en datetime NOT NULL,
+        PRIMARY KEY  (id),
+        KEY observacion_id (observacion_id)
+    ) $collate;";
+
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql );
+    dbDelta( $sql_entradas );
 
     update_option( 'bitacora_db_version', BITACORA_VERSION );
 }
@@ -358,15 +383,139 @@ function bitacora_registrar_rutas() {
 }
 add_action( 'rest_api_init', 'bitacora_registrar_rutas' );
 
+/* ===========================================================================
+ * 2-BIS. ENTRADAS POR OCULAR (una observación tiene varias)
+ *
+ * Cada entrada es lo observado a un aumento concreto: el aumento, el campo real
+ * que da el ocular en ese telescopio, la pupila de salida (opcional), una
+ * descripción (obligatoria) y, opcionalmente, una imagen ya orientada
+ * (Norte abajo, Oeste a la izquierda) que de momento solo se guarda.
+ * =========================================================================== */
+
+/** Devuelve las entradas de una observación, ordenadas. */
+function bitacora_obtener_entradas( $observacion_id ) {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla_entradas();
+    return $wpdb->get_results(
+        $wpdb->prepare( "SELECT * FROM $tabla WHERE observacion_id = %d ORDER BY orden ASC, id ASC", $observacion_id )
+    );
+}
+
+/**
+ * Valida la lista de entradas recibida del navegador. Devuelve un array de
+ * filas listas para la BD, o WP_Error. Una observación sin entradas es válida.
+ */
+function bitacora_validar_entradas( $lista ) {
+    if ( empty( $lista ) ) {
+        return array();
+    }
+    if ( ! is_array( $lista ) ) {
+        return new WP_Error( 'entradas_invalidas', 'El formato de las entradas no es válido.', array( 'status' => 400 ) );
+    }
+
+    $salida = array();
+    foreach ( array_values( $lista ) as $i => $e ) {
+        $n = $i + 1;
+
+        $aumento = isset( $e['aumento'] ) ? $e['aumento'] : null;
+        if ( ! is_numeric( $aumento ) || $aumento <= 0 || $aumento > 10000 ) {
+            return new WP_Error( 'entrada_invalida', "Entrada $n: el aumento debe ser un número mayor que 0.", array( 'status' => 400 ) );
+        }
+
+        // Campo real en grados decimales (p. ej. 1.17 para 1º 10').
+        $campo = isset( $e['campoReal'] ) ? $e['campoReal'] : null;
+        if ( ! is_numeric( $campo ) || $campo <= 0 || $campo > 10 ) {
+            return new WP_Error( 'entrada_invalida', "Entrada $n: el campo real (en grados) debe estar entre 0 y 10.", array( 'status' => 400 ) );
+        }
+
+        $desc = sanitize_textarea_field( isset( $e['descripcion'] ) ? $e['descripcion'] : '' );
+        if ( '' === trim( $desc ) ) {
+            return new WP_Error( 'entrada_invalida', "Entrada $n: falta la descripción.", array( 'status' => 400 ) );
+        }
+
+        // Pupila de salida (mm), opcional.
+        $pupila = isset( $e['pupilaSalida'] ) ? $e['pupilaSalida'] : null;
+        if ( null === $pupila || '' === $pupila ) {
+            $pupila = null;
+        } elseif ( is_numeric( $pupila ) && $pupila > 0 && $pupila <= 15 ) {
+            $pupila = floatval( $pupila );
+        } else {
+            return new WP_Error( 'entrada_invalida', "Entrada $n: la pupila de salida (mm) está fuera de rango.", array( 'status' => 400 ) );
+        }
+
+        // Imagen (opcional): id de la biblioteca de medios y/o su URL.
+        $img_id  = ( isset( $e['imagenId'] ) && is_numeric( $e['imagenId'] ) ) ? intval( $e['imagenId'] ) : null;
+        $img_url = isset( $e['imagenUrl'] ) ? esc_url_raw( $e['imagenUrl'] ) : '';
+
+        $salida[] = array(
+            'aumento'       => floatval( $aumento ),
+            'campo_real'    => floatval( $campo ),
+            'pupila_salida' => $pupila,
+            'descripcion'   => $desc,
+            'imagen_id'     => $img_id,
+            'imagen_url'    => $img_url,
+        );
+    }
+    return $salida;
+}
+
+/**
+ * Reemplaza TODAS las entradas de una observación por la lista dada (borra las
+ * previas e inserta las nuevas). Se usa al crear y al editar.
+ */
+function bitacora_guardar_entradas( $observacion_id, $entradas ) {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla_entradas();
+
+    $wpdb->delete( $tabla, array( 'observacion_id' => $observacion_id ), array( '%d' ) );
+
+    $orden = 0;
+    foreach ( $entradas as $e ) {
+        $fila = array(
+            'observacion_id' => $observacion_id,
+            'orden'          => $orden,
+            'aumento'        => $e['aumento'],
+            'campo_real'     => $e['campo_real'],
+            'pupila_salida'  => $e['pupila_salida'],
+            'descripcion'    => $e['descripcion'],
+            'imagen_id'      => $e['imagen_id'],
+            'imagen_url'     => $e['imagen_url'],
+            'creado_en'      => current_time( 'mysql', true ),
+        );
+        $formatos = array(
+            '%d', // observacion_id
+            '%d', // orden
+            '%f', // aumento
+            '%f', // campo_real
+            ( null === $e['pupila_salida'] ) ? '%s' : '%f', // pupila (NULL como %s)
+            '%s', // descripcion
+            ( null === $e['imagen_id'] ) ? '%s' : '%d',     // imagen_id (NULL como %s)
+            '%s', // imagen_url
+            '%s', // creado_en
+        );
+        $wpdb->insert( $tabla, $fila, $formatos );
+        $orden++;
+    }
+}
+
 /**
  * Guarda una observación. Devuelve el id creado.
  */
 function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     global $wpdb;
 
-    $datos = bitacora_validar_datos( $peticion->get_json_params() );
+    $params = $peticion->get_json_params();
+
+    $datos = bitacora_validar_datos( $params );
     if ( is_wp_error( $datos ) ) {
         return $datos;
+    }
+
+    // Entradas por ocular (opcionales). Se validan ANTES de tocar la BD, para
+    // no dejar una observación a medias si alguna entrada es incorrecta.
+    $entradas = bitacora_validar_entradas( isset( $params['entradas'] ) ? $params['entradas'] : array() );
+    if ( is_wp_error( $entradas ) ) {
+        return $entradas;
     }
 
     // Campos que fija el servidor, nunca el navegador.
@@ -384,10 +533,13 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
         return new WP_Error( 'error_bd', 'No se pudo guardar la observación.', array( 'status' => 500 ) );
     }
 
+    $id = $wpdb->insert_id;
+    bitacora_guardar_entradas( $id, $entradas );
+
     return new WP_REST_Response(
         array(
             'ok'      => true,
-            'id'      => $wpdb->insert_id,
+            'id'      => $id,
             'objeto'  => $datos['objeto'],
             'mensaje' => 'Observación registrada.',
         ),
@@ -403,6 +555,7 @@ function bitacora_leer_observacion( WP_REST_Request $peticion ) {
     if ( ! $obs || $obs->borrada_en ) {
         return new WP_Error( 'no_encontrada', 'Esa observación no existe.', array( 'status' => 404 ) );
     }
+    $obs->entradas = bitacora_obtener_entradas( $obs->id );
     return new WP_REST_Response( $obs, 200 );
 }
 
@@ -423,10 +576,18 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
         return new WP_Error( 'borrada', 'Esa observación está borrada. Restáurala antes de editarla.', array( 'status' => 409 ) );
     }
 
-    $datos = bitacora_validar_datos( $peticion->get_json_params() );
+    $params = $peticion->get_json_params();
+
+    $datos = bitacora_validar_datos( $params );
     if ( is_wp_error( $datos ) ) {
         return $datos;
     }
+
+    $entradas = bitacora_validar_entradas( isset( $params['entradas'] ) ? $params['entradas'] : array() );
+    if ( is_wp_error( $entradas ) ) {
+        return $entradas;
+    }
+
     $datos['actualizado_en'] = current_time( 'mysql', true );
 
     $formatos   = bitacora_formatos_datos( $datos );
@@ -443,6 +604,9 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
     if ( false === $ok ) {
         return new WP_Error( 'error_bd', 'No se pudo actualizar la observación.', array( 'status' => 500 ) );
     }
+
+    // Reemplaza el conjunto de entradas por el recibido.
+    bitacora_guardar_entradas( $id, $entradas );
 
     return new WP_REST_Response(
         array( 'ok' => true, 'id' => $id, 'mensaje' => 'Observación actualizada.' ),
@@ -946,6 +1110,7 @@ function bitacora_inyectar_datos() {
     }
     $datos = array(
         'endpoint'  => esc_url_raw( rest_url( 'bitacora/v1/observaciones' ) ),
+        'media'     => esc_url_raw( rest_url( 'wp/v2/media' ) ),
         'nonce'     => wp_create_nonce( 'wp_rest' ),
         'usuarioId' => get_current_user_id(),
     );
