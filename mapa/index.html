@@ -23,6 +23,25 @@
   marcadores de ambas vistas se generan automáticamente.
 -->
 
+<style>
+  /* Controles del mapa: oscuros y muy translúcidos, con desenfoque y texto
+     claro (el fondo del mapa es negro). La leyenda queda intacta. */
+  #mw-zoom-in, #mw-zoom-out, #mw-reset, #mw-toggle-view, #mw-search,
+  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo, #mw-observador {
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #eaf1fb !important;
+    border: 1px solid rgba(255,255,255,0.14) !important;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.28);
+  }
+  #mw-search::placeholder { color: rgba(234,241,251,0.55); }
+  #mw-zoom-in:hover, #mw-zoom-out:hover, #mw-reset:hover, #mw-toggle-view:hover {
+    background: rgba(30,38,56,0.5) !important;
+  }
+  #mw-nuevo { color: #f4c76b !important; border-color: rgba(244,199,107,0.35) !important; }
+  #mw-nuevo:hover { background: rgba(244,199,107,0.16) !important; }
+</style>
+
 <div id="mw-viewer" style="
   position: relative;
   width: 100%;
@@ -51,8 +70,7 @@
         object-position: center;
         pointer-events: none;
       " draggable="false" />
-#https://www.esa.int/var/esa/storage/images/esa_multimedia/images/2025/01/the_best_milky_way_map_by_gaia_edge-on/26531727-1-eng-GB/The_best_Milky_Way_map_by_Gaia_edge-on.jpg"
-    <img id="mw-image-edge" src="resources/images/MilkyWay_25J14_40KPC_Edge_10K.webp" alt="Vía Láctea vista de canto (Gaia)"
+    <img id="mw-image-edge" src="/bitacora-mapa/images/MilkyWay_25J14_40KPC_Edge_10K.webp" alt="Vía Láctea vista de canto (Gaia)"
       style="
         position: absolute;
         inset: 0;
@@ -205,9 +223,9 @@
     flex-direction: column;
     gap: 6px;
   ">
-    <button id="mw-zoom-in" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(255,255,255,0.85);font-size:18px;cursor:pointer;">+</button>
-    <button id="mw-zoom-out" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(255,255,255,0.85);font-size:18px;cursor:pointer;">−</button>
-    <button id="mw-reset" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(255,255,255,0.85);font-size:14px;cursor:pointer;">⟲</button>
+    <button id="mw-zoom-in" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:18px;cursor:pointer;">+</button>
+    <button id="mw-zoom-out" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:18px;cursor:pointer;">−</button>
+    <button id="mw-reset" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:14px;cursor:pointer;">⟲</button>
   </div>
 
   <div style="
@@ -219,8 +237,15 @@
     gap: 6px;
     align-items: flex-start;
   ">
+    <!-- IR A REGISTRAR UNA OBSERVACIÓN · ajusta el href a la ruta de tu página en WordPress -->
+    <a id="mw-nuevo" href="https://bitacoraestelar.app/index.php/registro-de-observacion/" style="
+      text-decoration:none;border-radius:20px;
+      background:rgba(12,16,28,0.32);color:#f4c76b;font-weight:600;
+      font-size:13px;padding:8px 16px;font-family:sans-serif;white-space:nowrap;
+    ">✦ Registrar observación</a>
+
     <button id="mw-toggle-view" style="
-      border:none;border-radius:20px;background:rgba(255,255,255,0.85);
+      border:none;border-radius:20px;background:rgba(12,16,28,0.32);
       font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
     ">🔄 Vista de canto</button>
 
@@ -230,22 +255,21 @@
       <input id="mw-search" type="text" autocomplete="off" spellcheck="false"
         placeholder="Buscar objeto…"
         style="
-          border:none;border-radius:20px;background:rgba(255,255,255,0.85);
+          border:none;border-radius:20px;background:rgba(12,16,28,0.32);
           font-size:13px;padding:8px 12px 8px 30px;width:150px;
           font-family:sans-serif;outline:none;color:#111;
         " />
     </div>
 
-    <!-- CONTROL DE GIRO (solo visible en vista cenital) -->
-    <div id="mw-rotate-control" class="mw-ui-control" style="
-      display:flex;align-items:center;gap:8px;
-      background:rgba(255,255,255,0.85);border-radius:20px;
-      padding:6px 12px;font-family:sans-serif;font-size:12px;color:#111;
+    <!-- SELECTOR DE OBSERVADOR (se rellena desde OBSERVADORES) -->
+    <select id="mw-observador" title="Filtrar por observador" style="
+      border:none;border-radius:20px;background:rgba(12,16,28,0.32);
+      font-size:13px;padding:8px 12px;width:186px;
+      font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
     ">
-      <span title="Girar la vista" style="pointer-events:none;">🧭</span>
-      <input id="mw-rotate" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
-        style="width:120px;cursor:pointer;" />
-      <span id="mw-rotate-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
+      <option value="">Todas las observaciones</option>
+    </select>
+
       <button id="mw-rotate-reset" class="mw-ui-control" title="Volver a la orientación original"
         style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;">⟲</button>
     </div>
@@ -253,7 +277,7 @@
          vista alrededor del eje polar de la galaxia -->
     <div id="mw-rotate-edge-control" class="mw-ui-control" style="
       display:none;align-items:center;gap:8px;
-      background:rgba(255,255,255,0.85);border-radius:20px;
+      background:rgba(12,16,28,0.32);border-radius:20px;
       padding:6px 12px;font-family:sans-serif;font-size:12px;color:#111;
     ">
       <span title="Girar el punto de vista alrededor de la galaxia" style="pointer-events:none;">🛰️</span>
@@ -267,7 +291,7 @@
          se activa/desactiva con CONFIG.giros.giroPlanoCanto) -->
     <div id="mw-rotate-plane-control" class="mw-ui-control" style="
       display:none;align-items:center;gap:8px;
-      background:rgba(255,255,255,0.85);border-radius:20px;
+      background:rgba(12,16,28,0.32);border-radius:20px;
       padding:6px 12px;font-family:sans-serif;font-size:12px;color:#111;
     ">
       <span title="Girar la imagen en el plano de la pantalla" style="pointer-events:none;">🌀</span>
@@ -606,7 +630,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/wp-content/uploads/via-lactea/via-lactea-config.js?v=20260708_1952"></script>
-<script src="/wp-content/uploads/via-lactea/via-lactea-datos.js?v=20260708_2328"></script>
-<script src="/wp-content/uploads/via-lactea/via-lactea-app.js?v=20260708_1952"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260714_0053"></script>
+<script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260714_0037"></script>
 </li>

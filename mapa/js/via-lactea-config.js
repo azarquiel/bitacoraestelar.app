@@ -28,7 +28,7 @@
     //   (p. ej. resources/images/m1/m1_70x.webp)
     // -------------------------------------------------------------------------
     rutas: {
-      imagenes: 'resources/images/'
+      imagenes: '/bitacora-mapa/images/'
     },
 
     sol: {

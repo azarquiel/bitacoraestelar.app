@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: Bitácora Messier
+ * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.12.0
+ * Version:     1.14.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.12.0' );
+define( 'BITACORA_VERSION', '1.14.0' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
@@ -91,6 +91,7 @@ function bitacora_crear_tabla() {
         decl double DEFAULT NULL,
         observador varchar(160) NOT NULL DEFAULT '',
         telescopio varchar(160) NOT NULL DEFAULT '',
+        fecha_observacion varchar(32) NOT NULL DEFAULT '',
         default_index smallint(6) NOT NULL DEFAULT 0,
         origen varchar(16) NOT NULL DEFAULT 'formulario',
         observador_id bigint(20) unsigned DEFAULT NULL,
@@ -384,6 +385,9 @@ function bitacora_validar_datos( $d ) {
         return new WP_Error( 'campo_invalido', 'Falta el nombre del observador.', array( 'status' => 400 ) );
     }
 
+    // --- Fecha de la observación (opcional, para el mapa: 'cuándo se observó') ---
+    $fecha_obs = sanitize_text_field( $d['fechaObservacion'] ?? '' );
+
     // --- RA/Dec: obligatorios (identifican el objeto; permiten calcular la ficha) ---
     $v = array();
     foreach ( array( 'ra' => array( 0, 360 ), 'dec' => array( -90, 90 ) ) as $campo => $rng ) {
@@ -457,6 +461,7 @@ function bitacora_validar_datos( $d ) {
         'decl'            => $v['dec'],
         'observador'      => $observador,
         'telescopio'      => $telescopio,
+        'fecha_observacion' => $fecha_obs,
     );
 }
 
@@ -622,6 +627,18 @@ function bitacora_registrar_rutas() {
         array(
             'methods'             => 'GET',
             'callback'            => 'bitacora_listar_observadores',
+            'permission_callback' => '__return_true',
+        )
+    );
+
+    // Datos del visor: emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript,
+    // en el mismo formato que via-lactea-datos.js. Lectura pública.
+    register_rest_route(
+        'bitacora/v1',
+        '/datos.js',
+        array(
+            'methods'             => 'GET',
+            'callback'            => 'bitacora_datos_js',
             'permission_callback' => '__return_true',
         )
     );
@@ -892,6 +909,159 @@ function bitacora_listar_observadores( WP_REST_Request $peticion ) {
 }
 
 /* ===========================================================================
+ * 2-SEXIES. DATOS DEL VISOR (emite via-lactea-datos.js desde la base de datos)
+ * =========================================================================== */
+
+/** Construye la cadena "lugar" del visor a partir de la ficha. */
+function bitacora_lugar_visor( $ficha ) {
+    if ( ! $ficha ) {
+        return '';
+    }
+    if ( isset( $ficha->lugar ) && '' !== $ficha->lugar ) {
+        return $ficha->lugar;
+    }
+    $p = array();
+    if ( isset( $ficha->sqm ) && null !== $ficha->sqm && '' !== $ficha->sqm ) {
+        $p[] = 'SQM-L ' . ( 0 + $ficha->sqm );
+    }
+    if ( isset( $ficha->ir ) && null !== $ficha->ir && '' !== $ficha->ir ) {
+        $p[] = 'IR ' . ( 0 + $ficha->ir ) . 'º';
+    }
+    if ( isset( $ficha->temp ) && null !== $ficha->temp && '' !== $ficha->temp ) {
+        $p[] = ( 0 + $ficha->temp ) . 'º amb.';
+    }
+    return implode( ' · ', $p );
+}
+
+/** Deriva el "boton" de una entrada (p. ej. "70x - 1º 10’ - 6.6mm"). */
+function bitacora_boton_de_entrada( $e ) {
+    if ( null === $e->aumento || '' === $e->aumento ) {
+        return 'Exploración';
+    }
+    $partes = array( ( 0 + $e->aumento ) . 'x' );
+    if ( isset( $e->campo_real ) && null !== $e->campo_real && '' !== $e->campo_real ) {
+        $deg = floatval( $e->campo_real );
+        $d = floor( $deg );
+        $m = round( ( $deg - $d ) * 60 );
+        $partes[] = ( $d > 0 ) ? ( $d . 'º ' . $m . '’' ) : ( $m . '’' );
+    }
+    if ( isset( $e->pupila_salida ) && null !== $e->pupila_salida && '' !== $e->pupila_salida ) {
+        $partes[] = ( 0 + $e->pupila_salida ) . 'mm';
+    }
+    return implode( ' - ', $partes );
+}
+
+/** Emite el JavaScript de datos del visor (OBSERVADORES, OBJECTS, OBSERVACIONES). */
+function bitacora_datos_js( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $t_ob  = bitacora_nombre_tabla();
+    $t_ent = bitacora_nombre_tabla_entradas();
+    $t_img = bitacora_nombre_tabla_imagenes();
+    $t_obj = bitacora_nombre_tabla_objetos();
+    $t_obs = bitacora_nombre_tabla_observadores();
+    $t_fic = bitacora_nombre_tabla_fichas();
+
+    // OBSERVADORES { clave: { nombre, equipo } } y mapa id -> clave.
+    $observadores = array();
+    $clave_por_id = array();
+    foreach ( $wpdb->get_results( "SELECT * FROM $t_obs" ) as $o ) {
+        $observadores[ $o->clave ] = array( 'nombre' => $o->nombre, 'equipo' => $o->equipo );
+        $clave_por_id[ (int) $o->id ] = $o->clave;
+    }
+
+    // OBJECTS [ { id, name, label, color, ficha, coords, top, edge } ]
+    $objetos = array();
+    foreach ( $wpdb->get_results( "SELECT * FROM $t_obj ORDER BY num ASC, slug ASC" ) as $o ) {
+        $objetos[] = array(
+            'id'     => $o->slug,
+            'name'   => $o->nombre,
+            'label'  => $o->etiqueta,
+            'color'  => $o->color,
+            'ficha'  => $o->ficha ? $o->ficha : $o->slug,
+            'coords' => $o->coords_texto,
+            'top'    => array( 'x' => floatval( $o->top_x ), 'y' => floatval( $o->top_y ) ),
+            'edge'   => array( 'x' => floatval( $o->edge_x ), 'y' => floatval( $o->edge_y ) ),
+        );
+    }
+
+    // OBSERVACIONES { slug: [ { observador, fecha, lugar, instrumento, pdf, defaultIndex, entries } ] }
+    $observaciones = array();
+    $obs_rows = $wpdb->get_results( "SELECT * FROM $t_ob WHERE borrada_en IS NULL ORDER BY id ASC" );
+    foreach ( $obs_rows as $ob ) {
+        $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', $ob->objeto ) );
+        if ( '' === $slug ) {
+            continue;
+        }
+        $ficha = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t_fic WHERE observacion_id = %d", $ob->id ) );
+
+        $entradas = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $t_ent WHERE observacion_id = %d ORDER BY orden ASC, id ASC", $ob->id ) );
+        $entries = array();
+        foreach ( $entradas as $e ) {
+            $principales = array();
+            $anexos = array();
+            $imgs = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $t_img WHERE entrada_id = %d ORDER BY orden ASC, id ASC", $e->id ) );
+            foreach ( $imgs as $im ) {
+                if ( 'anexo' === $im->tipo ) {
+                    $anexos[] = array( 'img' => $im->imagen_url, 'titulo' => $im->etiqueta, 'pos' => $im->pos ? $im->pos : 'right' );
+                } else {
+                    $principales[] = array( 'archivo' => $im->imagen_url, 'etiqueta' => $im->etiqueta );
+                }
+            }
+            // img: null | 'archivo' | [ {archivo, etiqueta} ] (con imgMode:'tabs')
+            $img = null;
+            $img_mode = '';
+            if ( 1 === count( $principales ) && '' === $principales[0]['etiqueta'] ) {
+                $img = $principales[0]['archivo'];
+            } elseif ( count( $principales ) >= 1 ) {
+                $img = $principales;
+                $img_mode = 'tabs';
+            }
+            $entry = array(
+                'boton'  => $e->boton ? $e->boton : bitacora_boton_de_entrada( $e ),
+                'titulo' => $e->titulo,
+                'img'    => $img,
+                'html'   => $e->descripcion,
+            );
+            if ( '' !== $img_mode ) {
+                $entry['imgMode'] = $img_mode;
+            }
+            if ( $anexos ) {
+                $entry['anexos'] = $anexos;
+            }
+            $entries[] = $entry;
+        }
+
+        $registro = array(
+            'observador'   => isset( $clave_por_id[ (int) $ob->observador_id ] ) ? $clave_por_id[ (int) $ob->observador_id ] : '',
+            'fecha'        => isset( $ob->fecha_observacion ) ? $ob->fecha_observacion : '',
+            'lugar'        => bitacora_lugar_visor( $ficha ),
+            'instrumento'  => $ob->telescopio,
+            'pdf'          => $ficha ? $ficha->pdf : '',
+            'defaultIndex' => (int) $ob->default_index,
+            'entries'      => $entries,
+        );
+        if ( ! isset( $observaciones[ $slug ] ) ) {
+            $observaciones[ $slug ] = array();
+        }
+        $observaciones[ $slug ][] = $registro;
+    }
+
+    while ( ob_get_level() > 0 ) {
+        ob_end_clean();
+    }
+    if ( ! headers_sent() ) {
+        nocache_headers();
+        header( 'Content-Type: application/javascript; charset=utf-8' );
+        header( 'X-Content-Type-Options: nosniff' );
+    }
+    echo "/* Generado por Bitácora Registro desde la base de datos. No editar a mano. */\n";
+    echo 'var OBSERVADORES = ' . wp_json_encode( (object) $observadores ) . ";\n";
+    echo 'var OBJECTS = ' . wp_json_encode( $objetos ) . ";\n";
+    echo 'var OBSERVACIONES = ' . wp_json_encode( (object) $observaciones ) . ";\n";
+    exit;
+}
+
+/* ===========================================================================
  * 2-TER. OBJETOS DEL MAPA (catálogo de representación en la Vía Láctea)
  *
  * Tabla independiente de las observaciones. Se siembra desde el JSON empaquetado
@@ -1033,6 +1203,7 @@ function bitacora_importar_observaciones_seed() {
             'num'             => $num,
             'observador'      => $nombre_obs,
             'telescopio'      => sanitize_text_field( isset( $o['instrumento'] ) ? $o['instrumento'] : '' ),
+            'fecha_observacion' => sanitize_text_field( isset( $o['fecha'] ) ? (string) $o['fecha'] : '' ),
             'default_index'   => intval( isset( $o['default_index'] ) ? $o['default_index'] : 0 ),
             'origen'          => 'legacy',
             'usuario_id'      => $usuario,
@@ -1941,10 +2112,10 @@ add_action( 'wp_head', 'bitacora_inyectar_datos' );
  * =========================================================================== */
 function bitacora_menu_admin() {
     add_menu_page(
-        'Bitácora Messier',
+        'Bitácora Registro',
         'Bitácora',
         'read',                 // cualquier usuario logueado puede ver
-        'bitacora-messier',
+        'bitacora-registro',
         'bitacora_pantalla_admin',
         'dashicons-star-filled',
         30
@@ -1999,7 +2170,7 @@ function bitacora_pantalla_admin() {
     $activas  = $wpdb->get_results( "SELECT * FROM $tabla WHERE borrada_en IS NULL ORDER BY fecha_hora_utc DESC LIMIT 100" );
     $borradas = $wpdb->get_results( "SELECT * FROM $tabla WHERE borrada_en IS NOT NULL ORDER BY borrada_en DESC LIMIT 50" );
 
-    echo '<div class="wrap"><h1>Bitácora Messier</h1>';
+    echo '<div class="wrap"><h1>Bitácora Registro</h1>';
     echo '<p>Observaciones activas: <strong>' . count( $activas ) . '</strong>';
     if ( $borradas ) {
         echo ' &nbsp;·&nbsp; En la papelera: <strong>' . count( $borradas ) . '</strong>';

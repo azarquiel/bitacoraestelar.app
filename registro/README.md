@@ -17,14 +17,14 @@ estructura interna de WordPress. Son portables desde el primer día.
 
 | Archivo | Qué es | Dónde va |
 |---|---|---|
-| `bitacora-messier.php` | El plugin: tabla, API y panel | WordPress, como plugin |
+| `bitacora-registro.php` | El plugin: tabla, API y panel | WordPress, como plugin |
 | `registrar-observacion-wordpress.html` | Fragmento del formulario | Editor de WordPress |
 | `bitacora-formulario.js` | Lógica del formulario | Servidor, por FTP |
 | `bitacora-formulario.css` | Estilos del formulario | Servidor, por FTP |
 | `listado-observaciones-wordpress.html` | Fragmento del listado | Editor de WordPress |
 | `bitacora-listado.js` | Lógica del listado | Servidor, por FTP |
 | `bitacora-listado.css` | Estilos del listado | Servidor, por FTP |
-| `…/bitacora-messier/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
+| `…/bitacora-registro/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
 | `registrar-observacion.html` | Versión autónoma, para probar en local | — |
 
 **Por qué el `.js` y el `.css` van por FTP y no pegados en el editor.** El
@@ -115,8 +115,8 @@ La recomendación es dejar el generador y la plantilla **dentro de la carpeta de
 plugin**, en una subcarpeta `ficha/`:
 
 ```
-wp-content/plugins/bitacora-messier/
-├── bitacora-messier.php
+wp-content/plugins/bitacora-registro/
+├── bitacora-registro.php
 └── ficha/
     └── plantilla_ficha.docx      ← aquí subes tu plantilla
 ```
@@ -225,11 +225,11 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/` y requieren sesión.
 
 ### 1. Instalar el plugin
 
-Crea una carpeta llamada `bitacora-messier` y mete dentro `bitacora-messier.php`:
+Crea una carpeta llamada `bitacora-registro` y mete dentro `bitacora-registro.php`:
 
 ```
-bitacora-messier/
-└── bitacora-messier.php
+bitacora-registro/
+└── bitacora-registro.php
 ```
 
 Comprime **la carpeta** (no el archivo suelto, o WordPress dirá que no

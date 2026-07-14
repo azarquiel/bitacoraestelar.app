@@ -17,8 +17,8 @@
   // ---------------------------------------------------------------------------
   var OBSERVADORES = {
     autor: {
-      nombre: 'The Ferret of Comets',   // ← pon aquí tu nombre o alias
-      equipo: null                       // p. ej. 'Dobson 305 mm f/5'
+      nombre: 'Israel Pérez de Tudela Vázquez',   // ← pon aquí tu nombre o alias
+      equipo: 'Stargate 18\"'                       // p. ej. 'Dobson 305 mm f/5'
     }
   };
 

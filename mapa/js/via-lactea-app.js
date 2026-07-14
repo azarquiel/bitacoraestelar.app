@@ -13,9 +13,19 @@
   // en el futuro, varias de distintos observadores). Cuando quieras un selector
   // de observador, este es el único punto que habrá que ampliar.
   // ---------------------------------------------------------------------------
+  // Observador activo del filtro ('' = todas las observaciones).
+  var observadorActivo = '';
+
   function getFicha(id) {
     var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
-    return (lista && lista.length) ? lista[0] : null;
+    if (!lista || !lista.length) return null;
+    if (observadorActivo) {
+      for (var i = 0; i < lista.length; i++) {
+        if (lista[i].observador === observadorActivo) return lista[i];
+      }
+      return null; // ese observador no tiene ficha de este objeto
+    }
+    return lista[0];
   }
 
 
@@ -264,6 +274,28 @@
     edgeAnchors.push(createMarker(obj, 'edge'));
   });
 
+  // ¿Tiene el objeto alguna observación del observador activo (o alguna, si 'todas')?
+  function objetoVisiblePorObservador(slug) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[slug] : null;
+    if (!observadorActivo) return true;            // 'todas': mostrar todos los objetos
+    if (!lista || !lista.length) return false;
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].observador === observadorActivo) return true;
+    }
+    return false;
+  }
+
+  // Muestra/oculta cada marcador según el observador activo. El Sol (índice 0)
+  // no se filtra; los objetos van a partir del índice 1 (mismo orden que OBJECTS).
+  function aplicarFiltroObservador() {
+    OBJECTS.forEach(function (obj, i) {
+      var visible = objetoVisiblePorObservador(obj.id);
+      var ta = topAnchors[i + 1], ea = edgeAnchors[i + 1];
+      if (ta) ta.style.display = visible ? '' : 'none';
+      if (ea) ea.style.display = visible ? '' : 'none';
+    });
+  }
+
   // --------------------------------------------------------------------------
   // ABANICO DE OBJETOS SOLAPADOS
   // Algunos objetos están casi en el mismo punto real (p. ej. M8 y M20, a la
@@ -462,7 +494,7 @@
     // superpuesta (buscador, botones, leyenda). Sin esto, el preventDefault()
     // de más abajo impediría enfocar el campo de búsqueda.
     if (e.target.closest &&
-        e.target.closest('#mw-search, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
+        e.target.closest('#mw-search, #mw-observador, #mw-nuevo, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
       return;
     }
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
@@ -597,7 +629,7 @@
     // No capturar el gesto si el toque empezó en un control de la interfaz
     // (buscador, botones, leyenda), para que el campo pueda recibir el foco.
     if (e.target.closest &&
-        e.target.closest('#mw-search, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
+        e.target.closest('#mw-search, #mw-observador, #mw-nuevo, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
       return;
     }
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
@@ -842,6 +874,7 @@
   // (archivo via-lactea-config.js).
   // --------------------------------------------------------------------------
   function imgPath(objeto, archivo) {
+    if (/^https?:\/\//i.test(archivo)) return archivo;  // URL absoluta (imagen subida por formulario)
     return CONFIG.rutas.imagenes + objeto + '/' + archivo;
   }
 
@@ -1200,6 +1233,17 @@
     });
   }
 
+  // "2023-10-21" -> "21 oct 2023"; texto libre se muestra escapado.
+  function fmtFechaEstelar(v) {
+    var t = String(v == null ? '' : v).trim();
+    var m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      return parseInt(m[3], 10) + ' ' + meses[parseInt(m[2], 10) - 1] + ' ' + m[1];
+    }
+    return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   function selectFichaEntry(f, idx) {
     fichaCurrent = idx;
     var entry = f.entries[idx];
@@ -1209,7 +1253,10 @@
     } else {
       fichaImgTitle.style.display = 'none';
     }
-    fichaText.innerHTML = entry.html;
+    var fechaLinea = f.fecha
+      ? '<div class="ficha-estelar" style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8fb2cf;margin:0 0 10px;border-bottom:1px solid rgba(143,178,207,.2);padding-bottom:8px;">Bit\u00e1cora Estelar \u00b7 Fecha estelar ' + fmtFechaEstelar(f.fecha) + '</div>'
+      : '';
+    fichaText.innerHTML = fechaLinea + entry.html;
     fichaText.scrollTop = 0;
 
     // estilo activo/inactivo de la botonera
@@ -1475,6 +1522,29 @@
   //   - Hace parpadear su punto y su etiqueta durante unos segundos.
   //   - Si no existe, muestra un aviso temporal (pop-up) que se autocierra.
   // ===========================================================================
+  // ── SELECTOR DE OBSERVADOR ──
+  var observadorSelect = document.getElementById('mw-observador');
+  if (observadorSelect && typeof OBSERVADORES !== 'undefined' && typeof OBSERVACIONES !== 'undefined') {
+    var conObs = {};
+    for (var _slug in OBSERVACIONES) {
+      if (!OBSERVACIONES.hasOwnProperty(_slug)) continue;
+      OBSERVACIONES[_slug].forEach(function (o) { if (o.observador) conObs[o.observador] = true; });
+    }
+    var opts = '<option value="">Todas las observaciones</option>';
+    Object.keys(OBSERVADORES).forEach(function (clave) {
+      if (!conObs[clave]) return;
+      var nom = (OBSERVADORES[clave] && OBSERVADORES[clave].nombre) ? OBSERVADORES[clave].nombre : clave;
+      opts += '<option value="' + clave + '">' + String(nom).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
+    });
+    observadorSelect.innerHTML = opts;
+    observadorSelect.addEventListener('change', function () {
+      observadorActivo = observadorSelect.value;
+      aplicarFiltroObservador();
+      var fO = document.getElementById('ficha-overlay');
+      if (fO && fO.style.display === 'flex' && typeof closeFicha === 'function') closeFicha();
+    });
+  }
+
   var searchInput = document.getElementById('mw-search');
   var searchToast = document.getElementById('mw-search-toast');
   var toastTimer = null;

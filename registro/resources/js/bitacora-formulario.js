@@ -335,7 +335,8 @@
       objeto:resolved.etiqueta, tipo:resolved.tipo, num:resolved.num,
       cons:resolved.cons||'', nombre:resolved.nombre||'',
       ra:resolved.ra, dec:resolved.dec,
-      observador:$('observer').value.trim(), telescopio:$('scope').value.trim()
+      observador:$('observer').value.trim(), telescopio:$('scope').value.trim(),
+      fechaObservacion:($('fechaObs')?$('fechaObs').value:'')
     };
     submitBtn.disabled=false;
   }
@@ -381,6 +382,7 @@
     objInput.value      = obs.objeto || '';
     $('observer').value = obs.observador || '';
     $('scope').value    = obs.telescopio || '';
+    if($('fechaObs') && obs.fecha_observacion) $('fechaObs').value = obs.fecha_observacion;
 
     // MySQL devuelve todo como texto; los campos de RA/Dec aceptan decimales.
     // Para los no-Messier hay que rellenarlos ANTES de resolver, porque
