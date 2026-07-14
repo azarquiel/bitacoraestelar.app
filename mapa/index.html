@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <!-- 
   NAVEGACIÓN CON ZOOM SOBRE EL MAPA CENITAL DE LA VÍA LÁCTEA (GAIA)
   -------------------------------------------------------------------
@@ -24,6 +25,9 @@
 -->
 
 <style>
+  /* Pantalla completa: sin márgenes del tema y fondo negro. */
+  html, body { margin:0 !important; padding:0 !important; background:#000 !important; }
+
   /* Controles del mapa: oscuros y muy translúcidos, con desenfoque y texto
      claro (el fondo del mapa es negro). La leyenda queda intacta. */
   #mw-zoom-in, #mw-zoom-out, #mw-reset, #mw-toggle-view, #mw-search,
@@ -43,16 +47,17 @@
 </style>
 
 <div id="mw-viewer" style="
-  position: relative;
-  width: 100%;
-  height: 95vh;
-  min-height: 420px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
   background: #000;
-  border-radius: 8px;
   cursor: grab;
   touch-action: none;
   user-select: none;
+  z-index: 9999;
 ">
   <div id="mw-content" style="
     position: absolute;
@@ -230,79 +235,89 @@
 
   <div style="
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 12px;
+    left: 12px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     align-items: flex-start;
+    max-width: calc(100vw - 90px);
+    z-index: 20;
   ">
-    <!-- IR A REGISTRAR UNA OBSERVACIÓN · ajusta el href a la ruta de tu página en WordPress -->
-    <a id="mw-nuevo" href="https://bitacoraestelar.app/index.php/registro-de-observacion/" style="
-      text-decoration:none;border-radius:20px;
-      background:rgba(12,16,28,0.32);color:#f4c76b;font-weight:600;
-      font-size:13px;padding:8px 16px;font-family:sans-serif;white-space:nowrap;
-    ">✦ Registrar observación</a>
+    <!-- Fila 1: registrar observación + selector de observador + buscar objeto -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <a id="mw-nuevo" href="https://bitacoraestelar.app/index.php/registro-de-observacion/" style="
+        text-decoration:none;border-radius:20px;
+        background:rgba(12,16,28,0.32);color:#f4c76b;font-weight:600;
+        font-size:13px;padding:8px 16px;font-family:sans-serif;white-space:nowrap;
+      ">✦ Registrar observación</a>
 
-    <button id="mw-toggle-view" style="
-      border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-      font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
-    ">🔄 Vista de canto</button>
+      <select id="mw-observador" title="Filtrar por observador" style="
+        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
+        font-size:13px;padding:8px 12px;width:186px;
+        font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
+      ">
+        <option value="">Todas las observaciones</option>
+      </select>
 
-    <!-- BUSCADOR DE OBJETOS -->
-    <div style="position:relative;display:flex;align-items:center;">
-      <span style="position:absolute;left:10px;font-size:12px;pointer-events:none;opacity:0.6;">🔍</span>
-      <input id="mw-search" type="text" autocomplete="off" spellcheck="false"
-        placeholder="Buscar objeto…"
-        style="
-          border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-          font-size:13px;padding:8px 12px 8px 30px;width:150px;
-          font-family:sans-serif;outline:none;color:#111;
-        " />
+      <div style="position:relative;display:flex;align-items:center;">
+        <span style="position:absolute;left:10px;font-size:12px;pointer-events:none;opacity:0.6;">🔍</span>
+        <input id="mw-search" type="text" autocomplete="off" spellcheck="false"
+          placeholder="Buscar objeto…"
+          style="
+            border:none;border-radius:20px;background:rgba(12,16,28,0.32);
+            font-size:13px;padding:8px 12px 8px 30px;width:150px;
+            font-family:sans-serif;outline:none;color:#eaf1fb;
+          " />
+      </div>
     </div>
 
-    <!-- SELECTOR DE OBSERVADOR (se rellena desde OBSERVADORES) -->
-    <select id="mw-observador" title="Filtrar por observador" style="
-      border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-      font-size:13px;padding:8px 12px;width:186px;
-      font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
-    ">
-      <option value="">Todas las observaciones</option>
-    </select>
+    <!-- Fila 2: vista de canto + giro de la galaxia (solo se ve el control de la vista activa) -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button id="mw-toggle-view" style="
+        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
+        font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
+      ">🔄 Vista de canto</button>
 
-      <button id="mw-rotate-reset" class="mw-ui-control" title="Volver a la orientación original"
-        style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;">⟲</button>
+      <div id="mw-rotate-control" class="mw-ui-control" style="
+        display:flex;align-items:center;gap:8px;
+        background:rgba(12,16,28,0.32);border-radius:20px;
+        padding:6px 12px;font-family:sans-serif;font-size:12px;color:#eaf1fb;
+      ">
+        <span title="Girar la vista de la galaxia" style="pointer-events:none;">🧭</span>
+        <input id="mw-rotate" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
+          style="width:130px;cursor:pointer;" />
+        <span id="mw-rotate-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
+        <button id="mw-rotate-reset" class="mw-ui-control" title="Volver a la orientación original"
+          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
+      </div>
+      <!-- Giro azimutal (solo vista de canto) -->
+      <div id="mw-rotate-edge-control" class="mw-ui-control" style="
+        display:none;align-items:center;gap:8px;
+        background:rgba(12,16,28,0.32);border-radius:20px;
+        padding:6px 12px;font-family:sans-serif;font-size:12px;color:#eaf1fb;
+      ">
+        <span title="Girar el punto de vista alrededor de la galaxia" style="pointer-events:none;">🛰️</span>
+        <input id="mw-rotate-edge" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
+          style="width:130px;cursor:pointer;" />
+        <span id="mw-rotate-edge-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
+        <button id="mw-rotate-edge-reset" class="mw-ui-control" title="Volver al punto de vista original"
+          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
+      </div>
+      <!-- Giro en plano (vista de canto, experimental) -->
+      <div id="mw-rotate-plane-control" class="mw-ui-control" style="
+        display:none;align-items:center;gap:8px;
+        background:rgba(12,16,28,0.32);border-radius:20px;
+        padding:6px 12px;font-family:sans-serif;font-size:12px;color:#eaf1fb;
+      ">
+        <span title="Girar la imagen en el plano de la pantalla" style="pointer-events:none;">🌀</span>
+        <input id="mw-rotate-plane" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
+          style="width:130px;cursor:pointer;" />
+        <span id="mw-rotate-plane-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
+        <button id="mw-rotate-plane-reset" class="mw-ui-control" title="Volver a la orientación original"
+          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
+      </div>
     </div>
-    <!-- CONTROL DE AZIMUT (solo visible en vista de canto): gira el punto de
-         vista alrededor del eje polar de la galaxia -->
-    <div id="mw-rotate-edge-control" class="mw-ui-control" style="
-      display:none;align-items:center;gap:8px;
-      background:rgba(12,16,28,0.32);border-radius:20px;
-      padding:6px 12px;font-family:sans-serif;font-size:12px;color:#111;
-    ">
-      <span title="Girar el punto de vista alrededor de la galaxia" style="pointer-events:none;">🛰️</span>
-      <input id="mw-rotate-edge" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
-        style="width:120px;cursor:pointer;" />
-      <span id="mw-rotate-edge-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
-      <button id="mw-rotate-edge-reset" class="mw-ui-control" title="Volver al punto de vista original"
-        style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;">⟲</button>
-    </div>
-    <!-- CONTROL DE GIRO EN PLANO de la vista de canto (opción experimental,
-         se activa/desactiva con CONFIG.giros.giroPlanoCanto) -->
-    <div id="mw-rotate-plane-control" class="mw-ui-control" style="
-      display:none;align-items:center;gap:8px;
-      background:rgba(12,16,28,0.32);border-radius:20px;
-      padding:6px 12px;font-family:sans-serif;font-size:12px;color:#111;
-    ">
-      <span title="Girar la imagen en el plano de la pantalla" style="pointer-events:none;">🌀</span>
-      <input id="mw-rotate-plane" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
-        style="width:120px;cursor:pointer;" />
-      <span id="mw-rotate-plane-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
-      <button id="mw-rotate-plane-reset" class="mw-ui-control" title="Volver a la orientación original"
-        style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;">⟲</button>
-    </div>
-
-
   </div>
   <div id="mw-search-toast" style="
     position:absolute;

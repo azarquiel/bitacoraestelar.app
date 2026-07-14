@@ -72,14 +72,15 @@
       }
 
       // "2023-10-21 21:30:00" -> "21 oct 2023, 21:30 UTC"
-      function fmtFecha(utc) {
-        if (!utc) return '';
+      function fmtFecha(v) {
+        if (!v) return '';
         var meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
                      'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-        var m = String(utc).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
-        if (!m) return esc(utc);
-        return parseInt(m[3], 10) + ' ' + meses[parseInt(m[2], 10) - 1] + ' ' + m[1] +
-               ', ' + m[4] + ':' + m[5] + ' UTC';
+        var m = String(v).match(/(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+        if (!m) return esc(v);
+        var out = parseInt(m[3], 10) + ' ' + meses[parseInt(m[2], 10) - 1] + ' ' + m[1];
+        if (m[4]) out += ', ' + m[4] + ':' + m[5] + ' UTC';
+        return out;
       }
 
       function mostrarFlash(texto, esError) {
@@ -149,7 +150,7 @@
             '<div class="who">' + esc(obs.observador) +
               (obs.telescopio ? ' <span style="color:var(--tinta-tenue)">· ' + esc(obs.telescopio) + '</span>' : '') +
             '</div>' +
-            '<div class="when">' + fmtFecha(obs.fecha_hora_utc) + '</div>' +
+            '<div class="when">' + fmtFecha(obs.fecha_observacion) + '</div>' +
           '</div>' +
           '<div class="pos">' +
             '<div class="p"><div class="k">Alt.</div><div class="v">' + fmtGrados(obs.obj_alt) + '</div></div>' +

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.14.0
+ * Version:     1.14.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.14.0' );
+define( 'BITACORA_VERSION', '1.14.1' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
@@ -2067,7 +2067,7 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
         $params[] = $filtro_observador;
     }
 
-    $sql = "SELECT * FROM $tabla WHERE $where ORDER BY fecha_hora_utc DESC LIMIT 200";
+    $sql = "SELECT * FROM $tabla WHERE $where ORDER BY creado_en DESC, id DESC LIMIT 200";
     if ( $params ) {
         $sql = $wpdb->prepare( $sql, $params );
     }
@@ -2167,7 +2167,7 @@ function bitacora_pantalla_admin() {
     global $wpdb;
     $tabla = bitacora_nombre_tabla();
 
-    $activas  = $wpdb->get_results( "SELECT * FROM $tabla WHERE borrada_en IS NULL ORDER BY fecha_hora_utc DESC LIMIT 100" );
+    $activas  = $wpdb->get_results( "SELECT * FROM $tabla WHERE borrada_en IS NULL ORDER BY creado_en DESC, id DESC LIMIT 100" );
     $borradas = $wpdb->get_results( "SELECT * FROM $tabla WHERE borrada_en IS NOT NULL ORDER BY borrada_en DESC LIMIT 50" );
 
     echo '<div class="wrap"><h1>Bitácora Registro</h1>';
