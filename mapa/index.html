@@ -18,12 +18,9 @@
   - Al hacer clic en un objeto Messier se abre su ficha en PDF en una ventana.
   - Leyenda de colores por tipo de objeto (abajo a la izquierda).
 
-  CÓMO AÑADIR MÁS OBJETOS:
-  Busca "var OBJECTS" en el <script> y añade una línea con: id, nombre,
-  coordenadas, color, URL del PDF y posición (en %) en cada vista. Los
-  marcadores de ambas vistas se generan automáticamente.
 -->
 
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 <style>
   /* Pantalla completa: sin márgenes del tema y fondo negro. */
   html, body { margin:0 !important; padding:0 !important; background:#000 !important; }
@@ -427,6 +424,47 @@
       <span class="mw-legend-text">Nebulosa planetaria</span>
     </div>
   </div>
+
+  <!-- LEYENDA DEL GRUPO LOCAL: clasificación de galaxias (secuencia de Hubble).
+       Oculta por defecto; grupo-local.js la muestra al entrar en la vista del
+       Grupo Local y oculta la leyenda de objetos. Colores en HUBBLE_COLORS. -->
+  <div id="mw-legend-hubble" style="
+    display: none;
+    position: absolute;
+    bottom: 14px;
+    left: 10px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: sans-serif;
+    font-size: 12px;
+    color: #ddd;
+    line-height: 1.7;
+    user-select: none;
+  ">
+    <div style="display:flex;align-items:center;gap:7px;color:#9aa;font-size:10px;margin-bottom:2px;pointer-events:none;">Tipo de galaxia · secuencia de Hubble</div>
+    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#f4c76b;box-shadow:0 0 4px 1px rgba(244,199,107,0.9);flex:none;"></span>
+      Elíptica (E)
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#c8b6ff;box-shadow:0 0 4px 1px rgba(200,182,255,0.9);flex:none;"></span>
+      Lenticular (S0)
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#7ec8ff;box-shadow:0 0 4px 1px rgba(126,200,255,0.9);flex:none;"></span>
+      Espiral (S)
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#5fe0c8;box-shadow:0 0 4px 1px rgba(95,224,200,0.9);flex:none;"></span>
+      Espiral barrada (SB)
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#ff8a80;box-shadow:0 0 4px 1px rgba(255,138,128,0.9);flex:none;"></span>
+      Irregular (Irr)
+    </div>
+  </div>
 </div>
 
 <!-- VENTANA MODAL CON LA FICHA PDF (fuera del visor para que pueda interaccionarse libremente) -->
@@ -696,7 +734,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260714_2330"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260715_1200"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript, en el
      mismo formato que el antiguo via-lactea-datos.js, asi que es intercambiable.
@@ -704,6 +742,6 @@
 <script src="/wp-json/bitacora/v1/datos.js?v=20260714_0100"></script>
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260714_2330"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260714_2330"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260715_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260715_1200"></script>
 </li>

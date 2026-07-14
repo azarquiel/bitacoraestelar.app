@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.14.3
+ * Version:     1.15.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.14.3' );
+define( 'BITACORA_VERSION', '1.15.0' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
@@ -162,6 +162,11 @@ function bitacora_crear_tabla() {
         top_y double DEFAULT NULL,
         edge_x double DEFAULT NULL,
         edge_y double DEFAULT NULL,
+        gal_l double DEFAULT NULL,
+        gal_b double DEFAULT NULL,
+        dist_al double DEFAULT NULL,
+        tipo varchar(8) NOT NULL DEFAULT '',
+        morph varchar(32) NOT NULL DEFAULT '',
         creado_en datetime NOT NULL,
         actualizado_en datetime DEFAULT NULL,
         PRIMARY KEY  (id),
@@ -614,9 +619,18 @@ function bitacora_registrar_rutas() {
         'bitacora/v1',
         '/objetos',
         array(
-            'methods'             => 'GET',
-            'callback'            => 'bitacora_listar_objetos',
-            'permission_callback' => '__return_true',
+            array(
+                'methods'             => 'GET',
+                'callback'            => 'bitacora_listar_objetos',
+                'permission_callback' => '__return_true',
+            ),
+            // Registra un objeto nuevo por identificador (p. ej. "M63"): resuelve
+            // sus datos en SIMBAD y calcula automáticamente dónde pintarlo.
+            array(
+                'methods'             => 'POST',
+                'callback'            => 'bitacora_crear_objeto',
+                'permission_callback' => $solo_logueados,
+            ),
         )
     );
 
@@ -969,10 +983,13 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
         $clave_por_id[ (int) $o->id ] = $o->clave;
     }
 
-    // OBJECTS [ { id, name, label, color, ficha, coords, top, edge } ]
+    // OBJECTS [ { id, name, label, color, ficha, coords, top, edge, l, b, dist, tipo } ]
+    // l/b/dist/tipo (coordenadas galácticas, distancia en años luz y clase de
+    // Hubble) alimentan la vista del Grupo Local y su leyenda. Solo se emiten si
+    // existen (objetos calculados automáticamente vía SIMBAD).
     $objetos = array();
     foreach ( $wpdb->get_results( "SELECT * FROM $t_obj ORDER BY num ASC, slug ASC" ) as $o ) {
-        $objetos[] = array(
+        $obj = array(
             'id'     => $o->slug,
             'name'   => $o->nombre,
             'label'  => $o->etiqueta,
@@ -982,6 +999,19 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
             'top'    => array( 'x' => floatval( $o->top_x ), 'y' => floatval( $o->top_y ) ),
             'edge'   => array( 'x' => floatval( $o->edge_x ), 'y' => floatval( $o->edge_y ) ),
         );
+        if ( null !== $o->gal_l && '' !== $o->gal_l ) {
+            $obj['l'] = floatval( $o->gal_l );
+        }
+        if ( null !== $o->gal_b && '' !== $o->gal_b ) {
+            $obj['b'] = floatval( $o->gal_b );
+        }
+        if ( null !== $o->dist_al && '' !== $o->dist_al ) {
+            $obj['dist'] = floatval( $o->dist_al );
+        }
+        if ( '' !== $o->tipo ) {
+            $obj['tipo'] = $o->tipo;
+        }
+        $objetos[] = $obj;
     }
 
     // OBSERVACIONES { slug: [ { observador, fecha, lugar, instrumento, pdf, defaultIndex, entries } ] }
@@ -1067,7 +1097,321 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
  * Tabla independiente de las observaciones. Se siembra desde el JSON empaquetado
  * datos/objetos-seed.json (extraído de via-lactea-datos.js) con un botón en el
  * panel de administración. La importación es idempotente (clave única: slug).
+ *
+ * CÁLCULO AUTOMÁTICO DE POSICIÓN (SIMBAD)
+ * Al registrar un objeto que no trae posición, el plugin resuelve sus datos en
+ * SIMBAD (coordenadas, distancia, tipo morfológico) y calcula automáticamente
+ * dónde pintarlo en el mapa. Si SIMBAD no tiene distancia, se usa la que se pase
+ * a mano. Ver bitacora_completar_objeto().
  * =========================================================================== */
+
+// ---------------------------------------------------------------------------
+// CONSTANTES FÍSICAS DEL MAPA (deben coincidir con via-lactea-config.js).
+// Si cambias la imagen del mapa o la posición del Sol allí, cámbialas aquí.
+// ---------------------------------------------------------------------------
+define( 'BITACORA_ANCHO_IMAGEN_AL', 130462.0 );   // ancho físico de las imágenes (40 kpc)
+define( 'BITACORA_DIST_SOL_NUCLEO_AL', 26000.0 ); // distancia Sol-núcleo galáctico
+define( 'BITACORA_SOL_CENITAL_X', 50.00 );        // posición del Sol, vista cenital (%)
+define( 'BITACORA_SOL_CENITAL_Y', 69.93 );
+define( 'BITACORA_SOL_CANTO_Y', 49.98 );          // posición vertical del Sol, vista de canto (%)
+// La vista de canto comprime el eje vertical (altura sobre el plano) respecto al
+// horizontal: factor calibrado con los objetos del catálogo (S_edge/S ≈ 0,5882).
+define( 'BITACORA_FACTOR_VERTICAL_CANTO', 0.5882 );
+
+/**
+ * Convierte coordenadas ecuatoriales J2000 (RA, Dec en grados) a galácticas
+ * (l, b en grados). Transformación estándar (polo norte galáctico J2000).
+ */
+function bitacora_radec_a_galactica( $ra, $dec ) {
+    $d2r = M_PI / 180.0;
+    $ra_gp  = 192.85948 * $d2r; // AR del polo norte galáctico (J2000)
+    $dec_gp = 27.12825 * $d2r;  // Dec del polo norte galáctico (J2000)
+    $l_cp   = 122.93192 * $d2r; // longitud galáctica del polo norte celeste
+    $ra_r   = $ra * $d2r;
+    $dec_r  = $dec * $d2r;
+
+    $sb = sin( $dec_gp ) * sin( $dec_r ) + cos( $dec_gp ) * cos( $dec_r ) * cos( $ra_r - $ra_gp );
+    $b  = asin( max( -1.0, min( 1.0, $sb ) ) );
+
+    $y = cos( $dec_r ) * sin( $ra_r - $ra_gp );
+    $x = cos( $dec_gp ) * sin( $dec_r ) - sin( $dec_gp ) * cos( $dec_r ) * cos( $ra_r - $ra_gp );
+    $l = $l_cp - atan2( $y, $x );
+
+    $l_deg = fmod( ( $l / $d2r ) + 360.0, 360.0 );
+    $b_deg = $b / $d2r;
+    return array( $l_deg, $b_deg );
+}
+
+/**
+ * Calcula las posiciones en el mapa (en % de la imagen) a partir de coordenadas
+ * galácticas (l, b en grados) y la distancia al Sol (d en años luz). Devuelve
+ * array( top_x, top_y, edge_x, edge_y ). Fórmula verificada contra el catálogo.
+ */
+function bitacora_posiciones_mapa( $l, $b, $d ) {
+    $d2r = M_PI / 180.0;
+    $s   = 100.0 / BITACORA_ANCHO_IMAGEN_AL;
+    $lr  = $l * $d2r;
+    $br  = $b * $d2r;
+    $u   = $d * cos( $br ) * cos( $lr ); // componente hacia el núcleo galáctico
+    $v   = $d * cos( $br ) * sin( $lr ); // componente perpendicular en el plano
+    $z   = $d * sin( $br );              // altura sobre el plano galáctico
+
+    $top_x  = BITACORA_SOL_CENITAL_X - $v * $s;
+    $top_y  = BITACORA_SOL_CENITAL_Y - $u * $s;
+    $edge_x = 50.0 + $s * ( $u - BITACORA_DIST_SOL_NUCLEO_AL );
+    $edge_y = BITACORA_SOL_CANTO_Y - $z * $s * BITACORA_FACTOR_VERTICAL_CANTO;
+
+    return array(
+        round( $top_x, 2 ),
+        round( $top_y, 2 ),
+        round( $edge_x, 2 ),
+        round( $edge_y, 2 ),
+    );
+}
+
+/**
+ * Traduce el tipo morfológico de SIMBAD (p. ej. "SB(s)bc", "E5", "SA(s)b") a una
+ * clase de la secuencia de Hubble para la leyenda del Grupo Local:
+ * E (elíptica), S0 (lenticular), SB (espiral barrada), S (espiral), Irr (irregular).
+ * Devuelve '' si no se reconoce (o el objeto no es una galaxia).
+ */
+function bitacora_clase_hubble( $morph ) {
+    $m = trim( (string) $morph );
+    if ( '' === $m ) {
+        return '';
+    }
+    if ( preg_match( '/^S0|^L[^y]?/i', $m ) ) {
+        return 'S0';
+    }
+    if ( preg_match( '/^E/i', $m ) ) {
+        return 'E';
+    }
+    if ( preg_match( '/^SB/i', $m ) ) {
+        return 'SB';
+    }
+    if ( preg_match( '/^(SA|S)/i', $m ) ) {
+        return 'S';
+    }
+    if ( preg_match( '/^I|Irr/i', $m ) ) {
+        return 'Irr';
+    }
+    return '';
+}
+
+/** Color por defecto de un marcador según su clase de Hubble o tipo. */
+function bitacora_color_por_clase( $clase ) {
+    $colores = array(
+        'E'   => '#f4c76b',
+        'S0'  => '#c8b6ff',
+        'S'   => '#7ec8ff',
+        'SB'  => '#5fe0c8',
+        'Irr' => '#ff8a80',
+    );
+    return isset( $colores[ $clase ] ) ? $colores[ $clase ] : '#7ec8ff';
+}
+
+/** Texto de coordenadas legible, con el mismo formato que el catálogo existente. */
+function bitacora_coords_texto( $l, $b, $d ) {
+    $fmt = function ( $x ) {
+        return str_replace( '.', ',', number_format( $x, 1, '.', '' ) );
+    };
+    $miles = number_format( $d, 0, ',', '.' );
+    $signo_b = ( $b >= 0 ) ? '+' : '';
+    return 'l ≈ ' . $fmt( $l ) . '°, b ≈ ' . $signo_b . $fmt( $b ) . '° · ~' . $miles . ' años luz del Sol';
+}
+
+/**
+ * Consulta SIMBAD (servicio TAP) por identificador y devuelve
+ * array( 'ra', 'dec', 'dist_al', 'morph', 'otype' ) o null si no se encuentra o
+ * falla la red. La distancia es la mediana de las medidas disponibles, en años
+ * luz. Se cachea 30 días por identificador para no repetir peticiones.
+ */
+function bitacora_simbad( $identificador ) {
+    $id = trim( (string) $identificador );
+    if ( '' === $id ) {
+        return null;
+    }
+    $cache_key = 'bitacora_simbad_' . md5( strtolower( $id ) );
+    $cache = get_transient( $cache_key );
+    if ( false !== $cache ) {
+        return is_array( $cache ) ? $cache : null;
+    }
+
+    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, d.dist, d.unit "
+        . "FROM basic AS b JOIN ident AS i ON i.oidref = b.oid "
+        . "LEFT JOIN mesDistance AS d ON d.oidref = b.oid "
+        . "WHERE i.id = '" . str_replace( "'", "''", $id ) . "'";
+
+    $url = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync';
+    $respuesta = wp_remote_post(
+        $url,
+        array(
+            'timeout' => 20,
+            'body'    => array(
+                'request' => 'doQuery',
+                'lang'    => 'ADQL',
+                'format'  => 'csv',
+                'query'   => $adql,
+            ),
+        )
+    );
+    if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
+        set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+        return null;
+    }
+
+    $csv = trim( wp_remote_retrieve_body( $respuesta ) );
+    $lineas = preg_split( '/\r?\n/', $csv );
+    if ( count( $lineas ) < 2 ) {
+        set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
+        return null;
+    }
+    array_shift( $lineas ); // cabecera
+
+    $ra = null; $dec = null; $morph = ''; $otype = '';
+    $distancias_al = array();
+    // Factores a años luz por unidad de SIMBAD.
+    $a_al = array( 'pc' => 3.2616, 'kpc' => 3261.6, 'mpc' => 3261600.0, 'ly' => 1.0, 'al' => 1.0 );
+
+    foreach ( $lineas as $linea ) {
+        if ( '' === trim( $linea ) ) {
+            continue;
+        }
+        $c = str_getcsv( $linea );
+        if ( count( $c ) < 6 ) {
+            continue;
+        }
+        if ( null === $ra && is_numeric( $c[0] ) ) {
+            $ra = floatval( $c[0] );
+            $dec = floatval( $c[1] );
+        }
+        if ( '' === $morph && '' !== trim( $c[2] ) ) {
+            $morph = trim( $c[2] );
+        }
+        if ( '' === $otype && '' !== trim( $c[3] ) ) {
+            $otype = trim( $c[3] );
+        }
+        $dist = trim( $c[4] );
+        $unidad = strtolower( trim( $c[5] ) );
+        if ( is_numeric( $dist ) && isset( $a_al[ $unidad ] ) ) {
+            $distancias_al[] = floatval( $dist ) * $a_al[ $unidad ];
+        }
+    }
+
+    $dist_al = null;
+    if ( ! empty( $distancias_al ) ) {
+        sort( $distancias_al );
+        $n = count( $distancias_al );
+        $mid = intdiv( $n, 2 );
+        $dist_al = ( $n % 2 ) ? $distancias_al[ $mid ] : ( $distancias_al[ $mid - 1 ] + $distancias_al[ $mid ] ) / 2.0;
+        $dist_al = round( $dist_al );
+    }
+
+    if ( null === $ra ) {
+        set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
+        return null;
+    }
+
+    $resultado = array(
+        'ra'      => $ra,
+        'dec'     => $dec,
+        'dist_al' => $dist_al,
+        'morph'   => $morph,
+        'otype'   => $otype,
+    );
+    set_transient( $cache_key, $resultado, 30 * DAY_IN_SECONDS );
+    return $resultado;
+}
+
+/**
+ * Completa la posición y metadatos de un objeto del mapa a partir de su
+ * identificador (etiqueta/slug), resolviéndolo en SIMBAD. $dist_manual_al es la
+ * distancia (años luz) a usar si SIMBAD no la tiene. Devuelve un array de campos
+ * para fusionar en la fila (coords_texto, top/edge, gal_l/b, dist_al, tipo,
+ * morph, color) o WP_Error si no se puede colocar (sin coordenadas ni distancia).
+ */
+function bitacora_completar_objeto( $identificador, $dist_manual_al = null ) {
+    $sim = bitacora_simbad( $identificador );
+    if ( ! $sim ) {
+        if ( null === $dist_manual_al ) {
+            return new WP_Error(
+                'sin_datos_simbad',
+                'No se encontró «' . $identificador . '» en SIMBAD. Indica la distancia (años luz) a mano para poder colocarlo.'
+            );
+        }
+        return new WP_Error(
+            'sin_coordenadas',
+            'No hay coordenadas para «' . $identificador . '» (SIMBAD no responde). No se puede colocar en el mapa.'
+        );
+    }
+
+    $dist_al = $sim['dist_al'];
+    if ( null === $dist_al ) {
+        $dist_al = ( null !== $dist_manual_al ) ? floatval( $dist_manual_al ) : null;
+    }
+    if ( null === $dist_al || $dist_al <= 0 ) {
+        return new WP_Error(
+            'sin_distancia',
+            'SIMBAD no tiene distancia para «' . $identificador . '». Indícala a mano (años luz) para colocarlo en el mapa.'
+        );
+    }
+
+    list( $l, $b ) = bitacora_radec_a_galactica( $sim['ra'], $sim['dec'] );
+    list( $top_x, $top_y, $edge_x, $edge_y ) = bitacora_posiciones_mapa( $l, $b, $dist_al );
+    $clase = bitacora_clase_hubble( $sim['morph'] );
+
+    return array(
+        'coords_texto' => bitacora_coords_texto( $l, $b, $dist_al ),
+        'top_x'        => $top_x,
+        'top_y'        => $top_y,
+        'edge_x'       => $edge_x,
+        'edge_y'       => $edge_y,
+        'gal_l'        => round( $l, 3 ),
+        'gal_b'        => round( $b, 3 ),
+        'dist_al'      => $dist_al,
+        'tipo'         => $clase,
+        'morph'        => $sim['morph'],
+        'color'        => bitacora_color_por_clase( $clase ),
+    );
+}
+
+/**
+ * Inserta o actualiza (por slug) una fila de objeto del mapa. Deriva los
+ * formatos de wpdb de cada columna y gestiona las marcas de tiempo. Devuelve
+ * 'insertado' o 'actualizado'.
+ */
+function bitacora_guardar_objeto_fila( $slug, $fila ) {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla_objetos();
+    $tipos = array(
+        'slug' => '%s', 'num' => '%d', 'nombre' => '%s', 'etiqueta' => '%s',
+        'color' => '%s', 'ficha' => '%s', 'coords_texto' => '%s',
+        'top_x' => '%f', 'top_y' => '%f', 'edge_x' => '%f', 'edge_y' => '%f',
+        'gal_l' => '%f', 'gal_b' => '%f', 'dist_al' => '%f',
+        'tipo' => '%s', 'morph' => '%s', 'creado_en' => '%s', 'actualizado_en' => '%s',
+    );
+
+    $existe = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE slug = %s", $slug ) );
+    if ( $existe ) {
+        $fila['actualizado_en'] = current_time( 'mysql', true );
+    } else {
+        $fila['creado_en'] = current_time( 'mysql', true );
+    }
+
+    // El formato de wpdb debe ir en el mismo orden que las columnas de $fila.
+    // Los valores NULL se marcan como '%s' para que wpdb los inserte como NULL.
+    $fmt = array();
+    foreach ( $fila as $col => $val ) {
+        $fmt[] = ( null === $val ) ? '%s' : ( isset( $tipos[ $col ] ) ? $tipos[ $col ] : '%s' );
+    }
+
+    if ( $existe ) {
+        $wpdb->update( $tabla, $fila, array( 'id' => intval( $existe ) ), $fmt, array( '%d' ) );
+        return 'actualizado';
+    }
+    $wpdb->insert( $tabla, $fila, $fmt );
+    return 'insertado';
+}
 
 /** Lista todos los objetos del mapa (para el visor y para comprobación). */
 function bitacora_listar_objetos( WP_REST_Request $peticion ) {
@@ -1075,6 +1419,64 @@ function bitacora_listar_objetos( WP_REST_Request $peticion ) {
     $tabla = bitacora_nombre_tabla_objetos();
     $filas = $wpdb->get_results( "SELECT * FROM $tabla ORDER BY num ASC, slug ASC" );
     return new WP_REST_Response( $filas ? $filas : array(), 200 );
+}
+
+/**
+ * POST /objetos — registra un objeto nuevo en el mapa a partir de su
+ * identificador (p. ej. "M63"), resolviéndolo en SIMBAD y calculando su
+ * posición automáticamente. Cuerpo JSON:
+ *   { "id": "M63", "label": "M63", "name": "...", "dist_al": 29300000, "ficha": "" }
+ * Solo "id" (o "label") es obligatorio. "dist_al" es la distancia en años luz a
+ * usar si SIMBAD no la tiene. Devuelve la fila creada o un error explicativo
+ * (p. ej. si no hay coordenadas ni distancia para colocarlo).
+ */
+function bitacora_crear_objeto( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $d = $peticion->get_json_params();
+    if ( ! is_array( $d ) ) {
+        return new WP_Error( 'sin_datos', 'No se recibieron datos.', array( 'status' => 400 ) );
+    }
+
+    $ident = trim( sanitize_text_field( $d['id'] ?? ( $d['label'] ?? '' ) ) );
+    if ( '' === $ident ) {
+        return new WP_Error( 'falta_id', 'Falta el identificador del objeto (p. ej. "M63").', array( 'status' => 400 ) );
+    }
+    $slug = sanitize_key( str_replace( ' ', '', $ident ) );
+    if ( '' === $slug ) {
+        return new WP_Error( 'id_invalido', 'El identificador no es válido.', array( 'status' => 400 ) );
+    }
+
+    $num = null;
+    if ( preg_match( '/^m(\d+)$/', $slug, $mm ) ) {
+        $num = intval( $mm[1] );
+    }
+    $dist_manual = isset( $d['dist_al'] ) && '' !== $d['dist_al'] ? floatval( $d['dist_al'] ) : null;
+
+    $calc = bitacora_completar_objeto( $ident, $dist_manual );
+    if ( is_wp_error( $calc ) ) {
+        $calc->add_data( array( 'status' => 422 ) );
+        return $calc;
+    }
+
+    $fila = array_merge(
+        array(
+            'slug'     => $slug,
+            'num'      => $num,
+            'nombre'   => sanitize_text_field( $d['name'] ?? ( $d['label'] ?? $ident ) ),
+            'etiqueta' => sanitize_text_field( $d['label'] ?? $ident ),
+            'ficha'    => sanitize_text_field( $d['ficha'] ?? '' ),
+        ),
+        $calc
+    );
+
+    $res  = bitacora_guardar_objeto_fila( $slug, $fila );
+    $fila_guardada = $wpdb->get_row(
+        $wpdb->prepare( "SELECT * FROM " . bitacora_nombre_tabla_objetos() . " WHERE slug = %s", $slug )
+    );
+    return new WP_REST_Response(
+        array( 'resultado' => $res, 'objeto' => $fila_guardada ),
+        ( 'insertado' === $res ) ? 201 : 200
+    );
 }
 
 /**
@@ -1092,9 +1494,9 @@ function bitacora_importar_objetos_seed() {
         return new WP_Error( 'semilla_invalida', 'El archivo de objetos no es un JSON válido.' );
     }
 
-    $tabla = bitacora_nombre_tabla_objetos();
     $insertados = 0;
     $actualizados = 0;
+    $avisos = array();
 
     foreach ( $json as $o ) {
         $slug = isset( $o['id'] ) ? sanitize_key( $o['id'] ) : '';
@@ -1118,33 +1520,40 @@ function bitacora_importar_objetos_seed() {
             'top_y'        => isset( $o['top']['y'] ) ? floatval( $o['top']['y'] ) : null,
             'edge_x'       => isset( $o['edge']['x'] ) ? floatval( $o['edge']['x'] ) : null,
             'edge_y'       => isset( $o['edge']['y'] ) ? floatval( $o['edge']['y'] ) : null,
-        );
-        $formatos = array(
-            '%s',                              // slug
-            ( null === $num ) ? '%s' : '%d',   // num
-            '%s', '%s', '%s', '%s', '%s',      // nombre, etiqueta, color, ficha, coords
-            ( null === $fila['top_x'] )  ? '%s' : '%f',
-            ( null === $fila['top_y'] )  ? '%s' : '%f',
-            ( null === $fila['edge_x'] ) ? '%s' : '%f',
-            ( null === $fila['edge_y'] ) ? '%s' : '%f',
+            'gal_l'        => isset( $o['l'] ) ? floatval( $o['l'] ) : null,
+            'gal_b'        => isset( $o['b'] ) ? floatval( $o['b'] ) : null,
+            'dist_al'      => isset( $o['dist_al'] ) ? floatval( $o['dist_al'] )
+                              : ( isset( $o['dist'] ) ? floatval( $o['dist'] ) : null ),
+            'tipo'         => sanitize_text_field( isset( $o['tipo'] ) ? $o['tipo'] : '' ),
+            'morph'        => sanitize_text_field( isset( $o['morph'] ) ? $o['morph'] : '' ),
         );
 
-        $existe = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE slug = %s", $slug ) );
-        if ( $existe ) {
-            $fila['actualizado_en'] = current_time( 'mysql', true );
-            $fmt = $formatos;
-            $fmt[] = '%s';
-            $wpdb->update( $tabla, $fila, array( 'id' => intval( $existe ) ), $fmt, array( '%d' ) );
+        // Si la semilla no trae posición, se calcula automáticamente resolviendo
+        // el objeto en SIMBAD (coordenadas + distancia + tipo morfológico). Los
+        // objetos que ya traen top/edge del catálogo no tocan la red.
+        if ( null === $fila['top_x'] && null === $fila['top_y'] ) {
+            $ident = $fila['etiqueta'] ? $fila['etiqueta'] : strtoupper( $slug );
+            $calc  = bitacora_completar_objeto( $ident, $fila['dist_al'] );
+            if ( is_wp_error( $calc ) ) {
+                $avisos[] = $calc->get_error_message();
+            } else {
+                foreach ( $calc as $k => $v ) {
+                    // El valor calculado rellena solo lo que la semilla dejó vacío.
+                    if ( ! isset( $fila[ $k ] ) || null === $fila[ $k ] || '' === $fila[ $k ] ) {
+                        $fila[ $k ] = $v;
+                    }
+                }
+            }
+        }
+
+        $res = bitacora_guardar_objeto_fila( $slug, $fila );
+        if ( 'actualizado' === $res ) {
             $actualizados++;
         } else {
-            $fila['creado_en'] = current_time( 'mysql', true );
-            $fmt = $formatos;
-            $fmt[] = '%s';
-            $wpdb->insert( $tabla, $fila, $fmt );
             $insertados++;
         }
     }
-    return array( 'insertados' => $insertados, 'actualizados' => $actualizados );
+    return array( 'insertados' => $insertados, 'actualizados' => $actualizados, 'avisos' => $avisos );
 }
 
 /**

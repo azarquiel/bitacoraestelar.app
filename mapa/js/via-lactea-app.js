@@ -460,6 +460,32 @@
     GrupoLocal.sync(pxPerLy, atlasAlpha);
   }
 
+  // --------------------------------------------------------------------------
+  // ZOOM OUT DINÁMICO SEGÚN EL OBJETO MÁS LEJANO
+  // El límite de zoom out (minScale) se ajusta para que el objeto extragaláctico
+  // más lejano del catálogo llegue a ser visible en el atlas. Como el fov del
+  // atlas es fov = R·ancho / (imgW·scale), para ver un objeto a distancia D
+  // (con margen) basta scale ≤ R·ancho / (imgW·D·margen). Se recalcula al cargar
+  // la imagen y al redimensionar. Nunca reduce el zoom out por debajo del que ya
+  // fija CONFIG.grupoLocal.escalaMinima.
+  // --------------------------------------------------------------------------
+  var MARGEN_OBJETO_LEJANO = 1.6;
+  function recalcularMinScale() {
+    var base = (window.CONFIG && CONFIG.grupoLocal && CONFIG.grupoLocal.escalaMinima) || 1;
+    var D = (typeof GrupoLocal !== 'undefined' && GrupoLocal.maxDist) ? GrupoLocal.maxDist : 0;
+    if (!(D > 0)) { minScale = base; return; }
+    var vr = viewer.getBoundingClientRect();
+    var R = Math.min(vr.width, vr.height) * 0.42;
+    var galImg = document.getElementById('mw-image');
+    var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : Math.min(vr.width, vr.height);
+    // Si aún no hay dimensiones válidas (layout no listo), no tocar minScale para
+    // no introducir NaN; se recalcula al cargar la imagen y al redimensionar.
+    if (!(R > 0) || !(imgW > 0)) { return; }
+    var necesaria = (R * CONFIG.fisica.anchoImagenAl) / (imgW * D * MARGEN_OBJETO_LEJANO);
+    if (!isFinite(necesaria) || necesaria <= 0) { minScale = base; return; }
+    minScale = Math.min(base, necesaria);
+  }
+
   function clampPosition() {
     var viewerRect = viewer.getBoundingClientRect();
     var activeImg = isEdgeView
@@ -1851,6 +1877,13 @@
   if (rotatePlaneReset) {
     rotatePlaneReset.addEventListener('click', function () { setEdgePlaneRotation(0); });
   }
+
+  // Ajusta el zoom out máximo al objeto más lejano (al cargar la imagen y al
+  // redimensionar, cuando ya se conocen las dimensiones reales).
+  recalcularMinScale();
+  var _galImg = document.getElementById('mw-image');
+  if (_galImg) _galImg.addEventListener('load', recalcularMinScale);
+  window.addEventListener('resize', recalcularMinScale);
 
   applyTransform();
   repositionAnchors();

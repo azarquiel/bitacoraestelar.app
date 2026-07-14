@@ -18,13 +18,28 @@
 
 var GrupoLocal = (function () {
 
-  // ---- Catálogo de objetos observados fuera de la Vía Láctea ----------------
-  // l = longitud galáctica (º), b = latitud galáctica (º), d = distancia (al)
-  var CATALOG = [
-    { name: "M63",  desc: "Galaxia del Girasol",       l: 105.5, b: 68.6, d: 29300000 },
-    { name: "M101", desc: "Galaxia del Molinete",      l: 102.0, b: 59.8, d: 20900000 },
-    { name: "M65",  desc: "Grupo Leo Triplet",         l: 241.5, b: 64.4, d: 35000000 },
-    { name: "M99",  desc: "Galaxia de Coma Pinwheel",  l: 271.0, b: 76.9, d: 49000000 }
+  // ---- Colores por clase de Hubble (leyenda del Grupo Local) ----------------
+  // Deben coincidir con la leyenda #mw-legend-hubble de index.html y con
+  // bitacora_color_por_clase() del plugin PHP.
+  var HUBBLE_COLORS = {
+    E:   '#f4c76b', // elíptica
+    S0:  '#c8b6ff', // lenticular
+    S:   '#7ec8ff', // espiral
+    SB:  '#5fe0c8', // espiral barrada
+    Irr: '#ff8a80'  // irregular
+  };
+
+  // A partir de esta distancia al Sol (años luz) un objeto se considera
+  // extragaláctico y se representa en el atlas del Grupo Local.
+  var DIST_MIN_EXTRAGALACTICA = 200000;
+
+  // Catálogo de respaldo: solo se usa si en la base de datos aún no hay objetos
+  // extragalácticos (con l/b/dist). En cuanto se registren, se usan los reales.
+  var CATALOG_FALLBACK = [
+    { name: "M63",  desc: "Galaxia del Girasol",       l: 105.5, b: 68.6, d: 29300000, tipo: 'S'  },
+    { name: "M101", desc: "Galaxia del Molinete",      l: 102.0, b: 59.8, d: 20900000, tipo: 'S'  },
+    { name: "M65",  desc: "Grupo Leo Triplet",         l: 241.5, b: 64.4, d: 35000000, tipo: 'S'  },
+    { name: "M99",  desc: "Galaxia de Coma Pinwheel",  l: 271.0, b: 76.9, d: 49000000, tipo: 'S'  }
   ];
 
   var DEG = Math.PI / 180;
@@ -37,10 +52,45 @@ var GrupoLocal = (function () {
     };
   }
 
-  var objects = CATALOG.map(function (o) {
-    var p = galToXYZ(o.l, o.b, o.d);
-    return { name: o.name, desc: o.desc, l: o.l, b: o.b, d: o.d, x: p.x, y: p.y, z: p.z };
-  });
+  function colorDe(o) {
+    if (o.tipo && HUBBLE_COLORS[o.tipo]) return HUBBLE_COLORS[o.tipo];
+    return o.color || '#7ec8ff';
+  }
+
+  // "#rrggbb" -> "rgba(r,g,b,a)" para halos y etiquetas de cada galaxia.
+  function hexToRgba(hex, a) {
+    var h = (hex || '#7ec8ff').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+
+  // Construye el catálogo del atlas desde los OBJECTS reales (los que tienen
+  // coordenadas galácticas y distancia extragaláctica). Si no hay ninguno,
+  // recurre al catálogo de respaldo para no dejar la vista vacía.
+  function construirCatalogo() {
+    var fuente = [];
+    if (typeof OBJECTS !== 'undefined' && OBJECTS && OBJECTS.length) {
+      for (var i = 0; i < OBJECTS.length; i++) {
+        var o = OBJECTS[i];
+        if (typeof o.dist !== 'number' || o.dist < DIST_MIN_EXTRAGALACTICA) continue;
+        if (typeof o.l !== 'number' || typeof o.b !== 'number') continue;
+        fuente.push({ name: o.label || o.id, desc: o.name || '', l: o.l, b: o.b, d: o.dist,
+                      tipo: o.tipo || '', color: o.color });
+      }
+    }
+    if (!fuente.length) fuente = CATALOG_FALLBACK;
+    return fuente.map(function (o) {
+      var p = galToXYZ(o.l, o.b, o.d);
+      return { name: o.name, desc: o.desc, l: o.l, b: o.b, d: o.d, tipo: o.tipo,
+               color: colorDe(o), x: p.x, y: p.y, z: p.z };
+    });
+  }
+
+  var objects = construirCatalogo();
+  // Distancia del objeto más lejano: gobierna hasta dónde se puede alejar la
+  // vista (fov máximo) para que cualquier objeto registrado llegue a ser visible.
+  var maxDist = objects.reduce(function (m, o) { return Math.max(m, o.d); }, 0);
 
   // ---- Elementos del DOM (se inyectan en index.html) ------------------------
   var canvas = document.getElementById('gl-sky');
@@ -70,7 +120,9 @@ var GrupoLocal = (function () {
 
   // zoom logarítmico: fov = campo de visión en al (radio visible)
   var FOV_MIN = 10;
-  var FOV_MAX = 30000000;
+  // El fov máximo abarca con margen al objeto más lejano registrado (o 30 Mal si
+  // aún no hay objetos), de modo que siempre se pueda alejar hasta verlo.
+  var FOV_MAX = Math.max(30000000, maxDist * 2.2);
   var fov = FOV_MAX; // arranca "muy lejos"; sync() lo ajusta al zoom real
 
   // estado gobernado por el visor principal
@@ -220,22 +272,23 @@ var GrupoLocal = (function () {
       ctx.beginPath();
       ctx.moveTo(foot.sx, foot.sy);
       ctx.lineTo(p.sx, p.sy);
-      ctx.strokeStyle = 'rgba(77,214,255,0.28)';
+      ctx.strokeStyle = hexToRgba(o.color || '#7ec8ff', 0.28);
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.setLineDash([]);
 
+      var col = o.color || '#7ec8ff';
       var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
-      halo.addColorStop(0, 'rgba(77,214,255,0.55)');
-      halo.addColorStop(1, 'rgba(77,214,255,0)');
+      halo.addColorStop(0, hexToRgba(col, 0.55));
+      halo.addColorStop(1, hexToRgba(col, 0));
       ctx.fillStyle = halo;
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
 
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#dffaff'; ctx.fill();
+      ctx.fillStyle = '#f4faff'; ctx.fill();
 
       if (onView) {
-        ctx.fillStyle = 'rgba(77,214,255,0.95)';
+        ctx.fillStyle = hexToRgba(col, 0.95);
         ctx.font = '500 12px Inter, sans-serif';
         ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
       }
@@ -304,6 +357,16 @@ var GrupoLocal = (function () {
   }
   loop();
 
+  // Leyendas dependientes de la vista: la de tipos de objeto (galaxia) y la de
+  // clases de Hubble (Grupo Local). Se alternan según domine una vista u otra.
+  var legendObjetos = document.getElementById('mw-legend');
+  var legendHubble = document.getElementById('mw-legend-hubble');
+  function toggleLeyenda(esAtlas) {
+    if (legendObjetos) legendObjetos.style.display = esAtlas ? 'none' : '';
+    if (legendHubble) legendHubble.style.display = esAtlas ? '' : 'none';
+  }
+  toggleLeyenda(false);
+
   // ---- API pública (la llama updateGrupoLocal en via-lactea-app.js) ---------
   //   pxPerLy : píxeles por año luz de la imagen de la galaxia al zoom actual.
   //             Se traduce a fov del atlas para que el relevo sea continuo.
@@ -315,6 +378,7 @@ var GrupoLocal = (function () {
     atlasInteractive = alpha > 0.5;
     if (tip && !atlasInteractive) tip.style.opacity = 0;
     if (scaleTag) scaleTag.style.opacity = alpha > 0.5 ? 1 : 0;
+    toggleLeyenda(alpha > 0.5);
     if (pxPerLy > 0) {
       var R = Math.min(W, H) * 0.42;
       var f = R / pxPerLy;
@@ -322,5 +386,7 @@ var GrupoLocal = (function () {
     }
   }
 
-  return { ready: true, sync: sync };
+  // maxDist (años luz del objeto más lejano) lo usa via-lactea-app.js para
+  // permitir alejar la vista hasta que ese objeto sea visible.
+  return { ready: true, sync: sync, maxDist: maxDist };
 })();

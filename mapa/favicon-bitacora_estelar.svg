@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fondo azul noche más claro para mayor contraste -->
+  <rect width="512" height="512" rx="110" fill="#1a233a"/>
+  
+  <!-- Páginas de la bitácora con contornos mucho más gruesos -->
+  <path d="M 256 380 C 200 340 130 350 80 380 L 80 180 C 130 150 200 140 256 180 C 312 140 382 150 432 180 L 432 380 C 382 350 312 340 256 380 Z" fill="none" stroke="#4f649c" stroke-width="24"/>
+  <path d="M 256 180 L 256 380" stroke="#4f649c" stroke-width="16"/>
+  
+  <!-- Hojas internas con brillo cian más grueso y visible -->
+  <path d="M 256 365 C 200 325 130 335 95 365 L 95 195 C 130 165 200 155 256 195 C 312 155 382 165 417 195 L 417 365 C 382 335 312 325 256 365 Z" fill="none" stroke="#38bdf8" stroke-width="12" opacity="0.8"/>
+  
+  <!-- Gran estrella surgiendo de las páginas, más grande y definida -->
+  <path d="M 256 60 L 270 140 L 350 154 L 270 168 L 256 248 L 242 168 L 162 154 L 242 140 Z" fill="#fbbf24"/>
+</svg>
