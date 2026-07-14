@@ -34,7 +34,9 @@
   var hint = document.getElementById('mw-hint');
 
   var scale = 1;
-  var minScale = 1;
+  // El zoom out puede bajar de 1 para hacer el tránsito al Grupo Local (atlas).
+  // El límite inferior lo marca CONFIG.grupoLocal.escalaMinima (ver config).
+  var minScale = (window.CONFIG && CONFIG.grupoLocal && CONFIG.grupoLocal.escalaMinima) || 1;
   var maxScale = 25;
   var posX = 0;
   var posY = 0;
@@ -415,6 +417,47 @@
         connector.style.transform = 'rotate(' + angDeg + 'deg)';
       }
     }
+
+    // Tránsito a la vista del Grupo Local (se recalcula en cada cambio de zoom).
+    updateGrupoLocal();
+  }
+
+  // --------------------------------------------------------------------------
+  // TRÁNSITO GALAXIA → GRUPO LOCAL
+  // Al hacer zoom out por debajo de CONFIG.grupoLocal.umbral, la imagen de la
+  // galaxia se funde hacia la capa del atlas (grupo-local.js), que se dibuja
+  // detrás del mapa. El fov del atlas se acopla al zoom del visor midiendo los
+  // píxeles por año luz de la imagen de la galaxia, de modo que la transición
+  // es continua: la galaxia se encoge hasta ser el punto "Vía Láctea" del atlas
+  // y, siguiendo el zoom out, aparecen las galaxias observadas del catálogo.
+  // --------------------------------------------------------------------------
+  function updateGrupoLocal() {
+    if (typeof GrupoLocal === 'undefined' || !GrupoLocal.ready) return;
+    var cfg = (window.CONFIG && CONFIG.grupoLocal) || {};
+    var umbral = cfg.umbral || 0.1;
+    var umbralFinal = (cfg.umbralFinal != null) ? cfg.umbralFinal : umbral * 0.4;
+    if (umbralFinal >= umbral) umbralFinal = umbral * 0.4;
+
+    // Opacidad de la galaxia: 1 por encima del umbral, 0 por debajo del final,
+    // fundido lineal en la banda intermedia.
+    var galaxyAlpha;
+    if (scale >= umbral) galaxyAlpha = 1;
+    else if (scale <= umbralFinal) galaxyAlpha = 0;
+    else galaxyAlpha = (scale - umbralFinal) / (umbral - umbralFinal);
+    var atlasAlpha = 1 - galaxyAlpha;
+
+    img.style.opacity = galaxyAlpha;
+
+    // Píxeles por año luz de la imagen de la galaxia al zoom actual, para que el
+    // fov del atlas encaje sin salto en el momento del relevo.
+    var galImg = document.getElementById('mw-image');
+    var pxPerLy = 0;
+    if (galImg && galImg.naturalWidth) {
+      var r = getImgRect(galImg);
+      pxPerLy = (r.width * scale) / CONFIG.fisica.anchoImagenAl;
+    }
+
+    GrupoLocal.sync(pxPerLy, atlasAlpha);
   }
 
   function clampPosition() {

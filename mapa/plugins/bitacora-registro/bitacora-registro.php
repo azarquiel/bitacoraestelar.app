@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.14.1
+ * Version:     1.14.3
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.14.1' );
+define( 'BITACORA_VERSION', '1.14.3' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
@@ -1284,6 +1284,23 @@ function bitacora_panel_legacy() {
         }
     }
 
+    if ( isset( $_POST['bitacora_reasignar_legacy'] ) && check_admin_referer( 'bitacora_reasignar_legacy' ) ) {
+        $uid = intval( isset( $_POST['bitacora_usuario_destino'] ) ? $_POST['bitacora_usuario_destino'] : 0 );
+        $destino = $uid ? get_userdata( $uid ) : false;
+        if ( $destino ) {
+            $n = $wpdb->query( $wpdb->prepare( "UPDATE $t SET usuario_id = %d WHERE origen = 'legacy'", $uid ) );
+            // Vincula también el observador de esas observaciones a este usuario de WordPress.
+            $t_obs = bitacora_nombre_tabla_observadores();
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE $t_obs SET usuario_id = %d WHERE id IN ( SELECT observador_id FROM ( SELECT DISTINCT observador_id FROM $t WHERE origen = 'legacy' AND observador_id IS NOT NULL ) AS sub )",
+                $uid
+            ) );
+            echo '<div class="notice notice-success"><p>Reasignadas <strong>' . intval( $n ) . '</strong> observaciones históricas a <strong>' . esc_html( $destino->display_name ) . '</strong>. Ya puedes editarlas y generar sus fichas desde ese usuario.</p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>Selecciona un usuario válido.</p></div>';
+        }
+    }
+
     $total = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $t WHERE origen = 'legacy'" ) );
 
     echo '<div style="margin:22px 0;padding:2px 18px 14px;border:1px solid #c3c4c7;border-left:4px solid #2271b1;background:#fff;max-width:820px">';
@@ -1293,6 +1310,15 @@ function bitacora_panel_legacy() {
     wp_nonce_field( 'bitacora_importar_legacy' );
     echo '<button type="submit" name="bitacora_importar_legacy" value="1" class="button button-primary">Importar / reimportar observaciones históricas</button>';
     echo ' <span style="color:#646970">Idempotente: reemplaza las históricas por las de la semilla (no toca las que registres con el formulario).</span>';
+    echo '</form>';
+
+    // Reasignar la propiedad (usuario_id) de las históricas a un usuario de WordPress.
+    echo '<form method="post" style="margin-top:16px;padding-top:14px;border-top:1px solid #e0e0e0">';
+    wp_nonce_field( 'bitacora_reasignar_legacy' );
+    echo '<label style="margin-right:8px">Propietario de las observaciones históricas: </label>';
+    wp_dropdown_users( array( 'name' => 'bitacora_usuario_destino', 'selected' => get_current_user_id() ) );
+    echo ' <button type="submit" name="bitacora_reasignar_legacy" value="1" class="button">Reasignar</button>';
+    echo '<p style="color:#646970;margin:8px 0 0">Pone las históricas a nombre del usuario elegido (el que puede editarlas y generar sus fichas). No reimporta ni cambia su contenido.</p>';
     echo '</form></div>';
 }
 
@@ -2092,11 +2118,18 @@ function bitacora_inyectar_datos() {
     if ( ! is_user_logged_in() ) {
         return;
     }
+    // Nombre y apellidos del usuario para precargar el observador (editable).
+    $u = wp_get_current_user();
+    $nombre_apellidos = trim( $u->first_name . ' ' . $u->last_name );
+    if ( '' === $nombre_apellidos ) {
+        $nombre_apellidos = $u->display_name;
+    }
     $datos = array(
-        'endpoint'  => esc_url_raw( rest_url( 'bitacora/v1/observaciones' ) ),
-        'media'     => esc_url_raw( rest_url( 'wp/v2/media' ) ),
-        'nonce'     => wp_create_nonce( 'wp_rest' ),
-        'usuarioId' => get_current_user_id(),
+        'endpoint'   => esc_url_raw( rest_url( 'bitacora/v1/observaciones' ) ),
+        'media'      => esc_url_raw( rest_url( 'wp/v2/media' ) ),
+        'nonce'      => wp_create_nonce( 'wp_rest' ),
+        'usuarioId'  => get_current_user_id(),
+        'observador' => $nombre_apellidos,
     );
     printf(
         '<script>window.BITACORA_WP = %s;</script>' . "\n",

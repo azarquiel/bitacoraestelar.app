@@ -44,6 +44,51 @@
   }
   #mw-nuevo { color: #f4c76b !important; border-color: rgba(244,199,107,0.35) !important; }
   #mw-nuevo:hover { background: rgba(244,199,107,0.16) !important; }
+
+  /* CAPA DEL GRUPO LOCAL (atlas extragaláctico), detrás del mapa de la galaxia.
+     Su opacidad y su zoom los controla el visor principal (grupo-local.js). */
+  #gl-sky {
+    position: absolute;
+    inset: 0;
+    display: none;      /* se activa al hacer zoom out (ver GrupoLocal.sync) */
+    opacity: 0;
+    pointer-events: none;
+  }
+  #gl-tip {
+    position: absolute;
+    z-index: 30;
+    pointer-events: none;
+    padding: 6px 10px;
+    background: rgba(4,10,26,0.92);
+    border: 1px solid #12307e;
+    border-radius: 4px;
+    font-family: sans-serif;
+    font-size: 11px;
+    color: #fff;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.12s;
+    transform: translate(-50%, -160%);
+  }
+  #gl-tip .sub { color: #5f7bb0; font-size: 9px; letter-spacing: 0.08em; }
+  #gl-scale {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    pointer-events: none;
+    font-family: sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: #9fb6c9;
+    background: rgba(4,10,26,0.6);
+    padding: 5px 14px;
+    border-radius: 20px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #gl-scale b { color: #ffe08a; font-weight: 500; }
 </style>
 
 <div id="mw-viewer" style="
@@ -59,6 +104,12 @@
   user-select: none;
   z-index: 9999;
 ">
+  <!-- CAPA DEL GRUPO LOCAL (atlas): se dibuja DETRÁS del mapa de la galaxia y
+       aparece al hacer zoom out. Ver grupo-local.js. -->
+  <canvas id="gl-sky"></canvas>
+  <div id="gl-scale"></div>
+  <div id="gl-tip"></div>
+
   <div id="mw-content" style="
     position: absolute;
     inset: 0;
@@ -645,7 +696,14 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260714_0053"></script>
-<script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260714_0037"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260714_2330"></script>
+<!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
+     El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript, en el
+     mismo formato que el antiguo via-lactea-datos.js, asi que es intercambiable.
+     Si el endpoint no respondiera, descomenta la linea del archivo estatico. -->
+<script src="/wp-json/bitacora/v1/datos.js?v=20260714_0100"></script>
+<!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
+<!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260714_2330"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260714_2330"></script>
 </li>

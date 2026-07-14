@@ -120,6 +120,29 @@
       parpadeoSegundos: 3,
       avisoSegundos: 3,
       zoom: 15
+    },
+
+    // -------------------------------------------------------------------------
+    // TRÁNSITO A LA VISTA DEL GRUPO LOCAL (zoom out más allá de la galaxia)
+    //   Al hacer zoom OUT, cuando la imagen de la galaxia se reduce hasta
+    //   "umbral" de su tamaño original, la vista funde hacia el atlas del Grupo
+    //   Local (galaxias observadas fuera de la Vía Láctea). La galaxia, al
+    //   encogerse, pasa a ser el punto "Vía Láctea" del centro del atlas.
+    //
+    //   umbral       : fracción del tamaño original en la que EMPIEZA el fundido.
+    //                  0.1 = una décima parte (lo pedido). Súbelo/bájalo a gusto.
+    //   umbralFinal  : fracción en la que el fundido está COMPLETO (solo atlas).
+    //                  Debe ser menor que "umbral" (define el ancho del fundido).
+    //   escalaMinima : zoom out máximo. Cuanto menor, más lejos se llega en el
+    //                  atlas (fov mayor). 0.0015 permite alcanzar las galaxias
+    //                  más lejanas del catálogo (~30 millones de años luz).
+    //   autoGiro     : giro ambiental lento del atlas (radianes por fotograma).
+    // -------------------------------------------------------------------------
+    grupoLocal: {
+      umbral: 0.1,
+      umbralFinal: 0.04,
+      escalaMinima: 0.0015,
+      autoGiro: 0.0004
     }
 
   };

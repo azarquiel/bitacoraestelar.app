@@ -168,16 +168,15 @@
             ? '<button type="button" class="act restore" data-accion="restaurar">Restaurar</button>'
             : '<span class="not-mine">de otro observador</span>';
         }
-        // Tarjetas activas: la ficha se puede generar siempre; editar y borrar,
-        // solo en las propias.
-        var ficha = '<button type="button" class="act ficha" data-accion="ficha">Ficha</button>';
+        // Tarjetas activas. Los botones "Datos ficha" y "Ficha" están OCULTOS de
+        // momento. Para reactivarlos, vuelve a añadir aquí:
+        //   '<a class="act" href="' + esc(URL_FICHA) + '?ficha=' + esc(obs.id) + '">Datos ficha</a>'
+        //   '<button type="button" class="act ficha" data-accion="ficha">Ficha</button>'
         if (obs.mia) {
           return '<a class="act" href="' + esc(URL_FORM) + '?editar=' + esc(obs.id) + '">Editar</a>' +
-                 '<a class="act" href="' + esc(URL_FICHA) + '?ficha=' + esc(obs.id) + '">Datos ficha</a>' +
-                 ficha +
                  '<button type="button" class="act danger" data-accion="borrar">Borrar</button>';
         }
-        return ficha + '<span class="not-mine">de otro observador</span>';
+        return '<span class="not-mine">de otro observador</span>';
       }
 
       function conectarAcciones(card, obs) {

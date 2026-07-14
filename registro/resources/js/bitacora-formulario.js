@@ -429,6 +429,13 @@
   aplicarModoEdicion();
   cargarParaEditar();
 
+  // Precarga el observador con el nombre del usuario de WordPress (editable).
+  // Solo al crear (en edición, precargar() pone el de la observación).
+  if (WP && WP.observador && !editandoId) {
+    var obsEl = $('observer');
+    if (obsEl && obsEl.value.trim() === '') { obsEl.value = WP.observador; recompute(); }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   // ENTRADAS POR OCULAR (una por aumento)
   //
