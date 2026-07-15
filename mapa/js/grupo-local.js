@@ -92,6 +92,10 @@ var GrupoLocal = (function () {
   // vista (fov máximo) para que cualquier objeto registrado llegue a ser visible.
   var maxDist = objects.reduce(function (m, o) { return Math.max(m, o.d); }, 0);
 
+  // Objeto "buscado" temporal: uno que NO está en el registro y que el buscador
+  // localiza en SIMBAD para enseñar dónde está (se dibuja resaltado). Ver focus().
+  var target = null;
+
   // ---- Elementos del DOM (se inyectan en index.html) ------------------------
   var canvas = document.getElementById('gl-sky');
   var tip = document.getElementById('gl-tip');
@@ -240,7 +244,10 @@ var GrupoLocal = (function () {
     drawStars();
     drawGrid();
 
-    var projected = objects.map(function (o) { return { o: o, p: project(o) }; })
+    // Se omiten los tipos de Hubble ocultados desde la leyenda.
+    var projected = objects
+      .filter(function (o) { return !(hiddenTipos && hiddenTipos[o.tipo || '']); })
+      .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
 
     // Vía Láctea en el origen (el punto en que se convierte la galaxia al encoger)
@@ -299,6 +306,29 @@ var GrupoLocal = (function () {
       }
     }
 
+    // Objeto buscado (no registrado): se dibuja resaltado con un anillo pulsante
+    // y su nombre, para señalar dónde está aunque no forme parte del catálogo.
+    if (target) {
+      var tp = project(target);
+      var pulso = 6 + 3 * Math.sin(Date.now() / 300);
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
+      var tcol = target.color || '#ffffff';
+      var thalo = ctx.createRadialGradient(tp.sx, tp.sy, 0, tp.sx, tp.sy, 12);
+      thalo.addColorStop(0, hexToRgba(tcol, 0.8));
+      thalo.addColorStop(1, hexToRgba(tcol, 0));
+      ctx.fillStyle = thalo;
+      ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      if (target.name) {
+        ctx.fillStyle = 'rgba(255,255,255,0.98)';
+        ctx.font = '600 12px Inter, sans-serif';
+        ctx.fillText(target.name, tp.sx + 14, tp.sy + 4);
+      }
+    }
+
     if (tip) {
       if (hovered) {
         tip.style.opacity = 1;
@@ -350,12 +380,39 @@ var GrupoLocal = (function () {
   // ---- Bucle de animación ---------------------------------------------------
   function loop() {
     if (layerAlpha > 0.001) {
-      if (!dragging) yaw += autoGiro;
+      // El giro ambiental se pausa mientras hay un objeto buscado enfocado, para
+      // que quede centrado.
+      if (!dragging && !target) yaw += autoGiro;
       render();
     }
     requestAnimationFrame(loop);
   }
   loop();
+
+  // Enfoca el atlas en un objeto por sus coordenadas galácticas (l, b) y su
+  // distancia (al): rota la vista para centrarlo, lo marca como objeto buscado
+  // y sube el fov máximo para que quepa. El fov real y la opacidad los fija el
+  // visor principal (via-lactea-app.js) al ajustar la escala de la galaxia.
+  function focus(l, b, d, name, tipo) {
+    var margen = (window.CONFIG && CONFIG.busqueda && CONFIG.busqueda.margenExtragalactico) || 1.8;
+    FOV_MAX = Math.max(FOV_MAX, d * (margen + 0.6));
+    // Se orienta la vista para que el objeto quede centrado en horizontal pero
+    // DESPLAZADO por encima del centro (no sobre la Vía Láctea, que siempre se
+    // proyecta en el origen). El desplazamiento en pantalla es (y2/margen)·R;
+    // se busca ~0,45·R eligiendo y2 = frac. Cierre analítico: con el yaw que
+    // anula la componente horizontal, y2 = cos(pitch + psi), psi = atan2(uz, h).
+    var u = galToXYZ(l, b, 1);
+    yaw = Math.atan2(u.x, u.y);
+    var h = Math.sqrt(u.x * u.x + u.y * u.y);
+    var frac = Math.min(0.85, 0.45 * margen);
+    var psi = Math.atan2(u.z, h);
+    var p = Math.acos(Math.max(-1, Math.min(1, frac))) - psi;
+    pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p));
+    var pos = galToXYZ(l, b, d);
+    target = { name: name || '', desc: '', l: l, b: b, d: d, tipo: tipo || '',
+               color: colorDe({ tipo: tipo }), x: pos.x, y: pos.y, z: pos.z };
+  }
+  function clearTarget() { target = null; }
 
   // Leyendas dependientes de la vista: la de tipos de objeto (galaxia) y la de
   // clases de Hubble (Grupo Local). Se alternan según domine una vista u otra.
@@ -366,6 +423,24 @@ var GrupoLocal = (function () {
     if (legendHubble) legendHubble.style.display = esAtlas ? '' : 'none';
   }
   toggleLeyenda(false);
+
+  // Leyenda interactiva del Grupo Local: pulsar una clase de Hubble la oculta o
+  // muestra en el atlas (el objeto se filtra en render). La fila se atenúa y se
+  // tacha mientras su clase está oculta, igual que la leyenda de la galaxia.
+  var hiddenTipos = {};
+  if (legendHubble) {
+    var glItems = legendHubble.querySelectorAll('.gl-legend-item');
+    for (var gi = 0; gi < glItems.length; gi++) {
+      glItems[gi].addEventListener('click', function () {
+        var tipo = this.getAttribute('data-tipo');
+        var nowHidden = !hiddenTipos[tipo];
+        hiddenTipos[tipo] = nowHidden;
+        this.style.opacity = nowHidden ? '0.4' : '1';
+        var textEl = this.querySelector('.gl-legend-text');
+        if (textEl) textEl.style.textDecoration = nowHidden ? 'line-through' : 'none';
+      });
+    }
+  }
 
   // ---- API pública (la llama updateGrupoLocal en via-lactea-app.js) ---------
   //   pxPerLy : píxeles por año luz de la imagen de la galaxia al zoom actual.
@@ -388,5 +463,6 @@ var GrupoLocal = (function () {
 
   // maxDist (años luz del objeto más lejano) lo usa via-lactea-app.js para
   // permitir alejar la vista hasta que ese objeto sea visible.
-  return { ready: true, sync: sync, maxDist: maxDist };
+  // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
+  return { ready: true, sync: sync, maxDist: maxDist, focus: focus, clearTarget: clearTarget };
 })();

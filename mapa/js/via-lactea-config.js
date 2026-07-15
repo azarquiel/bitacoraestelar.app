@@ -115,11 +115,19 @@
     //   avisoSegundos    : cuánto se muestra el pop-up de "no encontrado" (seg).
     //   zoom             : nivel de aumento del mapa al centrar en el objeto
     //                      (se recorta al máximo permitido por el mapa).
+    //   resolver         : endpoint que localiza en SIMBAD un objeto que NO está
+    //                      en el registro (para buscar también objetos fuera de
+    //                      la Vía Láctea). '' desactiva la búsqueda externa.
+    //   margenExtragalactico : cuánto "aire" dejar alrededor del objeto al
+    //                      enfocarlo en el atlas (1.8 = el objeto a ~0,55 del
+    //                      radio visible). Mayor = objeto más pequeño y centrado.
     // -------------------------------------------------------------------------
     busqueda: {
       parpadeoSegundos: 3,
       avisoSegundos: 3,
-      zoom: 15
+      zoom: 15,
+      resolver: '/wp-json/bitacora/v1/resolver',
+      margenExtragalactico: 1.8
     },
 
     // -------------------------------------------------------------------------

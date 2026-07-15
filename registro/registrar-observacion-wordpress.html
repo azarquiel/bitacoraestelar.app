@@ -65,6 +65,22 @@
       <button type="button" class="add-entry" id="addEntry">+ Añadir ocular</button>
     </fieldset>
 
+    <!-- 3 · EXPLORACIÓN (síntesis / retos, sin datos de ocular) -->
+    <fieldset>
+      <legend><div class="leg"><span class="num">3</span>
+        <div><h2>Exploración (opcional)</h2><p>Síntesis de la observación o los retos a los que se enfrenta el observador. No lleva datos de ocular. En la ficha aparece como «<span id="explNombre">objeto</span>. Exploración».</p></div></div></legend>
+
+      <div class="field"><span class="lab">Síntesis / retos</span>
+        <div class="rt-toolbar" id="explToolbar">
+          <button type="button" data-cmd="bold" title="Negrita"><b>B</b></button>
+          <button type="button" data-cmd="italic" title="Cursiva"><i>i</i></button>
+          <button type="button" data-cmd="insertUnorderedList" title="Lista">• lista</button>
+          <button type="button" data-cmd="formatBlock" data-arg="p" title="Párrafo">¶</button>
+        </div>
+        <div class="e-desc rt-editor" id="explDesc" contenteditable="true"></div>
+      </div>
+    </fieldset>
+
     <div class="actions">
       <button type="submit" class="primary" id="submitBtn" disabled>Preparar registro</button>
       <span class="out-note" id="outNote">Se generará el bloque de datos de la observación.</span>
@@ -77,4 +93,4 @@
 </div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=6" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=7" defer></script>

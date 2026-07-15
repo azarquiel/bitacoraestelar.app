@@ -443,26 +443,26 @@
     line-height: 1.7;
     user-select: none;
   ">
-    <div style="display:flex;align-items:center;gap:7px;color:#9aa;font-size:10px;margin-bottom:2px;pointer-events:none;">Tipo de galaxia · secuencia de Hubble</div>
-    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+    <div style="display:flex;align-items:center;gap:7px;color:#9aa;font-size:10px;margin-bottom:2px;pointer-events:none;">Tipo de galaxia · pulsa para mostrar/ocultar</div>
+    <div class="gl-legend-item" data-tipo="E" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#f4c76b;box-shadow:0 0 4px 1px rgba(244,199,107,0.9);flex:none;"></span>
-      Elíptica (E)
+      <span class="gl-legend-text">Elíptica (E)</span>
     </div>
-    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+    <div class="gl-legend-item" data-tipo="S0" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#c8b6ff;box-shadow:0 0 4px 1px rgba(200,182,255,0.9);flex:none;"></span>
-      Lenticular (S0)
+      <span class="gl-legend-text">Lenticular (S0)</span>
     </div>
-    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+    <div class="gl-legend-item" data-tipo="S" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#7ec8ff;box-shadow:0 0 4px 1px rgba(126,200,255,0.9);flex:none;"></span>
-      Espiral (S)
+      <span class="gl-legend-text">Espiral (S)</span>
     </div>
-    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+    <div class="gl-legend-item" data-tipo="SB" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#5fe0c8;box-shadow:0 0 4px 1px rgba(95,224,200,0.9);flex:none;"></span>
-      Espiral barrada (SB)
+      <span class="gl-legend-text">Espiral barrada (SB)</span>
     </div>
-    <div style="display:flex;align-items:center;gap:7px;pointer-events:none;">
+    <div class="gl-legend-item" data-tipo="Irr" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#ff8a80;box-shadow:0 0 4px 1px rgba(255,138,128,0.9);flex:none;"></span>
-      Irregular (Irr)
+      <span class="gl-legend-text">Irregular (Irr)</span>
     </div>
   </div>
 </div>
@@ -734,7 +734,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260715_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260715_1600"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript, en el
      mismo formato que el antiguo via-lactea-datos.js, asi que es intercambiable.
@@ -742,6 +742,6 @@
 <script src="/wp-json/bitacora/v1/datos.js?v=20260714_0100"></script>
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260715_1200"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260715_1200"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260715_1600"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260715_1600"></script>
 </li>

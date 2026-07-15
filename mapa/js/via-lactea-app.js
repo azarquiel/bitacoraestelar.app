@@ -368,9 +368,12 @@
 
     // Contraescala de los marcadores: al ampliar se encogen un poco en pantalla
     // (no del todo) para no tapar el mapa, manteniéndose legibles y pulsables.
+    // Nota: NO se pone suelo a counter. Como el marcador vive dentro de #mw-content
+    // (escalado por scale), su tamaño aparente es counter·scale = scale^0.1; un
+    // suelo en counter (p. ej. 0.12) haría crecer el marcador linealmente con el
+    // zoom (a scale 25, 3× su tamaño), que es justo lo que hay que evitar.
     var counter = Math.pow(scale, -0.9);
     if (counter > 1) counter = 1;
-    if (counter < 0.12) counter = 0.12;
 
     // Contra-rotación: cada marcador (punto + etiqueta) se gira en sentido
     // opuesto al mapa para que los nombres y el Sol se lean siempre horizontales.
@@ -470,9 +473,13 @@
   // fija CONFIG.grupoLocal.escalaMinima.
   // --------------------------------------------------------------------------
   var MARGEN_OBJETO_LEJANO = 1.6;
+  // Distancia (al) de un objeto buscado fuera del catálogo; permite alejar la
+  // vista más allá del objeto registrado más lejano para llegar a verlo.
+  var busquedaMaxDist = 0;
   function recalcularMinScale() {
     var base = (window.CONFIG && CONFIG.grupoLocal && CONFIG.grupoLocal.escalaMinima) || 1;
-    var D = (typeof GrupoLocal !== 'undefined' && GrupoLocal.maxDist) ? GrupoLocal.maxDist : 0;
+    var reg = (typeof GrupoLocal !== 'undefined' && GrupoLocal.maxDist) ? GrupoLocal.maxDist : 0;
+    var D = Math.max(reg, busquedaMaxDist);
     if (!(D > 0)) { minScale = base; return; }
     var vr = viewer.getBoundingClientRect();
     var R = Math.min(vr.width, vr.height) * 0.42;
@@ -943,6 +950,12 @@
   // (archivo via-lactea-config.js).
   // --------------------------------------------------------------------------
   function imgPath(objeto, archivo) {
+    archivo = archivo || '';
+    // Tolerancia a datos corruptos: un esc_url_raw() antiguo antepuso "http://"
+    // a nombres relativos ("m57_70x.webp" -> "http://m57_70x.webp"). Si la URL es
+    // un esquema + nombre de archivo SIN ruta, se recupera como relativa.
+    var corrupta = archivo.match(/^https?:\/\/([^/]+\.(?:webp|jpg|jpeg|png|gif|avif))$/i);
+    if (corrupta) archivo = corrupta[1];
     if (/^https?:\/\//i.test(archivo)) return archivo;  // URL absoluta (imagen subida por formulario)
     return CONFIG.rutas.imagenes + objeto + '/' + archivo;
   }
@@ -1759,7 +1772,9 @@
   function doSearch() {
     var obj = findObject(searchInput.value);
     if (!obj) {
-      showToast('Ese objeto no ha sido observado o no pertenece a la Vía Láctea.');
+      // No está en el registro: se intenta localizar como objeto externo
+      // (también fuera de la Vía Láctea) resolviéndolo en SIMBAD.
+      buscarObjetoExterno(searchInput.value);
       return;
     }
     hideHint();
@@ -1785,6 +1800,115 @@
     centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom);
     // El parpadeo se lanza tras un instante para que el centrado ya esté hecho.
     setTimeout(function () { blinkObject(obj.id); }, 60);
+  }
+
+  // ===========================================================================
+  // BÚSQUEDA DE OBJETOS EXTERNOS (no registrados, incluidos los del Grupo Local)
+  // Si el objeto no está en el registro, se resuelve en SIMBAD (endpoint del
+  // plugin) y se lleva la vista hasta él con el zoom adecuado: zoom-in si está
+  // en la Vía Láctea, o zoom-out al atlas del Grupo Local si es extragaláctico.
+  // ===========================================================================
+  var DIST_MIN_EXTRAGAL = 200000; // al (coincide con grupo-local.js)
+
+  // Punto de mira temporal en el centro del visor, para señalar el objeto
+  // localizado que no tiene marcador propio (los del Grupo Local ya se resaltan
+  // en el atlas). Se crea una sola vez y se reutiliza.
+  var puntoMiraEl = null, puntoMiraTimer = null;
+  function mostrarPuntoMira(nombre) {
+    if (!puntoMiraEl) {
+      puntoMiraEl = document.createElement('div');
+      puntoMiraEl.id = 'mw-search-crosshair';
+      puntoMiraEl.style.cssText = 'position:absolute;top:50%;left:50%;' +
+        'transform:translate(-50%,-50%);width:46px;height:46px;' +
+        'border:2px solid rgba(255,255,255,0.9);border-radius:50%;' +
+        'box-shadow:0 0 12px 2px rgba(255,255,255,0.45);pointer-events:none;' +
+        'z-index:25;display:none;';
+      var lbl = document.createElement('div');
+      lbl.className = 'mw-search-crosshair-label';
+      lbl.style.cssText = 'position:absolute;top:100%;left:50%;' +
+        'transform:translateX(-50%);margin-top:6px;color:#fff;' +
+        'font-family:sans-serif;font-size:12px;white-space:nowrap;' +
+        'text-shadow:0 0 4px rgba(0,0,0,0.9);';
+      puntoMiraEl.appendChild(lbl);
+      viewer.appendChild(puntoMiraEl);
+    }
+    puntoMiraEl.querySelector('.mw-search-crosshair-label').textContent = nombre || '';
+    puntoMiraEl.style.display = 'block';
+    if (puntoMiraTimer) clearTimeout(puntoMiraTimer);
+    puntoMiraTimer = setTimeout(function () {
+      if (puntoMiraEl) puntoMiraEl.style.display = 'none';
+    }, (CONFIG.busqueda.parpadeoSegundos || 3) * 1000 + 1500);
+  }
+
+  function buscarObjetoExterno(query) {
+    var q = (query || '').trim();
+    if (!q) return;
+    var url = (CONFIG.busqueda && CONFIG.busqueda.resolver) || '';
+    if (!url) {
+      showToast('Ese objeto no ha sido observado o no pertenece a la Vía Láctea.');
+      return;
+    }
+    showToast('Buscando «' + q + '»…');
+    fetch(url + '?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.data || typeof res.data.dist !== 'number') {
+          var msg = (res.data && res.data.message)
+            ? res.data.message
+            : 'No se ha encontrado «' + q + '».';
+          showToast(msg);
+          return;
+        }
+        irAObjetoExterno(res.data);
+      })
+      .catch(function () { showToast('No se pudo conectar para buscar «' + q + '».'); });
+  }
+
+  function irAObjetoExterno(data) {
+    hideHint();
+    var nombre = data.q || '';
+    if (data.dist < DIST_MIN_EXTRAGAL) {
+      // Dentro de la Vía Láctea: centrar en el mapa con zoom-in.
+      if (typeof GrupoLocal !== 'undefined' && GrupoLocal.clearTarget) GrupoLocal.clearTarget();
+      busquedaMaxDist = 0;
+      var pos = isEdgeView ? data.edge : data.top;
+      if (!pos) { showToast('No hay posición para «' + nombre + '».'); return; }
+      centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom);
+      mostrarPuntoMira(nombre);
+      showToast('«' + nombre + '» · ' + (data.coords || ''));
+    } else {
+      enfocarExtragalactico(data);
+    }
+  }
+
+  function enfocarExtragalactico(data) {
+    if (typeof GrupoLocal === 'undefined' || !GrupoLocal.ready || !GrupoLocal.focus) {
+      showToast('La vista del Grupo Local no está disponible.');
+      return;
+    }
+    // Rota el atlas para centrar el objeto y lo marca; sube su fov máximo.
+    busquedaMaxDist = data.dist;
+    GrupoLocal.focus(data.l, data.b, data.dist, data.q || '', data.tipo || '');
+    recalcularMinScale();
+
+    // Escala de la galaxia que produce el fov que enmarca el objeto: como
+    // fov = R·ancho / (imgW·scale), scale = R·ancho / (imgW·fov). Al fijar esa
+    // escala (por debajo del umbral) el atlas se activa y muestra el objeto.
+    var galImg = document.getElementById('mw-image');
+    var vr = viewer.getBoundingClientRect();
+    var R = Math.min(vr.width, vr.height) * 0.42;
+    var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : Math.min(vr.width, vr.height);
+    var margen = (CONFIG.busqueda && CONFIG.busqueda.margenExtragalactico) || 1.8;
+    var targetFov = data.dist * margen;
+    var s = (imgW > 0 && targetFov > 0)
+      ? (R * CONFIG.fisica.anchoImagenAl) / (imgW * targetFov)
+      : minScale;
+    scale = Math.max(minScale, Math.min(maxScale, s));
+    posX = 0; posY = 0;
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+    clampPosition();
+    applyTransform();
+    showToast('«' + (data.q || '') + '» · ' + (data.coords || ''));
   }
 
   if (searchInput) {

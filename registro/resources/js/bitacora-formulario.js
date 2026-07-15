@@ -328,6 +328,7 @@
   // objeto resuelto y observador. La astrometría (fecha, lugar, altitud/azimut)
   // se captura aparte, en el formulario de datos de ficha.
   function recompute(){
+    if(typeof actualizarExplNombre==='function') actualizarExplNombre();
     lastComputed=null; submitBtn.disabled=true; jsonOut.classList.remove('show');
     var haveObj=resolved!==null, haveObs=$('observer').value.trim()!=='';
     if(!(haveObj&&haveObs)){ return; }
@@ -397,7 +398,18 @@
     // precargar se ejecuta al resolver el fetch, cuando ya están listos).
     if(entradasBox){
       entradasBox.innerHTML='';
-      if(Array.isArray(obs.entradas)){ obs.entradas.forEach(function(en){ crearEntrada(en); }); }
+      var explEl = document.getElementById('explDesc');
+      if(explEl) explEl.innerHTML='';
+      if(Array.isArray(obs.entradas)){
+        obs.entradas.forEach(function(en){
+          // La entrada de "Exploración" (botón fijo o sin datos de ocular) va a su
+          // editor propio; el resto, a la lista de oculares.
+          var esExpl = (en.boton==='Exploración') ||
+                       (en.aumento==null && en.campo_real==null);
+          if(esExpl && explEl){ explEl.innerHTML = en.descripcion||''; }
+          else { crearEntrada(en); }
+        });
+      }
     }
 
     recompute();
@@ -660,6 +672,34 @@
     return {ok:true};
   }
 
+  // ── SECCIÓN "EXPLORACIÓN" (síntesis/retos, sin datos de ocular) ──
+  // Es una entrada especial: se envía como { esExploracion:true, titulo:
+  // "<objeto>. Exploración", descripcion }, sin aumento/campo/pupila ni imágenes.
+  var explDesc = $('explDesc'), explToolbar = $('explToolbar'), explNombre = $('explNombre');
+  if(explToolbar && explDesc){
+    try{ document.execCommand('defaultParagraphSeparator', false, 'p'); }catch(_e){}
+    explToolbar.querySelectorAll('button').forEach(function(btn){
+      btn.addEventListener('mousedown', function(ev){
+        ev.preventDefault();
+        var cmd=btn.getAttribute('data-cmd'), arg=btn.getAttribute('data-arg')||null;
+        explDesc.focus();
+        try{ document.execCommand(cmd,false,arg); }catch(_e){}
+      });
+    });
+  }
+  // Identificador corto del objeto para el título ("M1", "NGC 253"…).
+  function objetoCorto(){
+    if(resolved && resolved.tipo==='messier') return 'M'+resolved.num;
+    return objInput.value.trim();
+  }
+  function actualizarExplNombre(){ if(explNombre) explNombre.textContent = objetoCorto() || 'objeto'; }
+  function recogerExploracion(){
+    if(!explDesc) return null;
+    var html = explDesc.innerHTML.trim();
+    if(textoPlano(html)==='') return null;
+    return { esExploracion:true, titulo:(objetoCorto()||'')+'. Exploración', descripcion:html, imagenes:[] };
+  }
+
   if(addEntryBtn){ addEntryBtn.addEventListener('click',function(){ crearEntrada(); }); }
   // En modo creación arrancamos con una entrada vacía lista para rellenar.
   if(!editandoId && entradasBox){ crearEntrada(); }
@@ -678,7 +718,10 @@
       $('outNote').innerHTML='<span style="color:var(--rojo)">✗ '+ve.error+'</span>';
       return;
     }
-    var payload = Object.assign({}, lastComputed, { entradas: entradas });
+    // La Exploración (si tiene contenido) se antepone como primera entrada.
+    var expl = recogerExploracion();
+    var todas = expl ? [expl].concat(entradas) : entradas;
+    var payload = Object.assign({}, lastComputed, { entradas: todas });
 
     // Siempre mostramos el bloque de datos: sirve de comprobante.
     jsonArea.value=JSON.stringify(payload,null,2);

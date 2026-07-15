@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.15.0
+ * Version:     1.16.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.15.0' );
+define( 'BITACORA_VERSION', '1.16.0' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
@@ -313,6 +313,22 @@ function bitacora_crear_tabla() {
     ) );
     if ( $col_pdf ) {
         $wpdb->query( "ALTER TABLE $tabla_objetos DROP COLUMN pdf" );
+    }
+
+    // Reparación única: una versión anterior saneaba las rutas de imagen con
+    // esc_url_raw(), que antepone "http://" a los nombres relativos y rompe la
+    // ficha (p. ej. "m57_129x.webp" -> "http://m57_129x.webp"). Se les quita el
+    // esquema para devolverles su forma relativa.
+    if ( ! get_option( 'bitacora_reparar_img_url_v1' ) ) {
+        $t_img_rep = bitacora_nombre_tabla_imagenes();
+        $filas_rep = $wpdb->get_results(
+            "SELECT id, imagen_url FROM $t_img_rep WHERE imagen_url REGEXP '^https?://[^/]+\\\\.(webp|jpg|jpeg|png|gif|avif)$'"
+        );
+        foreach ( $filas_rep as $fr ) {
+            $arreglada = preg_replace( '#^https?://#i', '', $fr->imagen_url );
+            $wpdb->update( $t_img_rep, array( 'imagen_url' => $arreglada ), array( 'id' => intval( $fr->id ) ), array( '%s' ), array( '%d' ) );
+        }
+        update_option( 'bitacora_reparar_img_url_v1', 1 );
     }
 
     update_option( 'bitacora_db_version', BITACORA_VERSION );
@@ -634,6 +650,22 @@ function bitacora_registrar_rutas() {
         )
     );
 
+    // Resolver un objeto por identificador (SIMBAD) SIN guardarlo: devuelve su
+    // posición para que el buscador del mapa pueda localizarlo aunque no esté en
+    // el registro de objetos observados. Lectura pública (el mapa es público).
+    register_rest_route(
+        'bitacora/v1',
+        '/resolver',
+        array(
+            'methods'             => 'GET',
+            'callback'            => 'bitacora_resolver_objeto',
+            'permission_callback' => '__return_true',
+            'args'                => array(
+                'q' => array( 'required' => true ),
+            ),
+        )
+    );
+
     // Observadores (catálogo). Lectura pública, para filtrar el mapa por autor.
     register_rest_route(
         'bitacora/v1',
@@ -703,34 +735,55 @@ function bitacora_validar_entradas( $lista ) {
     foreach ( array_values( $lista ) as $i => $e ) {
         $n = $i + 1;
 
-        $aumento = isset( $e['aumento'] ) ? $e['aumento'] : null;
-        if ( ! is_numeric( $aumento ) || $aumento <= 0 || $aumento > 10000 ) {
-            return new WP_Error( 'entrada_invalida', "Entrada $n: el aumento debe ser un número mayor que 0.", array( 'status' => 400 ) );
-        }
+        // Una entrada de "Exploración" es la síntesis/retos de la observación: no
+        // tiene datos de ocular (aumento, campo, pupila). Se identifica por la
+        // marca esExploracion (o por su botón "Exploración").
+        $es_exploracion = ( ! empty( $e['esExploracion'] ) )
+            || ( isset( $e['boton'] ) && 'Exploración' === $e['boton'] );
 
-        // Campo real en grados decimales (p. ej. 1.17 para 1º 10').
-        $campo = isset( $e['campoReal'] ) ? $e['campoReal'] : null;
-        if ( ! is_numeric( $campo ) || $campo <= 0 || $campo > 10 ) {
-            return new WP_Error( 'entrada_invalida', "Entrada $n: el campo real (en grados) debe estar entre 0 y 10.", array( 'status' => 400 ) );
-        }
-
-        // Descripción: se admite HTML seguro (párrafos, listas, negrita...).
+        // Descripción (síntesis o descripción por ocular): HTML seguro, obligatoria.
         $desc = wp_kses_post( isset( $e['descripcion'] ) ? $e['descripcion'] : '' );
         if ( '' === trim( wp_strip_all_tags( $desc ) ) ) {
-            return new WP_Error( 'entrada_invalida', "Entrada $n: falta la descripción.", array( 'status' => 400 ) );
+            $cual = $es_exploracion ? 'Exploración' : "Entrada $n";
+            return new WP_Error( 'entrada_invalida', "$cual: falta la descripción.", array( 'status' => 400 ) );
         }
 
-        // Nombre del ocular (opcional), p. ej. "Nagler 31mm".
-        $titulo = sanitize_text_field( isset( $e['titulo'] ) ? $e['titulo'] : '' );
-
-        // Pupila de salida (mm), opcional.
-        $pupila = isset( $e['pupilaSalida'] ) ? $e['pupilaSalida'] : null;
-        if ( null === $pupila || '' === $pupila ) {
-            $pupila = null;
-        } elseif ( is_numeric( $pupila ) && $pupila > 0 && $pupila <= 15 ) {
-            $pupila = floatval( $pupila );
+        if ( $es_exploracion ) {
+            // Sin datos de ocular. El botón fijo "Exploración"; el título lo trae
+            // el formulario (p. ej. "M1. Exploración").
+            $aumento = null;
+            $campo   = null;
+            $pupila  = null;
+            $boton   = 'Exploración';
+            $titulo  = sanitize_text_field( isset( $e['titulo'] ) ? $e['titulo'] : '' );
         } else {
-            return new WP_Error( 'entrada_invalida', "Entrada $n: la pupila de salida (mm) está fuera de rango.", array( 'status' => 400 ) );
+            $aumento = isset( $e['aumento'] ) ? $e['aumento'] : null;
+            if ( ! is_numeric( $aumento ) || $aumento <= 0 || $aumento > 10000 ) {
+                return new WP_Error( 'entrada_invalida', "Entrada $n: el aumento debe ser un número mayor que 0.", array( 'status' => 400 ) );
+            }
+            $aumento = floatval( $aumento );
+
+            // Campo real en grados decimales (p. ej. 1.17 para 1º 10').
+            $campo = isset( $e['campoReal'] ) ? $e['campoReal'] : null;
+            if ( ! is_numeric( $campo ) || $campo <= 0 || $campo > 10 ) {
+                return new WP_Error( 'entrada_invalida', "Entrada $n: el campo real (en grados) debe estar entre 0 y 10.", array( 'status' => 400 ) );
+            }
+            $campo = floatval( $campo );
+
+            // Pupila de salida (mm), opcional.
+            $pupila = isset( $e['pupilaSalida'] ) ? $e['pupilaSalida'] : null;
+            if ( null === $pupila || '' === $pupila ) {
+                $pupila = null;
+            } elseif ( is_numeric( $pupila ) && $pupila > 0 && $pupila <= 15 ) {
+                $pupila = floatval( $pupila );
+            } else {
+                return new WP_Error( 'entrada_invalida', "Entrada $n: la pupila de salida (mm) está fuera de rango.", array( 'status' => 400 ) );
+            }
+
+            // Botón vacío: datos.js lo genera a partir de aumento/campo/pupila.
+            $boton  = '';
+            // Nombre del ocular (opcional), p. ej. "Nagler 31mm".
+            $titulo = sanitize_text_field( isset( $e['titulo'] ) ? $e['titulo'] : '' );
         }
 
         // Imágenes de la entrada (opcionales).
@@ -738,7 +791,7 @@ function bitacora_validar_entradas( $lista ) {
         if ( isset( $e['imagenes'] ) && is_array( $e['imagenes'] ) ) {
             foreach ( array_values( $e['imagenes'] ) as $img ) {
                 $img_id  = ( isset( $img['imagenId'] ) && is_numeric( $img['imagenId'] ) ) ? intval( $img['imagenId'] ) : null;
-                $img_url = isset( $img['imagenUrl'] ) ? esc_url_raw( $img['imagenUrl'] ) : '';
+                $img_url = isset( $img['imagenUrl'] ) ? bitacora_sanitizar_imagen_url( $img['imagenUrl'] ) : '';
                 if ( null === $img_id && '' === $img_url ) {
                     continue; // imagen vacía: se ignora
                 }
@@ -755,15 +808,43 @@ function bitacora_validar_entradas( $lista ) {
         }
 
         $salida[] = array(
-            'aumento'       => floatval( $aumento ),
-            'campo_real'    => floatval( $campo ),
+            'aumento'       => $aumento,
+            'campo_real'    => $campo,
             'pupila_salida' => $pupila,
+            'boton'         => $boton,
             'titulo'        => $titulo,
             'descripcion'   => $desc,
             'imagenes'      => $imagenes,
         );
     }
     return $salida;
+}
+
+/**
+ * Sanea la URL/ruta de una imagen preservando los nombres de archivo RELATIVOS.
+ * Las imágenes subidas por el formulario son URLs absolutas; las del catálogo
+ * son nombres relativos (p. ej. "m57_129x.webp", que el visor resuelve contra
+ * CONFIG.rutas.imagenes). No se puede usar esc_url_raw() a secas porque a un
+ * nombre relativo sin esquema le antepone "http://" y rompe la ruta.
+ */
+function bitacora_sanitizar_imagen_url( $valor ) {
+    $v = trim( (string) $valor );
+    if ( '' === $v ) {
+        return '';
+    }
+    // Repara un nombre relativo que un esc_url_raw() antiguo convirtió en
+    // "http://archivo.ext" (esquema + "host" que en realidad es el nombre de
+    // archivo, sin ninguna ruta): se le quita el esquema y vuelve a ser relativo.
+    if ( preg_match( '#^https?://([^/]+\.(?:webp|jpg|jpeg|png|gif|avif))$#i', $v, $mm ) ) {
+        $v = $mm[1];
+    }
+    // URL absoluta (http/https/protocol-relative): saneado de URL normal.
+    if ( preg_match( '#^(https?:)?//#i', $v ) ) {
+        return esc_url_raw( $v );
+    }
+    // Ruta/nombre relativo: se conservan solo caracteres válidos de ruta.
+    $v = wp_strip_all_tags( $v );
+    return preg_replace( '#[^A-Za-z0-9_./%\-]#', '', $v );
 }
 
 /**
@@ -793,6 +874,7 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                 'aumento'        => $e['aumento'],
                 'campo_real'     => $e['campo_real'],
                 'pupila_salida'  => $e['pupila_salida'],
+                'boton'          => isset( $e['boton'] ) ? $e['boton'] : '',
                 'titulo'         => $e['titulo'],
                 'descripcion'    => $e['descripcion'],
                 'creado_en'      => current_time( 'mysql', true ),
@@ -800,9 +882,10 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
             array(
                 '%d', // observacion_id
                 '%d', // orden
-                '%f', // aumento
-                '%f', // campo_real
+                ( null === $e['aumento'] )       ? '%s' : '%f', // aumento (NULL como %s)
+                ( null === $e['campo_real'] )    ? '%s' : '%f', // campo_real (NULL como %s)
                 ( null === $e['pupila_salida'] ) ? '%s' : '%f', // pupila (NULL como %s)
+                '%s', // boton
                 '%s', // titulo
                 '%s', // descripcion
                 '%s', // creado_en
@@ -1372,6 +1455,38 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null ) {
         'tipo'         => $clase,
         'morph'        => $sim['morph'],
         'color'        => bitacora_color_por_clase( $clase ),
+    );
+}
+
+/**
+ * GET /resolver?q=M104 — resuelve un objeto por identificador (SIMBAD) SIN
+ * guardarlo y devuelve su posición para el buscador del mapa: coordenadas
+ * galácticas, distancia, posiciones top/edge y clase de Hubble. Devuelve 404
+ * (con mensaje) si no se puede localizar.
+ */
+function bitacora_resolver_objeto( WP_REST_Request $peticion ) {
+    $q = trim( sanitize_text_field( (string) $peticion->get_param( 'q' ) ) );
+    if ( '' === $q ) {
+        return new WP_Error( 'falta_q', 'Indica un objeto a buscar.', array( 'status' => 400 ) );
+    }
+    $calc = bitacora_completar_objeto( $q, null );
+    if ( is_wp_error( $calc ) ) {
+        $calc->add_data( array( 'status' => 404 ) );
+        return $calc;
+    }
+    return new WP_REST_Response(
+        array(
+            'q'      => $q,
+            'l'      => $calc['gal_l'],
+            'b'      => $calc['gal_b'],
+            'dist'   => $calc['dist_al'],
+            'top'    => array( 'x' => $calc['top_x'], 'y' => $calc['top_y'] ),
+            'edge'   => array( 'x' => $calc['edge_x'], 'y' => $calc['edge_y'] ),
+            'tipo'   => $calc['tipo'],
+            'color'  => $calc['color'],
+            'coords' => $calc['coords_texto'],
+        ),
+        200
     );
 }
 
