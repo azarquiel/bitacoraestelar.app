@@ -21,11 +21,12 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `registrar-observacion-wordpress.html` | Fragmento del formulario | Editor de WordPress |
 | `bitacora-formulario.js` | Lógica del formulario | Servidor, por FTP |
 | `bitacora-formulario.css` | Estilos del formulario | Servidor, por FTP |
+| `datos-ficha-wordpress.html` | Fragmento del formulario de datos de ficha (astrometría) | Editor de WordPress |
+| `bitacora-ficha.js` | Lógica del formulario de datos de ficha | Servidor, por FTP |
 | `listado-observaciones-wordpress.html` | Fragmento del listado | Editor de WordPress |
 | `bitacora-listado.js` | Lógica del listado | Servidor, por FTP |
 | `bitacora-listado.css` | Estilos del listado | Servidor, por FTP |
 | `…/bitacora-registro/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
-| `registrar-observacion.html` | Versión autónoma, para probar en local | — |
 
 **Por qué el `.js` y el `.css` van por FTP y no pegados en el editor.** El
 editor de bloques de WordPress escapa el carácter `&` al guardar: convierte
@@ -37,8 +38,12 @@ Los fragmentos HTML que sí se pegan **no contienen ni una línea de código**.
 
 ## Qué hace el formulario
 
+El formulario de registro (`registrar-observacion-wordpress.html`) tiene tres
+secciones:
+
 ### 1 · Qué y quién
 
+- **Fecha de la observación**: el primer campo, y **obligatorio**.
 - **Objeto observado**, con autocompletado y validación en dos niveles:
   - Los **110 objetos Messier** están embebidos en el código con sus
     coordenadas. Al escribir `M30` o `Messier 30` se reconoce al instante y
@@ -49,14 +54,25 @@ Los fragmentos HTML que sí se pegan **no contienen ni una línea de código**.
     Admite formato sexagesimal (`21h 40m 22s`) o decimal (`325.09`).
 - Observador y telescopio.
 
-### 2 · Cuándo y dónde
+### 2 · Lo que viste, por ocular
 
-Fecha y hora locales, y la posición: pinchando en un mapa, con el botón de
-geolocalización, o escribiendo latitud y longitud.
+Una **entrada por cada aumento**, con: aumento y campo real (obligatorios),
+pupila de salida y nombre del ocular (opcionales), descripción con formato,
+imágenes principales (varias = pestañas en la ficha) e imágenes de apoyo
+(anexos). Las imágenes se suben a la biblioteca de medios de WordPress.
 
-### 3 · El cielo de esa noche
+### 3 · Exploración (opcional)
 
-Se calcula en tiempo real, en cuanto hay objeto, fecha y lugar:
+Una **síntesis de la observación o los retos** a los que se enfrenta el
+observador, **sin datos de ocular**. En la ficha del mapa aparece como
+«M30. Exploración».
+
+### El cielo de esa noche (paso aparte)
+
+La astrometría —fecha/hora exacta, lugar, altitud y azimut del objeto, altura
+del Sol y de la Luna— se captura en un **formulario de datos de ficha**
+independiente, accesible desde el listado. Se calcula sola en cuanto hay
+objeto, fecha y lugar:
 
 - Altitud y azimut del objeto (corregidos por refracción atmosférica).
 - Altitud del Sol y de la Luna.
@@ -69,6 +85,27 @@ del Sol y de la Luna, tiempo sidéreo y conversión a coordenadas horizontales.
 > **Validación.** Contrastado con una observación real de M30 anotada a mano:
 > el cálculo da altitud 26,2° frente a los 25,5° de la ficha, y azimut 202,0°
 > frente a 201,6°. La diferencia se debe a que la fecha exacta era estimada.
+
+---
+
+## Colocación automática en el mapa (SIMBAD)
+
+Los objetos del mapa —los puntos de la Vía Láctea y las galaxias del Grupo
+Local— viven en una tabla propia (`wp_bitacora_objetos`). Al registrar un
+objeto **sin posición**, el plugin lo resuelve en **SIMBAD** (servicio TAP) y
+calcula automáticamente todo lo necesario:
+
+- coordenadas galácticas `l`, `b` (a partir de RA/Dec);
+- la **distancia** al Sol (mediana de las medidas de SIMBAD; si SIMBAD no la
+  tiene, se indica a mano);
+- las posiciones `top` y `edge` sobre las imágenes del mapa (fórmula verificada
+  contra el catálogo existente);
+- la **clase de Hubble** (elíptica, lenticular, espiral, barrada, irregular),
+  que fija el color del marcador en el atlas del Grupo Local.
+
+Ya no hace falta calcular la posición a mano. Las consultas a SIMBAD se cachean
+para no repetirlas. Si el objeto es extragaláctico, se dibuja en el atlas; si
+está dentro de la galaxia, en el mapa cenital/de canto.
 
 ---
 
@@ -203,21 +240,45 @@ WordPress se usa solo para lo que hace bien: autenticar al usuario.
 | `actualizado_en` | `datetime` | al editar |
 | `borrada_en` | `datetime` | borrado suave; `NULL` si está activa |
 
+Además, la observación completa —con sus entradas por ocular y sus imágenes—
+se guarda en tablas hijas, y hay catálogos independientes:
+
+| Tabla | Qué guarda |
+|---|---|
+| `wp_bitacora_entradas` | Las entradas por aumento de cada observación (incluida la de *Exploración*) |
+| `wp_bitacora_imagenes` | Las imágenes de cada entrada (principales y anexos) |
+| `wp_bitacora_fichas` | La astrometría de la ficha (RA/Dec, lugar, altitud/azimut, Sol/Luna, condiciones) |
+| `wp_bitacora_objetos` | El catálogo de objetos del mapa: color, `top`/`edge`, `l`/`b`, distancia, clase de Hubble |
+| `wp_bitacora_observadores` | Quién observa (para filtrar el mapa por autor) |
+
+Todo sigue siendo SQL estándar con columnas explícitas: portable con un
+`export`/`import`.
+
 ---
 
 ## La API
 
-Todas las rutas cuelgan de `/wp-json/bitacora/v1/` y requieren sesión.
+Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 
-| Método | Ruta | Qué hace |
-|---|---|---|
-| `POST` | `/observaciones` | Crea una observación |
-| `GET` | `/observaciones` | Lista las activas. `?borradas=1` para la papelera, `?mias=1` para filtrar por autor |
-| `GET` | `/observaciones/{id}` | Devuelve una, para precargar el formulario |
-| `PUT` | `/observaciones/{id}` | La modifica *(solo el autor)* |
-| `DELETE` | `/observaciones/{id}` | Borrado suave *(solo el autor)* |
-| `POST` | `/observaciones/{id}/restaurar` | Deshace el borrado *(solo el autor)* |
-| `GET` | `/observaciones/{id}/ficha` | Genera y **descarga** la ficha `.docx` de la observación |
+| Método | Ruta | Sesión | Qué hace |
+|---|---|---|---|
+| `POST` | `/observaciones` | Sí | Crea una observación |
+| `GET` | `/observaciones` | Sí | Lista las activas. `?borradas=1` para la papelera, `?mias=1` para filtrar por autor |
+| `GET` | `/observaciones/{id}` | Sí | Devuelve una, para precargar el formulario |
+| `PUT` | `/observaciones/{id}` | Sí | La modifica *(solo el autor)* |
+| `DELETE` | `/observaciones/{id}` | Sí | Borrado suave *(solo el autor)* |
+| `POST` | `/observaciones/{id}/restaurar` | Sí | Deshace el borrado *(solo el autor)* |
+| `GET` | `/observaciones/{id}/ficha` | Sí | Genera y **descarga** la ficha `.docx` |
+| `GET`/`PUT` | `/observaciones/{id}/ficha-datos` | Sí | Lee/guarda la astrometría de la ficha |
+| `GET` | `/objetos` | No | Lista los objetos del mapa |
+| `POST` | `/objetos` | Sí | Registra un objeto por identificador (lo resuelve en SIMBAD y calcula su posición) |
+| `GET` | `/resolver?q=M104` | No | Localiza un objeto en SIMBAD **sin guardarlo** (para el buscador del mapa) |
+| `GET` | `/observadores` | No | Lista los observadores |
+| `GET` | `/datos.js` | No | Emite `OBSERVADORES`/`OBJECTS`/`OBSERVACIONES` como JavaScript para el visor |
+
+Las rutas de lectura pública (`/objetos` GET, `/resolver`, `/observadores`,
+`/datos.js`) sirven datos que ya son públicos en el mapa. Las de escritura y las
+de observaciones exigen sesión.
 
 ---
 
@@ -335,17 +396,22 @@ propio archivo, sin librerías.
 
 ## Probar en local
 
-Abre `registrar-observacion.html` en el navegador. Es una versión autónoma,
-con todo dentro. No guarda nada: al enviar, muestra el bloque de datos que
-*habría* enviado al servidor.
+El formulario funciona en **modo local** si no encuentra la sesión de WordPress
+(`window.BITACORA_WP`): en vez de guardar, muestra el bloque de datos que
+*habría* enviado al servidor. Basta servir los fragmentos con su `.css` y su
+`.js` al lado (rutas relativas) para probar la interfaz sin WordPress.
 
 ---
 
 ## Estado y siguientes pasos
 
-Ahora mismo se guarda la **cabecera** de la observación: qué, quién, cuándo,
-dónde y la posición del cielo.
+El esquema ya guarda la observación **completa**: la cabecera (qué, quién,
+cuándo, dónde y la posición del cielo), las **entradas por aumento** con sus
+textos y sus **imágenes**, la sección de **Exploración**, y el catálogo de
+**objetos del mapa** con su posición calculada automáticamente. El plugin
+alimenta el visor directamente por `/wp-json/bitacora/v1/datos.js`.
 
-Las fichas completas de la web —con sus entradas por aumento, sus textos y sus
-bocetos— tienen más estructura: *objeto → observaciones → entradas → imágenes*.
-El siguiente paso natural es ampliar el esquema para almacenarlas.
+Pendiente menor: el atlas del Grupo Local usa los objetos extragalácticos de la
+base de datos, pero conserva un pequeño catálogo de respaldo en `grupo-local.js`
+por si aún no hay ninguno registrado; se puede retirar cuando se carguen los
+reales.
