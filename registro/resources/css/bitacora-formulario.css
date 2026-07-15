@@ -54,11 +54,21 @@
 #mw-obs-form label.field {display:block;margin-bottom:18px;}
 #mw-obs-form label.field > span.lab {display:block;font-size:13px;color:var(--tinta-tenue);margin-bottom:6px;
     font-family:ui-monospace,Menlo,monospace;letter-spacing:0.02em;}
-#mw-obs-form input[type=text], #mw-obs-form input[type=number], #mw-obs-form input[type=datetime-local] {
+#mw-obs-form input[type=text], #mw-obs-form input[type=number],
+#mw-obs-form input[type=datetime-local], #mw-obs-form input[type=date] {
     width:100%;background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
     color:var(--tinta);font-family:inherit;font-size:16px;padding:11px 13px;transition:border-color .15s,box-shadow .15s;}
+/* El selector de fecha nativo se muestra en tema oscuro (icono del calendario
+   incluido), acorde con el resto del formulario. */
+#mw-obs-form input[type=date] {color-scheme:dark;}
 #mw-obs-form input:focus {outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
 #mw-obs-form input::placeholder {color:#54617d;}
+
+/* Campo en línea: el label y el control comparten fila (p. ej. la fecha, para
+   que no ocupe todo el ancho y quede junto a su etiqueta). */
+#mw-obs-form label.field.field-inline {display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+#mw-obs-form label.field.field-inline > span.lab {margin-bottom:0;white-space:nowrap;}
+#mw-obs-form label.field.field-inline > input {width:auto;flex:0 0 auto;}
 #mw-obs-form .row {display:flex;gap:14px;flex-wrap:wrap;}
 #mw-obs-form .row > * {flex:1 1 160px;}
 #mw-obs-form .obj-wrap {position:relative;}

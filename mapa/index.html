@@ -1,14 +1,15 @@
 <meta charset="utf-8">
-<!-- 
+<!--
   NAVEGACIÓN CON ZOOM SOBRE EL MAPA CENITAL DE LA VÍA LÁCTEA (GAIA)
   -------------------------------------------------------------------
   CÓMO USARLO EN WORDPRESS:
-  1. Sube la imagen "The_best_Milky_Way_map_by_Gaia.jpg" a tu biblioteca de medios
-     (Media Library) y copia su URL.
-  2. Sustituye la URL de ejemplo en "src" de #mw-image más abajo por esa URL.
-  3. Edita la página/entrada, añade un bloque "HTML personalizado" y pega
+  1. Las imágenes del mapa (cenital "The_best_Milky_Way_map_by_Gaia.webp" y de
+     canto) van en /bitacora-mapa/images/, la misma carpeta que ya usa la app.
+     Se sirven localmente para que carguen rápido (sin depender de servidores
+     externos). Si cambias la ruta, ajústala en el "src" de #mw-image más abajo.
+  2. Edita la página/entrada, añade un bloque "HTML personalizado" y pega
      TODO el contenido de este archivo.
-  4. Publica.
+  3. Publica.
 
   QUÉ HACE:
   - Muestra el mapa cenital de la Vía Láctea (vista desde arriba, según datos de Gaia).
@@ -113,7 +114,8 @@
     transform-origin: center center;
     transform: translate(0px, 0px) scale(1);
   ">
-    <img id="mw-image" src="https://www.esa.int/var/esa/storage/images/esa_multimedia/images/2025/01/the_best_milky_way_map_by_gaia/26530986-1-eng-GB/The_best_Milky_Way_map_by_Gaia.jpg" alt="Mapa cenital de la Vía Láctea (Gaia)"
+    <img id="mw-image" src="/bitacora-mapa/images/The_best_Milky_Way_map_by_Gaia.webp" alt="Mapa cenital de la Vía Láctea (Gaia)"
+      decoding="async" fetchpriority="high"
       style="
         position: absolute;
         inset: 0;
@@ -123,7 +125,11 @@
         object-position: center;
         pointer-events: none;
       " draggable="false" />
-    <img id="mw-image-edge" src="/bitacora-mapa/images/MilkyWay_25J14_40KPC_Edge_10K.webp" alt="Vía Láctea vista de canto (Gaia)"
+    <!-- La imagen de canto (~6 MB) NO se carga al inicio: su src está en
+         data-src y via-lactea-app.js la carga en segundo plano tras el arranque
+         (o al pulsar «Vista de canto»), para que el mapa aparezca antes. -->
+    <img id="mw-image-edge" data-src="/bitacora-mapa/images/MilkyWay_25J14_40KPC_Edge_10K.webp" alt="Vía Láctea vista de canto (Gaia)"
+      decoding="async"
       style="
         position: absolute;
         inset: 0;
@@ -292,7 +298,7 @@
     max-width: calc(100vw - 90px);
     z-index: 20;
   ">
-    <!-- Fila 1: registrar observación + selector de observador + buscar objeto -->
+    <!-- Fila 1: registrar observación + selector de observador -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <a id="mw-nuevo" href="https://bitacoraestelar.app/index.php/registro-de-observacion/" style="
         text-decoration:none;border-radius:20px;
@@ -307,20 +313,23 @@
       ">
         <option value="">Todas las observaciones</option>
       </select>
+    </div>
 
+    <!-- Fila 2: buscar objeto (debajo de registrar observación) -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div style="position:relative;display:flex;align-items:center;">
         <span style="position:absolute;left:10px;font-size:12px;pointer-events:none;opacity:0.6;">🔍</span>
         <input id="mw-search" type="text" autocomplete="off" spellcheck="false"
           placeholder="Buscar objeto…"
           style="
             border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-            font-size:13px;padding:8px 12px 8px 30px;width:150px;
+            font-size:13px;padding:8px 12px 8px 30px;width:186px;
             font-family:sans-serif;outline:none;color:#eaf1fb;
           " />
       </div>
     </div>
 
-    <!-- Fila 2: vista de canto + giro de la galaxia (solo se ve el control de la vista activa) -->
+    <!-- Fila 3: vista de canto + giro de la galaxia (solo se ve el control de la vista activa) -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button id="mw-toggle-view" style="
         border:none;border-radius:20px;background:rgba(12,16,28,0.32);
@@ -734,7 +743,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260715_1600"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260715_2147"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript, en el
      mismo formato que el antiguo via-lactea-datos.js, asi que es intercambiable.
@@ -742,6 +751,6 @@
 <script src="/wp-json/bitacora/v1/datos.js?v=20260714_0100"></script>
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260715_1600"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260715_1600"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260715_2147"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260715_2147"></script>
 </li>

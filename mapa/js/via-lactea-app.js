@@ -1453,6 +1453,16 @@
   var toggleBtn = document.getElementById('mw-toggle-view');
   var isEdgeView = false;
 
+  // Carga diferida de la imagen de canto (~6 MB): su URL está en data-src para
+  // no competir con la imagen cenital en el arranque. Se pide al pulsar «Vista
+  // de canto» y, si no, se precarga en segundo plano cuando el navegador esté
+  // ocioso. Al cargar, el listener de más abajo reposiciona los marcadores.
+  function ensureEdgeImage() {
+    if (!imgEdge || imgEdge.getAttribute('src')) return; // ya cargada o cargando
+    var ds = imgEdge.getAttribute('data-src');
+    if (ds) imgEdge.src = ds;
+  }
+
   // Colores (tipos de objeto) actualmente ocultados desde la leyenda
   var hiddenColors = {};
 
@@ -1523,6 +1533,7 @@
   var FLIP_MS = 350; // duración de cada mitad de la voltereta
 
   toggleBtn.addEventListener('click', function () {
+    ensureEdgeImage(); // asegura que la imagen de canto esté (o empiece a) cargarse
     if (!(CONFIG.giros && CONFIG.giros.transicion3D)) {
       performViewSwap();
       return;
@@ -1770,13 +1781,24 @@
   }
 
   function doSearch() {
-    var obj = findObject(searchInput.value);
+    var q = searchInput.value;
+
+    // 1) Objeto que YA está en el atlas del Grupo Local (registrado o de
+    //    respaldo): se enfoca allí resaltando el marcador existente. Se
+    //    comprueba primero para no duplicarlo con la búsqueda externa.
+    var atlasObj = (typeof GrupoLocal !== 'undefined' && GrupoLocal.buscar) ? GrupoLocal.buscar(q) : null;
+    if (atlasObj) { enfocarObjetoAtlas(atlasObj); return; }
+
+    // 2) Objeto de la Vía Láctea (registrado): se centra en el mapa con zoom-in.
+    var obj = findObject(q);
     if (!obj) {
-      // No está en el registro: se intenta localizar como objeto externo
-      // (también fuera de la Vía Láctea) resolviéndolo en SIMBAD.
-      buscarObjetoExterno(searchInput.value);
+      // 3) No registrado: se resuelve en SIMBAD y se localiza (galáctico o
+      //    extragaláctico).
+      buscarObjetoExterno(q);
       return;
     }
+    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.clearTarget) GrupoLocal.clearTarget();
+    busquedaMaxDist = 0;
     hideHint();
 
     // Si el tipo de este objeto estaba oculto por el filtro de la leyenda,
@@ -1800,6 +1822,35 @@
     centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom);
     // El parpadeo se lanza tras un instante para que el centrado ya esté hecho.
     setTimeout(function () { blinkObject(obj.id); }, 60);
+  }
+
+  // Lleva la vista al atlas con el fov que enmarca un objeto a distancia d (al).
+  function irAlAtlasConDistancia(d) {
+    recalcularMinScale();
+    var galImg = document.getElementById('mw-image');
+    var vr = viewer.getBoundingClientRect();
+    var R = Math.min(vr.width, vr.height) * 0.42;
+    var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : Math.min(vr.width, vr.height);
+    var margen = (CONFIG.busqueda && CONFIG.busqueda.margenExtragalactico) || 1.8;
+    var targetFov = d * margen;
+    var s = (imgW > 0 && targetFov > 0)
+      ? (R * CONFIG.fisica.anchoImagenAl) / (imgW * targetFov)
+      : minScale;
+    scale = Math.max(minScale, Math.min(maxScale, s));
+    posX = 0; posY = 0;
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+    clampPosition();
+    applyTransform();
+  }
+
+  // Enfoca un objeto que ya existe en el atlas (registrado o de respaldo):
+  // resalta su marcador (sin duplicarlo) y ajusta el zoom-out para verlo.
+  function enfocarObjetoAtlas(o) {
+    hideHint();
+    busquedaMaxDist = o.d;
+    GrupoLocal.focusObject(o);
+    irAlAtlasConDistancia(o.d);
+    showToast('«' + o.name + '» · localizado en el Grupo Local.');
   }
 
   // ===========================================================================
@@ -1886,28 +1937,11 @@
       showToast('La vista del Grupo Local no está disponible.');
       return;
     }
-    // Rota el atlas para centrar el objeto y lo marca; sube su fov máximo.
+    // Rota el atlas para centrar el objeto y lo marca (objeto NO registrado, se
+    // dibuja completo). Sube su fov máximo y ajusta el zoom-out para enmarcarlo.
     busquedaMaxDist = data.dist;
     GrupoLocal.focus(data.l, data.b, data.dist, data.q || '', data.tipo || '');
-    recalcularMinScale();
-
-    // Escala de la galaxia que produce el fov que enmarca el objeto: como
-    // fov = R·ancho / (imgW·scale), scale = R·ancho / (imgW·fov). Al fijar esa
-    // escala (por debajo del umbral) el atlas se activa y muestra el objeto.
-    var galImg = document.getElementById('mw-image');
-    var vr = viewer.getBoundingClientRect();
-    var R = Math.min(vr.width, vr.height) * 0.42;
-    var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : Math.min(vr.width, vr.height);
-    var margen = (CONFIG.busqueda && CONFIG.busqueda.margenExtragalactico) || 1.8;
-    var targetFov = data.dist * margen;
-    var s = (imgW > 0 && targetFov > 0)
-      ? (R * CONFIG.fisica.anchoImagenAl) / (imgW * targetFov)
-      : minScale;
-    scale = Math.max(minScale, Math.min(maxScale, s));
-    posX = 0; posY = 0;
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    clampPosition();
-    applyTransform();
+    irAlAtlasConDistancia(data.dist);
     showToast('«' + (data.q || '') + '» · ' + (data.coords || ''));
   }
 
@@ -2000,6 +2034,15 @@
   }
   if (rotatePlaneReset) {
     rotatePlaneReset.addEventListener('click', function () { setEdgePlaneRotation(0); });
+  }
+
+  // Precarga la imagen de canto en segundo plano cuando el navegador esté
+  // ocioso, para que el arranque priorice la imagen cenital pero la vista de
+  // canto ya esté lista cuando el usuario la pida.
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(ensureEdgeImage, { timeout: 5000 });
+  } else {
+    setTimeout(ensureEdgeImage, 3000);
   }
 
   // Ajusta el zoom out máximo al objeto más lejano (al cargar la imagen y al

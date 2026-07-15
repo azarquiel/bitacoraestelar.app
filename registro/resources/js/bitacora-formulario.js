@@ -331,7 +331,8 @@
     if(typeof actualizarExplNombre==='function') actualizarExplNombre();
     lastComputed=null; submitBtn.disabled=true; jsonOut.classList.remove('show');
     var haveObj=resolved!==null, haveObs=$('observer').value.trim()!=='';
-    if(!(haveObj&&haveObs)){ return; }
+    var haveFecha=(!!$('fechaObs') && $('fechaObs').value!=='');
+    if(!(haveObj&&haveObs&&haveFecha)){ return; }
     lastComputed={
       objeto:resolved.etiqueta, tipo:resolved.tipo, num:resolved.num,
       cons:resolved.cons||'', nombre:resolved.nombre||'',
@@ -343,6 +344,7 @@
   }
   $('observer').addEventListener('input',recompute);
   $('scope').addEventListener('input',recompute);
+  if($('fechaObs')) $('fechaObs').addEventListener('change',recompute);
 
   // ═══════════════════════════════════════════════════════════════════════
   // ENVÍO: por ahora, genera el bloque de datos de la observación

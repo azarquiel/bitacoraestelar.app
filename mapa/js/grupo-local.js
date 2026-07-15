@@ -314,18 +314,22 @@ var GrupoLocal = (function () {
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
-      var tcol = target.color || '#ffffff';
-      var thalo = ctx.createRadialGradient(tp.sx, tp.sy, 0, tp.sx, tp.sy, 12);
-      thalo.addColorStop(0, hexToRgba(tcol, 0.8));
-      thalo.addColorStop(1, hexToRgba(tcol, 0));
-      ctx.fillStyle = thalo;
-      ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 12, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff'; ctx.fill();
-      if (target.name) {
-        ctx.fillStyle = 'rgba(255,255,255,0.98)';
-        ctx.font = '600 12px Inter, sans-serif';
-        ctx.fillText(target.name, tp.sx + 14, tp.sy + 4);
+      // Si el objeto ya está en el catálogo (soloAnillo), el anillo lo resalta y
+      // su propio marcador aporta punto y etiqueta: no se dibujan de nuevo.
+      if (!target.soloAnillo) {
+        var tcol = target.color || '#ffffff';
+        var thalo = ctx.createRadialGradient(tp.sx, tp.sy, 0, tp.sx, tp.sy, 12);
+        thalo.addColorStop(0, hexToRgba(tcol, 0.8));
+        thalo.addColorStop(1, hexToRgba(tcol, 0));
+        ctx.fillStyle = thalo;
+        ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        if (target.name) {
+          ctx.fillStyle = 'rgba(255,255,255,0.98)';
+          ctx.font = '600 12px Inter, sans-serif';
+          ctx.fillText(target.name, tp.sx + 14, tp.sy + 4);
+        }
       }
     }
 
@@ -393,7 +397,34 @@ var GrupoLocal = (function () {
   // distancia (al): rota la vista para centrarlo, lo marca como objeto buscado
   // y sube el fov máximo para que quepa. El fov real y la opacidad los fija el
   // visor principal (via-lactea-app.js) al ajustar la escala de la galaxia.
-  function focus(l, b, d, name, tipo) {
+  // Normaliza para comparar nombres: minúsculas, sin acentos ni signos.
+  function normalizar(s) {
+    return (s || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  // Busca un objeto del atlas por nombre/descripción (exacto y luego parcial).
+  // Devuelve el objeto del catálogo (con sus l/b/d reales) o null.
+  function buscar(query) {
+    var q = normalizar(query);
+    if (!q) return null;
+    for (var i = 0; i < objects.length; i++) {
+      if (normalizar(objects[i].name) === q || normalizar(objects[i].desc) === q) return objects[i];
+    }
+    for (var j = 0; j < objects.length; j++) {
+      if (normalizar(objects[j].name).indexOf(q) >= 0) return objects[j];
+    }
+    return null;
+  }
+
+  // Enfoca un objeto que YA está en el atlas: lo resalta con un anillo sobre su
+  // propio marcador (sin dibujar un segundo punto ni etiqueta → sin duplicado).
+  function focusObject(o) {
+    focus(o.l, o.b, o.d, o.name, o.tipo, true);
+  }
+
+  function focus(l, b, d, name, tipo, soloAnillo) {
     var margen = (window.CONFIG && CONFIG.busqueda && CONFIG.busqueda.margenExtragalactico) || 1.8;
     FOV_MAX = Math.max(FOV_MAX, d * (margen + 0.6));
     // Se orienta la vista para que el objeto quede centrado en horizontal pero
@@ -410,7 +441,8 @@ var GrupoLocal = (function () {
     pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p));
     var pos = galToXYZ(l, b, d);
     target = { name: name || '', desc: '', l: l, b: b, d: d, tipo: tipo || '',
-               color: colorDe({ tipo: tipo }), x: pos.x, y: pos.y, z: pos.z };
+               color: colorDe({ tipo: tipo }), x: pos.x, y: pos.y, z: pos.z,
+               soloAnillo: !!soloAnillo };
   }
   function clearTarget() { target = null; }
 
@@ -463,6 +495,11 @@ var GrupoLocal = (function () {
 
   // maxDist (años luz del objeto más lejano) lo usa via-lactea-app.js para
   // permitir alejar la vista hasta que ese objeto sea visible.
+  // buscar/focusObject: localizar y enfocar un objeto YA presente en el atlas.
   // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
-  return { ready: true, sync: sync, maxDist: maxDist, focus: focus, clearTarget: clearTarget };
+  return {
+    ready: true, sync: sync, maxDist: maxDist,
+    buscar: buscar, focusObject: focusObject,
+    focus: focus, clearTarget: clearTarget
+  };
 })();
