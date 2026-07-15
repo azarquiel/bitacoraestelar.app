@@ -287,15 +287,11 @@
     return false;
   }
 
-  // Muestra/oculta cada marcador según el observador activo. El Sol (índice 0)
-  // no se filtra; los objetos van a partir del índice 1 (mismo orden que OBJECTS).
+  // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los
+  // tres filtros (vista + tipo + observador) sobre los marcadores de la vista
+  // activa; así el filtro nunca revela el marcador de la otra vista.
   function aplicarFiltroObservador() {
-    OBJECTS.forEach(function (obj, i) {
-      var visible = objetoVisiblePorObservador(obj.id);
-      var ta = topAnchors[i + 1], ea = edgeAnchors[i + 1];
-      if (ta) ta.style.display = visible ? '' : 'none';
-      if (ea) ea.style.display = visible ? '' : 'none';
-    });
+    refreshAnchors();
   }
 
   // --------------------------------------------------------------------------
@@ -1476,12 +1472,18 @@
     if (sunTop) sunTop.style.display = isEdgeView ? 'none' : '';
     if (sunEdge) sunEdge.style.display = isEdgeView ? '' : 'none';
 
+    // La visibilidad de cada marcador combina TRES filtros: la vista activa
+    // (cenital/canto), el tipo (leyenda) y el observador seleccionado. Deben
+    // aplicarse juntos: si no, el filtro de observador podría revelar el
+    // marcador de la otra vista (a su posición 'edge'), que aparecería como un
+    // duplicado en una zona distinta del mapa.
     var objs = img.querySelectorAll('.mw-object-anchor');
     for (var i = 0; i < objs.length; i++) {
       var a = objs[i];
       var inView = a.getAttribute('data-view') === currentView;
       var typeHidden = !!hiddenColors[a.getAttribute('data-color')];
-      a.style.display = (inView && !typeHidden) ? '' : 'none';
+      var obsVisible = objetoVisiblePorObservador(a.getAttribute('data-id'));
+      a.style.display = (inView && !typeHidden && obsVisible) ? '' : 'none';
     }
   }
 
@@ -1688,19 +1690,28 @@
     };
   });
 
-  function findObject(query) {
-    var q = normalize(query);
-    if (!q) return null;
-    // 1) coincidencia exacta por id o label
+  // Coincidencia EXACTA por id, etiqueta o nombre completo (normalizados).
+  function findObjectExact(nq) {
     for (var i = 0; i < searchIndex.length; i++) {
-      if (searchIndex[i].claves.indexOf(q) >= 0) return searchIndex[i].obj;
-    }
-    // 2) coincidencia por comienzo del nombre completo (p. ej. "cangrejo")
-    for (var j = 0; j < searchIndex.length; j++) {
-      var nombre = normalize(searchIndex[j].obj.name);
-      if (nombre.indexOf(q) >= 0) return searchIndex[j].obj;
+      if (searchIndex[i].claves.indexOf(nq) >= 0) return searchIndex[i].obj;
     }
     return null;
+  }
+
+  // Coincidencia PARCIAL: la consulta aparece dentro del nombre descriptivo
+  // (p. ej. "cangrejo" -> M1). No se usa con designaciones de catálogo.
+  function findObjectPartial(nq) {
+    for (var j = 0; j < searchIndex.length; j++) {
+      if (normalize(searchIndex[j].obj.name).indexOf(nq) >= 0) return searchIndex[j].obj;
+    }
+    return null;
+  }
+
+  // ¿La consulta es una designación de catálogo (M1, Messier 30, NGC 6826, IC
+  // 1396)? Esas solo deben casar de forma EXACTA, para no confundir "M1" con
+  // "M101" por coincidencia parcial.
+  function esDesignacionCatalogo(query) {
+    return /^\s*(m|messier|ngc|ic)\s*\d+\s*$/i.test(query || '');
   }
 
   function showToast(mensaje) {
@@ -1780,21 +1791,22 @@
     blinkTimer = { iv: iv, to: to, content: content };
   }
 
-  function doSearch() {
-    var q = searchInput.value;
+  // ¿Es un objeto extragaláctico? (tiene distancia y coordenadas galácticas y
+  // está más allá de la Vía Láctea). Determina si se enfoca en el atlas.
+  function esObjetoExtragalactico(o) {
+    return o && typeof o.dist === 'number' && o.dist >= DIST_MIN_EXTRAGAL &&
+      typeof o.l === 'number' && typeof o.b === 'number';
+  }
 
-    // 1) Objeto que YA está en el atlas del Grupo Local (registrado o de
-    //    respaldo): se enfoca allí resaltando el marcador existente. Se
-    //    comprueba primero para no duplicarlo con la búsqueda externa.
-    var atlasObj = (typeof GrupoLocal !== 'undefined' && GrupoLocal.buscar) ? GrupoLocal.buscar(q) : null;
-    if (atlasObj) { enfocarObjetoAtlas(atlasObj); return; }
-
-    // 2) Objeto de la Vía Láctea (registrado): se centra en el mapa con zoom-in.
-    var obj = findObject(q);
-    if (!obj) {
-      // 3) No registrado: se resuelve en SIMBAD y se localiza (galáctico o
-      //    extragaláctico).
-      buscarObjetoExterno(q);
+  // Lleva la vista a un objeto REGISTRADO (de OBJECTS): al atlas si es
+  // extragaláctico, o al mapa de la galaxia (zoom-in + parpadeo) si es galáctico.
+  function irAObjetoRegistrado(obj) {
+    if (esObjetoExtragalactico(obj)) {
+      var ao = (typeof GrupoLocal !== 'undefined' && GrupoLocal.buscar)
+        ? GrupoLocal.buscar(obj.label || obj.id) : null;
+      enfocarObjetoAtlas(ao || {
+        name: obj.label || obj.id, l: obj.l, b: obj.b, d: obj.dist, tipo: obj.tipo
+      });
       return;
     }
     if (typeof GrupoLocal !== 'undefined' && GrupoLocal.clearTarget) GrupoLocal.clearTarget();
@@ -1822,6 +1834,35 @@
     centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom);
     // El parpadeo se lanza tras un instante para que el centrado ya esté hecho.
     setTimeout(function () { blinkObject(obj.id); }, 60);
+  }
+
+  function doSearch() {
+    var q = searchInput.value;
+    var nq = normalize(q);
+    if (!nq) return;
+
+    // 1) Coincidencia EXACTA en la galaxia (registrado).
+    var obj = findObjectExact(nq);
+    if (obj) { irAObjetoRegistrado(obj); return; }
+
+    // 2) Coincidencia EXACTA en el atlas del Grupo Local (registrado o respaldo).
+    var atlasObj = (typeof GrupoLocal !== 'undefined' && GrupoLocal.buscarExacto)
+      ? GrupoLocal.buscarExacto(q) : null;
+    if (atlasObj) { enfocarObjetoAtlas(atlasObj); return; }
+
+    // 3) Coincidencia PARCIAL por nombre descriptivo (p. ej. "cangrejo" -> M1),
+    //    salvo que la consulta sea una designación de catálogo (M1, NGC 6826…),
+    //    que solo casa exacta para no confundir "M1" con "M101".
+    if (!esDesignacionCatalogo(q)) {
+      var pobj = findObjectPartial(nq);
+      if (pobj) { irAObjetoRegistrado(pobj); return; }
+      var patlas = (typeof GrupoLocal !== 'undefined' && GrupoLocal.buscarParcial)
+        ? GrupoLocal.buscarParcial(q) : null;
+      if (patlas) { enfocarObjetoAtlas(patlas); return; }
+    }
+
+    // 4) No registrado: se resuelve en SIMBAD (galáctico o extragaláctico).
+    buscarObjetoExterno(q);
   }
 
   // Lleva la vista al atlas con el fov que enmarca un objeto a distancia d (al).

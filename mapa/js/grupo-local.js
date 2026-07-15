@@ -404,18 +404,30 @@ var GrupoLocal = (function () {
       .replace(/[^a-z0-9]/g, '');
   }
 
-  // Busca un objeto del atlas por nombre/descripción (exacto y luego parcial).
-  // Devuelve el objeto del catálogo (con sus l/b/d reales) o null.
-  function buscar(query) {
+  // Coincidencia EXACTA por nombre o descripción (normalizados).
+  function buscarExacto(query) {
     var q = normalizar(query);
     if (!q) return null;
     for (var i = 0; i < objects.length; i++) {
       if (normalizar(objects[i].name) === q || normalizar(objects[i].desc) === q) return objects[i];
     }
+    return null;
+  }
+
+  // Coincidencia PARCIAL (la consulta dentro del nombre). No usar con
+  // designaciones de catálogo (confundiría "M1" con "M101").
+  function buscarParcial(query) {
+    var q = normalizar(query);
+    if (!q) return null;
     for (var j = 0; j < objects.length; j++) {
       if (normalizar(objects[j].name).indexOf(q) >= 0) return objects[j];
     }
     return null;
+  }
+
+  // Conveniencia: exacto y, si no, parcial (para localizar por etiqueta exacta).
+  function buscar(query) {
+    return buscarExacto(query) || buscarParcial(query);
   }
 
   // Enfoca un objeto que YA está en el atlas: lo resalta con un anillo sobre su
@@ -499,7 +511,7 @@ var GrupoLocal = (function () {
   // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
   return {
     ready: true, sync: sync, maxDist: maxDist,
-    buscar: buscar, focusObject: focusObject,
-    focus: focus, clearTarget: clearTarget
+    buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
+    focusObject: focusObject, focus: focus, clearTarget: clearTarget
   };
 })();
