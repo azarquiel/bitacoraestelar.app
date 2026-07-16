@@ -962,6 +962,17 @@ function bitacora_observador_id_desde_nombre( $nombre, $usuario_id = 0 ) {
     }
     $id = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE clave = %s", $clave ) );
     if ( $id ) {
+        // Si el observador ya existía sin usuario vinculado y ahora conocemos uno
+        // (el usuario logado que registra la observación), lo enlazamos. Así el
+        // mapa puede preseleccionar a ese observador al abrirlo, sin depender de
+        // la acción manual de "Reasignar". No sobreescribe un vínculo ya puesto.
+        if ( $usuario_id ) {
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE $tabla SET usuario_id = %d WHERE id = %d AND ( usuario_id IS NULL OR usuario_id = 0 )",
+                intval( $usuario_id ),
+                intval( $id )
+            ) );
+        }
         return intval( $id );
     }
     $wpdb->insert(
@@ -2758,10 +2769,29 @@ function bitacora_inyectar_datos() {
     // '' si el usuario aún no tiene observaciones registradas.
     global $wpdb;
     $t_obs = bitacora_nombre_tabla_observadores();
+    $t_ob  = bitacora_nombre_tabla();
     $uid = get_current_user_id();
+
+    // 1) Vía principal: el observador vinculado directamente a este usuario.
     $observador_clave = $wpdb->get_var(
         $wpdb->prepare( "SELECT clave FROM $t_obs WHERE usuario_id = %d ORDER BY id ASC LIMIT 1", $uid )
     );
+
+    // 2) Respaldo por sus propias observaciones: el campo usuario_id SIEMPRE se
+    //    guarda al registrar, así que aunque el observador no tenga usuario_id,
+    //    llegamos a su clave a través de las observaciones de este usuario.
+    if ( ! $observador_clave ) {
+        $observador_clave = $wpdb->get_var( $wpdb->prepare(
+            "SELECT o.clave FROM $t_obs o
+             INNER JOIN $t_ob ob ON ob.observador_id = o.id
+             WHERE ob.usuario_id = %d AND ob.borrada_en IS NULL
+             ORDER BY ob.id DESC LIMIT 1",
+            $uid
+        ) );
+    }
+
+    // 3) Último respaldo: por el nombre del usuario de WordPress (solo acierta si
+    //    la clave del observador coincide con su nombre y apellidos).
     if ( ! $observador_clave ) {
         $clave = sanitize_title( $nombre_apellidos );
         if ( '' !== $clave ) {
