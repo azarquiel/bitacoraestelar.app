@@ -156,6 +156,25 @@
       escalaMinima: 0.0015,
       autoGiro: 0.0004,
       alcanceMaximoAl: 5000000000
+    },
+
+    // -------------------------------------------------------------------------
+    // DESCUBRIR OBSERVACIONES DE OTROS OBSERVADORES
+    //   Cuando hay un observador seleccionado en el filtro, los objetos que ESE
+    //   observador NO ha observado (pero SÍ otros) no se ocultan: se muestran
+    //   atenuados (en gris con algo de su color, como "deshabilitados"). Al
+    //   pulsarlos, la ficha muestra la información básica con el rótulo
+    //   "NO VISITADO" y una lista de los observadores que sí lo han observado;
+    //   al elegir uno se ve su observación (con un botón para volver a la lista).
+    //   Lo mismo aplica a las galaxias del atlas del Grupo Local.
+    //
+    //   activo : true  = funcionalidad activada (los no observados se atenúan y
+    //                    permiten descubrir las observaciones de otros).
+    //            false = comportamiento clásico: los objetos no observados por el
+    //                    observador seleccionado simplemente se ocultan.
+    // -------------------------------------------------------------------------
+    observacionesAjenas: {
+      activo: true
     }
 
   };

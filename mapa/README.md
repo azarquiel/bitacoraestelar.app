@@ -38,6 +38,10 @@ galaxias observadas fuera de ella.
     lenticular, espiral, espiral barrada, irregular).
 - **Fichas de observación** en una ventana superpuesta, con pestañas por
   aumento, zoom sobre los bocetos y anexos de detalle.
+- **Descubrir observaciones de otros observadores**: con un observador
+  seleccionado, los objetos que él no ha observado (pero sí otros) se muestran
+  atenuados en gris; al pulsarlos, la ficha permite ver la observación de cada
+  uno de los demás observadores. Es configurable (`observacionesAjenas.activo`).
 
 El catálogo de la Vía Láctea contiene, de partida, **30 objetos**:
 
@@ -182,6 +186,9 @@ grupoLocal: {
   escalaMinima: 0.0015, // zoom out máximo (menor = se llega más lejos en el atlas)
   autoGiro: 0.0004    // giro ambiental lento del atlas
 },
+observacionesAjenas: {
+  activo: true        // descubrir observaciones de otros observadores (ver abajo)
+},
 zoomFicha: { maximo: 5 },    // zoom sobre los bocetos de las fichas
 fundido:   { duracionMs: 600 },
 marcadores:{ puntoDiametro: 5, textoTamano: '11px' }
@@ -193,6 +200,24 @@ completas cambiando una sola palabra.
 > El **zoom out máximo** se amplía además de forma automática si hace falta:
 > si el objeto más lejano del catálogo (o uno buscado) queda fuera del alcance
 > de `escalaMinima`, el visor permite alejar más hasta que sea visible.
+
+### Descubrir observaciones de otros observadores (`observacionesAjenas.activo`)
+
+Cuando hay un observador seleccionado en el filtro, esta opción cambia lo que
+ocurre con los objetos que **ese** observador aún no ha observado (pero **sí**
+otros):
+
+- `true` (por defecto): esos objetos **no se ocultan**, se muestran **atenuados
+  en gris** (con algo de su color, como "deshabilitados"), tanto en la Vía Láctea
+  como en el atlas del Grupo Local. Al pulsar uno, su ficha muestra la
+  información básica con el rótulo **NO VISITADO** y una lista de los
+  observadores que sí lo han observado; al elegir uno se ve su observación, con
+  un botón **← Descubrir** para volver a la lista.
+- `false`: comportamiento clásico. Los objetos que el observador seleccionado no
+  ha observado simplemente **se ocultan**.
+
+> Solo se aprecia cuando hay **varios observadores** con observaciones en la base
+> de datos: con uno solo no hay nada "ajeno" que descubrir y el mapa se ve igual.
 
 ---
 

@@ -28,6 +28,52 @@
     return lista[0];
   }
 
+  // ¿Está activada la funcionalidad de "descubrir observaciones de otros"?
+  // (CONFIG.observacionesAjenas.activo, ver via-lactea-config.js).
+  function observacionesAjenasActivo() {
+    return !!(window.CONFIG && CONFIG.observacionesAjenas && CONFIG.observacionesAjenas.activo);
+  }
+
+  // Devuelve la observación concreta que 'clave' hizo del objeto 'id', o null.
+  function fichaDeObservador(id, clave) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
+    if (!lista || !lista.length) return null;
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].observador === clave) return lista[i];
+    }
+    return null;
+  }
+
+  // Lista de observadores que han observado el objeto 'id', como
+  // [{ clave, nombre }], excluyendo (opcionalmente) uno. El nombre se resuelve
+  // desde OBSERVADORES; si falta, se usa la propia clave.
+  function observadoresDe(id, excluir) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
+    var out = [];
+    if (!lista || !lista.length) return out;
+    var vistos = {};
+    for (var i = 0; i < lista.length; i++) {
+      var clave = lista[i].observador;
+      if (!clave || clave === excluir || vistos[clave]) continue;
+      vistos[clave] = true;
+      var nombre = (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
+        ? OBSERVADORES[clave].nombre : clave;
+      out.push({ clave: clave, nombre: nombre });
+    }
+    return out;
+  }
+
+  // Estado de un objeto respecto al observador activo:
+  //   'propia'  -> mostrar la ficha con normalidad (modo "todas", o el activo lo observó).
+  //   'ajena'   -> nadie del activo lo observó, pero SÍ otros: atenuado + descubrimiento.
+  //   'ninguna' -> nadie relevante lo observó: se oculta.
+  function estadoObservador(id) {
+    if (!observadorActivo) return 'propia';       // modo "todas": todo a color
+    if (getFicha(id)) return 'propia';            // el observador activo lo observó
+    if (observacionesAjenasActivo() && observadoresDe(id, observadorActivo).length) return 'ajena';
+    return 'ninguna';
+  }
+
 
   var viewer = document.getElementById('mw-viewer');
   var img = document.getElementById('mw-content');
@@ -276,15 +322,11 @@
     edgeAnchors.push(createMarker(obj, 'edge'));
   });
 
-  // ¿Tiene el objeto alguna observación del observador activo (o alguna, si 'todas')?
+  // ¿Debe verse el marcador del objeto con el filtro de observador actual?
+  // Visible si el activo lo observó ('propia') o si lo observaron otros y la
+  // funcionalidad de descubrimiento está activa ('ajena', se pinta atenuado).
   function objetoVisiblePorObservador(slug) {
-    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[slug] : null;
-    if (!observadorActivo) return true;            // 'todas': mostrar todos los objetos
-    if (!lista || !lista.length) return false;
-    for (var i = 0; i < lista.length; i++) {
-      if (lista[i].observador === observadorActivo) return true;
-    }
-    return false;
+    return estadoObservador(slug) !== 'ninguna';
   }
 
   // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los
@@ -292,6 +334,10 @@
   // activa; así el filtro nunca revela el marcador de la otra vista.
   function aplicarFiltroObservador() {
     refreshAnchors();
+    // El atlas del Grupo Local atenúa por su cuenta las galaxias no observadas.
+    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setObservador) {
+      GrupoLocal.setObservador(observadorActivo, observacionesAjenasActivo());
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -898,6 +944,17 @@
       return;
     }
 
+    // El observador activo no lo ha observado: si otros sí y la funcionalidad
+    // está activa, se abre la pantalla "NO VISITADO" para descubrir sus
+    // observaciones en vez de ir directamente al PDF.
+    if (fichaId && observacionesAjenasActivo() && observadoresDe(fichaId, observadorActivo).length) {
+      abrirFichaDescubrimiento(fichaId, {
+        title:  dot.getAttribute('data-title') || '',
+        coords: dot.getAttribute('data-coords') || ''
+      });
+      return;
+    }
+
     pdfTitle.textContent = dot.getAttribute('data-title') || '';
     pdfCoords.textContent = dot.getAttribute('data-coords') || '';
     pdfOpenLink.href = url;
@@ -973,7 +1030,11 @@
   var fichaText = document.getElementById('ficha-text');
   var fichaAnexos = document.getElementById('ficha-anexos');
   var fichaAnexosRight = document.getElementById('ficha-anexos-right');
+  var fichaBackBtn = document.getElementById('ficha-back');
   var fichaCurrent = -1;
+  // Contexto de "descubrimiento": si la observación mostrada se alcanzó desde la
+  // pantalla NO VISITADO, guarda cómo volver a ella (para el botón ← Descubrir).
+  var fichaVolverA = null;
 
   // El boceto se lee de resources/images/<objeto>/<archivo>. Si la entrada
   // no tiene imagen (img: null, p. ej. "Exploración"), se oculta el área.
@@ -991,6 +1052,9 @@
   // entre las distintas regiones (útil cuando hay más de 2 imágenes o cuando
   // se prefiere verlas grandes de una en una).
   var fichaImgWrap = document.getElementById('ficha-img-wrap');
+  // Columna izquierda de la ficha (boceto + botonera). Se oculta en la pantalla
+  // de descubrimiento "NO VISITADO", que solo usa la columna de texto.
+  var fichaLeftCol = fichaImgWrap.parentNode;
 
   // -------------------------------------------------------------------------
   // FUNDIDO (valores derivados de CONFIG — no tocar)
@@ -1425,18 +1489,114 @@
     });
   }
 
-  function openFicha(id, dot) {
-    var f = getFicha(id);
-    f._id = id;
-    fichaTitle.textContent = dot.getAttribute('data-title') || '';
-    fichaCoords.textContent = dot.getAttribute('data-coords') || '';
-    fichaPdfLink.href = f.pdf;
+  // Muestra la ficha "normal" (boceto + texto) de una observación concreta.
+  //   f    : objeto observación (de OBSERVACIONES) con su _id ya asignado.
+  //   info : { title, coords, pdf } para la cabecera.
+  //   opts : { volverA, observadorNombre } (opcional). Si volverA está definido,
+  //          la observación se alcanzó desde la pantalla de descubrimiento y se
+  //          muestra el botón "← Descubrir" para regresar a la lista.
+  function renderFichaNormal(f, info, opts) {
+    opts = opts || {};
+    fichaVolverA = opts.volverA || null;
+
+    // Restaura el modo normal (por si venimos de la pantalla de descubrimiento).
+    fichaLeftCol.style.display = '';
+    fichaPdfLink.style.display = '';
+
+    var coords = (info && info.coords) || '';
+    if (opts.observadorNombre) {
+      coords += (coords ? '  ·  ' : '') + 'Observación de ' + opts.observadorNombre;
+    }
+    fichaTitle.textContent = (info && info.title) || '';
+    fichaCoords.textContent = coords;
+    fichaPdfLink.href = f.pdf || (info && info.pdf) || '#';
+    fichaBackBtn.style.display = fichaVolverA ? '' : 'none';
+
     buildFichaButtons(f);
     fichaOverlay.style.display = 'flex';
     isDragging = false;
     isPinching = false;
     hideHint();
     selectFichaEntry(f, f.defaultIndex || 0);
+  }
+
+  function openFicha(id, dot) {
+    var f = getFicha(id);
+    f._id = id;
+    renderFichaNormal(f, {
+      title:  dot.getAttribute('data-title') || '',
+      coords: dot.getAttribute('data-coords') || ''
+    });
+  }
+
+  // Escapa texto para insertarlo con seguridad en HTML (nombres de observador).
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // Pantalla "NO VISITADO": información básica del objeto + la lista de los
+  // observadores que sí lo han observado, para descubrir sus observaciones.
+  function abrirFichaDescubrimiento(id, info) {
+    fichaVolverA = null;
+    fichaBackBtn.style.display = 'none';
+    fichaPdfLink.style.display = 'none';
+    fichaLeftCol.style.display = 'none';         // solo se usa la columna de texto
+    fichaAnexos.style.display = 'none';
+    fichaAnexosRight.style.display = 'none';
+    fichaImgTitle.style.display = 'none';
+
+    fichaTitle.textContent = (info && info.title) || '';
+    fichaCoords.textContent = (info && info.coords) || '';
+
+    var otros = observadoresDe(id, observadorActivo);
+    var items = otros.map(function (o) {
+      return '<li><button type="button" class="ficha-descubrir-item" data-clave="' +
+        escHtml(o.clave) + '" style="' +
+        'display:block;width:100%;text-align:left;cursor:pointer;' +
+        'background:rgba(126,200,255,0.10);color:#cfe6f7;' +
+        'border:1px solid rgba(126,200,255,0.35);border-radius:10px;' +
+        'padding:10px 14px;margin:6px 0;font-family:sans-serif;font-size:14px;">' +
+        '✦ ' + escHtml(o.nombre) + '</button></li>';
+    }).join('');
+
+    fichaText.innerHTML =
+      '<div style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;font-size:12px;' +
+        'letter-spacing:.18em;text-transform:uppercase;color:#f4c76b;' +
+        'border:1px solid rgba(244,199,107,.35);border-radius:8px;' +
+        'padding:8px 12px;text-align:center;margin:0 0 18px;">NO VISITADO</div>' +
+      '<div style="font-family:sans-serif;font-size:13px;color:#9fb6c9;margin:0 0 6px;">' +
+        'Descubrir observaciones de otros observadores</div>' +
+      (otros.length
+        ? '<ul style="list-style:none;padding:0;margin:0;">' + items + '</ul>'
+        : '<div style="font-family:sans-serif;font-size:13px;color:#7f93a6;">' +
+          'Nadie más ha observado este objeto todavía.</div>');
+    fichaText.scrollTop = 0;
+
+    // Delegación: un clic en un ítem abre la observación de ese observador.
+    var botones = fichaText.querySelectorAll('.ficha-descubrir-item');
+    for (var i = 0; i < botones.length; i++) {
+      botones[i].addEventListener('click', function () {
+        abrirFichaDeObservador(id, this.getAttribute('data-clave'), info);
+      });
+    }
+
+    fichaOverlay.style.display = 'flex';
+    isDragging = false;
+    isPinching = false;
+    hideHint();
+  }
+
+  // Muestra la observación de un observador concreto, con el botón "← Descubrir"
+  // para volver a la pantalla de la lista (abrirFichaDescubrimiento).
+  function abrirFichaDeObservador(id, clave, info) {
+    var f = fichaDeObservador(id, clave);
+    if (!f) return;
+    f._id = id;
+    var nombre = (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
+      ? OBSERVADORES[clave].nombre : clave;
+    renderFichaNormal(f, info, { volverA: { id: id, info: info }, observadorNombre: nombre });
   }
 
   function closeFicha() {
@@ -1449,18 +1609,17 @@
   function abrirFichaObjeto(desc) {
     if (!desc) return;
     var fichaId = desc.ficha;
+    var info = { title: desc.title || '', coords: desc.coords || '', pdf: desc.pdf };
     if (fichaId && getFicha(fichaId)) {
       var f = getFicha(fichaId);
       f._id = fichaId;
-      fichaTitle.textContent = desc.title || '';
-      fichaCoords.textContent = desc.coords || '';
-      fichaPdfLink.href = f.pdf || desc.pdf || '#';
-      buildFichaButtons(f);
-      fichaOverlay.style.display = 'flex';
-      isDragging = false;
-      isPinching = false;
-      hideHint();
-      selectFichaEntry(f, f.defaultIndex || 0);
+      renderFichaNormal(f, info);
+      return;
+    }
+    // El observador activo no lo ha observado: si otros sí y la funcionalidad
+    // está activa, ofrecemos descubrir sus observaciones en vez de ir al PDF.
+    if (fichaId && observacionesAjenasActivo() && observadoresDe(fichaId, observadorActivo).length) {
+      abrirFichaDescubrimiento(fichaId, info);
       return;
     }
     var url = desc.pdf;
@@ -1490,6 +1649,12 @@
       });
     };
   }
+
+  // Botón "← Descubrir": vuelve a la pantalla NO VISITADO desde la observación
+  // de otro observador.
+  fichaBackBtn.addEventListener('click', function () {
+    if (fichaVolverA) abrirFichaDescubrimiento(fichaVolverA.id, fichaVolverA.info);
+  });
 
   fichaCloseBtn.addEventListener('click', closeFicha);
   fichaOverlay.addEventListener('mousedown', function (e) {
@@ -1537,8 +1702,12 @@
       var a = objs[i];
       var inView = a.getAttribute('data-view') === currentView;
       var typeHidden = !!hiddenColors[a.getAttribute('data-color')];
-      var obsVisible = objetoVisiblePorObservador(a.getAttribute('data-id'));
-      a.style.display = (inView && !typeHidden && obsVisible) ? '' : 'none';
+      var estado = estadoObservador(a.getAttribute('data-id'));
+      a.style.display = (inView && !typeHidden && estado !== 'ninguna') ? '' : 'none';
+      // Objeto observado solo por otros: se muestra atenuado (gris con algo de
+      // su color), como "deshabilitado". El filtro no afecta a los clics, así
+      // que sigue pudiéndose pulsar para descubrir las observaciones ajenas.
+      a.style.filter = (estado === 'ajena') ? 'grayscale(0.82) opacity(0.55)' : '';
     }
   }
 

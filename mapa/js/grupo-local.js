@@ -56,6 +56,54 @@ var GrupoLocal = (function () {
     return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
   }
 
+  // Componentes RGB de un color hex, opcionalmente mezclados ~82% hacia gris
+  // (para atenuar las galaxias no observadas, como el gris de los marcadores de
+  // la Vía Láctea, conservando algo de su tono original).
+  function rgbDe(hex, gris) {
+    var h = (hex || '#7ec8ff').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    if (gris) {
+      var G = 150, k = 0.82;
+      r = Math.round(r * (1 - k) + G * k);
+      g = Math.round(g * (1 - k) + G * k);
+      b = Math.round(b * (1 - k) + G * k);
+    }
+    return { r: r, g: g, b: b };
+  }
+
+  // "rgba(...)" de un color, atenuándolo a gris si 'gris' es true.
+  function colorRgba(hex, a, gris) {
+    var c = rgbDe(hex, gris);
+    return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
+  }
+
+  // ---- Filtro por observador (descubrir observaciones ajenas) ----------------
+  // El visor principal comunica quién es el observador activo y si la
+  // funcionalidad está activa (CONFIG.observacionesAjenas.activo) vía
+  // API.setObservador(). Con ella, las galaxias que el observador activo no ha
+  // observado (pero sí otros) se dibujan atenuadas, sin ocultarse.
+  var activeObs = '';
+  var ajenasActivo = false;
+
+  // ¿Ha observado el observador activo el objeto 'o'? En modo "todas"
+  // (activeObs vacío) se considera siempre observado (nada se atenúa).
+  function observadaPorActivo(o) {
+    if (!activeObs) return true;
+    var lista = (typeof OBSERVACIONES !== 'undefined' && o && o.id) ? OBSERVACIONES[o.id] : null;
+    if (!lista || !lista.length) return true; // sin datos: no atenuar
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].observador === activeObs) return true;
+    }
+    return false;
+  }
+
+  // ¿Debe dibujarse 'o' atenuada por el filtro de observador?
+  function atenuadaPorObservador(o) {
+    return ajenasActivo && !!activeObs && !observadaPorActivo(o);
+  }
+
   // Construye el catálogo del atlas desde los OBJECTS reales de la base de datos:
   // los objetos con coordenadas galácticas (l, b), distancia extragaláctica y,
   // opcionalmente, clase de Hubble (tipo). Si no hay ninguno registrado, el
@@ -272,29 +320,34 @@ var GrupoLocal = (function () {
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
       var r = Math.max(2.4, 4 * p.persp);
 
+      // Galaxia observada solo por otros: se atenúa (gris + menor opacidad),
+      // pero sigue siendo pulsable para descubrir esas observaciones.
+      var aten = atenuadaPorObservador(o);
+      var am = aten ? 0.5 : 1; // multiplicador de opacidad
+
       // línea guía hasta el plano galáctico
       var foot = project({ x: o.x, y: o.y, z: 0 });
       ctx.setLineDash([2, 3]);
       ctx.beginPath();
       ctx.moveTo(foot.sx, foot.sy);
       ctx.lineTo(p.sx, p.sy);
-      ctx.strokeStyle = hexToRgba(o.color || '#7ec8ff', 0.28);
+      ctx.strokeStyle = colorRgba(o.color || '#7ec8ff', 0.28 * am, aten);
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.setLineDash([]);
 
       var col = o.color || '#7ec8ff';
       var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
-      halo.addColorStop(0, hexToRgba(col, 0.55));
-      halo.addColorStop(1, hexToRgba(col, 0));
+      halo.addColorStop(0, colorRgba(col, 0.55 * am, aten));
+      halo.addColorStop(1, colorRgba(col, 0, aten));
       ctx.fillStyle = halo;
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
 
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#f4faff'; ctx.fill();
+      ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#f4faff'; ctx.fill();
 
       if (onView) {
-        ctx.fillStyle = hexToRgba(col, 0.95);
+        ctx.fillStyle = colorRgba(col, 0.95 * am, aten);
         ctx.font = '500 12px Inter, sans-serif';
         ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
       }
@@ -541,10 +594,18 @@ var GrupoLocal = (function () {
   // buscar/focusObject: localizar y enfocar un objeto YA presente en el atlas.
   // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
   // onObjectClick: lo asigna via-lactea-app.js para abrir la ficha al hacer clic.
+  // setObservador: el visor principal comunica el observador activo del filtro y
+  // si la funcionalidad de descubrir observaciones ajenas está activa, para
+  // atenuar las galaxias que ese observador no ha observado.
+  function setObservador(clave, activo) {
+    activeObs = clave || '';
+    ajenasActivo = !!activo;
+  }
   var API = {
     ready: true, sync: sync, maxDist: maxDist, alcanceMax: ALCANCE_MAX,
     buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
     focusObject: focusObject, focus: focus, clearTarget: clearTarget,
+    setObservador: setObservador,
     onObjectClick: null
   };
   return API;

@@ -613,6 +613,20 @@
         <div id="ficha-title" style="color: #7ec8ff; font-size: 14px; font-weight: 600;"></div>
         <div id="ficha-coords" style="color: #9fb6c9; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
       </div>
+      <!-- Solo visible al ver la observación de OTRO observador alcanzada desde
+           la pantalla de descubrimiento: vuelve a la lista de observadores. -->
+      <button id="ficha-back" type="button" style="
+        display: none;
+        color: #7ec8ff;
+        font-size: 12px;
+        background: transparent;
+        cursor: pointer;
+        border: 1px solid rgba(126, 200, 255, 0.5);
+        border-radius: 14px;
+        padding: 5px 12px;
+        white-space: nowrap;
+        font-family: sans-serif;
+      ">← Descubrir</button>
       <a id="ficha-pdf-link" href="#" target="_blank" rel="noopener" style="
         color: #7ec8ff;
         font-size: 12px;
@@ -743,7 +757,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260716_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260716_1900"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript, en el
      mismo formato que el antiguo via-lactea-datos.js, asi que es intercambiable.
@@ -751,6 +765,6 @@
 <script src="/wp-json/bitacora/v1/datos.js?v=20260714_0100"></script>
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260716_0207"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260716_0207"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260716_1900"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260716_1900"></script>
 </li>
