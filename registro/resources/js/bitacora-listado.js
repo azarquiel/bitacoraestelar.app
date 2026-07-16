@@ -333,7 +333,9 @@
 
       function cargar() {
         mostrarMensaje('Cargando observaciones…');
-        var url = WP.endpoint + (viendoPapelera ? '?borradas=1' : '');
+        // "Mis observaciones": solo las del usuario en sesión (mias=1). La
+        // papelera muestra, igualmente, solo las suyas ya borradas.
+        var url = WP.endpoint + '?mias=1' + (viendoPapelera ? '&borradas=1' : '');
         api(url)
           .then(function (res) {
             if (!res.ok) {

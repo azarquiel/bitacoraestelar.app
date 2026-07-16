@@ -446,6 +446,9 @@
     var atlasAlpha = 1 - galaxyAlpha;
 
     img.style.opacity = galaxyAlpha;
+    // Cuando el atlas domina, los marcadores (invisibles) de la galaxia no deben
+    // interceptar los clics: así el clic llega a los objetos del atlas.
+    img.style.pointerEvents = (atlasAlpha > 0.5) ? 'none' : '';
 
     // Píxeles por año luz de la imagen de la galaxia al zoom actual, para que el
     // fov del atlas encaje sin salto en el momento del relevo.
@@ -475,7 +478,11 @@
   function recalcularMinScale() {
     var base = (window.CONFIG && CONFIG.grupoLocal && CONFIG.grupoLocal.escalaMinima) || 1;
     var reg = (typeof GrupoLocal !== 'undefined' && GrupoLocal.maxDist) ? GrupoLocal.maxDist : 0;
-    var D = Math.max(reg, busquedaMaxDist);
+    // El zoom out llega hasta el objeto más lejano registrado (auto-encuadre),
+    // recortado por el tope de seguridad del atlas. Una búsqueda explícita
+    // (busquedaMaxDist) sí puede ir más allá para localizar un objeto lejano.
+    var alcance = (typeof GrupoLocal !== 'undefined' && GrupoLocal.alcanceMax) ? GrupoLocal.alcanceMax : Infinity;
+    var D = Math.max(Math.min(reg, alcance), busquedaMaxDist);
     if (!(D > 0)) { minScale = base; return; }
     var vr = viewer.getBoundingClientRect();
     var R = Math.min(vr.width, vr.height) * 0.42;
@@ -1436,6 +1443,54 @@
     fichaOverlay.style.display = 'none';
   }
 
+  // Abre la ficha (o, en su defecto, el PDF) de un objeto a partir de sus datos,
+  // sin necesitar un marcador DOM. La usa el atlas del Grupo Local al hacer clic
+  // en una galaxia, para reutilizar la misma ficha que en la Vía Láctea.
+  function abrirFichaObjeto(desc) {
+    if (!desc) return;
+    var fichaId = desc.ficha;
+    if (fichaId && getFicha(fichaId)) {
+      var f = getFicha(fichaId);
+      f._id = fichaId;
+      fichaTitle.textContent = desc.title || '';
+      fichaCoords.textContent = desc.coords || '';
+      fichaPdfLink.href = f.pdf || desc.pdf || '#';
+      buildFichaButtons(f);
+      fichaOverlay.style.display = 'flex';
+      isDragging = false;
+      isPinching = false;
+      hideHint();
+      selectFichaEntry(f, f.defaultIndex || 0);
+      return;
+    }
+    var url = desc.pdf;
+    if (!url) return; // sin ficha ni PDF no hay nada que abrir
+    pdfTitle.textContent = desc.title || '';
+    pdfCoords.textContent = desc.coords || '';
+    pdfOpenLink.href = url;
+    if (currentPdfUrl !== url) {
+      pdfFrame.setAttribute('src', url + '#view=FitH');
+      currentPdfUrl = url;
+    }
+    pdfFallback.style.display = 'flex';
+    pdfOverlay.style.display = 'flex';
+    isDragging = false;
+    isPinching = false;
+    hideHint();
+  }
+
+  // Clic en una galaxia del atlas del Grupo Local -> abre su ficha.
+  if (typeof GrupoLocal !== 'undefined' && GrupoLocal.ready) {
+    GrupoLocal.onObjectClick = function (obj) {
+      abrirFichaObjeto({
+        ficha:  obj.ficha || obj.id,
+        pdf:    obj.pdf,
+        title:  obj.title || obj.name,
+        coords: obj.coords
+      });
+    };
+  }
+
   fichaCloseBtn.addEventListener('click', closeFicha);
   fichaOverlay.addEventListener('mousedown', function (e) {
     if (e.target === fichaOverlay) closeFicha();
@@ -1632,6 +1687,17 @@
       opts += '<option value="' + clave + '">' + String(nom).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
     });
     observadorSelect.innerHTML = opts;
+
+    // Si el usuario está logado y tiene observaciones registradas, el mapa
+    // arranca mostrando LAS SUYAS (el plugin inyecta su clave en BITACORA_WP).
+    // Un visitante anónimo (o sin observaciones) arranca con "Todas".
+    var claveInicial = (window.BITACORA_WP && BITACORA_WP.observadorClave) ? BITACORA_WP.observadorClave : '';
+    if (claveInicial && conObs[claveInicial]) {
+      observadorSelect.value = claveInicial;
+      observadorActivo = claveInicial;
+      aplicarFiltroObservador();
+    }
+
     observadorSelect.addEventListener('change', function () {
       observadorActivo = observadorSelect.value;
       aplicarFiltroObservador();

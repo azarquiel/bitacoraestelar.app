@@ -114,13 +114,14 @@ está dentro de la galaxia, en el mapa cenital/de canto.
 Muestra las observaciones como tarjetas, con dos pestañas: **Registradas** y
 **Papelera**.
 
+- «Mis observaciones» lista **solo las del usuario en sesión** (`?mias=1`); la
+  papelera muestra, igualmente, solo las suyas ya borradas. Las observaciones de
+  otros observadores no aparecen aquí (sí en el mapa, que es público).
 - **Editar** lleva al formulario, precargado con esa observación. Si se cambia
   la fecha o el lugar, el cielo se recalcula solo.
 - **Borrar** es un **borrado suave**: la fila se marca con la fecha de borrado,
   pero los datos siguen íntegros en la base de datos. Se puede restaurar desde
   la papelera.
-- Cada usuario ve todas las observaciones, pero **solo puede editar o borrar
-  las suyas**. Las ajenas aparecen sin botones.
 
 ---
 

@@ -225,6 +225,22 @@
     var d=parseFloat(txt); return (isNaN(d)||d<-90||d>90)?null:d;
   }
 
+  // Grados decimales -> formato habitual. RA en horas: "21h 40m 22s".
+  // Se usa al precargar la edición para no mostrar el valor decimal crudo.
+  function formatRA(deg){
+    if(deg==null||deg===''||isNaN(deg)) return '';
+    var h=rev(parseFloat(deg))/15, hh=Math.floor(h), mDec=(h-hh)*60, mm=Math.floor(mDec), ss=Math.round((mDec-mm)*60);
+    if(ss===60){ ss=0; mm++; } if(mm===60){ mm=0; hh=(hh+1)%24; }
+    return hh+'h '+mm+'m '+ss+'s';
+  }
+  // Grados decimales -> Dec sexagesimal con signo: "-23° 10′ 47″".
+  function formatDec(deg){
+    if(deg==null||deg===''||isNaN(deg)) return '';
+    var v=parseFloat(deg), sign=v<0?'-':'+', a=Math.abs(v), dd=Math.floor(a), mDec=(a-dd)*60, mm=Math.floor(mDec), ss=Math.round((mDec-mm)*60);
+    if(ss===60){ ss=0; mm++; } if(mm===60){ mm=0; dd++; }
+    return sign+dd+'° '+mm+'′ '+ss+'″';
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   // ESTADO Y REFERENCIAS AL DOM
   // ═══════════════════════════════════════════════════════════════════════
@@ -265,8 +281,52 @@
       setStatus(objStatus,'ok','✓ '+txt+' — usando las coordenadas introducidas.');
     } else {
       setStatus(objStatus,'info','“'+txt+'” no es Messier. Introduce su RA y Dec para poder calcular su posición.');
+      // Autocompletado: si las cajetillas están vacías, se buscan sus RA/Dec en
+      // SIMBAD (con una pequeña espera para no consultar en cada tecla).
+      programarBusquedaCoords(txt);
     }
     recompute();
+  }
+
+  // ── Autocompletado de RA/Dec desde SIMBAD (para objetos no-Messier) ──
+  // Se apoya en el endpoint /coordenadas del plugin (el navegador no puede
+  // consultar SIMBAD directamente por CORS). No pisa lo que escriba el usuario.
+  var coordTimer=null, coordUltimo='', coordsAuto=false;
+  function coordenadasURL(q){
+    // Deriva la URL a partir de WP.endpoint (.../bitacora/v1/observaciones).
+    return WP.endpoint.replace(/observaciones\/?$/, 'coordenadas') + '?q=' + encodeURIComponent(q);
+  }
+  // ¿Podemos rellenar las cajetillas? Sí si están vacías o si las rellenamos
+  // nosotros (coordsAuto); NO si el usuario ha escrito coordenadas a mano.
+  function cajetillasLibres(){
+    return coordsAuto || (raManual.value.trim()==='' && decManual.value.trim()==='');
+  }
+  function programarBusquedaCoords(nombre){
+    if(!WP) return;                                   // sin sesión no hay endpoint
+    var q=(nombre||'').trim();
+    if(q.length<2 || !cajetillasLibres()) return;
+    if(coordTimer) clearTimeout(coordTimer);
+    coordTimer=setTimeout(function(){ buscarCoords(q); }, 700);
+  }
+  function buscarCoords(q){
+    if(q===coordUltimo || !cajetillasLibres()) return;
+    coordUltimo=q;
+    setStatus(objStatus,'info','Buscando las coordenadas de “'+q+'” en SIMBAD…');
+    fetch(coordenadasURL(q), { credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        if(!cajetillasLibres()) return;               // el usuario escribió mientras tanto
+        if(res.ok && res.data && typeof res.data.ra==='number'){
+          raManual.value  = formatRA(res.data.ra);
+          decManual.value = formatDec(res.data.dec);
+          coordsAuto=true;   // marcadas como auto: se pueden sustituir si cambia el nombre
+          resolveObject();   // re-resuelve ya con las coordenadas puestas
+          setStatus(objStatus,'ok','✓ Coordenadas de “'+q+'” traídas de SIMBAD (puedes ajustarlas).');
+        } else {
+          setStatus(objStatus,'info','“'+q+'” no está en SIMBAD. Introduce su RA y Dec a mano.');
+        }
+      })
+      .catch(function(){ /* silencioso: se mantiene el modo manual */ });
   }
 
   // ── Autocompletado ──
@@ -309,8 +369,9 @@
     btns.forEach(function(b,i){b.classList.toggle('active',i===activeIdx);});
   });
   objInput.addEventListener('blur',function(){ setTimeout(function(){suggestBox.style.display='none';},150); });
-  raManual.addEventListener('input',resolveObject);
-  decManual.addEventListener('input',resolveObject);
+  // Al escribir RA/Dec a mano se desactiva el autocompletado (no las pisamos).
+  raManual.addEventListener('input',function(){ coordsAuto=false; resolveObject(); });
+  decManual.addEventListener('input',function(){ coordsAuto=false; resolveObject(); });
 
   // (El mapa, la fecha y el cálculo del cielo se han movido al formulario de
   // datos de ficha. Aquí solo se registra el CONTENIDO de la observación.)
@@ -391,8 +452,9 @@
     // Para los no-Messier hay que rellenarlos ANTES de resolver, porque
     // resolveObject() los lee para poder validar el objeto.
     if(obs.tipo !== 'messier'){
-      raManual.value  = obs.ra;
-      decManual.value = obs.decl;
+      // Se muestran con el formato habitual (sexagesimal), no el decimal crudo.
+      raManual.value  = formatRA(obs.ra);
+      decManual.value = formatDec(obs.decl);
     }
     resolveObject();
 
@@ -760,6 +822,11 @@
         var txt = editando
           ? '✓ Cambios guardados en la observación nº ' + res.data.id + '.'
           : '✓ Observación guardada (registro nº ' + res.data.id + ').';
+        // Si el objeto no se pudo colocar en el mapa (p. ej. SIMBAD no tiene su
+        // distancia), se guarda igual pero se avisa para poder añadirlo a mano.
+        if(res.data.aviso){
+          txt += ' <span style="color:var(--ambar,#c88)">El objeto no se ha podido situar en el mapa automáticamente: ' + res.data.aviso + '</span>';
+        }
         $('outNote').innerHTML='<span style="color:var(--verde)">'+txt+'</span>';
         return;
       }

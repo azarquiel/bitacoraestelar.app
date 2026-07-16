@@ -145,12 +145,17 @@
     //                  atlas (fov mayor). 0.0015 permite alcanzar las galaxias
     //                  más lejanas del catálogo (~30 millones de años luz).
     //   autoGiro     : giro ambiental lento del atlas (radianes por fotograma).
+    //   alcanceMaximoAl : hasta dónde (años luz) se puede alejar la vista en el
+    //                  atlas. El zoom out llega SIEMPRE al menos hasta aquí, y
+    //                  más allá si hay un objeto registrado más lejano. 5000
+    //                  millones de años luz (5e9) da margen de sobra.
     // -------------------------------------------------------------------------
     grupoLocal: {
       umbral: 0.1,
       umbralFinal: 0.04,
       escalaMinima: 0.0015,
-      autoGiro: 0.0004
+      autoGiro: 0.0004,
+      alcanceMaximoAl: 5000000000
     }
 
   };

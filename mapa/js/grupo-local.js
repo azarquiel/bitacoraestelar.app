@@ -33,15 +33,6 @@ var GrupoLocal = (function () {
   // extragaláctico y se representa en el atlas del Grupo Local.
   var DIST_MIN_EXTRAGALACTICA = 200000;
 
-  // Catálogo de respaldo: solo se usa si en la base de datos aún no hay objetos
-  // extragalácticos (con l/b/dist). En cuanto se registren, se usan los reales.
-  var CATALOG_FALLBACK = [
-    { name: "M63",  desc: "Galaxia del Girasol",       l: 105.5, b: 68.6, d: 29300000, tipo: 'S'  },
-    { name: "M101", desc: "Galaxia del Molinete",      l: 102.0, b: 59.8, d: 20900000, tipo: 'S'  },
-    { name: "M65",  desc: "Grupo Leo Triplet",         l: 241.5, b: 64.4, d: 35000000, tipo: 'S'  },
-    { name: "M99",  desc: "Galaxia de Coma Pinwheel",  l: 271.0, b: 76.9, d: 49000000, tipo: 'S'  }
-  ];
-
   var DEG = Math.PI / 180;
   function galToXYZ(l, b, d) {
     var lr = l * DEG, br = b * DEG;
@@ -65,9 +56,10 @@ var GrupoLocal = (function () {
     return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
   }
 
-  // Construye el catálogo del atlas desde los OBJECTS reales (los que tienen
-  // coordenadas galácticas y distancia extragaláctica). Si no hay ninguno,
-  // recurre al catálogo de respaldo para no dejar la vista vacía.
+  // Construye el catálogo del atlas desde los OBJECTS reales de la base de datos:
+  // los objetos con coordenadas galácticas (l, b), distancia extragaláctica y,
+  // opcionalmente, clase de Hubble (tipo). Si no hay ninguno registrado, el
+  // atlas muestra solo la Vía Láctea, sin galaxias.
   function construirCatalogo() {
     var fuente = [];
     if (typeof OBJECTS !== 'undefined' && OBJECTS && OBJECTS.length) {
@@ -76,14 +68,16 @@ var GrupoLocal = (function () {
         if (typeof o.dist !== 'number' || o.dist < DIST_MIN_EXTRAGALACTICA) continue;
         if (typeof o.l !== 'number' || typeof o.b !== 'number') continue;
         fuente.push({ name: o.label || o.id, desc: o.name || '', l: o.l, b: o.b, d: o.dist,
-                      tipo: o.tipo || '', color: o.color });
+                      tipo: o.tipo || '', color: o.color,
+                      // Datos para abrir la ficha al hacer clic (como en la galaxia).
+                      id: o.id, ficha: o.ficha || o.id, pdf: o.pdf, coords: o.coords, title: o.name });
       }
     }
-    if (!fuente.length) fuente = CATALOG_FALLBACK;
     return fuente.map(function (o) {
       var p = galToXYZ(o.l, o.b, o.d);
       return { name: o.name, desc: o.desc, l: o.l, b: o.b, d: o.d, tipo: o.tipo,
-               color: colorDe(o), x: p.x, y: p.y, z: p.z };
+               color: colorDe(o), x: p.x, y: p.y, z: p.z,
+               id: o.id, ficha: o.ficha, pdf: o.pdf, coords: o.coords, title: o.title };
     });
   }
 
@@ -124,9 +118,14 @@ var GrupoLocal = (function () {
 
   // zoom logarítmico: fov = campo de visión en al (radio visible)
   var FOV_MIN = 10;
-  // El fov máximo abarca con margen al objeto más lejano registrado (o 30 Mal si
-  // aún no hay objetos), de modo que siempre se pueda alejar hasta verlo.
-  var FOV_MAX = Math.max(30000000, maxDist * 2.2);
+  // Hasta dónde se puede alejar la vista. La vista se AUTO-ENCUADRA en el objeto
+  // más lejano registrado (fov = distancia · 2,2), con un mínimo de 30 Mal si aún
+  // no hay objetos. CONFIG.grupoLocal.alcanceMaximoAl es un TOPE de seguridad
+  // (5000 Mal por defecto): solo recorta si un objeto estuviera aún más lejos.
+  // Así un objeto a 29 Mal se ve bien encuadrado, y se soportan objetos hasta el
+  // tope sin regar el zoom out sobre espacio vacío.
+  var ALCANCE_MAX = (window.CONFIG && CONFIG.grupoLocal && CONFIG.grupoLocal.alcanceMaximoAl) || 5000000000;
+  var FOV_MAX = Math.min(ALCANCE_MAX, Math.max(30000000, maxDist * 2.2));
   var fov = FOV_MAX; // arranca "muy lejos"; sync() lo ajusta al zoom real
 
   // estado gobernado por el visor principal
@@ -345,6 +344,9 @@ var GrupoLocal = (function () {
       }
     }
 
+    // Cursor de "mano" al pasar por encima de un objeto pulsable del atlas.
+    if (atlasInteractive) stage.style.cursor = hovered ? 'pointer' : 'grab';
+
     if (scaleTag) {
       scaleTag.innerHTML = 'Campo de visión · <b>' + fmtDist(fov) + ' años luz</b>';
     }
@@ -356,23 +358,51 @@ var GrupoLocal = (function () {
   var autoGiro = (window.CONFIG && CONFIG.grupoLocal && CONFIG.grupoLocal.autoGiro != null)
     ? CONFIG.grupoLocal.autoGiro : 0.0004;
 
+  // Objeto del atlas bajo un punto de pantalla (o null). Solo cuando el atlas
+  // domina la vista. Se usa para el clic (abrir ficha) y el cursor.
+  function hitTest(clientX, clientY) {
+    if (layerAlpha <= 0.5) return null;
+    var best = null, bestD = Infinity;
+    for (var i = 0; i < objects.length; i++) {
+      var p = project(objects[i]);
+      var dx = clientX - p.sx, dy = clientY - p.sy, d2 = dx * dx + dy * dy;
+      if (d2 < 220 && d2 < bestD) { bestD = d2; best = objects[i]; } // ~15 px de radio
+    }
+    return best;
+  }
+
+  var downX = 0, downY = 0, downMoved = false;
   function pointerDown(e) {
     if (!atlasInteractive) return;
     dragging = true;
     var p = e.touches ? e.touches[0] : e;
     last = { x: p.clientX, y: p.clientY };
+    downX = p.clientX; downY = p.clientY; downMoved = false;
   }
   function pointerMove(e) {
     var p = e.touches ? e.touches[0] : e;
     mouse.x = p.clientX; mouse.y = p.clientY;
     if (dragging && atlasInteractive) {
+      if (Math.abs(p.clientX - downX) + Math.abs(p.clientY - downY) > 5) downMoved = true;
       yaw += (p.clientX - last.x) * 0.006;
       pitch += (p.clientY - last.y) * 0.006;
       pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
       last = { x: p.clientX, y: p.clientY };
     }
   }
-  function pointerUp() { dragging = false; }
+  function pointerUp(e) {
+    // Un clic (sin apenas arrastre) sobre un objeto abre su ficha, como en la
+    // galaxia. El manejador lo aporta via-lactea-app.js (API.onObjectClick).
+    var fueClick = atlasInteractive && !downMoved;
+    dragging = false;
+    if (fueClick && API.onObjectClick) {
+      var p = (e && e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : (e || {});
+      var x = (p.clientX != null) ? p.clientX : downX;
+      var y = (p.clientY != null) ? p.clientY : downY;
+      var obj = hitTest(x, y);
+      if (obj) API.onObjectClick(obj);
+    }
+  }
 
   stage.addEventListener('mousedown', pointerDown);
   window.addEventListener('mousemove', pointerMove);
@@ -384,9 +414,10 @@ var GrupoLocal = (function () {
   // ---- Bucle de animación ---------------------------------------------------
   function loop() {
     if (layerAlpha > 0.001) {
-      // El giro ambiental se pausa mientras hay un objeto buscado enfocado, para
-      // que quede centrado.
-      if (!dragging && !target) yaw += autoGiro;
+      // El giro ambiental se pausa mientras hay un objeto buscado enfocado (para
+      // que quede centrado) o mientras el cursor está sobre un objeto pulsable
+      // (para poder hacer clic sin que se escape).
+      if (!dragging && !target && !hovered) yaw += autoGiro;
       render();
     }
     requestAnimationFrame(loop);
@@ -509,9 +540,12 @@ var GrupoLocal = (function () {
   // permitir alejar la vista hasta que ese objeto sea visible.
   // buscar/focusObject: localizar y enfocar un objeto YA presente en el atlas.
   // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
-  return {
-    ready: true, sync: sync, maxDist: maxDist,
+  // onObjectClick: lo asigna via-lactea-app.js para abrir la ficha al hacer clic.
+  var API = {
+    ready: true, sync: sync, maxDist: maxDist, alcanceMax: ALCANCE_MAX,
     buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
-    focusObject: focusObject, focus: focus, clearTarget: clearTarget
+    focusObject: focusObject, focus: focus, clearTarget: clearTarget,
+    onObjectClick: null
   };
+  return API;
 })();

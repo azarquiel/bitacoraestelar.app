@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.16.0
+ * Version:     1.16.3
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.16.0' );
+define( 'BITACORA_VERSION', '1.16.3' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
@@ -660,6 +660,22 @@ function bitacora_registrar_rutas() {
             'methods'             => 'GET',
             'callback'            => 'bitacora_resolver_objeto',
             'permission_callback' => '__return_true',
+            'args'                => array(
+                'q' => array( 'required' => true ),
+            ),
+        )
+    );
+
+    // Coordenadas (RA/Dec) de un objeto por nombre en SIMBAD, para autocompletar
+    // el formulario de registro. No exige distancia (a diferencia de /resolver).
+    // Solo con sesión: se usa desde el formulario, que ya requiere login.
+    register_rest_route(
+        'bitacora/v1',
+        '/coordenadas',
+        array(
+            'methods'             => 'GET',
+            'callback'            => 'bitacora_coordenadas_objeto',
+            'permission_callback' => $solo_logueados,
             'args'                => array(
                 'q' => array( 'required' => true ),
             ),
@@ -1408,40 +1424,43 @@ function bitacora_simbad( $identificador ) {
 
 /**
  * Completa la posición y metadatos de un objeto del mapa a partir de su
- * identificador (etiqueta/slug), resolviéndolo en SIMBAD. $dist_manual_al es la
- * distancia (años luz) a usar si SIMBAD no la tiene. Devuelve un array de campos
- * para fusionar en la fila (coords_texto, top/edge, gal_l/b, dist_al, tipo,
- * morph, color) o WP_Error si no se puede colocar (sin coordenadas ni distancia).
+ * identificador (etiqueta/slug). Resuelve el objeto en SIMBAD para obtener
+ * distancia y tipo morfológico. Las coordenadas se toman de $ra_dado/$dec_dado
+ * si se pasan (p. ej. las de la propia observación); si no, de SIMBAD.
+ * $dist_manual_al es la distancia (años luz) a usar si SIMBAD no la tiene.
+ * Devuelve un array de campos para fusionar en la fila (coords_texto, top/edge,
+ * gal_l/b, dist_al, tipo, morph, color) o WP_Error si no se puede colocar.
  */
-function bitacora_completar_objeto( $identificador, $dist_manual_al = null ) {
+function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_dado = null, $dec_dado = null ) {
     $sim = bitacora_simbad( $identificador );
-    if ( ! $sim ) {
-        if ( null === $dist_manual_al ) {
-            return new WP_Error(
-                'sin_datos_simbad',
-                'No se encontró «' . $identificador . '» en SIMBAD. Indica la distancia (años luz) a mano para poder colocarlo.'
-            );
-        }
+
+    // Coordenadas: preferimos las dadas (de la observación); si no, las de SIMBAD.
+    $tiene_radec = ( null !== $ra_dado && '' !== $ra_dado && null !== $dec_dado && '' !== $dec_dado );
+    $ra  = $tiene_radec ? floatval( $ra_dado )  : ( $sim ? $sim['ra']  : null );
+    $dec = $tiene_radec ? floatval( $dec_dado ) : ( $sim ? $sim['dec'] : null );
+    if ( null === $ra || null === $dec ) {
         return new WP_Error(
             'sin_coordenadas',
-            'No hay coordenadas para «' . $identificador . '» (SIMBAD no responde). No se puede colocar en el mapa.'
+            'No hay coordenadas para «' . $identificador . '» (no está en SIMBAD y no se dieron RA/Dec). No se puede colocar en el mapa.'
         );
     }
 
-    $dist_al = $sim['dist_al'];
+    // Distancia: la de SIMBAD o, si no la tiene, la indicada a mano.
+    $dist_al = $sim ? $sim['dist_al'] : null;
     if ( null === $dist_al ) {
         $dist_al = ( null !== $dist_manual_al ) ? floatval( $dist_manual_al ) : null;
     }
     if ( null === $dist_al || $dist_al <= 0 ) {
         return new WP_Error(
             'sin_distancia',
-            'SIMBAD no tiene distancia para «' . $identificador . '». Indícala a mano (años luz) para colocarlo en el mapa.'
+            'No hay distancia para «' . $identificador . '» (SIMBAD no la tiene). Indícala a mano (años luz) para colocarlo en el mapa.'
         );
     }
 
-    list( $l, $b ) = bitacora_radec_a_galactica( $sim['ra'], $sim['dec'] );
+    list( $l, $b ) = bitacora_radec_a_galactica( $ra, $dec );
     list( $top_x, $top_y, $edge_x, $edge_y ) = bitacora_posiciones_mapa( $l, $b, $dist_al );
-    $clase = bitacora_clase_hubble( $sim['morph'] );
+    $morph = $sim ? $sim['morph'] : '';
+    $clase = bitacora_clase_hubble( $morph );
 
     return array(
         'coords_texto' => bitacora_coords_texto( $l, $b, $dist_al ),
@@ -1453,9 +1472,57 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null ) {
         'gal_b'        => round( $b, 3 ),
         'dist_al'      => $dist_al,
         'tipo'         => $clase,
-        'morph'        => $sim['morph'],
+        'morph'        => $morph,
         'color'        => bitacora_color_por_clase( $clase ),
     );
+}
+
+/**
+ * Se asegura de que un objeto del mapa exista en la tabla de objetos. Si ya
+ * está (por slug), no lo toca. Si no, lo crea calculando su posición (galáctica,
+ * top/edge) a partir de sus RA/Dec y de la distancia de SIMBAD. Se llama al
+ * registrar/editar una observación, para que el objeto nuevo aparezca en el mapa.
+ * Devuelve true (creado), el id (ya existía) o WP_Error (no se pudo colocar).
+ */
+function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = null, $dec = null ) {
+    global $wpdb;
+    $identificador = trim( (string) $identificador );
+    // El slug debe coincidir con el que agrupa las OBSERVACIONES en el visor:
+    // minúsculas y sin nada que no sea letra o número ("NGC 6826" -> "ngc6826").
+    $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', $identificador ) );
+    if ( '' === $slug ) {
+        return null;
+    }
+    $tabla = bitacora_nombre_tabla_objetos();
+    $existe = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE slug = %s", $slug ) );
+    if ( $existe ) {
+        return intval( $existe ); // ya está en el catálogo: no se toca
+    }
+
+    $calc = bitacora_completar_objeto( $identificador, null, $ra, $dec );
+    if ( is_wp_error( $calc ) ) {
+        // No se pudo colocar (p. ej. SIMBAD no tiene distancia). La observación
+        // se guarda igual; el objeto podrá añadirse a mano más tarde.
+        return $calc;
+    }
+
+    $num = null;
+    if ( preg_match( '/^m(\d+)$/', $slug, $mm ) ) {
+        $num = intval( $mm[1] );
+    }
+    $etiqueta_larga = ( '' !== trim( (string) $etiqueta ) ) ? trim( (string) $etiqueta ) : $identificador;
+    $fila = array_merge(
+        array(
+            'slug'     => $slug,
+            'num'      => $num,
+            'nombre'   => $etiqueta_larga,   // "M30 · Capricornus"
+            'etiqueta' => $identificador,    // "M30" (lo que se muestra en el mapa)
+            'ficha'    => $slug,
+        ),
+        $calc
+    );
+    bitacora_guardar_objeto_fila( $slug, $fila );
+    return true;
 }
 
 /**
@@ -1485,6 +1552,31 @@ function bitacora_resolver_objeto( WP_REST_Request $peticion ) {
             'tipo'   => $calc['tipo'],
             'color'  => $calc['color'],
             'coords' => $calc['coords_texto'],
+        ),
+        200
+    );
+}
+
+/**
+ * GET /coordenadas?q=NGC6826 — devuelve las coordenadas ecuatoriales (RA/Dec,
+ * en grados) de un objeto según SIMBAD, para autocompletar el formulario de
+ * registro. No exige distancia. Devuelve 404 si SIMBAD no lo conoce.
+ */
+function bitacora_coordenadas_objeto( WP_REST_Request $peticion ) {
+    $q = trim( sanitize_text_field( (string) $peticion->get_param( 'q' ) ) );
+    if ( '' === $q ) {
+        return new WP_Error( 'falta_q', 'Indica un objeto.', array( 'status' => 400 ) );
+    }
+    $sim = bitacora_simbad( $q );
+    if ( ! $sim || null === $sim['ra'] ) {
+        return new WP_Error( 'no_encontrado', 'No se encontró «' . $q . '» en SIMBAD.', array( 'status' => 404 ) );
+    }
+    return new WP_REST_Response(
+        array(
+            'q'     => $q,
+            'ra'    => $sim['ra'],
+            'dec'   => $sim['dec'],
+            'otype' => $sim['otype'],
         ),
         200
     );
@@ -2053,12 +2145,19 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     bitacora_asignar_observador( $id, $datos['observador'], get_current_user_id() );
     bitacora_guardar_entradas( $id, $entradas );
 
+    // Si el objeto observado aún no está en el catálogo del mapa, se crea con su
+    // posición calculada (galáctica + top/edge). No bloquea el guardado: si no
+    // se puede colocar, la observación queda guardada igual y se avisa.
+    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'] );
+    $aviso   = is_wp_error( $obj_res ) ? $obj_res->get_error_message() : '';
+
     return new WP_REST_Response(
         array(
             'ok'      => true,
             'id'      => $id,
             'objeto'  => $datos['objeto'],
             'mensaje' => 'Observación registrada.',
+            'aviso'   => $aviso,
         ),
         201
     );
@@ -2122,8 +2221,12 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
     // Reemplaza el conjunto de entradas por el recibido.
     bitacora_guardar_entradas( $id, $entradas );
 
+    // Si al editar se cambió a un objeto que aún no está en el mapa, se crea.
+    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'] );
+    $aviso   = is_wp_error( $obj_res ) ? $obj_res->get_error_message() : '';
+
     return new WP_REST_Response(
-        array( 'ok' => true, 'id' => $id, 'mensaje' => 'Observación actualizada.' ),
+        array( 'ok' => true, 'id' => $id, 'mensaje' => 'Observación actualizada.', 'aviso' => $aviso ),
         200
     );
 }
@@ -2648,12 +2751,33 @@ function bitacora_inyectar_datos() {
     if ( '' === $nombre_apellidos ) {
         $nombre_apellidos = $u->display_name;
     }
+
+    // Clave del observador de este usuario, para que el mapa arranque con SUS
+    // observaciones. Se busca primero por usuario_id y, si no, por la clave
+    // derivada de su nombre (misma regla que al crear observadores). Puede ser
+    // '' si el usuario aún no tiene observaciones registradas.
+    global $wpdb;
+    $t_obs = bitacora_nombre_tabla_observadores();
+    $uid = get_current_user_id();
+    $observador_clave = $wpdb->get_var(
+        $wpdb->prepare( "SELECT clave FROM $t_obs WHERE usuario_id = %d ORDER BY id ASC LIMIT 1", $uid )
+    );
+    if ( ! $observador_clave ) {
+        $clave = sanitize_title( $nombre_apellidos );
+        if ( '' !== $clave ) {
+            $observador_clave = $wpdb->get_var(
+                $wpdb->prepare( "SELECT clave FROM $t_obs WHERE clave = %s", $clave )
+            );
+        }
+    }
+
     $datos = array(
-        'endpoint'   => esc_url_raw( rest_url( 'bitacora/v1/observaciones' ) ),
-        'media'      => esc_url_raw( rest_url( 'wp/v2/media' ) ),
-        'nonce'      => wp_create_nonce( 'wp_rest' ),
-        'usuarioId'  => get_current_user_id(),
-        'observador' => $nombre_apellidos,
+        'endpoint'        => esc_url_raw( rest_url( 'bitacora/v1/observaciones' ) ),
+        'media'           => esc_url_raw( rest_url( 'wp/v2/media' ) ),
+        'nonce'           => wp_create_nonce( 'wp_rest' ),
+        'usuarioId'       => $uid,
+        'observador'      => $nombre_apellidos,
+        'observadorClave' => $observador_clave ? $observador_clave : '',
     );
     printf(
         '<script>window.BITACORA_WP = %s;</script>' . "\n",
