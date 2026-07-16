@@ -399,6 +399,7 @@
       cons:resolved.cons||'', nombre:resolved.nombre||'',
       ra:resolved.ra, dec:resolved.dec,
       observador:$('observer').value.trim(), telescopio:$('scope').value.trim(),
+      telescopioId: telescopioIdSel,
       fechaObservacion:($('fechaObs')?$('fechaObs').value:'')
     };
     submitBtn.disabled=false;
@@ -407,12 +408,166 @@
   $('scope').addEventListener('input',recompute);
   if($('fechaObs')) $('fechaObs').addEventListener('change',recompute);
 
+  // Selector de telescopio de la flota: al elegir uno, rellena el texto del
+  // telescopio, guarda su id y recalcula la óptica de todas las entradas.
+  // Editar el texto a mano (o "— Elige… —") desvincula el telescopio.
+  var scopeSelect = $('scopeSelect');
+  if (scopeSelect) {
+    scopeSelect.addEventListener('change', function () {
+      if (scopeSelect.value) {
+        telescopioSel = piezaPorId('telescopios', scopeSelect.value);
+        telescopioIdSel = telescopioSel ? telescopioSel.id : null;
+        if (telescopioSel) $('scope').value = nombrePieza(telescopioSel);
+      } else {
+        telescopioSel = null; telescopioIdSel = null;
+      }
+      recompute();
+      if (entradasBox) {
+        Array.prototype.forEach.call(entradasBox.querySelectorAll('.entry'), function (el) { recalcEntrada(el, false); });
+      }
+    });
+  }
+  // Escribir el telescopio a mano lo desvincula de la flota (id a null).
+  $('scope').addEventListener('input', function () {
+    telescopioSel = null; telescopioIdSel = null;
+    if (scopeSelect) scopeSelect.value = '';
+  });
+
   // ═══════════════════════════════════════════════════════════════════════
   // ENVÍO: por ahora, genera el bloque de datos de la observación
   // ═══════════════════════════════════════════════════════════════════════
   // Datos que WordPress inyecta en la página (ver el plugin). Si no existen,
   // el formulario funciona en modo local: solo muestra el JSON, sin guardar.
   var WP = window.BITACORA_WP || null;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // EQUIPO DEL OBSERVADOR ("Mi flota"): telescopio + oculares + auxiliares.
+  // Al elegir telescopio y, por entrada, ocular (y opcionalmente auxiliar), se
+  // autocalculan aumento, pupila de salida y campo real (todos editables).
+  //   aumentos = focal_tele × factor_aux / focal_ocular
+  //   pupila   = apertura / aumentos     campo_real = campo_aparente / aumentos
+  // ═══════════════════════════════════════════════════════════════════════
+  var flota = { telescopios: [], oculares: [], auxiliares: [] };
+  var flotaCargada = false;
+  var telescopioSel = null;             // telescopio elegido (objeto) o null
+  var telescopioIdSel = null;           // su id (para guardar en la observación)
+  var telescopioIdPendiente = null;     // id a preseleccionar (modo edición)
+
+  function piezaPorId(cat, id) {
+    var arr = flota[cat] || [];
+    for (var i = 0; i < arr.length; i++) { if (String(arr[i].id) === String(id)) return arr[i]; }
+    return null;
+  }
+  function nombrePieza(p) {
+    if (!p) return '';
+    return ((p.vendor ? p.vendor + ' ' : '') + (p.modelo || p.nombre || '')).trim();
+  }
+  function specsPieza(cat, p) {
+    var n = function (v) { var x = parseFloat(v); return isNaN(x) ? null : x; };
+    var s = [];
+    if (cat === 'telescopios') {
+      if (n(p.apertura_mm) != null) s.push(n(p.apertura_mm) + 'mm');
+      if (n(p.focal_mm) != null) s.push('f=' + n(p.focal_mm));
+    } else if (cat === 'oculares') {
+      if (n(p.focal_mm) != null) s.push(n(p.focal_mm) + 'mm');
+      if (n(p.campo_aparente) != null) s.push(n(p.campo_aparente) + '°');
+    } else {
+      if (n(p.factor) != null) s.push('×' + n(p.factor));
+    }
+    return s.length ? ' (' + s.join(' ') + ')' : '';
+  }
+
+  // Rellena un <select> con una categoría de la flota (value = id).
+  function llenarSelect(sel, cat, placeholder) {
+    if (!sel) return;
+    var html = '<option value="">' + placeholder + '</option>';
+    (flota[cat] || []).forEach(function (p) {
+      html += '<option value="' + p.id + '">' + textoOpcion(nombrePieza(p) + specsPieza(cat, p)) + '</option>';
+    });
+    sel.innerHTML = html;
+  }
+  function textoOpcion(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Cálculo óptico. Devuelve { aumento, pupila, campoReal(grados) } o null.
+  function calcularOptica(tele, ocular, aux) {
+    if (!tele || !ocular) return null;
+    var Ftel = parseFloat(tele.focal_mm), fo = parseFloat(ocular.focal_mm);
+    if (!(Ftel > 0) || !(fo > 0)) return null;
+    var D = parseFloat(tele.apertura_mm), afov = parseFloat(ocular.campo_aparente);
+    var factor = (aux && parseFloat(aux.factor) > 0) ? parseFloat(aux.factor) : 1;
+    var aumento = (Ftel * factor) / fo;
+    return {
+      aumento: Math.round(aumento),
+      pupila: (D > 0) ? Math.round((D / aumento) * 10) / 10 : null,
+      campoReal: (afov > 0) ? Math.round((afov / aumento) * 100) / 100 : null
+    };
+  }
+
+  // Recalcula (y rellena) los campos ópticos de una entrada a partir de su
+  // ocular/auxiliar y del telescopio elegido. Con 'ponerTitulo', también fija el
+  // nombre del ocular. Solo actúa cuando hay telescopio y ocular seleccionados.
+  function recalcEntrada(el, ponerTitulo) {
+    var so = el.querySelector('.e-ocular'), sa = el.querySelector('.e-auxiliar');
+    var ocular = (so && so.value) ? piezaPorId('oculares', so.value) : null;
+    var aux = (sa && sa.value) ? piezaPorId('auxiliares', sa.value) : null;
+    if (ponerTitulo && ocular) {
+      var tit = el.querySelector('.e-titulo');
+      if (tit) tit.value = nombrePieza(ocular);
+    }
+    if (!telescopioSel || !ocular) return;
+    var r = calcularOptica(telescopioSel, ocular, aux);
+    if (!r) return;
+    el.querySelector('.e-aumento').value = (r.aumento != null) ? r.aumento : '';
+    if (r.campoReal != null) el.querySelector('.e-campo').value = fmtCampo(r.campoReal);
+    if (r.pupila != null) el.querySelector('.e-pupila').value = r.pupila;
+    if (typeof recompute === 'function') recompute();
+  }
+
+  // Rellena (una sola vez) los selects de equipo de una entrada y aplica la
+  // preselección guardada (modo edición: en._ocuPre / en._auxPre).
+  function poblarEntrada(el) {
+    if (!flotaCargada) return;
+    var so = el.querySelector('.e-ocular'), sa = el.querySelector('.e-auxiliar');
+    if (so && !so._pob) { llenarSelect(so, 'oculares', '— Elige un ocular —'); so._pob = true; if (el._ocuPre) so.value = String(el._ocuPre); }
+    if (sa && !sa._pob) { llenarSelect(sa, 'auxiliares', '— Sin auxiliar —'); sa._pob = true; if (el._auxPre) sa.value = String(el._auxPre); }
+  }
+
+  // Rellena el select de telescopios y aplica la preselección pendiente.
+  function poblarTelescopios() {
+    var sel = $('scopeSelect');
+    if (!sel) return;
+    if (!sel._pob) { llenarSelect(sel, 'telescopios', '— Elige de tu flota (o escribe abajo) —'); sel._pob = true; }
+    if (telescopioIdPendiente) {
+      sel.value = String(telescopioIdPendiente);
+      if (sel.value) { telescopioSel = piezaPorId('telescopios', telescopioIdPendiente); telescopioIdSel = telescopioSel ? telescopioSel.id : null; }
+      telescopioIdPendiente = null;
+    }
+  }
+
+  // Vuelca la flota en la interfaz cuando ya está cargada (y hay DOM listo).
+  function sincronizarFlota() {
+    if (!flotaCargada) return;
+    poblarTelescopios();
+    if (entradasBox) {
+      Array.prototype.forEach.call(entradasBox.querySelectorAll('.entry'), poblarEntrada);
+    }
+  }
+
+  function cargarFlota() {
+    if (!WP) return;
+    var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
+    fetch(API, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) return;
+        flota = { telescopios: d.telescopios || [], oculares: d.oculares || [], auxiliares: d.auxiliares || [] };
+        flotaCargada = true;
+        sincronizarFlota();
+      })
+      .catch(function () { /* sin flota: los campos ópticos se rellenan a mano */ });
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // MODO EDICIÓN
@@ -446,6 +601,8 @@
     objInput.value      = obs.objeto || '';
     $('observer').value = obs.observador || '';
     $('scope').value    = obs.telescopio || '';
+    // Telescopio de la flota (se preselecciona cuando la flota esté cargada).
+    telescopioIdPendiente = obs.telescopio_id ? obs.telescopio_id : null;
     if($('fechaObs') && obs.fecha_observacion) $('fechaObs').value = obs.fecha_observacion;
 
     // MySQL devuelve todo como texto; los campos de RA/Dec aceptan decimales.
@@ -477,6 +634,8 @@
     }
 
     recompute();
+    // Si la flota ya está cargada, preselecciona telescopio/oculares/auxiliares.
+    sincronizarFlota();
   }
 
   function cargarParaEditar(){
@@ -504,6 +663,7 @@
 
   aplicarModoEdicion();
   cargarParaEditar();
+  cargarFlota();   // carga el equipo del observador y puebla los selectores
 
   // Precarga el observador con el nombre del usuario de WordPress (editable).
   // Solo al crear (en edición, precargar() pone el de la observación).
@@ -615,6 +775,12 @@
     el.innerHTML =
       '<div class="entry-head"><span class="entry-title">Ocular</span>'+
         '<button type="button" class="entry-del">Quitar</button></div>'+
+      '<div class="row entry-equipo">'+
+        '<label class="field"><span class="lab">Ocular (de tu flota)</span>'+
+          '<select class="e-ocular"><option value="">— Elige un ocular —</option></select></label>'+
+        '<label class="field"><span class="lab">Auxiliar (opcional)</span>'+
+          '<select class="e-auxiliar"><option value="">— Sin auxiliar —</option></select></label>'+
+      '</div>'+
       '<div class="row">'+
         '<label class="field"><span class="lab">Aumento (✕) *</span>'+
           '<input type="number" class="e-aumento" step="1" min="1" placeholder="70"></label>'+
@@ -650,6 +816,14 @@
     el.querySelector('.e-pupila').value  = (datos.pupila_salida!==undefined&&datos.pupila_salida!==null&&datos.pupila_salida!=='')?datos.pupila_salida:'';
     el.querySelector('.e-titulo').value  = datos.titulo||'';
     el.querySelector('.e-desc').innerHTML = datos.descripcion||'';
+
+    // Equipo de la entrada: preselección guardada (modo edición) + poblado de los
+    // selects (cuando la flota esté cargada) + recálculo al cambiar de pieza.
+    if (datos.ocular_id) el._ocuPre = datos.ocular_id;
+    if (datos.auxiliar_id) el._auxPre = datos.auxiliar_id;
+    poblarEntrada(el);
+    el.querySelector('.e-ocular').addEventListener('change', function(){ recalcEntrada(el, true); });
+    el.querySelector('.e-auxiliar').addEventListener('change', function(){ recalcEntrada(el, false); });
 
     // Editor con formato: Enter crea párrafos <p>.
     try{ document.execCommand('defaultParagraphSeparator', false, 'p'); }catch(_e){}
@@ -713,6 +887,9 @@
       var titulo=el.querySelector('.e-titulo').value.trim();
       var descHtml=el.querySelector('.e-desc').innerHTML.trim();
       var imagenes=recogerImagenes(el);
+      var ocuSel=el.querySelector('.e-ocular'), auxSel=el.querySelector('.e-auxiliar');
+      var ocuId=(ocuSel&&ocuSel.value)?parseInt(ocuSel.value,10):null;
+      var auxId=(auxSel&&auxSel.value)?parseInt(auxSel.value,10):null;
       if(aum==='' && campo==='' && pup==='' && titulo==='' && textoPlano(descHtml)==='' && !imagenes.length) return;
       out.push({
         aumento: aum==='' ? null : parseFloat(aum),
@@ -720,6 +897,8 @@
         pupilaSalida: pup==='' ? null : parseFloat(pup),
         titulo: titulo,
         descripcion: descHtml,
+        ocularId: ocuId,
+        auxiliarId: auxId,
         imagenes: imagenes
       });
     });

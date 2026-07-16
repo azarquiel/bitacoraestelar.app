@@ -22,13 +22,16 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.16.3' );
+define( 'BITACORA_VERSION', '1.17.0' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
 define( 'BITACORA_TABLA_OBJETOS', 'bitacora_objetos' );
 define( 'BITACORA_TABLA_OBSERVADORES', 'bitacora_observadores' );
 define( 'BITACORA_TABLA_FICHAS', 'bitacora_fichas' );
+define( 'BITACORA_TABLA_TELESCOPIOS', 'bitacora_telescopios' );
+define( 'BITACORA_TABLA_OCULARES', 'bitacora_oculares' );
+define( 'BITACORA_TABLA_AUXILIARES', 'bitacora_auxiliares' );
 
 /**
  * Nombre real de la tabla, con el prefijo que use esta instalación
@@ -67,6 +70,37 @@ function bitacora_nombre_tabla_observadores() {
 function bitacora_nombre_tabla_fichas() {
     global $wpdb;
     return $wpdb->prefix . BITACORA_TABLA_FICHAS;
+}
+
+/** Nombre real de la tabla de telescopios (catálogo global + equipo personal). */
+function bitacora_nombre_tabla_telescopios() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_TELESCOPIOS;
+}
+
+/** Nombre real de la tabla de oculares (catálogo global + equipo personal). */
+function bitacora_nombre_tabla_oculares() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_OCULARES;
+}
+
+/** Nombre real de la tabla de auxiliares/Barlow/reductores (catálogo + personal). */
+function bitacora_nombre_tabla_auxiliares() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_AUXILIARES;
+}
+
+/**
+ * Añade una columna a una tabla si aún no existe (para migraciones de esquema
+ * sobre tablas ya creadas, donde dbDelta no siempre es fiable). $tabla es el
+ * nombre real (con prefijo); $definicion es el tipo SQL (p. ej. "bigint(20)...").
+ */
+function bitacora_asegurar_columna( $tabla, $columna, $definicion ) {
+    global $wpdb;
+    $cols = $wpdb->get_col( "DESC $tabla", 0 );
+    if ( ! in_array( $columna, (array) $cols, true ) ) {
+        $wpdb->query( "ALTER TABLE $tabla ADD COLUMN $columna $definicion" );
+    }
 }
 
 /* ===========================================================================
@@ -216,6 +250,62 @@ function bitacora_crear_tabla() {
         UNIQUE KEY observacion_id (observacion_id)
     ) $collate;";
 
+    // Catálogo de telescopios: filas con usuario_id NULL = catálogo global
+    // (semilla, común a todos); filas con usuario_id = telescopios PERSONALES de
+    // ese usuario. Apertura y focal (mm) bastan para calcular aumentos y pupila.
+    $tabla_telescopios = bitacora_nombre_tabla_telescopios();
+    $sql_telescopios = "CREATE TABLE $tabla_telescopios (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        usuario_id bigint(20) unsigned DEFAULT NULL,
+        vendor varchar(96) NOT NULL DEFAULT '',
+        modelo varchar(160) NOT NULL DEFAULT '',
+        optica varchar(64) NOT NULL DEFAULT '',
+        apertura_mm double DEFAULT NULL,
+        focal_mm double DEFAULT NULL,
+        f_ratio double DEFAULT NULL,
+        notas varchar(255) NOT NULL DEFAULT '',
+        creado_en datetime NOT NULL,
+        actualizado_en datetime DEFAULT NULL,
+        PRIMARY KEY  (id),
+        KEY usuario_id (usuario_id)
+    ) $collate;";
+
+    // Catálogo de oculares (misma convención usuario_id NULL/global vs personal).
+    // Focal (mm) y campo aparente (°) bastan para el aumento y el campo real.
+    $tabla_oculares = bitacora_nombre_tabla_oculares();
+    $sql_oculares = "CREATE TABLE $tabla_oculares (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        usuario_id bigint(20) unsigned DEFAULT NULL,
+        vendor varchar(96) NOT NULL DEFAULT '',
+        modelo varchar(160) NOT NULL DEFAULT '',
+        focal_mm double DEFAULT NULL,
+        campo_aparente double DEFAULT NULL,
+        barril_mm double DEFAULT NULL,
+        notas varchar(255) NOT NULL DEFAULT '',
+        creado_en datetime NOT NULL,
+        actualizado_en datetime DEFAULT NULL,
+        PRIMARY KEY  (id),
+        KEY usuario_id (usuario_id)
+    ) $collate;";
+
+    // Catálogo de auxiliares (Barlow / reductores / Powermates / flatteners).
+    // 'factor' multiplica la focal efectiva del telescopio (Barlow >1, reductor <1;
+    // vacío = 1). 'extension_mm' es un dato informativo de algunos modelos raros.
+    $tabla_auxiliares = bitacora_nombre_tabla_auxiliares();
+    $sql_auxiliares = "CREATE TABLE $tabla_auxiliares (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        usuario_id bigint(20) unsigned DEFAULT NULL,
+        vendor varchar(96) NOT NULL DEFAULT '',
+        nombre varchar(160) NOT NULL DEFAULT '',
+        factor double DEFAULT NULL,
+        extension_mm double DEFAULT NULL,
+        notas varchar(255) NOT NULL DEFAULT '',
+        creado_en datetime NOT NULL,
+        actualizado_en datetime DEFAULT NULL,
+        PRIMARY KEY  (id),
+        KEY usuario_id (usuario_id)
+    ) $collate;";
+
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql );
     dbDelta( $sql_entradas );
@@ -223,6 +313,25 @@ function bitacora_crear_tabla() {
     dbDelta( $sql_objetos );
     dbDelta( $sql_observadores );
     dbDelta( $sql_fichas );
+    dbDelta( $sql_telescopios );
+    dbDelta( $sql_oculares );
+    dbDelta( $sql_auxiliares );
+
+    // Columnas de asociación observación/entrada → equipo (idempotente: dbDelta no
+    // añade columnas nuevas a tablas ya creadas de forma fiable, así que se hace a
+    // mano comprobando su existencia). El texto de telescopio/ocular se conserva.
+    bitacora_asegurar_columna( $tabla, 'telescopio_id', "bigint(20) unsigned DEFAULT NULL" );
+    bitacora_asegurar_columna( $tabla_entradas, 'ocular_id', "bigint(20) unsigned DEFAULT NULL" );
+    bitacora_asegurar_columna( $tabla_entradas, 'auxiliar_id', "bigint(20) unsigned DEFAULT NULL" );
+
+    // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
+    // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
+    // se guarda una opción para no repetir ~1500 upserts en cada activación; el
+    // botón del admin permite reimportar cuando se actualicen los CSV.
+    if ( ! get_option( 'bitacora_equipo_seed_v1' ) ) {
+        bitacora_importar_equipo_seed();
+        update_option( 'bitacora_equipo_seed_v1', 1 );
+    }
 
     // Rellena el catálogo y enlaza las observaciones ya existentes por su nombre.
     bitacora_backfill_observadores();
@@ -455,6 +564,11 @@ function bitacora_validar_datos( $d ) {
         return new WP_Error( 'campo_invalido', 'El número Messier debe estar entre 1 y 110.', array( 'status' => 400 ) );
     }
 
+    // --- Telescopio de la flota del observador (opcional). El texto 'telescopio'
+    //     se conserva; este id enlaza con la pieza para poder reeditar/recalcular. ---
+    $telescopio_id = ( isset( $d['telescopioId'] ) && is_numeric( $d['telescopioId'] ) && $d['telescopioId'] > 0 )
+        ? intval( $d['telescopioId'] ) : null;
+
     // --- Datos de cielo (opcionales): null, o número en rango razonable ---
     $cielo = array();
     $rangos_cielo = array(
@@ -482,6 +596,7 @@ function bitacora_validar_datos( $d ) {
         'decl'            => $v['dec'],
         'observador'      => $observador,
         'telescopio'      => $telescopio,
+        'telescopio_id'   => $telescopio_id,
         'fecha_observacion' => $fecha_obs,
     );
 }
@@ -704,6 +819,55 @@ function bitacora_registrar_rutas() {
             'permission_callback' => '__return_true',
         )
     );
+
+    // ── EQUIPO (telescopios, oculares y auxiliares) ──
+    // Catálogo GLOBAL (semilla) del que el observador copia para su "flota".
+    register_rest_route(
+        'bitacora/v1',
+        '/equipo/catalogo',
+        array(
+            'methods'             => 'GET',
+            'callback'            => 'bitacora_equipo_catalogo',
+            'permission_callback' => $solo_logueados,
+        )
+    );
+
+    // Equipo PERSONAL del usuario, y alta de una pieza nueva por categoría.
+    register_rest_route(
+        'bitacora/v1',
+        '/equipo',
+        array(
+            'methods'             => 'GET',
+            'callback'            => 'bitacora_equipo_personal',
+            'permission_callback' => $solo_logueados,
+        )
+    );
+    register_rest_route(
+        'bitacora/v1',
+        '/equipo/(?P<tipo>telescopio|ocular|auxiliar)',
+        array(
+            'methods'             => 'POST',
+            'callback'            => 'bitacora_equipo_crear',
+            'permission_callback' => $solo_logueados,
+        )
+    );
+    // Editar / borrar una pieza personal concreta (con comprobación de propiedad).
+    register_rest_route(
+        'bitacora/v1',
+        '/equipo/(?P<tipo>telescopio|ocular|auxiliar)/(?P<id>\d+)',
+        array(
+            array(
+                'methods'             => 'PUT',
+                'callback'            => 'bitacora_equipo_editar',
+                'permission_callback' => $solo_logueados,
+            ),
+            array(
+                'methods'             => 'DELETE',
+                'callback'            => 'bitacora_equipo_borrar',
+                'permission_callback' => $solo_logueados,
+            ),
+        )
+    );
 }
 add_action( 'rest_api_init', 'bitacora_registrar_rutas' );
 
@@ -823,6 +987,12 @@ function bitacora_validar_entradas( $lista ) {
             }
         }
 
+        // Ocular y auxiliar de la flota (opcionales): enlazan la entrada con la
+        // pieza usada. Los valores ópticos (aumento/campo/pupila) ya vienen
+        // calculados desde el formulario, así que aquí solo se guardan los ids.
+        $ocular_id   = ( isset( $e['ocularId'] ) && is_numeric( $e['ocularId'] ) && $e['ocularId'] > 0 ) ? intval( $e['ocularId'] ) : null;
+        $auxiliar_id = ( isset( $e['auxiliarId'] ) && is_numeric( $e['auxiliarId'] ) && $e['auxiliarId'] > 0 ) ? intval( $e['auxiliarId'] ) : null;
+
         $salida[] = array(
             'aumento'       => $aumento,
             'campo_real'    => $campo,
@@ -830,6 +1000,8 @@ function bitacora_validar_entradas( $lista ) {
             'boton'         => $boton,
             'titulo'        => $titulo,
             'descripcion'   => $desc,
+            'ocular_id'     => $ocular_id,
+            'auxiliar_id'   => $auxiliar_id,
             'imagenes'      => $imagenes,
         );
     }
@@ -893,6 +1065,8 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                 'boton'          => isset( $e['boton'] ) ? $e['boton'] : '',
                 'titulo'         => $e['titulo'],
                 'descripcion'    => $e['descripcion'],
+                'ocular_id'      => isset( $e['ocular_id'] ) ? $e['ocular_id'] : null,
+                'auxiliar_id'    => isset( $e['auxiliar_id'] ) ? $e['auxiliar_id'] : null,
                 'creado_en'      => current_time( 'mysql', true ),
             ),
             array(
@@ -904,6 +1078,8 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                 '%s', // boton
                 '%s', // titulo
                 '%s', // descripcion
+                ( empty( $e['ocular_id'] ) )   ? '%s' : '%d', // ocular_id (NULL como %s)
+                ( empty( $e['auxiliar_id'] ) ) ? '%s' : '%d', // auxiliar_id (NULL como %s)
                 '%s', // creado_en
             )
         );
@@ -1030,6 +1206,184 @@ function bitacora_listar_observadores( WP_REST_Request $peticion ) {
             FROM $t_obs o ORDER BY o.nombre ASC";
     $filas = $wpdb->get_results( $sql );
     return new WP_REST_Response( $filas ? $filas : array(), 200 );
+}
+
+/* ===========================================================================
+ * 2-SEPTIES. EQUIPO DEL OBSERVADOR (telescopios, oculares, auxiliares)
+ *
+ * Cada tabla mezcla el CATÁLOGO GLOBAL (usuario_id NULL, semilla) y el equipo
+ * PERSONAL de cada usuario (usuario_id = suyo). El observador arma su "flota"
+ * copiando del catálogo o añadiendo piezas a medida.
+ * =========================================================================== */
+
+/** tipo ('telescopio'|'ocular'|'auxiliar') -> nombre real de la tabla, o null. */
+function bitacora_equipo_tabla( $tipo ) {
+    if ( 'telescopio' === $tipo ) { return bitacora_nombre_tabla_telescopios(); }
+    if ( 'ocular' === $tipo )     { return bitacora_nombre_tabla_oculares(); }
+    if ( 'auxiliar' === $tipo )   { return bitacora_nombre_tabla_auxiliares(); }
+    return null;
+}
+
+/**
+ * Esquema de campos por categoría: la columna que hace de "modelo/nombre", las
+ * columnas numéricas y las de texto (además de 'vendor', común a las tres).
+ */
+function bitacora_equipo_esquema( $tipo ) {
+    if ( 'telescopio' === $tipo ) {
+        return array( 'modelo_col' => 'modelo', 'num' => array( 'apertura_mm', 'focal_mm', 'f_ratio' ), 'txt' => array( 'optica', 'notas' ) );
+    }
+    if ( 'ocular' === $tipo ) {
+        return array( 'modelo_col' => 'modelo', 'num' => array( 'focal_mm', 'campo_aparente', 'barril_mm' ), 'txt' => array( 'notas' ) );
+    }
+    return array( 'modelo_col' => 'nombre', 'num' => array( 'factor', 'extension_mm' ), 'txt' => array( 'notas' ) );
+}
+
+/** Lee todo el equipo (catálogo global si usuario_id es null, o el personal). */
+function bitacora_equipo_leer_todo( $usuario_id ) {
+    global $wpdb;
+    $cond = ( null === $usuario_id ) ? 'usuario_id IS NULL' : $wpdb->prepare( 'usuario_id = %d', $usuario_id );
+    $tel = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_telescopios() . " WHERE $cond ORDER BY vendor ASC, modelo ASC" );
+    $ocu = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_oculares() . " WHERE $cond ORDER BY vendor ASC, modelo ASC" );
+    $aux = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_auxiliares() . " WHERE $cond ORDER BY vendor ASC, nombre ASC" );
+    return array(
+        'telescopios' => $tel ? $tel : array(),
+        'oculares'    => $ocu ? $ocu : array(),
+        'auxiliares'  => $aux ? $aux : array(),
+    );
+}
+
+function bitacora_equipo_catalogo( WP_REST_Request $peticion ) {
+    return new WP_REST_Response( bitacora_equipo_leer_todo( null ), 200 );
+}
+
+function bitacora_equipo_personal( WP_REST_Request $peticion ) {
+    return new WP_REST_Response( bitacora_equipo_leer_todo( get_current_user_id() ), 200 );
+}
+
+/**
+ * Construye el array de columnas de una pieza a partir de los parámetros. Si
+ * viene 'catalogoId', COPIA las specs de esa fila del catálogo global; los campos
+ * explícitos (crear a medida) las sobreescriben. Devuelve WP_Error si queda vacío.
+ */
+function bitacora_equipo_datos_desde_params( $tipo, $params ) {
+    global $wpdb;
+    $esq = bitacora_equipo_esquema( $tipo );
+    $mcol = $esq['modelo_col'];
+    $base = array( 'vendor' => '', $mcol => '' );
+    foreach ( $esq['txt'] as $c ) { $base[ $c ] = ''; }
+
+    if ( ! empty( $params['catalogoId'] ) ) {
+        $tabla = bitacora_equipo_tabla( $tipo );
+        $cat = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $tabla WHERE id = %d AND usuario_id IS NULL", intval( $params['catalogoId'] ) ), ARRAY_A );
+        if ( ! $cat ) {
+            return new WP_Error( 'catalogo', 'El modelo del catálogo no existe.', array( 'status' => 400 ) );
+        }
+        $base['vendor'] = $cat['vendor'];
+        $base[ $mcol ]  = $cat[ $mcol ];
+        foreach ( $esq['num'] as $c ) { $base[ $c ] = isset( $cat[ $c ] ) ? $cat[ $c ] : null; }
+        foreach ( $esq['txt'] as $c ) { $base[ $c ] = isset( $cat[ $c ] ) ? $cat[ $c ] : ''; }
+    }
+
+    if ( isset( $params['vendor'] ) ) { $base['vendor'] = sanitize_text_field( $params['vendor'] ); }
+    if ( isset( $params[ $mcol ] ) )  { $base[ $mcol ]  = sanitize_text_field( $params[ $mcol ] ); }
+    // Comodidad: 'modelo' vale como alias del nombre del auxiliar.
+    if ( 'nombre' === $mcol && isset( $params['modelo'] ) ) { $base['nombre'] = sanitize_text_field( $params['modelo'] ); }
+    foreach ( $esq['num'] as $c ) {
+        if ( array_key_exists( $c, $params ) ) {
+            $base[ $c ] = ( '' === $params[ $c ] || null === $params[ $c ] ) ? null : floatval( $params[ $c ] );
+        }
+    }
+    foreach ( $esq['txt'] as $c ) {
+        if ( isset( $params[ $c ] ) ) { $base[ $c ] = sanitize_text_field( $params[ $c ] ); }
+    }
+
+    if ( '' === trim( (string) $base['vendor'] ) && '' === trim( (string) $base[ $mcol ] ) ) {
+        return new WP_Error( 'vacio', 'Indica al menos un nombre o modelo.', array( 'status' => 400 ) );
+    }
+    return $base;
+}
+
+function bitacora_equipo_crear( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $tipo  = $peticion['tipo'];
+    $tabla = bitacora_equipo_tabla( $tipo );
+    if ( ! $tabla ) {
+        return new WP_Error( 'tipo_invalido', 'Tipo de equipo no válido.', array( 'status' => 400 ) );
+    }
+    $datos = bitacora_equipo_datos_desde_params( $tipo, (array) $peticion->get_json_params() );
+    if ( is_wp_error( $datos ) ) {
+        return $datos;
+    }
+    $datos['usuario_id'] = get_current_user_id();
+    $datos['creado_en']  = current_time( 'mysql', true );
+    if ( false === $wpdb->insert( $tabla, $datos ) ) {
+        return new WP_Error( 'bd', 'No se pudo guardar la pieza de equipo.', array( 'status' => 500 ) );
+    }
+    $fila = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $tabla WHERE id = %d", $wpdb->insert_id ) );
+    return new WP_REST_Response( array( 'ok' => true, 'item' => $fila ), 201 );
+}
+
+/** Comprueba que la pieza existe y es del usuario actual. Devuelve la fila o WP_Error. */
+function bitacora_equipo_pieza_propia( $tabla, $id ) {
+    global $wpdb;
+    $fila = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $tabla WHERE id = %d", $id ) );
+    if ( ! $fila ) {
+        return new WP_Error( 'no_existe', 'La pieza de equipo no existe.', array( 'status' => 404 ) );
+    }
+    if ( intval( $fila->usuario_id ) !== get_current_user_id() ) {
+        return new WP_Error( 'no_autorizado', 'Solo puedes modificar tu propio equipo.', array( 'status' => 403 ) );
+    }
+    return $fila;
+}
+
+function bitacora_equipo_editar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $tipo  = $peticion['tipo'];
+    $tabla = bitacora_equipo_tabla( $tipo );
+    if ( ! $tabla ) {
+        return new WP_Error( 'tipo_invalido', 'Tipo de equipo no válido.', array( 'status' => 400 ) );
+    }
+    $prev = bitacora_equipo_pieza_propia( $tabla, intval( $peticion['id'] ) );
+    if ( is_wp_error( $prev ) ) {
+        return $prev;
+    }
+    $params = (array) $peticion->get_json_params();
+    $esq = bitacora_equipo_esquema( $tipo );
+    $mcol = $esq['modelo_col'];
+    $upd = array();
+    if ( isset( $params['vendor'] ) ) { $upd['vendor'] = sanitize_text_field( $params['vendor'] ); }
+    if ( isset( $params[ $mcol ] ) )  { $upd[ $mcol ]  = sanitize_text_field( $params[ $mcol ] ); }
+    if ( 'nombre' === $mcol && isset( $params['modelo'] ) ) { $upd['nombre'] = sanitize_text_field( $params['modelo'] ); }
+    foreach ( $esq['num'] as $c ) {
+        if ( array_key_exists( $c, $params ) ) {
+            $upd[ $c ] = ( '' === $params[ $c ] || null === $params[ $c ] ) ? null : floatval( $params[ $c ] );
+        }
+    }
+    foreach ( $esq['txt'] as $c ) {
+        if ( isset( $params[ $c ] ) ) { $upd[ $c ] = sanitize_text_field( $params[ $c ] ); }
+    }
+    if ( ! $upd ) {
+        return new WP_Error( 'sin_cambios', 'No hay nada que actualizar.', array( 'status' => 400 ) );
+    }
+    $upd['actualizado_en'] = current_time( 'mysql', true );
+    $wpdb->update( $tabla, $upd, array( 'id' => intval( $peticion['id'] ) ) );
+    $fila = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $tabla WHERE id = %d", intval( $peticion['id'] ) ) );
+    return new WP_REST_Response( array( 'ok' => true, 'item' => $fila ), 200 );
+}
+
+function bitacora_equipo_borrar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $tipo  = $peticion['tipo'];
+    $tabla = bitacora_equipo_tabla( $tipo );
+    if ( ! $tabla ) {
+        return new WP_Error( 'tipo_invalido', 'Tipo de equipo no válido.', array( 'status' => 400 ) );
+    }
+    $prev = bitacora_equipo_pieza_propia( $tabla, intval( $peticion['id'] ) );
+    if ( is_wp_error( $prev ) ) {
+        return $prev;
+    }
+    $wpdb->delete( $tabla, array( 'id' => intval( $peticion['id'] ) ), array( '%d' ) );
+    return new WP_REST_Response( array( 'ok' => true ), 200 );
 }
 
 /* ===========================================================================
@@ -1698,6 +2052,132 @@ function bitacora_crear_objeto( WP_REST_Request $peticion ) {
 }
 
 /**
+ * Convierte un valor numérico de los CSV (decimales con coma, p. ej. "12,5")
+ * a float, o null si está vacío/no numérico.
+ */
+function bitacora_csv_num( $v ) {
+    $v = trim( (string) $v );
+    if ( '' === $v ) {
+        return null;
+    }
+    $v = str_replace( ',', '.', $v );
+    return is_numeric( $v ) ? floatval( $v ) : null;
+}
+
+/**
+ * Lee un CSV del plugin (separador ';', UTF-8) y devuelve un array de filas
+ * asociativas usando la primera línea como cabecera. '' si no existe.
+ */
+function bitacora_leer_csv( $nombre ) {
+    $archivo = __DIR__ . '/datos/' . $nombre;
+    if ( ! file_exists( $archivo ) ) {
+        return null;
+    }
+    $lineas = file( $archivo, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
+    if ( ! $lineas ) {
+        return array();
+    }
+    // Quita el BOM UTF-8 si lo hubiera y los retornos de carro (CRLF) de cada
+    // línea, para que el último campo de cada fila no arrastre un "\r".
+    $lineas = array_map( function ( $l ) { return rtrim( $l, "\r" ); }, $lineas );
+    $lineas[0] = preg_replace( '/^\xEF\xBB\xBF/', '', $lineas[0] );
+    $cabecera = str_getcsv( array_shift( $lineas ), ';' );
+    $filas = array();
+    foreach ( $lineas as $linea ) {
+        $campos = str_getcsv( $linea, ';' );
+        $fila = array();
+        foreach ( $cabecera as $i => $col ) {
+            $fila[ trim( $col ) ] = isset( $campos[ $i ] ) ? $campos[ $i ] : '';
+        }
+        $filas[] = $fila;
+    }
+    return $filas;
+}
+
+/**
+ * Importa el catálogo GLOBAL de equipo (telescopios, oculares y auxiliares) desde
+ * los CSV de datos/. Idempotente: upsert por (vendor, modelo) sobre las filas del
+ * catálogo (usuario_id NULL); no toca el equipo personal de nadie.
+ * Devuelve array con recuentos por categoría o WP_Error.
+ */
+function bitacora_importar_equipo_seed() {
+    global $wpdb;
+    $ahora = current_time( 'mysql', true );
+    $totales = array( 'telescopios' => 0, 'oculares' => 0, 'auxiliares' => 0 );
+
+    // Upsert de una fila del catálogo (usuario_id NULL) buscando por vendor+modelo.
+    $upsert = function ( $tabla, $clave_modelo, $vendor, $modelo, $datos ) use ( $wpdb, $ahora ) {
+        if ( '' === trim( (string) $vendor ) && '' === trim( (string) $modelo ) ) {
+            return null;
+        }
+        $id = $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM $tabla WHERE usuario_id IS NULL AND vendor = %s AND $clave_modelo = %s",
+            $vendor,
+            $modelo
+        ) );
+        if ( $id ) {
+            $wpdb->update( $tabla, array_merge( $datos, array( 'actualizado_en' => $ahora ) ), array( 'id' => intval( $id ) ) );
+            return 'actualizado';
+        }
+        $wpdb->insert( $tabla, array_merge(
+            array( 'usuario_id' => null, 'vendor' => $vendor, $clave_modelo => $modelo, 'creado_en' => $ahora ),
+            $datos
+        ) );
+        return 'insertado';
+    };
+
+    // Telescopios: Vendor;Model;Optics;D (mm);D (inch);FL (mm);f/Ratio;...
+    $tel = bitacora_leer_csv( 'telescopios.csv' );
+    if ( is_array( $tel ) ) {
+        $t = bitacora_nombre_tabla_telescopios();
+        foreach ( $tel as $f ) {
+            $r = $upsert( $t, 'modelo', sanitize_text_field( $f['Vendor'] ), sanitize_text_field( $f['Model'] ), array(
+                'optica'      => sanitize_text_field( isset( $f['Optics'] ) ? $f['Optics'] : '' ),
+                'apertura_mm' => bitacora_csv_num( isset( $f['D (mm)'] ) ? $f['D (mm)'] : '' ),
+                'focal_mm'    => bitacora_csv_num( isset( $f['FL (mm)'] ) ? $f['FL (mm)'] : '' ),
+                'f_ratio'     => bitacora_csv_num( isset( $f['f/Ratio'] ) ? $f['f/Ratio'] : '' ),
+            ) );
+            if ( $r ) {
+                $totales['telescopios']++;
+            }
+        }
+    }
+
+    // Oculares: Vendor;Model;F.Length (mm);AFoV (°);Barrel (");Reticle
+    $ocu = bitacora_leer_csv( 'oculares.csv' );
+    if ( is_array( $ocu ) ) {
+        $t = bitacora_nombre_tabla_oculares();
+        foreach ( $ocu as $f ) {
+            $r = $upsert( $t, 'modelo', sanitize_text_field( $f['Vendor'] ), sanitize_text_field( $f['Model'] ), array(
+                'focal_mm'       => bitacora_csv_num( isset( $f['F.Length (mm)'] ) ? $f['F.Length (mm)'] : '' ),
+                'campo_aparente' => bitacora_csv_num( isset( $f['AFoV (°)'] ) ? $f['AFoV (°)'] : '' ),
+                'barril_mm'      => bitacora_csv_num( isset( $f['Barrel (")'] ) ? $f['Barrel (")'] : '' ),
+            ) );
+            if ( $r ) {
+                $totales['oculares']++;
+            }
+        }
+    }
+
+    // Auxiliares: Vendor;Name;Magnification;Focal Length extension (mm)
+    $aux = bitacora_leer_csv( 'auxiliares.csv' );
+    if ( is_array( $aux ) ) {
+        $t = bitacora_nombre_tabla_auxiliares();
+        foreach ( $aux as $f ) {
+            $r = $upsert( $t, 'nombre', sanitize_text_field( $f['Vendor'] ), sanitize_text_field( $f['Name'] ), array(
+                'factor'       => bitacora_csv_num( isset( $f['Magnification'] ) ? $f['Magnification'] : '' ),
+                'extension_mm' => bitacora_csv_num( isset( $f['Focal Length extension (mm)'] ) ? $f['Focal Length extension (mm)'] : '' ),
+            ) );
+            if ( $r ) {
+                $totales['auxiliares']++;
+            }
+        }
+    }
+
+    return $totales;
+}
+
+/**
  * Importa (o actualiza) los objetos desde datos/objetos-seed.json.
  * Devuelve array( 'insertados' => n, 'actualizados' => n ) o WP_Error.
  */
@@ -1997,6 +2477,29 @@ function bitacora_panel_objetos() {
     wp_nonce_field( 'bitacora_importar_objetos' );
     echo '<button type="submit" name="bitacora_importar_objetos" value="1" class="button button-primary">Importar / actualizar objetos desde la semilla</button>';
     echo ' <span style="color:#646970">Idempotente: puedes pulsarlo las veces que quieras sin duplicar (clave: el identificador del objeto).</span>';
+    echo '</form></div>';
+
+    // ── Catálogo de equipo (telescopios / oculares / auxiliares) ──
+    if ( isset( $_POST['bitacora_importar_equipo'] ) && check_admin_referer( 'bitacora_importar_equipo' ) ) {
+        $r = bitacora_importar_equipo_seed();
+        if ( is_wp_error( $r ) ) {
+            echo '<div class="notice notice-error"><p>' . esc_html( $r->get_error_message() ) . '</p></div>';
+        } else {
+            echo '<div class="notice notice-success"><p>Catálogo de equipo importado: <strong>' . intval( $r['telescopios'] ) .
+                 '</strong> telescopios, <strong>' . intval( $r['oculares'] ) . '</strong> oculares, <strong>' .
+                 intval( $r['auxiliares'] ) . '</strong> auxiliares.</p></div>';
+        }
+    }
+    $t_tel = intval( $wpdb->get_var( 'SELECT COUNT(*) FROM ' . bitacora_nombre_tabla_telescopios() . ' WHERE usuario_id IS NULL' ) );
+    $t_ocu = intval( $wpdb->get_var( 'SELECT COUNT(*) FROM ' . bitacora_nombre_tabla_oculares() . ' WHERE usuario_id IS NULL' ) );
+    $t_aux = intval( $wpdb->get_var( 'SELECT COUNT(*) FROM ' . bitacora_nombre_tabla_auxiliares() . ' WHERE usuario_id IS NULL' ) );
+    echo '<div style="margin:22px 0;padding:2px 18px 14px;border:1px solid #c3c4c7;border-left:4px solid #2271b1;background:#fff;max-width:820px">';
+    echo '<h2 style="margin-top:14px">Catálogo de equipo</h2>';
+    echo '<p>Catálogo global: <strong>' . $t_tel . '</strong> telescopios, <strong>' . $t_ocu . '</strong> oculares, <strong>' . $t_aux . '</strong> auxiliares. Cada observador arma su flota desde estos modelos o añadiendo los suyos.</p>';
+    echo '<form method="post">';
+    wp_nonce_field( 'bitacora_importar_equipo' );
+    echo '<button type="submit" name="bitacora_importar_equipo" value="1" class="button button-primary">Importar / actualizar catálogo desde los CSV</button>';
+    echo ' <span style="color:#646970">Idempotente (clave: fabricante + modelo). No toca el equipo personal de nadie.</span>';
     echo '</form></div>';
 }
 

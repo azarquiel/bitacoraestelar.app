@@ -26,6 +26,9 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `listado-observaciones-wordpress.html` | Fragmento del listado | Editor de WordPress |
 | `bitacora-listado.js` | Lógica del listado | Servidor, por FTP |
 | `bitacora-listado.css` | Estilos del listado | Servidor, por FTP |
+| `mi-flota-wordpress.html` | Fragmento de "Mi flota" (equipo del observador) | Editor de WordPress |
+| `bitacora-flota.js` | Lógica de "Mi flota" | Servidor, por FTP |
+| `resources/datos/{telescopios,oculares,auxiliares}.csv` | Catálogo de equipo (semilla) | Bundled en el plugin (`…/bitacora-registro/datos/`) |
 | `…/bitacora-registro/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
 
 **Por qué el `.js` y el `.css` van por FTP y no pegados en el editor.** El
@@ -52,7 +55,8 @@ secciones:
   - Cualquier otro objeto (`NGC 6826`, `IC 1396`…) se acepta, pero pide su
     **RA y Dec a mano**, porque sin coordenadas no hay cálculo posible.
     Admite formato sexagesimal (`21h 40m 22s`) o decimal (`325.09`).
-- Observador y telescopio.
+- Observador y **telescopio**. El telescopio puede elegirse de la flota del
+  observador (ver *Mi flota* más abajo) o escribirse a mano.
 
 ### 2 · Lo que viste, por ocular
 
@@ -122,6 +126,36 @@ Muestra las observaciones como tarjetas, con dos pestañas: **Registradas** y
 - **Borrar** es un **borrado suave**: la fila se marca con la fecha de borrado,
   pero los datos siguen íntegros en la base de datos. Se puede restaurar desde
   la papelera.
+
+---
+
+## Mi flota (equipo del observador)
+
+`mi-flota-wordpress.html` es una página aparte donde cada observador arma su
+**equipo personal**: telescopios, oculares y auxiliares (Barlow, Powermates,
+reductores). Sirve para que, al registrar, no haya que teclear la óptica a mano.
+
+- **Catálogo global**: un catálogo común (~870 telescopios, ~660 oculares y
+  ~35 auxiliares) importado de 3 CSV incluidos en el plugin
+  (`…/bitacora-registro/datos/`). El observador **busca** en él y añade modelos
+  a su flota (se copian sus specs), o crea uno **a medida**. Cada pieza es suya
+  (`usuario_id`); el catálogo global son filas con `usuario_id` a NULL.
+- **Cálculo óptico automático**: en el formulario de registro, al elegir un
+  telescopio y, por ocular, uno de sus oculares (y opcionalmente un auxiliar), se
+  autocalculan **aumento**, **pupila de salida** y **campo real** —todos
+  editables— con:
+  - `aumentos = focal_tele × factor_auxiliar / focal_ocular`
+  - `pupila = apertura / aumentos`
+  - `campo_real = campo_aparente / aumentos`
+
+  El factor del auxiliar multiplica (Barlow) o reduce (reductor) la focal
+  efectiva. Los valores calculados son los que ya guardaba la observación, así
+  que **el mapa y la ficha no cambian**: el equipo solo los rellena.
+- La observación guarda además el `telescopio_id`, y cada entrada su `ocular_id`
+  y `auxiliar_id`, para poder reeditar y recalcular.
+
+El catálogo se importa solo al activar/actualizar el plugin (idempotente) y
+puede reimportarse desde el panel de administración de Bitácora.
 
 ---
 
@@ -251,6 +285,12 @@ se guarda en tablas hijas, y hay catálogos independientes:
 | `wp_bitacora_fichas` | La astrometría de la ficha (RA/Dec, lugar, altitud/azimut, Sol/Luna, condiciones) |
 | `wp_bitacora_objetos` | El catálogo de objetos del mapa: color, `top`/`edge`, `l`/`b`, distancia, clase de Hubble |
 | `wp_bitacora_observadores` | Quién observa (para filtrar el mapa por autor) |
+| `wp_bitacora_telescopios` | Telescopios: catálogo global (`usuario_id` NULL) + flotas personales |
+| `wp_bitacora_oculares` | Oculares: catálogo global + flotas personales |
+| `wp_bitacora_auxiliares` | Auxiliares (Barlow/reductores): catálogo global + flotas personales |
+
+La observación referencia el `telescopio_id`, y cada entrada su `ocular_id` y
+`auxiliar_id` (el equipo usado en ese aumento).
 
 Todo sigue siendo SQL estándar con columnas explícitas: portable con un
 `export`/`import`.
@@ -276,6 +316,10 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | `GET` | `/resolver?q=M104` | No | Localiza un objeto en SIMBAD **sin guardarlo** (para el buscador del mapa) |
 | `GET` | `/observadores` | No | Lista los observadores |
 | `GET` | `/datos.js` | No | Emite `OBSERVADORES`/`OBJECTS`/`OBSERVACIONES` como JavaScript para el visor |
+| `GET` | `/equipo/catalogo` | Sí | Catálogo global de telescopios/oculares/auxiliares |
+| `GET` | `/equipo` | Sí | Equipo personal del usuario |
+| `POST` | `/equipo/{telescopio\|ocular\|auxiliar}` | Sí | Añade una pieza a su flota (del catálogo o a medida) |
+| `PUT`/`DELETE` | `/equipo/{tipo}/{id}` | Sí | Edita/borra una pieza *(solo el dueño)* |
 
 Las rutas de lectura pública (`/objetos` GET, `/resolver`, `/observadores`,
 `/datos.js`) sirven datos que ya son públicos en el mapa. Las de escritura y las
@@ -287,11 +331,16 @@ de observaciones exigen sesión.
 
 ### 1. Instalar el plugin
 
-Crea una carpeta llamada `bitacora-registro` y mete dentro `bitacora-registro.php`:
+Crea una carpeta llamada `bitacora-registro` y mete dentro `bitacora-registro.php`
+y la carpeta `datos/` con los CSV del catálogo de equipo:
 
 ```
 bitacora-registro/
-└── bitacora-registro.php
+├── bitacora-registro.php
+└── datos/
+    ├── telescopios.csv
+    ├── oculares.csv
+    └── auxiliares.csv
 ```
 
 Comprime **la carpeta** (no el archivo suelto, o WordPress dirá que no
@@ -316,11 +365,12 @@ bitacora-formulario.js
 bitacora-formulario.css
 bitacora-listado.js
 bitacora-listado.css
+bitacora-flota.js
 ```
 
 > WordPress **no permite** subir `.js` desde la biblioteca de medios.
 
-### 3. Crear las dos páginas
+### 3. Crear las páginas
 
 **Página del formulario.** *Páginas → Añadir nueva*, título "Registrar
 observación". Añade un bloque **HTML personalizado** y pega dentro todo el
@@ -328,6 +378,10 @@ contenido de `registrar-observacion-wordpress.html`. Publica.
 
 **Página del listado.** Otra página, título "Mis observaciones", con un bloque
 **HTML personalizado** y el contenido de `listado-observaciones-wordpress.html`.
+
+**Página de "Mi flota".** Otra página, título "Mi flota", con un bloque **HTML
+personalizado** y el contenido de `mi-flota-wordpress.html`. Si su ruta no es
+`/mi-flota/`, ajusta el enlace del formulario de registro.
 
 En el fragmento del listado, ajusta la ruta de la página del formulario si no
 coincide con la tuya. Aparece en dos sitios:

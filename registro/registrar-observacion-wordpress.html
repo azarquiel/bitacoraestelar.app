@@ -13,6 +13,18 @@
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260715_2145" />
 
+<style>
+/* Selectores de equipo (telescopio / ocular / auxiliar), con el mismo aspecto
+   que los inputs del formulario. */
+#mw-obs-form select {
+  width:100%;background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
+  color:var(--tinta);font-family:inherit;font-size:16px;padding:11px 13px;cursor:pointer;
+  color-scheme:dark;transition:border-color .15s,box-shadow .15s;
+}
+#mw-obs-form select:focus {outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
+#mw-obs-form .entry-equipo {margin-bottom:14px;}
+</style>
+
 <div id="mw-obs-form">
 <div class="wrap">
   <header class="masthead">
@@ -53,7 +65,9 @@
         <input type="text" id="observer" placeholder="Israel Pérez de Tudela Vázquez" /></label>
 
       <label class="field"><span class="lab">Telescopio</span>
+        <select id="scopeSelect" style="margin-bottom:8px"><option value="">— Elige de tu flota (o escribe abajo) —</option></select>
         <input type="text" id="scope" placeholder="Stargate 18”" /></label>
+      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">Elige tu telescopio y, en cada ocular, uno de tus oculares: los aumentos, la pupila y el campo real se calculan solos. Gestiona tu equipo en <a href="/mi-flota/">Mi flota</a>.</p>
     </fieldset>
 
     <!-- 2 · LO QUE VISTE, POR OCULAR -->
@@ -93,4 +107,4 @@
 </div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=20260716_1400" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=20260716_1900" defer></script>

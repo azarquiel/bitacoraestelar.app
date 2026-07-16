@@ -1,0 +1,86 @@
+<!-- ============================================================
+     MI FLOTA · Equipo del observador (telescopios, oculares y auxiliares)
+     Bitácora Messier
+
+     Pega este bloque en un bloque "HTML personalizado" de Gutenberg,
+     en una página nueva (p. ej. "Mi flota"), protegida por login.
+
+     Reutiliza bitacora-formulario.css (mismo wrapper #mw-obs-form) y añade
+     unos pocos estilos propios. El JS va subido por FTP a
+     /wp-content/uploads/bitacora/  (no lo pegues aquí: el editor escapa los
+     "&" y rompería el JavaScript).
+
+     Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
+     ============================================================ -->
+
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260715_2145" />
+
+<style>
+/* Estilos propios de "Mi flota", encapsulados bajo #mw-obs-form. */
+#mw-obs-form .flota-list {display:flex;flex-direction:column;gap:10px;margin:6px 0 16px;}
+#mw-obs-form .flota-empty {color:var(--tinta-tenue);font-size:14px;font-style:italic;margin:2px 0 14px;}
+#mw-obs-form .flota-item {display:flex;align-items:flex-start;gap:12px;background:var(--noche-2);
+    border:1px solid var(--linea);border-radius:10px;padding:12px 14px;}
+#mw-obs-form .flota-item .fi-main {flex:1 1 auto;min-width:0;}
+#mw-obs-form .flota-item .fi-nom {font-size:16px;font-weight:600;}
+#mw-obs-form .flota-item .fi-specs {font-size:13px;color:var(--azul);
+    font-family:ui-monospace,Menlo,monospace;margin-top:3px;}
+#mw-obs-form .flota-item .fi-acts {display:flex;gap:8px;flex:none;}
+#mw-obs-form .fi-btn {background:none;border:1px solid var(--linea);border-radius:14px;color:var(--tinta-tenue);
+    font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:5px 11px;cursor:pointer;transition:.15s;}
+#mw-obs-form .fi-btn:hover {color:var(--tinta);border-color:var(--ambar);}
+#mw-obs-form .fi-btn.danger:hover {color:var(--rojo);border-color:var(--rojo);}
+#mw-obs-form .flota-add {margin-top:6px;}
+#mw-obs-form .flota-add .obj-wrap {margin-bottom:10px;}
+#mw-obs-form .flota-add-custom {display:none;border-top:1px dashed var(--linea);margin-top:12px;padding-top:14px;}
+#mw-obs-form .flota-add-custom.open {display:block;}
+#mw-obs-form .link-btn {background:none;border:none;color:var(--ambar);font-family:ui-monospace,Menlo,monospace;
+    font-size:13px;padding:0;cursor:pointer;text-decoration:underline;}
+#mw-obs-form .flash {position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:10px;padding:12px 18px;
+    font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .2s;}
+#mw-obs-form .flash.show {opacity:1;}
+#mw-obs-form .flash.ok {border-color:var(--verde);color:var(--verde);}
+#mw-obs-form .flash.err {border-color:var(--rojo);color:var(--rojo);}
+#mw-obs-form .flota-links {margin-top:10px;font-size:14px;color:var(--tinta-tenue);}
+#mw-obs-form .flota-links a {color:var(--ambar);}
+</style>
+
+<div id="mw-obs-form">
+<div id="mw-flota" data-form="/observaciones-visuales/">
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Bitácora · Equipo</p>
+    <h1>Mi flota
+      <span class="sub">Tus telescopios, oculares y auxiliares. Al registrar una observación podrás elegirlos y el formulario calculará solo los aumentos, la pupila de salida y el campo real.</span>
+    </h1>
+    <div class="flota-links">¿Listo para observar? <a href="/observaciones-visuales/">Registrar una observación →</a></div>
+  </header>
+
+  <!-- Cada sección se rellena desde bitacora-flota.js -->
+  <fieldset>
+    <legend><div class="leg"><span class="num">1</span>
+      <div><h2>Telescopios</h2><p>Apertura y focal. De ahí salen los aumentos y la pupila de salida.</p></div></div></legend>
+    <div class="flota-list" id="listaTelescopios"></div>
+    <div class="flota-add" id="addTelescopio"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend><div class="leg"><span class="num">2</span>
+      <div><h2>Oculares</h2><p>Focal y campo aparente. De ahí salen el aumento y el campo real.</p></div></div></legend>
+    <div class="flota-list" id="listaOculares"></div>
+    <div class="flota-add" id="addOcular"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend><div class="leg"><span class="num">3</span>
+      <div><h2>Auxiliares</h2><p>Barlow, Powermates y reductores: multiplican o reducen la focal efectiva del telescopio.</p></div></div></legend>
+    <div class="flota-list" id="listaAuxiliares"></div>
+    <div class="flota-add" id="addAuxiliar"></div>
+  </fieldset>
+</div>
+<div class="flash" id="flotaFlash"></div>
+</div>
+</div>
+
+<script src="/wp-content/uploads/bitacora/bitacora-flota.js?v=20260716_1900" defer></script>
