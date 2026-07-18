@@ -1,0 +1,136 @@
+<!-- ============================================================
+     SIMULADOR DE VISIÓN POR OCULAR · Bitácora Messier
+
+     Cómo se vería el objeto del proyecto (de momento M39) a través de
+     tus oculares, con el telescopio y los oculares tomados de tu flota
+     (la misma de "Mi flota").
+
+     Pega este bloque en un bloque "HTML personalizado" de Gutenberg,
+     en una página protegida por login (para que window.BITACORA_WP
+     exponga tu flota).
+
+     Los .css y .js van subidos por FTP a /wp-content/uploads/bitacora/
+     (WordPress no admite .js en la biblioteca de medios, y el editor
+     escapa los "&" del JavaScript). El proxy dss-proxy.php va en esa
+     misma carpeta para servir las placas del DSS desde tu dominio.
+
+     Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
+     ============================================================ -->
+
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260718_2330" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260718_2330" />
+
+<!-- Filtro de respuesta del ojo según la pupila de salida (modo de reserva
+     sin canvas): y = pendiente·x + desplazamiento. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="sim-filtro-pupila" color-interpolation-filters="sRGB">
+    <feComponentTransfer id="sim-transfer-pupila">
+      <feFuncR type="linear" slope="1" intercept="0"/>
+      <feFuncG type="linear" slope="1" intercept="0"/>
+      <feFuncB type="linear" slope="1" intercept="0"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+
+<div id="mw-obs-form" class="sim">
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Bitácora · A través del ocular</p>
+    <h1>Simulador de ocular
+      <span class="sub">Cómo se vería el objeto a través de tu equipo. Elige el telescopio y los oculares de tu flota, ajusta el cielo de tu observatorio y compara el campo de cada aumento.</span>
+    </h1>
+  </header>
+
+  <div class="marco">
+
+    <!-- ══════════ PANEL DE CONTROL ══════════ -->
+    <aside class="panel">
+
+      <div class="bloque">
+        <h2>Telescopio</h2>
+        <label class="field">
+          <select id="sim-tele" aria-label="Telescopio"><option value="">— Elige un telescopio —</option></select></label>
+        <label class="field"><span class="lab">Pupila del ojo adaptado (mm) — ~7 joven · ~5–6 con la edad</span>
+          <input type="number" id="sim-pupila-ojo" value="7" min="2" max="8" step="0.5"></label>
+      </div>
+
+      <div class="bloque">
+        <h2>Ocular</h2>
+        <label class="field">
+          <select id="sim-ocular" aria-label="Ocular"><option value="">— Elige un ocular —</option></select></label>
+        <p class="hint" id="sim-eq-hint">Elige el telescopio y el ocular con los que quieres ver el objeto.</p>
+      </div>
+
+      <div class="bloque">
+        <h2>Objeto del proyecto</h2>
+        <div class="objeto-fijo" id="sim-objeto">
+          <div class="obj-nom">M39</div>
+          <div class="obj-coord">—</div>
+        </div>
+        <label class="field"><span class="lab">Origen de imagen</span>
+          <select id="sim-origen">
+            <option value="hips">PanSTARRS DR1 (HiPS) — sin dependencias</option>
+            <option value="dss">DSS — placas fotográficas (vía dss-proxy.php)</option>
+          </select></label>
+      </div>
+
+      <div class="bloque">
+        <h2>Cielo del observador</h2>
+        <label class="field"><span class="lab">Fondo de cielo (mag/arcsec²) — 22 excepcional · 21 rural · 19 periurbano · 17,5 urbano</span>
+          <input type="number" id="sim-sqm" value="21.0" min="16" max="22" step="0.1"></label>
+
+        <div class="conmutador">
+          <input type="checkbox" id="sim-fotometrica" checked>
+          <label for="sim-fotometrica">Simulación fotométrica (píxel a píxel)</label>
+        </div>
+        <div class="conmutador">
+          <input type="checkbox" id="sim-hdr" checked>
+          <label for="sim-hdr">Fusión HDR (recupera núcleos quemados con DSS1 + DSS2)</label>
+        </div>
+        <div class="conmutador">
+          <input type="checkbox" id="sim-adaptacion" checked>
+          <label for="sim-adaptacion">Adaptación local del ojo (contraste dinámico)</label>
+        </div>
+        <div class="conmutador">
+          <input type="checkbox" id="sim-gaia" checked>
+          <label for="sim-gaia">Estrellas sintéticas de Gaia DR3 (hasta la mag. límite)</label>
+        </div>
+      </div>
+
+      <p class="nota">
+        El recorte del cielo lo fija el <strong>campo real</strong>, el diámetro del círculo
+        es proporcional al <strong>campo aparente</strong>, y el brillo y contraste siguen la
+        <strong>pupila de salida</strong>: a pupila baja las zonas tenues caen bajo el umbral
+        del ojo y solo sobrevive lo brillante.
+      </p>
+
+    </aside>
+
+    <!-- ══════════ ZONA DE OBSERVACIÓN ══════════ -->
+    <main class="observacion">
+
+      <div class="vista" id="sim-vista">
+        <img id="sim-img" crossorigin="anonymous" alt="Vista del objeto a través del ocular">
+        <canvas id="sim-lienzo" aria-label="Vista fotométrica del objeto"></canvas>
+        <div class="cargando" id="sim-cargando">preparando el simulador…</div>
+      </div>
+
+      <div class="lecturas">
+        <div class="lectura"><div class="valor" id="sim-v-aum">—</div><div class="titulo">Aumentos</div></div>
+        <div class="lectura"><div class="valor" id="sim-v-real">—</div><div class="titulo">Campo real</div></div>
+        <div class="lectura"><div class="valor" id="sim-v-apar">—</div><div class="titulo">Campo aparente</div></div>
+        <div class="lectura"><div class="valor" id="sim-v-pupila">—</div><div class="titulo">Pupila de salida</div></div>
+        <div class="lectura"><div class="valor" id="sim-v-brillo">—</div><div class="titulo">Brillo superficial</div></div>
+        <div class="lectura"><div class="valor" id="sim-v-cielo">—</div><div class="titulo">Fondo en ocular</div></div>
+        <div class="lectura"><div class="valor" id="sim-v-maglim">—</div><div class="titulo">Mag. límite ★</div></div>
+      </div>
+
+      <div class="aviso" id="sim-aviso"></div>
+
+    </main>
+  </div>
+</div>
+</div>
+
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260718_2330" defer></script>

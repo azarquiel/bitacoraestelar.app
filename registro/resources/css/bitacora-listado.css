@@ -1,52 +1,21 @@
 /* ===========================================================================
- * BITÁCORA MESSIER · Estilos del listado de observaciones
+ * BITÁCORA MESSIER · Estilos del listado de observaciones (específicos)
  * ---------------------------------------------------------------------------
- * Subir por FTP a /wp-content/uploads/bitacora/
- * Encapsulado bajo #mw-obs-list: no afecta al resto de la web.
+ * Se carga DESPUÉS de bitacora-base.css, que aporta la paleta, el fondo y la
+ * cabecera comunes. Aquí solo van los componentes propios del listado: barra
+ * de filtros, tarjetas de observación y franjas de resultado.
+ *
+ * Encapsulado bajo #mw-obs-list. Subir por FTP a
+ * /wp-content/uploads/bitacora/ e incrementar el ?v=N al actualizar.
  * =========================================================================== */
 
-#mw-obs-list {
-  background:
-    radial-gradient(1200px 700px at 80% -10%, #16203a 0%, transparent 60%),
-    radial-gradient(900px 600px at 0% 110%, #131a2e 0%, transparent 55%),
-    #0a0e1a;
-  color: #e8eef7;
-  font-family: 'Iowan Old Style', Georgia, 'Times New Roman', serif;
-  line-height: 1.55;
-  border-radius: 16px;
-  overflow: hidden;
-  --noche-2: #111725;
-  --tinta: #e8eef7;
-  --tinta-tenue: #8ea0bd;
-  --linea: #25304a;
-  --ambar: #f4c76b;
-  --ambar-suave: rgba(244, 199, 107, 0.14);
-  --verde: #7ee0a8;
-  --rojo: #ff8a80;
-  --azul: #7ec8ff;
-}
-
-#mw-obs-list * { box-sizing: border-box; }
-
-#mw-obs-list .wrap { max-width: 960px; margin: 0 auto; padding: 40px 22px 70px; }
+/* El listado es algo más ancho y con menos hueco inferior que el formulario. */
+#mw-obs-list .wrap { max-width: 960px; padding-bottom: 70px; }
 
 #mw-obs-list .masthead {
   border-bottom: 1px solid var(--linea);
   padding-bottom: 20px;
   margin-bottom: 26px;
-}
-#mw-obs-list .eyebrow {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase;
-  color: var(--ambar); margin: 0 0 10px;
-}
-#mw-obs-list h1 {
-  font-size: 34px; line-height: 1.05; margin: 0;
-  font-weight: 600; letter-spacing: -0.01em;
-}
-#mw-obs-list h1 .sub {
-  display: block; font-size: 16px; color: var(--tinta-tenue);
-  font-weight: 400; margin-top: 8px; letter-spacing: 0;
 }
 
 /* Barra de acciones: filtros y botón de nueva observación */

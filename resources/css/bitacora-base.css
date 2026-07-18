@@ -1,0 +1,124 @@
+/* ===========================================================================
+ * BITÁCORA MESSIER · Base común de estilos (design tokens + componentes)
+ * ---------------------------------------------------------------------------
+ * CSS COMPARTIDO por los módulos de la bitácora que usan el sistema de
+ * documento/formulario: registro de observaciones y "Mi flota" (#mw-obs-form),
+ * listado de observaciones (#mw-obs-list) y el simulador de ocular
+ * (#mw-obs-form.sim).
+ *
+ * Contiene la paleta, la tipografía, el fondo y la cabecera compartidos, más
+ * los componentes de FORMULARIO (campos, selects, botones), todo encapsulado
+ * bajo esos wrappers para no afectar al resto de la web de WordPress. Cada
+ * módulo carga DESPUÉS su propia hoja con lo que le es específico
+ * (bitacora-formulario.css, bitacora-listado.css, bitacora-ocular.css).
+ *
+ * NOTA: el mapa cenital (mapa/index.html) es una superficie distinta (canvas a
+ * pantalla completa) y no usa esta base.
+ *
+ * Subir por FTP a /wp-content/uploads/bitacora/ e incrementar el ?v=N al
+ * actualizar para saltarse la caché del navegador.
+ * =========================================================================== */
+
+/* ── Paleta, fondo y tipografía · TODOS los wrappers de documento ── */
+#mw-obs-form, #mw-obs-list {
+  --noche:#0a0e1a;            /* fondo cielo profundo */
+  --noche-2:#111725;          /* paneles */
+  --tinta:#e8eef7;            /* texto principal */
+  --tinta-tenue:#8ea0bd;      /* texto secundario */
+  --linea:#25304a;            /* bordes / hairlines */
+  --ambar:#f4c76b;            /* acento: luz de estrella / linterna ámbar */
+  --ambar-suave:rgba(244,199,107,0.14);
+  --verde:#7ee0a8;            /* validación correcta */
+  --rojo:#ff8a80;             /* error / aviso */
+  --azul:#7ec8ff;             /* dato calculado */
+
+  margin:0;
+  background:
+    radial-gradient(1200px 700px at 80% -10%, #16203a 0%, transparent 60%),
+    radial-gradient(900px 600px at 0% 110%, #131a2e 0%, transparent 55%),
+    var(--noche);
+  color:var(--tinta);
+  font-family:'Iowan Old Style',Georgia,'Times New Roman',serif;
+  line-height:1.55;
+  border-radius:16px;
+  overflow:hidden;
+}
+#mw-obs-form { min-height:100vh; }
+#mw-obs-form *, #mw-obs-list * { box-sizing:border-box; }
+
+/* ── Contenedor y cabecera compartidos ── */
+#mw-obs-form .wrap, #mw-obs-list .wrap {max-width:760px;margin:0 auto;padding:40px 22px 80px;}
+#mw-obs-form .eyebrow, #mw-obs-list .eyebrow {
+    font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.28em;
+    text-transform:uppercase;color:var(--ambar);margin:0 0 10px;}
+#mw-obs-form h1, #mw-obs-list h1 {font-size:34px;line-height:1.05;margin:0;font-weight:600;letter-spacing:-0.01em;}
+#mw-obs-form h1 .sub, #mw-obs-list h1 .sub {display:block;font-size:16px;color:var(--tinta-tenue);font-weight:400;margin-top:8px;letter-spacing:0;}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * COMPONENTES DE FORMULARIO — solo #mw-obs-form (registro, mi flota, simulador)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+#mw-obs-form header.masthead {border-bottom:1px solid var(--linea);padding-bottom:20px;margin-bottom:8px;}
+
+/* Secciones (fieldset) */
+#mw-obs-form fieldset {border:none;border-top:1px solid var(--linea);margin:0 0 34px;padding:26px 0 0;}
+#mw-obs-form legend {padding:0;}
+#mw-obs-form .leg {display:flex;align-items:baseline;gap:12px;margin-bottom:20px;}
+#mw-obs-form .leg .num {font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--ambar);
+    border:1px solid var(--linea);border-radius:50%;width:26px;height:26px;display:grid;place-items:center;flex:none;}
+#mw-obs-form .leg h2 {font-size:19px;margin:0;font-weight:600;}
+#mw-obs-form .leg p {margin:2px 0 0;font-size:13px;color:var(--tinta-tenue);}
+
+/* Campos de formulario */
+#mw-obs-form label.field {display:block;margin-bottom:18px;}
+#mw-obs-form label.field > span.lab {display:block;font-size:13px;color:var(--tinta-tenue);margin-bottom:6px;
+    font-family:ui-monospace,Menlo,monospace;letter-spacing:0.02em;}
+#mw-obs-form input[type=text], #mw-obs-form input[type=number],
+#mw-obs-form input[type=datetime-local], #mw-obs-form input[type=date] {
+    width:100%;background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
+    color:var(--tinta);font-family:inherit;font-size:16px;padding:11px 13px;transition:border-color .15s,box-shadow .15s;}
+#mw-obs-form input[type=date] {color-scheme:dark;}
+#mw-obs-form input:focus {outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
+#mw-obs-form input::placeholder {color:#54617d;}
+
+/* Selects (mismo aspecto que los inputs) */
+#mw-obs-form select {
+    width:100%;background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
+    color:var(--tinta);font-family:inherit;font-size:16px;padding:11px 13px;cursor:pointer;
+    color-scheme:dark;transition:border-color .15s,box-shadow .15s;}
+#mw-obs-form select:focus {outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
+
+/* Campo en línea (label + control en la misma fila) */
+#mw-obs-form label.field.field-inline {display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+#mw-obs-form label.field.field-inline > span.lab {margin-bottom:0;white-space:nowrap;}
+#mw-obs-form label.field.field-inline > input {width:auto;flex:0 0 auto;}
+
+/* Filas de campos */
+#mw-obs-form .row {display:flex;gap:14px;flex-wrap:wrap;}
+#mw-obs-form .row > * {flex:1 1 160px;}
+
+/* Avisos de estado */
+#mw-obs-form .status {font-size:13.5px;margin-top:7px;min-height:20px;display:flex;align-items:center;gap:7px;}
+#mw-obs-form .status.ok {color:var(--verde);}
+#mw-obs-form .status.err {color:var(--rojo);}
+#mw-obs-form .status.info {color:var(--tinta-tenue);}
+#mw-obs-form .hint {font-size:12.5px;color:var(--tinta-tenue);}
+
+/* Botones */
+#mw-obs-form button.primary {background:var(--ambar);color:#1a1206;border:none;font-family:ui-monospace,Menlo,monospace;
+    font-weight:600;font-size:14px;letter-spacing:0.03em;padding:14px 26px;border-radius:10px;cursor:pointer;transition:filter .15s;}
+#mw-obs-form button.primary:hover {filter:brightness(1.08);}
+#mw-obs-form button.primary:disabled {opacity:.4;cursor:not-allowed;filter:none;}
+#mw-obs-form .actions {display:flex;gap:14px;align-items:center;margin-top:30px;flex-wrap:wrap;}
+
+/* Aviso flotante (flash) */
+#mw-obs-form .flash {position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:10px;padding:12px 18px;
+    font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .2s;}
+#mw-obs-form .flash.show {opacity:1;}
+#mw-obs-form .flash.ok {border-color:var(--verde);color:var(--verde);}
+#mw-obs-form .flash.err {border-color:var(--rojo);color:var(--rojo);}
+
+@media(max-width:520px) {
+  #mw-obs-form h1 {font-size:27px;}
+}

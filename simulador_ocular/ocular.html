@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de ocular · DSS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --noche:#07090D;          /* cielo de fondo */
+  --panel:#10141B;          /* panel de instrumentos */
+  --linea:#232A35;          /* líneas de separación */
+  --tinta:#E9E5DB;          /* texto principal */
+  --tinta-suave:#8B93A1;    /* texto secundario */
+  --rojo:#D4472E;           /* linterna roja de observación */
+  --rojo-tenue:#5A2018;
+  --ok:#7BA98B;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{transition:none!important;animation:none!important} }
+body{
+  background:var(--noche);
+  color:var(--tinta);
+  font-family:'Archivo',sans-serif;
+  font-size:15px;
+  line-height:1.55;
+  min-height:100vh;
+}
+a{color:var(--rojo)}
+button{font-family:inherit;cursor:pointer}
+input,select{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:14px;
+  background:var(--noche);
+  border:1px solid var(--linea);
+  color:var(--tinta);
+  border-radius:4px;
+  padding:7px 9px;
+  width:100%;
+}
+input:focus,select:focus,button:focus-visible{
+  outline:2px solid var(--rojo);
+  outline-offset:1px;
+}
+label{
+  display:block;
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--tinta-suave);
+  margin-bottom:5px;
+}
+
+/* ---------- cabecera ---------- */
+header{
+  border-bottom:1px solid var(--linea);
+  padding:26px 32px 22px;
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:8px;
+}
+header h1{
+  font-variation-settings:'wdth' 118, 'wght' 700;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  font-size:clamp(19px,2.6vw,26px);
+}
+header h1 span{color:var(--rojo)}
+header .sub{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;
+  color:var(--tinta-suave);
+}
+
+/* ---------- disposición general ---------- */
+.marco{
+  display:grid;
+  grid-template-columns:340px 1fr;
+  min-height:calc(100vh - 78px);
+}
+@media (max-width:900px){ .marco{grid-template-columns:1fr} }
+
+/* ---------- panel de control ---------- */
+.panel{
+  background:var(--panel);
+  border-right:1px solid var(--linea);
+  padding:26px 24px 40px;
+}
+.panel h2{
+  font-variation-settings:'wdth' 115, 'wght' 650;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  font-size:12px;
+  color:var(--tinta-suave);
+  border-bottom:1px solid var(--linea);
+  padding-bottom:8px;
+  margin:26px 0 14px;
+}
+.panel h2:first-child{margin-top:0}
+.fila2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.fila1{margin-bottom:12px}
+
+/* lista de oculares */
+.ocular-item{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr auto;
+  gap:8px;
+  align-items:center;
+  margin-bottom:8px;
+}
+.ocular-item input{padding:6px 8px;font-size:13px}
+.quitar{
+  background:none;border:1px solid var(--linea);color:var(--tinta-suave);
+  border-radius:4px;width:28px;height:32px;font-size:15px;line-height:1;
+}
+.quitar:hover{border-color:var(--rojo);color:var(--rojo)}
+.anadir{
+  width:100%;background:none;border:1px dashed var(--linea);color:var(--tinta-suave);
+  border-radius:4px;padding:8px;font-size:13px;margin-top:4px;
+}
+.anadir:hover{border-color:var(--rojo);color:var(--rojo)}
+.cab-oculares{
+  display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;
+  font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--tinta-suave);
+  margin-bottom:6px;
+}
+.cab-oculares span:last-child{width:28px}
+
+.nota{
+  font-size:12px;color:var(--tinta-suave);margin-top:18px;
+  border-left:2px solid var(--rojo-tenue);padding-left:10px;
+}
+
+/* interruptor visión nocturna */
+.conmutador{
+  display:flex;align-items:center;gap:10px;margin-top:10px;
+  font-size:13px;color:var(--tinta-suave);
+}
+.conmutador input{width:auto;accent-color:var(--rojo)}
+
+/* ---------- zona de observación ---------- */
+.observacion{
+  padding:30px 36px 60px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+/* selector de oculares: círculos a escala de campo aparente */
+.selector{
+  display:flex;
+  align-items:flex-end;
+  gap:22px;
+  flex-wrap:wrap;
+  justify-content:center;
+  margin-bottom:8px;
+  min-height:96px;
+}
+.selector .opcion{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  background:none;border:none;color:var(--tinta-suave);
+}
+.selector .circulo-mini{
+  border-radius:50%;
+  border:1.5px solid var(--linea);
+  background:radial-gradient(circle at 40% 35%, #161B24, #07090D 75%);
+  transition:border-color .2s, box-shadow .2s;
+}
+.selector .opcion.activa .circulo-mini{
+  border-color:var(--rojo);
+  box-shadow:0 0 14px rgba(212,71,46,.35);
+}
+.selector .opcion.activa{color:var(--tinta)}
+.selector .etq{font-family:'IBM Plex Mono',monospace;font-size:11px}
+.selector-titulo{
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--tinta-suave);margin-bottom:14px;
+}
+
+/* el ocular grande */
+.vista{
+  position:relative;
+  margin-top:26px;
+  border-radius:50%;
+  overflow:hidden;
+  background:#000;
+  box-shadow:0 0 0 3px #05060A, 0 0 0 4px var(--linea), 0 0 60px rgba(0,0,0,.9);
+  transition:width .35s ease, height .35s ease;
+}
+.vista img{
+  width:100%;height:100%;display:block;object-fit:cover;
+  transition:filter .3s;
+}
+.vista canvas{
+  width:100%;height:100%;display:none;object-fit:cover;
+}
+/* el filtro (pupila de salida + visión nocturna) se aplica desde JS */
+/* viñeteado + anillo de diafragma de campo */
+.vista::after{
+  content:"";
+  position:absolute;inset:0;border-radius:50%;
+  box-shadow:inset 0 0 70px 24px rgba(0,0,0,.85), inset 0 0 0 2px rgba(0,0,0,.9);
+  pointer-events:none;
+}
+.vista .cargando{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--tinta-suave);
+  background:#000;border-radius:50%;
+}
+
+/* lectura de datos bajo el ocular */
+.lecturas{
+  display:flex;gap:34px;flex-wrap:wrap;justify-content:center;
+  margin-top:26px;
+  font-family:'IBM Plex Mono',monospace;
+}
+.lectura{text-align:center}
+.lectura .valor{font-size:21px;font-weight:600;color:var(--tinta)}
+.lectura .valor em{font-style:normal;font-size:13px;color:var(--tinta-suave)}
+.lectura .titulo{
+  font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--tinta-suave);margin-top:2px;
+}
+.aviso{
+  margin-top:16px;font-size:12px;color:var(--rojo);
+  font-family:'IBM Plex Mono',monospace;text-align:center;max-width:520px;
+  min-height:18px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Simulador de ocular <span>·</span> DSS</h1>
+  <div class="sub">Digitized Sky Survey — archive.eso.org</div>
+</header>
+
+<!-- Filtro de respuesta del ojo según pupila de salida:
+     y = pendiente·x + desplazamiento (el desplazamiento negativo recorta lo tenue) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="filtro-pupila" color-interpolation-filters="sRGB">
+    <feComponentTransfer id="transfer-pupila">
+      <feFuncR type="linear" slope="1" intercept="0"/>
+      <feFuncG type="linear" slope="1" intercept="0"/>
+      <feFuncB type="linear" slope="1" intercept="0"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+
+<div class="marco">
+
+  <!-- ══════════ PANEL DE CONTROL ══════════ -->
+  <aside class="panel">
+
+    <h2>Telescopio</h2>
+    <div class="fila2">
+      <div>
+        <label for="focal">Focal (mm)</label>
+        <input type="number" id="focal" value="1200" min="100" step="10">
+      </div>
+      <div>
+        <label for="apertura">Apertura (mm)</label>
+        <input type="number" id="apertura" value="200" min="30" step="5">
+      </div>
+    </div>
+    <div class="fila1">
+      <label for="pupila-ojo">Pupila del ojo adaptado (mm) — ~7 joven, ~5–6 con edad</label>
+      <input type="number" id="pupila-ojo" value="7" min="2" max="8" step="0.5">
+    </div>
+
+    <h2>Oculares</h2>
+    <div class="cab-oculares">
+      <span>Nombre</span><span>Focal mm</span><span>C. apar. °</span><span></span>
+    </div>
+    <div id="lista-oculares"></div>
+    <button class="anadir" id="btn-anadir">+ Añadir ocular</button>
+
+    <h2>Objeto</h2>
+    <div class="fila1">
+      <label for="preset">Catálogo</label>
+      <select id="preset"></select>
+    </div>
+    <div class="fila2">
+      <div>
+        <label for="ra">AR (J2000)</label>
+        <input type="text" id="ra" value="05 35 17">
+      </div>
+      <div>
+        <label for="dec">Dec (J2000)</label>
+        <input type="text" id="dec" value="-05 23 28">
+      </div>
+    </div>
+    <div class="fila1">
+      <label for="origen">Origen de imagen</label>
+      <select id="origen">
+        <option value="hips">PanSTARRS DR1 — núcleos resueltos (dec &gt; −30°)</option>
+        <option value="ps1fits">PS1 FITS + máscara — sin agujeros (campos ≤ 25′)</option>
+        <option value="dss">DSS — placas fotográficas (todo el cielo)</option>
+      </select>
+    </div>
+
+    <h2>Cielo del observador</h2>
+    <div class="fila1">
+      <label for="sqm">Fondo de cielo (mag/arcsec²) — 22 excepcional · 21 rural · 19 periurbano · 17,5 urbano</label>
+      <input type="number" id="sqm" value="21.0" min="16" max="22" step="0.1">
+    </div>
+    <div class="conmutador">
+      <input type="checkbox" id="fotometrica" checked>
+      <label for="fotometrica" style="margin:0;text-transform:none;font-size:13px;letter-spacing:0">
+        Simulación fotométrica (píxel a píxel)
+      </label>
+    </div>
+    <div class="conmutador">
+      <input type="checkbox" id="hdr" checked>
+      <label for="hdr" style="margin:0;text-transform:none;font-size:13px;letter-spacing:0">
+        Fusión HDR (recupera núcleos quemados con DSS1 + DSS2)
+      </label>
+    </div>
+    <div class="conmutador">
+      <input type="checkbox" id="adaptacion" checked>
+      <label for="adaptacion" style="margin:0;text-transform:none;font-size:13px;letter-spacing:0">
+        Adaptación local del ojo (contraste dinámico)
+      </label>
+    </div>
+    <div class="conmutador">
+      <input type="checkbox" id="gaia" checked>
+      <label for="gaia" style="margin:0;text-transform:none;font-size:13px;letter-spacing:0">
+        Estrellas sintéticas de Gaia DR3 (hasta la mag. límite)
+      </label>
+    </div>
+
+    <p class="nota">
+      El recorte del cielo lo fija el <strong>campo real</strong>, el diámetro del círculo
+      es proporcional al <strong>campo aparente</strong>, y el brillo y contraste de la
+      imagen siguen la <strong>pupila de salida</strong>: a pupila baja las zonas tenues
+      caen bajo el umbral del ojo y solo sobrevive lo brillante.
+    </p>
+
+  </aside>
+
+  <!-- ══════════ VISTA ══════════ -->
+  <main class="observacion">
+
+    <div class="selector-titulo">Oculares a escala de campo aparente — pulsa para cambiar</div>
+    <div class="selector" id="selector"></div>
+
+    <div class="vista" id="vista">
+      <img id="img-dss" crossorigin="anonymous" alt="Vista del objeto a través del ocular">
+      <canvas id="lienzo" aria-label="Vista fotométrica del objeto"></canvas>
+      <div class="cargando" id="cargando">solicitando placa al DSS…</div>
+    </div>
+
+    <div class="lecturas">
+      <div class="lectura"><div class="valor" id="v-aum">—</div><div class="titulo">Aumentos</div></div>
+      <div class="lectura"><div class="valor" id="v-real">—</div><div class="titulo">Campo real</div></div>
+      <div class="lectura"><div class="valor" id="v-apar">—</div><div class="titulo">Campo aparente</div></div>
+      <div class="lectura"><div class="valor" id="v-pupila">—</div><div class="titulo">Pupila de salida</div></div>
+      <div class="lectura"><div class="valor" id="v-brillo">—</div><div class="titulo">Brillo superficial</div></div>
+      <div class="lectura"><div class="valor" id="v-cielo">—</div><div class="titulo">Fondo en ocular</div></div>
+      <div class="lectura"><div class="valor" id="v-maglim">—</div><div class="titulo">Mag. límite ★</div></div>
+    </div>
+
+    <div class="aviso" id="aviso"></div>
+
+  </main>
+</div>
+
+<script>
+/* ══════════════════ DATOS ══════════════════ */
+
+// Oculares por defecto (el segundo reproduce tu ejemplo: 68x y 1,4°)
+let oculares = [
+  { nombre: "31 mm",   focal: 31,   afov: 82 },
+  { nombre: "17,5 mm", focal: 17.5, afov: 95 },
+  { nombre: "9 mm",    focal: 9,    afov: 100 },
+  { nombre: "5 mm",    focal: 5,    afov: 60 }
+];
+let ocularActivo = 1;
+
+// Objetos de ejemplo (coordenadas J2000, formato que acepta el DSS de ESO)
+const presets = [
+  { nombre: "M42 · Nebulosa de Orión",   ra: "05 35 17", dec: "-05 23 28" },
+  { nombre: "M31 · Galaxia de Andrómeda",ra: "00 42 44", dec: "+41 16 09" },
+  { nombre: "M45 · Las Pléyades",        ra: "03 47 24", dec: "+24 07 00" },
+  { nombre: "M13 · Cúmulo de Hércules",  ra: "16 41 41", dec: "+36 27 37" },
+  { nombre: "M51 · Galaxia Remolino",    ra: "13 29 53", dec: "+47 11 43" },
+  { nombre: "M57 · Nebulosa del Anillo", ra: "18 53 35", dec: "+33 01 45" },
+  { nombre: "M8 · Nebulosa de la Laguna",ra: "18 03 37", dec: "-24 23 12" },
+  { nombre: "NGC 869/884 · Doble Cúmulo",ra: "02 20 00", dec: "+57 08 00" },
+  { nombre: "— Coordenadas manuales —",  ra: null, dec: null }
+];
+
+const DSS_MAX_ARCMIN = 120;   // límite del servidor de ESO por lado
+const AFOV_REF = 110;         // campo aparente que ocupa el diámetro máximo en pantalla
+
+/* Origen de las placas. Para servirlas desde tu dominio (recomendado:
+   evita CORS y acelera la carga), sube dss-proxy.php junto a esta
+   página y cambia la línea por:  const DSS_BASE = "dss-proxy.php";  */
+const DSS_BASE = "dss-proxy.php";
+/* Servicio local que consume FITS y máscaras de calidad de Pan-STARRS. */
+const PS1_SERVICE_BASE = "http://localhost:8000";
+const PS1_MAX_ARCMIN = 25;
+
+/* ══════════════════ CÁLCULO ══════════════════ */
+
+function datosOcular(oc) {
+  const F = parseFloat(document.getElementById("focal").value) || 0;
+  const D = parseFloat(document.getElementById("apertura").value) || 0;
+  const aumentos  = F / oc.focal;
+  const campoReal = oc.afov / aumentos;            // grados
+  const pupila    = D / aumentos;                  // mm
+  return { aumentos, campoReal, pupila };
+}
+
+/* ══════════════════ RENDER ══════════════════ */
+
+function pintarPanelOculares() {
+  const cont = document.getElementById("lista-oculares");
+  cont.innerHTML = "";
+  oculares.forEach((oc, i) => {
+    const fila = document.createElement("div");
+    fila.className = "ocular-item";
+    fila.innerHTML = `
+      <input type="text"  value="${oc.nombre}" data-i="${i}" data-campo="nombre" aria-label="Nombre del ocular">
+      <input type="number" value="${oc.focal}"  data-i="${i}" data-campo="focal" step="0.1" min="1" aria-label="Focal del ocular en mm">
+      <input type="number" value="${oc.afov}"   data-i="${i}" data-campo="afov"  step="1"   min="20" max="120" aria-label="Campo aparente en grados">
+      <button class="quitar" data-quitar="${i}" aria-label="Quitar ocular">×</button>`;
+    cont.appendChild(fila);
+  });
+}
+
+function pintarSelector() {
+  const sel = document.getElementById("selector");
+  sel.innerHTML = "";
+  const maxD = ventanaBase() * 0.22; // diámetro máximo de los círculos pequeños
+  oculares.forEach((oc, i) => {
+    const d = Math.max(26, maxD * (oc.afov / AFOV_REF));
+    const { aumentos } = datosOcular(oc);
+    const btn = document.createElement("button");
+    btn.className = "opcion" + (i === ocularActivo ? " activa" : "");
+    btn.setAttribute("aria-label", `Seleccionar ocular ${oc.nombre}`);
+    btn.innerHTML = `
+      <span class="circulo-mini" style="width:${d}px;height:${d}px"></span>
+      <span class="etq">${oc.nombre}<br>${aumentos.toFixed(0)}x</span>`;
+    btn.addEventListener("click", () => { ocularActivo = i; actualizar(); });
+    sel.appendChild(btn);
+  });
+}
+
+function ventanaBase() {
+  // diámetro máximo disponible para el ocular grande
+  return Math.min(560, window.innerWidth - 80, window.innerHeight - 320);
+}
+
+function actualizar() {
+  if (!oculares.length) return;
+  if (ocularActivo >= oculares.length) ocularActivo = 0;
+  const oc = oculares[ocularActivo];
+  const { aumentos, campoReal, pupila } = datosOcular(oc);
+
+  // lecturas
+  document.getElementById("v-aum").innerHTML    = aumentos.toFixed(0) + "<em>x</em>";
+  document.getElementById("v-real").innerHTML   = campoReal.toFixed(2) + "<em>°</em>";
+  document.getElementById("v-apar").innerHTML   = oc.afov + "<em>°</em>";
+  document.getElementById("v-pupila").innerHTML = pupila.toFixed(1) + "<em>mm</em>";
+
+  // tamaño del círculo ∝ campo aparente
+  const diam = ventanaBase() * Math.min(1, oc.afov / AFOV_REF);
+  const vista = document.getElementById("vista");
+  vista.style.width  = diam + "px";
+  vista.style.height = diam + "px";
+
+  // petición al DSS: lado = campo real en arcmin
+  let arcmin = campoReal * 60;
+  const aviso = document.getElementById("aviso");
+  if (arcmin > DSS_MAX_ARCMIN) {
+    aviso.textContent = `El campo real (${(arcmin/60).toFixed(2)}°) supera el máximo del DSS (2°): la imagen se recorta a 2°.`;
+    arcmin = DSS_MAX_ARCMIN;
+  } else {
+    aviso.textContent = "";
+  }
+
+  const ra  = document.getElementById("ra").value.trim();
+  const dec = document.getElementById("dec").value.trim();
+  const origen = document.getElementById("origen").value;
+  const hdr = document.getElementById("hdr").checked;
+
+  const cargando = document.getElementById("cargando");
+  cargando.style.display = "flex";
+  cargando.textContent = "solicitando imagen…";
+  const peticion = ++contadorPeticion;
+
+  if (origen === "ps1fits") {
+    if (arcmin > PS1_MAX_ARCMIN) {
+      cargando.textContent =
+        `PS1 FITS admite por ahora hasta ${PS1_MAX_ARCMIN}′; reduce el campo o usa DSS/HiPS.`;
+      return;
+    }
+    const u = urlPs1Fits(ra, dec, arcmin);
+    cargarPlaca(u).then(im => {
+      if (peticion !== contadorPeticion) return;
+      if (!im) {
+        cargando.textContent = "El servicio PS1 FITS no respondió. ¿Está activo en el puerto 8000?";
+        return;
+      }
+      cargando.style.display = "none";
+      renderizar(im, null, u);
+    });
+  } else if (origen === "hips") {
+    const u = urlHips(ra, dec, arcmin);
+    cargarPlaca(u).then(im => {
+      if (peticion !== contadorPeticion) return;
+      if (!im) {
+        cargando.textContent = "hips2fits no respondió: prueba el origen DSS.";
+        return;
+      }
+      cargando.style.display = "none";
+      renderizar(im, null, u);
+    });
+  } else {
+    const urlProfunda = urlPlaca("DSS2-red", ra, dec, arcmin);  // profunda: nebulosidad tenue
+    const urlCorta    = urlPlaca("DSS1",     ra, dec, arcmin);  // corta: núcleos sin quemar
+    Promise.all([cargarPlaca(urlProfunda), hdr ? cargarPlaca(urlCorta) : Promise.resolve(null)])
+      .then(([profunda, corta]) => {
+        if (peticion !== contadorPeticion) return;   // respuesta obsoleta: hay otra en curso
+        if (!profunda && !corta) {
+          cargando.textContent = "No se pudo cargar la placa. Revisa coordenadas o conexión.";
+          return;
+        }
+        cargando.style.display = "none";
+        renderizar(profunda || corta, profunda ? corta : null, urlProfunda);
+      });
+  }
+
+  // lecturas fotométricas
+  const pOjo = pupilaOjo();
+  const pEf  = Math.min(pupila, pOjo);
+  const brillo = Math.pow(pEf / pOjo, 2);
+  const sqm  = parseFloat(document.getElementById("sqm").value) || 21;
+  const D    = parseFloat(document.getElementById("apertura").value) || 0;
+  document.getElementById("v-brillo").innerHTML = (brillo * 100).toFixed(0) + "<em>%</em>";
+  document.getElementById("v-cielo").innerHTML  =
+    (sqm + 5 * Math.log10(pOjo / pEf)).toFixed(1) + "<em>m/☐″</em>";
+  document.getElementById("v-maglim").innerHTML =
+    (7.7 + 5 * Math.log10(D / 100)).toFixed(1) + "<em>m</em>";
+
+  if (pupila > pOjo && !aviso.textContent) {
+    aviso.textContent =
+      `Pupila de salida (${pupila.toFixed(1)} mm) mayor que la del ojo (${pOjo} mm): parte de la luz se desperdicia.`;
+  }
+
+  pintarSelector();
+}
+
+function pupilaOjo() {
+  return parseFloat(document.getElementById("pupila-ojo").value) || 7;
+}
+
+/* ══════════════ MOTOR FOTOMÉTRICO ══════════════
+   Cadena por píxel, todo en mag/arcsec² (mayor = más tenue):
+   1. Calibración de la placa: el gris v se mapea a brillo
+      superficial del objeto entre SB_OBJ_MIN (v→0, nada) y
+      SB_OBJ_MAX (v=255, núcleos saturados).
+   2. Se suma el fondo de cielo del observador (flujos lineales):
+      la contaminación lumínica aclara el fondo y ahoga lo tenue.
+   3. Atenuación del telescopio: Δm = 5·log10(p_ojo / p_salida).
+      Afecta por igual a objeto y fondo (el contraste se conserva,
+      pero el umbral del ojo no baja con ellos).
+   4. Contraste mínimo: si el objeto no supera C_MIN sobre el
+      fondo, el ojo no lo separa y se pinta como fondo puro.
+   5. Umbral escotópico absoluto SB_NEGRO: por debajo, negro.
+   6. Respuesta del ojo ≈ logarítmica: la pantalla se mapea
+      linealmente en magnitudes entre SB_NEGRO y SB_BLANCO.     */
+
+const FOT = {
+  SB_OBJ_MAX: 14.0,   // v=255 en la placa
+  SB_OBJ_MIN: 24.0,   // v→0 en la placa
+  SB_NEGRO:  25.5,    // umbral escotópico para luz extensa
+  SB_BLANCO: 14.0,    // saturación de la escala en pantalla
+  C_MIN:     0.08,    // contraste mínimo (referencia: cielo rural a pupila plena)
+  C_EXP:     0.35,    // cuánto crece el umbral al oscurecerse la escena (Blackwell)
+  GAMMA_HIPS: 2.0     // des-estirado del JPEG de PanSTARRS antes de calibrar
+};
+let corsFallo = false;
+let contadorPeticion = 0;
+const PROC = 720;   // resolución de trabajo del procesado
+
+function urlPlaca(survey, ra, dec, arcmin) {
+  return DSS_BASE
+    + "?ra="  + encodeURIComponent(ra)
+    + "&dec=" + encodeURIComponent(dec)
+    + "&equinox=J2000&name="
+    + "&x=" + arcmin.toFixed(1) + "&y=" + arcmin.toFixed(1)
+    + "&Sky-Survey=" + survey + "&mime-type=download-gif";
+}
+
+/* "05 35 17" o "05:35:17.3" → grados decimales */
+function sexToDeg(s, esRA) {
+  const sig = /^\s*-/.test(s) ? -1 : 1;
+  const p = s.trim().replace(/[+\-]/g, "").replace(/:/g, " ").split(/\s+/).map(Number);
+  const abs = (p[0] || 0) + (p[1] || 0) / 60 + (p[2] || 0) / 3600;
+  return sig * abs * (esRA ? 15 : 1);
+}
+
+/* Recorte de PanSTARRS DR1 vía hips2fits (CDS): CCD moderno, núcleos
+   resueltos, y con CORS abierto: el canvas puede leerlo directamente. */
+function urlHips(ra, dec, arcmin) {
+  return "https://alasky.cds.unistra.fr/hips-image-services/hips2fits"
+    + "?hips=" + encodeURIComponent("CDS/P/PanSTARRS/DR1/color-z-zg-g")
+    + "&ra="  + sexToDeg(ra, true).toFixed(5)
+    + "&dec=" + sexToDeg(dec, false).toFixed(5)
+    + "&fov=" + (arcmin / 60).toFixed(4)
+    + "&width=" + PROC + "&height=" + PROC
+    + "&projection=TAN&format=jpg";
+}
+
+function urlPs1Fits(ra, dec, arcmin) {
+  return PS1_SERVICE_BASE + "/api/ps1/cutout.png"
+    + "?ra=" + sexToDeg(ra, true).toFixed(5)
+    + "&dec=" + sexToDeg(dec, false).toFixed(5)
+    + "&fov_arcmin=" + arcmin.toFixed(3)
+    + "&size=" + PROC;
+}
+
+function cargarPlaca(url) {
+  return new Promise(res => {
+    const im = new Image();
+    im.crossOrigin = "anonymous";
+    im.onload  = () => res(im);
+    im.onerror = () => res(null);
+    im.src = url;
+  });
+}
+
+/* Luminancias de una placa remuestreada a PROC×PROC (null si CORS bloquea) */
+function lumas(imagen) {
+  const c = document.createElement("canvas");
+  c.width = c.height = PROC;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(imagen, 0, 0, PROC, PROC);
+  let d;
+  try { d = ctx.getImageData(0, 0, PROC, PROC).data; }
+  catch (e) { return null; }
+  const v = new Float32Array(PROC * PROC);
+  for (let i = 0, j = 0; j < v.length; i += 4, j++) v[j] = (d[i] + d[i + 1] + d[i + 2]) / 3;
+  return v;
+}
+
+const suave = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+
+/* ══════ FUSIÓN HDR ══════
+   La placa corta (DSS1) se lleva a la escala radiométrica de la
+   profunda (DSS2-rojo) por regresión lineal sobre los píxeles
+   brillantes pero NO saturados, donde ambas ven lo mismo. Donde
+   la profunda se quema, entra la corta reescalada con valores que
+   superan 255: rango dinámico real recuperado, con costura suave. */
+function fusionar(vd, vs) {
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0;
+  for (let i = 0; i < vd.length; i++) {
+    if (vd[i] >= 120 && vd[i] <= 215 && vs[i] > 8) {
+      sx += vs[i]; sy += vd[i]; sxx += vs[i] * vs[i]; sxy += vs[i] * vd[i]; n++;
+    }
+  }
+  if (n < 500) return vd;                          // sin solape útil: no fusionar
+  const a = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  const b = (sy - a * sx) / n;
+  if (!(a > 0)) return vd;
+  const out = new Float32Array(vd.length);
+  for (let i = 0; i < vd.length; i++) {
+    const t = suave((vd[i] - 210) / 40);           // 0 hasta v=210, 1 desde v=250
+    out[i] = (1 - t) * vd[i] + t * Math.max(vd[i], a * vs[i] + b);
+  }
+  return out;
+}
+
+/* Desenfoque gaussiano de un array de luminancias, vía canvas */
+function desenfocar(v, radio) {
+  const c = document.createElement("canvas");
+  c.width = c.height = PROC;
+  const ctx = c.getContext("2d");
+  const im = ctx.createImageData(PROC, PROC);
+  for (let i = 0, j = 0; j < v.length; i += 4, j++) {
+    const o = Math.max(0, Math.min(255, v[j]));
+    im.data[i] = im.data[i + 1] = im.data[i + 2] = o;
+    im.data[i + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  const c2 = document.createElement("canvas");
+  c2.width = c2.height = PROC;
+  const ctx2 = c2.getContext("2d", { willReadFrequently: true });
+  ctx2.filter = "blur(" + radio + "px)";
+  ctx2.drawImage(c, 0, 0);
+  const d = ctx2.getImageData(0, 0, PROC, PROC).data;
+  const out = new Float32Array(v.length);
+  for (let i = 0, j = 0; j < v.length; i += 4, j++) out[j] = d[i];
+  return out;
+}
+
+/* ══════ REPARACIÓN DE NÚCLEOS SATURADOS ══════
+   En PanSTARRS las estrellas brillantes saturan el CCD y el mosaico
+   sirve sus centros negros o vacíos (las "rosquillas"). Un píxel
+   oscuro rodeado de un entorno muy brillante no existe en el cielo:
+   es un artefacto, y se rellena por encima del brillo de su halo. */
+function repararNucleos(v) {
+  const entorno = desenfocar(v, 4);
+  for (let i = 0; i < v.length; i++) {
+    if (entorno[i] > 140 && v[i] < 0.5 * entorno[i]) {
+      v[i] = Math.min(300, entorno[i] * 1.25);
+    }
+  }
+  return v;
+}
+
+/* ══════ ADAPTACIÓN LOCAL DEL OJO ══════
+   La retina percibe cada zona respecto a su entorno inmediato, no
+   en brillo absoluto. Solo se realza el detalle nítido (estrellas),
+   no la textura nebular suave; y el realce hacia oscuro se limita
+   para no dibujar anillos negros alrededor de los halos. */
+function adaptacionLocal(v) {
+  const borroso = desenfocar(v, Math.round(PROC / 60));
+  const out = new Float32Array(v.length);
+  const REALCE = 0.5, UMBRAL_DETALLE = 12;
+  for (let j = 0; j < v.length; j++) {
+    const dif = v[j] - borroso[j];
+    const mag = Math.abs(dif) - UMBRAL_DETALLE;
+    const gan = dif >= 0 ? REALCE : REALCE * 0.25;   // asimétrico: sin anillos
+    out[j] = v[j] + (mag > 0 ? gan * Math.sign(dif) * mag : 0);
+  }
+  return out;
+}
+
+/* ══════ CADENA FOTOMÉTRICA POR PÍXEL ══════
+   Igual que antes, pero sobre valores HDR: la calibración de la
+   placa extrapola por encima de v=255 hacia brillos superficiales
+   más intensos que SB_OBJ_MAX, así el núcleo fusionado conserva
+   su estructura en vez de aplanarse en blanco. */
+function procesarFotometrico(profunda, corta, canvas, p) {
+  const vd = lumas(profunda);
+  if (!vd) return false;
+  let v = vd;
+  if (corta) {
+    const vs = lumas(corta);
+    if (vs) v = fusionar(vd, vs);
+  }
+
+  const esHips = document.getElementById("origen").value === "hips";
+  if (esHips) v = repararNucleos(v);   // rosquillas de saturación de PanSTARRS
+
+  const pOjo = pupilaOjo(), pEf = Math.min(p, pOjo);
+  const sqm  = parseFloat(document.getElementById("sqm").value) || 21;
+  const dim  = Math.pow(pEf / pOjo, 2);
+  const Fcielo = Math.pow(10, -0.4 * sqm);
+  const rango  = FOT.SB_NEGRO - FOT.SB_BLANCO;
+
+  // Umbral de contraste adaptativo (curvas de Blackwell): cuanto más
+  // atenuada llega la escena al ojo, más contraste exige lo extenso.
+  // Referencia: cielo rural (21 m/☐") observado a pupila plena.
+  const Fref = Math.pow(10, -0.4 * 21);
+  const Cmin = FOT.C_MIN * Math.pow(Fref / (Fcielo * dim), FOT.C_EXP);
+
+  const salida = new Float32Array(v.length);
+  for (let i = 0; i < v.length; i++) {
+    let Fobj = 0;
+    let vi = v[i];
+    if (vi > 0) {
+      if (esHips) vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS);
+      const sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX);
+      Fobj = Math.pow(10, -0.4 * sb);
+    }
+    // visibilidad gradual: cerca del umbral la nebulosidad se ve lavada
+    // y desvaída, no recortada de golpe; lejos del umbral, plena
+    const s = suave((Fobj / (Fcielo * Cmin) - 1) / 1.5);
+    const Ftot = (Fobj * s + Fcielo) * dim;
+    salida[i] = 255 * (FOT.SB_NEGRO + 2.5 * Math.log10(Ftot)) / rango;
+  }
+
+  const final = document.getElementById("adaptacion").checked
+    ? adaptacionLocal(salida) : salida;
+
+  canvas.width = canvas.height = PROC;
+  const ctx = canvas.getContext("2d");
+  const im = ctx.createImageData(PROC, PROC);
+  for (let i = 0, j = 0; j < final.length; i += 4, j++) {
+    const o = Math.max(0, Math.min(255, final[j]));
+    im.data[i] = im.data[i + 1] = im.data[i + 2] = o;   // visión escotópica: sin color
+    im.data[i + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  return true;
+}
+
+function renderizar(profunda, corta, urlRespaldo) {
+  if (!oculares.length) return;
+  const { pupila } = datosOcular(oculares[ocularActivo]);
+  const img    = document.getElementById("img-dss");
+  const canvas = document.getElementById("lienzo");
+  const aviso  = document.getElementById("aviso");
+
+  // El endpoint PS1 ya ha leído FITS y máscara en el servidor. Esta primera
+  // fase muestra ese PNG reparado directamente, sin volver a tratarlo como
+  // un JPEG fotométrico. La simulación lineal de flujo llegará en la fase 2.
+  if (document.getElementById("origen").value === "ps1fits") {
+    canvas.style.display = "none";
+    img.style.display = "block";
+    img.src = urlRespaldo;
+    aplicarPupila(img, pupila);
+    return;
+  }
+
+  if (document.getElementById("fotometrica").checked && !corsFallo) {
+    if (procesarFotometrico(profunda, corta, canvas, pupila)) {
+      canvas.style.display = "block";
+      img.style.display = "none";
+      if (document.getElementById("gaia").checked) superponerGaia(canvas);
+      return;
+    }
+    corsFallo = true;
+    aviso.textContent =
+      "El navegador bloquea la lectura de píxeles (CORS): sirve las placas con dss-proxy.php desde tu dominio para activar el modo fotométrico.";
+  }
+  canvas.style.display = "none";
+  img.style.display = "block";
+  img.src = urlRespaldo;
+  aplicarPupila(img, pupila);
+}
+
+/* ══════ ESTRELLAS SINTÉTICAS DE GAIA DR3 ══════
+   Donde ninguna imagen conserva información (núcleos saturados,
+   grano de la placa), el catálogo sí: se consulta Gaia DR3 en el
+   campo, se filtra por la magnitud límite de la apertura y cada
+   estrella se dibuja como un punto cuyo brillo sigue su magnitud.
+   El "polvo de diamantes" del centro de un globular emerge del
+   dato, no de la fotografía. */
+
+const cacheGaia = {};
+
+function consultarGaia(ra0, dec0, radioDeg) {
+  const clave = ra0.toFixed(3) + "," + dec0.toFixed(3) + "," + radioDeg.toFixed(3);
+  if (cacheGaia[clave]) return Promise.resolve(cacheGaia[clave]);
+  const adql =
+    'SELECT TOP 15000 RA_ICRS, DE_ICRS, Gmag FROM "I/355/gaiadr3" ' +
+    "WHERE 1=CONTAINS(POINT('ICRS',RA_ICRS,DE_ICRS), " +
+    "CIRCLE('ICRS'," + ra0.toFixed(5) + "," + dec0.toFixed(5) + "," + radioDeg.toFixed(5) + ")) " +
+    "ORDER BY Gmag";
+  const url = "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync" +
+    "?request=doQuery&lang=adql&format=json&query=" + encodeURIComponent(adql);
+  return fetch(url)
+    .then(r => r.json())
+    .then(j => (cacheGaia[clave] = (j.data || []).filter(f => f[2] != null)));
+}
+
+function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim) {
+  const esc  = PROC / (arcmin / 60);              // píxeles por grado
+  const cos0 = Math.cos(dec0 * Math.PI / 180);
+  ctx.globalCompositeOperation = "lighter";       // la luz se suma, como en el cielo
+  for (const [ra, dec, g] of estrellas) {
+    if (g > mlim) continue;
+    const x = PROC / 2 - (ra - ra0) * cos0 * esc; // Este a la izquierda
+    const y = PROC / 2 - (dec - dec0) * esc;      // Norte arriba
+    if (x < -3 || y < -3 || x > PROC + 3 || y > PROC + 3) continue;
+    const f = Math.min(1, (mlim - g) / 6);        // 0 en el límite, 1 a 6 mag del límite
+    const r = 0.7 + 2.3 * f * f;
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2);
+    gr.addColorStop(0,    "rgba(255,255,255," + (0.35 + 0.65 * f).toFixed(3) + ")");
+    gr.addColorStop(0.45, "rgba(255,255,255," + (0.25 * f).toFixed(3) + ")");
+    gr.addColorStop(1,    "rgba(255,255,255,0)");
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 2.2, 0, 7);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = "source-over";
+}
+
+function superponerGaia(canvas) {
+  const oc = oculares[ocularActivo];
+  const arcmin = Math.min(datosOcular(oc).campoReal * 60, DSS_MAX_ARCMIN);
+  const ra0  = sexToDeg(document.getElementById("ra").value, true);
+  const dec0 = sexToDeg(document.getElementById("dec").value, false);
+  const D    = parseFloat(document.getElementById("apertura").value) || 0;
+  const mlim = 7.7 + 5 * Math.log10(D / 100);
+  const pet  = contadorPeticion;
+  consultarGaia(ra0, dec0, (arcmin / 60) * 0.72)   // radio: semidiagonal del campo
+    .then(estrellas => {
+      if (pet !== contadorPeticion) return;        // el campo ya cambió
+      dibujarGaia(canvas.getContext("2d"), estrellas, ra0, dec0, arcmin, mlim);
+    })
+    .catch(() => {
+      document.getElementById("aviso").textContent =
+        "No se pudo consultar Gaia DR3 (VizieR): se muestra solo la imagen.";
+    });
+}
+
+/* ══════ Reserva: aproximación por filtro SVG (sin canvas) ══════ */
+function aplicarPupila(img, p) {
+  const pOjo = pupilaOjo();
+  const pEf  = Math.min(p, pOjo);
+  const brilloPercibido = Math.pow(Math.pow(pEf / pOjo, 2), 0.5);
+  const umbral = 0.30 * (1 - pEf / pOjo);
+  const pendiente = brilloPercibido / (1 - umbral);
+  const despl     = -pendiente * umbral;
+  ["R","G","B"].forEach(c => {
+    const f = document.querySelector("#transfer-pupila feFunc" + c);
+    f.setAttribute("slope", pendiente.toFixed(4));
+    f.setAttribute("intercept", despl.toFixed(4));
+  });
+  img.style.filter = "grayscale(1) url(#filtro-pupila)";
+}
+
+/* ══════════════════ EVENTOS ══════════════════ */
+
+// panel de oculares (delegación)
+document.getElementById("lista-oculares").addEventListener("change", e => {
+  const i = e.target.dataset.i, campo = e.target.dataset.campo;
+  if (i === undefined) return;
+  oculares[i][campo] = campo === "nombre" ? e.target.value : parseFloat(e.target.value);
+  actualizar();
+});
+document.getElementById("lista-oculares").addEventListener("click", e => {
+  const i = e.target.dataset.quitar;
+  if (i === undefined) return;
+  oculares.splice(i, 1);
+  if (!oculares.length) oculares = [{ nombre: "25 mm", focal: 25, afov: 50 }];
+  ocularActivo = Math.min(ocularActivo, oculares.length - 1);
+  pintarPanelOculares(); actualizar();
+});
+document.getElementById("btn-anadir").addEventListener("click", () => {
+  oculares.push({ nombre: "Nuevo", focal: 10, afov: 68 });
+  pintarPanelOculares(); actualizar();
+});
+
+// telescopio, ojo y cielo
+["focal", "apertura", "pupila-ojo", "sqm"].forEach(id =>
+  document.getElementById(id).addEventListener("change", actualizar));
+["fotometrica", "hdr", "adaptacion", "gaia"].forEach(id =>
+  document.getElementById(id).addEventListener("change", actualizar));
+document.getElementById("origen").addEventListener("change", actualizar);
+
+// objetos
+const selPreset = document.getElementById("preset");
+presets.forEach((p, i) => {
+  const op = document.createElement("option");
+  op.value = i; op.textContent = p.nombre;
+  selPreset.appendChild(op);
+});
+selPreset.addEventListener("change", () => {
+  const p = presets[selPreset.value];
+  if (p.ra !== null) {
+    document.getElementById("ra").value = p.ra;
+    document.getElementById("dec").value = p.dec;
+  }
+  actualizar();
+});
+["ra", "dec"].forEach(id =>
+  document.getElementById(id).addEventListener("change", actualizar));
+
+window.addEventListener("resize", () => actualizar());
+
+/* ══════════════════ ARRANQUE ══════════════════ */
+pintarPanelOculares();
+actualizar();
+</script>
+</body>
+</html>
