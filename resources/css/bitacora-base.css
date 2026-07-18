@@ -81,9 +81,12 @@
 #mw-obs-form input:focus {outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
 #mw-obs-form input::placeholder {color:#54617d;}
 
-/* Selects (mismo aspecto que los inputs) */
+/* Selects (mismo aspecto que los inputs).
+   height:auto y line-height explícito anulan cualquier altura fija que el tema
+   de WordPress imponga al <select>: sin ellos, el texto se recorta arriba/abajo. */
 #mw-obs-form select {
-    width:100%;background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
+    width:100%;height:auto;line-height:1.3;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
     color:var(--tinta);font-family:inherit;font-size:16px;padding:11px 13px;cursor:pointer;
     color-scheme:dark;transition:border-color .15s,box-shadow .15s;}
 #mw-obs-form select:focus {outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
