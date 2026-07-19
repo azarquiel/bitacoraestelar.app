@@ -62,8 +62,21 @@
 
       var FOT = {
         SB_OBJ_MAX: 14.0, SB_OBJ_MIN: 24.0, SB_NEGRO: 25.5, SB_BLANCO: 14.0,
-        C_MIN: 0.08, C_EXP: 0.35, GAMMA_HIPS: 2.0
+        C_MIN: 0.08, C_EXP: 0.35, GAMMA_HIPS: 2.0,
+        // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo
+        // se pinta en función de su brillo superficial en el ocular (SBe, en
+        // mag/arcsec², atenuado por la pupila de salida). Por encima de
+        // SB_CIELO_NEGRO el fondo es negro total (contraste máximo, como bajo un
+        // cielo excepcional); por debajo se aclara linealmente en magnitudes
+        // (= logarítmicamente en flujo) hasta blanco en SB_CIELO_BLANCO.
+        SB_CIELO_NEGRO: 22.5, SB_CIELO_BLANCO: 16.5
       };
+
+      // Nivel de gris del fondo (0–255) para un brillo de cielo en el ocular SBe.
+      function nivelCielo(SBe) {
+        var t = (FOT.SB_CIELO_NEGRO - SBe) / (FOT.SB_CIELO_NEGRO - FOT.SB_CIELO_BLANCO);
+        return Math.max(0, Math.min(255, 255 * t));
+      }
 
       /* ══════════════════ CATÁLOGO DE EQUIPO ══════════════════ */
       function num(v) { if (v == null || v === '') return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
@@ -228,10 +241,9 @@
         var pOjo = pupilaOjo(), pEf = Math.min(pupila, pOjo);
         var sqm = parseFloat($('sim-sqm').value) || 21;
         var dim = Math.pow(pEf / pOjo, 2);
-        var Fcielo = Math.pow(10, -0.4 * sqm);
-        var rango = FOT.SB_NEGRO - FOT.SB_BLANCO;
-        var nivel = 255 * (FOT.SB_NEGRO + 2.5 * Math.log10(Fcielo * dim)) / rango;
-        return Math.round(Math.max(0, Math.min(255, nivel)));
+        // SBe = brillo del cielo en el ocular (más alto = más oscuro): el SQM
+        // atenuado por la pupila de salida (por eso a más aumentos, más oscuro).
+        return Math.round(nivelCielo(sqm - 2.5 * Math.log10(dim)));
       }
 
       /* ══════════════════ MODO ESTRELLAS DE GAIA (CANVAS 2D) ══════════════════
@@ -291,11 +303,18 @@
         var esHips = $('sim-origen').value === 'hips'; if (esHips) v = repararNucleos(v);
         var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var sqm = parseFloat($('sim-sqm').value) || 21; var dim = Math.pow(pEf / pOjo, 2); var Fcielo = Math.pow(10, -0.4 * sqm); var rango = FOT.SB_NEGRO - FOT.SB_BLANCO;
         var Fref = Math.pow(10, -0.4 * 21); var Cmin = FOT.C_MIN * Math.pow(Fref / (Fcielo * dim), FOT.C_EXP);
+        // El fondo de cielo se pinta con la curva empinada nivelCielo() (puede ir
+        // a negro bajo cielos oscuros); el objeto se suma encima como INCREMENTO
+        // de contraste sobre el cielo (Δmag = 2,5·log10(1 + Fobj·s / Fcielo)), que
+        // se conserva intacto. Así, cielo oscuro → fondo negro y objeto pleno
+        // (contraste brutal); cielo claro → fondo gris y menos incremento (lavado).
+        var nivelFondo = nivelCielo(sqm - 2.5 * Math.log10(dim));
         var salida = new Float32Array(v.length);
         for (var i = 0; i < v.length; i++) {
           var Fobj = 0, vi = v[i];
           if (vi > 0) { if (esHips) vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS); var sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX); Fobj = Math.pow(10, -0.4 * sb); }
-          var s = suave((Fobj / (Fcielo * Cmin) - 1) / 1.5); var Ftot = (Fobj * s + Fcielo) * dim; salida[i] = 255 * (FOT.SB_NEGRO + 2.5 * Math.log10(Ftot)) / rango;
+          var s = suave((Fobj / (Fcielo * Cmin) - 1) / 1.5);
+          salida[i] = nivelFondo + 255 * 2.5 * Math.log10(1 + (Fobj * s) / Fcielo) / rango;
         }
         var final = $('sim-adaptacion').checked ? adaptacionLocal(salida) : salida;
         canvas.width = canvas.height = PROC; var ctx = canvas.getContext('2d'); var im = ctx.createImageData(PROC, PROC);
