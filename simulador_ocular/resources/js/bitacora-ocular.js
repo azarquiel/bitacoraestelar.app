@@ -204,10 +204,11 @@
             renderizar(im, null, u);
           });
         } else {
+          // Fusión HDR siempre activa: la placa profunda (DSS2-red) para la
+          // nebulosidad tenue y la corta (DSS1) para recuperar los núcleos quemados.
           var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin);
           var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin);
-          var hdr = $('sim-hdr').checked;
-          Promise.all([cargarPlaca(urlProfunda), hdr ? cargarPlaca(urlCorta) : Promise.resolve(null)])
+          Promise.all([cargarPlaca(urlProfunda), cargarPlaca(urlCorta)])
             .then(function (res) {
               var profunda = res[0], corta = res[1];
               if (peticion !== contadorPeticion) return;
@@ -218,18 +219,36 @@
         }
       }
 
+      /* Nivel de gris del fondo de cielo (0–255) según el fondo del observador,
+         con EXACTAMENTE la misma cadena que el motor fotométrico: el flujo del
+         cielo atenuado por la pupila de salida se mapea linealmente en
+         magnitudes entre SB_NEGRO (negro) y SB_BLANCO (blanco). Así el fondo del
+         Canvas 2D coincide con el de las vistas DSS/PanSTARRS. */
+      function nivelFondoCielo(pupila) {
+        var pOjo = pupilaOjo(), pEf = Math.min(pupila, pOjo);
+        var sqm = parseFloat($('sim-sqm').value) || 21;
+        var dim = Math.pow(pEf / pOjo, 2);
+        var Fcielo = Math.pow(10, -0.4 * sqm);
+        var rango = FOT.SB_NEGRO - FOT.SB_BLANCO;
+        var nivel = 255 * (FOT.SB_NEGRO + 2.5 * Math.log10(Fcielo * dim)) / rango;
+        return Math.round(Math.max(0, Math.min(255, nivel)));
+      }
+
       /* ══════════════════ MODO ESTRELLAS DE GAIA (CANVAS 2D) ══════════════════
-         Dibuja SOLO las estrellas reales de Gaia DR3 sobre fondo negro, con la
-         misma consulta y proyección (dibujarGaia) que la superposición de Gaia
-         sobre las vistas DSS/PanSTARRS, así las estrellas caen en la MISMA
-         posición que en esas vistas. */
+         Dibuja las estrellas reales de Gaia DR3 sobre un fondo de cielo aclarado
+         según el "Fondo de cielo" del observador (mismo gris que el motor
+         fotométrico), con la misma consulta y proyección (dibujarGaia) que la
+         superposición de Gaia sobre DSS/PanSTARRS, así el fondo y las posiciones
+         se parecen lo máximo posible a esas vistas. */
       function renderGaia2D(arcmin, peticion) {
         var img = $('sim-img'), canvas = $('sim-lienzo'), cargando = $('sim-cargando');
         img.style.display = 'none';
         canvas.style.display = 'block';
         canvas.width = canvas.height = PROC;
         var ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, PROC, PROC);
+        var fondo = nivelFondoCielo(datosOcular().pupila);
+        var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
+        ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
         cargando.style.display = 'flex'; cargando.textContent = 'consultando estrellas de Gaia DR3…';
 
         var ra0 = sexToDeg(OBJETO.ra, true), dec0 = sexToDeg(OBJETO.dec, false);
@@ -241,7 +260,7 @@
         consultarGaia(ra0, dec0).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
-          ctx.fillStyle = '#000'; ctx.fillRect(0, 0, PROC, PROC);
+          ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
           dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim);
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
@@ -291,7 +310,8 @@
         var canvas = $('sim-lienzo');
         var aviso = $('sim-aviso');
 
-        if ($('sim-fotometrica').checked && !corsFallo) {
+        // Simulación fotométrica píxel a píxel: siempre activa.
+        if (!corsFallo) {
           if (procesarFotometrico(profunda, corta, canvas, pupila)) {
             canvas.style.display = 'block'; img.style.display = 'none';
             if ($('sim-gaia').checked) superponerGaia(canvas);
@@ -353,7 +373,7 @@
 
       /* ══════════════════ EVENTOS ══════════════════ */
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
-      ['sim-fotometrica', 'sim-hdr', 'sim-adaptacion', 'sim-gaia', 'sim-origen'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
+      ['sim-adaptacion', 'sim-gaia', 'sim-origen'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
       window.addEventListener('resize', function () { actualizar(); });
 
       /* ══════════════════ ARRANQUE ══════════════════ */
