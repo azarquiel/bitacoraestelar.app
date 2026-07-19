@@ -50,10 +50,17 @@
       /* Ajustes fáciles del render de estrellas de Gaia (Canvas 2D y overlay).
          Todo aquí para poder afinarlo sin tocar el resto del código. */
       var GAIA_CFG = {
-        blur: 1.3,          // grosor del halo alrededor de cada estrella (menor = más "punta de alfiler"; útil ~0.8–2.2)
+        blur: 1.3,          // ancho del halo respecto al núcleo (radio total = núcleo·(1+blur); menor = más "punta de alfiler")
         magColor: 10,       // solo las estrellas más brillantes que esta magnitud llevan color; el resto quedan blancas
         sbRefCielo: 21.8,   // brillo de cielo en el ocular (mag/arcsec²) de referencia: por encima se ve la mag. límite plena
-        mermaCielo: 1.0     // magnitudes de límite que se pierden por cada magnitud que el cielo se aclara bajo la referencia
+        mermaCielo: 1.0,    // magnitudes de límite que se pierden por cada magnitud que el cielo se aclara bajo la referencia
+        // Tamaño del NÚCLEO (px) según la magnitud: brillante = gordota, débil = punta de alfiler.
+        // Es fijo (no depende del cielo), como el "blooming" de una placa fotográfica.
+        radioMin: 0.6,      // radio del núcleo de las estrellas en el límite
+        radioMag: 0.34,     // px de radio de núcleo extra por cada magnitud que la estrella supera a magTamMin
+        magTamMin: 13.5,    // magnitud a partir de la cual el núcleo es el mínimo (más brillante → mayor)
+        radioMax: 5.5,      // radio máximo del núcleo (estrellas muy brillantes)
+        brillo: 1.4         // realce del brillo de las estrellas (1 = cálculo base)
       };
 
       var CFG = window.BITACORA_OCULAR || {};
@@ -329,7 +336,7 @@
           var s = suave((Fobj / (Fcielo * Cmin) - 1) / 1.5);
           salida[i] = nivelFondo + 255 * 2.5 * Math.log10(1 + (Fobj * s) / Fcielo) / rango;
         }
-        var final = $('sim-adaptacion').checked ? adaptacionLocal(salida) : salida;
+        var final = adaptacionLocal(salida);   // adaptación local del ojo: siempre activa
         canvas.width = canvas.height = PROC; var ctx = canvas.getContext('2d'); var im = ctx.createImageData(PROC, PROC);
         for (var k = 0, j = 0; j < final.length; k += 4, j++) { var o = Math.max(0, Math.min(255, final[j])); im.data[k] = im.data[k + 1] = im.data[k + 2] = o; im.data[k + 3] = 255; }
         ctx.putImageData(im, 0, 0); return true;
@@ -346,7 +353,7 @@
         if (!corsFallo) {
           if (procesarFotometrico(profunda, corta, canvas, pupila)) {
             canvas.style.display = 'block'; img.style.display = 'none';
-            if ($('sim-gaia').checked) superponerGaia(canvas);
+            superponerGaia(canvas);
             return;
           }
           corsFallo = true;
@@ -370,29 +377,29 @@
       // Devuelve estrellas [RA, Dec, Gmag, BP-RP]. El color BP-RP (bp_rp) puede
       // venir null en estrellas débiles sin fotometría BP/RP: se pintan blancas.
       function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 15000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
-      /* Crear un gradiente radial POR estrella es lo que dominaba el coste del
-         Canvas 2D (~1 s con miles de estrellas): en su lugar se pre-renderiza un
-         sprite por nivel de brillo (mismo gradiente exacto, 24 niveles) y cada
-         estrella se estampa con drawImage, que es muchísimo más rápido. */
-      var GAIA_NIVELES = 24;
-      var spritesGaia = [];
-      // Radio del disco de la estrella (halo incluido). El grosor del halo lo fija
-      // GAIA_CFG.blur; con seeing perfecto las queremos como puntas de alfiler.
-      function radioEstrella(f) { return (0.7 + 2.3 * f * f) * GAIA_CFG.blur; }
-
-      function spriteGaia(nivel) {
-        if (spritesGaia[nivel]) return spritesGaia[nivel];
-        var f = (nivel + 0.5) / GAIA_NIVELES;
-        var R = radioEstrella(f);
-        var S = Math.ceil(R * 2) + 2, m = S / 2;
+      /* Render de estrellas: un ÚNICO sprite base normalizado (núcleo blanco +
+         halo) que se escala al tamaño de cada estrella y se estampa con drawImage
+         + globalAlpha (rápido incluso con miles de estrellas). El TAMAÑO depende
+         de la magnitud (fijo, como el "blooming" de la placa: brillante = gorda);
+         el BRILLO se desvanece cerca de la mag. límite y sube con GAIA_CFG.brillo. */
+      var GAIA_SPRITE = null;
+      function spriteGaia() {
+        if (GAIA_SPRITE) return GAIA_SPRITE;
+        var S = 64, m = S / 2, R = m - 1;
+        var dCore = 1 / (1 + GAIA_CFG.blur);   // fracción del radio total que es núcleo sólido
         var c = document.createElement('canvas'); c.width = c.height = S;
         var g = c.getContext('2d');
         var gr = g.createRadialGradient(m, m, 0, m, m, R);
-        gr.addColorStop(0, 'rgba(255,255,255,' + (0.35 + 0.65 * f).toFixed(3) + ')');
-        gr.addColorStop(0.45, 'rgba(255,255,255,' + (0.25 * f).toFixed(3) + ')');
+        gr.addColorStop(0, 'rgba(255,255,255,1)');
+        gr.addColorStop(dCore * 0.7, 'rgba(255,255,255,0.9)');
+        gr.addColorStop(dCore, 'rgba(255,255,255,0.4)');
         gr.addColorStop(1, 'rgba(255,255,255,0)');
         g.fillStyle = gr; g.beginPath(); g.arc(m, m, R, 0, 7); g.fill();
-        return (spritesGaia[nivel] = c);
+        return (GAIA_SPRITE = c);
+      }
+      // Radio del NÚCLEO de la estrella según su magnitud (fijo, no depende del cielo).
+      function radioNucleo(g) {
+        return Math.min(GAIA_CFG.radioMax, GAIA_CFG.radioMin + GAIA_CFG.radioMag * Math.max(0, GAIA_CFG.magTamMin - g));
       }
 
       // Color de una estrella a partir de su índice BP-RP de Gaia: azul (caliente)
@@ -412,18 +419,21 @@
         return [A[A.length - 1][1], A[A.length - 1][2], A[A.length - 1][3]];
       }
       // Estrella con tinte: núcleo blanco (saturado) y halo del color de la estrella.
-      function dibujarEstrellaColor(ctx, x, y, f, rgb) {
-        var R = radioEstrella(f);
-        var gr = ctx.createRadialGradient(x, y, 0, x, y, R);
-        gr.addColorStop(0, 'rgba(255,255,255,' + (0.35 + 0.65 * f).toFixed(3) + ')');
-        gr.addColorStop(0.45, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + (0.28 * f).toFixed(3) + ')');
+      function dibujarEstrellaColor(ctx, x, y, Rtot, rgb) {
+        var dCore = 1 / (1 + GAIA_CFG.blur);
+        var gr = ctx.createRadialGradient(x, y, 0, x, y, Rtot);
+        gr.addColorStop(0, 'rgba(255,255,255,1)');
+        gr.addColorStop(dCore * 0.7, 'rgba(255,255,255,0.9)');
+        gr.addColorStop(dCore, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0.5)');
         gr.addColorStop(1, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0)');
-        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.fill();
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
       }
 
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim) {
         var escv = PROC / (arcmin / 60);
         var cos0 = Math.cos(dec0 * Math.PI / 180);
+        var base = spriteGaia();
+        var factorHalo = 1 + GAIA_CFG.blur;   // radio total = núcleo · (1 + blur)
         ctx.globalCompositeOperation = 'lighter';
         for (var i = 0; i < estrellas.length; i++) {
           var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2], bprp = estrellas[i][3];
@@ -431,14 +441,16 @@
           var x = PROC / 2 - (ra - ra0) * cos0 * escv;
           var y = PROC / 2 - (dec - dec0) * escv;
           if (x < -3 || y < -3 || x > PROC + 3 || y > PROC + 3) continue;
-          var f = Math.min(1, (mlim - g) / 6);
+          var Rtot = radioNucleo(g) * factorHalo;
+          // Brillo: se desvanece cerca de la mag. límite (sky-dependent) y se realza.
+          ctx.globalAlpha = Math.min(1, GAIA_CFG.brillo * Math.min(1, (mlim - g) / 6));
           if (g < GAIA_CFG.magColor && bprp != null) {
-            dibujarEstrellaColor(ctx, x, y, f, colorPorBpRp(bprp));   // solo las más brillantes llevan color
+            dibujarEstrellaColor(ctx, x, y, Rtot, colorPorBpRp(bprp));   // solo las más brillantes llevan color
           } else {
-            var sp = spriteGaia(Math.min(GAIA_NIVELES - 1, Math.floor(f * GAIA_NIVELES)));
-            ctx.drawImage(sp, x - sp.width / 2, y - sp.height / 2);
+            ctx.drawImage(base, x - Rtot, y - Rtot, Rtot * 2, Rtot * 2);
           }
         }
+        ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
       }
 
@@ -457,7 +469,7 @@
 
       /* ══════════════════ EVENTOS ══════════════════ */
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
-      ['sim-adaptacion', 'sim-gaia', 'sim-origen'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
+      $('sim-origen').addEventListener('change', actualizar);
       window.addEventListener('resize', function () { actualizar(); });
 
       /* ══════════════════ ARRANQUE ══════════════════ */
