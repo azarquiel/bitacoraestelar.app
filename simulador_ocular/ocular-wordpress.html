@@ -17,8 +17,8 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260719_1030" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260718_2330" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260719_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260719_1200" />
 
 <!-- Filtro de respuesta del ojo según la pupila de salida (modo de reserva
      sin canvas): y = pendiente·x + desplazamiento. -->
@@ -49,16 +49,20 @@
 
       <div class="bloque">
         <h2>Telescopio</h2>
-        <label class="field">
-          <select id="sim-tele" aria-label="Telescopio"><option value="">— Elige un telescopio —</option></select></label>
+        <div class="obj-wrap">
+          <input type="text" id="sim-tele-input" placeholder="— Escribe para buscar telescopio —" aria-label="Telescopio" autocomplete="off">
+          <div class="suggest" id="sim-tele-sugg"></div>
+        </div>
         <label class="field"><span class="lab">Pupila del ojo adaptado (mm) — ~7 joven · ~5–6 con la edad</span>
           <input type="number" id="sim-pupila-ojo" value="7" min="2" max="8" step="0.5"></label>
       </div>
 
       <div class="bloque">
         <h2>Ocular</h2>
-        <label class="field">
-          <select id="sim-ocular" aria-label="Ocular"><option value="">— Elige un ocular —</option></select></label>
+        <div class="obj-wrap">
+          <input type="text" id="sim-ocular-input" placeholder="— Escribe para buscar ocular —" aria-label="Ocular" autocomplete="off">
+          <div class="suggest" id="sim-ocular-sugg"></div>
+        </div>
         <p class="hint" id="sim-eq-hint">Elige el telescopio y el ocular con los que quieres ver el objeto.</p>
       </div>
 
@@ -72,6 +76,7 @@
           <select id="sim-origen">
             <option value="hips">PanSTARRS DR1 (HiPS)</option>
             <option value="dss">DSS (placas fotográficas)</option>
+            <option value="canvas-2d">Estrellas de Gaia DR3 (Canvas 2D)</option>
           </select></label>
       </div>
 
@@ -112,7 +117,7 @@
 
       <div class="vista" id="sim-vista">
         <img id="sim-img" crossorigin="anonymous" alt="Vista del objeto a través del ocular">
-        <canvas id="sim-lienzo" aria-label="Vista fotométrica del objeto"></canvas>
+        <canvas id="sim-lienzo" aria-label="Vista del objeto"></canvas>
         <div class="cargando" id="sim-cargando">preparando el simulador…</div>
       </div>
 
@@ -133,4 +138,5 @@
 </div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260718_2330" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260719_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260719_1200" defer></script>

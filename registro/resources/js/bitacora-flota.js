@@ -210,12 +210,16 @@
             '<div class="actions"><button type="button" class="primary guardar-custom">Añadir a mi flota</button></div>' +
           '</div>';
 
-        var input = cont.querySelector('.add-buscar');
-        var sugg = cont.querySelector('.suggest');
-        input.addEventListener('input', function () { buscarCatalogo(tipo, input.value, sugg); });
-        input.addEventListener('focus', function () { if (input.value.trim()) buscarCatalogo(tipo, input.value, sugg); });
-        document.addEventListener('click', function (e) {
-          if (!cont.contains(e.target)) sugg.style.display = 'none';
+        // Buscador de catálogo común (bitacora-base.js): al elegir un item,
+        // se añade a la flota personal por su id de catálogo.
+        BitacoraBase.montarBuscadorCatalogo({
+          input: cont.querySelector('.add-buscar'),
+          suggest: cont.querySelector('.suggest'),
+          contenedor: cont,
+          fuente: function () { return (estado.catalogo && estado.catalogo[plural[tipo]]) || []; },
+          texto: function (it) { return ((it.vendor ? it.vendor + ' ' : '') + (it[cfg.modeloCol] || '')).trim(); },
+          specs: cfg.specs,
+          onElegir: function (it) { crear(tipo, { catalogoId: parseInt(it.id, 10) }, null); }
         });
 
         var custom = cont.querySelector('.flota-add-custom');
@@ -229,35 +233,6 @@
         });
       }
 
-      function buscarCatalogo(tipo, q, sugg) {
-        q = q.trim().toLowerCase();
-        if (!q) { sugg.style.display = 'none'; return; }
-        var cfg = CATS[tipo];
-        var fuente = (estado.catalogo && estado.catalogo[plural[tipo]]) || [];
-        var res = fuente.filter(function (it) {
-          var t = ((it.vendor || '') + ' ' + (it[cfg.modeloCol] || '')).toLowerCase();
-          return t.indexOf(q) !== -1;
-        }).slice(0, 12);
-        if (!res.length) {
-          sugg.innerHTML = '<button type="button" disabled style="opacity:.6;cursor:default">Sin coincidencias en el catálogo</button>';
-          sugg.style.display = 'block';
-          return;
-        }
-        sugg.innerHTML = res.map(function (it) {
-          var nombre = ((it.vendor ? it.vendor + ' ' : '') + (it[cfg.modeloCol] || '')).trim();
-          return '<button type="button" data-id="' + esc(it.id) + '">' +
-            '<span>' + esc(nombre) + '</span>' +
-            '<span style="color:var(--azul);font-family:ui-monospace,Menlo,monospace;font-size:12px">' + esc(cfg.specs(it)) + '</span>' +
-            '</button>';
-        }).join('');
-        sugg.style.display = 'block';
-        sugg.querySelectorAll('button[data-id]').forEach(function (b) {
-          b.addEventListener('click', function () {
-            sugg.style.display = 'none';
-            crear(tipo, { catalogoId: parseInt(b.getAttribute('data-id'), 10) }, b);
-          });
-        });
-      }
 
       // ── Operaciones de API ──
       function crear(tipo, datos, btn) {

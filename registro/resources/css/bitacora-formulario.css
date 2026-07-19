@@ -12,17 +12,7 @@
 
 #mw-obs-form form {margin-top:36px;}
 
-/* ── Buscador de objeto (autocompletado) y coordenadas manuales ── */
-#mw-obs-form .obj-wrap {position:relative;}
-#mw-obs-form .suggest {position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--noche-2);
-    border:1px solid var(--linea);border-radius:8px;overflow:hidden;z-index:20;
-    box-shadow:0 10px 30px rgba(0,0,0,.5);display:none;}
-#mw-obs-form .suggest button {display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;
-    background:none;border:none;color:var(--tinta);font-family:inherit;font-size:15px;
-    padding:10px 13px;cursor:pointer;border-bottom:1px solid var(--linea);}
-#mw-obs-form .suggest button:last-child {border-bottom:none;}
-#mw-obs-form .suggest button:hover, #mw-obs-form .suggest button.active {background:var(--ambar-suave);}
-#mw-obs-form .suggest .cons {color:var(--tinta-tenue);font-family:ui-monospace,Menlo,monospace;font-size:12px;}
+/* ── Coordenadas manuales (cuando el objeto no es del catálogo Messier) ── */
 #mw-obs-form .radec {display:none;margin-top:6px;padding:16px;border:1px dashed var(--linea);border-radius:8px;background:rgba(126,200,255,0.04);}
 #mw-obs-form .radec.show {display:block;}
 #mw-obs-form .radec .hint {font-size:12.5px;color:var(--tinta-tenue);margin:0 0 12px;}
