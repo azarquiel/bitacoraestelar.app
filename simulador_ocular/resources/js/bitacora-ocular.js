@@ -169,7 +169,7 @@
         var sqm = parseFloat($('sim-sqm').value) || 21;
         var D = teleApertura();
         $('sim-v-brillo').innerHTML = (brillo * 100).toFixed(0) + '<em>%</em>';
-        $('sim-v-cielo').innerHTML  = (sqm + 5 * Math.log10(pOjo / pEf)).toFixed(1) + '<em>m/☐″</em>';
+        $('sim-v-cielo').innerHTML  = (sqm + 5 * Math.log10(pOjo / pEf)).toFixed(1) + '<em>mag/arcsec²</em>';
         $('sim-v-maglim').innerHTML = (7.7 + 5 * Math.log10(D / 100)).toFixed(1) + '<em>m</em>';
 
         // Recorte del cielo: lado = campo real, limitado por el servidor.
@@ -238,7 +238,7 @@
         // vistas de survey. La proyección es la misma (dibujarGaia), así que las
         // estrellas caen en la MISMA posición que en DSS/PanSTARRS.
         var mlim = Math.max(7.7 + 5 * Math.log10(teleApertura() / 100), 13.5);
-        consultarGaia(ra0, dec0, (arcmin / 60) * 0.72).then(function (estrellas) {
+        consultarGaia(ra0, dec0).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
           ctx.fillStyle = '#000'; ctx.fillRect(0, 0, PROC, PROC);
@@ -305,12 +305,42 @@
       }
 
       /* ══════════════════ ESTRELLAS SINTÉTICAS GAIA DR3 ══════════════════ */
-      function consultarGaia(ra0, dec0, radioDeg) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3) + ',' + radioDeg.toFixed(3); if (cacheGaia[clave]) return Promise.resolve(cacheGaia[clave]); var adql = 'SELECT TOP 15000 RA_ICRS, DE_ICRS, Gmag FROM "I/355/gaiadr3" WHERE 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + radioDeg.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return (cacheGaia[clave] = ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; })); }); }
-      function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim) { var escv = PROC / (arcmin / 60); var cos0 = Math.cos(dec0 * Math.PI / 180); ctx.globalCompositeOperation = 'lighter'; for (var i = 0; i < estrellas.length; i++) { var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2]; if (g > mlim) continue; var x = PROC / 2 - (ra - ra0) * cos0 * escv; var y = PROC / 2 - (dec - dec0) * escv; if (x < -3 || y < -3 || x > PROC + 3 || y > PROC + 3) continue; var f = Math.min(1, (mlim - g) / 6); var r = 0.7 + 2.3 * f * f; var gr = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2); gr.addColorStop(0, 'rgba(255,255,255,' + (0.35 + 0.65 * f).toFixed(3) + ')'); gr.addColorStop(0.45, 'rgba(255,255,255,' + (0.25 * f).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, 7); ctx.fill(); } ctx.globalCompositeOperation = 'source-over'; }
+      /* Consulta Gaia UNA sola vez por objeto, al radio máximo posible (el tope
+         del DSS, 2° de lado → 1,44° de radio): los campos menores se recortan en
+         cliente (dibujarGaia ya filtra por posición y magnitud), así cambiar de
+         ocular u origen no vuelve a preguntar a VizieR. El filtro Gmag<=14 poda
+         en el servidor ANTES de ordenar (sin él, en campos de Vía Láctea como
+         Cygnus el ORDER BY sobre cientos de miles de filas tarda varios
+         segundos) y cubre de sobra la mag. límite del canvas (13,5) y de
+         cualquier equipo del catálogo. */
+      var GAIA_RADIO_MAX = (DSS_MAX_ARCMIN / 60) * 0.72;   // 1,44°
+      var GAIA_MAG_MAX = 14;
+      function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 15000 RA_ICRS, DE_ICRS, Gmag FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
+      /* Crear un gradiente radial POR estrella es lo que dominaba el coste del
+         Canvas 2D (~1 s con miles de estrellas): en su lugar se pre-renderiza un
+         sprite por nivel de brillo (mismo gradiente exacto, 24 niveles) y cada
+         estrella se estampa con drawImage, que es muchísimo más rápido. */
+      var GAIA_NIVELES = 24;
+      var spritesGaia = [];
+      function spriteGaia(nivel) {
+        if (spritesGaia[nivel]) return spritesGaia[nivel];
+        var f = (nivel + 0.5) / GAIA_NIVELES;
+        var R = (0.7 + 2.3 * f * f) * 2.2;
+        var S = Math.ceil(R * 2) + 2, m = S / 2;
+        var c = document.createElement('canvas'); c.width = c.height = S;
+        var g = c.getContext('2d');
+        var gr = g.createRadialGradient(m, m, 0, m, m, R);
+        gr.addColorStop(0, 'rgba(255,255,255,' + (0.35 + 0.65 * f).toFixed(3) + ')');
+        gr.addColorStop(0.45, 'rgba(255,255,255,' + (0.25 * f).toFixed(3) + ')');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr; g.beginPath(); g.arc(m, m, R, 0, 7); g.fill();
+        return (spritesGaia[nivel] = c);
+      }
+      function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim) { var escv = PROC / (arcmin / 60); var cos0 = Math.cos(dec0 * Math.PI / 180); ctx.globalCompositeOperation = 'lighter'; for (var i = 0; i < estrellas.length; i++) { var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2]; if (g > mlim) continue; var x = PROC / 2 - (ra - ra0) * cos0 * escv; var y = PROC / 2 - (dec - dec0) * escv; if (x < -3 || y < -3 || x > PROC + 3 || y > PROC + 3) continue; var f = Math.min(1, (mlim - g) / 6); var sp = spriteGaia(Math.min(GAIA_NIVELES - 1, Math.floor(f * GAIA_NIVELES))); ctx.drawImage(sp, x - sp.width / 2, y - sp.height / 2); } ctx.globalCompositeOperation = 'source-over'; }
 
       function superponerGaia(canvas) {
         var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var ra0 = sexToDeg(OBJETO.ra, true); var dec0 = sexToDeg(OBJETO.dec, false); var D = teleApertura(); var mlim = 7.7 + 5 * Math.log10(D / 100); var pet = contadorPeticion;
-        consultarGaia(ra0, dec0, (arcmin / 60) * 0.72).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3 (VizieR): se muestra solo la imagen.'; });
+        consultarGaia(ra0, dec0).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3 (VizieR): se muestra solo la imagen.'; });
       }
 
       function aplicarPupila(img, p) { var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var brilloPercibido = Math.pow(Math.pow(pEf / pOjo, 2), 0.5); var umbral = 0.30 * (1 - pEf / pOjo); var pendiente = brilloPercibido / (1 - umbral); var despl = -pendiente * umbral; ['R', 'G', 'B'].forEach(function (c) { var f = document.querySelector('#sim-transfer-pupila feFunc' + c); if (f) { f.setAttribute('slope', pendiente.toFixed(4)); f.setAttribute('intercept', despl.toFixed(4)); } }); img.style.filter = 'grayscale(1) url(#sim-filtro-pupila)'; }
@@ -328,6 +358,9 @@
 
       /* ══════════════════ ARRANQUE ══════════════════ */
       cargarCatalogo();
+      // Precalienta la consulta de Gaia del objeto en segundo plano: cuando el
+      // usuario cambie a Canvas 2D (o el overlay la necesite) ya estará en caché.
+      consultarGaia(sexToDeg(OBJETO.ra, true), sexToDeg(OBJETO.dec, false)).catch(function () { /* se reintentará al usarse */ });
 
     } catch (err) {
       console.error('[Bitácora] Error al iniciar el simulador de ocular:', err);
