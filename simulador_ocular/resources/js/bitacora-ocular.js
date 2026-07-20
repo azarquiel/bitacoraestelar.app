@@ -90,7 +90,7 @@
         // COLOR de las estrellas (lo que más llama la atención a cielo oscuro).
         magColor: 9.5,     // solo las estrellas más brillantes que esta magnitud llevan color; el resto quedan blancas
         saturacion: 1.9,    // viveza del color: 1 = color base de Gaia; >1 más saturado (aleja del gris)
-        tinteNucleo: 0.55,  // cuánto tiñe el color al núcleo: 0 = núcleo blanco puro; 1 = núcleo del color de la estrella
+        tinteNucleo: 0.85,  // cuánto tiñe el color al núcleo: 0 = núcleo blanco puro; 1 = núcleo del color de la estrella
         // Tamaño del NÚCLEO (px) según la magnitud: brillante = gordota, débil = punta de alfiler.
         // Es fijo (no depende del cielo), como el "blooming" de una placa fotográfica.
         // radio = radioMin + radioMag · (magTamMin − g)^radioExp, acotado a radioMax.
@@ -101,7 +101,15 @@
         radioExp: 1.35,      // exponente: >1 = las brillantes crecen más deprisa
         magTamMin: 14,    // magnitud a partir de la cual el núcleo es el mínimo (más brillante → mayor)
         radioMax: 6.5,      // radio máximo del núcleo (estrellas muy brillantes)
-        brillo: 1.35         // realce del brillo de las estrellas (1 = cálculo base)
+        brillo: 1.4,        // realce del brillo de las estrellas (1 = cálculo base)
+        // GLOW de estrellas NO resueltas (solo Canvas 2D): las más débiles que la
+        // magnitud límite no se dibujan como puntos, sino como una mota tenue y
+        // aditiva. Donde se agolpan (cúmulos lejanos como NGC 2158, núcleos de
+        // galaxias) su SUMA forma una mancha nebulosa —como en el ocular real—;
+        // en campo abierto quedan casi invisibles. El brillo de la mancha ∝ densidad
+        // de estrellas sub-límite, que es justo el brillo superficial no resuelto.
+        glowIntensidad: 0.2,  // alfa de una estrella no resuelta JUSTO en el límite (cae con la profundidad, ∝ flujo)
+        glowRadio: 2.0        // radio (px) de cada mota de glow (↑ = más difuso)
       };
 
       var CFG = window.BITACORA_OCULAR || {};
@@ -402,7 +410,7 @@
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
           ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
-          dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim);
+          dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, true);   // Canvas 2D: con glow de estrellas no resueltas
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
           cargando.textContent = 'No se pudo consultar Gaia DR3 (VizieR).';
@@ -482,10 +490,10 @@
          segundos) y cubre de sobra la mag. límite del canvas (13,5) y de
          cualquier equipo del catálogo. */
       var GAIA_RADIO_MAX = (DSS_MAX_ARCMIN / 60) * 0.72;   // 1,44°
-      var GAIA_MAG_MAX = 15;
+      var GAIA_MAG_MAX = 16;
       // Devuelve estrellas [RA, Dec, Gmag, BP-RP]. El color BP-RP (bp_rp) puede
       // venir null en estrellas débiles sin fotometría BP/RP: se pintan blancas.
-      function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 18000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
+      function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 30000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
       /* Render de estrellas: un ÚNICO sprite base normalizado (núcleo blanco +
          halo) que se escala al tamaño de cada estrella y se estampa con drawImage
          + globalAlpha (rápido incluso con miles de estrellas). El TAMAÑO depende
@@ -505,6 +513,21 @@
         gr.addColorStop(1, 'rgba(255,255,255,0)');
         g.fillStyle = gr; g.beginPath(); g.arc(m, m, R, 0, 7); g.fill();
         return (GAIA_SPRITE = c);
+      }
+      // Sprite del GLOW: mota suave y sin núcleo duro (luz no resuelta). Muchas
+      // solapadas y sumadas (composición 'lighter') forman la mancha nebulosa.
+      var GLOW_SPRITE = null;
+      function spriteGlow() {
+        if (GLOW_SPRITE) return GLOW_SPRITE;
+        var S = 32, m = S / 2;
+        var c = document.createElement('canvas'); c.width = c.height = S;
+        var g = c.getContext('2d');
+        var gr = g.createRadialGradient(m, m, 0, m, m, m);
+        gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+        gr.addColorStop(0.5, 'rgba(255,255,255,0.3)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, S, S);
+        return (GLOW_SPRITE = c);
       }
       // Radio del NÚCLEO de la estrella según su magnitud (fijo, no depende del cielo).
       function radioNucleo(g) {
@@ -550,18 +573,34 @@
         ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
       }
 
-      function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim) {
+      // conGlow: si es true, las estrellas MÁS DÉBILES que mlim se pintan como
+      // glow no resuelto (solo tiene sentido en el Canvas 2D; en la superposición
+      // sobre placas se omite porque la foto ya trae ese resplandor).
+      function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow) {
         var escv = PROC / (arcmin / 60);
         var cos0 = Math.cos(dec0 * Math.PI / 180);
-        var base = spriteGaia();
+        var base = spriteGaia(), glow = spriteGlow();
         var factorHalo = 1 + GAIA_CFG.blur;   // radio total = núcleo · (1 + blur)
+        var Rg = GAIA_CFG.glowRadio;
         ctx.globalCompositeOperation = 'lighter';
         for (var i = 0; i < estrellas.length; i++) {
           var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2], bprp = estrellas[i][3];
-          if (g > mlim) continue;
+          if (g > mlim && !conGlow) continue;   // sin glow: las sub-límite se descartan
           var x = PROC / 2 - (ra - ra0) * cos0 * escv;
           var y = PROC / 2 - (dec - dec0) * escv;
           if (x < -3 || y < -3 || x > PROC + 3 || y > PROC + 3) continue;
+          if (g > mlim) {
+            // Estrella NO resuelta: mota tenue de glow (su suma forma la nebulosa).
+            // Ponderada por el flujo relativo al límite, 10^(-0.4·(g−mlim)): se
+            // desvanece con la profundidad (borra el corte duro de GAIA_MAG_MAX) y,
+            // como mlim SUBE con la apertura, un tubo mayor da un glow más brillante
+            // de las MISMAS estrellas → así un 18" luce más que un 12".
+            var aGlow = GAIA_CFG.glowIntensidad * Math.pow(10, -0.4 * (g - mlim));
+            if (aGlow < 0.004) continue;   // aportación despreciable
+            ctx.globalAlpha = Math.min(1, aGlow);
+            ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
+            continue;
+          }
           var Rtot = radioNucleo(g) * factorHalo;
           // Brillo: se desvanece cerca de la mag. límite (sky-dependent) y se realza.
           ctx.globalAlpha = Math.min(1, GAIA_CFG.brillo * Math.min(1, (mlim - g) / 6));

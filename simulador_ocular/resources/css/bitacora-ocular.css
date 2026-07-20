@@ -92,11 +92,15 @@
    El desplegable .suggest y el .obj-wrap vienen de bitacora-base.css. */
 #mw-obs-form.sim .panel .obj-wrap {margin-bottom:14px;}
 
-/* Telescopio manual: enlace para desplegar los campos y su fila apertura/focal. */
+/* Telescopio manual: enlace para desplegar los campos y su fila apertura/focal.
+   Los !important y el reset tipográfico blindan el botón frente a temas de
+   WordPress que imponen mayúsculas, serif o tamaños grandes a los <button>. */
 #mw-obs-form .link-manual {
   display:inline-block;margin:2px 0 0;padding:0;background:none;border:none;
-  color:var(--azul);font-size:12.5px;cursor:pointer;text-decoration:underline;
-  text-underline-offset:2px;font-family:inherit;}
+  color:var(--azul);cursor:pointer;text-decoration:underline;text-underline-offset:2px;
+  max-width:100%;white-space:normal;
+  font-family:inherit !important;font-size:12.5px !important;font-weight:400 !important;
+  line-height:1.4 !important;text-transform:none !important;letter-spacing:normal !important;}
 #mw-obs-form .link-manual:hover {color:var(--ambar);}
 #mw-obs-form .tele-manual {margin-top:12px;}
 #mw-obs-form .tele-manual .row {margin-bottom:0;}
