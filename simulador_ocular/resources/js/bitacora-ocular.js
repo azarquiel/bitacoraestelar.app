@@ -151,10 +151,17 @@
       function specsOcular(p) { var s = []; if (num(p.focal_mm) != null) s.push(num(p.focal_mm) + ' mm'); if (num(p.campo_aparente) != null) s.push(num(p.campo_aparente) + '°'); return s.join(' · '); }
       function pupilaOptica(p) { return { focal: num(p.focal_mm), afov: num(p.campo_aparente) || 60 }; }
 
+      // URL del catálogo GLOBAL de equipo. Con sesión se deriva de BITACORA_WP
+      // (y se manda el nonce); sin sesión se usa la URL pública inyectada en
+      // BITACORA_PUBLICO (el endpoint es público, no necesita nonce). Así el
+      // simulador funciona igual logueado o no.
       function cargarCatalogo() {
-        if (!WP) { usarEjemplo('Inicia sesión para elegir del catálogo completo de equipo. Mientras tanto se muestra un equipo de ejemplo.'); return; }
-        var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo') + '/catalogo';
-        fetch(API, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
+        var PUB = window.BITACORA_PUBLICO || {};
+        var API = (WP && WP.endpoint) ? WP.endpoint.replace(/observaciones\/?$/, 'equipo') + '/catalogo'
+                                      : (PUB.catalogoEquipo || null);
+        if (!API) { usarEjemplo('No hay catálogo de equipo disponible. Se muestra un equipo de ejemplo.'); return; }
+        var headers = (WP && WP.nonce) ? { 'X-WP-Nonce': WP.nonce } : {};
+        fetch(API, { credentials: 'same-origin', headers: headers })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) {
             if (!d || (!(d.telescopios || []).length && !(d.oculares || []).length)) { usarEjemplo('No se pudo leer el catálogo de equipo. Se usa un equipo de ejemplo.'); return; }

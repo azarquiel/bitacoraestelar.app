@@ -822,13 +822,17 @@ function bitacora_registrar_rutas() {
 
     // ── EQUIPO (telescopios, oculares y auxiliares) ──
     // Catálogo GLOBAL (semilla) del que el observador copia para su "flota".
+    // Lectura PÚBLICA: son datos de referencia (modelos de telescopio/ocular),
+    // sin ningún dato personal (bitacora_equipo_leer_todo(null) filtra
+    // usuario_id IS NULL). Así el simulador de ocular funciona sin sesión.
+    // El equipo PERSONAL (/equipo) y el registro siguen cerrados con login.
     register_rest_route(
         'bitacora/v1',
         '/equipo/catalogo',
         array(
             'methods'             => 'GET',
             'callback'            => 'bitacora_equipo_catalogo',
-            'permission_callback' => $solo_logueados,
+            'permission_callback' => '__return_true',
         )
     );
 
@@ -3318,6 +3322,23 @@ function bitacora_inyectar_datos() {
     );
 }
 add_action( 'wp_head', 'bitacora_inyectar_datos' );
+
+/**
+ * Configuración PÚBLICA (para todos, con o sin sesión): expone las URLs de los
+ * endpoints abiertos que las páginas compartibles necesitan sin login. De momento,
+ * el catálogo global de equipo, que usa el simulador de ocular. Va aparte de
+ * BITACORA_WP (que sigue siendo solo-logueado) para no confundir el estado de sesión.
+ */
+function bitacora_inyectar_publico() {
+    $datos = array(
+        'catalogoEquipo' => esc_url_raw( rest_url( 'bitacora/v1/equipo/catalogo' ) ),
+    );
+    printf(
+        '<script>window.BITACORA_PUBLICO = %s;</script>' . "\n",
+        wp_json_encode( $datos )
+    );
+}
+add_action( 'wp_head', 'bitacora_inyectar_publico' );
 
 /* ===========================================================================
  * 5. PANTALLA DE ADMINISTRACIÓN
