@@ -151,15 +151,20 @@
       function specsOcular(p) { var s = []; if (num(p.focal_mm) != null) s.push(num(p.focal_mm) + ' mm'); if (num(p.campo_aparente) != null) s.push(num(p.campo_aparente) + '°'); return s.join(' · '); }
       function pupilaOptica(p) { return { focal: num(p.focal_mm), afov: num(p.campo_aparente) || 60 }; }
 
-      // URL del catálogo GLOBAL de equipo. Con sesión se deriva de BITACORA_WP
-      // (y se manda el nonce); sin sesión se usa la URL pública inyectada en
-      // BITACORA_PUBLICO (el endpoint es público, no necesita nonce). Así el
-      // simulador funciona igual logueado o no.
-      function cargarCatalogo() {
+      // URL del catálogo GLOBAL de equipo, por orden de preferencia:
+      //   1) con sesión: derivada de BITACORA_WP (y se manda el nonce);
+      //   2) sin sesión: la URL pública inyectada en BITACORA_PUBLICO;
+      //   3) último recurso: se construye desde el propio dominio (wp-json),
+      //      para no depender de la inyección del plugin. El endpoint es público,
+      //      así que un GET sin nonce basta.
+      function urlCatalogo() {
+        if (WP && WP.endpoint) return WP.endpoint.replace(/observaciones\/?$/, 'equipo') + '/catalogo';
         var PUB = window.BITACORA_PUBLICO || {};
-        var API = (WP && WP.endpoint) ? WP.endpoint.replace(/observaciones\/?$/, 'equipo') + '/catalogo'
-                                      : (PUB.catalogoEquipo || null);
-        if (!API) { usarEjemplo('No hay catálogo de equipo disponible. Se muestra un equipo de ejemplo.'); return; }
+        if (PUB.catalogoEquipo) return PUB.catalogoEquipo;
+        return location.origin + '/wp-json/bitacora/v1/equipo/catalogo';
+      }
+      function cargarCatalogo() {
+        var API = urlCatalogo();
         var headers = (WP && WP.nonce) ? { 'X-WP-Nonce': WP.nonce } : {};
         fetch(API, { credentials: 'same-origin', headers: headers })
           .then(function (r) { return r.ok ? r.json() : null; })
@@ -497,10 +502,10 @@
          segundos) y cubre de sobra la mag. límite del canvas (13,5) y de
          cualquier equipo del catálogo. */
       var GAIA_RADIO_MAX = (DSS_MAX_ARCMIN / 60) * 0.72;   // 1,44°
-      var GAIA_MAG_MAX = 16;
+      var GAIA_MAG_MAX = 16.5;
       // Devuelve estrellas [RA, Dec, Gmag, BP-RP]. El color BP-RP (bp_rp) puede
       // venir null en estrellas débiles sin fotometría BP/RP: se pintan blancas.
-      function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 30000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
+      function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 40000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
       /* Render de estrellas: un ÚNICO sprite base normalizado (núcleo blanco +
          halo) que se escala al tamaño de cada estrella y se estampa con drawImage
          + globalAlpha (rápido incluso con miles de estrellas). El TAMAÑO depende

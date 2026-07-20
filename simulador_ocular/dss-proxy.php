@@ -25,6 +25,10 @@ if (!preg_match('/^[0-9+\-.: ]{1,24}$/', $ra) ||
     exit('Coordenadas no válidas');
 }
 
+/* Tope de disco para la caché de placas. Al superarlo se borran las MÁS
+   antiguas hasta bajar del 80 %. Ajusta este valor a tu espacio disponible. */
+$CACHE_MAX_BYTES = 150 * 1024 * 1024;   // 150 MB
+
 /* Caché en disco: una placa por combinación de coordenadas y campo */
 $cacheDir = __DIR__ . '/cache-dss';
 if (!is_dir($cacheDir)) {
@@ -47,6 +51,13 @@ if (!file_exists($fichero)) {
         exit('El servidor del DSS no respondió');
     }
     file_put_contents($fichero, $datos, LOCK_EX);
+    // Solo tras un fallo de caché (cuando el directorio ha crecido) revisamos
+    // el tamaño y podamos: mantiene el disco acotado sin cron ni tareas extra.
+    podar_cache($cacheDir, $CACHE_MAX_BYTES);
+} else {
+    // Marca la placa como usada recientemente: la poda borra por antigüedad
+    // (mtime), así las placas populares sobreviven (política tipo LRU).
+    @touch($fichero);
 }
 
 header('Content-Type: image/gif');
@@ -71,4 +82,38 @@ function descargar($url) {
     }
     $ctx = stream_context_create(['http' => ['timeout' => 40]]);
     return @file_get_contents($url, false, $ctx);
+}
+
+/* Mantiene el directorio de caché por debajo de $maxBytes borrando las placas
+   más antiguas (por fecha de modificación) hasta bajar al 80 % del tope. Se
+   llama solo en fallos de caché, así el coste de recorrer el directorio es raro. */
+function podar_cache($dir, $maxBytes) {
+    $ficheros = glob($dir . '/*.gif');
+    if (!$ficheros) {
+        return;
+    }
+    $total = 0;
+    $info  = [];
+    foreach ($ficheros as $f) {
+        $t = @filesize($f);
+        if ($t === false) {
+            continue;
+        }
+        $total += $t;
+        $info[] = [$f, $t, @filemtime($f)];
+    }
+    if ($total <= $maxBytes) {
+        return;
+    }
+    // Más antiguos primero (menor mtime).
+    usort($info, function ($a, $b) { return $a[2] <=> $b[2]; });
+    $objetivo = $maxBytes * 0.8;   // deja margen para no podar en cada petición
+    foreach ($info as $it) {
+        if ($total <= $objetivo) {
+            break;
+        }
+        if (@unlink($it[0])) {
+            $total -= $it[1];
+        }
+    }
 }
