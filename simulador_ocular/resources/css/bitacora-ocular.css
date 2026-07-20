@@ -83,6 +83,34 @@
 #mw-obs-form .aviso {margin-top:16px;font-size:12.5px;color:var(--ambar);
   font-family:ui-monospace,Menlo,monospace;text-align:center;max-width:520px;min-height:18px;}
 
+/* Leyenda del ★ de la magnitud límite (bajo las lecturas, centrada). */
+#mw-obs-form .hint-maglim {text-align:center;max-width:560px;margin:14px auto 0;
+  font-size:12px;color:var(--tinta-tenue);}
+#mw-obs-form .hint-maglim strong {color:var(--tinta);font-weight:600;}
+
 /* Buscador de catálogo dentro del panel: separación bajo el input.
    El desplegable .suggest y el .obj-wrap vienen de bitacora-base.css. */
 #mw-obs-form.sim .panel .obj-wrap {margin-bottom:14px;}
+
+/* Telescopio manual: enlace para desplegar los campos y su fila apertura/focal. */
+#mw-obs-form .link-manual {
+  display:inline-block;margin:2px 0 0;padding:0;background:none;border:none;
+  color:var(--azul);font-size:12.5px;cursor:pointer;text-decoration:underline;
+  text-underline-offset:2px;font-family:inherit;}
+#mw-obs-form .link-manual:hover {color:var(--ambar);}
+#mw-obs-form .tele-manual {margin-top:12px;}
+#mw-obs-form .tele-manual .row {margin-bottom:0;}
+#mw-obs-form .tele-manual .row .field {margin-bottom:0;}
+#mw-obs-form .tele-manual > .field {margin:12px 0 0;}
+
+/* Créditos: fórmulas del prof. J. R. Torres Lapasió. Destacado pero sobrio:
+   filete ámbar a la izquierda y tipografía menor que el cuerpo. */
+#mw-obs-form .creditos {
+  margin:30px auto 0;padding:16px 20px;max-width:1180px;
+  border:1px solid var(--linea);border-left:3px solid var(--ambar);border-radius:12px;
+  background:var(--noche-2);font-size:13px;line-height:1.65;color:var(--tinta-tenue);}
+#mw-obs-form .creditos p {margin:0 0 6px;}
+#mw-obs-form .creditos p:last-child {margin-bottom:0;}
+#mw-obs-form .creditos strong {color:var(--tinta);font-weight:600;}
+#mw-obs-form .creditos a {color:var(--azul);text-decoration:underline;text-underline-offset:2px;}
+#mw-obs-form .creditos a:hover {color:var(--ambar);}

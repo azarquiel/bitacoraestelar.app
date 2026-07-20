@@ -18,7 +18,7 @@
      ============================================================ -->
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260719_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260719_1300" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260719_2300" />
 
 <!-- Filtro de respuesta del ojo según la pupila de salida (modo de reserva
      sin canvas): y = pendiente·x + desplazamiento. -->
@@ -52,6 +52,21 @@
         <div class="obj-wrap">
           <input type="text" id="sim-tele-input" placeholder="— Escribe para buscar telescopio —" aria-label="Telescopio" autocomplete="off">
           <div class="suggest" id="sim-tele-sugg"></div>
+        </div>
+        <button type="button" class="link-manual" id="sim-tele-manual-toggle" aria-expanded="false" aria-controls="sim-tele-manual">¿No está en la lista? Introdúcelo a mano</button>
+        <div class="tele-manual" id="sim-tele-manual" hidden>
+          <div class="row">
+            <label class="field"><span class="lab">Apertura (mm)</span>
+              <input type="number" id="sim-tele-manual-apert" min="20" max="1000" step="1" placeholder="p. ej. 200" autocomplete="off"></label>
+            <label class="field"><span class="lab">Focal (mm)</span>
+              <input type="number" id="sim-tele-manual-focal" min="100" max="6000" step="1" placeholder="p. ej. 1200" autocomplete="off"></label>
+          </div>
+          <label class="field"><span class="lab">Tipo de telescopio — afecta a la transmisión de luz y, con ella, a la magnitud límite</span>
+            <select id="sim-tele-manual-tipo">
+              <option value="0.7" selected>Reflector / Newton (t = 0,7)</option>
+              <option value="0.9">Refractor (t = 0,9)</option>
+              <option value="0.65">Catadióptrico · SC / Maksutov (t = 0,65)</option>
+            </select></label>
         </div>
         <label class="field"><span class="lab">Pupila del ojo adaptado (mm) — ~7 joven · ~5–6 con la edad</span>
           <input type="number" id="sim-pupila-ojo" value="7" min="2" max="8" step="0.5"></label>
@@ -117,12 +132,23 @@
         <div class="lectura"><div class="valor" id="sim-v-maglim">—</div><div class="titulo">Mag. límite ★</div></div>
       </div>
 
+      <p class="hint hint-maglim">★ Magnitud estelar límite (rango <strong>típico–óptimo</strong>) para el ocular y el cielo actuales, según el método de Torres Lapasió.</p>
+
       <div class="aviso" id="sim-aviso"></div>
 
     </main>
   </div>
+
+  <footer class="creditos">
+    <p>Los cálculos de <strong>magnitud límite</strong> y visibilidad de esta web se basan en las fórmulas del profesor
+      <strong>José Ramón Torres Lapasió</strong> (<a href="https://www.uv.es/jrtorres/index.html" target="_blank" rel="noopener">www.uv.es/jrtorres</a>).</p>
+    <p>Nuestro agradecimiento especial por su magnífico artículo
+      <a href="https://www.uv.es/jrtorres/visib.pdf" target="_blank" rel="noopener"><em>«On the Prediction of Visibility for Deep-Sky Objects»</em></a>,
+      del que proceden las fórmulas empleadas.</p>
+  </footer>
+
 </div>
 </div>
 
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260719_1200" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260719_1900" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260719_2500" defer></script>

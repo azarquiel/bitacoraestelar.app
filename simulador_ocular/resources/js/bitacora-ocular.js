@@ -31,11 +31,12 @@
 
       /* ══════════════════ CONFIGURACIÓN ══════════════════ */
       var CATALOGO_OBJ = [
-        { id: 'M39', nombre: 'M39 · Cúmulo abierto (NGC 7092)', constelacion: 'Cygnus', ra: '21 31 48', dec: '+48 26 55' }
+		  { id: 'M35', nombre: 'M35 · Cúmulo abierto (NGC 2168)', constelacion: 'Gemini', ra: '06 08 54', dec: '+24 20 00' },
+          { id: 'M39', nombre: 'M39 · Cúmulo abierto (NGC 7092)', constelacion: 'Cygnus', ra: '21 31 48', dec: '+48 26 55' }
       ];
       var OBJETO = CATALOGO_OBJ[0];
 
-      var TELE_EJEMPLO = [{ id: '_t200', vendor: '', modelo: 'Newton 200/1200 (ejemplo)', apertura_mm: 200, focal_mm: 1200 }];
+      var TELE_EJEMPLO = [{ id: '_t200', vendor: '', modelo: 'Newton 200/1200 (ejemplo)', optica: 'Newtonian', apertura_mm: 200, focal_mm: 1200 }];
       var OCULARES_EJEMPLO = [
         { id: '_o31', vendor: '', modelo: '31 mm (ejemplo)',   focal_mm: 31,   campo_aparente: 82 },
         { id: '_o18', vendor: '', modelo: '17,5 mm (ejemplo)', focal_mm: 17.5, campo_aparente: 95 },
@@ -47,20 +48,60 @@
       var AFOV_REF = 110;
       var PROC = 720;
 
+      // Transmisión luminosa del telescopio (fracción de luz aprovechada), usada
+      // en la magnitud límite (Método del umbral). Torres Lapasió toma 0,9 para
+      // refractores y 0,7 para reflectores; 0,8 es el valor medio POR DEFECTO
+      // cuando no se conoce el tipo de tubo.
+      var TRANSMISION_TELE = 0.8;
+
+      // Margen (magnitudes) entre el límite ÓPTIMO del método de Torres Lapasió
+      // —optimista: observador experto y condiciones ideales— y un límite TÍPICO
+      // más realista para un observador medio. La lectura muestra el rango
+      // típico–óptimo para dejar claro que es una horquilla, no un valor exacto.
+      var MARGEN_MAGLIM = 0.7;
+
+      // Transmisión según el tipo óptico (columna "Optics" del catálogo, en
+      // inglés). Refractor 0,9 y reflector (2 espejos, sin corrector) 0,7 siguen
+      // a Torres Lapasió; los catadióptricos, con lámina/menisco corrector y
+      // obstrucción central, pierden algo más (~0,65-0,68). La clave se compara
+      // en minúsculas; los tipos no listados usan el valor por defecto.
+      var TRANSMISION_OPTICA = {
+        'refractor':          0.9,
+        'newtonian':          0.7,
+        'cassegrain':         0.7,
+        'ritchey-chretien':   0.7,
+        'dall-kirkham':       0.7,
+        'schmidt-cassegrain': 0.65,
+        'mak-cassegrain':     0.65,
+        'schmidt-newtonian':  0.68,
+        'mak-newtonian':      0.68,
+        'schmidt camera':     0.65
+      };
+      function transmisionPorOptica(optica) {
+        if (!optica) return null;
+        var t = TRANSMISION_OPTICA[String(optica).trim().toLowerCase()];
+        return t != null ? t : null;
+      }
+
       /* Ajustes fáciles del render de estrellas de Gaia (Canvas 2D y overlay).
          Todo aquí para poder afinarlo sin tocar el resto del código. */
       var GAIA_CFG = {
-        blur: 1.3,          // ancho del halo respecto al núcleo (radio total = núcleo·(1+blur); menor = más "punta de alfiler")
-        magColor: 10,       // solo las estrellas más brillantes que esta magnitud llevan color; el resto quedan blancas
-        sbRefCielo: 21.8,   // brillo de cielo en el ocular (mag/arcsec²) de referencia: por encima se ve la mag. límite plena
-        mermaCielo: 1.0,    // magnitudes de límite que se pierden por cada magnitud que el cielo se aclara bajo la referencia
+        blur: 1.1,          // ancho del halo respecto al núcleo (radio total = núcleo·(1+blur); menor = más "punta de alfiler")
+        // COLOR de las estrellas (lo que más llama la atención a cielo oscuro).
+        magColor: 9.5,     // solo las estrellas más brillantes que esta magnitud llevan color; el resto quedan blancas
+        saturacion: 1.9,    // viveza del color: 1 = color base de Gaia; >1 más saturado (aleja del gris)
+        tinteNucleo: 0.55,  // cuánto tiñe el color al núcleo: 0 = núcleo blanco puro; 1 = núcleo del color de la estrella
         // Tamaño del NÚCLEO (px) según la magnitud: brillante = gordota, débil = punta de alfiler.
         // Es fijo (no depende del cielo), como el "blooming" de una placa fotográfica.
-        radioMin: 0.6,      // radio del núcleo de las estrellas en el límite
-        radioMag: 0.34,     // px de radio de núcleo extra por cada magnitud que la estrella supera a magTamMin
-        magTamMin: 13.5,    // magnitud a partir de la cual el núcleo es el mínimo (más brillante → mayor)
-        radioMax: 5.5,      // radio máximo del núcleo (estrellas muy brillantes)
-        brillo: 1.4         // realce del brillo de las estrellas (1 = cálculo base)
+        // radio = radioMin + radioMag · (magTamMin − g)^radioExp, acotado a radioMax.
+        // radioExp > 1 acelera el crecimiento en las MÁS brillantes (más contraste
+        // de tamaño arriba); = 1 sería lineal en la magnitud.
+        radioMin: 0.08,      // radio del núcleo de las estrellas en el límite
+        radioMag: 0.13,     // px de radio de núcleo por cada (magnitud sobre magTamMin)^radioExp
+        radioExp: 1.35,      // exponente: >1 = las brillantes crecen más deprisa
+        magTamMin: 14,    // magnitud a partir de la cual el núcleo es el mínimo (más brillante → mayor)
+        radioMax: 6.5,      // radio máximo del núcleo (estrellas muy brillantes)
+        brillo: 1.35         // realce del brillo de las estrellas (1 = cálculo base)
       };
 
       var CFG = window.BITACORA_OCULAR || {};
@@ -129,7 +170,7 @@
           input: $('sim-tele-input'), suggest: $('sim-tele-sugg'),
           fuente: function () { return (catalogo.telescopios || []).filter(function (p) { return num(p.focal_mm) > 0; }); },
           texto: nombrePieza, specs: specsTele,
-          onElegir: function (it) { teleSel = it; $('sim-tele-input').value = nombrePieza(it); actualizar(); }
+          onElegir: function (it) { teleSel = it; $('sim-tele-input').value = nombrePieza(it); limpiarTeleManual(); actualizar(); }
         });
         BitacoraBase.montarBuscadorCatalogo({
           input: $('sim-ocular-input'), suggest: $('sim-ocular-sugg'),
@@ -143,6 +184,39 @@
         var o0 = (catalogo.oculares || []).find(function (p) { return num(p.focal_mm); });
         if (o0) { ocularSel = o0; $('sim-ocular-input').value = nombrePieza(o0); }
         actualizar();
+      }
+
+      // TELESCOPIO MANUAL: para equipos que no están en el catálogo. El enlace
+      // despliega dos campos (apertura y focal); al rellenar ambos se usan como
+      // telescopio activo, y el buscador queda vacío para no dar lugar a dudas.
+      function limpiarTeleManual() {
+        var a = $('sim-tele-manual-apert'), f = $('sim-tele-manual-focal');
+        if (a) a.value = ''; if (f) f.value = '';
+      }
+      function montarTeleManual() {
+        var toggle = $('sim-tele-manual-toggle'), caja = $('sim-tele-manual');
+        var apert = $('sim-tele-manual-apert'), focal = $('sim-tele-manual-focal'), tipo = $('sim-tele-manual-tipo');
+        if (!toggle || !caja || !apert || !focal) return;
+        toggle.addEventListener('click', function () {
+          var abrir = caja.hidden;
+          caja.hidden = !abrir;
+          toggle.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+          if (abrir) (num(apert.value) ? focal : apert).focus();
+        });
+        function usarManual() {
+          var a = num(apert.value), f = num(focal.value);
+          if (!(a > 0) || !(f > 0)) return;
+          // El tipo fija la transmisión t (refractor 0,9 · reflector 0,7 ·
+          // catadióptrico 0,65, siguiendo a Torres Lapasió); se guarda en el
+          // telescopio para que magLimiteTelescopio() la use.
+          var t = (tipo && num(tipo.value)) || TRANSMISION_TELE;
+          teleSel = { id: '_manual', vendor: '', modelo: 'Telescopio manual', apertura_mm: a, focal_mm: f, transmision: t };
+          $('sim-tele-input').value = '';
+          actualizar();
+        }
+        apert.addEventListener('input', usarManual);
+        focal.addEventListener('input', usarManual);
+        if (tipo) tipo.addEventListener('change', usarManual);
       }
 
       /* ══════════════════ CÁLCULO ÓPTICO ══════════════════ */
@@ -160,6 +234,42 @@
       }
 
       function ventanaBase() { return Math.min(560, window.innerWidth - 80, window.innerHeight - 240); }
+
+      /* Magnitud estelar límite del conjunto telescopio + ocular (TLM), según el
+         "Método del umbral" de J. R. Torres Lapasió ("On the Prediction of
+         Visibility for Deep-Sky Objects", RIGEL/AVA, 1994/2000). A diferencia de
+         la vieja regla 7,7 + 5·log(D/100) —que solo depende de la apertura—, aquí
+         el límite SUBE con el aumento (que oscurece el fondo del cielo) y BAJA
+         cuando el cielo es más brillante, tal como se observa en la práctica.
+
+         Cadena de cálculo (con D = apertura en mm, MAG = aumentos, t = transmisión):
+           1) Fondo del cielo visto por el ocular, oscurecido por el aumento (Ec. 5):
+                SB0T = SB0 + 5·log10(7,5·MAG / (D·√t))
+              donde SB0 = SQM (brillo del cielo a ojo desnudo, mag/arcsec²). Se
+              acota entre SB0 (con pupilas de salida grandes el fondo no se
+              oscurece por debajo del de ojo desnudo) y 27 mag/arcsec² (umbral de
+              detección del ojo: no cabe oscurecer más).
+           2) Estrella más débil visible sobre ese fondo oscurecido (Ec. 6):
+                TLM = -22,81 + 1,792·SB0T - 0,02949·SB0T² + 2,5·log10(D²·t)
+         El máximo posible (SB0T = 27) coincide con la Ec. 7:
+                TLM_máx = 4,12 + 2,5·log10(D²·t). */
+      function magLimiteTelescopio() {
+        var D = teleApertura(), MAG = datosOcular().aumentos;
+        // Transmisión del tubo, por orden de preferencia: la fijada a mano
+        // (teleSel.transmision, telescopio manual con tipo elegido), luego la
+        // deducida del tipo óptico del catálogo (teleSel.optica), y si no, el
+        // valor medio por defecto.
+        var t = TRANSMISION_TELE;
+        if (teleSel) {
+          if (num(teleSel.transmision) > 0) { t = num(teleSel.transmision); }
+          else { var tOpt = transmisionPorOptica(teleSel.optica); if (tOpt) { t = tOpt; } }
+        }
+        if (!(D > 0) || !(MAG > 0)) return null;
+        var sqm = parseFloat($('sim-sqm').value) || 21;
+        var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
+        SB0T = Math.max(sqm, Math.min(27, SB0T));
+        return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(D * D * t);
+      }
 
       /* ══════════════════ RENDER CENTRALIZADO ══════════════════ */
       function actualizar() {
@@ -196,10 +306,13 @@
         var pEf = Math.min(d.pupila, pOjo);
         var brillo = Math.pow(pEf / pOjo, 2);
         var sqm = parseFloat($('sim-sqm').value) || 21;
-        var D = teleApertura();
         $('sim-v-brillo').innerHTML = (brillo * 100).toFixed(0) + '<em>%</em>';
         $('sim-v-cielo').innerHTML  = (sqm + 5 * Math.log10(pOjo / pEf)).toFixed(1) + '<em>mag/arcsec²</em>';
-        $('sim-v-maglim').innerHTML = (7.7 + 5 * Math.log10(D / 100)).toFixed(1) + '<em>m</em>';
+        // Mag. límite como RANGO típico–óptimo: el óptimo es el valor de Torres
+        // Lapasió (optimista); el típico resta un margen para el observador medio.
+        var magOpt = magLimiteTelescopio();
+        $('sim-v-maglim').innerHTML = (magOpt == null ? '—'
+          : (magOpt - MARGEN_MAGLIM).toFixed(1) + '–' + magOpt.toFixed(1) + '<em>m</em>');
 
         // Recorte del cielo: lado = campo real, limitado por el servidor.
         var arcmin = d.campoReal * 60;
@@ -280,15 +393,11 @@
         cargando.style.display = 'flex'; cargando.textContent = 'consultando estrellas de Gaia DR3…';
 
         var ra0 = sexToDeg(OBJETO.ra, true), dec0 = sexToDeg(OBJETO.dec, false);
-        // Magnitud límite. Bajo cielo oscuro poblamos el campo hasta ~mag 13,5
-        // (densidad como el survey); a medida que el cielo se aclara respecto a
-        // GAIA_CFG.sbRefCielo, el límite baja y las estrellas más débiles
-        // DESAPARECEN, igual que en el DSS. SBe = brillo del cielo en el ocular.
-        var pOjo = pupilaOjo(), pEf = Math.min(datosOcular().pupila, pOjo);
-        var sqm = parseFloat($('sim-sqm').value) || 21;
-        var SBe = sqm - 2.5 * Math.log10(Math.pow(pEf / pOjo, 2));
-        var mlimOscuro = Math.max(7.7 + 5 * Math.log10(teleApertura() / 100), 13.5);
-        var mlim = mlimOscuro - GAIA_CFG.mermaCielo * Math.max(0, GAIA_CFG.sbRefCielo - SBe);
+        // Magnitud límite del telescopio + ocular (Método del umbral): con más
+        // aumento el fondo se oscurece y se alcanzan estrellas más débiles; con
+        // el cielo más brillante, el límite baja y las débiles DESAPARECEN,
+        // igual que en el DSS. dibujarGaia solo pinta estrellas con Gmag <= mlim.
+        var mlim = magLimiteTelescopio();
         consultarGaia(ra0, dec0).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
@@ -373,10 +482,10 @@
          segundos) y cubre de sobra la mag. límite del canvas (13,5) y de
          cualquier equipo del catálogo. */
       var GAIA_RADIO_MAX = (DSS_MAX_ARCMIN / 60) * 0.72;   // 1,44°
-      var GAIA_MAG_MAX = 14;
+      var GAIA_MAG_MAX = 15;
       // Devuelve estrellas [RA, Dec, Gmag, BP-RP]. El color BP-RP (bp_rp) puede
       // venir null en estrellas débiles sin fotometría BP/RP: se pintan blancas.
-      function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 15000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
+      function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 18000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
       /* Render de estrellas: un ÚNICO sprite base normalizado (núcleo blanco +
          halo) que se escala al tamaño de cada estrella y se estampa con drawImage
          + globalAlpha (rápido incluso con miles de estrellas). El TAMAÑO depende
@@ -399,33 +508,45 @@
       }
       // Radio del NÚCLEO de la estrella según su magnitud (fijo, no depende del cielo).
       function radioNucleo(g) {
-        return Math.min(GAIA_CFG.radioMax, GAIA_CFG.radioMin + GAIA_CFG.radioMag * Math.max(0, GAIA_CFG.magTamMin - g));
+        return Math.min(GAIA_CFG.radioMax, GAIA_CFG.radioMin + GAIA_CFG.radioMag * Math.pow(Math.max(0, GAIA_CFG.magTamMin - g), GAIA_CFG.radioExp));
       }
 
       // Color de una estrella a partir de su índice BP-RP de Gaia: azul (caliente)
       // → blanco → amarillo → naranja → rojo (fría). Interpolación por tramos.
       var GAIA_COLOR = [[-0.3, 160, 190, 255], [0.3, 205, 220, 255], [0.8, 255, 250, 245], [1.3, 255, 228, 190], [1.8, 255, 205, 160], [3.0, 255, 175, 140]];
+      // Empuja un color RGB lejos de su gris (aumenta la saturación). s=1 lo deja igual.
+      function saturar(rgb, s) {
+        var gris = 0.30 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
+        var f = function (c) { return Math.max(0, Math.min(255, Math.round(gris + s * (c - gris)))); };
+        return [f(rgb[0]), f(rgb[1]), f(rgb[2])];
+      }
       function colorPorBpRp(bprp) {
-        var A = GAIA_COLOR;
-        if (bprp <= A[0][0]) return [A[0][1], A[0][2], A[0][3]];
-        for (var i = 1; i < A.length; i++) {
-          if (bprp <= A[i][0]) {
-            var t = (bprp - A[i - 1][0]) / (A[i][0] - A[i - 1][0]);
-            return [Math.round(A[i - 1][1] + t * (A[i][1] - A[i - 1][1])),
-                    Math.round(A[i - 1][2] + t * (A[i][2] - A[i - 1][2])),
-                    Math.round(A[i - 1][3] + t * (A[i][3] - A[i - 1][3]))];
+        var A = GAIA_COLOR, rgb = [A[A.length - 1][1], A[A.length - 1][2], A[A.length - 1][3]];
+        if (bprp <= A[0][0]) { rgb = [A[0][1], A[0][2], A[0][3]]; }
+        else {
+          for (var i = 1; i < A.length; i++) {
+            if (bprp <= A[i][0]) {
+              var t = (bprp - A[i - 1][0]) / (A[i][0] - A[i - 1][0]);
+              rgb = [A[i - 1][1] + t * (A[i][1] - A[i - 1][1]),
+                     A[i - 1][2] + t * (A[i][2] - A[i - 1][2]),
+                     A[i - 1][3] + t * (A[i][3] - A[i - 1][3])];
+              break;
+            }
           }
         }
-        return [A[A.length - 1][1], A[A.length - 1][2], A[A.length - 1][3]];
+        return saturar(rgb, GAIA_CFG.saturacion);
       }
-      // Estrella con tinte: núcleo blanco (saturado) y halo del color de la estrella.
+      // Estrella con tinte: centro brillante (teñido según tinteNucleo) y el color
+      // pleno ya desde el núcleo hacia fuera, para que la tonalidad se aprecie.
       function dibujarEstrellaColor(ctx, x, y, Rtot, rgb) {
         var dCore = 1 / (1 + GAIA_CFG.blur);
+        var tn = GAIA_CFG.tinteNucleo, col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
+        var centro = Math.round(255 + tn * (rgb[0] - 255)) + ',' + Math.round(255 + tn * (rgb[1] - 255)) + ',' + Math.round(255 + tn * (rgb[2] - 255));
         var gr = ctx.createRadialGradient(x, y, 0, x, y, Rtot);
-        gr.addColorStop(0, 'rgba(255,255,255,1)');
-        gr.addColorStop(dCore * 0.7, 'rgba(255,255,255,0.9)');
-        gr.addColorStop(dCore, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0.5)');
-        gr.addColorStop(1, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0)');
+        gr.addColorStop(0, 'rgba(' + centro + ',1)');
+        gr.addColorStop(dCore * 0.55, 'rgba(' + col + ',0.9)');
+        gr.addColorStop(dCore, 'rgba(' + col + ',0.6)');
+        gr.addColorStop(1, 'rgba(' + col + ',0)');
         ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
       }
 
@@ -455,7 +576,15 @@
       }
 
       function superponerGaia(canvas) {
-        var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var ra0 = sexToDeg(OBJETO.ra, true); var dec0 = sexToDeg(OBJETO.dec, false); var D = teleApertura(); var mlim = 7.7 + 5 * Math.log10(D / 100); var pet = contadorPeticion;
+        // En las vistas DSS/PanSTARRS la PLACA fotográfica ya contiene el campo de
+        // estrellas hasta muy débil; el overlay de Gaia solo REALZA las estrellas
+        // brillantes (núcleo nítido y color, que la placa quema). Por eso aquí el
+        // límite es mucho más brillante que la magnitud límite del telescopio
+        // —que sí se usa en el modo Canvas 2D, donde no hay placa y las estrellas
+        // de Gaia son lo único que se pinta—. Si se usara aquí la mag. límite
+        // plena, el DSS se llenaría de las mismas estrellas que el Canvas 2D y
+        // ambas vistas quedarían casi idénticas.
+        var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var ra0 = sexToDeg(OBJETO.ra, true); var dec0 = sexToDeg(OBJETO.dec, false); var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
         consultarGaia(ra0, dec0).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3 (VizieR): se muestra solo la imagen.'; });
       }
 
@@ -471,6 +600,7 @@
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
       $('sim-origen').addEventListener('change', actualizar);
       window.addEventListener('resize', function () { actualizar(); });
+      montarTeleManual();
 
       /* ══════════════════ ARRANQUE ══════════════════ */
       cargarCatalogo();
