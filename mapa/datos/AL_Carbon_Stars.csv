@@ -1,0 +1,101 @@
+Name;Type;Const;RA;Dec;Mag
+TW OPH;Star+Carbon+Var Star;Oph;17h 29m 44s;-19°28,3';8,2
+SAO 46574;Star+Carbon+IRSrc;Her;17h 13m 31s;+42°06,3';7,6
+SZ SGR;Dbl+Star+Carbon;Sgr;17h 44m 56s;-18°39,4';8,6
+T DRA;Dbl+Star+Carbon;Dra;17h 56m 23s;+58°13,1';12,5
+FO SER;Star+Carbon+Var Star;Ser;18h 19m 22s;-15°36,7';8,5
+AC HER;Star+Var Star+IRSrc;Her;18h 30m 16s;+21°52,0';7,6
+T LYR;Star+Carbon+Var Star;Lyr;18h 32m 20s;+36°59,9';8,0
+HK LYR;Star+Carbon+Var Star;Lyr;18h 42m 50s;+36°57,5';7,7
+S SCT;Dbl+Star+Carbon;Sct;18h 50m 20s;-07°54,4';6,8
+UV AQL;Star+Carbon+Var Star;Aql;18h 58m 32s;+14°21,8';8,4
+V AQL;Dbl+Star+Carbon;Aql;19h 04m 24s;-05°41,0';6,8
+V1942 SGR;Star+Carbon+Var Star;Sgr;19h 19m 10s;-15°54,5';6,9
+U LYR;Dbl+Star+Carbon;Lyr;19h 20m 09s;+37°52,6';8,3
+UX DRA;Star+Carbon+Var Star;Dra;19h 21m 36s;+76°33,5';6,2
+SAO 162551;Star+Carbon+Var Star;Aql;19h 23m 10s;-10°42,1';7,0
+AW CYG;Star+Carbon+Var Star;Cyg;19h 28m 48s;+46°02,6';11,0
+AQ SGR;Star+Carbon+Var Star;Sgr;19h 34m 19s;-16°22,4';7,0
+TT CYG;Dbl+Star+Carbon;Cyg;19h 40m 57s;+32°37,0';10,7
+AX CYG;Dbl+Star+Carbon;Cyg;19h 57m 13s;+44°15,6';7,8
+V1469 AQL;Dbl+Star+Carbon;Aql;20h 01m 04s;+09°30,8';8,4
+BF SGE;Star+Carbon+Var Star;Sge;20h 02m 23s;+21°05,4';10,3
+X SGE;Dbl+Star+Carbon;Sge;20h 05m 05s;+20°38,8';8,4
+SV CYG;Dbl+Star+Carbon;Cyg;20h 09m 30s;+47°52,2';8,6
+RY CYG;Star+Carbon+Var Star;Cyg;20h 10m 23s;+35°56,8';9,1
+RS CYG;Dbl+Star+Carbon;Cyg;20h 13m 24s;+38°43,7';7,7
+RT CAP;Dbl+Star+Carbon;Cap;20h 17m 07s;-21°19,0';7,2
+U CYG;Dbl+Star+Carbon;Cyg;20h 19m 37s;+47°53,6';8,8
+V CYG;Var Star+Star+Carbon;Cyg;20h 41m 18s;+48°08,4';7,7
+CY CYG;Star+Var Star+IRSrc;Cyg;20h 46m 50s;+46°03,1';8,3
+SAO 106516;SpecBin+Star+Carbon;Del;20h 48m 37s;+17°50,3';8,1
+SAO 89499;SpecBin+Star+Carbon;Vul;21h 09m 59s;+26°36,9';8,1
+S CEP;Star+Carbon+Var Star;Cep;21h 35m 13s;+78°37,4';7,4
+V460 CYG;Star+Carbon+Var Star;Cyg;21h 42m 01s;+35°30,6';6,0
+RV CYG;Dbl+Star+Carbon;Cyg;21h 43m 16s;+38°01,0';10,8
+RX PEG;Star+Carbon+Var Star;Peg;21h 56m 22s;+22°51,6';8,1
+RZ PEG;Star+Carbon+Var Star;Peg;22h 05m 53s;+33°30,4';9,2
+RU AQR;Star+Var Star+IRSrc;Aqr;23h 24m 24s;-17°19,1';9,3
+ST AND;Star+Carbon+Var Star;And;23h 38m 45s;+35°46,3';7,7
+TX PSC;Star+Carbon+Var Star;Psc;23h 46m 24s;+03°29,2';5,0
+SAO 128396;Star+Carbon+IRSrc;Psc;23h 49m 05s;+06°22,9';8,5
+WZ CASS;Dbl+Star+Carbon;Cas;00h 01m 16s;+60°21,3';7,1
+SU AND;Star+Carbon+Var Star;And;00h 04m 36s;+43°33,0';8,1
+SAO 109003;Star+IRSrc;Psc;00h 05m 22s;+08°47,2';8,2
+VX AND;Star+Carbon+Var Star;And;00h 19m 54s;+44°42,5';8,5
+AQ AND;Star+Carbon+Var Star;And;00h 27m 32s;+35°35,2';7,8
+SAO74353;SpecBin+Star+Carbon;And;00h 54m 14s;+24°04,0';8,5
+W CAS;Star+Carbon+Var Star;Cas;00h 54m 54s;+58°33,8';7,8
+Z PSC;Star+Carbon+Var Star;Psc;01h 16m 05s;+25°46,1';6,8
+V ARI;Star+Carbon+Var Star;Ari;02h 15m 00s;+12°14,3';8,5
+SAO 129989;Star+Carbon+IRSrc;Cet;02h 35m 07s;-09°26,5';8,2
+UY AND;Star+Carbon+Var Star;And;02h 38m 24s;+39°10,1';7,4
+SAO 23858;Star+Carbon+Var Star;Cas;03h 11m 25s;+57°54,1';7,6
+Y PER;Star+Carbon+Var Star;Per;03h 27m 42s;+44°10,6';9,8
+V466 PER;Star+Carbon+Var Star;Per;03h 41m 30s;+51°30,1';8,1
+U CAM;Dbl+Star+Carbon;Cam;03h 41m 48s;+62°38,9';7,3
+UV CAM;Star+Carbon+Var Star;Cam;04h 05m 54s;+61°47,6';7,6
+XX CAM;Star+Var Star+IRSrc;Cam;04h 08m 39s;+53°21,6';7,3
+ST CAM;Star+Carbon+Var Star;Cam;04h 51m 13s;+68°10,1';10,0
+TT TAU;Star+Carbon+Var Star;Tau;04h 51m 31s;+28°31,6';7,9
+R LEP;Star+Carbon+Var Star;Lep;04h 59m 36s;-14°48,3';8,1
+EL AUR;Star+Carbon+Var Star;Aur;05h 03m 23s;+50°38,0';11,5
+W ORI;Star+Carbon+Var Star;Ori;05h 05m 24s;+01°10,6';5,9
+TX AUR;Star+Carbon+Var Star;Aur;05h 09m 05s;+39°00,1';9,1
+SY ERI;Star+Carbon+Var Star;Eri;05h 09m 48s;-05°30,9';8,3
+UV AUR;Dbl+Star+Carbon;Aur;05h 21m 49s;+32°30,7';9,6
+S AUR;Dbl+Star+Carbon;Aur;05h 27m 07s;+34°09,0';10,3
+RT ORI;Star+Carbon+Var Star;Ori;05h 33m 14s;+07°09,2';8,0
+S CAM;Star+Carbon+Var Star;Cam;05h 41m 02s;+68°47,9';9,0
+TU TAU;Dbl+Star+Carbon;Tau;05h 45m 14s;+24°25,2';8,5
+Y TAU;Star+Carbon+Var Star;Tau;05h 45m 39s;+20°41,7';6,8
+FU AUR;Star+Carbon+Var Star;Aur;05h 48m 08s;+30°37,8';8,4
+TU GEM;Star+Carbon+Var Star;Gem;06h 10m 53s;+26°00,8';7,4
+FU MON;Star+Carbon+Var Star;Mon;06h 22m 24s;+03°25,4';8,9
+V AUR;Star+Carbon+Var Star;Aur;06h 24m 02s;+47°42,3';8,5
+BL ORI;Star+Carbon+Var Star;Ori;06h 25m 28s;+14°43,3';6,3
+UU AUR;Dbl+Star+Carbon;Aur;06h 36m 33s;+38°26,7';5,5
+VW GEM;Star+Carbon+Var Star;Gem;06h 42m 09s;+31°27,2';8,2
+GY MON;Star+Carbon+Var Star;Mon;06h 53m 11s;-04°34,5';8,2
+RV MON;Star+Carbon+Var Star;Mon;06h 58m 21s;+06°10,0';7,5
+V614 MON;Star+Carbon+Var Star;Mon;07h 01m 02s;-03°15,1';7,3
+RY MON;Star+Carbon+Var Star;Mon;07h 06m 56s;-07°33,4';7,9
+W CMA;Star+Carbon+Var Star;CMa;07h 08m 03s;-11°55,3';6,7
+R CMA;EclBin+SpecBin+Star;CMa;07h 19m 28s;-16°23,7';5,7
+BM GEM;Star+Carbon+Var Star;Gem;07h 20m 59s;+25°00,0';10,9
+RU CAM;Star+Carbon+Var Star;Cam;07h 21m 44s;+69°40,2';8,5
+NQ GEM;SpecBin+Star+Carbon;Gem;07h 31m 55s;+24°30,2';8,0
+RU PUP;Star+Carbon+Var Star;Pup;08h 07m 30s;-22°54,7';8,4
+X CNC;Star+Carbon+Var Star;Cnc;08h 55m 23s;+17°13,8';6,2
+T CNC;Dbl+Star+Carbon;Cnc;08h 56m 40s;+19°50,9';8,5
+Y HYA;Star+Carbon+Var Star;Hya;09h 51m 04s;-23°01,0';6,7
+U HYA;Star+Carbon+Var Star;Hya;10h 37m 33s;-13°23,0';4,9
+VY UMA;Star+Carbon+Var Star;UMa;10h 45m 04s;+67°24,6';6,0
+V HYA;Star+Dbl+Carbon;Hya;10h 51m 37s;-21°15,0';9,7
+SS VIR;Star+Carbon+Var Star;Vir;12h 25m 14s;+00°46,1';7,3
+Y CVN;Star+Carbon+Var Star;CVn;12h 45m 08s;+45°26,4';5,3
+RY DRA;Star+Carbon+Var Star;Dra;12h 56m 26s;+65°59,6';6,5
+SAO 157721;Star+Carbon+IRSrc;Vir;13h 06m 25s;-20°03,5';8,4
+V CRB;Star+Carbon+Var Star;CrB;15h 49m 31s;+39°34,2';9,3
+RR HER;Star+Carbon+Var Star;Her;16h 04m 13s;+50°29,9';11,5
+V OPH;Star+Carbon+Var Star;Oph;16h 26m 44s;-12°25,5';8,9

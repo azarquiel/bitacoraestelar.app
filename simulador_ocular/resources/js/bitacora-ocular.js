@@ -31,7 +31,8 @@
 
       /* ══════════════════ CONFIGURACIÓN ══════════════════ */
       var CATALOGO_OBJ = [
-		  { id: 'M35', nombre: 'M35 · Cúmulo abierto (NGC 2168)', constelacion: 'Gemini', ra: '06 08 54', dec: '+24 20 00' },
+		  //{ id: 'NGC 7789', nombre: 'NGC 7789 · Rosa de Carolina', constelacion: 'Cassiopea', ra: '23 57 24', dec: '+56 42 56' },
+		  //{ id: 'M35', nombre: 'M35 · Cúmulo abierto (NGC 2168)', constelacion: 'Gemini', ra: '06 08 54', dec: '+24 20 00' },
           { id: 'M39', nombre: 'M39 · Cúmulo abierto (NGC 7092)', constelacion: 'Cygnus', ra: '21 31 48', dec: '+48 26 55' }
       ];
       var OBJETO = CATALOGO_OBJ[0];
@@ -82,6 +83,23 @@
         var t = TRANSMISION_OPTICA[String(optica).trim().toLowerCase()];
         return t != null ? t : null;
       }
+      // Tipos ópticos cuyo secundario va sujeto por una ARAÑA de brazos → producen
+      // diffraction spikes. Los refractores no tienen obstrucción; los SC/Mak sujetan
+      // el secundario en la lámina/menisco (sin brazos) → sin spikes.
+      var OPTICA_ARANA = {
+        'newtonian': true, 'schmidt-newtonian': true, 'mak-newtonian': true,
+        'cassegrain': true, 'ritchey-chretien': true, 'dall-kirkham': true,
+        'refractor': false, 'schmidt-cassegrain': false, 'mak-cassegrain': false, 'schmidt camera': false
+      };
+      function opticaTieneArana(optica) {
+        return !!(optica && OPTICA_ARANA[String(optica).trim().toLowerCase()]);
+      }
+      // ¿El telescopio seleccionado tiene araña? (manual: campo 'arana'; catálogo: por su óptica)
+      function teleTieneArana() {
+        if (!teleSel) return false;
+        if (typeof teleSel.arana === 'boolean') return teleSel.arana;
+        return opticaTieneArana(teleSel.optica);
+      }
 
       /* Ajustes fáciles del render de estrellas de Gaia (Canvas 2D y overlay).
          Todo aquí para poder afinarlo sin tocar el resto del código. */
@@ -96,12 +114,13 @@
         // radio = radioMin + radioMag · (magTamMin − g)^radioExp, acotado a radioMax.
         // radioExp > 1 acelera el crecimiento en las MÁS brillantes (más contraste
         // de tamaño arriba); = 1 sería lineal en la magnitud.
-        radioMin: 0.08,      // radio del núcleo de las estrellas en el límite
+        radioMin: 0.42,     // SUELO de radio del núcleo (mínimo visible, ~1 px): solo afecta a las débiles, no infla las brillantes
         radioMag: 0.13,     // px de radio de núcleo por cada (magnitud sobre magTamMin)^radioExp
         radioExp: 1.35,      // exponente: >1 = las brillantes crecen más deprisa
         magTamMin: 14,    // magnitud a partir de la cual el núcleo es el mínimo (más brillante → mayor)
         radioMax: 6.5,      // radio máximo del núcleo (estrellas muy brillantes)
         brillo: 1.4,        // realce del brillo de las estrellas (1 = cálculo base)
+        alfaMin: 0.24,      // suelo de alfa: las estrellas del borde del límite quedan tenues pero presentes (sin esto, invisibles)
         // GLOW de estrellas NO resueltas (solo Canvas 2D): las más débiles que la
         // magnitud límite no se dibujan como puntos, sino como una mota tenue y
         // aditiva. Donde se agolpan (cúmulos lejanos como NGC 2158, núcleos de
@@ -109,7 +128,30 @@
         // en campo abierto quedan casi invisibles. El brillo de la mancha ∝ densidad
         // de estrellas sub-límite, que es justo el brillo superficial no resuelto.
         glowIntensidad: 0.2,  // alfa de una estrella no resuelta JUSTO en el límite (cae con la profundidad, ∝ flujo)
-        glowRadio: 2.0        // radio (px) de cada mota de glow (↑ = más difuso)
+        glowRadio: 2.0,       // radio (px) de cada mota de glow (↑ = más difuso)
+        // Escala del TAMAÑO con el aumento: a más aumento (menos campo) las estrellas
+        // se agrandan, como en el ocular real. Así un cúmulo lejano a mucho aumento
+        // (NGC 7789 con un 18") se ve rico, y uno cercano a poco aumento (M35) fino,
+        // con la MISMA regla. factor = √(escalaMagCampo / campo_arcmin), en [1, escalaMagMax].
+        escalaMagCampo: 90,   // arcmin de referencia: por debajo, estrellas mayores
+        escalaMagMax: 2.0,    // tope del factor de escala por aumento
+        radioTotalMax: 14,    // tope absoluto del radio total dibujado (px), evita blobs enormes a mucho aumento
+        // DIFFRACTION SPIKES: el destello en cruz que produce la ARAÑA del secundario
+        // en reflectores (Newton, etc.). Cada brazo de la araña es un obstáculo fino;
+        // por el principio de Babinet difracta como una rendija, con perfil sinc²
+        // (I ∝ (sin u / u)²). Solo se dibuja en telescopios con araña, y solo en las
+        // estrellas brillantes: longitud e intensidad ∝ brillo (magnitud) de la estrella.
+        spikes: {
+          magMax: 10,       // solo estrellas más brillantes que esta magnitud lucen spikes
+          rango: 5,         // magnitudes sobre magMax para llegar a la intensidad plena
+          brazos: 4,        // nº de puntas (araña de 4 brazos → cruz de 4)
+          angulo: 0,        // rotación de la cruz en grados (0 = +, 45 = ×)
+          longMag: 12,      // px de longitud de brazo por magnitud sobre magMax
+          longMax: 180,     // longitud máxima (px) de un brazo
+          grosor: 3.5,      // grosor del brazo (px)
+          lobulos: 2,       // nº de lóbulos del sinc² dibujados (estructura de difracción)
+          intensidad: 0.85  // alfa base del brazo
+        }
       };
 
       var CFG = window.BITACORA_OCULAR || {};
@@ -230,7 +272,11 @@
           // catadióptrico 0,65, siguiendo a Torres Lapasió); se guarda en el
           // telescopio para que magLimiteTelescopio() la use.
           var t = (tipo && num(tipo.value)) || TRANSMISION_TELE;
-          teleSel = { id: '_manual', vendor: '', modelo: 'Telescopio manual', apertura_mm: a, focal_mm: f, transmision: t };
+          // ¿Tiene araña? La opción marcada con data-arana (Reflector/Newton) sí;
+          // refractor y catadióptrico no → sin diffraction spikes.
+          var opt = tipo && tipo.options[tipo.selectedIndex];
+          var arana = !!(opt && opt.getAttribute('data-arana') === '1');
+          teleSel = { id: '_manual', vendor: '', modelo: 'Telescopio manual', apertura_mm: a, focal_mm: f, transmision: t, arana: arana };
           $('sim-tele-input').value = '';
           actualizar();
         }
@@ -541,9 +587,63 @@
         g.fillStyle = gr; g.fillRect(0, 0, S, S);
         return (GLOW_SPRITE = c);
       }
+      // Sprite de UN brazo de la cruz de difracción (parte del centro, x=0, hacia la
+      // derecha). El perfil A LO LARGO del brazo es el de una rendija (Babinet):
+      // I(u) = (sin(πLu)/(πLu))² con L = nº de lóbulos → lóbulo central brillante y
+      // lóbulos secundarios cada vez más tenues, la firma de la difracción. El perfil
+      // TRANSVERSAL es una gaussiana fina. Se estampa girado y escalado por estrella.
+      var SPIKE_SPRITE = null;
+      function spriteSpike() {
+        if (SPIKE_SPRITE) return SPIKE_SPRITE;
+        var W = 256, H = 32, m = H / 2;
+        var c = document.createElement('canvas'); c.width = W; c.height = H;
+        var ctx = c.getContext('2d');
+        var im = ctx.createImageData(W, H);
+        var kL = Math.max(1, GAIA_CFG.spikes.lobulos) * Math.PI;   // arg del sinc en el extremo
+        for (var x = 0; x < W; x++) {
+          var u = x / (W - 1);                 // 0 (centro) … 1 (punta)
+          var arg = kL * u;
+          var s = arg < 1e-6 ? 1 : Math.sin(arg) / arg;
+          var along = s * s;                   // sinc² a lo largo del brazo
+          along *= (1 - u);                    // ventana suave que apaga la punta
+          for (var y = 0; y < H; y++) {
+            var t = (y - m) / m;               // -1 … 1 transversal
+            var a = along * Math.exp(-(t * t) * 10);   // gaussiana fina en el grosor
+            var idx = (y * W + x) * 4;
+            im.data[idx] = im.data[idx + 1] = im.data[idx + 2] = 255;
+            im.data[idx + 3] = Math.round(255 * Math.max(0, Math.min(1, a)));
+          }
+        }
+        ctx.putImageData(im, 0, 0);
+        return (SPIKE_SPRITE = c);
+      }
+      // Dibuja la cruz de difracción de una estrella brillante: N brazos girados,
+      // con longitud e intensidad ∝ su brillo (magnitud) y escalados con el aumento.
+      function dibujarSpikes(ctx, x, y, g, escalaMag) {
+        var cf = GAIA_CFG.spikes;
+        var sobre = cf.magMax - g;             // cuánto más brillante que el umbral
+        if (sobre <= 0) return;
+        var L = Math.min(cf.longMax, cf.longMag * sobre) * escalaMag;
+        if (L < 3) return;
+        var alpha = Math.min(1, cf.intensidad * (sobre / cf.rango));
+        var sp = spriteSpike(), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(cf.angulo * Math.PI / 180);
+        ctx.globalAlpha = alpha;
+        for (var k = 0; k < cf.brazos; k++) {
+          ctx.drawImage(sp, 0, -H / 2, L, H);
+          ctx.rotate(paso);
+        }
+        ctx.restore();
+      }
       // Radio del NÚCLEO de la estrella según su magnitud (fijo, no depende del cielo).
+      // El radioMin es un SUELO (max), no un sumando: así las estrellas débiles no
+      // caen por debajo del mínimo visible (~1 px), pero las brillantes conservan
+      // su tamaño natural (el término de potencia) sin inflarse.
       function radioNucleo(g) {
-        return Math.min(GAIA_CFG.radioMax, GAIA_CFG.radioMin + GAIA_CFG.radioMag * Math.pow(Math.max(0, GAIA_CFG.magTamMin - g), GAIA_CFG.radioExp));
+        var r = GAIA_CFG.radioMag * Math.pow(Math.max(0, GAIA_CFG.magTamMin - g), GAIA_CFG.radioExp);
+        return Math.min(GAIA_CFG.radioMax, Math.max(GAIA_CFG.radioMin, r));
       }
 
       // Color de una estrella a partir de su índice BP-RP de Gaia: azul (caliente)
@@ -594,6 +694,11 @@
         var base = spriteGaia(), glow = spriteGlow();
         var factorHalo = 1 + GAIA_CFG.blur;   // radio total = núcleo · (1 + blur)
         var Rg = GAIA_CFG.glowRadio;
+        // A más aumento (menos campo) las estrellas se agrandan (tamaño angular en
+        // el ocular). En [1, escalaMagMax]: 1 a poco aumento, mayor a mucho aumento.
+        var escalaMag = Math.min(GAIA_CFG.escalaMagMax, Math.max(1, Math.sqrt(GAIA_CFG.escalaMagCampo / arcmin)));
+        // Diffraction spikes: solo en el Canvas 2D y si el telescopio tiene araña.
+        var spikesOn = conGlow && teleTieneArana();
         ctx.globalCompositeOperation = 'lighter';
         for (var i = 0; i < estrellas.length; i++) {
           var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2], bprp = estrellas[i][3];
@@ -613,14 +718,18 @@
             ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
             continue;
           }
-          var Rtot = radioNucleo(g) * factorHalo;
-          // Brillo: se desvanece cerca de la mag. límite (sky-dependent) y se realza.
-          ctx.globalAlpha = Math.min(1, GAIA_CFG.brillo * Math.min(1, (mlim - g) / 6));
+          var Rtot = Math.min(GAIA_CFG.radioTotalMax, radioNucleo(g) * factorHalo * escalaMag);
+          // Brillo: se desvanece cerca de la mag. límite (sky-dependent) y se realza,
+          // pero con un SUELO (alfaMin) para que las estrellas del borde del límite
+          // sigan siendo puntos tenues visibles y no desaparezcan del todo.
+          ctx.globalAlpha = Math.min(1, Math.max(GAIA_CFG.alfaMin, GAIA_CFG.brillo * Math.min(1, (mlim - g) / 6)));
           if (g < GAIA_CFG.magColor && bprp != null) {
             dibujarEstrellaColor(ctx, x, y, Rtot, colorPorBpRp(bprp));   // solo las más brillantes llevan color
           } else {
             ctx.drawImage(base, x - Rtot, y - Rtot, Rtot * 2, Rtot * 2);
           }
+          // Cruz de difracción de la araña, solo en las estrellas brillantes.
+          if (spikesOn && g < GAIA_CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escalaMag);
         }
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
