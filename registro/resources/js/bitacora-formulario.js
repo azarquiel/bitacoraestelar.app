@@ -242,6 +242,28 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // CATÁLOGO DE ESTRELLAS DE CARBONO (Astronomical League)
+  // ═══════════════════════════════════════════════════════════════════════
+  // Se carga desde estrellas-carbono-datos.js (window.BITACORA_CARBONO). Sus
+  // coordenadas vienen en sexagesimal ("HH MM SS" / "±DD MM SS"); aquí se pasan
+  // a GRADOS, que es como el formulario maneja RA/Dec internamente. Así una
+  // estrella de carbono se resuelve con NUESTRAS coordenadas, sin depender de
+  // SIMBAD ni de tener sesión iniciada (funciona en la página pública).
+  function sxRAaGrados(s){ var p=String(s).trim().split(/\s+/).map(parseFloat); return rev(((p[0]||0)+(p[1]||0)/60+(p[2]||0)/3600)*15); }
+  function sxDecaGrados(s){ var t=String(s).trim(), sg=/^-/.test(t)?-1:1, p=t.replace(/^[+-]/,'').split(/\s+/).map(parseFloat); return sg*((p[0]||0)+(p[1]||0)/60+(p[2]||0)/3600); }
+  var CARBONO = (window.BITACORA_CARBONO||[]).map(function(e){
+    return { nombre:e.nombre, id:e.id, cons:e.constelacion, ra:sxRAaGrados(e.ra), dec:sxDecaGrados(e.dec), mag:e.mag, subtipo:e.tipo };
+  });
+  // Busca una estrella de carbono por su nombre o identificador exacto.
+  function carbonoPorNombre(txt){
+    var q=(txt||'').trim().toLowerCase(); if(!q) return null;
+    for(var i=0;i<CARBONO.length;i++){
+      if(CARBONO[i].nombre.toLowerCase()===q || String(CARBONO[i].id).toLowerCase()===q) return CARBONO[i];
+    }
+    return null;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // ESTADO Y REFERENCIAS AL DOM
   // ═══════════════════════════════════════════════════════════════════════
   var $=function(id){return document.getElementById(id);};
@@ -249,7 +271,7 @@
       radecBox=$('radecBox'), raManual=$('raManual'), decManual=$('decManual'),
       submitBtn=$('submitBtn'), jsonOut=$('jsonOut'), jsonArea=$('jsonArea');
 
-  var resolved=null; // {tipo:'messier'|'ncgic', num, nombre, ra, dec, etiqueta}
+  var resolved=null; // {tipo:'messier'|'carbono'|'otro', num, nombre, ra, dec, cons, etiqueta}
 
   // ═══════════════════════════════════════════════════════════════════════
   // RESOLUCIÓN + VALIDACIÓN DEL OBJETO
@@ -259,7 +281,7 @@
   function resolveObject(){
     var txt=objInput.value.trim();
     resolved=null; radecBox.classList.remove('show');
-    if(txt===''){ setStatus(objStatus,'info','Escribe un objeto Messier (M1–M110) o un NGC/IC.'); recompute(); return; }
+    if(txt===''){ setStatus(objStatus,'info','Escribe un objeto Messier (M1–M110), una estrella de carbono o un NGC/IC.'); recompute(); return; }
 
     var mn=messierNumber(txt);
     if(mn!==null){
@@ -273,7 +295,17 @@
       }
       recompute(); return;
     }
-    // No es Messier: aceptamos como NGC/IC/otro y pedimos RA/Dec
+    // ¿Es una estrella de carbono del catálogo? Si el nombre coincide, se
+    // resuelve con NUESTRAS coordenadas (sin SIMBAD ni login) y se deja la caja
+    // de RA/Dec oculta, igual que con un Messier.
+    var carb=carbonoPorNombre(txt);
+    if(carb){
+      var etc='estrella de carbono'+(carb.cons?' · '+carb.cons:'');
+      resolved={tipo:'carbono',num:null,nombre:carb.nombre,ra:carb.ra,dec:carb.dec,cons:carb.cons,etiqueta:carb.nombre};
+      setStatus(objStatus,'ok','✓ '+carb.nombre+' — '+etc+(carb.mag!=null?' · mag ≈ '+String(carb.mag).replace('.',','):'')+'.');
+      recompute(); return;
+    }
+    // No es Messier ni estrella de carbono: aceptamos como NGC/IC/otro y pedimos RA/Dec
     radecBox.classList.add('show');
     var ra=parseRA(raManual.value), dec=parseDec(decManual.value);
     if(ra!==null && dec!==null){
@@ -337,13 +369,22 @@
     if(txt.length<1) return;
     var num=txt.replace(/[^0-9]/g,'');
     var matches=[];
+    // Objetos Messier (por número o nombre), hasta 7.
     for(var k=1;k<=110;k++){
       var o=MESSIER[k], label='M'+k, hay=(o.n||'').toLowerCase();
       if((num && String(k).indexOf(num)===0) ||
          (hay && hay.indexOf(txt)>=0) ||
          label.toLowerCase().indexOf(txt.replace(/\s/g,''))===0){
-        matches.push({k:k,label:label,n:o.n,c:o.c});
+        matches.push({valor:'M'+k, label:'M'+k+(o.n?' · '+o.n:''), cons:o.c});
         if(matches.length>=7) break;
+      }
+    }
+    // Estrellas de carbono (por nombre o constelación), hasta completar 12.
+    var qc=txt.replace(/\s+/g,' ');
+    for(var i=0;i<CARBONO.length && matches.length<12;i++){
+      var c=CARBONO[i];
+      if(c.nombre.toLowerCase().indexOf(qc)>=0 || (c.cons||'').toLowerCase().indexOf(qc)>=0){
+        matches.push({valor:c.nombre, label:c.nombre+' · estrella de carbono', cons:c.cons||''});
       }
     }
     if(!matches.length) return;
@@ -351,8 +392,8 @@
     suggestBox.innerHTML='';
     matches.forEach(function(m,i){
       var b=document.createElement('button'); b.type='button';
-      b.innerHTML='<span>'+m.label+(m.n?' · '+m.n:'')+'</span><span class="cons">'+m.c+'</span>';
-      b.addEventListener('mousedown',function(e){ e.preventDefault(); objInput.value='M'+m.k;
+      b.innerHTML='<span>'+m.label+'</span><span class="cons">'+(m.cons||'')+'</span>';
+      b.addEventListener('mousedown',function(e){ e.preventDefault(); objInput.value=m.valor;
         suggestBox.style.display='none'; resolveObject(); });
       suggestBox.appendChild(b);
     });
