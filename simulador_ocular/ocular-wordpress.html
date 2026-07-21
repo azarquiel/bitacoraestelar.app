@@ -1,8 +1,9 @@
 <!-- ============================================================
      SIMULADOR DE VISIÓN POR OCULAR · Bitácora Messier
 
-     Cómo se vería el objeto del proyecto (de momento M35) a través del
-     telescopio y los oculares elegidos del catálogo global de equipo.
+     Cómo se vería el objeto elegido (un cúmulo abierto o una estrella de
+     carbono de la Astronomical League) a través del telescopio y los oculares
+     elegidos del catálogo global de equipo.
 
      Pega este bloque en un bloque "HTML personalizado" de Gutenberg. La
      página puede ser PÚBLICA (compartible): el catálogo de equipo se lee
@@ -82,10 +83,19 @@
       </div>
 
       <div class="bloque">
-        <h2>Objeto del proyecto</h2>
+        <h2>Objeto a observar</h2>
+        <div class="obj-tabs" role="tablist" aria-label="Tipo de objeto">
+          <button type="button" class="obj-tab is-activa" role="tab" aria-selected="true" data-cat="cumulos">Cúmulos abiertos</button>
+          <button type="button" class="obj-tab" role="tab" aria-selected="false" data-cat="carbono">Estrellas de carbono</button>
+        </div>
+        <div class="obj-wrap">
+          <input type="text" id="sim-obj-input" placeholder="— Escribe para buscar objeto —" aria-label="Objeto a observar" autocomplete="off">
+          <div class="suggest" id="sim-obj-sugg"></div>
+        </div>
         <div class="objeto-fijo" id="sim-objeto">
-          <div class="obj-nom">M39</div>
+          <div class="obj-nom">—</div>
           <div class="obj-coord">—</div>
+          <div class="obj-meta" id="sim-obj-meta" hidden></div>
         </div>
         <label class="field"><span class="lab">Origen de imagen</span>
           <select id="sim-origen">
@@ -151,4 +161,5 @@
 </div>
 
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260719_1200" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260720_1700" defer></script>
+<script src="/wp-content/uploads/bitacora/estrellas-carbono-datos.js?v=20260721_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260721_1800" defer></script>

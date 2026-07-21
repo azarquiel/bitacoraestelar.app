@@ -1,9 +1,11 @@
 /* ===========================================================================
  * BITÁCORA MESSIER · Simulador de visión por ocular
  * ---------------------------------------------------------------------------
- * Reproduce cómo se vería el objeto del proyecto (de momento M39) a través del
- * telescopio y el ocular elegidos. Telescopio y ocular se eligen del catálogo
- * global de equipo con el buscador común (BitacoraBase, el mismo de Mi flota).
+ * Reproduce cómo se vería el objeto elegido —un cúmulo abierto o una estrella de
+ * carbono de la Astronomical League— a través del telescopio y el ocular
+ * elegidos. Telescopio y ocular se eligen del catálogo global de equipo con el
+ * buscador común (BitacoraBase, el mismo de Mi flota); el objeto, del selector
+ * de dos pestañas (cúmulos / estrellas de carbono).
  *
  * Orígenes de imagen:
  *   · hips      → PanSTARRS DR1 (HiPS), sin dependencias.
@@ -30,12 +32,25 @@
       if (!$('sim-vista')) return;   // el bloque del simulador no está en la página
 
       /* ══════════════════ CONFIGURACIÓN ══════════════════ */
-      var CATALOGO_OBJ = [
-		  //{ id: 'NGC 7789', nombre: 'NGC 7789 · Rosa de Carolina', constelacion: 'Cassiopea', ra: '23 57 24', dec: '+56 42 56' },
-		  //{ id: 'M35', nombre: 'M35 · Cúmulo abierto (NGC 2168)', constelacion: 'Gemini', ra: '06 08 54', dec: '+24 20 00' },
-          { id: 'M39', nombre: 'M39 · Cúmulo abierto (NGC 7092)', constelacion: 'Cygnus', ra: '21 31 48', dec: '+48 26 55' }
+      // Cúmulos abiertos (de momento una selección; a futuro, un catálogo mayor).
+      // Cada entrada lleva su marca `carbono:false` para el render de la ficha.
+      var CATALOGO_CUMULOS = [
+          { id: 'M35',      nombre: 'M35 · Cúmulo abierto (NGC 2168)',   constelacion: 'Gemini',    ra: '06 08 54', dec: '+24 20 00', tipo: 'cúmulo abierto', carbono: false },
+          { id: 'M39',      nombre: 'M39 · Cúmulo abierto (NGC 7092)',   constelacion: 'Cygnus',    ra: '21 31 48', dec: '+48 26 55', tipo: 'cúmulo abierto', carbono: false },
+          { id: 'NGC 7789', nombre: 'NGC 7789 · Rosa de Carolina',       constelacion: 'Cassiopeia', ra: '23 57 24', dec: '+56 42 56', tipo: 'cúmulo abierto', carbono: false }
       ];
-      var OBJETO = CATALOGO_OBJ[0];
+      // Estrellas de carbono: catálogo de la Astronomical League, cargado desde el
+      // módulo estrellas-carbono-datos.js (window.BITACORA_CARBONO). Se marca
+      // `carbono:true` para que la ficha resalte su color rojo-anaranjado.
+      var CATALOGO_CARBONO = (window.BITACORA_CARBONO || []).map(function (e) {
+        return {
+          id: e.id, nombre: e.nombre, constelacion: e.constelacion, abrev: e.abrev,
+          ra: e.ra, dec: e.dec, mag: e.mag, tipo: e.tipo, carbono: true
+        };
+      });
+      // Categorías del selector de objeto. La clave coincide con data-cat del HTML.
+      var CATALOGOS_OBJ = { cumulos: CATALOGO_CUMULOS, carbono: CATALOGO_CARBONO };
+      var objetoSel = CATALOGO_CUMULOS[0];   // M35 por defecto
 
       var TELE_EJEMPLO = [{ id: '_t200', vendor: '', modelo: 'Newton 200/1200 (ejemplo)', optica: 'Newtonian', apertura_mm: 200, focal_mm: 1200 }];
       var OCULARES_EJEMPLO = [
@@ -393,7 +408,7 @@
         }
 
         var origen = $('sim-origen').value;
-        var ra = OBJETO.ra, dec = OBJETO.dec;
+        var ra = objetoSel.ra, dec = objetoSel.dec;
         cargando.style.display = 'flex';
         cargando.textContent = 'solicitando imagen…';
         var peticion = ++contadorPeticion;
@@ -458,7 +473,7 @@
         ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
         cargando.style.display = 'flex'; cargando.textContent = 'consultando estrellas de Gaia DR3…';
 
-        var ra0 = sexToDeg(OBJETO.ra, true), dec0 = sexToDeg(OBJETO.dec, false);
+        var ra0 = sexToDeg(objetoSel.ra, true), dec0 = sexToDeg(objetoSel.dec, false);
         // Magnitud límite del telescopio + ocular (Método del umbral): con más
         // aumento el fondo se oscurece y se alcanzan estrellas más débiles; con
         // el cielo más brillante, el límite baja y las débiles DESAPARECEN,
@@ -744,29 +759,93 @@
         // de Gaia son lo único que se pinta—. Si se usara aquí la mag. límite
         // plena, el DSS se llenaría de las mismas estrellas que el Canvas 2D y
         // ambas vistas quedarían casi idénticas.
-        var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var ra0 = sexToDeg(OBJETO.ra, true); var dec0 = sexToDeg(OBJETO.dec, false); var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
-        consultarGaia(ra0, dec0).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3 (VizieR): se muestra solo la imagen.'; });
+        var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var ra0 = sexToDeg(objetoSel.ra, true); var dec0 = sexToDeg(objetoSel.dec, false); var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
+        consultarGaia(ra0, dec0).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3 (VizieR): se muestra solo la imagen.'; });
       }
 
       function aplicarPupila(img, p) { var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var brilloPercibido = Math.pow(Math.pow(pEf / pOjo, 2), 0.5); var umbral = 0.30 * (1 - pEf / pOjo); var pendiente = brilloPercibido / (1 - umbral); var despl = -pendiente * umbral; ['R', 'G', 'B'].forEach(function (c) { var f = document.querySelector('#sim-transfer-pupila feFunc' + c); if (f) { f.setAttribute('slope', pendiente.toFixed(4)); f.setAttribute('intercept', despl.toFixed(4)); } }); img.style.filter = 'grayscale(1) url(#sim-filtro-pupila)'; }
 
-      (function pintarObjeto() {
+      // Pinta la ficha del objeto activo. Para estrellas de carbono añade una
+      // línea de metadatos (magnitud, tipo) y un aviso de su color, y tiñe la
+      // tarjeta de ámbar (clase .es-carbono); para cúmulos usa el azul de siempre.
+      function pintarObjeto() {
         var box = $('sim-objeto'); if (!box) return;
-        box.querySelector('.obj-nom').textContent = OBJETO.nombre;
-        box.querySelector('.obj-coord').textContent = 'AR ' + OBJETO.ra + '  ·  Dec ' + OBJETO.dec + '  ·  ' + OBJETO.constelacion + ' (J2000)';
-      })();
+        var o = objetoSel;
+        box.querySelector('.obj-nom').textContent = o.nombre;
+        box.querySelector('.obj-coord').textContent = 'AR ' + o.ra + '  ·  Dec ' + o.dec + '  ·  ' + o.constelacion + ' (J2000)';
+        box.classList.toggle('es-carbono', !!o.carbono);
+        var meta = $('sim-obj-meta');
+        if (meta) {
+          if (o.carbono) {
+            var mag = (o.mag != null) ? ('mag ≈ ' + String(o.mag).replace('.', ',')) : '';
+            meta.innerHTML =
+              '<span class="obj-tags">' + BitacoraBase.esc([mag, o.tipo].filter(Boolean).join('  ·  ')) + '</span>' +
+              '<span class="obj-color">Estrella de carbono: busca su intenso tono rojo-anaranjado. Se aprecia mejor en la vista «Estrellas de Gaia DR3» (color real).</span>';
+            meta.hidden = false;
+          } else {
+            meta.innerHTML = '';
+            meta.hidden = true;
+          }
+        }
+      }
+
+      // Cambia el objeto activo: repinta la ficha, recalcula la simulación y
+      // precalienta la consulta de Gaia del nuevo objeto en segundo plano.
+      function elegirObjeto(o) {
+        if (!o) return;
+        objetoSel = o;
+        pintarObjeto();
+        actualizar();
+        consultarGaia(sexToDeg(o.ra, true), sexToDeg(o.dec, false)).catch(function () { /* se reintentará al usarse */ });
+      }
+
+      // Selector de objeto: dos pestañas (cúmulos / estrellas de carbono) sobre
+      // el buscador de catálogo común. Al cambiar de pestaña se limpia el input y
+      // se listan los objetos de esa categoría; al elegir uno, se activa.
+      function montarSelectorObjeto() {
+        var input = $('sim-obj-input');
+        if (!input) return;
+        var categoria = 'cumulos';
+        BitacoraBase.montarBuscadorCatalogo({
+          input: input, suggest: $('sim-obj-sugg'),
+          fuente: function () { return CATALOGOS_OBJ[categoria] || []; },
+          texto: function (o) { return o.nombre; },
+          specs: function (o) {
+            if (o.carbono) return (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '') || o.abrev || '';
+            return o.constelacion || '';
+          },
+          max: 40, todosSiVacio: true,
+          sinResultados: 'Sin coincidencias en esta lista',
+          onElegir: function (o) { input.value = ''; elegirObjeto(o); }
+        });
+        var tabs = document.querySelectorAll('.obj-tab');
+        tabs.forEach(function (t) {
+          t.addEventListener('click', function () {
+            categoria = t.getAttribute('data-cat') || 'cumulos';
+            tabs.forEach(function (x) {
+              var act = (x === t);
+              x.classList.toggle('is-activa', act);
+              x.setAttribute('aria-selected', act ? 'true' : 'false');
+            });
+            input.value = '';
+            input.focus();   // dispara el listado de la nueva categoría (todosSiVacio)
+          });
+        });
+      }
 
       /* ══════════════════ EVENTOS ══════════════════ */
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
       $('sim-origen').addEventListener('change', actualizar);
       window.addEventListener('resize', function () { actualizar(); });
       montarTeleManual();
+      montarSelectorObjeto();
+      pintarObjeto();
 
       /* ══════════════════ ARRANQUE ══════════════════ */
       cargarCatalogo();
       // Precalienta la consulta de Gaia del objeto en segundo plano: cuando el
       // usuario cambie a Canvas 2D (o el overlay la necesite) ya estará en caché.
-      consultarGaia(sexToDeg(OBJETO.ra, true), sexToDeg(OBJETO.dec, false)).catch(function () { /* se reintentará al usarse */ });
+      consultarGaia(sexToDeg(objetoSel.ra, true), sexToDeg(objetoSel.dec, false)).catch(function () { /* se reintentará al usarse */ });
 
     } catch (err) {
       console.error('[Bitácora] Error al iniciar el simulador de ocular:', err);

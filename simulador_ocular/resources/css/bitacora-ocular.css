@@ -37,13 +37,44 @@
 #mw-obs-form .panel label.field {margin-bottom:14px;}
 #mw-obs-form .panel .row {gap:12px;}
 
-/* ── Objeto fijo (M39) ── */
+/* ── Selector de objeto: pestañas (cúmulos / estrellas de carbono) ── */
+#mw-obs-form .obj-tabs {
+  display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;
+}
+#mw-obs-form .obj-tab {
+  padding:8px 10px;border:1px solid var(--linea);border-radius:9px;
+  background:var(--noche-2);color:var(--tinta-tenue);cursor:pointer;
+  font-family:inherit !important;font-size:12.5px !important;font-weight:500 !important;
+  line-height:1.25 !important;text-transform:none !important;letter-spacing:normal !important;
+  transition:border-color .18s, color .18s, background .18s;
+}
+#mw-obs-form .obj-tab:hover {color:var(--tinta);border-color:var(--azul);}
+#mw-obs-form .obj-tab.is-activa {
+  color:var(--noche);background:var(--ambar);border-color:var(--ambar);font-weight:600 !important;
+}
+
+/* ── Ficha del objeto seleccionado ── */
 #mw-obs-form .objeto-fijo {
   border:1px solid var(--linea);border-radius:10px;background:rgba(126,200,255,0.05);
-  padding:12px 14px;margin-bottom:8px;
+  padding:12px 14px;margin-bottom:8px;transition:background .2s, border-color .2s;
 }
 #mw-obs-form .objeto-fijo .obj-nom {font-size:16px;font-weight:600;}
 #mw-obs-form .objeto-fijo .obj-coord {color:var(--azul);font-family:ui-monospace,Menlo,monospace;font-size:12.5px;margin-top:4px;}
+
+/* Variante para estrellas de carbono: tinte cálido y acentos ámbar/rojizos. */
+#mw-obs-form .objeto-fijo.es-carbono {
+  background:rgba(255,170,90,0.07);border-color:rgba(255,170,90,0.35);
+}
+#mw-obs-form .objeto-fijo.es-carbono .obj-coord {color:var(--ambar);}
+#mw-obs-form .objeto-fijo .obj-meta {margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+#mw-obs-form .objeto-fijo .obj-tags {
+  font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--ambar);
+  letter-spacing:0.02em;
+}
+#mw-obs-form .objeto-fijo .obj-color {
+  font-size:12px;line-height:1.5;color:var(--tinta-tenue);
+  border-left:2px solid rgba(255,170,90,0.5);padding-left:9px;
+}
 
 /* ── Conmutadores (visión nocturna / cielo del observador) ── */
 #mw-obs-form .conmutador {display:flex;align-items:flex-start;gap:10px;margin-top:10px;font-size:13.5px;color:var(--tinta);}

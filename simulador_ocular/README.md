@@ -9,13 +9,19 @@ Funciona en el navegador (móvil u ordenador), **sin instalar nada y sin necesid
 de iniciar sesión**. Vive en la web WordPress del proyecto
 ([bitacoraestelar.app](https://bitacoraestelar.app)) como un bloque HTML.
 
-> El objeto va de momento fijo en el código (M35, con M39 de reserva). El resto
-> —equipo y cielo— lo elige el usuario.
+> El **objeto** lo elige el usuario en un selector de dos pestañas: **cúmulos
+> abiertos** (de momento M35, M39 y NGC 7789) o **estrellas de carbono** (las ~100
+> del programa de la Astronomical League). El equipo y el cielo también los elige
+> el usuario.
 
 ---
 
 ## Qué hace
 
+- **Elige el objeto**: en un selector de dos pestañas, un **cúmulo abierto** o una
+  **estrella de carbono** de la Astronomical League. Al elegir una estrella de
+  carbono, la ficha resalta su magnitud, tipo y su característico **color
+  rojo-anaranjado** (mejor visible en la vista de Gaia).
 - **Elige tu equipo**: telescopio y ocular de un catálogo de cientos de modelos,
   o **introdúcelos a mano** (apertura, focal y tipo óptico) si no están en la lista.
 - **Ajusta el cielo** del observador (brillo de fondo en mag/arcsec², de rural
@@ -37,6 +43,7 @@ de iniciar sesión**. Vive en la web WordPress del proyecto
 |---|---|---|
 | `ocular-wordpress.html` | Fragmento HTML del simulador (sin código) | Editor de WordPress (bloque HTML) |
 | `resources/js/bitacora-ocular.js` | Toda la lógica (óptica, fotometría, Gaia) | Servidor, por FTP a `…/uploads/bitacora/` |
+| `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
 | `dss-proxy.php` | Proxy de placas del DSS con caché en disco acotada | Servidor, junto al JS/CSS |
 | `generar_niveles.py`, `ps1_service.py` | Pipeline/servicio **experimental** de placas fotométricas (ver más abajo) | Herramientas offline, no requeridas |
@@ -206,7 +213,14 @@ desplegado con el permiso público.
 ## Dependencias y fuentes de datos
 
 - **WordPress** + el plugin `bitacora-registro` (catálogo de equipo).
+- **Estrellas de carbono**: programa de observación de la **Astronomical League**.
+  La fuente de verdad es `mapa/datos/AL_Carbon_Stars.csv`; el módulo
+  `estrellas-carbono-datos.js` se **regenera** desde el CSV con
+  `python3 scripts/gen_carbono.py` (no editar el `.js` a mano).
 - **Gaia DR3** vía [VizieR TAP](https://tapvizier.cds.unistra.fr/) (CDS).
+- **Colores estelares**: J.-V. Harre &amp; R. Heller (2021), *«Digital color codes of
+  stars»*, Astron. Nachr. ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254);
+  código [spec2col](https://github.com/janvincentharre/spec2col)).
 - **PanSTARRS DR1** vía [hips2fits](https://alasky.cds.unistra.fr/) (CDS/alasky).
 - **DSS** (Digitized Sky Survey) desde el [archivo de ESO](https://archive.eso.org/),
   servido por `dss-proxy.php`.
