@@ -130,7 +130,18 @@
         // Gaia (que infravalora su rojo). Se suma al índice, con un suelo, solo a la
         // estrella central cuando el objeto elegido es de carbono. Ver colorPorBpRp().
         carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
-        tinteNucleo: 0.8,  // cuánto tiñe el color al núcleo: 0 = núcleo blanco puro; 1 = núcleo del color de la estrella
+        // CORRECCIÓN GAMMA sRGB. Los nodos de GAIA_COLOR son los códigos LINEALES
+        // que publica Harre & Heller; mostrarlos CRUDOS (sin gamma) sobre-satura
+        // —el azul de las estrellas calientes sale demasiado azul, y el rojo de
+        // las de carbono, muy profundo—. Al codificarlos a sRGB (gamma) el color
+        // es el que percibe el ojo (una estrella caliente es azul-BLANCA, no azul).
+        //   global:false → gamma solo del azul al blanco (hasta→desvanece), dejando
+        //                  CRUDO el extremo rojo para conservar el rojo ember del
+        //                  carbono. Estrellas O·B·A·F·G quedan azul-blanco natural.
+        //   global:true  → gamma en TODA la tabla (físicamente coherente; los rojos
+        //                  de carbono se suavizan a naranja, como el propio paper con gamma).
+        //   hasta/desvanece: banda de BP-RP donde la gamma se desvanece (mezcla suave).
+        gamma: { global: false, hasta: 0.9, desvanece: 1.6 },
         // Tamaño del NÚCLEO (px) según la magnitud: brillante = gordota, débil = punta de alfiler.
         // Es fijo (no depende del cielo), como el "blooming" de una placa fotográfica.
         // radio = radioMin + radioMag · (magTamMin − g)^radioExp, acotado a radioMax.
@@ -716,6 +727,25 @@
         var f = function (c) { return Math.max(0, Math.min(255, Math.round(gris + s * (c - gris)))); };
         return [f(rgb[0]), f(rgb[1]), f(rgb[2])];
       }
+      // Codificación gamma sRGB de un canal lineal (0–255 → 0–255).
+      function sRGBenc(c) {
+        c = Math.max(0, Math.min(1, c / 255));
+        return (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255;
+      }
+      // Aplica la gamma según GAIA_CFG.gamma: total si global, o solo del azul al
+      // blanco (mezcla suave en la banda [hasta, desvanece]) dejando crudo el rojo.
+      // 'v' es el índice BP-RP efectivo (el mismo con el que se buscó el color).
+      function aplicarGamma(rgb, v) {
+        var G = GAIA_CFG.gamma || {};
+        var amt = G.global ? 1
+                : (v <= G.hasta) ? 1
+                : (v >= G.desvanece) ? 0
+                : (G.desvanece - v) / (G.desvanece - G.hasta);
+        if (amt <= 0) return rgb;
+        return [rgb[0] + (sRGBenc(rgb[0]) - rgb[0]) * amt,
+                rgb[1] + (sRGBenc(rgb[1]) - rgb[1]) * amt,
+                rgb[2] + (sRGBenc(rgb[2]) - rgb[2]) * amt];
+      }
       function colorPorBpRp(bprp, carbono) {
         // carbono=true (solo la estrella-objetivo, que sabemos que es de carbono):
         // la fotometría BP/RP de Gaia SATURA en las estrellas de carbono —muy rojas
@@ -740,7 +770,7 @@
             }
           }
         }
-        return saturar(rgb, GAIA_CFG.saturacion);
+        return saturar(aplicarGamma(rgb, v), GAIA_CFG.saturacion);
       }
       // Estrella con tinte: centro brillante (teñido según tinteNucleo) y el color
       // pleno ya desde el núcleo hacia fuera, para que la tonalidad se aprecie.
