@@ -87,6 +87,51 @@
     transition: opacity 0.3s;
   }
   #gl-scale b { color: #ffe08a; font-weight: 500; }
+
+  /* CAPA DEL VECINDARIO SOLAR (zoom máximo sobre el Sol), detrás del mapa de la
+     galaxia. Su opacidad y su zoom los controla el visor (vecindario-solar.js). */
+  #vs-sky {
+    position: absolute;
+    inset: 0;
+    display: none;      /* se activa al hacer zoom máximo sobre el Sol */
+    opacity: 0;
+    pointer-events: none;
+  }
+  #vs-tip {
+    position: absolute;
+    z-index: 30;
+    pointer-events: none;
+    padding: 6px 10px;
+    background: rgba(20,12,4,0.92);
+    border: 1px solid #6b5320;
+    border-radius: 4px;
+    font-family: sans-serif;
+    font-size: 11px;
+    color: #fff;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.12s;
+    transform: translate(-50%, -160%);
+  }
+  #vs-tip .sub { color: #b79a5f; font-size: 9px; letter-spacing: 0.08em; }
+  #vs-scale {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    pointer-events: none;
+    font-family: sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: #c9b59f;
+    background: rgba(20,12,4,0.6);
+    padding: 5px 14px;
+    border-radius: 20px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #vs-scale b { color: #ffe08a; font-weight: 500; }
 </style>
 
 <div id="mw-viewer" style="
@@ -107,6 +152,12 @@
   <canvas id="gl-sky"></canvas>
   <div id="gl-scale"></div>
   <div id="gl-tip"></div>
+
+  <!-- CAPA DEL VECINDARIO SOLAR: se dibuja DETRÁS del mapa de la galaxia y
+       aparece al hacer zoom máximo sobre el Sol. Ver vecindario-solar.js. -->
+  <canvas id="vs-sky"></canvas>
+  <div id="vs-scale"></div>
+  <div id="vs-tip"></div>
 
   <div id="mw-content" style="
     position: absolute;
@@ -477,6 +528,55 @@
       <span class="gl-legend-text">Irregular (Irr)</span>
     </div>
   </div>
+
+  <!-- LEYENDA DEL VECINDARIO SOLAR: clasificación espectral (O·B·A·F·G·K·M).
+       Oculta por defecto; vecindario-solar.js la muestra al hacer zoom máximo
+       sobre el Sol y pinta cada punto con la MISMA función de color de Gaia. -->
+  <div id="mw-legend-espectral" style="
+    display: none;
+    position: absolute;
+    bottom: 14px;
+    left: 10px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,224,138,0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: sans-serif;
+    font-size: 12px;
+    color: #ddd;
+    line-height: 1.7;
+    user-select: none;
+  ">
+    <div style="display:flex;align-items:center;gap:7px;color:#c9b59f;font-size:10px;margin-bottom:2px;pointer-events:none;">Tipo espectral · pulsa para mostrar/ocultar</div>
+    <div class="vs-legend-item" data-clase="O" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span class="vs-legend-dot" style="width:9px;height:9px;border-radius:50%;background:#bacbff;flex:none;"></span>
+      <span class="vs-legend-text">O · azul</span>
+    </div>
+    <div class="vs-legend-item" data-clase="B" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span class="vs-legend-dot" style="width:9px;height:9px;border-radius:50%;background:#bacbff;flex:none;"></span>
+      <span class="vs-legend-text">B · blanco-azul</span>
+    </div>
+    <div class="vs-legend-item" data-clase="A" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span class="vs-legend-dot" style="width:9px;height:9px;border-radius:50%;background:#cad6ff;flex:none;"></span>
+      <span class="vs-legend-text">A · blanca</span>
+    </div>
+    <div class="vs-legend-item" data-clase="F" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span class="vs-legend-dot" style="width:9px;height:9px;border-radius:50%;background:#ecf0ff;flex:none;"></span>
+      <span class="vs-legend-text">F · blanco-amarilla</span>
+    </div>
+    <div class="vs-legend-item" data-clase="G" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span class="vs-legend-dot" style="width:9px;height:9px;border-radius:50%;background:#fef7f5;flex:none;"></span>
+      <span class="vs-legend-text">G · amarilla (como el Sol)</span>
+    </div>
+    <div class="vs-legend-item" data-clase="K" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span class="vs-legend-dot" style="width:9px;height:9px;border-radius:50%;background:#ffcca0;flex:none;"></span>
+      <span class="vs-legend-text">K · naranja</span>
+    </div>
+    <div class="vs-legend-item" data-clase="M" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span class="vs-legend-dot" style="width:9px;height:9px;border-radius:50%;background:#ffa34d;flex:none;"></span>
+      <span class="vs-legend-text">M · roja</span>
+    </div>
+  </div>
 </div>
 
 <!-- VENTANA MODAL CON LA FICHA PDF (fuera del visor para que pueda interaccionarse libremente) -->
@@ -760,7 +860,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260716_1900"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260721_1900"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript, en el
      mismo formato que el antiguo via-lactea-datos.js, asi que es intercambiable.
@@ -769,5 +869,9 @@
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
 <script src="/bitacora-mapa/js/grupo-local.js?v=20260716_1900"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260716_1900"></script>
+<!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
+     en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
+<script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260721_2330"></script>
+<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260721_2100"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260721_1900"></script>
 </li>

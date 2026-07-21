@@ -84,6 +84,9 @@
   // El límite inferior lo marca CONFIG.grupoLocal.escalaMinima (ver config).
   var minScale = (window.CONFIG && CONFIG.grupoLocal && CONFIG.grupoLocal.escalaMinima) || 1;
   var maxScale = 25;
+  // Tope de zoom ELEVADO cuando el Sol está centrado (para entrar al vecindario
+  // solar). effMaxScale() lo aplica solo en ese caso; fuera de ahí rige maxScale.
+  var MAXSCALE_VECINDARIO = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.zoomMaximo) || 6500;
   var posX = 0;
   var posY = 0;
   var rotation = 0; // grados de giro de la vista cenital (0 = orientación base)
@@ -463,8 +466,10 @@
       }
     }
 
-    // Tránsito a la vista del Grupo Local (se recalcula en cada cambio de zoom).
+    // Tránsito a la vista del Grupo Local (zoom out) y al Vecindario Solar
+    // (zoom máximo sobre el Sol). Se recalculan en cada cambio de zoom.
     updateGrupoLocal();
+    updateVecindario();
   }
 
   // --------------------------------------------------------------------------
@@ -506,6 +511,62 @@
     }
 
     GrupoLocal.sync(pxPerLy, atlasAlpha);
+  }
+
+  // --------------------------------------------------------------------------
+  // TRÁNSITO GALAXIA → VECINDARIO SOLAR (zoom máximo SOBRE EL SOL)
+  // Simétrico al Grupo Local pero al ACERCAR: cuando el Sol está centrado y el
+  // campo de visión de la galaxia baja de CONFIG.vecindario.fovInicioAl, la
+  // imagen se funde en el punto "Sol" y aparece la capa del vecindario
+  // (vecindario-solar.js), acoplando su fov a los píxeles/año-luz de la galaxia.
+  // --------------------------------------------------------------------------
+  // ¿Está el marcador del Sol (vista cenital) cerca del centro del visor?
+  function cercaDelSol() {
+    if (isEdgeView) return false;
+    var el = document.getElementById('mw-sun-anchor');
+    if (!el) return false;
+    var r = el.getBoundingClientRect();
+    if (!r.width && !r.height) return false;
+    var vr = viewer.getBoundingClientRect();
+    var dx = (r.left + r.width / 2) - (vr.left + vr.width / 2);
+    var dy = (r.top + r.height / 2) - (vr.top + vr.height / 2);
+    var frac = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.proximidad) || 0.28;
+    return Math.sqrt(dx * dx + dy * dy) < Math.min(vr.width, vr.height) * frac;
+  }
+
+  // Tope de zoom vigente: elevado SOLO al acercarse al Sol en la vista cenital
+  // (para entrar al vecindario); en cualquier otro caso, el tope normal (25).
+  function effMaxScale() {
+    return (!isEdgeView && cercaDelSol()) ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
+  }
+
+  function updateVecindario() {
+    if (typeof VecindarioSolar === 'undefined' || !VecindarioSolar.ready) return;
+    var cfg = (window.CONFIG && CONFIG.vecindario) || {};
+    var galImg = document.getElementById('mw-image');
+    var pxPerLy = 0, fov = Infinity;
+    if (galImg && galImg.naturalWidth) {
+      var r = getImgRect(galImg);
+      pxPerLy = (r.width * scale) / CONFIG.fisica.anchoImagenAl;
+      if (pxPerLy > 0) {
+        var vr = viewer.getBoundingClientRect();
+        fov = (Math.min(vr.width, vr.height) * 0.42) / pxPerLy;   // campo (al) del vecindario
+      }
+    }
+    // Fundido: 0 salvo que el Sol esté centrado (cenital) y el campo baje del
+    // umbral. Completo por debajo de fovFinalAl.
+    var fovIni = cfg.fovInicioAl || 2500, fovFin = cfg.fovFinalAl || 900;
+    var alpha = 0;
+    if (!isEdgeView && cercaDelSol() && fov < fovIni) {
+      alpha = (fov <= fovFin) ? 1 : (fovIni - fov) / (fovIni - fovFin);
+    }
+    // Al dominar el vecindario, se oculta la imagen de la galaxia y sus
+    // marcadores dejan de capturar clics (para que lleguen a la capa).
+    if (alpha > 0) {
+      img.style.opacity = 1 - alpha;
+      img.style.pointerEvents = (alpha > 0.5) ? 'none' : '';
+    }
+    VecindarioSolar.sync(pxPerLy, alpha);
   }
 
   // --------------------------------------------------------------------------
@@ -622,6 +683,9 @@
         e.target.closest('#mw-search, #mw-observador, #mw-nuevo, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
       return;
     }
+    // Con el vecindario solar dominando, su capa gestiona la rotación: no
+    // arrastramos ni rotamos la galaxia por debajo (descentraría el Sol).
+    if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.interactivo && VecindarioSolar.interactivo()) return;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
     // Ctrl/Shift + arrastre: modo rotación en lugar de desplazamiento.
@@ -760,7 +824,10 @@
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
     if (e.touches.length === 1) {
-      // Arrastre con un dedo
+      // Arrastre con un dedo. Con el vecindario dominando, su capa gestiona la
+      // rotación con un dedo; no arrastramos la galaxia (el pinch de dos dedos
+      // sí sigue funcionando para seguir acercándose).
+      if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.interactivo && VecindarioSolar.interactivo()) return;
       isPinching = false;
       isDragging = true;
       startX = e.touches[0].clientX;
@@ -806,7 +873,7 @@
       e.preventDefault();
       var dist = touchDistance(e.touches[0], e.touches[1]);
       if (pinchStartDist > 0) {
-        var targetScale = Math.min(maxScale, Math.max(minScale,
+        var targetScale = Math.min(effMaxScale(), Math.max(minScale,
           pinchStartScale * (dist / pinchStartDist)));
 
         var rect = viewer.getBoundingClientRect();
@@ -872,7 +939,7 @@
     e.preventDefault();
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     var factor = e.deltaY > 0 ? 0.85 : 1.18;
-    var newScale = Math.min(maxScale, Math.max(minScale, scale * factor));
+    var newScale = Math.min(effMaxScale(), Math.max(minScale, scale * factor));
     zoomAt(e.clientX, e.clientY, newScale);
     hideHint();
   }, { passive: false });
@@ -880,7 +947,7 @@
   document.getElementById('mw-zoom-in').addEventListener('click', function () {
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     var rect = viewer.getBoundingClientRect();
-    var newScale = Math.min(maxScale, scale * 1.3);
+    var newScale = Math.min(effMaxScale(), scale * 1.3);
     zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, newScale);
     hideHint();
   });

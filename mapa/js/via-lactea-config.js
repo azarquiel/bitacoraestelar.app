@@ -175,6 +175,38 @@
     // -------------------------------------------------------------------------
     observacionesAjenas: {
       activo: true
+    },
+
+    // -------------------------------------------------------------------------
+    // TRÁNSITO AL VECINDARIO SOLAR (zoom máximo SOBRE EL SOL)
+    //   Simétrico al Grupo Local pero al ACERCAR: al hacer zoom sobre el Sol,
+    //   la imagen de la galaxia se funde en el punto "Sol" y aparece una escena
+    //   3D de las estrellas cercanas registradas (vecindario-solar.js), en tono
+    //   dorado (brazos de la Vía Láctea) para una inmersión suave.
+    //
+    //   La imagen mide 40 kpc (130.462 al) a zoom 0; a ×25 (zoom normal) se ve un
+    //   parche de ~5.200 al. Para llegar al vecindario (~16 al) hace falta ~×6.500,
+    //   pero SOLO se permite superar ×25 cuando el Sol está centrado (ver más
+    //   abajo): fuera de ahí el zoom sigue topado en ×25, sin afectar a la
+    //   navegación normal.
+    //
+    //   zoomMaximo  : tope de zoom cuando el Sol está centrado (si no, 25).
+    //   proximidad  : el Sol debe estar a < esta fracción del lado menor respecto
+    //                 al centro para elevar el tope y activar la capa.
+    //   fovInicioAl : campo de visión (al) en que EMPIEZA el fundido al vecindario.
+    //   fovFinalAl  : campo (al) en que el fundido está COMPLETO (solo vecindario).
+    //   fovMinAl    : campo mínimo (radio, al) al que se puede acercar (~8 al ≈ 16 al de diámetro).
+    //   distMaxAl   : distancia máxima (al) para considerar una estrella "del vecindario".
+    //   autoGiro    : giro ambiental lento de la escena (radianes por fotograma).
+    // -------------------------------------------------------------------------
+    vecindario: {
+      zoomMaximo: 6500,
+      proximidad: 0.28,
+      fovInicioAl: 2500,
+      fovFinalAl: 900,
+      fovMinAl: 8,
+      distMaxAl: 500,
+      autoGiro: 0.0006
     }
 
   };
