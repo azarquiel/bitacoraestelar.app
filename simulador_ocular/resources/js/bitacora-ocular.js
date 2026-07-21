@@ -122,26 +122,13 @@
         blur: 1.1,          // ancho del halo respecto al núcleo (radio total = núcleo·(1+blur); menor = más "punta de alfiler")
         // COLOR de las estrellas (lo que más llama la atención a cielo oscuro).
         magColor: 9.5,     // solo las estrellas más brillantes que esta magnitud llevan color; el resto quedan blancas
-        // Antes 1,9: era un empuje ad-hoc necesario porque la tabla de color era pálida.
-        // Ahora la tabla lleva los colores físicos (Harre & Heller), así que se muestran
-        // FIELES (1 = sin empuje). Subirlo por encima de 1 vuelve a exagerar el croma.
-        saturacion: 1.0,
-        // Estrella de carbono como OBJETIVO: cuánto corregir la saturación de BP/RP de
-        // Gaia (que infravalora su rojo). Se suma al índice, con un suelo, solo a la
-        // estrella central cuando el objeto elegido es de carbono. Ver colorPorBpRp().
+        // La gamma sRGB y la saturación del color viven ahora en el módulo compartido
+        // (BitacoraGaiaColor.config) — misma palanca para simulador y mapa. Aquí solo
+        // queda el ajuste propio del simulador:
+        // Estrella de carbono como OBJETIVO: cuánto corregir el índice BP/RP de Gaia
+        // (que infravalora su rojo). Se suma al índice, con un suelo, solo a la
+        // estrella central cuando el objeto elegido es de carbono. Ver colorEstrella().
         carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
-        // CORRECCIÓN GAMMA sRGB. Los nodos de GAIA_COLOR son los códigos LINEALES
-        // que publica Harre & Heller; mostrarlos CRUDOS (sin gamma) sobre-satura
-        // —el azul de las estrellas calientes sale demasiado azul, y el rojo de
-        // las de carbono, muy profundo—. Al codificarlos a sRGB (gamma) el color
-        // es el que percibe el ojo (una estrella caliente es azul-BLANCA, no azul).
-        //   global:false → gamma solo del azul al blanco (hasta→desvanece), dejando
-        //                  CRUDO el extremo rojo para conservar el rojo ember del
-        //                  carbono. Estrellas O·B·A·F·G quedan azul-blanco natural.
-        //   global:true  → gamma en TODA la tabla (físicamente coherente; los rojos
-        //                  de carbono se suavizan a naranja, como el propio paper con gamma).
-        //   hasta/desvanece: banda de BP-RP donde la gamma se desvanece (mezcla suave).
-        gamma: { global: false, hasta: 0.9, desvanece: 1.6 },
         // Tamaño del NÚCLEO (px) según la magnitud: brillante = gordota, débil = punta de alfiler.
         // Es fijo (no depende del cielo), como el "blooming" de una placa fotográfica.
         // radio = radioMin + radioMag · (magTamMin − g)^radioExp, acotado a radioMax.
@@ -445,19 +432,26 @@
             renderizar(im, null, u);
           });
         } else {
-          // Fusión HDR siempre activa: la placa profunda (DSS2-red) para la
-          // nebulosidad tenue y la corta (DSS1) para recuperar los núcleos quemados.
-          var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin);
-          var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin);
-          Promise.all([cargarPlaca(urlProfunda), cargarPlaca(urlCorta)])
-            .then(function (res) {
-              var profunda = res[0], corta = res[1];
-              if (peticion !== contadorPeticion) return;
-              if (!profunda && !corta) { cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?'; return; }
-              cargando.style.display = 'none';
-              renderizar(profunda || corta, profunda ? corta : null, urlProfunda);
-            });
+          renderDSS(arcmin, peticion);
         }
+      }
+
+      // Carga y compone la placa DSS (fusión HDR: DSS2-red profunda + DSS1 corta).
+      // Extraído de actualizar() para poder reutilizarlo como RESPALDO cuando la
+      // consulta a Gaia (Canvas 2D) falla —así una caída de VizieR no deja negro—.
+      function renderDSS(arcmin, peticion) {
+        var cargando = $('sim-cargando');
+        var ra = objetoSel.ra, dec = objetoSel.dec;
+        var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin);
+        var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin);
+        Promise.all([cargarPlaca(urlProfunda), cargarPlaca(urlCorta)])
+          .then(function (res) {
+            var profunda = res[0], corta = res[1];
+            if (peticion !== contadorPeticion) return;
+            if (!profunda && !corta) { cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?'; return; }
+            cargando.style.display = 'none';
+            renderizar(profunda || corta, profunda ? corta : null, urlProfunda);
+          });
       }
 
       /* Nivel de gris del fondo de cielo (0–255) según el fondo del observador,
@@ -497,14 +491,18 @@
         // el cielo más brillante, el límite baja y las débiles DESAPARECEN,
         // igual que en el DSS. dibujarGaia solo pinta estrellas con Gmag <= mlim.
         var mlim = magLimiteTelescopio();
-        consultarGaia(ra0, dec0).then(function (estrellas) {
+        consultarGaia(ra0, dec0, arcmin).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
           ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
           dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, true, !!objetoSel.carbono);   // Canvas 2D: con glow de estrellas no resueltas
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
-          cargando.textContent = 'No se pudo consultar Gaia DR3 (VizieR).';
+          // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el
+          // canvas en negro, mostramos la placa DSS del mismo campo como respaldo.
+          cargando.style.display = 'flex';
+          cargando.textContent = 'Gaia DR3 no responde (CDS/GAVO); mostrando placa DSS…';
+          renderDSS(arcmin, peticion);
         });
       }
 
@@ -572,19 +570,123 @@
       }
 
       /* ══════════════════ ESTRELLAS SINTÉTICAS GAIA DR3 ══════════════════ */
-      /* Consulta Gaia UNA sola vez por objeto, al radio máximo posible (el tope
-         del DSS, 2° de lado → 1,44° de radio): los campos menores se recortan en
-         cliente (dibujarGaia ya filtra por posición y magnitud), así cambiar de
-         ocular u origen no vuelve a preguntar a VizieR. El filtro Gmag<=14 poda
-         en el servidor ANTES de ordenar (sin él, en campos de Vía Láctea como
-         Cygnus el ORDER BY sobre cientos de miles de filas tarda varios
-         segundos) y cubre de sobra la mag. límite del canvas (13,5) y de
-         cualquier equipo del catálogo. */
-      var GAIA_RADIO_MAX = (DSS_MAX_ARCMIN / 60) * 0.72;   // 1,44°
+      /* Consulta Gaia con RADIO ADAPTADO al campo del ocular (no un radio fijo
+         enorme): un ocular de campo pequeño pide muchas menos estrellas → la
+         consulta es más rápida y no revienta el modo sync de los TAP. Se cachea
+         por objeto guardando el radio pedido: si una vista posterior necesita un
+         radio menor o igual, se reutiliza (dibujarGaia recorta por posición y
+         magnitud); solo un ocular de campo MAYOR fuerza una nueva consulta.
+         FAILOVER de proveedor: si el primero (CDS/VizieR) no responde, se prueba
+         el siguiente (GAVO, Heidelberg, infraestructura independiente) antes de
+         rendirse; renderGaia2D, si TODOS fallan, cae a la placa DSS. */
+      var GAIA_RADIO_MAX = (DSS_MAX_ARCMIN / 60) * 0.72;   // 1,44° (tope: 2° de lado del DSS)
+      var GAIA_RADIO_MIN = 0.12;                           // suelo del radio (°): oculares de campo mínimo
       var GAIA_MAG_MAX = 16.5;
-      // Devuelve estrellas [RA, Dec, Gmag, BP-RP]. El color BP-RP (bp_rp) puede
-      // venir null en estrellas débiles sin fotometría BP/RP: se pintan blancas.
-      function consultarGaia(ra0, dec0) { var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3); if (cacheGaia[clave]) return cacheGaia[clave]; var adql = 'SELECT TOP 40000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + GAIA_MAG_MAX + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra0.toFixed(5) + ',' + dec0.toFixed(5) + ',' + GAIA_RADIO_MAX.toFixed(5) + ')) ORDER BY Gmag'; var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(adql); return (cacheGaia[clave] = fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (jj) { return ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; }); }).catch(function (e) { delete cacheGaia[clave]; throw e; })); }
+      var GAIA_ARCMIN_DEFECTO = 60;                        // campo asumido en los prefetch sin ocular (→ radio 0,72°)
+      var GAIA_FETCH_TIMEOUT = 12000;                      // ms antes de abortar una consulta colgada (por proveedor)
+      // Proveedores TAP de Gaia DR3, en orden de preferencia. Cada url() genera la
+      // consulta para ese servicio (distinto nombre de tabla/columnas), pero TODOS
+      // devuelven filas [RA, Dec, Gmag, BP-RP] bajo jj.data, así el resto del código
+      // no cambia. CDS es el primario; GAVO es un respaldo con infra independiente
+      // (si CDS se satura, GAVO no está en su misma máquina). Ambos verificados con
+      // CORS desde el navegador. ESA (gea.esac) queda fuera: NO envía cabeceras CORS.
+      /*var GAIA_PROVEEDORES = [
+        { nombre: 'CDS', url: function (ra, dec, rad, mag) {
+            var q = 'SELECT TOP 40000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + mag + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra + ',' + dec + ',' + rad + ')) ORDER BY Gmag';
+            return 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(q); } },
+        { nombre: 'GAVO', url: function (ra, dec, rad, mag) {
+            // GAVO (dr3lite) no trae BP-RP precomputado: se calcula BP−RP; exige LANG=ADQL en mayúsculas.
+            var q = 'SELECT TOP 40000 ra, dec, phot_g_mean_mag, phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM gaia.dr3lite WHERE phot_g_mean_mag<=' + mag + ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' + ra + ',' + dec + ',' + rad + ')) ORDER BY phot_g_mean_mag';
+            return 'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' + encodeURIComponent(q); } }
+      ];*/
+      // fetch con timeout (AbortController). Devuelve el JSON (o null en 4xx); lanza
+      // en timeout / 5xx / error de red para que consultarGaia pase al siguiente
+      // proveedor. El failover entre hosts hace de "reintento" ante un hipo puntual.
+      function fetchGaia(ra, dec, rad) {
+          var ctrl = new AbortController();
+          var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
+
+	      var url =
+	          "../wp-content/uploads/bitacora/gaia_proxy.php" +
+	          "?ra=" + encodeURIComponent(ra) +
+	          "&dec=" + encodeURIComponent(dec) +
+	          "&rad=" + encodeURIComponent(rad) +
+	          "&mag=" + encodeURIComponent(GAIA_MAG_MAX);
+	      return fetch(url, {
+	          signal: ctrl.signal
+	      }).then(function (r) {
+	          clearTimeout(id);
+	          if (!r.ok)
+	              throw new Error();
+	          return r.json();
+	      });
+	  }
+
+	  /*function fetchGaia(url) {
+        var ctrl = new AbortController();
+        var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
+        return fetch(url, { signal: ctrl.signal }).then(function (r) {
+          clearTimeout(id);
+          if (r.status >= 500) throw new Error('http ' + r.status);   // servidor saturado → siguiente proveedor
+          return r.ok ? r.json() : null;                              // 4xx u otro: se resuelve a null
+        }, function (e) { clearTimeout(id); throw e; });
+      }*/
+      // Radio de consulta (°) que cubre el campo cuadrado de 'arcmin' de lado por sus
+      // esquinas + margen, acotado a [GAIA_RADIO_MIN, GAIA_RADIO_MAX].
+      function radioConsulta(arcmin) {
+        return Math.min(GAIA_RADIO_MAX, Math.max(GAIA_RADIO_MIN, (arcmin / 60) * 0.72));
+      }
+      // Devuelve estrellas [RA, Dec, Gmag, BP-RP] (BP-RP puede venir null en débiles
+      // sin fotometría BP/RP → se pintan blancas). 'arcmin' = lado del campo a cubrir
+      // (opcional; los prefetch usan GAIA_ARCMIN_DEFECTO). Prueba los proveedores en
+      // orden hasta que uno responda; si todos fallan, la promesa se rechaza.
+      function consultarGaia(ra0, dec0, arcmin) {
+        var rad = radioConsulta(arcmin || GAIA_ARCMIN_DEFECTO);
+        var clave = ra0.toFixed(3) + "," + dec0.toFixed(3);
+        var ent = cacheGaia[clave];
+
+        if (ent && ent.rad >= rad - 1e-6)
+          return ent.promise;
+
+        var raS = ra0.toFixed(5);
+        var decS = dec0.toFixed(5);
+        var radS = rad.toFixed(5);
+
+        var nueva = {
+          rad: rad,
+          promise: fetchGaia(raS, decS, radS).then(function (jj) {
+            return ((jj.data || []).filter(function (f) {
+              return f[2] != null;
+              }));
+            })
+          };
+
+          cacheGaia[clave] = nueva;
+          nueva.promise.catch(function () {
+            if (cacheGaia[clave] === nueva)
+              delete cacheGaia[clave];
+		    });
+           return nueva.promise;
+      }
+      /*function consultarGaia(ra0, dec0, arcmin) {
+        var rad = radioConsulta(arcmin || GAIA_ARCMIN_DEFECTO);
+        var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3);
+        var ent = cacheGaia[clave];
+        if (ent && ent.rad >= rad - 1e-6) return ent.promise;   // lo cacheado ya cubre este campo
+        var raS = ra0.toFixed(5), decS = dec0.toFixed(5), radS = rad.toFixed(5);
+        function intentar(i) {
+          if (i >= GAIA_PROVEEDORES.length) return Promise.reject(new Error('Gaia sin respuesta'));
+          return fetchGaia(GAIA_PROVEEDORES[i].url(raS, decS, radS, GAIA_MAG_MAX)).then(function (jj) {
+            var filas = ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; });
+            if (!filas.length && i + 1 < GAIA_PROVEEDORES.length) return intentar(i + 1);   // vacío → siguiente
+            return filas;
+          }, function () { return intentar(i + 1); });          // timeout/error → siguiente proveedor
+        }
+        var nueva = { rad: rad, promise: intentar(0) };
+        cacheGaia[clave] = nueva;
+        nueva.promise.catch(function () { if (cacheGaia[clave] === nueva) delete cacheGaia[clave]; });   // no cachear un fallo
+        return nueva.promise;
+      }*/
       /* Render de estrellas: un ÚNICO sprite base normalizado (núcleo blanco +
          halo) que se escala al tamaño de cada estrella y se estampa con drawImage
          + globalAlpha (rápido incluso con miles de estrellas). El TAMAÑO depende
@@ -713,64 +815,22 @@
       // eso ahora las estrellas de carbono se diferencian y alcanzan el rojo ember,
       // en lugar de saturarse todas en el mismo naranja (antes se recortaba en 3,0).
       // [bp_rp, R, G, B]
-      var GAIA_COLOR = [
-        [-0.40, 125, 153, 255], [0.00, 125, 153, 255], [0.33, 181, 194, 255],
-        [ 0.60, 233, 238, 255], [0.82, 255, 237, 231], [1.00, 255, 222, 192],
-        [ 1.30, 255, 189, 136], [1.60, 255, 174, 113], [2.00, 255, 162,  90],
-        [ 2.40, 255, 162,  81], [2.70, 255, 163,  75], [3.00, 255, 146,  55],
-        [ 3.30, 255, 126,  36], [3.70, 255,  97,   9], [4.20, 255,  93,   8],
-        [ 5.00, 255,  89,   6]
-      ];
-      // Empuja un color RGB lejos de su gris (aumenta la saturación). s=1 lo deja igual.
-      function saturar(rgb, s) {
-        var gris = 0.30 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
-        var f = function (c) { return Math.max(0, Math.min(255, Math.round(gris + s * (c - gris)))); };
-        return [f(rgb[0]), f(rgb[1]), f(rgb[2])];
-      }
-      // Codificación gamma sRGB de un canal lineal (0–255 → 0–255).
-      function sRGBenc(c) {
-        c = Math.max(0, Math.min(1, c / 255));
-        return (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255;
-      }
-      // Aplica la gamma según GAIA_CFG.gamma: total si global, o solo del azul al
-      // blanco (mezcla suave en la banda [hasta, desvanece]) dejando crudo el rojo.
-      // 'v' es el índice BP-RP efectivo (el mismo con el que se buscó el color).
-      function aplicarGamma(rgb, v) {
-        var G = GAIA_CFG.gamma || {};
-        var amt = G.global ? 1
-                : (v <= G.hasta) ? 1
-                : (v >= G.desvanece) ? 0
-                : (G.desvanece - v) / (G.desvanece - G.hasta);
-        if (amt <= 0) return rgb;
-        return [rgb[0] + (sRGBenc(rgb[0]) - rgb[0]) * amt,
-                rgb[1] + (sRGBenc(rgb[1]) - rgb[1]) * amt,
-                rgb[2] + (sRGBenc(rgb[2]) - rgb[2]) * amt];
-      }
-      function colorPorBpRp(bprp, carbono) {
-        // carbono=true (solo la estrella-objetivo, que sabemos que es de carbono):
-        // la fotometría BP/RP de Gaia SATURA en las estrellas de carbono —muy rojas
-        // y brillantes— e infravalora su enrojecimiento. Como el catálogo ya nos
-        // dice que es de carbono, desplazamos su índice hacia el rojo profundo (con
-        // un suelo) para devolverle el rubí que la hace famosa (p. ej. La Superba).
-        var v = (bprp == null) ? 1.4 : bprp;
+      // El MODELO DE COLOR GAIA (tabla BP–RP→RGB de Harre & Heller, gamma sRGB y
+      // saturación) vive ahora en el módulo compartido BitacoraGaiaColor —fuente
+      // única para simulador y mapa; ver bitacora-gaia-color.js—. La palanca de
+      // gamma/saturación que antes estaba en GAIA_CFG está en BitacoraGaiaColor.config.
+      // Aquí solo queda la capa de CARBONO: la fotometría BP/RP de Gaia SATURA en las
+      // estrellas de carbono —muy rojas y brillantes— e infravalora su enrojecimiento.
+      // Como el catálogo ya nos dice que la estrella-objetivo es de carbono, le
+      // desplazamos el índice hacia el rojo profundo (con un suelo) ANTES de pedir el
+      // color canónico, devolviéndole el rubí que la hace famosa (p. ej. La Superba).
+      function colorEstrella(bprp, carbono) {
+        var v = bprp;
         if (carbono) {
           v = (bprp == null) ? GAIA_CFG.carbono.bprpMin
                              : Math.max(GAIA_CFG.carbono.bprpMin, bprp + GAIA_CFG.carbono.bprpOffset);
         }
-        var A = GAIA_COLOR, rgb = [A[A.length - 1][1], A[A.length - 1][2], A[A.length - 1][3]];
-        if (v <= A[0][0]) { rgb = [A[0][1], A[0][2], A[0][3]]; }
-        else {
-          for (var i = 1; i < A.length; i++) {
-            if (v <= A[i][0]) {
-              var t = (v - A[i - 1][0]) / (A[i][0] - A[i - 1][0]);
-              rgb = [A[i - 1][1] + t * (A[i][1] - A[i - 1][1]),
-                     A[i - 1][2] + t * (A[i][2] - A[i - 1][2]),
-                     A[i - 1][3] + t * (A[i][3] - A[i - 1][3])];
-              break;
-            }
-          }
-        }
-        return saturar(aplicarGamma(rgb, v), GAIA_CFG.saturacion);
+        return BitacoraGaiaColor.colorPorBpRp(v);   // el módulo aplica gamma con ese índice
       }
       // Estrella con tinte: centro brillante (teñido según tinteNucleo) y el color
       // pleno ya desde el núcleo hacia fuera, para que la tonalidad se aprecie.
@@ -841,7 +901,7 @@
           var esCarbono = (i === idxCarbono);
           var colEstrella = null;
           if ((g < GAIA_CFG.magColor && bprp != null) || esCarbono) {
-            colEstrella = colorPorBpRp(bprp, esCarbono);
+            colEstrella = colorEstrella(bprp, esCarbono);
             dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella);   // solo las más brillantes llevan color
           } else {
             ctx.drawImage(base, x - Rtot, y - Rtot, Rtot * 2, Rtot * 2);
@@ -865,7 +925,7 @@
         // plena, el DSS se llenaría de las mismas estrellas que el Canvas 2D y
         // ambas vistas quedarían casi idénticas.
         var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var ra0 = sexToDeg(objetoSel.ra, true); var dec0 = sexToDeg(objetoSel.dec, false); var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
-        consultarGaia(ra0, dec0).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3 (VizieR): se muestra solo la imagen.'; });
+        consultarGaia(ra0, dec0, arcmin).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3: se muestra solo la imagen.'; });
       }
 
       function aplicarPupila(img, p) { var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var brilloPercibido = Math.pow(Math.pow(pEf / pOjo, 2), 0.5); var umbral = 0.30 * (1 - pEf / pOjo); var pendiente = brilloPercibido / (1 - umbral); var despl = -pendiente * umbral; ['R', 'G', 'B'].forEach(function (c) { var f = document.querySelector('#sim-transfer-pupila feFunc' + c); if (f) { f.setAttribute('slope', pendiente.toFixed(4)); f.setAttribute('intercept', despl.toFixed(4)); } }); img.style.filter = 'grayscale(1) url(#sim-filtro-pupila)'; }
