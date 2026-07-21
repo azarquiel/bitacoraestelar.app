@@ -37,6 +37,8 @@ window.BitacoraBase = (function () {
    *   specs:      function(item) -> texto de specs (columna derecha, opcional)
    *   onElegir:   function(item)
    *   max:        nº máximo de resultados (por defecto 12)
+   *   todosSiVacio: si es true, al enfocar sin texto lista los primeros `max`
+   *               resultados (para catálogos cortos o para explorar la lista)
    *   sinResultados: texto cuando no hay coincidencias
    * }
    * Devuelve { buscar, cerrar } por si se quiere disparar/cerrar manualmente.
@@ -51,9 +53,13 @@ window.BitacoraBase = (function () {
 
     function buscar() {
       var q = (input.value || '').trim().toLowerCase();
-      if (!q) { sugg.style.display = 'none'; return; }
+      // Con todosSiVacio, al enfocar sin texto se listan los primeros resultados
+      // (útil para catálogos cortos o para explorar la lista); si no, se oculta.
+      if (!q) {
+        if (!opts.todosSiVacio) { sugg.style.display = 'none'; return; }
+      }
       var res = (opts.fuente() || []).filter(function (it) {
-        return opts.texto(it).toLowerCase().indexOf(q) !== -1;
+        return !q || opts.texto(it).toLowerCase().indexOf(q) !== -1;
       }).slice(0, max);
 
       if (!res.length) {
@@ -81,7 +87,7 @@ window.BitacoraBase = (function () {
     }
 
     input.addEventListener('input', buscar);
-    input.addEventListener('focus', function () { if (input.value.trim()) buscar(); });
+    input.addEventListener('focus', function () { if (input.value.trim() || opts.todosSiVacio) buscar(); });
     document.addEventListener('click', function (e) { if (!cont.contains(e.target)) sugg.style.display = 'none'; });
 
     return { buscar: buscar, cerrar: function () { sugg.style.display = 'none'; } };

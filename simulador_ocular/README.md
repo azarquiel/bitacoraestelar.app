@@ -9,13 +9,19 @@ Funciona en el navegador (móvil u ordenador), **sin instalar nada y sin necesid
 de iniciar sesión**. Vive en la web WordPress del proyecto
 ([bitacoraestelar.app](https://bitacoraestelar.app)) como un bloque HTML.
 
-> El objeto va de momento fijo en el código (M35, con M39 de reserva). El resto
-> —equipo y cielo— lo elige el usuario.
+> El **objeto** lo elige el usuario en un selector de dos pestañas: **cúmulos
+> abiertos** (de momento M35, M39 y NGC 7789) o **estrellas de carbono** (las ~100
+> del programa de la Astronomical League). El equipo y el cielo también los elige
+> el usuario.
 
 ---
 
 ## Qué hace
 
+- **Elige el objeto**: en un selector de dos pestañas, un **cúmulo abierto** o una
+  **estrella de carbono** de la Astronomical League. Al elegir una estrella de
+  carbono, la ficha resalta su magnitud, tipo y su característico **color
+  rojo-anaranjado** (mejor visible en la vista de Gaia).
 - **Elige tu equipo**: telescopio y ocular de un catálogo de cientos de modelos,
   o **introdúcelos a mano** (apertura, focal y tipo óptico) si no están en la lista.
 - **Ajusta el cielo** del observador (brillo de fondo en mag/arcsec², de rural
@@ -37,6 +43,7 @@ de iniciar sesión**. Vive en la web WordPress del proyecto
 |---|---|---|
 | `ocular-wordpress.html` | Fragmento HTML del simulador (sin código) | Editor de WordPress (bloque HTML) |
 | `resources/js/bitacora-ocular.js` | Toda la lógica (óptica, fotometría, Gaia) | Servidor, por FTP a `…/uploads/bitacora/` |
+| `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
 | `dss-proxy.php` | Proxy de placas del DSS con caché en disco acotada | Servidor, junto al JS/CSS |
 | `generar_niveles.py`, `ps1_service.py` | Pipeline/servicio **experimental** de placas fotométricas (ver más abajo) | Herramientas offline, no requeridas |
@@ -112,8 +119,20 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   (su tamaño angular en el ocular), `factor = √(escalaMagCampo / campo_arcmin)`
   acotado a `[1, escalaMagMax]`. Así un cúmulo lejano a mucho aumento (NGC 7789 con
   un 18") se ve rico y uno cercano a poco aumento (M35) fino, con la misma regla.
-- **Color** real a partir del índice **BP–RP**, con un factor de **saturación**
-  ajustable y tinte del núcleo.
+- **Color** a partir del índice **BP–RP** de Gaia mediante una tabla interpolada
+  cuyos nodos son los **códigos de color físicos** de Harre &amp; Heller (2021),
+  *«Digital color codes of stars»* ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254),
+  código [spec2col](https://github.com/janvincentharre/spec2col)): espectro real →
+  funciones CIE del ojo → XYZ → sRGB. El tramo frío/rojo (BP–RP ≳ 2,7) se ancla a un
+  espectro de **estrella de carbono** (cuerpo negro × bandas de absorción C₂ *Swan* +
+  CN), que la hacen **más roja que un cuerpo negro** de su temperatura. Así las
+  estrellas de carbono se **diferencian** y alcanzan el rojo ember, en vez de
+  saturarse todas en el mismo naranja.
+- **Realce de carbono (objeto-objetivo)**: la fotometría BP/RP de Gaia *satura* en las
+  estrellas de carbono (muy rojas y brillantes) e infravalora su enrojecimiento. Como
+  el catálogo ya sabe que el objeto es de carbono, a la estrella central (la más
+  cercana al centro del campo) se le desplaza el índice hacia el rojo profundo
+  (`GAIA_CFG.carbono`), devolviéndole el rubí que la hace famosa (p. ej. *La Superba*).
 - **Glow de estrellas no resueltas**: las más débiles que la magnitud límite no se
   dibujan como puntos, sino como una mota tenue **aditiva ponderada por su flujo**.
   Donde se agolpan (cúmulos lejanos, núcleos de galaxias) su suma forma una **mancha
@@ -141,6 +160,12 @@ con una gaussiana fina en el grosor; el sprite se estampa girado `brazos` veces 
 estrella. Se dibuja solo en el Canvas 2D (en las placas DSS/PanSTARRS los spikes ya
 vienen en la propia foto).
 
+La cruz se **tiñe con el color de la estrella** (la difracción es de su propia luz),
+no en blanco: así, en un reflector, la cruz de una estrella de carbono es **roja** y
+**no lava el color del núcleo a blanco** —el problema que se ve al comparar un reflector
+(con araña) con un refractor/APO (sin ella)—. Además, el arranque del brazo se atenúa
+(no se apila sobre el núcleo coloreado), que la estrella tapa.
+
 ---
 
 ## Configuración
@@ -150,7 +175,8 @@ la lógica:
 
 | Bloque | Controla |
 |---|---|
-| `GAIA_CFG` | Render de Gaia: `blur`, `magColor`, `saturacion`, `tinteNucleo`; tamaño (`radioMin` = suelo, `radioMag`, `radioExp`, `magTamMin`, `radioMax`, `radioTotalMax`); brillo (`brillo`, `alfaMin`); escala con el aumento (`escalaMagCampo`, `escalaMagMax`); y el glow (`glowIntensidad`, `glowRadio`). |
+| `GAIA_CFG` | Render de Gaia: `blur`, `magColor`, `saturacion` (=1: la tabla `GAIA_COLOR` ya lleva el color físico), `tinteNucleo`, `carbono` (`bprpOffset`/`bprpMin` del realce rojo del objeto de carbono); tamaño (`radioMin` = suelo, `radioMag`, `radioExp`, `magTamMin`, `radioMax`, `radioTotalMax`); brillo (`brillo`, `alfaMin`); escala con el aumento (`escalaMagCampo`, `escalaMagMax`); y el glow (`glowIntensidad`, `glowRadio`). |
+| `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
 | `FOT` | Curvas de la fotometría: brillo del objeto y del fondo de cielo. |
@@ -206,7 +232,14 @@ desplegado con el permiso público.
 ## Dependencias y fuentes de datos
 
 - **WordPress** + el plugin `bitacora-registro` (catálogo de equipo).
+- **Estrellas de carbono**: programa de observación de la **Astronomical League**.
+  La fuente de verdad es `mapa/datos/AL_Carbon_Stars.csv`; el módulo
+  `estrellas-carbono-datos.js` se **regenera** desde el CSV con
+  `python3 scripts/gen_carbono.py` (no editar el `.js` a mano).
 - **Gaia DR3** vía [VizieR TAP](https://tapvizier.cds.unistra.fr/) (CDS).
+- **Colores estelares**: J.-V. Harre &amp; R. Heller (2021), *«Digital color codes of
+  stars»*, Astron. Nachr. ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254);
+  código [spec2col](https://github.com/janvincentharre/spec2col)).
 - **PanSTARRS DR1** vía [hips2fits](https://alasky.cds.unistra.fr/) (CDS/alasky).
 - **DSS** (Digitized Sky Survey) desde el [archivo de ESO](https://archive.eso.org/),
   servido por `dss-proxy.php`.
