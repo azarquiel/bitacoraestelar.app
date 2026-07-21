@@ -128,6 +128,12 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   CN), que la hacen **más roja que un cuerpo negro** de su temperatura. Así las
   estrellas de carbono se **diferencian** y alcanzan el rojo ember, en vez de
   saturarse todas en el mismo naranja.
+- **Corrección gamma sRGB** (`GAIA_CFG.gamma`): los códigos del paper son RGB
+  *lineal*; mostrarlos crudos sobre-satura (las estrellas calientes salen demasiado
+  azules). Por defecto se aplica gamma **del azul al blanco** (las O·B·A·F·G quedan
+  azul-**blanco** natural) dejando **crudo el extremo rojo**, para conservar el rojo
+  ember del carbono. Con `gamma.global = true` se corrige toda la tabla (coherente,
+  pero los rojos de carbono se suavizan a naranja).
 - **Realce de carbono (objeto-objetivo)**: la fotometría BP/RP de Gaia *satura* en las
   estrellas de carbono (muy rojas y brillantes) e infravalora su enrojecimiento. Como
   el catálogo ya sabe que el objeto es de carbono, a la estrella central (la más
@@ -175,7 +181,7 @@ la lógica:
 
 | Bloque | Controla |
 |---|---|
-| `GAIA_CFG` | Render de Gaia: `blur`, `magColor`, `saturacion` (=1: la tabla `GAIA_COLOR` ya lleva el color físico), `tinteNucleo`, `carbono` (`bprpOffset`/`bprpMin` del realce rojo del objeto de carbono); tamaño (`radioMin` = suelo, `radioMag`, `radioExp`, `magTamMin`, `radioMax`, `radioTotalMax`); brillo (`brillo`, `alfaMin`); escala con el aumento (`escalaMagCampo`, `escalaMagMax`); y el glow (`glowIntensidad`, `glowRadio`). |
+| `GAIA_CFG` | Render de Gaia: `blur`, `magColor`, `saturacion` (=1: la tabla `GAIA_COLOR` ya lleva el color físico), `tinteNucleo`, `carbono` (`bprpOffset`/`bprpMin` del realce rojo del objeto de carbono), `gamma` (`global` on/off; `hasta`/`desvanece`: banda donde la gamma se desvanece hacia el rojo); tamaño (`radioMin` = suelo, `radioMag`, `radioExp`, `magTamMin`, `radioMax`, `radioTotalMax`); brillo (`brillo`, `alfaMin`); escala con el aumento (`escalaMagCampo`, `escalaMagMax`); y el glow (`glowIntensidad`, `glowRadio`). |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
