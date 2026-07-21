@@ -31,6 +31,8 @@ define( 'BITACORA_TABLA_OBSERVADORES', 'bitacora_observadores' );
 define( 'BITACORA_TABLA_FICHAS', 'bitacora_fichas' );
 define( 'BITACORA_TABLA_TELESCOPIOS', 'bitacora_telescopios' );
 define( 'BITACORA_TABLA_OCULARES', 'bitacora_oculares' );
+// Clave del transient que cachea el catálogo GLOBAL de equipo (ver bitacora_equipo_catalogo).
+define( 'BITACORA_EQUIPO_CATALOGO_CACHE', 'bitacora_equipo_catalogo' );
 define( 'BITACORA_TABLA_AUXILIARES', 'bitacora_auxiliares' );
 
 /**
@@ -441,6 +443,10 @@ function bitacora_crear_tabla() {
     }
 
     update_option( 'bitacora_db_version', BITACORA_VERSION );
+
+    // El catálogo global pudo (re)sembrarse: invalida su caché para que la
+    // próxima lectura la reconstruya con los datos frescos.
+    delete_transient( BITACORA_EQUIPO_CATALOGO_CACHE );
 }
 register_activation_hook( __FILE__, 'bitacora_crear_tabla' );
 
@@ -1257,7 +1263,17 @@ function bitacora_equipo_leer_todo( $usuario_id ) {
 }
 
 function bitacora_equipo_catalogo( WP_REST_Request $peticion ) {
-    return new WP_REST_Response( bitacora_equipo_leer_todo( null ), 200 );
+    // El catálogo global (usuario_id NULL) es de referencia y apenas cambia: se
+    // cachea en un transient para no consultar la BD en cada carga de "Mi flota"
+    // y del simulador de ocular. El equipo PERSONAL no entra aquí, así que dar de
+    // alta/editar/borrar piezas personales NO invalida esta caché; solo se
+    // invalida al (re)sembrar el catálogo (bitacora_crear_tabla → delete_transient).
+    $cache = get_transient( BITACORA_EQUIPO_CATALOGO_CACHE );
+    if ( false === $cache ) {
+        $cache = bitacora_equipo_leer_todo( null );
+        set_transient( BITACORA_EQUIPO_CATALOGO_CACHE, $cache, 12 * HOUR_IN_SECONDS );
+    }
+    return new WP_REST_Response( $cache, 200 );
 }
 
 function bitacora_equipo_personal( WP_REST_Request $peticion ) {
@@ -1800,7 +1816,7 @@ function bitacora_simbad( $identificador ) {
  * Devuelve un array de campos para fusionar en la fila (coords_texto, top/edge,
  * gal_l/b, dist_al, tipo, morph, color) o WP_Error si no se puede colocar.
  */
-function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_dado = null, $dec_dado = null ) {
+function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_dado = null, $dec_dado = null, $tipo_obs = '' ) {
     $sim = bitacora_simbad( $identificador );
 
     // Coordenadas: preferimos las dadas (de la observación); si no, las de SIMBAD.
@@ -1831,6 +1847,20 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
     $morph = $sim ? $sim['morph'] : '';
     $clase = bitacora_clase_hubble( $morph );
 
+    // Estrella de carbono: la observación ya lo sabe (tipo 'carbono' del selector
+    // del registro) o SIMBAD la clasifica como tal (otype "C*" / "Carbon Star").
+    // Se le da tipo y color PROPIOS en el mapa; si no, caería en el color por
+    // defecto (#7ec8ff), que coincide con "Resto de supernova" en la leyenda.
+    $es_carbono = ( 'carbono' === $tipo_obs )
+        || ( $sim && preg_match( '/carbon|(^|[^A-Za-z])C\*/i', (string) $sim['otype'] ) );
+    if ( $es_carbono ) {
+        $tipo  = 'carbono';
+        $color = '#ff9d5a';
+    } else {
+        $tipo  = $clase;
+        $color = bitacora_color_por_clase( $clase );
+    }
+
     return array(
         'coords_texto' => bitacora_coords_texto( $l, $b, $dist_al ),
         'top_x'        => $top_x,
@@ -1840,9 +1870,9 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
         'gal_l'        => round( $l, 3 ),
         'gal_b'        => round( $b, 3 ),
         'dist_al'      => $dist_al,
-        'tipo'         => $clase,
+        'tipo'         => $tipo,
         'morph'        => $morph,
-        'color'        => bitacora_color_por_clase( $clase ),
+        'color'        => $color,
     );
 }
 
@@ -1853,7 +1883,7 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
  * registrar/editar una observación, para que el objeto nuevo aparezca en el mapa.
  * Devuelve true (creado), el id (ya existía) o WP_Error (no se pudo colocar).
  */
-function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = null, $dec = null ) {
+function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = null, $dec = null, $tipo_obs = '' ) {
     global $wpdb;
     $identificador = trim( (string) $identificador );
     // El slug debe coincidir con el que agrupa las OBSERVACIONES en el visor:
@@ -1868,7 +1898,7 @@ function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = nu
         return intval( $existe ); // ya está en el catálogo: no se toca
     }
 
-    $calc = bitacora_completar_objeto( $identificador, null, $ra, $dec );
+    $calc = bitacora_completar_objeto( $identificador, null, $ra, $dec, $tipo_obs );
     if ( is_wp_error( $calc ) ) {
         // No se pudo colocar (p. ej. SIMBAD no tiene distancia). La observación
         // se guarda igual; el objeto podrá añadirse a mano más tarde.
@@ -2666,7 +2696,7 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     // Si el objeto observado aún no está en el catálogo del mapa, se crea con su
     // posición calculada (galáctica + top/edge). No bloquea el guardado: si no
     // se puede colocar, la observación queda guardada igual y se avisa.
-    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'] );
+    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'], isset( $datos['tipo'] ) ? $datos['tipo'] : '' );
     $aviso   = is_wp_error( $obj_res ) ? $obj_res->get_error_message() : '';
 
     return new WP_REST_Response(
@@ -2740,7 +2770,7 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
     bitacora_guardar_entradas( $id, $entradas );
 
     // Si al editar se cambió a un objeto que aún no está en el mapa, se crea.
-    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'] );
+    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'], isset( $datos['tipo'] ) ? $datos['tipo'] : '' );
     $aviso   = is_wp_error( $obj_res ) ? $obj_res->get_error_message() : '';
 
     return new WP_REST_Response(
