@@ -31,6 +31,8 @@ define( 'BITACORA_TABLA_OBSERVADORES', 'bitacora_observadores' );
 define( 'BITACORA_TABLA_FICHAS', 'bitacora_fichas' );
 define( 'BITACORA_TABLA_TELESCOPIOS', 'bitacora_telescopios' );
 define( 'BITACORA_TABLA_OCULARES', 'bitacora_oculares' );
+// Clave del transient que cachea el catálogo GLOBAL de equipo (ver bitacora_equipo_catalogo).
+define( 'BITACORA_EQUIPO_CATALOGO_CACHE', 'bitacora_equipo_catalogo' );
 define( 'BITACORA_TABLA_AUXILIARES', 'bitacora_auxiliares' );
 
 /**
@@ -441,6 +443,10 @@ function bitacora_crear_tabla() {
     }
 
     update_option( 'bitacora_db_version', BITACORA_VERSION );
+
+    // El catálogo global pudo (re)sembrarse: invalida su caché para que la
+    // próxima lectura la reconstruya con los datos frescos.
+    delete_transient( BITACORA_EQUIPO_CATALOGO_CACHE );
 }
 register_activation_hook( __FILE__, 'bitacora_crear_tabla' );
 
@@ -1257,7 +1263,17 @@ function bitacora_equipo_leer_todo( $usuario_id ) {
 }
 
 function bitacora_equipo_catalogo( WP_REST_Request $peticion ) {
-    return new WP_REST_Response( bitacora_equipo_leer_todo( null ), 200 );
+    // El catálogo global (usuario_id NULL) es de referencia y apenas cambia: se
+    // cachea en un transient para no consultar la BD en cada carga de "Mi flota"
+    // y del simulador de ocular. El equipo PERSONAL no entra aquí, así que dar de
+    // alta/editar/borrar piezas personales NO invalida esta caché; solo se
+    // invalida al (re)sembrar el catálogo (bitacora_crear_tabla → delete_transient).
+    $cache = get_transient( BITACORA_EQUIPO_CATALOGO_CACHE );
+    if ( false === $cache ) {
+        $cache = bitacora_equipo_leer_todo( null );
+        set_transient( BITACORA_EQUIPO_CATALOGO_CACHE, $cache, 12 * HOUR_IN_SECONDS );
+    }
+    return new WP_REST_Response( $cache, 200 );
 }
 
 function bitacora_equipo_personal( WP_REST_Request $peticion ) {

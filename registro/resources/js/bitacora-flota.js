@@ -92,6 +92,20 @@
       var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
 
       var estado = { personal: null, catalogo: null };
+      // El catálogo global es grande; se carga EN DIFERIDO (solo al ir a buscar en
+      // él), no en el arranque. Esta promesa garantiza que se pida una sola vez.
+      var catalogoPromise = null;
+      function asegurarCatalogo() {
+        if (!catalogoPromise) {
+          catalogoPromise = api(API + '/catalogo').then(function (res) {
+            estado.catalogo = (res.ok && res.data) || { telescopios: [], oculares: [], auxiliares: [] };
+          }).catch(function () {
+            estado.catalogo = { telescopios: [], oculares: [], auxiliares: [] };
+            catalogoPromise = null;   // permite reintentar si la carga falló
+          });
+        }
+        return catalogoPromise;
+      }
 
       function esc(t) {
         if (t === null || t === undefined) return '';
@@ -212,14 +226,22 @@
 
         // Buscador de catálogo común (bitacora-base.js): al elegir un item,
         // se añade a la flota personal por su id de catálogo.
-        BitacoraBase.montarBuscadorCatalogo({
-          input: cont.querySelector('.add-buscar'),
+        var inpBuscar = cont.querySelector('.add-buscar');
+        var buscador = BitacoraBase.montarBuscadorCatalogo({
+          input: inpBuscar,
           suggest: cont.querySelector('.suggest'),
           contenedor: cont,
           fuente: function () { return (estado.catalogo && estado.catalogo[plural[tipo]]) || []; },
           texto: function (it) { return ((it.vendor ? it.vendor + ' ' : '') + (it[cfg.modeloCol] || '')).trim(); },
           specs: cfg.specs,
           onElegir: function (it) { crear(tipo, { catalogoId: parseInt(it.id, 10) }, null); }
+        });
+        // Carga PEREZOSA del catálogo: se pide al enfocar el buscador (una sola
+        // vez para todas las categorías); cuando llega, se refresca la búsqueda.
+        inpBuscar.addEventListener('focus', function () {
+          asegurarCatalogo().then(function () {
+            if (document.activeElement === inpBuscar && inpBuscar.value.trim()) buscador.buscar();
+          });
         });
 
         var custom = cont.querySelector('.flota-add-custom');
@@ -321,13 +343,15 @@
       }
 
       // ── Carga inicial ──
-      Promise.all([api(API), api(API + '/catalogo')]).then(function (r) {
-        if (!r[0].ok || !r[1].ok) {
+      // Solo el equipo PERSONAL (pequeño y rápido): así la flota se muestra sin
+      // esperar al catálogo global. El catálogo se carga en diferido al buscar
+      // (asegurarCatalogo, disparado desde el buscador de pintarAdd).
+      api(API).then(function (res) {
+        if (!res.ok) {
           mostrarFlash('No se pudo cargar tu flota.', true);
           return;
         }
-        estado.personal = r[0].data || { telescopios: [], oculares: [], auxiliares: [] };
-        estado.catalogo = r[1].data || { telescopios: [], oculares: [], auxiliares: [] };
+        estado.personal = res.data || { telescopios: [], oculares: [], auxiliares: [] };
         ['telescopio', 'ocular', 'auxiliar'].forEach(function (tipo) {
           pintarCategoria(tipo);
           pintarAdd(tipo);
