@@ -122,8 +122,15 @@
         blur: 1.1,          // ancho del halo respecto al núcleo (radio total = núcleo·(1+blur); menor = más "punta de alfiler")
         // COLOR de las estrellas (lo que más llama la atención a cielo oscuro).
         magColor: 9.5,     // solo las estrellas más brillantes que esta magnitud llevan color; el resto quedan blancas
-        saturacion: 1.9,    // viveza del color: 1 = color base de Gaia; >1 más saturado (aleja del gris)
-        tinteNucleo: 0.85,  // cuánto tiñe el color al núcleo: 0 = núcleo blanco puro; 1 = núcleo del color de la estrella
+        // Antes 1,9: era un empuje ad-hoc necesario porque la tabla de color era pálida.
+        // Ahora la tabla lleva los colores físicos (Harre & Heller), así que se muestran
+        // FIELES (1 = sin empuje). Subirlo por encima de 1 vuelve a exagerar el croma.
+        saturacion: 1.0,
+        // Estrella de carbono como OBJETIVO: cuánto corregir la saturación de BP/RP de
+        // Gaia (que infravalora su rojo). Se suma al índice, con un suelo, solo a la
+        // estrella central cuando el objeto elegido es de carbono. Ver colorPorBpRp().
+        carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
+        tinteNucleo: 0.8,  // cuánto tiñe el color al núcleo: 0 = núcleo blanco puro; 1 = núcleo del color de la estrella
         // Tamaño del NÚCLEO (px) según la magnitud: brillante = gordota, débil = punta de alfiler.
         // Es fijo (no depende del cielo), como el "blooming" de una placa fotográfica.
         // radio = radioMin + radioMag · (magTamMin − g)^radioExp, acotado a radioMax.
@@ -161,11 +168,11 @@
           rango: 5,         // magnitudes sobre magMax para llegar a la intensidad plena
           brazos: 4,        // nº de puntas (araña de 4 brazos → cruz de 4)
           angulo: 0,        // rotación de la cruz en grados (0 = +, 45 = ×)
-          longMag: 12,      // px de longitud de brazo por magnitud sobre magMax
+          longMag: 10,      // px de longitud de brazo por magnitud sobre magMax
           longMax: 180,     // longitud máxima (px) de un brazo
-          grosor: 3.5,      // grosor del brazo (px)
+          grosor: 3,        // grosor del brazo (px)
           lobulos: 2,       // nº de lóbulos del sinc² dibujados (estructura de difracción)
-          intensidad: 0.85  // alfa base del brazo
+          intensidad: 0.8   // alfa base del brazo
         }
       };
 
@@ -483,7 +490,7 @@
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
           ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
-          dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, true);   // Canvas 2D: con glow de estrellas no resueltas
+          dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, true, !!objetoSel.carbono);   // Canvas 2D: con glow de estrellas no resueltas
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
           cargando.textContent = 'No se pudo consultar Gaia DR3 (VizieR).';
@@ -621,6 +628,10 @@
           var s = arg < 1e-6 ? 1 : Math.sin(arg) / arg;
           var along = s * s;                   // sinc² a lo largo del brazo
           along *= (1 - u);                    // ventana suave que apaga la punta
+          // Suaviza el ARRANQUE del brazo (u pequeño): así la cruz no apila su brillo
+          // sobre el núcleo coloreado y no lo lava a blanco. El núcleo de la estrella
+          // tapa ese hueco; las puntas siguen saliendo del centro.
+          var g0 = Math.min(1, u / 0.12); along *= g0 * g0 * (3 - 2 * g0);
           for (var y = 0; y < H; y++) {
             var t = (y - m) / m;               // -1 … 1 transversal
             var a = along * Math.exp(-(t * t) * 10);   // gaussiana fina en el grosor
@@ -632,16 +643,34 @@
         ctx.putImageData(im, 0, 0);
         return (SPIKE_SPRITE = c);
       }
+      // Versión del sprite del brazo TEÑIDA con el color de la estrella (la máscara
+      // blanca del sinc² recoloreada). Cacheada por color: en un campo hay pocas
+      // estrellas brillantes con cruz, así que la caché queda pequeña.
+      var SPIKE_TINT_CACHE = {};
+      function spriteSpikeColor(rgb) {
+        if (!rgb) return spriteSpike();
+        var r = Math.round(rgb[0]), gc = Math.round(rgb[1]), b = Math.round(rgb[2]);
+        var key = r + ',' + gc + ',' + b;
+        if (SPIKE_TINT_CACHE[key]) return SPIKE_TINT_CACHE[key];
+        var base = spriteSpike();
+        var c = document.createElement('canvas'); c.width = base.width; c.height = base.height;
+        var g = c.getContext('2d');
+        g.drawImage(base, 0, 0);
+        g.globalCompositeOperation = 'source-in';   // conserva el alfa del sinc², cambia el color
+        g.fillStyle = 'rgb(' + r + ',' + gc + ',' + b + ')';
+        g.fillRect(0, 0, c.width, c.height);
+        return (SPIKE_TINT_CACHE[key] = c);
+      }
       // Dibuja la cruz de difracción de una estrella brillante: N brazos girados,
       // con longitud e intensidad ∝ su brillo (magnitud) y escalados con el aumento.
-      function dibujarSpikes(ctx, x, y, g, escalaMag) {
+      function dibujarSpikes(ctx, x, y, g, escalaMag, rgb) {
         var cf = GAIA_CFG.spikes;
         var sobre = cf.magMax - g;             // cuánto más brillante que el umbral
         if (sobre <= 0) return;
         var L = Math.min(cf.longMax, cf.longMag * sobre) * escalaMag;
         if (L < 3) return;
         var alpha = Math.min(1, cf.intensidad * (sobre / cf.rango));
-        var sp = spriteSpike(), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
+        var sp = spriteSpikeColor(rgb), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(cf.angulo * Math.PI / 180);
@@ -662,21 +691,48 @@
       }
 
       // Color de una estrella a partir de su índice BP-RP de Gaia: azul (caliente)
-      // → blanco → amarillo → naranja → rojo (fría). Interpolación por tramos.
-      var GAIA_COLOR = [[-0.3, 160, 190, 255], [0.3, 205, 220, 255], [0.8, 255, 250, 245], [1.3, 255, 228, 190], [1.8, 255, 205, 160], [3.0, 255, 175, 140]];
+      // → blanco → amarillo → naranja → rojo profundo (fría). Interpolación por tramos.
+      //
+      // La tabla YA NO es "a ojo": sus nodos son los códigos de color que propone
+      // Harre & Heller (2021), "Digital color codes of stars" (spec2col), obtenidos
+      // convolucionando espectros reales con las funciones CIE del ojo → XYZ → sRGB.
+      // El tramo frío/rojo (BP-RP ≳ 2,7) se ancla a un espectro de estrella de
+      // CARBONO (cuerpo negro × bandas de absorción C2 "Swan" + CN), que se comen el
+      // verde/azul y las hacen MÁS rojas que un cuerpo negro de su temperatura. Por
+      // eso ahora las estrellas de carbono se diferencian y alcanzan el rojo ember,
+      // en lugar de saturarse todas en el mismo naranja (antes se recortaba en 3,0).
+      // [bp_rp, R, G, B]
+      var GAIA_COLOR = [
+        [-0.40, 125, 153, 255], [0.00, 125, 153, 255], [0.33, 181, 194, 255],
+        [ 0.60, 233, 238, 255], [0.82, 255, 237, 231], [1.00, 255, 222, 192],
+        [ 1.30, 255, 189, 136], [1.60, 255, 174, 113], [2.00, 255, 162,  90],
+        [ 2.40, 255, 162,  81], [2.70, 255, 163,  75], [3.00, 255, 146,  55],
+        [ 3.30, 255, 126,  36], [3.70, 255,  97,   9], [4.20, 255,  93,   8],
+        [ 5.00, 255,  89,   6]
+      ];
       // Empuja un color RGB lejos de su gris (aumenta la saturación). s=1 lo deja igual.
       function saturar(rgb, s) {
         var gris = 0.30 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
         var f = function (c) { return Math.max(0, Math.min(255, Math.round(gris + s * (c - gris)))); };
         return [f(rgb[0]), f(rgb[1]), f(rgb[2])];
       }
-      function colorPorBpRp(bprp) {
+      function colorPorBpRp(bprp, carbono) {
+        // carbono=true (solo la estrella-objetivo, que sabemos que es de carbono):
+        // la fotometría BP/RP de Gaia SATURA en las estrellas de carbono —muy rojas
+        // y brillantes— e infravalora su enrojecimiento. Como el catálogo ya nos
+        // dice que es de carbono, desplazamos su índice hacia el rojo profundo (con
+        // un suelo) para devolverle el rubí que la hace famosa (p. ej. La Superba).
+        var v = (bprp == null) ? 1.4 : bprp;
+        if (carbono) {
+          v = (bprp == null) ? GAIA_CFG.carbono.bprpMin
+                             : Math.max(GAIA_CFG.carbono.bprpMin, bprp + GAIA_CFG.carbono.bprpOffset);
+        }
         var A = GAIA_COLOR, rgb = [A[A.length - 1][1], A[A.length - 1][2], A[A.length - 1][3]];
-        if (bprp <= A[0][0]) { rgb = [A[0][1], A[0][2], A[0][3]]; }
+        if (v <= A[0][0]) { rgb = [A[0][1], A[0][2], A[0][3]]; }
         else {
           for (var i = 1; i < A.length; i++) {
-            if (bprp <= A[i][0]) {
-              var t = (bprp - A[i - 1][0]) / (A[i][0] - A[i - 1][0]);
+            if (v <= A[i][0]) {
+              var t = (v - A[i - 1][0]) / (A[i][0] - A[i - 1][0]);
               rgb = [A[i - 1][1] + t * (A[i][1] - A[i - 1][1]),
                      A[i - 1][2] + t * (A[i][2] - A[i - 1][2]),
                      A[i - 1][3] + t * (A[i][3] - A[i - 1][3])];
@@ -703,10 +759,24 @@
       // conGlow: si es true, las estrellas MÁS DÉBILES que mlim se pintan como
       // glow no resuelto (solo tiene sentido en el Canvas 2D; en la superposición
       // sobre placas se omite porque la foto ya trae ese resplandor).
-      function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow) {
+      function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
         var escv = PROC / (arcmin / 60);
         var cos0 = Math.cos(dec0 * Math.PI / 180);
         var base = spriteGaia(), glow = spriteGlow();
+        // Si el objeto elegido es de carbono, localizamos la estrella que lo
+        // representa: la más cercana al centro del campo (ahí van sus coordenadas)
+        // de entre las que llevan color. Solo ESA recibe el realce rojo de carbono.
+        var idxCarbono = -1;
+        if (objetoCarbono) {
+          var mejorD2 = Infinity;
+          for (var c = 0; c < estrellas.length; c++) {
+            if (estrellas[c][2] >= GAIA_CFG.magColor) continue;
+            var cx = PROC / 2 - (estrellas[c][0] - ra0) * cos0 * escv;
+            var cy = PROC / 2 - (estrellas[c][1] - dec0) * escv;
+            var d2 = (cx - PROC / 2) * (cx - PROC / 2) + (cy - PROC / 2) * (cy - PROC / 2);
+            if (d2 < mejorD2) { mejorD2 = d2; idxCarbono = c; }
+          }
+        }
         var factorHalo = 1 + GAIA_CFG.blur;   // radio total = núcleo · (1 + blur)
         var Rg = GAIA_CFG.glowRadio;
         // A más aumento (menos campo) las estrellas se agrandan (tamaño angular en
@@ -738,13 +808,18 @@
           // pero con un SUELO (alfaMin) para que las estrellas del borde del límite
           // sigan siendo puntos tenues visibles y no desaparezcan del todo.
           ctx.globalAlpha = Math.min(1, Math.max(GAIA_CFG.alfaMin, GAIA_CFG.brillo * Math.min(1, (mlim - g) / 6)));
-          if (g < GAIA_CFG.magColor && bprp != null) {
-            dibujarEstrellaColor(ctx, x, y, Rtot, colorPorBpRp(bprp));   // solo las más brillantes llevan color
+          var esCarbono = (i === idxCarbono);
+          var colEstrella = null;
+          if ((g < GAIA_CFG.magColor && bprp != null) || esCarbono) {
+            colEstrella = colorPorBpRp(bprp, esCarbono);
+            dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella);   // solo las más brillantes llevan color
           } else {
             ctx.drawImage(base, x - Rtot, y - Rtot, Rtot * 2, Rtot * 2);
           }
-          // Cruz de difracción de la araña, solo en las estrellas brillantes.
-          if (spikesOn && g < GAIA_CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escalaMag);
+          // Cruz de difracción de la araña, solo en las estrellas brillantes. Se tiñe
+          // con el COLOR de la estrella (la difracción es de su propia luz): así en un
+          // reflector la cruz de una estrella de carbono es roja y no lava su color.
+          if (spikesOn && g < GAIA_CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escalaMag, colEstrella);
         }
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';

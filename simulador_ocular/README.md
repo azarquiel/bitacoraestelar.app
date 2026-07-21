@@ -119,8 +119,20 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   (su tamaño angular en el ocular), `factor = √(escalaMagCampo / campo_arcmin)`
   acotado a `[1, escalaMagMax]`. Así un cúmulo lejano a mucho aumento (NGC 7789 con
   un 18") se ve rico y uno cercano a poco aumento (M35) fino, con la misma regla.
-- **Color** real a partir del índice **BP–RP**, con un factor de **saturación**
-  ajustable y tinte del núcleo.
+- **Color** a partir del índice **BP–RP** de Gaia mediante una tabla interpolada
+  cuyos nodos son los **códigos de color físicos** de Harre &amp; Heller (2021),
+  *«Digital color codes of stars»* ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254),
+  código [spec2col](https://github.com/janvincentharre/spec2col)): espectro real →
+  funciones CIE del ojo → XYZ → sRGB. El tramo frío/rojo (BP–RP ≳ 2,7) se ancla a un
+  espectro de **estrella de carbono** (cuerpo negro × bandas de absorción C₂ *Swan* +
+  CN), que la hacen **más roja que un cuerpo negro** de su temperatura. Así las
+  estrellas de carbono se **diferencian** y alcanzan el rojo ember, en vez de
+  saturarse todas en el mismo naranja.
+- **Realce de carbono (objeto-objetivo)**: la fotometría BP/RP de Gaia *satura* en las
+  estrellas de carbono (muy rojas y brillantes) e infravalora su enrojecimiento. Como
+  el catálogo ya sabe que el objeto es de carbono, a la estrella central (la más
+  cercana al centro del campo) se le desplaza el índice hacia el rojo profundo
+  (`GAIA_CFG.carbono`), devolviéndole el rubí que la hace famosa (p. ej. *La Superba*).
 - **Glow de estrellas no resueltas**: las más débiles que la magnitud límite no se
   dibujan como puntos, sino como una mota tenue **aditiva ponderada por su flujo**.
   Donde se agolpan (cúmulos lejanos, núcleos de galaxias) su suma forma una **mancha
@@ -148,6 +160,12 @@ con una gaussiana fina en el grosor; el sprite se estampa girado `brazos` veces 
 estrella. Se dibuja solo en el Canvas 2D (en las placas DSS/PanSTARRS los spikes ya
 vienen en la propia foto).
 
+La cruz se **tiñe con el color de la estrella** (la difracción es de su propia luz),
+no en blanco: así, en un reflector, la cruz de una estrella de carbono es **roja** y
+**no lava el color del núcleo a blanco** —el problema que se ve al comparar un reflector
+(con araña) con un refractor/APO (sin ella)—. Además, el arranque del brazo se atenúa
+(no se apila sobre el núcleo coloreado), que la estrella tapa.
+
 ---
 
 ## Configuración
@@ -157,7 +175,8 @@ la lógica:
 
 | Bloque | Controla |
 |---|---|
-| `GAIA_CFG` | Render de Gaia: `blur`, `magColor`, `saturacion`, `tinteNucleo`; tamaño (`radioMin` = suelo, `radioMag`, `radioExp`, `magTamMin`, `radioMax`, `radioTotalMax`); brillo (`brillo`, `alfaMin`); escala con el aumento (`escalaMagCampo`, `escalaMagMax`); y el glow (`glowIntensidad`, `glowRadio`). |
+| `GAIA_CFG` | Render de Gaia: `blur`, `magColor`, `saturacion` (=1: la tabla `GAIA_COLOR` ya lleva el color físico), `tinteNucleo`, `carbono` (`bprpOffset`/`bprpMin` del realce rojo del objeto de carbono); tamaño (`radioMin` = suelo, `radioMag`, `radioExp`, `magTamMin`, `radioMax`, `radioTotalMax`); brillo (`brillo`, `alfaMin`); escala con el aumento (`escalaMagCampo`, `escalaMagMax`); y el glow (`glowIntensidad`, `glowRadio`). |
+| `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
 | `FOT` | Curvas de la fotometría: brillo del objeto y del fondo de cielo. |
