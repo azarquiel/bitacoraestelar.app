@@ -1682,7 +1682,10 @@ function bitacora_clase_hubble( $morph ) {
     return '';
 }
 
-/** Color por defecto de un marcador según su clase de Hubble o tipo. */
+/** Color de un marcador de GALAXIA según su clase de Hubble (vista extragaláctica
+ *  / grupo local). Debe coincidir con HUBBLE_COLORS de mapa/js/grupo-local.js y con
+ *  la leyenda #mw-legend-hubble. Solo se usa para galaxias (clase de Hubble válida);
+ *  la clasificación de objetos del mapa MW la hace bitacora_clasificar_objeto(). */
 function bitacora_color_por_clase( $clase ) {
     $colores = array(
         'E'   => '#f4c76b',
@@ -1692,6 +1695,55 @@ function bitacora_color_por_clase( $clase ) {
         'Irr' => '#ff8a80',
     );
     return isset( $colores[ $clase ] ) ? $colores[ $clase ] : '#7ec8ff';
+}
+
+/**
+ * CLASIFICACIÓN DE OBJETO DEL MAPA — decide (tipo, color) de un objeto a partir de
+ * su otype de SIMBAD, su morfología y el tipo declarado en la observación. Único
+ * punto donde se decide categoría Y color juntos (antes estaban repartidos y el
+ * hueco entre ambos era el bug: una estrella de carbono / un cúmulo caían en el
+ * color por defecto #7ec8ff, que en la leyenda es "Resto de supernova").
+ *
+ * Prioridad:
+ *   1. tipo declarado en el registro (p. ej. 'carbono' del selector) o el otype MW.
+ *   2. Tabla de categorías del mapa MW por código otype de SIMBAD.
+ *   3. Galaxia: clase de Hubble por morfología (para la vista extragaláctica).
+ *   4. Nada reconocido → 'otro' neutro (NO reutiliza un color de la leyenda, para
+ *      no disfrazarse de otra categoría).
+ *
+ * Los colores DEBEN coincidir con la leyenda #mw-legend (data-color) de
+ * mapa/index.html. El test scripts/test_clasificacion_objeto.py verifica la sincronía.
+ *
+ * Devuelve array( 'tipo' => string, 'color' => '#rrggbb' ).
+ */
+function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
+    $codigo   = strtoupper( trim( (string) $otype ) );
+    $tipo_obs = strtolower( trim( (string) $tipo_obs ) );
+
+    // Categorías del mapa MW: [ tipo, [códigos otype SIMBAD (mayúsculas)], color ].
+    // La primera cuya categoría venga en $tipo_obs, o cuyo código case con $otype, gana.
+    $reglas = array(
+        array( 'carbono',    array( 'C*' ),          '#ff9d5a' ),
+        array( 'globular',   array( 'GLC' ),         '#d7a4ff' ),
+        array( 'abierto',    array( 'OPC', 'CL*' ),  '#8aff9e' ),
+        array( 'planetaria', array( 'PN' ),          '#5fe0c8' ),
+        array( 'emision',    array( 'HII', 'EMO' ),  '#ff8a80' ),
+        array( 'snr',        array( 'SNR' ),         '#7ec8ff' ),
+    );
+    foreach ( $reglas as $r ) {
+        if ( $tipo_obs === $r[0] || in_array( $codigo, $r[1], true ) ) {
+            return array( 'tipo' => $r[0], 'color' => $r[2] );
+        }
+    }
+
+    // Galaxia (extragaláctica): la clase de Hubble tiñe el marcador en grupo-local.
+    $clase = bitacora_clase_hubble( $morph );
+    if ( '' !== $clase ) {
+        return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
+    }
+
+    // Estrella normal / doble / variable / otype desconocido: neutro fuera de la leyenda.
+    return array( 'tipo' => 'otro', 'color' => '#dfe7f5' );
 }
 
 /** Texto de coordenadas legible, con el mismo formato que el catálogo existente. */
@@ -1845,21 +1897,13 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
     list( $l, $b ) = bitacora_radec_a_galactica( $ra, $dec );
     list( $top_x, $top_y, $edge_x, $edge_y ) = bitacora_posiciones_mapa( $l, $b, $dist_al );
     $morph = $sim ? $sim['morph'] : '';
-    $clase = bitacora_clase_hubble( $morph );
+    $otype = $sim ? (string) $sim['otype'] : '';
 
-    // Estrella de carbono: la observación ya lo sabe (tipo 'carbono' del selector
-    // del registro) o SIMBAD la clasifica como tal (otype "C*" / "Carbon Star").
-    // Se le da tipo y color PROPIOS en el mapa; si no, caería en el color por
-    // defecto (#7ec8ff), que coincide con "Resto de supernova" en la leyenda.
-    $es_carbono = ( 'carbono' === $tipo_obs )
-        || ( $sim && preg_match( '/carbon|(^|[^A-Za-z])C\*/i', (string) $sim['otype'] ) );
-    if ( $es_carbono ) {
-        $tipo  = 'carbono';
-        $color = '#ff9d5a';
-    } else {
-        $tipo  = $clase;
-        $color = bitacora_color_por_clase( $clase );
-    }
+    // Un solo sitio decide categoría Y color (otype SIMBAD + morfología + tipo del
+    // registro). Cierra el hueco donde los objetos MW caían en el default azul.
+    $clasificacion = bitacora_clasificar_objeto( $otype, $morph, $tipo_obs );
+    $tipo  = $clasificacion['tipo'];
+    $color = $clasificacion['color'];
 
     return array(
         'coords_texto' => bitacora_coords_texto( $l, $b, $dist_al ),
