@@ -1765,46 +1765,11 @@
     return nombreTipo;
   }
 
-  // Normaliza un texto para comparar: minúsculas, sin acentos, sin espacios
-  // ni signos, para que "M 13", "m13" y "M13" se consideren iguales.
-  function normalize(s) {
-    return (s || '')
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita acentos
-      .replace(/[^a-z0-9]/g, '');                        // quita espacios/signos
-  }
-
-  // Construye un índice de búsqueda a partir de OBJECTS (id, label y nombre).
-  var searchIndex = OBJECTS.map(function (o) {
-    return {
-      obj: o,
-      claves: [normalize(o.id), normalize(o.label), normalize(o.name)]
-    };
-  });
-
-  // Coincidencia EXACTA por id, etiqueta o nombre completo (normalizados).
-  function findObjectExact(nq) {
-    for (var i = 0; i < searchIndex.length; i++) {
-      if (searchIndex[i].claves.indexOf(nq) >= 0) return searchIndex[i].obj;
-    }
-    return null;
-  }
-
-  // Coincidencia PARCIAL: la consulta aparece dentro del nombre descriptivo
-  // (p. ej. "cangrejo" -> M1). No se usa con designaciones de catálogo.
-  function findObjectPartial(nq) {
-    for (var j = 0; j < searchIndex.length; j++) {
-      if (normalize(searchIndex[j].obj.name).indexOf(nq) >= 0) return searchIndex[j].obj;
-    }
-    return null;
-  }
-
-  // ¿La consulta es una designación de catálogo (M1, Messier 30, NGC 6826, IC
-  // 1396)? Esas solo deben casar de forma EXACTA, para no confundir "M1" con
-  // "M101" por coincidencia parcial.
-  function esDesignacionCatalogo(query) {
-    return /^\s*(m|messier|ngc|ic)\s*\d+\s*$/i.test(query || '');
-  }
+  // El resolvedor de texto del buscador (normalización, índice y coincidencia
+  // exacta/parcial) vive en via-lactea-buscador-indice.js (VLBuscadorIndice),
+  // cargado antes que este archivo. Aquí solo se construye el índice sobre
+  // OBJECTS; la navegación (mover la cámara) sigue más abajo.
+  var indiceBusqueda = VLBuscadorIndice.construir(OBJECTS);
 
   function showToast(mensaje) {
     if (!searchToast) return;
@@ -1930,11 +1895,10 @@
 
   function doSearch() {
     var q = searchInput.value;
-    var nq = normalize(q);
-    if (!nq) return;
+    if (!VLBuscadorIndice.normalizar(q)) return;
 
     // 1) Coincidencia EXACTA en la galaxia (registrado).
-    var obj = findObjectExact(nq);
+    var obj = indiceBusqueda.exacto(q);
     if (obj) { irAObjetoRegistrado(obj); return; }
 
     // 2) Coincidencia EXACTA en el atlas del Grupo Local (registrado o respaldo).
@@ -1945,8 +1909,8 @@
     // 3) Coincidencia PARCIAL por nombre descriptivo (p. ej. "cangrejo" -> M1),
     //    salvo que la consulta sea una designación de catálogo (M1, NGC 6826…),
     //    que solo casa exacta para no confundir "M1" con "M101".
-    if (!esDesignacionCatalogo(q)) {
-      var pobj = findObjectPartial(nq);
+    if (!VLBuscadorIndice.esDesignacionCatalogo(q)) {
+      var pobj = indiceBusqueda.parcial(q);
       if (pobj) { irAObjetoRegistrado(pobj); return; }
       var patlas = (typeof GrupoLocal !== 'undefined' && GrupoLocal.buscarParcial)
         ? GrupoLocal.buscarParcial(q) : null;
