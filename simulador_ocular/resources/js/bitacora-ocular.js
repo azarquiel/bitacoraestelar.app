@@ -122,6 +122,7 @@
         blur: 1.1,          // ancho del halo respecto al núcleo (radio total = núcleo·(1+blur); menor = más "punta de alfiler")
         // COLOR de las estrellas (lo que más llama la atención a cielo oscuro).
         magColor: 9.5,     // solo las estrellas más brillantes que esta magnitud llevan color; el resto quedan blancas
+        tinteNucleo: 0.8,  // cuánto tiñe el color al núcleo: 0 = núcleo blanco puro; 1 = núcleo del color de la estrella
         // La gamma sRGB y la saturación del color viven ahora en el módulo compartido
         // (BitacoraGaiaColor.config) — misma palanca para simulador y mapa. Aquí solo
         // queda el ajuste propio del simulador:
