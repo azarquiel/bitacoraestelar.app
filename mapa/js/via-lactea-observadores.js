@@ -50,6 +50,15 @@
     return !!(window.CONFIG && CONFIG.observacionesAjenas && CONFIG.observacionesAjenas.activo);
   }
 
+  // Nombre legible de un observador a partir de su clave, resuelto sobre
+  // OBSERVADORES; si no está catalogado se usa la propia clave. Clave vacía o
+  // nula -> '' (para que la ficha no muestre una etiqueta de observador vacía).
+  function nombreObservador(clave) {
+    if (!clave) return '';
+    return (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
+      ? OBSERVADORES[clave].nombre : clave;
+  }
+
   // Devuelve la observación concreta que 'clave' hizo del objeto 'id', o null.
   function fichaDeObservador(id, clave) {
     var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
@@ -72,9 +81,7 @@
       var clave = lista[i].observador;
       if (!clave || clave === excluir || vistos[clave]) continue;
       vistos[clave] = true;
-      var nombre = (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
-        ? OBSERVADORES[clave].nombre : clave;
-      out.push({ clave: clave, nombre: nombre });
+      out.push({ clave: clave, nombre: nombreObservador(clave) });
     }
     return out;
   }
@@ -90,13 +97,17 @@
     return 'ninguna';
   }
 
-  window.VLObservadores = {
+  var API = {
     getActivo: getActivo,
     setActivo: setActivo,
     getFicha: getFicha,
     observacionesAjenasActivo: observacionesAjenasActivo,
+    nombreObservador: nombreObservador,
     fichaDeObservador: fichaDeObservador,
     observadoresDe: observadoresDe,
     estadoObservador: estadoObservador
   };
+
+  if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
+  if (typeof window !== 'undefined') { window.VLObservadores = API; }
 })();
