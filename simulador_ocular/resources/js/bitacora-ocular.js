@@ -278,6 +278,7 @@
             input: auxInput, suggest: $('sim-aux-sugg'),
             fuente: function () { return (catalogo.auxiliares || []); },
             texto: nombrePieza, specs: specsAux,
+            todosSiVacio: true,   // catálogo corto: al enfocar lista todas las opciones para elegir
             onElegir: function (it) { auxSel = it; auxInput.value = nombrePieza(it); actualizar(); }
           });
           var auxClear = $('sim-aux-clear');
@@ -886,6 +887,11 @@
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
         var escv = PROC / (arcmin / 60);
         var cos0 = Math.cos(dec0 * Math.PI / 180);
+        // Diferencia de ascensión recta normalizada al salto 0°/360°: sin esto,
+        // un objeto cercano a RA 0h (p. ej. NGC 7789 en ~359,35°) con un campo
+        // ancho deja media vista en negro, porque las estrellas pasadas las 24h
+        // (RA ~0–1°) se proyectan fuera de pantalla (0,5 − 359,35 ≈ −359°).
+        function deltaRA(ra) { return ((ra - ra0 + 540) % 360) - 180; }
         var base = spriteGaia(), glow = spriteGlow();
         // Si el objeto elegido es de carbono, localizamos la estrella que lo
         // representa: la más cercana al centro del campo (ahí van sus coordenadas)
@@ -895,7 +901,7 @@
           var mejorD2 = Infinity;
           for (var c = 0; c < estrellas.length; c++) {
             if (estrellas[c][2] >= GAIA_CFG.magColor) continue;
-            var cx = PROC / 2 - (estrellas[c][0] - ra0) * cos0 * escv;
+            var cx = PROC / 2 - deltaRA(estrellas[c][0]) * cos0 * escv;
             var cy = PROC / 2 - (estrellas[c][1] - dec0) * escv;
             var d2 = (cx - PROC / 2) * (cx - PROC / 2) + (cy - PROC / 2) * (cy - PROC / 2);
             if (d2 < mejorD2) { mejorD2 = d2; idxCarbono = c; }
@@ -912,7 +918,7 @@
         for (var i = 0; i < estrellas.length; i++) {
           var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2], bprp = estrellas[i][3];
           if (g > mlim && !conGlow) continue;   // sin glow: las sub-límite se descartan
-          var x = PROC / 2 - (ra - ra0) * cos0 * escv;
+          var x = PROC / 2 - deltaRA(ra) * cos0 * escv;
           var y = PROC / 2 - (dec - dec0) * escv;
           if (x < -3 || y < -3 || x > PROC + 3 || y > PROC + 3) continue;
           if (g > mlim) {
