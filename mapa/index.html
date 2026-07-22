@@ -880,7 +880,10 @@
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260721_2330"></script>
-<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260721_2100"></script>
+<!-- Selección pura de estrellas del vecindario: ANTES de vecindario-solar.js y
+     DESPUÉS de bitacora-gaia-color.js (necesita claseEspectral). -->
+<script src="/bitacora-mapa/js/via-lactea-vecindario-catalogo.js?v=20260722_1600"></script>
+<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260722_1600"></script>
 <!-- SUBMÓDULOS de la app (extraídos del módulo-dios): cargar ANTES de
      via-lactea-app.js. observadores necesita OBSERVACIONES/OBSERVADORES (datos)
      y CONFIG; zoom-imagen necesita CONFIG. -->
