@@ -51,3 +51,29 @@ carbono, `GlC` globular, `OpC`/`Cl*` abierto, `PN` planetaria, `HII`/`EmO` emisi
   `scripts/test_clasificacion_objeto.py` verifica mapeos y sincronía.
 - **Default neutro:** un otype desconocido NO reutiliza un color de la leyenda, para
   no disfrazarse de otra categoría (era la raíz del bug).
+
+## Equipo del observador (helpers puros)
+
+Cálculos y rótulos puros del equipo, compartidos por el **simulador de oculares**
+y por **Mi flota**, sin DOM ni WordPress.
+
+- **Fuente única:** `resources/js/bitacora-equipo.js`, global `window.BitacoraEquipo`
+  (+ `module.exports` para node), URL canónica en `/wp-content/uploads/bitacora/`.
+- **`focalEfectiva(focal, factor, extension)`** → focal del telescopio tras la
+  **óptica auxiliar**: el `factor` multiplica (Barlow > 1 alarga, reductor < 1
+  acorta, vacío = 1 neutro) y la `extension_mm` suma milímetros fijos. Es el único
+  punto por el que el auxiliar entra en el simulador; aumentos, pupila de salida,
+  campo y magnitud límite heredan el cambio.
+- **`nombreTelescopio(item)`** → rótulo del telescopio: el **nombre** propio que el
+  observador le puso en Mi flota, o `vendor + modelo` en su defecto. Mismo rótulo
+  en la lista de Mi flota y en el selector del simulador.
+- **Test:** `scripts/test_equipo.js` fija el contrato de ambos.
+
+## Nombre del observador (mapa)
+
+Resolución **clave → nombre legible** de un observador, sobre el catálogo
+`OBSERVADORES`. Vive en `VLObservadores` (`mapa/js/via-lactea-observadores.js`)
+como `nombreObservador(clave)` (clave desconocida → la propia clave; vacía → `''`
+para no pintar etiqueta). La ficha del mapa la usa para mostrar «Observación de
+{nombre}» de forma discreta, igual en el flujo normal y en el de descubrimiento.
+Test: `scripts/test_observadores.js`.

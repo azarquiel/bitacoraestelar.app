@@ -25,13 +25,20 @@
       lista: 'listaTelescopios', add: 'addTelescopio', modeloCol: 'modelo',
       etiquetaModelo: 'Modelo', singular: 'telescopio',
       campos: [
+        { k: 'nombre', lab: 'Nombre (opcional)', tipo: 'text' },
         { k: 'apertura_mm', lab: 'Apertura (mm)', tipo: 'number' },
         { k: 'focal_mm', lab: 'Focal (mm)', tipo: 'number' },
         { k: 'f_ratio', lab: 'f/', tipo: 'number' },
         { k: 'optica', lab: 'Óptica', tipo: 'text' }
       ],
+      // Rótulo: el nombre propio del observador si lo puso, o "fabricante modelo".
+      titulo: function (it) { return window.BitacoraEquipo ? BitacoraEquipo.nombreTelescopio(it) : ''; },
       specs: function (it) {
         var p = [];
+        // Si tiene nombre propio, el modelo no cabe en el título: se muestra aquí
+        // para no perderlo.
+        var modelo = ((it.vendor ? it.vendor + ' ' : '') + (it.modelo || '')).trim();
+        if (it.nombre && String(it.nombre).trim() && modelo) p.push(modelo);
         if (num(it.apertura_mm) != null) p.push(num(it.apertura_mm) + ' mm');
         if (num(it.focal_mm) != null) p.push('f=' + num(it.focal_mm) + ' mm');
         if (num(it.f_ratio) != null) p.push('f/' + num(it.f_ratio));
@@ -165,7 +172,8 @@
         var cfg = CATS[tipo];
         var el = document.createElement('div');
         el.className = 'flota-item';
-        var nombre = ((it.vendor ? it.vendor + ' ' : '') + (it[cfg.modeloCol] || '')).trim() || '(sin nombre)';
+        var nombre = (cfg.titulo && cfg.titulo(it)) ||
+          ((it.vendor ? it.vendor + ' ' : '') + (it[cfg.modeloCol] || '')).trim() || '(sin nombre)';
         el.innerHTML =
           '<div class="fi-main">' +
             '<div class="fi-nom">' + esc(nombre) + '</div>' +
@@ -198,13 +206,19 @@
       }
 
       function leerCampos(cont, cfg) {
+        // Tipo declarado de cada campo: los de texto (nombre, óptica) se guardan
+        // como cadena; los numéricos, como número o null. Sin esto, un campo de
+        // texto se convertía en NaN al enviarlo.
+        var tipos = {};
+        cfg.campos.forEach(function (c) { tipos[c.k] = c.tipo; });
         var datos = {
           vendor: cont.querySelector('.f-vendor').value.trim(),
           modelo: cont.querySelector('.f-modelo').value.trim()  // 'modelo' vale de alias del nombre del auxiliar
         };
         cont.querySelectorAll('.f-campo').forEach(function (inp) {
+          var k = inp.getAttribute('data-k');
           var v = inp.value.trim();
-          datos[inp.getAttribute('data-k')] = (v === '') ? null : parseFloat(v);
+          datos[k] = (tipos[k] === 'text') ? v : ((v === '') ? null : parseFloat(v));
         });
         return datos;
       }

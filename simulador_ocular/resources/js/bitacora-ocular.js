@@ -180,9 +180,10 @@
 
       /* ══════════════════ ESTADO ══════════════════ */
       var WP = window.BITACORA_WP || null;
-      var catalogo = { telescopios: [], oculares: [] };
+      var catalogo = { telescopios: [], oculares: [], auxiliares: [] };
       var teleSel = null;
       var ocularSel = null;
+      var auxSel = null;   // óptica auxiliar activa (Barlow/reductor); null = ninguna
 
       var corsFallo = false;
       var contadorPeticion = 0;
@@ -209,9 +210,15 @@
       /* ══════════════════ CATÁLOGO DE EQUIPO ══════════════════ */
       function num(v) { if (v == null || v === '') return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
       function nombrePieza(p) { return ((p.vendor ? p.vendor + ' ' : '') + (p.modelo || p.nombre || '')).trim() || '(sin nombre)'; }
+      // Rótulo del telescopio: su nombre propio de Mi flota si lo tiene (helper
+      // compartido con la flota), o "vendor modelo" en su defecto.
+      function nombreTele(p) { return BitacoraEquipo.nombreTelescopio(p) || '(sin nombre)'; }
       function itemPorId(cat, id) { var arr = catalogo[cat] || []; for (var i = 0; i < arr.length; i++) { if (String(arr[i].id) === String(id)) return arr[i]; } return null; }
       function specsTele(p) { var s = []; if (num(p.apertura_mm) != null) s.push(num(p.apertura_mm) + ' mm'); if (num(p.focal_mm) != null) s.push('f=' + num(p.focal_mm) + ' mm'); return s.join(' · '); }
       function specsOcular(p) { var s = []; if (num(p.focal_mm) != null) s.push(num(p.focal_mm) + ' mm'); if (num(p.campo_aparente) != null) s.push(num(p.campo_aparente) + '°'); return s.join(' · '); }
+      // Specs de una óptica auxiliar: el factor (Barlow >1, reductor <1) y, si lo
+      // trae, la extensión focal fija en mm.
+      function specsAux(p) { var s = []; if (num(p.factor) != null) s.push('×' + num(p.factor)); if (num(p.extension_mm) != null) s.push('+' + num(p.extension_mm) + ' mm'); return s.join(' · '); }
       function pupilaOptica(p) { return { focal: num(p.focal_mm), afov: num(p.campo_aparente) || 60 }; }
 
       // URL del catálogo GLOBAL de equipo, por orden de preferencia:
@@ -233,7 +240,7 @@
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) {
             if (!d || (!(d.telescopios || []).length && !(d.oculares || []).length)) { usarEjemplo('No se pudo leer el catálogo de equipo. Se usa un equipo de ejemplo.'); return; }
-            catalogo = { telescopios: d.telescopios || [], oculares: d.oculares || [] };
+            catalogo = { telescopios: d.telescopios || [], oculares: d.oculares || [], auxiliares: d.auxiliares || [] };
             var hint = $('sim-eq-hint'); if (hint) hint.textContent = 'Telescopio y ocular elegidos del catálogo de equipo.';
             poblarEquipo();
           })
@@ -241,7 +248,7 @@
       }
 
       function usarEjemplo(mensaje) {
-        catalogo = { telescopios: TELE_EJEMPLO.slice(), oculares: OCULARES_EJEMPLO.slice() };
+        catalogo = { telescopios: TELE_EJEMPLO.slice(), oculares: OCULARES_EJEMPLO.slice(), auxiliares: [] };
         var hint = $('sim-eq-hint'); if (hint) hint.textContent = mensaje;
         poblarEquipo();
       }
@@ -252,8 +259,8 @@
         BitacoraBase.montarBuscadorCatalogo({
           input: $('sim-tele-input'), suggest: $('sim-tele-sugg'),
           fuente: function () { return (catalogo.telescopios || []).filter(function (p) { return num(p.focal_mm) > 0; }); },
-          texto: nombrePieza, specs: specsTele,
-          onElegir: function (it) { teleSel = it; $('sim-tele-input').value = nombrePieza(it); limpiarTeleManual(); actualizar(); }
+          texto: nombreTele, specs: specsTele,
+          onElegir: function (it) { teleSel = it; $('sim-tele-input').value = nombreTele(it); limpiarTeleManual(); actualizar(); }
         });
         BitacoraBase.montarBuscadorCatalogo({
           input: $('sim-ocular-input'), suggest: $('sim-ocular-sugg'),
@@ -262,8 +269,23 @@
           onElegir: function (it) { ocularSel = it; $('sim-ocular-input').value = nombrePieza(it); actualizar(); }
         });
 
+        // ÓPTICA AUXILIAR (opcional): Barlow, reductor, Powermate… Modifica la
+        // focal efectiva del telescopio. Si no hay ninguna elegida, la simulación
+        // usa la focal del tubo tal cual. El botón "sin auxiliar" la quita.
+        var auxInput = $('sim-aux-input');
+        if (auxInput) {
+          BitacoraBase.montarBuscadorCatalogo({
+            input: auxInput, suggest: $('sim-aux-sugg'),
+            fuente: function () { return (catalogo.auxiliares || []); },
+            texto: nombrePieza, specs: specsAux,
+            onElegir: function (it) { auxSel = it; auxInput.value = nombrePieza(it); actualizar(); }
+          });
+          var auxClear = $('sim-aux-clear');
+          if (auxClear) auxClear.addEventListener('click', function () { auxSel = null; auxInput.value = ''; actualizar(); });
+        }
+
         var t0 = (catalogo.telescopios || []).find(function (p) { return num(p.focal_mm) && num(p.apertura_mm); });
-        if (t0) { teleSel = t0; $('sim-tele-input').value = nombrePieza(t0); }
+        if (t0) { teleSel = t0; $('sim-tele-input').value = nombreTele(t0); }
         var o0 = (catalogo.oculares || []).find(function (p) { return num(p.focal_mm); });
         if (o0) { ocularSel = o0; $('sim-ocular-input').value = nombrePieza(o0); }
         actualizar();
@@ -307,7 +329,18 @@
       }
 
       /* ══════════════════ CÁLCULO ÓPTICO ══════════════════ */
-      function teleFocal()    { return teleSel ? (num(teleSel.focal_mm) || 0) : 0; }
+      // Focal EFECTIVA del telescopio: la del tubo modificada por la óptica
+      // auxiliar activa (factor de Barlow/reductor + extensión fija). Sin auxiliar
+      // = la focal del tubo. Es el único punto donde entra el auxiliar: aumentos,
+      // pupila de salida, campo y magnitud límite heredan el cambio.
+      function teleFocal() {
+        if (!teleSel) return 0;
+        var f = BitacoraEquipo.focalEfectiva(
+          teleSel.focal_mm,
+          auxSel ? auxSel.factor : null,
+          auxSel ? auxSel.extension_mm : null);
+        return f || 0;
+      }
       function teleApertura() { return teleSel ? (num(teleSel.apertura_mm) || 0) : 0; }
       function pupilaOjo()    { return parseFloat($('sim-pupila-ojo').value) || 7; }
 

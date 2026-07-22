@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.17.0
+ * Version:     1.18.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.17.0' );
+define( 'BITACORA_VERSION', '1.18.0' );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
@@ -261,6 +261,7 @@ function bitacora_crear_tabla() {
         usuario_id bigint(20) unsigned DEFAULT NULL,
         vendor varchar(96) NOT NULL DEFAULT '',
         modelo varchar(160) NOT NULL DEFAULT '',
+        nombre varchar(160) NOT NULL DEFAULT '',
         optica varchar(64) NOT NULL DEFAULT '',
         apertura_mm double DEFAULT NULL,
         focal_mm double DEFAULT NULL,
@@ -325,6 +326,8 @@ function bitacora_crear_tabla() {
     bitacora_asegurar_columna( $tabla, 'telescopio_id', "bigint(20) unsigned DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla_entradas, 'ocular_id', "bigint(20) unsigned DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla_entradas, 'auxiliar_id', "bigint(20) unsigned DEFAULT NULL" );
+    // Nombre propio que el observador da a su telescopio personal en Mi flota.
+    bitacora_asegurar_columna( $tabla_telescopios, 'nombre', "varchar(160) NOT NULL DEFAULT ''" );
 
     // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
     // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
@@ -1240,7 +1243,7 @@ function bitacora_equipo_tabla( $tipo ) {
  */
 function bitacora_equipo_esquema( $tipo ) {
     if ( 'telescopio' === $tipo ) {
-        return array( 'modelo_col' => 'modelo', 'num' => array( 'apertura_mm', 'focal_mm', 'f_ratio' ), 'txt' => array( 'optica', 'notas' ) );
+        return array( 'modelo_col' => 'modelo', 'num' => array( 'apertura_mm', 'focal_mm', 'f_ratio' ), 'txt' => array( 'nombre', 'optica', 'notas' ) );
     }
     if ( 'ocular' === $tipo ) {
         return array( 'modelo_col' => 'modelo', 'num' => array( 'focal_mm', 'campo_aparente', 'barril_mm' ), 'txt' => array( 'notas' ) );

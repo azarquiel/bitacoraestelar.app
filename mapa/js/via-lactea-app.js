@@ -1357,7 +1357,7 @@
     renderFichaNormal(f, {
       title:  dot.getAttribute('data-title') || '',
       coords: dot.getAttribute('data-coords') || ''
-    });
+    }, { observadorNombre: VLO.nombreObservador(f.observador) });
   }
 
   // Escapa texto para insertarlo con seguridad en HTML (nombres de observador).
@@ -1444,7 +1444,7 @@
     if (fichaId && VLO.getFicha(fichaId)) {
       var f = VLO.getFicha(fichaId);
       f._id = fichaId;
-      renderFichaNormal(f, info);
+      renderFichaNormal(f, info, { observadorNombre: VLO.nombreObservador(f.observador) });
       return;
     }
     // El observador activo no lo ha observado: si otros sí y la funcionalidad
