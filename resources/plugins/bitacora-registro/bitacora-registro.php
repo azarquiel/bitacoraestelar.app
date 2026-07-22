@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.18.0
+ * Version:     1.19.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,13 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.18.0' );
+define( 'BITACORA_VERSION', '1.19.0' );
+// Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
+// objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
+// relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
+// usa objetos muy cercanos, así que este margen holgado los cubre y evita
+// contaminar los objetos lejanos con un color ajeno.
+define( 'BITACORA_BPRP_DIST_MAX_AL', 2000 );
 define( 'BITACORA_TABLA', 'bitacora_observaciones' );
 define( 'BITACORA_TABLA_ENTRADAS', 'bitacora_entradas' );
 define( 'BITACORA_TABLA_IMAGENES', 'bitacora_imagenes' );
@@ -201,6 +207,7 @@ function bitacora_crear_tabla() {
         gal_l double DEFAULT NULL,
         gal_b double DEFAULT NULL,
         dist_al double DEFAULT NULL,
+        bp_rp double DEFAULT NULL,
         tipo varchar(8) NOT NULL DEFAULT '',
         morph varchar(32) NOT NULL DEFAULT '',
         creado_en datetime NOT NULL,
@@ -328,6 +335,9 @@ function bitacora_crear_tabla() {
     bitacora_asegurar_columna( $tabla_entradas, 'auxiliar_id', "bigint(20) unsigned DEFAULT NULL" );
     // Nombre propio que el observador da a su telescopio personal en Mi flota.
     bitacora_asegurar_columna( $tabla_telescopios, 'nombre', "varchar(160) NOT NULL DEFAULT ''" );
+    // Índice BP–RP (color de Gaia) del objeto, para pintar las estrellas del
+    // vecindario solar en su color real. Nulo si no se pudo resolver.
+    bitacora_asegurar_columna( $tabla_objetos, 'bp_rp', "double DEFAULT NULL" );
 
     // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
     // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
@@ -1495,6 +1505,11 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
         if ( null !== $o->dist_al && '' !== $o->dist_al ) {
             $obj['dist'] = floatval( $o->dist_al );
         }
+        // Índice BP–RP (color de Gaia), para el vecindario solar. Solo si existe,
+        // igual que las coordenadas galácticas y la distancia.
+        if ( isset( $o->bp_rp ) && null !== $o->bp_rp && '' !== $o->bp_rp ) {
+            $obj['bp_rp'] = floatval( $o->bp_rp );
+        }
         if ( '' !== $o->tipo ) {
             $obj['tipo'] = $o->tipo;
         }
@@ -1863,6 +1878,76 @@ function bitacora_simbad( $identificador ) {
 }
 
 /**
+ * Índice BP–RP (color de Gaia DR3) de la estrella más cercana a unas coordenadas
+ * ecuatoriales (ra, dec en grados), o null si no hay coincidencia o falla la red.
+ * Alimenta el color de las estrellas del vecindario solar. Consulta Gaia DR3 por
+ * TAP con el mismo failover que el proxy del simulador: CDS (VizieR I/355/gaiadr3)
+ * y, si falla, GAVO (gaia.dr3lite). Se cachea 30 días por coordenadas.
+ */
+function bitacora_gaia_bprp( $ra, $dec ) {
+    if ( ! is_numeric( $ra ) || ! is_numeric( $dec ) ) {
+        return null;
+    }
+    $ra  = floatval( $ra );
+    $dec = floatval( $dec );
+    $cache_key = 'bitacora_bprp_' . md5( round( $ra, 5 ) . '_' . round( $dec, 5 ) );
+    $cache = get_transient( $cache_key );
+    if ( false !== $cache ) {
+        return ( 'nulo' === $cache ) ? null : floatval( $cache );
+    }
+
+    $rad = 0.0028; // grados (~10 arcsec): margen para casar la estrella por sus coordenadas.
+    // Mismas tablas/columnas que el proxy de Gaia (gaia_proxy.php): la estrella más
+    // brillante dentro del radio. CSV: cabecera + una fila con el BP–RP.
+    $proveedores = array(
+        array(
+            'url'   => 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync',
+            'query' => 'SELECT TOP 1 "BP-RP" AS bprp FROM "I/355/gaiadr3"'
+                . ' WHERE 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS),CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
+                . ' AND "BP-RP" IS NOT NULL ORDER BY Gmag',
+        ),
+        array(
+            'url'   => 'https://dc.zah.uni-heidelberg.de/tap/sync',
+            'query' => 'SELECT TOP 1 phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM gaia.dr3lite'
+                . ' WHERE 1=CONTAINS(POINT(\'ICRS\',ra,dec),CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
+                . ' AND phot_bp_mean_mag IS NOT NULL AND phot_rp_mean_mag IS NOT NULL ORDER BY phot_g_mean_mag',
+        ),
+    );
+
+    foreach ( $proveedores as $p ) {
+        $respuesta = wp_remote_post(
+            $p['url'],
+            array(
+                'timeout' => 20,
+                'body'    => array(
+                    'request' => 'doQuery',
+                    'lang'    => 'ADQL',
+                    'format'  => 'csv',
+                    'query'   => $p['query'],
+                ),
+            )
+        );
+        if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
+            continue;
+        }
+        $csv = trim( wp_remote_retrieve_body( $respuesta ) );
+        $lineas = preg_split( '/\r?\n/', $csv );
+        if ( count( $lineas ) < 2 ) {
+            continue; // solo cabecera: sin coincidencia en este proveedor
+        }
+        $val = trim( $lineas[1], " \"\r\n" );
+        if ( is_numeric( $val ) ) {
+            $bprp = floatval( $val );
+            set_transient( $cache_key, (string) $bprp, 30 * DAY_IN_SECONDS );
+            return $bprp;
+        }
+    }
+
+    set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+    return null;
+}
+
+/**
  * Completa la posición y metadatos de un objeto del mapa a partir de su
  * identificador (etiqueta/slug). Resuelve el objeto en SIMBAD para obtener
  * distancia y tipo morfológico. Las coordenadas se toman de $ra_dado/$dec_dado
@@ -1908,6 +1993,10 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
     $tipo  = $clasificacion['tipo'];
     $color = $clasificacion['color'];
 
+    // Color BP–RP de Gaia, solo para objetos suficientemente cercanos (los que
+    // pueden entrar en el vecindario solar); en objetos lejanos no tiene sentido.
+    $bp_rp = ( $dist_al <= BITACORA_BPRP_DIST_MAX_AL ) ? bitacora_gaia_bprp( $ra, $dec ) : null;
+
     return array(
         'coords_texto' => bitacora_coords_texto( $l, $b, $dist_al ),
         'top_x'        => $top_x,
@@ -1917,6 +2006,7 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
         'gal_l'        => round( $l, 3 ),
         'gal_b'        => round( $b, 3 ),
         'dist_al'      => $dist_al,
+        'bp_rp'        => $bp_rp,
         'tipo'         => $tipo,
         'morph'        => $morph,
         'color'        => $color,
@@ -2040,7 +2130,7 @@ function bitacora_guardar_objeto_fila( $slug, $fila ) {
         'slug' => '%s', 'num' => '%d', 'nombre' => '%s', 'etiqueta' => '%s',
         'color' => '%s', 'ficha' => '%s', 'coords_texto' => '%s',
         'top_x' => '%f', 'top_y' => '%f', 'edge_x' => '%f', 'edge_y' => '%f',
-        'gal_l' => '%f', 'gal_b' => '%f', 'dist_al' => '%f',
+        'gal_l' => '%f', 'gal_b' => '%f', 'dist_al' => '%f', 'bp_rp' => '%f',
         'tipo' => '%s', 'morph' => '%s', 'creado_en' => '%s', 'actualizado_en' => '%s',
     );
 
@@ -2064,6 +2154,39 @@ function bitacora_guardar_objeto_fila( $slug, $fila ) {
     }
     $wpdb->insert( $tabla, $fila, $fmt );
     return 'insertado';
+}
+
+/**
+ * Completa el color BP–RP (Gaia) de los objetos cercanos que aún no lo tienen,
+ * re-resolviendo sus coordenadas por SIMBAD (por su etiqueta) y consultando Gaia.
+ * Solo toca objetos con distancia dentro del margen del vecindario y bp_rp nulo,
+ * así que es idempotente y barato de repetir. Devuelve el número de objetos
+ * completados. Backfill para el equipo ya registrado; los objetos nuevos ya
+ * obtienen su BP–RP al registrarse.
+ */
+function bitacora_backfill_bprp() {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla_objetos();
+    $filas = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT id, etiqueta FROM $tabla WHERE bp_rp IS NULL AND dist_al IS NOT NULL AND dist_al <= %f",
+            BITACORA_BPRP_DIST_MAX_AL
+        )
+    );
+    $completados = 0;
+    foreach ( (array) $filas as $o ) {
+        $sim = bitacora_simbad( $o->etiqueta );
+        if ( ! $sim || null === $sim['ra'] ) {
+            continue;
+        }
+        $bp_rp = bitacora_gaia_bprp( $sim['ra'], $sim['dec'] );
+        if ( null === $bp_rp ) {
+            continue;
+        }
+        $wpdb->update( $tabla, array( 'bp_rp' => $bp_rp ), array( 'id' => intval( $o->id ) ), array( '%f' ), array( '%d' ) );
+        $completados++;
+    }
+    return $completados;
 }
 
 /** Lista todos los objetos del mapa (para el visor y para comprobación). */
@@ -2558,6 +2681,21 @@ function bitacora_panel_objetos() {
     wp_nonce_field( 'bitacora_importar_objetos' );
     echo '<button type="submit" name="bitacora_importar_objetos" value="1" class="button button-primary">Importar / actualizar objetos desde la semilla</button>';
     echo ' <span style="color:#646970">Idempotente: puedes pulsarlo las veces que quieras sin duplicar (clave: el identificador del objeto).</span>';
+    echo '</form>';
+
+    // ── Backfill del color BP–RP (Gaia) para el vecindario solar ──
+    if ( isset( $_POST['bitacora_backfill_bprp'] ) && check_admin_referer( 'bitacora_backfill_bprp' ) ) {
+        $n = bitacora_backfill_bprp();
+        echo '<div class="notice notice-success"><p>Color BP–RP completado en <strong>' . intval( $n ) . '</strong> objeto(s) cercano(s).</p></div>';
+    }
+    $sin_bprp = intval( $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM $tabla WHERE bp_rp IS NULL AND dist_al IS NOT NULL AND dist_al <= %f",
+        BITACORA_BPRP_DIST_MAX_AL
+    ) ) );
+    echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
+    wp_nonce_field( 'bitacora_backfill_bprp' );
+    echo '<button type="submit" name="bitacora_backfill_bprp" value="1" class="button">Completar color BP–RP de objetos cercanos</button>';
+    echo ' <span style="color:#646970">Consulta Gaia el color de las estrellas cercanas para el vecindario solar. Pendientes: <strong>' . $sin_bprp . '</strong>. Idempotente. Los objetos nuevos ya lo obtienen al registrarse.</span>';
     echo '</form></div>';
 
     // ── Catálogo de equipo (telescopios / oculares / auxiliares) ──

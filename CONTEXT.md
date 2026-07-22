@@ -77,3 +77,23 @@ como `nombreObservador(clave)` (clave desconocida → la propia clave; vacía �
 para no pintar etiqueta). La ficha del mapa la usa para mostrar «Observación de
 {nombre}» de forma discreta, igual en el flujo normal y en el de descubrimiento.
 Test: `scripts/test_observadores.js`.
+
+## Vecindario solar (estrellas cercanas)
+
+Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (500 al) del Sol,
+que aparece al hacer zoom máximo sobre el Sol en la vista cenital. Se puebla
+desde los **objetos del mapa** que tengan coordenadas galácticas y esa distancia.
+
+- **Selección pura:** `mapa/js/via-lactea-vecindario-catalogo.js`
+  (`VLVecindarioCatalogo.estrellasVecindario(objects, distMaxAl)`): filtra por
+  distancia y coordenadas, resuelve el `bp_rp` (color) y proyecta a XYZ con el
+  Sol en el origen (`galToXYZ`). La capa `vecindario-solar.js` solo dibuja.
+  Test: `scripts/test_vecindario_catalogo.js`.
+- **Color:** cada estrella usa su índice **BP–RP** con el [[modelo de color Gaia]]
+  compartido; por eso su color coincide con el del simulador de oculares. El
+  objeto del mapa guarda `bp_rp` (columna nueva); lo resuelve el plugin al
+  registrar (Gaia por ra/dec, mismo failover CDS→GAVO que el proxy) y lo emite
+  `datos.js`. Sin `bp_rp`, la estrella sale con color neutro.
+- **Requisito de datos:** sin objetos a ≤ 500 al, la escena avisa "aún no hay
+  estrellas cercanas registradas" en vez de quedar muda con solo el Sol. Un
+  botón del admin completa el `bp_rp` de los objetos cercanos ya registrados.

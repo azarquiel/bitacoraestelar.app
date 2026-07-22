@@ -52,41 +52,14 @@ var VecindarioSolar = (function () {
   var DIST_MAX = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.distMaxAl) || 500;
 
   var DEG = Math.PI / 180;
-  function galToXYZ(l, b, d) {
-    var lr = l * DEG, br = b * DEG;
-    return {
-      x: d * Math.cos(br) * Math.cos(lr),
-      y: d * Math.cos(br) * Math.sin(lr),
-      z: d * Math.sin(br)
-    };
-  }
 
-  // Construye el catálogo de estrellas cercanas desde los OBJECTS reales: los
-  // objetos con coordenadas galácticas (l, b), distancia < DIST_MAX (vecindario)
-  // e índice BP–RP (bp_rp). Sin ninguno registrado, la escena muestra solo el Sol.
-  function construirCatalogo() {
-    var fuente = [];
-    if (typeof OBJECTS !== 'undefined' && OBJECTS && OBJECTS.length) {
-      for (var i = 0; i < OBJECTS.length; i++) {
-        var o = OBJECTS[i];
-        if (typeof o.dist !== 'number' || o.dist <= 0 || o.dist > DIST_MAX) continue;
-        if (typeof o.l !== 'number' || typeof o.b !== 'number') continue;
-        var bprp = (typeof o.bp_rp === 'number') ? o.bp_rp
-                 : (typeof o.bprp === 'number') ? o.bprp : null;
-        fuente.push({ name: o.label || o.id, desc: o.name || '', l: o.l, b: o.b, d: o.dist,
-                      bprp: bprp, id: o.id, ficha: o.ficha || o.id, pdf: o.pdf, coords: o.coords, title: o.name });
-      }
-    }
-    return fuente.map(function (o) {
-      var p = galToXYZ(o.l, o.b, o.d);
-      return { name: o.name, desc: o.desc, l: o.l, b: o.b, d: o.d, bprp: o.bprp,
-               clase: BitacoraGaiaColor.claseEspectral(o.bprp),
-               x: p.x, y: p.y, z: p.z,
-               id: o.id, ficha: o.ficha, pdf: o.pdf, coords: o.coords, title: o.title };
-    });
-  }
-
-  var objects = construirCatalogo();
+  // Estrellas del vecindario: la selección (filtro por distancia y coordenadas)
+  // y su colocación 3D con el Sol en el origen viven en el módulo puro
+  // via-lactea-vecindario-catalogo.js (cargado antes que este archivo). Sin
+  // ninguna estrella cercana registrada, la lista queda vacía y la escena
+  // muestra solo el Sol con un aviso.
+  var objects = VLVecindarioCatalogo.estrellasVecindario(
+    (typeof OBJECTS !== 'undefined' && OBJECTS) ? OBJECTS : [], DIST_MAX);
 
   // ==========================================================================
   // DOM
@@ -254,6 +227,19 @@ var VecindarioSolar = (function () {
       ctx.fillStyle = 'rgba(255,224,138,0.97)';
       ctx.font = '600 12px Inter, sans-serif';
       ctx.fillText('Sol', sun.sx + 13, sun.sy - 9);
+    }
+
+    // Estado vacío: sin estrellas cercanas registradas se avisa, en vez de dejar
+    // una escena muda con solo el Sol.
+    if (!objects.length && layerAlpha > 0.4) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(214,196,150,' + (0.9 * layerAlpha).toFixed(3) + ')';
+      ctx.font = '500 13px Inter, sans-serif';
+      ctx.fillText('Aún no hay estrellas cercanas registradas', sun.sx, sun.sy + 50);
+      ctx.fillStyle = 'rgba(183,154,95,' + (0.85 * layerAlpha).toFixed(3) + ')';
+      ctx.font = '400 11px Inter, sans-serif';
+      ctx.fillText('Registra estrellas a menos de ' + DIST_MAX + ' al para poblar el vecindario', sun.sx, sun.sy + 68);
+      ctx.textAlign = 'left';
     }
 
     hovered = null;
