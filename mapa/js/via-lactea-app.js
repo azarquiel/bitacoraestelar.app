@@ -7,72 +7,12 @@
 
 (function () {
   // ---------------------------------------------------------------------------
-  // ADAPTADOR DE DATOS
-  // La lógica pide "la ficha" de un objeto; este adaptador la resuelve sobre
-  // OBSERVACIONES, donde cada objeto tiene una LISTA de observaciones (hoy una;
-  // en el futuro, varias de distintos observadores). Cuando quieras un selector
-  // de observador, este es el único punto que habrá que ampliar.
+  // ADAPTADOR DE DATOS DE OBSERVADORES
+  // La resolución de "la ficha" de un objeto y el observador activo del filtro
+  // viven en via-lactea-observadores.js (window.VLObservadores), cargado antes
+  // que este archivo. Aquí solo se consume esa interfaz a través de VLO.
   // ---------------------------------------------------------------------------
-  // Observador activo del filtro ('' = todas las observaciones).
-  var observadorActivo = '';
-
-  function getFicha(id) {
-    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
-    if (!lista || !lista.length) return null;
-    if (observadorActivo) {
-      for (var i = 0; i < lista.length; i++) {
-        if (lista[i].observador === observadorActivo) return lista[i];
-      }
-      return null; // ese observador no tiene ficha de este objeto
-    }
-    return lista[0];
-  }
-
-  // ¿Está activada la funcionalidad de "descubrir observaciones de otros"?
-  // (CONFIG.observacionesAjenas.activo, ver via-lactea-config.js).
-  function observacionesAjenasActivo() {
-    return !!(window.CONFIG && CONFIG.observacionesAjenas && CONFIG.observacionesAjenas.activo);
-  }
-
-  // Devuelve la observación concreta que 'clave' hizo del objeto 'id', o null.
-  function fichaDeObservador(id, clave) {
-    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
-    if (!lista || !lista.length) return null;
-    for (var i = 0; i < lista.length; i++) {
-      if (lista[i].observador === clave) return lista[i];
-    }
-    return null;
-  }
-
-  // Lista de observadores que han observado el objeto 'id', como
-  // [{ clave, nombre }], excluyendo (opcionalmente) uno. El nombre se resuelve
-  // desde OBSERVADORES; si falta, se usa la propia clave.
-  function observadoresDe(id, excluir) {
-    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
-    var out = [];
-    if (!lista || !lista.length) return out;
-    var vistos = {};
-    for (var i = 0; i < lista.length; i++) {
-      var clave = lista[i].observador;
-      if (!clave || clave === excluir || vistos[clave]) continue;
-      vistos[clave] = true;
-      var nombre = (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
-        ? OBSERVADORES[clave].nombre : clave;
-      out.push({ clave: clave, nombre: nombre });
-    }
-    return out;
-  }
-
-  // Estado de un objeto respecto al observador activo:
-  //   'propia'  -> mostrar la ficha con normalidad (modo "todas", o el activo lo observó).
-  //   'ajena'   -> nadie del activo lo observó, pero SÍ otros: atenuado + descubrimiento.
-  //   'ninguna' -> nadie relevante lo observó: se oculta.
-  function estadoObservador(id) {
-    if (!observadorActivo) return 'propia';       // modo "todas": todo a color
-    if (getFicha(id)) return 'propia';            // el observador activo lo observó
-    if (observacionesAjenasActivo() && observadoresDe(id, observadorActivo).length) return 'ajena';
-    return 'ninguna';
-  }
+  var VLO = window.VLObservadores;
 
 
   var viewer = document.getElementById('mw-viewer');
@@ -329,7 +269,7 @@
   // Visible si el activo lo observó ('propia') o si lo observaron otros y la
   // funcionalidad de descubrimiento está activa ('ajena', se pinta atenuado).
   function objetoVisiblePorObservador(slug) {
-    return estadoObservador(slug) !== 'ninguna';
+    return VLO.estadoObservador(slug) !== 'ninguna';
   }
 
   // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los
@@ -339,7 +279,7 @@
     refreshAnchors();
     // El atlas del Grupo Local atenúa por su cuenta las galaxias no observadas.
     if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setObservador) {
-      GrupoLocal.setObservador(observadorActivo, observacionesAjenasActivo());
+      GrupoLocal.setObservador(VLO.getActivo(), VLO.observacionesAjenasActivo());
     }
   }
 
@@ -1006,7 +946,7 @@
 
     // Si el objeto tiene ficha interactiva, se abre esta en lugar del PDF
     var fichaId = dot.getAttribute('data-ficha');
-    if (fichaId && getFicha(fichaId)) {
+    if (fichaId && VLO.getFicha(fichaId)) {
       openFicha(fichaId, dot);
       return;
     }
@@ -1014,7 +954,7 @@
     // El observador activo no lo ha observado: si otros sí y la funcionalidad
     // está activa, se abre la pantalla "NO VISITADO" para descubrir sus
     // observaciones en vez de ir directamente al PDF.
-    if (fichaId && observacionesAjenasActivo() && observadoresDe(fichaId, observadorActivo).length) {
+    if (fichaId && VLO.observacionesAjenasActivo() && VLO.observadoresDe(fichaId, VLO.getActivo()).length) {
       abrirFichaDescubrimiento(fichaId, {
         title:  dot.getAttribute('data-title') || '',
         coords: dot.getAttribute('data-coords') || ''
@@ -1130,159 +1070,9 @@
   var FADE_CSS  = 'opacity ' + (FADE_MS / 1000) + 's ease';
   var FADE_HALF = Math.round(FADE_MS / 2);
 
-  // ---------------------------------------------------------------------------
-  // ZOOM SOBRE LAS IMÁGENES DE LA FICHA (hasta CONFIG.zoomFicha.maximo)
-  //  - Rueda del ratón o pellizco con dos dedos: acercar/alejar (centrado en
-  //    el cursor o en el punto medio de los dedos).
-  //  - Con zoom aplicado, arrastrar con el ratón o con un dedo desplaza la
-  //    imagen. Doble clic / doble toque: vuelve al tamaño original.
-  //  - A tamaño normal (x1), un dedo sigue desplazando la ficha con normalidad;
-  //    solo el pellizco activa el zoom (touch-action: pan-y).
-  //  Usa Pointer Events, que unifican ratón y táctil en una sola API.
-  // ---------------------------------------------------------------------------
-  function makeZoomable(im) {
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'position:relative; overflow:hidden; touch-action:pan-y; ' +
-      'border-radius:6px; max-width:100%; display:flex; align-items:center; ' +
-      'justify-content:center; cursor:zoom-in; user-select:none; -webkit-user-select:none;';
-    wrap.appendChild(im);
 
-    // CRÍTICO: desactivar el arrastre nativo de imágenes del navegador.
-    // Sin esto, al arrastrar con el ratón el navegador inicia su propio
-    // "drag & drop" de la imagen y nuestro desplazamiento nunca recibe
-    // los eventos.
-    im.draggable = false;
-    im.style.webkitUserDrag = 'none';
-    wrap.addEventListener('dragstart', function (e) { e.preventDefault(); });
-
-    // Indicador discreto de que la imagen admite zoom. Se muestra en la
-    // esquina y desaparece la primera vez que el usuario hace zoom.
-    var isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    var zoomHint = document.createElement('div');
-    zoomHint.textContent = '🔍 ' + (isTouch ? 'Pellizca para ampliar' : 'Rueda para ampliar');
-    zoomHint.style.cssText = 'position:absolute; right:8px; bottom:8px; ' +
-      'background:rgba(0,0,0,0.55); color:#cfe6ff; font-family:sans-serif; ' +
-      'font-size:11px; padding:4px 10px; border-radius:12px; ' +
-      'pointer-events:none; opacity:0.85; transition:opacity 0.5s ease; z-index:2;';
-    wrap.appendChild(zoomHint);
-    var hintHidden = false;
-    function hideZoomHint() {
-      if (hintHidden) return;
-      hintHidden = true;
-      zoomHint.style.opacity = '0';
-    }
-
-    var MAXZ = CONFIG.zoomFicha.maximo;
-    var z = 1, tx = 0, ty = 0;
-
-    function apply() {
-      im.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + z + ')';
-      wrap.style.cursor = z > 1 ? 'grab' : 'zoom-in';
-      // A x1 dejamos que un dedo desplace la ficha; ampliada, todos los
-      // gestos son nuestros.
-      wrap.style.touchAction = z > 1 ? 'none' : 'pan-y';
-      if (z > 1) hideZoomHint();
-    }
-
-    function clampPan() {
-      var r = wrap.getBoundingClientRect();
-      var limX = r.width  * (z - 1) / 2;
-      var limY = r.height * (z - 1) / 2;
-      tx = Math.max(-limX, Math.min(limX, tx));
-      ty = Math.max(-limY, Math.min(limY, ty));
-    }
-
-    function zoomAtPoint(clientX, clientY, newZ) {
-      newZ = Math.max(1, Math.min(MAXZ, newZ));
-      var r = wrap.getBoundingClientRect();
-      var cx = clientX - r.left - r.width / 2;
-      var cy = clientY - r.top  - r.height / 2;
-      // Punto de la imagen (sin escala) bajo el cursor: debe permanecer ahí.
-      var px = (cx - tx) / z;
-      var py = (cy - ty) / z;
-      z = newZ;
-      tx = cx - px * z;
-      ty = cy - py * z;
-      clampPan();
-      apply();
-    }
-
-    function reset() { z = 1; tx = 0; ty = 0; apply(); }
-    im._resetZoom = reset;
-
-    // Rueda del ratón: zoom centrado en el cursor
-    wrap.addEventListener('wheel', function (e) {
-      e.preventDefault();
-      var factor = e.deltaY > 0 ? 0.85 : 1.18;
-      zoomAtPoint(e.clientX, e.clientY, z * factor);
-    }, { passive: false });
-
-    // Doble clic / doble toque: restablecer
-    wrap.addEventListener('dblclick', function (e) {
-      e.preventDefault();
-      reset();
-    });
-
-    // Pointer Events: ratón y táctil unificados
-    var pointers = new Map();
-    var pinchStart = 0, pinchZ = 1;
-    var panStartX = 0, panStartY = 0, panTx = 0, panTy = 0;
-
-    wrap.addEventListener('pointerdown', function (e) {
-      if (e.pointerType === 'mouse') e.preventDefault(); // evita selección/drag nativo
-      wrap.setPointerCapture(e.pointerId);
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 1) {
-        panStartX = e.clientX; panStartY = e.clientY;
-        panTx = tx; panTy = ty;
-        if (z > 1) wrap.style.cursor = 'grabbing';
-      } else if (pointers.size === 2) {
-        var pts = Array.from(pointers.values());
-        pinchStart = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-        pinchZ = z;
-      }
-    });
-
-    wrap.addEventListener('pointermove', function (e) {
-      if (!pointers.has(e.pointerId)) return;
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      var pts = Array.from(pointers.values());
-
-      if (pointers.size === 2 && pinchStart > 0) {
-        // Pellizco: zoom centrado en el punto medio de los dedos
-        e.preventDefault();
-        var dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-        var midX = (pts[0].x + pts[1].x) / 2;
-        var midY = (pts[0].y + pts[1].y) / 2;
-        zoomAtPoint(midX, midY, pinchZ * (dist / pinchStart));
-      } else if (pointers.size === 1 && z > 1) {
-        // Arrastre con la imagen ampliada
-        e.preventDefault();
-        tx = panTx + (e.clientX - panStartX);
-        ty = panTy + (e.clientY - panStartY);
-        clampPan();
-        apply();
-      }
-    });
-
-    function releasePointer(e) {
-      pointers.delete(e.pointerId);
-      if (pointers.size === 1) {
-        // De pellizco a arrastre con el puntero restante
-        var rest = Array.from(pointers.values())[0];
-        panStartX = rest.x; panStartY = rest.y;
-        panTx = tx; panTy = ty;
-        pinchStart = 0;
-      } else if (pointers.size === 0) {
-        pinchStart = 0;
-        if (z > 1) wrap.style.cursor = 'grab';
-      }
-    }
-    wrap.addEventListener('pointerup', releasePointer);
-    wrap.addEventListener('pointercancel', releasePointer);
-
-    return wrap;
-  }
+  // El zoom de las imágenes de la ficha vive en via-lactea-zoom-imagen.js
+  // (VLZoomImagen.crear), cargado antes que este archivo.
 
   function renderImgMosaic(f, entry, imgs) {
     fichaImgWrap.style.flexDirection = 'row';
@@ -1295,7 +1085,7 @@
       im.alt = 'Boceto de ' + f._id.toUpperCase() + ' — ' + entry.titulo + (item.etiqueta ? ' (' + item.etiqueta + ')' : '');
       im.style.cssText = 'display:block; max-width:100%; max-height:56vh; border-radius:6px; box-shadow:0 2px 14px rgba(0,0,0,0.6); background:transparent;';
       im.style.transition = FADE_CSS;
-      panel.appendChild(makeZoomable(im));
+      panel.appendChild(VLZoomImagen.crear(im));
 
       if (item.etiqueta) {
         var cap = document.createElement('div');
@@ -1314,7 +1104,7 @@
     var im = document.createElement('img');
     im.style.cssText = 'display:block; max-width:100%; max-height:52vh; border-radius:6px; box-shadow:0 2px 14px rgba(0,0,0,0.6); background:transparent;';
     im.style.transition = FADE_CSS;
-    fichaImgWrap.appendChild(makeZoomable(im));
+    fichaImgWrap.appendChild(VLZoomImagen.crear(im));
 
     var cap = document.createElement('div');
     cap.style.cssText = 'color:#9fb6c9; font-size:12px; text-align:center; font-family:sans-serif; min-height:1.2em;';
@@ -1588,7 +1378,7 @@
   }
 
   function openFicha(id, dot) {
-    var f = getFicha(id);
+    var f = VLO.getFicha(id);
     f._id = id;
     renderFichaNormal(f, {
       title:  dot.getAttribute('data-title') || '',
@@ -1617,7 +1407,7 @@
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = (info && info.coords) || '';
 
-    var otros = observadoresDe(id, observadorActivo);
+    var otros = VLO.observadoresDe(id, VLO.getActivo());
     var items = otros.map(function (o) {
       return '<li><button type="button" class="ficha-descubrir-item" data-clave="' +
         escHtml(o.clave) + '" style="' +
@@ -1658,7 +1448,7 @@
   // Muestra la observación de un observador concreto, con el botón "← Descubrir"
   // para volver a la pantalla de la lista (abrirFichaDescubrimiento).
   function abrirFichaDeObservador(id, clave, info) {
-    var f = fichaDeObservador(id, clave);
+    var f = VLO.fichaDeObservador(id, clave);
     if (!f) return;
     f._id = id;
     var nombre = (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
@@ -1677,15 +1467,15 @@
     if (!desc) return;
     var fichaId = desc.ficha;
     var info = { title: desc.title || '', coords: desc.coords || '', pdf: desc.pdf };
-    if (fichaId && getFicha(fichaId)) {
-      var f = getFicha(fichaId);
+    if (fichaId && VLO.getFicha(fichaId)) {
+      var f = VLO.getFicha(fichaId);
       f._id = fichaId;
       renderFichaNormal(f, info);
       return;
     }
     // El observador activo no lo ha observado: si otros sí y la funcionalidad
     // está activa, ofrecemos descubrir sus observaciones en vez de ir al PDF.
-    if (fichaId && observacionesAjenasActivo() && observadoresDe(fichaId, observadorActivo).length) {
+    if (fichaId && VLO.observacionesAjenasActivo() && VLO.observadoresDe(fichaId, VLO.getActivo()).length) {
       abrirFichaDescubrimiento(fichaId, info);
       return;
     }
@@ -1769,7 +1559,7 @@
       var a = objs[i];
       var inView = a.getAttribute('data-view') === currentView;
       var typeHidden = !!hiddenColors[a.getAttribute('data-color')];
-      var estado = estadoObservador(a.getAttribute('data-id'));
+      var estado = VLO.estadoObservador(a.getAttribute('data-id'));
       a.style.display = (inView && !typeHidden && estado !== 'ninguna') ? '' : 'none';
       // Objeto observado solo por otros: se muestra atenuado (gris con algo de
       // su color), como "deshabilitado". El filtro no afecta a los clics, así
@@ -1930,12 +1720,12 @@
     var claveInicial = (window.BITACORA_WP && BITACORA_WP.observadorClave) ? BITACORA_WP.observadorClave : '';
     if (claveInicial && conObs[claveInicial]) {
       observadorSelect.value = claveInicial;
-      observadorActivo = claveInicial;
+      VLO.setActivo(claveInicial);
       aplicarFiltroObservador();
     }
 
     observadorSelect.addEventListener('change', function () {
-      observadorActivo = observadorSelect.value;
+      VLO.setActivo(observadorSelect.value);
       aplicarFiltroObservador();
       var fO = document.getElementById('ficha-overlay');
       if (fO && fO.style.display === 'flex' && typeof closeFicha === 'function') closeFicha();
