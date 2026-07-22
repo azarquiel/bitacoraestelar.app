@@ -75,23 +75,15 @@
   // para un azimut dado. Geometría: u apunta del Sol al núcleo, v es la
   // perpendicular en el plano; el núcleo está fijo en x=50 y todo gira a su
   // alrededor. En phi=0 reproduce exactamente las posiciones del archivo.
+  // Adaptadores: inyectan las constantes físicas de CONFIG en la geometría pura
+  // de VLGeometria (via-lactea-geometria.js).
   function edgeXAt(g, phiDeg) {
-    var S = 100 / CONFIG.fisica.anchoImagenAl;
-    var R0 = CONFIG.fisica.distanciaSolNucleoAl;
-    var a = phiDeg * Math.PI / 180;
-    var lr = g.l * Math.PI / 180;
-    var cb = Math.cos(g.b * Math.PI / 180);
-    var u = g.d * cb * Math.cos(lr);
-    var v = g.d * cb * Math.sin(lr);
-    return 50 + S * ((u - R0) * Math.cos(a) + v * Math.sin(a));
+    return VLGeometria.xCantoObjeto(g, phiDeg,
+      CONFIG.fisica.anchoImagenAl, CONFIG.fisica.distanciaSolNucleoAl);
   }
-
-  // Posición horizontal del Sol en la vista de canto para un azimut dado
-  // (el Sol orbita el núcleo a distancia R0).
   function sunEdgeXAt(phiDeg) {
-    var S = 100 / CONFIG.fisica.anchoImagenAl;
-    var R0 = CONFIG.fisica.distanciaSolNucleoAl;
-    return 50 - S * R0 * Math.cos(phiDeg * Math.PI / 180);
+    return VLGeometria.xCantoSol(phiDeg,
+      CONFIG.fisica.anchoImagenAl, CONFIG.fisica.distanciaSolNucleoAl);
   }
 
   var isDragging = false;
@@ -109,28 +101,11 @@
   // dentro del contenedor. Así las posiciones son idénticas en cualquier
   // pantalla o resolución.
   // --------------------------------------------------------------------------
+  // Adaptador: lee las dimensiones del DOM y delega el letterbox en VLGeometria.
   function getImgRect(imgEl) {
-    var cW = img.clientWidth;
-    var cH = img.clientHeight;
-    var nW = imgEl.naturalWidth  || cW;
-    var nH = imgEl.naturalHeight || cH;
-    var ratio = nW / nH;
-    var rW, rH;
-    if (cW / cH > ratio) {
-      // el contenedor es más ancho que la imagen: bandas a los lados
-      rH = cH;
-      rW = cH * ratio;
-    } else {
-      // el contenedor es más alto que la imagen: bandas arriba/abajo
-      rW = cW;
-      rH = cW / ratio;
-    }
-    return {
-      left:   (cW - rW) / 2,
-      top:    (cH - rH) / 2,
-      width:  rW,
-      height: rH
-    };
+    return VLGeometria.rectContain(
+      img.clientWidth, img.clientHeight,
+      imgEl.naturalWidth, imgEl.naturalHeight);
   }
 
   function repositionAnchors() {
@@ -558,15 +533,14 @@
     // para que el clamp no impida ver zonas que sí están dentro del encuadre.
     var rot = currentPlaneRotation();
     if (rot) {
-      var a = rot * Math.PI / 180;
-      var c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
-      effW = r.width * c + r.height * s;
-      effH = r.width * s + r.height * c;
+      var huella = VLGeometria.huellaRotada(r.width, r.height, rot);
+      effW = huella.w;
+      effH = huella.h;
     }
-    var limitX = (effW * scale - viewerRect.width)  / 2;
-    var limitY = (effH * scale - viewerRect.height) / 2;
-    posX = limitX > 0 ? Math.min(limitX, Math.max(-limitX, posX)) : 0;
-    posY = limitY > 0 ? Math.min(limitY, Math.max(-limitY, posY)) : 0;
+    var pos = VLGeometria.clampDesplazamiento(
+      posX, posY, effW * scale, effH * scale, viewerRect.width, viewerRect.height);
+    posX = pos.x;
+    posY = pos.y;
   }
 
   function hideHint() {
@@ -578,9 +552,9 @@
     var cx = clientX - rect.left - rect.width / 2;
     var cy = clientY - rect.top - rect.height / 2;
 
-    var ratio = newScale / scale;
-    posX = cx - (cx - posX) * ratio;
-    posY = cy - (cy - posY) * ratio;
+    var pos = VLGeometria.zoomAlrededor(posX, posY, cx, cy, scale, newScale);
+    posX = pos.x;
+    posY = pos.y;
     scale = newScale;
 
     clampPosition();
