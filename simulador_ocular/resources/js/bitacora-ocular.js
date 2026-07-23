@@ -48,8 +48,27 @@
           ra: e.ra, dec: e.dec, mag: e.mag, tipo: e.tipo, carbono: true
         };
       });
+      // Estrellas dobles: catálogo unificado (AL + Cambridge + RASC), cargado desde
+      // estrellas-dobles-datos.js (window.BITACORA_DOBLES). Se marca `doble:true` para
+      // que la ficha muestre Mag1/Mag2/Sep, las insignias de catálogo y el veredicto de
+      // resolución (Dawes + aumento). El render lo sigue mandando Gaia (posiciones reales).
+      var CATALOGO_DOBLES = (window.BITACORA_DOBLES || []).map(function (e) {
+        return {
+          id: e.id, nombre: e.nombre, constelacion: e.constelacion, abrev: e.abrev,
+          ra: e.ra, dec: e.dec, tipo: e.tipo,
+          mag1: e.mag1, mag2: e.mag2, sep: e.sep, catalogos: e.catalogos, aliases: e.aliases,
+          doble: true
+        };
+      });
+      // Códigos de catálogo -> nombre largo (fuente: mapa/datos/catalogos_dobles.csv).
+      var CAT_DOBLES_NOMBRE = {
+        AL:   'Double Star Club (Astronomical League)',
+        CDSA: 'Cambridge Double Star Atlas',
+        RASC: 'Royal Astronomical Society of Canada Double Star Program'
+      };
+
       // Categorías del selector de objeto. La clave coincide con data-cat del HTML.
-      var CATALOGOS_OBJ = { cumulos: CATALOGO_CUMULOS, carbono: CATALOGO_CARBONO };
+      var CATALOGOS_OBJ = { cumulos: CATALOGO_CUMULOS, carbono: CATALOGO_CARBONO, dobles: CATALOGO_DOBLES };
       var objetoSel = CATALOGO_CUMULOS[0];   // M35 por defecto
 
       var TELE_EJEMPLO = [{ id: '_t200', vendor: '', modelo: 'Newton 200/1200 (ejemplo)', optica: 'Newtonian', apertura_mm: 200, focal_mm: 1200 }];
@@ -395,6 +414,9 @@
       /* ══════════════════ RENDER CENTRALIZADO ══════════════════ */
       function actualizar() {
         var aviso = $('sim-aviso');
+        // El veredicto de resolución de una doble depende del equipo (apertura y
+        // aumento): se recalcula en cada actualización, también si falta equipo.
+        if (objetoSel && objetoSel.doble) pintarObjeto();
         var lecturas = ['sim-v-aum', 'sim-v-real', 'sim-v-apar', 'sim-v-pupila', 'sim-v-brillo', 'sim-v-cielo', 'sim-v-maglim'];
         var cargando = $('sim-cargando');
         var img = $('sim-img');
@@ -973,12 +995,44 @@
       // Pinta la ficha del objeto activo. Para estrellas de carbono añade una
       // línea de metadatos (magnitud, tipo) y un aviso de su color, y tiñe la
       // tarjeta de ámbar (clase .es-carbono); para cúmulos usa el azul de siempre.
+      function num1(v) { return (v == null) ? '' : String(v).replace('.', ','); }
+
+      // Insignias de los catálogos en que aparece la doble ("AL|CDSA|RASC").
+      function insigniasDoble(catalogos) {
+        return (catalogos || '').split('|').filter(Boolean).map(function (c) {
+          return '<span class="obj-cat" title="' + BitacoraBase.esc(CAT_DOBLES_NOMBRE[c] || c) + '">' +
+                 BitacoraBase.esc(c) + '</span>';
+        }).join('');
+      }
+
+      // Veredicto "¿se resuelve con tu equipo?" para una doble. Dos condiciones
+      // independientes: la APERTURA (límite de Dawes 116/D mm) y el AUMENTO (para
+      // percibir el hueco hace falta que aumentos·sep alcance ~480" de campo aparente
+      // cómodo, ~300" para empezar a partirla). Ver notas-resolucion-dobles.md.
+      function resolucionDoble(o) {
+        if (o.sep == null) return { clase: 'is-desconocida', texto: 'Separación no catalogada: no se puede predecir el desdoble.' };
+        if (!teleSel || !ocularSel || !teleApertura() || !num(ocularSel.focal_mm))
+          return { clase: 'is-pendiente', texto: 'Elige telescopio y ocular para ver si se resuelve.' };
+        var D = teleApertura(), aum = datosOcular().aumentos, sep = o.sep;
+        var dawes = 116 / D;                       // límite de resolución por difracción (Dawes)
+        var dtxt = '≈ ' + dawes.toFixed(1).replace('.', ',') + '″';
+        if (sep < dawes)
+          return { clase: 'is-no', texto: 'Par demasiado cerrado para tu apertura (Dawes ' + dtxt + ', separación ' + num1(sep) + '″).' };
+        var xComodo = Math.ceil(480 / sep);        // aumento para un hueco cómodo (~8′)
+        if (aum * sep >= 480)
+          return { clase: 'is-si', texto: 'Se resuelve: apertura de sobra (Dawes ' + dtxt + ') y a ' + aum.toFixed(0) + '× el hueco es cómodo.' };
+        if (aum * sep >= 300)
+          return { clase: 'is-justo', texto: 'Se resuelve justo: la apertura llega (Dawes ' + dtxt + '), pero para separarlas con holgura sube a ≳ ' + xComodo + '×.' };
+        return { clase: 'is-justo', texto: 'Tu apertura la resuelve (Dawes ' + dtxt + '), pero a ' + aum.toFixed(0) + '× el aumento es escaso: sube a ≳ ' + xComodo + '× para ver el hueco.' };
+      }
+
       function pintarObjeto() {
         var box = $('sim-objeto'); if (!box) return;
         var o = objetoSel;
         box.querySelector('.obj-nom').textContent = o.nombre;
         box.querySelector('.obj-coord').textContent = 'AR ' + o.ra + '  ·  Dec ' + o.dec + '  ·  ' + o.constelacion + ' (J2000)';
         box.classList.toggle('es-carbono', !!o.carbono);
+        box.classList.toggle('es-doble', !!o.doble);
         var meta = $('sim-obj-meta');
         if (meta) {
           if (o.carbono) {
@@ -986,6 +1040,17 @@
             meta.innerHTML =
               '<span class="obj-tags">' + BitacoraBase.esc([mag, o.tipo].filter(Boolean).join('  ·  ')) + '</span>' +
               '<span class="obj-color">Estrella de carbono: busca su intenso tono rojo-anaranjado. Se aprecia mejor en la vista «Estrellas de Gaia DR3» (color real).</span>';
+            meta.hidden = false;
+          } else if (o.doble) {
+            var fot = [];
+            if (o.mag1 != null) fot.push('A ' + num1(o.mag1));
+            if (o.mag2 != null) fot.push('B ' + num1(o.mag2));
+            var datos = [o.tipo, (fot.length ? 'mag ' + fot.join(' / ') : ''), (o.sep != null ? 'sep ' + num1(o.sep) + '″' : '')].filter(Boolean).join('  ·  ');
+            var r = resolucionDoble(o);
+            meta.innerHTML =
+              '<span class="obj-tags">' + BitacoraBase.esc(datos) + '</span>' +
+              '<span class="obj-cats">' + insigniasDoble(o.catalogos) + '</span>' +
+              '<span class="obj-resol ' + r.clase + '">' + BitacoraBase.esc(r.texto) + '</span>';
             meta.hidden = false;
           } else {
             meta.innerHTML = '';
@@ -1017,6 +1082,7 @@
           texto: function (o) { return o.nombre; },
           specs: function (o) {
             if (o.carbono) return (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '') || o.abrev || '';
+            if (o.doble) return [o.constelacion, (o.sep != null ? o.sep + '″' : '')].filter(Boolean).join('  ·  ');
             return o.constelacion || '';
           },
           max: 40, todosSiVacio: true,

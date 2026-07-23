@@ -76,6 +76,25 @@
   border-left:2px solid rgba(255,170,90,0.5);padding-left:9px;
 }
 
+/* Variante para estrellas dobles: acento azul (dato/óptica) y sus piezas propias. */
+#mw-obs-form .objeto-fijo.es-doble {
+  background:rgba(126,200,255,0.06);border-color:rgba(126,200,255,0.35);
+}
+#mw-obs-form .objeto-fijo.es-doble .obj-tags {color:var(--azul);}
+#mw-obs-form .objeto-fijo .obj-cats {display:flex;flex-wrap:wrap;gap:6px;}
+#mw-obs-form .objeto-fijo .obj-cat {
+  font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:0.03em;
+  color:var(--azul);border:1px solid rgba(126,200,255,0.4);border-radius:999px;
+  padding:2px 8px;cursor:help;
+}
+#mw-obs-form .objeto-fijo .obj-resol {
+  font-size:12px;line-height:1.5;color:var(--tinta-tenue);
+  border-left:2px solid var(--linea);padding-left:9px;
+}
+#mw-obs-form .objeto-fijo .obj-resol.is-si {border-left-color:var(--verde);color:var(--verde);}
+#mw-obs-form .objeto-fijo .obj-resol.is-justo {border-left-color:var(--ambar);color:var(--ambar);}
+#mw-obs-form .objeto-fijo .obj-resol.is-no {border-left-color:var(--rojo);color:var(--rojo);}
+
 /* ── Conmutadores (visión nocturna / cielo del observador) ── */
 #mw-obs-form .conmutador {display:flex;align-items:flex-start;gap:10px;margin-top:10px;font-size:13.5px;color:var(--tinta);}
 #mw-obs-form .conmutador input {width:auto;accent-color:var(--ambar);flex:none;margin-top:3px;}

@@ -9,19 +9,21 @@ Funciona en el navegador (móvil u ordenador), **sin instalar nada y sin necesid
 de iniciar sesión**. Vive en la web WordPress del proyecto
 ([bitacoraestelar.app](https://bitacoraestelar.app)) como un bloque HTML.
 
-> El **objeto** lo elige el usuario en un selector de dos pestañas: **cúmulos
-> abiertos** (de momento M35, M39 y NGC 7789) o **estrellas de carbono** (las ~100
-> del programa de la Astronomical League). El equipo y el cielo también los elige
-> el usuario.
+> El **objeto** lo elige el usuario en un selector de tres pestañas: **cúmulos
+> abiertos** (de momento M35, M39 y NGC 7789), **estrellas de carbono** (las ~100
+> del programa de la Astronomical League) o **estrellas dobles** (188, fusión de
+> tres catálogos). El equipo y el cielo también los elige el usuario.
 
 ---
 
 ## Qué hace
 
-- **Elige el objeto**: en un selector de dos pestañas, un **cúmulo abierto** o una
-  **estrella de carbono** de la Astronomical League. Al elegir una estrella de
-  carbono, la ficha resalta su magnitud, tipo y su característico **color
-  rojo-anaranjado** (mejor visible en la vista de Gaia).
+- **Elige el objeto**: en un selector de tres pestañas, un **cúmulo abierto**, una
+  **estrella de carbono** de la Astronomical League o una **estrella doble**. Al elegir
+  una estrella de carbono, la ficha resalta su magnitud, tipo y su característico **color
+  rojo-anaranjado** (mejor visible en la vista de Gaia). Al elegir una doble, la ficha
+  muestra las magnitudes de las dos componentes, su separación, en qué catálogos aparece
+  y un **veredicto de si tu equipo la resuelve** (ver más abajo).
 - **Elige tu equipo**: telescopio y ocular de un catálogo de cientos de modelos,
   o **introdúcelos a mano** (apertura, focal y tipo óptico) si no están en la lista.
 - **Ajusta el cielo** del observador (brillo de fondo en mag/arcsec², de rural
@@ -45,6 +47,7 @@ de iniciar sesión**. Vive en la web WordPress del proyecto
 | `ocular-wordpress.html` | Fragmento HTML del simulador (sin código) | Editor de WordPress (bloque HTML) |
 | `resources/js/bitacora-ocular.js` | Toda la lógica (óptica, fotometría, Gaia) | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
+| `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
 | `dss-proxy.php` | Proxy de placas del DSS con caché en disco acotada | Servidor, junto al JS/CSS |
 | `generar_niveles.py`, `ps1_service.py` | Pipeline/servicio **experimental** de placas fotométricas (ver más abajo) | Herramientas offline, no requeridas |
@@ -173,6 +176,51 @@ no en blanco: así, en un reflector, la cruz de una estrella de carbono es **roj
 (con araña) con un refractor/APO (sin ella)—. Además, el arranque del brazo se atenúa
 (no se apila sobre el núcleo coloreado), que la estrella tapa.
 
+### Estrellas dobles
+
+La categoría **dobles** reutiliza toda la maquinaria (selector, ficha, óptica, render de
+Gaia). Sus datos salen de un **catálogo unificado** que fusiona tres programas de
+observación (ver *Pipeline de dobles* más abajo).
+
+- **Render por Gaia, sin síntesis**: el par se dibuja con las **posiciones y colores
+  reales** de las componentes que trae Gaia DR3, así que la **separación y el ángulo de
+  posición son verdaderos** (las fuentes traen la separación, pero no el PA). El catálogo
+  de la doble solo se usa para la **ficha** y el **veredicto de resolución**, no para
+  colocar estrellas. En dobles muy brillantes o muy cerradas (mag 0–3, sep <1″) Gaia puede
+  saturar o no traer las dos entradas: es una limitación asumida del enfoque.
+- **Ficha**: magnitudes de las componentes A y B, separación (″), tipo (doble/triple/
+  múltiple), **insignias** de los catálogos en que aparece y el veredicto de resolución.
+- **Veredicto «¿se resuelve con tu equipo?»**: dos condiciones independientes.
+  1. **Apertura** — límite de **Dawes** `116 / D(mm)` ″ (resolución por difracción). Si la
+     separación es menor, el par es inseparable con esa apertura.
+  2. **Aumento** — aunque la apertura resuelva, hace falta ampliación para *percibir* el
+     hueco: se usa `aumentos · sep ≳ 480″` (hueco cómodo, ~8′ de campo aparente) y `≳ 300″`
+     para empezar a partirlo. El veredicto propone el aumento cómodo (`≈ 480 / sep`).
+
+  Se apoya en las fórmulas de Dawes/Rayleigh documentadas en
+  [`notas-resolucion-dobles.md`](notas-resolucion-dobles.md). **Pendiente para v2**: un
+  penalti por diferencia de magnitud (pares desiguales tipo Sirio/Antares son más difíciles;
+  no hay fórmula limpia aceptada) y un filtro «resoluble con mi equipo ahora» en el buscador.
+
+### Pipeline de dobles
+
+El catálogo unificado se genera con `python3 scripts/gen_dobles.py`, que fusiona tres
+CSV fuente (en `mapa/datos/`) en uno solo:
+
+- **Match por alias normalizado**: claves fuertes y únicas (`HD`, `SAO`, `HR`, Flamsteed,
+  `STF`/`Struve`) unen la misma doble catalogada bajo designaciones distintas; el **Bayer**
+  griego es clave *débil* (solo une si no colisiona: θ¹/θ² Ori comparten «θ Ori» pero son
+  estrellas distintas). Los **nombres propios** son solo para buscar/mostrar, nunca clave.
+- **Pasada final por coordenadas acotada** (≤ 50″, ΔMag ≤ 0,6) solo para dobles que no
+  comparten ningún alias (p. ej. `HR8281` = `STF 2816`). El match por alias sigue mandando.
+- **Desempate** campo a campo, primer no-vacío, prioridad `AL > RASC > Cambridge`.
+- **Salidas**: `mapa/datos/estrellas_dobles.csv` (unificado), `mapa/datos/catalogos_dobles.csv`
+  (código → nombre largo, para el futuro seguimiento de progreso por catálogo) y el módulo
+  `estrellas-dobles-datos.js`. Prueba sin framework: `python3 scripts/test_dobles.py`.
+
+Añadir un catálogo futuro = soltar su CSV en `mapa/datos/` y añadir una entrada a la lista
+`FUENTES` de `gen_dobles.py` (con el mapeo de sus columnas). No editar el `.js` a mano.
+
 ---
 
 ## Configuración
@@ -262,6 +310,12 @@ desplegado con el permiso público.
   La fuente de verdad es `mapa/datos/AL_Carbon_Stars.csv`; el módulo
   `estrellas-carbono-datos.js` se **regenera** desde el CSV con
   `python3 scripts/gen_carbono.py` (no editar el `.js` a mano).
+- **Estrellas dobles**: fusión de tres programas de observación —
+  **Double Star Club** (Astronomical League), **Cambridge Double Star Atlas** y
+  **RASC Double Star Program**—. Las fuentes (`mapa/datos/{AL_DoubleStarClub,
+  cambridge_double_star_atlas,RASC_Double_Star_Program}.csv`) se fusionan en
+  `mapa/datos/estrellas_dobles.csv` con `python3 scripts/gen_dobles.py` (no editar el
+  `.js` a mano). Física de resolución: ver [`notas-resolucion-dobles.md`](notas-resolucion-dobles.md).
 - **Gaia DR3** vía [VizieR TAP](https://tapvizier.cds.unistra.fr/) (CDS).
 - **Colores estelares**: J.-V. Harre &amp; R. Heller (2021), *«Digital color codes of
   stars»*, Astron. Nachr. ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254);
