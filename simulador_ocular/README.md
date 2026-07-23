@@ -30,7 +30,8 @@ de iniciar sesión**. Vive en la web WordPress del proyecto
   brillo superficial, fondo de cielo en el ocular y **magnitud límite** del conjunto.
 - **Tres vistas del mismo campo**:
   - **PanSTARRS DR1 (HiPS)** — foto real en color, sin dependencias de servidor propio.
-  - **DSS (placas fotográficas)** — servidas por un proxy propio con caché en disco.
+  - **DSS (placas fotográficas)** — servidas por un proxy propio con caché LRU en
+    disco (TTL, anti-estampida, ETag/304 y estadísticas).
   - **Estrellas de Gaia DR3 (Canvas 2D)** — posiciones y colores reales de las
     estrellas, con brillo, tamaño y color según cada estrella, glow de las no
     resueltas y **cruz de difracción** de la araña en los reflectores.
@@ -189,7 +190,7 @@ la lógica:
 | `TRANSMISION_TELE` / `TRANSMISION_OPTICA` | Transmisión por defecto y por tipo óptico. |
 | `MARGEN_MAGLIM` | Margen entre el límite típico y el óptimo. |
 | `GAIA_MAG_MAX` / `TOP` | Profundidad y tope de la consulta a Gaia (afecta al rendimiento). |
-| `$CACHE_MAX_BYTES` (en `dss-proxy.php`) | Tope de disco de la caché de placas DSS (150 MB por defecto). |
+| `DSS_CACHE_MAX_BYTES` (en `dss-proxy.php`) | Tope de disco de la caché de placas DSS (150 MB por defecto). Otras constantes `DSS_*` afinan TTL, timeouts y limpieza. |
 
 ---
 
@@ -212,10 +213,32 @@ usuarios no autenticados, hay que permitir esa ruta.
 
 ### Caché del DSS
 
-`dss-proxy.php` guarda cada placa en `cache-dss/`. Para que el disco no crezca sin
-límite con tráfico público, **se autolimpia**: al descargar una placa nueva, si el
-directorio supera `$CACHE_MAX_BYTES`, borra las **más antiguas** (política tipo LRU,
-por fecha de uso) hasta bajar al 80 % del tope. Sin cron ni tareas externas.
+`dss-proxy.php` guarda cada placa en `cache-dss/`. Comparte el diseño de caché del
+proxy de Gaia (`gaia_proxy.php`):
+
+- **Caché LRU en disco con TTL**: cada acierto renueva la antigüedad de la placa
+  (`touch`); las populares sobreviven y las que llevan más de `DSS_CACHE_TTL` sin
+  usarse caducan. Al superar `DSS_CACHE_MAX_BYTES`, borra las **más antiguas** hasta
+  bajar al 80 % del tope.
+- **Limpieza incremental**: no se escanea el directorio en cada petición (throttle
+  con un *stamp*), y cada pasada borra como mucho `DSS_CLEANUP_MAX_DEL` entradas.
+  También barre `.lock`/`.tmp` huérfanos. Sin cron ni tareas externas.
+- **Anti-estampida**: la descarga se hace bajo `flock`, con escritura atómica
+  (temp + `rename`), así varias peticiones simultáneas de la misma placa no la
+  descargan a la vez ni dejan ficheros a medias.
+- **Revalidación barata**: envía `ETag` + `Cache-Control` y responde `304` ante
+  `If-None-Match`.
+- **Timeouts separados** de conexión y de petición al archivo del ESO.
+- **Estadísticas**: `dss-proxy.php?stats=1` devuelve aciertos, fallos, evicciones y
+  tamaño de la caché en JSON. Logs opcionales con `DSS_LOG_ENABLED`.
+
+Se omiten a propósito tres piezas del proxy de Gaia que no aplican al DSS: el gzip
+en disco (los GIF ya son binarios), la cuantización de parámetros (las coordenadas
+son sexagesimales y el resultado es una imagen) y el *failover* de proveedores (el
+DSS tiene un único origen).
+
+Las funciones puras del proxy tienen su propio test sin framework:
+`php scripts/test_dss_proxy.php` (espejo de `scripts/test_gaia_proxy.php`).
 
 ---
 
