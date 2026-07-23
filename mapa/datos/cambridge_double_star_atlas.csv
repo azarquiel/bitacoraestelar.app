@@ -1,0 +1,133 @@
+ID;Name;Type;RA;Dec;Mag
+17911;The Ind,SAO246965;Dbl;21h 19m 52s;-53°27,0';4,4
+100 Her;STF 2280;Mult;18h 07m 50s;+26°06,0';5,9
+12 Lyn;STF 948;Mult;06h 46m 14s;+59°26,5';4,9
+15 Aql;Sh 286;Dbl;19h 04m 58s;-04°01,8';5,4
+16 Cyg;SAO 31899;Dbl;19h 41m 52s;+50°31,0';6,2
+3 Cen;SAO 204917;Dbl;13h 51m 50s;-32°59,6';6,1
+32 Cam;STF 1694;Dbl;12h 49m 12s;+83°25,0';5,3
+32 Eri;STF 470;Triple;03h 54m 17s;-02°57,1';6,1
+36 Oph;Sh 243;Mult;17h 15m 21s;-26°36,1';5,1
+38 Lyn;STF 1334;Mult;09h 18m 51s;+36°48,1';3,8
+41 Dra;STF 2308;Triple;18h 00m 09s;+80°00,2';5,7
+54 Leo;STF 1487;Dbl;10h 55m 37s;+24°44,9';6,3
+56 And;STF I 4;Mult;01h 56m 09s;+37°15,1';5,7
+57 Aql;STF 2594;Dbl;19h 54m 36s;-08°14,0';5,7
+6 Tri;STF 227;Dbl;02h 12m 22s;+30°18,1';5,2
+61 Cyg;STF 2758;Dbl+Var Star;21h 06m 55s;+38°44,7';5,2
+70 Oph;STF 2272;Mult;18h 05m 27s;+02°30,0';4,0
+8 Lac;STF 2922;Mult;22h 35m 52s;+39°38,0';5,7
+94 Aqr;STF 2998;Triple;23h 19m 07s;-13°27,5';5,1
+ADS5951;WDS 07166-2319;Dbl;07h 16m 37s;-23°18,9';5,0
+Alp Cap;ALDS 88;Dbl;20h 18m 06s;-12°33,0';3,6
+Alp Cen;SAO 252838;Triple;14h 39m 36s;-60°50,1';0,0
+Alp CMa;SAO 151881;Mult;06h 45m 09s;-16°43,0';-1,5
+Alp Cru;SAO 251904;Dbl;12h 26m 36s;-63°05,9';1,3
+Alp CVn;ALDS49;Dbl;12h 56m 00s;+38°19,0';2,9
+Alp For;h 3555;Dbl;03h 12m 04s;-28°59,2';3,9
+Alp Gem;STF 1110;Mult;07h 34m 36s;+31°53,3';2,9
+Alp Her;STF 2140;Mult;17h 14m 39s;+14°23,4';3,5
+Alp Leo;Regulus;Mult;10h 08m 22s;+11°58,0';1,4
+Alp Lib;Sh 186;Triple;14h 50m 53s;-16°02,5';2,8
+Alp Lyr;H V 39;Dbl;18h 36m 56s;+38°47,0';0,0
+Alp Psc;STF 202;Dbl+Var Star;02h 02m 03s;+02°45,8';4,3
+Alp Sco;Burg/Grant (no #);Dbl;16h 29m 24s;-26°25,9';1,0
+Alp Umi;STF 93;Mult;02h 31m 49s;+89°15,8';2,0
+Bet Cen;SAO 252582,;Dbl;14h 03m 49s;-60°22,3';0,6
+Bet Cep;STF 2805;Dbl;21h 28m 42s;+70°34,0';3,2
+Bet Cyg;SAO 87301;Dbl;19h 30m 42s;+27°58,0';3,1
+Bet Lyr;STF I 39;Mult;18h 50m 05s;+33°21,7';3,5
+Bet Mon;STF 919;Mult;06h 28m 49s;-07°02,0';4,6
+Bet Mus;R 207;Dbl+Var Star;12h 46m 17s;-68°06,4';3,0
+Bet Ori;STF668;Dbl+Var Star;05h 14m 32s;-08°12,1';0,1
+Bet Sco;H III 7;Mult;16h 05m 26s;-19°48,3';2,6
+Bet Tuc;Lac 119;Mult;00h 31m 33s;-62°57,4';4,4
+Del Cen;;Dbl;12h 08m 22s;-50°43,3';2,6
+Del Cep;ALDS97;Dbl;22h 29m 12s;+58°25,0';3,9
+Del Crv;Sh 145;Dbl;12h 29m 54s;-16°31,0';3,0
+Del Cyg;STF 2579;Dbl;19h 44m 59s;+45°07,8';2,9
+Del Gem;STF 1066;Triple;07h 20m 07s;+21°58,9';3,5
+Del Her;STF 3127;Mult;17h 15m 02s;+24°50,3';3,1
+Del Lyr;Sh 586;Dbl;18h 53m 44s;+36°58,3';5,6
+Del Ori;STF I 14;Triple;05h 32m 00s;-00°18,0';2,2
+Del Ser;STF 1954;Mult;15h 34m 48s;+10°32,2';3,8
+Eps Boo;Izar;Dbl;14h 45m 00s;+27°04,0';2,5
+Eps CMa;ALDS 33;Dbl;06h 58m 36s;-28°58,0';1,5
+Eps Hya;STF 1273;Dbl;08h 46m 47s;+06°25,1';3,4
+Eps Lyr;STF 2382/3;Mult;18h 44m 20s;+39°40,1';5,1
+Eps Mon;STF 900;Triple;06h 23m 46s;+04°35,5';4,4
+Eps Nor;h 4853;Dbl;16h 27m 11s;-47°33,3';4,5
+Eps Peg;S 798;Triple;21h 44m 11s;+09°52,5';2,4
+Eta Cas;STF 60;Dbl;00h 49m 06s;+57°49,0';3,4
+Eta Lup;Dunlop 197;Triple;16h 00m 07s;-38°23,8';3,4
+Eta Ori;Dawes 5;Dbl;05h 24m 29s;-02°23,8';3,4
+Eta Per;STF 307;Mult;02h 50m 42s;+55°53,7';3,8
+f Eri;Dunlop 16;Dbl;03h 48m 36s;-37°37,0';4,8
+Gam And;Almach;Mult;02h 03m 54s;+42°19,7';2,3
+Gam Ari;STF180;Dbl;01h 53m 30s;+19°18,0';4,8
+Gam Cet;STF 299;Dbl;02h 43m 18s;+03°14,0';3,5
+Gam Cra;SAO 210928;Dbl+Var Star;19h 06m 25s;-37°03,7';4,9
+Gam Cru;SAO 240019;Triple;12h 31m 10s;-57°06,8';1,6
+Gam Del;STF 2727;Dbl;20h 46m 39s;+16°07,4';5,1
+Gam Leo;STF 1424;Mult;10h 19m 59s;+19°50,4';3,8
+Gam Lep;H VI 40;Triple;05h 44m 28s;-22°26,9';3,6
+Gam Vel;Dunlop 65;Mult;08h 09m 29s;-47°20,7';4,3
+Gam Vir;STF 1670;Mult;12h 41m 40s;-01°27,0';3,6
+Gam Vol;Dunlop 42;Dbl;07h 08m 42s;-70°29,8';5,7
+h 5014;h 5014;Dbl;18h 07m 00s;-43°25,0';5,7
+Iot Cas;STF 262;Dbl;02h 29m 04s;+67°24,1';4,5
+Iot Cnc;STF1268;Dbl;08h 46m 42s;+28°46,0';4,0
+Iot Ori;STF 752;Dbl;05h 35m 26s;-05°54,5';2,8
+Iot Pic;Dunlop 18;Dbl;04h 50m 55s;-53°27,6';5,6
+J VEL;Rmk 13;Triple;10h 21m 00s;-56°03,0';4,5
+Kap Boo;STF 1821;Dbl;14h 13m 30s;+51°47,0';4,6
+Kap Her;STF 2010;Triple;16h 08m 04s;+17°02,8';5,0
+Kap Lup;Dunlop 177;Dbl;15h 11m 58s;-48°44,6';5,7
+Kap Pup;H III 27;Dbl;07h 38m 48s;-26°48,0';4,5
+Lam Ari;H V 12 = O SST 21;Dbl;01h 57m 54s;+23°36,0';4,9
+Lam Ori;STF 738;Dbl;05h 35m 08s;+09°56,0';3,5
+Mu Boo;STF 1938;Dbl;15h 24m 30s;+37°23,0';4,3
+Mu Cru;SAO 240366;Dbl;12h 54m 36s;-57°10,6';4,0
+Mu Dra;STF 2120;Dbl+Var Star;17h 05m 20s;+54°28,2';5,8
+Mu Lup;h 4753;Triple;15h 18m 32s;-47°52,5';4,3
+N Hya;H III 96;Dbl;11h 32m 16s;-29°15,8';5,8
+Nu Dra;STF I 35;Dbl;17h 32m 11s;+55°11,0';4,9
+Nu Sco;BU 120;Mult;16h 12m 00s;-19°27,6';4,0
+o-1 Cyg;STF I 50;Mult;20h 14m 00s;+46°44,0';3,8
+O2 Eri;STF518;Dbl;04h 15m 18s;-07°39,0';4,4
+Omi Oph;H III 25;Dbl;17h 18m 00s;-24°17,0';6,8
+Pi Boo;STF 1864;Dbl;14h 40m 42s;+16°25,0';4,9
+Pi Lup;h 4728;Dbl;15h 05m 07s;-47°03,0';4,7
+Psi Dra;STF 2241;Mult;17h 41m 56s;+72°08,9';4,6
+Psi Pic;STF 88;Triple;01h 05m 41s;+21°28,3';5,3
+Rho Eri;Dunlop 5;Dbl;01h 40m 10s;-56°12,7';5,8
+Rho Her;STF 2161;Triple;17h 23m 41s;+37°08,8';5,5
+Rho Her;STF 2264;Triple;17h 23m 41s;+37°08,7';4,5
+Sig Cas;STF 3049;Dbl;23h 59m 00s;+55°45,0';5,0
+Sig CrB;STF 2032;Dbl;16h 14m 42s;+33°52,0';5,6
+Sig Ori;STF 762;Mult;05h 38m 45s;-02°36,0';3,8
+STF742;STF 742;Dbl;05h 36m 24s;+22°00,0';7,2
+STF1657;24 Com;Dbl;12h 35m 06s;+18°23,0';5,0
+STF2816;STF 2816;Dbl;21h 39m 00s;+57°29,0';5,7
+STF2840;STF 2840;Dbl;21h 52m 00s;+55°48,0';5,7
+STF3053;STF 3053;Dbl;00h 02m 36s;+66°06,0';5,9
+The Aur;ALDS 29;Dbl;05h 59m 42s;+37°13,0';2,6
+The Eri;Piazzi (no #);Dbl;02h 58m 16s;-40°18,2';3,2
+The Ind;h 5258;Dbl;21h 19m 52s;-53°27,0';4,4
+The Ori;STF 748;Mult;05h 35m 17s;-05°23,3';5,1
+The Ser;STF 2417;Triple;18h 56m 13s;+04°12,2';4,6
+The Tau;STF I 10;Mult;04h 28m 35s;+15°57,7';3,8
+Ups Car;SAO 250695;Dbl;09h 47m 06s;-65°04,3';3,0
+Xi Boo;STF 1888;Dbl;14h 51m 24s;+19°06,0';4,6
+Xi Cep;STF 2863;Dbl;22h 03m 48s;+64°38,0';4,4
+Xi Lup;Dunlop 196;Dbl;15h 56m 53s;-33°58,0';5,1
+Xi Sco;STF 1998;Mult;16h 04m 22s;-11°22,3';5,1
+Xi UMa;STF 1523;Dbl+Var Star;11h 18m 11s;+31°31,7';4,4
+Zet Aqr;STF 2909;Triple;22h 28m 50s;-00°01,2';4,6
+Zet Boo;STF 1865;Dbl+Var Star;14h 41m 09s;+13°43,6';4,4
+Zet Cnc;Tegmeni;Dbl;08h 12m 12s;+17°39,0';6,0
+Zet CrB;STF 1965;Dbl;15h 39m 24s;+36°38,0';5,1
+Zet Lyr;STF I 38;Mult;18h 44m 48s;+37°35,6';5,7
+Zet Ori;STF 774;Dbl;05h 40m 46s;-01°56,5';2,0
+Zet Psc;STF 100;Mult;01h 13m 44s;+07°34,5';5,2
+Zet UMa;STF 1744;Mult;13h 23m 56s;+54°55,2';4,0
