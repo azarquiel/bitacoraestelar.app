@@ -45,7 +45,8 @@ de iniciar sesión**. Vive en la web WordPress del proyecto
 | Archivo | Qué es | Dónde va |
 |---|---|---|
 | `ocular-wordpress.html` | Fragmento HTML del simulador (sin código) | Editor de WordPress (bloque HTML) |
-| `resources/js/bitacora-ocular.js` | Toda la lógica (óptica, fotometría, Gaia) | Servidor, por FTP a `…/uploads/bitacora/` |
+| `resources/js/bitacora-ocular.js` | La lógica del simulador (óptica, fotometría, UI) | Servidor, por FTP a `…/uploads/bitacora/` |
+| `../resources/js/bitacora-gaia-render.js` (compartido) | **Motor de render de estrellas de Gaia** (consulta + dibujo, `window.BitacoraGaiaRender`), extraído para reutilizarlo también desde el formulario de registro | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
@@ -109,6 +110,13 @@ cielo y el objeto se combinan según su **brillo superficial** real, con:
 Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
 
 ### Estrellas de Gaia (Canvas 2D)
+
+> **Módulo compartido.** Toda la consulta y el dibujo de esta vista viven ahora en
+> `../resources/js/bitacora-gaia-render.js` (`window.BitacoraGaiaRender`), un módulo
+> DOM-agnóstico que recibe `{ra, dec, arcmin, apertura, aumentos, óptica, sqm…}` y un
+> `<canvas>`. El simulador es solo un consumidor (le pasa su equipo/cielo); el
+> **formulario de registro** lo reutiliza para *Generar con el simulador*. Sus ajustes
+> (`GAIA_CFG`) son `BitacoraGaiaRender.config`. El color sigue en `BitacoraGaiaColor`.
 
 - **Consulta** a Gaia DR3 vía VizieR TAP, una vez por objeto, al radio máximo
   (`GAIA_RADIO_MAX ≈ 1,44°`) y hasta `GAIA_MAG_MAX` (16,5), con `TOP 40000`. El

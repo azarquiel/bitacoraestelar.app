@@ -128,8 +128,58 @@ window.BitacoraBase = (function () {
     return { buscar: buscar, cerrar: function () { sugg.style.display = 'none'; } };
   }
 
+  /* ── Cielo: escala Bortle ↔ SQM ──────────────────────────────────────────
+     Enlaza un <select> de clase Bortle con un input numérico de SQM. Elegir una
+     clase fija el SQM; teclear un SQM que no cuadre con ninguna clase deja el
+     selector en "personalizado". El selector muestra solo clase + etiqueta (el
+     valor SQM va en el value de la opción, no visible). */
+  var BORTLE = [
+    { clase: 1, etiqueta: 'Cielo excelente',                    sqm: 21.9 },
+    { clase: 2, etiqueta: 'Cielo oscuro típico',                sqm: 21.6 },
+    { clase: 3, etiqueta: 'Cielo rural',                        sqm: 21.4 },
+    { clase: 4, etiqueta: 'Transición rural/suburbano',         sqm: 20.85 },
+    { clase: 5, etiqueta: 'Cielo suburbano',                    sqm: 19.75 },
+    { clase: 6, etiqueta: 'Cielo suburbano brillante',          sqm: 18.55 },
+    { clase: 7, etiqueta: 'Transición suburbano/urbano',        sqm: 17.40 },
+    { clase: 8, etiqueta: 'Cielo urbano',                       sqm: 16.15 },
+    { clase: 9, etiqueta: 'Cielo centro urbano',                sqm: 14.25 }
+  ];
+  function claseBortlePorSqm(sqm) {
+    for (var i = 0; i < BORTLE.length; i++) if (Math.abs(BORTLE[i].sqm - sqm) < 1e-9) return BORTLE[i];
+    return null;
+  }
+  function montarCielo(select, input) {
+    if (select && !select._pob) {
+      var html = '<option value="">— personalizado —</option>';
+      BORTLE.forEach(function (b) {
+        html += '<option value="' + b.sqm + '">Clase ' + b.clase + ' · ' + b.etiqueta + '</option>';
+      });
+      select.innerHTML = html;
+      select._pob = true;
+    }
+    function sincronizarSelect() {
+      var b = claseBortlePorSqm(parseFloat(input.value));
+      if (select) select.value = b ? String(b.sqm) : '';
+    }
+    if (select) select.addEventListener('change', function () {
+      if (select.value !== '') { input.value = select.value; input.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
+    input.addEventListener('input', sincronizarSelect);
+    sincronizarSelect();
+    return {
+      leer: function () {
+        var v = parseFloat(input.value);
+        var b = claseBortlePorSqm(v);
+        return { sqm: isNaN(v) ? null : v, clase: b ? b.clase : null, etiqueta: b ? b.etiqueta : null };
+      }
+    };
+  }
+
   return {
     esc: esc,
-    montarBuscadorCatalogo: montarBuscadorCatalogo
+    montarBuscadorCatalogo: montarBuscadorCatalogo,
+    BORTLE: BORTLE,
+    claseBortlePorSqm: claseBortlePorSqm,
+    montarCielo: montarCielo
   };
 })();
