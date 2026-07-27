@@ -685,7 +685,69 @@
         consultarGaia(sexToDeg(o.ra, true), sexToDeg(o.dec, false)).catch(function () { /* se reintentará al usarse */ });
       }
 
-      // Selector de objeto: dos pestañas (cúmulos / estrellas de carbono) sobre
+      /* ══════════════════ MODO "CUALQUIER OBJETO" ══════════════════
+         Herramienta de pruebas: apuntar a RA/Dec arbitrarias o buscar por nombre
+         en SIMBAD. Va detrás del flag window.BITACORA_OCULAR_LIBRE (apagado por
+         defecto): sin él, la 4ª pestaña ni aparece ni se cablea. El objeto libre
+         se pinta con carbono:true y doble:false fijos (la clasificación real
+         vendrá en el futuro). */
+      function pad2(n) { return (n < 10 ? '0' : '') + n; }
+      // Grados -> sexagesimal PLANO ("HH MM SS" / "±DD MM SS"), que es lo que
+      // consume sexToDeg() (el formato "21h 40m 22s" de formatRA NO vale aquí).
+      function degAHms(deg) {
+        var h = ((deg % 360) + 360) % 360 / 15, hh = Math.floor(h), m = (h - hh) * 60, mm = Math.floor(m), ss = Math.round((m - mm) * 60);
+        if (ss === 60) { ss = 0; mm++; } if (mm === 60) { mm = 0; hh = (hh + 1) % 24; }
+        return pad2(hh) + ' ' + pad2(mm) + ' ' + pad2(ss);
+      }
+      function degADms(deg) {
+        var sign = deg < 0 ? '-' : '+', a = Math.abs(deg), dd = Math.floor(a), m = (a - dd) * 60, mm = Math.floor(m), ss = Math.round((m - mm) * 60);
+        if (ss === 60) { ss = 0; mm++; } if (mm === 60) { mm = 0; dd++; }
+        return sign + pad2(dd) + ' ' + pad2(mm) + ' ' + pad2(ss);
+      }
+      function libreEstado(txt, cls) { var e = $('sim-libre-estado'); if (e) { e.textContent = txt || ''; e.className = 'sim-libre-estado' + (cls ? ' ' + cls : ''); } }
+      // Construye y activa el objeto libre desde los campos RA/Dec.
+      function fijarObjetoLibre(nombre, tipo) {
+        var raDeg = BitacoraBase.parseRA($('sim-libre-ra').value);
+        var decDeg = BitacoraBase.parseDec($('sim-libre-dec').value);
+        if (raDeg == null || decDeg == null) { libreEstado('Introduce una RA y una Dec válidas (o busca un nombre en SIMBAD).'); return; }
+        var o = { nombre: (nombre || 'Objeto libre'), constelacion: '', ra: degAHms(raDeg), dec: degADms(decDeg), tipo: tipo || '', carbono: false, doble: false };
+        libreEstado('✓ ' + o.nombre + '  ·  AR ' + o.ra + '  ·  Dec ' + o.dec, 'ok');
+        elegirObjeto(o);
+      }
+      // Búsqueda por nombre en SIMBAD (reutiliza /coordenadas, solo con sesión).
+      var simbadTimer = null, simbadUltimo = '';
+      function programarSimbad() {
+        var q = $('sim-libre-nombre').value.trim();
+        if (simbadTimer) clearTimeout(simbadTimer);
+        if (q.length < 2) return;
+        simbadTimer = setTimeout(function () { buscarSimbad(q); }, 700);
+      }
+      function buscarSimbad(q) {
+        if (!WP) { libreEstado('Inicia sesión para buscar por nombre en SIMBAD. Puedes introducir RA/Dec a mano.'); return; }
+        if (q === simbadUltimo) return; simbadUltimo = q;
+        libreEstado('Buscando «' + q + '» en SIMBAD…');
+        var url = WP.endpoint.replace(/observaciones\/?$/, 'coordenadas') + '?q=' + encodeURIComponent(q);
+        fetch(url, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+          .then(function (res) {
+            if (res.ok && res.data && typeof res.data.ra === 'number') {
+              $('sim-libre-ra').value = BitacoraBase.formatRA(res.data.ra);
+              $('sim-libre-dec').value = BitacoraBase.formatDec(res.data.dec);
+              fijarObjetoLibre(q, res.data.otype || '');
+            } else { libreEstado('«' + q + '» no está en SIMBAD. Introduce su RA y Dec a mano.'); }
+          })
+          .catch(function () { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); });
+      }
+      function montarObjetoLibre() {
+        var nom = $('sim-libre-nombre');
+        if (nom) nom.addEventListener('input', programarSimbad);
+        if (!WP && nom) nom.placeholder = '— Inicia sesión para buscar en SIMBAD —';
+        ['sim-libre-ra', 'sim-libre-dec'].forEach(function (id) {
+          var el = $(id); if (el) el.addEventListener('change', function () { fijarObjetoLibre($('sim-libre-nombre').value.trim(), ''); });
+        });
+      }
+
+      // Selector de objeto: pestañas (cúmulos / carbono / dobles [+ libre]) sobre
       // el buscador de catálogo común. Al cambiar de pestaña se limpia el input y
       // se listan los objetos de esa categoría; al elegir uno, se activa.
       function montarSelectorObjeto() {
@@ -705,6 +767,14 @@
           sinResultados: 'Sin coincidencias en esta lista',
           onElegir: function (o) { input.value = ''; elegirObjeto(o); }
         });
+        // 4ª pestaña "Cualquier objeto": solo si el flag de pruebas está activo.
+        var libreOn = !!window.BITACORA_OCULAR_LIBRE;
+        var tabLibre = $('sim-tab-libre'), panelLibre = $('sim-libre');
+        if (tabLibre) tabLibre.hidden = !libreOn;
+        if (panelLibre) panelLibre.hidden = true;
+        if (libreOn) montarObjetoLibre();
+        var objWrap = input.closest ? input.closest('.obj-wrap') : document.querySelector('.obj-wrap');
+
         var tabs = document.querySelectorAll('.obj-tab');
         tabs.forEach(function (t) {
           t.addEventListener('click', function () {
@@ -714,8 +784,10 @@
               x.classList.toggle('is-activa', act);
               x.setAttribute('aria-selected', act ? 'true' : 'false');
             });
-            input.value = '';
-            input.focus();   // dispara el listado de la nueva categoría (todosSiVacio)
+            var esLibre = (categoria === 'libre');
+            if (objWrap) objWrap.hidden = esLibre;   // oculta el buscador normal en modo libre
+            if (panelLibre) panelLibre.hidden = !esLibre;
+            if (!esLibre) { input.value = ''; input.focus(); } // dispara el listado (todosSiVacio)
           });
         });
       }

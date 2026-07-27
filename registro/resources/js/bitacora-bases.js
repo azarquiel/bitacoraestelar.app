@@ -79,8 +79,10 @@
     function iniciarMapa() {
       try {
         map = L.map('map', { worldCopyJump: true }).setView([37.371, -6.070], 5);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-          { attribution: '© OpenStreetMap © CARTO', maxZoom: 19 }).addTo(map);
+        // OpenTopoMap: fondo claro CON relieve (sombreado + curvas de nivel) y
+        // etiquetas de OpenStreetMap en el idioma local (castellano en España).
+        L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+          { attribution: '© OpenStreetMap, SRTM · © OpenTopoMap (CC-BY-SA)', maxZoom: 17 }).addTo(map);
         map.on('click', function (e) { setLatLon(e.latlng.lat, e.latlng.lng, false); });
         setTimeout(function () { map.invalidateSize(); }, 200);
       } catch (err) { mapaNo(); }

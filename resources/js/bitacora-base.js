@@ -221,6 +221,42 @@ window.BitacoraBase = (function () {
     };
   }
 
+  // ── Parsers/formatos de coordenadas ecuatoriales (RA/Dec) ──
+  // Fuente única, compartida por el registro y el simulador de ocular. RA en
+  // grados internamente. Aceptan sexagesimal ("21h 40m 22s" / "21 40 22" /
+  // "21:40:22") o decimal en grados ("325.09"); Dec con signo.
+  function revGrados(x) { return ((x % 360) + 360) % 360; }
+  function parseRA(txt) {
+    txt = String(txt == null ? '' : txt).trim(); if (txt === '') return null;
+    var hms = txt.match(/(-?\d+(?:\.\d+)?)\s*[h: ]\s*(\d+(?:\.\d+)?)\s*[m: ]?\s*(\d+(?:\.\d+)?)?/i);
+    if (hms && /[h:]/i.test(txt)) {
+      var h = parseFloat(hms[1]), mi = parseFloat(hms[2] || 0), s = parseFloat(hms[3] || 0);
+      return revGrados((h + mi / 60 + s / 3600) * 15);
+    }
+    var d = parseFloat(txt); return isNaN(d) ? null : revGrados(d);
+  }
+  function parseDec(txt) {
+    txt = String(txt == null ? '' : txt).trim(); if (txt === '') return null;
+    var dms = txt.match(/(-?\+?\d+(?:\.\d+)?)\s*[°d: ]\s*(\d+(?:\.\d+)?)?\s*['′m: ]?\s*(\d+(?:\.\d+)?)?/i);
+    if (dms && /[°d'′"]/i.test(txt)) {
+      var sign = /^\s*-/.test(txt) ? -1 : 1, dg = Math.abs(parseFloat(dms[1])), mi = parseFloat(dms[2] || 0), s = parseFloat(dms[3] || 0);
+      var v = sign * (dg + mi / 60 + s / 3600); return (v < -90 || v > 90) ? null : v;
+    }
+    var d = parseFloat(txt); return (isNaN(d) || d < -90 || d > 90) ? null : d;
+  }
+  function formatRA(deg) {
+    if (deg == null || deg === '' || isNaN(deg)) return '';
+    var h = revGrados(parseFloat(deg)) / 15, hh = Math.floor(h), mDec = (h - hh) * 60, mm = Math.floor(mDec), ss = Math.round((mDec - mm) * 60);
+    if (ss === 60) { ss = 0; mm++; } if (mm === 60) { mm = 0; hh = (hh + 1) % 24; }
+    return hh + 'h ' + mm + 'm ' + ss + 's';
+  }
+  function formatDec(deg) {
+    if (deg == null || deg === '' || isNaN(deg)) return '';
+    var v = parseFloat(deg), sign = v < 0 ? '-' : '+', a = Math.abs(v), dd = Math.floor(a), mDec = (a - dd) * 60, mm = Math.floor(mDec), ss = Math.round((mDec - mm) * 60);
+    if (ss === 60) { ss = 0; mm++; } if (mm === 60) { mm = 0; dd++; }
+    return sign + dd + '° ' + mm + '′ ' + ss + '″';
+  }
+
   return {
     esc: esc,
     montarBuscadorCatalogo: montarBuscadorCatalogo,
@@ -229,6 +265,10 @@ window.BitacoraBase = (function () {
     montarCielo: montarCielo,
     TRANSPARENCIA: TRANSPARENCIA,
     transparenciaPorIr: transparenciaPorIr,
-    montarTransparencia: montarTransparencia
+    montarTransparencia: montarTransparencia,
+    parseRA: parseRA,
+    parseDec: parseDec,
+    formatRA: formatRA,
+    formatDec: formatDec
   };
 })();

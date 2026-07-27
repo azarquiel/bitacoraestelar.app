@@ -204,42 +204,12 @@
     var m=txt.trim().toLowerCase().replace(/\s+/g,'').match(/^(?:m|messier)(\d{1,3})$/);
     return m ? parseInt(m[1],10) : null;
   }
-  // RA aceptando "21h40m22s", "21 40 22", "21:40:22" ó decimal en grados "325.09"
-  function parseRA(txt){
-    txt=txt.trim(); if(txt==='') return null;
-    var hms=txt.match(/(-?\d+(?:\.\d+)?)\s*[h: ]\s*(\d+(?:\.\d+)?)\s*[m: ]?\s*(\d+(?:\.\d+)?)?/i);
-    if(hms && /[h:]/i.test(txt)){
-      var h=parseFloat(hms[1]),mi=parseFloat(hms[2]||0),s=parseFloat(hms[3]||0);
-      return rev((h+mi/60+s/3600)*15);
-    }
-    var d=parseFloat(txt); return isNaN(d)?null:rev(d);
-  }
-  // Dec aceptando "-23°10'47\"", "-23 10 47", ó decimal "-23.18"
-  function parseDec(txt){
-    txt=txt.trim(); if(txt==='') return null;
-    var dms=txt.match(/(-?\+?\d+(?:\.\d+)?)\s*[°d: ]\s*(\d+(?:\.\d+)?)?\s*['′m: ]?\s*(\d+(?:\.\d+)?)?/i);
-    if(dms && /[°d'′"]/i.test(txt)){
-      var sign=/^\s*-/.test(txt)?-1:1, dg=Math.abs(parseFloat(dms[1])),mi=parseFloat(dms[2]||0),s=parseFloat(dms[3]||0);
-      var v=sign*(dg+mi/60+s/3600); return (v<-90||v>90)?null:v;
-    }
-    var d=parseFloat(txt); return (isNaN(d)||d<-90||d>90)?null:d;
-  }
-
-  // Grados decimales -> formato habitual. RA en horas: "21h 40m 22s".
-  // Se usa al precargar la edición para no mostrar el valor decimal crudo.
-  function formatRA(deg){
-    if(deg==null||deg===''||isNaN(deg)) return '';
-    var h=rev(parseFloat(deg))/15, hh=Math.floor(h), mDec=(h-hh)*60, mm=Math.floor(mDec), ss=Math.round((mDec-mm)*60);
-    if(ss===60){ ss=0; mm++; } if(mm===60){ mm=0; hh=(hh+1)%24; }
-    return hh+'h '+mm+'m '+ss+'s';
-  }
-  // Grados decimales -> Dec sexagesimal con signo: "-23° 10′ 47″".
-  function formatDec(deg){
-    if(deg==null||deg===''||isNaN(deg)) return '';
-    var v=parseFloat(deg), sign=v<0?'-':'+', a=Math.abs(v), dd=Math.floor(a), mDec=(a-dd)*60, mm=Math.floor(mDec), ss=Math.round((mDec-mm)*60);
-    if(ss===60){ ss=0; mm++; } if(mm===60){ mm=0; dd++; }
-    return sign+dd+'° '+mm+'′ '+ss+'″';
-  }
+  // Parsers/formatos de RA/Dec: fuente única en BitacoraBase (compartida con el
+  // simulador de ocular). base.js se carga antes que este archivo.
+  var parseRA   = BitacoraBase.parseRA,
+      parseDec  = BitacoraBase.parseDec,
+      formatRA  = BitacoraBase.formatRA,
+      formatDec = BitacoraBase.formatDec;
 
   // ═══════════════════════════════════════════════════════════════════════
   // CATÁLOGO DE ESTRELLAS DE CARBONO (Astronomical League)
