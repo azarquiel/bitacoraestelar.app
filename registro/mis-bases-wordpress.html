@@ -1,0 +1,139 @@
+<!-- ============================================================
+     MIS BASES · Lugares de observación del observador · Bitácora Messier
+
+     Pega este bloque en un bloque "HTML personalizado" de Gutenberg,
+     en una página nueva (p. ej. "Mis bases"), protegida por login.
+
+     Reutiliza bitacora-base.css + bitacora-formulario.css (wrapper
+     #mw-obs-form) y añade estilos propios. El JS va subido por FTP a
+     /wp-content/uploads/bitacora/ (no lo pegues aquí: el editor escapa
+     los "&" y rompería el JavaScript).
+
+     Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
+     ============================================================ -->
+
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260727_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260727_1300" />
+
+<style>
+/* Estilos propios de "Mis bases", encapsulados bajo #mw-obs-form. */
+#mw-obs-form .bases-list {display:flex;flex-direction:column;gap:10px;margin:6px 0 22px;}
+#mw-obs-form .bases-empty {color:var(--tinta-tenue);font-size:14px;font-style:italic;margin:2px 0 18px;}
+#mw-obs-form .base-item {display:flex;align-items:flex-start;gap:12px;background:var(--noche-2);
+    border:1px solid var(--linea);border-radius:10px;padding:12px 14px;}
+#mw-obs-form .base-item .bi-main {flex:1 1 auto;min-width:0;}
+#mw-obs-form .base-item .bi-nom {font-size:16px;font-weight:600;}
+#mw-obs-form .base-item .bi-specs {font-size:13px;color:var(--azul);
+    font-family:ui-monospace,Menlo,monospace;margin-top:3px;}
+#mw-obs-form .base-item .bi-meta {font-size:12px;color:var(--tinta-tenue);margin-top:3px;}
+#mw-obs-form .base-item .bi-acts {display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
+#mw-obs-form .bi-btn {background:none;border:1px solid var(--linea);border-radius:14px;color:var(--tinta-tenue);
+    font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:5px 11px;cursor:pointer;transition:.15s;}
+#mw-obs-form .bi-btn:hover:not(:disabled) {color:var(--tinta);border-color:var(--ambar);}
+#mw-obs-form .bi-btn.danger:hover:not(:disabled) {color:var(--rojo);border-color:var(--rojo);}
+#mw-obs-form .bi-btn:disabled {opacity:.4;cursor:not-allowed;}
+#mw-obs-form .base-pill {display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;
+    border:1px solid var(--linea);border-radius:999px;padding:2px 8px;margin-left:6px;color:var(--tinta-tenue);}
+#mw-obs-form #map {height:340px;border-radius:12px;overflow:hidden;border:1px solid var(--linea);margin:8px 0;
+    background:#e8eef2;}
+#mw-obs-form .geo-btn {background:none;border:1px dashed var(--linea);border-radius:8px;color:var(--tinta-tenue);
+    font-family:ui-monospace,Menlo,monospace;font-size:12.5px;padding:8px 14px;cursor:pointer;margin-bottom:4px;}
+#mw-obs-form .geo-btn:hover {color:var(--tinta);border-color:var(--ambar);}
+#mw-obs-form .compartir-box {margin-top:10px;padding:12px;border:1px dashed var(--linea);border-radius:10px;}
+#mw-obs-form .compartir-box.hidden {display:none;}
+#mw-obs-form .comp-list {display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto;margin-top:6px;}
+#mw-obs-form .comp-list label {display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;}
+#mw-obs-form .flash {position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:10px;padding:11px 18px;
+    color:var(--tinta);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;}
+#mw-obs-form .flash.show {opacity:1;}
+#mw-obs-form .flash.err {border-color:var(--rojo);color:var(--rojo);}
+/* Salud de la base */
+#mw-obs-form .salud-graf {background:var(--noche-2);border:1px solid var(--linea);border-radius:12px;padding:14px;margin:10px 0;}
+#mw-obs-form .salud-graf h3 {margin:0 0 6px;font-size:14px;}
+#mw-obs-form .salud-graf svg {width:100%;height:auto;display:block;}
+#mw-obs-form table.salud-tabla {width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
+#mw-obs-form table.salud-tabla th, #mw-obs-form table.salud-tabla td {text-align:left;padding:6px 8px;border-bottom:1px solid var(--linea);}
+#mw-obs-form table.salud-tabla th {color:var(--tinta-tenue);font-weight:600;}
+</style>
+
+<div id="mw-obs-form">
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Bitácora · Lugares de observación</p>
+    <h1>Mis bases
+      <span class="sub">Tus lugares de observación reutilizables. Se eligen al registrar para calcular la altura y el azimut, y guardan la salud del cielo (SQM/IR) del sitio.</span>
+    </h1>
+  </header>
+
+  <!-- VISTA LISTA + AÑADIR -->
+  <div id="vistaLista">
+    <fieldset>
+      <legend><div class="leg"><span class="num">1</span>
+        <div><h2>Mis bases</h2><p>Puedes editarlas o compartirlas. Solo se borran si no tienen observaciones.</p></div></div></legend>
+      <div class="bases-list" id="basesMias"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend><div class="leg"><span class="num">2</span>
+        <div><h2>Compartidas conmigo / públicas</h2><p>Bases de otros observadores. Solo lectura: puedes usarlas y ver su salud.</p></div></div></legend>
+      <div class="bases-list" id="basesCompartidas"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend><div class="leg"><span class="num">3</span>
+        <div><h2 id="baseFormTitulo">Añadir una base</h2><p>Pincha en el mapa para fijar el lugar, o escribe las coordenadas a mano.</p></div></div></legend>
+
+      <form id="baseForm" autocomplete="off">
+        <label class="field"><span class="lab">Nombre de la base</span>
+          <input type="text" id="bNombre" placeholder="Observatorio del Cortijo, Sierra Norte…" /></label>
+
+        <button type="button" class="geo-btn" id="geoBtn">◎ Usar mi ubicación actual</button>
+        <div id="map"></div>
+        <div class="row">
+          <label class="field"><span class="lab">Latitud</span>
+            <input type="number" id="bLat" step="0.0001" placeholder="37.3710" /></label>
+          <label class="field"><span class="lab">Longitud</span>
+            <input type="number" id="bLon" step="0.0001" placeholder="-6.0700" /></label>
+        </div>
+        <div class="row">
+          <label class="field"><span class="lab">Altitud (m, opcional)</span>
+            <input type="number" id="bAltitud" step="1" placeholder="640" /></label>
+          <label class="field"><span class="lab">Zona horaria</span>
+            <select id="bTz"></select></label>
+        </div>
+
+        <label class="field" style="margin-top:6px"><span class="lab">Visibilidad</span>
+          <select id="bVisibilidad">
+            <option value="privada">Privada (solo yo)</option>
+            <option value="publica">Pública (todos los observadores)</option>
+            <option value="seleccionada">Compartida con observadores concretos</option>
+          </select></label>
+        <div class="compartir-box hidden" id="compartirBox">
+          <div class="lab">Observadores con los que compartir</div>
+          <div class="comp-list" id="compList"></div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="primary" id="baseGuardar">Guardar base</button>
+          <button type="button" class="bi-btn" id="baseCancelar" style="display:none">Cancelar edición</button>
+          <span class="out-note" id="baseFormNota"></span>
+        </div>
+      </form>
+    </fieldset>
+  </div>
+
+  <!-- VISTA SALUD -->
+  <div id="vistaSalud" style="display:none">
+    <button type="button" class="bi-btn" id="saludVolver">← Volver a mis bases</button>
+    <h2 id="saludTitulo" style="margin-top:14px">Salud de la base</h2>
+    <p class="sub" id="saludSub">Evolución del brillo (SQM) y la transparencia (IR) del cielo en este lugar.</p>
+    <div id="saludGraficas"></div>
+    <div id="saludTablaCont"></div>
+  </div>
+</div>
+<div class="flash" id="flash"></div>
+</div>
+
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260727_1300" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-bases.js?v=20260727_1300" defer></script>

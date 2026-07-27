@@ -81,7 +81,7 @@
     // ═══════════════════════════════════════════════════════════════════════
     // DOM Y ESTADO
     // ═══════════════════════════════════════════════════════════════════════
-    var whenInput = $('when'), latInput = $('lat'), lonInput = $('lon'),
+    var whenInput = $('when'), baseSelect = $('baseSelect'),
         submitBtn = $('submitBtn'), outNote = $('outNote'), cabecera = $('fichaObjeto');
 
     var obsId = null;
@@ -89,6 +89,31 @@
 
     var OBS = null;          // { ra, dec, etiqueta }
     var lastComputed = null;
+
+    // La ubicación es la BASE elegida (fuente única): sus lat/lon/tz. Sin base no
+    // se calcula ni se guarda la ficha.
+    var listaBases = [], baseSel = null, basePendiente = null;
+
+    // ── Zona horaria: hora local de la base → instante UTC (sin librería) ──
+    function offsetMsTz(tz, utcMs) {
+      try {
+        var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false,
+          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        var p = dtf.formatToParts(new Date(utcMs)).reduce(function (a, x) { a[x.type] = x.value; return a; }, {});
+        var comoUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+        return comoUtc - utcMs;
+      } catch (_e) { return 0; }
+    }
+    // whenVal 'YYYY-MM-DDTHH:MM' interpretado como hora de pared en la TZ de la base.
+    function localAUtc(whenVal, tz) {
+      var m = whenVal.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      if (!m) return new Date(whenVal);
+      var guess = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+      if (!tz) return new Date(guess);
+      return new Date(guess - offsetMsTz(tz, guess));
+    }
+    function escOpt(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function basePorId(id) { for (var i = 0; i < listaBases.length; i++) { if (String(listaBases[i].id) === String(id)) return listaBases[i]; } return null; }
 
     function fmtDeg(v) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '°'; }
     function fmtAz(v) {
@@ -106,48 +131,40 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // MAPA (Leaflet, cargado dinámicamente; si falla, se escribe a mano)
+    // BASES (la ubicación es la base elegida; su mapa vive en "Mis bases")
     // ═══════════════════════════════════════════════════════════════════════
-    var map = null, marker = null;
-    function setLatLon(la, lo, recenter) {
-      latInput.value = la.toFixed(4); lonInput.value = lo.toFixed(4);
-      if (map) {
-        if (marker) marker.setLatLng([la, lo]); else marker = L.marker([la, lo]).addTo(map);
-        if (recenter) map.setView([la, lo], Math.max(map.getZoom(), 9));
+    function poblarBases() {
+      if (!baseSelect) return;
+      var mias = [], comp = [];
+      listaBases.forEach(function (b) { (b.es_mia ? mias : comp).push(b); });
+      function opt(b) {
+        var extra = [];
+        if (b.altitud_m != null && b.altitud_m !== '') extra.push(Math.round(b.altitud_m) + ' m');
+        if (!b.es_mia && b.dueno) extra.push(b.dueno);
+        return '<option value="' + b.id + '">' + escOpt(b.nombre) + (extra.length ? ' (' + escOpt(extra.join(' · ')) + ')' : '') + '</option>';
       }
+      var html = '<option value="">— Elige una base —</option>';
+      if (mias.length) html += '<optgroup label="Mis bases">' + mias.map(opt).join('') + '</optgroup>';
+      if (comp.length) html += '<optgroup label="Compartidas / públicas">' + comp.map(opt).join('') + '</optgroup>';
+      baseSelect.innerHTML = html;
+      if (baseSel) baseSelect.value = String(baseSel.id);
+    }
+    function cargarBases() {
+      var API = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+      return api(API).then(function (res) {
+        if (res.ok && Array.isArray(res.data)) {
+          listaBases = res.data;
+          if (basePendiente != null) { baseSel = basePorId(basePendiente); basePendiente = null; }
+          poblarBases();
+        }
+      });
+    }
+    if (baseSelect) baseSelect.addEventListener('change', function () {
+      baseSel = baseSelect.value ? basePorId(baseSelect.value) : null;
       recompute();
-    }
-    function cargarCSS(url) { var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = url; document.head.appendChild(l); }
-    function cargarJS(url, ok, err) { var s = document.createElement('script'); s.src = url; s.async = true; s.onload = ok; s.onerror = err; document.head.appendChild(s); }
-    function iniciarMapa() {
-      try {
-        map = L.map('map', { worldCopyJump: true }).setView([37.371, -6.070], 5);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-          { attribution: '© OpenStreetMap © CARTO', maxZoom: 19 }).addTo(map);
-        map.on('click', function (e) { setLatLon(e.latlng.lat, e.latlng.lng, false); });
-        setTimeout(function () { map.invalidateSize(); }, 200);
-      } catch (err) { mapaNoDisponible(); }
-    }
-    function mapaNoDisponible() {
-      var c = $('map'); if (!c) return;
-      c.style.display = 'grid'; c.style.placeItems = 'center'; c.style.padding = '20px'; c.style.textAlign = 'center';
-      c.innerHTML = '<div style="color:#8ea0bd;font-size:13.5px;line-height:1.5">No se pudo cargar el mapa.<br>Escribe la latitud y la longitud a mano.</div>';
-    }
-    if (window.L && window.L.map) {
-      iniciarMapa();
-    } else {
-      cargarCSS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
-      cargarJS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', iniciarMapa, mapaNoDisponible);
-    }
-    latInput.addEventListener('input', function () { var la = parseFloat(latInput.value), lo = parseFloat(lonInput.value); if (!isNaN(la) && !isNaN(lo)) setLatLon(la, lo, true); else recompute(); });
-    lonInput.addEventListener('input', function () { var la = parseFloat(latInput.value), lo = parseFloat(lonInput.value); if (!isNaN(la) && !isNaN(lo)) setLatLon(la, lo, true); else recompute(); });
-    $('geoBtn').addEventListener('click', function () {
-      if (!navigator.geolocation) { alert('Tu navegador no permite geolocalización.'); return; }
-      navigator.geolocation.getCurrentPosition(function (p) { setLatLon(p.coords.latitude, p.coords.longitude, true); },
-        function () { alert('No se pudo obtener la ubicación. Escríbela a mano o pincha en el mapa.'); });
     });
     whenInput.addEventListener('input', recompute);
-    ['sqm', 'ir', 'temp', 'pdf'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('input', recompute); });
+    ['temp', 'pdf'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('input', recompute); });
 
     // ═══════════════════════════════════════════════════════════════════════
     // CÁLCULO EN TIEMPO REAL
@@ -155,24 +172,25 @@
     function recompute() {
       lastComputed = null; submitBtn.disabled = true;
       if (!OBS) return;
-      var la = parseFloat(latInput.value), lo = parseFloat(lonInput.value), whenVal = whenInput.value;
-      var haveWhere = !isNaN(la) && !isNaN(lo), haveWhen = !!whenVal;
+      var whenVal = whenInput.value;
+      var haveBase = !!(baseSel && baseSel.lat != null && baseSel.lon != null), haveWhen = !!whenVal;
 
-      if (!(haveWhen && haveWhere)) {
+      if (!(haveWhen && haveBase)) {
         $('compTitle').textContent = 'A la espera de datos';
-        $('compSub').textContent = 'Indica la fecha/hora y el lugar para calcular la posición.';
+        $('compSub').textContent = haveWhen ? 'Elige una base: la ficha no se genera sin lugar.' : 'Indica la fecha/hora y elige una base para calcular la posición.';
         ['objAlt', 'objAz', 'sunAlt', 'moonAlt'].forEach(function (id) { $(id).textContent = '—'; });
         $('visibility').className = 'visibility';
         return;
       }
-      var date = new Date(whenVal), jd = julianDay(date);
+      var la = parseFloat(baseSel.lat), lo = parseFloat(baseSel.lon);
+      var date = localAUtc(whenVal, baseSel.tz || ''), jd = julianDay(date);
       var obj = altAz(OBS.ra, OBS.dec, jd, la, lo);
       var s = sunPos(jd), sun = altAz(s.ra, s.dec, jd, la, lo);
       var m = moonPos(jd), moon = altAz(m.ra, m.dec, jd, la, lo);
       var objAltR = refract(obj.alt);
 
       $('compTitle').textContent = OBS.etiqueta;
-      $('compSub').textContent = 'Posición calculada para la fecha, hora y lugar indicados.';
+      $('compSub').textContent = 'Posición calculada para ' + escOpt(baseSel.nombre) + ' (' + escOpt(baseSel.tz || 'TZ del navegador') + ').';
       $('objAlt').innerHTML = fmtDeg(objAltR);
       $('objAz').innerHTML = fmtAz(obj.az);
       $('sunAlt').innerHTML = fmtDeg(sun.alt);
@@ -188,12 +206,13 @@
       }
 
       lastComputed = {
+        baseId: baseSel.id,
         ra: OBS.ra, dec: OBS.dec,
         fechaHoraLocal: whenVal, fechaHoraUTC: date.toISOString(),
         lat: la, lon: lo,
         objAlt: +objAltR.toFixed(2), objAz: +obj.az.toFixed(2),
         sunAlt: +sun.alt.toFixed(2), moonAlt: +moon.alt.toFixed(2),
-        sqm: valor('sqm'), ir: valor('ir'), temp: valor('temp'),
+        temp: valor('temp'),
         pdf: ($('pdf') ? $('pdf').value.trim() : '')
       };
       submitBtn.disabled = false;
@@ -214,9 +233,12 @@
         var o = res.data;
         OBS = { ra: parseFloat(o.ra), dec: parseFloat(o.decl), etiqueta: (o.objeto_etiqueta || o.objeto || '') };
         if (cabecera) cabecera.textContent = OBS.etiqueta + (o.observador ? (' · ' + o.observador) : '');
-        return api(WP.endpoint + '/' + obsId + '/ficha-datos').then(function (fres) {
-          if (fres.ok && fres.data && fres.data.observacion_id) { precargar(fres.data); }
-          recompute();
+        if (o.base_id) basePendiente = o.base_id;   // base ya elegida en el registro
+        return cargarBases().then(function () {
+          return api(WP.endpoint + '/' + obsId + '/ficha-datos').then(function (fres) {
+            if (fres.ok && fres.data && fres.data.observacion_id) { precargar(fres.data); }
+            recompute();
+          });
         });
       }).catch(function () {
         outNote.innerHTML = '<span style="color:var(--rojo)">✗ No se pudo contactar con el servidor.</span>';
@@ -225,12 +247,9 @@
 
     function precargar(f) {
       if (f.fecha_hora_local) whenInput.value = f.fecha_hora_local;
-      if (f.sqm !== null && f.sqm !== undefined && f.sqm !== '') $('sqm').value = f.sqm;
-      if (f.ir !== null && f.ir !== undefined && f.ir !== '') $('ir').value = f.ir;
       if (f.temp !== null && f.temp !== undefined && f.temp !== '') $('temp').value = f.temp;
       if ($('pdf') && f.pdf) $('pdf').value = f.pdf;
-      var la = parseFloat(f.lat), lo = parseFloat(f.lon);
-      if (!isNaN(la) && !isNaN(lo)) setLatLon(la, lo, true);
+      // La ubicación ya no se guarda a mano: viene de la base (preseleccionada por base_id).
     }
 
     // ═══════════════════════════════════════════════════════════════════════
