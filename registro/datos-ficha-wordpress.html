@@ -12,8 +12,8 @@
      Sube bitacora-ficha.js por FTP a /wp-content/uploads/bitacora/.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260719_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260719_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260727_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260727_1300" />
 
 <div id="mw-obs-form">
 <div class="wrap">
@@ -31,25 +31,15 @@
       <legend><div class="leg"><span class="num">1</span>
         <div><h2>Cuándo y dónde</h2><p>Con la fecha, la hora y el lugar, la posición del objeto se calcula sola.</p></div></div></legend>
 
-      <label class="field"><span class="lab">Fecha y hora de la observación (hora local)</span>
+      <label class="field"><span class="lab">Fecha y hora de la observación (hora local de la base)</span>
         <input type="datetime-local" id="when" /></label>
 
-      <button type="button" class="geo-btn" id="geoBtn">◎ Usar mi ubicación actual</button>
-      <div id="map"></div>
-      <p class="coord-note">Pincha en el mapa para fijar el lugar, o escribe las coordenadas a mano.</p>
-      <div class="row">
-        <label class="field"><span class="lab">Latitud</span>
-          <input type="number" id="lat" step="0.0001" placeholder="37.3710" /></label>
-        <label class="field"><span class="lab">Longitud</span>
-          <input type="number" id="lon" step="0.0001" placeholder="-6.0700" /></label>
-      </div>
+      <label class="field" style="margin-top:14px"><span class="lab">Base de observación</span>
+        <select id="baseSelect"><option value="">— Elige una base —</option></select></label>
+      <p class="coord-note">La ubicación y su zona horaria salen de la base elegida. Gestiona tus lugares en <a href="/mis-bases/">Mis bases</a>. <strong>La ficha no se puede generar sin base.</strong></p>
 
-      <p class="coord-note" style="margin-top:22px">Condiciones del cielo esa noche (opcional):</p>
+      <p class="coord-note" style="margin-top:22px">Temperatura ambiente esa noche (opcional). El brillo (SQM) y la transparencia (IR) del cielo se registran en la observación.</p>
       <div class="row">
-        <label class="field"><span class="lab">SQM-L</span>
-          <input type="number" id="sqm" step="0.01" placeholder="21.40" /></label>
-        <label class="field"><span class="lab">IR (º)</span>
-          <input type="number" id="ir" step="0.1" placeholder="-1.3" /></label>
         <label class="field"><span class="lab">Temp. ambiente (º)</span>
           <input type="number" id="temp" step="0.1" placeholder="18" /></label>
       </div>
@@ -84,4 +74,4 @@
 </div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-ficha.js?v=1" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ficha.js?v=20260727_1300" defer></script>

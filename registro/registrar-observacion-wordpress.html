@@ -73,13 +73,26 @@
         <select id="scopeSelect"><option value="">— Elige un telescopio de tu flota —</option></select></label>
       <p class="hint" id="scopeHint" style="margin:-8px 0 0;font-size:12.5px;">Elige tu telescopio de la flota y, en cada ocular, uno de tus oculares: los aumentos, la pupila y el campo real se calculan solos. Gestiona tu equipo en <a href="/mi-flota/">Mi flota</a>.</p>
 
+      <label class="field" style="margin-top:14px"><span class="lab">Base de observación (opcional)</span>
+        <select id="baseSelect"><option value="">— Sin base (no se calcula altitud/azimut) —</option></select></label>
+      <p class="hint" id="baseHint" style="margin:-8px 0 0;font-size:12.5px;">Elige desde dónde observaste: con la base + la fecha + la hora se calculan la altura y el azimut del objeto, del Sol y de la Luna. Gestiona tus lugares en <a href="/mis-bases/">Mis bases</a>.</p>
+      <div class="astro-preview" id="astroPreview" hidden>
+        <span>Objeto <b id="apObj">—</b></span><span>Sol <b id="apSun">—</b></span><span>Luna <b id="apMoon">—</b></span>
+      </div>
+
       <div class="row" style="margin-top:14px">
         <label class="field"><span class="lab">Cielo (escala Bortle)</span>
           <select id="cieloBortle"></select></label>
         <label class="field"><span class="lab">SQM del cielo (mag/arcsec²)</span>
           <input type="number" id="cieloSqm" min="14" max="22" step="0.05" value="21.4" /></label>
       </div>
-      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">El brillo del cielo de la sesión. Se usa para la magnitud límite al <strong>generar la imagen del simulador</strong> y queda registrado en la observación.</p>
+      <div class="row" style="margin-top:14px">
+        <label class="field"><span class="lab">Transparencia (escala IR)</span>
+          <select id="transpSel"></select></label>
+        <label class="field"><span class="lab">IR del cielo (ºC)</span>
+          <input type="number" id="cieloIr" min="-50" max="50" step="1" placeholder="−20" /></label>
+      </div>
+      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">El brillo (SQM) y la transparencia (IR) del cielo de la sesión. El SQM se usa para la magnitud límite al <strong>generar la imagen del simulador</strong>; ambos quedan registrados y alimentan la <strong>salud de la base</strong>.</p>
     </fieldset>
 
     <!-- 2 · LO QUE VISTE, POR OCULAR -->
@@ -119,7 +132,7 @@
 </div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260723_1800" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260727_1300" defer></script>
 <script src="/wp-content/uploads/bitacora/estrellas-carbono-datos.js?v=20260721_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260721_2330" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260723_1800" defer></script>

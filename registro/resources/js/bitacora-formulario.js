@@ -425,10 +425,66 @@
     var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
     return v.toFixed(1)+'° <small>'+dirs[Math.round(v/22.5)%16]+'</small>';
   }
+  // ── Zona horaria: hora local de la base → instante UTC ──
+  // Sin librería: se formatea un instante UTC en la TZ IANA de la base y se mide
+  // el desfase. Una pasada basta (el error en el borde de horario de verano es de
+  // segundos, irrelevante para alt/az). tz vacía = TZ del navegador.
+  function offsetMsTz(tz, utcMs){
+    try{
+      var dtf=new Intl.DateTimeFormat('en-US',{ timeZone:tz, hour12:false,
+        year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      var p=dtf.formatToParts(new Date(utcMs)).reduce(function(a,x){a[x.type]=x.value;return a;},{});
+      var comoUtc=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute,+p.second);
+      return comoUtc-utcMs;
+    }catch(_e){ return 0; }
+  }
+  function localAUtc(fecha, hora, tz){          // fecha 'YYYY-MM-DD', hora 'HH:MM'
+    var f=fecha.split('-').map(Number), h=(hora||'00:00').split(':').map(Number);
+    var guess=Date.UTC(f[0], f[1]-1, f[2], h[0]||0, h[1]||0);
+    if(!tz) return new Date(guess);            // sin TZ: interpretar como UTC del guess
+    return new Date(guess - offsetMsTz(tz, guess));
+  }
+
+  // Base elegida (objeto de la flota de bases) y su astrometría calculada.
+  var baseSel=null, basesCargadas=false, listaBases=[];
+  var astroActual=null;   // {lat,lon,objAlt,objAz,sunAlt,moonAlt,fechaHoraUTC,fechaHoraLocal} o null
+
+  // Calcula alt/az del objeto, el Sol y la Luna desde la base + fecha + hora, y
+  // pinta la previsualización. Devuelve el objeto de astrometría o null.
+  function calcularAstro(){
+    var prev=$('astroPreview');
+    astroActual=null;
+    if(prev) prev.hidden=true;
+    if(!baseSel || !resolved || resolved.ra==null || resolved.dec==null) return null;
+    var fecha=$('fechaObs')?$('fechaObs').value:'', hora=$('horaObs')?$('horaObs').value:'';
+    if(!fecha) return null;
+    if(baseSel.lat==null || baseSel.lon==null) return null;
+    var d=localAUtc(fecha, hora||'00:00', baseSel.tz||'');
+    var jd=julianDay(d), lat=parseFloat(baseSel.lat), lon=parseFloat(baseSel.lon);
+    var obj=altAz(resolved.ra, resolved.dec, jd, lat, lon);
+    var s=sunPos(jd),  sun=altAz(s.ra, s.dec, jd, lat, lon);
+    var m=moonPos(jd), moon=altAz(m.ra, m.dec, jd, lat, lon);
+    var objAlt=refract(obj.alt);
+    astroActual={
+      lat:lat, lon:lon,
+      objAlt:objAlt, objAz:obj.az,
+      sunAlt:refract(sun.alt), moonAlt:refract(moon.alt),
+      fechaHoraLocal: fecha+'T'+(hora||'00:00'),
+      fechaHoraUTC: d.toISOString()
+    };
+    if(prev){
+      $('apObj').innerHTML = fmtDeg(objAlt)+' / '+fmtAz(obj.az);
+      $('apSun').innerHTML = fmtDeg(astroActual.sunAlt);
+      $('apMoon').innerHTML= fmtDeg(astroActual.moonAlt);
+      prev.hidden=false;
+    }
+    return astroActual;
+  }
+
   var lastComputed=null;
-  // En este formulario (solo contenido) la observación está lista cuando hay
-  // objeto resuelto y observador. La astrometría (fecha, lugar, altitud/azimut)
-  // se captura aparte, en el formulario de datos de ficha.
+  // Observación lista cuando hay objeto resuelto, observador, fecha y telescopio.
+  // La base es OPCIONAL: si la hay, se calcula y adjunta la astrometría (siembra
+  // la ficha en el servidor); si no, se registra sin altitud/azimut.
   function recompute(){
     if(typeof actualizarExplNombre==='function') actualizarExplNombre();
     lastComputed=null; submitBtn.disabled=true; jsonOut.classList.remove('show');
@@ -437,16 +493,27 @@
     var haveTele=telescopioNombre!=='';   // telescopio SIEMPRE de la flota (o heredado)
     if(!(haveObj&&haveObs&&haveFecha&&haveTele)){ return; }
     var cielo = cieloCtrl ? cieloCtrl.leer() : { sqm:null, clase:null, etiqueta:null };
+    var transp = transpCtrl ? transpCtrl.leer() : { ir:null, etiqueta:null };
+    var astro = calcularAstro();   // null si no hay base
     lastComputed={
       objeto:resolved.etiqueta, tipo:resolved.tipo, num:resolved.num,
       cons:resolved.cons||'', nombre:resolved.nombre||'',
       ra:resolved.ra, dec:resolved.dec,
       observador:$('observer').value.trim(), telescopio:telescopioNombre,
       telescopioId: telescopioIdSel,
+      baseId: baseSel ? baseSel.id : null,
       fechaObservacion:($('fechaObs')?$('fechaObs').value:''),
       horaObservacion:($('horaObs')?$('horaObs').value:''),
-      cieloSqm: cielo.sqm, cieloBortle: cielo.clase, cieloBortleEtiqueta: cielo.etiqueta
+      cieloSqm: cielo.sqm, cieloBortle: cielo.clase, cieloBortleEtiqueta: cielo.etiqueta,
+      cieloIr: transp.ir, cieloTransparencia: transp.etiqueta
     };
+    // Astrometría (solo si hay base): el servidor la usa para sembrar la ficha.
+    if(astro){
+      lastComputed.lat=astro.lat; lastComputed.lon=astro.lon;
+      lastComputed.objAlt=astro.objAlt; lastComputed.objAz=astro.objAz;
+      lastComputed.sunAlt=astro.sunAlt; lastComputed.moonAlt=astro.moonAlt;
+      lastComputed.fechaHoraLocal=astro.fechaHoraLocal; lastComputed.fechaHoraUTC=astro.fechaHoraUTC;
+    }
     submitBtn.disabled=false;
   }
   $('observer').addEventListener('input',recompute);
@@ -457,6 +524,55 @@
   var cieloCtrl = (window.BitacoraBase && $('cieloBortle') && $('cieloSqm'))
     ? BitacoraBase.montarCielo($('cieloBortle'), $('cieloSqm')) : null;
   if ($('cieloSqm')) $('cieloSqm').addEventListener('change', recompute);
+
+  // Transparencia (IR) enlazada a su escala etiquetada (widget compartido).
+  var transpCtrl = (window.BitacoraBase && BitacoraBase.montarTransparencia && $('transpSel') && $('cieloIr'))
+    ? BitacoraBase.montarTransparencia($('transpSel'), $('cieloIr')) : null;
+  if ($('cieloIr')) $('cieloIr').addEventListener('change', recompute);
+
+  // ── Bases de observación (lugares reutilizables del observador) ──
+  // Se cargan de /bases (mías + públicas + compartidas conmigo) y se agrupan en el
+  // selector. Al elegir una, se recalcula la astrometría (alt/az, Sol, Luna).
+  var baseSelect = $('baseSelect');
+  function basePorId(id){
+    for(var i=0;i<listaBases.length;i++){ if(String(listaBases[i].id)===String(id)) return listaBases[i]; }
+    return null;
+  }
+  function poblarBases(){
+    if(!baseSelect) return;
+    var mias=[], comp=[];
+    listaBases.forEach(function(b){ (b.es_mia?mias:comp).push(b); });
+    function opt(b){
+      var extra=[]; if(b.altitud_m!=null&&b.altitud_m!=='') extra.push(Math.round(b.altitud_m)+' m');
+      if(!b.es_mia&&b.dueno) extra.push(b.dueno);
+      return '<option value="'+b.id+'">'+BitacoraBase.esc(b.nombre)+(extra.length?' ('+BitacoraBase.esc(extra.join(' · '))+')':'')+'</option>';
+    }
+    var html='<option value="">— Sin base (no se calcula altitud/azimut) —</option>';
+    if(mias.length){ html+='<optgroup label="Mis bases">'+mias.map(opt).join('')+'</optgroup>'; }
+    if(comp.length){ html+='<optgroup label="Compartidas / públicas">'+comp.map(opt).join('')+'</optgroup>'; }
+    baseSelect.innerHTML=html;
+    if(baseSel) baseSelect.value=String(baseSel.id);
+  }
+  if(baseSelect){
+    baseSelect.addEventListener('change', function(){
+      baseSel = baseSelect.value ? basePorId(baseSelect.value) : null;
+      recompute();
+    });
+  }
+  function cargarBases(){
+    if(!WP) return;
+    var API = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+    fetch(API, { credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if(!Array.isArray(d)) return;
+        listaBases=d; basesCargadas=true;
+        if(basePendiente!=null){ baseSel=basePorId(basePendiente); basePendiente=null; }
+        poblarBases(); recompute();
+      })
+      .catch(function(){ /* sin bases: se registra sin ubicación */ });
+  }
+  var basePendiente=null;   // id a preseleccionar en modo edición
 
   // Selector de telescopio: SIEMPRE de la flota (sin texto libre). Al elegir uno,
   // guarda su id/nombre y recalcula la óptica de todas las entradas. La opción
@@ -685,6 +801,12 @@
       $('cieloSqm').value = obs.cielo_sqm;
       if (cieloCtrl) $('cieloSqm').dispatchEvent(new Event('input', { bubbles: true }));
     }
+    if($('cieloIr') && obs.cielo_ir != null && obs.cielo_ir !== '') {
+      $('cieloIr').value = obs.cielo_ir;
+      if (transpCtrl) $('cieloIr').dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    // Base: se preselecciona al cargar la lista de bases (basePendiente).
+    if(obs.base_id){ basePendiente = obs.base_id; if(basesCargadas){ baseSel = basePorId(obs.base_id); if(baseSelect) baseSelect.value=String(obs.base_id); } }
 
     // MySQL devuelve todo como texto; los campos de RA/Dec aceptan decimales.
     // Para los no-Messier hay que rellenarlos ANTES de resolver, porque
@@ -745,6 +867,7 @@
   aplicarModoEdicion();
   cargarParaEditar();
   cargarFlota();   // carga el equipo del observador y puebla los selectores
+  cargarBases();   // carga las bases (mías + públicas + compartidas) del selector
 
   // Precarga el observador con el nombre del usuario de WordPress (editable).
   // Solo al crear (en edición, precargar() pone el de la observación).

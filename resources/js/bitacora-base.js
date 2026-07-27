@@ -175,11 +175,60 @@ window.BitacoraBase = (function () {
     };
   }
 
+  // ── Transparencia del cielo (IR, ºC): más negativo = más transparente ──
+  // Escala del observador: IR −30 extremadamente … IR > −5 pobre. A diferencia
+  // del SQM/Bortle, el IR se teclea con cualquier valor, así que la etiqueta se
+  // decide por umbrales (bandas), no por coincidencia exacta.
+  var TRANSPARENCIA = [
+    { ir: -30, etiqueta: 'Extremadamente transparente' },
+    { ir: -20, etiqueta: 'Transparente' },
+    { ir: -15, etiqueta: 'Mayoritariamente transparente' },
+    { ir: -5,  etiqueta: 'Algo transparente' },
+    { ir: 0,   etiqueta: 'Pobre' }
+  ];
+  function transparenciaPorIr(ir) {
+    if (isNaN(ir)) return null;
+    if (ir <= -25)   return TRANSPARENCIA[0];
+    if (ir <= -17.5) return TRANSPARENCIA[1];
+    if (ir <= -10)   return TRANSPARENCIA[2];
+    if (ir <= -5)    return TRANSPARENCIA[3];
+    return TRANSPARENCIA[4];
+  }
+  function montarTransparencia(select, input) {
+    if (select && !select._pob) {
+      var html = '<option value="">— personalizado —</option>';
+      TRANSPARENCIA.forEach(function (t) {
+        html += '<option value="' + t.ir + '">' + t.etiqueta + ' · IR ' + t.ir + '</option>';
+      });
+      select.innerHTML = html;
+      select._pob = true;
+    }
+    function sincronizarSelect() {
+      var t = transparenciaPorIr(parseFloat(input.value));
+      if (select) select.value = (input.value === '' || !t) ? '' : String(t.ir);
+    }
+    if (select) select.addEventListener('change', function () {
+      if (select.value !== '') { input.value = select.value; input.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
+    input.addEventListener('input', sincronizarSelect);
+    sincronizarSelect();
+    return {
+      leer: function () {
+        var v = parseFloat(input.value);
+        var t = transparenciaPorIr(v);
+        return { ir: isNaN(v) ? null : v, etiqueta: t ? t.etiqueta : null };
+      }
+    };
+  }
+
   return {
     esc: esc,
     montarBuscadorCatalogo: montarBuscadorCatalogo,
     BORTLE: BORTLE,
     claseBortlePorSqm: claseBortlePorSqm,
-    montarCielo: montarCielo
+    montarCielo: montarCielo,
+    TRANSPARENCIA: TRANSPARENCIA,
+    transparenciaPorIr: transparenciaPorIr,
+    montarTransparencia: montarTransparencia
   };
 })();

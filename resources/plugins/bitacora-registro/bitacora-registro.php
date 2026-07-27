@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.20.0' );
+define( 'BITACORA_VERSION', '1.21.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -40,6 +40,9 @@ define( 'BITACORA_TABLA_OCULARES', 'bitacora_oculares' );
 // Clave del transient que cachea el catálogo GLOBAL de equipo (ver bitacora_equipo_catalogo).
 define( 'BITACORA_EQUIPO_CATALOGO_CACHE', 'bitacora_equipo_catalogo' );
 define( 'BITACORA_TABLA_AUXILIARES', 'bitacora_auxiliares' );
+// Bases del observador (lugares de observación reutilizables) y su compartición.
+define( 'BITACORA_TABLA_BASES', 'bitacora_bases' );
+define( 'BITACORA_TABLA_BASE_COMPARTIDA', 'bitacora_base_compartida' );
 
 /**
  * Nombre real de la tabla, con el prefijo que use esta instalación
@@ -78,6 +81,18 @@ function bitacora_nombre_tabla_observadores() {
 function bitacora_nombre_tabla_fichas() {
     global $wpdb;
     return $wpdb->prefix . BITACORA_TABLA_FICHAS;
+}
+
+/** Nombre real de la tabla de bases (lugares de observación del observador). */
+function bitacora_nombre_tabla_bases() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_BASES;
+}
+
+/** Nombre real de la tabla de compartición de bases (base_id ↔ usuario_id). */
+function bitacora_nombre_tabla_base_compartida() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_BASE_COMPARTIDA;
 }
 
 /** Nombre real de la tabla de telescopios (catálogo global + equipo personal). */
@@ -316,6 +331,37 @@ function bitacora_crear_tabla() {
         KEY usuario_id (usuario_id)
     ) $collate;";
 
+    // Bases del observador: lugares de observación reutilizables (nombre, coords,
+    // altitud y zona horaria IANA). Fuente única de ubicación; una observación
+    // enlaza a una por base_id. visibilidad: 'privada' | 'publica' | 'seleccionada'.
+    $tabla_bases = bitacora_nombre_tabla_bases();
+    $sql_bases = "CREATE TABLE $tabla_bases (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        usuario_id bigint(20) unsigned DEFAULT NULL,
+        nombre varchar(160) NOT NULL DEFAULT '',
+        lat double DEFAULT NULL,
+        lon double DEFAULT NULL,
+        altitud_m double DEFAULT NULL,
+        tz varchar(64) NOT NULL DEFAULT '',
+        visibilidad varchar(16) NOT NULL DEFAULT 'privada',
+        creado_en datetime NOT NULL,
+        actualizado_en datetime DEFAULT NULL,
+        PRIMARY KEY  (id),
+        KEY usuario_id (usuario_id)
+    ) $collate;";
+
+    // Compartición selectiva de una base con usuarios concretos (visibilidad
+    // 'seleccionada'). Compartir = solo lectura (elegir la base + ver su salud).
+    $tabla_base_comp = bitacora_nombre_tabla_base_compartida();
+    $sql_base_comp = "CREATE TABLE $tabla_base_comp (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        base_id bigint(20) unsigned NOT NULL,
+        usuario_id bigint(20) unsigned NOT NULL,
+        creado_en datetime NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY base_usuario (base_id, usuario_id)
+    ) $collate;";
+
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql );
     dbDelta( $sql_entradas );
@@ -326,6 +372,8 @@ function bitacora_crear_tabla() {
     dbDelta( $sql_telescopios );
     dbDelta( $sql_oculares );
     dbDelta( $sql_auxiliares );
+    dbDelta( $sql_bases );
+    dbDelta( $sql_base_comp );
 
     // Columnas de asociación observación/entrada → equipo (idempotente: dbDelta no
     // añade columnas nuevas a tablas ya creadas de forma fiable, así que se hace a
@@ -339,6 +387,11 @@ function bitacora_crear_tabla() {
     bitacora_asegurar_columna( $tabla, 'hora_observacion', "varchar(8) NOT NULL DEFAULT ''" );
     bitacora_asegurar_columna( $tabla, 'cielo_sqm', "double DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla, 'cielo_bortle', "tinyint DEFAULT NULL" );
+    // Transparencia del cielo (IR, ºC): hogar de SQM/IR = la observación (los mide
+    // el observador en el registro); la ficha los LEE para mostrarse. Y la base
+    // desde la que se observó, para calcular alt/az y agregar la "salud" del sitio.
+    bitacora_asegurar_columna( $tabla, 'cielo_ir', "double DEFAULT NULL" );
+    bitacora_asegurar_columna( $tabla, 'base_id', "bigint(20) unsigned DEFAULT NULL" );
     // Origen de cada imagen: 'subida' (foto/boceto del observador) o 'simulada' (Gaia).
     bitacora_asegurar_columna( $tabla_imagenes, 'origen', "varchar(16) NOT NULL DEFAULT 'subida'" );
     // Nombre propio que el observador da a su telescopio personal en Mi flota.
@@ -423,6 +476,23 @@ function bitacora_crear_tabla() {
             }
         }
         update_option( 'bitacora_columnas_sesion_retiradas', 1 );
+    }
+
+    // Hogar de la calidad de cielo (SQM/IR) = la observación (cielo_sqm/cielo_ir):
+    // los mide el observador en el registro. Backfill una vez desde la ficha
+    // (donde vivían antes) para no perder mediciones históricas.
+    if ( ! get_option( 'bitacora_cielo_desde_ficha' ) ) {
+        $wpdb->query(
+            "UPDATE $tabla o JOIN $tabla_fichas f ON f.observacion_id = o.id
+             SET o.cielo_sqm = f.sqm
+             WHERE o.cielo_sqm IS NULL AND f.sqm IS NOT NULL"
+        );
+        $wpdb->query(
+            "UPDATE $tabla o JOIN $tabla_fichas f ON f.observacion_id = o.id
+             SET o.cielo_ir = f.ir
+             WHERE o.cielo_ir IS NULL AND f.ir IS NOT NULL"
+        );
+        update_option( 'bitacora_cielo_desde_ficha', 1 );
     }
 
     // Instalaciones anteriores: aflojar los campos astrométricos (las
@@ -615,6 +685,19 @@ function bitacora_validar_datos( $d ) {
         $b = intval( $d['cieloBortle'] );
         $cielo_bortle = ( $b >= 1 && $b <= 9 ) ? $b : null;
     }
+    // --- Transparencia del cielo (IR, ºC): escala de −30 (extremadamente
+    //     transparente) a >−5 (pobre). Opcional, la mide el observador. ---
+    $cielo_ir = null;
+    if ( isset( $d['cieloIr'] ) && '' !== $d['cieloIr'] && null !== $d['cieloIr'] ) {
+        if ( ! is_numeric( $d['cieloIr'] ) || $d['cieloIr'] < -50 || $d['cieloIr'] > 50 ) {
+            return new WP_Error( 'campo_invalido', 'El IR (transparencia) del cielo está fuera de rango.', array( 'status' => 400 ) );
+        }
+        $cielo_ir = floatval( $d['cieloIr'] );
+    }
+    // --- Base de observación (opcional): lugar reutilizable del observador. Su
+    //     propiedad/visibilidad se comprueba al guardar (bitacora_base_legible). ---
+    $base_id = ( isset( $d['baseId'] ) && is_numeric( $d['baseId'] ) && $d['baseId'] > 0 )
+        ? intval( $d['baseId'] ) : null;
 
     // --- Datos de cielo (opcionales): null, o número en rango razonable ---
     $cielo = array();
@@ -648,6 +731,8 @@ function bitacora_validar_datos( $d ) {
         'hora_observacion'  => $hora_obs,
         'cielo_sqm'         => $cielo_sqm,
         'cielo_bortle'      => $cielo_bortle,
+        'cielo_ir'          => $cielo_ir,
+        'base_id'           => $base_id,
     );
 }
 
@@ -922,6 +1007,22 @@ function bitacora_registrar_rutas() {
             ),
         )
     );
+
+    // ── Bases del observador (lugares de observación) ──
+    register_rest_route( 'bitacora/v1', '/bases', array(
+        array( 'methods' => 'GET',  'callback' => 'bitacora_bases_listar', 'permission_callback' => $solo_logueados ),
+        array( 'methods' => 'POST', 'callback' => 'bitacora_base_crear',   'permission_callback' => $solo_logueados ),
+    ) );
+    register_rest_route( 'bitacora/v1', '/bases/(?P<id>\d+)', array(
+        array( 'methods' => 'PUT',    'callback' => 'bitacora_base_editar', 'permission_callback' => $solo_logueados ),
+        array( 'methods' => 'DELETE', 'callback' => 'bitacora_base_borrar', 'permission_callback' => $solo_logueados ),
+    ) );
+    register_rest_route( 'bitacora/v1', '/bases/(?P<id>\d+)/salud', array(
+        'methods' => 'GET', 'callback' => 'bitacora_base_salud', 'permission_callback' => $solo_logueados,
+    ) );
+    register_rest_route( 'bitacora/v1', '/bases/(?P<id>\d+)/compartir', array(
+        'methods' => 'PUT', 'callback' => 'bitacora_base_compartir', 'permission_callback' => $solo_logueados,
+    ) );
 }
 add_action( 'rest_api_init', 'bitacora_registrar_rutas' );
 
@@ -2808,16 +2909,14 @@ function bitacora_validar_ficha_datos( $d ) {
     $fecha_utc_raw = sanitize_text_field( $d['fechaHoraUTC'] ?? '' );
     $fecha_utc     = $fecha_utc_raw && strtotime( $fecha_utc_raw ) ? gmdate( 'Y-m-d H:i:s', strtotime( $fecha_utc_raw ) ) : null;
 
-    $cielo = array();
-    foreach ( array( 'sqm' => array( 0, 25 ), 'ir' => array( -50, 50 ), 'temp' => array( -50, 60 ) ) as $c => $rng ) {
-        $val = $d[ $c ] ?? null;
-        if ( null === $val || '' === $val ) {
-            $cielo[ $c ] = null;
-        } elseif ( is_numeric( $val ) && $val >= $rng[0] && $val <= $rng[1] ) {
-            $cielo[ $c ] = floatval( $val );
-        } else {
-            return new WP_Error( 'campo_invalido', "El campo '$c' está fuera de rango.", array( 'status' => 400 ) );
+    // SQM/IR ya NO se capturan aquí: viven en la observación (cielo_sqm/cielo_ir),
+    // los mide el observador en el registro. La ficha conserva la temp ambiente.
+    $temp = null;
+    if ( isset( $d['temp'] ) && '' !== $d['temp'] && null !== $d['temp'] ) {
+        if ( ! is_numeric( $d['temp'] ) || $d['temp'] < -50 || $d['temp'] > 60 ) {
+            return new WP_Error( 'campo_invalido', "El campo 'temp' está fuera de rango.", array( 'status' => 400 ) );
         }
+        $temp = floatval( $d['temp'] );
     }
 
     return array(
@@ -2831,9 +2930,7 @@ function bitacora_validar_ficha_datos( $d ) {
         'obj_az'           => $v['objAz'],
         'sun_alt'          => $v['sunAlt'],
         'moon_alt'         => $v['moonAlt'],
-        'sqm'              => $cielo['sqm'],
-        'ir'               => $cielo['ir'],
-        'temp'             => $cielo['temp'],
+        'temp'             => $temp,
         'pdf'              => esc_url_raw( $d['pdf'] ?? '' ),
     );
 }
@@ -2860,23 +2957,302 @@ function bitacora_guardar_ficha_datos( WP_REST_Request $peticion ) {
         return $permiso;
     }
 
-    $datos = bitacora_validar_ficha_datos( $peticion->get_json_params() );
+    $params = $peticion->get_json_params();
+    $datos  = bitacora_validar_ficha_datos( $params );
     if ( is_wp_error( $datos ) ) {
         return $datos;
     }
 
+    // Una ficha NO se genera sin base: la ubicación es la base elegida. Se guarda
+    // el base_id en la observación (hogar de la base) y se comprueba que es usable.
+    $base_id = ( isset( $params['baseId'] ) && is_numeric( $params['baseId'] ) && $params['baseId'] > 0 ) ? intval( $params['baseId'] ) : null;
+    if ( ! $base_id ) {
+        return new WP_Error( 'sin_base', 'Elige una base: la ficha no se puede generar sin lugar de observación.', array( 'status' => 400 ) );
+    }
+    if ( ! bitacora_base_legible( $base_id, get_current_user_id() ) ) {
+        return new WP_Error( 'base_invalida', 'Esa base no existe o no puedes usarla.', array( 'status' => 400 ) );
+    }
+    $wpdb->update( bitacora_nombre_tabla(), array( 'base_id' => $base_id ), array( 'id' => $id ) );
+
+    bitacora_upsert_ficha( $id, $datos );
+
+    return new WP_REST_Response( array( 'ok' => true, 'id' => $id, 'mensaje' => 'Datos de ficha guardados.' ), 200 );
+}
+
+/**
+ * Inserta o actualiza (por observacion_id) la ficha de una observación con las
+ * columnas dadas. Fuente única del upsert: la usan tanto el editor de ficha
+ * (datos-ficha) como la SIEMBRA desde el registro (que fija lat/lon+astrometría
+ * desde la base elegida). Solo toca las columnas presentes en $datos.
+ */
+function bitacora_upsert_ficha( $observacion_id, $datos ) {
+    global $wpdb;
+    if ( empty( $datos ) ) {
+        return;
+    }
     $tabla  = bitacora_nombre_tabla_fichas();
-    $existe = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE observacion_id = %d", $id ) );
+    $existe = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE observacion_id = %d", $observacion_id ) );
     if ( $existe ) {
         $datos['actualizado_en'] = current_time( 'mysql', true );
-        $wpdb->update( $tabla, $datos, array( 'observacion_id' => $id ) );
+        $wpdb->update( $tabla, $datos, array( 'observacion_id' => $observacion_id ) );
     } else {
-        $datos['observacion_id'] = $id;
+        $datos['observacion_id'] = $observacion_id;
         $datos['creado_en']      = current_time( 'mysql', true );
         $wpdb->insert( $tabla, $datos );
     }
+}
 
-    return new WP_REST_Response( array( 'ok' => true, 'id' => $id, 'mensaje' => 'Datos de ficha guardados.' ), 200 );
+/**
+ * Siembra la ficha desde el registro: toma la astrometría que el cliente calcula
+ * (con las coords/TZ de la base elegida) y la fija en la ficha. Solo actúa si hay
+ * ubicación (lat/lon). No pisa SQM/IR (viven en la observación) ni pdf/lugar.
+ */
+function bitacora_sembrar_ficha_desde_registro( $observacion_id, $params ) {
+    $lat = ( isset( $params['lat'] ) && is_numeric( $params['lat'] ) ) ? floatval( $params['lat'] ) : null;
+    $lon = ( isset( $params['lon'] ) && is_numeric( $params['lon'] ) ) ? floatval( $params['lon'] ) : null;
+    if ( null === $lat || null === $lon ) {
+        return; // sin base/ubicación no se siembra la ficha
+    }
+    $n = function ( $k ) use ( $params ) {
+        return ( isset( $params[ $k ] ) && is_numeric( $params[ $k ] ) ) ? floatval( $params[ $k ] ) : null;
+    };
+    $utc_raw = sanitize_text_field( $params['fechaHoraUTC'] ?? '' );
+    $campos = array(
+        'ra'               => $n( 'ra' ),
+        'decl'             => $n( 'dec' ),
+        'lat'              => $lat,
+        'lon'              => $lon,
+        'obj_alt'          => $n( 'objAlt' ),
+        'obj_az'           => $n( 'objAz' ),
+        'sun_alt'          => $n( 'sunAlt' ),
+        'moon_alt'         => $n( 'moonAlt' ),
+        'fecha_hora_local' => sanitize_text_field( $params['fechaHoraLocal'] ?? '' ),
+        'fecha_hora_utc'   => ( $utc_raw && strtotime( $utc_raw ) ) ? gmdate( 'Y-m-d H:i:s', strtotime( $utc_raw ) ) : null,
+    );
+    bitacora_upsert_ficha( $observacion_id, $campos );
+}
+
+/* ===========================================================================
+ * BASES DEL OBSERVADOR (lugares de observación reutilizables)
+ *
+ * Una base es la fuente ÚNICA de ubicación: se elige en el registro para calcular
+ * alt/az/sol/luna y acumula la "salud" del sitio (histórico SQM/IR). Compartir es
+ * de solo lectura: privada / pública / seleccionada (usuarios concretos).
+ * =========================================================================== */
+
+/** ¿Puede $uid VER (elegir + salud) la base $base_id? Dueño, pública o compartida. */
+function bitacora_base_legible( $base_id, $uid ) {
+    global $wpdb;
+    $t  = bitacora_nombre_tabla_bases();
+    $tc = bitacora_nombre_tabla_base_compartida();
+    $b  = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d", $base_id ) );
+    if ( ! $b ) {
+        return false;
+    }
+    if ( intval( $b->usuario_id ) === intval( $uid ) || 'publica' === $b->visibilidad ) {
+        return true;
+    }
+    if ( 'seleccionada' === $b->visibilidad ) {
+        $n = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $tc WHERE base_id = %d AND usuario_id = %d", $base_id, $uid ) );
+        return $n > 0;
+    }
+    return false;
+}
+
+/** La base existe y es del usuario actual; devuelve la fila o WP_Error. */
+function bitacora_base_propia( $base_id ) {
+    global $wpdb;
+    $t = bitacora_nombre_tabla_bases();
+    $b = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d", $base_id ) );
+    if ( ! $b ) {
+        return new WP_Error( 'no_existe', 'La base no existe.', array( 'status' => 404 ) );
+    }
+    if ( intval( $b->usuario_id ) !== get_current_user_id() ) {
+        return new WP_Error( 'no_autorizado', 'Solo puedes modificar tus propias bases.', array( 'status' => 403 ) );
+    }
+    return $b;
+}
+
+/** Valida los datos de una base recibidos del navegador. */
+function bitacora_validar_base( $d ) {
+    $d = (array) $d;
+    $nombre = sanitize_text_field( $d['nombre'] ?? '' );
+    if ( '' === trim( $nombre ) ) {
+        return new WP_Error( 'campo_invalido', 'La base necesita un nombre.', array( 'status' => 400 ) );
+    }
+    $lat = $d['lat'] ?? null;
+    $lon = $d['lon'] ?? null;
+    if ( ! is_numeric( $lat ) || $lat < -90 || $lat > 90 ) {
+        return new WP_Error( 'campo_invalido', 'Latitud fuera de rango (−90 a 90).', array( 'status' => 400 ) );
+    }
+    if ( ! is_numeric( $lon ) || $lon < -180 || $lon > 180 ) {
+        return new WP_Error( 'campo_invalido', 'Longitud fuera de rango (−180 a 180).', array( 'status' => 400 ) );
+    }
+    $altitud = ( isset( $d['altitud_m'] ) && '' !== $d['altitud_m'] && is_numeric( $d['altitud_m'] ) ) ? floatval( $d['altitud_m'] ) : null;
+    $tz = sanitize_text_field( $d['tz'] ?? '' );
+    if ( '' !== $tz && ! in_array( $tz, timezone_identifiers_list(), true ) ) {
+        return new WP_Error( 'campo_invalido', 'Zona horaria no válida.', array( 'status' => 400 ) );
+    }
+    $vis = $d['visibilidad'] ?? 'privada';
+    if ( ! in_array( $vis, array( 'privada', 'publica', 'seleccionada' ), true ) ) {
+        $vis = 'privada';
+    }
+    return array(
+        'nombre'      => $nombre,
+        'lat'         => floatval( $lat ),
+        'lon'         => floatval( $lon ),
+        'altitud_m'   => $altitud,
+        'tz'          => $tz,
+        'visibilidad' => $vis,
+    );
+}
+
+/** Lista de usuario_id con los que se comparte una base (para prefijar el selector). */
+function bitacora_base_compartidos( $base_id ) {
+    global $wpdb;
+    $tc = bitacora_nombre_tabla_base_compartida();
+    return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( "SELECT usuario_id FROM $tc WHERE base_id = %d", $base_id ) ) );
+}
+
+/** GET /bases → mías + públicas + compartidas conmigo, con es_mia y n_observaciones. */
+function bitacora_bases_listar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $uid = get_current_user_id();
+    $t   = bitacora_nombre_tabla_bases();
+    $tc  = bitacora_nombre_tabla_base_compartida();
+    $obs = bitacora_nombre_tabla();
+    $filas = $wpdb->get_results( $wpdb->prepare(
+        "SELECT * FROM $t
+         WHERE usuario_id = %d OR visibilidad = 'publica'
+            OR id IN ( SELECT base_id FROM $tc WHERE usuario_id = %d )
+         ORDER BY nombre ASC",
+        $uid, $uid
+    ) );
+    $out = array();
+    foreach ( $filas as $b ) {
+        $es_mia = intval( $b->usuario_id ) === intval( $uid );
+        $b->es_mia = $es_mia;
+        $b->n_observaciones = intval( $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $obs WHERE base_id = %d AND borrada_en IS NULL", $b->id
+        ) ) );
+        $b->compartidos = $es_mia ? bitacora_base_compartidos( $b->id ) : array();
+        if ( ! $es_mia ) {
+            $b->dueno = bitacora_nombre_usuario( intval( $b->usuario_id ) );
+        }
+        $out[] = $b;
+    }
+    return new WP_REST_Response( $out, 200 );
+}
+
+/** Nombre legible de un usuario (display_name), o '' si no existe. */
+function bitacora_nombre_usuario( $uid ) {
+    $u = $uid ? get_userdata( $uid ) : null;
+    return $u ? $u->display_name : '';
+}
+
+/** POST /bases → crea una base del usuario actual. */
+function bitacora_base_crear( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $datos = bitacora_validar_base( $peticion->get_json_params() );
+    if ( is_wp_error( $datos ) ) {
+        return $datos;
+    }
+    $datos['usuario_id'] = get_current_user_id();
+    $datos['creado_en']  = current_time( 'mysql', true );
+    if ( false === $wpdb->insert( bitacora_nombre_tabla_bases(), $datos ) ) {
+        return new WP_Error( 'bd', 'No se pudo guardar la base.', array( 'status' => 500 ) );
+    }
+    $id = $wpdb->insert_id;
+    bitacora_base_guardar_compartidos( $id, $datos['visibilidad'], $peticion->get_json_params() );
+    return new WP_REST_Response( array( 'ok' => true, 'id' => $id ), 201 );
+}
+
+/** PUT /bases/{id} → edita (solo dueño). */
+function bitacora_base_editar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $prev = bitacora_base_propia( intval( $peticion['id'] ) );
+    if ( is_wp_error( $prev ) ) {
+        return $prev;
+    }
+    $datos = bitacora_validar_base( $peticion->get_json_params() );
+    if ( is_wp_error( $datos ) ) {
+        return $datos;
+    }
+    $datos['actualizado_en'] = current_time( 'mysql', true );
+    $wpdb->update( bitacora_nombre_tabla_bases(), $datos, array( 'id' => intval( $peticion['id'] ) ) );
+    bitacora_base_guardar_compartidos( intval( $peticion['id'] ), $datos['visibilidad'], $peticion->get_json_params() );
+    return new WP_REST_Response( array( 'ok' => true, 'id' => intval( $peticion['id'] ) ), 200 );
+}
+
+/** DELETE /bases/{id} → borra solo si es del dueño y no tiene observaciones. */
+function bitacora_base_borrar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $id   = intval( $peticion['id'] );
+    $prev = bitacora_base_propia( $id );
+    if ( is_wp_error( $prev ) ) {
+        return $prev;
+    }
+    $n = intval( $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM " . bitacora_nombre_tabla() . " WHERE base_id = %d AND borrada_en IS NULL", $id
+    ) ) );
+    if ( $n > 0 ) {
+        return new WP_Error( 'con_observaciones', "No puedes borrar una base con $n observación(es) asociada(s).", array( 'status' => 409 ) );
+    }
+    $wpdb->delete( bitacora_nombre_tabla_base_compartida(), array( 'base_id' => $id ) );
+    $wpdb->delete( bitacora_nombre_tabla_bases(), array( 'id' => $id ) );
+    return new WP_REST_Response( array( 'ok' => true, 'id' => $id ), 200 );
+}
+
+/** Reemplaza la lista de compartidos de una base (solo si visibilidad='seleccionada'). */
+function bitacora_base_guardar_compartidos( $base_id, $visibilidad, $params ) {
+    global $wpdb;
+    $tc = bitacora_nombre_tabla_base_compartida();
+    $wpdb->delete( $tc, array( 'base_id' => $base_id ) );
+    if ( 'seleccionada' !== $visibilidad ) {
+        return;
+    }
+    $usuarios = ( isset( $params['usuarios'] ) && is_array( $params['usuarios'] ) ) ? $params['usuarios'] : array();
+    $ahora = current_time( 'mysql', true );
+    foreach ( array_unique( array_map( 'intval', $usuarios ) ) as $u ) {
+        if ( $u > 0 && $u !== get_current_user_id() ) {
+            $wpdb->insert( $tc, array( 'base_id' => $base_id, 'usuario_id' => $u, 'creado_en' => $ahora ) );
+        }
+    }
+}
+
+/** PUT /bases/{id}/compartir → actualiza solo la compartición (solo dueño). */
+function bitacora_base_compartir( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $prev = bitacora_base_propia( intval( $peticion['id'] ) );
+    if ( is_wp_error( $prev ) ) {
+        return $prev;
+    }
+    $params = $peticion->get_json_params();
+    $vis = ( isset( $params['visibilidad'] ) && in_array( $params['visibilidad'], array( 'privada', 'publica', 'seleccionada' ), true ) )
+        ? $params['visibilidad'] : $prev->visibilidad;
+    $wpdb->update( bitacora_nombre_tabla_bases(), array( 'visibilidad' => $vis, 'actualizado_en' => current_time( 'mysql', true ) ), array( 'id' => intval( $peticion['id'] ) ) );
+    bitacora_base_guardar_compartidos( intval( $peticion['id'] ), $vis, $params );
+    return new WP_REST_Response( array( 'ok' => true, 'id' => intval( $peticion['id'] ) ), 200 );
+}
+
+/** GET /bases/{id}/salud → histórico SQM/IR de las observaciones de esa base. */
+function bitacora_base_salud( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $id = intval( $peticion['id'] );
+    if ( ! bitacora_base_legible( $id, get_current_user_id() ) ) {
+        return new WP_Error( 'no_autorizado', 'No puedes ver esta base.', array( 'status' => 403 ) );
+    }
+    $obs = bitacora_nombre_tabla();
+    $t   = bitacora_nombre_tabla_bases();
+    $base = $wpdb->get_row( $wpdb->prepare( "SELECT id, nombre, lat, lon, altitud_m, tz FROM $t WHERE id = %d", $id ) );
+    $filas = $wpdb->get_results( $wpdb->prepare(
+        "SELECT fecha_observacion, hora_observacion, cielo_sqm, cielo_ir, observador
+         FROM $obs
+         WHERE base_id = %d AND borrada_en IS NULL
+           AND ( cielo_sqm IS NOT NULL OR cielo_ir IS NOT NULL )
+         ORDER BY fecha_observacion ASC, hora_observacion ASC", $id
+    ) );
+    return new WP_REST_Response( array( 'base' => $base, 'mediciones' => $filas ), 200 );
 }
 
 /**
@@ -2899,6 +3275,11 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
         return $entradas;
     }
 
+    // Base elegida: solo vale si es del usuario, pública o compartida con él.
+    if ( $datos['base_id'] && ! bitacora_base_legible( $datos['base_id'], get_current_user_id() ) ) {
+        return new WP_Error( 'base_invalida', 'Esa base no existe o no puedes usarla.', array( 'status' => 400 ) );
+    }
+
     // Campos que fija el servidor, nunca el navegador.
     $datos['usuario_id'] = get_current_user_id();
     $datos['creado_en']  = current_time( 'mysql', true );
@@ -2914,6 +3295,9 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     $id = $wpdb->insert_id;
     bitacora_asignar_observador( $id, $datos['observador'], get_current_user_id() );
     bitacora_guardar_entradas( $id, $entradas );
+    // Si se eligió base, el cliente manda la astrometría ya calculada: se siembra
+    // la ficha (lat/lon + alt/az + sol/luna) en este mismo momento.
+    bitacora_sembrar_ficha_desde_registro( $id, $params );
 
     // Si el objeto observado aún no está en el catálogo del mapa, se crea con su
     // posición calculada (galáctica + top/edge). No bloquea el guardado: si no
@@ -2974,6 +3358,10 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
         return $entradas;
     }
 
+    if ( $datos['base_id'] && ! bitacora_base_legible( $datos['base_id'], get_current_user_id() ) ) {
+        return new WP_Error( 'base_invalida', 'Esa base no existe o no puedes usarla.', array( 'status' => 400 ) );
+    }
+
     $datos['actualizado_en'] = current_time( 'mysql', true );
 
     $ok = $wpdb->update(
@@ -2990,6 +3378,8 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
 
     // Reemplaza el conjunto de entradas por el recibido.
     bitacora_guardar_entradas( $id, $entradas );
+    // Re-siembra la ficha con la astrometría recalculada (si hay base/ubicación).
+    bitacora_sembrar_ficha_desde_registro( $id, $params );
 
     // Si al editar se cambió a un objeto que aún no está en el mapa, se crea.
     $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'], isset( $datos['tipo'] ) ? $datos['tipo'] : '' );
@@ -3291,14 +3681,17 @@ function bitacora_ficha_radec_texto( $ra, $dec ) {
     return sprintf( "%dh %02dm %s%d\xc2\xba %02d\xe2\x80\x99", $hh, $mm, $signo, $dd, $dm );
 }
 function bitacora_ficha_datos_cielo( $obs ) {
+    // SQM/IR viven en la observación (cielo_sqm/cielo_ir); la ficha solo los lee.
+    $sqm = isset( $obs->cielo_sqm ) ? $obs->cielo_sqm : null;
+    $ir  = isset( $obs->cielo_ir )  ? $obs->cielo_ir  : null;
     $p = array();
-    if ( null !== $obs->sqm  && '' !== $obs->sqm  ) {
-        $p[] = 'SQM-L ' . ( 0 + $obs->sqm );
+    if ( null !== $sqm && '' !== $sqm ) {
+        $p[] = 'SQM-L ' . ( 0 + $sqm );
     }
-    if ( null !== $obs->ir   && '' !== $obs->ir   ) {
-        $p[] = 'IR ' . ( 0 + $obs->ir ) . "\xc2\xb0";
+    if ( null !== $ir && '' !== $ir ) {
+        $p[] = 'IR ' . ( 0 + $ir ) . "\xc2\xb0";
     }
-    if ( null !== $obs->temp && '' !== $obs->temp ) {
+    if ( isset( $obs->temp ) && null !== $obs->temp && '' !== $obs->temp ) {
         $p[] = 'Temperatura ambiente ' . ( 0 + $obs->temp ) . "\xc2\xb0";
     }
     return implode( ' ', $p );
