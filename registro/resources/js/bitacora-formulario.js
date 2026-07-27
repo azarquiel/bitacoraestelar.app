@@ -434,33 +434,45 @@
     lastComputed=null; submitBtn.disabled=true; jsonOut.classList.remove('show');
     var haveObj=resolved!==null, haveObs=$('observer').value.trim()!=='';
     var haveFecha=(!!$('fechaObs') && $('fechaObs').value!=='');
-    if(!(haveObj&&haveObs&&haveFecha)){ return; }
+    var haveTele=telescopioNombre!=='';   // telescopio SIEMPRE de la flota (o heredado)
+    if(!(haveObj&&haveObs&&haveFecha&&haveTele)){ return; }
+    var cielo = cieloCtrl ? cieloCtrl.leer() : { sqm:null, clase:null, etiqueta:null };
     lastComputed={
       objeto:resolved.etiqueta, tipo:resolved.tipo, num:resolved.num,
       cons:resolved.cons||'', nombre:resolved.nombre||'',
       ra:resolved.ra, dec:resolved.dec,
-      observador:$('observer').value.trim(), telescopio:$('scope').value.trim(),
+      observador:$('observer').value.trim(), telescopio:telescopioNombre,
       telescopioId: telescopioIdSel,
-      fechaObservacion:($('fechaObs')?$('fechaObs').value:'')
+      fechaObservacion:($('fechaObs')?$('fechaObs').value:''),
+      horaObservacion:($('horaObs')?$('horaObs').value:''),
+      cieloSqm: cielo.sqm, cieloBortle: cielo.clase, cieloBortleEtiqueta: cielo.etiqueta
     };
     submitBtn.disabled=false;
   }
   $('observer').addEventListener('input',recompute);
-  $('scope').addEventListener('input',recompute);
   if($('fechaObs')) $('fechaObs').addEventListener('change',recompute);
+  if($('horaObs')) $('horaObs').addEventListener('change',recompute);
 
-  // Selector de telescopio de la flota: al elegir uno, rellena el texto del
-  // telescopio, guarda su id y recalcula la óptica de todas las entradas.
-  // Editar el texto a mano (o "— Elige… —") desvincula el telescopio.
+  // Cielo de la sesión: selector Bortle enlazado al SQM (widget compartido).
+  var cieloCtrl = (window.BitacoraBase && $('cieloBortle') && $('cieloSqm'))
+    ? BitacoraBase.montarCielo($('cieloBortle'), $('cieloSqm')) : null;
+  if ($('cieloSqm')) $('cieloSqm').addEventListener('change', recompute);
+
+  // Selector de telescopio: SIEMPRE de la flota (sin texto libre). Al elegir uno,
+  // guarda su id/nombre y recalcula la óptica de todas las entradas. La opción
+  // "__legacy__" (registros antiguos con telescopio fuera de la flota) conserva el
+  // nombre sin id, y en esas entradas "Generar" queda deshabilitado.
   var scopeSelect = $('scopeSelect');
   if (scopeSelect) {
     scopeSelect.addEventListener('change', function () {
-      if (scopeSelect.value) {
+      if (scopeSelect.value === '__legacy__') {
+        telescopioSel = null; telescopioIdSel = null;   // se conserva telescopioNombre
+      } else if (scopeSelect.value) {
         telescopioSel = piezaPorId('telescopios', scopeSelect.value);
         telescopioIdSel = telescopioSel ? telescopioSel.id : null;
-        if (telescopioSel) $('scope').value = nombrePieza(telescopioSel);
+        telescopioNombre = telescopioSel ? nombrePieza(telescopioSel) : '';
       } else {
-        telescopioSel = null; telescopioIdSel = null;
+        telescopioSel = null; telescopioIdSel = null; telescopioNombre = '';
       }
       recompute();
       if (entradasBox) {
@@ -468,11 +480,6 @@
       }
     });
   }
-  // Escribir el telescopio a mano lo desvincula de la flota (id a null).
-  $('scope').addEventListener('input', function () {
-    telescopioSel = null; telescopioIdSel = null;
-    if (scopeSelect) scopeSelect.value = '';
-  });
 
   // ═══════════════════════════════════════════════════════════════════════
   // ENVÍO: por ahora, genera el bloque de datos de la observación
@@ -492,6 +499,7 @@
   var flotaCargada = false;
   var telescopioSel = null;             // telescopio elegido (objeto) o null
   var telescopioIdSel = null;           // su id (para guardar en la observación)
+  var telescopioNombre = '';            // nombre a guardar (de la flota o heredado)
   var telescopioIdPendiente = null;     // id a preseleccionar (modo edición)
 
   function piezaPorId(cat, id) {
@@ -523,7 +531,14 @@
     if (!sel) return;
     var html = '<option value="">' + placeholder + '</option>';
     (flota[cat] || []).forEach(function (p) {
-      html += '<option value="' + p.id + '">' + textoOpcion(nombrePieza(p) + specsPieza(cat, p)) + '</option>';
+      // El telescopio lleva delante su nombre propio (destaca); sus características
+      // (fabricante, modelo, óptica) van detrás, separadas, para leerse como
+      // secundarias. Un <option> nativo no admite estilar solo una parte, así que
+      // la jerarquía se da por el orden y el separador.
+      var nom = (cat === 'telescopios' && p.nombre) ? String(p.nombre).trim() : '';
+      var carac = nombrePieza(p) + specsPieza(cat, p);
+      var etiqueta = nom ? (nom + '  —  ' + carac) : carac;
+      html += '<option value="' + p.id + '">' + textoOpcion(etiqueta) + '</option>';
     });
     sel.innerHTML = html;
   }
@@ -578,13 +593,32 @@
   // Rellena el select de telescopios y aplica la preselección pendiente.
   function poblarTelescopios() {
     var sel = $('scopeSelect');
-    if (!sel) return;
-    if (!sel._pob) { llenarSelect(sel, 'telescopios', '— Elige de tu flota (o escribe abajo) —'); sel._pob = true; }
-    if (telescopioIdPendiente) {
+    if (!sel || sel._pob) return;
+    var vacia = !(flota.telescopios && flota.telescopios.length);
+    llenarSelect(sel, 'telescopios', vacia ? '— No tienes telescopios en tu flota —' : '— Elige un telescopio de tu flota —');
+    // Preselección pendiente (modo edición): telescopio de la flota por id.
+    if (telescopioIdPendiente != null) {
       sel.value = String(telescopioIdPendiente);
-      if (sel.value) { telescopioSel = piezaPorId('telescopios', telescopioIdPendiente); telescopioIdSel = telescopioSel ? telescopioSel.id : null; }
-      telescopioIdPendiente = null;
+      if (sel.value) {
+        telescopioSel = piezaPorId('telescopios', telescopioIdPendiente);
+        telescopioIdSel = telescopioSel ? telescopioSel.id : null;
+        telescopioNombre = telescopioSel ? nombrePieza(telescopioSel) : telescopioNombre;
+      }
     }
+    // Registro antiguo con telescopio fuera de la flota: opción para no perder el
+    // nombre (sin id → "Generar" queda deshabilitado en sus entradas).
+    if ((!sel.value || sel.value === '') && telescopioNombre) {
+      var op = document.createElement('option');
+      op.value = '__legacy__'; op.textContent = telescopioNombre + ' (fuera de tu flota)';
+      sel.appendChild(op); sel.value = '__legacy__';
+    }
+    if (vacia) {
+      var hint = $('scopeHint');
+      if (hint) hint.innerHTML = 'No tienes telescopios en tu flota. Añádelos en <a href="/mi-flota/">Mi flota</a> para poder registrar (y generar la imagen con el simulador).';
+    }
+    sel._pob = true;
+    telescopioIdPendiente = null;
+    recompute();
   }
 
   // Vuelca la flota en la interfaz cuando ya está cargada (y hay DOM listo).
@@ -641,10 +675,16 @@
   function precargar(obs){
     objInput.value      = obs.objeto || '';
     $('observer').value = obs.observador || '';
-    $('scope').value    = obs.telescopio || '';
-    // Telescopio de la flota (se preselecciona cuando la flota esté cargada).
+    // Telescopio: nombre guardado + id de flota (se preselecciona al cargar la flota;
+    // si no casa con la flota, se ofrece como opción heredada "(fuera de tu flota)").
+    telescopioNombre = obs.telescopio || '';
     telescopioIdPendiente = obs.telescopio_id ? obs.telescopio_id : null;
     if($('fechaObs') && obs.fecha_observacion) $('fechaObs').value = obs.fecha_observacion;
+    if($('horaObs') && obs.hora_observacion) $('horaObs').value = obs.hora_observacion;
+    if($('cieloSqm') && obs.cielo_sqm != null && obs.cielo_sqm !== '') {
+      $('cieloSqm').value = obs.cielo_sqm;
+      if (cieloCtrl) $('cieloSqm').dispatchEvent(new Event('input', { bubbles: true }));
+    }
 
     // MySQL devuelve todo como texto; los campos de RA/Dec aceptan decimales.
     // Para los no-Messier hay que rellenarlos ANTES de resolver, porque
@@ -748,6 +788,13 @@
     });
   }
 
+  // Muestra la miniatura de una imagen ya asociada (subida o existente).
+  function ponerMiniatura(rowEl, url){
+    var t=rowEl.querySelector('.img-thumb');
+    if(!t || !url) return;
+    t.src=url; t.hidden=false;
+  }
+
   // ── Subida de un archivo a la biblioteca de medios ──
   function subirImagen(file, rowEl, statusEl){
     if(!WP || !WP.media){ statusEl.textContent='(sin sesión de WordPress no se puede subir)'; return; }
@@ -766,6 +813,7 @@
       if(res.ok && res.data && res.data.id){
         rowEl.setAttribute('data-img-id', res.data.id);
         rowEl.setAttribute('data-img-url', res.data.source_url||'');
+        ponerMiniatura(rowEl, res.data.source_url||'');
         statusEl.innerHTML='<span style="color:var(--verde)">✓ subida</span>';
       } else {
         var msg=(res.data&&res.data.message)?res.data.message:('error '+res.status);
@@ -775,6 +823,121 @@
     .catch(function(){ statusEl.innerHTML='<span style="color:var(--rojo)">sin conexión</span>'; });
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // GENERAR LA IMAGEN DEL OCULAR CON EL SIMULADOR (estrellas de Gaia)
+  // Reutiliza el motor del simulador (BitacoraGaiaRender) con el equipo de la
+  // FLOTA de esta entrada + el objeto de la observación + el cielo de la sesión.
+  // La imagen se sube como un adjunto más, marcada origen:'simulada'.
+  // ═══════════════════════════════════════════════════════════════════════
+  var AFOV_REF_SIM = 110;   // campo aparente de referencia (igual que el simulador)
+  var _simModal = null, _simUsar = null;
+
+  // Reúne el equipo de una entrada para el render; {error} si falta algo (coords,
+  // telescopio de flota, ocular de flota). Solo la flota trae apertura/focal/óptica.
+  function datosSimEntrada(el){
+    if(!resolved || resolved.ra==null || resolved.dec==null)
+      return { error:'Elige un objeto con coordenadas conocidas.' };
+    if(!telescopioSel || !(parseFloat(telescopioSel.apertura_mm)>0) || !(parseFloat(telescopioSel.focal_mm)>0))
+      return { error:'Elige un telescopio de tu flota (con apertura y focal).' };
+    var so=el.querySelector('.e-ocular');
+    var ocular=(so&&so.value)?piezaPorId('oculares', so.value):null;
+    if(!ocular || !(parseFloat(ocular.focal_mm)>0) || !(parseFloat(ocular.campo_aparente)>0))
+      return { error:'Elige un ocular de tu flota en esta entrada.' };
+    var sa=el.querySelector('.e-auxiliar');
+    var aux=(sa&&sa.value)?piezaPorId('auxiliares', sa.value):null;
+    var opt=calcularOptica(telescopioSel, ocular, aux);
+    if(!opt || !(opt.campoReal>0) || !(opt.aumento>0)) return { error:'No se pudo calcular la óptica.' };
+    var cielo=cieloCtrl?cieloCtrl.leer():{ sqm:null };
+    var D=parseFloat(telescopioSel.apertura_mm);
+    return {
+      ra:resolved.ra, dec:resolved.dec, carbono:(resolved.tipo==='carbono'),
+      apertura:D, aumentos:opt.aumento, afov:parseFloat(ocular.campo_aparente),
+      arcmin:opt.campoReal*60,
+      pupilaSalida:(opt.pupila!=null?opt.pupila:D/opt.aumento),
+      optica:telescopioSel.optica||'',
+      arana:(typeof telescopioSel.arana==='boolean')?telescopioSel.arana:undefined,
+      sqm:(cielo.sqm!=null?cielo.sqm:21.4),
+      objeto:resolved.etiqueta, telescopio:telescopioNombre, ocular:nombrePieza(ocular)
+    };
+  }
+
+  function construirModalSim(){
+    if(_simModal) return _simModal;
+    var ov=document.createElement('div');
+    ov.className='sim-gen-ov'; ov.style.display='none';
+    ov.innerHTML =
+      '<div class="sim-gen">'+
+        '<div class="sim-gen-head"><strong>Imagen del simulador · Gaia DR3</strong>'+
+          '<button type="button" class="sim-gen-x" title="Cerrar">×</button></div>'+
+        '<div class="sim-gen-info"></div>'+
+        '<div class="sim-gen-vista"><canvas class="sim-gen-canvas" width="900" height="900"></canvas>'+
+          '<div class="sim-gen-spin">consultando estrellas de Gaia DR3…</div></div>'+
+        '<div class="sim-gen-foot"><span class="sim-gen-badge">simulada (Gaia)</span>'+
+          '<div class="sim-gen-btns"><button type="button" class="sim-gen-cancel">Cancelar</button>'+
+          '<button type="button" class="sim-gen-usar" disabled>Usar esta imagen</button></div></div>'+
+      '</div>';
+    // Se cuelga DENTRO de #mw-obs-form (no de <body>): la paleta (--ambar, --linea…)
+    // está scoped a ese wrapper; fuera, var(--ambar) queda sin definir y el botón
+    // "Usar esta imagen" pierde el dorado. Es position:fixed, así que el padre no
+    // afecta al layout.
+    ($('mw-obs-form') || document.body).appendChild(ov);
+    function cerrar(){ ov.style.display='none'; _simUsar=null; }
+    ov.querySelector('.sim-gen-x').addEventListener('click', cerrar);
+    ov.querySelector('.sim-gen-cancel').addEventListener('click', cerrar);
+    ov.addEventListener('click', function(e){ if(e.target===ov) cerrar(); });
+    ov.querySelector('.sim-gen-usar').addEventListener('click', function(){ if(_simUsar) _simUsar(); });
+    _simModal=ov; return ov;
+  }
+
+  function abrirModalGenerar(el){
+    var st=el.querySelector('.gen-status');
+    if(st){ st.textContent=''; st.className='gen-status'; }
+    var d=datosSimEntrada(el);
+    if(d.error){ if(st){ st.textContent=d.error; st.className='gen-status err'; } return; }
+    if(!window.BitacoraGaiaRender){ if(st){ st.textContent='El módulo del simulador no está cargado.'; st.className='gen-status err'; } return; }
+    var ov=construirModalSim();
+    var canvas=ov.querySelector('.sim-gen-canvas'), ctx=canvas.getContext('2d');
+    var spin=ov.querySelector('.sim-gen-spin'), usar=ov.querySelector('.sim-gen-usar');
+    ov.querySelector('.sim-gen-info').innerHTML =
+      BitacoraBase.esc(d.objeto)+' · '+BitacoraBase.esc(d.telescopio)+' · '+BitacoraBase.esc(d.ocular)+
+      ' · '+d.aumentos+'× · campo '+fmtCampo(d.arcmin/60);
+    usar.disabled=true; spin.style.display='flex'; spin.textContent='consultando estrellas de Gaia DR3…';
+    ov.style.display='flex';
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
+    // Diámetro del campo ∝ campo aparente del ocular (como el simulador en pantalla).
+    var D=Math.max(60, Math.round(900*Math.min(1, d.afov/AFOV_REF_SIM)));
+    var off=document.createElement('canvas'); off.width=off.height=D;
+    BitacoraGaiaRender.render(off, {
+      ra:d.ra, dec:d.dec, arcmin:d.arcmin, apertura:d.apertura, aumentos:d.aumentos,
+      optica:d.optica, arana:d.arana, sqm:d.sqm, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
+      carbono:d.carbono, conGlow:true
+    }).then(function(){
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
+      ctx.save(); ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.clip();
+      ctx.drawImage(off, 450-D/2, 450-D/2);
+      ctx.restore();
+      spin.style.display='none'; usar.disabled=false;
+    }).catch(function(){
+      spin.style.display='flex'; spin.textContent='Gaia DR3 no respondió. Cierra e inténtalo de nuevo.';
+    });
+    _simUsar=function(){ usarImagenGenerada(canvas, el, d); };
+  }
+
+  function usarImagenGenerada(canvas, el, d){
+    var listaP=el.querySelector('.lista-principales');
+    function subir(blob, ext){
+      var nombre='sim-'+(resolved&&resolved.num?('m'+resolved.num):'obj')+'-'+d.aumentos+'x.'+ext;
+      var file=new File([blob], nombre, { type:blob.type });
+      var row=crearImagen(listaP, 'principal', { origen:'simulada' });
+      subirImagen(file, row, row.querySelector('.img-status'));
+    }
+    canvas.toBlob(function(b){
+      if(b){ subir(b, 'webp'); }
+      else { canvas.toBlob(function(p){ if(p) subir(p, 'png'); }, 'image/png'); }
+    }, 'image/webp', 0.92);
+    if(_simModal){ _simModal.style.display='none'; } _simUsar=null;
+  }
+
   // ── Una fila de imagen (principal o anexo) ──
   function crearImagen(listEl, tipo, datos){
     datos = datos || {};
@@ -782,12 +945,15 @@
     row.className='img-row'; row.setAttribute('data-tipo', tipo);
     if(datos.imagen_id) row.setAttribute('data-img-id', datos.imagen_id);
     if(datos.imagen_url) row.setAttribute('data-img-url', datos.imagen_url);
+    var origen = datos.origen || 'subida';
+    if(origen!=='subida') row.setAttribute('data-origen', origen);
 
     var posSel = (tipo==='anexo')
       ? '<select class="img-pos"><option value="right">Derecha</option><option value="left">Izquierda</option></select>'
       : '';
     var placeholder = (tipo==='anexo') ? 'Título del anexo' : 'Etiqueta (p. ej. Sin filtro)';
     row.innerHTML =
+      '<img class="img-thumb" alt="" hidden>'+
       '<input type="file" class="img-file" accept="image/*">'+
       '<input type="text" class="img-etiqueta" placeholder="'+placeholder+'">'+
       posSel+
@@ -797,12 +963,20 @@
     row.querySelector('.img-etiqueta').value = datos.etiqueta || '';
     if(tipo==='anexo' && datos.pos){ row.querySelector('.img-pos').value = datos.pos; }
     if(datos.imagen_url){
+      ponerMiniatura(row, datos.imagen_url);
       row.querySelector('.img-status').innerHTML='<a href="'+datos.imagen_url+'" target="_blank" rel="noopener">imagen actual</a>';
+    }
+
+    if(origen==='simulada'){
+      var badge=document.createElement('span');
+      badge.className='img-origen'; badge.textContent='simulada (Gaia)';
+      row.insertBefore(badge, row.firstChild);
     }
 
     row.querySelector('.img-del').addEventListener('click',function(){ row.remove(); });
     row.querySelector('.img-file').addEventListener('change',function(ev){
-      var f=ev.target.files&&ev.target.files[0]; if(f) subirImagen(f, row, row.querySelector('.img-status'));
+      var f=ev.target.files&&ev.target.files[0];
+      if(f){ row.removeAttribute('data-origen'); var b=row.querySelector('.img-origen'); if(b) b.remove(); subirImagen(f, row, row.querySelector('.img-status')); }
     });
     listEl.appendChild(row);
     return row;
@@ -843,7 +1017,11 @@
       '<div class="imgs-block">'+
         '<div class="imgs-head">Imágenes principales <span>(el boceto/foto a este aumento; varias = pestañas)</span></div>'+
         '<div class="lista-principales"></div>'+
-        '<button type="button" class="add-img" data-tipo="principal">+ Añadir imagen</button>'+
+        '<div class="imgs-btns">'+
+          '<button type="button" class="add-img" data-tipo="principal">+ Añadir imagen</button>'+
+          '<button type="button" class="gen-img">+ Generar con el simulador</button>'+
+        '</div>'+
+        '<div class="gen-status"></div>'+
       '</div>'+
       '<div class="imgs-block">'+
         '<div class="imgs-head">Imágenes de apoyo (anexos) <span>(refuerzan lo que describes)</span></div>'+
@@ -885,6 +1063,8 @@
         crearImagen(tipo==='anexo'?listaA:listaP, tipo);
       });
     });
+    var genBtn=el.querySelector('.gen-img');
+    if(genBtn) genBtn.addEventListener('click',function(){ abrirModalGenerar(el); });
 
     // Imágenes existentes (modo edición)
     if(Array.isArray(datos.imagenes)){
@@ -913,7 +1093,8 @@
         imagenId: id?parseInt(id,10):null,
         imagenUrl: url||'',
         etiqueta: (row.querySelector('.img-etiqueta').value||'').trim(),
-        pos: (tipo==='anexo' && posSel)?posSel.value:''
+        pos: (tipo==='anexo' && posSel)?posSel.value:'',
+        origen: row.getAttribute('data-origen')||'subida'
       });
     });
     return out;

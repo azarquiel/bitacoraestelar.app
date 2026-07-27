@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.19.0' );
+define( 'BITACORA_VERSION', '1.20.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -333,6 +333,14 @@ function bitacora_crear_tabla() {
     bitacora_asegurar_columna( $tabla, 'telescopio_id', "bigint(20) unsigned DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla_entradas, 'ocular_id', "bigint(20) unsigned DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla_entradas, 'auxiliar_id', "bigint(20) unsigned DEFAULT NULL" );
+    // Hora local y cielo de la SESIÓN, capturados ya en el registro (no en la ficha
+    // astrométrica). El SQM alimenta la magnitud límite al generar la imagen del
+    // simulador; la clase Bortle (1–9) es la etiqueta legible de ese SQM.
+    bitacora_asegurar_columna( $tabla, 'hora_observacion', "varchar(8) NOT NULL DEFAULT ''" );
+    bitacora_asegurar_columna( $tabla, 'cielo_sqm', "double DEFAULT NULL" );
+    bitacora_asegurar_columna( $tabla, 'cielo_bortle', "tinyint DEFAULT NULL" );
+    // Origen de cada imagen: 'subida' (foto/boceto del observador) o 'simulada' (Gaia).
+    bitacora_asegurar_columna( $tabla_imagenes, 'origen', "varchar(16) NOT NULL DEFAULT 'subida'" );
     // Nombre propio que el observador da a su telescopio personal en Mi flota.
     bitacora_asegurar_columna( $tabla_telescopios, 'nombre', "varchar(160) NOT NULL DEFAULT ''" );
     // Índice BP–RP (color de Gaia) del objeto, para pintar las estrellas del
@@ -588,6 +596,26 @@ function bitacora_validar_datos( $d ) {
     $telescopio_id = ( isset( $d['telescopioId'] ) && is_numeric( $d['telescopioId'] ) && $d['telescopioId'] > 0 )
         ? intval( $d['telescopioId'] ) : null;
 
+    // --- Hora local de la observación (opcional): "HH:MM". Para calcular la
+    //     posición del objeto cuando se añada un lugar de observación. ---
+    $hora_obs_raw = sanitize_text_field( $d['horaObservacion'] ?? '' );
+    $hora_obs     = preg_match( '/^([01]\d|2[0-3]):[0-5]\d$/', $hora_obs_raw ) ? $hora_obs_raw : '';
+
+    // --- Cielo de la sesión (opcional): SQM (mag/arcsec²) y clase Bortle (1–9). El
+    //     SQM alimenta la magnitud límite al generar la imagen del simulador. ---
+    $cielo_sqm = null;
+    if ( isset( $d['cieloSqm'] ) && '' !== $d['cieloSqm'] && null !== $d['cieloSqm'] ) {
+        if ( ! is_numeric( $d['cieloSqm'] ) || $d['cieloSqm'] < 0 || $d['cieloSqm'] > 25 ) {
+            return new WP_Error( 'campo_invalido', 'El SQM del cielo está fuera de rango.', array( 'status' => 400 ) );
+        }
+        $cielo_sqm = floatval( $d['cieloSqm'] );
+    }
+    $cielo_bortle = null;
+    if ( isset( $d['cieloBortle'] ) && '' !== $d['cieloBortle'] && null !== $d['cieloBortle'] ) {
+        $b = intval( $d['cieloBortle'] );
+        $cielo_bortle = ( $b >= 1 && $b <= 9 ) ? $b : null;
+    }
+
     // --- Datos de cielo (opcionales): null, o número en rango razonable ---
     $cielo = array();
     $rangos_cielo = array(
@@ -617,6 +645,9 @@ function bitacora_validar_datos( $d ) {
         'telescopio'      => $telescopio,
         'telescopio_id'   => $telescopio_id,
         'fecha_observacion' => $fecha_obs,
+        'hora_observacion'  => $hora_obs,
+        'cielo_sqm'         => $cielo_sqm,
+        'cielo_bortle'      => $cielo_bortle,
     );
 }
 
@@ -1000,12 +1031,15 @@ function bitacora_validar_entradas( $lista ) {
                 }
                 $tipo = ( isset( $img['tipo'] ) && 'anexo' === $img['tipo'] ) ? 'anexo' : 'principal';
                 $pos  = ( isset( $img['pos'] ) && in_array( $img['pos'], array( 'left', 'right' ), true ) ) ? $img['pos'] : '';
+                // Origen: 'simulada' (imagen generada con el simulador de Gaia) o 'subida'.
+                $origen = ( isset( $img['origen'] ) && 'simulada' === $img['origen'] ) ? 'simulada' : 'subida';
                 $imagenes[] = array(
                     'tipo'      => $tipo,
                     'imagen_id' => $img_id,
                     'imagen_url'=> $img_url,
                     'etiqueta'  => sanitize_text_field( isset( $img['etiqueta'] ) ? $img['etiqueta'] : '' ),
                     'pos'       => $pos,
+                    'origen'    => $origen,
                 );
             }
         }
@@ -1120,6 +1154,7 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                     'imagen_url' => $img['imagen_url'],
                     'etiqueta'   => $img['etiqueta'],
                     'pos'        => $img['pos'],
+                    'origen'     => isset( $img['origen'] ) ? $img['origen'] : 'subida',
                     'creado_en'  => current_time( 'mysql', true ),
                 ),
                 array(
@@ -1130,6 +1165,7 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                     '%s', // imagen_url
                     '%s', // etiqueta
                     '%s', // pos
+                    '%s', // origen
                     '%s', // creado_en
                 )
             );
@@ -1533,10 +1569,11 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
             $anexos = array();
             $imgs = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $t_img WHERE entrada_id = %d ORDER BY orden ASC, id ASC", $e->id ) );
             foreach ( $imgs as $im ) {
+                $origen_im = isset( $im->origen ) ? $im->origen : 'subida';
                 if ( 'anexo' === $im->tipo ) {
-                    $anexos[] = array( 'img' => $im->imagen_url, 'titulo' => $im->etiqueta, 'pos' => $im->pos ? $im->pos : 'right' );
+                    $anexos[] = array( 'img' => $im->imagen_url, 'titulo' => $im->etiqueta, 'pos' => $im->pos ? $im->pos : 'right', 'origen' => $origen_im );
                 } else {
-                    $principales[] = array( 'archivo' => $im->imagen_url, 'etiqueta' => $im->etiqueta );
+                    $principales[] = array( 'archivo' => $im->imagen_url, 'etiqueta' => $im->etiqueta, 'origen' => $origen_im );
                 }
             }
             // img: null | 'archivo' | [ {archivo, etiqueta} ] (con imgMode:'tabs')

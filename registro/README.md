@@ -21,6 +21,7 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `registrar-observacion-wordpress.html` | Fragmento del formulario | Editor de WordPress |
 | `bitacora-formulario.js` | Lógica del formulario | Servidor, por FTP |
 | `bitacora-formulario.css` | Estilos del formulario | Servidor, por FTP |
+| `resources/js/bitacora-gaia-color.js`, `bitacora-gaia-render.js` (compartidos) | Motor de render de estrellas de Gaia, reutilizado del simulador para *Generar con el simulador* | Servidor, por FTP (mismos que usa el simulador) |
 | `datos-ficha-wordpress.html` | Fragmento del formulario de datos de ficha (astrometría) | Editor de WordPress |
 | `bitacora-ficha.js` | Lógica del formulario de datos de ficha | Servidor, por FTP |
 | `listado-observaciones-wordpress.html` | Fragmento del listado | Editor de WordPress |
@@ -46,7 +47,9 @@ secciones:
 
 ### 1 · Qué y quién
 
-- **Fecha de la observación**: el primer campo, y **obligatorio**.
+- **Fecha de la observación** (**obligatoria**) y **hora local** (opcional). La
+  hora no cambia nada del render; se guarda para calcular más adelante la
+  **posición del objeto** cuando se añada un lugar de observación.
 - **Objeto observado**, con autocompletado y validación en dos niveles:
   - Los **110 objetos Messier** están embebidos en el código con sus
     coordenadas. Al escribir `M30` o `Messier 30` se reconoce al instante y
@@ -55,8 +58,13 @@ secciones:
   - Cualquier otro objeto (`NGC 6826`, `IC 1396`…) se acepta, pero pide su
     **RA y Dec a mano**, porque sin coordenadas no hay cálculo posible.
     Admite formato sexagesimal (`21h 40m 22s`) o decimal (`325.09`).
-- Observador y **telescopio**. El telescopio puede elegirse de la flota del
-  observador (ver *Mi flota* más abajo) o escribirse a mano.
+- Observador y **telescopio**. El telescopio es **siempre de la flota** del
+  observador (ver *Mi flota* más abajo): no hay texto libre, para que todo el
+  equipo tenga apertura/focal/óptica reales (necesarias para generar la imagen
+  del simulador). Si la flota está vacía, el formulario guía a *Mi flota*.
+- **Cielo de la sesión**: un **SQM** (mag/arcsec²) con un atajo por la **escala
+  Bortle** (elegir «Clase 3 · Cielo rural» fija el SQM). Alimenta la magnitud
+  límite al generar la imagen y queda registrado en la observación.
 
 ### 2 · Lo que viste, por ocular
 
@@ -64,6 +72,18 @@ Una **entrada por cada aumento**, con: aumento y campo real (obligatorios),
 pupila de salida y nombre del ocular (opcionales), descripción con formato,
 imágenes principales (varias = pestañas en la ficha) e imágenes de apoyo
 (anexos). Las imágenes se suben a la biblioteca de medios de WordPress.
+
+**Generar la imagen con el simulador.** Cada entrada tiene, junto a *+ Añadir
+imagen*, un botón **+ Generar con el simulador**: reutiliza el motor de la vista
+de estrellas del [simulador de ocular](../simulador_ocular/README.md)
+(`BitacoraGaiaRender`) con el **equipo de la flota de esa entrada** (telescopio +
+ocular + auxiliar), el **objeto** de la observación y el **cielo** de la sesión,
+y produce la imagen de cómo se vería ese campo con las **estrellas reales de Gaia
+DR3**. Se muestra una **previsualización** (900×900, campo circular ∝ campo
+aparente del ocular) y, al aceptar, se sube como una imagen principal más en
+**WebP**, marcada `origen: simulada` y con la insignia *«simulada (Gaia)»* para
+distinguirla de una foto o boceto reales. Disponible solo cuando el objeto tiene
+coordenadas y la entrada usa telescopio y ocular de la flota.
 
 ### 3 · Exploración (opcional)
 
@@ -264,7 +284,10 @@ WordPress se usa solo para lo que hace bien: autenticar al usuario.
 | `num` | `smallint` | número Messier, o `NULL` |
 | `ra`, `decl` | `double` | coordenadas ecuatoriales, en grados |
 | `observador` | `varchar(160)` | del formulario |
-| `telescopio` | `varchar(160)` | del formulario |
+| `telescopio` | `varchar(160)` | del formulario (siempre de la flota) |
+| `hora_observacion` | `varchar(8)` | hora local `HH:MM` (opcional), para la posición futura |
+| `cielo_sqm` | `double` | brillo de cielo de la sesión, o `NULL` |
+| `cielo_bortle` | `tinyint` | clase Bortle 1–9 (etiqueta del SQM), o `NULL` |
 | `fecha_hora_local` | `varchar(32)` | tal como la escribió el observador |
 | `fecha_hora_utc` | `datetime` | normalizada |
 | `lat`, `lon` | `double` | lugar de observación |
@@ -281,7 +304,7 @@ se guarda en tablas hijas, y hay catálogos independientes:
 | Tabla | Qué guarda |
 |---|---|
 | `wp_bitacora_entradas` | Las entradas por aumento de cada observación (incluida la de *Exploración*) |
-| `wp_bitacora_imagenes` | Las imágenes de cada entrada (principales y anexos) |
+| `wp_bitacora_imagenes` | Las imágenes de cada entrada (principales y anexos). La columna `origen` distingue `subida` (foto/boceto) de `simulada` (generada con el simulador de Gaia) |
 | `wp_bitacora_fichas` | La astrometría de la ficha (RA/Dec, lugar, altitud/azimut, Sol/Luna, condiciones) |
 | `wp_bitacora_objetos` | El catálogo de objetos del mapa: color, `top`/`edge`, `l`/`b`, distancia, clase de Hubble |
 | `wp_bitacora_observadores` | Quién observa (para filtrar el mapa por autor) |

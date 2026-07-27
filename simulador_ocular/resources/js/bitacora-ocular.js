@@ -135,64 +135,10 @@
         return opticaTieneArana(teleSel.optica);
       }
 
-      /* Ajustes fáciles del render de estrellas de Gaia (Canvas 2D y overlay).
-         Todo aquí para poder afinarlo sin tocar el resto del código. */
-      var GAIA_CFG = {
-        blur: 1.1,          // ancho del halo respecto al núcleo (radio total = núcleo·(1+blur); menor = más "punta de alfiler")
-        // COLOR de las estrellas (lo que más llama la atención a cielo oscuro).
-        magColor: 9.5,     // solo las estrellas más brillantes que esta magnitud llevan color; el resto quedan blancas
-        tinteNucleo: 0.8,  // cuánto tiñe el color al núcleo: 0 = núcleo blanco puro; 1 = núcleo del color de la estrella
-        // La gamma sRGB y la saturación del color viven ahora en el módulo compartido
-        // (BitacoraGaiaColor.config) — misma palanca para simulador y mapa. Aquí solo
-        // queda el ajuste propio del simulador:
-        // Estrella de carbono como OBJETIVO: cuánto corregir el índice BP/RP de Gaia
-        // (que infravalora su rojo). Se suma al índice, con un suelo, solo a la
-        // estrella central cuando el objeto elegido es de carbono. Ver colorEstrella().
-        carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
-        // Tamaño del NÚCLEO (px) según la magnitud: brillante = gordota, débil = punta de alfiler.
-        // Es fijo (no depende del cielo), como el "blooming" de una placa fotográfica.
-        // radio = radioMin + radioMag · (magTamMin − g)^radioExp, acotado a radioMax.
-        // radioExp > 1 acelera el crecimiento en las MÁS brillantes (más contraste
-        // de tamaño arriba); = 1 sería lineal en la magnitud.
-        radioMin: 0.42,     // SUELO de radio del núcleo (mínimo visible, ~1 px): solo afecta a las débiles, no infla las brillantes
-        radioMag: 0.13,     // px de radio de núcleo por cada (magnitud sobre magTamMin)^radioExp
-        radioExp: 1.35,      // exponente: >1 = las brillantes crecen más deprisa
-        magTamMin: 14,    // magnitud a partir de la cual el núcleo es el mínimo (más brillante → mayor)
-        radioMax: 6.5,      // radio máximo del núcleo (estrellas muy brillantes)
-        brillo: 1.4,        // realce del brillo de las estrellas (1 = cálculo base)
-        alfaMin: 0.24,      // suelo de alfa: las estrellas del borde del límite quedan tenues pero presentes (sin esto, invisibles)
-        // GLOW de estrellas NO resueltas (solo Canvas 2D): las más débiles que la
-        // magnitud límite no se dibujan como puntos, sino como una mota tenue y
-        // aditiva. Donde se agolpan (cúmulos lejanos como NGC 2158, núcleos de
-        // galaxias) su SUMA forma una mancha nebulosa —como en el ocular real—;
-        // en campo abierto quedan casi invisibles. El brillo de la mancha ∝ densidad
-        // de estrellas sub-límite, que es justo el brillo superficial no resuelto.
-        glowIntensidad: 0.2,  // alfa de una estrella no resuelta JUSTO en el límite (cae con la profundidad, ∝ flujo)
-        glowRadio: 2.0,       // radio (px) de cada mota de glow (↑ = más difuso)
-        // Escala del TAMAÑO con el aumento: a más aumento (menos campo) las estrellas
-        // se agrandan, como en el ocular real. Así un cúmulo lejano a mucho aumento
-        // (NGC 7789 con un 18") se ve rico, y uno cercano a poco aumento (M35) fino,
-        // con la MISMA regla. factor = √(escalaMagCampo / campo_arcmin), en [1, escalaMagMax].
-        escalaMagCampo: 90,   // arcmin de referencia: por debajo, estrellas mayores
-        escalaMagMax: 2.0,    // tope del factor de escala por aumento
-        radioTotalMax: 14,    // tope absoluto del radio total dibujado (px), evita blobs enormes a mucho aumento
-        // DIFFRACTION SPIKES: el destello en cruz que produce la ARAÑA del secundario
-        // en reflectores (Newton, etc.). Cada brazo de la araña es un obstáculo fino;
-        // por el principio de Babinet difracta como una rendija, con perfil sinc²
-        // (I ∝ (sin u / u)²). Solo se dibuja en telescopios con araña, y solo en las
-        // estrellas brillantes: longitud e intensidad ∝ brillo (magnitud) de la estrella.
-        spikes: {
-          magMax: 10,       // solo estrellas más brillantes que esta magnitud lucen spikes
-          rango: 5,         // magnitudes sobre magMax para llegar a la intensidad plena
-          brazos: 4,        // nº de puntas (araña de 4 brazos → cruz de 4)
-          angulo: 0,        // rotación de la cruz en grados (0 = +, 45 = ×)
-          longMag: 10,      // px de longitud de brazo por magnitud sobre magMax
-          longMax: 180,     // longitud máxima (px) de un brazo
-          grosor: 3,        // grosor del brazo (px)
-          lobulos: 2,       // nº de lóbulos del sinc² dibujados (estructura de difracción)
-          intensidad: 0.8   // alfa base del brazo
-        }
-      };
+      /* El render de Gaia (ajustes, sprites, consulta y dibujo) vive en el módulo
+         compartido BitacoraGaiaRender (bitacora-gaia-render.js), fuente única con el
+         formulario de registro. Su config editable es BitacoraGaiaRender.config. */
+      var GAIA_CFG = window.BitacoraGaiaRender.config;
 
       var CFG = window.BITACORA_OCULAR || {};
       var DSS_BASE = CFG.dssProxy || '/wp-content/uploads/bitacora/dss-proxy.php';
@@ -206,7 +152,6 @@
 
       var corsFallo = false;
       var contadorPeticion = 0;
-      var cacheGaia = {};
 
       var FOT = {
         SB_OBJ_MAX: 14.0, SB_OBJ_MIN: 24.0, SB_NEGRO: 25.5, SB_BLANCO: 14.0,
@@ -636,345 +581,16 @@
          FAILOVER de proveedor: si el primero (CDS/VizieR) no responde, se prueba
          el siguiente (GAVO, Heidelberg, infraestructura independiente) antes de
          rendirse; renderGaia2D, si TODOS fallan, cae a la placa DSS. */
-      var GAIA_RADIO_MAX = (DSS_MAX_ARCMIN / 60) * 0.72;   // 1,44° (tope: 2° de lado del DSS)
-      var GAIA_RADIO_MIN = 0.12;                           // suelo del radio (°): oculares de campo mínimo
-      var GAIA_MAG_MAX = 16.5;
-      var GAIA_ARCMIN_DEFECTO = 60;                        // campo asumido en los prefetch sin ocular (→ radio 0,72°)
-      var GAIA_FETCH_TIMEOUT = 12000;                      // ms antes de abortar una consulta colgada (por proveedor)
-      // Proveedores TAP de Gaia DR3, en orden de preferencia. Cada url() genera la
-      // consulta para ese servicio (distinto nombre de tabla/columnas), pero TODOS
-      // devuelven filas [RA, Dec, Gmag, BP-RP] bajo jj.data, así el resto del código
-      // no cambia. CDS es el primario; GAVO es un respaldo con infra independiente
-      // (si CDS se satura, GAVO no está en su misma máquina). Ambos verificados con
-      // CORS desde el navegador. ESA (gea.esac) queda fuera: NO envía cabeceras CORS.
-      /*var GAIA_PROVEEDORES = [
-        { nombre: 'CDS', url: function (ra, dec, rad, mag) {
-            var q = 'SELECT TOP 40000 RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3" WHERE Gmag<=' + mag + ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' + ra + ',' + dec + ',' + rad + ')) ORDER BY Gmag';
-            return 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' + encodeURIComponent(q); } },
-        { nombre: 'GAVO', url: function (ra, dec, rad, mag) {
-            // GAVO (dr3lite) no trae BP-RP precomputado: se calcula BP−RP; exige LANG=ADQL en mayúsculas.
-            var q = 'SELECT TOP 40000 ra, dec, phot_g_mean_mag, phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM gaia.dr3lite WHERE phot_g_mean_mag<=' + mag + ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' + ra + ',' + dec + ',' + rad + ')) ORDER BY phot_g_mean_mag';
-            return 'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' + encodeURIComponent(q); } }
-      ];*/
-      // fetch con timeout (AbortController). Devuelve el JSON (o null en 4xx); lanza
-      // en timeout / 5xx / error de red para que consultarGaia pase al siguiente
-      // proveedor. El failover entre hosts hace de "reintento" ante un hipo puntual.
-      function fetchGaia(ra, dec, rad) {
-          var ctrl = new AbortController();
-          var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
-
-	      var url =
-	          "../wp-content/uploads/bitacora/gaia_proxy.php" +
-	          "?ra=" + encodeURIComponent(ra) +
-	          "&dec=" + encodeURIComponent(dec) +
-	          "&rad=" + encodeURIComponent(rad) +
-	          "&mag=" + encodeURIComponent(GAIA_MAG_MAX);
-	      return fetch(url, {
-	          signal: ctrl.signal
-	      }).then(function (r) {
-	          clearTimeout(id);
-	          if (!r.ok)
-	              throw new Error();
-	          return r.json();
-	      });
-	  }
-
-	  /*function fetchGaia(url) {
-        var ctrl = new AbortController();
-        var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
-        return fetch(url, { signal: ctrl.signal }).then(function (r) {
-          clearTimeout(id);
-          if (r.status >= 500) throw new Error('http ' + r.status);   // servidor saturado → siguiente proveedor
-          return r.ok ? r.json() : null;                              // 4xx u otro: se resuelve a null
-        }, function (e) { clearTimeout(id); throw e; });
-      }*/
-      // Radio de consulta (°) que cubre el campo cuadrado de 'arcmin' de lado por sus
-      // esquinas + margen, acotado a [GAIA_RADIO_MIN, GAIA_RADIO_MAX].
-      function radioConsulta(arcmin) {
-        return Math.min(GAIA_RADIO_MAX, Math.max(GAIA_RADIO_MIN, (arcmin / 60) * 0.72));
-      }
-      // Devuelve estrellas [RA, Dec, Gmag, BP-RP] (BP-RP puede venir null en débiles
-      // sin fotometría BP/RP → se pintan blancas). 'arcmin' = lado del campo a cubrir
-      // (opcional; los prefetch usan GAIA_ARCMIN_DEFECTO). Prueba los proveedores en
-      // orden hasta que uno responda; si todos fallan, la promesa se rechaza.
+      /* Consulta y dibujo de Gaia: delegados al módulo compartido BitacoraGaiaRender.
+         Aquí quedan solo los adaptadores que le pasan el equipo/cielo del simulador. */
       function consultarGaia(ra0, dec0, arcmin) {
-        var rad = radioConsulta(arcmin || GAIA_ARCMIN_DEFECTO);
-        var clave = ra0.toFixed(3) + "," + dec0.toFixed(3);
-        var ent = cacheGaia[clave];
-
-        if (ent && ent.rad >= rad - 1e-6)
-          return ent.promise;
-
-        var raS = ra0.toFixed(5);
-        var decS = dec0.toFixed(5);
-        var radS = rad.toFixed(5);
-
-        var nueva = {
-          rad: rad,
-          promise: fetchGaia(raS, decS, radS).then(function (jj) {
-            return ((jj.data || []).filter(function (f) {
-              return f[2] != null;
-              }));
-            })
-          };
-
-          cacheGaia[clave] = nueva;
-          nueva.promise.catch(function () {
-            if (cacheGaia[clave] === nueva)
-              delete cacheGaia[clave];
-		    });
-           return nueva.promise;
+        return BitacoraGaiaRender.consultar(ra0, dec0, arcmin);
       }
-      /*function consultarGaia(ra0, dec0, arcmin) {
-        var rad = radioConsulta(arcmin || GAIA_ARCMIN_DEFECTO);
-        var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3);
-        var ent = cacheGaia[clave];
-        if (ent && ent.rad >= rad - 1e-6) return ent.promise;   // lo cacheado ya cubre este campo
-        var raS = ra0.toFixed(5), decS = dec0.toFixed(5), radS = rad.toFixed(5);
-        function intentar(i) {
-          if (i >= GAIA_PROVEEDORES.length) return Promise.reject(new Error('Gaia sin respuesta'));
-          return fetchGaia(GAIA_PROVEEDORES[i].url(raS, decS, radS, GAIA_MAG_MAX)).then(function (jj) {
-            var filas = ((jj ? jj.data : null) || []).filter(function (f) { return f[2] != null; });
-            if (!filas.length && i + 1 < GAIA_PROVEEDORES.length) return intentar(i + 1);   // vacío → siguiente
-            return filas;
-          }, function () { return intentar(i + 1); });          // timeout/error → siguiente proveedor
-        }
-        var nueva = { rad: rad, promise: intentar(0) };
-        cacheGaia[clave] = nueva;
-        nueva.promise.catch(function () { if (cacheGaia[clave] === nueva) delete cacheGaia[clave]; });   // no cachear un fallo
-        return nueva.promise;
-      }*/
-      /* Render de estrellas: un ÚNICO sprite base normalizado (núcleo blanco +
-         halo) que se escala al tamaño de cada estrella y se estampa con drawImage
-         + globalAlpha (rápido incluso con miles de estrellas). El TAMAÑO depende
-         de la magnitud (fijo, como el "blooming" de la placa: brillante = gorda);
-         el BRILLO se desvanece cerca de la mag. límite y sube con GAIA_CFG.brillo. */
-      var GAIA_SPRITE = null;
-      function spriteGaia() {
-        if (GAIA_SPRITE) return GAIA_SPRITE;
-        var S = 64, m = S / 2, R = m - 1;
-        var dCore = 1 / (1 + GAIA_CFG.blur);   // fracción del radio total que es núcleo sólido
-        var c = document.createElement('canvas'); c.width = c.height = S;
-        var g = c.getContext('2d');
-        var gr = g.createRadialGradient(m, m, 0, m, m, R);
-        gr.addColorStop(0, 'rgba(255,255,255,1)');
-        gr.addColorStop(dCore * 0.7, 'rgba(255,255,255,0.9)');
-        gr.addColorStop(dCore, 'rgba(255,255,255,0.4)');
-        gr.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = gr; g.beginPath(); g.arc(m, m, R, 0, 7); g.fill();
-        return (GAIA_SPRITE = c);
-      }
-      // Sprite del GLOW: mota suave y sin núcleo duro (luz no resuelta). Muchas
-      // solapadas y sumadas (composición 'lighter') forman la mancha nebulosa.
-      var GLOW_SPRITE = null;
-      function spriteGlow() {
-        if (GLOW_SPRITE) return GLOW_SPRITE;
-        var S = 32, m = S / 2;
-        var c = document.createElement('canvas'); c.width = c.height = S;
-        var g = c.getContext('2d');
-        var gr = g.createRadialGradient(m, m, 0, m, m, m);
-        gr.addColorStop(0, 'rgba(255,255,255,0.9)');
-        gr.addColorStop(0.5, 'rgba(255,255,255,0.3)');
-        gr.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = gr; g.fillRect(0, 0, S, S);
-        return (GLOW_SPRITE = c);
-      }
-      // Sprite de UN brazo de la cruz de difracción (parte del centro, x=0, hacia la
-      // derecha). El perfil A LO LARGO del brazo es el de una rendija (Babinet):
-      // I(u) = (sin(πLu)/(πLu))² con L = nº de lóbulos → lóbulo central brillante y
-      // lóbulos secundarios cada vez más tenues, la firma de la difracción. El perfil
-      // TRANSVERSAL es una gaussiana fina. Se estampa girado y escalado por estrella.
-      var SPIKE_SPRITE = null;
-      function spriteSpike() {
-        if (SPIKE_SPRITE) return SPIKE_SPRITE;
-        var W = 256, H = 32, m = H / 2;
-        var c = document.createElement('canvas'); c.width = W; c.height = H;
-        var ctx = c.getContext('2d');
-        var im = ctx.createImageData(W, H);
-        var kL = Math.max(1, GAIA_CFG.spikes.lobulos) * Math.PI;   // arg del sinc en el extremo
-        for (var x = 0; x < W; x++) {
-          var u = x / (W - 1);                 // 0 (centro) … 1 (punta)
-          var arg = kL * u;
-          var s = arg < 1e-6 ? 1 : Math.sin(arg) / arg;
-          var along = s * s;                   // sinc² a lo largo del brazo
-          along *= (1 - u);                    // ventana suave que apaga la punta
-          // Suaviza el ARRANQUE del brazo (u pequeño): así la cruz no apila su brillo
-          // sobre el núcleo coloreado y no lo lava a blanco. El núcleo de la estrella
-          // tapa ese hueco; las puntas siguen saliendo del centro.
-          var g0 = Math.min(1, u / 0.12); along *= g0 * g0 * (3 - 2 * g0);
-          for (var y = 0; y < H; y++) {
-            var t = (y - m) / m;               // -1 … 1 transversal
-            var a = along * Math.exp(-(t * t) * 10);   // gaussiana fina en el grosor
-            var idx = (y * W + x) * 4;
-            im.data[idx] = im.data[idx + 1] = im.data[idx + 2] = 255;
-            im.data[idx + 3] = Math.round(255 * Math.max(0, Math.min(1, a)));
-          }
-        }
-        ctx.putImageData(im, 0, 0);
-        return (SPIKE_SPRITE = c);
-      }
-      // Versión del sprite del brazo TEÑIDA con el color de la estrella (la máscara
-      // blanca del sinc² recoloreada). Cacheada por color: en un campo hay pocas
-      // estrellas brillantes con cruz, así que la caché queda pequeña.
-      var SPIKE_TINT_CACHE = {};
-      function spriteSpikeColor(rgb) {
-        if (!rgb) return spriteSpike();
-        var r = Math.round(rgb[0]), gc = Math.round(rgb[1]), b = Math.round(rgb[2]);
-        var key = r + ',' + gc + ',' + b;
-        if (SPIKE_TINT_CACHE[key]) return SPIKE_TINT_CACHE[key];
-        var base = spriteSpike();
-        var c = document.createElement('canvas'); c.width = base.width; c.height = base.height;
-        var g = c.getContext('2d');
-        g.drawImage(base, 0, 0);
-        g.globalCompositeOperation = 'source-in';   // conserva el alfa del sinc², cambia el color
-        g.fillStyle = 'rgb(' + r + ',' + gc + ',' + b + ')';
-        g.fillRect(0, 0, c.width, c.height);
-        return (SPIKE_TINT_CACHE[key] = c);
-      }
-      // Dibuja la cruz de difracción de una estrella brillante: N brazos girados,
-      // con longitud e intensidad ∝ su brillo (magnitud) y escalados con el aumento.
-      function dibujarSpikes(ctx, x, y, g, escalaMag, rgb) {
-        var cf = GAIA_CFG.spikes;
-        var sobre = cf.magMax - g;             // cuánto más brillante que el umbral
-        if (sobre <= 0) return;
-        var L = Math.min(cf.longMax, cf.longMag * sobre) * escalaMag;
-        if (L < 3) return;
-        var alpha = Math.min(1, cf.intensidad * (sobre / cf.rango));
-        var sp = spriteSpikeColor(rgb), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(cf.angulo * Math.PI / 180);
-        ctx.globalAlpha = alpha;
-        for (var k = 0; k < cf.brazos; k++) {
-          ctx.drawImage(sp, 0, -H / 2, L, H);
-          ctx.rotate(paso);
-        }
-        ctx.restore();
-      }
-      // Radio del NÚCLEO de la estrella según su magnitud (fijo, no depende del cielo).
-      // El radioMin es un SUELO (max), no un sumando: así las estrellas débiles no
-      // caen por debajo del mínimo visible (~1 px), pero las brillantes conservan
-      // su tamaño natural (el término de potencia) sin inflarse.
-      function radioNucleo(g) {
-        var r = GAIA_CFG.radioMag * Math.pow(Math.max(0, GAIA_CFG.magTamMin - g), GAIA_CFG.radioExp);
-        return Math.min(GAIA_CFG.radioMax, Math.max(GAIA_CFG.radioMin, r));
-      }
-
-      // Color de una estrella a partir de su índice BP-RP de Gaia: azul (caliente)
-      // → blanco → amarillo → naranja → rojo profundo (fría). Interpolación por tramos.
-      //
-      // La tabla YA NO es "a ojo": sus nodos son los códigos de color que propone
-      // Harre & Heller (2021), "Digital color codes of stars" (spec2col), obtenidos
-      // convolucionando espectros reales con las funciones CIE del ojo → XYZ → sRGB.
-      // El tramo frío/rojo (BP-RP ≳ 2,7) se ancla a un espectro de estrella de
-      // CARBONO (cuerpo negro × bandas de absorción C2 "Swan" + CN), que se comen el
-      // verde/azul y las hacen MÁS rojas que un cuerpo negro de su temperatura. Por
-      // eso ahora las estrellas de carbono se diferencian y alcanzan el rojo ember,
-      // en lugar de saturarse todas en el mismo naranja (antes se recortaba en 3,0).
-      // [bp_rp, R, G, B]
-      // El MODELO DE COLOR GAIA (tabla BP–RP→RGB de Harre & Heller, gamma sRGB y
-      // saturación) vive ahora en el módulo compartido BitacoraGaiaColor —fuente
-      // única para simulador y mapa; ver bitacora-gaia-color.js—. La palanca de
-      // gamma/saturación que antes estaba en GAIA_CFG está en BitacoraGaiaColor.config.
-      // Aquí solo queda la capa de CARBONO: la fotometría BP/RP de Gaia SATURA en las
-      // estrellas de carbono —muy rojas y brillantes— e infravalora su enrojecimiento.
-      // Como el catálogo ya nos dice que la estrella-objetivo es de carbono, le
-      // desplazamos el índice hacia el rojo profundo (con un suelo) ANTES de pedir el
-      // color canónico, devolviéndole el rubí que la hace famosa (p. ej. La Superba).
-      function colorEstrella(bprp, carbono) {
-        var v = bprp;
-        if (carbono) {
-          v = (bprp == null) ? GAIA_CFG.carbono.bprpMin
-                             : Math.max(GAIA_CFG.carbono.bprpMin, bprp + GAIA_CFG.carbono.bprpOffset);
-        }
-        return BitacoraGaiaColor.colorPorBpRp(v);   // el módulo aplica gamma con ese índice
-      }
-      // Estrella con tinte: centro brillante (teñido según tinteNucleo) y el color
-      // pleno ya desde el núcleo hacia fuera, para que la tonalidad se aprecie.
-      function dibujarEstrellaColor(ctx, x, y, Rtot, rgb) {
-        var dCore = 1 / (1 + GAIA_CFG.blur);
-        var tn = GAIA_CFG.tinteNucleo, col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
-        var centro = Math.round(255 + tn * (rgb[0] - 255)) + ',' + Math.round(255 + tn * (rgb[1] - 255)) + ',' + Math.round(255 + tn * (rgb[2] - 255));
-        var gr = ctx.createRadialGradient(x, y, 0, x, y, Rtot);
-        gr.addColorStop(0, 'rgba(' + centro + ',1)');
-        gr.addColorStop(dCore * 0.55, 'rgba(' + col + ',0.9)');
-        gr.addColorStop(dCore, 'rgba(' + col + ',0.6)');
-        gr.addColorStop(1, 'rgba(' + col + ',0)');
-        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
-      }
-
-      // conGlow: si es true, las estrellas MÁS DÉBILES que mlim se pintan como
-      // glow no resuelto (solo tiene sentido en el Canvas 2D; en la superposición
-      // sobre placas se omite porque la foto ya trae ese resplandor).
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
-        var escv = PROC / (arcmin / 60);
-        var cos0 = Math.cos(dec0 * Math.PI / 180);
-        // Diferencia de ascensión recta normalizada al salto 0°/360°: sin esto,
-        // un objeto cercano a RA 0h (p. ej. NGC 7789 en ~359,35°) con un campo
-        // ancho deja media vista en negro, porque las estrellas pasadas las 24h
-        // (RA ~0–1°) se proyectan fuera de pantalla (0,5 − 359,35 ≈ −359°).
-        function deltaRA(ra) { return ((ra - ra0 + 540) % 360) - 180; }
-        var base = spriteGaia(), glow = spriteGlow();
-        // Si el objeto elegido es de carbono, localizamos la estrella que lo
-        // representa: la más cercana al centro del campo (ahí van sus coordenadas)
-        // de entre las que llevan color. Solo ESA recibe el realce rojo de carbono.
-        var idxCarbono = -1;
-        if (objetoCarbono) {
-          var mejorD2 = Infinity;
-          for (var c = 0; c < estrellas.length; c++) {
-            if (estrellas[c][2] >= GAIA_CFG.magColor) continue;
-            var cx = PROC / 2 - deltaRA(estrellas[c][0]) * cos0 * escv;
-            var cy = PROC / 2 - (estrellas[c][1] - dec0) * escv;
-            var d2 = (cx - PROC / 2) * (cx - PROC / 2) + (cy - PROC / 2) * (cy - PROC / 2);
-            if (d2 < mejorD2) { mejorD2 = d2; idxCarbono = c; }
-          }
-        }
-        var factorHalo = 1 + GAIA_CFG.blur;   // radio total = núcleo · (1 + blur)
-        var Rg = GAIA_CFG.glowRadio;
-        // A más aumento (menos campo) las estrellas se agrandan (tamaño angular en
-        // el ocular). En [1, escalaMagMax]: 1 a poco aumento, mayor a mucho aumento.
-        var escalaMag = Math.min(GAIA_CFG.escalaMagMax, Math.max(1, Math.sqrt(GAIA_CFG.escalaMagCampo / arcmin)));
-        // Diffraction spikes: solo en el Canvas 2D y si el telescopio tiene araña.
-        var spikesOn = conGlow && teleTieneArana();
-        ctx.globalCompositeOperation = 'lighter';
-        for (var i = 0; i < estrellas.length; i++) {
-          var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2], bprp = estrellas[i][3];
-          if (g > mlim && !conGlow) continue;   // sin glow: las sub-límite se descartan
-          var x = PROC / 2 - deltaRA(ra) * cos0 * escv;
-          var y = PROC / 2 - (dec - dec0) * escv;
-          if (x < -3 || y < -3 || x > PROC + 3 || y > PROC + 3) continue;
-          if (g > mlim) {
-            // Estrella NO resuelta: mota tenue de glow (su suma forma la nebulosa).
-            // Ponderada por el flujo relativo al límite, 10^(-0.4·(g−mlim)): se
-            // desvanece con la profundidad (borra el corte duro de GAIA_MAG_MAX) y,
-            // como mlim SUBE con la apertura, un tubo mayor da un glow más brillante
-            // de las MISMAS estrellas → así un 18" luce más que un 12".
-            var aGlow = GAIA_CFG.glowIntensidad * Math.pow(10, -0.4 * (g - mlim));
-            if (aGlow < 0.004) continue;   // aportación despreciable
-            ctx.globalAlpha = Math.min(1, aGlow);
-            ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
-            continue;
-          }
-          var Rtot = Math.min(GAIA_CFG.radioTotalMax, radioNucleo(g) * factorHalo * escalaMag);
-          // Brillo: se desvanece cerca de la mag. límite (sky-dependent) y se realza,
-          // pero con un SUELO (alfaMin) para que las estrellas del borde del límite
-          // sigan siendo puntos tenues visibles y no desaparezcan del todo.
-          ctx.globalAlpha = Math.min(1, Math.max(GAIA_CFG.alfaMin, GAIA_CFG.brillo * Math.min(1, (mlim - g) / 6)));
-          var esCarbono = (i === idxCarbono);
-          var colEstrella = null;
-          if ((g < GAIA_CFG.magColor && bprp != null) || esCarbono) {
-            colEstrella = colorEstrella(bprp, esCarbono);
-            dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella);   // solo las más brillantes llevan color
-          } else {
-            ctx.drawImage(base, x - Rtot, y - Rtot, Rtot * 2, Rtot * 2);
-          }
-          // Cruz de difracción de la araña, solo en las estrellas brillantes. Se tiñe
-          // con el COLOR de la estrella (la difracción es de su propia luz): así en un
-          // reflector la cruz de una estrella de carbono es roja y no lava su color.
-          if (spikesOn && g < GAIA_CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escalaMag, colEstrella);
-        }
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
+        BitacoraGaiaRender.dibujar(ctx, estrellas, {
+          ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim,
+          conGlow: conGlow, carbono: objetoCarbono, arana: teleTieneArana()
+        });
       }
 
       function superponerGaia(canvas) {
@@ -1105,6 +721,9 @@
       }
 
       /* ══════════════════ EVENTOS ══════════════════ */
+      // Selector Bortle enlazado al SQM (widget compartido): elegir clase fija el SQM
+      // y dispara 'change' → actualizar.
+      if (window.BitacoraBase && $('sim-bortle') && $('sim-sqm')) BitacoraBase.montarCielo($('sim-bortle'), $('sim-sqm'));
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
       $('sim-origen').addEventListener('change', actualizar);
       window.addEventListener('resize', function () { actualizar(); });

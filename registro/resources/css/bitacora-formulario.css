@@ -111,6 +111,10 @@
     padding:8px;border:1px solid var(--linea);border-radius:8px;margin-bottom:8px;
     background:rgba(126,200,255,0.03);
   }
+#mw-obs-form .img-row .img-thumb {
+    flex:0 0 auto;width:52px;height:52px;object-fit:cover;border-radius:6px;
+    border:1px solid var(--linea);background:#000;
+  }
 #mw-obs-form .img-row .img-file {font-size:12.5px;color:var(--tinta-tenue);flex:1 1 180px;}
 #mw-obs-form .img-row .img-etiqueta {flex:1 1 160px;}
 #mw-obs-form .img-row .img-pos {flex:0 0 auto;background:var(--noche-2);border:1px solid var(--linea);
@@ -127,3 +131,58 @@
     border-radius:8px;cursor:pointer;transition:all .15s;
   }
 #mw-obs-form .add-img:hover {color:var(--ambar);border-color:var(--ambar);}
+
+/* ── Generar imagen con el simulador (Gaia) ─────────────────────────────── */
+#mw-obs-form .imgs-btns {display:flex;flex-wrap:wrap;gap:8px;}
+#mw-obs-form .gen-img {
+  background:none;border:1px dashed rgba(126,200,255,0.5);color:var(--azul);
+  font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:7px 14px;
+  border-radius:8px;cursor:pointer;transition:all .15s;
+}
+#mw-obs-form .gen-img:hover {border-color:var(--azul);background:rgba(126,200,255,0.08);}
+#mw-obs-form .gen-status {font-size:12px;color:var(--tinta-tenue);margin-top:6px;}
+#mw-obs-form .gen-status.err {color:var(--rojo);}
+#mw-obs-form .img-origen {
+  display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;
+  color:var(--azul);border:1px solid rgba(126,200,255,0.4);border-radius:999px;
+  padding:2px 8px;margin-right:8px;white-space:nowrap;
+}
+
+/* Modal de previsualización */
+.sim-gen-ov {
+  position:fixed;inset:0;z-index:9999;background:rgba(4,7,14,0.78);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+}
+.sim-gen {
+  width:min(560px,94vw);background:var(--noche,#0a0e1a);
+  border:1px solid var(--linea);border-radius:14px;overflow:hidden;
+  box-shadow:0 24px 70px rgba(0,0,0,0.6);color:var(--tinta);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+}
+.sim-gen-head {display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid var(--linea);font-size:15px;}
+.sim-gen-x {background:none;border:none;color:var(--tinta-tenue);font-size:22px;line-height:1;cursor:pointer;}
+.sim-gen-x:hover {color:var(--tinta);}
+.sim-gen-info {padding:12px 18px 0;font-size:12.5px;color:var(--tinta-tenue);
+  font-family:ui-monospace,Menlo,monospace;}
+.sim-gen-vista {position:relative;margin:14px 18px;aspect-ratio:1/1;
+  background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--linea);}
+.sim-gen-canvas {width:100%;height:100%;display:block;}
+.sim-gen-spin {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:20px;font-size:13px;color:var(--tinta-tenue);background:rgba(4,7,14,0.65);}
+.sim-gen-foot {display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 18px;border-top:1px solid var(--linea);}
+.sim-gen-badge {font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--azul);
+  border:1px solid rgba(126,200,255,0.4);border-radius:999px;padding:3px 9px;}
+.sim-gen-btns {display:flex;gap:10px;}
+.sim-gen-cancel {background:none;border:1px solid var(--linea);color:var(--tinta-tenue);
+  font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;}
+.sim-gen-cancel:hover {color:var(--tinta);border-color:var(--tinta-tenue);}
+/* Scoped a #mw-obs-form para ganar en especificidad a cualquier estilo de
+   <button> del tema de WordPress (por eso salía negro), y con el dorado general
+   como valor literal de reserva por si --ambar no resolviera. */
+#mw-obs-form .sim-gen-usar {background:var(--ambar,#f4c76b);color:#1a1206;border:none;
+  font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;
+  padding:9px 18px;border-radius:8px;cursor:pointer;}
+#mw-obs-form .sim-gen-usar:hover {filter:brightness(1.08);}
+#mw-obs-form .sim-gen-usar:disabled {opacity:0.45;cursor:default;filter:none;}
