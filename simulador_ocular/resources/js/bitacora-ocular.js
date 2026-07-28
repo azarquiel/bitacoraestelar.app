@@ -500,9 +500,10 @@
         consultarGaia(ra0, dec0, arcmin).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
-          // Telón difuso: luz integrada de las estrellas que el catálogo no trae,
-          // extrapolada de los propios conteos del campo. Pinta también el fondo de
-          // cielo, así que sustituye al relleno gris cuando hay muestra suficiente.
+          // Capas difusas: telón (luz de las estrellas que el catálogo no trae,
+          // extrapolada de los propios conteos) y halo no resuelto (el déficit que
+          // la aglomeración le roba al telón en los núcleos densos). Pintan también
+          // el fondo de cielo, así que sustituyen al relleno gris cuando las hay.
           /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
              del equipo, faltan estrellas que SÍ se verían. Pasa en campos ricos y
              muy anchos. Se avisa en vez de mostrar un campo pobre sin explicación. */
@@ -512,8 +513,8 @@
             $('sim-aviso').textContent = 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
               ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
           }
-          var telon = BitacoraGaiaRender.telonDifuso(estrellas, { ra: ra0, dec: dec0, arcmin: arcmin, size: PROC });
-          if (telon) { BitacoraGaiaRender.pintarFot(telon, ctx, cieloOptica(datosOcular().pupila)); }
+          var difuso = BitacoraGaiaRender.capasDifusas(estrellas, { ra: ra0, dec: dec0, arcmin: arcmin, size: PROC });
+          if (difuso) { BitacoraGaiaRender.pintarFot(difuso, ctx, cieloOptica(datosOcular().pupila)); }
           else { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC); }
           dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, true, !!objetoSel.carbono);   // Canvas 2D: con glow de estrellas no resueltas
         }).catch(function () {

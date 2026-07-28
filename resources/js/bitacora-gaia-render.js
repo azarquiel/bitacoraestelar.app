@@ -374,6 +374,203 @@
     return out;
   }
 
+  /* ═══════════ HALO NO RESUELTO DE CÚMULOS (PERFIL DE KING) ═══════════════════
+     En el núcleo de un cúmulo denso Gaia DR3 está incompleto por AGLOMERACIÓN: no
+     separa fuentes tan juntas. Como telonDifuso reparte su luz extrapolada según
+     las estrellas observadas, hereda ese agujero justo donde el ojo ve el
+     resplandor más fuerte.
+
+     Esta capa NO vuelve a pintar el cúmulo entero — eso sería contar dos veces lo
+     que el telón ya puso. Pinta solo el DÉFICIT: la diferencia entre el perfil que
+     predice la parte sana del cúmulo y lo que el catálogo trae de verdad.
+
+     Método:
+       1. Perfil radial de densidad en anillos.
+       2. Radio de aglomeración = donde la densidad deja de crecer hacia dentro.
+          En un cúmulo real la densidad sube hasta el centro; si baja, es que el
+          catálogo está perdiendo fuentes, no que haya menos estrellas.
+       3. Ajuste de King SOLO fuera de ese radio (la zona no sesgada) y
+          extrapolación hacia dentro.
+       4. Déficit = King − observado, convertido a flujo.
+
+     Si la densidad crece hasta el centro no hay déficit y esta capa no pinta nada:
+     el telón ya bastaba. Se autoactiva, sin catálogo de globulares. */
+  var KING = {
+    k: 1.0,             // calibración visual del halo
+    minEstrellas: 400,  // por debajo el perfil radial es ruido
+    nAnillos: 18,
+    rcMin: 0.02, rcMax: 0.5,   // radio de core, en fracción del radio del campo
+    rtMin: 1.0, rtMax: 5.0,    // radio de marea, en múltiplos del radio del campo
+    // El campo tiene que estar de verdad concentrado: densidad en el anillo de
+    // pico frente al del borde. Evita disparar la capa en campos uniformes, donde
+    // el ruido de Poisson basta para que el pico no caiga en el centro.
+    concentracionMin: 3,
+    // Y la caída hacia el centro tiene que ser apreciable, no un tropiezo del
+    // conteo: fracción mínima que baja la densidad del pico al anillo central.
+    caidaMin: 0.2,
+    // Ante ajustes indistinguibles, quedarse con el MENOS picudo (rc mayor). Desde
+    // fuera del core no se puede conocer el core: inventar un pico estrecho
+    // sobreilumina el núcleo. Margen de error dentro del cual se consideran empate.
+    margenEmpate: 1.10
+  };
+
+  /* Perfil de King (1962): densidad superficial de un cúmulo con radio de core rc
+     y radio de marea rt. La resta del término de rt es lo que lo hace caer a cero
+     en el borde, en vez de extenderse indefinidamente. */
+  function formaKing(r, rc, rt) {
+    var a = 1 / Math.sqrt(1 + (r / rc) * (r / rc));
+    var b = 1 / Math.sqrt(1 + (rt / rc) * (rt / rc));
+    var d = a - b;
+    return d > 0 ? d * d : 0;
+  }
+
+  /* Perfil radial de densidad (estrellas por grado²) alrededor del centro del
+     campo, más el flujo medio por estrella, que hace de conversión a luz. */
+  function perfilRadial(estrellas, o) {
+    var n = KING.nAnillos, rmax = (o.arcmin / 60) / 2;
+    var cuenta = new Float64Array(n), flujo = 0, dentro = 0;
+    var cos0 = Math.cos(o.dec * Math.PI / 180);
+    for (var i = 0; i < estrellas.length; i++) {
+      var dRA = (((estrellas[i][0] - o.ra + 540) % 360) - 180) * cos0;
+      var dDec = estrellas[i][1] - o.dec;
+      var r = Math.sqrt(dRA * dRA + dDec * dDec);
+      if (r >= rmax) continue;
+      cuenta[Math.floor(r / rmax * n)]++;
+      flujo += Math.pow(10, -0.4 * estrellas[i][2]); dentro++;
+    }
+    if (dentro < KING.minEstrellas) return null;
+    var dens = new Float64Array(n), radio = new Float64Array(n), area = new Float64Array(n);
+    for (i = 0; i < n; i++) {
+      var r0 = rmax * i / n, r1 = rmax * (i + 1) / n;
+      area[i] = Math.PI * (r1 * r1 - r0 * r0);
+      dens[i] = cuenta[i] / area[i];
+      radio[i] = (r0 + r1) / 2;
+    }
+    return { dens: dens, radio: radio, area: area, cuenta: cuenta, rmax: rmax, flujoMedio: flujo / dentro };
+  }
+
+  /* Radio a partir del cual el catálogo pierde fuentes: el anillo de densidad
+     máxima. Hacia dentro de él la densidad BAJA, que en un cúmulo real no pasa. */
+  function radioAglomeracion(dens) {
+    var iMax = 0;
+    for (var i = 1; i < dens.length; i++) if (dens[i] > dens[iMax]) iMax = i;
+    return iMax;
+  }
+
+  /* Ajusta King a los anillos NO sesgados (fuera del radio de aglomeración).
+     Búsqueda en rejilla de rc y rt; la amplitud k sale lineal por mínimos cuadrados.
+
+     El ajuste va en CUENTAS con χ² de Poisson (peso 1/N), no en densidad absoluta.
+     La diferencia no es cosmética: en densidad, el anillo interior es dos órdenes
+     de magnitud más denso que el exterior y su residuo domina la suma entera, así
+     que ganaba cualquier rc que clavara ese anillo y el perfil se elegía por
+     ruido. En cuentas con peso de Poisson todos los anillos pesan lo que deben. */
+  function ajustarKing(p, iDesde) {
+    var n = p.dens.length, candidatos = [], mejorErr = Infinity;
+    for (var a = 0; a < 12; a++) {
+      var rc = p.rmax * (KING.rcMin * Math.pow(KING.rcMax / KING.rcMin, a / 11));
+      for (var b = 0; b < 6; b++) {
+        var rt = p.rmax * (KING.rtMin + (KING.rtMax - KING.rtMin) * b / 5);
+        var sm = 0, smm = 0, i, m;
+        for (i = iDesde; i < n; i++) {
+          m = formaKing(p.radio[i], rc, rt) * p.area[i];        // cuentas del modelo, salvo k
+          sm += m; smm += m * m / Math.max(1, p.cuenta[i]);
+        }
+        if (!(smm > 0)) continue;
+        var k = sm / smm;
+        if (!(k > 0)) continue;
+        var err = 0;
+        for (i = iDesde; i < n; i++) {
+          m = formaKing(p.radio[i], rc, rt) * p.area[i];
+          var d = p.cuenta[i] - k * m;
+          err += d * d / Math.max(1, p.cuenta[i]);
+        }
+        candidatos.push({ rc: rc, rt: rt, k: k, err: err });
+        if (err < mejorErr) mejorErr = err;
+      }
+    }
+    if (!candidatos.length) return null;
+    /* Desempate conservador: entre los ajustes que los datos no distinguen, el de
+       rc MAYOR. Solo se ven los anillos de fuera del core, donde el perfil es casi
+       una ley de potencias y rc queda degenerado; quedarse con el rc más pequeño
+       daría un pico estrecho inventado y un núcleo sobreiluminado. */
+    var mejor = null;
+    for (var c = 0; c < candidatos.length; c++) {
+      var cand = candidatos[c];
+      if (cand.err > mejorErr * KING.margenEmpate) continue;
+      if (!mejor || cand.rc > mejor.rc) mejor = cand;
+    }
+    return mejor;
+  }
+
+  /* Halo no resuelto del campo, en flujo por arcsec². Devuelve null si no hay
+     cúmulo con déficit por aglomeración, que es el caso normal. */
+  function haloNoResuelto(estrellas, o) {
+    if (!estrellas || estrellas.length < KING.minEstrellas) return null;
+    var p = perfilRadial(estrellas, o);
+    if (!p) return null;
+    var iCrowd = radioAglomeracion(p.dens);
+    if (iCrowd < 1) return null;                 // densidad crece hasta el centro: sin déficit
+    /* Dos guardas contra el falso positivo. En un campo uniforme el ruido de
+       Poisson basta para que el anillo de máxima densidad no sea el central, y sin
+       esto la capa se dispararía en cualquier sitio. */
+    var pico = p.dens[iCrowd], borde = p.dens[p.dens.length - 1];
+    if (!(pico > borde * KING.concentracionMin)) return null;   // el campo no está concentrado
+    if (!((pico - p.dens[0]) / pico > KING.caidaMin)) return null;   // la caída al centro es un tropiezo
+    var fit = ajustarKing(p, iCrowd);
+    if (!fit || !(fit.k > 0)) return null;
+
+    // Déficit por anillo interior, en estrellas por grado², y su paso a flujo.
+    var deficit = new Float64Array(iCrowd + 1), hay = false;
+    for (var i = 0; i <= iCrowd; i++) {
+      var d = fit.k * formaKing(p.radio[i], fit.rc, fit.rt) - p.dens[i];
+      // ponytail: las estrellas que el catálogo pierde se cuentan con el flujo
+      // MEDIO de la muestra. Sesga a brillante (las perdidas son sobre todo
+      // débiles), y por eso KING.k queda como perilla. Con una función de
+      // luminosidad por cúmulo se afinaría, pero exige el catálogo que no hay.
+      deficit[i] = d > 0 ? d * p.flujoMedio : 0;
+      if (deficit[i] > 0) hay = true;
+    }
+    if (!hay) return null;
+
+    // De densidad por grado² a flujo por arcsec² (mismas unidades que Fcielo).
+    var porArcsec2 = 1 / (3600 * 3600);
+    var SIZE = o.size, out = new Float32Array(SIZE * SIZE);
+    var escPix = (o.arcmin / 60) / SIZE;         // grados por píxel
+    var rCorte = p.radio[iCrowd];
+    for (var y = 0; y < SIZE; y++) {
+      var dy = (y + 0.5 - SIZE / 2) * escPix;
+      for (var x = 0; x < SIZE; x++) {
+        var dx = (x + 0.5 - SIZE / 2) * escPix;
+        var r = Math.sqrt(dx * dx + dy * dy);
+        if (r >= rCorte) continue;               // fuera del núcleo: ya lo cubre el telón
+        // Interpolación lineal del déficit entre centros de anillo.
+        var f = r / p.rmax * p.dens.length - 0.5;
+        var i0 = Math.max(0, Math.min(iCrowd, Math.floor(f)));
+        var i1 = Math.min(iCrowd, i0 + 1), t = Math.max(0, Math.min(1, f - i0));
+        out[y * SIZE + x] = KING.k * (deficit[i0] * (1 - t) + deficit[i1] * t) * porArcsec2;
+      }
+    }
+    return out;
+  }
+
+  /* Suma de todas las capas difusas del campo, en flujo por arcsec². Cada capa
+     aporta lo suyo sin solaparse: el telón, la luz de las estrellas que el
+     catálogo no trae; el halo, solo el déficit que la aglomeración le roba al
+     telón en los núcleos densos.
+     Ninguna lleva atenuación de pupila: la aplica ctxFotometrico al pintar. */
+  function capasDifusas(estrellas, o) {
+    var capas = [];
+    if (o.conTelon !== false) { var t = telonDifuso(estrellas, o); if (t) capas.push(t); }
+    if (o.conHalo !== false) { var h = haloNoResuelto(estrellas, o); if (h) capas.push(h); }
+    if (!capas.length) return null;
+    var out = capas[0];
+    for (var c = 1; c < capas.length; c++) {
+      for (var i = 0; i < out.length; i++) out[i] += capas[c][i];
+    }
+    return out;
+  }
+
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio) ── */
   var cacheGaia = {};
   function radioConsulta(arcmin) {
@@ -572,11 +769,12 @@
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t
     };
     return consultar(o.ra, o.dec, o.arcmin).then(function (estrellas) {
-      // Capa difusa primero (incluye el fondo de cielo); si no hay, gris uniforme.
-      var telon = (o.conTelon !== false)
-        ? telonDifuso(estrellas, { ra: o.ra, dec: o.dec, arcmin: o.arcmin, size: SIZE })
-        : null;
-      if (telon) { pintarFot(telon, ctx, cielo); }
+      // Capas difusas primero (incluyen el fondo de cielo); si no hay, gris uniforme.
+      var difuso = capasDifusas(estrellas, {
+        ra: o.ra, dec: o.dec, arcmin: o.arcmin, size: SIZE,
+        conTelon: o.conTelon, conHalo: o.conHalo
+      });
+      if (difuso) { pintarFot(difuso, ctx, cielo); }
       else { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE); }
       dibujar(ctx, estrellas, {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim,
@@ -601,6 +799,12 @@
     telonDifuso: telonDifuso,
     pendienteConteos: pendienteConteos,
     razonNoResuelta: razonNoResuelta,
+    king: KING,
+    haloNoResuelto: haloNoResuelto,
+    perfilRadial: perfilRadial,
+    ajustarKing: ajustarKing,
+    formaKing: formaKing,
+    capasDifusas: capasDifusas,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
     suave: suave,

@@ -143,5 +143,72 @@ var muTelon = -2.5 * Math.log10(denso);
 ok(muTelon > 17 && muTelon < 26,
   'brillo del telón denso = ' + muTelon.toFixed(1) + ' mag/arcsec² (rango plausible)');
 
+/* ── 7. Halo de King: el ajuste no debe comerse el sesgo que corrige ─────────
+   Cúmulo sintético con perfil de King conocido y el NÚCLEO VACIADO a propósito,
+   imitando la incompletitud de Gaia por aglomeración. Si el ajuste usara los
+   anillos centrales, aprendería el agujero y no lo rellenaría nunca. */
+console.log('Halo de King: ajuste fuera del radio de aglomeración:');
+function cumuloSintetico(rcGrados, rtGrados, nTotal, rVaciado) {
+  // Reparte estrellas según King(r)·2πr, y borra las de dentro de rVaciado.
+  var est = [], acum = [], total = 0, PASO = rtGrados / 400, r;
+  for (r = PASO / 2; r < rtGrados; r += PASO) {
+    total += R.formaKing(r, rcGrados, rtGrados) * 2 * Math.PI * r;
+    acum.push([r, total]);
+  }
+  for (var i = 0; i < nTotal; i++) {
+    var u = (i + 0.5) / nTotal * total, rr = rtGrados;
+    for (var j = 0; j < acum.length; j++) if (acum[j][1] >= u) { rr = acum[j][0]; break; }
+    if (rr < rVaciado) continue;                     // el "agujero" de la aglomeración
+    var ang = i * 2.399963;
+    est.push([10 + rr * Math.cos(ang) / Math.cos(40 * Math.PI / 180),
+              40 + rr * Math.sin(ang), 14 + (i % 25) * 0.1, 0.9]);
+  }
+  return est;
+}
+var optsC = { ra: 10, dec: 40, arcmin: 60, size: 64 };
+var RC = 0.06, RT = 0.9;
+var cumulo = cumuloSintetico(RC, RT, 9000, 0.10);
+
+var perf = R.perfilRadial(cumulo, optsC);
+var iCrowd = perf ? (function (d) { var m = 0; for (var i = 1; i < d.length; i++) if (d[i] > d[m]) m = i; return m; })(perf.dens) : -1;
+ok(iCrowd >= 1, 'detecta el radio de aglomeración (anillo ' + iCrowd + ', densidad cae hacia el centro)');
+
+var fit = R.ajustarKing(perf, iCrowd);
+ok(fit && fit.k > 0, 'ajuste con amplitud positiva');
+
+/* rc no se puede medir desde fuera del core: está degenerado y el ajuste debe
+   resolver el empate hacia el perfil MENOS picudo. Lo que se comprueba no es que
+   acierte rc, sino que no se pegue al mínimo de la rejilla — que daría un pico
+   inventado y un núcleo sobreiluminado. */
+ok(fit.rc > perf.rmax * R.king.rcMin * 1.5,
+  'rc no se pega al mínimo de la rejilla (desempate conservador)');
+
+/* Lo que de verdad importa: que el King ajustado por fuera recupere la densidad
+   central que la aglomeración borró. El mismo cúmulo SIN vaciar es la verdad. */
+var densCentro = perf.dens[0];
+var kingCentro = fit.k * R.formaKing(perf.radio[0], fit.rc, fit.rt);
+ok(kingCentro > densCentro * 2,
+  'el King extrapolado predice el centro muy por encima de lo observado');
+var verdad = R.perfilRadial(cumuloSintetico(RC, RT, 9000, 0), optsC).dens[0];
+ok(kingCentro > verdad * 0.25 && kingCentro < verdad * 4,
+  'densidad central recuperada dentro de un factor 4 de la real (' +
+  kingCentro.toFixed(0) + ' vs ' + verdad.toFixed(0) + ' estrellas/grado²)');
+
+console.log('Halo de King: solo pinta donde hay déficit:');
+var halo = R.haloNoResuelto(cumulo, optsC);
+ok(halo !== null, 'con núcleo vaciado sí produce halo');
+var centroIdx = (optsC.size / 2) * optsC.size + optsC.size / 2;
+ok(halo[centroIdx] > 0, 'el halo aporta luz en el centro');
+ok(halo[0] === 0, 'no aporta nada en la esquina del campo (ya lo cubre el telón)');
+
+// Sin agujero (densidad creciendo hasta el centro) no hay déficit que rellenar:
+// el telón ya bastaba, y esta capa debe abstenerse en vez de duplicarlo.
+ok(R.haloNoResuelto(cumuloSintetico(RC, RT, 9000, 0), optsC) === null,
+  'sin déficit por aglomeración → null (no duplica el telón)');
+
+// Un campo sin cúmulo tampoco debe disparar la capa.
+ok(R.haloNoResuelto(campoSintetico(0.32, 16.5, 6000, 0.4), optsC) === null,
+  'campo uniforme → null');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);
