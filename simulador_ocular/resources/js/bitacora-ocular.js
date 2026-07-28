@@ -162,7 +162,11 @@
         // SB_CIELO_NEGRO el fondo es negro total (contraste máximo, como bajo un
         // cielo excepcional); por debajo se aclara linealmente en magnitudes
         // (= logarítmicamente en flujo) hasta blanco en SB_CIELO_BLANCO.
-        SB_CIELO_NEGRO: 22.5, SB_CIELO_BLANCO: 16.5
+        SB_CIELO_NEGRO: 22.5, SB_CIELO_BLANCO: 16.5,
+        // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el
+        // lado brillante). 1 = simétrico → las nebulosas oscuras (Barnard) recortan
+        // su silueta contra el fondo brillante. Bajar si aparece ruido moteado.
+        REALCE_OSCURO: 1.0
       };
 
       // Nivel de gris del fondo (0–255) para un brillo de cielo en el ocular SBe.
@@ -338,22 +342,32 @@
                 TLM = -22,81 + 1,792·SB0T - 0,02949·SB0T² + 2,5·log10(D²·t)
          El máximo posible (SB0T = 27) coincide con la Ec. 7:
                 TLM_máx = 4,12 + 2,5·log10(D²·t). */
-      function magLimiteTelescopio() {
-        var D = teleApertura(), MAG = datosOcular().aumentos;
-        // Transmisión del tubo, por orden de preferencia: la fijada a mano
-        // (teleSel.transmision, telescopio manual con tipo elegido), luego la
-        // deducida del tipo óptico del catálogo (teleSel.optica), y si no, el
-        // valor medio por defecto.
+      // Transmisión del tubo, por orden de preferencia: la fijada a mano
+      // (teleSel.transmision, telescopio manual con tipo elegido), luego la
+      // deducida del tipo óptico del catálogo (teleSel.optica), y si no, el valor
+      // medio por defecto. Fuente única: la usan la magnitud límite y el fondo.
+      function transmisionEfectiva() {
         var t = TRANSMISION_TELE;
         if (teleSel) {
           if (num(teleSel.transmision) > 0) { t = num(teleSel.transmision); }
           else { var tOpt = transmisionPorOptica(teleSel.optica); if (tOpt) { t = tOpt; } }
         }
+        return t;
+      }
+      function magLimiteTelescopio() {
+        var D = teleApertura(), MAG = datosOcular().aumentos;
+        var t = transmisionEfectiva();
         if (!(D > 0) || !(MAG > 0)) return null;
         var sqm = parseFloat($('sim-sqm').value) || 21;
         var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
         SB0T = Math.max(sqm, Math.min(27, SB0T));
-        return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(D * D * t);
+        // Apertura efectiva: si la pupila de salida (d_ep = D/MAG) supera la del
+        // ojo, el ojo recorta el haz y se desperdicia apertura → D_eff = D·min(1,
+        // d_eye/d_ep). Solo en la captación de luz (D²); el término de cielo SB0T
+        // conserva su propio clamp (min(1,dim)) en el render, sin doble recorte.
+        var dEp = D / MAG, dEye = pupilaOjo();
+        var Deff = D * Math.min(1, dEye / dEp);
+        return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(Deff * Deff * t);
       }
 
       /* ══════════════════ RENDER CENTRALIZADO ══════════════════ */
@@ -524,7 +538,7 @@
       function fusionar(vd, vs) { var sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0, i; for (i = 0; i < vd.length; i++) { if (vd[i] >= 120 && vd[i] <= 215 && vs[i] > 8) { sx += vs[i]; sy += vd[i]; sxx += vs[i] * vs[i]; sxy += vs[i] * vd[i]; n++; } } if (n < 500) return vd; var a = (n * sxy - sx * sy) / (n * sxx - sx * sx); var b = (sy - a * sx) / n; if (!(a > 0)) return vd; var out = new Float32Array(vd.length); for (i = 0; i < vd.length; i++) { var t = suave((vd[i] - 210) / 40); out[i] = (1 - t) * vd[i] + t * Math.max(vd[i], a * vs[i] + b); } return out; }
       function desenfocar(v, radio) { var c = document.createElement('canvas'); c.width = c.height = PROC; var ctx = c.getContext('2d'); var im = ctx.createImageData(PROC, PROC); var i, j; for (i = 0, j = 0; j < v.length; i += 4, j++) { var o = Math.max(0, Math.min(255, v[j])); im.data[i] = im.data[i + 1] = im.data[i + 2] = o; im.data[i + 3] = 255; } ctx.putImageData(im, 0, 0); var c2 = document.createElement('canvas'); c2.width = c2.height = PROC; var ctx2 = c2.getContext('2d', { willReadFrequently: true }); ctx2.filter = 'blur(' + radio + 'px)'; ctx2.drawImage(c, 0, 0); var dd = ctx2.getImageData(0, 0, PROC, PROC).data; var out = new Float32Array(v.length); for (i = 0, j = 0; j < v.length; i += 4, j++) out[j] = dd[i]; return out; }
       function repararNucleos(v) { var entorno = desenfocar(v, 4); for (var i = 0; i < v.length; i++) { if (entorno[i] > 140 && v[i] < 0.5 * entorno[i]) v[i] = Math.min(300, entorno[i] * 1.25); } return v; }
-      function adaptacionLocal(v) { var borroso = desenfocar(v, Math.round(PROC / 60)); var out = new Float32Array(v.length); var REALCE = 0.5, UMBRAL_DETALLE = 12; for (var j = 0; j < v.length; j++) { var dif = v[j] - borroso[j]; var mag = Math.abs(dif) - UMBRAL_DETALLE; var gan = dif >= 0 ? REALCE : REALCE * 0.25; out[j] = v[j] + (mag > 0 ? gan * Math.sign(dif) * mag : 0); } return out; }
+      function adaptacionLocal(v) { var borroso = desenfocar(v, Math.round(PROC / 60)); var out = new Float32Array(v.length); var REALCE = 0.5, UMBRAL_DETALLE = 12; for (var j = 0; j < v.length; j++) { var dif = v[j] - borroso[j]; var mag = Math.abs(dif) - UMBRAL_DETALLE; var gan = dif >= 0 ? REALCE : REALCE * FOT.REALCE_OSCURO; out[j] = v[j] + (mag > 0 ? gan * Math.sign(dif) * mag : 0); } return out; }
 
       function procesarFotometrico(profunda, corta, canvas, p) {
         var vd = lumas(profunda); if (!vd) return false; var v = vd; if (corta) { var vs = lumas(corta); if (vs) v = fusionar(vd, vs); }
@@ -536,7 +550,11 @@
         // de contraste sobre el cielo (Δmag = 2,5·log10(1 + Fobj·s / Fcielo)), que
         // se conserva intacto. Así, cielo oscuro → fondo negro y objeto pleno
         // (contraste brutal); cielo claro → fondo gris y menos incremento (lavado).
-        var nivelFondo = nivelCielo(sqm - 2.5 * Math.log10(dim));
+        // El fondo se atenúa también por la transmisión del tubo (antes se omitía).
+        // Como el objeto se pinta nivelFondo + incremento, esto oscurece fondo y
+        // objeto por igual: conserva el contraste y baja un poco el suelo.
+        var T = transmisionEfectiva();
+        var nivelFondo = nivelCielo(sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T));
         var salida = new Float32Array(v.length);
         for (var i = 0; i < v.length; i++) {
           var Fobj = 0, vi = v[i];
