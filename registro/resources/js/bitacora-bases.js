@@ -150,7 +150,7 @@
       var el = document.createElement('div');
       el.className = 'base-item';
       var specs = [];
-      if (b.lat != null && b.lon != null) specs.push((0 + b.lat).toFixed(4) + ', ' + (0 + b.lon).toFixed(4));
+      if (b.lat != null && b.lon != null) specs.push(Number(b.lat).toFixed(4) + ', ' + Number(b.lon).toFixed(4));
       if (b.altitud_m != null && b.altitud_m !== '') specs.push(Math.round(b.altitud_m) + ' m');
       if (b.tz) specs.push(b.tz);
       var meta = etiquetaVis(b.visibilidad) + ' · ' + b.n_observaciones + ' observación(es)';

@@ -59,18 +59,6 @@
           .replace(/'/g, '&#39;');
       }
 
-      function fmtGrados(v) {
-        var n = parseFloat(v);
-        if (isNaN(n)) return '—';
-        return (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(1) + '°';
-      }
-
-      function fmtAz(v) {
-        var n = parseFloat(v);
-        if (isNaN(n)) return '—';
-        return n.toFixed(1) + '°';
-      }
-
       // "2023-10-21 21:30:00" -> "21 oct 2023, 21:30 UTC"
       function fmtFecha(v) {
         if (!v) return '';
@@ -151,10 +139,6 @@
               (obs.telescopio ? ' <span style="color:var(--tinta-tenue)">· ' + esc(obs.telescopio) + '</span>' : '') +
             '</div>' +
             '<div class="when">' + fmtFecha(obs.fecha_observacion) + '</div>' +
-          '</div>' +
-          '<div class="pos">' +
-            '<div class="p"><div class="k">Alt.</div><div class="v">' + fmtGrados(obs.obj_alt) + '</div></div>' +
-            '<div class="p"><div class="k">Az.</div><div class="v">' + fmtAz(obs.obj_az) + '</div></div>' +
           '</div>' +
           '<div class="acts">' + acciones + '</div>';
 
