@@ -452,25 +452,34 @@
      campo, más el flujo medio por estrella, que hace de conversión a luz. */
   function perfilRadial(estrellas, o) {
     var n = KING.nAnillos, rmax = (o.arcmin / 60) / 2;
-    var cuenta = new Float64Array(n), flujo = 0, dentro = 0;
+    var cuenta = new Float64Array(n), flujoAnillo = new Float64Array(n);
+    var flujo = 0, dentro = 0;
     var cos0 = Math.cos(o.dec * Math.PI / 180);
     for (var i = 0; i < estrellas.length; i++) {
       var dRA = (((estrellas[i][0] - o.ra + 540) % 360) - 180) * cos0;
       var dDec = estrellas[i][1] - o.dec;
       var r = Math.sqrt(dRA * dRA + dDec * dDec);
       if (r >= rmax) continue;
-      cuenta[Math.floor(r / rmax * n)]++;
-      flujo += Math.pow(10, -0.4 * estrellas[i][2]); dentro++;
+      var f = Math.pow(10, -0.4 * estrellas[i][2]);
+      var iAnillo = Math.floor(r / rmax * n);
+      cuenta[iAnillo]++; flujoAnillo[iAnillo] += f;
+      flujo += f; dentro++;
     }
     if (dentro < KING.minEstrellas) return null;
     var dens = new Float64Array(n), radio = new Float64Array(n), area = new Float64Array(n);
+    var flujoDens = new Float64Array(n);
     for (i = 0; i < n; i++) {
       var r0 = rmax * i / n, r1 = rmax * (i + 1) / n;
       area[i] = Math.PI * (r1 * r1 - r0 * r0);
       dens[i] = cuenta[i] / area[i];
+      // Flujo observado por arcsec² en el anillo (área en grados² → arcsec²).
+      flujoDens[i] = flujoAnillo[i] / (area[i] * 3600 * 3600);
       radio[i] = (r0 + r1) / 2;
     }
-    return { dens: dens, radio: radio, area: area, cuenta: cuenta, rmax: rmax, flujoMedio: flujo / dentro };
+    return {
+      dens: dens, radio: radio, area: area, cuenta: cuenta, rmax: rmax,
+      flujoDens: flujoDens, flujoMedio: flujo / dentro
+    };
   }
 
   /* Radio a partir del cual el catálogo pierde fuentes: el anillo de densidad
@@ -527,10 +536,77 @@
     return mejor;
   }
 
+  /* Globular catalogado (Harris) cuyo centro cae en el campo. El catálogo lo
+     inyecta window.BITACORA_GLOBULARES; sin él, todo sigue funcionando por
+     conteos. Fila: [id, nombre, RA°, Dec°, r_c('), r_h('), c, mu_V(0)]. */
+  function globularEnCampo(o) {
+    var cat = window.BITACORA_GLOBULARES;
+    if (!cat || !cat.length) return null;
+    var medio = (o.arcmin / 60) / 2, cos0 = Math.cos(o.dec * Math.PI / 180);
+    for (var i = 0; i < cat.length; i++) {
+      var g = cat[i];
+      var dRA = (((g[2] - o.ra + 540) % 360) - 180) * cos0, dDec = g[3] - o.dec;
+      if (Math.abs(dRA) > medio || Math.abs(dDec) > medio) continue;
+      if (!(g[4] > 0) || g[6] == null || g[7] == null) continue;
+      return { id: g[0], ra: g[2], dec: g[3], rc: g[4] / 60, c: g[6], muV: g[7] };
+    }
+    return null;
+  }
+
+  /* Halo anclado al BRILLO SUPERFICIAL MEDIDO de un globular catalogado, en vez
+     de deducido de conteos sesgados por aglomeración.
+
+     mu_V(0) es la luz TOTAL del centro del cúmulo: incluye las estrellas que Gaia
+     sí resuelve y que el render ya dibuja, y las débiles que el telón ya reparte.
+     Pintar el perfil entero encima las contaría dos y tres veces. Lo que aporta
+     esta capa es solo el RESTO:
+
+       déficit(r) = King_catálogo(r) − flujo observado(r) − telón(r)
+
+     La geometría sale del propio catálogo: r_c y r_t = r_c·10^c. */
+  function haloCatalogado(gc, estrellas, o, yaPuesto) {
+    var p = perfilRadial(estrellas, { ra: gc.ra, dec: gc.dec, arcmin: o.arcmin });
+    if (!p) return null;
+    var rt = gc.rc * Math.pow(10, gc.c);
+    var pico = formaKing(0, gc.rc, rt);
+    if (!(pico > 0)) return null;
+    var F0 = Math.pow(10, -0.4 * gc.muV);        // flujo por arcsec² en el centro
+
+    var SIZE = o.size, out = new Float32Array(SIZE * SIZE), hay = false;
+    var escPix = (o.arcmin / 60) / SIZE, cos0 = Math.cos(o.dec * Math.PI / 180);
+    // Desplazamiento del centro del cúmulo respecto al del campo, en píxeles.
+    var offX = (((gc.ra - o.ra + 540) % 360) - 180) * cos0 / escPix;
+    var offY = (gc.dec - o.dec) / escPix;
+    for (var y = 0; y < SIZE; y++) {
+      var dy = (y + 0.5 - SIZE / 2 + offY) * escPix;
+      for (var x = 0; x < SIZE; x++) {
+        var dx = (x + 0.5 - SIZE / 2 - offX) * escPix;
+        var r = Math.sqrt(dx * dx + dy * dy);
+        if (r >= rt) continue;
+        var idx = y * SIZE + x;
+        var king = F0 * formaKing(r, gc.rc, rt) / pico;
+        // Flujo ya presente: el observado del anillo y lo que ponga el telón.
+        var iA = Math.min(p.dens.length - 1, Math.floor(r / p.rmax * p.dens.length));
+        var puesto = p.flujoDens[iA] + (yaPuesto ? yaPuesto[idx] : 0);
+        var d = king - puesto;
+        if (d > 0) { out[idx] = KING.k * d; hay = true; }
+      }
+    }
+    return hay ? out : null;
+  }
+
   /* Halo no resuelto del campo, en flujo por arcsec². Devuelve null si no hay
-     cúmulo con déficit por aglomeración, que es el caso normal. */
-  function haloNoResuelto(estrellas, o) {
+     cúmulo con déficit por aglomeración, que es el caso normal.
+     yaPuesto: capas difusas ya calculadas (el telón), para no contarlas dos veces
+     en la rama anclada al catálogo. */
+  function haloNoResuelto(estrellas, o, yaPuesto) {
     if (!estrellas || estrellas.length < KING.minEstrellas) return null;
+    // Con perfil medido en el catálogo no hace falta adivinarlo de los conteos.
+    var gc = globularEnCampo(o);
+    if (gc) {
+      var anclado = haloCatalogado(gc, estrellas, o, yaPuesto);
+      if (anclado) return anclado;
+    }
     var p = perfilRadial(estrellas, o);
     if (!p) return null;
     var iCrowd = radioAglomeracion(p.dens);
@@ -589,15 +665,14 @@
      telón en los núcleos densos.
      Ninguna lleva atenuación de pupila: la aplica ctxFotometrico al pintar. */
   function capasDifusas(estrellas, o) {
-    var capas = [];
-    if (o.conTelon !== false) { var t = telonDifuso(estrellas, o); if (t) capas.push(t); }
-    if (o.conHalo !== false) { var h = haloNoResuelto(estrellas, o); if (h) capas.push(h); }
-    if (!capas.length) return null;
-    var out = capas[0];
-    for (var c = 1; c < capas.length; c++) {
-      for (var i = 0; i < out.length; i++) out[i] += capas[c][i];
-    }
-    return out;
+    // El telón va primero: el halo anclado a catálogo necesita saber qué luz hay
+    // puesta ya para aportar solo el resto.
+    var telon = (o.conTelon !== false) ? telonDifuso(estrellas, o) : null;
+    var halo = (o.conHalo !== false) ? haloNoResuelto(estrellas, o, telon) : null;
+    if (!telon) return halo;
+    if (!halo) return telon;
+    for (var i = 0; i < telon.length; i++) telon[i] += halo[i];
+    return telon;
   }
 
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio) ── */
@@ -830,6 +905,8 @@
     razonNoResuelta: razonNoResuelta,
     king: KING,
     haloNoResuelto: haloNoResuelto,
+    haloCatalogado: haloCatalogado,
+    globularEnCampo: globularEnCampo,
     flujoMedioNoResuelto: flujoMedioNoResuelto,
     perfilRadial: perfilRadial,
     ajustarKing: ajustarKing,

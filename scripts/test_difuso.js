@@ -225,5 +225,36 @@ ok(R.haloNoResuelto(cumuloSintetico(RC, RT, 9000, 0), optsC) === null,
 ok(R.haloNoResuelto(campoSintetico(0.32, 16.5, 6000, 0.4), optsC) === null,
   'campo uniforme → null');
 
+/* ── 8. Halo anclado al catálogo de Harris ──────────────────────────────────
+   mu_V(0) es la luz TOTAL del centro: incluye las estrellas dibujadas y lo que
+   el telón ya reparte. La capa debe aportar solo el RESTO, o cuenta doble. */
+console.log('Halo anclado a Harris:');
+// 47 Tuc: r_c = 0,36', c = 2,07, mu_V(0) = 14,38 (fila real del catálogo).
+window.BITACORA_GLOBULARES = [['NGC 104', '47 Tuc', 10, 40, 0.36, 3.17, 2.07, 14.38]];
+var gc = R.globularEnCampo(optsC);
+ok(gc && gc.id === 'NGC 104', 'encuentra el globular catalogado en el campo');
+casi(gc.rc, 0.36 / 60, 1e-9, 'r_c convertido a grados');
+
+var anclado = R.haloCatalogado(gc, cumulo, { ra: 10, dec: 40, arcmin: 60, size: 64 }, null);
+ok(anclado !== null, 'produce halo anclado');
+var muCentro = -2.5 * Math.log10(anclado[centroIdx]);
+ok(muCentro > 14.38, 'el centro aporta MENOS que mu_V(0) = 14,38 (' + muCentro.toFixed(2) +
+  '): lo ya observado se resta');
+
+// Con telón puesto, el aporte tiene que bajar todavía más: es luz ya contada.
+var telonFalso = new Float32Array(64 * 64);
+for (var q = 0; q < telonFalso.length; q++) telonFalso[q] = 1e-6;
+var conTelon = R.haloCatalogado(gc, cumulo, { ra: 10, dec: 40, arcmin: 60, size: 64 }, telonFalso);
+ok(conTelon === null || conTelon[centroIdx] < anclado[centroIdx],
+  'restar el telón reduce el aporte del halo (sin doble conteo)');
+
+// Fuera del radio de marea no pinta nada.
+ok(anclado[0] === 0, 'nada fuera del radio de marea');
+
+// Sin catálogo cargado, el motor cae a los conteos y sigue funcionando.
+window.BITACORA_GLOBULARES = null;
+ok(R.globularEnCampo(optsC) === null, 'sin catálogo → null, sin romperse');
+ok(R.haloNoResuelto(cumulo, optsC, null) !== null, 'sigue el camino de conteos');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);
