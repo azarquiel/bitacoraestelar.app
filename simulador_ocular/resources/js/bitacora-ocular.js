@@ -722,8 +722,15 @@
         if (q.length < 2) return;
         simbadTimer = setTimeout(function () { buscarSimbad(q); }, 700);
       }
+      // SIMBAD identifica Messier como "M 3" (con espacio); "M3"/"M03"/"Messier 3"
+      // no resuelven. Canonicaliza a "M <n>" antes de consultar.
+      function normalizarSimbad(q) {
+        var m = q.match(/^(?:M|Messier)\s*0*(\d+)$/i);
+        return m ? 'M ' + m[1] : q;
+      }
       function buscarSimbad(q) {
         if (!WP) { libreEstado('Inicia sesión para buscar por nombre en SIMBAD. Puedes introducir RA/Dec a mano.'); return; }
+        q = normalizarSimbad(q);
         if (q === simbadUltimo) return; simbadUltimo = q;
         libreEstado('Buscando «' + q + '» en SIMBAD…');
         var url = WP.endpoint.replace(/observaciones\/?$/, 'coordenadas') + '?q=' + encodeURIComponent(q);

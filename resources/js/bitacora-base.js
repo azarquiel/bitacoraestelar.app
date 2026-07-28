@@ -144,9 +144,12 @@ window.BitacoraBase = (function () {
     { clase: 8, etiqueta: 'Cielo urbano',                       sqm: 16.15 },
     { clase: 9, etiqueta: 'Cielo centro urbano',                sqm: 14.25 }
   ];
+  // El sqm de cada clase es el mínimo del rango; la lista va de más a menos oscuro.
+  // Clase 1: sqm >= 21.9; Clase 2: [21.6, 21.9); … Clase 9: todo lo inferior.
   function claseBortlePorSqm(sqm) {
-    for (var i = 0; i < BORTLE.length; i++) if (Math.abs(BORTLE[i].sqm - sqm) < 1e-9) return BORTLE[i];
-    return null;
+    if (isNaN(sqm)) return null;
+    for (var i = 0; i < BORTLE.length; i++) if (sqm >= BORTLE[i].sqm) return BORTLE[i];
+    return BORTLE[BORTLE.length - 1];
   }
   function montarCielo(select, input) {
     if (select && !select._pob) {
@@ -186,13 +189,13 @@ window.BitacoraBase = (function () {
     { ir: -5,  etiqueta: 'Algo transparente' },
     { ir: 0,   etiqueta: 'Pobre' }
   ];
+  // El ir de cada banda es el mínimo (más negativo) del rango; lista de más a
+  // menos transparente. ir < -20: Extremadamente; [-20,-15): Transparente; …;
+  // ir >= 0: Pobre. Más transparente que -30 se agrupa en la primera banda.
   function transparenciaPorIr(ir) {
     if (isNaN(ir)) return null;
-    if (ir <= -25)   return TRANSPARENCIA[0];
-    if (ir <= -17.5) return TRANSPARENCIA[1];
-    if (ir <= -10)   return TRANSPARENCIA[2];
-    if (ir <= -5)    return TRANSPARENCIA[3];
-    return TRANSPARENCIA[4];
+    for (var i = TRANSPARENCIA.length - 1; i >= 0; i--) if (ir >= TRANSPARENCIA[i].ir) return TRANSPARENCIA[i];
+    return TRANSPARENCIA[0];
   }
   function montarTransparencia(select, input) {
     if (select && !select._pob) {
