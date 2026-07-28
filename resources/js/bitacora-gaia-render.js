@@ -69,17 +69,114 @@
     return !!(optica && OPTICA_ARANA[String(optica).trim().toLowerCase()]);
   }
 
-  /* ── Fondo de cielo (gris) — misma curva que el motor fotométrico ── */
-  var SB_CIELO_NEGRO = 22.5, SB_CIELO_BLANCO = 16.5;
+  /* ── Curvas de la fotometría (fuente única; = FOT del simulador) ──
+     Antes vivían duplicadas aquí y en bitacora-ocular.js, y había que
+     sincronizarlas a mano. Ahora el simulador hace `var FOT = …render.fot`. */
+  var FOT = {
+    SB_OBJ_MAX: 14.0, SB_OBJ_MIN: 24.0, SB_NEGRO: 25.5, SB_BLANCO: 14.0,
+    C_MIN: 0.08, C_EXP: 0.35, GAMMA_HIPS: 2.0,
+    // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo se
+    // pinta en función de su brillo superficial en el ocular (SBe, mag/arcsec²,
+    // atenuado por la pupila de salida). Por encima de SB_CIELO_NEGRO el fondo es
+    // negro total; por debajo se aclara linealmente en magnitudes hasta blanco.
+    SB_CIELO_NEGRO: 22.5, SB_CIELO_BLANCO: 16.5,
+    // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el lado
+    // brillante). 1 = simétrico → las siluetas oscuras recortan contra el fondo.
+    REALCE_OSCURO: 1.0
+  };
+
   function nivelCielo(SBe) {
-    var t = (SB_CIELO_NEGRO - SBe) / (SB_CIELO_NEGRO - SB_CIELO_BLANCO);
+    var t = (FOT.SB_CIELO_NEGRO - SBe) / (FOT.SB_CIELO_NEGRO - FOT.SB_CIELO_BLANCO);
     return Math.max(0, Math.min(255, 255 * t));
   }
-  function nivelFondo(o) {
+
+  // Escalón suave (smoothstep) usado como desvanecido de visibilidad.
+  function suave(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
+
+  /* ── Cadena fotométrica, compartida por TODOS los motores ──────────────────
+     ctxFotometrico() concentra el cielo y la óptica: flujo del cielo, umbral de
+     contraste Cmin y nivel de gris del fondo, atenuados por la pupila de salida
+     (dim) y la transmisión del tubo (T).
+
+     El fondo se pinta con la curva empinada nivelCielo() (puede ir a negro bajo
+     cielos oscuros); el objeto se suma encima como INCREMENTO de contraste
+     (Δmag = 2,5·log10(1 + Fobj·s / Fcielo)), que se conserva intacto. Como el
+     objeto se pinta como nivelFondo + incremento, la atenuación oscurece fondo y
+     objeto por igual: conserva el contraste y baja el suelo.
+
+     AQUÍ vive el término de pupila (−2,5·log10(dim·T)). Ningún motor que produzca
+     un Fobj debe volver a aplicarlo, o lo contaría dos veces. */
+  function ctxFotometrico(o) {
     var pOjo = o.pupilaOjo || 7, pEf = Math.min(o.pupilaSalida, pOjo);
     var sqm = (o.sqm != null) ? o.sqm : 21;
+    var T = (o.transmision > 0) ? o.transmision : TRANSMISION_DEFECTO;
     var dim = Math.pow(pEf / pOjo, 2);
-    return Math.round(nivelCielo(sqm - 2.5 * Math.log10(dim)));
+    var Fcielo = Math.pow(10, -0.4 * sqm);
+    var Fref = Math.pow(10, -0.4 * 21);
+    var Cmin = FOT.C_MIN * Math.pow(Fref / (Fcielo * dim), FOT.C_EXP);
+    return {
+      Fcielo: Fcielo, Cmin: Cmin, dim: dim, T: T,
+      nivelFondo: nivelCielo(sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T)),
+      rango: FOT.SB_NEGRO - FOT.SB_BLANCO
+    };
+  }
+
+  // Nivel de gris del fondo de cielo (0–255). Mismo cálculo que ctxFotometrico,
+  // redondeado, para quien solo necesita rellenar el lienzo.
+  function nivelFondo(o) { return Math.round(ctxFotometrico(o).nivelFondo); }
+
+  /* Desenfoque gaussiano de un array de GRISES (0–255) usando el filtro nativo
+     del canvas. Ojo: recorta a 0–255, así que no sirve para arrays de flujo. */
+  function desenfocar(v, radio, SIZE) {
+    var c = document.createElement('canvas'); c.width = c.height = SIZE;
+    var ctx = c.getContext('2d'); var im = ctx.createImageData(SIZE, SIZE); var i, j;
+    for (i = 0, j = 0; j < v.length; i += 4, j++) {
+      var o = Math.max(0, Math.min(255, v[j]));
+      im.data[i] = im.data[i + 1] = im.data[i + 2] = o; im.data[i + 3] = 255;
+    }
+    ctx.putImageData(im, 0, 0);
+    var c2 = document.createElement('canvas'); c2.width = c2.height = SIZE;
+    var ctx2 = c2.getContext('2d', { willReadFrequently: true });
+    ctx2.filter = 'blur(' + radio + 'px)'; ctx2.drawImage(c, 0, 0);
+    var dd = ctx2.getImageData(0, 0, SIZE, SIZE).data;
+    var out = new Float32Array(v.length);
+    for (i = 0, j = 0; j < v.length; i += 4, j++) out[j] = dd[i];
+    return out;
+  }
+
+  // Adaptación local del ojo: realza el detalle respecto al entorno desenfocado.
+  function adaptacionLocal(v, SIZE) {
+    var borroso = desenfocar(v, Math.round(SIZE / 60), SIZE);
+    var out = new Float32Array(v.length); var REALCE = 0.5, UMBRAL_DETALLE = 12;
+    for (var j = 0; j < v.length; j++) {
+      var dif = v[j] - borroso[j];
+      var mag = Math.abs(dif) - UMBRAL_DETALLE;
+      var gan = dif >= 0 ? REALCE : REALCE * FOT.REALCE_OSCURO;
+      out[j] = v[j] + (mag > 0 ? gan * Math.sign(dif) * mag : 0);
+    }
+    return out;
+  }
+
+  /* Pinta un contexto a partir de un array de FLUJO DE OBJETO por píxel (Fobj, en
+     las mismas unidades que Fcielo). Cadena de contraste + adaptación local,
+     compartida por todos los motores que sepan producir un Fobj: el de placas del
+     simulador y las capas difusas sintéticas del Canvas-2D.
+     El lienzo debe venir ya dimensionado (cuadrado). */
+  function pintarFot(Fobj, ctx, o) {
+    var SIZE = ctx.canvas.width;
+    var c = ctxFotometrico(o);
+    var salida = new Float32Array(Fobj.length);
+    for (var i = 0; i < Fobj.length; i++) {
+      var s = suave((Fobj[i] / (c.Fcielo * c.Cmin) - 1) / 1.5);
+      salida[i] = c.nivelFondo + 255 * 2.5 * Math.log10(1 + (Fobj[i] * s) / c.Fcielo) / c.rango;
+    }
+    var final = adaptacionLocal(salida, SIZE);
+    var im = ctx.createImageData(SIZE, SIZE);
+    for (var k = 0, j = 0; j < final.length; k += 4, j++) {
+      var g = Math.max(0, Math.min(255, final[j]));
+      im.data[k] = im.data[k + 1] = im.data[k + 2] = g; im.data[k + 3] = 255;
+    }
+    ctx.putImageData(im, 0, 0); return true;
   }
 
   /* ── Magnitud límite (método del umbral, Torres Lapasió) ── */
@@ -90,7 +187,13 @@
     var sqm = (o.sqm != null) ? o.sqm : 21;
     var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
     SB0T = Math.max(sqm, Math.min(27, SB0T));
-    return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(D * D * t);
+    // Apertura efectiva: si la pupila de salida (d_ep = D/MAG) supera la del ojo,
+    // el ojo recorta el haz y se desperdicia apertura → D_eff = D·min(1, d_eye/d_ep).
+    // Solo en la captación de luz (D²); el término de cielo SB0T conserva su propio
+    // clamp (min(1,dim)) en el render, sin doble recorte.
+    var dEye = o.pupilaOjo || 7;
+    var Deff = D * Math.min(1, dEye / (D / MAG));
+    return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(Deff * Deff * t);
   }
 
   /* ── Ajustes del render (idénticos a GAIA_CFG del simulador) ── */
@@ -294,7 +397,7 @@
     var ctx = canvas.getContext('2d');
     var t = (o.transmision > 0) ? o.transmision : (transmisionOptica(o.optica) || TRANSMISION_DEFECTO);
     var arana = (typeof o.arana === 'boolean') ? o.arana : opticaTieneArana(o.optica);
-    var fondo = nivelFondo({ pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm });
+    var fondo = nivelFondo({ pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t });
     var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
     ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE);
     var mlim = magLimite({ apertura: o.apertura, aumentos: o.aumentos, transmision: t, sqm: o.sqm });
@@ -310,11 +413,18 @@
 
   window.BitacoraGaiaRender = {
     config: CFG,
+    fot: FOT,
     consultar: consultar,
     dibujar: dibujar,
     render: render,
     magLimite: magLimite,
     nivelFondo: nivelFondo,
+    nivelCielo: nivelCielo,
+    ctxFotometrico: ctxFotometrico,
+    pintarFot: pintarFot,
+    desenfocar: desenfocar,
+    adaptacionLocal: adaptacionLocal,
+    suave: suave,
     transmisionOptica: transmisionOptica,
     opticaTieneArana: opticaTieneArana,
     set proxyUrl(u) { PROXY_URL = u; },

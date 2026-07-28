@@ -153,27 +153,10 @@
       var corsFallo = false;
       var contadorPeticion = 0;
 
-      var FOT = {
-        SB_OBJ_MAX: 14.0, SB_OBJ_MIN: 24.0, SB_NEGRO: 25.5, SB_BLANCO: 14.0,
-        C_MIN: 0.08, C_EXP: 0.35, GAMMA_HIPS: 2.0,
-        // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo
-        // se pinta en función de su brillo superficial en el ocular (SBe, en
-        // mag/arcsec², atenuado por la pupila de salida). Por encima de
-        // SB_CIELO_NEGRO el fondo es negro total (contraste máximo, como bajo un
-        // cielo excepcional); por debajo se aclara linealmente en magnitudes
-        // (= logarítmicamente en flujo) hasta blanco en SB_CIELO_BLANCO.
-        SB_CIELO_NEGRO: 22.5, SB_CIELO_BLANCO: 16.5,
-        // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el
-        // lado brillante). 1 = simétrico → las nebulosas oscuras (Barnard) recortan
-        // su silueta contra el fondo brillante. Bajar si aparece ruido moteado.
-        REALCE_OSCURO: 1.0
-      };
-
-      // Nivel de gris del fondo (0–255) para un brillo de cielo en el ocular SBe.
-      function nivelCielo(SBe) {
-        var t = (FOT.SB_CIELO_NEGRO - SBe) / (FOT.SB_CIELO_NEGRO - FOT.SB_CIELO_BLANCO);
-        return Math.max(0, Math.min(255, 255 * t));
-      }
+      /* Curvas de la fotometría. Viven en el módulo compartido (fuente única con
+         el formulario de registro); esto es solo el alias para poder seguir
+         escribiendo FOT.X aquí y para que sigan siendo editables en un sitio. */
+      var FOT = window.BitacoraGaiaRender.fot;
 
       /* ══════════════════ CATÁLOGO DE EQUIPO ══════════════════ */
       function num(v) { if (v == null || v === '') return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
@@ -354,20 +337,23 @@
         }
         return t;
       }
+
+      /* Estado de cielo + óptica que espera el módulo compartido. Único punto de
+         este fichero que lee el DOM para la fotometría; de aquí para dentro todo
+         es parámetro. */
+      function cieloOptica(pupila) {
+        return {
+          pupilaSalida: pupila, pupilaOjo: pupilaOjo(),
+          sqm: parseFloat($('sim-sqm').value) || 21, transmision: transmisionEfectiva()
+        };
+      }
+      // Delegada en el módulo compartido (incluye el recorte de apertura efectiva).
       function magLimiteTelescopio() {
-        var D = teleApertura(), MAG = datosOcular().aumentos;
-        var t = transmisionEfectiva();
-        if (!(D > 0) || !(MAG > 0)) return null;
-        var sqm = parseFloat($('sim-sqm').value) || 21;
-        var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
-        SB0T = Math.max(sqm, Math.min(27, SB0T));
-        // Apertura efectiva: si la pupila de salida (d_ep = D/MAG) supera la del
-        // ojo, el ojo recorta el haz y se desperdicia apertura → D_eff = D·min(1,
-        // d_eye/d_ep). Solo en la captación de luz (D²); el término de cielo SB0T
-        // conserva su propio clamp (min(1,dim)) en el render, sin doble recorte.
-        var dEp = D / MAG, dEye = pupilaOjo();
-        var Deff = D * Math.min(1, dEye / dEp);
-        return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(Deff * Deff * t);
+        return BitacoraGaiaRender.magLimite({
+          apertura: teleApertura(), aumentos: datosOcular().aumentos,
+          transmision: transmisionEfectiva(), sqm: parseFloat($('sim-sqm').value) || 21,
+          pupilaOjo: pupilaOjo()
+        });
       }
 
       /* ══════════════════ RENDER CENTRALIZADO ══════════════════ */
@@ -476,12 +462,7 @@
          magnitudes entre SB_NEGRO (negro) y SB_BLANCO (blanco). Así el fondo del
          Canvas 2D coincide con el de las vistas DSS/PanSTARRS. */
       function nivelFondoCielo(pupila) {
-        var pOjo = pupilaOjo(), pEf = Math.min(pupila, pOjo);
-        var sqm = parseFloat($('sim-sqm').value) || 21;
-        var dim = Math.pow(pEf / pOjo, 2);
-        // SBe = brillo del cielo en el ocular (más alto = más oscuro): el SQM
-        // atenuado por la pupila de salida (por eso a más aumentos, más oscuro).
-        return Math.round(nivelCielo(sqm - 2.5 * Math.log10(dim)));
+        return BitacoraGaiaRender.nivelFondo(cieloOptica(pupila));
       }
 
       /* ══════════════════ MODO ESTRELLAS DE GAIA (CANVAS 2D) ══════════════════
@@ -534,49 +515,19 @@
         var v = new Float32Array(PROC * PROC); for (var i = 0, j = 0; j < v.length; i += 4, j++) v[j] = (dd[i] + dd[i + 1] + dd[i + 2]) / 3; return v;
       }
 
-      var suave = function (x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+      var suave = BitacoraGaiaRender.suave;
       function fusionar(vd, vs) { var sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0, i; for (i = 0; i < vd.length; i++) { if (vd[i] >= 120 && vd[i] <= 215 && vs[i] > 8) { sx += vs[i]; sy += vd[i]; sxx += vs[i] * vs[i]; sxy += vs[i] * vd[i]; n++; } } if (n < 500) return vd; var a = (n * sxy - sx * sy) / (n * sxx - sx * sx); var b = (sy - a * sx) / n; if (!(a > 0)) return vd; var out = new Float32Array(vd.length); for (i = 0; i < vd.length; i++) { var t = suave((vd[i] - 210) / 40); out[i] = (1 - t) * vd[i] + t * Math.max(vd[i], a * vs[i] + b); } return out; }
-      function desenfocar(v, radio) { var c = document.createElement('canvas'); c.width = c.height = PROC; var ctx = c.getContext('2d'); var im = ctx.createImageData(PROC, PROC); var i, j; for (i = 0, j = 0; j < v.length; i += 4, j++) { var o = Math.max(0, Math.min(255, v[j])); im.data[i] = im.data[i + 1] = im.data[i + 2] = o; im.data[i + 3] = 255; } ctx.putImageData(im, 0, 0); var c2 = document.createElement('canvas'); c2.width = c2.height = PROC; var ctx2 = c2.getContext('2d', { willReadFrequently: true }); ctx2.filter = 'blur(' + radio + 'px)'; ctx2.drawImage(c, 0, 0); var dd = ctx2.getImageData(0, 0, PROC, PROC).data; var out = new Float32Array(v.length); for (i = 0, j = 0; j < v.length; i += 4, j++) out[j] = dd[i]; return out; }
+      function desenfocar(v, radio) { return BitacoraGaiaRender.desenfocar(v, radio, PROC); }
       function repararNucleos(v) { var entorno = desenfocar(v, 4); for (var i = 0; i < v.length; i++) { if (entorno[i] > 140 && v[i] < 0.5 * entorno[i]) v[i] = Math.min(300, entorno[i] * 1.25); } return v; }
-      function adaptacionLocal(v) { var borroso = desenfocar(v, Math.round(PROC / 60)); var out = new Float32Array(v.length); var REALCE = 0.5, UMBRAL_DETALLE = 12; for (var j = 0; j < v.length; j++) { var dif = v[j] - borroso[j]; var mag = Math.abs(dif) - UMBRAL_DETALLE; var gan = dif >= 0 ? REALCE : REALCE * FOT.REALCE_OSCURO; out[j] = v[j] + (mag > 0 ? gan * Math.sign(dif) * mag : 0); } return out; }
 
-      // Contexto fotométrico del cielo/óptica, independiente del origen de imagen:
-      // flujo del cielo, umbral de contraste Cmin y nivel de gris del fondo, todo
-      // atenuado por la pupila de salida (dim) y la transmisión del tubo (T).
-      //
-      // El fondo se pinta con la curva empinada nivelCielo() (puede ir a negro bajo
-      // cielos oscuros); el objeto se suma encima como INCREMENTO de contraste
-      // (Δmag = 2,5·log10(1 + Fobj·s / Fcielo)), que se conserva intacto. Así, cielo
-      // oscuro → fondo negro y objeto pleno (contraste brutal); cielo claro → fondo
-      // gris y menos incremento (lavado). Como el objeto se pinta como
-      // nivelFondo + incremento, la atenuación oscurece fondo y objeto por igual:
-      // conserva el contraste y baja el suelo.
-      //
-      // AQUÍ vive el término de pupila (−2,5·log10(dim·T)). Ningún motor que
-      // produzca un Fobj debe volver a aplicarlo, o lo contaría dos veces.
-      function ctxFotometrico(p) {
-        var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var sqm = parseFloat($('sim-sqm').value) || 21;
-        var dim = Math.pow(pEf / pOjo, 2); var Fcielo = Math.pow(10, -0.4 * sqm);
-        var Fref = Math.pow(10, -0.4 * 21); var Cmin = FOT.C_MIN * Math.pow(Fref / (Fcielo * dim), FOT.C_EXP);
-        var T = transmisionEfectiva();
-        var nivelFondo = nivelCielo(sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T));
-        return { Fcielo: Fcielo, Cmin: Cmin, nivelFondo: nivelFondo, rango: FOT.SB_NEGRO - FOT.SB_BLANCO };
-      }
-
-      // Pinta el lienzo a partir de un array de FLUJO DE OBJETO por píxel (Fobj, en
-      // las mismas unidades de flujo que Fcielo). Cadena de contraste + adaptación
-      // local, compartida por todos los motores que sepan producir un Fobj.
+      /* Pinta el lienzo a partir de un array de FLUJO DE OBJETO por píxel. La
+         cadena (contraste sobre el cielo + adaptación local) vive en el módulo
+         compartido; aquí solo se dimensiona el lienzo y se lee el DOM.
+         El término de pupila lo aplica ctxFotometrico allí dentro: este Fobj NO
+         debe traerlo ya aplicado o se contaría dos veces. */
       function pintarFot(Fobj, canvas, p) {
-        var c = ctxFotometrico(p);
-        var salida = new Float32Array(Fobj.length);
-        for (var i = 0; i < Fobj.length; i++) {
-          var s = suave((Fobj[i] / (c.Fcielo * c.Cmin) - 1) / 1.5);
-          salida[i] = c.nivelFondo + 255 * 2.5 * Math.log10(1 + (Fobj[i] * s) / c.Fcielo) / c.rango;
-        }
-        var final = adaptacionLocal(salida);   // adaptación local del ojo: siempre activa
-        canvas.width = canvas.height = PROC; var ctx = canvas.getContext('2d'); var im = ctx.createImageData(PROC, PROC);
-        for (var k = 0, j = 0; j < final.length; k += 4, j++) { var o = Math.max(0, Math.min(255, final[j])); im.data[k] = im.data[k + 1] = im.data[k + 2] = o; im.data[k + 3] = 255; }
-        ctx.putImageData(im, 0, 0); return true;
+        canvas.width = canvas.height = PROC;
+        return BitacoraGaiaRender.pintarFot(Fobj, canvas.getContext('2d'), cieloOptica(p));
       }
 
       function procesarFotometrico(profunda, corta, canvas, p) {
