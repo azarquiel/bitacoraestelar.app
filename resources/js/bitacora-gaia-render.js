@@ -411,8 +411,32 @@
     // Ante ajustes indistinguibles, quedarse con el MENOS picudo (rc mayor). Desde
     // fuera del core no se puede conocer el core: inventar un pico estrecho
     // sobreilumina el núcleo. Margen de error dentro del cual se consideran empate.
-    margenEmpate: 1.10
+    margenEmpate: 1.10,
+    // Cuánto más débiles son, en magnitudes, las estrellas que la aglomeración se
+    // lleva respecto a la media de la población. La incompletitud de Gaia en
+    // núcleos densos castiga más a las fuentes débiles: sin este término, contar
+    // el déficit con el flujo medio del campo sobreestima el halo.
+    sesgoDebil: 1.0
   };
+
+  /* Flujo medio por estrella de la población que el catálogo pierde, deducido de
+     la función de luminosidad MEDIDA en el campo (la misma pendiente b que usa el
+     telón), no del flujo medio de lo observado.
+
+       <F> = ∫ 10^(b·m)·10^(−0,4·m) dm / ∫ 10^(b·m) dm      sobre [mlo, mcat]
+
+     y luego desplazado sesgoDebil magnitudes hacia el extremo débil. */
+  function flujoMedioNoResuelto(b, mlo, mcat) {
+    var k = b - 0.4;
+    var num = (Math.abs(k) < 1e-6)
+      ? (mcat - mlo)
+      : (Math.pow(10, k * mcat) - Math.pow(10, k * mlo)) / k;
+    var den = (Math.abs(b) < 1e-6)
+      ? (mcat - mlo)
+      : (Math.pow(10, b * mcat) - Math.pow(10, b * mlo)) / b;
+    if (!(den > 0) || !(num > 0)) return null;
+    return (num / den) * Math.pow(10, -0.4 * KING.sesgoDebil);
+  }
 
   /* Perfil de King (1962): densidad superficial de un cúmulo con radio de core rc
      y radio de marea rt. La resta del término de rt es lo que lo hace caer a cero
@@ -520,15 +544,20 @@
     var fit = ajustarKing(p, iCrowd);
     if (!fit || !(fit.k > 0)) return null;
 
+    /* Paso de cuentas a luz. La población que falta NO tiene el flujo medio de lo
+       observado: la aglomeración se lleva sobre todo fuentes débiles. Se pesa con
+       la función de luminosidad medida en el propio campo. Si el ajuste de la
+       pendiente no sale (muestra pobre), se cae al flujo medio observado, que es
+       peor pero no inventa nada. */
+    var lf = pendienteConteos(estrellas);
+    var fPorEstrella = lf ? flujoMedioNoResuelto(lf.b, lf.lo, lf.mcat) : null;
+    if (!(fPorEstrella > 0)) fPorEstrella = p.flujoMedio;
+
     // Déficit por anillo interior, en estrellas por grado², y su paso a flujo.
     var deficit = new Float64Array(iCrowd + 1), hay = false;
     for (var i = 0; i <= iCrowd; i++) {
       var d = fit.k * formaKing(p.radio[i], fit.rc, fit.rt) - p.dens[i];
-      // ponytail: las estrellas que el catálogo pierde se cuentan con el flujo
-      // MEDIO de la muestra. Sesga a brillante (las perdidas son sobre todo
-      // débiles), y por eso KING.k queda como perilla. Con una función de
-      // luminosidad por cúmulo se afinaría, pero exige el catálogo que no hay.
-      deficit[i] = d > 0 ? d * p.flujoMedio : 0;
+      deficit[i] = d > 0 ? d * fPorEstrella : 0;
       if (deficit[i] > 0) hay = true;
     }
     if (!hay) return null;
@@ -801,6 +830,7 @@
     razonNoResuelta: razonNoResuelta,
     king: KING,
     haloNoResuelto: haloNoResuelto,
+    flujoMedioNoResuelto: flujoMedioNoResuelto,
     perfilRadial: perfilRadial,
     ajustarKing: ajustarKing,
     formaKing: formaKing,

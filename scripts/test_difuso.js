@@ -194,6 +194,21 @@ ok(kingCentro > verdad * 0.25 && kingCentro < verdad * 4,
   'densidad central recuperada dentro de un factor 4 de la real (' +
   kingCentro.toFixed(0) + ' vs ' + verdad.toFixed(0) + ' estrellas/grado²)');
 
+/* El déficit se convierte a luz con la función de luminosidad MEDIDA en el campo,
+   no con el flujo medio de lo observado: la aglomeración se lleva sobre todo
+   fuentes débiles, y contar el hueco con el brillo medio sobreestima el halo. */
+console.log('Halo de King: flujo por estrella desde la función de luminosidad:');
+var perfC = R.perfilRadial(cumulo, optsC);
+var lfC = R.pendienteConteos(cumulo);
+var fLF = R.flujoMedioNoResuelto(lfC.b, lfC.lo, lfC.mcat);
+ok(fLF > 0, 'flujo medio de la población no resuelta bien definido');
+ok(fLF < perfC.flujoMedio,
+  'más débil que el flujo medio observado (' +
+  (-2.5 * Math.log10(fLF / perfC.flujoMedio)).toFixed(2) + ' mag)');
+// Una pendiente más empinada = más estrellas débiles = flujo medio más débil.
+ok(R.flujoMedioNoResuelto(0.38, 12.5, 16.5) < R.flujoMedioNoResuelto(0.18, 12.5, 16.5),
+  'pendiente más empinada → población más débil');
+
 console.log('Halo de King: solo pinta donde hay déficit:');
 var halo = R.haloNoResuelto(cumulo, optsC);
 ok(halo !== null, 'con núcleo vaciado sí produce halo');
