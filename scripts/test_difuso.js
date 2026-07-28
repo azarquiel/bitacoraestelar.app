@@ -91,5 +91,57 @@ var SB0T = Math.max(21, Math.min(27, 21 + 5 * Math.log10(7.5 * 100 / (200 * Math
 casi(mlim(100), -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(200 * 200 * 0.8),
   1e-9, 'a 100x (pupila 2 mm) usa la apertura completa');
 
+/* ── 5. Telón difuso: la pendiente se mide, no se supone ─────────────────────
+   Campo sintético con log10 N(m) de pendiente conocida. Si el ajuste se comiera
+   la truncadura del catálogo, saldría una pendiente falsamente plana. */
+console.log('Telón: ajuste de la pendiente de conteos:');
+function campoSintetico(b, mcat, nTotal, radioGrados) {
+  // Reparte estrellas con N(m) ∝ 10^(b·m) hasta mcat, uniformes en el campo.
+  var est = [], mlo = mcat - 6;
+  var acum = [], total = 0, PASO = 0.1, m;
+  for (m = mlo; m < mcat; m += PASO) { total += Math.pow(10, b * m); acum.push([m, total]); }
+  for (var i = 0; i < nTotal; i++) {
+    var u = (i + 0.5) / nTotal * total, mag = mcat;
+    for (var j = 0; j < acum.length; j++) if (acum[j][1] >= u) { mag = acum[j][0]; break; }
+    // Posición determinista y bien repartida (sin RNG: el test debe ser estable).
+    var a = i * 2.399963, r = radioGrados * Math.sqrt((i + 0.5) / nTotal);
+    est.push([10 + r * Math.cos(a), 40 + r * Math.sin(a), mag, 0.8]);
+  }
+  return est;
+}
+var campo = campoSintetico(0.32, 16.5, 6000, 0.4);
+var aj = R.pendienteConteos(campo);
+casi(aj.b, 0.32, 0.03, 'pendiente b recuperada de un campo de b = 0,32');
+casi(aj.mcat, 16.5, 0.11, 'magnitud de corte = la más débil de la muestra');
+
+console.log('Telón: la razón de no resueltas crece con la pendiente:');
+var Rplano = R.razonNoResuelta(0.38, 16.5, 12.5);
+var Rpolo  = R.razonNoResuelta(0.18, 16.5, 12.5);
+ok(Rplano > Rpolo, 'b mayor (más estrellas débiles) → más luz no resuelta');
+ok(Rpolo > 0 && Rplano < 1e4, 'la integral converge en ambos extremos del rango');
+
+/* ── 6. Telón: un campo denso pinta más luz que uno pobre ────────────────────
+   Es el assert de «plano galáctico brillante, polo casi sin telón» sin depender
+   de la red: mismo cielo, misma óptica, distinta densidad de estrellas. */
+console.log('Telón: densidad de campo → brillo del telón:');
+var opts = { ra: 10, dec: 40, arcmin: 60, size: 64 };
+function medioTelon(est) {
+  var t = R.telonDifuso(est, opts);
+  if (!t) return null;
+  var s = 0; for (var i = 0; i < t.length; i++) s += t[i];
+  return s / t.length;
+}
+var denso = medioTelon(campoSintetico(0.32, 16.5, 12000, 0.4));
+var pobre = medioTelon(campoSintetico(0.32, 16.5, 600, 0.4));
+ok(denso > pobre * 5, 'campo 20× más denso → telón mucho más brillante');
+ok(R.telonDifuso(campoSintetico(0.32, 16.5, 50, 0.4), opts) === null,
+  'muestra insuficiente → no se inventa telón (null)');
+
+/* El telón sale en flujo por arcsec², comparable con Fcielo: un campo denso debe
+   quedar en el entorno del brillo de la Vía Láctea, no órdenes de magnitud fuera. */
+var muTelon = -2.5 * Math.log10(denso);
+ok(muTelon > 17 && muTelon < 26,
+  'brillo del telón denso = ' + muTelon.toFixed(1) + ' mag/arcsec² (rango plausible)');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);

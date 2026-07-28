@@ -210,6 +210,163 @@
     }
   };
 
+  /* ═══════════ TELÓN DIFUSO: LUZ INTEGRADA DE ESTRELLAS NO RESUELTAS ═══════════
+     El fondo brillante contra el que se recortan la Gran Grieta, la Pipa o el
+     Saco de Carbón NO es emisión de gas: es la luz sumada de las estrellas que ni
+     el catálogo trae ni el ojo separa. Sin esta capa, la de polvo no tiene sobre
+     qué actuar y el Canvas-2D se queda en gris uniforme.
+
+     No hace falta ningún dataset nuevo: la propia muestra de Gaia del campo lleva
+     dentro su función de luminosidad. Como el `ORDER BY Gmag` va ANTES del `TOP`
+     en la consulta, la muestra está COMPLETA hasta la magnitud de la última
+     estrella que cupo — ese es el límite del que se extrapola, y se mide, no se
+     supone.
+
+     Método:
+       1. Conteos por magnitud → pendiente b de log10 N(m), medida en una ventana
+          alejada del corte para que la truncadura no la sesgue.
+       2. Razón R entre el flujo integrado por debajo del corte y el flujo
+          observado por encima. Cerrada en forma analítica: el integrando es
+          10^((b−0,4)m), porque el número de estrellas sube como 10^(b·m) y el
+          flujo de cada una cae como 10^(−0,4·m).
+       3. El flujo observado por celda, multiplicado por R, da la luz que falta,
+          repartida por donde de verdad hay estrellas.
+
+     El resultado sale en flujo por arcsec², las mismas unidades que Fcielo, y NO
+     lleva atenuación de pupila: la aplica ctxFotometrico. */
+  var TELON = {
+    // Factor de calibración visual. El método fija la FORMA y la razón entre
+    // zonas; el nivel absoluto depende de la función de luminosidad real y del
+    // enrojecimiento, que no modelamos. Esta es la perilla para cuadrarlo con la
+    // Vía Láctea que se ve de verdad.
+    k: 1.0,
+    // Extremo débil de la integración. Más allá la contribución es despreciable
+    // mientras b < 0,4.
+    magMax: 28,
+    // ponytail: b se acota a este rango. Por encima de 0,4 la integral diverge
+    // (más estrellas débiles de las que su flujo decae) y los conteos reales se
+    // aplanan a magnitudes débiles por la escala de altura del disco, cosa que una
+    // sola recta no captura. Si hiciera falta más fidelidad: función de luminosidad
+    // por latitud galáctica en vez de una pendiente única.
+    bMin: 0.15, bMax: 0.40,
+    bDefecto: 0.30,     // si la muestra es pobre, pendiente típica de campo medio
+    minEstrellas: 300,  // por debajo, el ajuste es ruido: mejor no pintar nada
+    arcminCelda: 6      // ~13 % de ruido de Poisson; bajarlo lo empeora
+  };
+
+  /* Pendiente b de log10 N(m) medida en la muestra, y magnitud de corte (la más
+     débil que trae el catálogo, que por el ORDER BY es el límite de completitud). */
+  function pendienteConteos(estrellas) {
+    var mcat = -Infinity, i;
+    for (i = 0; i < estrellas.length; i++) if (estrellas[i][2] > mcat) mcat = estrellas[i][2];
+    if (!isFinite(mcat)) return null;
+    // Ventana de ajuste: lejos del corte (la última media magnitud sufre la
+    // truncadura) y no tan brillante que sean cuatro estrellas.
+    var hi = mcat - 0.5, lo = mcat - 4.0, PASO = 0.5;
+    var nbins = Math.round((hi - lo) / PASO), bins = new Array(nbins);
+    for (i = 0; i < nbins; i++) bins[i] = 0;
+    for (i = 0; i < estrellas.length; i++) {
+      var g = estrellas[i][2];
+      if (g < lo || g >= hi) continue;
+      bins[Math.floor((g - lo) / PASO)]++;
+    }
+    // Regresión de log10(N) contra m sobre los bins poblados.
+    var sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0;
+    for (i = 0; i < nbins; i++) {
+      if (bins[i] < 5) continue;
+      var m = lo + (i + 0.5) * PASO, y = Math.log10(bins[i]);
+      sx += m; sy += y; sxx += m * m; sxy += m * y; n++;
+    }
+    var b = (n >= 3 && (n * sxx - sx * sx) !== 0)
+      ? (n * sxy - sx * sy) / (n * sxx - sx * sx)
+      : TELON.bDefecto;
+    return { b: Math.max(TELON.bMin, Math.min(TELON.bMax, b)), mcat: mcat, lo: lo };
+  }
+
+  /* Razón entre el flujo de las estrellas que NO están en el catálogo y el de las
+     que sí. Integra 10^((b−0,4)m) en ambos tramos. */
+  function razonNoResuelta(b, mcat, mlo) {
+    var k = b - 0.4;
+    if (Math.abs(k) < 1e-6) return (TELON.magMax - mcat) / (mcat - mlo);   // caso límite
+    // ∫ₐᵇ 10^(k·m) dm = (10^(k·b) − 10^(k·a)) / (k·ln10). Con k < 0 (el caso
+    // normal: el flujo cae más deprisa de lo que suben los conteos) el numerador
+    // sale negativo y el denominador también, así que la integral es positiva.
+    var kl = k * Math.LN10;
+    var integral = function (a, b2) { return (Math.pow(10, k * b2) - Math.pow(10, k * a)) / kl; };
+    var arriba = integral(mcat, TELON.magMax);
+    var abajo = integral(mlo, mcat);
+    return (abajo > 0) ? Math.max(0, arriba / abajo) : 0;
+  }
+
+  /* Suavizado de una rejilla pequeña con un núcleo 3×3, para bajar el ruido de
+     Poisson sin borrar la estructura de las nubes estelares. */
+  function suavizarRejilla(v, N) {
+    var out = new Float32Array(v.length);
+    for (var y = 0; y < N; y++) {
+      for (var x = 0; x < N; x++) {
+        var s = 0, w = 0;
+        for (var dy = -1; dy <= 1; dy++) {
+          for (var dx = -1; dx <= 1; dx++) {
+            var yy = y + dy, xx = x + dx;
+            if (yy < 0 || xx < 0 || yy >= N || xx >= N) continue;
+            var p = (dx === 0 && dy === 0) ? 4 : 1;
+            s += p * v[yy * N + xx]; w += p;
+          }
+        }
+        out[y * N + x] = s / w;
+      }
+    }
+    return out;
+  }
+
+  /* Telón difuso del campo, en flujo por arcsec² (mismas unidades que Fcielo).
+     o: { ra, dec, arcmin, size }. Devuelve Float32Array(size²) o null si la
+     muestra no da para un ajuste honesto. */
+  function telonDifuso(estrellas, o) {
+    var SIZE = o.size, arcmin = o.arcmin;
+    if (!estrellas || estrellas.length < TELON.minEstrellas) return null;
+    var aj = pendienteConteos(estrellas);
+    if (!aj) return null;
+    var R = razonNoResuelta(aj.b, aj.mcat, aj.lo);
+    if (!(R > 0)) return null;
+
+    var N = Math.max(3, Math.min(32, Math.round(arcmin / TELON.arcminCelda)));
+    var flujo = new Float32Array(N * N);
+    var ra0 = o.ra, dec0 = o.dec;
+    var cos0 = Math.cos(dec0 * Math.PI / 180);
+    var escc = N / (arcmin / 60);              // celdas por grado
+    for (var i = 0; i < estrellas.length; i++) {
+      var g = estrellas[i][2];
+      if (g < aj.lo) continue;                 // solo el tramo que traza la ventana ajustada
+      var dRA = ((estrellas[i][0] - ra0 + 540) % 360) - 180;
+      var cx = Math.floor(N / 2 - dRA * cos0 * escc);
+      var cy = Math.floor(N / 2 - (estrellas[i][1] - dec0) * escc);
+      if (cx < 0 || cy < 0 || cx >= N || cy >= N) continue;
+      flujo[cy * N + cx] += Math.pow(10, -0.4 * g);
+    }
+    flujo = suavizarRejilla(flujo, N);
+
+    // De flujo por celda a flujo por arcsec², ya extrapolado a las no resueltas.
+    var ladoCelda = (arcmin * 60) / N;         // arcsec
+    var esc = TELON.k * R / (ladoCelda * ladoCelda);
+    for (i = 0; i < flujo.length; i++) flujo[i] *= esc;
+
+    // Ampliación bilineal de la rejilla al lienzo.
+    var out = new Float32Array(SIZE * SIZE);
+    for (var y = 0; y < SIZE; y++) {
+      var fy = Math.max(0, Math.min(N - 1.001, (y + 0.5) * N / SIZE - 0.5));
+      var y0 = Math.floor(fy), ty = fy - y0, y1 = Math.min(N - 1, y0 + 1);
+      for (var x = 0; x < SIZE; x++) {
+        var fx = Math.max(0, Math.min(N - 1.001, (x + 0.5) * N / SIZE - 0.5));
+        var x0 = Math.floor(fx), tx = fx - x0, x1 = Math.min(N - 1, x0 + 1);
+        var a = flujo[y0 * N + x0] * (1 - tx) + flujo[y0 * N + x1] * tx;
+        var c = flujo[y1 * N + x0] * (1 - tx) + flujo[y1 * N + x1] * tx;
+        out[y * SIZE + x] = a * (1 - ty) + c * ty;
+      }
+    }
+    return out;
+  }
+
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio) ── */
   var cacheGaia = {};
   function radioConsulta(arcmin) {
@@ -400,14 +557,25 @@
     var fondo = nivelFondo({ pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t });
     var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
     ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE);
-    var mlim = magLimite({ apertura: o.apertura, aumentos: o.aumentos, transmision: t, sqm: o.sqm });
+    var mlim = magLimite({
+      apertura: o.apertura, aumentos: o.aumentos, transmision: t,
+      sqm: o.sqm, pupilaOjo: o.pupilaOjo
+    });
+    var cielo = {
+      pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t
+    };
     return consultar(o.ra, o.dec, o.arcmin).then(function (estrellas) {
-      ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE);
+      // Capa difusa primero (incluye el fondo de cielo); si no hay, gris uniforme.
+      var telon = (o.conTelon !== false)
+        ? telonDifuso(estrellas, { ra: o.ra, dec: o.dec, arcmin: o.arcmin, size: SIZE })
+        : null;
+      if (telon) { pintarFot(telon, ctx, cielo); }
+      else { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE); }
       dibujar(ctx, estrellas, {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim,
         conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
       });
-      return { estrellas: estrellas, mlim: mlim, fondo: fondo };
+      return { estrellas: estrellas, mlim: mlim, fondo: fondo, telon: !!telon };
     });
   }
 
@@ -422,6 +590,10 @@
     nivelCielo: nivelCielo,
     ctxFotometrico: ctxFotometrico,
     pintarFot: pintarFot,
+    telon: TELON,
+    telonDifuso: telonDifuso,
+    pendienteConteos: pendienteConteos,
+    razonNoResuelta: razonNoResuelta,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
     suave: suave,

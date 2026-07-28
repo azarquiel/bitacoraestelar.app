@@ -491,7 +491,12 @@
         consultarGaia(ra0, dec0, arcmin).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
-          ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
+          // Telón difuso: luz integrada de las estrellas que el catálogo no trae,
+          // extrapolada de los propios conteos del campo. Pinta también el fondo de
+          // cielo, así que sustituye al relleno gris cuando hay muestra suficiente.
+          var telon = BitacoraGaiaRender.telonDifuso(estrellas, { ra: ra0, dec: dec0, arcmin: arcmin, size: PROC });
+          if (telon) { BitacoraGaiaRender.pintarFot(telon, ctx, cieloOptica(datosOcular().pupila)); }
+          else { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC); }
           dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, true, !!objetoSel.carbono);   // Canvas 2D: con glow de estrellas no resueltas
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
