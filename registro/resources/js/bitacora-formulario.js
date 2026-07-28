@@ -881,6 +881,15 @@
     });
   }
 
+  // Las imágenes legacy se guardan con nombre pelado ("m1_480x.webp") y viven en
+  // /bitacora-mapa/images/{objeto}/ (el objeto es el prefijo antes del "_", p. ej.
+  // "m1"). Las subidas por formulario llevan URL absoluta o con ruta: se dejan tal
+  // cual. Solo afecta a la visualización; el valor guardado (data-img-url) no cambia.
+  function resolverImagenVis(url){
+    if(!url || /^https?:\/\//i.test(url) || url.indexOf('/')>=0) return url;
+    return '/bitacora-mapa/images/' + url.split('_')[0] + '/' + url;
+  }
+
   // Muestra la miniatura de una imagen ya asociada (subida o existente).
   function ponerMiniatura(rowEl, url){
     var t=rowEl.querySelector('.img-thumb');
@@ -1056,8 +1065,9 @@
     row.querySelector('.img-etiqueta').value = datos.etiqueta || '';
     if(tipo==='anexo' && datos.pos){ row.querySelector('.img-pos').value = datos.pos; }
     if(datos.imagen_url){
-      ponerMiniatura(row, datos.imagen_url);
-      row.querySelector('.img-status').innerHTML='<a href="'+datos.imagen_url+'" target="_blank" rel="noopener">imagen actual</a>';
+      var imgVis = resolverImagenVis(datos.imagen_url);
+      ponerMiniatura(row, imgVis);
+      row.querySelector('.img-status').innerHTML='<a href="'+imgVis+'" target="_blank" rel="noopener">imagen actual</a>';
     }
 
     if(origen==='simulada'){
