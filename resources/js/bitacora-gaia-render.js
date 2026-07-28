@@ -95,7 +95,7 @@
 
   /* ── Ajustes del render (idénticos a GAIA_CFG del simulador) ── */
   var CFG = {
-    blur: 1.1, magColor: 9.5, tinteNucleo: 0.8,
+    blur: 1.1, magColor: 9, tinteNucleo: 0.8,
     carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
     radioMin: 0.42, radioMag: 0.13, radioExp: 1.35, magTamMin: 14, radioMax: 6.5,
     brillo: 1.4, alfaMin: 0.24,
