@@ -80,6 +80,10 @@
       ];
 
       var DSS_MAX_ARCMIN = 120;
+      // Tope del Canvas-2D de Gaia: 6° de lado. No lo fija ningún servidor de
+      // placas, sino el radio de consulta del módulo compartido; cubre oculares de
+      // campo ancho y binoculares.
+      var GAIA_MAX_ARCMIN = 360;
       var AFOV_REF = 110;
       var PROC = 720;
 
@@ -402,19 +406,24 @@
         $('sim-v-maglim').innerHTML = (magOpt == null ? '—'
           : (magOpt - MARGEN_MAGLIM).toFixed(1) + '–' + magOpt.toFixed(1) + '<em>m</em>');
 
-        // Recorte del cielo: lado = campo real, limitado por el servidor.
+        var origen = $('sim-origen').value;
+
+        /* Recorte del cielo: lado = campo real, limitado por el origen. El tope de
+           2° es de las PLACAS (el servidor del DSS no sirve más); el Canvas-2D de
+           Gaia es un catálogo y llega mucho más lejos, así que no tiene por qué
+           heredarlo. */
+        var maxArcmin = (origen === 'canvas-2d') ? GAIA_MAX_ARCMIN : DSS_MAX_ARCMIN;
         var arcmin = d.campoReal * 60;
-        if (arcmin > DSS_MAX_ARCMIN) {
-          aviso.textContent = 'El campo real (' + (arcmin / 60).toFixed(2) + '°) supera el máximo (2°): la imagen se recorta a 2°.';
-          arcmin = DSS_MAX_ARCMIN;
+        if (arcmin > maxArcmin) {
+          aviso.textContent = 'El campo real (' + (arcmin / 60).toFixed(2) + '°) supera el máximo de este origen (' +
+            (maxArcmin / 60).toFixed(0) + '°): la imagen se recorta.';
+          arcmin = maxArcmin;
         } else {
           aviso.textContent = '';
         }
         if (d.pupila > pOjo && !aviso.textContent) {
           aviso.textContent = 'Pupila de salida (' + d.pupila.toFixed(1) + ' mm) mayor que la del ojo (' + pOjo + ' mm): parte de la luz se desperdicia.';
         }
-
-        var origen = $('sim-origen').value;
         var ra = objetoSel.ra, dec = objetoSel.dec;
         cargando.style.display = 'flex';
         cargando.textContent = 'solicitando imagen…';
@@ -494,6 +503,15 @@
           // Telón difuso: luz integrada de las estrellas que el catálogo no trae,
           // extrapolada de los propios conteos del campo. Pinta también el fondo de
           // cielo, así que sustituye al relleno gris cuando hay muestra suficiente.
+          /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
+             del equipo, faltan estrellas que SÍ se verían. Pasa en campos ricos y
+             muy anchos. Se avisa en vez de mostrar un campo pobre sin explicación. */
+          var mcorte = -Infinity;
+          for (var e = 0; e < estrellas.length; e++) if (estrellas[e][2] > mcorte) mcorte = estrellas[e][2];
+          if (mlim != null && isFinite(mcorte) && mcorte < mlim - 0.1) {
+            $('sim-aviso').textContent = 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
+              ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
+          }
           var telon = BitacoraGaiaRender.telonDifuso(estrellas, { ra: ra0, dec: dec0, arcmin: arcmin, size: PROC });
           if (telon) { BitacoraGaiaRender.pintarFot(telon, ctx, cieloOptica(datosOcular().pupila)); }
           else { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC); }

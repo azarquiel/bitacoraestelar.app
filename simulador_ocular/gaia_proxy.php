@@ -41,6 +41,8 @@ const GAIA_QUANT_RADEC     = 0.001;               // ° : cuantización del cent
 const GAIA_QUANT_RAD       = 0.01;                // ° : cuantización del radio (se redondea ↑)
 const GAIA_QUANT_MAG       = 0.5;                 // mag: cuantización del límite (se redondea ↑)
 const GAIA_MAX_ROWS        = 40000;              // TOP N de la consulta
+const GAIA_MAX_RAD         = 4.5;                // ° : radio máximo aceptado (6° de lado + margen)
+const GAIA_MAX_MAG         = 17.0;               // mag: límite máximo aceptado
 const GAIA_CLEANUP_EVERY   = 300;                // s: limpieza como mucho cada 5 min
 const GAIA_CLEANUP_MAX_DEL = 300;                // nº máx. de entradas a borrar por pasada (incremental)
 const GAIA_CLIENT_MAXAGE   = 86400;              // s: Cache-Control max-age que se anuncia al navegador
@@ -256,6 +258,17 @@ if (!is_numeric($ra) || !is_numeric($dec) || !is_numeric($rad) || !is_numeric($m
     http_response_code(400);
     gaia_json_headers();
     exit(json_encode(['error' => 'Parámetros incorrectos (ra, dec, rad, mag numéricos)']));
+}
+
+/* Cotas del lado servidor. El endpoint es público y una consulta TAP de radio o
+   magnitud arbitrarios es cara para el archivo de origen y para la caché: el
+   cliente ya se acota, pero eso no es una defensa. */
+if ($rad <= 0 || $rad > GAIA_MAX_RAD || $mag <= 0 || $mag > GAIA_MAX_MAG
+    || $ra < 0 || $ra > 360 || $dec < -90 || $dec > 90) {
+    http_response_code(400);
+    gaia_json_headers();
+    exit(json_encode(['error' => 'Parámetros fuera de rango (rad ≤ ' . GAIA_MAX_RAD
+        . '°, mag ≤ ' . GAIA_MAX_MAG . ', ra 0-360, dec ±90)']));
 }
 
 [$qra, $qdec, $qrad, $qmag] = gaia_cuantizar((float) $ra, (float) $dec, (float) $rad, (float) $mag);

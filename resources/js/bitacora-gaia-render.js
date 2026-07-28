@@ -42,7 +42,14 @@
 
   /* ── Consulta a Gaia ── */
   var GAIA_MAG_MAX        = 16.5;
-  var GAIA_RADIO_MAX      = (120 / 60) * 0.72;   // 1,44° (tope: 2° de lado del DSS)
+  // Radio máximo de consulta: 4,32°, o sea 6° de lado, que cubre los oculares de
+  // campo ancho y los binoculares. Antes eran 1,44° heredados del tope de 2° del
+  // DSS, un límite de PLACA que no aplica a un catálogo. Lo que sí acota de verdad
+  // es el TOP de la consulta: en campos ricos la muestra se trunca a magnitudes
+  // más brillantes. No es un fallo silencioso — el ORDER BY garantiza que se
+  // quedan fuera las más débiles, telonDifuso mide el corte real en vez de
+  // suponerlo, y el render avisa si el corte llega antes que la magnitud límite.
+  var GAIA_RADIO_MAX      = (360 / 60) * 0.72;
   var GAIA_RADIO_MIN      = 0.12;
   var GAIA_ARCMIN_DEFECTO = 60;
   var GAIA_FETCH_TIMEOUT  = 12000;
