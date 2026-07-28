@@ -540,32 +540,56 @@
       function repararNucleos(v) { var entorno = desenfocar(v, 4); for (var i = 0; i < v.length; i++) { if (entorno[i] > 140 && v[i] < 0.5 * entorno[i]) v[i] = Math.min(300, entorno[i] * 1.25); } return v; }
       function adaptacionLocal(v) { var borroso = desenfocar(v, Math.round(PROC / 60)); var out = new Float32Array(v.length); var REALCE = 0.5, UMBRAL_DETALLE = 12; for (var j = 0; j < v.length; j++) { var dif = v[j] - borroso[j]; var mag = Math.abs(dif) - UMBRAL_DETALLE; var gan = dif >= 0 ? REALCE : REALCE * FOT.REALCE_OSCURO; out[j] = v[j] + (mag > 0 ? gan * Math.sign(dif) * mag : 0); } return out; }
 
-      function procesarFotometrico(profunda, corta, canvas, p) {
-        var vd = lumas(profunda); if (!vd) return false; var v = vd; if (corta) { var vs = lumas(corta); if (vs) v = fusionar(vd, vs); }
-        var esHips = $('sim-origen').value === 'hips'; if (esHips) v = repararNucleos(v);
-        var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var sqm = parseFloat($('sim-sqm').value) || 21; var dim = Math.pow(pEf / pOjo, 2); var Fcielo = Math.pow(10, -0.4 * sqm); var rango = FOT.SB_NEGRO - FOT.SB_BLANCO;
+      // Contexto fotométrico del cielo/óptica, independiente del origen de imagen:
+      // flujo del cielo, umbral de contraste Cmin y nivel de gris del fondo, todo
+      // atenuado por la pupila de salida (dim) y la transmisión del tubo (T).
+      //
+      // El fondo se pinta con la curva empinada nivelCielo() (puede ir a negro bajo
+      // cielos oscuros); el objeto se suma encima como INCREMENTO de contraste
+      // (Δmag = 2,5·log10(1 + Fobj·s / Fcielo)), que se conserva intacto. Así, cielo
+      // oscuro → fondo negro y objeto pleno (contraste brutal); cielo claro → fondo
+      // gris y menos incremento (lavado). Como el objeto se pinta como
+      // nivelFondo + incremento, la atenuación oscurece fondo y objeto por igual:
+      // conserva el contraste y baja el suelo.
+      //
+      // AQUÍ vive el término de pupila (−2,5·log10(dim·T)). Ningún motor que
+      // produzca un Fobj debe volver a aplicarlo, o lo contaría dos veces.
+      function ctxFotometrico(p) {
+        var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var sqm = parseFloat($('sim-sqm').value) || 21;
+        var dim = Math.pow(pEf / pOjo, 2); var Fcielo = Math.pow(10, -0.4 * sqm);
         var Fref = Math.pow(10, -0.4 * 21); var Cmin = FOT.C_MIN * Math.pow(Fref / (Fcielo * dim), FOT.C_EXP);
-        // El fondo de cielo se pinta con la curva empinada nivelCielo() (puede ir
-        // a negro bajo cielos oscuros); el objeto se suma encima como INCREMENTO
-        // de contraste sobre el cielo (Δmag = 2,5·log10(1 + Fobj·s / Fcielo)), que
-        // se conserva intacto. Así, cielo oscuro → fondo negro y objeto pleno
-        // (contraste brutal); cielo claro → fondo gris y menos incremento (lavado).
-        // El fondo se atenúa también por la transmisión del tubo (antes se omitía).
-        // Como el objeto se pinta nivelFondo + incremento, esto oscurece fondo y
-        // objeto por igual: conserva el contraste y baja un poco el suelo.
         var T = transmisionEfectiva();
         var nivelFondo = nivelCielo(sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T));
-        var salida = new Float32Array(v.length);
-        for (var i = 0; i < v.length; i++) {
-          var Fobj = 0, vi = v[i];
-          if (vi > 0) { if (esHips) vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS); var sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX); Fobj = Math.pow(10, -0.4 * sb); }
-          var s = suave((Fobj / (Fcielo * Cmin) - 1) / 1.5);
-          salida[i] = nivelFondo + 255 * 2.5 * Math.log10(1 + (Fobj * s) / Fcielo) / rango;
+        return { Fcielo: Fcielo, Cmin: Cmin, nivelFondo: nivelFondo, rango: FOT.SB_NEGRO - FOT.SB_BLANCO };
+      }
+
+      // Pinta el lienzo a partir de un array de FLUJO DE OBJETO por píxel (Fobj, en
+      // las mismas unidades de flujo que Fcielo). Cadena de contraste + adaptación
+      // local, compartida por todos los motores que sepan producir un Fobj.
+      function pintarFot(Fobj, canvas, p) {
+        var c = ctxFotometrico(p);
+        var salida = new Float32Array(Fobj.length);
+        for (var i = 0; i < Fobj.length; i++) {
+          var s = suave((Fobj[i] / (c.Fcielo * c.Cmin) - 1) / 1.5);
+          salida[i] = c.nivelFondo + 255 * 2.5 * Math.log10(1 + (Fobj[i] * s) / c.Fcielo) / c.rango;
         }
         var final = adaptacionLocal(salida);   // adaptación local del ojo: siempre activa
         canvas.width = canvas.height = PROC; var ctx = canvas.getContext('2d'); var im = ctx.createImageData(PROC, PROC);
         for (var k = 0, j = 0; j < final.length; k += 4, j++) { var o = Math.max(0, Math.min(255, final[j])); im.data[k] = im.data[k + 1] = im.data[k + 2] = o; im.data[k + 3] = 255; }
         ctx.putImageData(im, 0, 0); return true;
+      }
+
+      function procesarFotometrico(profunda, corta, canvas, p) {
+        var vd = lumas(profunda); if (!vd) return false; var v = vd; if (corta) { var vs = lumas(corta); if (vs) v = fusionar(vd, vs); }
+        var esHips = $('sim-origen').value === 'hips'; if (esHips) v = repararNucleos(v);
+        // Flujo del objeto a partir de la luma 8-bit (heurístico: luma → brillo
+        // superficial entre SB_OBJ_MIN y SB_OBJ_MAX). No es fotometría calibrada.
+        var Fobj = new Float32Array(v.length);
+        for (var i = 0; i < v.length; i++) {
+          var vi = v[i];
+          if (vi > 0) { if (esHips) vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS); var sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX); Fobj[i] = Math.pow(10, -0.4 * sb); }
+        }
+        return pintarFot(Fobj, canvas, p);
       }
 
       function renderizar(profunda, corta, urlRespaldo) {
