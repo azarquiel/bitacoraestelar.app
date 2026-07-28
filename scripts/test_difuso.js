@@ -251,6 +251,42 @@ ok(conTelon === null || conTelon[centroIdx] < anclado[centroIdx],
 // Fuera del radio de marea no pinta nada.
 ok(anclado[0] === 0, 'nada fuera del radio de marea');
 
+/* El halo NO puede depender de con cuánto campo se mire: es brillo superficial
+   intrínseco. Antes se restaba el flujo observado en anillos escalados al CAMPO,
+   así que a campo ancho el anillo central diluía el core cientos de veces, la
+   resta no quitaba nada y el halo se disparaba. */
+console.log('Halo anclado: invariante al ancho del campo:');
+window.BITACORA_GLOBULARES = [['NGC 104', '47 Tuc', 10, 40, 0.36, 3.17, 2.07, 14.38]];
+/* Se compara el FLUJO TOTAL, no el píxel central: a campo ancho el core cae por
+   debajo del píxel y su pico se muestrea peor, cosa esperable. Lo que no puede
+   cambiar es cuánta luz aporta la capa en total. */
+function haloFlujoTotal(arcmin) {
+  var n = 128;
+  var h = R.haloCatalogado(gc, cumulo, { ra: 10, dec: 40, arcmin: arcmin, size: n }, null);
+  if (!h) return 0;
+  var areaPix = Math.pow(arcmin * 60 / n, 2);          // arcsec² por píxel
+  var s = 0; for (var i = 0; i < h.length; i++) s += h[i];
+  return s * areaPix;
+}
+var estrecho = haloFlujoTotal(20), ancho = haloFlujoTotal(180);
+ok(estrecho > 0 && ancho > 0, 'produce halo con campo estrecho y con campo ancho');
+var razonCampo = ancho / estrecho;
+ok(razonCampo > 0.5 && razonCampo < 2,
+  'campo 9x más ancho cambia el flujo total menos de 2x (razón ' + razonCampo.toFixed(2) + ')');
+
+/* Y el perfil tiene que caer de forma continua: restar un perfil escalonado de un
+   King continuo deja un salto por anillo, y eso se ve como círculos concéntricos. */
+console.log('Halo anclado: perfil sin anillos:');
+var NN = 160;
+var perfilHalo = R.haloCatalogado(gc, cumulo, { ra: 10, dec: 40, arcmin: 30, size: NN }, null);
+var subidas = 0, previo = Infinity;
+for (var px = NN / 2; px < NN; px++) {
+  var v = perfilHalo[(NN / 2) * NN + px];
+  if (v > previo * 1.02 && previo > 0) subidas++;
+  previo = v;
+}
+ok(subidas === 0, 'el perfil radial no vuelve a subir en ningún punto (' + subidas + ' repuntes)');
+
 // Sin catálogo cargado, el motor cae a los conteos y sigue funcionando.
 window.BITACORA_GLOBULARES = null;
 ok(R.globularEnCampo(optsC) === null, 'sin catálogo → null, sin romperse');

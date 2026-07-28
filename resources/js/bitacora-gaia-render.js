@@ -564,12 +564,64 @@
        déficit(r) = King_catálogo(r) − flujo observado(r) − telón(r)
 
      La geometría sale del propio catálogo: r_c y r_t = r_c·10^c. */
+  /* Perfil de flujo observado a la escala del CÚMULO, no del campo.
+
+     Con anillos escalados al campo (rmax/n) y un campo ancho, el anillo central
+     mide varios arcmin mientras el core mide décimas: el flujo observado del
+     centro sale diluido cientos de veces, la resta no quita casi nada y el halo
+     se dispara. Por eso los anillos van en escala LOGARÍTMICA desde una fracción
+     de r_c: el core queda resuelto se mire con el campo que se mire.
+
+     Devuelve un muestreador continuo (interpolación lineal en log r), no un
+     escalón: restar un perfil escalonado de un King continuo deja un salto en
+     cada frontera de anillo, y eso se ve como círculos concéntricos. */
+  function flujoObservadoCumulo(estrellas, gc, rt, rmaxCampo) {
+    var n = 24;
+    var rMin = Math.max(gc.rc / 8, 1e-5);
+    var rMax = Math.min(rt, rmaxCampo);
+    if (!(rMax > rMin)) return null;
+    var lnMin = Math.log(rMin), paso = (Math.log(rMax) - lnMin) / n;
+    var flujo = new Float64Array(n + 1), area = new Float64Array(n + 1), i;
+    // Bin 0: el disco central completo; el resto, coronas logarítmicas.
+    area[0] = Math.PI * rMin * rMin;
+    for (i = 1; i <= n; i++) {
+      var r0 = Math.exp(lnMin + (i - 1) * paso), r1 = Math.exp(lnMin + i * paso);
+      area[i] = Math.PI * (r1 * r1 - r0 * r0);
+    }
+    var cos0 = Math.cos(gc.dec * Math.PI / 180);
+    for (i = 0; i < estrellas.length; i++) {
+      var dRA = (((estrellas[i][0] - gc.ra + 540) % 360) - 180) * cos0;
+      var dDec = estrellas[i][1] - gc.dec;
+      var r = Math.sqrt(dRA * dRA + dDec * dDec);
+      if (r >= rMax) continue;
+      var b = (r <= rMin) ? 0 : Math.min(n, 1 + Math.floor((Math.log(r) - lnMin) / paso));
+      flujo[b] += Math.pow(10, -0.4 * estrellas[i][2]);
+    }
+    // Densidad de flujo por arcsec², suavizada a tres puntos: los anillos
+    // interiores tienen pocas estrellas y su ruido se vería como anillos.
+    var dens = new Float64Array(n + 1);
+    for (i = 0; i <= n; i++) dens[i] = flujo[i] / (area[i] * 3600 * 3600);
+    var suavizado = new Float64Array(n + 1);
+    for (i = 0; i <= n; i++) {
+      var a = dens[Math.max(0, i - 1)], c = dens[Math.min(n, i + 1)];
+      suavizado[i] = (a + 2 * dens[i] + c) / 4;
+    }
+    return function (r) {
+      if (r <= rMin) return suavizado[0];
+      if (r >= rMax) return suavizado[n];
+      var f = 1 + (Math.log(r) - lnMin) / paso;
+      var i0 = Math.max(0, Math.min(n, Math.floor(f)));
+      var i1 = Math.min(n, i0 + 1), t = f - i0;
+      return suavizado[i0] * (1 - t) + suavizado[i1] * t;
+    };
+  }
+
   function haloCatalogado(gc, estrellas, o, yaPuesto) {
-    var p = perfilRadial(estrellas, { ra: gc.ra, dec: gc.dec, arcmin: o.arcmin });
-    if (!p) return null;
     var rt = gc.rc * Math.pow(10, gc.c);
     var pico = formaKing(0, gc.rc, rt);
     if (!(pico > 0)) return null;
+    var observado = flujoObservadoCumulo(estrellas, gc, rt, (o.arcmin / 60) / 2);
+    if (!observado) return null;
     var F0 = Math.pow(10, -0.4 * gc.muV);        // flujo por arcsec² en el centro
 
     var SIZE = o.size, out = new Float32Array(SIZE * SIZE), hay = false;
@@ -585,9 +637,8 @@
         if (r >= rt) continue;
         var idx = y * SIZE + x;
         var king = F0 * formaKing(r, gc.rc, rt) / pico;
-        // Flujo ya presente: el observado del anillo y lo que ponga el telón.
-        var iA = Math.min(p.dens.length - 1, Math.floor(r / p.rmax * p.dens.length));
-        var puesto = p.flujoDens[iA] + (yaPuesto ? yaPuesto[idx] : 0);
+        // Flujo ya presente: el observado a ese radio y lo que ponga el telón.
+        var puesto = observado(r) + (yaPuesto ? yaPuesto[idx] : 0);
         var d = king - puesto;
         if (d > 0) { out[idx] = KING.k * d; hay = true; }
       }
