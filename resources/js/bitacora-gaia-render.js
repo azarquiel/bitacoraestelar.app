@@ -151,15 +151,32 @@
     return out;
   }
 
+  /* Realce de un detalle respecto a su entorno, con RODILLA SUAVE.
+
+     El umbral existe para no amplificar ruido de fondo. Aplicado como corte duro
+     (`|dif| > umbral ? ganancia·(|dif|−umbral) : 0`) la función es continua pero
+     su PENDIENTE salta de golpe en el umbral. Sobre un degradado suave —el halo
+     de un cúmulo— |dif| cruza el umbral a varios radios, y cada cruce deja un
+     borde: círculos concéntricos, muy visibles con pupila de salida pequeña,
+     cuando el fondo es negro y el halo es lo único en pantalla.
+
+     Con el factor suave() la transición es C1 y, en cuanto |dif| pasa del doble
+     del umbral, coincide EXACTAMENTE con la fórmula anterior: solo cambia la
+     banda de detalle débil, no el realce de lo que ya destacaba. */
+  var REALCE = 0.5, UMBRAL_DETALLE = 12;
+  function realceDetalle(dif, ganancia) {
+    var abs = Math.abs(dif), sobre = abs - UMBRAL_DETALLE;
+    if (sobre <= 0) return 0;
+    return ganancia * Math.sign(dif) * sobre * suave(sobre / UMBRAL_DETALLE);
+  }
+
   // Adaptación local del ojo: realza el detalle respecto al entorno desenfocado.
   function adaptacionLocal(v, SIZE) {
     var borroso = desenfocar(v, Math.round(SIZE / 60), SIZE);
-    var out = new Float32Array(v.length); var REALCE = 0.5, UMBRAL_DETALLE = 12;
+    var out = new Float32Array(v.length);
     for (var j = 0; j < v.length; j++) {
       var dif = v[j] - borroso[j];
-      var mag = Math.abs(dif) - UMBRAL_DETALLE;
-      var gan = dif >= 0 ? REALCE : REALCE * FOT.REALCE_OSCURO;
-      out[j] = v[j] + (mag > 0 ? gan * Math.sign(dif) * mag : 0);
+      out[j] = v[j] + realceDetalle(dif, dif >= 0 ? REALCE : REALCE * FOT.REALCE_OSCURO);
     }
     return out;
   }
@@ -715,7 +732,34 @@
        valor central bajo —precisamente donde la resta se pasa— se propague a todo
        el perfil y aplaste el halo entero: el cúmulo se queda sin nubosidad. Así el
        centro recibe al menos lo que haya justo fuera, y el perfil sigue sin poder
-       brillar más lejos del centro, que es lo que elimina los anillos. */
+       brillar más lejos del centro. */
+    for (i = nR - 2; i >= 0; i--) if (perfil[i] < perfil[i + 1]) perfil[i] = perfil[i + 1];
+
+    /* Y ahora se SUAVIZA, que no es lo mismo que acotar. Un perfil monótono puede
+       estar lleno de codos: la cota de arriba crea mesetas, y el flujo observado
+       es lineal a trozos entre nodos de anillo. adaptacionLocal es una máscara de
+       enfoque y realza precisamente las discontinuidades de PENDIENTE, así que
+       cada codo acaba siendo un borde visible — los círculos concéntricos, que se
+       ven desnudos con pupila de salida pequeña porque el fondo es negro y el halo
+       es lo único en pantalla.
+       Tres pasadas de media móvil ≈ una gaussiana. Van sobre la rejilla cuadrática
+       (r ∝ i²), así que suavizan más fuerte por fuera, que es donde los anillos
+       son anchos, y respetan el pico del núcleo. */
+    var ancho = 13, mitad = (ancho - 1) / 2, pasada, tmp = new Float64Array(nR);
+    for (pasada = 0; pasada < 4; pasada++) {
+      for (i = 0; i < nR; i++) {
+        var suma = 0, cuantos = 0;
+        for (var d = -mitad; d <= mitad; d++) {
+          var jj = i + d;
+          if (jj < 0) jj = -jj;                    // espejo en el centro
+          if (jj > nR - 1) jj = nR - 1;
+          suma += perfil[jj]; cuantos++;
+        }
+        tmp[i] = suma / cuantos;
+      }
+      perfil.set(tmp);
+    }
+    // El suavizado puede introducir subidas mínimas: se vuelve a acotar.
     for (i = nR - 2; i >= 0; i--) if (perfil[i] < perfil[i + 1]) perfil[i] = perfil[i + 1];
 
     var SIZE = o.size, out = new Float32Array(SIZE * SIZE), hay = false;
@@ -1125,6 +1169,7 @@
     capasDifusas: capasDifusas,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
+    realceDetalle: realceDetalle,
     suave: suave,
     transmisionOptica: transmisionOptica,
     opticaTieneArana: opticaTieneArana,

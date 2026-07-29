@@ -343,6 +343,24 @@ var conservado = flujoTotal(hBrillante) / flujoTotal(hEstrecho);
 ok(conservado > 0.5,
   'conserva más de la mitad del halo (' + (conservado * 100).toFixed(0) + '%)');
 
+/* Monótono NO basta: un perfil que solo baja puede estar lleno de codos, y
+   adaptacionLocal es una máscara de enfoque que realza justo las
+   discontinuidades de pendiente, convirtiendo cada codo en un círculo visible.
+   Se mide la segunda diferencia a lo largo del radio, normalizada al pico. */
+console.log('Halo anclado: perfil suave, no solo monótono:');
+function curvaturaMaxima(h, N) {
+  var pico = h[(N / 2) * N + N / 2], peor = 0;
+  if (!(pico > 0)) return Infinity;
+  for (var x = N / 2 + 1; x < N - 1; x++) {
+    var a = h[(N / 2) * N + x - 1], b = h[(N / 2) * N + x], c = h[(N / 2) * N + x + 1];
+    peor = Math.max(peor, Math.abs(a - 2 * b + c) / pico);
+  }
+  return peor;
+}
+var curva = curvaturaMaxima(hEstrecho, NE);
+ok(curva < 0.003, 'sin codos en el perfil radial (curvatura máx ' +
+  (curva * 100).toFixed(3) + '% del pico por píxel²)');
+
 // El muestreador nunca debe devolver 0 en el centro por falta de estrellas.
 var obs = R.flujoObservadoCumulo(lleno, gcT, gcT.rc * Math.pow(10, gcT.c), 0.0833);
 ok(obs && obs(0) > 0, 'el flujo observado en el centro no es cero');
@@ -377,6 +395,25 @@ ok(apilado(4) > apilado(2), 'un núcleo 2x más brillante sigue saliendo más br
    fallo — pero la rodilla está mucho más arriba que el recorte de antes. */
 ok(apilado(2) < 255 && apilado(4) < 255, 'lo que antes se recortaba ahora cabe en la escala');
 ok(apilado(64) > apilado(16), 'el orden se conserva incluso pasado el techo');
+
+/* ── 11. Rodilla del realce de detalle ──────────────────────────────────────
+   La adaptación local usaba un corte duro: continua en valor, pero con un salto
+   de PENDIENTE en el umbral. Sobre un degradado suave —el halo de un cúmulo—
+   |dif| cruza el umbral a varios radios y cada cruce deja un borde: los círculos
+   concéntricos. La rodilla suave lo elimina sin tocar el realce de lo que ya
+   destacaba. */
+console.log('Realce de detalle: rodilla suave:');
+function pendiente(d) { return (R.realceDetalle(d + 1e-4, 0.5) - R.realceDetalle(d - 1e-4, 0.5)) / 2e-4; }
+ok(R.realceDetalle(6, 0.5) === 0, 'por debajo del umbral no realza nada');
+// El salto de pendiente en el umbral es lo que dibujaba el círculo.
+var saltoUmbral = Math.abs(pendiente(12.5) - pendiente(11.5));
+ok(saltoUmbral < 0.05, 'la pendiente no salta en el umbral (' + saltoUmbral.toFixed(4) + ')');
+// Y con detalle fuerte coincide con la fórmula de siempre.
+[30, 60, 120].forEach(function (d) {
+  casi(R.realceDetalle(d, 0.5), 0.5 * (d - 12), 1e-9,
+    'detalle ' + d + ': idéntico al realce anterior');
+});
+ok(R.realceDetalle(-40, 0.5) === -R.realceDetalle(40, 0.5), 'simétrico en signo');
 
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);
