@@ -647,5 +647,14 @@ var soloNeb = suma(R.capasDifusas([], Object.assign({}, soloObjetos, { conGalaxi
 ok(soloGal > 0 && soloNeb > 0 && Math.abs(soloGal + soloNeb - suma(R.capasDifusas([], soloObjetos))) < 1e-6,
   'cada capa aporta su parte y la suma cuadra');
 
+/* Sin el fichero de nebulosas desplegado, la capa tiene que desaparecer, no caer
+   al catálogo de galaxias: `galaxiasEnCampo` usa el de galaxias por defecto, así
+   que un `undefined` las pintaría DOS veces, más brillantes y sin avisar. */
+var guardadas = window.BITACORA_NEBULOSAS;
+window.BITACORA_NEBULOSAS = undefined;
+casi(suma(R.capasDifusas([], soloObjetos)), soloGal, 1e-6,
+  'sin catálogo de nebulosas queda solo la capa de galaxias');
+window.BITACORA_NEBULOSAS = guardadas;
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);

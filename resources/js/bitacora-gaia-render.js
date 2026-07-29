@@ -1112,7 +1112,11 @@
     var telon = (o.conTelon !== false) ? telonDifuso(estrellas, o) : null;
     var halo = (o.conHalo !== false) ? haloNoResuelto(estrellas, o, telon) : null;
     var galaxias = (o.conGalaxias !== false) ? capaGalaxias(o) : null;
-    var nebulosas = (o.conNebulosas !== false) ? capaGalaxias(o, window.BITACORA_NEBULOSAS) : null;
+    /* El catálogo se comprueba AQUÍ: `galaxiasEnCampo` cae al de galaxias cuando
+       no le llega ninguno, así que pasarle un `undefined` —el fichero de
+       nebulosas sin desplegar— pintaría las galaxias dos veces en silencio. */
+    var nebulosas = (o.conNebulosas !== false && window.BITACORA_NEBULOSAS)
+      ? capaGalaxias(o, window.BITACORA_NEBULOSAS) : null;
     var capas = [];
     if (telon) capas.push(telon);
     if (halo) capas.push(halo);
