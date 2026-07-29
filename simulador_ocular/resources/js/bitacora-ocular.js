@@ -738,39 +738,26 @@
         libreEstado('✓ ' + o.nombre + '  ·  AR ' + o.ra + '  ·  Dec ' + o.dec, 'ok');
         elegirObjeto(o);
       }
-      /* Búsqueda por nombre contra el resolvedor Sesame del CDS, directa desde el
-         navegador. Antes iba por el endpoint /coordenadas de WordPress, que exige
-         nonce de sesión: en la página pública —que es donde vive el simulador— la
-         pestaña salía visible y la búsqueda contestaba siempre «inicia sesión».
-         Sesame sirve `Access-Control-Allow-Origin: *`, así que no necesita proxy,
-         y además resuelve los alias por su cuenta: «M3», «Messier 3», «NGC 6826»
-         y «Barnard 33» caen todos donde deben sin canonicalizar nada. */
-      var SESAME_URL = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?';
-      var simbadTimer = null, simbadUltimo = '';
-      function programarSimbad() {
-        var q = $('sim-libre-nombre').value.trim();
-        if (simbadTimer) clearTimeout(simbadTimer);
-        if (q.length < 2) return;
-        simbadTimer = setTimeout(function () { buscarSimbad(q); }, 700);
-      }
-      function buscarSimbad(q) {
-        if (q === simbadUltimo) return; simbadUltimo = q;
-        libreEstado('Buscando «' + q + '» en SIMBAD…');
-        fetch(SESAME_URL + encodeURIComponent(q))
-          .then(function (r) { return r.text(); })
-          .then(function (txt) {
-            var d = BitacoraBase.leerSesame(txt);
-            if (d) {
-              $('sim-libre-ra').value = BitacoraBase.formatRA(d.ra);
-              $('sim-libre-dec').value = BitacoraBase.formatDec(d.dec);
-              fijarObjetoLibre(q, d.otype);
-            } else { libreEstado('«' + q + '» no está en SIMBAD. Introduce su RA y Dec a mano.'); }
-          })
-          .catch(function () { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); });
-      }
+      /* Búsqueda por nombre: el ciclo (espera, deduplicado y consulta a Sesame)
+         vive en BitacoraBase.resolutorNombre, compartido con el formulario de
+         registro. Aquí solo quedan los textos y dónde se escribe el resultado.
+         Buscar un nombre SÍ pisa lo que hubiera en las cajas de RA/Dec: es lo que
+         se está pidiendo al escribirlo. */
+      var resolutor = BitacoraBase.resolutorNombre({
+        onResuelto: function (d) {
+          $('sim-libre-ra').value = BitacoraBase.formatRA(d.ra);
+          $('sim-libre-dec').value = BitacoraBase.formatDec(d.dec);
+          fijarObjetoLibre(d.q, d.otype);
+        },
+        onEstado: function (estado, q) {
+          if (estado === 'buscando') { libreEstado('Buscando «' + q + '» en SIMBAD…'); }
+          else if (estado === 'nada') { libreEstado('«' + q + '» no está en SIMBAD. Introduce su RA y Dec a mano.'); }
+          else { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); }
+        }
+      });
       function montarObjetoLibre() {
         var nom = $('sim-libre-nombre');
-        if (nom) nom.addEventListener('input', programarSimbad);
+        if (nom) nom.addEventListener('input', function () { resolutor.programar(nom.value); });
         ['sim-libre-ra', 'sim-libre-dec'].forEach(function (id) {
           var el = $(id); if (el) el.addEventListener('change', function () { fijarObjetoLibre($('sim-libre-nombre').value.trim(), ''); });
         });

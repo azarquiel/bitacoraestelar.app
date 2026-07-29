@@ -97,6 +97,30 @@ instante de hora local con los algoritmos de Meeus.
   celeste a la altura de la latitud, la declinación solar en solsticio y equinoccio,
   el convenio de azimut y los husos con y sin horario de verano).
 
+## Resolvedor de objeto por nombre
+
+El ciclo «el observador escribe un nombre → salen su RA y su Dec»: espera a que
+deje de teclear, no repite la misma consulta, no pisa las coordenadas escritas a
+mano y avisa del estado.
+
+- **Fuente única:** `resources/js/bitacora-base.js`,
+  `BitacoraBase.resolutorNombre({onResuelto, onEstado, puedeEscribir, espera})`
+  → `{programar(nombre)}`. Sin DOM: cada pantalla cablea su input y escribe sus
+  textos; el módulo solo emite `'buscando' | 'nada' | 'error'`.
+- **Consumidores:** el **simulador de oculares** (modo «Cualquier objeto») y el
+  **formulario de registro** (autocompletado de RA/Dec de objetos no-Messier).
+- **Transporte único:** el resolvedor Sesame del CDS, directo desde el navegador
+  (sirve `Access-Control-Allow-Origin: *`). No hay proxy ni sesión de por medio, y
+  Sesame resuelve los alias por su cuenta («M3», «Messier 3», «NGC 6826»,
+  «Barnard 33»). El endpoint `/coordenadas` del plugin, que era el camino del
+  formulario y exigía login, se ha eliminado por no tener consumidores.
+- **No confundir con `/resolver`** (`bitacora_resolver_objeto`, público): eso es
+  «nombre → [[objeto del mapa]]» con distancia, tipo y color, y lo usa el buscador
+  del mapa. Otro concepto, otro módulo.
+- **Tests:** `scripts/test_sesame.js` fija el parseo de la respuesta;
+  `scripts/test_resolutor.js`, el ciclo (espera, deduplicado y guarda), con un
+  `fetch` de mentira y sin red.
+
 ## Transmisión y araña por tipo óptico
 
 Dos tablas indexadas por la columna `Optics` del catálogo de equipo: la **transmisión**

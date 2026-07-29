@@ -916,21 +916,9 @@ function bitacora_registrar_rutas() {
         )
     );
 
-    // Coordenadas (RA/Dec) de un objeto por nombre en SIMBAD, para autocompletar
-    // el formulario de registro. No exige distancia (a diferencia de /resolver).
-    // Solo con sesión: se usa desde el formulario, que ya requiere login.
-    register_rest_route(
-        'bitacora/v1',
-        '/coordenadas',
-        array(
-            'methods'             => 'GET',
-            'callback'            => 'bitacora_coordenadas_objeto',
-            'permission_callback' => $solo_logueados,
-            'args'                => array(
-                'q' => array( 'required' => true ),
-            ),
-        )
-    );
+    // (El autocompletado de RA/Dec del formulario de registro ya no pasa por
+    // aquí: el navegador consulta el resolvedor Sesame del CDS directamente,
+    // igual que el simulador de oculares. Ver BitacoraBase.resolutorNombre.)
 
     // Observadores (catálogo). Lectura pública, para filtrar el mapa por autor.
     register_rest_route(
@@ -2226,31 +2214,6 @@ function bitacora_resolver_objeto( WP_REST_Request $peticion ) {
             'tipo'   => $calc['tipo'],
             'color'  => $calc['color'],
             'coords' => $calc['coords_texto'],
-        ),
-        200
-    );
-}
-
-/**
- * GET /coordenadas?q=NGC6826 — devuelve las coordenadas ecuatoriales (RA/Dec,
- * en grados) de un objeto según SIMBAD, para autocompletar el formulario de
- * registro. No exige distancia. Devuelve 404 si SIMBAD no lo conoce.
- */
-function bitacora_coordenadas_objeto( WP_REST_Request $peticion ) {
-    $q = trim( sanitize_text_field( (string) $peticion->get_param( 'q' ) ) );
-    if ( '' === $q ) {
-        return new WP_Error( 'falta_q', 'Indica un objeto.', array( 'status' => 400 ) );
-    }
-    $sim = bitacora_simbad( $q );
-    if ( ! $sim || null === $sim['ra'] ) {
-        return new WP_Error( 'no_encontrado', 'No se encontró «' . $q . '» en SIMBAD.', array( 'status' => 404 ) );
-    }
-    return new WP_REST_Response(
-        array(
-            'q'     => $q,
-            'ra'    => $sim['ra'],
-            'dec'   => $sim['dec'],
-            'otype' => $sim['otype'],
         ),
         200
     );

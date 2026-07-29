@@ -240,51 +240,37 @@
       setStatus(objStatus,'info','“'+txt+'” no es Messier. Introduce su RA y Dec para poder calcular su posición.');
       // Autocompletado: si las cajetillas están vacías, se buscan sus RA/Dec en
       // SIMBAD (con una pequeña espera para no consultar en cada tecla).
-      programarBusquedaCoords(txt);
+      resolutorCoords.programar(txt);
     }
     recompute();
   }
 
   // ── Autocompletado de RA/Dec desde SIMBAD (para objetos no-Messier) ──
-  // Se apoya en el endpoint /coordenadas del plugin (el navegador no puede
-  // consultar SIMBAD directamente por CORS). No pisa lo que escriba el usuario.
-  var coordTimer=null, coordUltimo='', coordsAuto=false;
-  function coordenadasURL(q){
-    // Deriva la URL a partir de WP.endpoint (.../bitacora/v1/observaciones).
-    return WP.endpoint.replace(/observaciones\/?$/, 'coordenadas') + '?q=' + encodeURIComponent(q);
-  }
+  // El ciclo (espera, deduplicado y consulta a Sesame) vive en
+  // BitacoraBase.resolutorNombre, compartido con el simulador de oculares. Va
+  // directo al CDS: ya no pasa por el endpoint /coordenadas del plugin, así que
+  // el autocompletado tampoco depende de la sesión.
+  var coordsAuto=false;
   // ¿Podemos rellenar las cajetillas? Sí si están vacías o si las rellenamos
   // nosotros (coordsAuto); NO si el usuario ha escrito coordenadas a mano.
   function cajetillasLibres(){
     return coordsAuto || (raManual.value.trim()==='' && decManual.value.trim()==='');
   }
-  function programarBusquedaCoords(nombre){
-    if(!WP) return;                                   // sin sesión no hay endpoint
-    var q=(nombre||'').trim();
-    if(q.length<2 || !cajetillasLibres()) return;
-    if(coordTimer) clearTimeout(coordTimer);
-    coordTimer=setTimeout(function(){ buscarCoords(q); }, 700);
-  }
-  function buscarCoords(q){
-    if(q===coordUltimo || !cajetillasLibres()) return;
-    coordUltimo=q;
-    setStatus(objStatus,'info','Buscando las coordenadas de “'+q+'” en SIMBAD…');
-    fetch(coordenadasURL(q), { credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
-      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
-      .then(function(res){
-        if(!cajetillasLibres()) return;               // el usuario escribió mientras tanto
-        if(res.ok && res.data && typeof res.data.ra==='number'){
-          raManual.value  = formatRA(res.data.ra);
-          decManual.value = formatDec(res.data.dec);
-          coordsAuto=true;   // marcadas como auto: se pueden sustituir si cambia el nombre
-          resolveObject();   // re-resuelve ya con las coordenadas puestas
-          setStatus(objStatus,'ok','✓ Coordenadas de “'+q+'” traídas de SIMBAD (puedes ajustarlas).');
-        } else {
-          setStatus(objStatus,'info','“'+q+'” no está en SIMBAD. Introduce su RA y Dec a mano.');
-        }
-      })
-      .catch(function(){ /* silencioso: se mantiene el modo manual */ });
-  }
+  var resolutorCoords = BitacoraBase.resolutorNombre({
+    puedeEscribir: cajetillasLibres,
+    onResuelto: function(d){
+      raManual.value  = formatRA(d.ra);
+      decManual.value = formatDec(d.dec);
+      coordsAuto=true;   // marcadas como auto: se pueden sustituir si cambia el nombre
+      resolveObject();   // re-resuelve ya con las coordenadas puestas
+      setStatus(objStatus,'ok','✓ Coordenadas de “'+d.q+'” traídas de SIMBAD (puedes ajustarlas).');
+    },
+    onEstado: function(estado, q){
+      if(estado==='buscando'){ setStatus(objStatus,'info','Buscando las coordenadas de “'+q+'” en SIMBAD…'); }
+      else if(estado==='nada'){ setStatus(objStatus,'info','“'+q+'” no está en SIMBAD. Introduce su RA y Dec a mano.'); }
+      // 'error': silencioso, se mantiene el modo manual.
+    }
+  });
 
   // ── Autocompletado ──
   var activeIdx=-1, currentMatches=[];

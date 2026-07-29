@@ -274,9 +274,68 @@ window.BitacoraBase = (function () {
     return { ra: ra, dec: dec, otype: t ? t[1] : '' };
   }
 
+  /* ── Resolvedor de objeto por nombre ────────────────────────────────────────
+     El ciclo completo de «el observador escribe un nombre → salen su RA y su
+     Dec»: espera a que deje de teclear, no repite la misma consulta, no pisa lo
+     que haya escrito a mano y avisa del estado. Sin DOM: cada pantalla cablea su
+     propio input y escribe sus propios textos.
+
+     Va DIRECTO al resolvedor Sesame del CDS, que sirve
+     `Access-Control-Allow-Origin: *`. No hace falta proxy ni sesión —el
+     simulador vive en una página pública— y Sesame resuelve los alias por su
+     cuenta: «M3», «Messier 3», «NGC 6826» o «Barnard 33» caen donde deben sin
+     canonicalizar nada.
+
+     Interfaz:
+       resolutorNombre({ onResuelto, onEstado, puedeEscribir, espera })
+         -> { programar(nombre) }
+
+       onResuelto({ra, dec, otype, q})  ra/dec en grados
+       onEstado(estado, q)              'buscando' | 'nada' | 'error'
+       puedeEscribir()                  opcional; si devuelve false no se
+                                        consulta (y si pasa a false mientras se
+                                        consulta, el resultado se descarta)
+       espera                           ms de espera tras la última tecla (700) */
+  var SESAME_URL = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?';
+
+  function resolutorNombre(opts) {
+    opts = opts || {};
+    var espera = (opts.espera != null) ? opts.espera : 700;
+    var puedeEscribir = opts.puedeEscribir || function () { return true; };
+    var onEstado = opts.onEstado || function () {};
+    var onResuelto = opts.onResuelto || function () {};
+    var temporizador = null, ultima = '';
+
+    function consultar(q) {
+      if (q === ultima || !puedeEscribir()) return;
+      ultima = q;
+      onEstado('buscando', q);
+      fetch(SESAME_URL + encodeURIComponent(q))
+        .then(function (r) { return r.text(); })
+        .then(function (txt) {
+          if (!puedeEscribir()) return;    // el observador escribió mientras tanto
+          var d = leerSesame(txt);
+          if (d) { onResuelto({ ra: d.ra, dec: d.dec, otype: d.otype, q: q }); }
+          else { onEstado('nada', q); }
+        })
+        .catch(function () { onEstado('error', q); });
+    }
+
+    return {
+      programar: function (nombre) {
+        var q = String(nombre == null ? '' : nombre).trim();
+        if (temporizador) clearTimeout(temporizador);
+        // Menos de dos letras no es un nombre: ni se consulta ni se avisa.
+        if (q.length < 2 || !puedeEscribir()) return;
+        temporizador = setTimeout(function () { consultar(q); }, espera);
+      }
+    };
+  }
+
   return {
     esc: esc,
     leerSesame: leerSesame,
+    resolutorNombre: resolutorNombre,
     montarBuscadorCatalogo: montarBuscadorCatalogo,
     BORTLE: BORTLE,
     claseBortlePorSqm: claseBortlePorSqm,
