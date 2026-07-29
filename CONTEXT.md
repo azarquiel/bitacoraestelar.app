@@ -97,6 +97,20 @@ instante de hora local con los algoritmos de Meeus.
   celeste a la altura de la latitud, la declinación solar en solsticio y equinoccio,
   el convenio de azimut y los husos con y sin horario de verano).
 
+## Transmisión y araña por tipo óptico
+
+Dos tablas indexadas por la columna `Optics` del catálogo de equipo: la **transmisión**
+luminosa del tubo (refractor 0,9 · reflector 0,7 · catadióptrico 0,65–0,68, según
+Torres Lapasió) y si su secundario va sujeto por una **araña** de brazos, que es lo
+que produce los *diffraction spikes*.
+
+- **Fuente única:** `resources/js/bitacora-gaia-render.js`, expuestas como
+  `transmisionOptica(optica)` → transmisión o `null`, y `opticaTieneArana(optica)` → bool.
+- **Consumidores:** el propio render (spikes y magnitud límite) y el **simulador de
+  oculares**, que antes tenía su propia copia de ambas tablas.
+- Un tipo no listado devuelve `null`: el valor por defecto (0,8) lo pone el llamador,
+  que es quien sabe si además hay una transmisión fijada a mano en el telescopio.
+
 ## Nombre del observador (mapa)
 
 Resolución **clave → nombre legible** de un observador, sobre el catálogo

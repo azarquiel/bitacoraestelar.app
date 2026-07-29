@@ -58,7 +58,15 @@
   var GAIA_FETCH_TIMEOUT  = 12000;
   var PROXY_URL           = '/wp-content/uploads/bitacora/gaia_proxy.php';
 
-  /* ── Transmisión y araña por tipo óptico (idéntico al simulador) ── */
+  /* ── Transmisión y araña por tipo óptico (fuente única) ──
+     Refractor 0,9 y reflector (2 espejos, sin corrector) 0,7 siguen a Torres
+     Lapasió; los catadióptricos, con lámina/menisco corrector y obstrucción
+     central, pierden algo más (~0,65-0,68). Los tipos no listados devuelven null
+     y el llamador decide su valor por defecto.
+     La araña de brazos del secundario es la que produce los diffraction spikes:
+     los refractores no tienen obstrucción y los SC/Mak sujetan el secundario en
+     la lámina/menisco, sin brazos. El simulador de oculares consume las dos
+     desde aquí; antes tenía su propia copia de ambas tablas. */
   var TRANSMISION_DEFECTO = 0.8;
   var TRANSMISION_OPTICA = {
     'refractor': 0.9, 'newtonian': 0.7, 'cassegrain': 0.7, 'ritchey-chretien': 0.7,

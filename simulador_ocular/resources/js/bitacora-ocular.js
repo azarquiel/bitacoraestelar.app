@@ -99,44 +99,15 @@
       // típico–óptimo para dejar claro que es una horquilla, no un valor exacto.
       var MARGEN_MAGLIM = 0.7;
 
-      // Transmisión según el tipo óptico (columna "Optics" del catálogo, en
-      // inglés). Refractor 0,9 y reflector (2 espejos, sin corrector) 0,7 siguen
-      // a Torres Lapasió; los catadióptricos, con lámina/menisco corrector y
-      // obstrucción central, pierden algo más (~0,65-0,68). La clave se compara
-      // en minúsculas; los tipos no listados usan el valor por defecto.
-      var TRANSMISION_OPTICA = {
-        'refractor':          0.9,
-        'newtonian':          0.7,
-        'cassegrain':         0.7,
-        'ritchey-chretien':   0.7,
-        'dall-kirkham':       0.7,
-        'schmidt-cassegrain': 0.65,
-        'mak-cassegrain':     0.65,
-        'schmidt-newtonian':  0.68,
-        'mak-newtonian':      0.68,
-        'schmidt camera':     0.65
-      };
-      function transmisionPorOptica(optica) {
-        if (!optica) return null;
-        var t = TRANSMISION_OPTICA[String(optica).trim().toLowerCase()];
-        return t != null ? t : null;
-      }
-      // Tipos ópticos cuyo secundario va sujeto por una ARAÑA de brazos → producen
-      // diffraction spikes. Los refractores no tienen obstrucción; los SC/Mak sujetan
-      // el secundario en la lámina/menisco (sin brazos) → sin spikes.
-      var OPTICA_ARANA = {
-        'newtonian': true, 'schmidt-newtonian': true, 'mak-newtonian': true,
-        'cassegrain': true, 'ritchey-chretien': true, 'dall-kirkham': true,
-        'refractor': false, 'schmidt-cassegrain': false, 'mak-cassegrain': false, 'schmidt camera': false
-      };
-      function opticaTieneArana(optica) {
-        return !!(optica && OPTICA_ARANA[String(optica).trim().toLowerCase()]);
-      }
+      // Transmisión y araña por tipo óptico (columna "Optics" del catálogo): las
+      // dos tablas viven en el módulo compartido BitacoraGaiaRender, que ya las
+      // necesita para pintar los spikes. Antes estaban copiadas aquí y había que
+      // sincronizarlas a mano al añadir un tipo de tubo.
       // ¿El telescopio seleccionado tiene araña? (manual: campo 'arana'; catálogo: por su óptica)
       function teleTieneArana() {
         if (!teleSel) return false;
         if (typeof teleSel.arana === 'boolean') return teleSel.arana;
-        return opticaTieneArana(teleSel.optica);
+        return window.BitacoraGaiaRender.opticaTieneArana(teleSel.optica);
       }
 
       /* El render de Gaia (ajustes, sprites, consulta y dibujo) vive en el módulo
@@ -337,7 +308,7 @@
         var t = TRANSMISION_TELE;
         if (teleSel) {
           if (num(teleSel.transmision) > 0) { t = num(teleSel.transmision); }
-          else { var tOpt = transmisionPorOptica(teleSel.optica); if (tOpt) { t = tOpt; } }
+          else { var tOpt = window.BitacoraGaiaRender.transmisionOptica(teleSel.optica); if (tOpt) { t = tOpt; } }
         }
         return t;
       }
