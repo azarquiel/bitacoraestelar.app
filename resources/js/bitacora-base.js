@@ -189,13 +189,22 @@ window.BitacoraBase = (function () {
     { ir: -5,  etiqueta: 'Algo transparente' },
     { ir: 0,   etiqueta: 'Pobre' }
   ];
-  // El ir de cada banda es el mínimo (más negativo) del rango; lista de más a
-  // menos transparente. ir < -20: Extremadamente; [-20,-15): Transparente; …;
-  // ir >= 0: Pobre. Más transparente que -30 se agrupa en la primera banda.
+  /* El IR del cielo es NEGATIVO y baja cuanto más transparente está: un −30 es
+     mejor cielo que un −3. El `ir` de cada banda es su extremo MENOS negativo (su
+     máximo), y la banda se lleva ese valor exacto —el que ofrece su opción del
+     desplegable, que tiene que volver a caer en ella—:
+       ir ≤ −30           Extremadamente transparente
+       −30 < ir ≤ −20     Transparente
+       −20 < ir ≤ −15     Mayoritariamente transparente
+       −15 < ir ≤ −5      Algo transparente
+       ir > −5            Pobre
+     Antes la comparación iba al revés (`ir >= banda.ir` recorriendo la lista de
+     atrás hacia delante), así que un cielo de −3 salía como «Algo transparente»
+     cuando es Pobre: con valores negativos, «mayor o igual» premia al peor cielo. */
   function transparenciaPorIr(ir) {
     if (isNaN(ir)) return null;
-    for (var i = TRANSPARENCIA.length - 1; i >= 0; i--) if (ir >= TRANSPARENCIA[i].ir) return TRANSPARENCIA[i];
-    return TRANSPARENCIA[0];
+    for (var i = 0; i < TRANSPARENCIA.length; i++) if (ir <= TRANSPARENCIA[i].ir) return TRANSPARENCIA[i];
+    return TRANSPARENCIA[TRANSPARENCIA.length - 1];   // por encima de −5: Pobre
   }
   function montarTransparencia(select, input) {
     if (select && !select._pob) {

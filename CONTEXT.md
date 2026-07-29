@@ -128,6 +128,24 @@ fallo que se ve pero no se explica:
   arco cae por debajo del píxel en pantalla, así que el que dice si se resuelve es
   el veredicto, no la imagen.
 
+## Cielo de la sesión (SQM e IR)
+
+Las dos medidas del cielo de una observación, con **escalas opuestas**, cada una con
+su tabla de bandas en `resources/js/bitacora-base.js`:
+
+- **SQM** (mag/arcsec²): positivo y **sube** con la oscuridad. `claseBortlePorSqm`;
+  el `sqm` de cada clase Bortle es el **mínimo** de su rango.
+- **IR** (ºC): negativo y **baja** cuanto más transparente está el cielo.
+  `transparenciaPorIr`; el `ir` de cada banda es su extremo **menos negativo**:
+  `ir > −5` Pobre · `−15 < ir ≤ −5` Algo transparente · `−20 < ir ≤ −15`
+  Mayoritariamente transparente · `−30 < ir ≤ −20` Transparente · `ir ≤ −30`
+  Extremadamente transparente.
+- **Invariante:** el valor que ofrece cada opción del desplegable tiene que volver a
+  caer en su propia banda, o el `<select>` y el `<input>` se desincronizan solos.
+- La comparación es distinta en las dos (`>=` en el SQM, `<=` en el IR) **a
+  propósito**: usar la del SQM en el IR fue el fallo —un cielo de −3 salía «Algo
+  transparente» cuando es Pobre—. Test: `scripts/test_cielo.js`.
+
 ## Cadena de la placa (luma → flujo)
 
 Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de objeto
