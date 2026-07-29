@@ -17,14 +17,15 @@
 
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
 
-     MODO PRUEBAS "Cualquier objeto" (RA/Dec o SIMBAD): apagado por defecto.
-     Para activarlo SOLO en tus pruebas, añade esta línea antes de los <script src>:
-         <script>window.BITACORA_OCULAR_LIBRE = true;</script>
-     Para desactivarlo (que no se use abiertamente), borra esa línea.
+     PESTAÑA "Cualquier objeto" (RA/Dec o SIMBAD): ENCENDIDA por defecto. Es la
+     única forma de apuntar a una galaxia, una nebulosa o un globular, que se
+     pintan como capa por campo y no tienen pestaña propia en el selector.
+     Para ocultarla, añade esta línea antes de los <script src>:
+         <script>window.BITACORA_OCULAR_LIBRE = false;</script>
      ============================================================ -->
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260720_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260727_1400" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260729_1600" />
 
 <!-- Filtro de respuesta del ojo según la pupila de salida (modo de reserva
      sin canvas): y = pendiente·x + desplazamiento. -->
@@ -109,7 +110,8 @@
           <input type="text" id="sim-obj-input" placeholder="— Escribe para buscar objeto —" aria-label="Objeto a observar" autocomplete="off">
           <div class="suggest" id="sim-obj-sugg"></div>
         </div>
-        <!-- Panel "Cualquier objeto" (modo pruebas; oculto salvo que el flag esté activo). -->
+        <!-- Panel "Cualquier objeto": nace oculto para que no parpadee antes de que
+             cargue el JS, que lo muestra al activarse la pestaña. -->
         <div class="obj-libre" id="sim-libre" hidden>
           <label class="field"><span class="lab">Nombre (busca en SIMBAD)</span>
             <input type="text" id="sim-libre-nombre" placeholder="NGC 6826, IC 1396, Barnard 33…" autocomplete="off"></label>
@@ -126,12 +128,6 @@
           <div class="obj-coord">—</div>
           <div class="obj-meta" id="sim-obj-meta" hidden></div>
         </div>
-        <label class="field"><span class="lab">Origen de imagen</span>
-          <select id="sim-origen">
-            <option value="hips">PanSTARRS DR1 (HiPS)</option>
-            <option value="dss">DSS (placas fotográficas)</option>
-            <option value="canvas-2d">Estrellas de Gaia DR3 (Canvas 2D)</option>
-          </select></label>
       </div>
 
       <div class="bloque">
@@ -161,6 +157,30 @@
         <img id="sim-img" crossorigin="anonymous" alt="Vista del objeto a través del ocular">
         <canvas id="sim-lienzo" aria-label="Vista del objeto"></canvas>
         <div class="cargando" id="sim-cargando">preparando el simulador…</div>
+      </div>
+
+      <!-- Barra "Capas y vista": va aquí, pegada a la imagen, y no en el lateral,
+           porque son decisiones sobre LO QUE SE VE. De paso aligera la columna
+           izquierda, que era muy densa. -->
+      <div class="capas" id="sim-capas">
+        <label class="capa-origen"><span class="lab">Origen</span>
+          <select id="sim-origen">
+            <option value="hips">PanSTARRS DR1 (HiPS)</option>
+            <option value="dss">DSS (placas fotográficas)</option>
+            <option value="canvas-2d">Estrellas de Gaia DR3 (Canvas 2D)</option>
+          </select></label>
+        <div class="capa-grupo" id="sim-capa-grupo">
+          <span class="capa-tit">Capas difusas</span>
+          <label class="capa" title="Luz sumada de las estrellas que el catálogo no trae, extrapolada de los conteos del propio campo">
+            <input type="checkbox" id="sim-capa-telon" checked> Vía Láctea difusa</label>
+          <label class="capa" title="Resplandor no resuelto del núcleo de los cúmulos, donde Gaia pierde estrellas por aglomeración">
+            <input type="checkbox" id="sim-capa-halo" checked> Halo de cúmulos</label>
+          <label class="capa" title="Galaxias del catálogo RC3 que caen en el campo, como perfil de Sérsic">
+            <input type="checkbox" id="sim-capa-galaxias" checked> Galaxias</label>
+          <label class="capa" title="Nebulosas del NGC/IC que caen en el campo, como mancha gaussiana de la luz y el tamaño de catálogo">
+            <input type="checkbox" id="sim-capa-nebulosas" checked> Nebulosas</label>
+        </div>
+        <p class="capa-nota" id="sim-capa-nota" hidden>Las capas difusas solo se aplican a la vista de Gaia: en las placas fotográficas ya vienen en la propia imagen.</p>
       </div>
 
       <div class="lecturas">
@@ -195,11 +215,13 @@
 
 </div>
 </div>
-<script>window.BITACORA_OCULAR_LIBRE = true;</script>
-<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260727_1400" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/estrellas-carbono-datos.js?v=20260721_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/estrellas-dobles-datos.js?v=20260723_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260721_2330" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260728_1300" defer></script>
+<script src="/wp-content/uploads/bitacora/globulares-datos.js?v=20260729_1600" defer></script>
+<script src="/wp-content/uploads/bitacora/galaxias-datos.js?v=20260729_1600" defer></script>
+<script src="/wp-content/uploads/bitacora/nebulosas-datos.js?v=20260729_1600" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260722_1500" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260728_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260729_1600" defer></script>

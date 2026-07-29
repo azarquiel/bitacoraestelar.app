@@ -80,6 +80,10 @@
       ];
 
       var DSS_MAX_ARCMIN = 120;
+      // Tope del Canvas-2D de Gaia: 6° de lado. No lo fija ningún servidor de
+      // placas, sino el radio de consulta del módulo compartido; cubre oculares de
+      // campo ancho y binoculares.
+      var GAIA_MAX_ARCMIN = 360;
       var AFOV_REF = 110;
       var PROC = 720;
 
@@ -153,27 +157,10 @@
       var corsFallo = false;
       var contadorPeticion = 0;
 
-      var FOT = {
-        SB_OBJ_MAX: 14.0, SB_OBJ_MIN: 24.0, SB_NEGRO: 25.5, SB_BLANCO: 14.0,
-        C_MIN: 0.08, C_EXP: 0.35, GAMMA_HIPS: 2.0,
-        // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo
-        // se pinta en función de su brillo superficial en el ocular (SBe, en
-        // mag/arcsec², atenuado por la pupila de salida). Por encima de
-        // SB_CIELO_NEGRO el fondo es negro total (contraste máximo, como bajo un
-        // cielo excepcional); por debajo se aclara linealmente en magnitudes
-        // (= logarítmicamente en flujo) hasta blanco en SB_CIELO_BLANCO.
-        SB_CIELO_NEGRO: 22.5, SB_CIELO_BLANCO: 16.5,
-        // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el
-        // lado brillante). 1 = simétrico → las nebulosas oscuras (Barnard) recortan
-        // su silueta contra el fondo brillante. Bajar si aparece ruido moteado.
-        REALCE_OSCURO: 1.0
-      };
-
-      // Nivel de gris del fondo (0–255) para un brillo de cielo en el ocular SBe.
-      function nivelCielo(SBe) {
-        var t = (FOT.SB_CIELO_NEGRO - SBe) / (FOT.SB_CIELO_NEGRO - FOT.SB_CIELO_BLANCO);
-        return Math.max(0, Math.min(255, 255 * t));
-      }
+      /* Curvas de la fotometría. Viven en el módulo compartido (fuente única con
+         el formulario de registro); esto es solo el alias para poder seguir
+         escribiendo FOT.X aquí y para que sigan siendo editables en un sitio. */
+      var FOT = window.BitacoraGaiaRender.fot;
 
       /* ══════════════════ CATÁLOGO DE EQUIPO ══════════════════ */
       function num(v) { if (v == null || v === '') return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
@@ -354,20 +341,46 @@
         }
         return t;
       }
+
+      /* Estado de los interruptores de la barra "Capas y vista". Las capas
+         difusas se calculan SOLO en el Canvas-2D de Gaia: en las placas del DSS o
+         PanSTARRS esa luz ya viene en la propia imagen, y sumarla otra vez la
+         contaría dos veces y encima a peor resolución. */
+      function capasActivas() {
+        function on(id) { var el = $(id); return !el || el.checked; }
+        return {
+          conTelon: on('sim-capa-telon'),
+          conHalo: on('sim-capa-halo'),
+          conGalaxias: on('sim-capa-galaxias'),
+          conNebulosas: on('sim-capa-nebulosas')
+        };
+      }
+
+      // Habilita o deshabilita el grupo de capas según el origen activo.
+      function sincronizarCapas() {
+        var esGaia = $('sim-origen').value === 'canvas-2d';
+        var grupo = $('sim-capa-grupo'), nota = $('sim-capa-nota');
+        if (grupo) grupo.classList.toggle('esta-off', !esGaia);
+        if (nota) nota.hidden = esGaia;
+      }
+
+      /* Estado de cielo + óptica que espera el módulo compartido. Único punto de
+         este fichero que lee el DOM para la fotometría; de aquí para dentro todo
+         es parámetro. */
+      function cieloOptica(pupila) {
+        return {
+          pupilaSalida: pupila, pupilaOjo: pupilaOjo(),
+          sqm: parseFloat($('sim-sqm').value) || 21, transmision: transmisionEfectiva(),
+          aumentos: datosOcular().aumentos
+        };
+      }
+      // Delegada en el módulo compartido (incluye el recorte de apertura efectiva).
       function magLimiteTelescopio() {
-        var D = teleApertura(), MAG = datosOcular().aumentos;
-        var t = transmisionEfectiva();
-        if (!(D > 0) || !(MAG > 0)) return null;
-        var sqm = parseFloat($('sim-sqm').value) || 21;
-        var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
-        SB0T = Math.max(sqm, Math.min(27, SB0T));
-        // Apertura efectiva: si la pupila de salida (d_ep = D/MAG) supera la del
-        // ojo, el ojo recorta el haz y se desperdicia apertura → D_eff = D·min(1,
-        // d_eye/d_ep). Solo en la captación de luz (D²); el término de cielo SB0T
-        // conserva su propio clamp (min(1,dim)) en el render, sin doble recorte.
-        var dEp = D / MAG, dEye = pupilaOjo();
-        var Deff = D * Math.min(1, dEye / dEp);
-        return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(Deff * Deff * t);
+        return BitacoraGaiaRender.magLimite({
+          apertura: teleApertura(), aumentos: datosOcular().aumentos,
+          transmision: transmisionEfectiva(), sqm: parseFloat($('sim-sqm').value) || 21,
+          pupilaOjo: pupilaOjo()
+        });
       }
 
       /* ══════════════════ RENDER CENTRALIZADO ══════════════════ */
@@ -416,19 +429,25 @@
         $('sim-v-maglim').innerHTML = (magOpt == null ? '—'
           : (magOpt - MARGEN_MAGLIM).toFixed(1) + '–' + magOpt.toFixed(1) + '<em>m</em>');
 
-        // Recorte del cielo: lado = campo real, limitado por el servidor.
+        var origen = $('sim-origen').value;
+        sincronizarCapas();
+
+        /* Recorte del cielo: lado = campo real, limitado por el origen. El tope de
+           2° es de las PLACAS (el servidor del DSS no sirve más); el Canvas-2D de
+           Gaia es un catálogo y llega mucho más lejos, así que no tiene por qué
+           heredarlo. */
+        var maxArcmin = (origen === 'canvas-2d') ? GAIA_MAX_ARCMIN : DSS_MAX_ARCMIN;
         var arcmin = d.campoReal * 60;
-        if (arcmin > DSS_MAX_ARCMIN) {
-          aviso.textContent = 'El campo real (' + (arcmin / 60).toFixed(2) + '°) supera el máximo (2°): la imagen se recorta a 2°.';
-          arcmin = DSS_MAX_ARCMIN;
+        if (arcmin > maxArcmin) {
+          aviso.textContent = 'El campo real (' + (arcmin / 60).toFixed(2) + '°) supera el máximo de este origen (' +
+            (maxArcmin / 60).toFixed(0) + '°): la imagen se recorta.';
+          arcmin = maxArcmin;
         } else {
           aviso.textContent = '';
         }
         if (d.pupila > pOjo && !aviso.textContent) {
           aviso.textContent = 'Pupila de salida (' + d.pupila.toFixed(1) + ' mm) mayor que la del ojo (' + pOjo + ' mm): parte de la luz se desperdicia.';
         }
-
-        var origen = $('sim-origen').value;
         var ra = objetoSel.ra, dec = objetoSel.dec;
         cargando.style.display = 'flex';
         cargando.textContent = 'solicitando imagen…';
@@ -476,12 +495,7 @@
          magnitudes entre SB_NEGRO (negro) y SB_BLANCO (blanco). Así el fondo del
          Canvas 2D coincide con el de las vistas DSS/PanSTARRS. */
       function nivelFondoCielo(pupila) {
-        var pOjo = pupilaOjo(), pEf = Math.min(pupila, pOjo);
-        var sqm = parseFloat($('sim-sqm').value) || 21;
-        var dim = Math.pow(pEf / pOjo, 2);
-        // SBe = brillo del cielo en el ocular (más alto = más oscuro): el SQM
-        // atenuado por la pupila de salida (por eso a más aumentos, más oscuro).
-        return Math.round(nivelCielo(sqm - 2.5 * Math.log10(dim)));
+        return BitacoraGaiaRender.nivelFondo(cieloOptica(pupila));
       }
 
       /* ══════════════════ MODO ESTRELLAS DE GAIA (CANVAS 2D) ══════════════════
@@ -510,8 +524,34 @@
         consultarGaia(ra0, dec0, arcmin).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
-          ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
-          dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, true, !!objetoSel.carbono);   // Canvas 2D: con glow de estrellas no resueltas
+          // Capas difusas: telón (luz de las estrellas que el catálogo no trae,
+          // extrapolada de los propios conteos) y halo no resuelto (el déficit que
+          // la aglomeración le roba al telón en los núcleos densos). Pintan también
+          // el fondo de cielo, así que sustituyen al relleno gris cuando las hay.
+          /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
+             del equipo, faltan estrellas que SÍ se verían. Pasa en campos ricos y
+             muy anchos. Se avisa en vez de mostrar un campo pobre sin explicación. */
+          var mcorte = -Infinity;
+          for (var e = 0; e < estrellas.length; e++) if (estrellas[e][2] > mcorte) mcorte = estrellas[e][2];
+          if (mlim != null && isFinite(mcorte) && mcorte < mlim - 0.1) {
+            $('sim-aviso').textContent = 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
+              ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
+          }
+          /* Capas difusas y estrellas se mapean JUNTAS, en una sola curva de tono.
+             Si las estrellas se dibujaran encima en 8 bits se saltarían la curva,
+             y en un núcleo denso la suma de sprites se recorta a blanco: la mancha
+             saturada sin estrellas distinguibles. */
+          var opcCapas = capasActivas();
+          opcCapas.ra = ra0; opcCapas.dec = dec0; opcCapas.arcmin = arcmin; opcCapas.size = PROC;
+          var difuso = BitacoraGaiaRender.capasDifusas(estrellas, opcCapas)
+            || new Float32Array(PROC * PROC);
+          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellas, {
+            ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim,
+            conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana()
+          }, PROC);
+          var cieloGaia = cieloOptica(datosOcular().pupila);
+          cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
+          BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el
@@ -534,38 +574,32 @@
         var v = new Float32Array(PROC * PROC); for (var i = 0, j = 0; j < v.length; i += 4, j++) v[j] = (dd[i] + dd[i + 1] + dd[i + 2]) / 3; return v;
       }
 
-      var suave = function (x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+      var suave = BitacoraGaiaRender.suave;
       function fusionar(vd, vs) { var sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0, i; for (i = 0; i < vd.length; i++) { if (vd[i] >= 120 && vd[i] <= 215 && vs[i] > 8) { sx += vs[i]; sy += vd[i]; sxx += vs[i] * vs[i]; sxy += vs[i] * vd[i]; n++; } } if (n < 500) return vd; var a = (n * sxy - sx * sy) / (n * sxx - sx * sx); var b = (sy - a * sx) / n; if (!(a > 0)) return vd; var out = new Float32Array(vd.length); for (i = 0; i < vd.length; i++) { var t = suave((vd[i] - 210) / 40); out[i] = (1 - t) * vd[i] + t * Math.max(vd[i], a * vs[i] + b); } return out; }
-      function desenfocar(v, radio) { var c = document.createElement('canvas'); c.width = c.height = PROC; var ctx = c.getContext('2d'); var im = ctx.createImageData(PROC, PROC); var i, j; for (i = 0, j = 0; j < v.length; i += 4, j++) { var o = Math.max(0, Math.min(255, v[j])); im.data[i] = im.data[i + 1] = im.data[i + 2] = o; im.data[i + 3] = 255; } ctx.putImageData(im, 0, 0); var c2 = document.createElement('canvas'); c2.width = c2.height = PROC; var ctx2 = c2.getContext('2d', { willReadFrequently: true }); ctx2.filter = 'blur(' + radio + 'px)'; ctx2.drawImage(c, 0, 0); var dd = ctx2.getImageData(0, 0, PROC, PROC).data; var out = new Float32Array(v.length); for (i = 0, j = 0; j < v.length; i += 4, j++) out[j] = dd[i]; return out; }
+      function desenfocar(v, radio) { return BitacoraGaiaRender.desenfocar(v, radio, PROC); }
       function repararNucleos(v) { var entorno = desenfocar(v, 4); for (var i = 0; i < v.length; i++) { if (entorno[i] > 140 && v[i] < 0.5 * entorno[i]) v[i] = Math.min(300, entorno[i] * 1.25); } return v; }
-      function adaptacionLocal(v) { var borroso = desenfocar(v, Math.round(PROC / 60)); var out = new Float32Array(v.length); var REALCE = 0.5, UMBRAL_DETALLE = 12; for (var j = 0; j < v.length; j++) { var dif = v[j] - borroso[j]; var mag = Math.abs(dif) - UMBRAL_DETALLE; var gan = dif >= 0 ? REALCE : REALCE * FOT.REALCE_OSCURO; out[j] = v[j] + (mag > 0 ? gan * Math.sign(dif) * mag : 0); } return out; }
+
+      /* Pinta el lienzo a partir de un array de FLUJO DE OBJETO por píxel. La
+         cadena (contraste sobre el cielo + adaptación local) vive en el módulo
+         compartido; aquí solo se dimensiona el lienzo y se lee el DOM.
+         El término de pupila lo aplica ctxFotometrico allí dentro: este Fobj NO
+         debe traerlo ya aplicado o se contaría dos veces. */
+      function pintarFot(Fobj, canvas, p) {
+        canvas.width = canvas.height = PROC;
+        return BitacoraGaiaRender.pintarFot(Fobj, canvas.getContext('2d'), cieloOptica(p));
+      }
 
       function procesarFotometrico(profunda, corta, canvas, p) {
         var vd = lumas(profunda); if (!vd) return false; var v = vd; if (corta) { var vs = lumas(corta); if (vs) v = fusionar(vd, vs); }
         var esHips = $('sim-origen').value === 'hips'; if (esHips) v = repararNucleos(v);
-        var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var sqm = parseFloat($('sim-sqm').value) || 21; var dim = Math.pow(pEf / pOjo, 2); var Fcielo = Math.pow(10, -0.4 * sqm); var rango = FOT.SB_NEGRO - FOT.SB_BLANCO;
-        var Fref = Math.pow(10, -0.4 * 21); var Cmin = FOT.C_MIN * Math.pow(Fref / (Fcielo * dim), FOT.C_EXP);
-        // El fondo de cielo se pinta con la curva empinada nivelCielo() (puede ir
-        // a negro bajo cielos oscuros); el objeto se suma encima como INCREMENTO
-        // de contraste sobre el cielo (Δmag = 2,5·log10(1 + Fobj·s / Fcielo)), que
-        // se conserva intacto. Así, cielo oscuro → fondo negro y objeto pleno
-        // (contraste brutal); cielo claro → fondo gris y menos incremento (lavado).
-        // El fondo se atenúa también por la transmisión del tubo (antes se omitía).
-        // Como el objeto se pinta nivelFondo + incremento, esto oscurece fondo y
-        // objeto por igual: conserva el contraste y baja un poco el suelo.
-        var T = transmisionEfectiva();
-        var nivelFondo = nivelCielo(sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T));
-        var salida = new Float32Array(v.length);
+        // Flujo del objeto a partir de la luma 8-bit (heurístico: luma → brillo
+        // superficial entre SB_OBJ_MIN y SB_OBJ_MAX). No es fotometría calibrada.
+        var Fobj = new Float32Array(v.length);
         for (var i = 0; i < v.length; i++) {
-          var Fobj = 0, vi = v[i];
-          if (vi > 0) { if (esHips) vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS); var sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX); Fobj = Math.pow(10, -0.4 * sb); }
-          var s = suave((Fobj / (Fcielo * Cmin) - 1) / 1.5);
-          salida[i] = nivelFondo + 255 * 2.5 * Math.log10(1 + (Fobj * s) / Fcielo) / rango;
+          var vi = v[i];
+          if (vi > 0) { if (esHips) vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS); var sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX); Fobj[i] = Math.pow(10, -0.4 * sb); }
         }
-        var final = adaptacionLocal(salida);   // adaptación local del ojo: siempre activa
-        canvas.width = canvas.height = PROC; var ctx = canvas.getContext('2d'); var im = ctx.createImageData(PROC, PROC);
-        for (var k = 0, j = 0; j < final.length; k += 4, j++) { var o = Math.max(0, Math.min(255, final[j])); im.data[k] = im.data[k + 1] = im.data[k + 2] = o; im.data[k + 3] = 255; }
-        ctx.putImageData(im, 0, 0); return true;
+        return pintarFot(Fobj, canvas, p);
       }
 
       function renderizar(profunda, corta, urlRespaldo) {
@@ -704,11 +738,12 @@
       }
 
       /* ══════════════════ MODO "CUALQUIER OBJETO" ══════════════════
-         Herramienta de pruebas: apuntar a RA/Dec arbitrarias o buscar por nombre
-         en SIMBAD. Va detrás del flag window.BITACORA_OCULAR_LIBRE (apagado por
-         defecto): sin él, la 4ª pestaña ni aparece ni se cablea. El objeto libre
-         se pinta con carbono:true y doble:false fijos (la clasificación real
-         vendrá en el futuro). */
+         Apuntar a RA/Dec arbitrarias o buscar por nombre en SIMBAD. Ahora viene
+         ENCENDIDO: sin él no hay forma de apuntar a una galaxia o a un globular,
+         que se pintan como capa por campo y no tienen pestaña propia en el
+         selector. Para ocultarlo, window.BITACORA_OCULAR_LIBRE = false.
+         El objeto libre se pinta con carbono:true y doble:false fijos (la
+         clasificación real vendrá en el futuro). */
       function pad2(n) { return (n < 10 ? '0' : '') + n; }
       // Grados -> sexagesimal PLANO ("HH MM SS" / "±DD MM SS"), que es lo que
       // consume sexToDeg() (el formato "21h 40m 22s" de formatRA NO vale aquí).
@@ -732,7 +767,14 @@
         libreEstado('✓ ' + o.nombre + '  ·  AR ' + o.ra + '  ·  Dec ' + o.dec, 'ok');
         elegirObjeto(o);
       }
-      // Búsqueda por nombre en SIMBAD (reutiliza /coordenadas, solo con sesión).
+      /* Búsqueda por nombre contra el resolvedor Sesame del CDS, directa desde el
+         navegador. Antes iba por el endpoint /coordenadas de WordPress, que exige
+         nonce de sesión: en la página pública —que es donde vive el simulador— la
+         pestaña salía visible y la búsqueda contestaba siempre «inicia sesión».
+         Sesame sirve `Access-Control-Allow-Origin: *`, así que no necesita proxy,
+         y además resuelve los alias por su cuenta: «M3», «Messier 3», «NGC 6826»
+         y «Barnard 33» caen todos donde deben sin canonicalizar nada. */
+      var SESAME_URL = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?';
       var simbadTimer = null, simbadUltimo = '';
       function programarSimbad() {
         var q = $('sim-libre-nombre').value.trim();
@@ -740,25 +782,17 @@
         if (q.length < 2) return;
         simbadTimer = setTimeout(function () { buscarSimbad(q); }, 700);
       }
-      // SIMBAD identifica Messier como "M 3" (con espacio); "M3"/"M03"/"Messier 3"
-      // no resuelven. Canonicaliza a "M <n>" antes de consultar.
-      function normalizarSimbad(q) {
-        var m = q.match(/^(?:M|Messier)\s*0*(\d+)$/i);
-        return m ? 'M ' + m[1] : q;
-      }
       function buscarSimbad(q) {
-        if (!WP) { libreEstado('Inicia sesión para buscar por nombre en SIMBAD. Puedes introducir RA/Dec a mano.'); return; }
-        q = normalizarSimbad(q);
         if (q === simbadUltimo) return; simbadUltimo = q;
         libreEstado('Buscando «' + q + '» en SIMBAD…');
-        var url = WP.endpoint.replace(/observaciones\/?$/, 'coordenadas') + '?q=' + encodeURIComponent(q);
-        fetch(url, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
-          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-          .then(function (res) {
-            if (res.ok && res.data && typeof res.data.ra === 'number') {
-              $('sim-libre-ra').value = BitacoraBase.formatRA(res.data.ra);
-              $('sim-libre-dec').value = BitacoraBase.formatDec(res.data.dec);
-              fijarObjetoLibre(q, res.data.otype || '');
+        fetch(SESAME_URL + encodeURIComponent(q))
+          .then(function (r) { return r.text(); })
+          .then(function (txt) {
+            var d = BitacoraBase.leerSesame(txt);
+            if (d) {
+              $('sim-libre-ra').value = BitacoraBase.formatRA(d.ra);
+              $('sim-libre-dec').value = BitacoraBase.formatDec(d.dec);
+              fijarObjetoLibre(q, d.otype);
             } else { libreEstado('«' + q + '» no está en SIMBAD. Introduce su RA y Dec a mano.'); }
           })
           .catch(function () { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); });
@@ -766,7 +800,6 @@
       function montarObjetoLibre() {
         var nom = $('sim-libre-nombre');
         if (nom) nom.addEventListener('input', programarSimbad);
-        if (!WP && nom) nom.placeholder = '— Inicia sesión para buscar en SIMBAD —';
         ['sim-libre-ra', 'sim-libre-dec'].forEach(function (id) {
           var el = $(id); if (el) el.addEventListener('change', function () { fijarObjetoLibre($('sim-libre-nombre').value.trim(), ''); });
         });
@@ -792,8 +825,8 @@
           sinResultados: 'Sin coincidencias en esta lista',
           onElegir: function (o) { input.value = ''; elegirObjeto(o); }
         });
-        // 4ª pestaña "Cualquier objeto": solo si el flag de pruebas está activo.
-        var libreOn = !!window.BITACORA_OCULAR_LIBRE;
+        // 4ª pestaña "Cualquier objeto": encendida salvo que se apague a mano.
+        var libreOn = (window.BITACORA_OCULAR_LIBRE !== false);
         var tabLibre = $('sim-tab-libre'), panelLibre = $('sim-libre');
         if (tabLibre) tabLibre.hidden = !libreOn;
         if (panelLibre) panelLibre.hidden = true;
@@ -823,6 +856,9 @@
       if (window.BitacoraBase && $('sim-bortle') && $('sim-sqm')) BitacoraBase.montarCielo($('sim-bortle'), $('sim-sqm'));
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
       $('sim-origen').addEventListener('change', actualizar);
+      ['sim-capa-telon', 'sim-capa-halo', 'sim-capa-galaxias'].forEach(function (id) {
+        var el = $(id); if (el) el.addEventListener('change', actualizar);
+      });
       window.addEventListener('resize', function () { actualizar(); });
       montarTeleManual();
       montarSelectorObjeto();
