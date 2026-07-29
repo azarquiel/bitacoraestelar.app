@@ -27,56 +27,12 @@
     var WP = window.BITACORA_WP || null;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ASTRONOMÍA DE POSICIÓN (algoritmos de Meeus, sin dependencias)
+    // ASTRONOMÍA DE POSICIÓN
     // ═══════════════════════════════════════════════════════════════════════
-    var D2R = Math.PI / 180, R2D = 180 / Math.PI;
-    function rev(x) { return ((x % 360) + 360) % 360; }
-    function julianDay(date) {
-      var Y = date.getUTCFullYear(), M = date.getUTCMonth() + 1,
-          D = date.getUTCDate() + (date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600) / 24;
-      if (M <= 2) { Y -= 1; M += 12; }
-      var A = Math.floor(Y / 100), B = 2 - A + Math.floor(A / 4);
-      return Math.floor(365.25 * (Y + 4716)) + Math.floor(30.6001 * (M + 1)) + D + B - 1524.5;
-    }
-    function sunPos(jd) {
-      var T = (jd - 2451545) / 36525;
-      var L0 = rev(280.46646 + 36000.76983 * T + 0.0003032 * T * T);
-      var M = rev(357.52911 + 35999.05029 * T - 0.0001537 * T * T) * D2R;
-      var C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(M) + (0.019993 - 0.000101 * T) * Math.sin(2 * M) + 0.000289 * Math.sin(3 * M);
-      var tl = (L0 + C) * D2R, eps = (23.439291 - 0.0130042 * T) * D2R;
-      return { ra: rev(Math.atan2(Math.cos(eps) * Math.sin(tl), Math.cos(tl)) * R2D),
-               dec: Math.asin(Math.sin(eps) * Math.sin(tl)) * R2D };
-    }
-    function moonPos(jd) {
-      var T = (jd - 2451545) / 36525;
-      var Lp = rev(218.3164477 + 481267.88123421 * T),
-          D = rev(297.8501921 + 445267.1114034 * T) * D2R,
-          M = rev(357.5291092 + 35999.0502909 * T) * D2R,
-          Mp = rev(134.9633964 + 477198.8675055 * T) * D2R,
-          F = rev(93.272095 + 483202.0175233 * T) * D2R;
-      var lon = Lp + (6.288774 * Math.sin(Mp) + 1.274027 * Math.sin(2 * D - Mp) + 0.658314 * Math.sin(2 * D)
-                + 0.213618 * Math.sin(2 * Mp) - 0.185116 * Math.sin(M) - 0.114332 * Math.sin(2 * F));
-      var lat = (5.128122 * Math.sin(F) + 0.280602 * Math.sin(Mp + F) + 0.277693 * Math.sin(Mp - F)
-                + 0.173237 * Math.sin(2 * D - F) + 0.055413 * Math.sin(2 * D + F - Mp));
-      lon = rev(lon) * D2R; lat = lat * D2R; var eps = (23.439291 - 0.0130042 * T) * D2R;
-      return { ra: rev(Math.atan2(Math.sin(lon) * Math.cos(eps) - Math.tan(lat) * Math.sin(eps), Math.cos(lon)) * R2D),
-               dec: Math.asin(Math.sin(lat) * Math.cos(eps) + Math.cos(lat) * Math.sin(eps) * Math.sin(lon)) * R2D };
-    }
-    function gmst(jd) {
-      var T = (jd - 2451545) / 36525;
-      return rev(280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T - T * T * T / 38710000);
-    }
-    function altAz(ra, dec, jd, lat, lon) {
-      var lst = rev(gmst(jd) + lon), H = rev(lst - ra) * D2R;
-      var la = lat * D2R, de = dec * D2R;
-      var alt = Math.asin(Math.sin(la) * Math.sin(de) + Math.cos(la) * Math.cos(de) * Math.cos(H));
-      var az = Math.atan2(-Math.cos(de) * Math.sin(H), Math.sin(de) * Math.cos(la) - Math.cos(de) * Math.sin(la) * Math.cos(H));
-      return { alt: alt * R2D, az: rev(az * R2D) };
-    }
-    function refract(alt) {
-      if (alt < -1) return alt;
-      return alt + (1 / 60) * (1.02 / Math.tan((alt + 10.3 / (alt + 5.11)) * D2R));
-    }
+    // Los algoritmos de Meeus y la conversión de hora local de la base a UTC
+    // viven en BitacoraAstro (bitacora-astro.js), fuente única con el formulario
+    // de registro: la altura que se guarda al registrar y la que se recalcula
+    // aquí salen del mismo código. Test: scripts/test_astro.js.
 
     // ═══════════════════════════════════════════════════════════════════════
     // DOM Y ESTADO
@@ -94,24 +50,6 @@
     // se calcula ni se guarda la ficha.
     var listaBases = [], baseSel = null, basePendiente = null;
 
-    // ── Zona horaria: hora local de la base → instante UTC (sin librería) ──
-    function offsetMsTz(tz, utcMs) {
-      try {
-        var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false,
-          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        var p = dtf.formatToParts(new Date(utcMs)).reduce(function (a, x) { a[x.type] = x.value; return a; }, {});
-        var comoUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
-        return comoUtc - utcMs;
-      } catch (_e) { return 0; }
-    }
-    // whenVal 'YYYY-MM-DDTHH:MM' interpretado como hora de pared en la TZ de la base.
-    function localAUtc(whenVal, tz) {
-      var m = whenVal.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-      if (!m) return new Date(whenVal);
-      var guess = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
-      if (!tz) return new Date(guess);
-      return new Date(guess - offsetMsTz(tz, guess));
-    }
     function escOpt(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function basePorId(id) { for (var i = 0; i < listaBases.length; i++) { if (String(listaBases[i].id) === String(id)) return listaBases[i]; } return null; }
 
@@ -183,11 +121,13 @@
         return;
       }
       var la = parseFloat(baseSel.lat), lo = parseFloat(baseSel.lon);
-      var date = localAUtc(whenVal, baseSel.tz || ''), jd = julianDay(date);
-      var obj = altAz(OBS.ra, OBS.dec, jd, la, lo);
-      var s = sunPos(jd), sun = altAz(s.ra, s.dec, jd, la, lo);
-      var m = moonPos(jd), moon = altAz(m.ra, m.dec, jd, la, lo);
-      var objAltR = refract(obj.alt);
+      var p = BitacoraAstro.posiciones({
+        fechaHoraLocal: whenVal, tz: baseSel.tz || '',
+        lat: la, lon: lo, ra: OBS.ra, dec: OBS.dec
+      });
+      if (!p) return;
+      var obj = p.objeto, sun = p.sol, moon = p.luna;
+      var objAltR = obj.alt;   // ya viene refractada; el Sol y la Luna, geométricos
 
       $('compTitle').textContent = OBS.etiqueta;
       $('compSub').textContent = 'Posición calculada para ' + escOpt(baseSel.nombre) + ' (' + escOpt(baseSel.tz || 'TZ del navegador') + ').';
@@ -208,7 +148,7 @@
       lastComputed = {
         baseId: baseSel.id,
         ra: OBS.ra, dec: OBS.dec,
-        fechaHoraLocal: whenVal, fechaHoraUTC: date.toISOString(),
+        fechaHoraLocal: whenVal, fechaHoraUTC: p.utc,
         lat: la, lon: lo,
         objAlt: +objAltR.toFixed(2), objAz: +obj.az.toFixed(2),
         sunAlt: +sun.alt.toFixed(2), moonAlt: +moon.alt.toFixed(2),

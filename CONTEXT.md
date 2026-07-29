@@ -69,6 +69,34 @@ y por **Mi flota**, sin DOM ni WordPress.
   en la lista de Mi flota y en el selector del simulador.
 - **Test:** `scripts/test_equipo.js` fija el contrato de ambos.
 
+## Astrometría de la sesión
+
+La altura y el azimut que se registran de una observación: los del **objeto**, los
+del **Sol** y los de la **Luna**, calculados para una [[base]] (lat/lon/huso) y un
+instante de hora local con los algoritmos de Meeus.
+
+- **Fuente única:** `resources/js/bitacora-astro.js`, global `window.BitacoraAstro`
+  (+ `module.exports` para node), URL canónica en `/wp-content/uploads/bitacora/`.
+- **Interfaz:** `posiciones({fechaHoraLocal, tz, lat, lon, ra, dec})` →
+  `{utc, objeto:{alt,az}, sol:{alt,az}, luna:{alt,az}}`, o `null` si falta cualquier
+  dato imprescindible (sin base, sin fecha, sin coordenadas): el llamador no valida
+  nada más. `fechaHoraLocal` es hora de PARED en la base; el huso IANA la convierte
+  a UTC sin librerías.
+- **Consumidores:** el formulario de registro (`bitacora-formulario.js`, que siembra
+  la ficha al registrar) y el formulario de datos de ficha (`bitacora-ficha.js`, que
+  la recalcula al editarla).
+- **Convención de refracción:** solo el **objeto** lleva refracción (Bennett), porque
+  su altura describe lo que el observador vio. El Sol y la Luna salen **geométricos**,
+  porque los umbrales de crepúsculo (−6°, −12°, −18°) se definen sobre la altura
+  geométrica del centro del Sol.
+- **Invariante:** la altura que guarda el registro y la que recalcula la ficha son el
+  mismo número. Garantizado estructuralmente (una sola fuente), no por copiar y pegar:
+  antes había dos copias byte a byte que YA habían divergido —el formulario refractaba
+  el Sol y la Luna y la ficha no—, así que abrir la ficha cambiaba el dato guardado.
+  El test `scripts/test_astro.js` fija el contrato contra invariantes físicos (el polo
+  celeste a la altura de la latitud, la declinación solar en solsticio y equinoccio,
+  el convenio de azimut y los husos con y sin horario de verano).
+
 ## Nombre del observador (mapa)
 
 Resolución **clave → nombre legible** de un observador, sobre el catálogo
