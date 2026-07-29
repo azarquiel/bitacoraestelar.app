@@ -142,59 +142,14 @@
     110:{n:'',ra:10.0919,de:41.6853,c:'And'}
   };
   // ═══════════════════════════════════════════════════════════════════════
-  // ASTRONOMÍA DE POSICIÓN (algoritmos de Meeus, sin dependencias externas)
+  // ASTRONOMÍA DE POSICIÓN
   // ═══════════════════════════════════════════════════════════════════════
-  var D2R=Math.PI/180, R2D=180/Math.PI;
+  // Los algoritmos de Meeus (día juliano, Sol, Luna, alt/az, refracción) y la
+  // conversión de hora local de la base a UTC viven en BitacoraAstro
+  // (bitacora-astro.js), fuente única con el formulario de la ficha. Antes
+  // estaban duplicados aquí y allí, y las dos copias habían divergido en la
+  // refracción del Sol y la Luna. Test: scripts/test_astro.js.
   function rev(x){ return ((x%360)+360)%360; }
-
-  function julianDay(date){ // date = objeto Date (en UTC)
-    var Y=date.getUTCFullYear(), M=date.getUTCMonth()+1,
-        D=date.getUTCDate()+(date.getUTCHours()+date.getUTCMinutes()/60+date.getUTCSeconds()/3600)/24;
-    if(M<=2){Y-=1;M+=12;}
-    var A=Math.floor(Y/100), B=2-A+Math.floor(A/4);
-    return Math.floor(365.25*(Y+4716))+Math.floor(30.6001*(M+1))+D+B-1524.5;
-  }
-  function sunPos(jd){
-    var T=(jd-2451545)/36525;
-    var L0=rev(280.46646+36000.76983*T+0.0003032*T*T);
-    var M=rev(357.52911+35999.05029*T-0.0001537*T*T)*D2R;
-    var C=(1.914602-0.004817*T-0.000014*T*T)*Math.sin(M)+(0.019993-0.000101*T)*Math.sin(2*M)+0.000289*Math.sin(3*M);
-    var tl=(L0+C)*D2R, eps=(23.439291-0.0130042*T)*D2R;
-    return { ra:rev(Math.atan2(Math.cos(eps)*Math.sin(tl),Math.cos(tl))*R2D),
-             dec:Math.asin(Math.sin(eps)*Math.sin(tl))*R2D };
-  }
-  function moonPos(jd){
-    var T=(jd-2451545)/36525;
-    var Lp=rev(218.3164477+481267.88123421*T),
-        D=rev(297.8501921+445267.1114034*T)*D2R,
-        M=rev(357.5291092+35999.0502909*T)*D2R,
-        Mp=rev(134.9633964+477198.8675055*T)*D2R,
-        F=rev(93.272095+483202.0175233*T)*D2R;
-    var lon=Lp+(6.288774*Math.sin(Mp)+1.274027*Math.sin(2*D-Mp)+0.658314*Math.sin(2*D)
-              +0.213618*Math.sin(2*Mp)-0.185116*Math.sin(M)-0.114332*Math.sin(2*F));
-    var lat=(5.128122*Math.sin(F)+0.280602*Math.sin(Mp+F)+0.277693*Math.sin(Mp-F)
-            +0.173237*Math.sin(2*D-F)+0.055413*Math.sin(2*D+F-Mp));
-    lon=rev(lon)*D2R; lat=lat*D2R; var eps=(23.439291-0.0130042*T)*D2R;
-    return { ra:rev(Math.atan2(Math.sin(lon)*Math.cos(eps)-Math.tan(lat)*Math.sin(eps),Math.cos(lon))*R2D),
-             dec:Math.asin(Math.sin(lat)*Math.cos(eps)+Math.cos(lat)*Math.sin(eps)*Math.sin(lon))*R2D };
-  }
-  function gmst(jd){
-    var T=(jd-2451545)/36525;
-    return rev(280.46061837+360.98564736629*(jd-2451545)+0.000387933*T*T-T*T*T/38710000);
-  }
-  // Devuelve {alt, az} en grados. az medido desde el Norte hacia el Este.
-  function altAz(ra,dec,jd,lat,lon){
-    var lst=rev(gmst(jd)+lon), H=rev(lst-ra)*D2R;
-    var la=lat*D2R, de=dec*D2R;
-    var alt=Math.asin(Math.sin(la)*Math.sin(de)+Math.cos(la)*Math.cos(de)*Math.cos(H));
-    var az=Math.atan2(-Math.cos(de)*Math.sin(H), Math.sin(de)*Math.cos(la)-Math.cos(de)*Math.sin(la)*Math.cos(H));
-    return { alt:alt*R2D, az:rev(az*R2D) };
-  }
-  // Refracción atmosférica aproximada (Bennett) para altitudes ≳ -1°
-  function refract(alt){
-    if(alt<-1) return alt;
-    return alt + (1/60)*(1.02/Math.tan((alt+10.3/(alt+5.11))*D2R));
-  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // PARSERS DE COORDENADAS Y NOMBRE DE OBJETO
@@ -285,51 +240,37 @@
       setStatus(objStatus,'info','“'+txt+'” no es Messier. Introduce su RA y Dec para poder calcular su posición.');
       // Autocompletado: si las cajetillas están vacías, se buscan sus RA/Dec en
       // SIMBAD (con una pequeña espera para no consultar en cada tecla).
-      programarBusquedaCoords(txt);
+      resolutorCoords.programar(txt);
     }
     recompute();
   }
 
   // ── Autocompletado de RA/Dec desde SIMBAD (para objetos no-Messier) ──
-  // Se apoya en el endpoint /coordenadas del plugin (el navegador no puede
-  // consultar SIMBAD directamente por CORS). No pisa lo que escriba el usuario.
-  var coordTimer=null, coordUltimo='', coordsAuto=false;
-  function coordenadasURL(q){
-    // Deriva la URL a partir de WP.endpoint (.../bitacora/v1/observaciones).
-    return WP.endpoint.replace(/observaciones\/?$/, 'coordenadas') + '?q=' + encodeURIComponent(q);
-  }
+  // El ciclo (espera, deduplicado y consulta a Sesame) vive en
+  // BitacoraBase.resolutorNombre, compartido con el simulador de oculares. Va
+  // directo al CDS: ya no pasa por el endpoint /coordenadas del plugin, así que
+  // el autocompletado tampoco depende de la sesión.
+  var coordsAuto=false;
   // ¿Podemos rellenar las cajetillas? Sí si están vacías o si las rellenamos
   // nosotros (coordsAuto); NO si el usuario ha escrito coordenadas a mano.
   function cajetillasLibres(){
     return coordsAuto || (raManual.value.trim()==='' && decManual.value.trim()==='');
   }
-  function programarBusquedaCoords(nombre){
-    if(!WP) return;                                   // sin sesión no hay endpoint
-    var q=(nombre||'').trim();
-    if(q.length<2 || !cajetillasLibres()) return;
-    if(coordTimer) clearTimeout(coordTimer);
-    coordTimer=setTimeout(function(){ buscarCoords(q); }, 700);
-  }
-  function buscarCoords(q){
-    if(q===coordUltimo || !cajetillasLibres()) return;
-    coordUltimo=q;
-    setStatus(objStatus,'info','Buscando las coordenadas de “'+q+'” en SIMBAD…');
-    fetch(coordenadasURL(q), { credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
-      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
-      .then(function(res){
-        if(!cajetillasLibres()) return;               // el usuario escribió mientras tanto
-        if(res.ok && res.data && typeof res.data.ra==='number'){
-          raManual.value  = formatRA(res.data.ra);
-          decManual.value = formatDec(res.data.dec);
-          coordsAuto=true;   // marcadas como auto: se pueden sustituir si cambia el nombre
-          resolveObject();   // re-resuelve ya con las coordenadas puestas
-          setStatus(objStatus,'ok','✓ Coordenadas de “'+q+'” traídas de SIMBAD (puedes ajustarlas).');
-        } else {
-          setStatus(objStatus,'info','“'+q+'” no está en SIMBAD. Introduce su RA y Dec a mano.');
-        }
-      })
-      .catch(function(){ /* silencioso: se mantiene el modo manual */ });
-  }
+  var resolutorCoords = BitacoraBase.resolutorNombre({
+    puedeEscribir: cajetillasLibres,
+    onResuelto: function(d){
+      raManual.value  = formatRA(d.ra);
+      decManual.value = formatDec(d.dec);
+      coordsAuto=true;   // marcadas como auto: se pueden sustituir si cambia el nombre
+      resolveObject();   // re-resuelve ya con las coordenadas puestas
+      setStatus(objStatus,'ok','✓ Coordenadas de “'+d.q+'” traídas de SIMBAD (puedes ajustarlas).');
+    },
+    onEstado: function(estado, q){
+      if(estado==='buscando'){ setStatus(objStatus,'info','Buscando las coordenadas de “'+q+'” en SIMBAD…'); }
+      else if(estado==='nada'){ setStatus(objStatus,'info','“'+q+'” no está en SIMBAD. Introduce su RA y Dec a mano.'); }
+      // 'error': silencioso, se mantiene el modo manual.
+    }
+  });
 
   // ── Autocompletado ──
   var activeIdx=-1, currentMatches=[];
@@ -395,26 +336,6 @@
     var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
     return v.toFixed(1)+'° <small>'+dirs[Math.round(v/22.5)%16]+'</small>';
   }
-  // ── Zona horaria: hora local de la base → instante UTC ──
-  // Sin librería: se formatea un instante UTC en la TZ IANA de la base y se mide
-  // el desfase. Una pasada basta (el error en el borde de horario de verano es de
-  // segundos, irrelevante para alt/az). tz vacía = TZ del navegador.
-  function offsetMsTz(tz, utcMs){
-    try{
-      var dtf=new Intl.DateTimeFormat('en-US',{ timeZone:tz, hour12:false,
-        year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
-      var p=dtf.formatToParts(new Date(utcMs)).reduce(function(a,x){a[x.type]=x.value;return a;},{});
-      var comoUtc=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute,+p.second);
-      return comoUtc-utcMs;
-    }catch(_e){ return 0; }
-  }
-  function localAUtc(fecha, hora, tz){          // fecha 'YYYY-MM-DD', hora 'HH:MM'
-    var f=fecha.split('-').map(Number), h=(hora||'00:00').split(':').map(Number);
-    var guess=Date.UTC(f[0], f[1]-1, f[2], h[0]||0, h[1]||0);
-    if(!tz) return new Date(guess);            // sin TZ: interpretar como UTC del guess
-    return new Date(guess - offsetMsTz(tz, guess));
-  }
-
   // Base elegida (objeto de la flota de bases) y su astrometría calculada.
   var baseSel=null, basesCargadas=false, listaBases=[];
   var astroActual=null;   // {lat,lon,objAlt,objAz,sunAlt,moonAlt,fechaHoraUTC,fechaHoraLocal} o null
@@ -425,25 +346,26 @@
     var prev=$('astroPreview');
     astroActual=null;
     if(prev) prev.hidden=true;
-    if(!baseSel || !resolved || resolved.ra==null || resolved.dec==null) return null;
+    if(!baseSel || !resolved) return null;
     var fecha=$('fechaObs')?$('fechaObs').value:'', hora=$('horaObs')?$('horaObs').value:'';
     if(!fecha) return null;
-    if(baseSel.lat==null || baseSel.lon==null) return null;
-    var d=localAUtc(fecha, hora||'00:00', baseSel.tz||'');
-    var jd=julianDay(d), lat=parseFloat(baseSel.lat), lon=parseFloat(baseSel.lon);
-    var obj=altAz(resolved.ra, resolved.dec, jd, lat, lon);
-    var s=sunPos(jd),  sun=altAz(s.ra, s.dec, jd, lat, lon);
-    var m=moonPos(jd), moon=altAz(m.ra, m.dec, jd, lat, lon);
-    var objAlt=refract(obj.alt);
+    var fechaHoraLocal = fecha+'T'+(hora||'00:00');
+    // El módulo devuelve null si falta cualquier dato (base a medias, objeto sin
+    // coordenadas): aquí no hace falta volver a comprobarlos.
+    var p = BitacoraAstro.posiciones({
+      fechaHoraLocal: fechaHoraLocal, tz: baseSel.tz||'',
+      lat: baseSel.lat, lon: baseSel.lon, ra: resolved.ra, dec: resolved.dec
+    });
+    if(!p) return null;
     astroActual={
-      lat:lat, lon:lon,
-      objAlt:objAlt, objAz:obj.az,
-      sunAlt:refract(sun.alt), moonAlt:refract(moon.alt),
-      fechaHoraLocal: fecha+'T'+(hora||'00:00'),
-      fechaHoraUTC: d.toISOString()
+      lat:parseFloat(baseSel.lat), lon:parseFloat(baseSel.lon),
+      objAlt:p.objeto.alt, objAz:p.objeto.az,
+      sunAlt:p.sol.alt, moonAlt:p.luna.alt,
+      fechaHoraLocal: fechaHoraLocal,
+      fechaHoraUTC: p.utc
     };
     if(prev){
-      $('apObj').innerHTML = fmtDeg(objAlt)+' / '+fmtAz(obj.az);
+      $('apObj').innerHTML = fmtDeg(astroActual.objAlt)+' / '+fmtAz(astroActual.objAz);
       $('apSun').innerHTML = fmtDeg(astroActual.sunAlt);
       $('apMoon').innerHTML= fmtDeg(astroActual.moonAlt);
       prev.hidden=false;

@@ -47,27 +47,8 @@ ok(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1') !== dss_clave('05 35 1
 ok(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1') !== dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS2-red'),
    'reconocimiento distinto → clave distinta');
 
-echo "dss_seleccionar_evict (LRU, incremental):\n";
-$max = 1000; $low = 0.8;   // objetivo tras evict: 800
-// total 1500 > 1000: borra las más viejas hasta bajar de 800. Orden por mtime asc.
-$lista = [
-    ['/z.gif', 400, 300],   // más nueva
-    ['/a.gif', 300, 100],   // más vieja
-    ['/b.gif', 500, 200],
-    ['/c.gif', 300, 250],
-];
-$total = 1500;
-$plan = dss_seleccionar_evict($lista, $total, $max, $low, 100);
-// viejas primero: a(100,300) -> 1200; b(200,500) -> 700 <= 800 => para. Borra a,b.
-eq($plan['rutas'], ['/a.gif', '/b.gif'], 'evicta las más antiguas hasta bajar del objetivo');
-eq($plan['liberado'], 800, 'bytes liberados correctos');
-// bajo el tope: no evicta nada
-eq(dss_seleccionar_evict($lista, 800, $max, $low, 100)['rutas'], [], 'por debajo del tope no evicta');
-// límite incremental: como mucho N borrados por pasada
-$muchos = [];
-for ($i = 0; $i < 50; $i++) { $muchos[] = ["/f$i.gif", 100, $i]; }   // 5000 bytes
-$plan2 = dss_seleccionar_evict($muchos, 5000, 1000, 0.8, 10);
-ok(count($plan2['rutas']) <= 10, 'respeta el máximo de borrados por pasada (incremental)');
+// La expulsión LRU y la limpieza ya no son de este proxy: son la política
+// compartida con el de Gaia. Su test es scripts/test_cache_lru.php.
 
 echo "dss_url (URL del archivo del ESO):\n";
 $u = dss_url('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1');

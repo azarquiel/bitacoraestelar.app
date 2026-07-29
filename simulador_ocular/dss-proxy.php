@@ -26,8 +26,11 @@ const DSS_CLEANUP_EVERY   = 300;                 // s: limpieza como mucho cada 
 const DSS_CLEANUP_MAX_DEL = 300;                 // nº máx. de entradas a borrar por pasada (incremental)
 const DSS_CLIENT_MAXAGE   = 31536000;            // s: Cache-Control max-age que se anuncia al navegador (1 año)
 const DSS_ORPHAN_TTL      = 3600;                // s: edad mínima de un .lock/.tmp huérfano para retirarlo
-const DSS_CLEANUP_STAMP   = DSS_CACHE_DIR . '/.cleanup';
 const DSS_SURVEYS         = ['DSS1', 'DSS2-red', 'DSS2-blue', 'DSS2-infrared'];
+
+/* La política de caché LRU (qué se evicta y cuándo se limpia) es la misma que la
+   del proxy de Gaia y vive en el módulo compartido. */
+require_once __DIR__ . '/bitacora-cache-lru.php';
 
 // ───────────────────────── FUNCIONES PURAS (testables) ───────────────────────
 
@@ -69,31 +72,6 @@ function dss_url(string $ra, string $dec, float $x, float $y, string $sv): strin
         . '&Sky-Survey=' . rawurlencode($sv) . '&mime-type=download-gif';
 }
 
-/**
- * Selecciona qué entradas evictar (LRU) para bajar el tamaño total por debajo del
- * nivel bajo. PURA: recibe la lista [ [ruta, tamaño, mtime], ... ], no toca disco.
- * Ordena por mtime ascendente (más viejas primero) y acumula hasta bajar del
- * objetivo o alcanzar el máximo de borrados por pasada (limpieza incremental).
- * Devuelve [ 'rutas' => string[], 'liberado' => int ].
- */
-function dss_seleccionar_evict(array $lista, int $total, int $max_bytes, float $lowwater, int $max_del): array {
-    $objetivo = (int) ($max_bytes * $lowwater);
-    if ($total <= $max_bytes) {
-        return ['rutas' => [], 'liberado' => 0];
-    }
-    usort($lista, static fn($a, $b) => $a[2] <=> $b[2]);   // más antiguas primero
-    $rutas = [];
-    $liberado = 0;
-    foreach ($lista as [$ruta, $size, $mtime]) {
-        if ($total - $liberado <= $objetivo || count($rutas) >= $max_del) {
-            break;
-        }
-        $rutas[] = $ruta;
-        $liberado += $size;
-    }
-    return ['rutas' => $rutas, 'liberado' => $liberado];
-}
-
 // ───────────────────────── EFECTOS (disco / red) ─────────────────────────────
 
 /**
@@ -129,43 +107,6 @@ function dss_fetch(string $url): ?string {
         return $body;
     }
     return null;
-}
-
-/** Limpieza LRU incremental: como mucho una vez cada DSS_CLEANUP_EVERY segundos. */
-function dss_limpieza_incremental(): void {
-    // El "stamp" evita que cada petición escanee el directorio. Se actualiza ANTES
-    // de escanear para que peticiones concurrentes no disparen la limpieza a la vez.
-    $ultima = @filemtime(DSS_CLEANUP_STAMP) ?: 0;
-    if (time() - $ultima < DSS_CLEANUP_EVERY) {
-        return;
-    }
-    @touch(DSS_CLEANUP_STAMP);
-
-    $ahora = time();
-    $lista = [];
-    $total = 0;
-    foreach (glob(DSS_CACHE_DIR . '/*.gif') ?: [] as $f) {
-        $mtime = @filemtime($f);
-        $size = @filesize($f);
-        if ($mtime === false || $size === false) {
-            continue;
-        }
-        $lista[] = [$f, $size, $mtime];
-        $total += $size;
-    }
-
-    $plan = dss_seleccionar_evict($lista, $total, DSS_CACHE_MAX_BYTES, DSS_CACHE_LOWWATER, DSS_CLEANUP_MAX_DEL);
-    foreach ($plan['rutas'] as $f) {
-        @unlink($f);
-    }
-
-    // Barrido de .lock y .tmp huérfanos: solo los más viejos que DSS_ORPHAN_TTL (ningún
-    // fetch activo los usa a esas alturas), así el unlink no compite con un flock en curso.
-    foreach (array_merge(glob(DSS_CACHE_DIR . '/*.lock') ?: [], glob(DSS_CACHE_DIR . '/*.tmp*') ?: []) as $f) {
-        if (($mt = @filemtime($f)) !== false && $ahora - $mt >= DSS_ORPHAN_TTL) {
-            @unlink($f);
-        }
-    }
 }
 
 /**
@@ -274,7 +215,12 @@ if ($lock && flock($lock, LOCK_EX)) {
     // flock es una condición de carrera. Es vacío y hay uno por placa; la limpieza
     // incremental los retira si envejecen.
 
-    dss_limpieza_incremental();
+    cache_lru_limpieza([
+        'dir' => DSS_CACHE_DIR, 'patron' => '*.gif',
+        'max_bytes' => DSS_CACHE_MAX_BYTES, 'lowwater' => DSS_CACHE_LOWWATER,
+        'max_del' => DSS_CLEANUP_MAX_DEL, 'cada' => DSS_CLEANUP_EVERY,
+        'huerfano_ttl' => DSS_ORPHAN_TTL,
+    ]);
 
     if (is_file($fichero)) {
         dss_servir($fichero, $clave);    // termina

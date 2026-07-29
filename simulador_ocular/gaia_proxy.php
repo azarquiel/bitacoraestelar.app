@@ -47,7 +47,6 @@ const GAIA_CLEANUP_EVERY   = 300;                // s: limpieza como mucho cada 
 const GAIA_CLEANUP_MAX_DEL = 300;                // nº máx. de entradas a borrar por pasada (incremental)
 const GAIA_CLIENT_MAXAGE   = 86400;              // s: Cache-Control max-age que se anuncia al navegador
 const GAIA_ORPHAN_TTL      = 3600;               // s: edad mínima de un .lock/.tmp huérfano para retirarlo
-const GAIA_CLEANUP_STAMP   = GAIA_CACHE_DIR . '/.cleanup';
 
 // ───────────────────────── FUNCIONES PURAS (testables) ───────────────────────
 
@@ -71,6 +70,10 @@ function gaia_cuantizar(float $ra, float $dec, float $rad, float $mag): array {
     ];
 }
 
+/* La política de caché LRU (qué se evicta y cuándo se limpia) es la misma que la
+   del proxy del DSS y vive en el módulo compartido. */
+require_once __DIR__ . '/bitacora-cache-lru.php';
+
 /** Clave de caché determinista a partir de los parámetros ya cuantizados. */
 function gaia_clave(float $ra, float $dec, float $rad, float $mag): string {
     return sha1(sprintf('%.3f_%.3f_%.2f_%.2f', $ra, $dec, $rad, $mag));
@@ -79,31 +82,6 @@ function gaia_clave(float $ra, float $dec, float $rad, float $mag): string {
 /** Ruta del fichero de caché (gzip) de una clave. */
 function gaia_ruta(string $clave): string {
     return GAIA_CACHE_DIR . '/' . $clave . '.json.gz';
-}
-
-/**
- * Selecciona qué entradas evictar (LRU) para bajar el tamaño total por debajo del
- * nivel bajo. PURA: recibe la lista [ [ruta, tamaño, mtime], ... ], no toca disco.
- * Ordena por mtime ascendente (más viejas primero) y acumula hasta bajar del
- * objetivo o alcanzar el máximo de borrados por pasada (limpieza incremental).
- * Devuelve [ 'rutas' => string[], 'liberado' => int ].
- */
-function gaia_seleccionar_evict(array $lista, int $total, int $max_bytes, float $lowwater, int $max_del): array {
-    $objetivo = (int) ($max_bytes * $lowwater);
-    if ($total <= $max_bytes) {
-        return ['rutas' => [], 'liberado' => 0];
-    }
-    usort($lista, static fn($a, $b) => $a[2] <=> $b[2]);   // más antiguas primero
-    $rutas = [];
-    $liberado = 0;
-    foreach ($lista as [$ruta, $size, $mtime]) {
-        if ($total - $liberado <= $objetivo || count($rutas) >= $max_del) {
-            break;
-        }
-        $rutas[] = $ruta;
-        $liberado += $size;
-    }
-    return ['rutas' => $rutas, 'liberado' => $liberado];
 }
 
 /** URLs de proveedores TAP (failover), en orden de preferencia. */
@@ -150,43 +128,6 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag): ?string {
         }
     }
     return null;
-}
-
-/** Limpieza LRU incremental: como mucho una vez cada GAIA_CLEANUP_EVERY segundos. */
-function gaia_limpieza_incremental(): void {
-    // El "stamp" evita que cada petición escanee el directorio. Se actualiza ANTES
-    // de escanear para que peticiones concurrentes no disparen la limpieza a la vez.
-    $ultima = @filemtime(GAIA_CLEANUP_STAMP) ?: 0;
-    if (time() - $ultima < GAIA_CLEANUP_EVERY) {
-        return;
-    }
-    @touch(GAIA_CLEANUP_STAMP);
-
-    $ahora = time();
-    $lista = [];
-    $total = 0;
-    foreach (glob(GAIA_CACHE_DIR . '/*.json.gz') ?: [] as $f) {
-        $mtime = @filemtime($f);
-        $size = @filesize($f);
-        if ($mtime === false || $size === false) {
-            continue;
-        }
-        $lista[] = [$f, $size, $mtime];
-        $total += $size;
-    }
-
-    $plan = gaia_seleccionar_evict($lista, $total, GAIA_CACHE_MAX_BYTES, GAIA_CACHE_LOWWATER, GAIA_CLEANUP_MAX_DEL);
-    foreach ($plan['rutas'] as $f) {
-        @unlink($f);
-    }
-
-    // Barrido de .lock y .tmp huérfanos: solo los más viejos que GAIA_ORPHAN_TTL (ningún
-    // fetch activo los usa a esas alturas), así el unlink no compite con un flock en curso.
-    foreach (array_merge(glob(GAIA_CACHE_DIR . '/*.lock') ?: [], glob(GAIA_CACHE_DIR . '/*.tmp*') ?: []) as $f) {
-        if (($mt = @filemtime($f)) !== false && $ahora - $mt >= GAIA_ORPHAN_TTL) {
-            @unlink($f);
-        }
-    }
 }
 
 /** ¿El cliente acepta gzip? */
@@ -315,7 +256,12 @@ if ($lock && flock($lock, LOCK_EX)) {
     // flock es una condición de carrera (operaría sobre un inodo fantasma). Es vacío
     // y hay uno por región; la limpieza incremental los retira si envejecen.
 
-    gaia_limpieza_incremental();
+    cache_lru_limpieza([
+        'dir' => GAIA_CACHE_DIR, 'patron' => '*.json.gz',
+        'max_bytes' => GAIA_CACHE_MAX_BYTES, 'lowwater' => GAIA_CACHE_LOWWATER,
+        'max_del' => GAIA_CLEANUP_MAX_DEL, 'cada' => GAIA_CLEANUP_EVERY,
+        'huerfano_ttl' => GAIA_ORPHAN_TTL,
+    ]);
 
     if (is_file($ruta)) {
         gaia_servir($ruta, $clave);      // termina

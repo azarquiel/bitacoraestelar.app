@@ -58,7 +58,15 @@
   var GAIA_FETCH_TIMEOUT  = 12000;
   var PROXY_URL           = '/wp-content/uploads/bitacora/gaia_proxy.php';
 
-  /* ── Transmisión y araña por tipo óptico (idéntico al simulador) ── */
+  /* ── Transmisión y araña por tipo óptico (fuente única) ──
+     Refractor 0,9 y reflector (2 espejos, sin corrector) 0,7 siguen a Torres
+     Lapasió; los catadióptricos, con lámina/menisco corrector y obstrucción
+     central, pierden algo más (~0,65-0,68). Los tipos no listados devuelven null
+     y el llamador decide su valor por defecto.
+     La araña de brazos del secundario es la que produce los diffraction spikes:
+     los refractores no tienen obstrucción y los SC/Mak sujetan el secundario en
+     la lámina/menisco, sin brazos. El simulador de oculares consume las dos
+     desde aquí; antes tenía su propia copia de ambas tablas. */
   var TRANSMISION_DEFECTO = 0.8;
   var TRANSMISION_OPTICA = {
     'refractor': 0.9, 'newtonian': 0.7, 'cassegrain': 0.7, 'ritchey-chretien': 0.7,
@@ -225,6 +233,80 @@
       out[j] = v[j] + realceDetalle(dif, dif >= 0 ? REALCE : REALCE * FOT.REALCE_OSCURO);
     }
     return out;
+  }
+
+  /* ══════════════════ CADENA DE LA PLACA (luma 8-bit → flujo) ══════════════════
+     El otro motor que produce un Fobj para pintarFot: en vez de sintetizarlo de
+     un catálogo, lo estima de la LUMA de una placa fotográfica (DSS o PanSTARRS).
+     Vivía dentro de la clausura del simulador, sin test, aunque son tres reglas
+     numéricas con parámetros a ojo que deciden lo que se ve.
+     Nada de esto es fotometría calibrada: es un mapeo heurístico luma → brillo
+     superficial. Lo que los tests fijan son sus INVARIANTES (monotonía, no
+     inventar luz donde no hay), no los valores. */
+
+  /* Fusión HDR de dos placas del mismo campo: una PROFUNDA (DSS2-red, que llega a
+     objetos débiles pero quema los núcleos) y una CORTA (DSS1, que conserva los
+     núcleos sin saturar). Ajusta por mínimos cuadrados la recta corta → profunda
+     usando solo los píxeles de la zona lineal común (luma 120-215 en la profunda,
+     con señal en la corta) y, donde la profunda empieza a saturar, cede el paso a
+     la corta reescalada.
+     Si no hay bastantes píxeles en común (n < 500) o el ajuste sale con pendiente
+     no positiva, devuelve la profunda TAL CUAL: mejor una placa buena que una
+     fusión con una recta inventada. */
+  function fusionarPlacas(vd, vs) {
+    var sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0, i;
+    for (i = 0; i < vd.length; i++) {
+      if (vd[i] >= 120 && vd[i] <= 215 && vs[i] > 8) {
+        sx += vs[i]; sy += vd[i]; sxx += vs[i] * vs[i]; sxy += vs[i] * vd[i]; n++;
+      }
+    }
+    if (n < 500) return vd;
+    var a = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+    var b = (sy - a * sx) / n;
+    if (!(a > 0)) return vd;
+    var out = new Float32Array(vd.length);
+    for (i = 0; i < vd.length; i++) {
+      var t = suave((vd[i] - 210) / 40);
+      out[i] = (1 - t) * vd[i] + t * Math.max(vd[i], a * vs[i] + b);
+    }
+    return out;
+  }
+
+  /* Regla del núcleo hundido: en los mosaicos de PanSTARRS el centro de una
+     estrella brillante llega a veces vacío (el pixel saturado se marca como sin
+     dato), y queda un agujero negro rodeado de halo. Si el ENTORNO está claro y el
+     píxel está muy por debajo de él, se rellena con algo más que el entorno —era
+     el punto más brillante, no el más oscuro—.
+     PURA y probada aparte del desenfoque: la regla es el umbral, no el kernel.
+     MODIFICA v y lo devuelve (el array es de PROC² floats; copiarlo no aporta). */
+  function rellenarNucleo(v, entorno) {
+    for (var i = 0; i < v.length; i++) {
+      if (entorno[i] > 140 && v[i] < 0.5 * entorno[i]) {
+        v[i] = Math.min(300, entorno[i] * 1.25);
+      }
+    }
+    return v;
+  }
+  function repararNucleos(v, SIZE) { return rellenarNucleo(v, desenfocar(v, 4, SIZE)); }
+
+  /* Flujo de objeto a partir de la luma de la placa. La luma 0-255 se lee como un
+     brillo superficial entre SB_OBJ_MIN (píxel apagado) y SB_OBJ_MAX (píxel
+     saturado), y de ahí a flujo con la definición de magnitud.
+     Un píxel a 0 se queda a flujo 0: donde la placa no registró nada no se
+     inventa luz, que es lo que separa el fondo de cielo del objeto.
+     Las placas de PanSTARRS (HiPS) llegan con más rango y otra respuesta, así que
+     antes pasan por una gamma y se recortan a 512. */
+  function flujoDePlaca(v, esHips) {
+    var Fobj = new Float32Array(v.length);
+    for (var i = 0; i < v.length; i++) {
+      var vi = v[i];
+      if (vi > 0) {
+        if (esHips) { vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS); }
+        var sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX);
+        Fobj[i] = Math.pow(10, -0.4 * sb);
+      }
+    }
+    return Fobj;
   }
 
   /* Pinta un contexto a partir de un array de FLUJO DE OBJETO por píxel (Fobj, en
@@ -1440,6 +1522,10 @@
     capasDifusas: capasDifusas,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
+    fusionarPlacas: fusionarPlacas,
+    rellenarNucleo: rellenarNucleo,
+    repararNucleos: repararNucleos,
+    flujoDePlaca: flujoDePlaca,
     realceDetalle: realceDetalle,
     suave: suave,
     transmisionOptica: transmisionOptica,

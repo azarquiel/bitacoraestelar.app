@@ -36,27 +36,8 @@ echo "gaia_clave (determinista y sensible):\n";
 eq(gaia_clave(56.75, 24.115, 0.36, 16.5), gaia_clave(56.75, 24.115, 0.36, 16.5), 'misma entrada → misma clave');
 ok(gaia_clave(56.75, 24.115, 0.36, 16.5) !== gaia_clave(56.76, 24.115, 0.36, 16.5), 'entradas distintas → claves distintas');
 
-echo "gaia_seleccionar_evict (LRU, incremental):\n";
-$max = 1000; $low = 0.9;   // objetivo tras evict: 900
-// total 1500 > 1000: borra las más viejas hasta bajar de 900. Orden por mtime asc.
-$lista = [
-    ['/z.gz', 400, 300],   // más nueva
-    ['/a.gz', 300, 100],   // más vieja
-    ['/b.gz', 500, 200],
-    ['/c.gz', 300, 250],
-];
-$total = 1500;
-$plan = gaia_seleccionar_evict($lista, $total, $max, $low, 100);
-// viejas primero: a(100,300) -> 1200; b(200,500) -> 700 <= 900 => para. Borra a,b.
-eq($plan['rutas'], ['/a.gz', '/b.gz'], 'evicta las más antiguas hasta bajar del objetivo');
-eq($plan['liberado'], 800, 'bytes liberados correctos');
-// bajo el tope: no evicta nada
-eq(gaia_seleccionar_evict($lista, 800, $max, $low, 100)['rutas'], [], 'por debajo del tope no evicta');
-// límite incremental: como mucho N borrados por pasada
-$muchos = [];
-for ($i = 0; $i < 50; $i++) { $muchos[] = ["/f$i.gz", 100, $i]; }   // 5000 bytes
-$plan2 = gaia_seleccionar_evict($muchos, 5000, 1000, 0.9, 10);
-ok(count($plan2['rutas']) <= 10, 'respeta el máximo de borrados por pasada (incremental)');
+// La expulsión LRU y la limpieza ya no son de este proxy: son la política
+// compartida con el del DSS. Su test es scripts/test_cache_lru.php.
 
 if ($fallos) { echo "\n$fallos fallo(s).\n"; exit(1); }
 echo "\nTodo verde.\n";

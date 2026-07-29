@@ -99,44 +99,15 @@
       // típico–óptimo para dejar claro que es una horquilla, no un valor exacto.
       var MARGEN_MAGLIM = 0.7;
 
-      // Transmisión según el tipo óptico (columna "Optics" del catálogo, en
-      // inglés). Refractor 0,9 y reflector (2 espejos, sin corrector) 0,7 siguen
-      // a Torres Lapasió; los catadióptricos, con lámina/menisco corrector y
-      // obstrucción central, pierden algo más (~0,65-0,68). La clave se compara
-      // en minúsculas; los tipos no listados usan el valor por defecto.
-      var TRANSMISION_OPTICA = {
-        'refractor':          0.9,
-        'newtonian':          0.7,
-        'cassegrain':         0.7,
-        'ritchey-chretien':   0.7,
-        'dall-kirkham':       0.7,
-        'schmidt-cassegrain': 0.65,
-        'mak-cassegrain':     0.65,
-        'schmidt-newtonian':  0.68,
-        'mak-newtonian':      0.68,
-        'schmidt camera':     0.65
-      };
-      function transmisionPorOptica(optica) {
-        if (!optica) return null;
-        var t = TRANSMISION_OPTICA[String(optica).trim().toLowerCase()];
-        return t != null ? t : null;
-      }
-      // Tipos ópticos cuyo secundario va sujeto por una ARAÑA de brazos → producen
-      // diffraction spikes. Los refractores no tienen obstrucción; los SC/Mak sujetan
-      // el secundario en la lámina/menisco (sin brazos) → sin spikes.
-      var OPTICA_ARANA = {
-        'newtonian': true, 'schmidt-newtonian': true, 'mak-newtonian': true,
-        'cassegrain': true, 'ritchey-chretien': true, 'dall-kirkham': true,
-        'refractor': false, 'schmidt-cassegrain': false, 'mak-cassegrain': false, 'schmidt camera': false
-      };
-      function opticaTieneArana(optica) {
-        return !!(optica && OPTICA_ARANA[String(optica).trim().toLowerCase()]);
-      }
+      // Transmisión y araña por tipo óptico (columna "Optics" del catálogo): las
+      // dos tablas viven en el módulo compartido BitacoraGaiaRender, que ya las
+      // necesita para pintar los spikes. Antes estaban copiadas aquí y había que
+      // sincronizarlas a mano al añadir un tipo de tubo.
       // ¿El telescopio seleccionado tiene araña? (manual: campo 'arana'; catálogo: por su óptica)
       function teleTieneArana() {
         if (!teleSel) return false;
         if (typeof teleSel.arana === 'boolean') return teleSel.arana;
-        return opticaTieneArana(teleSel.optica);
+        return window.BitacoraGaiaRender.opticaTieneArana(teleSel.optica);
       }
 
       /* El render de Gaia (ajustes, sprites, consulta y dibujo) vive en el módulo
@@ -157,10 +128,9 @@
       var corsFallo = false;
       var contadorPeticion = 0;
 
-      /* Curvas de la fotometría. Viven en el módulo compartido (fuente única con
-         el formulario de registro); esto es solo el alias para poder seguir
-         escribiendo FOT.X aquí y para que sigan siendo editables en un sitio. */
-      var FOT = window.BitacoraGaiaRender.fot;
+      /* Las curvas de la fotometría (BitacoraGaiaRender.fot) ya no se leen desde
+         aquí: la última regla que las usaba —luma de la placa → flujo— se fue con
+         la cadena al módulo compartido. */
 
       /* ══════════════════ CATÁLOGO DE EQUIPO ══════════════════ */
       function num(v) { if (v == null || v === '') return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
@@ -337,7 +307,7 @@
         var t = TRANSMISION_TELE;
         if (teleSel) {
           if (num(teleSel.transmision) > 0) { t = num(teleSel.transmision); }
-          else { var tOpt = transmisionPorOptica(teleSel.optica); if (tOpt) { t = tOpt; } }
+          else { var tOpt = window.BitacoraGaiaRender.transmisionOptica(teleSel.optica); if (tOpt) { t = tOpt; } }
         }
         return t;
       }
@@ -574,10 +544,9 @@
         var v = new Float32Array(PROC * PROC); for (var i = 0, j = 0; j < v.length; i += 4, j++) v[j] = (dd[i] + dd[i + 1] + dd[i + 2]) / 3; return v;
       }
 
-      var suave = BitacoraGaiaRender.suave;
-      function fusionar(vd, vs) { var sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0, i; for (i = 0; i < vd.length; i++) { if (vd[i] >= 120 && vd[i] <= 215 && vs[i] > 8) { sx += vs[i]; sy += vd[i]; sxx += vs[i] * vs[i]; sxy += vs[i] * vd[i]; n++; } } if (n < 500) return vd; var a = (n * sxy - sx * sy) / (n * sxx - sx * sx); var b = (sy - a * sx) / n; if (!(a > 0)) return vd; var out = new Float32Array(vd.length); for (i = 0; i < vd.length; i++) { var t = suave((vd[i] - 210) / 40); out[i] = (1 - t) * vd[i] + t * Math.max(vd[i], a * vs[i] + b); } return out; }
-      function desenfocar(v, radio) { return BitacoraGaiaRender.desenfocar(v, radio, PROC); }
-      function repararNucleos(v) { var entorno = desenfocar(v, 4); for (var i = 0; i < v.length; i++) { if (entorno[i] > 140 && v[i] < 0.5 * entorno[i]) v[i] = Math.min(300, entorno[i] * 1.25); } return v; }
+      /* La cadena de la placa (fusión HDR, reparación de núcleos y luma → flujo)
+         vive en el módulo compartido y tiene su test en scripts/test_placa.js.
+         Aquí queda lo que de verdad es del simulador: leer los píxeles del DOM. */
 
       /* Pinta el lienzo a partir de un array de FLUJO DE OBJETO por píxel. La
          cadena (contraste sobre el cielo + adaptación local) vive en el módulo
@@ -590,16 +559,12 @@
       }
 
       function procesarFotometrico(profunda, corta, canvas, p) {
-        var vd = lumas(profunda); if (!vd) return false; var v = vd; if (corta) { var vs = lumas(corta); if (vs) v = fusionar(vd, vs); }
-        var esHips = $('sim-origen').value === 'hips'; if (esHips) v = repararNucleos(v);
-        // Flujo del objeto a partir de la luma 8-bit (heurístico: luma → brillo
-        // superficial entre SB_OBJ_MIN y SB_OBJ_MAX). No es fotometría calibrada.
-        var Fobj = new Float32Array(v.length);
-        for (var i = 0; i < v.length; i++) {
-          var vi = v[i];
-          if (vi > 0) { if (esHips) vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS); var sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX); Fobj[i] = Math.pow(10, -0.4 * sb); }
-        }
-        return pintarFot(Fobj, canvas, p);
+        var vd = lumas(profunda); if (!vd) return false;
+        var v = vd;
+        if (corta) { var vs = lumas(corta); if (vs) v = BitacoraGaiaRender.fusionarPlacas(vd, vs); }
+        var esHips = $('sim-origen').value === 'hips';
+        if (esHips) v = BitacoraGaiaRender.repararNucleos(v, PROC);
+        return pintarFot(BitacoraGaiaRender.flujoDePlaca(v, esHips), canvas, p);
       }
 
       function renderizar(profunda, corta, urlRespaldo) {
@@ -767,39 +732,26 @@
         libreEstado('✓ ' + o.nombre + '  ·  AR ' + o.ra + '  ·  Dec ' + o.dec, 'ok');
         elegirObjeto(o);
       }
-      /* Búsqueda por nombre contra el resolvedor Sesame del CDS, directa desde el
-         navegador. Antes iba por el endpoint /coordenadas de WordPress, que exige
-         nonce de sesión: en la página pública —que es donde vive el simulador— la
-         pestaña salía visible y la búsqueda contestaba siempre «inicia sesión».
-         Sesame sirve `Access-Control-Allow-Origin: *`, así que no necesita proxy,
-         y además resuelve los alias por su cuenta: «M3», «Messier 3», «NGC 6826»
-         y «Barnard 33» caen todos donde deben sin canonicalizar nada. */
-      var SESAME_URL = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?';
-      var simbadTimer = null, simbadUltimo = '';
-      function programarSimbad() {
-        var q = $('sim-libre-nombre').value.trim();
-        if (simbadTimer) clearTimeout(simbadTimer);
-        if (q.length < 2) return;
-        simbadTimer = setTimeout(function () { buscarSimbad(q); }, 700);
-      }
-      function buscarSimbad(q) {
-        if (q === simbadUltimo) return; simbadUltimo = q;
-        libreEstado('Buscando «' + q + '» en SIMBAD…');
-        fetch(SESAME_URL + encodeURIComponent(q))
-          .then(function (r) { return r.text(); })
-          .then(function (txt) {
-            var d = BitacoraBase.leerSesame(txt);
-            if (d) {
-              $('sim-libre-ra').value = BitacoraBase.formatRA(d.ra);
-              $('sim-libre-dec').value = BitacoraBase.formatDec(d.dec);
-              fijarObjetoLibre(q, d.otype);
-            } else { libreEstado('«' + q + '» no está en SIMBAD. Introduce su RA y Dec a mano.'); }
-          })
-          .catch(function () { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); });
-      }
+      /* Búsqueda por nombre: el ciclo (espera, deduplicado y consulta a Sesame)
+         vive en BitacoraBase.resolutorNombre, compartido con el formulario de
+         registro. Aquí solo quedan los textos y dónde se escribe el resultado.
+         Buscar un nombre SÍ pisa lo que hubiera en las cajas de RA/Dec: es lo que
+         se está pidiendo al escribirlo. */
+      var resolutor = BitacoraBase.resolutorNombre({
+        onResuelto: function (d) {
+          $('sim-libre-ra').value = BitacoraBase.formatRA(d.ra);
+          $('sim-libre-dec').value = BitacoraBase.formatDec(d.dec);
+          fijarObjetoLibre(d.q, d.otype);
+        },
+        onEstado: function (estado, q) {
+          if (estado === 'buscando') { libreEstado('Buscando «' + q + '» en SIMBAD…'); }
+          else if (estado === 'nada') { libreEstado('«' + q + '» no está en SIMBAD. Introduce su RA y Dec a mano.'); }
+          else { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); }
+        }
+      });
       function montarObjetoLibre() {
         var nom = $('sim-libre-nombre');
-        if (nom) nom.addEventListener('input', programarSimbad);
+        if (nom) nom.addEventListener('input', function () { resolutor.programar(nom.value); });
         ['sim-libre-ra', 'sim-libre-dec'].forEach(function (id) {
           var el = $(id); if (el) el.addEventListener('change', function () { fijarObjetoLibre($('sim-libre-nombre').value.trim(), ''); });
         });
