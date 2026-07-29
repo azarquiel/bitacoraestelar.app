@@ -260,8 +260,23 @@ window.BitacoraBase = (function () {
     return sign + dd + '° ' + mm + '′ ' + ss + '″';
   }
 
+  /* Respuesta del resolvedor Sesame del CDS, en texto plano:
+       %C.0 HII
+       %J 83.82010000 -5.38760000 = 05 35 16.8    -05 23 15
+     La línea %J trae los grados decimales y %C.0 el tipo de objeto. Sin
+     resultado no hay línea %J, solo una que empieza por «#!». */
+  function leerSesame(txt) {
+    var j = String(txt || '').match(/^%J\s+(-?[\d.]+)\s+([-+]?[\d.]+)/m);
+    if (!j) return null;
+    var ra = parseFloat(j[1]), dec = parseFloat(j[2]);
+    if (!isFinite(ra) || !isFinite(dec)) return null;
+    var t = String(txt).match(/^%C\.0\s+(\S+)/m);
+    return { ra: ra, dec: dec, otype: t ? t[1] : '' };
+  }
+
   return {
     esc: esc,
+    leerSesame: leerSesame,
     montarBuscadorCatalogo: montarBuscadorCatalogo,
     BORTLE: BORTLE,
     claseBortlePorSqm: claseBortlePorSqm,

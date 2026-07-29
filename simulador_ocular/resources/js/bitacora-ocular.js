@@ -767,7 +767,14 @@
         libreEstado('✓ ' + o.nombre + '  ·  AR ' + o.ra + '  ·  Dec ' + o.dec, 'ok');
         elegirObjeto(o);
       }
-      // Búsqueda por nombre en SIMBAD (reutiliza /coordenadas, solo con sesión).
+      /* Búsqueda por nombre contra el resolvedor Sesame del CDS, directa desde el
+         navegador. Antes iba por el endpoint /coordenadas de WordPress, que exige
+         nonce de sesión: en la página pública —que es donde vive el simulador— la
+         pestaña salía visible y la búsqueda contestaba siempre «inicia sesión».
+         Sesame sirve `Access-Control-Allow-Origin: *`, así que no necesita proxy,
+         y además resuelve los alias por su cuenta: «M3», «Messier 3», «NGC 6826»
+         y «Barnard 33» caen todos donde deben sin canonicalizar nada. */
+      var SESAME_URL = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?';
       var simbadTimer = null, simbadUltimo = '';
       function programarSimbad() {
         var q = $('sim-libre-nombre').value.trim();
@@ -775,25 +782,17 @@
         if (q.length < 2) return;
         simbadTimer = setTimeout(function () { buscarSimbad(q); }, 700);
       }
-      // SIMBAD identifica Messier como "M 3" (con espacio); "M3"/"M03"/"Messier 3"
-      // no resuelven. Canonicaliza a "M <n>" antes de consultar.
-      function normalizarSimbad(q) {
-        var m = q.match(/^(?:M|Messier)\s*0*(\d+)$/i);
-        return m ? 'M ' + m[1] : q;
-      }
       function buscarSimbad(q) {
-        if (!WP) { libreEstado('Inicia sesión para buscar por nombre en SIMBAD. Puedes introducir RA/Dec a mano.'); return; }
-        q = normalizarSimbad(q);
         if (q === simbadUltimo) return; simbadUltimo = q;
         libreEstado('Buscando «' + q + '» en SIMBAD…');
-        var url = WP.endpoint.replace(/observaciones\/?$/, 'coordenadas') + '?q=' + encodeURIComponent(q);
-        fetch(url, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
-          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-          .then(function (res) {
-            if (res.ok && res.data && typeof res.data.ra === 'number') {
-              $('sim-libre-ra').value = BitacoraBase.formatRA(res.data.ra);
-              $('sim-libre-dec').value = BitacoraBase.formatDec(res.data.dec);
-              fijarObjetoLibre(q, res.data.otype || '');
+        fetch(SESAME_URL + encodeURIComponent(q))
+          .then(function (r) { return r.text(); })
+          .then(function (txt) {
+            var d = BitacoraBase.leerSesame(txt);
+            if (d) {
+              $('sim-libre-ra').value = BitacoraBase.formatRA(d.ra);
+              $('sim-libre-dec').value = BitacoraBase.formatDec(d.dec);
+              fijarObjetoLibre(q, d.otype);
             } else { libreEstado('«' + q + '» no está en SIMBAD. Introduce su RA y Dec a mano.'); }
           })
           .catch(function () { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); });
@@ -801,7 +800,6 @@
       function montarObjetoLibre() {
         var nom = $('sim-libre-nombre');
         if (nom) nom.addEventListener('input', programarSimbad);
-        if (!WP && nom) nom.placeholder = '— Inicia sesión para buscar en SIMBAD —';
         ['sim-libre-ra', 'sim-libre-dec'].forEach(function (id) {
           var el = $(id); if (el) el.addEventListener('change', function () { fijarObjetoLibre($('sim-libre-nombre').value.trim(), ''); });
         });
