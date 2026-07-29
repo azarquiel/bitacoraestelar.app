@@ -111,6 +111,11 @@ fallo que se ve pero no se explica:
   los spikes. Los topes (`radioTotalMax`, `spikes.longMax`) se aplican al tamaño
   NOMINAL, antes de escalar; al revés, las estrellas brillantes se recortarían a
   distinto tamaño aparente según el ocular.
+- **`escalaMagAfov` no está puesta a ojo:** el criterio es que **un disco dibujado no
+  puede comerse un hueco que el equipo sí resuelve**. El caso que la fija es Almaak
+  (9,6″; mag 2,3 y 5,1) a 333×: los dos discos suman 3,6 px y el hueco mide 4,5 px.
+  Con el valor anterior (100) sumaban 9,0 px y el par se fundía. El test falla si
+  alguien la sube hasta tragarse el par.
 - **Por qué 1/afov:** el lienzo se muestra a un diámetro ∝ `afov` (un ocular de 100°
   ocupa más ventana que uno de 50°: eso es tener más campo aparente). Lo que la
   ventana estira, la escala lo encoge, y en pantalla queda solo el aumento.
@@ -125,8 +130,38 @@ fallo que se ve pero no se explica:
   de la ley.
 - El **veredicto de desdoble** de una doble (`resolucionDoble`) no depende de nada de
   esto: es apertura (Dawes) y `aumentos · separación`. Un par de pocos segundos de
-  arco cae por debajo del píxel en pantalla, así que el que dice si se resuelve es
-  el veredicto, no la imagen.
+  arco cae por debajo del píxel en pantalla, así que en los pares justos el que dice
+  si se resuelve es el veredicto, no la imagen.
+
+## Par de una doble (completar lo que Gaia no trae)
+
+Gaia DR3 **satura por arriba**: las primarias muy brillantes no están en el catálogo.
+La de Almaak (γ And A, V 2,3 pero G ≈ 1,5 por ser una gigante K3 muy roja) no
+aparece, así que el Canvas-2D dibujaba una sola estrella —la compañera, G 4,86—
+mientras el veredicto decía «se resuelve». Los dos tenían razón: no hablaban del
+mismo par.
+
+- **Fuente única:** `BitacoraGaiaRender.parDoble(estrellas, {ra, dec, sep, mag1, mag2})`,
+  pura, devuelve la lista con las componentes que faltaban (sin tocar la original).
+- **Completa, no sustituye:** busca en un círculo de `1,5 · sep` las estrellas
+  brillantes que el catálogo sí trae y sintetiza solo lo que falta, para conservar la
+  posición y el **color** reales de las presentes. No es un problema general: Mizar
+  (G 2,28 + 3,91), Achird (3,32 + 6,76) y 65 Psc (6,21 + 6,24) vienen completas y a
+  esas no se les añade nada.
+- **Solo el dibujo de estrellas.** Las capas difusas siguen recibiendo la muestra de
+  Gaia tal cual, que es de donde sale su función de luminosidad.
+- **Ángulo de posición ASUMIDO** (55°, oblicuo para que el par no salga pegado a un
+  eje): los CSV del catálogo de dobles traen magnitudes y separación, no PA. Para el
+  desdoble lo que importa es la separación, y la orientación en el ocular depende del
+  montaje, que tampoco se modela.
+- **Limitación conocida:** la componente sintética sale **blanca**, porque el catálogo
+  de dobles no trae color. La vía si hace falta el dorado de Almaak es añadir tipo
+  espectral o B−V a `mapa/datos/estrellas_dobles.csv`.
+- Las magnitudes del catálogo son **visuales** y se usan como si fueran G: el error es
+  de unas décimas, más en las estrellas muy rojas.
+- **Trampa:** `+null` es `0`, y como magnitud sería una estrella falsa deslumbrante;
+  por eso los datos del catálogo entran por `numONulo`. Test:
+  `scripts/test_par_doble.js`.
 
 ## Cielo de la sesión (SQM e IR)
 

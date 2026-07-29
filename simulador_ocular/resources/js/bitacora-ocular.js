@@ -515,7 +515,17 @@
           opcCapas.ra = ra0; opcCapas.dec = dec0; opcCapas.arcmin = arcmin; opcCapas.size = PROC;
           var difuso = BitacoraGaiaRender.capasDifusas(estrellas, opcCapas)
             || new Float32Array(PROC * PROC);
-          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellas, {
+          /* Si el objeto es una doble, se completan del catálogo las componentes
+             que Gaia no trae (satura con las primarias muy brillantes: la de
+             Almaak no está en DR3). Solo para el dibujo de estrellas: las capas
+             difusas siguen con la muestra tal cual, que es de donde sale su
+             función de luminosidad. */
+          var estrellasDibujo = objetoSel.doble
+            ? BitacoraGaiaRender.parDoble(estrellas, {
+                ra: ra0, dec: dec0, sep: objetoSel.sep, mag1: objetoSel.mag1, mag2: objetoSel.mag2
+              })
+            : estrellas;
+          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana()
           }, PROC);

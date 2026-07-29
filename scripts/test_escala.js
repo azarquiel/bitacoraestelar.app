@@ -100,11 +100,32 @@ casi(separacionEnPantalla(largo, 3) / separacionEnPantalla(corto, 3), 4, 1e-9,
 
 /* ── 3. La ley y su calibración ────────────────────────────────────────────── */
 console.log('\nLa ley: escala ∝ 1/afov, anclada al ocular de referencia:');
-casi(R.escalaEstrellas(100), 1, 1e-12, 'a 100° la escala es 1 (tamaño nominal)');
-casi(R.escalaEstrellas(50), 2, 1e-12, 'a 50° las estrellas van al doble en el lienzo');
+var REF = R.config.escalaMagAfov;
+casi(R.escalaEstrellas(REF), 1, 1e-12, 'al campo de referencia (' + REF + '°) la escala es 1');
+casi(R.escalaEstrellas(REF * 2), 0.5, 1e-12, 'al doble de campo aparente, la mitad de tamaño en el lienzo');
 casi(R.escalaEstrellas(100) * 100, R.escalaEstrellas(46) * 46, 1e-9, 'escala × afov es constante');
 ok(R.escalaEstrellas(0) === 1 && R.escalaEstrellas(undefined) === 1,
   'sin campo aparente conocido, escala 1 (no rompe a quien no lo pase)');
+
+/* ── 4. El criterio que calibra el tamaño ──────────────────────────────────────
+   `escalaMagAfov` no está puesta a ojo: un disco dibujado no puede comerse un
+   hueco que el equipo SÍ resuelve. El caso que lo fijó es Almaak (9,6″, mag 2,3 y
+   5,1) con el equipo del informe: un 114/1000 con Barlow 1,5× y un Delos de
+   4,5 mm (72°), o sea 333×. Si alguien sube la constante y las estrellas vuelven
+   a tragarse el par, esto se cae. */
+console.log('\nCriterio de calibración (Almaak a 333× tiene que verse partida):');
+var C = R.config;
+function radioNominal(g) {
+  var r = C.radioMag * Math.pow(Math.max(0, C.magTamMin - g), C.radioExp);
+  r = Math.min(C.radioMax, Math.max(C.radioMin, r));
+  return Math.min(C.radioTotalMax, r * (1 + C.blur));
+}
+var delos = vista(1000 * 1.5, 4.5, 72);
+var sumaRadios = radioEnPantalla(delos, radioNominal(2.3)) + radioEnPantalla(delos, radioNominal(5.1));
+var hueco = separacionEnPantalla(delos, 9.6);
+ok(delos.aumentos > 332 && delos.aumentos < 334, 'el equipo del informe da ' + delos.aumentos.toFixed(0) + '×');
+ok(sumaRadios < hueco,
+  'los discos (' + sumaRadios.toFixed(2) + ' px) caben en el hueco (' + hueco.toFixed(2) + ' px)');
 
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);

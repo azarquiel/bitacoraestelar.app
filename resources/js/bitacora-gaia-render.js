@@ -422,10 +422,16 @@
     brillo: 1.4, alfaMin: 0.24,
     glowIntensidad: 0.2, glowRadio: 2.0,
     /* Campo aparente (grados) al que corresponde el tamaño NOMINAL en píxeles de
-       radioNucleo: con un ocular de 100° las estrellas salen a su tamaño nominal,
-       y con uno más estrecho salen proporcionalmente más grandes en el lienzo.
-       Ver escalaEstrellas() para el por qué. Es la perilla del tamaño de estrella. */
-    escalaMagAfov: 100, radioTotalMax: 14,
+       radioNucleo: con un ocular de este campo las estrellas salen a su tamaño
+       nominal, y con uno más estrecho salen proporcionalmente más grandes en el
+       lienzo. Ver escalaEstrellas() para el por qué.
+
+       Es la perilla del tamaño de estrella, y está calibrada por un criterio, no
+       a ojo: el disco que se dibuja no puede comerse un hueco que el equipo SÍ
+       resuelve. Con 40, una estrella de mag 2,3 ocupa ~2,1 px de radio en
+       pantalla, así que un par de 9,6″ a 333× (4,5 px de separación) se ve
+       partido. Con 100 salía a 5,3 px y se fundía. */
+    escalaMagAfov: 40, radioTotalMax: 14,
     spikes: {
       magMax: 10, rango: 5, brazos: 4, angulo: 0,
       longMag: 10, longMax: 180, grosor: 3, lobulos: 2, intensidad: 0.8
@@ -1355,6 +1361,81 @@
     var a = (afov > 0) ? afov : CFG.escalaMagAfov;
     return CFG.escalaMagAfov / a;
   }
+
+  /* ── Par de una doble: completar lo que Gaia DR3 no trae ─────────────────────
+     Gaia satura por arriba. Almaak es el caso que lo destapó: γ And A es una
+     gigante K3 muy roja (V 2,3, G ≈ 1,5) y NO está en DR3, así que en un círculo
+     de 36″ el catálogo solo devuelve su compañera (G 4,86) y dos estrellas de
+     campo. El simulador dibujaba una estrella y el veredicto decía «se resuelve»:
+     los dos tenían razón, pero no hablaban del mismo par.
+
+     No es general —Mizar (G 2,28 + 3,91), Achird (3,32 + 6,76) y 65 Psc (6,21 +
+     6,24) vienen completas— así que aquí NO se sustituye a Gaia: se completa. Se
+     buscan las componentes que el catálogo sí tiene y solo se sintetiza lo que
+     falta, para conservar la posición y el COLOR reales de las que están (el
+     BP–RP de la compañera de Almaak es −0,04: azul, y ese contraste es media
+     gracia del par).
+
+     El ángulo de posición es ASUMIDO: los CSV del catálogo de dobles traen
+     magnitudes y separación, no PA. Para el desdoble lo que importa es la
+     separación; la orientación en el ocular depende del montaje, que tampoco se
+     modela. Se elige uno oblicuo para que el par no salga alineado con los ejes.
+
+     ponytail: la componente sintética sale blanca porque el catálogo de dobles no
+     trae color. Si hace falta el dorado de Almaak, la vía es añadir tipo espectral
+     o B−V a mapa/datos/estrellas_dobles.csv y derivar el BP–RP de ahí.
+
+     PURA: recibe y devuelve la lista de estrellas, sin tocar la original. */
+  var PAR = {
+    angulo: 55,        // ° de PA asumido (desde el Norte hacia el Este)
+    margenMag: 1.0,    // una componente puede venir hasta 1 mag más débil que mag2
+    radioMinBusca: 3   // ″ : suelo del círculo donde se buscan las componentes
+  };
+  /* null / '' → null, y NO 0: el catálogo deja en null lo que no sabe, y `+null`
+     es 0, que como magnitud sería una estrella falsa deslumbrante. */
+  function numONulo(v) {
+    if (v == null || v === '') return null;
+    var n = +v;
+    return isFinite(n) ? n : null;
+  }
+  function parDoble(estrellas, o) {
+    var sep = numONulo(o.sep), m1 = numONulo(o.mag1), m2 = numONulo(o.mag2);
+    // Sin separación o sin las dos magnitudes no hay par que completar (el
+    // catálogo deja ambas en null en muchas múltiples).
+    if (sep == null || !(sep > 0) || m1 == null || m2 == null) return estrellas;
+
+    var ra0 = numONulo(o.ra), dec0 = numONulo(o.dec);
+    if (ra0 == null || dec0 == null) return estrellas;
+
+    var cos0 = Math.cos(dec0 * Math.PI / 180);
+    var radio = Math.max(PAR.radioMinBusca, sep * 1.5) / 3600;   // grados
+    var limite = Math.max(m1, m2) + PAR.margenMag;
+    var halladas = [];
+    for (var i = 0; i < estrellas.length; i++) {
+      var e = estrellas[i];
+      if (!(e[2] <= limite)) continue;                            // demasiado débil para ser componente
+      var dra = (((e[0] - ra0 + 540) % 360) - 180) * cos0, ddec = e[1] - dec0;
+      if (dra * dra + ddec * ddec <= radio * radio) halladas.push(e);
+    }
+    if (halladas.length >= 2) return estrellas;                  // Gaia trae el par: no se toca
+
+    // Desplazamiento de una componente respecto de la otra, con el PA asumido.
+    var pa = PAR.angulo * Math.PI / 180;
+    var dDec = sep * Math.cos(pa) / 3600;
+    var dRa = sep * Math.sin(pa) / (3600 * (cos0 || 1));
+
+    var nuevas;
+    if (halladas.length === 1) {
+      // Falta una: la que peor encaja con la magnitud de la que sí está.
+      var g0 = halladas[0][2];
+      var falta = (Math.abs(g0 - m1) <= Math.abs(g0 - m2)) ? m2 : m1;
+      nuevas = [[halladas[0][0] + dRa, halladas[0][1] + dDec, falta, null]];
+    } else {
+      // No hay ninguna: las dos, con la primaria en las coordenadas del catálogo.
+      nuevas = [[ra0, dec0, m1, null], [ra0 + dRa, dec0 + dDec, m2, null]];
+    }
+    return estrellas.concat(nuevas);
+  }
   function radioNucleo(g) {
     var r = CFG.radioMag * Math.pow(Math.max(0, CFG.magTamMin - g), CFG.radioExp);
     return Math.min(CFG.radioMax, Math.max(CFG.radioMin, r));
@@ -1534,6 +1615,8 @@
     tono: TONO,
     capaEstrellas: capaEstrellas,
     escalaEstrellas: escalaEstrellas,
+    parDoble: parDoble,
+    par: PAR,
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
     realzarPerceptual: realzarPerceptual,
