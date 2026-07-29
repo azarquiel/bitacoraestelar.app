@@ -8,8 +8,9 @@
 
    Sin dependencias:  node scripts/test_difuso.js
 
-   Crece con las fases: hoy cubre la cadena fotométrica (F1). Los asserts de
-   Rayleigh→μ, King y telón entran con sus fases. */
+   Cubre las seis fases: cadena fotométrica, telón de conteos, halo de King,
+   galaxias, capas de la UI y nebulosas. El assert de Rayleigh→μ que estaba
+   previsto cayó con los mapas all-sky (decisión 21 de las notas). */
 'use strict';
 
 // El módulo es un IIFE de navegador: se cuelga de window y no exporta nada.

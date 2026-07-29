@@ -156,13 +156,22 @@ respaldo de Astro Data Lab, ni `procesarFotometricoMu`.
 
 ## Comprobación prevista
 
-`scripts/test_difuso.js`, sin framework, espejo de `scripts/test_gaia_color.js`:
+`scripts/test_difuso.js`, sin framework, espejo de `scripts/test_gaia_color.js`.
+26 secciones, 90 asserts. Los cuatro que motivaron el fichero:
 
 1. **Pupila aplicada una sola vez** — la razón entre dos aumentos es `(p1/p2)²`.
    Es el fallo más probable y el más difícil de ver a ojo.
-2. **Rayleigh → μ** con un ancla conocida.
+2. ~~**Rayleigh → μ** con un ancla conocida.~~ Cae con los mapas (decisión 21).
 3. **Ajuste de King** recupera un King sintético con el núcleo vaciado a propósito.
 4. **Polo galáctico ≈ sin telón, plano ≈ brillante.**
+
+Y los que salieron de fallos reales, cada uno guardando lo que se rompió:
+el fondo que no puede cambiar con los aumentos a igual pupila de salida; el
+perfil del halo suave y no solo monótono (monótono ≠ suave: las derivadas
+discontinuas salían como círculos concéntricos); la rodilla del realce de
+detalle sin salto de pendiente; la luz integrada de galaxias y nebulosas contra
+la magnitud de catálogo; y los interruptores de capa, que tienen que apagar de
+verdad.
 
 ---
 
