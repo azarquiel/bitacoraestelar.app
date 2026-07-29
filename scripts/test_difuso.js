@@ -415,5 +415,70 @@ ok(saltoUmbral < 0.05, 'la pendiente no salta en el umbral (' + saltoUmbral.toFi
 });
 ok(R.realceDetalle(-40, 0.5) === -R.realceDetalle(40, 0.5), 'simétrico en signo');
 
+/* ── 12. Galaxias por perfil de Sérsic ──────────────────────────────────────
+   El perfil se normaliza a la magnitud TOTAL del catálogo, así que lo que hay
+   que comprobar es que la luz integrada sea la que el catálogo dice: si la
+   normalización estuviera mal, la galaxia saldría plausible pero con el brillo
+   equivocado, y a ojo no se nota. */
+console.log('Galaxias: el perfil integra la luz del catálogo:');
+// M31 en el centro del campo: r_e = 2198", b/a = 0,324, PA 35, V = 3,61, n = 1.
+window.BITACORA_GALAXIAS = [['NGC 224', 'M31', 10, 40, 2198.47, 0.324, 35, 3.61, 1]];
+function luzIntegrada(arcmin, size) {
+  var g = R.capaGalaxias({ ra: 10, dec: 40, arcmin: arcmin, size: size });
+  if (!g) return 0;
+  var areaPix = Math.pow(arcmin * 60 / size, 2);      // arcsec² por píxel
+  var s = 0; for (var i = 0; i < g.length; i++) s += g[i];
+  return s * areaPix;
+}
+// Campo muy ancho: debe recogerse casi toda la luz de la galaxia.
+var total = luzIntegrada(600, 300);
+var esperado = Math.pow(10, -0.4 * 3.61);
+var fraccion = total / esperado;
+ok(fraccion > 0.9 && fraccion < 1.05,
+  'un campo que la abarca recoge el ' + (fraccion * 100).toFixed(0) + ' % de la luz de V = 3,61');
+
+// Y la mitad de la luz cae dentro de r_e: es la definición de radio efectivo.
+var dentroRe = (function () {
+  var size = 300, arcmin = 600;
+  var g = R.capaGalaxias({ ra: 10, dec: 40, arcmin: arcmin, size: size });
+  var escArc = arcmin * 60 / size, areaPix = escArc * escArc, s = 0;
+  var pa = 35 * Math.PI / 180, sen = Math.sin(pa), cos = Math.cos(pa);
+  for (var y = 0; y < size; y++) {
+    for (var x = 0; x < size; x++) {
+      var dN = (size / 2 - (y + 0.5)) * escArc, dE = (size / 2 - (x + 0.5)) * escArc;
+      var u = dE * sen + dN * cos, v = dE * cos - dN * sen;
+      if (Math.sqrt(u * u + Math.pow(v / 0.324, 2)) <= 2198.47) s += g[y * size + x];
+    }
+  }
+  return s * areaPix;
+})();
+casi(dentroRe / total, 0.5, 0.03, 'la mitad de la luz cae dentro de r_e');
+
+console.log('Galaxias: geometría:');
+var enCampo = R.galaxiasEnCampo({ ra: 10, dec: 40, arcmin: 60, size: 64 });
+ok(enCampo.length === 1, 'encuentra la galaxia del campo');
+// El halo entra aunque el núcleo quede fuera: en campo ancho el borde de una
+// galaxia grande debe aparecer igual.
+ok(R.galaxiasEnCampo({ ra: 10.9, dec: 40, arcmin: 60, size: 64 }).length === 1,
+  'una galaxia con el centro fuera pero halo dentro sigue contando');
+ok(R.galaxiasEnCampo({ ra: 40, dec: -20, arcmin: 60, size: 64 }).length === 0,
+  'en otro punto del cielo no hay ninguna');
+
+// El eje mayor debe ir en el PA del catálogo: a igual distancia, más brillo a lo
+// largo del eje mayor que del menor.
+var N2 = 201, campoG = { ra: 10, dec: 40, arcmin: 300, size: N2 };
+var img = R.capaGalaxias(campoG);
+var escA = 300 * 60 / N2, dPx = Math.round(1500 / escA);
+var paR = 35 * Math.PI / 180;
+// Este = −x, Norte = −y. Eje mayor a PA=35 desde el norte hacia el este.
+var mx = Math.round(N2 / 2 - dPx * Math.sin(paR)), my = Math.round(N2 / 2 - dPx * Math.cos(paR));
+var nx = Math.round(N2 / 2 - dPx * Math.cos(paR)), ny = Math.round(N2 / 2 + dPx * Math.sin(paR));
+ok(img[my * N2 + mx] > img[ny * N2 + nx] * 3,
+  'a igual distancia, el eje mayor es mucho más brillante que el menor');
+
+window.BITACORA_GALAXIAS = null;
+ok(R.capaGalaxias({ ra: 10, dec: 40, arcmin: 60, size: 64 }) === null,
+  'sin catálogo → null, sin romperse');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);

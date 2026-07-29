@@ -852,6 +852,105 @@
     return out;
   }
 
+  /* ═══════════ GALAXIAS: PERFIL DE SÉRSIC SINTÉTICO ═══════════════════════════
+     Por el ocular una galaxia es un óvalo difuso con el núcleo más brillante:
+     brazos y bandas de polvo exigen apertura grande y cielo oscuro. Un perfil
+     sintético no es aquí una aproximación barata — es más honesto que una foto
+     profunda, y no cuesta ningún asset de imagen.
+
+     Se pinta CUALQUIER galaxia del catálogo que caiga en el campo, no solo la
+     apuntada: así M110 acompaña a M31 y NGC 5195 a M51, como en el ocular.
+
+     Cada fila del catálogo (window.BITACORA_GALAXIAS) es
+     [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n]. */
+  var GALAXIA = {
+    k: 1.0,          // calibración visual
+    muCorte: 30      // mag/arcsec² por debajo del cual ya no se pinta nada
+  };
+
+  function bSersic(n) { return 2 * n - 1 / 3 + 0.009876 / n; }
+
+  // Γ(x) por Lanczos: hace falta para normalizar el perfil a la luz total.
+  function gamma(x) {
+    var g = [676.5203681218851, -1259.1392167224028, 771.32342877765313,
+             -176.61502916214059, 12.507343278686905, -0.13857109526572012,
+             9.9843695780195716e-6, 1.5056327351493116e-7];
+    if (x < 0.5) return Math.PI / (Math.sin(Math.PI * x) * gamma(1 - x));
+    x -= 1;
+    var a = 0.99999999999980993, t = x + 7.5;
+    for (var i = 0; i < g.length; i++) a += g[i] / (x + i + 1);
+    return Math.sqrt(2 * Math.PI) * Math.pow(t, x + 0.5) * Math.exp(-t) * a;
+  }
+
+  // L_total = I_e · r_e² · factorLuz(n) · (b/a)
+  function factorLuz(n) {
+    var b = bSersic(n);
+    return 2 * Math.PI * n * Math.exp(b) * gamma(2 * n) / Math.pow(b, 2 * n);
+  }
+
+  /* Galaxias cuyo disco solapa el campo, con su radio de corte ya calculado.
+     Se incluyen las de centro FUERA del campo cuyo halo entra: en un campo ancho
+     el borde de M31 aparece aunque su núcleo quede fuera. */
+  function galaxiasEnCampo(o) {
+    var cat = window.BITACORA_GALAXIAS;
+    if (!cat || !cat.length) return [];
+    var medio = (o.arcmin / 60) / 2, cos0 = Math.cos(o.dec * Math.PI / 180);
+    var fuera = Math.pow(10, -0.4 * GALAXIA.muCorte), lista = [];
+    for (var i = 0; i < cat.length; i++) {
+      var g = cat[i], re = g[4], q = g[5], magV = g[7], n = g[8];
+      if (!(re > 0) || !(q > 0) || !(n > 0)) continue;
+      var dRA = (((g[2] - o.ra + 540) % 360) - 180) * cos0, dDec = g[3] - o.dec;
+      var iE = Math.pow(10, -0.4 * magV) / (re * re * factorLuz(n) * q);
+      // Radio donde el perfil cae bajo muCorte, invirtiendo el propio Sérsic.
+      var dentro = 1 - Math.log(fuera / iE) / bSersic(n);
+      if (!(dentro > 0)) continue;
+      var rMax = Math.min(re * Math.pow(dentro, n), (o.arcmin / 60) * 3 * 3600);
+      var rGrados = rMax / 3600;
+      if (Math.abs(dRA) > medio + rGrados || Math.abs(dDec) > medio + rGrados) continue;
+      lista.push({
+        dRA: dRA, dDec: dDec, re: re, q: q, n: n, iE: iE, rMax: rMax,
+        pa: g[6] * Math.PI / 180, nombre: g[0]
+      });
+    }
+    return lista;
+  }
+
+  /* Capa de galaxias del campo, en flujo por arcsec². Sin atenuación de pupila:
+     la aplica ctxFotometrico. */
+  function capaGalaxias(o) {
+    var lista = galaxiasEnCampo(o);
+    if (!lista.length) return null;
+    var SIZE = o.size, out = new Float32Array(SIZE * SIZE);
+    var escArc = (o.arcmin * 60) / SIZE;      // arcsec por píxel
+    for (var k = 0; k < lista.length; k++) {
+      var G = lista[k], b = bSersic(G.n), invN = 1 / G.n;
+      // Centro de la galaxia en píxeles (norte arriba, este a la izquierda).
+      var cx = SIZE / 2 - (G.dRA * 3600) / escArc;
+      var cy = SIZE / 2 - (G.dDec * 3600) / escArc;
+      var radioPx = G.rMax / escArc;
+      var x0 = Math.max(0, Math.floor(cx - radioPx)), x1 = Math.min(SIZE - 1, Math.ceil(cx + radioPx));
+      var y0 = Math.max(0, Math.floor(cy - radioPx)), y1 = Math.min(SIZE - 1, Math.ceil(cy + radioPx));
+      var senPA = Math.sin(G.pa), cosPA = Math.cos(G.pa);
+      for (var y = y0; y <= y1; y++) {
+        // De píxel a desplazamiento en el cielo: este positivo hacia la izquierda,
+        // norte positivo hacia arriba.
+        var dNorte = (SIZE / 2 - (y + 0.5)) * escArc;
+        for (var x = x0; x <= x1; x++) {
+          var dEste = (SIZE / 2 - (x + 0.5)) * escArc;
+          // Proyección sobre los ejes mayor y menor. El PA se mide desde el norte
+          // hacia el este, de ahí el reparto de seno y coseno.
+          var u = dEste * senPA + dNorte * cosPA;
+          var v = dEste * cosPA - dNorte * senPA;
+          var r = Math.sqrt(u * u + (v / G.q) * (v / G.q));
+          if (r > G.rMax) continue;
+          var s = Math.pow(Math.max(r, 1e-6) / G.re, invN);
+          out[y * SIZE + x] += GALAXIA.k * G.iE * Math.exp(-b * (s - 1));
+        }
+      }
+    }
+    return out;
+  }
+
   /* Suma de todas las capas difusas del campo, en flujo por arcsec². Cada capa
      aporta lo suyo sin solaparse: el telón, la luz de las estrellas que el
      catálogo no trae; el halo, solo el déficit que la aglomeración le roba al
@@ -862,10 +961,17 @@
     // puesta ya para aportar solo el resto.
     var telon = (o.conTelon !== false) ? telonDifuso(estrellas, o) : null;
     var halo = (o.conHalo !== false) ? haloNoResuelto(estrellas, o, telon) : null;
-    if (!telon) return halo;
-    if (!halo) return telon;
-    for (var i = 0; i < telon.length; i++) telon[i] += halo[i];
-    return telon;
+    var galaxias = (o.conGalaxias !== false) ? capaGalaxias(o) : null;
+    var capas = [];
+    if (telon) capas.push(telon);
+    if (halo) capas.push(halo);
+    if (galaxias) capas.push(galaxias);
+    if (!capas.length) return null;
+    var out = capas[0];
+    for (var c = 1; c < capas.length; c++) {
+      for (var i = 0; i < out.length; i++) out[i] += capas[c][i];
+    }
+    return out;
   }
 
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio) ── */
@@ -1166,6 +1272,11 @@
     perfilRadial: perfilRadial,
     ajustarKing: ajustarKing,
     formaKing: formaKing,
+    galaxia: GALAXIA,
+    capaGalaxias: capaGalaxias,
+    galaxiasEnCampo: galaxiasEnCampo,
+    factorLuz: factorLuz,
+    bSersic: bSersic,
     capasDifusas: capasDifusas,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
