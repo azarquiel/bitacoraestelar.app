@@ -516,7 +516,7 @@
           var difuso = BitacoraGaiaRender.capasDifusas(estrellas, opcCapas)
             || new Float32Array(PROC * PROC);
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellas, {
-            ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim,
+            ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana()
           }, PROC);
           var cieloGaia = cieloOptica(datosOcular().pupila);
@@ -605,7 +605,7 @@
       }
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
         BitacoraGaiaRender.dibujar(ctx, estrellas, {
-          ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim,
+          ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
           conGlow: conGlow, carbono: objetoCarbono, arana: teleTieneArana()
         });
       }

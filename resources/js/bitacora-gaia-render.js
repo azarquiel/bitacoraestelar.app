@@ -421,7 +421,11 @@
     radioMin: 0.42, radioMag: 0.13, radioExp: 1.35, magTamMin: 14, radioMax: 6.5,
     brillo: 1.4, alfaMin: 0.24,
     glowIntensidad: 0.2, glowRadio: 2.0,
-    escalaMagCampo: 90, escalaMagMax: 2.0, radioTotalMax: 14,
+    /* Campo aparente (grados) al que corresponde el tamaño NOMINAL en píxeles de
+       radioNucleo: con un ocular de 100° las estrellas salen a su tamaño nominal,
+       y con uno más estrecho salen proporcionalmente más grandes en el lienzo.
+       Ver escalaEstrellas() para el por qué. Es la perilla del tamaño de estrella. */
+    escalaMagAfov: 100, radioTotalMax: 14,
     spikes: {
       magMax: 10, rango: 5, brazos: 4, angulo: 0,
       longMag: 10, longMax: 180, grosor: 3, lobulos: 2, intensidad: 0.8
@@ -1305,10 +1309,11 @@
     g.fillRect(0, 0, c.width, c.height);
     return (SPIKE_TINT[key] = c);
   }
-  function dibujarSpikes(ctx, x, y, g, escalaMag, rgb) {
+  function dibujarSpikes(ctx, x, y, g, escala, rgb) {
     var cf = CFG.spikes, sobre = cf.magMax - g;
     if (sobre <= 0) return;
-    var L = Math.min(cf.longMax, cf.longMag * sobre) * escalaMag;
+    // Como el radio: el tope, sobre la longitud nominal; la escala, después.
+    var L = Math.min(cf.longMax, cf.longMag * sobre) * escala;
     if (L < 3) return;
     var alpha = Math.min(1, cf.intensidad * (sobre / cf.rango));
     var sp = spriteSpikeColor(rgb), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
@@ -1320,7 +1325,36 @@
     ctx.restore();
   }
 
-  /* ── Tamaño y color de cada estrella ── */
+  /* ── Tamaño y color de cada estrella ──
+
+     El tamaño con que se dibuja una estrella es un tamaño APARENTE: lo que el ojo
+     ve en el ocular. Y el tamaño aparente NO depende de cuánto cielo entra en el
+     campo, solo del aumento y del brillo de la estrella. Dos oculares de la misma
+     focal (mismo aumento) tienen que dibujarla igual: el de campo más ancho
+     enseña MÁS CIELO alrededor, no estrellas más gordas.
+
+     Quien consume esto (el simulador y el generador del registro) dibuja el
+     lienzo y luego lo muestra a un diámetro proporcional al campo aparente del
+     ocular —un ocular de 100° ocupa más ventana que uno de 50°—. Por eso, para
+     que el tamaño en PANTALLA no dependa del campo aparente, el radio en píxeles
+     del lienzo tiene que ir con 1/afov: lo que la ventana estira, la escala lo
+     encoge, y queda solo el aumento.
+
+     Antes esta escala se calculaba con el campo REAL en arcmin
+     (`sqrt(90/arcmin)`, acotada a 2×), que es justo la variable equivocada: con
+     el mismo aumento, un Ethos de 100° y un AstroPhysics de ~46° dan campos
+     reales distintos, así que la misma estrella salía casi el doble de grande en
+     pantalla con el Ethos. Y como el par de una doble sí caía a la separación
+     correcta, el par se fundía en una mancha con un ocular y se separaba con el
+     otro: la separación parecía depender del campo aparente.
+
+     Ojo: la ventana del simulador deja de crecer a partir de AFOV_REF (110°), así
+     que por encima de ese campo aparente la compensación ya no es exacta. Es un
+     límite de la página, no de esta ley. */
+  function escalaEstrellas(afov) {
+    var a = (afov > 0) ? afov : CFG.escalaMagAfov;
+    return CFG.escalaMagAfov / a;
+  }
   function radioNucleo(g) {
     var r = CFG.radioMag * Math.pow(Math.max(0, CFG.magTamMin - g), CFG.radioExp);
     return Math.min(CFG.radioMax, Math.max(CFG.radioMin, r));
@@ -1367,8 +1401,9 @@
     // Ganancia global del dibujo: la usa la capa de rango extendido para hacer
     // una segunda pasada atenuada que rescate los núcleos recortados.
     ganActual = (o.ganancia > 0) ? o.ganancia : 1;
-    var factorHalo = 1 + CFG.blur, Rg = CFG.glowRadio;
-    var escalaMag = Math.min(CFG.escalaMagMax, Math.max(1, Math.sqrt(CFG.escalaMagCampo / arcmin)));
+    // Tamaños APARENTES: van con el campo aparente del ocular, no con el real.
+    var escala = escalaEstrellas(o.afov);
+    var factorHalo = 1 + CFG.blur, Rg = CFG.glowRadio * escala;
     var spikesOn = conGlow && arana;
     ctx.globalCompositeOperation = 'lighter';
     for (var i = 0; i < estrellas.length; i++) {
@@ -1384,7 +1419,10 @@
         ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
         continue;
       }
-      var Rtot = Math.min(CFG.radioTotalMax, radioNucleo(g) * factorHalo * escalaMag);
+      // El tope va sobre el tamaño NOMINAL, antes de escalar: si se aplicara
+      // después, las estrellas brillantes se recortarían a distinto tamaño
+      // aparente según el ocular y volvería el fallo por la puerta de atrás.
+      var Rtot = Math.min(CFG.radioTotalMax, radioNucleo(g) * factorHalo) * escala;
       ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / 6))) * ganActual;
       var esCarbono = (i === idxCarbono), colEstrella = null;
       if ((g < CFG.magColor && bprp != null) || esCarbono) {
@@ -1393,7 +1431,7 @@
       } else {
         ctx.drawImage(base, x - Rtot, y - Rtot, Rtot * 2, Rtot * 2);
       }
-      if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escalaMag, colEstrella);
+      if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
@@ -1476,7 +1514,7 @@
         conGalaxias: o.conGalaxias, conNebulosas: o.conNebulosas
       }) || new Float32Array(SIZE * SIZE);
       var capaEst = capaEstrellas(estrellas, {
-        ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim,
+        ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
         conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
       }, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst);
@@ -1495,6 +1533,7 @@
     nivelCielo: nivelCielo,
     tono: TONO,
     capaEstrellas: capaEstrellas,
+    escalaEstrellas: escalaEstrellas,
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
     realzarPerceptual: realzarPerceptual,

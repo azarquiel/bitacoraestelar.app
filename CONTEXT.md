@@ -97,6 +97,37 @@ instante de hora local con los algoritmos de Meeus.
   celeste a la altura de la latitud, la declinación solar en solsticio y equinoccio,
   el convenio de azimut y los husos con y sin horario de verano).
 
+## Escala aparente del dibujo
+
+Lo que el ojo ve en el ocular tiene dos escalas distintas, y confundirlas es un
+fallo que se ve pero no se explica:
+
+- **El cielo** (posiciones, separación de una doble, tamaño de una galaxia) va con
+  el **campo real**: el lienzo cubre `campoReal = afov / aumentos` y las posiciones
+  se proyectan con `SIZE / campoReal`.
+- **El tamaño de una estrella** va con el **campo aparente**: es un tamaño aparente,
+  no un tamaño en el cielo. `BitacoraGaiaRender.escalaEstrellas(afov)` =
+  `escalaMagAfov / afov`, y multiplica el radio del núcleo, el glow y la longitud de
+  los spikes. Los topes (`radioTotalMax`, `spikes.longMax`) se aplican al tamaño
+  NOMINAL, antes de escalar; al revés, las estrellas brillantes se recortarían a
+  distinto tamaño aparente según el ocular.
+- **Por qué 1/afov:** el lienzo se muestra a un diámetro ∝ `afov` (un ocular de 100°
+  ocupa más ventana que uno de 50°: eso es tener más campo aparente). Lo que la
+  ventana estira, la escala lo encoge, y en pantalla queda solo el aumento.
+- **Invariante:** con el mismo aumento, cambiar de ocular no cambia ni el tamaño de
+  las estrellas ni la separación de un par en pantalla; solo cuánto cielo se ve
+  alrededor. Antes la escala usaba el campo real (`sqrt(90/arcmin)`, acotada a 2×):
+  un Ethos de 6 mm y un AstroPhysics de 6 mm dibujaban la misma estrella 1,9×
+  distinta, y el par se fundía con uno y se separaba con el otro.
+  Test: `scripts/test_escala.js`.
+- **Límite conocido:** la ventana deja de crecer en `AFOV_REF` (110°), así que por
+  encima de ese campo aparente la compensación ya no es exacta. Es de la página, no
+  de la ley.
+- El **veredicto de desdoble** de una doble (`resolucionDoble`) no depende de nada de
+  esto: es apertura (Dawes) y `aumentos · separación`. Un par de pocos segundos de
+  arco cae por debajo del píxel en pantalla, así que el que dice si se resuelve es
+  el veredicto, no la imagen.
+
 ## Cadena de la placa (luma → flujo)
 
 Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de objeto
