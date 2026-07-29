@@ -89,7 +89,20 @@
     SB_CIELO_NEGRO: 22.5, SB_CIELO_BLANCO: 16.5,
     // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el lado
     // brillante). 1 = simétrico → las siluetas oscuras recortan contra el fondo.
-    REALCE_OSCURO: 1.0
+    REALCE_OSCURO: 1.0,
+    /* Gamma PERCEPTUAL de las capas difusas calibradas. La curva reparte 11,5
+       magnitudes linealmente sobre 0–255, así que un objeto 0,4 mag por encima
+       del cielo recibe 9 niveles: 3,5 % de gris sobre negro, invisible en un
+       monitor. Pero un ojo adaptado a la oscuridad detecta contrastes del 1–5 %,
+       y ese 45 % de diferencia lo ve con claridad. O sea: el reparto lineal pinta
+       el contraste FÍSICO, no el PERCIBIDO.
+
+       Se aplica SOLO donde el flujo está calibrado de verdad (las capas
+       sintéticas del Canvas-2D). Las placas del DSS y PanSTARRS no la llevan: su
+       heurístico luma→brillo mapea un píxel brillante a μ=14, más brillante que
+       cualquier objeto real, así que ya van sobradas de brillo y la gamma solo
+       las empeoraría. Con 1 se recupera el reparto lineal exacto. */
+    GAMMA_PERCEPTUAL: 0.45
   };
 
   function nivelCielo(SBe) {
@@ -197,10 +210,21 @@
     return Fcielo * (Math.pow(10, v * rango / (255 * 2.5)) - 1);
   }
 
+  /* Realce perceptual de un flujo difuso: expande su nivel en pantalla con
+     FOT.GAMMA_PERCEPTUAL y lo devuelve a flujo, para que la suma con la capa de
+     estrellas siga siendo aditiva y los núcleos sigan comprimiendo. Devuelve el
+     flujo tal cual si la gamma es 1. Ver FOT.GAMMA_PERCEPTUAL para el porqué. */
+  function realzarPerceptual(F, Fcielo, rango) {
+    if (FOT.GAMMA_PERCEPTUAL === 1 || !(F > 0)) return F;
+    var nivel = valorDeFlujo(F, Fcielo, rango);
+    return flujoDeValor(255 * Math.pow(nivel / 255, FOT.GAMMA_PERCEPTUAL), Fcielo, rango);
+  }
+
   function pintarFot(Fobj, ctx, o, estrellas) {
     var SIZE = ctx.canvas.width, n = Fobj.length;
     var c = ctxFotometrico(o);
     var canales = estrellas ? 3 : 1;
+    var perceptual = !!o.perceptual && FOT.GAMMA_PERCEPTUAL !== 1;
     var salida = [new Float32Array(n), null, null];
     if (canales === 3) { salida[1] = new Float32Array(n); salida[2] = new Float32Array(n); }
     for (var i = 0; i < n; i++) {
@@ -209,6 +233,12 @@
       // límite, que dibujar() ya ha aplicado.
       var s = suave((Fobj[i] / (c.Fcielo * c.Cmin) - 1) / 1.5);
       var difuso = Fobj[i] * s;
+      /* Realce perceptual del difuso: se expande su nivel en pantalla y se
+         devuelve a flujo, para que la suma con las estrellas siga siendo aditiva
+         y los núcleos sigan comprimiendo en vez de recortarse. Solo cuando el
+         motor declara que su flujo está calibrado (o.perceptual): las placas
+         entran por aquí con su heurístico y no deben tocarse. */
+      if (perceptual && difuso > 0) difuso = realzarPerceptual(difuso, c.Fcielo, c.rango);
       for (var ch = 0; ch < canales; ch++) {
         var F = difuso;
         if (estrellas) {
@@ -1224,7 +1254,8 @@
       sqm: o.sqm, pupilaOjo: o.pupilaOjo
     });
     var cielo = {
-      pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t
+      pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t,
+      perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
     return consultar(o.ra, o.dec, o.arcmin).then(function (estrellas) {
       /* Capas difusas y estrellas se mapean JUNTAS, en una sola curva de tono.
@@ -1257,6 +1288,7 @@
     capaEstrellas: capaEstrellas,
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
+    realzarPerceptual: realzarPerceptual,
     ctxFotometrico: ctxFotometrico,
     pintarFot: pintarFot,
     telon: TELON,

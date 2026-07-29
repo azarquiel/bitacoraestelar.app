@@ -480,5 +480,37 @@ window.BITACORA_GALAXIAS = null;
 ok(R.capaGalaxias({ ra: 10, dec: 40, arcmin: 60, size: 64 }) === null,
   'sin catálogo → null, sin romperse');
 
+/* ── 13. Realce perceptual de las capas calibradas ──────────────────────────
+   La curva reparte 11,5 magnitudes linealmente sobre 0–255, así que una galaxia
+   0,4 mag por encima del cielo recibía 9 niveles: invisible en un monitor,
+   cuando el ojo adaptado ve ese 45 % de contraste con claridad. */
+console.log('Realce perceptual:');
+var Fc2 = Math.pow(10, -0.4 * 21), rg = FOT.SB_NEGRO - FOT.SB_BLANCO;
+function nivelDe(mu, conRealce) {
+  var F = Math.pow(10, -0.4 * mu);
+  if (conRealce) F = R.realzarPerceptual(F, Fc2, rg);
+  return R.valorDeFlujo(F, Fc2, rg);
+}
+// El caso real que lo motivó: núcleo de NGC 891 a 21,62 mag/arcsec².
+ok(nivelDe(21.62, false) < 15, 'sin realce, un objeto de 21,6 se queda en ' +
+  nivelDe(21.62, false).toFixed(1) + '/255');
+ok(nivelDe(21.62, true) > 40, 'con realce sube a ' + nivelDe(21.62, true).toFixed(1) + '/255');
+
+// El orden de brillos se conserva: es un realce, no un aplanamiento.
+ok(nivelDe(20, true) > nivelDe(21.62, true) && nivelDe(21.62, true) > nivelDe(23, true),
+  'conserva el orden de brillos');
+// Y queda margen: lo brillante no se va de escala.
+ok(nivelDe(18, true) < 255, 'un objeto muy brillante sigue dentro de la escala');
+
+// Con gamma 1 la cadena vuelve a ser EXACTAMENTE la de antes: es la garantía de
+// que las placas, que no llevan realce, no se han movido ni un nivel.
+var gammaOriginal = FOT.GAMMA_PERCEPTUAL;
+FOT.GAMMA_PERCEPTUAL = 1;
+[19, 21, 23].forEach(function (mu) {
+  casi(nivelDe(mu, true), nivelDe(mu, false), 0,
+    'gamma 1 en μ=' + mu + ': idéntico al reparto lineal');
+});
+FOT.GAMMA_PERCEPTUAL = gammaOriginal;
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);

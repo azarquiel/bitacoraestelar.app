@@ -547,7 +547,9 @@
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim,
             conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana()
           }, PROC);
-          BitacoraGaiaRender.pintarFot(difuso, ctx, cieloOptica(datosOcular().pupila), capaEst);
+          var cieloGaia = cieloOptica(datosOcular().pupila);
+          cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
+          BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el
