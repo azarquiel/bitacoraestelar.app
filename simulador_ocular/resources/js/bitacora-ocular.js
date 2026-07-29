@@ -48,15 +48,19 @@
           ra: e.ra, dec: e.dec, mag: e.mag, tipo: e.tipo, carbono: true
         };
       });
-      // Estrellas dobles: catálogo unificado (AL + Cambridge + RASC), cargado desde
-      // estrellas-dobles-datos.js (window.BITACORA_DOBLES). Se marca `doble:true` para
-      // que la ficha muestre Mag1/Mag2/Sep, las insignias de catálogo y el veredicto de
-      // resolución (Dawes + aumento). El render lo sigue mandando Gaia (posiciones reales).
+      // Estrellas dobles: catálogo unificado (AL + Cambridge + RASC + WDS), cargado
+      // desde estrellas-dobles-datos.js (window.BITACORA_DOBLES). Se marca `doble:true`
+      // para que la ficha muestre Mag1/Mag2/Sep, las insignias de catálogo y el veredicto
+      // de resolución (Dawes + aumento). Las posiciones las sigue mandando Gaia; el
+      // ángulo de posición y los tipos espectrales solo se usan para completar las
+      // componentes que Gaia no trae (ver BitacoraGaiaRender.parDoble).
       var CATALOGO_DOBLES = (window.BITACORA_DOBLES || []).map(function (e) {
         return {
           id: e.id, nombre: e.nombre, constelacion: e.constelacion, abrev: e.abrev,
           ra: e.ra, dec: e.dec, tipo: e.tipo,
-          mag1: e.mag1, mag2: e.mag2, sep: e.sep, catalogos: e.catalogos, aliases: e.aliases,
+          mag1: e.mag1, mag2: e.mag2, sep: e.sep, pa: e.pa,
+          spect1: e.spect1, spect2: e.spect2,
+          catalogos: e.catalogos, aliases: e.aliases,
           doble: true
         };
       });
@@ -64,7 +68,8 @@
       var CAT_DOBLES_NOMBRE = {
         AL:   'Double Star Club (Astronomical League)',
         CDSA: 'Cambridge Double Star Atlas',
-        RASC: 'Royal Astronomical Society of Canada Double Star Program'
+        RASC: 'Royal Astronomical Society of Canada Double Star Program',
+        WDS:  'Washington Double Star Catalog (WDS 2024.08)'
       };
 
       // Categorías del selector de objeto. La clave coincide con data-cat del HTML.
@@ -522,7 +527,9 @@
              función de luminosidad. */
           var estrellasDibujo = objetoSel.doble
             ? BitacoraGaiaRender.parDoble(estrellas, {
-                ra: ra0, dec: dec0, sep: objetoSel.sep, mag1: objetoSel.mag1, mag2: objetoSel.mag2
+                ra: ra0, dec: dec0, sep: objetoSel.sep,
+                mag1: objetoSel.mag1, mag2: objetoSel.mag2,
+                pa: objetoSel.pa, spect1: objetoSel.spect1, spect2: objetoSel.spect2
               })
             : estrellas;
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, {

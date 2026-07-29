@@ -16,8 +16,12 @@
 'use strict';
 
 global.window = {};
+// El modelo de color va PRIMERO, como en las páginas: el render lo captura al
+// cargarse y de ahí saca el color de las componentes sintéticas.
+require('../resources/js/bitacora-gaia-color.js');
 require('../resources/js/bitacora-gaia-render.js');
 var R = global.window.BitacoraGaiaRender;
+var GColor = global.window.BitacoraGaiaColor;
 
 var fallos = 0;
 function ok(cond, etiqueta) {
@@ -88,6 +92,51 @@ casi(dos[1][1], ALMAAK.dec, 1e-12, 'y en su declinación');
    perfectamente vertical u horizontal se lee como un artefacto del dibujo. */
 var dRa = Math.abs(dos[2][0] - dos[1][0]), dDec = Math.abs(dos[2][1] - dos[1][1]);
 ok(dRa > 1e-9 && dDec > 1e-9, 'el par sale oblicuo, no pegado a un eje');
+
+/* ── 3.bis El ángulo de posición del catálogo ───────────────────────────────── */
+/* El PA va de la A a la B, medido desde el Norte hacia el Este. Lo trae el WDS
+   para 132 de las 289 dobles; en las demás se asume uno oblicuo. */
+function anguloPosicion(a, b) {
+  var cos0 = Math.cos(a[1] * Math.PI / 180);
+  var dra = (((b[0] - a[0] + 540) % 360) - 180) * cos0, ddec = b[1] - a[1];
+  return (Math.atan2(dra, ddec) * 180 / Math.PI + 360) % 360;
+}
+console.log('\nÁngulo de posición del catálogo:');
+var conPa = R.parDoble([], { ra: 30.975, dec: 42.3283, mag1: 3.4, mag2: 5.1, sep: 34.7, pa: 53 });
+casi(anguloPosicion(conPa[0], conPa[1]), 53, 0.05, 'la B se coloca al PA del catálogo (53°)');
+casi(separacion(conPa[0], conPa[1]), 34.7, 0.01, 'y a su separación (″)');
+
+/* Si la que falta es la PRIMARIA —el caso de Almaak—, el desplazamiento va al
+   revés: el PA apunta de A a B, así que la A está a PA+180 de la B. */
+var soloSecundaria = [estrella(0, 0, 5.1)];   // la B, en el centro del campo
+var conPrimaria = R.parDoble(soloSecundaria, { ra: ALMAAK.ra, dec: ALMAAK.dec, mag1: 2.3, mag2: 5.1, sep: 9.6, pa: 63 });
+var primaria = conPrimaria[conPrimaria.length - 1];
+casi(primaria[2], 2.3, 1e-9, 'se sintetiza la primaria');
+casi(anguloPosicion(primaria, soloSecundaria[0]), 63, 0.05,
+  'y queda de forma que la B siga estando a PA 63° de la A');
+
+/* ── 3.ter Color desde el tipo espectral ───────────────────────────────────── */
+console.log('\nColor de la componente sintética (Albireo: K3II + B9.5):');
+var albireo = { ra: 292.6803, dec: 27.9597, mag1: 3.4, mag2: 5.1, sep: 34.7, pa: 53,
+                spect1: 'K3II', spect2: 'B9.5' };
+var parAlbireo = R.parDoble([], albireo);
+casi(parAlbireo[0][3], GColor.bpRpPorTipo('K3II'), 1e-12, 'la A toma el BP–RP de su tipo (K3II)');
+casi(parAlbireo[1][3], GColor.bpRpPorTipo('B9.5'), 1e-12, 'la B, el del suyo (B9.5)');
+var colA = GColor.colorPorBpRp(parAlbireo[0][3]), colB = GColor.colorPorBpRp(parAlbireo[1][3]);
+ok(colA[0] > colA[2] && colB[2] > colB[0], 'el par sale dorado + azul, no dos puntos blancos');
+
+/* Cuando falta solo una, el tipo que se usa es el de LA QUE FALTA. */
+var faltaLaA = R.parDoble([estrella(9.9, 20, 4.86)], {
+  ra: ALMAAK.ra, dec: ALMAAK.dec, mag1: 2.3, mag2: 5.1, sep: 9.6, spect1: 'K3II', spect2: 'B9.5'
+});
+casi(faltaLaA[faltaLaA.length - 1][3], GColor.bpRpPorTipo('K3II'), 1e-12,
+  'falta la primaria → se usa spect1, no spect2');
+
+/* Sin tipo espectral, blanca: no se inventa un color. */
+var sinTipo = R.parDoble([], { ra: ALMAAK.ra, dec: ALMAAK.dec, mag1: 2.3, mag2: 5.1, sep: 9.6 });
+ok(sinTipo[0][3] === null && sinTipo[1][3] === null, 'sin tipo espectral, las dos salen sin color');
+var tipoBasura = R.parDoble([], { ra: ALMAAK.ra, dec: ALMAAK.dec, mag1: 2.3, mag2: 5.1, sep: 9.6, spect1: 'basura' });
+ok(tipoBasura[0][3] === null, 'un tipo que no se entiende tampoco inventa color');
 
 /* ── 4. Sin datos no se inventa nada ───────────────────────────────────────── */
 console.log('\nEntradas del catálogo a medias (muchas múltiples no traen sep ni mag2):');

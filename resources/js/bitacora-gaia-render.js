@@ -1376,14 +1376,18 @@
      BP–RP de la compañera de Almaak es −0,04: azul, y ese contraste es media
      gracia del par).
 
-     El ángulo de posición es ASUMIDO: los CSV del catálogo de dobles traen
-     magnitudes y separación, no PA. Para el desdoble lo que importa es la
-     separación; la orientación en el ocular depende del montaje, que tampoco se
-     modela. Se elige uno oblicuo para que el par no salga alineado con los ejes.
+     El ángulo de posición sale del catálogo cuando lo hay (lo trae el WDS, para
+     132 de las 289 dobles): la B se coloca a ese ángulo de la A, medido desde el
+     Norte hacia el Este. Si el par se completa al revés —la que falta es la
+     primaria—, el desplazamiento va a PA+180°. Sin PA se asume uno oblicuo, para
+     que el par no salga alineado con los ejes; para el desdoble lo que importa es
+     la separación, y la orientación en el ocular depende del montaje, que tampoco
+     se modela.
 
-     ponytail: la componente sintética sale blanca porque el catálogo de dobles no
-     trae color. Si hace falta el dorado de Almaak, la vía es añadir tipo espectral
-     o B−V a mapa/datos/estrellas_dobles.csv y derivar el BP–RP de ahí.
+     El COLOR de la componente sintética sale de su tipo espectral con
+     BitacoraGaiaColor.bpRpPorTipo, así que el modelo de color sigue siendo la
+     única fuente: una K3 del catálogo se pinta igual que una estrella de Gaia con
+     ese mismo BP–RP. Sin tipo espectral sale blanca.
 
      PURA: recibe y devuelve la lista de estrellas, sin tocar la original. */
   var PAR = {
@@ -1419,20 +1423,33 @@
     }
     if (halladas.length >= 2) return estrellas;                  // Gaia trae el par: no se toca
 
-    // Desplazamiento de una componente respecto de la otra, con el PA asumido.
-    var pa = PAR.angulo * Math.PI / 180;
-    var dDec = sep * Math.cos(pa) / 3600;
-    var dRa = sep * Math.sin(pa) / (3600 * (cos0 || 1));
+    // Desplazamiento de la B respecto de la A: PA del catálogo, o el asumido.
+    var paCat = numONulo(o.pa);
+    var pa = (paCat != null ? paCat : PAR.angulo) * Math.PI / 180;
+    function desplazar(estrella, signo) {
+      return [estrella[0] + signo * sep * Math.sin(pa) / (3600 * (cos0 || 1)),
+              estrella[1] + signo * sep * Math.cos(pa) / 3600];
+    }
+    // Color desde el tipo espectral. Guardado por si un caché sirviera una versión
+    // vieja del módulo de color: sin color se dibuja blanca, no se cae.
+    function bprpDe(tipo) {
+      var f = GColor && GColor.bpRpPorTipo;
+      return f ? f(tipo) : null;
+    }
 
     var nuevas;
     if (halladas.length === 1) {
-      // Falta una: la que peor encaja con la magnitud de la que sí está.
-      var g0 = halladas[0][2];
-      var falta = (Math.abs(g0 - m1) <= Math.abs(g0 - m2)) ? m2 : m1;
-      nuevas = [[halladas[0][0] + dRa, halladas[0][1] + dDec, falta, null]];
+      // Falta una: la que peor encaja con la magnitud de la que sí está. Si la que
+      // falta es la primaria, va en sentido contrario al PA (que apunta de A a B).
+      var hallada = halladas[0], g0 = hallada[2];
+      var faltaLaB = Math.abs(g0 - m1) <= Math.abs(g0 - m2);
+      var xy = desplazar(hallada, faltaLaB ? 1 : -1);
+      nuevas = [[xy[0], xy[1], faltaLaB ? m2 : m1, bprpDe(faltaLaB ? o.spect2 : o.spect1)]];
     } else {
       // No hay ninguna: las dos, con la primaria en las coordenadas del catálogo.
-      nuevas = [[ra0, dec0, m1, null], [ra0 + dRa, dec0 + dDec, m2, null]];
+      var a = [ra0, dec0, m1, bprpDe(o.spect1)];
+      var xyB = desplazar(a, 1);
+      nuevas = [a, [xyB[0], xyB[1], m2, bprpDe(o.spect2)]];
     }
     return estrellas.concat(nuevas);
   }

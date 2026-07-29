@@ -12,8 +12,16 @@ de estrella de carbono (bandas C2 "Swan").
 
 - **Fuente única:** `resources/js/bitacora-gaia-color.js`, global `window.BitacoraGaiaColor`.
 - **Interfaz:** `colorPorBpRp(bprp)` → `[r,g,b]`; `claseEspectral(bprp)` → letra
-  espectral (O·B·A·F·G·K·M); `config` → palanca mutable de gamma y saturación
-  compartida por todos los consumidores.
+  espectral (O·B·A·F·G·K·M); `bpRpPorTipo(tipo)` → el camino INVERSO, del tipo
+  espectral del catálogo (`'K3II'`, `'B9.5'`, `'gM0'`) al índice BP–RP, para las
+  estrellas de las que hay tipo pero no fotometría de Gaia; `config` → palanca
+  mutable de gamma y saturación compartida por todos los consumidores.
+- `bpRpPorTipo` NO es una segunda fuente de color: solo estima el BP–RP con el que
+  preguntarle al modelo, así que una K3 del catálogo se pinta igual que una
+  estrella de Gaia con ese mismo índice. Es una tabla de anclas interpolada, con
+  corrección por clase de luminosidad en las clases frías; aproximación para
+  pintar, no fotometría. Un tipo que no se entiende devuelve `null` (blanco), y
+  «basura» no cuela como una B5.
 - **Consumidores:** el **simulador de oculares** (`bitacora-ocular.js`) y el
   **vecindario solar** del mapa (`vecindario-solar.js`), ambos desde la misma URL
   canónica `/wp-content/uploads/bitacora/bitacora-gaia-color.js`.
@@ -150,13 +158,15 @@ mismo par.
   esas no se les añade nada.
 - **Solo el dibujo de estrellas.** Las capas difusas siguen recibiendo la muestra de
   Gaia tal cual, que es de donde sale su función de luminosidad.
-- **Ángulo de posición ASUMIDO** (55°, oblicuo para que el par no salga pegado a un
-  eje): los CSV del catálogo de dobles traen magnitudes y separación, no PA. Para el
-  desdoble lo que importa es la separación, y la orientación en el ocular depende del
-  montaje, que tampoco se modela.
-- **Limitación conocida:** la componente sintética sale **blanca**, porque el catálogo
-  de dobles no trae color. La vía si hace falta el dorado de Almaak es añadir tipo
-  espectral o B−V a `mapa/datos/estrellas_dobles.csv`.
+- **Ángulo de posición:** del catálogo cuando lo hay (lo trae el WDS, 132 de 289),
+  medido desde el Norte hacia el Este y de la A a la B; si el par se completa al
+  revés —falta la primaria— el desplazamiento va a PA+180°. Sin PA se asume uno
+  oblicuo (55°) para que el par no salga pegado a un eje: para el desdoble lo que
+  importa es la separación, y la orientación en el ocular depende del montaje, que
+  tampoco se modela.
+- **Color:** del tipo espectral de cada componente con
+  [[modelo de color Gaia]]`.bpRpPorTipo`, así que Albireo sale dorada + azul y no
+  como dos puntos blancos. Sin tipo espectral (140 de 289), blanca.
 - Las magnitudes del catálogo son **visuales** y se usan como si fueran G: el error es
   de unas décimas, más en las estrellas muy rojas.
 - **Trampa:** `+null` es `0`, y como magnitud sería una estrella falsa deslumbrante;
