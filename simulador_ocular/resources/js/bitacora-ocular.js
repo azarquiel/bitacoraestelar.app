@@ -351,7 +351,8 @@
         return {
           conTelon: on('sim-capa-telon'),
           conHalo: on('sim-capa-halo'),
-          conGalaxias: on('sim-capa-galaxias')
+          conGalaxias: on('sim-capa-galaxias'),
+          conNebulosas: on('sim-capa-nebulosas')
         };
       }
 

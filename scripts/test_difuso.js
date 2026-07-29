@@ -590,5 +590,61 @@ var sinTermino = R.ctxFotometrico({ pupilaSalida: 2, pupilaOjo: 7, sqm: 21, tran
 casi(enorme.Cmin / sinTermino.Cmin, FOT.C_MAG_MIN, 1e-9, 'acotado por abajo');
 casi(minusculo.Cmin / sinTermino.Cmin, FOT.C_MAG_MAX, 1e-9, 'acotado por arriba');
 
+/* ── 15. Nebulosas ─────────────────────────────────────────────────────────
+   Las nebulosas reutilizan la capa de las galaxias: exponencial (n = 1), sin
+   bulbo, sin banda de polvo y sin PA —el catálogo no lo trae para la mayoría, y
+   se pintan redondas antes que inventar una orientación—. El brillo sale de la
+   magnitud total, así que un error de normalización no deforma la mancha: la
+   pone entera del brillo equivocado, que a ojo no se distingue de otra
+   calibración. Por eso se mide la luz integrada, no la forma. */
+console.log('Nebulosas: el perfil integra la luz del catálogo:');
+window.BITACORA_NEBULOSAS = [['NGC 1976', 'M42', 10, 40, 661.36, 1, 0, 4.0, 1, 0, 0]];
+function luzNebulosa(arcmin, size) {
+  var g = R.capaGalaxias({ ra: 10, dec: 40, arcmin: arcmin, size: size },
+                         window.BITACORA_NEBULOSAS);
+  if (!g) return 0;
+  var areaPix = Math.pow(arcmin * 60 / size, 2);
+  var s = 0; for (var i = 0; i < g.length; i++) s += g[i];
+  return s * areaPix;
+}
+var totalNeb = luzNebulosa(300, 300);
+var fracNeb = totalNeb / Math.pow(10, -0.4 * 4.0);
+ok(fracNeb > 0.9 && fracNeb < 1.05,
+  'un campo que la abarca recoge el ' + (fracNeb * 100).toFixed(0) + ' % de la luz de V = 4,0');
+
+/* La mitad de la luz dentro de r_e: es la definición, y es lo que se rompe si
+   `bSersic(0,5)` se desvía del valor exacto ln 2 = 0,693. */
+var dentroReNeb = (function () {
+  var size = 300, arcmin = 300, esc = arcmin * 60 / size, s = 0;
+  var g = R.capaGalaxias({ ra: 10, dec: 40, arcmin: arcmin, size: size },
+                         window.BITACORA_NEBULOSAS);
+  for (var y = 0; y < size; y++) {
+    for (var x = 0; x < size; x++) {
+      var dN = (size / 2 - (y + 0.5)) * esc, dE = (size / 2 - (x + 0.5)) * esc;
+      if (Math.sqrt(dN * dN + dE * dE) <= 661.36) s += g[y * size + x];
+    }
+  }
+  return s * esc * esc;
+})();
+casi(dentroReNeb / totalNeb, 0.5, 0.03, 'la mitad de la luz cae dentro de r_e');
+
+/* Y los interruptores tienen que APAGAR de verdad. `conGalaxias` llegaba a
+   `capasActivas` pero no se reenviaba a `capasDifusas`, así que la casilla de
+   galaxias no hacía nada: el fallo no se ve porque la capa sigue siendo
+   correcta, solo desobedece. */
+console.log('Nebulosas y galaxias: los interruptores apagan:');
+// La sección anterior dejó el catálogo de galaxias vacío a propósito.
+window.BITACORA_GALAXIAS = [['NGC 224', 'M31', 10, 40, 2198.47, 0.324, 35, 3.61, 1, 0, 0]];
+var soloObjetos = { ra: 10, dec: 40, arcmin: 300, size: 64, conTelon: false, conHalo: false };
+function suma(a) { var s = 0; for (var i = 0; a && i < a.length; i++) s += a[i]; return s; }
+ok(suma(R.capasDifusas([], soloObjetos)) > 0, 'con todo encendido hay luz difusa');
+ok(R.capasDifusas([], Object.assign({}, soloObjetos,
+  { conGalaxias: false, conNebulosas: false })) === null,
+  'apagando galaxias y nebulosas no queda ninguna capa');
+var soloGal = suma(R.capasDifusas([], Object.assign({}, soloObjetos, { conNebulosas: false })));
+var soloNeb = suma(R.capasDifusas([], Object.assign({}, soloObjetos, { conGalaxias: false })));
+ok(soloGal > 0 && soloNeb > 0 && Math.abs(soloGal + soloNeb - suma(R.capasDifusas([], soloObjetos))) < 1e-6,
+  'cada capa aporta su parte y la suma cuadra');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);

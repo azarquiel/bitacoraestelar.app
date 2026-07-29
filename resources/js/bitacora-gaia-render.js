@@ -978,11 +978,13 @@
     return 2 * Math.PI * n * Math.exp(b) * gamma(2 * n) / Math.pow(b, 2 * n);
   }
 
-  /* Galaxias cuyo disco solapa el campo, con su radio de corte ya calculado.
-     Se incluyen las de centro FUERA del campo cuyo halo entra: en un campo ancho
-     el borde de M31 aparece aunque su núcleo quede fuera. */
-  function galaxiasEnCampo(o) {
-    var cat = window.BITACORA_GALAXIAS;
+  /* Objetos de perfil elíptico cuyo disco solapa el campo, con su radio de corte
+     ya calculado. Se incluyen los de centro FUERA del campo cuyo halo entra: en
+     un campo ancho el borde de M31 aparece aunque su núcleo quede fuera.
+     Sirve a galaxias y a nebulosas: comparten esquema de fila, y una nebulosa es
+     un Sérsic de n = 0,5 (gaussiana) sin bulbo ni banda de polvo. */
+  function galaxiasEnCampo(o, cat) {
+    cat = cat || window.BITACORA_GALAXIAS;
     if (!cat || !cat.length) return [];
     var medio = (o.arcmin / 60) / 2, cos0 = Math.cos(o.dec * Math.PI / 180);
     var fuera = Math.pow(10, -0.4 * GALAXIA.muCorte), lista = [];
@@ -1034,10 +1036,10 @@
     return lista;
   }
 
-  /* Capa de galaxias del campo, en flujo por arcsec². Sin atenuación de pupila:
-     la aplica ctxFotometrico. */
-  function capaGalaxias(o) {
-    var lista = galaxiasEnCampo(o);
+  /* Capa de objetos elípticos del campo, en flujo por arcsec². Sin atenuación de
+     pupila: la aplica ctxFotometrico. */
+  function capaGalaxias(o, cat) {
+    var lista = galaxiasEnCampo(o, cat);
     if (!lista.length) return null;
     var SIZE = o.size, out = new Float32Array(SIZE * SIZE);
     var escArc = (o.arcmin * 60) / SIZE;      // arcsec por píxel
@@ -1110,10 +1112,12 @@
     var telon = (o.conTelon !== false) ? telonDifuso(estrellas, o) : null;
     var halo = (o.conHalo !== false) ? haloNoResuelto(estrellas, o, telon) : null;
     var galaxias = (o.conGalaxias !== false) ? capaGalaxias(o) : null;
+    var nebulosas = (o.conNebulosas !== false) ? capaGalaxias(o, window.BITACORA_NEBULOSAS) : null;
     var capas = [];
     if (telon) capas.push(telon);
     if (halo) capas.push(halo);
     if (galaxias) capas.push(galaxias);
+    if (nebulosas) capas.push(nebulosas);
     if (!capas.length) return null;
     var out = capas[0];
     for (var c = 1; c < capas.length; c++) {
@@ -1382,7 +1386,8 @@
          recortaban a blanco y no se distinguía ninguna estrella. */
       var difuso = capasDifusas(estrellas, {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, size: SIZE,
-        conTelon: o.conTelon, conHalo: o.conHalo
+        conTelon: o.conTelon, conHalo: o.conHalo,
+        conGalaxias: o.conGalaxias, conNebulosas: o.conNebulosas
       }) || new Float32Array(SIZE * SIZE);
       var capaEst = capaEstrellas(estrellas, {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim,

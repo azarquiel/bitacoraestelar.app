@@ -18,14 +18,14 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
 
      PESTAÑA "Cualquier objeto" (RA/Dec o SIMBAD): ENCENDIDA por defecto. Es la
-     única forma de apuntar a una galaxia o a un globular, que se pintan como
-     capa por campo y no tienen pestaña propia en el selector.
+     única forma de apuntar a una galaxia, una nebulosa o un globular, que se
+     pintan como capa por campo y no tienen pestaña propia en el selector.
      Para ocultarla, añade esta línea antes de los <script src>:
          <script>window.BITACORA_OCULAR_LIBRE = false;</script>
      ============================================================ -->
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260720_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260729_1000" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260729_1600" />
 
 <!-- Filtro de respuesta del ojo según la pupila de salida (modo de reserva
      sin canvas): y = pendiente·x + desplazamiento. -->
@@ -177,6 +177,8 @@
             <input type="checkbox" id="sim-capa-halo" checked> Halo de cúmulos</label>
           <label class="capa" title="Galaxias del catálogo RC3 que caen en el campo, como perfil de Sérsic">
             <input type="checkbox" id="sim-capa-galaxias" checked> Galaxias</label>
+          <label class="capa" title="Nebulosas del NGC/IC que caen en el campo, como mancha gaussiana de la luz y el tamaño de catálogo">
+            <input type="checkbox" id="sim-capa-nebulosas" checked> Nebulosas</label>
         </div>
         <p class="capa-nota" id="sim-capa-nota" hidden>Las capas difusas solo se aplican a la vista de Gaia: en las placas fotográficas ya vienen en la propia imagen.</p>
       </div>
@@ -217,8 +219,9 @@
 <script src="/wp-content/uploads/bitacora/estrellas-carbono-datos.js?v=20260721_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/estrellas-dobles-datos.js?v=20260723_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260721_2330" defer></script>
-<script src="/wp-content/uploads/bitacora/globulares-datos.js?v=20260729_1000" defer></script>
-<script src="/wp-content/uploads/bitacora/galaxias-datos.js?v=20260729_1000" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260729_1000" defer></script>
+<script src="/wp-content/uploads/bitacora/globulares-datos.js?v=20260729_1600" defer></script>
+<script src="/wp-content/uploads/bitacora/galaxias-datos.js?v=20260729_1600" defer></script>
+<script src="/wp-content/uploads/bitacora/nebulosas-datos.js?v=20260729_1600" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260722_1500" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260729_1000" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260729_1600" defer></script>

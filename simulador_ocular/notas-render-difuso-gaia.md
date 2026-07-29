@@ -53,6 +53,7 @@ antes de tocar nada. Buena parte resultó ya implementada o superada.
 | 18 | Exposición de galaxias | Solo capa por campo, sin pestaña; se pintan las compañeras |
 | 19 | Apuntar | Exponer el modo libre SIMBAD (quitar el flag de pruebas) |
 | 20 | Cadena fotométrica | `ctxFotometrico` + `pintarFot` **se mudan al módulo compartido** |
+| 21 | Nebulosas (revisión de 5 y 7) | **Catálogo sintético NGC/IC**, no mapas all-sky. Cero assets |
 
 ### Justificaciones clave
 
@@ -74,6 +75,17 @@ antes de tocar nada. Buena parte resultó ya implementada o superada.
   brazos y bandas de polvo exigen apertura grande. Un Sérsic no es una
   aproximación barata aquí: es **más honesto** visualmente que una foto profunda,
   y no cuesta assets.
+- **21** — Revierte las decisiones 5, 7 y 13 (PNG all-sky de Hα y polvo) una vez
+  implementado el resto. Tres razones, todas ya escritas en este mismo documento:
+  el riesgo 1 dice que a 6′ el mapa da un degradado y no estructura; la decisión 8
+  y el riesgo 5 dicen que las siluetas oscuras las da el **telón de conteos de
+  Gaia**, ya en producción y con resolución efectiva comparable; y la decisión 3
+  dice que el ojo es casi ciego a Hα, así que el mapa aporta poco donde no hay
+  nebulosa catalogada. Coste evitado: ~600 MB de Bayestar19, `healpy` y ~2–4 MB
+  de asset descargados **siempre**, incluido el formulario de registro (riesgo 3).
+  A cambio, las nebulosas salen del NGC/IC con el mismo argumento que las
+  galaxias (decisión 17) y por la misma tubería: `capaGalaxias` con un
+  exponencial, sin bulbo ni banda de polvo.
 - **20** — El Canvas-2D necesita la misma cadena flujo→pantalla que las placas.
   Mudarla mata además las réplicas de `nivelFondo` y `magLimite`, hoy
   sincronizadas a mano.
@@ -87,6 +99,9 @@ antes de tocar nada. Buena parte resultó ya implementada o superada.
   viene con el agujero (Gaia no detecta las estrellas que el polvo extingue), así
   que la máscara contaría el polvo dos veces y vaciaría un campo lleno de
   estrellas de delante.
+- **§4 mapa Hα de Finkbeiner y §7 mapa de polvo SFD/Bayestar** — descartados
+  enteros, ver justificación de la decisión 21. Las nebulosas de emisión pasan a
+  catálogo sintético; las oscuras ya las dibuja el telón.
 - **§8 paso 6** — corregido, ver justificación de la decisión 6.
 - **Signo de la atenuación** — la spec traía `+2,5·log10(B_rel)` con `B_rel < 1`,
   que **aclara** el objeto. Signo correcto: **menos**. Mismo error que ya se
@@ -104,7 +119,17 @@ antes de tocar nada. Buena parte resultó ya implementada o superada.
    simulador que presume de funcionar en móvil.
 4. **El modo máscara es físicamente falso por diseño.** Solo lo sostiene la
    etiqueta de la UI.
-5. **Ruido de Poisson en el telón.** Con `TOP 40000` en 1,44° salen ~1500
+5. **La magnitud de catálogo de una nebulosa a veces es la de su estrella.**
+   NGC 1980 figura con V = 2,5, que es ι Orionis: sin tope salía a μ_e = 14,5,
+   más brillante que el núcleo de M42, y encima duplicando luz que Gaia ya pinta.
+   Mitigado con un suelo de brillo superficial (`MU_MIN`), que es un tope global,
+   no un arreglo por objeto: 123 de 239 filas quedan recortadas.
+6. **Una nebulosa es más que un óvalo suave.** M42 concentra su luz en ~4′ de los
+   90′ que da el catálogo, y de un solo tamaño y una sola magnitud no sale esa
+   concentración. Sale la mancha con núcleo, no la estructura.
+7. **Sin ángulo de posición en 193 de 239 filas.** Se pintan redondas, con el
+   radio medio geométrico: conserva tamaño y luz, pierde la forma.
+8. **Ruido de Poisson en el telón.** Con `TOP 40000` en 1,44° salen ~1500
    estrellas en un campo de 30′: a celdas de 6′ son ~60 estrellas, 13 % de ruido.
    Resolución efectiva ~3–6′, comparable a Bayestar, no mejor.
 
@@ -143,10 +168,10 @@ respaldo de Astro Data Lab, ni `procesarFotometricoMu`.
 
 ## Fuentes
 
-- Finkbeiner (2003), mapa Hα compuesto (WHAM/VTSS/SHASSA), en Rayleighs:
-  https://lambda.gsfc.nasa.gov/product/foreground/fg_ha_get.html
-- Schlegel, Finkbeiner & Davis (1998), mapa de extinción `E(B−V)`, 6,1′.
-- Green et al. (2019), Bayestar19 — polvo 3D, `dec > −30°`.
+- Verga, «OpenNGC» — NGC/IC revisado, con tamaños, magnitudes y tipos:
+  https://github.com/mattiaverga/OpenNGC
+- Descartadas por la decisión 21: Finkbeiner (2003) mapa Hα compuesto,
+  Schlegel, Finkbeiner & Davis (1998) `E(B−V)`, y Green et al. (2019) Bayestar19.
 - Roger N. Clark, *Visual Astronomy of the Deep Sky* — invariancia del contraste
   con el aumento, contraste umbral de Blackwell, siluetas oscuras:
   https://clarkvision.com/visastro/omva1/
