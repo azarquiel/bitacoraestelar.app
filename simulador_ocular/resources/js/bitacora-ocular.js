@@ -513,10 +513,17 @@
             $('sim-aviso').textContent = 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
               ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
           }
-          var difuso = BitacoraGaiaRender.capasDifusas(estrellas, { ra: ra0, dec: dec0, arcmin: arcmin, size: PROC });
-          if (difuso) { BitacoraGaiaRender.pintarFot(difuso, ctx, cieloOptica(datosOcular().pupila)); }
-          else { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC); }
-          dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, true, !!objetoSel.carbono);   // Canvas 2D: con glow de estrellas no resueltas
+          /* Capas difusas y estrellas se mapean JUNTAS, en una sola curva de tono.
+             Si las estrellas se dibujaran encima en 8 bits se saltarían la curva,
+             y en un núcleo denso la suma de sprites se recorta a blanco: la mancha
+             saturada sin estrellas distinguibles. */
+          var difuso = BitacoraGaiaRender.capasDifusas(estrellas, { ra: ra0, dec: dec0, arcmin: arcmin, size: PROC })
+            || new Float32Array(PROC * PROC);
+          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellas, {
+            ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim,
+            conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana()
+          }, PROC);
+          BitacoraGaiaRender.pintarFot(difuso, ctx, cieloOptica(datosOcular().pupila), capaEst);
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el

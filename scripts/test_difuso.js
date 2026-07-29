@@ -348,5 +348,35 @@ var obs = R.flujoObservadoCumulo(lleno, gcT, gcT.rc * Math.pow(10, gcT.c), 0.083
 ok(obs && obs(0) > 0, 'el flujo observado en el centro no es cero');
 ok(obs(0) >= obs(0.05), 'el perfil observado decrece del centro hacia fuera');
 
+/* ── 10. Curva de tono de las estrellas ─────────────────────────────────────
+   Las estrellas se dibujaban con 'lighter' en 8 bits y saltándose la curva de
+   tono: en el núcleo de un cúmulo cientos de sprites sumaban por encima de 255,
+   se recortaban a blanco y no quedaba ninguna estrella distinguible. Ahora su
+   valor de pantalla vuelve a flujo y se mapea junto con las capas difusas. */
+console.log('Curva de tono de la capa de estrellas:');
+var Fc = Math.pow(10, -0.4 * 21), rango = FOT.SB_NEGRO - FOT.SB_BLANCO;
+// Ida y vuelta exacta: nada que no estuviera saturado se mueve de sitio.
+[1, 37, 128, 200, 255].forEach(function (v) {
+  casi(R.valorDeFlujo(R.flujoDeValor(v, Fc, rango), Fc, rango), v, 1e-9,
+    'valor ' + v + ' sobrevive la ida y vuelta');
+});
+
+/* Lo que antes se recortaba, ahora comprime. Dos estrellas que sumaban 400
+   niveles quedaban en 255 igual que cuatro que sumaran 800: misma mancha blanca
+   y sin forma. Ahora conservan su orden. */
+function apilado(veces) {   // suma de flujos, que es lo que hace pintarFot
+  return R.valorDeFlujo(R.flujoDeValor(200, Fc, rango) * veces, Fc, rango);
+}
+ok(apilado(2) > 200, 'apilar estrellas sube el nivel');
+ok(apilado(4) > apilado(2), 'un núcleo 2x más brillante sigue saliendo más brillante (' +
+  apilado(2).toFixed(1) + ' vs ' + apilado(4).toFixed(1) + '), no los dos a 255');
+/* Antes, dos estrellas de 200 niveles sumaban 400 y se recortaban a blanco; con
+   cuatro pasaba lo mismo, así que el núcleo era una mancha plana. Ahora ambos
+   casos caben en la escala y se distinguen. Con apilados extremos sigue habiendo
+   techo: la curva abarca 11,5 magnitudes y eso es el rango de la pantalla, no un
+   fallo — pero la rodilla está mucho más arriba que el recorte de antes. */
+ok(apilado(2) < 255 && apilado(4) < 255, 'lo que antes se recortaba ahora cabe en la escala');
+ok(apilado(64) > apilado(16), 'el orden se conserva incluso pasado el techo');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);

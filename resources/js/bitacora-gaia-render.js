@@ -169,19 +169,59 @@
      compartida por todos los motores que sepan producir un Fobj: el de placas del
      simulador y las capas difusas sintéticas del Canvas-2D.
      El lienzo debe venir ya dimensionado (cuadrado). */
-  function pintarFot(Fobj, ctx, o) {
-    var SIZE = ctx.canvas.width;
+  /* Curva de tono y su inversa. El incremento sobre el fondo de cielo en niveles
+     de pantalla es Δ = 255·2,5·log10(1 + F/Fcielo)/rango; flujoDeValor la
+     invierte. Que sean inversas exactas es lo que permite meter las estrellas en
+     la cadena sin mover de sitio nada que no estuviera ya saturado. */
+  function valorDeFlujo(F, Fcielo, rango) {
+    return 255 * 2.5 * Math.log10(1 + F / Fcielo) / rango;
+  }
+  function flujoDeValor(v, Fcielo, rango) {
+    return Fcielo * (Math.pow(10, v * rango / (255 * 2.5)) - 1);
+  }
+
+  function pintarFot(Fobj, ctx, o, estrellas) {
+    var SIZE = ctx.canvas.width, n = Fobj.length;
     var c = ctxFotometrico(o);
-    var salida = new Float32Array(Fobj.length);
-    for (var i = 0; i < Fobj.length; i++) {
+    var canales = estrellas ? 3 : 1;
+    var salida = [new Float32Array(n), null, null];
+    if (canales === 3) { salida[1] = new Float32Array(n); salida[2] = new Float32Array(n); }
+    for (var i = 0; i < n; i++) {
+      // El desvanecido por umbral de contraste es para objetos EXTENSOS. A una
+      // fuente puntual no se le aplica: su visibilidad la fija la magnitud
+      // límite, que dibujar() ya ha aplicado.
       var s = suave((Fobj[i] / (c.Fcielo * c.Cmin) - 1) / 1.5);
-      salida[i] = c.nivelFondo + 255 * 2.5 * Math.log10(1 + (Fobj[i] * s) / c.Fcielo) / c.rango;
+      var difuso = Fobj[i] * s;
+      for (var ch = 0; ch < canales; ch++) {
+        var F = difuso;
+        if (estrellas) {
+          var v = estrellas[i * 3 + ch];
+          if (v > 0) F += flujoDeValor(v, c.Fcielo, c.rango);
+        }
+        salida[ch][i] = c.nivelFondo + valorDeFlujo(F, c.Fcielo, c.rango);
+      }
     }
-    var final = adaptacionLocal(salida, SIZE);
-    var im = ctx.createImageData(SIZE, SIZE);
-    for (var k = 0, j = 0; j < final.length; k += 4, j++) {
-      var g = Math.max(0, Math.min(255, final[j]));
-      im.data[k] = im.data[k + 1] = im.data[k + 2] = g; im.data[k + 3] = 255;
+    var im = ctx.createImageData(SIZE, SIZE), k, j;
+    if (canales === 1) {
+      var final = adaptacionLocal(salida[0], SIZE);
+      for (k = 0, j = 0; j < n; k += 4, j++) {
+        var g = Math.max(0, Math.min(255, final[j]));
+        im.data[k] = im.data[k + 1] = im.data[k + 2] = g; im.data[k + 3] = 255;
+      }
+    } else {
+      /* La adaptación local se calcula sobre la LUMINANCIA y su corrección se
+         aplica igual a los tres canales: así realza el detalle sin desviar el
+         color de las estrellas, y con un solo desenfoque en vez de tres. */
+      var lum = new Float32Array(n);
+      for (j = 0; j < n; j++) lum[j] = (salida[0][j] + salida[1][j] + salida[2][j]) / 3;
+      var adaptada = adaptacionLocal(lum, SIZE);
+      for (k = 0, j = 0; j < n; k += 4, j++) {
+        var delta = adaptada[j] - lum[j];
+        im.data[k] = Math.max(0, Math.min(255, salida[0][j] + delta));
+        im.data[k + 1] = Math.max(0, Math.min(255, salida[1][j] + delta));
+        im.data[k + 2] = Math.max(0, Math.min(255, salida[2][j] + delta));
+        im.data[k + 3] = 255;
+      }
     }
     ctx.putImageData(im, 0, 0); return true;
   }
@@ -816,6 +856,9 @@
     return nueva.promise;
   }
 
+  // Ganancia global del dibujo actual (ver capaEstrellas).
+  var ganActual = 1;
+
   /* ── Sprites (núcleo, glow, brazo de difracción) ── */
   var GAIA_SPRITE = null, GLOW_SPRITE = null, SPIKE_SPRITE = null, SPIKE_TINT = {};
   function spriteGaia() {
@@ -884,7 +927,7 @@
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(cf.angulo * Math.PI / 180);
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = alpha * ganActual;
     for (var k = 0; k < cf.brazos; k++) { ctx.drawImage(sp, 0, -H / 2, L, H); ctx.rotate(paso); }
     ctx.restore();
   }
@@ -933,6 +976,9 @@
         if (d2 < mejorD2) { mejorD2 = d2; idxCarbono = c; }
       }
     }
+    // Ganancia global del dibujo: la usa la capa de rango extendido para hacer
+    // una segunda pasada atenuada que rescate los núcleos recortados.
+    ganActual = (o.ganancia > 0) ? o.ganancia : 1;
     var factorHalo = 1 + CFG.blur, Rg = CFG.glowRadio;
     var escalaMag = Math.min(CFG.escalaMagMax, Math.max(1, Math.sqrt(CFG.escalaMagCampo / arcmin)));
     var spikesOn = conGlow && arana;
@@ -946,12 +992,12 @@
       if (g > mlim) {
         var aGlow = CFG.glowIntensidad * Math.pow(10, -0.4 * (g - mlim));
         if (aGlow < 0.004) continue;
-        ctx.globalAlpha = Math.min(1, aGlow);
+        ctx.globalAlpha = Math.min(1, aGlow) * ganActual;
         ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
         continue;
       }
       var Rtot = Math.min(CFG.radioTotalMax, radioNucleo(g) * factorHalo * escalaMag);
-      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / 6)));
+      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / 6))) * ganActual;
       var esCarbono = (i === idxCarbono), colEstrella = null;
       if ((g < CFG.magColor && bprp != null) || esCarbono) {
         colEstrella = colorEstrella(bprp, esCarbono);
@@ -963,6 +1009,55 @@
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+  }
+
+  /* ═══════════ CAPA DE ESTRELLAS EN RANGO EXTENDIDO ═══════════════════════════
+     Las estrellas se dibujan sumando sprites con 'lighter' sobre un lienzo de 8
+     bits. En el núcleo de un cúmulo se solapan cientos y la suma se RECORTA a
+     255: ahí se pierde la información, y ningún posprocesado la recupera porque
+     el recorte ya ocurrió al dibujar. Por eso un globular a pocos aumentos salía
+     como una mancha blanca sin estrellas distinguibles.
+
+     Dos pasadas sobre el mismo dibujo:
+       · ganancia 1 conserva lo tenue (el glow de las no resueltas baja a α≈0,004);
+       · ganancia reducida rescata solo donde la primera satura.
+     El empalme se hace con una transición suave, para que no se vea la costura.
+
+     Devuelve valores de pantalla (0..255·1/ganancia) por canal RGB, que pintarFot
+     convierte a flujo y mapea junto con las capas difusas. */
+  var TONO = {
+    ganancia: 1 / 16,   // 4 pasos de margen sobre el recorte
+    desde: 230, hasta: 252   // banda donde se cruza de la pasada alta a la baja
+  };
+
+  function lienzoEstrellas(estrellas, o, SIZE, ganancia) {
+    var c = document.createElement('canvas'); c.width = c.height = SIZE;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, SIZE, SIZE);
+    var op = { ganancia: ganancia };
+    for (var kk in o) if (Object.prototype.hasOwnProperty.call(o, kk)) op[kk] = o[kk];
+    op.ganancia = ganancia;
+    dibujar(ctx, estrellas, op);
+    return ctx.getImageData(0, 0, SIZE, SIZE).data;
+  }
+
+  function capaEstrellas(estrellas, o, SIZE) {
+    var alta = lienzoEstrellas(estrellas, o, SIZE, 1);
+    var baja = lienzoEstrellas(estrellas, o, SIZE, TONO.ganancia);
+    var n = SIZE * SIZE, out = new Float32Array(n * 3);
+    var inv = 1 / TONO.ganancia;
+    for (var j = 0; j < n; j++) {
+      // El cruce se decide por el canal más alto: si uno satura, el píxel está
+      // recortado aunque los otros no, y hay que rescatar los tres a la vez para
+      // no torcer el color.
+      var p = j * 4;
+      var pico = Math.max(alta[p], Math.max(alta[p + 1], alta[p + 2]));
+      var t = suave((pico - TONO.desde) / (TONO.hasta - TONO.desde));
+      for (var ch = 0; ch < 3; ch++) {
+        out[j * 3 + ch] = alta[p + ch] * (1 - t) + baja[p + ch] * inv * t;
+      }
+    }
+    return out;
   }
 
   /* ── Entrada de alto nivel: fondo + consulta + dibujo ── */
@@ -982,17 +1077,19 @@
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t
     };
     return consultar(o.ra, o.dec, o.arcmin).then(function (estrellas) {
-      // Capas difusas primero (incluyen el fondo de cielo); si no hay, gris uniforme.
+      /* Capas difusas y estrellas se mapean JUNTAS, en una sola curva de tono.
+         Antes el fondo pasaba por la curva logarítmica y las estrellas se
+         dibujaban encima en 8 bits, saltándosela: por eso los núcleos densos se
+         recortaban a blanco y no se distinguía ninguna estrella. */
       var difuso = capasDifusas(estrellas, {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, size: SIZE,
         conTelon: o.conTelon, conHalo: o.conHalo
-      });
-      if (difuso) { pintarFot(difuso, ctx, cielo); }
-      else { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE); }
-      dibujar(ctx, estrellas, {
+      }) || new Float32Array(SIZE * SIZE);
+      var capaEst = capaEstrellas(estrellas, {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim,
         conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
-      });
+      }, SIZE);
+      pintarFot(difuso, ctx, cielo, capaEst);
       return { estrellas: estrellas, mlim: mlim, fondo: fondo, telon: !!telon };
     });
   }
@@ -1006,6 +1103,10 @@
     magLimite: magLimite,
     nivelFondo: nivelFondo,
     nivelCielo: nivelCielo,
+    tono: TONO,
+    capaEstrellas: capaEstrellas,
+    valorDeFlujo: valorDeFlujo,
+    flujoDeValor: flujoDeValor,
     ctxFotometrico: ctxFotometrico,
     pintarFot: pintarFot,
     telon: TELON,
