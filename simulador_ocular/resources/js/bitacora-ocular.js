@@ -342,6 +342,27 @@
         return t;
       }
 
+      /* Estado de los interruptores de la barra "Capas y vista". Las capas
+         difusas se calculan SOLO en el Canvas-2D de Gaia: en las placas del DSS o
+         PanSTARRS esa luz ya viene en la propia imagen, y sumarla otra vez la
+         contaría dos veces y encima a peor resolución. */
+      function capasActivas() {
+        function on(id) { var el = $(id); return !el || el.checked; }
+        return {
+          conTelon: on('sim-capa-telon'),
+          conHalo: on('sim-capa-halo'),
+          conGalaxias: on('sim-capa-galaxias')
+        };
+      }
+
+      // Habilita o deshabilita el grupo de capas según el origen activo.
+      function sincronizarCapas() {
+        var esGaia = $('sim-origen').value === 'canvas-2d';
+        var grupo = $('sim-capa-grupo'), nota = $('sim-capa-nota');
+        if (grupo) grupo.classList.toggle('esta-off', !esGaia);
+        if (nota) nota.hidden = esGaia;
+      }
+
       /* Estado de cielo + óptica que espera el módulo compartido. Único punto de
          este fichero que lee el DOM para la fotometría; de aquí para dentro todo
          es parámetro. */
@@ -407,6 +428,7 @@
           : (magOpt - MARGEN_MAGLIM).toFixed(1) + '–' + magOpt.toFixed(1) + '<em>m</em>');
 
         var origen = $('sim-origen').value;
+        sincronizarCapas();
 
         /* Recorte del cielo: lado = campo real, limitado por el origen. El tope de
            2° es de las PLACAS (el servidor del DSS no sirve más); el Canvas-2D de
@@ -517,7 +539,9 @@
              Si las estrellas se dibujaran encima en 8 bits se saltarían la curva,
              y en un núcleo denso la suma de sprites se recorta a blanco: la mancha
              saturada sin estrellas distinguibles. */
-          var difuso = BitacoraGaiaRender.capasDifusas(estrellas, { ra: ra0, dec: dec0, arcmin: arcmin, size: PROC })
+          var opcCapas = capasActivas();
+          opcCapas.ra = ra0; opcCapas.dec = dec0; opcCapas.arcmin = arcmin; opcCapas.size = PROC;
+          var difuso = BitacoraGaiaRender.capasDifusas(estrellas, opcCapas)
             || new Float32Array(PROC * PROC);
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellas, {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim,
@@ -710,11 +734,12 @@
       }
 
       /* ══════════════════ MODO "CUALQUIER OBJETO" ══════════════════
-         Herramienta de pruebas: apuntar a RA/Dec arbitrarias o buscar por nombre
-         en SIMBAD. Va detrás del flag window.BITACORA_OCULAR_LIBRE (apagado por
-         defecto): sin él, la 4ª pestaña ni aparece ni se cablea. El objeto libre
-         se pinta con carbono:true y doble:false fijos (la clasificación real
-         vendrá en el futuro). */
+         Apuntar a RA/Dec arbitrarias o buscar por nombre en SIMBAD. Ahora viene
+         ENCENDIDO: sin él no hay forma de apuntar a una galaxia o a un globular,
+         que se pintan como capa por campo y no tienen pestaña propia en el
+         selector. Para ocultarlo, window.BITACORA_OCULAR_LIBRE = false.
+         El objeto libre se pinta con carbono:true y doble:false fijos (la
+         clasificación real vendrá en el futuro). */
       function pad2(n) { return (n < 10 ? '0' : '') + n; }
       // Grados -> sexagesimal PLANO ("HH MM SS" / "±DD MM SS"), que es lo que
       // consume sexToDeg() (el formato "21h 40m 22s" de formatRA NO vale aquí).
@@ -798,8 +823,8 @@
           sinResultados: 'Sin coincidencias en esta lista',
           onElegir: function (o) { input.value = ''; elegirObjeto(o); }
         });
-        // 4ª pestaña "Cualquier objeto": solo si el flag de pruebas está activo.
-        var libreOn = !!window.BITACORA_OCULAR_LIBRE;
+        // 4ª pestaña "Cualquier objeto": encendida salvo que se apague a mano.
+        var libreOn = (window.BITACORA_OCULAR_LIBRE !== false);
         var tabLibre = $('sim-tab-libre'), panelLibre = $('sim-libre');
         if (tabLibre) tabLibre.hidden = !libreOn;
         if (panelLibre) panelLibre.hidden = true;
@@ -829,6 +854,9 @@
       if (window.BitacoraBase && $('sim-bortle') && $('sim-sqm')) BitacoraBase.montarCielo($('sim-bortle'), $('sim-sqm'));
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
       $('sim-origen').addEventListener('change', actualizar);
+      ['sim-capa-telon', 'sim-capa-halo', 'sim-capa-galaxias'].forEach(function (id) {
+        var el = $(id); if (el) el.addEventListener('change', actualizar);
+      });
       window.addEventListener('resize', function () { actualizar(); });
       montarTeleManual();
       montarSelectorObjeto();
