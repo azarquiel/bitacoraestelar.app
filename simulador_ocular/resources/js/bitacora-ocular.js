@@ -369,7 +369,8 @@
       function cieloOptica(pupila) {
         return {
           pupilaSalida: pupila, pupilaOjo: pupilaOjo(),
-          sqm: parseFloat($('sim-sqm').value) || 21, transmision: transmisionEfectiva()
+          sqm: parseFloat($('sim-sqm').value) || 21, transmision: transmisionEfectiva(),
+          aumentos: datosOcular().aumentos
         };
       }
       // Delegada en el módulo compartido (incluye el recorte de apertura efectiva).

@@ -41,7 +41,10 @@
   var GColor = window.BitacoraGaiaColor;
 
   /* ── Consulta a Gaia ── */
-  var GAIA_MAG_MAX        = 16.5;
+  // Profundidad de la consulta. 16,5 dejaba corto a un 18", que alcanza 16,5
+  // bajo cielo rural: las estrellas que su apertura revela no llegaban a estar en
+  // el catálogo. 17 cubre hasta aperturas de ~20"; el tope del proxy es el mismo.
+  var GAIA_MAG_MAX        = 17.0;
   // Radio máximo de consulta: 4,32°, o sea 6° de lado, que cubre los oculares de
   // campo ancho y los binoculares. Antes eran 1,44° heredados del tope de 2° del
   // DSS, un límite de PLACA que no aplica a un catálogo. Lo que sí acota de verdad
@@ -82,6 +85,21 @@
   var FOT = {
     SB_OBJ_MAX: 14.0, SB_OBJ_MIN: 24.0, SB_NEGRO: 25.5, SB_BLANCO: 14.0,
     C_MIN: 0.08, C_EXP: 0.35, GAMMA_HIPS: 2.0,
+    /* Dependencia del umbral de contraste con el TAMAÑO APARENTE del objeto.
+       Sin esto, el umbral solo dependía del brillo del fondo, y entonces cambiar
+       de un 12" a un 18" no mejoraba nada en objetos extensos: a igual pupila de
+       salida el brillo superficial es idéntico —eso es física—, así que la imagen
+       quedaba igual salvo por las estrellas.
+
+       Lo que sí cambia es el tamaño en la retina. Más apertura permite más
+       aumentos a igual pupila, y un objeto mayor se detecta con MUCHO menos
+       contraste (datos de Blackwell, en los que Clark basa su método). Para un
+       objeto fijo del cielo el tamaño aparente crece con los aumentos, así que
+       se usan los aumentos como medida.
+
+       C_MAG_MIN/MAX acotan el factor: el beneficio satura cuando el objeto ya
+       llena el campo, y por abajo no tiene sentido penalizar sin límite. */
+    C_MAG_REF: 100, C_MAG_EXP: 0.7, C_MAG_MIN: 0.3, C_MAG_MAX: 2.0,
     // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo se
     // pinta en función de su brillo superficial en el ocular (SBe, mag/arcsec²,
     // atenuado por la pupila de salida). Por encima de SB_CIELO_NEGRO el fondo es
@@ -142,6 +160,13 @@
     var Fcielo = Math.pow(10, -0.4 * sqm);
     var Fref = Math.pow(10, -0.4 * 21);
     var Cmin = FOT.C_MIN * Math.pow(Fref / (Fcielo * dim), FOT.C_EXP);
+    // Un objeto mayor en la retina se detecta con menos contraste: los aumentos
+    // fijan su tamaño aparente. Aquí es donde la apertura extra se nota en los
+    // objetos extensos, ya que el brillo superficial no puede subir.
+    if (o.aumentos > 0) {
+      Cmin *= Math.max(FOT.C_MAG_MIN, Math.min(FOT.C_MAG_MAX,
+        Math.pow(FOT.C_MAG_REF / o.aumentos, FOT.C_MAG_EXP)));
+    }
     return {
       Fcielo: Fcielo, Cmin: Cmin, dim: dim, T: T,
       nivelFondo: nivelCielo(sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T)),
@@ -1348,7 +1373,7 @@
     });
     var cielo = {
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t,
-      perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
+      aumentos: o.aumentos, perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
     return consultar(o.ra, o.dec, o.arcmin).then(function (estrellas) {
       /* Capas difusas y estrellas se mapean JUNTAS, en una sola curva de tono.

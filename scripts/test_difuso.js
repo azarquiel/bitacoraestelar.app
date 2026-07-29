@@ -564,5 +564,31 @@ FOT.GAMMA_PERCEPTUAL = 1;
 });
 FOT.GAMMA_PERCEPTUAL = gammaOriginal;
 
+/* ── 14. La apertura tiene que notarse en los objetos extensos ──────────────
+   El brillo superficial NO puede subir con la apertura: a igual pupila de salida
+   es idéntico, y eso es física. Lo que sí cambia es el tamaño en la retina, y un
+   objeto mayor se detecta con mucho menos contraste (Blackwell, vía Clark). Sin
+   ese término, cambiar de un 12" a un 18" no mejoraba nada salvo las estrellas. */
+console.log('Apertura y umbral de contraste:');
+function ctxDe(pupila, aumentos) {
+  return R.ctxFotometrico({ pupilaSalida: pupila, pupilaOjo: 7, sqm: 21, transmision: 0.7, aumentos: aumentos });
+}
+// Mismo ocular en un 12" y en un 18": más aumentos, umbral más bajo.
+var doce = ctxDe(305 / 254, 254), diecoicho = ctxDe(457 / 343, 343);
+ok(diecoicho.Cmin < doce.Cmin * 0.9,
+  'un 18" baja el umbral respecto a un 12" (' + doce.Cmin.toFixed(3) + ' → ' + diecoicho.Cmin.toFixed(3) + ')');
+
+/* Pero el FONDO solo depende de la pupila de salida, nunca de la apertura: si
+   esto se rompiera, el simulador estaría inventando luz que el telescopio no
+   puede dar, y ese es el error más fácil de colar «para que se vea mejor». */
+casi(ctxDe(2, 100).nivelFondo, ctxDe(2, 400).nivelFondo, 1e-9,
+  'el fondo no cambia con los aumentos a igual pupila de salida');
+
+// Y el término satura por arriba y por abajo, para no dispararse en los extremos.
+var enorme = ctxDe(2, 100000), minusculo = ctxDe(2, 0.01);
+var sinTermino = R.ctxFotometrico({ pupilaSalida: 2, pupilaOjo: 7, sqm: 21, transmision: 0.7 });
+casi(enorme.Cmin / sinTermino.Cmin, FOT.C_MAG_MIN, 1e-9, 'acotado por abajo');
+casi(minusculo.Cmin / sinTermino.Cmin, FOT.C_MAG_MAX, 1e-9, 'acotado por arriba');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);
