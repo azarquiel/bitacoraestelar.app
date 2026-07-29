@@ -97,6 +97,30 @@ instante de hora local con los algoritmos de Meeus.
   celeste a la altura de la latitud, la declinación solar en solsticio y equinoccio,
   el convenio de azimut y los husos con y sin horario de verano).
 
+## Caché LRU de los proxies
+
+La política con la que los dos proxies del simulador (`gaia_proxy.php` y
+`dss-proxy.php`) acotan su caché en disco. Las respuestas que guardan son
+**inmutables** —Gaia DR3 es un catálogo fijo y el DSS un archivo fijo—, así que no
+caducan: lo único que acota el disco es la **expulsión por tamaño**, y la limpieza
+es **incremental** (como mucho una pasada cada 5 min y un número máximo de
+borrados por pasada, para no escanear el directorio en cada petición).
+
+- **Fuente única:** `simulador_ocular/bitacora-cache-lru.php`.
+  `cache_lru_seleccionar_evict(lista, total, max_bytes, lowwater, max_del)` decide
+  qué cae (pura, no toca disco) y `cache_lru_limpieza({dir, patron, max_bytes,
+  lowwater, max_del, cada, huerfano_ttl})` la ejecuta, más el barrido de `.lock` y
+  `.tmp` huérfanos ya envejecidos.
+- **Consumidores:** los dos proxies, cada uno con sus cifras (Gaia 500 MB y
+  lowwater 0,90 sobre `*.json.gz`; DSS 150 MB y 0,80 sobre `*.gif`).
+- **Lo que NO es compartido:** la clave de caché, la ruta y el servido. Cada proxy
+  sirve otra cosa (JSON con negociación gzip / GIF) y con sus propios cuerpos de
+  error; unificarlo pediría más perillas de las que ahorra.
+- **Test:** `scripts/test_cache_lru.php`, sobre un directorio temporal de verdad.
+  La limpieza —el patrón que acota qué se borra, el stamp que evita escanear en
+  cada petición, el barrido de huérfanos— no la cubría ningún test antes; los de
+  cada proxy solo comprobaban su copia de la selección.
+
 ## Resolvedor de objeto por nombre
 
 El ciclo «el observador escribe un nombre → salen su RA y su Dec»: espera a que
