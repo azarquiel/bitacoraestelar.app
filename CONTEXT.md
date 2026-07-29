@@ -119,11 +119,20 @@ fallo que se ve pero no se explica:
   los spikes. Los topes (`radioTotalMax`, `spikes.longMax`) se aplican al tamaño
   NOMINAL, antes de escalar; al revés, las estrellas brillantes se recortarían a
   distinto tamaño aparente según el ocular.
-- **`escalaMagAfov` no está puesta a ojo:** el criterio es que **un disco dibujado no
-  puede comerse un hueco que el equipo sí resuelve**. El caso que la fija es Almaak
-  (9,6″; mag 2,3 y 5,1) a 333×: los dos discos suman 3,6 px y el hueco mide 4,5 px.
-  Con el valor anterior (100) sumaban 9,0 px y el par se fundía. El test falla si
-  alguien la sube hasta tragarse el par.
+- **El tamaño se calibra por DOS criterios, no uno**, y los dos están en el test:
+  1. **Un disco no puede comerse un hueco que el equipo sí resuelve.** El caso que
+     lo fija es Almaak (9,6″; mag 2,3 y 5,1) a 333×: los discos suman 3,6 px y el
+     hueco mide 4,5 px.
+  2. **Una estrella débil tiene que verse.** El caso es M13: con solo el criterio
+     anterior, las estrellas del globular caían a 0,25 px de radio y desaparecían.
+     El suelo es 0,88 px, lo que daba la ley vieja en campo ancho.
+
+  Calibrar solo el primero fue el error: bajar `escalaMagAfov` comprimía el rango
+  entero. Lo que hace falta es **comprimir el rango de tamaños** (`radioMin` 2,0 –
+  `radioMax` 3,5) y no desplazarlo: el brillo lo cuentan sobre todo la opacidad y
+  la curva de tono, así que el tamaño solo tiene que cumplir esos dos límites. El
+  `glowRadio` de las estrellas por debajo de la magnitud límite va en las mismas
+  unidades: es lo que da textura al halo de un globular.
 - **Por qué 1/afov:** el lienzo se muestra a un diámetro ∝ `afov` (un ocular de 100°
   ocupa más ventana que uno de 50°: eso es tener más campo aparente). Lo que la
   ventana estira, la escala lo encoge, y en pantalla queda solo el aumento.

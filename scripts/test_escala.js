@@ -127,5 +127,28 @@ ok(delos.aumentos > 332 && delos.aumentos < 334, 'el equipo del informe da ' + d
 ok(sumaRadios < hueco,
   'los discos (' + sumaRadios.toFixed(2) + ' px) caben en el hueco (' + hueco.toFixed(2) + ' px)');
 
+/* ── 5. …y el criterio del otro extremo ────────────────────────────────────────
+   El tamaño tiene DOS criterios, no uno, y calibrar solo el brillante fue el
+   error: las estrellas de un globular se quedaron en 0,25 px de radio y M13 dejó
+   de verse. Una estrella débil tiene que seguir siendo visible, y el suelo es lo
+   que daba la ley vieja en campo ancho (0,88 px de radio): por debajo de eso se
+   pierde. Igual el glow de las que no llegan a la magnitud límite, que es lo que
+   da textura al halo del globular. */
+console.log('\nCriterio del extremo débil (un globular tiene que verse):');
+var SUELO_VISIBLE = 0.88;
+var globular = vista(1200, 9, 100);   // M13 a 133×, campo real 45′
+[11.9, 13, 14].forEach(function (g) {
+  var r = radioEnPantalla(globular, radioNominal(g));
+  ok(r >= SUELO_VISIBLE, 'una estrella de mag ' + g + ' mide ' + r.toFixed(2) + ' px de radio (suelo ' + SUELO_VISIBLE + ')');
+});
+var glow = radioEnPantalla(globular, R.config.glowRadio);
+ok(glow >= SUELO_VISIBLE, 'el glow de las que no llegan al límite mide ' + glow.toFixed(2) + ' px');
+
+/* Y el rango tiene que seguir siendo un rango: una estrella brillante, más
+   grande que una débil. Poco, porque el brillo lo cuentan sobre todo la opacidad
+   y la curva de tono, pero no al revés ni igual. */
+ok(radioEnPantalla(globular, radioNominal(2.3)) > radioEnPantalla(globular, radioNominal(13)),
+  'una estrella brillante sigue saliendo mayor que una débil');
+
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);

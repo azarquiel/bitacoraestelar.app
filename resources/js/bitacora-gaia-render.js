@@ -418,9 +418,18 @@
   var CFG = {
     blur: 1.1, magColor: 9, tinteNucleo: 0.8,
     carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
-    radioMin: 0.42, radioMag: 0.13, radioExp: 1.35, magTamMin: 14, radioMax: 6.5,
+    /* Rango de tamaños COMPRIMIDO. El tamaño no es el único que cuenta el brillo:
+       la opacidad y la curva de tono ya lo hacen, así que aquí basta con que las
+       débiles se vean y las brillantes no se coman los huecos. Con el rango ancho
+       de antes (0,42–6,5) no cabían las dos cosas: al calibrar el extremo
+       brillante para que Almaak se partiera, las estrellas de un globular caían a
+       0,25 px de radio en pantalla y desaparecían. */
+    radioMin: 2.0, radioMag: 0.13, radioExp: 1.35, magTamMin: 14, radioMax: 3.5,
     brillo: 1.4, alfaMin: 0.24,
-    glowIntensidad: 0.2, glowRadio: 2.0,
+    /* El glow de las estrellas por debajo de la magnitud límite es lo que da
+       textura al halo de un globular, así que va calibrado en las mismas unidades
+       aparentes: ~1,4 px de radio en pantalla. */
+    glowIntensidad: 0.2, glowRadio: 5.0,
     /* Campo aparente (grados) al que corresponde el tamaño NOMINAL en píxeles de
        radioNucleo: con un ocular de este campo las estrellas salen a su tamaño
        nominal, y con uno más estrecho salen proporcionalmente más grandes en el
