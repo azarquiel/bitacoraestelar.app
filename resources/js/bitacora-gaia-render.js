@@ -102,7 +102,15 @@
        heurístico luma→brillo mapea un píxel brillante a μ=14, más brillante que
        cualquier objeto real, así que ya van sobradas de brillo y la gamma solo
        las empeoraría. Con 1 se recupera el reparto lineal exacto. */
-    GAMMA_PERCEPTUAL: 0.45
+    GAMMA_PERCEPTUAL: 0.45,
+    /* Anchura y margen (en dex de flujo) del desvanecido por umbral de contraste
+       en las capas calibradas. El desvanecido original, suave((F/Fumbral−1)/1,5),
+       barre de 0 a 1 en un factor 2,5 de flujo: sobre un objeto extenso eso no
+       atenúa, RECORTA. Donde la banda de polvo de una espiral de canto baja el
+       flujo bajo el umbral, la zona se iba a negro puro y la banda salía como una
+       cuña negra en vez de una línea. Aquí barre ~5 magnitudes y no deja borde.
+       Las placas conservan el desvanecido original. */
+    UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4
   };
 
   function nivelCielo(SBe) {
@@ -210,6 +218,15 @@
     return Fcielo * (Math.pow(10, v * rango / (255 * 2.5)) - 1);
   }
 
+  /* Desvanecido de un objeto extenso al acercarse al umbral de contraste del ojo.
+     En las capas calibradas barre suavemente en escala logarítmica; en las placas
+     conserva el desvanecido original, más abrupto, para no moverlas. */
+  function visibilidadDifusa(F, Fumbral, perceptual) {
+    if (!perceptual) return suave((F / Fumbral - 1) / 1.5);
+    if (!(F > 0)) return 0;
+    return suave((Math.log10(F / Fumbral) + FOT.UMBRAL_MARGEN) / FOT.UMBRAL_ANCHURA);
+  }
+
   /* Realce perceptual de un flujo difuso: expande su nivel en pantalla con
      FOT.GAMMA_PERCEPTUAL y lo devuelve a flujo, para que la suma con la capa de
      estrellas siga siendo aditiva y los núcleos sigan comprimiendo. Devuelve el
@@ -231,7 +248,7 @@
       // El desvanecido por umbral de contraste es para objetos EXTENSOS. A una
       // fuente puntual no se le aplica: su visibilidad la fija la magnitud
       // límite, que dibujar() ya ha aplicado.
-      var s = suave((Fobj[i] / (c.Fcielo * c.Cmin) - 1) / 1.5);
+      var s = visibilidadDifusa(Fobj[i], c.Fcielo * c.Cmin, perceptual);
       var difuso = Fobj[i] * s;
       /* Realce perceptual del difuso: se expande su nivel en pantalla y se
          devuelve a flujo, para que la suma con las estrellas siga siendo aditiva
@@ -895,7 +912,25 @@
      [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n]. */
   var GALAXIA = {
     k: 1.0,          // calibración visual
-    muCorte: 30      // mag/arcsec² por debajo del cual ya no se pinta nada
+    muCorte: 30,     // mag/arcsec² por debajo del cual ya no se pinta nada
+    // Bulbo: mucho más compacto que su disco, y casi redondo por muy de canto
+    // que se vea el disco. Sin él, un Sérsic único con n=1 es un disco
+    // exponencial puro y el núcleo no destaca de nada.
+    reBulboRel: 0.2, qBulboMin: 0.6,
+    /* Núcleo suavizado, como fracción del r_e del bulbo. Un de Vaucouleurs puro
+       tiene una punta infinita en r=0 (I(0) = 2100·I_e): sin suavizar, el núcleo
+       salía a 14,6 mag/arcsec², más brillante que cualquier galaxia real. El
+       suavizado representa que ni el seeing ni el ojo resuelven ese pico. */
+    nucleoSuave: 0.08,
+    // Banda de polvo de las espirales de canto. El polvo se concentra en el plano
+    // medio, mucho más fino que el disco estelar: de ahí una franja estrecha.
+    // Absorbe, no emite, así que MULTIPLICA.
+    polvoGrosor: 0.25,      // fracción de la altura de escala del disco de canto
+    polvoAbsorcion: 0.7,    // fracción de luz del disco que quita en su centro
+    /* Al bulbo le quita menos: está centrado en el plano, así que solo la mitad
+       de su luz sale por detrás de la capa de polvo. Con 0 el núcleo quedaría
+       intacto y la banda no lo cruzaría, cosa que en NGC 891 sí hace. */
+    polvoSobreBulbo: 0.5
   };
 
   function bSersic(n) { return 2 * n - 1 / 3 + 0.009876 / n; }
@@ -928,17 +963,46 @@
     var fuera = Math.pow(10, -0.4 * GALAXIA.muCorte), lista = [];
     for (var i = 0; i < cat.length; i++) {
       var g = cat[i], re = g[4], q = g[5], magV = g[7], n = g[8];
+      var fracBulbo = (g[9] != null) ? g[9] : 0, polvo = !!g[10];
       if (!(re > 0) || !(q > 0) || !(n > 0)) continue;
       var dRA = (((g[2] - o.ra + 540) % 360) - 180) * cos0, dDec = g[3] - o.dec;
-      var iE = Math.pow(10, -0.4 * magV) / (re * re * factorLuz(n) * q);
-      // Radio donde el perfil cae bajo muCorte, invirtiendo el propio Sérsic.
-      var dentro = 1 - Math.log(fuera / iE) / bSersic(n);
-      if (!(dentro > 0)) continue;
-      var rMax = Math.min(re * Math.pow(dentro, n), (o.arcmin / 60) * 3 * 3600);
+      var fTotal = Math.pow(10, -0.4 * magV);
+      // Disco: Sérsic n con el r_e del catálogo. Bulbo: de Vaucouleurs compacto.
+      var reB = re * GALAXIA.reBulboRel, qB = Math.max(q, GALAXIA.qBulboMin);
+      var iD = (fracBulbo < 1) ? fTotal * (1 - fracBulbo) / (re * re * factorLuz(n) * q) : 0;
+      var iB = (fracBulbo > 0) ? fTotal * fracBulbo / (reB * reB * factorLuz(4) * qB) : 0;
+      // Radio de corte: el mayor de los dos, invirtiendo cada Sérsic.
+      var rMax = 0;
+      if (iD > 0) {
+        var dD = 1 - Math.log(fuera / iD) / bSersic(n);
+        if (dD > 0) rMax = Math.max(rMax, re * Math.pow(dD, n));
+      }
+      if (iB > 0) {
+        var dB = 1 - Math.log(fuera / iB) / bSersic(4);
+        if (dB > 0) rMax = Math.max(rMax, reB * Math.pow(dB, 4));
+      }
+      if (!(rMax > 0)) continue;
+      rMax = Math.min(rMax, (o.arcmin / 60) * 3 * 3600);
       var rGrados = rMax / 3600;
       if (Math.abs(dRA) > medio + rGrados || Math.abs(dDec) > medio + rGrados) continue;
+      /* Espirales de canto: disco EXPONENCIAL SEPARABLE, no elipse de Sérsic.
+         Las isofotas elípticas se afilan hasta un punto en los extremos, así que
+         una banda de polvo de grosor constante acaba tapando todo el grosor allí
+         y la galaxia sale partida en dos cuñas. Un disco de canto real tiene
+         grosor casi constante y cae exponencialmente en las dos direcciones:
+             I(u,v) = I0 · exp(−|u|/h_r) · exp(−|v|/h_z)
+         con h_r = r_e/1,678 (relación r_e–escala del perfil exponencial) y la
+         normalización 4·I0·h_r·h_z, que conserva la luz total del catálogo. */
+      var deCanto = polvo, hR = 0, hZ = 0, i0 = 0;
+      if (deCanto && iD > 0) {
+        hR = re / 1.678; hZ = hR * q;
+        i0 = fTotal * (1 - fracBulbo) / (4 * hR * hZ);
+      }
       lista.push({
-        dRA: dRA, dDec: dDec, re: re, q: q, n: n, iE: iE, rMax: rMax,
+        dRA: dRA, dDec: dDec, re: re, q: q, n: n, iD: iD,
+        reB: reB, qB: qB, iB: iB, rMax: rMax, r0B: reB * GALAXIA.nucleoSuave,
+        deCanto: deCanto, hR: hR, hZ: hZ, i0: i0,
+        polvo: polvo, hPolvo: (deCanto ? hZ : re * q) * GALAXIA.polvoGrosor,
         pa: g[6] * Math.PI / 180, nombre: g[0]
       });
     }
@@ -953,7 +1017,7 @@
     var SIZE = o.size, out = new Float32Array(SIZE * SIZE);
     var escArc = (o.arcmin * 60) / SIZE;      // arcsec por píxel
     for (var k = 0; k < lista.length; k++) {
-      var G = lista[k], b = bSersic(G.n), invN = 1 / G.n;
+      var G = lista[k], b = bSersic(G.n), invN = 1 / G.n, bB = bSersic(4);
       // Centro de la galaxia en píxeles (norte arriba, este a la izquierda).
       var cx = SIZE / 2 - (G.dRA * 3600) / escArc;
       var cy = SIZE / 2 - (G.dDec * 3600) / escArc;
@@ -962,19 +1026,48 @@
       var y0 = Math.max(0, Math.floor(cy - radioPx)), y1 = Math.min(SIZE - 1, Math.ceil(cy + radioPx));
       var senPA = Math.sin(G.pa), cosPA = Math.cos(G.pa);
       for (var y = y0; y <= y1; y++) {
-        // De píxel a desplazamiento en el cielo: este positivo hacia la izquierda,
-        // norte positivo hacia arriba.
-        var dNorte = (SIZE / 2 - (y + 0.5)) * escArc;
+        /* Desplazamiento respecto al centro de LA GALAXIA, no del campo: este
+           positivo hacia la izquierda, norte hacia arriba. Medirlo desde el
+           centro del campo dibujaba a las compañeras con el perfil descolocado. */
+        var dNorte = (cy - (y + 0.5)) * escArc;
         for (var x = x0; x <= x1; x++) {
-          var dEste = (SIZE / 2 - (x + 0.5)) * escArc;
+          var dEste = (cx - (x + 0.5)) * escArc;
           // Proyección sobre los ejes mayor y menor. El PA se mide desde el norte
           // hacia el este, de ahí el reparto de seno y coseno.
           var u = dEste * senPA + dNorte * cosPA;
           var v = dEste * cosPA - dNorte * senPA;
-          var r = Math.sqrt(u * u + (v / G.q) * (v / G.q));
-          if (r > G.rMax) continue;
-          var s = Math.pow(Math.max(r, 1e-6) / G.re, invN);
-          out[y * SIZE + x] += GALAXIA.k * G.iE * Math.exp(-b * (s - 1));
+          var flujo = 0;
+          if (G.iD > 0) {
+            var rD = Math.sqrt(u * u + (v / G.q) * (v / G.q));
+            if (rD <= G.rMax) {
+              var disco = G.deCanto
+                ? G.i0 * Math.exp(-Math.abs(u) / G.hR - Math.abs(v) / G.hZ)
+                : G.iD * Math.exp(-b * (Math.pow(Math.max(rD, 1e-6) / G.re, invN) - 1));
+              /* Banda de polvo: absorbe, no emite, así que multiplica. Va pegada
+                 al plano medio (|v| pequeño) y solo afecta al DISCO; el bulbo
+                 sobresale del plano y por eso asoma a ambos lados de la banda. */
+              if (G.polvo && G.hPolvo > 0) {
+                var t = v / G.hPolvo;
+                disco *= 1 - GALAXIA.polvoAbsorcion * Math.exp(-t * t);
+              }
+              flujo += disco;
+            }
+          }
+          if (G.iB > 0) {
+            var rB = Math.sqrt(u * u + (v / G.qB) * (v / G.qB));
+            if (rB <= G.rMax) {
+              // Radio suavizado: sin esto el de Vaucouleurs tiene una punta
+              // infinita en el centro que ningún telescopio resuelve.
+              var rS = Math.sqrt(rB * rB + G.r0B * G.r0B);
+              var bulbo = G.iB * Math.exp(-bB * (Math.pow(rS / G.reB, 0.25) - 1));
+              if (G.polvo && G.hPolvo > 0) {
+                var tb = v / G.hPolvo;
+                bulbo *= 1 - GALAXIA.polvoAbsorcion * GALAXIA.polvoSobreBulbo * Math.exp(-tb * tb);
+              }
+              flujo += bulbo;
+            }
+          }
+          if (flujo > 0) out[y * SIZE + x] += GALAXIA.k * flujo;
         }
       }
     }
@@ -1289,6 +1382,7 @@
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
     realzarPerceptual: realzarPerceptual,
+    visibilidadDifusa: visibilidadDifusa,
     ctxFotometrico: ctxFotometrico,
     pintarFot: pintarFot,
     telon: TELON,

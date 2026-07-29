@@ -421,8 +421,9 @@ ok(R.realceDetalle(-40, 0.5) === -R.realceDetalle(40, 0.5), 'simétrico en signo
    normalización estuviera mal, la galaxia saldría plausible pero con el brillo
    equivocado, y a ojo no se nota. */
 console.log('Galaxias: el perfil integra la luz del catálogo:');
-// M31 en el centro del campo: r_e = 2198", b/a = 0,324, PA 35, V = 3,61, n = 1.
-window.BITACORA_GALAXIAS = [['NGC 224', 'M31', 10, 40, 2198.47, 0.324, 35, 3.61, 1]];
+// Disco puro (sin bulbo) para poder comprobar la definición de r_e sin que el
+// bulbo compacto desplace la mitad de la luz hacia dentro.
+window.BITACORA_GALAXIAS = [['NGC 224', 'M31', 10, 40, 2198.47, 0.324, 35, 3.61, 1, 0, 0]];
 function luzIntegrada(arcmin, size) {
   var g = R.capaGalaxias({ ra: 10, dec: 40, arcmin: arcmin, size: size });
   if (!g) return 0;
@@ -475,6 +476,57 @@ var mx = Math.round(N2 / 2 - dPx * Math.sin(paR)), my = Math.round(N2 / 2 - dPx 
 var nx = Math.round(N2 / 2 - dPx * Math.cos(paR)), ny = Math.round(N2 / 2 + dPx * Math.sin(paR));
 ok(img[my * N2 + mx] > img[ny * N2 + nx] * 3,
   'a igual distancia, el eje mayor es mucho más brillante que el menor');
+
+/* ── Bulbo: sin él, un Sérsic n=1 es un disco exponencial puro y el núcleo no
+   destaca. Por el ocular una espiral enseña el bulbo antes que nada. */
+console.log('Galaxias: bulbo y banda de polvo:');
+function centroDe(fila, arcmin) {
+  window.BITACORA_GALAXIAS = [fila];
+  var n = 201, g = R.capaGalaxias({ ra: 10, dec: 40, arcmin: arcmin, size: n });
+  return g ? g[(n / 2 | 0) * n + (n / 2 | 0)] : 0;
+}
+var base = ['NGC 0', '', 10, 40, 600, 0.5, 0, 9.0, 1];
+var sinBulbo = centroDe(base.concat([0, 0]), 40);
+var conBulbo = centroDe(base.concat([0.3, 0]), 40);
+ok(conBulbo > sinBulbo * 3, 'el bulbo hace el núcleo mucho más brillante (x' +
+  (conBulbo / sinBulbo).toFixed(1) + ')');
+// Y no infinito: un de Vaucouleurs sin suavizar tiene una punta que ningún
+// telescopio resuelve y sacaba el núcleo a 14,6 mag/arcsec².
+ok(-2.5 * Math.log10(conBulbo) > 16, 'el núcleo no se dispara (μ = ' +
+  (-2.5 * Math.log10(conBulbo)).toFixed(1) + ')');
+
+/* Banda de polvo: absorbe, así que debe dejar un MÍNIMO en el plano medio de una
+   espiral de canto, y no aparecer en una vista de frente. */
+function corteMenor(fila, arcmin, offsetMayor) {
+  window.BITACORA_GALAXIAS = [fila];
+  var n = 401, g = R.capaGalaxias({ ra: 10, dec: 40, arcmin: arcmin, size: n });
+  var esc = arcmin * 60 / n, c = n / 2 | 0, out = [];
+  // PA = 0: eje mayor norte-sur (−y), eje menor este-oeste (−x).
+  for (var d = -6; d <= 6; d++) {
+    var x = c - Math.round(d * 10 / esc), y = c - Math.round(offsetMayor / esc);
+    out.push(g[y * n + x]);
+  }
+  return out;
+}
+var deCanto = corteMenor(['E', '', 10, 40, 600, 0.2, 0, 9.0, 1, 0.3, 1], 40, 300);
+var medio = deCanto[6], fuera = Math.max(deCanto[2], deCanto[10]);
+ok(medio < fuera * 0.8, 'de canto: el plano medio queda por debajo de sus lados (' +
+  (medio / fuera).toFixed(2) + ' del brillo)');
+var deFrente = corteMenor(['F', '', 10, 40, 600, 0.8, 0, 9.0, 1, 0.3, 0], 40, 300);
+ok(deFrente[6] >= Math.max(deFrente[2], deFrente[10]),
+  'de frente: sin banda, el centro del corte es el máximo');
+
+/* Colocación: el perfil se mide desde el centro de LA GALAXIA. Medirlo desde el
+   centro del campo dibujaba a las compañeras descolocadas. */
+console.log('Galaxias: colocación de las que no están centradas:');
+window.BITACORA_GALAXIAS = [['NGC 0', '', 10, 40, 300, 0.5, 0, 9.0, 1, 0.3, 0]];
+var nn = 161, arc = 20;
+var desplazado = R.capaGalaxias({ ra: 10 + (4 / 60) / Math.cos(40 * Math.PI / 180), dec: 40, arcmin: arc, size: nn });
+var pico = 0, ipico = 0;
+for (var w = 0; w < desplazado.length; w++) if (desplazado[w] > pico) { pico = desplazado[w]; ipico = w; }
+var dxPico = (ipico % nn) - nn / 2, escPix = arc * 60 / nn;
+casi(Math.abs(dxPico * escPix / 60), 4.0, 0.15,
+  'el núcleo cae a 4′ del centro del campo, no en el medio');
 
 window.BITACORA_GALAXIAS = null;
 ok(R.capaGalaxias({ ra: 10, dec: 40, arcmin: 60, size: 64 }) === null,

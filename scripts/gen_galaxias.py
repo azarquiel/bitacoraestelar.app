@@ -60,6 +60,83 @@ def indice_sersic(t):
     return 4.0 if (t is not None and t <= -0.5) else 1.0
 
 
+def fraccion_bulbo(t):
+    """Fracción de la luz total que aporta el BULBO, por tipo de Hubble.
+
+    Un Sérsic único con n=1 es un disco exponencial puro: no tiene núcleo
+    destacado, y por el ocular una espiral SÍ enseña el bulbo antes que nada. El
+    reparto bulbo/disco por tipo morfológico es la aproximación estándar; los
+    valores son los típicos de las descomposiciones fotométricas."""
+    if t is None:
+        return 0.3
+    if t <= -3:
+        return 1.0      # elíptica: todo bulbo
+    if t <= 0:
+        return 0.6      # lenticular
+    if t <= 1:
+        return 0.5      # Sa
+    if t <= 3:
+        return 0.3      # Sab-Sb
+    if t <= 5:
+        return 0.15     # Sbc-Sc
+    if t <= 7:
+        return 0.08     # Scd-Sd
+    return 0.03         # Sm e irregulares
+
+
+# Radio efectivo del bulbo, como fracción del del disco. Los bulbos son mucho
+# más compactos que su disco; 0,2 es el orden de magnitud habitual.
+RE_BULBO_REL = 0.2
+# Razón de ejes mínima del bulbo: por muy de canto que esté el disco, el bulbo
+# se ve casi redondo.
+Q_BULBO_MIN = 0.6
+
+
+def perfil_total(r, re_disco, n_disco, frac_bulbo, mag_total, q):
+    """Flujo del modelo bulbo+disco a lo largo del semieje mayor."""
+    f_total = 10 ** (-0.4 * mag_total)
+    i = 0.0
+    if frac_bulbo < 1:
+        f_d = f_total * (1 - frac_bulbo)
+        i_e = f_d / (re_disco * re_disco * factor_luz(n_disco) * q)
+        i += i_e * math.exp(-b_n(n_disco) * ((r / re_disco) ** (1.0 / n_disco) - 1))
+    if frac_bulbo > 0:
+        re_b = re_disco * RE_BULBO_REL
+        q_b = max(q, Q_BULBO_MIN)
+        f_b = f_total * frac_bulbo
+        i_e = f_b / (re_b * re_b * factor_luz(4.0) * q_b)
+        i += i_e * math.exp(-b_n(4.0) * ((r / re_b) ** 0.25 - 1))
+    return i
+
+
+def luz_dentro(a, re_disco, n_disco, frac_bulbo, mag_total, q, pasos=400):
+    """Luz encerrada dentro del semieje mayor a (integración en anillos)."""
+    total, paso = 0.0, a / pasos
+    for k in range(pasos):
+        r = (k + 0.5) * paso
+        total += perfil_total(r, re_disco, n_disco, frac_bulbo, mag_total, q) * 2 * math.pi * r * q * paso
+    return total
+
+
+def ajustar_re_disco(re_objetivo, n_disco, frac_bulbo, mag_total, q):
+    """Escala el r_e del DISCO para que el modelo bulbo+disco siga encerrando la
+    mitad de su luz dentro del r_e del catálogo.
+
+    Sin esto, añadir un bulbo compacto concentra la luz y el objeto saldría más
+    pequeño de lo que el catálogo mide."""
+    if frac_bulbo >= 1:
+        return re_objetivo
+    mitad = 0.5 * 10 ** (-0.4 * mag_total)
+    lo, hi = re_objetivo * 0.5, re_objetivo * 4.0
+    for _ in range(50):
+        med = math.sqrt(lo * hi)
+        if luz_dentro(re_objetivo, med, n_disco, frac_bulbo, mag_total, q) > mitad:
+            lo = med      # demasiada luz dentro: hay que estirar el disco
+        else:
+            hi = med
+    return math.sqrt(lo * hi)
+
+
 def b_n(n):
     """Constante de Sérsic: b_n tal que r_e encierra la mitad de la luz.
     Aproximación de Ciotti & Bertin (1999), buena para n > 0,36."""
@@ -160,16 +237,27 @@ def main():
             sin_datos += 1
             continue
 
+        frac_bulbo = fraccion_bulbo(t)
+        # El r_e del catálogo es el del OBJETO ENTERO. Al partirlo en bulbo+disco
+        # hay que estirar el disco para que el conjunto siga encerrando la mitad
+        # de su luz donde el catálogo dice.
+        re_disco = ajustar_re_disco(r_e, n, frac_bulbo, mag_v, q) if frac_bulbo < 1 else r_e
+        # Banda de polvo: solo en espirales vistas suficientemente de canto. Es lo
+        # que parte en dos a NGC 891, y no aparece si la galaxia se ve de frente.
+        polvo = 1 if (t is not None and t >= 1 and q <= 0.35) else 0
+
         filas.append({
             'nombre': limpia_nombre(c[0]),
             'alt': limpia_nombre(c[1]),
             'ra_grados': round(ra, 5),
             'dec_grados': round(dec, 5),
-            're_arcsec': round(r_e, 2),
+            're_arcsec': round(re_disco, 2),
             'razon_ejes': round(q, 3),
             'pa_grados': int(numero(c[7]) or 0),
             'mag_v': round(mag_v, 2),
             'sersic_n': n,
+            'frac_bulbo': round(frac_bulbo, 2),
+            'polvo': polvo,
         })
 
     filas.sort(key=lambda f: f['ra_grados'])
@@ -183,14 +271,16 @@ def main():
         fh.write('/* Galaxias — GENERADO, no editar a mano.\n')
         fh.write('   Regenerar con: python3 scripts/gen_galaxias.py\n')
         fh.write('   Fuente: %s\n' % FUENTE)
-        fh.write('   Campos: [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n]\n')
-        fh.write('   r_e es el semieje mayor efectivo; n el índice de Sérsic. */\n')
+        fh.write('   Campos: [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n, B/T, polvo]\n')
+        fh.write('   r_e es el semieje mayor efectivo DEL DISCO; n el índice de Sérsic del\n')
+        fh.write('   disco; B/T la fracción de luz del bulbo; polvo=1 marca espiral de canto\n')
+        fh.write('   con banda de polvo. */\n')
         fh.write('window.BITACORA_GALAXIAS = [\n')
         for f in filas:
-            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s],\n' % (
+            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s],\n' % (
                 f['nombre'], f['alt'], f['ra_grados'], f['dec_grados'],
                 f['re_arcsec'], f['razon_ejes'], f['pa_grados'], f['mag_v'],
-                int(f['sersic_n'])))
+                int(f['sersic_n']), f['frac_bulbo'], f['polvo']))
         fh.write('];\n')
 
     print('galaxias: %d  (r_e resuelto desde D25 en %d; descartadas %d)'
