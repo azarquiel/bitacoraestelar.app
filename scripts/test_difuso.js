@@ -329,6 +329,20 @@ for (var pe = NE / 2; pe < NE; pe++) {
 ok(repuntes === 0, 'perfil sin ningún repunte a campo estrecho (' + repuntes +
   ', peor ' + (peorSalto * 100).toFixed(2) + '% del pico)');
 
+/* Una estrella brillante justo en el centro hace que el anillo interior
+   sobre-reste. La cota monótona NO puede dejar que ese único valor aplaste el
+   perfil entero: con un mínimo corriente desde el centro, el cúmulo se quedaba
+   sin nubosidad en todo el núcleo. */
+console.log('Halo anclado: un centro sobre-restado no puede aplastar el halo:');
+var conBrillante = lleno.slice();
+conBrillante.push([10, 40, 8.0, 0.9]);          // estrella de mag 8 en el centro
+var hBrillante = R.haloCatalogado(gcT, conBrillante, campoEstrecho, null);
+ok(hBrillante !== null, 'sigue habiendo halo con una estrella brillante central');
+function flujoTotal(h) { var s = 0; for (var i = 0; i < h.length; i++) s += h[i]; return s; }
+var conservado = flujoTotal(hBrillante) / flujoTotal(hEstrecho);
+ok(conservado > 0.5,
+  'conserva más de la mitad del halo (' + (conservado * 100).toFixed(0) + '%)');
+
 // El muestreador nunca debe devolver 0 en el centro por falta de estrellas.
 var obs = R.flujoObservadoCumulo(lleno, gcT, gcT.rc * Math.pow(10, gcT.c), 0.0833);
 ok(obs && obs(0) > 0, 'el flujo observado en el centro no es cero');

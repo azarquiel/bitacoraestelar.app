@@ -670,7 +670,13 @@
       radios[i] = ri;
       perfil[i] = Math.max(0, F0 * formaKing(ri, gc.rc, rt) / pico - observado(ri));
     }
-    for (i = 1; i < nR; i++) if (perfil[i] > perfil[i - 1]) perfil[i] = perfil[i - 1];
+    /* Se impone de FUERA HACIA DENTRO (máximo corriente), no al revés. Un mínimo
+       corriente desde el centro cumple la misma condición, pero deja que un único
+       valor central bajo —precisamente donde la resta se pasa— se propague a todo
+       el perfil y aplaste el halo entero: el cúmulo se queda sin nubosidad. Así el
+       centro recibe al menos lo que haya justo fuera, y el perfil sigue sin poder
+       brillar más lejos del centro, que es lo que elimina los anillos. */
+    for (i = nR - 2; i >= 0; i--) if (perfil[i] < perfil[i + 1]) perfil[i] = perfil[i + 1];
 
     var SIZE = o.size, out = new Float32Array(SIZE * SIZE), hay = false;
     var escPix = (o.arcmin / 60) / SIZE, cos0 = Math.cos(o.dec * Math.PI / 180);
