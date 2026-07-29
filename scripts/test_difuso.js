@@ -282,7 +282,7 @@ var perfilHalo = R.haloCatalogado(gc, cumulo, { ra: 10, dec: 40, arcmin: 30, siz
 var subidas = 0, previo = Infinity;
 for (var px = NN / 2; px < NN; px++) {
   var v = perfilHalo[(NN / 2) * NN + px];
-  if (v > previo * 1.02 && previo > 0) subidas++;
+  if (v > previo && previo > 0) subidas++;
   previo = v;
 }
 ok(subidas === 0, 'el perfil radial no vuelve a subir en ningún punto (' + subidas + ' repuntes)');
@@ -291,6 +291,48 @@ ok(subidas === 0, 'el perfil radial no vuelve a subir en ningún punto (' + subi
 window.BITACORA_GLOBULARES = null;
 ok(R.globularEnCampo(optsC) === null, 'sin catálogo → null, sin romperse');
 ok(R.haloNoResuelto(cumulo, optsC, null) !== null, 'sigue el camino de conteos');
+
+/* ── 9. Anillos interiores hambrientos: la burbuja ──────────────────────────
+   A mucho aumento (campo estrecho) o con un cúmulo compacto a campo ancho, el
+   anillo más interior de radio fijo puede no contener NINGUNA estrella: el flujo
+   observado sale 0, no se resta nada, el King entra a pelo y aparece una burbuja
+   brillante con un salto en la frontera del anillo.
+   Con anillos adaptativos (mínimo de estrellas por anillo) eso no puede pasar. */
+console.log('Halo anclado: anillos interiores con datos suficientes:');
+// Cúmulo LLENO (sin vaciar) y campo muy estrecho: el caso de M13 a 422x.
+var lleno = cumuloSintetico(RC, RT, 9000, 0);
+// muV por encima del brillo que el propio cúmulo ya tiene (18,76 medido), o no
+// habría déficit y la capa se abstendría — que es justo lo que debe hacer.
+var gcT = { id: 'test', ra: 10, dec: 40, rc: 0.06, c: 1.176, muV: 17.5 };
+var F0T = Math.pow(10, -0.4 * gcT.muV);
+var NE = 160, campoEstrecho = { ra: 10, dec: 40, arcmin: 10, size: NE };
+var hEstrecho = R.haloCatalogado(gcT, lleno, campoEstrecho, null);
+ok(hEstrecho !== null, 'produce halo a campo estrecho');
+var centroE = hEstrecho[(NE / 2) * NE + NE / 2];
+ok(centroE < F0T * 0.9,
+  'el centro resta flujo observado, no entra el King a pelo (' +
+  (centroE / F0T).toFixed(2) + ' del pico)');
+
+/* Sin repuntes tampoco a campo estrecho, y medidos como FRACCIÓN DEL PICO: el
+   test anterior contaba saltos sin mirar su tamaño, y los que quedaban valían
+   hasta 21 niveles de 255 en pantalla — o sea, un anillo bien visible. */
+var repuntes = 0, prev = Infinity, peorSalto = 0;
+var picoE = hEstrecho[(NE / 2) * NE + NE / 2];
+for (var pe = NE / 2; pe < NE; pe++) {
+  var ve = hEstrecho[(NE / 2) * NE + pe];
+  if (ve > prev && prev > 0) {
+    repuntes++;
+    peorSalto = Math.max(peorSalto, (ve - prev) / picoE);
+  }
+  prev = ve;
+}
+ok(repuntes === 0, 'perfil sin ningún repunte a campo estrecho (' + repuntes +
+  ', peor ' + (peorSalto * 100).toFixed(2) + '% del pico)');
+
+// El muestreador nunca debe devolver 0 en el centro por falta de estrellas.
+var obs = R.flujoObservadoCumulo(lleno, gcT, gcT.rc * Math.pow(10, gcT.c), 0.0833);
+ok(obs && obs(0) > 0, 'el flujo observado en el centro no es cero');
+ok(obs(0) >= obs(0.05), 'el perfil observado decrece del centro hacia fuera');
 
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);

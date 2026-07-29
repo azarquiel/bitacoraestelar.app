@@ -416,7 +416,15 @@
     // lleva respecto a la media de la población. La incompletitud de Gaia en
     // núcleos densos castiga más a las fuentes débiles: sin este término, contar
     // el déficit con el flujo medio del campo sobreestima el halo.
-    sesgoDebil: 1.0
+    sesgoDebil: 1.0,
+    // Estrellas mínimas por anillo del perfil observado. Con menos, la densidad
+    // es ruido de Poisson y aparecen burbujas y anillos al restarla del King.
+    minPorAnillo: 12,
+    // Y anchura mínima del anillo, como razón r_exterior/r_interior. Sin esto, un
+    // anillo que cierra sobre estrellas a radios casi idénticos —normal en un
+    // núcleo denso— tiene área casi nula y su densidad se dispara: al restarla
+    // abriría un agujero en el centro del cúmulo.
+    anchoMinAnillo: 1.05
   };
 
   /* Flujo medio por estrella de la población que el catálogo pierde, deducido de
@@ -576,43 +584,65 @@
      escalón: restar un perfil escalonado de un King continuo deja un salto en
      cada frontera de anillo, y eso se ve como círculos concéntricos. */
   function flujoObservadoCumulo(estrellas, gc, rt, rmaxCampo) {
-    var n = 24;
-    var rMin = Math.max(gc.rc / 8, 1e-5);
     var rMax = Math.min(rt, rmaxCampo);
-    if (!(rMax > rMin)) return null;
-    var lnMin = Math.log(rMin), paso = (Math.log(rMax) - lnMin) / n;
-    var flujo = new Float64Array(n + 1), area = new Float64Array(n + 1), i;
-    // Bin 0: el disco central completo; el resto, coronas logarítmicas.
-    area[0] = Math.PI * rMin * rMin;
-    for (i = 1; i <= n; i++) {
-      var r0 = Math.exp(lnMin + (i - 1) * paso), r1 = Math.exp(lnMin + i * paso);
-      area[i] = Math.PI * (r1 * r1 - r0 * r0);
-    }
-    var cos0 = Math.cos(gc.dec * Math.PI / 180);
+    if (!(rMax > 0)) return null;
+
+    // Radios y flujos de las estrellas del cúmulo, ordenados de dentro afuera.
+    var cos0 = Math.cos(gc.dec * Math.PI / 180), muestra = [], i;
     for (i = 0; i < estrellas.length; i++) {
       var dRA = (((estrellas[i][0] - gc.ra + 540) % 360) - 180) * cos0;
       var dDec = estrellas[i][1] - gc.dec;
       var r = Math.sqrt(dRA * dRA + dDec * dDec);
-      if (r >= rMax) continue;
-      var b = (r <= rMin) ? 0 : Math.min(n, 1 + Math.floor((Math.log(r) - lnMin) / paso));
-      flujo[b] += Math.pow(10, -0.4 * estrellas[i][2]);
+      if (r < rMax) muestra.push([r, Math.pow(10, -0.4 * estrellas[i][2])]);
     }
-    // Densidad de flujo por arcsec², suavizada a tres puntos: los anillos
-    // interiores tienen pocas estrellas y su ruido se vería como anillos.
-    var dens = new Float64Array(n + 1);
-    for (i = 0; i <= n; i++) dens[i] = flujo[i] / (area[i] * 3600 * 3600);
-    var suavizado = new Float64Array(n + 1);
-    for (i = 0; i <= n; i++) {
-      var a = dens[Math.max(0, i - 1)], c = dens[Math.min(n, i + 1)];
-      suavizado[i] = (a + 2 * dens[i] + c) / 4;
+    if (muestra.length < KING.minPorAnillo) return null;
+    muestra.sort(function (a, b) { return a[0] - b[0]; });
+
+    /* Anillos ADAPTATIVOS: se acumulan estrellas hasta juntar minPorAnillo antes
+       de cerrar cada anillo. Con anillos de radio fijo, el más interior de un
+       cúmulo visto a mucho aumento (o de uno compacto a campo ancho) puede no
+       contener NINGUNA estrella: la densidad observada sale 0, no se resta nada,
+       el King entra a pelo y aparece una burbuja brillante con un salto en la
+       frontera del anillo. Exigiendo un mínimo de estrellas por anillo, cada
+       punto del perfil está respaldado por datos y el ruido queda acotado. */
+    var radio = [], dens = [], acc = 0, desde = 0, rIni = 0;
+    for (i = 0; i < muestra.length; i++) {
+      acc += muestra[i][1];
+      var ultimo = (i === muestra.length - 1);
+      var r1 = ultimo ? rMax : muestra[i][0];
+      var bastantes = (i - desde + 1) >= KING.minPorAnillo;
+      var bastanteAncho = (rIni <= 0) || (r1 >= rIni * KING.anchoMinAnillo);
+      // Cierra el anillo solo con estrellas suficientes Y anchura suficiente. Las
+      // dos condiciones hacen falta: la primera acota el ruido de Poisson, la
+      // segunda evita el anillo de área casi nula con densidad disparada.
+      if (!ultimo && !(bastantes && bastanteAncho)) continue;
+      var area = Math.PI * (r1 * r1 - rIni * rIni);
+      if (area > 0) {
+        radio.push(Math.sqrt((rIni * rIni + r1 * r1) / 2));   // parte el anillo por área
+        dens.push(acc / (area * 3600 * 3600));                // flujo por arcsec²
+        acc = 0; rIni = r1; desde = i + 1;
+      }
     }
+    if (radio.length < 2) {
+      var plano = dens.length ? dens[0] : 0;
+      return function () { return plano; };
+    }
+    // Suavizado a tres puntos sobre los anillos ya poblados.
+    var suave2 = dens.slice();
+    for (i = 0; i < dens.length; i++) {
+      var a = dens[Math.max(0, i - 1)], c = dens[Math.min(dens.length - 1, i + 1)];
+      suave2[i] = (a + 2 * dens[i] + c) / 4;
+    }
+    /* Muestreador continuo, interpolado en log r: restar un perfil escalonado de
+       un King continuo deja un salto por anillo, y eso se ve como círculos. */
     return function (r) {
-      if (r <= rMin) return suavizado[0];
-      if (r >= rMax) return suavizado[n];
-      var f = 1 + (Math.log(r) - lnMin) / paso;
-      var i0 = Math.max(0, Math.min(n, Math.floor(f)));
-      var i1 = Math.min(n, i0 + 1), t = f - i0;
-      return suavizado[i0] * (1 - t) + suavizado[i1] * t;
+      if (r <= radio[0]) return suave2[0];
+      var ultimo = radio.length - 1;
+      if (r >= radio[ultimo]) return suave2[ultimo];
+      var lo = 0;
+      while (lo < ultimo && radio[lo + 1] < r) lo++;
+      var t = (Math.log(r) - Math.log(radio[lo])) / (Math.log(radio[lo + 1]) - Math.log(radio[lo]));
+      return suave2[lo] * (1 - t) + suave2[lo + 1] * t;
     };
   }
 
@@ -623,6 +653,24 @@
     var observado = flujoObservadoCumulo(estrellas, gc, rt, (o.arcmin / 60) / 2);
     if (!observado) return null;
     var F0 = Math.pow(10, -0.4 * gc.muV);        // flujo por arcsec² en el centro
+
+    /* Perfil radial del déficit, en una rejilla fina y densa hacia el centro
+       (r ∝ i²), antes de pintar nada.
+
+       Y se fuerza MONÓTONO no creciente. El halo de un globular no puede brillar
+       más lejos del centro; si el déficit crudo sube hacia fuera es un artefacto
+       de la resta: el flujo de las estrellas resueltas se descuenta como si fuera
+       brillo superficial repartido por el anillo, pero el render las dibuja como
+       puntos. En el centro, donde un anillo pequeño puede contener una estrella
+       brillante, eso sobre-resta y deja un hoyo rodeado de un anillo claro — la
+       burbuja. La cota lo elimina por construcción, no por suavizado. */
+    var nR = 256, perfil = new Float64Array(nR), radios = new Float64Array(nR), i;
+    for (i = 0; i < nR; i++) {
+      var ri = rt * Math.pow(i / (nR - 1), 2);
+      radios[i] = ri;
+      perfil[i] = Math.max(0, F0 * formaKing(ri, gc.rc, rt) / pico - observado(ri));
+    }
+    for (i = 1; i < nR; i++) if (perfil[i] > perfil[i - 1]) perfil[i] = perfil[i - 1];
 
     var SIZE = o.size, out = new Float32Array(SIZE * SIZE), hay = false;
     var escPix = (o.arcmin / 60) / SIZE, cos0 = Math.cos(o.dec * Math.PI / 180);
@@ -635,11 +683,15 @@
         var dx = (x + 0.5 - SIZE / 2 - offX) * escPix;
         var r = Math.sqrt(dx * dx + dy * dy);
         if (r >= rt) continue;
+        // Índice en la rejilla cuadrática, con interpolación lineal.
+        var f = (nR - 1) * Math.sqrt(r / rt);
+        var i0 = Math.max(0, Math.min(nR - 1, Math.floor(f)));
+        var i1 = Math.min(nR - 1, i0 + 1), t = f - i0;
+        var d = perfil[i0] * (1 - t) + perfil[i1] * t;
+        // El telón ya reparte luz aquí: se descuenta también, o se contaría dos
+        // veces. Es suave (celdas de ~6'), así que no reintroduce anillos.
         var idx = y * SIZE + x;
-        var king = F0 * formaKing(r, gc.rc, rt) / pico;
-        // Flujo ya presente: el observado a ese radio y lo que ponga el telón.
-        var puesto = observado(r) + (yaPuesto ? yaPuesto[idx] : 0);
-        var d = king - puesto;
+        if (yaPuesto) d -= yaPuesto[idx];
         if (d > 0) { out[idx] = KING.k * d; hay = true; }
       }
     }
@@ -957,6 +1009,7 @@
     king: KING,
     haloNoResuelto: haloNoResuelto,
     haloCatalogado: haloCatalogado,
+    flujoObservadoCumulo: flujoObservadoCumulo,
     globularEnCampo: globularEnCampo,
     flujoMedioNoResuelto: flujoMedioNoResuelto,
     perfilRadial: perfilRadial,
