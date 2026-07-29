@@ -97,6 +97,31 @@ instante de hora local con los algoritmos de Meeus.
   celeste a la altura de la latitud, la declinación solar en solsticio y equinoccio,
   el convenio de azimut y los husos con y sin horario de verano).
 
+## Cadena de la placa (luma → flujo)
+
+Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de objeto
+por píxel** que come `pintarFot`. Es el otro motor que produce un `Fobj`, en
+paralelo a las capas difusas sintéticas del Canvas-2D.
+
+- **Fuente única:** `resources/js/bitacora-gaia-render.js`, en tres pasos:
+  `fusionarPlacas(profunda, corta)` (fusión HDR por mínimos cuadrados de la
+  DSS2-red profunda con la DSS1 corta, que conserva los núcleos sin quemar),
+  `repararNucleos(v, size)` = `rellenarNucleo(v, desenfocar(v,4,size))` (el agujero
+  negro que PanSTARRS deja en el centro de una estrella brillante) y
+  `flujoDePlaca(v, esHips)` (luma 0-255 → brillo superficial entre `SB_OBJ_MIN` y
+  `SB_OBJ_MAX` → flujo).
+- **Consumidor:** el **simulador de oculares**, que conserva solo lo que es suyo:
+  `lumas()`, que lee los píxeles de la placa del DOM, y la orquestación.
+- **No es fotometría calibrada:** es un mapeo heurístico con parámetros puestos a
+  ojo, y están para tocarlos. Lo que el test fija son los **invariantes**: más luma
+  nunca es menos flujo, un píxel apagado no inventa luz (flujo 0), la escala es
+  logarítmica en magnitudes, la fusión nunca oscurece lo que la placa profunda ya
+  registró, y una fusión que no cuadra (pocos píxeles en común o pendiente no
+  positiva) devuelve **la placa profunda tal cual** en vez de una recta inventada.
+- **La regla se prueba aparte del desenfoque:** `rellenarNucleo` recibe el entorno
+  ya calculado, porque lo que se comprueba es el umbral, no el kernel (que es el
+  filtro nativo del canvas y necesita DOM). Test: `scripts/test_placa.js`.
+
 ## Caché LRU de los proxies
 
 La política con la que los dos proxies del simulador (`gaia_proxy.php` y

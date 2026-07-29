@@ -128,10 +128,9 @@
       var corsFallo = false;
       var contadorPeticion = 0;
 
-      /* Curvas de la fotometría. Viven en el módulo compartido (fuente única con
-         el formulario de registro); esto es solo el alias para poder seguir
-         escribiendo FOT.X aquí y para que sigan siendo editables en un sitio. */
-      var FOT = window.BitacoraGaiaRender.fot;
+      /* Las curvas de la fotometría (BitacoraGaiaRender.fot) ya no se leen desde
+         aquí: la última regla que las usaba —luma de la placa → flujo— se fue con
+         la cadena al módulo compartido. */
 
       /* ══════════════════ CATÁLOGO DE EQUIPO ══════════════════ */
       function num(v) { if (v == null || v === '') return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
@@ -545,10 +544,9 @@
         var v = new Float32Array(PROC * PROC); for (var i = 0, j = 0; j < v.length; i += 4, j++) v[j] = (dd[i] + dd[i + 1] + dd[i + 2]) / 3; return v;
       }
 
-      var suave = BitacoraGaiaRender.suave;
-      function fusionar(vd, vs) { var sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0, i; for (i = 0; i < vd.length; i++) { if (vd[i] >= 120 && vd[i] <= 215 && vs[i] > 8) { sx += vs[i]; sy += vd[i]; sxx += vs[i] * vs[i]; sxy += vs[i] * vd[i]; n++; } } if (n < 500) return vd; var a = (n * sxy - sx * sy) / (n * sxx - sx * sx); var b = (sy - a * sx) / n; if (!(a > 0)) return vd; var out = new Float32Array(vd.length); for (i = 0; i < vd.length; i++) { var t = suave((vd[i] - 210) / 40); out[i] = (1 - t) * vd[i] + t * Math.max(vd[i], a * vs[i] + b); } return out; }
-      function desenfocar(v, radio) { return BitacoraGaiaRender.desenfocar(v, radio, PROC); }
-      function repararNucleos(v) { var entorno = desenfocar(v, 4); for (var i = 0; i < v.length; i++) { if (entorno[i] > 140 && v[i] < 0.5 * entorno[i]) v[i] = Math.min(300, entorno[i] * 1.25); } return v; }
+      /* La cadena de la placa (fusión HDR, reparación de núcleos y luma → flujo)
+         vive en el módulo compartido y tiene su test en scripts/test_placa.js.
+         Aquí queda lo que de verdad es del simulador: leer los píxeles del DOM. */
 
       /* Pinta el lienzo a partir de un array de FLUJO DE OBJETO por píxel. La
          cadena (contraste sobre el cielo + adaptación local) vive en el módulo
@@ -561,16 +559,12 @@
       }
 
       function procesarFotometrico(profunda, corta, canvas, p) {
-        var vd = lumas(profunda); if (!vd) return false; var v = vd; if (corta) { var vs = lumas(corta); if (vs) v = fusionar(vd, vs); }
-        var esHips = $('sim-origen').value === 'hips'; if (esHips) v = repararNucleos(v);
-        // Flujo del objeto a partir de la luma 8-bit (heurístico: luma → brillo
-        // superficial entre SB_OBJ_MIN y SB_OBJ_MAX). No es fotometría calibrada.
-        var Fobj = new Float32Array(v.length);
-        for (var i = 0; i < v.length; i++) {
-          var vi = v[i];
-          if (vi > 0) { if (esHips) vi = 255 * Math.pow(Math.min(vi, 512) / 255, FOT.GAMMA_HIPS); var sb = FOT.SB_OBJ_MIN - (vi / 255) * (FOT.SB_OBJ_MIN - FOT.SB_OBJ_MAX); Fobj[i] = Math.pow(10, -0.4 * sb); }
-        }
-        return pintarFot(Fobj, canvas, p);
+        var vd = lumas(profunda); if (!vd) return false;
+        var v = vd;
+        if (corta) { var vs = lumas(corta); if (vs) v = BitacoraGaiaRender.fusionarPlacas(vd, vs); }
+        var esHips = $('sim-origen').value === 'hips';
+        if (esHips) v = BitacoraGaiaRender.repararNucleos(v, PROC);
+        return pintarFot(BitacoraGaiaRender.flujoDePlaca(v, esHips), canvas, p);
       }
 
       function renderizar(profunda, corta, urlRespaldo) {
