@@ -317,27 +317,6 @@
         return t;
       }
 
-      /* Estado de los interruptores de la barra "Capas y vista". Las capas
-         difusas se calculan SOLO en el Canvas-2D de Gaia: en las placas del DSS o
-         PanSTARRS esa luz ya viene en la propia imagen, y sumarla otra vez la
-         contaría dos veces y encima a peor resolución. */
-      function capasActivas() {
-        function on(id) { var el = $(id); return !el || el.checked; }
-        return {
-          conTelon: on('sim-capa-telon'),
-          conHalo: on('sim-capa-halo'),
-          conGalaxias: on('sim-capa-galaxias'),
-          conNebulosas: on('sim-capa-nebulosas')
-        };
-      }
-
-      // Habilita o deshabilita el grupo de capas según el origen activo.
-      function sincronizarCapas() {
-        var esGaia = $('sim-origen').value === 'canvas-2d';
-        var grupo = $('sim-capa-grupo'), nota = $('sim-capa-nota');
-        if (grupo) grupo.classList.toggle('esta-off', !esGaia);
-        if (nota) nota.hidden = esGaia;
-      }
 
       /* Estado de cielo + óptica que espera el módulo compartido. Único punto de
          este fichero que lee el DOM para la fotometría; de aquí para dentro todo
@@ -405,7 +384,6 @@
           : (magOpt - MARGEN_MAGLIM).toFixed(1) + '–' + magOpt.toFixed(1) + '<em>m</em>');
 
         var origen = $('sim-origen').value;
-        sincronizarCapas();
 
         /* Recorte del cielo: lado = campo real, limitado por el origen. El tope de
            2° es de las PLACAS (el servidor del DSS no sirve más); el Canvas-2D de
@@ -499,10 +477,6 @@
         consultarGaia(ra0, dec0, arcmin).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
-          // Capas difusas: telón (luz de las estrellas que el catálogo no trae,
-          // extrapolada de los propios conteos) y halo no resuelto (el déficit que
-          // la aglomeración le roba al telón en los núcleos densos). Pintan también
-          // el fondo de cielo, así que sustituyen al relleno gris cuando las hay.
           /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
              del equipo, faltan estrellas que SÍ se verían. Pasa en campos ricos y
              muy anchos. Se avisa en vez de mostrar un campo pobre sin explicación. */
@@ -512,14 +486,9 @@
             $('sim-aviso').textContent = 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
               ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
           }
-          /* Capas difusas y estrellas se mapean JUNTAS, en una sola curva de tono.
-             Si las estrellas se dibujaran encima en 8 bits se saltarían la curva,
-             y en un núcleo denso la suma de sprites se recorta a blanco: la mancha
-             saturada sin estrellas distinguibles. */
-          var opcCapas = capasActivas();
-          opcCapas.ra = ra0; opcCapas.dec = dec0; opcCapas.arcmin = arcmin; opcCapas.size = PROC;
-          var difuso = BitacoraGaiaRender.capasDifusas(estrellas, opcCapas)
-            || new Float32Array(PROC * PROC);
+          // Fondo plano de cielo: sin capas difusas, las estrellas se dibujan
+          // sobre el nivel de cielo tal cual (sin componente difusa que sumar).
+          var difuso = new Float32Array(PROC * PROC);
           /* Si el objeto es una doble, se completan del catálogo las componentes
              que Gaia no trae (satura con las primarias muy brillantes: la de
              Almaak no está en DR3). Solo para el dibujo de estrellas: las capas
@@ -535,6 +504,12 @@
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
+            // Solo si el objeto es una doble: el suelo de visibilidad de SUS dos
+            // componentes se recorta con el aumento para no comerse el hueco ya
+            // resuelto (ver radioEstrella en bitacora-gaia-render.js). Sin esto,
+            // sep queda undefined y el suelo se comporta igual que en cualquier
+            // otro campo.
+            sep: objetoSel.doble ? objetoSel.sep : null,
             conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana()
           }, PROC);
           var cieloGaia = cieloOptica(datosOcular().pupila);
@@ -827,9 +802,6 @@
       if (window.BitacoraBase && $('sim-bortle') && $('sim-sqm')) BitacoraBase.montarCielo($('sim-bortle'), $('sim-sqm'));
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
       $('sim-origen').addEventListener('change', actualizar);
-      ['sim-capa-telon', 'sim-capa-halo', 'sim-capa-galaxias'].forEach(function (id) {
-        var el = $(id); if (el) el.addEventListener('change', actualizar);
-      });
       window.addEventListener('resize', function () { actualizar(); });
       montarTeleManual();
       montarSelectorObjeto();
