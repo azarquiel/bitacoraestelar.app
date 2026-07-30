@@ -102,7 +102,84 @@
     return 'M';
   }
 
-  var api = { config: config, colorPorBpRp: colorPorBpRp, claseEspectral: claseEspectral };
+  /* ── Tipo espectral → índice BP–RP (el camino inverso, aproximado) ───────────
+     Para las estrellas de las que hay TIPO pero no fotometría de Gaia: las
+     componentes de las dobles del catálogo (el WDS trae "K3II+B9.5") cuando Gaia
+     no las tiene, que es justo lo que le pasa a las primarias muy brillantes.
+
+     No sustituye al modelo de color: solo estima el BP–RP con el que preguntarle,
+     así que el color sigue saliendo de una sola fuente y una estrella de tipo K3
+     se pinta igual que una estrella de Gaia con ese mismo BP–RP.
+
+     Es una tabla de anclas interpoladas linealmente sobre la secuencia
+     O·B·A·F·G·K·M (índice = clase×10 + subclase), con los valores habituales de
+     BP–RP de secuencia principal. Las gigantes y supergigantes de la misma
+     subclase son algo más rojas, y eso se corrige con un desplazamiento pequeño
+     en las clases frías, donde el efecto se nota. Es una aproximación para
+     PINTAR, no fotometría: el error típico es de unas centésimas, y más en las
+     estrellas peculiares (Be, shell, carbono).
+
+     Acepta lo que trae el catálogo: "A0", "B9.5V", "K2Vvar", "G8II-III",
+     "F5Iab", "gM0" (prefijo g = gigante), "dF0" (d = enana), "A1VpSrSi". */
+  var CLASES = 'OBAFGKM';
+  var ANCLAS_BPRP = [
+    [ 5, -0.32], [10, -0.29], [15, -0.16], [18, -0.07],   // O5 · B0 · B5 · B8
+    [20,  0.00], [25,  0.19],                             // A0 · A5
+    [30,  0.38], [35,  0.55],                             // F0 · F5
+    [40,  0.75], [42,  0.82], [45,  0.87],                // G0 · G2 (el Sol) · G5
+    [50,  1.00], [52,  1.10], [55,  1.45], [57,  1.75],   // K0 · K2 · K5 · K7
+    [60,  1.87], [62,  2.15], [65,  3.00], [68,  4.30]    // M0 · M2 · M5 · M8
+  ];
+  // Enrojecimiento por clase de luminosidad, solo de G en adelante (índice ≥ 40).
+  var ROJEZ_LUMINOSIDAD = { I: 0.30, II: 0.30, III: 0.15, IV: 0.05, V: 0, VI: 0 };
+
+  function bpRpPorTipo(tipo) {
+    var t = String(tipo == null ? '' : tipo).trim();
+    if (t === '') return null;
+
+    // Prefijos en minúscula del catálogo: g = gigante, d = enana, sd = subenana.
+    var lum = null;
+    var pre = t.match(/^(sd|d|g)([OBAFGKM])/);
+    if (pre) {
+      lum = (pre[1] === 'g') ? 'III' : 'V';
+      t = t.slice(pre[1].length);
+    }
+
+    /* La clase tiene que ir seguida de su subclase numérica, o ser la letra sola
+       ("A" está en el catálogo). Sin esa exigencia, cualquier palabra que empiece
+       por una de las siete letras colaría como tipo espectral: "basura" saldría
+       como una B5. */
+    var m = t.toUpperCase().match(/^([OBAFGKM])(?:\s*([0-9]+(?:[.,][0-9]+)?)|$)/);
+    if (!m) return null;
+    var indice = CLASES.indexOf(m[1]) * 10 + (m[2] ? parseFloat(m[2].replace(',', '.')) : 5);
+
+    // Clase de luminosidad del resto del tipo, si no la dijo ya el prefijo. El
+    // orden de la alternancia importa: IV antes que I y V, III antes que II.
+    if (lum == null) {
+      var romano = t.toUpperCase().slice(m[0].length).match(/(VI|IV|III|II|V|I)/);
+      lum = romano ? romano[1] : 'V';
+    }
+
+    // Interpolación entre anclas.
+    var bprp;
+    if (indice <= ANCLAS_BPRP[0][0]) { bprp = ANCLAS_BPRP[0][1]; }
+    else if (indice >= ANCLAS_BPRP[ANCLAS_BPRP.length - 1][0]) { bprp = ANCLAS_BPRP[ANCLAS_BPRP.length - 1][1]; }
+    else {
+      for (var i = 1; i < ANCLAS_BPRP.length; i++) {
+        if (indice <= ANCLAS_BPRP[i][0]) {
+          var x0 = ANCLAS_BPRP[i - 1][0], y0 = ANCLAS_BPRP[i - 1][1];
+          var x1 = ANCLAS_BPRP[i][0], y1 = ANCLAS_BPRP[i][1];
+          bprp = y0 + (y1 - y0) * (indice - x0) / (x1 - x0);
+          break;
+        }
+      }
+    }
+    if (indice >= 40) { bprp += (ROJEZ_LUMINOSIDAD[lum] || 0); }
+    return bprp;
+  }
+
+  var api = { config: config, colorPorBpRp: colorPorBpRp, claseEspectral: claseEspectral,
+              bpRpPorTipo: bpRpPorTipo };
   root.BitacoraGaiaColor = api;                                   // navegador (WordPress carga global)
   if (typeof module !== 'undefined' && module.exports) module.exports = api;   // Node (test dorado)
 })(typeof window !== 'undefined' ? window : globalThis);

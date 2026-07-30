@@ -12,8 +12,16 @@ de estrella de carbono (bandas C2 "Swan").
 
 - **Fuente única:** `resources/js/bitacora-gaia-color.js`, global `window.BitacoraGaiaColor`.
 - **Interfaz:** `colorPorBpRp(bprp)` → `[r,g,b]`; `claseEspectral(bprp)` → letra
-  espectral (O·B·A·F·G·K·M); `config` → palanca mutable de gamma y saturación
-  compartida por todos los consumidores.
+  espectral (O·B·A·F·G·K·M); `bpRpPorTipo(tipo)` → el camino INVERSO, del tipo
+  espectral del catálogo (`'K3II'`, `'B9.5'`, `'gM0'`) al índice BP–RP, para las
+  estrellas de las que hay tipo pero no fotometría de Gaia; `config` → palanca
+  mutable de gamma y saturación compartida por todos los consumidores.
+- `bpRpPorTipo` NO es una segunda fuente de color: solo estima el BP–RP con el que
+  preguntarle al modelo, así que una K3 del catálogo se pinta igual que una
+  estrella de Gaia con ese mismo índice. Es una tabla de anclas interpolada, con
+  corrección por clase de luminosidad en las clases frías; aproximación para
+  pintar, no fotometría. Un tipo que no se entiende devuelve `null` (blanco), y
+  «basura» no cuela como una B5.
 - **Consumidores:** el **simulador de oculares** (`bitacora-ocular.js`) y el
   **vecindario solar** del mapa (`vecindario-solar.js`), ambos desde la misma URL
   canónica `/wp-content/uploads/bitacora/bitacora-gaia-color.js`.
@@ -96,6 +104,104 @@ instante de hora local con los algoritmos de Meeus.
   El test `scripts/test_astro.js` fija el contrato contra invariantes físicos (el polo
   celeste a la altura de la latitud, la declinación solar en solsticio y equinoccio,
   el convenio de azimut y los husos con y sin horario de verano).
+
+## Escala aparente del dibujo
+
+Lo que el ojo ve en el ocular tiene dos escalas distintas, y confundirlas es un
+fallo que se ve pero no se explica:
+
+- **El cielo** (posiciones, separación de una doble, tamaño de una galaxia) va con
+  el **campo real**: el lienzo cubre `campoReal = afov / aumentos` y las posiciones
+  se proyectan con `SIZE / campoReal`.
+- **El tamaño de una estrella** tiene dos términos, sumados en cuadratura por
+  `BitacoraGaiaRender.radioEstrella({afov, apertura, arcmin, size})`:
+  1. **El físico**, la imagen estelar de verdad: disco de Airy (`airyArcsec`/D =
+     138″/D(mm), el criterio de Rayleigh) ⊕ seeing (`seeingArcsec`, FWHM, perilla del
+     sitio), llevado a píxeles con la escala de placa del campo. Al ser ángulos de
+     CIELO, el aumento los agranda —las estrellas engordan— y el Airy va como 1/D
+     —más apertura, estrellas más apretadas—.
+  2. **El suelo de visibilidad**, `radioSuelo · escalaEstrellas(afov)`, que existe
+     porque la ventana tiene ~500 px para 72-100° de campo aparente: a aumentos
+     normales la imagen estelar real cae muy por debajo del píxel (una mag 13 de M13
+     a 133× son 0,23 px) y sin suelo el globular desaparece.
+
+  A poco aumento manda el suelo; a mucho, la física. La cuadratura (y no un `max`)
+  hace suave el paso de un régimen al otro.
+- **El tamaño NO depende de la magnitud.** El disco lo fijan apertura, aumento y
+  seeing: es el mismo para todas las estrellas del campo. El brillo lo cuentan la
+  opacidad, el glow, los spikes y la curva de tono, que además ensancha los núcleos
+  saturados. Que las brillantes se dibujen más gordas es convención de atlas, y era
+  lo que se comía el hueco de los pares apretados: con el rango de tamaños por
+  magnitud, Almaak sumaba 5,5 px de discos contra 4,5 px de hueco.
+- El **glow** de las que no llegan a la magnitud límite se queda solo en el suelo
+  aparente: representa estrellas que NO se resuelven, así que darles el tamaño físico
+  de una resuelta sería contarlas dos veces.
+- **Por qué 1/afov:** el lienzo se muestra a un diámetro ∝ `afov` (un ocular de 100°
+  ocupa más ventana que uno de 50°: eso es tener más campo aparente). Lo que la
+  ventana estira, la escala lo encoge, y en pantalla queda solo el aumento.
+- **Invariante:** con el mismo aumento, cambiar de ocular no cambia ni el tamaño de
+  las estrellas ni la separación de un par en pantalla; solo cuánto cielo se ve
+  alrededor. Antes la escala usaba el campo real (`sqrt(90/arcmin)`, acotada a 2×):
+  un Ethos de 6 mm y un AstroPhysics de 6 mm dibujaban la misma estrella 1,9×
+  distinta, y el par se fundía con uno y se separaba con el otro.
+  Test: `scripts/test_escala.js`.
+- **Límite conocido:** la ventana deja de crecer en `AFOV_REF` (110°), así que por
+  encima de ese campo aparente la compensación ya no es exacta. Es de la página, no
+  de la ley.
+- El **veredicto de desdoble** de una doble (`resolucionDoble`) no depende de nada de
+  esto: es apertura (Dawes) y `aumentos · separación`. Un par de pocos segundos de
+  arco cae por debajo del píxel en pantalla, así que en los pares justos el que dice
+  si se resuelve es el veredicto, no la imagen.
+
+## Par de una doble (completar lo que Gaia no trae)
+
+Gaia DR3 **satura por arriba**: las primarias muy brillantes no están en el catálogo.
+La de Almaak (γ And A, V 2,3 pero G ≈ 1,5 por ser una gigante K3 muy roja) no
+aparece, así que el Canvas-2D dibujaba una sola estrella —la compañera, G 4,86—
+mientras el veredicto decía «se resuelve». Los dos tenían razón: no hablaban del
+mismo par.
+
+- **Fuente única:** `BitacoraGaiaRender.parDoble(estrellas, {ra, dec, sep, mag1, mag2})`,
+  pura, devuelve la lista con las componentes que faltaban (sin tocar la original).
+- **Completa, no sustituye:** busca en un círculo de `1,5 · sep` las estrellas
+  brillantes que el catálogo sí trae y sintetiza solo lo que falta, para conservar la
+  posición y el **color** reales de las presentes. No es un problema general: Mizar
+  (G 2,28 + 3,91), Achird (3,32 + 6,76) y 65 Psc (6,21 + 6,24) vienen completas y a
+  esas no se les añade nada.
+- **Solo el dibujo de estrellas.** Las capas difusas siguen recibiendo la muestra de
+  Gaia tal cual, que es de donde sale su función de luminosidad.
+- **Ángulo de posición:** del catálogo cuando lo hay (lo trae el WDS, 132 de 289),
+  medido desde el Norte hacia el Este y de la A a la B; si el par se completa al
+  revés —falta la primaria— el desplazamiento va a PA+180°. Sin PA se asume uno
+  oblicuo (55°) para que el par no salga pegado a un eje: para el desdoble lo que
+  importa es la separación, y la orientación en el ocular depende del montaje, que
+  tampoco se modela.
+- **Color:** del tipo espectral de cada componente con
+  [[modelo de color Gaia]]`.bpRpPorTipo`, así que Albireo sale dorada + azul y no
+  como dos puntos blancos. Sin tipo espectral (140 de 289), blanca.
+- Las magnitudes del catálogo son **visuales** y se usan como si fueran G: el error es
+  de unas décimas, más en las estrellas muy rojas.
+- **Trampa:** `+null` es `0`, y como magnitud sería una estrella falsa deslumbrante;
+  por eso los datos del catálogo entran por `numONulo`. Test:
+  `scripts/test_par_doble.js`.
+
+## Cielo de la sesión (SQM e IR)
+
+Las dos medidas del cielo de una observación, con **escalas opuestas**, cada una con
+su tabla de bandas en `resources/js/bitacora-base.js`:
+
+- **SQM** (mag/arcsec²): positivo y **sube** con la oscuridad. `claseBortlePorSqm`;
+  el `sqm` de cada clase Bortle es el **mínimo** de su rango.
+- **IR** (ºC): negativo y **baja** cuanto más transparente está el cielo.
+  `transparenciaPorIr`; el `ir` de cada banda es su extremo **menos negativo**:
+  `ir > −5` Pobre · `−15 < ir ≤ −5` Algo transparente · `−20 < ir ≤ −15`
+  Mayoritariamente transparente · `−30 < ir ≤ −20` Transparente · `ir ≤ −30`
+  Extremadamente transparente.
+- **Invariante:** el valor que ofrece cada opción del desplegable tiene que volver a
+  caer en su propia banda, o el `<select>` y el `<input>` se desincronizan solos.
+- La comparación es distinta en las dos (`>=` en el SQM, `<=` en el IR) **a
+  propósito**: usar la del SQM en el IR fue el fallo —un cielo de −3 salía «Algo
+  transparente» cuando es Pobre—. Test: `scripts/test_cielo.js`.
 
 ## Cadena de la placa (luma → flujo)
 

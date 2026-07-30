@@ -418,10 +418,34 @@
   var CFG = {
     blur: 1.1, magColor: 9, tinteNucleo: 0.8,
     carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
-    radioMin: 0.42, radioMag: 0.13, radioExp: 1.35, magTamMin: 14, radioMax: 6.5,
+    /* Suelo de visibilidad del tamaño de estrella, en píxeles de lienzo (antes de
+       la escala del campo aparente y del halo del blur). Es UNO para todas las
+       magnitudes a propósito: el disco de una estrella lo fijan la apertura, el
+       aumento y el seeing, no su brillo —eso es física—, y el brillo ya lo cuentan
+       la opacidad, el glow, los spikes y la curva de tono, que además ensancha los
+       núcleos saturados. Que las brillantes se dibujen más gordas es convención de
+       atlas, y era justo lo que se comía el hueco de los pares apretados. */
+    radioSuelo: 2.0,
     brillo: 1.4, alfaMin: 0.24,
-    glowIntensidad: 0.2, glowRadio: 2.0,
-    escalaMagCampo: 90, escalaMagMax: 2.0, radioTotalMax: 14,
+    /* El glow de las estrellas por debajo de la magnitud límite es lo que da
+       textura al halo de un globular, así que va calibrado en las mismas unidades
+       aparentes: ~1,4 px de radio en pantalla. */
+    glowIntensidad: 0.2, glowRadio: 5.0,
+    /* Campo aparente (grados) al que corresponde radioSuelo tal cual: con un ocular
+       de este campo el suelo sale a su tamaño nominal, y con uno más estrecho sale
+       proporcionalmente mayor en el lienzo. Ver escalaEstrellas() para el por qué.
+       Es la perilla del tamaño de estrella a aumentos normales, donde manda el
+       suelo; con 60 las estrellas de un globular salen a ~1,8 px de radio en
+       pantalla. Subirla las engorda a todas por igual. */
+    escalaMagAfov: 60,
+    /* Radio del primer anillo oscuro del disco de Airy: 1,22·λ/D en segundos de
+       arco, con λ = 550 nm (el verde al que el ojo adaptado es más sensible), ya
+       convertido para recibir la apertura en mm. */
+    airyArcsec: 138.4,
+    /* Seeing en segundos de arco (FWHM). Perilla del sitio y de la noche: 2″ es un
+       cielo decente, 1″ excepcional, 4-5″ una noche mala. Con apertura grande es
+       esto —y no la óptica— lo que fija el tamaño de la estrella. */
+    seeingArcsec: 2.0,
     spikes: {
       magMax: 10, rango: 5, brazos: 4, angulo: 0,
       longMag: 10, longMax: 180, grosor: 3, lobulos: 2, intensidad: 0.8
@@ -1305,10 +1329,11 @@
     g.fillRect(0, 0, c.width, c.height);
     return (SPIKE_TINT[key] = c);
   }
-  function dibujarSpikes(ctx, x, y, g, escalaMag, rgb) {
+  function dibujarSpikes(ctx, x, y, g, escala, rgb) {
     var cf = CFG.spikes, sobre = cf.magMax - g;
     if (sobre <= 0) return;
-    var L = Math.min(cf.longMax, cf.longMag * sobre) * escalaMag;
+    // Como el radio: el tope, sobre la longitud nominal; la escala, después.
+    var L = Math.min(cf.longMax, cf.longMag * sobre) * escala;
     if (L < 3) return;
     var alpha = Math.min(1, cf.intensidad * (sobre / cf.rango));
     var sp = spriteSpikeColor(rgb), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
@@ -1320,10 +1345,180 @@
     ctx.restore();
   }
 
-  /* ── Tamaño y color de cada estrella ── */
-  function radioNucleo(g) {
-    var r = CFG.radioMag * Math.pow(Math.max(0, CFG.magTamMin - g), CFG.radioExp);
-    return Math.min(CFG.radioMax, Math.max(CFG.radioMin, r));
+  /* ── Tamaño y color de cada estrella ──
+
+     El tamaño con que se dibuja una estrella es un tamaño APARENTE: lo que el ojo
+     ve en el ocular. Y el tamaño aparente NO depende de cuánto cielo entra en el
+     campo, solo del aumento y del brillo de la estrella. Dos oculares de la misma
+     focal (mismo aumento) tienen que dibujarla igual: el de campo más ancho
+     enseña MÁS CIELO alrededor, no estrellas más gordas.
+
+     Quien consume esto (el simulador y el generador del registro) dibuja el
+     lienzo y luego lo muestra a un diámetro proporcional al campo aparente del
+     ocular —un ocular de 100° ocupa más ventana que uno de 50°—. Por eso, para
+     que el tamaño en PANTALLA no dependa del campo aparente, el radio en píxeles
+     del lienzo tiene que ir con 1/afov: lo que la ventana estira, la escala lo
+     encoge, y queda solo el aumento.
+
+     Antes esta escala se calculaba con el campo REAL en arcmin
+     (`sqrt(90/arcmin)`, acotada a 2×), que es justo la variable equivocada: con
+     el mismo aumento, un Ethos de 100° y un AstroPhysics de ~46° dan campos
+     reales distintos, así que la misma estrella salía casi el doble de grande en
+     pantalla con el Ethos. Y como el par de una doble sí caía a la separación
+     correcta, el par se fundía en una mancha con un ocular y se separaba con el
+     otro: la separación parecía depender del campo aparente.
+
+     Ojo: la ventana del simulador deja de crecer a partir de AFOV_REF (110°), así
+     que por encima de ese campo aparente la compensación ya no es exacta. Es un
+     límite de la página, no de esta ley. */
+  function escalaEstrellas(afov) {
+    var a = (afov > 0) ? afov : CFG.escalaMagAfov;
+    return CFG.escalaMagAfov / a;
+  }
+
+  /* ── Par de una doble: completar lo que Gaia DR3 no trae ─────────────────────
+     Gaia satura por arriba. Almaak es el caso que lo destapó: γ And A es una
+     gigante K3 muy roja (V 2,3, G ≈ 1,5) y NO está en DR3, así que en un círculo
+     de 36″ el catálogo solo devuelve su compañera (G 4,86) y dos estrellas de
+     campo. El simulador dibujaba una estrella y el veredicto decía «se resuelve»:
+     los dos tenían razón, pero no hablaban del mismo par.
+
+     No es general —Mizar (G 2,28 + 3,91), Achird (3,32 + 6,76) y 65 Psc (6,21 +
+     6,24) vienen completas— así que aquí NO se sustituye a Gaia: se completa. Se
+     buscan las componentes que el catálogo sí tiene y solo se sintetiza lo que
+     falta, para conservar la posición y el COLOR reales de las que están (el
+     BP–RP de la compañera de Almaak es −0,04: azul, y ese contraste es media
+     gracia del par).
+
+     El ángulo de posición sale del catálogo cuando lo hay (lo trae el WDS, para
+     132 de las 289 dobles): la B se coloca a ese ángulo de la A, medido desde el
+     Norte hacia el Este. Si el par se completa al revés —la que falta es la
+     primaria—, el desplazamiento va a PA+180°. Sin PA se asume uno oblicuo, para
+     que el par no salga alineado con los ejes; para el desdoble lo que importa es
+     la separación, y la orientación en el ocular depende del montaje, que tampoco
+     se modela.
+
+     El COLOR de la componente sintética sale de su tipo espectral con
+     BitacoraGaiaColor.bpRpPorTipo, así que el modelo de color sigue siendo la
+     única fuente: una K3 del catálogo se pinta igual que una estrella de Gaia con
+     ese mismo BP–RP. Sin tipo espectral sale blanca.
+
+     PURA: recibe y devuelve la lista de estrellas, sin tocar la original. */
+  var PAR = {
+    angulo: 55,        // ° de PA asumido (desde el Norte hacia el Este)
+    margenMag: 1.0,    // una componente puede venir hasta 1 mag más débil que mag2
+    radioMinBusca: 3   // ″ : suelo del círculo donde se buscan las componentes
+  };
+  /* null / '' → null, y NO 0: el catálogo deja en null lo que no sabe, y `+null`
+     es 0, que como magnitud sería una estrella falsa deslumbrante. */
+  function numONulo(v) {
+    if (v == null || v === '') return null;
+    var n = +v;
+    return isFinite(n) ? n : null;
+  }
+  function parDoble(estrellas, o) {
+    var sep = numONulo(o.sep), m1 = numONulo(o.mag1), m2 = numONulo(o.mag2);
+    // Sin separación o sin las dos magnitudes no hay par que completar (el
+    // catálogo deja ambas en null en muchas múltiples).
+    if (sep == null || !(sep > 0) || m1 == null || m2 == null) return estrellas;
+
+    var ra0 = numONulo(o.ra), dec0 = numONulo(o.dec);
+    if (ra0 == null || dec0 == null) return estrellas;
+
+    var cos0 = Math.cos(dec0 * Math.PI / 180);
+    var radio = Math.max(PAR.radioMinBusca, sep * 1.5) / 3600;   // grados
+    var limite = Math.max(m1, m2) + PAR.margenMag;
+    var halladas = [];
+    for (var i = 0; i < estrellas.length; i++) {
+      var e = estrellas[i];
+      if (!(e[2] <= limite)) continue;                            // demasiado débil para ser componente
+      var dra = (((e[0] - ra0 + 540) % 360) - 180) * cos0, ddec = e[1] - dec0;
+      if (dra * dra + ddec * ddec <= radio * radio) halladas.push(e);
+    }
+    if (halladas.length >= 2) return estrellas;                  // Gaia trae el par: no se toca
+
+    // Desplazamiento de la B respecto de la A: PA del catálogo, o el asumido.
+    var paCat = numONulo(o.pa);
+    var pa = (paCat != null ? paCat : PAR.angulo) * Math.PI / 180;
+    function desplazar(estrella, signo) {
+      return [estrella[0] + signo * sep * Math.sin(pa) / (3600 * (cos0 || 1)),
+              estrella[1] + signo * sep * Math.cos(pa) / 3600];
+    }
+    // Color desde el tipo espectral. Guardado por si un caché sirviera una versión
+    // vieja del módulo de color: sin color se dibuja blanca, no se cae.
+    function bprpDe(tipo) {
+      var f = GColor && GColor.bpRpPorTipo;
+      return f ? f(tipo) : null;
+    }
+
+    var nuevas;
+    if (halladas.length === 1) {
+      // Falta una: la que peor encaja con la magnitud de la que sí está. Si la que
+      // falta es la primaria, va en sentido contrario al PA (que apunta de A a B).
+      var hallada = halladas[0], g0 = hallada[2];
+      var faltaLaB = Math.abs(g0 - m1) <= Math.abs(g0 - m2);
+      var xy = desplazar(hallada, faltaLaB ? 1 : -1);
+      nuevas = [[xy[0], xy[1], faltaLaB ? m2 : m1, bprpDe(faltaLaB ? o.spect2 : o.spect1)]];
+    } else {
+      // No hay ninguna: las dos, con la primaria en las coordenadas del catálogo.
+      var a = [ra0, dec0, m1, bprpDe(o.spect1)];
+      var xyB = desplazar(a, 1);
+      nuevas = [a, [xyB[0], xyB[1], m2, bprpDe(o.spect2)]];
+    }
+    return estrellas.concat(nuevas);
+  }
+
+  /* ── La imagen estelar de VERDAD: disco de Airy + seeing ─────────────────────
+     Una estrella es una fuente puntual: lo que se ve en el ocular es su patrón de
+     difracción. El radio del primer anillo oscuro (criterio de Rayleigh) es
+     1,22·λ/D, que a 550 nm son 138″/D(mm) — para un 114 mm, 1,21″; su límite de
+     Dawes (116/D = 1,02″) es un 19 % más apretado, como debe ser.
+
+     De ahí salen las dos cosas que el modelo anterior no tenía:
+       · va como 1/D  → más apertura, estrellas más apretadas al mismo aumento;
+       · es un ángulo de CIELO fijo → el aumento lo agranda, así que las estrellas
+         ENGORDAN con el aumento. Es la sensación del ocular, y es real.
+
+     El seeing entra en cuadratura porque son dos borrones independientes. Con
+     apertura grande es el que manda: es lo que impide que un 400 mm dé estrellas
+     cuatro veces más finas que un 100 mm. */
+  function radioAiry(aperturaMm) {
+    var D = (aperturaMm > 0) ? aperturaMm : 0;
+    if (!D) return null;
+    return CFG.airyArcsec / D;
+  }
+  function radioImagenEstelar(aperturaMm) {
+    var rAiry = radioAiry(aperturaMm);
+    if (rAiry == null) return null;
+    var rSeeing = (CFG.seeingArcsec > 0 ? CFG.seeingArcsec : 0) / 2;   // FWHM → radio
+    return Math.sqrt(rAiry * rAiry + rSeeing * rSeeing);
+  }
+
+  /* Radio con el que se DIBUJA una estrella, en píxeles del lienzo.
+
+     Dos términos, sumados en cuadratura porque cada uno manda en un régimen:
+
+       · el FÍSICO, la imagen estelar de arriba llevada a píxeles con la escala de
+         placa del campo. Es el que crece con el aumento y se aprieta con la
+         apertura;
+       · el SUELO DE VISIBILIDAD, el tamaño aparente por magnitud de siempre. Existe
+         porque la ventana tiene ~500 px para 72-100° de campo aparente: a aumentos
+         normales la imagen estelar real cae MUY por debajo del píxel (una mag 13 de
+         M13 a 133× son 0,23 px) y sin suelo el globular desaparece.
+
+     Por eso a poco aumento el dibujo lo gobierna el suelo —y no cambia nada de lo
+     ya calibrado— y a mucho aumento lo gobierna la física, que es justo donde el
+     observador nota que las estrellas engordan y que enfocar cuesta más.
+
+     La cuadratura, y no un max(), para que el paso de un régimen a otro sea suave:
+     un salto en el tamaño al cambiar de ocular se vería como un parpadeo. */
+  function radioEstrella(o) {
+    var suelo = CFG.radioSuelo * (1 + CFG.blur) * escalaEstrellas(o.afov);
+    var theta = radioImagenEstelar(o.apertura);
+    var arcmin = +o.arcmin, size = +o.size;
+    if (theta == null || !(arcmin > 0) || !(size > 0)) return suelo;   // sin equipo, como antes
+    var fisico = theta * size / (arcmin * 60);                        // ″ → px de lienzo
+    return Math.sqrt(suelo * suelo + fisico * fisico);
   }
   function colorEstrella(bprp, carbono) {
     var v = bprp;
@@ -1367,8 +1562,12 @@
     // Ganancia global del dibujo: la usa la capa de rango extendido para hacer
     // una segunda pasada atenuada que rescate los núcleos recortados.
     ganActual = (o.ganancia > 0) ? o.ganancia : 1;
-    var factorHalo = 1 + CFG.blur, Rg = CFG.glowRadio;
-    var escalaMag = Math.min(CFG.escalaMagMax, Math.max(1, Math.sqrt(CFG.escalaMagCampo / arcmin)));
+    // Tamaños APARENTES: van con el campo aparente del ocular, no con el real.
+    var escala = escalaEstrellas(o.afov);
+    // El glow de las que no llegan a la magnitud límite se queda en el suelo
+    // aparente: representa estrellas que NO se resuelven, así que darles el tamaño
+    // físico de una resuelta sería contarlas dos veces.
+    var Rg = CFG.glowRadio * escala;
     var spikesOn = conGlow && arana;
     ctx.globalCompositeOperation = 'lighter';
     for (var i = 0; i < estrellas.length; i++) {
@@ -1384,7 +1583,9 @@
         ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
         continue;
       }
-      var Rtot = Math.min(CFG.radioTotalMax, radioNucleo(g) * factorHalo * escalaMag);
+      // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
+      // se aprieta con la apertura) en cuadratura con el suelo de visibilidad.
+      var Rtot = radioEstrella({ afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE });
       ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / 6))) * ganActual;
       var esCarbono = (i === idxCarbono), colEstrella = null;
       if ((g < CFG.magColor && bprp != null) || esCarbono) {
@@ -1393,7 +1594,7 @@
       } else {
         ctx.drawImage(base, x - Rtot, y - Rtot, Rtot * 2, Rtot * 2);
       }
-      if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escalaMag, colEstrella);
+      if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
@@ -1476,7 +1677,8 @@
         conGalaxias: o.conGalaxias, conNebulosas: o.conNebulosas
       }) || new Float32Array(SIZE * SIZE);
       var capaEst = capaEstrellas(estrellas, {
-        ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim,
+        ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
+        apertura: o.apertura,   // el disco de Airy va como 1/D
         conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
       }, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst);
@@ -1495,6 +1697,12 @@
     nivelCielo: nivelCielo,
     tono: TONO,
     capaEstrellas: capaEstrellas,
+    escalaEstrellas: escalaEstrellas,
+    radioAiry: radioAiry,
+    radioImagenEstelar: radioImagenEstelar,
+    radioEstrella: radioEstrella,
+    parDoble: parDoble,
+    par: PAR,
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
     realzarPerceptual: realzarPerceptual,

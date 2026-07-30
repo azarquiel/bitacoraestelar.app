@@ -18,6 +18,10 @@ function ok(cond, etiqueta) {
   if (cond) { console.log('  ok   ' + etiqueta); }
   else { fallos++; console.error('  FALLA ' + etiqueta); }
 }
+function casi(actual, esperado, tol, etiqueta) {
+  if (actual != null && Math.abs(actual - esperado) <= tol) { console.log('  ok   ' + etiqueta + ' = ' + actual.toFixed(3)); }
+  else { fallos++; console.error('  FALLA ' + etiqueta + '\n         esperado ' + esperado + ' ±' + tol + '\n         obtenido ' + actual); }
+}
 
 console.log('colorPorBpRp — valores dorados (RGB):');
 eq(G.colorPorBpRp(-0.40), [186, 203, 255], 'BP-RP -0.40 (caliente O)');
@@ -41,6 +45,48 @@ console.log('claseEspectral:');
 eq(G.claseEspectral(-0.40), 'O', 'BP-RP -0.40 → O');
 eq(G.claseEspectral(2.60),  'M', 'BP-RP  2.60 → M');
 eq(G.claseEspectral(null),  '',  'BP-RP null → ""');
+
+/* ── bpRpPorTipo: el camino inverso, para las estrellas que Gaia no trae ──────
+   Lo usan las componentes de las dobles del catálogo del WDS. Aquí NO se fijan
+   valores exactos (es una aproximación para pintar, no fotometría) sino los
+   anclajes de libro y los invariantes: la secuencia va de azul a rojo sin
+   retrocesos, las gigantes son más rojas que las enanas de su misma subclase, y
+   lo que no es un tipo espectral no cuela. */
+console.log('bpRpPorTipo — anclajes de la secuencia espectral:');
+casi(G.bpRpPorTipo('A0V'), 0.00, 0.02, 'A0V ≈ 0,00 (el cero de la escala)');
+casi(G.bpRpPorTipo('G2V'), 0.82, 0.02, 'G2V ≈ 0,82 (el Sol)');
+casi(G.bpRpPorTipo('K5V'), 1.45, 0.05, 'K5V ≈ 1,45');
+casi(G.bpRpPorTipo('M0V'), 1.87, 0.05, 'M0V ≈ 1,87');
+ok(G.bpRpPorTipo('B0V') < 0, 'una B0V es más azul que el cero de A0');
+ok(G.bpRpPorTipo('O5V') < G.bpRpPorTipo('B0V'), 'y una O5V, más aún');
+
+console.log('bpRpPorTipo — invariantes:');
+var secuencia = ['O5V','B0V','B5V','A0V','A5V','F0V','F5V','G0V','G5V','K0V','K5V','M0V','M5V'];
+var monotona = true;
+for (var s = 1; s < secuencia.length; s++) {
+  if (!(G.bpRpPorTipo(secuencia[s]) > G.bpRpPorTipo(secuencia[s - 1]))) monotona = false;
+}
+ok(monotona, 'la secuencia O→M enrojece sin retrocesos');
+ok(G.bpRpPorTipo('K0III') > G.bpRpPorTipo('K0V'), 'una gigante K0III es más roja que una enana K0V');
+ok(G.bpRpPorTipo('K2Ib')  > G.bpRpPorTipo('K2III'), 'y una supergigante, más que la gigante');
+casi(G.bpRpPorTipo('gM0'), G.bpRpPorTipo('M0III'), 1e-9, 'el prefijo g del catálogo es una gigante');
+casi(G.bpRpPorTipo('dF0'), G.bpRpPorTipo('F0V'),   1e-9, 'y el prefijo d, una enana');
+casi(G.bpRpPorTipo('B9.5V'), G.bpRpPorTipo('B9.5'), 1e-9, 'sin clase de luminosidad se asume enana');
+
+console.log('bpRpPorTipo — lo que trae el catálogo de dobles de verdad:');
+[['K3II', 'Albireo A'], ['B9.5', 'Albireo B'], ['A1VpSrSi', 'Mizar A'],
+ ['K2Vvar', ''], ['G8II-III', ''], ['A1spe...', ''], ['F7-G3Ib', ''], ['A', '']].forEach(function (t) {
+  ok(G.bpRpPorTipo(t[0]) != null, 'reconoce «' + t[0] + '»' + (t[1] ? '  (' + t[1] + ')' : ''));
+});
+// El par de Albireo: la A dorada y la B azul, con el modelo de color de siempre.
+var albA = G.colorPorBpRp(G.bpRpPorTipo('K3II')), albB = G.colorPorBpRp(G.bpRpPorTipo('B9.5'));
+ok(albA[0] > albA[2], 'Albireo A (K3II) sale cálida (R > B)');
+ok(albB[2] > albB[0], 'Albireo B (B9.5) sale azulada (B > R)');
+
+console.log('bpRpPorTipo — lo que NO es un tipo espectral:');
+[null, '', '   ', 'basura', 'Nebulosa', 'X9V', '9'].forEach(function (t) {
+  ok(G.bpRpPorTipo(t) === null, JSON.stringify(t) + ' → null');
+});
 
 console.log('config expuesta (palanca compartida):');
 ok(G.config && G.config.gammaGlobal === false && G.config.saturacion === 1.0, 'config por defecto {gammaGlobal:false, saturacion:1.0}');

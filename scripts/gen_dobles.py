@@ -6,9 +6,12 @@ Entradas (fuente de verdad, en mapa/datos/):
   - AL_DoubleStarClub.csv           (Double Star Club, Astronomical League)
   - cambridge_double_star_atlas.csv (Cambridge Double Star Atlas)
   - RASC_Double_Star_Program.csv    (Royal Astronomical Society of Canada)
+  - WDS_dobles.csv                  (Washington Double Star Catalog 2024.08; el
+                                     único con ángulo de posición y tipo espectral)
 
 Salidas:
-  - mapa/datos/estrellas_dobles.csv       catálogo unificado (Id;Name;Type;RA;Dec;Mag 1;Mag 2;Sep;Catalogue)
+  - mapa/datos/estrellas_dobles.csv       catálogo unificado
+        (Id;Name;Type;RA;Dec;Mag 1;Mag 2;Sep;PosAngle;Spect 1;Spect 2;Catalogue)
   - mapa/datos/catalogos_dobles.csv       tabla de catálogos (Code;Name)
   - simulador_ocular/resources/js/estrellas-dobles-datos.js   (window.BITACORA_DOBLES)
 
@@ -17,7 +20,8 @@ Reglas (decididas en sesión de grilling):
     (Nº+constelación), STF/Struve. Bayer griego = clave DÉBIL: solo une si NO colisiona
     (dos dobles distintas pueden compartir Bayer, p.ej. θ¹/θ² Ori). Nombres propios: solo
     display/búsqueda, nunca clave.
-  - Desempate campo a campo, primer no-vacío, prioridad AL > RASC > Cambridge.
+  - Desempate campo a campo, primer no-vacío, prioridad AL > RASC > Cambridge > WDS.
+    El WDS va último para completar (PA y tipo espectral) sin pisar lo que ya había.
   - Se descarta de RASC lo que no es doble: sin RA (malformado/blanco), o sin Mag 2 NI Sep
     y sin match con otra doble. (AL y Cambridge listan solo dobles → siempre se conservan.)
   - Id = clave sintética estable DBL#### asignada en orden de RA (se persiste en el CSV).
@@ -32,6 +36,7 @@ def ruta(*p): return os.path.join(RAIZ, *p)
 # Prioridad de desempate = orden de esta lista. Añadir catálogo = añadir entrada.
 #   alias_cols: columnas de las que extraer nombres/aliases
 #   tiene_mag2sep: si trae Mag 2 y Sep
+#   tiene_pa_spect: si trae ángulo de posición y tipo espectral
 FUENTES = [
     dict(code='AL',   nombre='Double Star Club (Astronomical League)',
          archivo='AL_DoubleStarClub.csv',        alias_cols=['Name'],       tiene_mag2sep=True),
@@ -39,6 +44,15 @@ FUENTES = [
          archivo='RASC_Double_Star_Program.csv', alias_cols=['ID', 'Name'], tiene_mag2sep=True),
     dict(code='CDSA', nombre='Cambridge Double Star Atlas',
          archivo='cambridge_double_star_atlas.csv', alias_cols=['ID', 'Name'], tiene_mag2sep=False),
+    # Va ÚLTIMO a propósito: es el único que trae ángulo de posición y tipo
+    # espectral, así que esos campos salen siempre de aquí, pero al tener la
+    # prioridad más baja no pisa las magnitudes ni las separaciones que ya
+    # estaban. Completa el catálogo, no lo reescribe.
+    # Origen: exportación WDS 2024.08 (+ filas de Hipparcos/ASCC/Tycho-2 para las
+    # compañeras, que se caen aquí porque no traen Mag 2 ni Sep).
+    dict(code='WDS',  nombre='Washington Double Star Catalog (WDS 2024.08)',
+         archivo='WDS_dobles.csv',               alias_cols=['ID', 'Name'], tiene_mag2sep=True,
+         tiene_pa_spect=True),
 ]
 
 CSV_OUT   = ruta('mapa', 'datos', 'estrellas_dobles.csv')
@@ -86,8 +100,9 @@ def claves_de(alias):
     up = a.upper()
     fuertes = set()
 
-    # Catálogos numéricos únicos
-    for pref in ('HD', 'SAO', 'HR'):
+    # Catálogos numéricos únicos. HIP solo aparece en el WDS (los otros tres no
+    # traen ninguno), así que añadirlo solo mejora el match de esa fuente.
+    for pref in ('HD', 'SAO', 'HR', 'HIP'):
         m = re.match(r'^%s\s*0*([0-9]+)$' % pref, up)
         if m:
             fuertes.add('%s%s' % (pref, m.group(1)))
@@ -158,12 +173,22 @@ def leer_fuente(src):
             # No afecta a AL (siempre trae Mag 2) ni a CDSA (no tiene esas columnas).
             if src['tiene_mag2sep'] and mag2 == '' and sep == '':
                 continue
+            # Ángulo de posición y tipo espectral: solo el WDS los trae. El Spect
+            # viene junto para las dos componentes ("B7Vn+B8V"); las que no lo
+            # desglosan dejan la segunda vacía.
+            pa = num(row.get('PosAngle')) if src.get('tiene_pa_spect') else ''
+            spect1 = spect2 = ''
+            if src.get('tiene_pa_spect'):
+                partes = [p.strip() for p in (row.get('Spect') or '').split('+')]
+                spect1 = partes[0] if partes else ''
+                spect2 = partes[1] if len(partes) > 1 else ''
             regs.append(dict(
                 code=src['code'], aliases=aliases,
                 type=(row.get('Type') or '').strip(),
                 ra=ra, dec=(row.get('Dec') or '').strip(),
                 mag1=num(row.get('Mag')),
                 mag2=mag2, sep=sep,
+                pa=pa, spect1=spect1, spect2=spect2,
             ))
     return regs
 
@@ -287,8 +312,9 @@ def fusionar(grupo, regs):
         aliases=aliases, type=primero('type'),
         ra=primero('ra'), dec=primero('dec'),
         mag1=primero('mag1'), mag2=primero('mag2'), sep=primero('sep'),
+        pa=primero('pa'), spect1=primero('spect1'), spect2=primero('spect2'),
         catalogue='|'.join(codes),
-        es_doble_dura=any(m['code'] in ('AL', 'CDSA') for m in miembros),
+        es_doble_dura=any(m['code'] in ('AL', 'CDSA', 'WDS') for m in miembros),
     )
 
 
@@ -368,10 +394,12 @@ def construir():
 def escribir_csv(filas):
     with io.open(CSV_OUT, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f, delimiter=';')
-        w.writerow(['Id', 'Name', 'Type', 'RA', 'Dec', 'Mag 1', 'Mag 2', 'Sep', 'Catalogue'])
+        w.writerow(['Id', 'Name', 'Type', 'RA', 'Dec', 'Mag 1', 'Mag 2', 'Sep',
+                    'PosAngle', 'Spect 1', 'Spect 2', 'Catalogue'])
         for r in filas:
             w.writerow([r['id'], ','.join(r['aliases']), r['type'], r['ra'], r['dec'],
-                        r['mag1'], r['mag2'], r['sep'], r['catalogue']])
+                        r['mag1'], r['mag2'], r['sep'],
+                        r['pa'], r['spect1'], r['spect2'], r['catalogue']])
     with io.open(CAT_OUT, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f, delimiter=';')
         w.writerow(['Code', 'Name'])
@@ -382,25 +410,30 @@ def escribir_csv(filas):
 def escribir_js(filas):
     def js_str(s): return '"' + (s or '').replace('\\', '\\\\').replace('"', '\\"') + '"'
     def js_num(s): return s.replace(',', '.') if s else 'null'
+    # Lo que no se sabe va como null, no como cadena vacía: en el simulador la
+    # diferencia es "no hay dato" frente a "el dato es vacío".
+    def js_str_o_nulo(s): return js_str(s) if s else 'null'
     lineas = []
     for r in filas:
         abbr = r['const_abbr'] or ''
         cfull = CONST.get(abbr, abbr)
         lineas.append(
             "  { id: %s, nombre: %s, constelacion: %s, abrev: %s, ra: %s, dec: %s, "
-            "mag1: %s, mag2: %s, sep: %s, tipo: %s, catalogos: %s, aliases: %s }" % (
+            "mag1: %s, mag2: %s, sep: %s, pa: %s, spect1: %s, spect2: %s, "
+            "tipo: %s, catalogos: %s, aliases: %s }" % (
                 js_str(r['id']), js_str(nombre_disp(r['aliases'], abbr)),
                 js_str(cfull), js_str(abbr), js_str(ra_js(r['ra'])), js_str(dec_js(r['dec'])),
-                js_num(r['mag1']), js_num(r['mag2']), js_num(r['sep']),
+                js_num(r['mag1']), js_num(r['mag2']), js_num(r['sep']), js_num(r['pa']),
+                js_str_o_nulo(r['spect1']), js_str_o_nulo(r['spect2']),
                 js_str(tipo_leg(r['type'])), js_str(r['catalogue']), js_str(','.join(r['aliases'])),
             ))
     header = '''/* ===========================================================================
  * BITÁCORA ESTELAR · Catálogo de ESTRELLAS DOBLES
  * ---------------------------------------------------------------------------
  * Versión consultable (JavaScript) del catálogo unificado de dobles. Fuente de
- * verdad: mapa/datos/estrellas_dobles.csv, fusión de tres catálogos
- * (Astronomical League, Cambridge Double Star Atlas, RASC). Generado con
- * scripts/gen_dobles.py. NO editar a mano: regenerar desde los CSV.
+ * verdad: mapa/datos/estrellas_dobles.csv, fusión de cuatro catálogos
+ * (Astronomical League, Cambridge Double Star Atlas, RASC y WDS 2024.08).
+ * Generado con scripts/gen_dobles.py. NO editar a mano: regenerar desde los CSV.
  *
  * Cada objeto:
  *   id           clave sintética estable (DBL####)
@@ -409,8 +442,12 @@ def escribir_js(filas):
  *   ra, dec      J2000 "HH MM SS" / "±DD MM SS" (formato del simulador)
  *   mag1, mag2   magnitudes de las componentes A y B (mag2 puede ser null)
  *   sep          separación en segundos de arco (puede ser null)
+ *   pa           ángulo de posición de la B respecto de la A, en grados desde el
+ *                Norte hacia el Este (null si no se conoce; solo lo trae el WDS)
+ *   spect1/2     tipo espectral de cada componente (null si no se conoce). El
+ *                simulador saca de aquí el color cuando Gaia no trae la estrella.
  *   tipo         doble · triple · múltiple
- *   catalogos    en cuáles aparece: "AL|CDSA|RASC"
+ *   catalogos    en cuáles aparece: "AL|CDSA|RASC|WDS"
  *   aliases      todos los nombres (para búsqueda)
  *
  * Va SUBIDO POR FTP a /wp-content/uploads/bitacora/. Incrementa ?v=N al actualizar.
@@ -431,8 +468,13 @@ if __name__ == '__main__':
     n_al   = sum('AL'   in f['catalogue'] for f in filas)
     n_cdsa = sum('CDSA' in f['catalogue'] for f in filas)
     n_rasc = sum('RASC' in f['catalogue'] for f in filas)
-    n3     = sum(f['catalogue'].count('|') == 2 for f in filas)
+    n_wds  = sum('WDS'  in f['catalogue'] for f in filas)
+    n_pa   = sum(f['pa'] != '' for f in filas)
+    n_sp   = sum(f['spect1'] != '' for f in filas)
+    n_sp2  = sum(f['spect2'] != '' for f in filas)
     print("Dobles unificadas: %d" % len(filas))
-    print("  en AL=%d  CDSA=%d  RASC=%d  |  en los 3=%d" % (n_al, n_cdsa, n_rasc, n3))
+    print("  en AL=%d  CDSA=%d  RASC=%d  WDS=%d" % (n_al, n_cdsa, n_rasc, n_wds))
+    print("  con ángulo de posición=%d  con tipo espectral=%d (de las dos componentes=%d)"
+          % (n_pa, n_sp, n_sp2))
     print("  -> %s" % CSV_OUT)
     print("  -> %s" % JS_OUT)

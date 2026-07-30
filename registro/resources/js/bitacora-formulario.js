@@ -934,7 +934,9 @@
     BitacoraGaiaRender.render(off, {
       ra:d.ra, dec:d.dec, arcmin:d.arcmin, apertura:d.apertura, aumentos:d.aumentos,
       optica:d.optica, arana:d.arana, sqm:d.sqm, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
-      carbono:d.carbono, conGlow:true
+      // El campo aparente fija el tamaño de las estrellas: el lienzo se muestra a
+      // un diámetro ∝ afov, así que el radio en píxeles va con 1/afov.
+      afov:d.afov, carbono:d.carbono, conGlow:true
     }).then(function(){
       ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
       ctx.save(); ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.clip();
