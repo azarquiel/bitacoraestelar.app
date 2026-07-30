@@ -144,9 +144,29 @@
       if (!cont) return;
       cont.innerHTML = '';
       if (!lista.length) { cont.innerHTML = '<div class="bases-empty">' + vacio + '</div>'; return; }
-      lista.forEach(function (b) { cont.appendChild(crearItem(b, propias)); });
+      var top = podio(lista);
+      lista.forEach(function (b) { cont.appendChild(crearItem(b, propias, top.indexOf(b.id))); });
     }
-    function crearItem(b, propia) {
+
+    // ── Podio de uso: la base con más observaciones lleva delta dorada; la
+    //    segunda, plateada. Las que no tienen observaciones no puntúan; en un
+    //    empate manda el orden en que vino la lista (sort estable).
+    var DELTA = 'M12 1 C 15.6 7 18.6 15 21 22.6 C 15.5 13.5 8.5 13.5 3 22.6 C 5.4 15 8.4 7 12 1 Z';
+    function podio(lista) {
+      return lista.filter(function (b) { return Number(b.n_observaciones) > 0; })
+        .sort(function (a, b) { return Number(b.n_observaciones) - Number(a.n_observaciones); })
+        .slice(0, 2)
+        .map(function (b) { return b.id; });
+    }
+    function medalla(puesto, n) {
+      if (puesto < 0) return '';
+      var tit = (puesto === 0 ? 'Base con más observaciones' : 'Segunda base con más observaciones') +
+                ' · ' + n + ' observación(es)';
+      return '<svg class="base-medalla ' + (puesto === 0 ? 'oro' : 'plata') + '" viewBox="0 0 24 24" role="img">' +
+             '<title>' + esc(tit) + '</title><path d="' + DELTA + '"/></svg>';
+    }
+
+    function crearItem(b, propia, puesto) {
       var el = document.createElement('div');
       el.className = 'base-item';
       var specs = [];
@@ -157,7 +177,8 @@
       if (!propia && b.dueno) meta += ' · de ' + esc(b.dueno);
       el.innerHTML =
         '<div class="bi-main">' +
-          '<div class="bi-nom">' + esc(b.nombre) + '<span class="base-pill">' + etiquetaVis(b.visibilidad) + '</span></div>' +
+          '<div class="bi-nom">' + esc(b.nombre) + medalla(puesto, b.n_observaciones) +
+            '<span class="base-pill">' + etiquetaVis(b.visibilidad) + '</span></div>' +
           '<div class="bi-specs">' + esc(specs.join(' · ')) + '</div>' +
           '<div class="bi-meta">' + meta + '</div>' +
         '</div>' +
