@@ -50,8 +50,7 @@
   // DSS, un límite de PLACA que no aplica a un catálogo. Lo que sí acota de verdad
   // es el TOP de la consulta: en campos ricos la muestra se trunca a magnitudes
   // más brillantes. No es un fallo silencioso — el ORDER BY garantiza que se
-  // quedan fuera las más débiles, telonDifuso mide el corte real en vez de
-  // suponerlo, y el render avisa si el corte llega antes que la magnitud límite.
+  // quedan fuera las más débiles, no las más brillantes.
   var GAIA_RADIO_MAX      = (360 / 60) * 0.72;
   var GAIA_RADIO_MIN      = 0.12;
   var GAIA_ARCMIN_DEFECTO = 60;
@@ -446,795 +445,39 @@
        cielo decente, 1″ excepcional, 4-5″ una noche mala. Con apertura grande es
        esto —y no la óptica— lo que fija el tamaño de la estrella. */
     seeingArcsec: 2.0,
+    /* Tope del suelo SOLO para las dos componentes de una doble catalogada (ver
+       radioEstrella): a poco aumento el suelo manda igual que en cualquier otro
+       campo, pero según sube el aumento y el hueco en pantalla crece, el suelo se
+       recorta a esta fracción de ese hueco para no comérselo entero. Es la parte
+       de radioSuelo que SÍ decrece con el aumento -el resto (cúmulos, campo
+       suelto) se queda exactamente igual que antes, porque no traen `sep`-. Ver
+       simulador_ocular/notas-separacion-dobles-dibujo.md. */
+    margenSuelo: 0.33,
+    radioSueloMin: 0.5,   // px: ni recortado por margenSuelo desaparece del todo
+    /* Aureola de dispersión (glare) alrededor de estrellas resueltas muy
+       brillantes: dispersión óptica + difusión intraocular, no el anillo de
+       difracción (ese queda fuera, ver notas-separacion-dobles-dibujo.md).
+       Proporcional al flujo absoluto de la estrella (no al límite del
+       equipo, a diferencia del glow de las no resueltas): mismo aspecto en
+       cualquier telescopio para la misma estrella. Sin corte duro de
+       magnitud -se apaga sola, 10^(-0,4·mag)-, con un techo de intensidad
+       para que nunca parezca un disco sólido. aureolaAlfaK/Max son perillas
+       nuevas sin más anclaje que "Sirio/Vega asoman aureola visible pero
+       translúcida, Albireo A ya casi no". */
+    aureolaRadio: 14.0,
+    aureolaAlfaK: 0.15,
+    aureolaAlfaMax: 0.35,
+    /* Truco HDR de capaEstrellas: segunda pasada del lienzo entero para
+       rescatar núcleos saturados (ver TONO más abajo). Cuesta un render
+       completo + getImageData extra, así que por defecto va OFF -una sola
+       pasada-; actívalo solo si hace falta rescatar núcleos recortados. */
+    hdrRescate: false,
     spikes: {
       magMax: 10, rango: 5, brazos: 4, angulo: 0,
       longMag: 10, longMax: 180, grosor: 3, lobulos: 2, intensidad: 0.8
     }
   };
 
-  /* ═══════════ TELÓN DIFUSO: LUZ INTEGRADA DE ESTRELLAS NO RESUELTAS ═══════════
-     El fondo brillante contra el que se recortan la Gran Grieta, la Pipa o el
-     Saco de Carbón NO es emisión de gas: es la luz sumada de las estrellas que ni
-     el catálogo trae ni el ojo separa. Sin esta capa, la de polvo no tiene sobre
-     qué actuar y el Canvas-2D se queda en gris uniforme.
-
-     No hace falta ningún dataset nuevo: la propia muestra de Gaia del campo lleva
-     dentro su función de luminosidad. Como el `ORDER BY Gmag` va ANTES del `TOP`
-     en la consulta, la muestra está COMPLETA hasta la magnitud de la última
-     estrella que cupo — ese es el límite del que se extrapola, y se mide, no se
-     supone.
-
-     Método:
-       1. Conteos por magnitud → pendiente b de log10 N(m), medida en una ventana
-          alejada del corte para que la truncadura no la sesgue.
-       2. Razón R entre el flujo integrado por debajo del corte y el flujo
-          observado por encima. Cerrada en forma analítica: el integrando es
-          10^((b−0,4)m), porque el número de estrellas sube como 10^(b·m) y el
-          flujo de cada una cae como 10^(−0,4·m).
-       3. El flujo observado por celda, multiplicado por R, da la luz que falta,
-          repartida por donde de verdad hay estrellas.
-
-     El resultado sale en flujo por arcsec², las mismas unidades que Fcielo, y NO
-     lleva atenuación de pupila: la aplica ctxFotometrico. */
-  var TELON = {
-    // Factor de calibración visual. El método fija la FORMA y la razón entre
-    // zonas; el nivel absoluto depende de la función de luminosidad real y del
-    // enrojecimiento, que no modelamos. Esta es la perilla para cuadrarlo con la
-    // Vía Láctea que se ve de verdad.
-    k: 1.0,
-    // Extremo débil de la integración. Más allá la contribución es despreciable
-    // mientras b < 0,4.
-    magMax: 28,
-    // ponytail: b se acota a este rango. Por encima de 0,4 la integral diverge
-    // (más estrellas débiles de las que su flujo decae) y los conteos reales se
-    // aplanan a magnitudes débiles por la escala de altura del disco, cosa que una
-    // sola recta no captura. Si hiciera falta más fidelidad: función de luminosidad
-    // por latitud galáctica en vez de una pendiente única.
-    bMin: 0.15, bMax: 0.40,
-    bDefecto: 0.30,     // si la muestra es pobre, pendiente típica de campo medio
-    minEstrellas: 300,  // por debajo, el ajuste es ruido: mejor no pintar nada
-    arcminCelda: 6      // ~13 % de ruido de Poisson; bajarlo lo empeora
-  };
-
-  /* Pendiente b de log10 N(m) medida en la muestra, y magnitud de corte (la más
-     débil que trae el catálogo, que por el ORDER BY es el límite de completitud). */
-  function pendienteConteos(estrellas) {
-    var mcat = -Infinity, i;
-    for (i = 0; i < estrellas.length; i++) if (estrellas[i][2] > mcat) mcat = estrellas[i][2];
-    if (!isFinite(mcat)) return null;
-    // Ventana de ajuste: lejos del corte (la última media magnitud sufre la
-    // truncadura) y no tan brillante que sean cuatro estrellas.
-    var hi = mcat - 0.5, lo = mcat - 4.0, PASO = 0.5;
-    var nbins = Math.round((hi - lo) / PASO), bins = new Array(nbins);
-    for (i = 0; i < nbins; i++) bins[i] = 0;
-    for (i = 0; i < estrellas.length; i++) {
-      var g = estrellas[i][2];
-      if (g < lo || g >= hi) continue;
-      bins[Math.floor((g - lo) / PASO)]++;
-    }
-    // Regresión de log10(N) contra m sobre los bins poblados.
-    var sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0;
-    for (i = 0; i < nbins; i++) {
-      if (bins[i] < 5) continue;
-      var m = lo + (i + 0.5) * PASO, y = Math.log10(bins[i]);
-      sx += m; sy += y; sxx += m * m; sxy += m * y; n++;
-    }
-    var b = (n >= 3 && (n * sxx - sx * sx) !== 0)
-      ? (n * sxy - sx * sy) / (n * sxx - sx * sx)
-      : TELON.bDefecto;
-    return { b: Math.max(TELON.bMin, Math.min(TELON.bMax, b)), mcat: mcat, lo: lo };
-  }
-
-  /* Razón entre el flujo de las estrellas que NO están en el catálogo y el de las
-     que sí. Integra 10^((b−0,4)m) en ambos tramos. */
-  function razonNoResuelta(b, mcat, mlo) {
-    var k = b - 0.4;
-    if (Math.abs(k) < 1e-6) return (TELON.magMax - mcat) / (mcat - mlo);   // caso límite
-    // ∫ₐᵇ 10^(k·m) dm = (10^(k·b) − 10^(k·a)) / (k·ln10). Con k < 0 (el caso
-    // normal: el flujo cae más deprisa de lo que suben los conteos) el numerador
-    // sale negativo y el denominador también, así que la integral es positiva.
-    var kl = k * Math.LN10;
-    var integral = function (a, b2) { return (Math.pow(10, k * b2) - Math.pow(10, k * a)) / kl; };
-    var arriba = integral(mcat, TELON.magMax);
-    var abajo = integral(mlo, mcat);
-    return (abajo > 0) ? Math.max(0, arriba / abajo) : 0;
-  }
-
-  /* Suavizado de una rejilla pequeña con un núcleo 3×3, para bajar el ruido de
-     Poisson sin borrar la estructura de las nubes estelares. */
-  function suavizarRejilla(v, N) {
-    var out = new Float32Array(v.length);
-    for (var y = 0; y < N; y++) {
-      for (var x = 0; x < N; x++) {
-        var s = 0, w = 0;
-        for (var dy = -1; dy <= 1; dy++) {
-          for (var dx = -1; dx <= 1; dx++) {
-            var yy = y + dy, xx = x + dx;
-            if (yy < 0 || xx < 0 || yy >= N || xx >= N) continue;
-            var p = (dx === 0 && dy === 0) ? 4 : 1;
-            s += p * v[yy * N + xx]; w += p;
-          }
-        }
-        out[y * N + x] = s / w;
-      }
-    }
-    return out;
-  }
-
-  /* Telón difuso del campo, en flujo por arcsec² (mismas unidades que Fcielo).
-     o: { ra, dec, arcmin, size }. Devuelve Float32Array(size²) o null si la
-     muestra no da para un ajuste honesto. */
-  function telonDifuso(estrellas, o) {
-    var SIZE = o.size, arcmin = o.arcmin;
-    if (!estrellas || estrellas.length < TELON.minEstrellas) return null;
-    var aj = pendienteConteos(estrellas);
-    if (!aj) return null;
-    var R = razonNoResuelta(aj.b, aj.mcat, aj.lo);
-    if (!(R > 0)) return null;
-
-    var N = Math.max(3, Math.min(32, Math.round(arcmin / TELON.arcminCelda)));
-    var flujo = new Float32Array(N * N);
-    var ra0 = o.ra, dec0 = o.dec;
-    var cos0 = Math.cos(dec0 * Math.PI / 180);
-    var escc = N / (arcmin / 60);              // celdas por grado
-    for (var i = 0; i < estrellas.length; i++) {
-      var g = estrellas[i][2];
-      if (g < aj.lo) continue;                 // solo el tramo que traza la ventana ajustada
-      var dRA = ((estrellas[i][0] - ra0 + 540) % 360) - 180;
-      var cx = Math.floor(N / 2 - dRA * cos0 * escc);
-      var cy = Math.floor(N / 2 - (estrellas[i][1] - dec0) * escc);
-      if (cx < 0 || cy < 0 || cx >= N || cy >= N) continue;
-      flujo[cy * N + cx] += Math.pow(10, -0.4 * g);
-    }
-    flujo = suavizarRejilla(flujo, N);
-
-    // De flujo por celda a flujo por arcsec², ya extrapolado a las no resueltas.
-    var ladoCelda = (arcmin * 60) / N;         // arcsec
-    var esc = TELON.k * R / (ladoCelda * ladoCelda);
-    for (i = 0; i < flujo.length; i++) flujo[i] *= esc;
-
-    // Ampliación bilineal de la rejilla al lienzo.
-    var out = new Float32Array(SIZE * SIZE);
-    for (var y = 0; y < SIZE; y++) {
-      var fy = Math.max(0, Math.min(N - 1.001, (y + 0.5) * N / SIZE - 0.5));
-      var y0 = Math.floor(fy), ty = fy - y0, y1 = Math.min(N - 1, y0 + 1);
-      for (var x = 0; x < SIZE; x++) {
-        var fx = Math.max(0, Math.min(N - 1.001, (x + 0.5) * N / SIZE - 0.5));
-        var x0 = Math.floor(fx), tx = fx - x0, x1 = Math.min(N - 1, x0 + 1);
-        var a = flujo[y0 * N + x0] * (1 - tx) + flujo[y0 * N + x1] * tx;
-        var c = flujo[y1 * N + x0] * (1 - tx) + flujo[y1 * N + x1] * tx;
-        out[y * SIZE + x] = a * (1 - ty) + c * ty;
-      }
-    }
-    return out;
-  }
-
-  /* ═══════════ HALO NO RESUELTO DE CÚMULOS (PERFIL DE KING) ═══════════════════
-     En el núcleo de un cúmulo denso Gaia DR3 está incompleto por AGLOMERACIÓN: no
-     separa fuentes tan juntas. Como telonDifuso reparte su luz extrapolada según
-     las estrellas observadas, hereda ese agujero justo donde el ojo ve el
-     resplandor más fuerte.
-
-     Esta capa NO vuelve a pintar el cúmulo entero — eso sería contar dos veces lo
-     que el telón ya puso. Pinta solo el DÉFICIT: la diferencia entre el perfil que
-     predice la parte sana del cúmulo y lo que el catálogo trae de verdad.
-
-     Método:
-       1. Perfil radial de densidad en anillos.
-       2. Radio de aglomeración = donde la densidad deja de crecer hacia dentro.
-          En un cúmulo real la densidad sube hasta el centro; si baja, es que el
-          catálogo está perdiendo fuentes, no que haya menos estrellas.
-       3. Ajuste de King SOLO fuera de ese radio (la zona no sesgada) y
-          extrapolación hacia dentro.
-       4. Déficit = King − observado, convertido a flujo.
-
-     Si la densidad crece hasta el centro no hay déficit y esta capa no pinta nada:
-     el telón ya bastaba. Se autoactiva, sin catálogo de globulares. */
-  var KING = {
-    k: 1.0,             // calibración visual del halo
-    minEstrellas: 400,  // por debajo el perfil radial es ruido
-    nAnillos: 18,
-    rcMin: 0.02, rcMax: 0.5,   // radio de core, en fracción del radio del campo
-    rtMin: 1.0, rtMax: 5.0,    // radio de marea, en múltiplos del radio del campo
-    // El campo tiene que estar de verdad concentrado: densidad en el anillo de
-    // pico frente al del borde. Evita disparar la capa en campos uniformes, donde
-    // el ruido de Poisson basta para que el pico no caiga en el centro.
-    concentracionMin: 3,
-    // Y la caída hacia el centro tiene que ser apreciable, no un tropiezo del
-    // conteo: fracción mínima que baja la densidad del pico al anillo central.
-    caidaMin: 0.2,
-    // Ante ajustes indistinguibles, quedarse con el MENOS picudo (rc mayor). Desde
-    // fuera del core no se puede conocer el core: inventar un pico estrecho
-    // sobreilumina el núcleo. Margen de error dentro del cual se consideran empate.
-    margenEmpate: 1.10,
-    // Cuánto más débiles son, en magnitudes, las estrellas que la aglomeración se
-    // lleva respecto a la media de la población. La incompletitud de Gaia en
-    // núcleos densos castiga más a las fuentes débiles: sin este término, contar
-    // el déficit con el flujo medio del campo sobreestima el halo.
-    sesgoDebil: 1.0,
-    // Estrellas mínimas por anillo del perfil observado. Con menos, la densidad
-    // es ruido de Poisson y aparecen burbujas y anillos al restarla del King.
-    minPorAnillo: 12,
-    // Y anchura mínima del anillo, como razón r_exterior/r_interior. Sin esto, un
-    // anillo que cierra sobre estrellas a radios casi idénticos —normal en un
-    // núcleo denso— tiene área casi nula y su densidad se dispara: al restarla
-    // abriría un agujero en el centro del cúmulo.
-    anchoMinAnillo: 1.05
-  };
-
-  /* Flujo medio por estrella de la población que el catálogo pierde, deducido de
-     la función de luminosidad MEDIDA en el campo (la misma pendiente b que usa el
-     telón), no del flujo medio de lo observado.
-
-       <F> = ∫ 10^(b·m)·10^(−0,4·m) dm / ∫ 10^(b·m) dm      sobre [mlo, mcat]
-
-     y luego desplazado sesgoDebil magnitudes hacia el extremo débil. */
-  function flujoMedioNoResuelto(b, mlo, mcat) {
-    var k = b - 0.4;
-    var num = (Math.abs(k) < 1e-6)
-      ? (mcat - mlo)
-      : (Math.pow(10, k * mcat) - Math.pow(10, k * mlo)) / k;
-    var den = (Math.abs(b) < 1e-6)
-      ? (mcat - mlo)
-      : (Math.pow(10, b * mcat) - Math.pow(10, b * mlo)) / b;
-    if (!(den > 0) || !(num > 0)) return null;
-    return (num / den) * Math.pow(10, -0.4 * KING.sesgoDebil);
-  }
-
-  /* Perfil de King (1962): densidad superficial de un cúmulo con radio de core rc
-     y radio de marea rt. La resta del término de rt es lo que lo hace caer a cero
-     en el borde, en vez de extenderse indefinidamente. */
-  function formaKing(r, rc, rt) {
-    var a = 1 / Math.sqrt(1 + (r / rc) * (r / rc));
-    var b = 1 / Math.sqrt(1 + (rt / rc) * (rt / rc));
-    var d = a - b;
-    return d > 0 ? d * d : 0;
-  }
-
-  /* Perfil radial de densidad (estrellas por grado²) alrededor del centro del
-     campo, más el flujo medio por estrella, que hace de conversión a luz. */
-  function perfilRadial(estrellas, o) {
-    var n = KING.nAnillos, rmax = (o.arcmin / 60) / 2;
-    var cuenta = new Float64Array(n), flujoAnillo = new Float64Array(n);
-    var flujo = 0, dentro = 0;
-    var cos0 = Math.cos(o.dec * Math.PI / 180);
-    for (var i = 0; i < estrellas.length; i++) {
-      var dRA = (((estrellas[i][0] - o.ra + 540) % 360) - 180) * cos0;
-      var dDec = estrellas[i][1] - o.dec;
-      var r = Math.sqrt(dRA * dRA + dDec * dDec);
-      if (r >= rmax) continue;
-      var f = Math.pow(10, -0.4 * estrellas[i][2]);
-      var iAnillo = Math.floor(r / rmax * n);
-      cuenta[iAnillo]++; flujoAnillo[iAnillo] += f;
-      flujo += f; dentro++;
-    }
-    if (dentro < KING.minEstrellas) return null;
-    var dens = new Float64Array(n), radio = new Float64Array(n), area = new Float64Array(n);
-    var flujoDens = new Float64Array(n);
-    for (i = 0; i < n; i++) {
-      var r0 = rmax * i / n, r1 = rmax * (i + 1) / n;
-      area[i] = Math.PI * (r1 * r1 - r0 * r0);
-      dens[i] = cuenta[i] / area[i];
-      // Flujo observado por arcsec² en el anillo (área en grados² → arcsec²).
-      flujoDens[i] = flujoAnillo[i] / (area[i] * 3600 * 3600);
-      radio[i] = (r0 + r1) / 2;
-    }
-    return {
-      dens: dens, radio: radio, area: area, cuenta: cuenta, rmax: rmax,
-      flujoDens: flujoDens, flujoMedio: flujo / dentro
-    };
-  }
-
-  /* Radio a partir del cual el catálogo pierde fuentes: el anillo de densidad
-     máxima. Hacia dentro de él la densidad BAJA, que en un cúmulo real no pasa. */
-  function radioAglomeracion(dens) {
-    var iMax = 0;
-    for (var i = 1; i < dens.length; i++) if (dens[i] > dens[iMax]) iMax = i;
-    return iMax;
-  }
-
-  /* Ajusta King a los anillos NO sesgados (fuera del radio de aglomeración).
-     Búsqueda en rejilla de rc y rt; la amplitud k sale lineal por mínimos cuadrados.
-
-     El ajuste va en CUENTAS con χ² de Poisson (peso 1/N), no en densidad absoluta.
-     La diferencia no es cosmética: en densidad, el anillo interior es dos órdenes
-     de magnitud más denso que el exterior y su residuo domina la suma entera, así
-     que ganaba cualquier rc que clavara ese anillo y el perfil se elegía por
-     ruido. En cuentas con peso de Poisson todos los anillos pesan lo que deben. */
-  function ajustarKing(p, iDesde) {
-    var n = p.dens.length, candidatos = [], mejorErr = Infinity;
-    for (var a = 0; a < 12; a++) {
-      var rc = p.rmax * (KING.rcMin * Math.pow(KING.rcMax / KING.rcMin, a / 11));
-      for (var b = 0; b < 6; b++) {
-        var rt = p.rmax * (KING.rtMin + (KING.rtMax - KING.rtMin) * b / 5);
-        var sm = 0, smm = 0, i, m;
-        for (i = iDesde; i < n; i++) {
-          m = formaKing(p.radio[i], rc, rt) * p.area[i];        // cuentas del modelo, salvo k
-          sm += m; smm += m * m / Math.max(1, p.cuenta[i]);
-        }
-        if (!(smm > 0)) continue;
-        var k = sm / smm;
-        if (!(k > 0)) continue;
-        var err = 0;
-        for (i = iDesde; i < n; i++) {
-          m = formaKing(p.radio[i], rc, rt) * p.area[i];
-          var d = p.cuenta[i] - k * m;
-          err += d * d / Math.max(1, p.cuenta[i]);
-        }
-        candidatos.push({ rc: rc, rt: rt, k: k, err: err });
-        if (err < mejorErr) mejorErr = err;
-      }
-    }
-    if (!candidatos.length) return null;
-    /* Desempate conservador: entre los ajustes que los datos no distinguen, el de
-       rc MAYOR. Solo se ven los anillos de fuera del core, donde el perfil es casi
-       una ley de potencias y rc queda degenerado; quedarse con el rc más pequeño
-       daría un pico estrecho inventado y un núcleo sobreiluminado. */
-    var mejor = null;
-    for (var c = 0; c < candidatos.length; c++) {
-      var cand = candidatos[c];
-      if (cand.err > mejorErr * KING.margenEmpate) continue;
-      if (!mejor || cand.rc > mejor.rc) mejor = cand;
-    }
-    return mejor;
-  }
-
-  /* Globular catalogado (Harris) cuyo centro cae en el campo. El catálogo lo
-     inyecta window.BITACORA_GLOBULARES; sin él, todo sigue funcionando por
-     conteos. Fila: [id, nombre, RA°, Dec°, r_c('), r_h('), c, mu_V(0)]. */
-  function globularEnCampo(o) {
-    var cat = window.BITACORA_GLOBULARES;
-    if (!cat || !cat.length) return null;
-    var medio = (o.arcmin / 60) / 2, cos0 = Math.cos(o.dec * Math.PI / 180);
-    for (var i = 0; i < cat.length; i++) {
-      var g = cat[i];
-      var dRA = (((g[2] - o.ra + 540) % 360) - 180) * cos0, dDec = g[3] - o.dec;
-      if (Math.abs(dRA) > medio || Math.abs(dDec) > medio) continue;
-      if (!(g[4] > 0) || g[6] == null || g[7] == null) continue;
-      return { id: g[0], ra: g[2], dec: g[3], rc: g[4] / 60, c: g[6], muV: g[7] };
-    }
-    return null;
-  }
-
-  /* Halo anclado al BRILLO SUPERFICIAL MEDIDO de un globular catalogado, en vez
-     de deducido de conteos sesgados por aglomeración.
-
-     mu_V(0) es la luz TOTAL del centro del cúmulo: incluye las estrellas que Gaia
-     sí resuelve y que el render ya dibuja, y las débiles que el telón ya reparte.
-     Pintar el perfil entero encima las contaría dos y tres veces. Lo que aporta
-     esta capa es solo el RESTO:
-
-       déficit(r) = King_catálogo(r) − flujo observado(r) − telón(r)
-
-     La geometría sale del propio catálogo: r_c y r_t = r_c·10^c. */
-  /* Perfil de flujo observado a la escala del CÚMULO, no del campo.
-
-     Con anillos escalados al campo (rmax/n) y un campo ancho, el anillo central
-     mide varios arcmin mientras el core mide décimas: el flujo observado del
-     centro sale diluido cientos de veces, la resta no quita casi nada y el halo
-     se dispara. Por eso los anillos van en escala LOGARÍTMICA desde una fracción
-     de r_c: el core queda resuelto se mire con el campo que se mire.
-
-     Devuelve un muestreador continuo (interpolación lineal en log r), no un
-     escalón: restar un perfil escalonado de un King continuo deja un salto en
-     cada frontera de anillo, y eso se ve como círculos concéntricos. */
-  function flujoObservadoCumulo(estrellas, gc, rt, rmaxCampo) {
-    var rMax = Math.min(rt, rmaxCampo);
-    if (!(rMax > 0)) return null;
-
-    // Radios y flujos de las estrellas del cúmulo, ordenados de dentro afuera.
-    var cos0 = Math.cos(gc.dec * Math.PI / 180), muestra = [], i;
-    for (i = 0; i < estrellas.length; i++) {
-      var dRA = (((estrellas[i][0] - gc.ra + 540) % 360) - 180) * cos0;
-      var dDec = estrellas[i][1] - gc.dec;
-      var r = Math.sqrt(dRA * dRA + dDec * dDec);
-      if (r < rMax) muestra.push([r, Math.pow(10, -0.4 * estrellas[i][2])]);
-    }
-    if (muestra.length < KING.minPorAnillo) return null;
-    muestra.sort(function (a, b) { return a[0] - b[0]; });
-
-    /* Anillos ADAPTATIVOS: se acumulan estrellas hasta juntar minPorAnillo antes
-       de cerrar cada anillo. Con anillos de radio fijo, el más interior de un
-       cúmulo visto a mucho aumento (o de uno compacto a campo ancho) puede no
-       contener NINGUNA estrella: la densidad observada sale 0, no se resta nada,
-       el King entra a pelo y aparece una burbuja brillante con un salto en la
-       frontera del anillo. Exigiendo un mínimo de estrellas por anillo, cada
-       punto del perfil está respaldado por datos y el ruido queda acotado. */
-    var radio = [], dens = [], acc = 0, desde = 0, rIni = 0;
-    for (i = 0; i < muestra.length; i++) {
-      acc += muestra[i][1];
-      var ultimo = (i === muestra.length - 1);
-      var r1 = ultimo ? rMax : muestra[i][0];
-      var bastantes = (i - desde + 1) >= KING.minPorAnillo;
-      var bastanteAncho = (rIni <= 0) || (r1 >= rIni * KING.anchoMinAnillo);
-      // Cierra el anillo solo con estrellas suficientes Y anchura suficiente. Las
-      // dos condiciones hacen falta: la primera acota el ruido de Poisson, la
-      // segunda evita el anillo de área casi nula con densidad disparada.
-      if (!ultimo && !(bastantes && bastanteAncho)) continue;
-      var area = Math.PI * (r1 * r1 - rIni * rIni);
-      if (area > 0) {
-        radio.push(Math.sqrt((rIni * rIni + r1 * r1) / 2));   // parte el anillo por área
-        dens.push(acc / (area * 3600 * 3600));                // flujo por arcsec²
-        acc = 0; rIni = r1; desde = i + 1;
-      }
-    }
-    if (radio.length < 2) {
-      var plano = dens.length ? dens[0] : 0;
-      return function () { return plano; };
-    }
-    // Suavizado a tres puntos sobre los anillos ya poblados.
-    var suave2 = dens.slice();
-    for (i = 0; i < dens.length; i++) {
-      var a = dens[Math.max(0, i - 1)], c = dens[Math.min(dens.length - 1, i + 1)];
-      suave2[i] = (a + 2 * dens[i] + c) / 4;
-    }
-    /* Muestreador continuo, interpolado en log r: restar un perfil escalonado de
-       un King continuo deja un salto por anillo, y eso se ve como círculos. */
-    return function (r) {
-      if (r <= radio[0]) return suave2[0];
-      var ultimo = radio.length - 1;
-      if (r >= radio[ultimo]) return suave2[ultimo];
-      var lo = 0;
-      while (lo < ultimo && radio[lo + 1] < r) lo++;
-      var t = (Math.log(r) - Math.log(radio[lo])) / (Math.log(radio[lo + 1]) - Math.log(radio[lo]));
-      return suave2[lo] * (1 - t) + suave2[lo + 1] * t;
-    };
-  }
-
-  function haloCatalogado(gc, estrellas, o, yaPuesto) {
-    var rt = gc.rc * Math.pow(10, gc.c);
-    var pico = formaKing(0, gc.rc, rt);
-    if (!(pico > 0)) return null;
-    var observado = flujoObservadoCumulo(estrellas, gc, rt, (o.arcmin / 60) / 2);
-    if (!observado) return null;
-    var F0 = Math.pow(10, -0.4 * gc.muV);        // flujo por arcsec² en el centro
-
-    /* Perfil radial del déficit, en una rejilla fina y densa hacia el centro
-       (r ∝ i²), antes de pintar nada.
-
-       Y se fuerza MONÓTONO no creciente. El halo de un globular no puede brillar
-       más lejos del centro; si el déficit crudo sube hacia fuera es un artefacto
-       de la resta: el flujo de las estrellas resueltas se descuenta como si fuera
-       brillo superficial repartido por el anillo, pero el render las dibuja como
-       puntos. En el centro, donde un anillo pequeño puede contener una estrella
-       brillante, eso sobre-resta y deja un hoyo rodeado de un anillo claro — la
-       burbuja. La cota lo elimina por construcción, no por suavizado. */
-    var nR = 256, perfil = new Float64Array(nR), radios = new Float64Array(nR), i;
-    for (i = 0; i < nR; i++) {
-      var ri = rt * Math.pow(i / (nR - 1), 2);
-      radios[i] = ri;
-      perfil[i] = Math.max(0, F0 * formaKing(ri, gc.rc, rt) / pico - observado(ri));
-    }
-    /* Se impone de FUERA HACIA DENTRO (máximo corriente), no al revés. Un mínimo
-       corriente desde el centro cumple la misma condición, pero deja que un único
-       valor central bajo —precisamente donde la resta se pasa— se propague a todo
-       el perfil y aplaste el halo entero: el cúmulo se queda sin nubosidad. Así el
-       centro recibe al menos lo que haya justo fuera, y el perfil sigue sin poder
-       brillar más lejos del centro. */
-    for (i = nR - 2; i >= 0; i--) if (perfil[i] < perfil[i + 1]) perfil[i] = perfil[i + 1];
-
-    /* Y ahora se SUAVIZA, que no es lo mismo que acotar. Un perfil monótono puede
-       estar lleno de codos: la cota de arriba crea mesetas, y el flujo observado
-       es lineal a trozos entre nodos de anillo. adaptacionLocal es una máscara de
-       enfoque y realza precisamente las discontinuidades de PENDIENTE, así que
-       cada codo acaba siendo un borde visible — los círculos concéntricos, que se
-       ven desnudos con pupila de salida pequeña porque el fondo es negro y el halo
-       es lo único en pantalla.
-       Tres pasadas de media móvil ≈ una gaussiana. Van sobre la rejilla cuadrática
-       (r ∝ i²), así que suavizan más fuerte por fuera, que es donde los anillos
-       son anchos, y respetan el pico del núcleo. */
-    var ancho = 13, mitad = (ancho - 1) / 2, pasada, tmp = new Float64Array(nR);
-    for (pasada = 0; pasada < 4; pasada++) {
-      for (i = 0; i < nR; i++) {
-        var suma = 0, cuantos = 0;
-        for (var d = -mitad; d <= mitad; d++) {
-          var jj = i + d;
-          if (jj < 0) jj = -jj;                    // espejo en el centro
-          if (jj > nR - 1) jj = nR - 1;
-          suma += perfil[jj]; cuantos++;
-        }
-        tmp[i] = suma / cuantos;
-      }
-      perfil.set(tmp);
-    }
-    // El suavizado puede introducir subidas mínimas: se vuelve a acotar.
-    for (i = nR - 2; i >= 0; i--) if (perfil[i] < perfil[i + 1]) perfil[i] = perfil[i + 1];
-
-    var SIZE = o.size, out = new Float32Array(SIZE * SIZE), hay = false;
-    var escPix = (o.arcmin / 60) / SIZE, cos0 = Math.cos(o.dec * Math.PI / 180);
-    // Desplazamiento del centro del cúmulo respecto al del campo, en píxeles.
-    var offX = (((gc.ra - o.ra + 540) % 360) - 180) * cos0 / escPix;
-    var offY = (gc.dec - o.dec) / escPix;
-    for (var y = 0; y < SIZE; y++) {
-      var dy = (y + 0.5 - SIZE / 2 + offY) * escPix;
-      for (var x = 0; x < SIZE; x++) {
-        var dx = (x + 0.5 - SIZE / 2 - offX) * escPix;
-        var r = Math.sqrt(dx * dx + dy * dy);
-        if (r >= rt) continue;
-        // Índice en la rejilla cuadrática, con interpolación lineal.
-        var f = (nR - 1) * Math.sqrt(r / rt);
-        var i0 = Math.max(0, Math.min(nR - 1, Math.floor(f)));
-        var i1 = Math.min(nR - 1, i0 + 1), t = f - i0;
-        var d = perfil[i0] * (1 - t) + perfil[i1] * t;
-        // El telón ya reparte luz aquí: se descuenta también, o se contaría dos
-        // veces. Es suave (celdas de ~6'), así que no reintroduce anillos.
-        var idx = y * SIZE + x;
-        if (yaPuesto) d -= yaPuesto[idx];
-        if (d > 0) { out[idx] = KING.k * d; hay = true; }
-      }
-    }
-    return hay ? out : null;
-  }
-
-  /* Halo no resuelto del campo, en flujo por arcsec². Devuelve null si no hay
-     cúmulo con déficit por aglomeración, que es el caso normal.
-     yaPuesto: capas difusas ya calculadas (el telón), para no contarlas dos veces
-     en la rama anclada al catálogo. */
-  function haloNoResuelto(estrellas, o, yaPuesto) {
-    if (!estrellas || estrellas.length < KING.minEstrellas) return null;
-    // Con perfil medido en el catálogo no hace falta adivinarlo de los conteos.
-    var gc = globularEnCampo(o);
-    if (gc) {
-      var anclado = haloCatalogado(gc, estrellas, o, yaPuesto);
-      if (anclado) return anclado;
-    }
-    var p = perfilRadial(estrellas, o);
-    if (!p) return null;
-    var iCrowd = radioAglomeracion(p.dens);
-    if (iCrowd < 1) return null;                 // densidad crece hasta el centro: sin déficit
-    /* Dos guardas contra el falso positivo. En un campo uniforme el ruido de
-       Poisson basta para que el anillo de máxima densidad no sea el central, y sin
-       esto la capa se dispararía en cualquier sitio. */
-    var pico = p.dens[iCrowd], borde = p.dens[p.dens.length - 1];
-    if (!(pico > borde * KING.concentracionMin)) return null;   // el campo no está concentrado
-    if (!((pico - p.dens[0]) / pico > KING.caidaMin)) return null;   // la caída al centro es un tropiezo
-    var fit = ajustarKing(p, iCrowd);
-    if (!fit || !(fit.k > 0)) return null;
-
-    /* Paso de cuentas a luz. La población que falta NO tiene el flujo medio de lo
-       observado: la aglomeración se lleva sobre todo fuentes débiles. Se pesa con
-       la función de luminosidad medida en el propio campo. Si el ajuste de la
-       pendiente no sale (muestra pobre), se cae al flujo medio observado, que es
-       peor pero no inventa nada. */
-    var lf = pendienteConteos(estrellas);
-    var fPorEstrella = lf ? flujoMedioNoResuelto(lf.b, lf.lo, lf.mcat) : null;
-    if (!(fPorEstrella > 0)) fPorEstrella = p.flujoMedio;
-
-    // Déficit por anillo interior, en estrellas por grado², y su paso a flujo.
-    var deficit = new Float64Array(iCrowd + 1), hay = false;
-    for (var i = 0; i <= iCrowd; i++) {
-      var d = fit.k * formaKing(p.radio[i], fit.rc, fit.rt) - p.dens[i];
-      deficit[i] = d > 0 ? d * fPorEstrella : 0;
-      if (deficit[i] > 0) hay = true;
-    }
-    if (!hay) return null;
-
-    // De densidad por grado² a flujo por arcsec² (mismas unidades que Fcielo).
-    var porArcsec2 = 1 / (3600 * 3600);
-    var SIZE = o.size, out = new Float32Array(SIZE * SIZE);
-    var escPix = (o.arcmin / 60) / SIZE;         // grados por píxel
-    var rCorte = p.radio[iCrowd];
-    for (var y = 0; y < SIZE; y++) {
-      var dy = (y + 0.5 - SIZE / 2) * escPix;
-      for (var x = 0; x < SIZE; x++) {
-        var dx = (x + 0.5 - SIZE / 2) * escPix;
-        var r = Math.sqrt(dx * dx + dy * dy);
-        if (r >= rCorte) continue;               // fuera del núcleo: ya lo cubre el telón
-        // Interpolación lineal del déficit entre centros de anillo.
-        var f = r / p.rmax * p.dens.length - 0.5;
-        var i0 = Math.max(0, Math.min(iCrowd, Math.floor(f)));
-        var i1 = Math.min(iCrowd, i0 + 1), t = Math.max(0, Math.min(1, f - i0));
-        out[y * SIZE + x] = KING.k * (deficit[i0] * (1 - t) + deficit[i1] * t) * porArcsec2;
-      }
-    }
-    return out;
-  }
-
-  /* ═══════════ GALAXIAS: PERFIL DE SÉRSIC SINTÉTICO ═══════════════════════════
-     Por el ocular una galaxia es un óvalo difuso con el núcleo más brillante:
-     brazos y bandas de polvo exigen apertura grande y cielo oscuro. Un perfil
-     sintético no es aquí una aproximación barata — es más honesto que una foto
-     profunda, y no cuesta ningún asset de imagen.
-
-     Se pinta CUALQUIER galaxia del catálogo que caiga en el campo, no solo la
-     apuntada: así M110 acompaña a M31 y NGC 5195 a M51, como en el ocular.
-
-     Cada fila del catálogo (window.BITACORA_GALAXIAS) es
-     [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n]. */
-  var GALAXIA = {
-    k: 1.0,          // calibración visual
-    muCorte: 30,     // mag/arcsec² por debajo del cual ya no se pinta nada
-    // Bulbo: mucho más compacto que su disco, y casi redondo por muy de canto
-    // que se vea el disco. Sin él, un Sérsic único con n=1 es un disco
-    // exponencial puro y el núcleo no destaca de nada.
-    reBulboRel: 0.2, qBulboMin: 0.6,
-    /* Núcleo suavizado, como fracción del r_e del bulbo. Un de Vaucouleurs puro
-       tiene una punta infinita en r=0 (I(0) = 2100·I_e): sin suavizar, el núcleo
-       salía a 14,6 mag/arcsec², más brillante que cualquier galaxia real. El
-       suavizado representa que ni el seeing ni el ojo resuelven ese pico. */
-    nucleoSuave: 0.08,
-    // Banda de polvo de las espirales de canto. El polvo se concentra en el plano
-    // medio, mucho más fino que el disco estelar: de ahí una franja estrecha.
-    // Absorbe, no emite, así que MULTIPLICA.
-    polvoGrosor: 0.25,      // fracción de la altura de escala del disco de canto
-    polvoAbsorcion: 0.7,    // fracción de luz del disco que quita en su centro
-    /* Al bulbo le quita menos: está centrado en el plano, así que solo la mitad
-       de su luz sale por detrás de la capa de polvo. Con 0 el núcleo quedaría
-       intacto y la banda no lo cruzaría, cosa que en NGC 891 sí hace. */
-    polvoSobreBulbo: 0.5
-  };
-
-  function bSersic(n) { return 2 * n - 1 / 3 + 0.009876 / n; }
-
-  // Γ(x) por Lanczos: hace falta para normalizar el perfil a la luz total.
-  function gamma(x) {
-    var g = [676.5203681218851, -1259.1392167224028, 771.32342877765313,
-             -176.61502916214059, 12.507343278686905, -0.13857109526572012,
-             9.9843695780195716e-6, 1.5056327351493116e-7];
-    if (x < 0.5) return Math.PI / (Math.sin(Math.PI * x) * gamma(1 - x));
-    x -= 1;
-    var a = 0.99999999999980993, t = x + 7.5;
-    for (var i = 0; i < g.length; i++) a += g[i] / (x + i + 1);
-    return Math.sqrt(2 * Math.PI) * Math.pow(t, x + 0.5) * Math.exp(-t) * a;
-  }
-
-  // L_total = I_e · r_e² · factorLuz(n) · (b/a)
-  function factorLuz(n) {
-    var b = bSersic(n);
-    return 2 * Math.PI * n * Math.exp(b) * gamma(2 * n) / Math.pow(b, 2 * n);
-  }
-
-  /* Objetos de perfil elíptico cuyo disco solapa el campo, con su radio de corte
-     ya calculado. Se incluyen los de centro FUERA del campo cuyo halo entra: en
-     un campo ancho el borde de M31 aparece aunque su núcleo quede fuera.
-     Sirve a galaxias y a nebulosas: comparten esquema de fila, y una nebulosa es
-     un Sérsic de n = 0,5 (gaussiana) sin bulbo ni banda de polvo. */
-  function galaxiasEnCampo(o, cat) {
-    cat = cat || window.BITACORA_GALAXIAS;
-    if (!cat || !cat.length) return [];
-    var medio = (o.arcmin / 60) / 2, cos0 = Math.cos(o.dec * Math.PI / 180);
-    var fuera = Math.pow(10, -0.4 * GALAXIA.muCorte), lista = [];
-    for (var i = 0; i < cat.length; i++) {
-      var g = cat[i], re = g[4], q = g[5], magV = g[7], n = g[8];
-      var fracBulbo = (g[9] != null) ? g[9] : 0, polvo = !!g[10];
-      if (!(re > 0) || !(q > 0) || !(n > 0)) continue;
-      var dRA = (((g[2] - o.ra + 540) % 360) - 180) * cos0, dDec = g[3] - o.dec;
-      var fTotal = Math.pow(10, -0.4 * magV);
-      // Disco: Sérsic n con el r_e del catálogo. Bulbo: de Vaucouleurs compacto.
-      var reB = re * GALAXIA.reBulboRel, qB = Math.max(q, GALAXIA.qBulboMin);
-      var iD = (fracBulbo < 1) ? fTotal * (1 - fracBulbo) / (re * re * factorLuz(n) * q) : 0;
-      var iB = (fracBulbo > 0) ? fTotal * fracBulbo / (reB * reB * factorLuz(4) * qB) : 0;
-      // Radio de corte: el mayor de los dos, invirtiendo cada Sérsic.
-      var rMax = 0;
-      if (iD > 0) {
-        var dD = 1 - Math.log(fuera / iD) / bSersic(n);
-        if (dD > 0) rMax = Math.max(rMax, re * Math.pow(dD, n));
-      }
-      if (iB > 0) {
-        var dB = 1 - Math.log(fuera / iB) / bSersic(4);
-        if (dB > 0) rMax = Math.max(rMax, reB * Math.pow(dB, 4));
-      }
-      if (!(rMax > 0)) continue;
-      rMax = Math.min(rMax, (o.arcmin / 60) * 3 * 3600);
-      var rGrados = rMax / 3600;
-      if (Math.abs(dRA) > medio + rGrados || Math.abs(dDec) > medio + rGrados) continue;
-      /* Espirales de canto: disco EXPONENCIAL SEPARABLE, no elipse de Sérsic.
-         Las isofotas elípticas se afilan hasta un punto en los extremos, así que
-         una banda de polvo de grosor constante acaba tapando todo el grosor allí
-         y la galaxia sale partida en dos cuñas. Un disco de canto real tiene
-         grosor casi constante y cae exponencialmente en las dos direcciones:
-             I(u,v) = I0 · exp(−|u|/h_r) · exp(−|v|/h_z)
-         con h_r = r_e/1,678 (relación r_e–escala del perfil exponencial) y la
-         normalización 4·I0·h_r·h_z, que conserva la luz total del catálogo. */
-      var deCanto = polvo, hR = 0, hZ = 0, i0 = 0;
-      if (deCanto && iD > 0) {
-        hR = re / 1.678; hZ = hR * q;
-        i0 = fTotal * (1 - fracBulbo) / (4 * hR * hZ);
-      }
-      lista.push({
-        dRA: dRA, dDec: dDec, re: re, q: q, n: n, iD: iD,
-        reB: reB, qB: qB, iB: iB, rMax: rMax, r0B: reB * GALAXIA.nucleoSuave,
-        deCanto: deCanto, hR: hR, hZ: hZ, i0: i0,
-        polvo: polvo, hPolvo: (deCanto ? hZ : re * q) * GALAXIA.polvoGrosor,
-        pa: g[6] * Math.PI / 180, nombre: g[0]
-      });
-    }
-    return lista;
-  }
-
-  /* Capa de objetos elípticos del campo, en flujo por arcsec². Sin atenuación de
-     pupila: la aplica ctxFotometrico. */
-  function capaGalaxias(o, cat) {
-    var lista = galaxiasEnCampo(o, cat);
-    if (!lista.length) return null;
-    var SIZE = o.size, out = new Float32Array(SIZE * SIZE);
-    var escArc = (o.arcmin * 60) / SIZE;      // arcsec por píxel
-    for (var k = 0; k < lista.length; k++) {
-      var G = lista[k], b = bSersic(G.n), invN = 1 / G.n, bB = bSersic(4);
-      // Centro de la galaxia en píxeles (norte arriba, este a la izquierda).
-      var cx = SIZE / 2 - (G.dRA * 3600) / escArc;
-      var cy = SIZE / 2 - (G.dDec * 3600) / escArc;
-      var radioPx = G.rMax / escArc;
-      var x0 = Math.max(0, Math.floor(cx - radioPx)), x1 = Math.min(SIZE - 1, Math.ceil(cx + radioPx));
-      var y0 = Math.max(0, Math.floor(cy - radioPx)), y1 = Math.min(SIZE - 1, Math.ceil(cy + radioPx));
-      var senPA = Math.sin(G.pa), cosPA = Math.cos(G.pa);
-      for (var y = y0; y <= y1; y++) {
-        /* Desplazamiento respecto al centro de LA GALAXIA, no del campo: este
-           positivo hacia la izquierda, norte hacia arriba. Medirlo desde el
-           centro del campo dibujaba a las compañeras con el perfil descolocado. */
-        var dNorte = (cy - (y + 0.5)) * escArc;
-        for (var x = x0; x <= x1; x++) {
-          var dEste = (cx - (x + 0.5)) * escArc;
-          // Proyección sobre los ejes mayor y menor. El PA se mide desde el norte
-          // hacia el este, de ahí el reparto de seno y coseno.
-          var u = dEste * senPA + dNorte * cosPA;
-          var v = dEste * cosPA - dNorte * senPA;
-          var flujo = 0;
-          if (G.iD > 0) {
-            var rD = Math.sqrt(u * u + (v / G.q) * (v / G.q));
-            if (rD <= G.rMax) {
-              var disco = G.deCanto
-                ? G.i0 * Math.exp(-Math.abs(u) / G.hR - Math.abs(v) / G.hZ)
-                : G.iD * Math.exp(-b * (Math.pow(Math.max(rD, 1e-6) / G.re, invN) - 1));
-              /* Banda de polvo: absorbe, no emite, así que multiplica. Va pegada
-                 al plano medio (|v| pequeño) y solo afecta al DISCO; el bulbo
-                 sobresale del plano y por eso asoma a ambos lados de la banda. */
-              if (G.polvo && G.hPolvo > 0) {
-                var t = v / G.hPolvo;
-                disco *= 1 - GALAXIA.polvoAbsorcion * Math.exp(-t * t);
-              }
-              flujo += disco;
-            }
-          }
-          if (G.iB > 0) {
-            var rB = Math.sqrt(u * u + (v / G.qB) * (v / G.qB));
-            if (rB <= G.rMax) {
-              // Radio suavizado: sin esto el de Vaucouleurs tiene una punta
-              // infinita en el centro que ningún telescopio resuelve.
-              var rS = Math.sqrt(rB * rB + G.r0B * G.r0B);
-              var bulbo = G.iB * Math.exp(-bB * (Math.pow(rS / G.reB, 0.25) - 1));
-              if (G.polvo && G.hPolvo > 0) {
-                var tb = v / G.hPolvo;
-                bulbo *= 1 - GALAXIA.polvoAbsorcion * GALAXIA.polvoSobreBulbo * Math.exp(-tb * tb);
-              }
-              flujo += bulbo;
-            }
-          }
-          if (flujo > 0) out[y * SIZE + x] += GALAXIA.k * flujo;
-        }
-      }
-    }
-    return out;
-  }
-
-  /* Suma de todas las capas difusas del campo, en flujo por arcsec². Cada capa
-     aporta lo suyo sin solaparse: el telón, la luz de las estrellas que el
-     catálogo no trae; el halo, solo el déficit que la aglomeración le roba al
-     telón en los núcleos densos.
-     Ninguna lleva atenuación de pupila: la aplica ctxFotometrico al pintar. */
-  function capasDifusas(estrellas, o) {
-    // El telón va primero: el halo anclado a catálogo necesita saber qué luz hay
-    // puesta ya para aportar solo el resto.
-    var telon = (o.conTelon !== false) ? telonDifuso(estrellas, o) : null;
-    var halo = (o.conHalo !== false) ? haloNoResuelto(estrellas, o, telon) : null;
-    var galaxias = (o.conGalaxias !== false) ? capaGalaxias(o) : null;
-    /* El catálogo se comprueba AQUÍ: `galaxiasEnCampo` cae al de galaxias cuando
-       no le llega ninguno, así que pasarle un `undefined` —el fichero de
-       nebulosas sin desplegar— pintaría las galaxias dos veces en silencio. */
-    var nebulosas = (o.conNebulosas !== false && window.BITACORA_NEBULOSAS)
-      ? capaGalaxias(o, window.BITACORA_NEBULOSAS) : null;
-    var capas = [];
-    if (telon) capas.push(telon);
-    if (halo) capas.push(halo);
-    if (galaxias) capas.push(galaxias);
-    if (nebulosas) capas.push(nebulosas);
-    if (!capas.length) return null;
-    var out = capas[0];
-    for (var c = 1; c < capas.length; c++) {
-      for (var i = 0; i < out.length; i++) out[i] += capas[c][i];
-    }
-    return out;
-  }
 
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio) ── */
   var cacheGaia = {};
@@ -1514,11 +757,23 @@
      un salto en el tamaño al cambiar de ocular se vería como un parpadeo. */
   function radioEstrella(o) {
     var suelo = CFG.radioSuelo * (1 + CFG.blur) * escalaEstrellas(o.afov);
+    var sep = +o.sep, arcmin = +o.arcmin, size = +o.size;
+    if (sep > 0 && arcmin > 0 && size > 0) {
+      var sepPx = sep * size / (arcmin * 60);                           // ″ → px de lienzo
+      suelo = Math.min(suelo, Math.max(CFG.radioSueloMin, sepPx * CFG.margenSuelo));
+    }
     var theta = radioImagenEstelar(o.apertura);
-    var arcmin = +o.arcmin, size = +o.size;
     if (theta == null || !(arcmin > 0) || !(size > 0)) return suelo;   // sin equipo, como antes
     var fisico = theta * size / (arcmin * 60);                        // ″ → px de lienzo
     return Math.sqrt(suelo * suelo + fisico * fisico);
+  }
+  /* Opacidad de la aureola de dispersión (glare) de una estrella RESUELTA,
+     proporcional a su flujo absoluto (mag Gaia g), no al margen sobre el
+     límite del equipo -a diferencia del glow de las no resueltas-. Sin
+     corte duro: se apaga sola con la magnitud, con techo en aureolaAlfaMax.
+     Ver CFG.aureolaRadio/AlfaK/AlfaMax y notas-separacion-dobles-dibujo.md. */
+  function alfaAureola(g) {
+    return Math.min(CFG.aureolaAlfaMax, CFG.aureolaAlfaK * Math.pow(10, -0.4 * g));
   }
   function colorEstrella(bprp, carbono) {
     var v = bprp;
@@ -1585,7 +840,15 @@
       }
       // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
       // se aprieta con la apertura) en cuadratura con el suelo de visibilidad.
-      var Rtot = radioEstrella({ afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE });
+      var Rtot = radioEstrella({ afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE, sep: o.sep });
+      // Aureola de dispersión (glare): debajo del disco, se apaga sola en las
+      // tenues -ver alfaAureola()-.
+      var aAur = alfaAureola(g);
+      if (aAur > 0.004) {
+        var Ra = CFG.aureolaRadio * escala;
+        ctx.globalAlpha = aAur * ganActual;
+        ctx.drawImage(glow, x - Ra, y - Ra, Ra * 2, Ra * 2);
+      }
       ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / 6))) * ganActual;
       var esCarbono = (i === idxCarbono), colEstrella = null;
       if ((g < CFG.magColor && bprp != null) || esCarbono) {
@@ -1632,8 +895,16 @@
 
   function capaEstrellas(estrellas, o, SIZE) {
     var alta = lienzoEstrellas(estrellas, o, SIZE, 1);
-    var baja = lienzoEstrellas(estrellas, o, SIZE, TONO.ganancia);
     var n = SIZE * SIZE, out = new Float32Array(n * 3);
+    if (!CFG.hdrRescate) {
+      // Sin el truco HDR: una sola pasada, se copia tal cual (sin blend).
+      for (var j0 = 0; j0 < n; j0++) {
+        var p0 = j0 * 4;
+        out[j0 * 3] = alta[p0]; out[j0 * 3 + 1] = alta[p0 + 1]; out[j0 * 3 + 2] = alta[p0 + 2];
+      }
+      return out;
+    }
+    var baja = lienzoEstrellas(estrellas, o, SIZE, TONO.ganancia);
     var inv = 1 / TONO.ganancia;
     for (var j = 0; j < n; j++) {
       // El cruce se decide por el canal más alto: si uno satura, el píxel está
@@ -1667,22 +938,17 @@
       aumentos: o.aumentos, perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
     return consultar(o.ra, o.dec, o.arcmin).then(function (estrellas) {
-      /* Capas difusas y estrellas se mapean JUNTAS, en una sola curva de tono.
-         Antes el fondo pasaba por la curva logarítmica y las estrellas se
-         dibujaban encima en 8 bits, saltándosela: por eso los núcleos densos se
-         recortaban a blanco y no se distinguía ninguna estrella. */
-      var difuso = capasDifusas(estrellas, {
-        ra: o.ra, dec: o.dec, arcmin: o.arcmin, size: SIZE,
-        conTelon: o.conTelon, conHalo: o.conHalo,
-        conGalaxias: o.conGalaxias, conNebulosas: o.conNebulosas
-      }) || new Float32Array(SIZE * SIZE);
+      /* Estrellas y fondo se mapean en una sola curva de tono: el fondo pasa
+         por la curva logarítmica y las estrellas se dibujan encima en 8
+         bits, saltándosela; por eso el fondo va plano (sin capas difusas). */
+      var difuso = new Float32Array(SIZE * SIZE);
       var capaEst = capaEstrellas(estrellas, {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
         apertura: o.apertura,   // el disco de Airy va como 1/D
         conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
       }, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst);
-      return { estrellas: estrellas, mlim: mlim, fondo: fondo, telon: !!telon };
+      return { estrellas: estrellas, mlim: mlim, fondo: fondo };
     });
   }
 
@@ -1701,6 +967,7 @@
     radioAiry: radioAiry,
     radioImagenEstelar: radioImagenEstelar,
     radioEstrella: radioEstrella,
+    alfaAureola: alfaAureola,
     parDoble: parDoble,
     par: PAR,
     valorDeFlujo: valorDeFlujo,
@@ -1709,25 +976,6 @@
     visibilidadDifusa: visibilidadDifusa,
     ctxFotometrico: ctxFotometrico,
     pintarFot: pintarFot,
-    telon: TELON,
-    telonDifuso: telonDifuso,
-    pendienteConteos: pendienteConteos,
-    razonNoResuelta: razonNoResuelta,
-    king: KING,
-    haloNoResuelto: haloNoResuelto,
-    haloCatalogado: haloCatalogado,
-    flujoObservadoCumulo: flujoObservadoCumulo,
-    globularEnCampo: globularEnCampo,
-    flujoMedioNoResuelto: flujoMedioNoResuelto,
-    perfilRadial: perfilRadial,
-    ajustarKing: ajustarKing,
-    formaKing: formaKing,
-    galaxia: GALAXIA,
-    capaGalaxias: capaGalaxias,
-    galaxiasEnCampo: galaxiasEnCampo,
-    factorLuz: factorLuz,
-    bSersic: bSersic,
-    capasDifusas: capasDifusas,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
     fusionarPlacas: fusionarPlacas,

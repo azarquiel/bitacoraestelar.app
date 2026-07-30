@@ -131,5 +131,72 @@ var ethos = equipo(114, 1500, 4.5, 100), ap = equipo(114, 1500, 4.5, 46);
 casi(radioPantalla(ethos), radioPantalla(ap), 1e-9,
   'Ethos de 100° y AstroPhysics de 46°, misma estrella en pantalla');
 
+/* ── 6. El suelo de una doble catalogada se recorta con el aumento ───────────
+   El bug que fijó esto: el suelo de arriba (secciones 1-5) es UNO para toda
+   estrella suelta, y a aumentos normales (no los extremos de la sección 2) es
+   mucho mayor que el hueco en pantalla de un par bien resuelto, así que el
+   dibujo se fundía en una mancha aunque el propio veredicto del simulador
+   (resolucionDoble en bitacora-ocular.js) dijera "se resuelve cómodo". Detalle
+   completo, con la aritmética y las fuentes de campo, en
+   simulador_ocular/notas-separacion-dobles-dibujo.md.
+
+   `radioEstrella` ahora acepta un `sep` (″) opcional: SOLO cuando viene (el
+   objeto es una doble catalogada, ver bitacora-ocular.js:renderGaia2D) el
+   suelo se recorta a una fracción del hueco en pantalla entre las dos
+   componentes. Sin `sep` (cualquier otro campo o cúmulo) nada cambia: por eso
+   las secciones 1-5 de arriba siguen pasando tal cual, sin tocarlas. */
+console.log('\nEl suelo de una doble SÍ decrece con el aumento (radioEstrella con sep):');
+
+function huecoConSep(eq, sepArcsec) {
+  var r = R.radioEstrella({ arcmin: eq.arcmin, afov: eq.afov, apertura: eq.apertura, size: SIZE, sep: sepArcsec });
+  var sepPx = (sepArcsec / 3600) * (SIZE / (eq.arcmin / 60));
+  return (sepPx - 2 * r) * eq.diam / SIZE;   // px de PANTALLA; negativo = discos solapados
+}
+
+// Albireo (34,7″) con un 150 mm a 75×, el aumento con el que freestarcharts.com
+// y eyesonthesky.com dicen que YA se separa con holgura: antes del recorte el
+// dibujo apenas dejaba 0,1-0,2 px de hueco (una mancha alargada, no un split).
+var albireo75 = equipo(150, 1500, 20, 68);   // 1500/20 = 75×
+ok(huecoConSep(albireo75, 34.7) > 0.8,
+  'Albireo a 75×/150mm: hueco en pantalla ' + huecoConSep(albireo75, 34.7).toFixed(2) + ' px (antes, sin recorte, ~0,2 px)');
+
+// Sigue sin separar lo que de verdad no toca separar: a poco aumento (20×) el
+// mismo par cabe en un campo tan ancho que 34,7″ son casi nada en pantalla; el
+// recorte por sep no debe inventar un hueco que no hay.
+var albireo20 = equipo(150, 1500, 75, 68);   // 1500/75 = 20×
+ok(huecoConSep(albireo20, 34.7) < huecoConSep(albireo75, 34.7),
+  'y a menos aumento (20×) el hueco es menor: ' + huecoConSep(albireo20, 34.7).toFixed(2) + ' px');
+
+// Un par realmente apretado (Castor, 2,0″) sigue fundido: el recorte del suelo
+// nunca gana al término FÍSICO (Airy+seeing), que es el que de verdad decide si
+// el par se resuelve. El suelo solo deja de estorbar; no resuelve lo irresoluble.
+var castor300 = equipo(200, 2000, 6.67, 50);   // ~300×, 2×/mm de un 200 mm
+ok(huecoConSep(castor300, 2.0) < 0,
+  'Castor a 300×/200mm sigue fundido (' + huecoConSep(castor300, 2.0).toFixed(2) + ' px): el recorte no inventa resolución');
+
+// Sin `sep` (el resto de esta suite, campos y cúmulos) nada se mueve: mismo
+// resultado con y sin el argumento cuando no hay doble de por medio.
+casi(R.radioEstrella({ arcmin: albireo75.arcmin, afov: albireo75.afov, apertura: albireo75.apertura, size: SIZE }),
+     R.radioEstrella({ arcmin: albireo75.arcmin, afov: albireo75.afov, apertura: albireo75.apertura, size: SIZE, sep: null }),
+     1e-9, 'sin sep (o null), radioEstrella no cambia');
+
+/* ── Sección 7: aureola de dispersión (glare) de estrellas resueltas muy
+   brillantes (R.alfaAureola, bitacora-gaia-render.js) ── */
+console.log('\n7. Aureola de dispersión: brillante = halo visible, tenue = puntual');
+
+// Sirio/Vega (mag ~0): halo claramente visible pero nunca opaco (techo en
+// aureolaAlfaMax, no en 1 -si no, se vería como un disco sólido-).
+ok(R.alfaAureola(0) > 0.1 && R.alfaAureola(0) <= C.aureolaAlfaMax,
+  'mag 0: alfaAureola=' + R.alfaAureola(0).toFixed(3) + ' (techo ' + C.aureolaAlfaMax + ')');
+
+// Se apaga sola con la magnitud, sin corte duro: Albireo A (mag 3,1) ya casi
+// imperceptible, y una estrella de campo típica (mag 10) no debe pintar nada.
+ok(R.alfaAureola(3.1) < 0.03, 'mag 3,1 (Albireo A): alfaAureola=' + R.alfaAureola(3.1).toFixed(4) + ' (casi nula)');
+ok(R.alfaAureola(10) < 0.004, 'mag 10: alfaAureola=' + R.alfaAureola(10).toFixed(6) + ' (por debajo del umbral de dibujo)');
+
+// Monótona decreciente con la magnitud (más tenue ⇒ menos halo, sin saltos).
+ok(R.alfaAureola(0) > R.alfaAureola(2) && R.alfaAureola(2) > R.alfaAureola(5),
+  'monótona: mag 0 > mag 2 > mag 5');
+
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);
