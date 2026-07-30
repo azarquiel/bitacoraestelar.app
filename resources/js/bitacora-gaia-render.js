@@ -418,29 +418,34 @@
   var CFG = {
     blur: 1.1, magColor: 9, tinteNucleo: 0.8,
     carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
-    /* Rango de tamaños COMPRIMIDO. El tamaño no es el único que cuenta el brillo:
-       la opacidad y la curva de tono ya lo hacen, así que aquí basta con que las
-       débiles se vean y las brillantes no se coman los huecos. Con el rango ancho
-       de antes (0,42–6,5) no cabían las dos cosas: al calibrar el extremo
-       brillante para que Almaak se partiera, las estrellas de un globular caían a
-       0,25 px de radio en pantalla y desaparecían. */
-    radioMin: 2.0, radioMag: 0.13, radioExp: 1.35, magTamMin: 14, radioMax: 3.5,
+    /* Suelo de visibilidad del tamaño de estrella, en píxeles de lienzo (antes de
+       la escala del campo aparente y del halo del blur). Es UNO para todas las
+       magnitudes a propósito: el disco de una estrella lo fijan la apertura, el
+       aumento y el seeing, no su brillo —eso es física—, y el brillo ya lo cuentan
+       la opacidad, el glow, los spikes y la curva de tono, que además ensancha los
+       núcleos saturados. Que las brillantes se dibujen más gordas es convención de
+       atlas, y era justo lo que se comía el hueco de los pares apretados. */
+    radioSuelo: 2.0,
     brillo: 1.4, alfaMin: 0.24,
     /* El glow de las estrellas por debajo de la magnitud límite es lo que da
        textura al halo de un globular, así que va calibrado en las mismas unidades
        aparentes: ~1,4 px de radio en pantalla. */
     glowIntensidad: 0.2, glowRadio: 5.0,
-    /* Campo aparente (grados) al que corresponde el tamaño NOMINAL en píxeles de
-       radioNucleo: con un ocular de este campo las estrellas salen a su tamaño
-       nominal, y con uno más estrecho salen proporcionalmente más grandes en el
-       lienzo. Ver escalaEstrellas() para el por qué.
-
-       Es la perilla del tamaño de estrella, y está calibrada por un criterio, no
-       a ojo: el disco que se dibuja no puede comerse un hueco que el equipo SÍ
-       resuelve. Con 40, una estrella de mag 2,3 ocupa ~2,1 px de radio en
-       pantalla, así que un par de 9,6″ a 333× (4,5 px de separación) se ve
-       partido. Con 100 salía a 5,3 px y se fundía. */
-    escalaMagAfov: 40, radioTotalMax: 14,
+    /* Campo aparente (grados) al que corresponde radioSuelo tal cual: con un ocular
+       de este campo el suelo sale a su tamaño nominal, y con uno más estrecho sale
+       proporcionalmente mayor en el lienzo. Ver escalaEstrellas() para el por qué.
+       Es la perilla del tamaño de estrella a aumentos normales, donde manda el
+       suelo; con 60 las estrellas de un globular salen a ~1,8 px de radio en
+       pantalla. Subirla las engorda a todas por igual. */
+    escalaMagAfov: 60,
+    /* Radio del primer anillo oscuro del disco de Airy: 1,22·λ/D en segundos de
+       arco, con λ = 550 nm (el verde al que el ojo adaptado es más sensible), ya
+       convertido para recibir la apertura en mm. */
+    airyArcsec: 138.4,
+    /* Seeing en segundos de arco (FWHM). Perilla del sitio y de la noche: 2″ es un
+       cielo decente, 1″ excepcional, 4-5″ una noche mala. Con apertura grande es
+       esto —y no la óptica— lo que fija el tamaño de la estrella. */
+    seeingArcsec: 2.0,
     spikes: {
       magMax: 10, rango: 5, brazos: 4, angulo: 0,
       longMag: 10, longMax: 180, grosor: 3, lobulos: 2, intensidad: 0.8
@@ -1462,9 +1467,58 @@
     }
     return estrellas.concat(nuevas);
   }
-  function radioNucleo(g) {
-    var r = CFG.radioMag * Math.pow(Math.max(0, CFG.magTamMin - g), CFG.radioExp);
-    return Math.min(CFG.radioMax, Math.max(CFG.radioMin, r));
+
+  /* ── La imagen estelar de VERDAD: disco de Airy + seeing ─────────────────────
+     Una estrella es una fuente puntual: lo que se ve en el ocular es su patrón de
+     difracción. El radio del primer anillo oscuro (criterio de Rayleigh) es
+     1,22·λ/D, que a 550 nm son 138″/D(mm) — para un 114 mm, 1,21″; su límite de
+     Dawes (116/D = 1,02″) es un 19 % más apretado, como debe ser.
+
+     De ahí salen las dos cosas que el modelo anterior no tenía:
+       · va como 1/D  → más apertura, estrellas más apretadas al mismo aumento;
+       · es un ángulo de CIELO fijo → el aumento lo agranda, así que las estrellas
+         ENGORDAN con el aumento. Es la sensación del ocular, y es real.
+
+     El seeing entra en cuadratura porque son dos borrones independientes. Con
+     apertura grande es el que manda: es lo que impide que un 400 mm dé estrellas
+     cuatro veces más finas que un 100 mm. */
+  function radioAiry(aperturaMm) {
+    var D = (aperturaMm > 0) ? aperturaMm : 0;
+    if (!D) return null;
+    return CFG.airyArcsec / D;
+  }
+  function radioImagenEstelar(aperturaMm) {
+    var rAiry = radioAiry(aperturaMm);
+    if (rAiry == null) return null;
+    var rSeeing = (CFG.seeingArcsec > 0 ? CFG.seeingArcsec : 0) / 2;   // FWHM → radio
+    return Math.sqrt(rAiry * rAiry + rSeeing * rSeeing);
+  }
+
+  /* Radio con el que se DIBUJA una estrella, en píxeles del lienzo.
+
+     Dos términos, sumados en cuadratura porque cada uno manda en un régimen:
+
+       · el FÍSICO, la imagen estelar de arriba llevada a píxeles con la escala de
+         placa del campo. Es el que crece con el aumento y se aprieta con la
+         apertura;
+       · el SUELO DE VISIBILIDAD, el tamaño aparente por magnitud de siempre. Existe
+         porque la ventana tiene ~500 px para 72-100° de campo aparente: a aumentos
+         normales la imagen estelar real cae MUY por debajo del píxel (una mag 13 de
+         M13 a 133× son 0,23 px) y sin suelo el globular desaparece.
+
+     Por eso a poco aumento el dibujo lo gobierna el suelo —y no cambia nada de lo
+     ya calibrado— y a mucho aumento lo gobierna la física, que es justo donde el
+     observador nota que las estrellas engordan y que enfocar cuesta más.
+
+     La cuadratura, y no un max(), para que el paso de un régimen a otro sea suave:
+     un salto en el tamaño al cambiar de ocular se vería como un parpadeo. */
+  function radioEstrella(o) {
+    var suelo = CFG.radioSuelo * (1 + CFG.blur) * escalaEstrellas(o.afov);
+    var theta = radioImagenEstelar(o.apertura);
+    var arcmin = +o.arcmin, size = +o.size;
+    if (theta == null || !(arcmin > 0) || !(size > 0)) return suelo;   // sin equipo, como antes
+    var fisico = theta * size / (arcmin * 60);                        // ″ → px de lienzo
+    return Math.sqrt(suelo * suelo + fisico * fisico);
   }
   function colorEstrella(bprp, carbono) {
     var v = bprp;
@@ -1510,7 +1564,10 @@
     ganActual = (o.ganancia > 0) ? o.ganancia : 1;
     // Tamaños APARENTES: van con el campo aparente del ocular, no con el real.
     var escala = escalaEstrellas(o.afov);
-    var factorHalo = 1 + CFG.blur, Rg = CFG.glowRadio * escala;
+    // El glow de las que no llegan a la magnitud límite se queda en el suelo
+    // aparente: representa estrellas que NO se resuelven, así que darles el tamaño
+    // físico de una resuelta sería contarlas dos veces.
+    var Rg = CFG.glowRadio * escala;
     var spikesOn = conGlow && arana;
     ctx.globalCompositeOperation = 'lighter';
     for (var i = 0; i < estrellas.length; i++) {
@@ -1526,10 +1583,9 @@
         ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
         continue;
       }
-      // El tope va sobre el tamaño NOMINAL, antes de escalar: si se aplicara
-      // después, las estrellas brillantes se recortarían a distinto tamaño
-      // aparente según el ocular y volvería el fallo por la puerta de atrás.
-      var Rtot = Math.min(CFG.radioTotalMax, radioNucleo(g) * factorHalo) * escala;
+      // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
+      // se aprieta con la apertura) en cuadratura con el suelo de visibilidad.
+      var Rtot = radioEstrella({ afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE });
       ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / 6))) * ganActual;
       var esCarbono = (i === idxCarbono), colEstrella = null;
       if ((g < CFG.magColor && bprp != null) || esCarbono) {
@@ -1622,6 +1678,7 @@
       }) || new Float32Array(SIZE * SIZE);
       var capaEst = capaEstrellas(estrellas, {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
+        apertura: o.apertura,   // el disco de Airy va como 1/D
         conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
       }, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst);
@@ -1641,6 +1698,9 @@
     tono: TONO,
     capaEstrellas: capaEstrellas,
     escalaEstrellas: escalaEstrellas,
+    radioAiry: radioAiry,
+    radioImagenEstelar: radioImagenEstelar,
+    radioEstrella: radioEstrella,
     parDoble: parDoble,
     par: PAR,
     valorDeFlujo: valorDeFlujo,

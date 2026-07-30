@@ -534,6 +534,7 @@
             : estrellas;
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
+            apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
             conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana()
           }, PROC);
           var cieloGaia = cieloOptica(datosOcular().pupila);
@@ -623,6 +624,7 @@
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
         BitacoraGaiaRender.dibujar(ctx, estrellas, {
           ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
+          apertura: teleApertura(),
           conGlow: conGlow, carbono: objetoCarbono, arana: teleTieneArana()
         });
       }

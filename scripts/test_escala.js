@@ -48,10 +48,12 @@ function vista(focalTele, focalOcular, afov) {
     diam: diametroVentana(afov)
   };
 }
-// Radio de la estrella EN PANTALLA: el nominal en píxeles del lienzo, por la
-// escala aparente, por el achique del lienzo a la ventana.
-function radioEnPantalla(v, radioNominal) {
-  return radioNominal * R.escalaEstrellas(v.afov) * v.diam / SIZE;
+// Radio de la estrella EN PANTALLA. Sin apertura, radioEstrella se queda en el
+// suelo de visibilidad, que es lo que este test vigila: que ese suelo no dependa
+// del campo aparente. El término físico (Airy + seeing) tiene su propio test en
+// scripts/test_estrella_fisica.js.
+function radioEnPantalla(v) {
+  return R.radioEstrella({ afov: v.afov }) * v.diam / SIZE;
 }
 // Separación de un par EN PANTALLA, en píxeles.
 function separacionEnPantalla(v, sepArcsec) {
@@ -68,8 +70,7 @@ ok(ethos.aumentos === ap.aumentos, 'mismo aumento: ' + ethos.aumentos + '×');
 ok(ethos.arcmin > ap.arcmin, 'el Ethos enseña más cielo (' + ethos.arcmin.toFixed(1) + '′ vs ' + ap.arcmin.toFixed(1) + '′)');
 ok(ethos.diam > ap.diam, 'y lo enseña en una ventana mayor (' + ethos.diam.toFixed(0) + ' px vs ' + ap.diam.toFixed(0) + ' px)');
 
-var NOMINAL = 5.3;   // radio nominal de una estrella de mag 5 (radioNucleo × halo)
-casi(radioEnPantalla(ethos, NOMINAL), radioEnPantalla(ap, NOMINAL), 1e-9,
+casi(radioEnPantalla(ethos), radioEnPantalla(ap), 1e-9,
   'la MISMA estrella sale del mismo tamaño en pantalla con los dos oculares');
 casi(separacionEnPantalla(ethos, 3), separacionEnPantalla(ap, 3), 1e-9,
   'y un par de 3″ sale con la MISMA separación en pantalla');
@@ -77,8 +78,9 @@ casi(separacionEnPantalla(ethos, 3), separacionEnPantalla(ap, 3), 1e-9,
 /* La regresión concreta: con la ley vieja (sqrt del campo real, acotada a 2×) el
    Ethos dibujaba la estrella casi al doble de tamaño que el AstroPhysics. */
 function escalaVieja(arcmin) { return Math.min(2, Math.max(1, Math.sqrt(90 / arcmin))); }
+var NOMINAL_VIEJO = 5.3;   // lo que daba radioNucleo×halo para una mag 5
 function radioViejoEnPantalla(v) {
-  return Math.min(14, NOMINAL * escalaVieja(v.arcmin)) * v.diam / SIZE;
+  return Math.min(14, NOMINAL_VIEJO * escalaVieja(v.arcmin)) * v.diam / SIZE;
 }
 var razonVieja = radioViejoEnPantalla(ethos) / radioViejoEnPantalla(ap);
 ok(razonVieja > 1.5, 'la ley vieja las hacía ' + razonVieja.toFixed(2) + '× distintas (por eso el par se fundía)');
@@ -88,8 +90,8 @@ console.log('\nEl tamaño aparente solo depende del ocular, no del cielo que ent
 // Mismo ocular, dos telescopios: cambia el aumento y el campo real, no el tamaño.
 var corto = vista(600, 6, 100), largo = vista(2400, 6, 100);
 ok(corto.arcmin !== largo.arcmin, 'campos reales distintos (' + corto.arcmin.toFixed(1) + '′ vs ' + largo.arcmin.toFixed(1) + '′)');
-casi(radioEnPantalla(corto, NOMINAL), radioEnPantalla(largo, NOMINAL), 1e-9,
-  'la estrella sale igual: el aumento no cambia su tamaño aparente');
+casi(radioEnPantalla(corto), radioEnPantalla(largo), 1e-9,
+  'el suelo de visibilidad no lo mueve el campo real');
 ok(separacionEnPantalla(largo, 3) > separacionEnPantalla(corto, 3),
   'lo que sí cambia con el aumento es la separación del par (para eso se sube)');
 
@@ -107,48 +109,10 @@ casi(R.escalaEstrellas(100) * 100, R.escalaEstrellas(46) * 46, 1e-9, 'escala × 
 ok(R.escalaEstrellas(0) === 1 && R.escalaEstrellas(undefined) === 1,
   'sin campo aparente conocido, escala 1 (no rompe a quien no lo pase)');
 
-/* ── 4. El criterio que calibra el tamaño ──────────────────────────────────────
-   `escalaMagAfov` no está puesta a ojo: un disco dibujado no puede comerse un
-   hueco que el equipo SÍ resuelve. El caso que lo fijó es Almaak (9,6″, mag 2,3 y
-   5,1) con el equipo del informe: un 114/1000 con Barlow 1,5× y un Delos de
-   4,5 mm (72°), o sea 333×. Si alguien sube la constante y las estrellas vuelven
-   a tragarse el par, esto se cae. */
-console.log('\nCriterio de calibración (Almaak a 333× tiene que verse partida):');
-var C = R.config;
-function radioNominal(g) {
-  var r = C.radioMag * Math.pow(Math.max(0, C.magTamMin - g), C.radioExp);
-  r = Math.min(C.radioMax, Math.max(C.radioMin, r));
-  return Math.min(C.radioTotalMax, r * (1 + C.blur));
-}
-var delos = vista(1000 * 1.5, 4.5, 72);
-var sumaRadios = radioEnPantalla(delos, radioNominal(2.3)) + radioEnPantalla(delos, radioNominal(5.1));
-var hueco = separacionEnPantalla(delos, 9.6);
-ok(delos.aumentos > 332 && delos.aumentos < 334, 'el equipo del informe da ' + delos.aumentos.toFixed(0) + '×');
-ok(sumaRadios < hueco,
-  'los discos (' + sumaRadios.toFixed(2) + ' px) caben en el hueco (' + hueco.toFixed(2) + ' px)');
-
-/* ── 5. …y el criterio del otro extremo ────────────────────────────────────────
-   El tamaño tiene DOS criterios, no uno, y calibrar solo el brillante fue el
-   error: las estrellas de un globular se quedaron en 0,25 px de radio y M13 dejó
-   de verse. Una estrella débil tiene que seguir siendo visible, y el suelo es lo
-   que daba la ley vieja en campo ancho (0,88 px de radio): por debajo de eso se
-   pierde. Igual el glow de las que no llegan a la magnitud límite, que es lo que
-   da textura al halo del globular. */
-console.log('\nCriterio del extremo débil (un globular tiene que verse):');
-var SUELO_VISIBLE = 0.88;
-var globular = vista(1200, 9, 100);   // M13 a 133×, campo real 45′
-[11.9, 13, 14].forEach(function (g) {
-  var r = radioEnPantalla(globular, radioNominal(g));
-  ok(r >= SUELO_VISIBLE, 'una estrella de mag ' + g + ' mide ' + r.toFixed(2) + ' px de radio (suelo ' + SUELO_VISIBLE + ')');
-});
-var glow = radioEnPantalla(globular, R.config.glowRadio);
-ok(glow >= SUELO_VISIBLE, 'el glow de las que no llegan al límite mide ' + glow.toFixed(2) + ' px');
-
-/* Y el rango tiene que seguir siendo un rango: una estrella brillante, más
-   grande que una débil. Poco, porque el brillo lo cuentan sobre todo la opacidad
-   y la curva de tono, pero no al revés ni igual. */
-ok(radioEnPantalla(globular, radioNominal(2.3)) > radioEnPantalla(globular, radioNominal(13)),
-  'una estrella brillante sigue saliendo mayor que una débil');
+/* Los dos criterios que CALIBRAN el tamaño —que los discos quepan en el hueco de
+   un par resuelto (Almaak) y que las estrellas de un globular se vean (M13)— viven
+   en scripts/test_estrella_fisica.js, junto al modelo que los produce. Aquí solo
+   se vigila que nada de eso dependa del campo aparente del ocular. */
 
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);

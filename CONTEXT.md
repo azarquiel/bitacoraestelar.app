@@ -113,26 +113,29 @@ fallo que se ve pero no se explica:
 - **El cielo** (posiciones, separación de una doble, tamaño de una galaxia) va con
   el **campo real**: el lienzo cubre `campoReal = afov / aumentos` y las posiciones
   se proyectan con `SIZE / campoReal`.
-- **El tamaño de una estrella** va con el **campo aparente**: es un tamaño aparente,
-  no un tamaño en el cielo. `BitacoraGaiaRender.escalaEstrellas(afov)` =
-  `escalaMagAfov / afov`, y multiplica el radio del núcleo, el glow y la longitud de
-  los spikes. Los topes (`radioTotalMax`, `spikes.longMax`) se aplican al tamaño
-  NOMINAL, antes de escalar; al revés, las estrellas brillantes se recortarían a
-  distinto tamaño aparente según el ocular.
-- **El tamaño se calibra por DOS criterios, no uno**, y los dos están en el test:
-  1. **Un disco no puede comerse un hueco que el equipo sí resuelve.** El caso que
-     lo fija es Almaak (9,6″; mag 2,3 y 5,1) a 333×: los discos suman 3,6 px y el
-     hueco mide 4,5 px.
-  2. **Una estrella débil tiene que verse.** El caso es M13: con solo el criterio
-     anterior, las estrellas del globular caían a 0,25 px de radio y desaparecían.
-     El suelo es 0,88 px, lo que daba la ley vieja en campo ancho.
+- **El tamaño de una estrella** tiene dos términos, sumados en cuadratura por
+  `BitacoraGaiaRender.radioEstrella({afov, apertura, arcmin, size})`:
+  1. **El físico**, la imagen estelar de verdad: disco de Airy (`airyArcsec`/D =
+     138″/D(mm), el criterio de Rayleigh) ⊕ seeing (`seeingArcsec`, FWHM, perilla del
+     sitio), llevado a píxeles con la escala de placa del campo. Al ser ángulos de
+     CIELO, el aumento los agranda —las estrellas engordan— y el Airy va como 1/D
+     —más apertura, estrellas más apretadas—.
+  2. **El suelo de visibilidad**, `radioSuelo · escalaEstrellas(afov)`, que existe
+     porque la ventana tiene ~500 px para 72-100° de campo aparente: a aumentos
+     normales la imagen estelar real cae muy por debajo del píxel (una mag 13 de M13
+     a 133× son 0,23 px) y sin suelo el globular desaparece.
 
-  Calibrar solo el primero fue el error: bajar `escalaMagAfov` comprimía el rango
-  entero. Lo que hace falta es **comprimir el rango de tamaños** (`radioMin` 2,0 –
-  `radioMax` 3,5) y no desplazarlo: el brillo lo cuentan sobre todo la opacidad y
-  la curva de tono, así que el tamaño solo tiene que cumplir esos dos límites. El
-  `glowRadio` de las estrellas por debajo de la magnitud límite va en las mismas
-  unidades: es lo que da textura al halo de un globular.
+  A poco aumento manda el suelo; a mucho, la física. La cuadratura (y no un `max`)
+  hace suave el paso de un régimen al otro.
+- **El tamaño NO depende de la magnitud.** El disco lo fijan apertura, aumento y
+  seeing: es el mismo para todas las estrellas del campo. El brillo lo cuentan la
+  opacidad, el glow, los spikes y la curva de tono, que además ensancha los núcleos
+  saturados. Que las brillantes se dibujen más gordas es convención de atlas, y era
+  lo que se comía el hueco de los pares apretados: con el rango de tamaños por
+  magnitud, Almaak sumaba 5,5 px de discos contra 4,5 px de hueco.
+- El **glow** de las que no llegan a la magnitud límite se queda solo en el suelo
+  aparente: representa estrellas que NO se resuelven, así que darles el tamaño físico
+  de una resuelta sería contarlas dos veces.
 - **Por qué 1/afov:** el lienzo se muestra a un diámetro ∝ `afov` (un ocular de 100°
   ocupa más ventana que uno de 50°: eso es tener más campo aparente). Lo que la
   ventana estira, la escala lo encoge, y en pantalla queda solo el aumento.
