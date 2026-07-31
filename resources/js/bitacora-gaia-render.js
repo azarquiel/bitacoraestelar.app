@@ -916,6 +916,19 @@
     gr.addColorStop(1, 'rgba(' + col + ',0)');
     ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
   }
+  /* Aureola (glare) teñida del color de la estrella -mismos stops que el
+     sprite blanco de spriteGlow(), pero con el rgb real-. Solo la dibujan las
+     pocas estrellas con aAur apreciable (ver dibujar()), así que un gradiente
+     por estrella (en vez de reusar un sprite bitmap) no cuesta nada extra. */
+  function dibujarAureola(ctx, x, y, radio, rgb, alpha) {
+    var col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
+    var gr = ctx.createRadialGradient(x, y, 0, x, y, radio);
+    gr.addColorStop(0, 'rgba(' + col + ',0.9)');
+    gr.addColorStop(0.5, 'rgba(' + col + ',0.3)');
+    gr.addColorStop(1, 'rgba(' + col + ',0)');
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, radio, 0, 7); ctx.fill();
+  }
 
   /* ── Dibujo de las estrellas (tamaño = ctx.canvas.width, cuadrado) ── */
   function dibujar(ctx, estrellas, o) {
@@ -973,18 +986,21 @@
       // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
       // se aprieta con la apertura) en cuadratura con el suelo de visibilidad.
       var Rtot = radioEstrella({ afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE, sep: o.sep, g: g, blur: blurG, mlim: mlim });
-      // Aureola de dispersión (glare): debajo del disco, se apaga sola en las
-      // tenues -ver alfaAureola()-.
-      var aAur = alfaAureola(g, o.apertura);
-      if (aAur > 0.004) {
-        var Ra = CFG.aureolaRadio * escala;
-        ctx.globalAlpha = aAur * ganActual;
-        ctx.drawImage(glow, x - Ra, y - Ra, Ra * 2, Ra * 2);
-      }
-      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual;
       var esCarbono = (i === idxCarbono);
       var colEstrella = ((g < magColorEfectivo && bprp != null) || esCarbono)
         ? colorEstrella(bprp, esCarbono) : [255, 255, 255];
+      // Aureola de dispersión (glare): debajo del disco, se apaga sola en las
+      // tenues -ver alfaAureola()-. Teñida con el color de la propia estrella
+      // -antes un sprite blanco fijo-: en las pocas realmente brillantes (las
+      // únicas con aureola apreciable) esa aureola blanca se sumaba ADITIVA
+      // ('lighter') al disco de color y lo lavaba hacia blanco -justo las
+      // estrellas donde más se nota el color real (p. ej. las B/A de M39)-.
+      var aAur = alfaAureola(g, o.apertura);
+      if (aAur > 0.004) {
+        var Ra = CFG.aureolaRadio * escala;
+        dibujarAureola(ctx, x, y, Ra, colEstrella, aAur * ganActual);
+      }
+      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual;
       dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG);
       if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }

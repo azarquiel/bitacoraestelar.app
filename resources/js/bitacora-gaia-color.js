@@ -30,7 +30,7 @@
   // tabla (físicamente coherente, rojos más suaves). hasta/desvanece: banda BP–RP
   // donde la gamma se desvanece hacia el rojo. saturacion:1 = sin empuje (la tabla
   // ya lleva el color físico; saturar(rgb,1) es la identidad, se conserva por él).
-  var config = { gammaGlobal: false, gammaHasta: 0.9, gammaDesvanece: 1.6, saturacion: 1.0 };
+  var config = { gammaGlobal: false, gammaHasta: 0.9, gammaDesvanece: 1.6, saturacion: 1.4 };
 
   var GAIA_COLOR = [
     [-0.40, 125, 153, 255], [0.00, 125, 153, 255], [0.33, 181, 194, 255],

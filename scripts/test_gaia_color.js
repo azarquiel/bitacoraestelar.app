@@ -3,8 +3,8 @@
    Bloquea el contrato de color que comparten el simulador de oculares y el mapa:
    si alguien toca la tabla, la gamma o la saturación, este test lo caza antes de
    que las dos vistas diverjan. Sin dependencias:  node scripts/test_gaia_color.js
-   Valores dorados = salida validada del módulo (M39 azul-blanco, no demasiado azul;
-   carbono rojo ember). */
+   Valores dorados = salida validada del módulo con saturacion:1.4 (M39 azul
+   visible, no pastel; carbono rojo ember más marcado). */
 'use strict';
 var G = require('../resources/js/bitacora-gaia-color.js');
 
@@ -24,17 +24,17 @@ function casi(actual, esperado, tol, etiqueta) {
 }
 
 console.log('colorPorBpRp — valores dorados (RGB):');
-eq(G.colorPorBpRp(-0.40), [186, 203, 255], 'BP-RP -0.40 (caliente O)');
-eq(G.colorPorBpRp(0.00),  [186, 203, 255], 'BP-RP  0.00 (M39, azul-blanco)');
-eq(G.colorPorBpRp(0.33),  [219, 226, 255], 'BP-RP  0.33');
-eq(G.colorPorBpRp(0.60),  [245, 247, 255], 'BP-RP  0.60');
-eq(G.colorPorBpRp(1.00),  [255, 237, 220], 'BP-RP  1.00');
-eq(G.colorPorBpRp(1.60),  [255, 174, 113], 'BP-RP  1.60');
-eq(G.colorPorBpRp(2.00),  [255, 162,  90], 'BP-RP  2.00');
-eq(G.colorPorBpRp(2.59),  [255, 163,  77], 'BP-RP  2.59 (Y CVn, carbono)');
-eq(G.colorPorBpRp(3.55),  [255, 108,  19], 'BP-RP  3.55 (V Hya, rojo ember)');
-eq(G.colorPorBpRp(4.20),  [255,  93,   8], 'BP-RP  4.20 (frío extremo)');
-eq(G.colorPorBpRp(null),  [255, 195, 145], 'BP-RP null (sin dato → neutro)');
+eq(G.colorPorBpRp(-0.40), [179, 203, 255], 'BP-RP -0.40 (caliente O)');
+eq(G.colorPorBpRp(0.00),  [179, 203, 255], 'BP-RP  0.00 (M39, azul-blanco)');
+eq(G.colorPorBpRp(0.33),  [216, 226, 255], 'BP-RP  0.33');
+eq(G.colorPorBpRp(0.60),  [244, 247, 255], 'BP-RP  0.60');
+eq(G.colorPorBpRp(1.00),  [255, 236, 212], 'BP-RP  1.00');
+eq(G.colorPorBpRp(1.60),  [255, 167,  82], 'BP-RP  1.60');
+eq(G.colorPorBpRp(2.00),  [255, 154,  53], 'BP-RP  2.00');
+eq(G.colorPorBpRp(2.59),  [255, 155,  36], 'BP-RP  2.59 (Y CVn, carbono)');
+eq(G.colorPorBpRp(3.55),  [255,  94,   0], 'BP-RP  3.55 (V Hya, rojo ember)');
+eq(G.colorPorBpRp(4.20),  [255,  77,   0], 'BP-RP  4.20 (frío extremo)');
+eq(G.colorPorBpRp(null),  [255, 189, 121], 'BP-RP null (sin dato → neutro)');
 
 console.log('colorPorBpRp — invariantes estructurales:');
 var caliente = G.colorPorBpRp(-0.40), frio = G.colorPorBpRp(4.20);
@@ -89,7 +89,7 @@ console.log('bpRpPorTipo — lo que NO es un tipo espectral:');
 });
 
 console.log('config expuesta (palanca compartida):');
-ok(G.config && G.config.gammaGlobal === false && G.config.saturacion === 1.0, 'config por defecto {gammaGlobal:false, saturacion:1.0}');
+ok(G.config && G.config.gammaGlobal === false && G.config.saturacion === 1.4, 'config por defecto {gammaGlobal:false, saturacion:1.4}');
 
 if (fallos) { console.error('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');
