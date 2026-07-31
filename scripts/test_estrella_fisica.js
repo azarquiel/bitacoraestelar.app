@@ -189,14 +189,78 @@ console.log('\n7. Aureola de dispersión: brillante = halo visible, tenue = punt
 ok(R.alfaAureola(0) > 0.1 && R.alfaAureola(0) <= C.aureolaAlfaMax,
   'mag 0: alfaAureola=' + R.alfaAureola(0).toFixed(3) + ' (techo ' + C.aureolaAlfaMax + ')');
 
-// Se apaga sola con la magnitud, sin corte duro: Albireo A (mag 3,1) ya casi
-// imperceptible, y una estrella de campo típica (mag 10) no debe pintar nada.
-ok(R.alfaAureola(3.1) < 0.03, 'mag 3,1 (Albireo A): alfaAureola=' + R.alfaAureola(3.1).toFixed(4) + ' (casi nula)');
+// Se apaga sola con la magnitud, sin corte duro: Albireo A (mag 3,1, primaria
+// típica de doble) debe asomar ya un halo perceptible -no "casi nulo"-, y una
+// estrella de campo típica (mag 10) no debe pintar nada.
+ok(R.alfaAureola(3.1) > 0.08, 'mag 3,1 (Albireo A): alfaAureola=' + R.alfaAureola(3.1).toFixed(4) + ' (perceptible)');
 ok(R.alfaAureola(10) < 0.004, 'mag 10: alfaAureola=' + R.alfaAureola(10).toFixed(6) + ' (por debajo del umbral de dibujo)');
 
 // Monótona decreciente con la magnitud (más tenue ⇒ menos halo, sin saltos).
 ok(R.alfaAureola(0) > R.alfaAureola(2) && R.alfaAureola(2) > R.alfaAureola(5),
   'monótona: mag 0 > mag 2 > mag 5');
+
+// La aureola representa luz dispersada: más apertura recoge más luz (∝ D²), así
+// que la MISMA estrella debe asomar más halo en un 18" que en un 6".
+ok(R.alfaAureola(3.1, 457) > R.alfaAureola(3.1, 152),
+  'Albireo A: más aureola en un 18" (' + R.alfaAureola(3.1, 457).toFixed(3) +
+  ') que en un 6" (' + R.alfaAureola(3.1, 152).toFixed(3) + ')');
+ok(Math.abs(R.alfaAureola(3.1) - R.alfaAureola(3.1, 200)) < 1e-9,
+  'sin apertura, se asume la de referencia (200 mm): mismo resultado');
+
+/* ── Sección 8: el suelo SÍ escala con la magnitud (radioEstrella con `g`) ────
+   Sección 1-6 (sin `g`) siguen intactas: por defecto delta=0, mismo suelo de
+   siempre. Con `g`, una estrella brillante debe dibujarse más gorda que una en
+   el límite -sin que eso reabra el bug de los pares, que sigue protegido por
+   `sep` (sección 6), independiente de cómo se calcule este suelo base. */
+console.log('\n8. El suelo de estrella suelta SÍ escala con magnitud (radioEstrella con g):');
+var campoTipico = equipo(200, 1200, 9, 100);
+function radioConMag(eq, g) {
+  return R.radioEstrella({ arcmin: eq.arcmin, afov: eq.afov, apertura: eq.apertura, size: SIZE, g: g }) * eq.diam / SIZE;
+}
+ok(radioConMag(campoTipico, 3) > radioConMag(campoTipico, 13),
+  'mag 3 (' + radioConMag(campoTipico, 3).toFixed(2) + ' px) más gorda que mag 13 (' + radioConMag(campoTipico, 13).toFixed(2) + ' px)');
+casi(radioConMag(campoTipico, 25), radioPantalla(campoTipico), 1e-3,
+  'muy tenue (mag 25) converge al suelo puro sin g (flujo relativo ≈ 0)');
+
+/* ── Sección 9: el suelo escala con el FLUJO ABSOLUTO, no con mlim ───────────
+   Bug real (probado y descartado): un suelo relativo a mlim (mlim - margen)
+   hacía que con un equipo SOMERO (mlim bajo) casi todo el campo quedara a
+   pocas magnitudes de SU límite y "engordara" en bloque -no solo las pocas
+   estrellas realmente brillantes-. Con flujo absoluto (misma fórmula que
+   alfaAureola: factorApertura·10^-0,4g), el tamaño de una estrella dada de
+   magnitud fija NO depende de qué tan profundo llegue el equipo (mlim), solo
+   de su brillo real y de la apertura -que sí debe importar: un 18" recoge
+   más fotones que un 6" y muestra la MISMA estrella más gorda-. */
+console.log('\n9. El suelo depende del flujo absoluto (magnitud + apertura), no de mlim:');
+function radioMag(apertura, g, mlim) {
+  return R.radioEstrella({ arcmin: 60, afov: 60, size: SIZE, apertura: apertura, g: g, mlim: mlim });
+}
+casi(radioMag(300, 8, 11), radioMag(300, 8, 18), 1e-9,
+  'la misma estrella (mag 8, 300 mm) sale igual con mlim=11 que con mlim=18: mlim ya no interviene en el tamaño');
+ok(radioMag(457, 6, 15) > radioMag(152, 6, 15),
+  'la MISMA estrella (mag 6) sale más gorda en un 18" (' + radioMag(457, 6, 15).toFixed(2) +
+  ' px) que en un 6" (' + radioMag(152, 6, 15).toFixed(2) + ' px): más apertura, más fotones');
+
+/* ── Sección 10: dilución de brillo al sobre-aumentar (conservación de flujo) ─
+   Pasado el punto en que el disco físico (Airy+seeing) supera al suelo
+   artístico, más aumento no trae más luz: los mismos fotones se reparten en
+   un disco mayor. `factorDilucion(suelo, Rtot)` diluye el alpha de pico por
+   (suelo/Rtot)² -exacto para este perfil autosimilar, ver dibujarEstrellaColor-
+   en cuanto Rtot supera a suelo·√2 (equivale a fisico > suelo). */
+console.log('\n10. Sobre-aumentar diluye el brillo de pico (conservación de flujo):');
+var eqPoco = equipo(200, 1200, 25, 60);   // aumento bajo: fisico <= suelo
+var oPoco = { arcmin: eqPoco.arcmin, afov: eqPoco.afov, apertura: eqPoco.apertura, size: SIZE, g: 8 };
+var sueloPoco = R.sueloEstrella(oPoco), RtotPoco = R.radioEstrella(oPoco);
+ok(R.factorDilucion(sueloPoco, RtotPoco) === 1,
+  'a poco aumento (suelo=' + sueloPoco.toFixed(2) + ', Rtot=' + RtotPoco.toFixed(2) + '), sin dilución');
+
+var eqMucho = equipo(60, 3000, 1, 60);    // aumento extremo: fisico >> suelo
+var oMucho = { arcmin: eqMucho.arcmin, afov: eqMucho.afov, apertura: eqMucho.apertura, size: SIZE, g: 8 };
+var sueloMucho = R.sueloEstrella(oMucho), RtotMucho = R.radioEstrella(oMucho);
+var dilMucho = R.factorDilucion(sueloMucho, RtotMucho);
+ok(dilMucho < 1, 'a mucho aumento (Rtot=' + RtotMucho.toFixed(2) + ' px), factorDilucion=' + dilMucho.toFixed(4) + ' < 1');
+casi(dilMucho * RtotMucho * RtotMucho, sueloMucho * sueloMucho, 1e-6,
+  'diluido, alfa_pico·Rtot² = suelo² (conserva el flujo total, no crece con el aumento)');
 
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);

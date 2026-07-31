@@ -26,9 +26,10 @@
  *           pupilaSalida, pupilaOjo,  // para el gris de fondo
  *           carbono,            // bool: realce rojo de la estrella central
  *           conGlow }           // bool (def. true): glow de estrellas no resueltas
- *   BitacoraGaiaRender.consultar(ra, dec, arcmin) → Promise<estrellas[]>  (prefetch)
+ *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
  *   BitacoraGaiaRender.magLimite({ apertura, aumentos, transmision, sqm }) → number|null
+ *   BitacoraGaiaRender.magConsultaGaia(apertura, transmision) → number (profundidad de consulta)
  *   BitacoraGaiaRender.nivelFondo({ pupilaSalida, pupilaOjo, sqm }) → 0..255
  *   BitacoraGaiaRender.transmisionOptica(optica) → number|null
  *   BitacoraGaiaRender.opticaTieneArana(optica) → bool
@@ -41,10 +42,17 @@
   var GColor = window.BitacoraGaiaColor;
 
   /* ── Consulta a Gaia ── */
-  // Profundidad de la consulta. 16,5 dejaba corto a un 18", que alcanza 16,5
-  // bajo cielo rural: las estrellas que su apertura revela no llegaban a estar en
-  // el catálogo. 17 cubre hasta aperturas de ~20"; el tope del proxy es el mismo.
-  var GAIA_MAG_MAX        = 17.0;
+  // Profundidad de la consulta. Historial: 16,5 se quedaba corto para un 18" bajo
+  // cielo rural, se subió a 17 fijo... y un 20" ya lo volvía a agotar. El fallo de
+  // raíz era usar una profundidad IGUAL para cualquier equipo: un 8" nunca necesita
+  // llegar tan lejos como un 20", y un 20" siempre se queda corto con un tope
+  // pensado para uno más pequeño. magConsultaGaia() la calcula por APERTURA (más
+  // el margen de la cola de glow, ver CFG.glowCorte), así cada equipo trae lo que
+  // de verdad puede usar, ni más (tráfico) ni menos (estrellas que faltan).
+  var GAIA_MAG_MIN        = 12.0;   // suelo: ni el equipo más modesto pide menos
+  var GAIA_MAG_TOPE       = 20.0;   // techo de seguridad (mismo valor que GAIA_MAX_MAG en gaia_proxy.php)
+  var GAIA_MAG_DEFECTO    = 17.0;   // sin apertura conocida (p. ej. sin equipo elegido aún)
+  var GAIA_SQM_MAS_OSCURO = 22.0;   // el máximo del <input id="sim-sqm"> del simulador
   // Radio máximo de consulta: 4,32°, o sea 6° de lado, que cubre los oculares de
   // campo ancho y los binoculares. Antes eran 1,44° heredados del tope de 2° del
   // DSS, un límite de PLACA que no aplica a un catálogo. Lo que sí acota de verdad
@@ -175,7 +183,7 @@
         Math.pow(FOT.C_MAG_REF / o.aumentos, FOT.C_MAG_EXP)));
     }
     return {
-      Fcielo: Fcielo, Cmin: Cmin, dim: dim, T: T,
+      Fcielo: Fcielo, Fref: Fref, Cmin: Cmin, dim: dim, T: T,
       nivelFondo: nivelCielo(sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T)),
       rango: FOT.SB_NEGRO - FOT.SB_BLANCO
     };
@@ -366,7 +374,26 @@
         var F = difuso;
         if (estrellas) {
           var v = estrellas[i * 3 + ch];
-          if (v > 0) F += flujoDeValor(v, c.Fcielo, c.rango);
+          /* BUG (contaminación lumínica): v ya es un valor de pantalla (el
+             alpha-ramp de dibujar(), calibrado contra mlim, no contra el
+             cielo de ESTA escena). Si aquí se invierte con c.Fcielo -el de la
+             escena actual- y dos líneas más abajo se vuelve a pasar por
+             valorDeFlujo con ese MISMO c.Fcielo, las dos conversiones son
+             funciones exactamente inversas y se cancelan: v llega intacto
+             pase lo que pase con la contaminación, así que su contraste
+             sobre nivelFondo nunca decrece y una estrella se ve IGUAL de
+             marcada da igual lo mal que esté el cielo -y como nivelFondo sí
+             sube con la contaminación, ese contraste fijo se vuelve más
+             visible sobre un fondo claro que sobre uno negro: parece que
+             "aparecen" estrellas nuevas al empeorar el cielo.
+             Arreglo: invertir v contra un cielo de REFERENCIA fijo (Fref,
+             sqm=21, el mismo que ya usa Cmin más arriba) en vez del de la
+             escena. Así v dejar de ser un número de pantalla y pasa a ser un
+             flujo real comparable a Fcielo; el valorDeFlujo de más abajo, con
+             el Fcielo de la escena, SÍ comprime el contraste cuando el cielo
+             actual es más brillante que la referencia -y lo expande cuando es
+             más oscuro-, en vez de cancelarse siempre. */
+          if (v > 0) F += flujoDeValor(v, c.Fref, c.rango);
         }
         salida[ch][i] = c.nivelFondo + valorDeFlujo(F, c.Fcielo, c.rango);
       }
@@ -415,21 +442,83 @@
 
   /* ── Ajustes del render (idénticos a GAIA_CFG del simulador) ── */
   var CFG = {
-    blur: 1.1, magColor: 9, tinteNucleo: 0.8,
+    /* Halo del sprite: dCore = 1/(1+blur) fija cuánto del radio es núcleo duro
+       frente a borde difuso. Antes era un valor único para toda estrella, así
+       que hasta la más tenue del límite salía con el mismo borde suave que
+       Sirio. Ahora depende del brillo ABSOLUTO (reusa alfaAureola, que ya está
+       calibrada por flujo + apertura, no por mlim: el halo es un fenómeno físico
+       del fotón, no de lo que ese equipo concreto es capaz de detectar).
+       blur = el tope (estrellas brillantes); blurMin = el suelo (al límite). */
+    blur: 1.1, blurMin: 0.15,
+    // Ver fraccionFlujo(): potencia que levanta la fracción de flujo compartida
+    // por blur y saturación de color para brillos medios (cúmulos típicos),
+    // sin tocar los extremos ni la calibración de aureolaAlfaMax/AlfaK.
+    fraccionGamma: 0.35,
+    // Margen (mag) por debajo del límite de detección al que aparece el color.
+    // Ver color: antes era CFG.magColor fijo, así que un 24" no mostraba color
+    // más allá de lo que mostraba un 4" con el mismo cielo. El umbral de color SÍ
+    // depende del equipo -como la propia detección-, así que ahora se mide desde
+    // `mlim` (que ya integra apertura, aumentos, transmisión y cielo) en vez de
+    // ser una magnitud absoluta.
+    margenColorMag: 4.5, tinteNucleo: 0.8,
     carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
     /* Suelo de visibilidad del tamaño de estrella, en píxeles de lienzo (antes de
-       la escala del campo aparente y del halo del blur). Es UNO para todas las
-       magnitudes a propósito: el disco de una estrella lo fijan la apertura, el
-       aumento y el seeing, no su brillo —eso es física—, y el brillo ya lo cuentan
-       la opacidad, el glow, los spikes y la curva de tono, que además ensancha los
-       núcleos saturados. Que las brillantes se dibujen más gordas es convención de
-       atlas, y era justo lo que se comía el hueco de los pares apretados. */
+       la escala del campo aparente y del halo del blur). Las más brillantes
+       crecen por encima de este mínimo -convención de atlas, así se ve la
+       imagen a través del ocular-, pero el crecimiento NO reabre el bug de los
+       pares apretados: ese recorte lo sigue haciendo el `sep` más abajo, que
+       gana siempre que hay doble de por medio, se dibuje del tamaño base que
+       se dibuje. Ver simulador_ocular/notas-separacion-dobles-dibujo.md.
+       El crecimiento es proporcional al FLUJO ABSOLUTO de la estrella
+       (factorApertura·10^-0,4g, misma fórmula que alfaAureola/blurEstrella),
+       no a lo lejos que está de mlim: probado con "delta relativo a mlim" y
+       descartado -con un mlim bajo (equipo de poco aumento) casi TODO el campo
+       queda a pocas magnitudes de su propio límite y "engorda" en bloque, no
+       solo las pocas estrellas realmente brillantes de un cúmulo. Con flujo
+       absoluto, una mag 12 se queda puntual da igual el mlim del equipo -solo
+       crecen las que de verdad son brillantes-, y un aperture mayor SÍ muestra
+       más gorda la MISMA estrella (más fotones recogidos), que es lo que se
+       quería conservar. */
     radioSuelo: 2.0,
-    brillo: 1.4, alfaMin: 0.24,
+    radioSueloMag: 40,      // escala del término extra sobre el flujo relativo, elevado a radioSueloExp
+    radioSueloExp: 0.5,
+    radioSueloMax: 8.0,    // tope de seguridad; en la práctica solo lo tocan objetos extremos (Venus, la Luna...)
+    brillo: 1.0,
+    /* ponytail: suelo de opacidad por estrella, SIN conciencia de densidad. En
+       un campo disperso evita que la más débil se apague del todo; en un campo
+       MUY rico (miles de estrellas al límite, tipo NGC 2158) el 'lighter'
+       aditivo las suma y el suelo × recuento puede superar a un cúmulo cercano
+       con pocas estrellas brillantes. Mantenlo bajo (probado hasta 0.02–0.05);
+       si un campo extremo lo sigue rompiendo, la mejora real es ponderar este
+       suelo por densidad local (o quitarlo y fiar la visibilidad solo al
+       tamaño, que ya tiene su propio suelo en radioSuelo). */
+    alfaMin: 0.05,
+    // Rango de magnitudes (por debajo del límite) que recorre el alpha de 0 a 1.
+    // FIJO, no escala con apertura: la detectabilidad es contraste relativo a mlim
+    // (Weber-Fechner), y mlim ya integra la apertura. Probado y confirmado: 12 da
+    // aspecto más realista que valores más bajos (ver feedback_verify... memoria:
+    // ensanchar esto para saturar antes a las estrellas brillantes de un campo
+    // concreto "engorda" TODO el campo -la mayoría de estrellas tenues también
+    // se acercan más rápido a alfaMin/saturación-, no es la corrección correcta.
+    rangoBrillo: 12,
     /* El glow de las estrellas por debajo de la magnitud límite es lo que da
        textura al halo de un globular, así que va calibrado en las mismas unidades
-       aparentes: ~1,4 px de radio en pantalla. */
-    glowIntensidad: 0.2, glowRadio: 5.0,
+       aparentes: ~1,4 px de radio en pantalla. Su intensidad en g=mlim ANCLA a
+       alfaMin (ver dibujar()): no lleva constante propia porque si las dos
+       ramas (resuelta/no resuelta) no coinciden exactamente en el cruce, una
+       estrella salta de alfaMin a un valor mayor justo al cruzar mlim -viendo
+       más contaminación, más estrellas cruzan ese límite hacia abajo y se ven
+       "aparecer" más brillantes en vez de apagarse. */
+    glowRadio: 5.0,
+    /* Corte de invisibilidad del glow: por debajo de este alpha no se dibuja.
+       Antes 0,004 daba una cola de ~2,74 magnitudes bajo mlim (con alfaMin=0,05)
+       -tan ancha que se comía casi todo el catálogo Gaia disponible (17,0) para
+       CUALQUIER apertura, así que un 8" y un 20" acababan "viendo" el mismo
+       número de estrellas (como glow, aunque no resueltas) y la apertura dejaba
+       de notarse. 0,02 la recorta a ~1 magnitud: usa esta MISMA constante
+       magConsultaGaia() para saber hasta dónde de verdad hace falta pedirle a
+       Gaia -si se cambia aquí, cambia también la profundidad de consulta. */
+    glowCorte: 0.02,
     /* Campo aparente (grados) al que corresponde radioSuelo tal cual: con un ocular
        de este campo el suelo sale a su tamaño nominal, y con uno más estrecho sale
        proporcionalmente mayor en el lienzo. Ver escalaEstrellas() para el por qué.
@@ -465,8 +554,12 @@
        nuevas sin más anclaje que "Sirio/Vega asoman aureola visible pero
        translúcida, Albireo A ya casi no". */
     aureolaRadio: 14.0,
-    aureolaAlfaK: 0.15,
+    aureolaAlfaK: 2.0,
     aureolaAlfaMax: 0.35,
+    // Apertura (mm) a la que está calibrado aureolaAlfaK: la aureola representa luz
+    // dispersada, proporcional a lo que recoge el objetivo (∝ D²), así que se escala
+    // por (apertura/aureolaAperturaRef)². Sin dato de apertura, factor 1 (sin cambio).
+    aureolaAperturaRef: 200,
     /* Truco HDR de capaEstrellas: segunda pasada del lienzo entero para
        rescatar núcleos saturados (ver TONO más abajo). Cuesta un render
        completo + getImageData extra, así que por defecto va OFF -una sola
@@ -479,30 +572,55 @@
   };
 
 
-  /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio) ── */
+  /* Cuánto por debajo de mlim sigue habiendo glow visible (mag), derivado del
+     MISMO par de constantes que decide el corte en dibujar(): así la consulta
+     y el render siempre están de acuerdo en qué profundidad hace falta. */
+  function colaGlowMag() {
+    return -2.5 * Math.log10(CFG.glowCorte / CFG.alfaMin);
+  }
+
+  /* Profundidad de consulta a Gaia para un equipo dado: el mlim TECHO que ese
+     equipo puede alcanzar (cielo más oscuro que admite la UI, aumentos altos
+     -Deff y SB0T ya saturan ahí, ver magLimite-) más la cola de glow, más un
+     margen de seguridad. Cubre TODO el rango de sqm/aumentos que el usuario
+     puede tocar después sin apertura nueva, así no hace falta re-consultar
+     cada vez que mueve esos sliders -solo al cambiar de equipo (apertura o
+     transmisión, que llegan juntas en teleSel). */
+  function magConsultaGaia(apertura, transmision) {
+    var techo = magLimite({ apertura: apertura, aumentos: 1e6, transmision: transmision, sqm: GAIA_SQM_MAS_OSCURO });
+    if (techo == null) return GAIA_MAG_DEFECTO;
+    return Math.max(GAIA_MAG_MIN, Math.min(GAIA_MAG_TOPE, techo + colaGlowMag() + 0.3));
+  }
+
+  /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio+profundidad) ── */
   var cacheGaia = {};
   function radioConsulta(arcmin) {
     return Math.min(GAIA_RADIO_MAX, Math.max(GAIA_RADIO_MIN, (arcmin / 60) * 0.72));
   }
-  function fetchGaia(ra, dec, rad) {
+  function fetchGaia(ra, dec, rad, mag) {
     var ctrl = new AbortController();
     var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
     var url = PROXY_URL + '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) +
-              '&rad=' + encodeURIComponent(rad) + '&mag=' + encodeURIComponent(GAIA_MAG_MAX);
+              '&rad=' + encodeURIComponent(rad) + '&mag=' + encodeURIComponent(mag);
     return fetch(url, { signal: ctrl.signal }).then(function (r) {
       clearTimeout(id);
       if (!r.ok) throw new Error();
       return r.json();
     });
   }
-  function consultar(ra0, dec0, arcmin) {
+  function consultar(ra0, dec0, arcmin, mag) {
     var rad = radioConsulta(arcmin || GAIA_ARCMIN_DEFECTO);
+    var prof = (mag > 0) ? mag : GAIA_MAG_DEFECTO;
     var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3);
     var ent = cacheGaia[clave];
-    if (ent && ent.rad >= rad - 1e-6) return ent.promise;
+    // Reutiliza el caché solo si YA cubre el radio Y la profundidad pedidos:
+    // sin el segundo chequeo, cambiar a un equipo más grande sobre el mismo
+    // objeto se quedaba con el catálogo más somero que trajo el equipo chico.
+    if (ent && ent.rad >= rad - 1e-6 && ent.mag >= prof - 1e-6) return ent.promise;
     var nueva = {
       rad: rad,
-      promise: fetchGaia(ra0.toFixed(5), dec0.toFixed(5), rad.toFixed(5)).then(function (jj) {
+      mag: prof,
+      promise: fetchGaia(ra0.toFixed(5), dec0.toFixed(5), rad.toFixed(5), prof.toFixed(2)).then(function (jj) {
         return (jj.data || []).filter(function (f) { return f[2] != null; });
       })
     };
@@ -514,20 +632,12 @@
   // Ganancia global del dibujo actual (ver capaEstrellas).
   var ganActual = 1;
 
-  /* ── Sprites (núcleo, glow, brazo de difracción) ── */
-  var GAIA_SPRITE = null, GLOW_SPRITE = null, SPIKE_SPRITE = null, SPIKE_TINT = {};
-  function spriteGaia() {
-    if (GAIA_SPRITE) return GAIA_SPRITE;
-    var S = 64, m = S / 2, R = m - 1, dCore = 1 / (1 + CFG.blur);
-    var c = document.createElement('canvas'); c.width = c.height = S;
-    var g = c.getContext('2d'), gr = g.createRadialGradient(m, m, 0, m, m, R);
-    gr.addColorStop(0, 'rgba(255,255,255,1)');
-    gr.addColorStop(dCore * 0.7, 'rgba(255,255,255,0.9)');
-    gr.addColorStop(dCore, 'rgba(255,255,255,0.4)');
-    gr.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = gr; g.beginPath(); g.arc(m, m, R, 0, 7); g.fill();
-    return (GAIA_SPRITE = c);
-  }
+  /* ── Sprites (glow, brazo de difracción) ──
+     El núcleo de la estrella YA NO usa un sprite cacheado: el halo (blur)
+     depende del brillo de cada estrella (ver blurEstrella), así que se dibuja
+     con un gradiente propio por estrella en dibujarEstrellaColor (blanca o de
+     color, mismo camino). */
+  var GLOW_SPRITE = null, SPIKE_SPRITE = null, SPIKE_TINT = {};
   function spriteGlow() {
     if (GLOW_SPRITE) return GLOW_SPRITE;
     var S = 32, m = S / 2;
@@ -755,36 +865,85 @@
 
      La cuadratura, y no un max(), para que el paso de un régimen a otro sea suave:
      un salto en el tamaño al cambiar de ocular se vería como un parpadeo. */
-  function radioEstrella(o) {
-    var suelo = CFG.radioSuelo * (1 + CFG.blur) * escalaEstrellas(o.afov);
+  function sueloEstrella(o) {
+    var blur = (o.blur != null) ? o.blur : CFG.blur;
+    var D = (o.apertura > 0) ? o.apertura : CFG.aureolaAperturaRef;
+    var factorApertura = Math.pow(D / CFG.aureolaAperturaRef, 2);
+    var flujoRel = (o.g != null) ? factorApertura * Math.pow(10, -0.4 * o.g) : 0;
+    var sueloBase = Math.min(CFG.radioSueloMax, CFG.radioSuelo + CFG.radioSueloMag * Math.pow(flujoRel, CFG.radioSueloExp));
+    var suelo = sueloBase * (1 + blur) * escalaEstrellas(o.afov);
     var sep = +o.sep, arcmin = +o.arcmin, size = +o.size;
     if (sep > 0 && arcmin > 0 && size > 0) {
       var sepPx = sep * size / (arcmin * 60);                           // ″ → px de lienzo
       suelo = Math.min(suelo, Math.max(CFG.radioSueloMin, sepPx * CFG.margenSuelo));
     }
+    return suelo;
+  }
+  function radioEstrella(o) {
+    var suelo = sueloEstrella(o);
+    var arcmin = +o.arcmin, size = +o.size;
     var theta = radioImagenEstelar(o.apertura);
     if (theta == null || !(arcmin > 0) || !(size > 0)) return suelo;   // sin equipo, como antes
     var fisico = theta * size / (arcmin * 60);                        // ″ → px de lienzo
     return Math.sqrt(suelo * suelo + fisico * fisico);
+  }
+  /* Sobre-aumentar más allá de lo que el disco de Airy+seeing justifica no
+     trae más luz real: la misma cantidad de fotones se reparte en un disco
+     mayor. Diluimos el alpha de pico por (suelo/Rtot)² -conserva el flujo
+     total exacto para este perfil de gradiente autosimilar- en cuanto el
+     término físico supera al suelo artístico (Rtot > suelo·√2 equivale a
+     fisico > suelo, por la cuadratura suelo²+fisico²=Rtot²). */
+  function factorDilucion(suelo, Rtot) {
+    return (Rtot > suelo * Math.SQRT2) ? (suelo * suelo) / (Rtot * Rtot) : 1;
   }
   /* Opacidad de la aureola de dispersión (glare) de una estrella RESUELTA,
      proporcional a su flujo absoluto (mag Gaia g), no al margen sobre el
      límite del equipo -a diferencia del glow de las no resueltas-. Sin
      corte duro: se apaga sola con la magnitud, con techo en aureolaAlfaMax.
      Ver CFG.aureolaRadio/AlfaK/AlfaMax y notas-separacion-dobles-dibujo.md. */
-  function alfaAureola(g) {
-    return Math.min(CFG.aureolaAlfaMax, CFG.aureolaAlfaK * Math.pow(10, -0.4 * g));
+  function alfaAureola(g, apertura) {
+    var D = (apertura > 0) ? apertura : CFG.aureolaAperturaRef;
+    var factorApertura = Math.pow(D / CFG.aureolaAperturaRef, 2);
+    return Math.min(CFG.aureolaAlfaMax, CFG.aureolaAlfaK * factorApertura * Math.pow(10, -0.4 * g));
   }
-  function colorEstrella(bprp, carbono) {
+  /* Fracción de flujo (0-1) que comparten blurEstrella y colorEstrella, con una
+     curva de potencia (CFG.fraccionGamma < 1) que levanta los valores bajos:
+     alfaAureola/aureolaAlfaMax está calibrada para saturar al techo con
+     brillo tipo Sirio/Vega (mag 0-3), así que la más brillante de un cúmulo
+     típico (mag 6-8) apenas rozaba el 5-7% de la escala -halo casi pinpoint y
+     color casi sin saturar aun siendo la estrella más notable del campo-. La
+     potencia sube esa cola sin tocar los extremos (0→0, 1→1) ni recalibrar
+     aureolaAlfaMax/AlfaK (ya validados con Albireo). */
+  function fraccionFlujo(g, apertura) {
+    return Math.pow(Math.min(1, alfaAureola(g, apertura) / CFG.aureolaAlfaMax), CFG.fraccionGamma);
+  }
+  /* Halo del sprite (dCore, ver CFG.blur/blurMin) según el brillo ABSOLUTO de
+     la estrella, reusando la misma escala de flujo que la aureola: al límite
+     de detección (aAur≈0) sale con blurMin (borde duro, pinpoint); una
+     brillante que ya toca el techo de la aureola (aAur=aureolaAlfaMax) sale
+     con blur (borde suave). No depende de mlim: el halo es del fotón, no del
+     equipo. */
+  function blurEstrella(g, apertura) {
+    return CFG.blurMin + (CFG.blur - CFG.blurMin) * fraccionFlujo(g, apertura);
+  }
+  /* La saturación del color escala con el flujo ABSOLUTO de la estrella -misma
+     fracción f que blurEstrella/alfaAureola-, no es constante: una estrella
+     brillante se ve claramente azul/naranja, una tenue casi al límite se ve
+     deslavada hacia blanco (efecto tipo Purkinje: los conos necesitan señal
+     para dar color, ver README). f=1 (techo de la aureola) → saturacion
+     completa; f=0 (al límite de detección) → neutro (1, sin empuje). */
+  function colorEstrella(bprp, carbono, g, apertura) {
     var v = bprp;
     if (carbono) {
       v = (bprp == null) ? CFG.carbono.bprpMin
                          : Math.max(CFG.carbono.bprpMin, bprp + CFG.carbono.bprpOffset);
     }
-    return GColor.colorPorBpRp(v);
+    var f = (g != null) ? fraccionFlujo(g, apertura) : 1;
+    var sat = 1 + (GColor.config.saturacion - 1) * f;
+    return GColor.colorPorBpRp(v, sat);
   }
-  function dibujarEstrellaColor(ctx, x, y, Rtot, rgb) {
-    var dCore = 1 / (1 + CFG.blur), tn = CFG.tinteNucleo, col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
+  function dibujarEstrellaColor(ctx, x, y, Rtot, rgb, blur) {
+    var dCore = 1 / (1 + (blur != null ? blur : CFG.blur)), tn = CFG.tinteNucleo, col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
     var centro = Math.round(255 + tn * (rgb[0] - 255)) + ',' + Math.round(255 + tn * (rgb[1] - 255)) + ',' + Math.round(255 + tn * (rgb[2] - 255));
     var gr = ctx.createRadialGradient(x, y, 0, x, y, Rtot);
     gr.addColorStop(0, 'rgba(' + centro + ',1)');
@@ -792,6 +951,19 @@
     gr.addColorStop(dCore, 'rgba(' + col + ',0.6)');
     gr.addColorStop(1, 'rgba(' + col + ',0)');
     ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
+  }
+  /* Aureola (glare) teñida del color de la estrella -mismos stops que el
+     sprite blanco de spriteGlow(), pero con el rgb real-. Solo la dibujan las
+     pocas estrellas con aAur apreciable (ver dibujar()), así que un gradiente
+     por estrella (en vez de reusar un sprite bitmap) no cuesta nada extra. */
+  function dibujarAureola(ctx, x, y, radio, rgb, alpha) {
+    var col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
+    var gr = ctx.createRadialGradient(x, y, 0, x, y, radio);
+    gr.addColorStop(0, 'rgba(' + col + ',0.9)');
+    gr.addColorStop(0.5, 'rgba(' + col + ',0.3)');
+    gr.addColorStop(1, 'rgba(' + col + ',0)');
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, radio, 0, 7); ctx.fill();
   }
 
   /* ── Dibujo de las estrellas (tamaño = ctx.canvas.width, cuadrado) ── */
@@ -802,12 +974,15 @@
     var escv = SIZE / (arcmin / 60);
     var cos0 = Math.cos(dec0 * Math.PI / 180);
     function deltaRA(ra) { return ((ra - ra0 + 540) % 360) - 180; }
-    var base = spriteGaia(), glow = spriteGlow();
+    var glow = spriteGlow();
+    // Umbral de color relativo al límite de ESTE equipo/cielo, no una magnitud
+    // absoluta: ver CFG.margenColorMag.
+    var magColorEfectivo = mlim - CFG.margenColorMag;
     var idxCarbono = -1;
     if (objetoCarbono) {
       var mejorD2 = Infinity;
       for (var c = 0; c < estrellas.length; c++) {
-        if (estrellas[c][2] >= CFG.magColor) continue;
+        if (estrellas[c][2] >= magColorEfectivo) continue;
         var cx = SIZE / 2 - deltaRA(estrellas[c][0]) * cos0 * escv;
         var cy = SIZE / 2 - (estrellas[c][1] - dec0) * escv;
         var d2 = (cx - SIZE / 2) * (cx - SIZE / 2) + (cy - SIZE / 2) * (cy - SIZE / 2);
@@ -832,31 +1007,39 @@
       var y = SIZE / 2 - (dec - dec0) * escv;
       if (x < -3 || y < -3 || x > SIZE + 3 || y > SIZE + 3) continue;
       if (g > mlim) {
-        var aGlow = CFG.glowIntensidad * Math.pow(10, -0.4 * (g - mlim));
-        if (aGlow < 0.004) continue;
+        // Ancla en alfaMin (el suelo de la rama resuelta) para que el cruce en
+        // g=mlim sea continuo: nada de "aparecer" más brillante al cruzar.
+        var aGlow = CFG.alfaMin * Math.pow(10, -0.4 * (g - mlim));
+        if (aGlow < CFG.glowCorte) continue;
         ctx.globalAlpha = Math.min(1, aGlow) * ganActual;
         ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
         continue;
       }
+      // Halo (blur) según el brillo ABSOLUTO -ver blurEstrella()-, no relativo
+      // al límite: una estrella tenue sale pinpoint da igual lo profundo que
+      // llegue el equipo.
+      var blurG = blurEstrella(g, o.apertura);
       // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
       // se aprieta con la apertura) en cuadratura con el suelo de visibilidad.
-      var Rtot = radioEstrella({ afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE, sep: o.sep });
+      var oRadio = { afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE, sep: o.sep, g: g, blur: blurG, mlim: mlim };
+      var Rtot = radioEstrella(oRadio);
+      var dilucion = factorDilucion(sueloEstrella(oRadio), Rtot);
+      var esCarbono = (i === idxCarbono);
+      var colEstrella = ((g < magColorEfectivo && bprp != null) || esCarbono)
+        ? colorEstrella(bprp, esCarbono, g, o.apertura) : [255, 255, 255];
       // Aureola de dispersión (glare): debajo del disco, se apaga sola en las
-      // tenues -ver alfaAureola()-.
-      var aAur = alfaAureola(g);
+      // tenues -ver alfaAureola()-. Teñida con el color de la propia estrella
+      // -antes un sprite blanco fijo-: en las pocas realmente brillantes (las
+      // únicas con aureola apreciable) esa aureola blanca se sumaba ADITIVA
+      // ('lighter') al disco de color y lo lavaba hacia blanco -justo las
+      // estrellas donde más se nota el color real (p. ej. las B/A de M39)-.
+      var aAur = alfaAureola(g, o.apertura);
       if (aAur > 0.004) {
         var Ra = CFG.aureolaRadio * escala;
-        ctx.globalAlpha = aAur * ganActual;
-        ctx.drawImage(glow, x - Ra, y - Ra, Ra * 2, Ra * 2);
+        dibujarAureola(ctx, x, y, Ra, colEstrella, aAur * ganActual);
       }
-      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / 6))) * ganActual;
-      var esCarbono = (i === idxCarbono), colEstrella = null;
-      if ((g < CFG.magColor && bprp != null) || esCarbono) {
-        colEstrella = colorEstrella(bprp, esCarbono);
-        dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella);
-      } else {
-        ctx.drawImage(base, x - Rtot, y - Rtot, Rtot * 2, Rtot * 2);
-      }
+      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual * dilucion;
+      dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG);
       if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }
     ctx.globalAlpha = 1;
@@ -937,7 +1120,7 @@
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t,
       aumentos: o.aumentos, perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
-    return consultar(o.ra, o.dec, o.arcmin).then(function (estrellas) {
+    return consultar(o.ra, o.dec, o.arcmin, magConsultaGaia(o.apertura, t)).then(function (estrellas) {
       /* Estrellas y fondo se mapean en una sola curva de tono: el fondo pasa
          por la curva logarítmica y las estrellas se dibujan encima en 8
          bits, saltándosela; por eso el fondo va plano (sin capas difusas). */
@@ -959,6 +1142,7 @@
     dibujar: dibujar,
     render: render,
     magLimite: magLimite,
+    magConsultaGaia: magConsultaGaia,
     nivelFondo: nivelFondo,
     nivelCielo: nivelCielo,
     tono: TONO,
@@ -967,7 +1151,12 @@
     radioAiry: radioAiry,
     radioImagenEstelar: radioImagenEstelar,
     radioEstrella: radioEstrella,
+    sueloEstrella: sueloEstrella,
+    factorDilucion: factorDilucion,
     alfaAureola: alfaAureola,
+    blurEstrella: blurEstrella,
+    colorEstrella: colorEstrella,
+    fraccionFlujo: fraccionFlujo,
     parDoble: parDoble,
     par: PAR,
     valorDeFlujo: valorDeFlujo,

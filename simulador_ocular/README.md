@@ -47,6 +47,7 @@ de iniciar sesión**. Vive en la web WordPress del proyecto
 | `ocular-wordpress.html` | Fragmento HTML del simulador (sin código) | Editor de WordPress (bloque HTML) |
 | `resources/js/bitacora-ocular.js` | La lógica del simulador (óptica, fotometría, UI) | Servidor, por FTP a `…/uploads/bitacora/` |
 | `../resources/js/bitacora-gaia-render.js` (compartido) | **Motor de render de estrellas de Gaia** (consulta + dibujo, `window.BitacoraGaiaRender`), extraído para reutilizarlo también desde el formulario de registro | Servidor, por FTP a `…/uploads/bitacora/` |
+| ~~`resources/js/bitacora-ocular_main.js`~~ | **Código muerto**: copia antigua y duplicada del render de Gaia (su propio `spriteGaia()`, `magColor` fijo…), previa a la extracción a `bitacora-gaia-render.js`. Verificado (grep) que ningún `.html`/`.php` desplegado lo referencia. No se ha borrado a la espera de confirmación. | No desplegar |
 | `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
@@ -119,18 +120,55 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
 > (`GAIA_CFG`) son `BitacoraGaiaRender.config`. El color sigue en `BitacoraGaiaColor`.
 
 - **Consulta** a Gaia DR3 vía VizieR TAP, una vez por objeto, al radio máximo
-  (`GAIA_RADIO_MAX ≈ 1,44°`) y hasta `GAIA_MAG_MAX` (16,5), con `TOP 40000`. El
-  `ORDER BY Gmag` va **antes** del `TOP` (verificado en TAPVizieR): si hay
-  truncamiento, se quedan fuera las **menos brillantes**.
-- **Tamaño** del núcleo según la magnitud, con un exponente (`radioExp`) para que
-  las brillantes destaquen más (imita el *blooming* fotográfico). Un **suelo**
-  (`radioMin`, aplicado con `max()`, no sumando) garantiza que las débiles no bajen
-  del mínimo visible (~1 px) sin inflar las brillantes; y un **suelo de alfa**
-  (`alfaMin`) evita que las del borde del límite se apaguen del todo.
+  (`GAIA_RADIO_MAX ≈ 1,44°`) y hasta `magConsultaGaia(apertura, transmision)` —
+  la profundidad depende del EQUIPO, no es una magnitud fija: un 8" y un 20" ya
+  no piden ni "ven" el mismo catálogo. `GAIA_MAG_TOPE` (20,0, = `GAIA_MAX_MAG`
+  en `gaia_proxy.php`) acota el máximo por seguridad. `TOP 40000` sigue siendo
+  el límite de filas; el `ORDER BY Gmag` va **antes** del `TOP` (verificado en
+  TAPVizieR): si hay truncamiento, se quedan fuera las **menos brillantes**.
+- **Tamaño** = imagen estelar física (disco de Airy + seeing, ver más abajo), en
+  cuadratura con un **suelo de visibilidad** en píxeles (`radioSuelo`, con un
+  término extra `radioSueloMag · flujoRelativo^radioSueloExp` y `radioSueloMax`
+  como tope de seguridad). El término extra depende del **flujo ABSOLUTO** de
+  la estrella (`(apertura/aureolaAperturaRef)² · 10^-0,4g`, la misma fórmula que
+  `alfaAureola`/`blurEstrella` más abajo), no de lo lejos que esté del límite
+  del equipo (`mlim`): probado y descartado un suelo relativo a `mlim` porque
+  con un equipo somero casi todo el campo queda a pocas magnitudes de SU propio
+  límite y "engorda" en bloque, no solo las pocas estrellas realmente
+  brillantes. Con flujo absoluto, una estrella dada mantiene su tamaño pase lo
+  que pase con `mlim`, pero SÍ crece con la apertura (más D² = más fotones). Un
+  **suelo de alfa** (`alfaMin`) evita que las del borde del límite se apaguen
+  del todo por transparencia — ver más abajo la salvedad sobre campos muy ricos.
 - **Escala con el aumento**: a más aumento (menos campo) las estrellas se agrandan
-  (su tamaño angular en el ocular), `factor = √(escalaMagCampo / campo_arcmin)`
+  (su tamaño angular en el ocular), `factor = √(escalaMagAfov / campo_arcmin)`
   acotado a `[1, escalaMagMax]`. Así un cúmulo lejano a mucho aumento (NGC 7789 con
   un 18") se ve rico y uno cercano a poco aumento (M35) fino, con la misma regla.
+- **Brillo (alpha) relativo al equipo**: `alfaMin` y `rangoBrillo` (mag por debajo
+  del límite que satura la opacidad a 1) son deliberadamente **fijos, no escalan
+  con la apertura** — y eso es correcto, no un descuido. La detectabilidad de una
+  estrella depende de su contraste sobre el fondo (ley de Weber-Fechner), y ese
+  contraste ya está expresado en `(mlim − g)`: una estrella "3 mag por debajo del
+  límite" tiene el mismo contraste perceptual en un 60 mm que en un 400 mm, porque
+  `mlim` en sí YA integra la apertura (Torres Lapasió, más arriba). Lo que SÍ varía
+  con la apertura por su cuenta, sin que `rangoBrillo` tenga que hacerlo, es el
+  **halo** y el **color** — ver el punto siguiente —, porque esos dependen del
+  flujo de fotones absoluto (∝ D²), no de lo cerca que esté la estrella del límite
+  de detección de ese equipo concreto.
+- **Halo del sprite (blur) por brillo ABSOLUTO**: cada estrella se dibuja con un
+  borde más o menos difuso según `blurEstrella(g, apertura)`, que reutiliza la
+  misma escala de flujo que la aureola (`alfaAureola`, ver abajo): al límite de
+  detección sale con `blurMin` (borde duro, cabeza de alfiler); una estrella muy
+  brillante, con `blur` (borde suave). Antes había un único `blur` fijo para toda
+  estrella resuelta, así que hasta la más tenue del límite salía con el mismo
+  halo que Sirio — se notaba especialmente mal en campos ricos y poco profundos.
+- **Color relativo al equipo, no una magnitud fija**: el umbral de color
+  (`magColorEfectivo = mlim − margenColorMag`) se mide desde el límite de
+  detección de ESE equipo/cielo, no desde una magnitud absoluta fija. Antes, un
+  umbral fijo (p. ej. mag 9) hacía que un 24" mostrara color exactamente hasta la
+  misma magnitud catalogada que un 4" bajo el mismo cielo — cuando en realidad un
+  equipo más profundo debería mostrar color más abajo en la escala, porque llega
+  a estrellas objetivamente más brillantes en términos absolutos de lo que su
+  propio límite permite ver con nitidez.
 - **Color** a partir del índice **BP–RP** de Gaia mediante una tabla interpolada
   cuyos nodos son los **códigos de color físicos** de Harre &amp; Heller (2021),
   *«Digital color codes of stars»* ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254),
@@ -140,6 +178,19 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   CN), que la hacen **más roja que un cuerpo negro** de su temperatura. Así las
   estrellas de carbono se **diferencian** y alcanzan el rojo ember, en vez de
   saturarse todas en el mismo naranja.
+- **Saturación relativa al brillo ABSOLUTO de cada estrella, no constante**
+  (`colorEstrella(bprp, carbono, g, apertura)`): reusa la misma fracción de
+  flujo `f = min(1, alfaAureola(g,apertura)/aureolaAlfaMax)` que ya calibra
+  `blurEstrella` — al techo de la aureola (estrella realmente brillante) sale
+  con `GAIA_CFG.saturacion` completa; al límite de detección, `f≈0` y el color
+  cae a neutro (`saturacion=1`, sin empuje). Modela el **efecto Purkinje**: la
+  visión de color depende de los conos de la retina, que necesitan un mínimo de
+  señal luminosa para activarse — por debajo de ese umbral el ojo ve en
+  monocromo (bastones), así que una estrella tenue casi al límite se percibe
+  deslavada hacia blanco/gris aunque su índice BP–RP diga que es azul o roja.
+  Antes la saturación era la misma constante para toda estrella visible, así
+  que un 18" no mostraba las estrellas de un cúmulo más "de color" que un
+  telescopio pequeño, solo más grandes.
 - **Corrección gamma sRGB** (`GAIA_CFG.gamma`): los códigos del paper son RGB
   *lineal*; mostrarlos crudos sobre-satura (las estrellas calientes salen demasiado
   azules). Por defecto se aplica gamma **del azul al blanco** (las O·B·A·F·G quedan
@@ -156,6 +207,19 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   Donde se agolpan (cúmulos lejanos, núcleos de galaxias) su suma forma una **mancha
   nebulosa** —p. ej. **NGC 2158** junto a M35—, y el resplandor **escala con la
   apertura**, así un tubo mayor luce más.
+  > **Techo conocido**: el dibujo usa `globalCompositeOperation = 'lighter'`
+  > (aditivo), y `alfaMin` pone un suelo de opacidad por estrella SIN conciencia de
+  > densidad de campo. En un campo disperso eso evita que la más débil se apague
+  > del todo; pero en un campo MUY rico y profundo (miles de estrellas al límite,
+  > como NGC 2158), la suma aditiva de ese suelo × recuento puede superar el
+  > brillo de un cúmulo cercano con pocas estrellas brillantes (como M35),
+  > invirtiendo su brillo relativo real. Se mitigó bajando `alfaMin` a `0.05`
+  > (antes más alto), pero no está resuelto de raíz: la mejora real sería ponderar
+  > ese suelo por densidad local de estrellas, o retirarlo del todo y fiar la
+  > visibilidad únicamente al tamaño (que ya tiene su propio suelo, `radioSuelo`).
+  > No implementado porque añade una complejidad (censo de densidad local) que no
+  > se ha pedido todavía — ver el comentario `ponytail:` junto a `CFG.alfaMin` en
+  > `bitacora-gaia-render.js`.
 
 ### Diffraction spikes (cruz de difracción de la araña)
 
@@ -238,7 +302,7 @@ la lógica:
 
 | Bloque | Controla |
 |---|---|
-| `GAIA_CFG` | Render de Gaia: `blur`, `magColor`, `saturacion` (=1: la tabla `GAIA_COLOR` ya lleva el color físico), `tinteNucleo`, `carbono` (`bprpOffset`/`bprpMin` del realce rojo del objeto de carbono), `gamma` (`global` on/off; `hasta`/`desvanece`: banda donde la gamma se desvanece hacia el rojo); tamaño (`radioMin` = suelo, `radioMag`, `radioExp`, `magTamMin`, `radioMax`, `radioTotalMax`); brillo (`brillo`, `alfaMin`); escala con el aumento (`escalaMagCampo`, `escalaMagMax`); y el glow (`glowIntensidad`, `glowRadio`). |
+| `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo`); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
