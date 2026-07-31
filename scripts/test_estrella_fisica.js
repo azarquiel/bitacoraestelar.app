@@ -241,5 +241,26 @@ ok(radioMag(457, 6, 15) > radioMag(152, 6, 15),
   'la MISMA estrella (mag 6) sale más gorda en un 18" (' + radioMag(457, 6, 15).toFixed(2) +
   ' px) que en un 6" (' + radioMag(152, 6, 15).toFixed(2) + ' px): más apertura, más fotones');
 
+/* ── Sección 10: dilución de brillo al sobre-aumentar (conservación de flujo) ─
+   Pasado el punto en que el disco físico (Airy+seeing) supera al suelo
+   artístico, más aumento no trae más luz: los mismos fotones se reparten en
+   un disco mayor. `factorDilucion(suelo, Rtot)` diluye el alpha de pico por
+   (suelo/Rtot)² -exacto para este perfil autosimilar, ver dibujarEstrellaColor-
+   en cuanto Rtot supera a suelo·√2 (equivale a fisico > suelo). */
+console.log('\n10. Sobre-aumentar diluye el brillo de pico (conservación de flujo):');
+var eqPoco = equipo(200, 1200, 25, 60);   // aumento bajo: fisico <= suelo
+var oPoco = { arcmin: eqPoco.arcmin, afov: eqPoco.afov, apertura: eqPoco.apertura, size: SIZE, g: 8 };
+var sueloPoco = R.sueloEstrella(oPoco), RtotPoco = R.radioEstrella(oPoco);
+ok(R.factorDilucion(sueloPoco, RtotPoco) === 1,
+  'a poco aumento (suelo=' + sueloPoco.toFixed(2) + ', Rtot=' + RtotPoco.toFixed(2) + '), sin dilución');
+
+var eqMucho = equipo(60, 3000, 1, 60);    // aumento extremo: fisico >> suelo
+var oMucho = { arcmin: eqMucho.arcmin, afov: eqMucho.afov, apertura: eqMucho.apertura, size: SIZE, g: 8 };
+var sueloMucho = R.sueloEstrella(oMucho), RtotMucho = R.radioEstrella(oMucho);
+var dilMucho = R.factorDilucion(sueloMucho, RtotMucho);
+ok(dilMucho < 1, 'a mucho aumento (Rtot=' + RtotMucho.toFixed(2) + ' px), factorDilucion=' + dilMucho.toFixed(4) + ' < 1');
+casi(dilMucho * RtotMucho * RtotMucho, sueloMucho * sueloMucho, 1e-6,
+  'diluido, alfa_pico·Rtot² = suelo² (conserva el flujo total, no crece con el aumento)');
+
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);

@@ -70,7 +70,9 @@
 
   // Color Gaia canónico de una estrella por su índice BP–RP. bprp==null (débil sin
   // fotometría BP/RP) → ~amarillo neutro (1.4), como Gaia. Interpolación por tramos.
-  function colorPorBpRp(bprp) {
+  // `sat` opcional sustituye a config.saturacion (ver simulador: efecto Purkinje,
+  // el color se satura con el brillo absoluto de la estrella, no es constante).
+  function colorPorBpRp(bprp, sat) {
     var v = (bprp == null) ? 1.4 : bprp;
     var A = GAIA_COLOR, rgb = [A[A.length - 1][1], A[A.length - 1][2], A[A.length - 1][3]];
     if (v <= A[0][0]) { rgb = [A[0][1], A[0][2], A[0][3]]; }
@@ -85,7 +87,7 @@
         }
       }
     }
-    return saturar(aplicarGamma(rgb, v), config.saturacion);
+    return saturar(aplicarGamma(rgb, v), sat != null ? sat : config.saturacion);
   }
 
   // Clasificación espectral aproximada a partir del índice BP–RP (para leyendas

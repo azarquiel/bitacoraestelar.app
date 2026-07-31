@@ -450,6 +450,10 @@
        del fotón, no de lo que ese equipo concreto es capaz de detectar).
        blur = el tope (estrellas brillantes); blurMin = el suelo (al límite). */
     blur: 1.1, blurMin: 0.15,
+    // Ver fraccionFlujo(): potencia que levanta la fracción de flujo compartida
+    // por blur y saturación de color para brillos medios (cúmulos típicos),
+    // sin tocar los extremos ni la calibración de aureolaAlfaMax/AlfaK.
+    fraccionGamma: 0.35,
     // Margen (mag) por debajo del límite de detección al que aparece el color.
     // Ver color: antes era CFG.magColor fijo, así que un 24" no mostraba color
     // más allá de lo que mostraba un 4" con el mismo cielo. El umbral de color SÍ
@@ -861,7 +865,7 @@
 
      La cuadratura, y no un max(), para que el paso de un régimen a otro sea suave:
      un salto en el tamaño al cambiar de ocular se vería como un parpadeo. */
-  function radioEstrella(o) {
+  function sueloEstrella(o) {
     var blur = (o.blur != null) ? o.blur : CFG.blur;
     var D = (o.apertura > 0) ? o.apertura : CFG.aureolaAperturaRef;
     var factorApertura = Math.pow(D / CFG.aureolaAperturaRef, 2);
@@ -873,10 +877,24 @@
       var sepPx = sep * size / (arcmin * 60);                           // ″ → px de lienzo
       suelo = Math.min(suelo, Math.max(CFG.radioSueloMin, sepPx * CFG.margenSuelo));
     }
+    return suelo;
+  }
+  function radioEstrella(o) {
+    var suelo = sueloEstrella(o);
+    var arcmin = +o.arcmin, size = +o.size;
     var theta = radioImagenEstelar(o.apertura);
     if (theta == null || !(arcmin > 0) || !(size > 0)) return suelo;   // sin equipo, como antes
     var fisico = theta * size / (arcmin * 60);                        // ″ → px de lienzo
     return Math.sqrt(suelo * suelo + fisico * fisico);
+  }
+  /* Sobre-aumentar más allá de lo que el disco de Airy+seeing justifica no
+     trae más luz real: la misma cantidad de fotones se reparte en un disco
+     mayor. Diluimos el alpha de pico por (suelo/Rtot)² -conserva el flujo
+     total exacto para este perfil de gradiente autosimilar- en cuanto el
+     término físico supera al suelo artístico (Rtot > suelo·√2 equivale a
+     fisico > suelo, por la cuadratura suelo²+fisico²=Rtot²). */
+  function factorDilucion(suelo, Rtot) {
+    return (Rtot > suelo * Math.SQRT2) ? (suelo * suelo) / (Rtot * Rtot) : 1;
   }
   /* Opacidad de la aureola de dispersión (glare) de una estrella RESUELTA,
      proporcional a su flujo absoluto (mag Gaia g), no al margen sobre el
@@ -888,6 +906,17 @@
     var factorApertura = Math.pow(D / CFG.aureolaAperturaRef, 2);
     return Math.min(CFG.aureolaAlfaMax, CFG.aureolaAlfaK * factorApertura * Math.pow(10, -0.4 * g));
   }
+  /* Fracción de flujo (0-1) que comparten blurEstrella y colorEstrella, con una
+     curva de potencia (CFG.fraccionGamma < 1) que levanta los valores bajos:
+     alfaAureola/aureolaAlfaMax está calibrada para saturar al techo con
+     brillo tipo Sirio/Vega (mag 0-3), así que la más brillante de un cúmulo
+     típico (mag 6-8) apenas rozaba el 5-7% de la escala -halo casi pinpoint y
+     color casi sin saturar aun siendo la estrella más notable del campo-. La
+     potencia sube esa cola sin tocar los extremos (0→0, 1→1) ni recalibrar
+     aureolaAlfaMax/AlfaK (ya validados con Albireo). */
+  function fraccionFlujo(g, apertura) {
+    return Math.pow(Math.min(1, alfaAureola(g, apertura) / CFG.aureolaAlfaMax), CFG.fraccionGamma);
+  }
   /* Halo del sprite (dCore, ver CFG.blur/blurMin) según el brillo ABSOLUTO de
      la estrella, reusando la misma escala de flujo que la aureola: al límite
      de detección (aAur≈0) sale con blurMin (borde duro, pinpoint); una
@@ -895,16 +924,23 @@
      con blur (borde suave). No depende de mlim: el halo es del fotón, no del
      equipo. */
   function blurEstrella(g, apertura) {
-    var f = Math.min(1, alfaAureola(g, apertura) / CFG.aureolaAlfaMax);
-    return CFG.blurMin + (CFG.blur - CFG.blurMin) * f;
+    return CFG.blurMin + (CFG.blur - CFG.blurMin) * fraccionFlujo(g, apertura);
   }
-  function colorEstrella(bprp, carbono) {
+  /* La saturación del color escala con el flujo ABSOLUTO de la estrella -misma
+     fracción f que blurEstrella/alfaAureola-, no es constante: una estrella
+     brillante se ve claramente azul/naranja, una tenue casi al límite se ve
+     deslavada hacia blanco (efecto tipo Purkinje: los conos necesitan señal
+     para dar color, ver README). f=1 (techo de la aureola) → saturacion
+     completa; f=0 (al límite de detección) → neutro (1, sin empuje). */
+  function colorEstrella(bprp, carbono, g, apertura) {
     var v = bprp;
     if (carbono) {
       v = (bprp == null) ? CFG.carbono.bprpMin
                          : Math.max(CFG.carbono.bprpMin, bprp + CFG.carbono.bprpOffset);
     }
-    return GColor.colorPorBpRp(v);
+    var f = (g != null) ? fraccionFlujo(g, apertura) : 1;
+    var sat = 1 + (GColor.config.saturacion - 1) * f;
+    return GColor.colorPorBpRp(v, sat);
   }
   function dibujarEstrellaColor(ctx, x, y, Rtot, rgb, blur) {
     var dCore = 1 / (1 + (blur != null ? blur : CFG.blur)), tn = CFG.tinteNucleo, col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
@@ -985,10 +1021,12 @@
       var blurG = blurEstrella(g, o.apertura);
       // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
       // se aprieta con la apertura) en cuadratura con el suelo de visibilidad.
-      var Rtot = radioEstrella({ afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE, sep: o.sep, g: g, blur: blurG, mlim: mlim });
+      var oRadio = { afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE, sep: o.sep, g: g, blur: blurG, mlim: mlim };
+      var Rtot = radioEstrella(oRadio);
+      var dilucion = factorDilucion(sueloEstrella(oRadio), Rtot);
       var esCarbono = (i === idxCarbono);
       var colEstrella = ((g < magColorEfectivo && bprp != null) || esCarbono)
-        ? colorEstrella(bprp, esCarbono) : [255, 255, 255];
+        ? colorEstrella(bprp, esCarbono, g, o.apertura) : [255, 255, 255];
       // Aureola de dispersión (glare): debajo del disco, se apaga sola en las
       // tenues -ver alfaAureola()-. Teñida con el color de la propia estrella
       // -antes un sprite blanco fijo-: en las pocas realmente brillantes (las
@@ -1000,7 +1038,7 @@
         var Ra = CFG.aureolaRadio * escala;
         dibujarAureola(ctx, x, y, Ra, colEstrella, aAur * ganActual);
       }
-      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual;
+      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual * dilucion;
       dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG);
       if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }
@@ -1113,8 +1151,12 @@
     radioAiry: radioAiry,
     radioImagenEstelar: radioImagenEstelar,
     radioEstrella: radioEstrella,
+    sueloEstrella: sueloEstrella,
+    factorDilucion: factorDilucion,
     alfaAureola: alfaAureola,
     blurEstrella: blurEstrella,
+    colorEstrella: colorEstrella,
+    fraccionFlujo: fraccionFlujo,
     parDoble: parDoble,
     par: PAR,
     valorDeFlujo: valorDeFlujo,

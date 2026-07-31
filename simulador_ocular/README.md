@@ -178,6 +178,19 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   CN), que la hacen **más roja que un cuerpo negro** de su temperatura. Así las
   estrellas de carbono se **diferencian** y alcanzan el rojo ember, en vez de
   saturarse todas en el mismo naranja.
+- **Saturación relativa al brillo ABSOLUTO de cada estrella, no constante**
+  (`colorEstrella(bprp, carbono, g, apertura)`): reusa la misma fracción de
+  flujo `f = min(1, alfaAureola(g,apertura)/aureolaAlfaMax)` que ya calibra
+  `blurEstrella` — al techo de la aureola (estrella realmente brillante) sale
+  con `GAIA_CFG.saturacion` completa; al límite de detección, `f≈0` y el color
+  cae a neutro (`saturacion=1`, sin empuje). Modela el **efecto Purkinje**: la
+  visión de color depende de los conos de la retina, que necesitan un mínimo de
+  señal luminosa para activarse — por debajo de ese umbral el ojo ve en
+  monocromo (bastones), así que una estrella tenue casi al límite se percibe
+  deslavada hacia blanco/gris aunque su índice BP–RP diga que es azul o roja.
+  Antes la saturación era la misma constante para toda estrella visible, así
+  que un 18" no mostraba las estrellas de un cúmulo más "de color" que un
+  telescopio pequeño, solo más grandes.
 - **Corrección gamma sRGB** (`GAIA_CFG.gamma`): los códigos del paper son RGB
   *lineal*; mostrarlos crudos sobre-satura (las estrellas calientes salen demasiado
   azules). Por defecto se aplica gamma **del azul al blanco** (las O·B·A·F·G quedan
@@ -289,7 +302,7 @@ la lógica:
 
 | Bloque | Controla |
 |---|---|
-| `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `saturacion` =1 porque `GAIA_COLOR` ya lleva el color físico; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo`); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
+| `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo`); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |

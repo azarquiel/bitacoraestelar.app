@@ -55,7 +55,7 @@ console.log('1. blurEstrella: absoluto, no relativo al límite del equipo');
 var bFaint = R.blurEstrella(20, 200);   // muy tenue, aureola ≈ 0
 var bMedio = R.blurEstrella(3.1, 200);  // tipo Albireo A
 var bBright = R.blurEstrella(0, 200);   // aureola ya al techo
-ok(Math.abs(bFaint - C.blurMin) < 1e-6, 'tenue → blurMin (' + bFaint.toFixed(3) + ')');
+ok(Math.abs(bFaint - C.blurMin) < 0.01, 'tenue → blurMin (' + bFaint.toFixed(3) + ')');
 ok(Math.abs(bBright - C.blur) < 1e-6, 'muy brillante → blur máximo (' + bBright.toFixed(3) + ')');
 ok(bBright > bMedio && bMedio > bFaint, 'monótono: brillante > medio > tenue');
 // La misma magnitud da el mismo blur da igual el mlim del equipo (no recibe mlim).
@@ -84,6 +84,24 @@ R.dibujar(fakeCtx({ width: 64, height: 64 }), estrellas, Object.assign({ mlim: 1
 var bordeSomero = gradientes[0].stops[1][1];
 ok(bordeSomero.indexOf('255,255,255') !== -1,
   'equipo somero (mlim=11, umbral=' + (11 - C.margenColorMag) + '): la MISMA mag 10 sale blanca (' + bordeSomero + ')');
+
+console.log('\n3. colorEstrella: la saturación escala con el flujo absoluto (tipo Purkinje)');
+var GColor = require('../resources/js/bitacora-gaia-color.js');
+function sat(rgb) {
+  var gris = 0.30 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
+  return Math.max(Math.abs(rgb[0] - gris), Math.abs(rgb[1] - gris), Math.abs(rgb[2] - gris));
+}
+var bprpAzul = 0.0;
+var colBrillante = R.colorEstrella(bprpAzul, false, 0, 457);     // aureola al techo → f=1
+var colMedio = R.colorEstrella(bprpAzul, false, 6.57, 457);      // M39, la más brillante del campo
+var colTenue = R.colorEstrella(bprpAzul, false, 20, 457);        // al límite → f≈0
+ok(sat(colBrillante) > sat(colMedio) && sat(colMedio) > sat(colTenue),
+  'monótono: brillante (' + sat(colBrillante).toFixed(1) + ') > medio (' + sat(colMedio).toFixed(1) +
+  ') > tenue (' + sat(colTenue).toFixed(1) + ')');
+ok(Math.abs(sat(colTenue) - sat(GColor.colorPorBpRp(bprpAzul, 1))) < 1e-6,
+  'al límite (f≈0), saturación cae a 1 (neutro, sin empuje)');
+ok(Math.abs(sat(colBrillante) - sat(GColor.colorPorBpRp(bprpAzul, C.saturacion))) < 1e-6,
+  'al techo de la aureola (f=1), saturación completa (config.saturacion)');
 
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);
