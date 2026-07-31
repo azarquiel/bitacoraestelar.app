@@ -594,7 +594,8 @@
       /* Consulta y dibujo de Gaia: delegados al módulo compartido BitacoraGaiaRender.
          Aquí quedan solo los adaptadores que le pasan el equipo/cielo del simulador. */
       function consultarGaia(ra0, dec0, arcmin) {
-        return BitacoraGaiaRender.consultar(ra0, dec0, arcmin);
+        var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva());
+        return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
         BitacoraGaiaRender.dibujar(ctx, estrellas, {

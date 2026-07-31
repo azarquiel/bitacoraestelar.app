@@ -42,7 +42,7 @@ const GAIA_QUANT_RAD       = 0.01;                // ° : cuantización del radi
 const GAIA_QUANT_MAG       = 0.5;                 // mag: cuantización del límite (se redondea ↑)
 const GAIA_MAX_ROWS        = 40000;              // TOP N de la consulta
 const GAIA_MAX_RAD         = 4.5;                // ° : radio máximo aceptado (6° de lado + margen)
-const GAIA_MAX_MAG         = 17.0;               // mag: límite máximo aceptado
+const GAIA_MAX_MAG         = 20.0;               // mag: límite máximo aceptado (= GAIA_MAG_TOPE en bitacora-gaia-render.js)
 const GAIA_CLEANUP_EVERY   = 300;                // s: limpieza como mucho cada 5 min
 const GAIA_CLEANUP_MAX_DEL = 300;                // nº máx. de entradas a borrar por pasada (incremental)
 const GAIA_CLIENT_MAXAGE   = 86400;              // s: Cache-Control max-age que se anuncia al navegador
@@ -122,7 +122,8 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag): ?string {
         ]);
         $body = curl_exec($ch);
         $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        // Sin curl_close(): no-op desde PHP 8, y en PHP 8.5 emite un deprecation
+        // notice que se cuela en la respuesta JSON si display_errors está On.
         if ($http >= 200 && $http < 300 && $body !== false && $body !== '') {
             return $body;
         }

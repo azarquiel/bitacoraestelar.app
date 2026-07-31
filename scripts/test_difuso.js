@@ -198,5 +198,49 @@ var sinTermino = R.ctxFotometrico({ pupilaSalida: 2, pupilaOjo: 7, sqm: 21, tran
 casi(enorme.Cmin / sinTermino.Cmin, FOT.C_MAG_MIN, 1e-9, 'acotado por abajo');
 casi(minusculo.Cmin / sinTermino.Cmin, FOT.C_MAG_MAX, 1e-9, 'acotado por arriba');
 
+/* ── 15. Contaminación lumínica comprime el contraste de las estrellas ──────
+   Bug: pintarFot() invertía el valor de pantalla de una estrella con el
+   Fcielo de LA ESCENA y volvía a pasarlo por la curva con ese mismo Fcielo:
+   son funciones inversas exactas, así que el contraste de la estrella sobre
+   el fondo era invariante al SQM y una estrella se veía IGUAL de marcada con
+   cielo negro que con cielo muy contaminado — y como el fondo sí se aclaraba,
+   parecía que aparecían estrellas nuevas al empeorar el cielo. Arreglo:
+   invertir contra Fref (fijo, sqm=21) y solo el segundo paso usa el Fcielo
+   real, así el contraste SÍ se comprime cuando el cielo empeora. */
+console.log('Contaminación lumínica comprime el contraste de las estrellas:');
+function contrasteEstrella(sqm, v) {
+  var c = R.ctxFotometrico({ pupilaSalida: 2, pupilaOjo: 7, sqm: sqm, transmision: 1 });
+  return R.valorDeFlujo(R.flujoDeValor(v, c.Fref, c.rango), c.Fcielo, c.rango);
+}
+ok(R.ctxFotometrico({ pupilaSalida: 2, pupilaOjo: 7, sqm: 21.9, transmision: 1 }).Fref ===
+  R.ctxFotometrico({ pupilaSalida: 2, pupilaOjo: 7, sqm: 16.15, transmision: 1 }).Fref,
+  'Fref es fijo, no depende del sqm de la escena');
+casi(contrasteEstrella(21, 128), 128, 1e-9,
+  'en sqm=21 (la referencia) el contraste no cambia: compatible con el comportamiento anterior');
+var claro = contrasteEstrella(21.9, 128), contaminado = contrasteEstrella(16.15, 128);
+ok(claro > contaminado,
+  'la misma estrella (' + claro.toFixed(1) + ' en cielo oscuro vs ' + contaminado.toFixed(1) +
+  ' con contaminación) pierde contraste al empeorar el cielo, ya no lo mantiene fijo');
+
+/* ── 16. El cruce resuelta/glow en g=mlim es continuo ───────────────────────
+   Bug real (el que seguía viéndose tras el fix de Fref): la rama resuelta
+   tenía un SUELO alfaMin y la rama de glow (no resuelta) arrancaba en
+   glowIntensidad, una constante sin relación con alfaMin. Al empeorar el
+   cielo mlim baja y una estrella cruza de una rama a otra: si glowIntensidad
+   > alfaMin, cruzar el límite la hace SALTAR a un alpha mayor (y un radio de
+   glow mayor que el disco puntual) justo cuando debería desvanecerse — se ve
+   como si "apareciera" una estrella nueva. Arreglo: ancla la rama de glow en
+   alfaMin, así en g=mlim las dos ramas coinciden EXACTAMENTE. */
+console.log('Cruce resuelta/glow en mlim, sin salto:');
+var CFG = R.config;
+function alphaResuelta(mlim, g) {
+  return Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo));
+}
+function alphaGlow(mlim, g) { return CFG.alfaMin * Math.pow(10, -0.4 * (g - mlim)); }
+casi(alphaResuelta(14, 14), alphaGlow(14, 14 + 1e-9), 1e-6,
+  'en g=mlim las dos ramas dan el mismo alpha (continuidad)');
+ok(alphaGlow(14, 14.5) < alphaResuelta(14, 14) && alphaGlow(14, 15) < alphaGlow(14, 14.5),
+  'pasado el límite el glow solo decae, nunca sube');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);
