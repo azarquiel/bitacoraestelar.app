@@ -8,8 +8,11 @@
 
    Sin dependencias:  node scripts/test_difuso.js
 
-   Las capas difusas (telón, halo de King, galaxias, nebulosas) se borraron del
-   render junto con `capasDifusas`; sus tests iban aquí y se quitaron con ellas. */
+   El telón difuso, las galaxias y las nebulosas sintéticas se borraron del
+   render junto con `capasDifusas`; sus tests iban aquí y se quitaron con
+   ellas. El halo de King de los cúmulos globulares volvió (con otra
+   arquitectura, sin discretizar en anillos) — su test vive aparte, en
+   scripts/test_globulares.js. */
 'use strict';
 
 // El módulo es un IIFE de navegador: se cuelga de window y no exporta nada.
