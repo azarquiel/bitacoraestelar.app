@@ -133,17 +133,21 @@ console.log('pintarHaloGlobular: perfil en el array difuso, radial desde el cent
 /* ── 6. Damping continuo (P8): compara mu(r) [mag/arcsec²] con la magnitud
    propia de la estrella -misma escala logarítmica, sin factor de conversión
    de área-, con transición suave (smoothstep), sin umbral duro. ────────── */
-console.log('Amortiguación puntual de estrellas dentro del halo (continua, sin salto):');
+console.log('Amortiguación puntual de estrellas dentro del halo (corte duro en rc, continua fuera):');
 var haloTuc = R.haloGlobular({ rc: 0.36, rt: 0.36 * Math.pow(10, 2.07), muV0: 14.38 }, [], 250, 36);   // 47 Tuc: núcleo denso y brillante de verdad
 var rangoMag = R.config.globular.rangoMag;
+// Dentro del radio de núcleo (rcAs) toda estrella sale puntual sin excepción,
+// da igual su magnitud -el ojo no resuelve halo individual ahí, solo el
+// brillo difuso del cúmulo (petición del usuario, 2026-08-01)-. Fuera de rc,
+// sigue la transición suave de siempre.
 function tPin(rArcsec, g) {
+  if (rArcsec <= haloTuc.rcAs) return 0;
   var dm = R.muGlobular(haloTuc, rArcsec) - g;
   return Math.max(0, Math.min(1, 0.5 + dm / (2 * rangoMag)));   // sin pasar por suave(): se valida su monotonía aparte
 }
-// Una estrella tenue (cerca del límite) enterrada en el núcleo se fuerza a
-// puntual; una brillante, apenas se amortigua; alejándose del núcleo, ninguna.
-ok(tPin(0, 16) < 0.3, 'estrella tenue (g=16) en el núcleo denso: fuertemente amortiguada');
-ok(tPin(0, 10) > 0.7, 'estrella brillante (g=10) en el mismo núcleo: casi sin amortiguar');
+// Dentro del núcleo, puntual siempre, tenue o brillante. Fuera, ninguna.
+ok(tPin(0, 16) === 0, 'estrella tenue (g=16) en el núcleo: puntual total');
+ok(tPin(0, 10) === 0, 'estrella brillante (g=10) en el mismo núcleo: puntual total también');
 ok(tPin(600, 16) > tPin(0, 16), 'la misma estrella tenue, lejos del núcleo, se amortigua menos');
 
 // Monotonía y continuidad de tPin en r (a magnitud fija): mismo criterio que

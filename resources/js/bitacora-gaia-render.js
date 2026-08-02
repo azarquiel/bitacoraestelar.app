@@ -62,7 +62,10 @@
   var GAIA_RADIO_MAX      = (360 / 60) * 0.72;
   var GAIA_RADIO_MIN      = 0.12;
   var GAIA_ARCMIN_DEFECTO = 60;
-  var GAIA_FETCH_TIMEOUT  = 12000;
+  // Por encima de GAIA_REQUEST_TIMEOUT del proxy (25s, gaia_proxy.php): si el
+  // cliente aborta antes que el propio servidor, una consulta profunda que el
+  // servidor SÍ habría terminado se ve como "error de conexión" sin serlo.
+  var GAIA_FETCH_TIMEOUT  = 28000;
   var PROXY_URL           = '/wp-content/uploads/bitacora/gaia_proxy.php';
 
   /* ── Transmisión y araña por tipo óptico (fuente única) ──
@@ -114,7 +117,7 @@
 
        C_MAG_MIN/MAX acotan el factor: el beneficio satura cuando el objeto ya
        llena el campo, y por abajo no tiene sentido penalizar sin límite. */
-    C_MAG_REF: 100, C_MAG_EXP: 0.7, C_MAG_MIN: 0.3, C_MAG_MAX: 2.0,
+    C_MAG_REF: 100, C_MAG_EXP: 0.5, C_MAG_MIN: 0.45, C_MAG_MAX: 2.0,
     // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo se
     // pinta en función de su brillo superficial en el ocular (SBe, mag/arcsec²,
     // atenuado por la pupila de salida). Por encima de SB_CIELO_NEGRO el fondo es
@@ -345,10 +348,17 @@
      FOT.GAMMA_PERCEPTUAL y lo devuelve a flujo, para que la suma con la capa de
      estrellas siga siendo aditiva y los núcleos sigan comprimiendo. Devuelve el
      flujo tal cual si la gamma es 1. Ver FOT.GAMMA_PERCEPTUAL para el porqué. */
-  function realzarPerceptual(F, Fcielo, rango) {
+  function realzarPerceptual(F, Fcielo, rango, s) {
     if (FOT.GAMMA_PERCEPTUAL === 1 || !(F > 0)) return F;
+    // s = visibilidadDifusa ya calculada en pintarFot (0 = justo en el umbral,
+    // 1 = ya totalmente visible). Sin ella (llamadas antiguas), boost completo
+    // como siempre. Con ella, el boost decae hacia gamma=1 (sin boost) según
+    // crece s: rescata lo que roza el umbral, no infla lo que ya se ve bien
+    // -un núcleo de cúmulo globular resuelto no debe quemarse a blanco-.
+    var t = (s == null) ? 0 : Math.max(0, Math.min(1, s));
+    var gammaEfectiva = 1 + (FOT.GAMMA_PERCEPTUAL - 1) * (1 - t);
     var nivel = valorDeFlujo(F, Fcielo, rango);
-    return flujoDeValor(255 * Math.pow(nivel / 255, FOT.GAMMA_PERCEPTUAL), Fcielo, rango);
+    return flujoDeValor(255 * Math.pow(nivel / 255, gammaEfectiva), Fcielo, rango);
   }
 
   function pintarFot(Fobj, ctx, o, estrellas) {
@@ -369,7 +379,7 @@
          y los núcleos sigan comprimiendo en vez de recortarse. Solo cuando el
          motor declara que su flujo está calibrado (o.perceptual): las placas
          entran por aquí con su heurístico y no deben tocarse. */
-      if (perceptual && difuso > 0) difuso = realzarPerceptual(difuso, c.Fcielo, c.rango);
+      if (perceptual && difuso > 0) difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, s);
       for (var ch = 0; ch < canales; ch++) {
         var F = difuso;
         if (estrellas) {
@@ -461,6 +471,12 @@
     // `mlim` (que ya integra apertura, aumentos, transmisión y cielo) en vez de
     // ser una magnitud absoluta.
     margenColorMag: 4.5, tinteNucleo: 0.8,
+    // Núcleo de estrella de carbono: tinteNucleo normal (0.8) mezcla 80% color +
+    // 20% blanco, y a magnificaciones altas Rtot es tan chico que ese núcleo
+    // ocupa casi todo el disco -"corazón blanco" reportado (2026-08-01, V Aql,
+    // 475x)-. Para estas SÍ importa que el color domine el centro: casi sin
+    // blanqueo.
+    tinteNucleoCarbono: 0.95,
     carbono: { bprpOffset: 0.9, bprpMin: 3.0 },
     /* Suelo de visibilidad del tamaño de estrella, en píxeles de lienzo (antes de
        la escala del campo aparente y del halo del blur). Las más brillantes
@@ -511,14 +527,20 @@
        "aparecer" más brillantes en vez de apagarse. */
     glowRadio: 5.0,
     /* Corte de invisibilidad del glow: por debajo de este alpha no se dibuja.
-       Antes 0,004 daba una cola de ~2,74 magnitudes bajo mlim (con alfaMin=0,05)
-       -tan ancha que se comía casi todo el catálogo Gaia disponible (17,0) para
-       CUALQUIER apertura, así que un 8" y un 20" acababan "viendo" el mismo
-       número de estrellas (como glow, aunque no resueltas) y la apertura dejaba
-       de notarse. 0,02 la recorta a ~1 magnitud: usa esta MISMA constante
-       magConsultaGaia() para saber hasta dónde de verdad hace falta pedirle a
-       Gaia -si se cambia aquí, cambia también la profundidad de consulta. */
-    glowCorte: 0.02,
+       0,004 daba ~2,74 mag de cola y se comía casi todo el catálogo Gaia de
+       ENTONCES (tope fijo 17,0 para cualquier apertura): un 8" y un 20"
+       acababan viendo el mismo número de estrellas. 0,02 la recortó a ~1 mag.
+       Desde entonces el tope de catálogo subió a 20,0 y magConsultaGaia() ya
+       escala con la apertura real (18" pide 18,3; 6" pide 15,9) -hay margen de
+       sobra bajo el tope incluso con cola más larga-, así que el recorte a 1
+       mag ya no hace falta para separar aperturas: solo dejaba pobre el
+       granulado de campos densos (cúmulos globulares), con muy pocas
+       estrellas por debajo de mlim visibles como textura. 0,006 amplía la cola
+       a ~2,3 mag (18" queda en 19,6, sigue bajo el tope de 20 con margen).
+       ponytail: valor artístico, ajustar si un campo real sigue viéndose
+       pobre o si una apertura extrema roza el tope de 20. Ver
+       magConsultaGaia(), misma constante decide cuánto pedir a Gaia. */
+    glowCorte: 0.006,
     /* Campo aparente (grados) al que corresponde radioSuelo tal cual: con un ocular
        de este campo el suelo sale a su tamaño nominal, y con uno más estrecho sale
        proporcionalmente mayor en el lienzo. Ver escalaEstrellas() para el por qué.
@@ -576,7 +598,14 @@
     // que alimenta la resta de P4 (ver haloGlobular). restaMaxFrac: tope a la
     // fracción del flujo total que esa resta puede quitar, para que el halo
     // nunca llegue a apagarse del todo.
-    globular: { rangoMag: 3, magResta: 17, restaMaxFrac: 0.85 }
+    globular: {
+      rangoMag: 3, magResta: 17, restaMaxFrac: 0.85,
+      // gamma(M) = 1 + gammaA·(M/gammaRef)^gammaExp, tope en gammaMax (ver
+      // gammaHalo). Valores iniciales: gamma≈1.33 a 100x, ≈1.67 a 200x,
+      // ≈2.0 a 300x -ajustar gammaA/gammaRef si el halo aún cierra poco o
+      // mucho a los aumentos reales que uses-.
+      gammaA: 0.5, gammaRef: 150, gammaExp: 1, gammaMax: 4
+    }
   };
 
 
@@ -605,7 +634,7 @@
   function radioConsulta(arcmin) {
     return Math.min(GAIA_RADIO_MAX, Math.max(GAIA_RADIO_MIN, (arcmin / 60) * 0.72));
   }
-  function fetchGaia(ra, dec, rad, mag) {
+  function fetchGaiaUnaVez(ra, dec, rad, mag) {
     var ctrl = new AbortController();
     var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
     var url = PROXY_URL + '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) +
@@ -614,6 +643,14 @@
       clearTimeout(id);
       if (!r.ok) throw new Error();
       return r.json();
+    }, function (err) { clearTimeout(id); throw err; });
+  }
+  // Un reintento: el proxy hace failover entre proveedores TAP (ver
+  // gaia_proxy.php), así un fallo puntual del primero suele resolverse solo
+  // en el segundo intento, sin que el usuario tenga que volver a pedirlo.
+  function fetchGaia(ra, dec, rad, mag) {
+    return fetchGaiaUnaVez(ra, dec, rad, mag).catch(function () {
+      return fetchGaiaUnaVez(ra, dec, rad, mag);
     });
   }
   function consultar(ra0, dec0, arcmin, mag) {
@@ -950,13 +987,38 @@
     var sat = 1 + (GColor.config.saturacion - 1) * f;
     return GColor.colorPorBpRp(v, sat);
   }
-  function dibujarEstrellaColor(ctx, x, y, Rtot, rgb, blur) {
-    var dCore = 1 / (1 + (blur != null ? blur : CFG.blur)), tn = CFG.tinteNucleo, col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
+  function dibujarEstrellaColor(ctx, x, y, Rtot, rgb, blur, puntual, esCarbono) {
+    var tn = esCarbono ? CFG.tinteNucleoCarbono : CFG.tinteNucleo, col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
     var centro = Math.round(255 + tn * (rgb[0] - 255)) + ',' + Math.round(255 + tn * (rgb[1] - 255)) + ',' + Math.round(255 + tn * (rgb[2] - 255));
+    /* puntual: estrella resuelta dentro del radio de núcleo de un globular
+       (ver tPin en dibujar()). Ni con blurMin el degradado normal llega a
+       borde 100% duro -dCore=1/(1+blurMin)² sigue dejando ~1/4 del radio con
+       una cola de alfa suave-, y el pedido es CERO rastro de halo ahí: disco
+       plano de un color, sin gradiente ni caída. */
+    if (puntual) {
+      ctx.fillStyle = 'rgba(' + centro + ',1)';
+      ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
+      return;
+    }
+    /* dCore al cuadrado, no lineal: con 1/(1+blur) el disco denso (alfa
+       0,6-0,9) llegaba a ocupar HALF el radio en una estrella brillante
+       (dCore≈0,5) -se veía como un disco "quemado" tipo foto de larga
+       exposición, no como el punto minúsculo + halo amplio que ve el ojo por
+       el ocular-. Elevar al cuadrado empuja el núcleo denso muy por debajo
+       solo cuando blur es alto (brillantes), y apenas toca a las tenues -su
+       Rtot ya es tan pequeño que la diferencia no se nota-. */
+    var dCore = 1 / Math.pow(1 + (blur != null ? blur : CFG.blur), 2);
     var gr = ctx.createRadialGradient(x, y, 0, x, y, Rtot);
     gr.addColorStop(0, 'rgba(' + centro + ',1)');
     gr.addColorStop(dCore * 0.55, 'rgba(' + col + ',0.9)');
     gr.addColorStop(dCore, 'rgba(' + col + ',0.6)');
+    /* Sin este stop intermedio, dCore→1 es UN solo tramo lineal: con blur alto
+       (18"+brillante) dCore ronda 0,5, así que medio radio -3/4 del área del
+       disco- queda ≥0,6 de alfa y el resto cae en línea recta, muy por encima
+       de la caída real de un glare (≈1/r²). Se ve disco sólido con anillo, no
+       halo. Este stop dobla la curva: cae deprisa nada más pasar dCore y deja
+       una cola larga y tenue hasta Rtot. */
+    gr.addColorStop(dCore + (1 - dCore) * 0.35, 'rgba(' + col + ',0.18)');
     gr.addColorStop(1, 'rgba(' + col + ',0)');
     ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
   }
@@ -998,7 +1060,7 @@
      consulta, y con ella Fresuelto, y el halo podía aparecer o desaparecer de
      golpe sin que el cúmulo hubiera cambiado. Con margen, además, para que la
      resta nunca llegue a apagar el halo del todo (ver restaMaxFrac). */
-  function haloGlobular(cluster, estrellas, ra0, dec0) {
+  function haloGlobular(cluster, estrellas, ra0, dec0, aumentos) {
     var rcAs = cluster.rc * 60, rtAs = cluster.rt * 60;
     var k = rtAs / rcAs;
     var areaAs2 = areaKing(k) * rcAs * rcAs;
@@ -1012,11 +1074,29 @@
     }
     Fresuelto = Math.min(Fresuelto, Ftotal * CFG.globular.restaMaxFrac);
     var Fneto = (Ftotal - Fresuelto) / areaAs2;
-    return { rcAs: rcAs, rtAs: rtAs, Fcentral: Fneto };
+    // Nótese: Fneto/areaAs2 se calibran con el perfil SIN modificar (gamma no
+    // entra aquí), así que subir gamma para la cola externa no descuadra el
+    // descuento de estrellas resueltas hecho arriba (ver gammaHalo).
+    return { rcAs: rcAs, rtAs: rtAs, Fcentral: Fneto, gamma: gammaHalo(aumentos) };
+  }
+
+  /* Potencia extra sobre el perfil normalizado (exp>1 hunde solo la cola
+     externa: perfilKing vale 1 en r=0 por construcción, así que ^exp no
+     toca el centro -1^exp=1-, y para r>0 los valores <1 caen más rápido
+     cuanto mayor exp). Dinámica con los aumentos: a más M, más estrellas del
+     halo exterior se resuelven y dejan de aportar luz difusa, así que lo que
+     queda debe decaer más rápido con r. gamma(M)=1+A·(M/Mref)^B tiende a 1
+     sola cuando M→0 (sin necesidad de umbral duro que rompa continuidad),
+     acotada arriba en gammaMax para no vaciar el halo del todo. */
+  function gammaHalo(aumentos) {
+    var g = CFG.globular;
+    if (!(aumentos > 0)) return 1;
+    return Math.min(g.gammaMax, 1 + g.gammaA * Math.pow(aumentos / g.gammaRef, g.gammaExp));
   }
 
   function fobjGlobular(halo, rArcsec) {
-    return halo.Fcentral * perfilKing(rArcsec, halo.rcAs, halo.rtAs);
+    var gamma = (halo.gamma != null) ? halo.gamma : 1;
+    return halo.Fcentral * Math.pow(perfilKing(rArcsec, halo.rcAs, halo.rtAs), gamma);
   }
 
   /* Brillo superficial LOCAL del halo (mag/arcsec²), para comparar directamente
@@ -1055,8 +1135,15 @@
   function dibujarAureola(ctx, x, y, radio, rgb, alpha) {
     var col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
     var gr = ctx.createRadialGradient(x, y, 0, x, y, radio);
+    /* Antes 3 stops (0→0,9, 0,5→0,3, 1→0): lineal en TODO el radio, así que a
+       r=0,8·radio todavía quedaba alfa≈0,12 (visible a simple vista) — por
+       eso las estrellas muy brillantes se veían como un círculo grande casi
+       sólido y sin apenas difuminado, en vez de un glare que se apaga rápido
+       cerca del núcleo (ver captura del usuario, 2026-08-01). Se adelanta el
+       pico y se acelera la caída: mismo brillo central, cola larga y tenue. */
     gr.addColorStop(0, 'rgba(' + col + ',0.9)');
-    gr.addColorStop(0.5, 'rgba(' + col + ',0.3)');
+    gr.addColorStop(0.15, 'rgba(' + col + ',0.4)');
+    gr.addColorStop(0.35, 'rgba(' + col + ',0.1)');
     gr.addColorStop(1, 'rgba(' + col + ',0)');
     ctx.globalAlpha = alpha;
     ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, radio, 0, 7); ctx.fill();
@@ -1076,13 +1163,30 @@
     var magColorEfectivo = mlim - CFG.margenColorMag;
     var idxCarbono = -1;
     if (objetoCarbono) {
-      var mejorD2 = Infinity;
+      /* Bug (2026-08-01, SZ Sgr con "corazón blanco"): el catálogo de
+         estrellas de carbono (Astronomical League) da RA/Dec redondeado al
+         arcsec, así que en un campo con más de una estrella candidata dos
+         pueden quedar a una distancia en píxeles casi idéntica por puro
+         redondeo -aquí ganaba por 0,3" una vecina bastante más tenue-, y la
+         real quedaba sin `esCarbono`, mostrando su color natural (más pálido)
+         en vez del rojo intenso forzado. Con `o.carbonoMag` (magnitud del
+         catálogo) disponible, dentro de una tolerancia de posición generosa
+         se desempata por CERCANÍA DE MAGNITUD, mucho más discriminante entre
+         candidatas próximas que un redondeo de coordenadas. Sin `carbonoMag`
+         (llamadas antiguas), cae al criterio de siempre: la más cercana. */
+      var TOL_ARCSEC = 30;
+      var tolPx2 = Math.pow(TOL_ARCSEC * escv / 3600, 2);
+      var mejorD2 = Infinity, mejorDMag = Infinity;
       for (var c = 0; c < estrellas.length; c++) {
         if (estrellas[c][2] >= magColorEfectivo) continue;
         var cx = SIZE / 2 - deltaRA(estrellas[c][0]) * cos0 * escv;
         var cy = SIZE / 2 - (estrellas[c][1] - dec0) * escv;
         var d2 = (cx - SIZE / 2) * (cx - SIZE / 2) + (cy - SIZE / 2) * (cy - SIZE / 2);
-        if (d2 < mejorD2) { mejorD2 = d2; idxCarbono = c; }
+        if (o.carbonoMag != null) {
+          if (d2 > tolPx2) continue;
+          var dMag = Math.abs(estrellas[c][2] - o.carbonoMag);
+          if (dMag < mejorDMag) { mejorDMag = dMag; idxCarbono = c; }
+        } else if (d2 < mejorD2) { mejorD2 = d2; idxCarbono = c; }
       }
     }
     // Ganancia global del dibujo: la usa la capa de rango extendido para hacer
@@ -1122,12 +1226,21 @@
       // implementaciones anteriores (ver perfilKing).
       if (o.globular) {
         var rAsPin = Math.sqrt(Math.pow(deltaRA(ra) * cos0 * 3600, 2) + Math.pow((dec - dec0) * 3600, 2));
-        // dm > 0: el fondo (por arcsec²) es más tenue que la propia estrella, no
-        // amortigua. dm < 0: el fondo pesa más que la estrella ahí, la empuja a
-        // puntual. rangoMag ancha o estrecha la transición -es el "k" a ajustar
-        // tras ver M13/M92 en el ocular-.
-        var dm = muGlobular(o.globular, rAsPin) - g;
-        var tPin = suave(0.5 + dm / (2 * CFG.globular.rangoMag));
+        var tPin;
+        if (rAsPin <= o.globular.rcAs) {
+          // Dentro del radio de núcleo: puntual sin excepción, pase lo que
+          // pase con su magnitud -el ojo nunca resuelve halo individual ahí,
+          // solo el brillo difuso del cúmulo (ver captura del usuario,
+          // 2026-08-01)-.
+          tPin = 0;
+        } else {
+          // Fuera del núcleo: la transición suave de siempre (dm > 0: el
+          // fondo es más tenue que la estrella, no amortigua; dm < 0: el
+          // fondo pesa más, la empuja a puntual). rangoMag ancha o estrecha
+          // la transición -es el "k" a ajustar tras ver M13/M92 en el ocular-.
+          var dm = muGlobular(o.globular, rAsPin) - g;
+          tPin = suave(0.5 + dm / (2 * CFG.globular.rangoMag));
+        }
         blurG = CFG.blurMin + (blurG - CFG.blurMin) * tPin;
       }
       // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
@@ -1151,7 +1264,7 @@
         dibujarAureola(ctx, x, y, Ra, colEstrella, aAur * ganActual);
       }
       ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual * dilucion;
-      dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG);
+      dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG, !!(o.globular && tPin === 0), esCarbono);
       if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }
     ctx.globalAlpha = 1;
@@ -1280,6 +1393,7 @@
     perfilKing: perfilKing,
     areaKing: areaKing,
     haloGlobular: haloGlobular,
+    gammaHalo: gammaHalo,
     fobjGlobular: fobjGlobular,
     muGlobular: muGlobular,
     pintarHaloGlobular: pintarHaloGlobular,
