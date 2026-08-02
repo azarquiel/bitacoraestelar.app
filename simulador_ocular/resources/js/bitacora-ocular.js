@@ -64,6 +64,20 @@
           doble: true
         };
       });
+      // Cúmulos globulares: catálogo de Harris (1996, rev. 2010), cargado desde
+      // globulares-datos.js (window.BITACORA_GLOBULARES). r_h del catálogo es
+      // radio de MEDIA LUZ, no de marea: r_tidal sale de r_c·10^c (ver
+      // BitacoraGaiaRender.haloGlobular).
+      var CATALOGO_GLOBULARES = (window.BITACORA_GLOBULARES || []).map(function (e) {
+        var rc = e[4], c = e[6];
+        return {
+          id: e[0],
+          nombre: e[1] ? (e[1] + ' · Cúmulo globular (' + e[0] + ')') : (e[0] + ' · Cúmulo globular'),
+          constelacion: '', ra: degAHms(e[2]), dec: degADms(e[3]),
+          tipo: 'cúmulo globular', carbono: false, doble: false, globular: true,
+          rCore: rc, rTidal: rc * Math.pow(10, c), muV0: e[7]
+        };
+      });
       // Códigos de catálogo -> nombre largo (fuente: mapa/datos/catalogos_dobles.csv).
       var CAT_DOBLES_NOMBRE = {
         AL:   'Double Star Club (Astronomical League)',
@@ -73,7 +87,7 @@
       };
 
       // Categorías del selector de objeto. La clave coincide con data-cat del HTML.
-      var CATALOGOS_OBJ = { cumulos: CATALOGO_CUMULOS, carbono: CATALOGO_CARBONO, dobles: CATALOGO_DOBLES };
+      var CATALOGOS_OBJ = { cumulos: CATALOGO_CUMULOS, carbono: CATALOGO_CARBONO, dobles: CATALOGO_DOBLES, globulares: CATALOGO_GLOBULARES };
       var objetoSel = CATALOGO_CUMULOS[0];   // M35 por defecto
 
       var TELE_EJEMPLO = [{ id: '_t200', vendor: '', modelo: 'Newton 200/1200 (ejemplo)', optica: 'Newtonian', apertura_mm: 200, focal_mm: 1200 }];
@@ -474,7 +488,18 @@
         // el cielo más brillante, el límite baja y las débiles DESAPARECEN,
         // igual que en el DSS. dibujarGaia solo pinta estrellas con Gmag <= mlim.
         var mlim = magLimiteTelescopio();
-        consultarGaia(ra0, dec0, arcmin).then(function (estrellas) {
+        // Consulta aparte, a profundidad y radio FIJOS (el del cúmulo, no el
+        // campo actual), para la resta de P4: cuánta luz ya está en estrellas
+        // catalogadas es del cúmulo, no de con qué telescopio se mira esta
+        // noche -si dependiera de la consulta principal (que sí varía con el
+        // equipo), cambiar de telescopio podía apagar el halo de golpe-. Si
+        // falla, sigue sin halo en vez de tirar todo el render a DSS.
+        var haloQuery = objetoSel.globular
+          ? BitacoraGaiaRender.consultar(ra0, dec0, Math.max(objetoSel.rTidal * 2.2, 10),
+              BitacoraGaiaRender.config.globular.magResta).catch(function () { return []; })
+          : Promise.resolve([]);
+        Promise.all([consultarGaia(ra0, dec0, arcmin), haloQuery]).then(function (res) {
+          var estrellas = res[0], estrellasHalo = res[1];
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
           /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
@@ -501,6 +526,16 @@
                 pa: objetoSel.pa, spect1: objetoSel.spect1, spect2: objetoSel.spect2
               })
             : estrellas;
+          // Halo no resuelto del cúmulo globular (perfil de King): se suma al
+          // fondo difuso y amortigua la aureola/blur de las estrellas que caen
+          // dentro (ver perfilKing/haloGlobular en bitacora-gaia-render.js).
+          // Solo en canvas-2d: la superposición de Gaia sobre DSS no lo lleva.
+          var halo = objetoSel.globular
+            ? BitacoraGaiaRender.haloGlobular(
+                { rc: objetoSel.rCore, rt: objetoSel.rTidal, muV0: objetoSel.muV0 },
+                estrellasHalo, ra0, dec0)
+            : null;
+          if (halo) BitacoraGaiaRender.pintarHaloGlobular(difuso, halo, { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
@@ -510,7 +545,8 @@
             // sep queda undefined y el suelo se comporta igual que en cualquier
             // otro campo.
             sep: objetoSel.doble ? objetoSel.sep : null,
-            conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana()
+            conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana(),
+            globular: halo
           }, PROC);
           var cieloGaia = cieloOptica(datosOcular().pupila);
           cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
@@ -658,7 +694,7 @@
         var box = $('sim-objeto'); if (!box) return;
         var o = objetoSel;
         box.querySelector('.obj-nom').textContent = o.nombre;
-        box.querySelector('.obj-coord').textContent = 'AR ' + o.ra + '  ·  Dec ' + o.dec + '  ·  ' + o.constelacion + ' (J2000)';
+        box.querySelector('.obj-coord').textContent = 'AR ' + o.ra + '  ·  Dec ' + o.dec + (o.constelacion ? '  ·  ' + o.constelacion : '') + ' (J2000)';
         box.classList.toggle('es-carbono', !!o.carbono);
         box.classList.toggle('es-doble', !!o.doble);
         var meta = $('sim-obj-meta');
@@ -766,6 +802,7 @@
           specs: function (o) {
             if (o.carbono) return (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '') || o.abrev || '';
             if (o.doble) return [o.constelacion, (o.sep != null ? o.sep + '″' : '')].filter(Boolean).join('  ·  ');
+            if (o.globular) return 'μV₀ ' + o.muV0.toFixed(1) + '  ·  r_t ' + o.rTidal.toFixed(0) + '′';
             return o.constelacion || '';
           },
           max: 40, todosSiVacio: true,

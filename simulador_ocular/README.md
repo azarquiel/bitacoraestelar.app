@@ -9,21 +9,24 @@ Funciona en el navegador (móvil u ordenador), **sin instalar nada y sin necesid
 de iniciar sesión**. Vive en la web WordPress del proyecto
 ([bitacoraestelar.app](https://bitacoraestelar.app)) como un bloque HTML.
 
-> El **objeto** lo elige el usuario en un selector de tres pestañas: **cúmulos
-> abiertos** (de momento M35, M39 y NGC 7789), **estrellas de carbono** (las ~100
-> del programa de la Astronomical League) o **estrellas dobles** (188, fusión de
-> tres catálogos). El equipo y el cielo también los elige el usuario.
+> El **objeto** lo elige el usuario en un selector de cuatro pestañas: **cúmulos
+> abiertos** (de momento M35, M39 y NGC 7789), **cúmulos globulares** (los 149 del
+> catálogo de Harris), **estrellas de carbono** (las ~100 del programa de la
+> Astronomical League) o **estrellas dobles** (188, fusión de tres catálogos). El
+> equipo y el cielo también los elige el usuario.
 
 ---
 
 ## Qué hace
 
-- **Elige el objeto**: en un selector de tres pestañas, un **cúmulo abierto**, una
-  **estrella de carbono** de la Astronomical League o una **estrella doble**. Al elegir
-  una estrella de carbono, la ficha resalta su magnitud, tipo y su característico **color
-  rojo-anaranjado** (mejor visible en la vista de Gaia). Al elegir una doble, la ficha
-  muestra las magnitudes de las dos componentes, su separación, en qué catálogos aparece
-  y un **veredicto de si tu equipo la resuelve** (ver más abajo).
+- **Elige el objeto**: en un selector de cuatro pestañas, un **cúmulo abierto**, un
+  **cúmulo globular**, una **estrella de carbono** de la Astronomical League o una
+  **estrella doble**. Al elegir un globular, la vista de Gaia pinta su **halo no
+  resuelto** (perfil de King) además de las estrellas individuales del catálogo. Al
+  elegir una estrella de carbono, la ficha resalta su magnitud, tipo y su característico
+  **color rojo-anaranjado** (mejor visible en la vista de Gaia). Al elegir una doble, la
+  ficha muestra las magnitudes de las dos componentes, su separación, en qué catálogos
+  aparece y un **veredicto de si tu equipo la resuelve** (ver más abajo).
 - **Elige tu equipo**: telescopio y ocular de un catálogo de cientos de modelos,
   o **introdúcelos a mano** (apertura, focal y tipo óptico) si no están en la lista.
 - **Ajusta el cielo** del observador (brillo de fondo en mag/arcsec², de rural
@@ -48,6 +51,7 @@ de iniciar sesión**. Vive en la web WordPress del proyecto
 | `resources/js/bitacora-ocular.js` | La lógica del simulador (óptica, fotometría, UI) | Servidor, por FTP a `…/uploads/bitacora/` |
 | `../resources/js/bitacora-gaia-render.js` (compartido) | **Motor de render de estrellas de Gaia** (consulta + dibujo, `window.BitacoraGaiaRender`), extraído para reutilizarlo también desde el formulario de registro | Servidor, por FTP a `…/uploads/bitacora/` |
 | ~~`resources/js/bitacora-ocular_main.js`~~ | **Código muerto**: copia antigua y duplicada del render de Gaia (su propio `spriteGaia()`, `magColor` fijo…), previa a la extracción a `bitacora-gaia-render.js`. Verificado (grep) que ningún `.html`/`.php` desplegado lo referencia. No se ha borrado a la espera de confirmación. | No desplegar |
+| `resources/js/globulares-datos.js` | Catálogo de cúmulos globulares (`window.BITACORA_GLOBULARES`), generado del catálogo de Harris | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
@@ -221,6 +225,35 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   > se ha pedido todavía — ver el comentario `ponytail:` junto a `CFG.alfaMin` en
   > `bitacora-gaia-render.js`.
 
+### Halo de los cúmulos globulares (perfil de King)
+
+Los 149 cúmulos del catálogo de **Harris** (1996, rev. 2010) pintan, además de sus
+estrellas individuales de Gaia, un **halo no resuelto** con el perfil de brillo
+superficial de **King (1962)**, anclado a los parámetros medidos del cúmulo (radio
+de core `r_c`, concentración `c = log(r_t/r_c)` y brillo superficial central `mu_V0`),
+no a un ajuste visual:
+
+- **`perfilKing`/`areaKing`**: forma cerrada del perfil (1 en el centro, 0 en el radio
+  de marea `r_t`) y de su integral de área efectiva, sin discretizar en anillos (evita
+  artefactos de anillos visibles en renders anteriores basados en esa técnica).
+- **Resta de luz ya resuelta (evita contar dos veces)**: el flujo total catalogado
+  (`mu_V0`) incluye la luz de las estrellas que Gaia también dibuja como puntos: se
+  resta su flujo sumado antes de pintar el halo. Esa resta usa una consulta **aparte**,
+  a **profundidad y radio fijos** (`CFG.globular.magResta`), independiente del telescopio
+  del visor — si usara la misma consulta que alimenta el dibujo de estrellas (que sí
+  varía con la apertura), cambiar de equipo cambiaba cuánta luz se restaba y el halo
+  podía **apagarse de golpe** al pasar a un telescopio más grande. Con tope
+  `restaMaxFrac` (85 % del flujo total) para que esa resta nunca lo apague del todo.
+- **Amortiguación cerca de estrellas resueltas ("gotas de rocío sobre una perla")**:
+  el borde (blur) de cada estrella dibujada se afina hacia cabeza de alfiler cuando el
+  halo de fondo en su posición es tenue frente a su propio brillo (comparación en
+  magnitudes, `mu(r)` del halo vs. magnitud de la estrella), para que las estrellas del
+  cúmulo se vean nítidas sobre el resplandor en vez de difuminadas por él.
+- Todo verificado sin navegador en `scripts/test_globulares.js` (forma del perfil,
+  conservación de flujo, tope de la resta, monotonía radial sin anillos, continuidad de
+  la amortiguación). Catálogo regenerable con `python3 scripts/gen_globulares.py`
+  (fuente: `mapa/datos/harris_mwgc.dat`; no editar `globulares-datos.js` a mano).
+
 ### Diffraction spikes (cruz de difracción de la araña)
 
 Las estrellas **brillantes** lucen el destello en cruz que produce la **araña** del
@@ -302,7 +335,7 @@ la lógica:
 
 | Bloque | Controla |
 |---|---|
-| `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo`); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
+| `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo de estrella** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **halo de cúmulo globular** (`globular.rangoMag` = margen de la amortiguación cerca de estrellas resueltas, `globular.magResta`/`globular.restaMaxFrac` = profundidad fija y tope de la resta de luz ya resuelta — ver *Halo de los cúmulos globulares* más arriba); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo`); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
@@ -378,6 +411,10 @@ desplegado con el permiso público.
 ## Dependencias y fuentes de datos
 
 - **WordPress** + el plugin `bitacora-registro` (catálogo de equipo).
+- **Cúmulos globulares**: W. E. Harris, *«A Catalog of Parameters for Milky Way
+  Globular Clusters»* (1996, revisión de diciembre de 2010), McMaster University
+  ([physics.mcmaster.ca/~harris/mwgc.dat](https://physics.mcmaster.ca/~harris/mwgc.dat)),
+  de libre distribución citando la fuente. Regenerado con `python3 scripts/gen_globulares.py`.
 - **Estrellas de carbono**: programa de observación de la **Astronomical League**.
   La fuente de verdad es `mapa/datos/AL_Carbon_Stars.csv`; el módulo
   `estrellas-carbono-datos.js` se **regenera** desde el CSV con
