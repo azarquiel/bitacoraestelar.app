@@ -533,7 +533,7 @@
           var halo = objetoSel.globular
             ? BitacoraGaiaRender.haloGlobular(
                 { rc: objetoSel.rCore, rt: objetoSel.rTidal, muV0: objetoSel.muV0 },
-                estrellasHalo, ra0, dec0)
+                estrellasHalo, ra0, dec0, datosOcular().aumentos)
             : null;
           if (halo) BitacoraGaiaRender.pintarHaloGlobular(difuso, halo, { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, {
@@ -545,7 +545,8 @@
             // sep queda undefined y el suelo se comporta igual que en cualquier
             // otro campo.
             sep: objetoSel.doble ? objetoSel.sep : null,
-            conGlow: true, carbono: !!objetoSel.carbono, arana: teleTieneArana(),
+            conGlow: true, carbono: !!objetoSel.carbono,
+            carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana(),
             globular: halo
           }, PROC);
           var cieloGaia = cieloOptica(datosOcular().pupila);
@@ -637,7 +638,8 @@
         BitacoraGaiaRender.dibujar(ctx, estrellas, {
           ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
           apertura: teleApertura(),
-          conGlow: conGlow, carbono: objetoCarbono, arana: teleTieneArana()
+          conGlow: conGlow, carbono: objetoCarbono,
+          carbonoMag: objetoCarbono ? objetoSel.mag : null, arana: teleTieneArana()
         });
       }
 

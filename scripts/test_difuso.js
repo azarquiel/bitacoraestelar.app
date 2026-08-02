@@ -175,6 +175,28 @@ FOT.GAMMA_PERCEPTUAL = 1;
 });
 FOT.GAMMA_PERCEPTUAL = gammaOriginal;
 
+/* ── 13b. El realce perceptual decae si el objeto ya está bien visible ──────
+   Bug (2026-08-01): el boost de GAMMA_PERCEPTUAL se aplicaba IGUAL da igual
+   si el objeto rozaba el umbral de contraste (donde ayuda, evita que
+   desaparezca) o si ya estaba muy por encima (visibilidadDifusa≈1, un núcleo
+   de cúmulo globular bien resuelto): un núcleo ya visible del todo se inflaba
+   igual que una nebulosa apenas perceptible, y se veía quemado/blanco. El
+   quinto parámetro `s` (la misma visibilidad 0-1 que pintarFot ya calcula
+   antes de llamar) atenúa el gamma hacia 1 (sin boost) según crece s. */
+console.log('Realce perceptual decae con la visibilidad (no infla lo ya visible):');
+function nivelDeS(mu, s) {
+  var F = Math.pow(10, -0.4 * mu);
+  F = R.realzarPerceptual(F, Fc2, rg, s);
+  return R.valorDeFlujo(F, Fc2, rg);
+}
+var sinBoost = nivelDeS(21.62, 1), boostCompleto = nivelDeS(21.62, 0);
+ok(Math.abs(sinBoost - nivelDe(21.62, false)) < 0.5,
+  's=1 (ya totalmente visible): nivel ≈ igual que sin realce (' + sinBoost.toFixed(1) + ' vs ' +
+  nivelDe(21.62, false).toFixed(1) + ')');
+ok(Math.abs(boostCompleto - nivelDe(21.62, true)) < 0.5,
+  's=0 (justo en el umbral): nivel ≈ igual que el realce de siempre (' + boostCompleto.toFixed(1) + ')');
+ok(sinBoost < boostCompleto, 'a más visibilidad, menos boost (' + sinBoost.toFixed(1) + ' < ' + boostCompleto.toFixed(1) + ')');
+
 /* ── 14. La apertura tiene que notarse en los objetos extensos ──────────────
    El brillo superficial NO puede subir con la apertura: a igual pupila de salida
    es idéntico, y eso es física. Lo que sí cambia es el tamaño en la retina, y un
@@ -224,6 +246,42 @@ var claro = contrasteEstrella(21.9, 128), contaminado = contrasteEstrella(16.15,
 ok(claro > contaminado,
   'la misma estrella (' + claro.toFixed(1) + ' en cielo oscuro vs ' + contaminado.toFixed(1) +
   ' con contaminación) pierde contraste al empeorar el cielo, ya no lo mantiene fijo');
+
+/* ── 15b. El halo difuso de un cúmulo globular NO se suma sin comprimir al
+   brillo propio de una estrella resuelta ──────────────────────────────────
+   Sospecha del usuario (2026-08-01): que el halo de un globular sufriera el
+   mismo bug que la contaminación lumínica (nº15) -que el "exceso" de una
+   estrella sobre su fondo se mantenga fijo pase lo que pase con el fondo, en
+   vez de comprimirse-. pintarFot() usa la MISMA fórmula para cualquier fondo
+   difuso (Fobj[i], venga de contaminación o de perfil de King): F = difuso +
+   flujoDeValor(v, Fref, rango); salida = valorDeFlujo(F, Fcielo, rango). Como
+   valorDeFlujo es logarítmica (cóncava), el exceso que aporta la estrella
+   SIEMPRE decrece al crecer F, sea cual sea la fuente del difuso -no hace
+   falta lógica aparte por cúmulo-. Se reproduce aquí la fórmula exacta de
+   pintarFot con las mismas piezas exportadas que usa el nº15, sin canvas. */
+console.log('Halo de cúmulo globular comprime el exceso de una estrella, igual que la CL:');
+var cFondo = R.ctxFotometrico({ pupilaSalida: 2, pupilaOjo: 7, sqm: 21, transmision: 1 });
+function pixelFot(v, difuso) {
+  var F = difuso + (v > 0 ? R.flujoDeValor(v, cFondo.Fref, cFondo.rango) : 0);
+  return cFondo.nivelFondo + R.valorDeFlujo(F, cFondo.Fcielo, cFondo.rango);
+}
+var vEstrella = 200;
+var nivelesDifuso = [0, cFondo.Fcielo, cFondo.Fcielo * 10, cFondo.Fcielo * 100, cFondo.Fcielo * 1000];
+var excesos = nivelesDifuso.map(function (dif) { return pixelFot(vEstrella, dif) - pixelFot(0, dif); });
+var comprimeSiempre = true;
+for (var e = 1; e < excesos.length; e++) if (excesos[e] >= excesos[e - 1]) comprimeSiempre = false;
+ok(comprimeSiempre, 'el exceso de la estrella (' + excesos.map(function (x) { return x.toFixed(0); }).join(' → ') +
+  ') decrece según crece el difuso local (halo del cúmulo), nunca se mantiene fijo ni crece');
+ok(excesos[0] === vEstrella, 'sin difuso de fondo, el exceso es exactamente el valor propio de la estrella');
+
+console.log('Fresuelto de haloGlobular resta en agregado, no por píxel (aproximación documentada, no bug):');
+var M13test = { rc: 0.62, rt: 0.62 * Math.pow(10, 1.87), muV0: 15.6 };
+var estrellaBrillante = [[250, 36, 8]];   // ra, dec = centro exacto del cúmulo; g=8, muy brillante
+var haloSinResta = R.haloGlobular(M13test, [], 250, 36);
+var haloConResta = R.haloGlobular(M13test, estrellaBrillante, 250, 36);
+ok(haloConResta.Fcentral < haloSinResta.Fcentral,
+  'una estrella resuelta muy brillante en el centro SÍ reduce el Fcentral del halo (resta agregada, ' +
+  haloSinResta.Fcentral.toExponential(2) + ' → ' + haloConResta.Fcentral.toExponential(2) + ')');
 
 /* ── 16. El cruce resuelta/glow en g=mlim es continuo ───────────────────────
    Bug real (el que seguía viéndose tras el fix de Fref): la rama resuelta

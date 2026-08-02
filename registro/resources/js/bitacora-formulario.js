@@ -226,7 +226,7 @@
     var carb=carbonoPorNombre(txt);
     if(carb){
       var etc='estrella de carbono'+(carb.cons?' · '+carb.cons:'');
-      resolved={tipo:'carbono',num:null,nombre:carb.nombre,ra:carb.ra,dec:carb.dec,cons:carb.cons,etiqueta:carb.nombre};
+      resolved={tipo:'carbono',num:null,nombre:carb.nombre,ra:carb.ra,dec:carb.dec,cons:carb.cons,etiqueta:carb.nombre,mag:carb.mag};
       setStatus(objStatus,'ok','✓ '+carb.nombre+' — '+etc+(carb.mag!=null?' · mag ≈ '+String(carb.mag).replace('.',','):'')+'.');
       recompute(); return;
     }
@@ -875,6 +875,7 @@
     var D=parseFloat(telescopioSel.apertura_mm);
     return {
       ra:resolved.ra, dec:resolved.dec, carbono:(resolved.tipo==='carbono'),
+      carbonoMag:(resolved.tipo==='carbono'?resolved.mag:null),
       apertura:D, aumentos:opt.aumento, afov:parseFloat(ocular.campo_aparente),
       arcmin:opt.campoReal*60,
       pupilaSalida:(opt.pupila!=null?opt.pupila:D/opt.aumento),
@@ -936,7 +937,7 @@
       optica:d.optica, arana:d.arana, sqm:d.sqm, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
       // El campo aparente fija el tamaño de las estrellas: el lienzo se muestra a
       // un diámetro ∝ afov, así que el radio en píxeles va con 1/afov.
-      afov:d.afov, carbono:d.carbono, conGlow:true
+      afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, conGlow:true
     }).then(function(){
       ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
       ctx.save(); ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.clip();
