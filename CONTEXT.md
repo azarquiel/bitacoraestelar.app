@@ -222,8 +222,20 @@ paralelo a las capas difusas sintéticas del Canvas-2D.
   negro que PanSTARRS deja en el centro de una estrella brillante) y
   `flujoDePlaca(v, esHips)` (luma 0-255 → brillo superficial entre `SB_OBJ_MIN` y
   `SB_OBJ_MAX` → flujo).
-- **Consumidor:** el **simulador de oculares**, que conserva solo lo que es suyo:
-  `lumas()`, que lee los píxeles de la placa del DOM, y la orquestación.
+- **Consumidores:** el **simulador de oculares**, que conserva su orquestación
+  (avisos, respaldo a `<img>` si el navegador bloquea los píxeles, superposición
+  de Gaia), y el **formulario de registro**, que entra por `renderPlaca(canvas,
+  opts)`: el gemelo fotográfico de `render()` —misma vista, misma fotometría—
+  que pide las dos placas, las fusiona, las pinta y realza encima las estrellas
+  brillantes de Gaia. La URL del proxy la arma `urlPlaca()`, fuente única de los
+  dos (test: `scripts/test_url_placa.js`): las coordenadas van en sexagesimal
+  llano porque el validador de `dss-proxy.php` no admite ni «h» ni «°», y el
+  campo se acota a los 2° que el DSS sirve.
+- **Por qué dos fuentes en el registro:** el catálogo dibujado gana en cúmulos y
+  dobles; la placa gana en nebulosidad y, sobre todo, en las **nebulosas
+  oscuras** (los Barnard), que son ausencia de estrellas sobre un fondo rico y
+  un catálogo de puntos no puede contar. El observador elige en el modal y
+  compara antes de decidir.
 - **No es fotometría calibrada:** es un mapeo heurístico con parámetros puestos a
   ojo, y están para tocarlos. Lo que el test fija son los **invariantes**: más luma
   nunca es menos flujo, un píxel apagado no inventa luz (flujo 0), la escala es

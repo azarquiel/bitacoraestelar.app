@@ -78,12 +78,27 @@ imagen*, un botón **+ Generar con el simulador**: reutiliza el motor de la vist
 de estrellas del [simulador de ocular](../simulador_ocular/README.md)
 (`BitacoraGaiaRender`) con el **equipo de la flota de esa entrada** (telescopio +
 ocular + auxiliar), el **objeto** de la observación y el **cielo** de la sesión,
-y produce la imagen de cómo se vería ese campo con las **estrellas reales de Gaia
-DR3**. Se muestra una **previsualización** (900×900, campo circular ∝ campo
-aparente del ocular) y, al aceptar, se sube como una imagen principal más en
-**WebP**, marcada `origen: simulada` y con la insignia *«simulada (Gaia)»* para
-distinguirla de una foto o boceto reales. Disponible solo cuando el objeto tiene
-coordenadas y la entrada usa telescopio y ocular de la flota.
+y produce la imagen de cómo se vería ese campo. Se muestra una
+**previsualización** (900×900, campo circular ∝ campo aparente del ocular) y, al
+aceptar, se sube como una imagen principal más en **WebP**, marcada
+`origen: simulada` y con la insignia *«simulada (Gaia)»* o *«simulada (DSS)»*
+para distinguirla de una foto o boceto reales. Disponible solo cuando el objeto
+tiene coordenadas y la entrada usa telescopio y ocular de la flota.
+
+En la cabecera del modal se elige la **fuente** de la vista, y cambiarla repinta
+el mismo campo para poder compararlas **antes** de decidir:
+
+- **Estrellas de Gaia DR3** — el catálogo dibujado (`BitacoraGaiaRender.render`).
+  Manda en cúmulos, dobles y campos estelares.
+- **DSS (placas fotográficas)** — la placa real pasada por la misma cadena
+  fotométrica del simulador (`BitacoraGaiaRender.renderPlaca`), con las
+  brillantes realzadas con Gaia encima. Manda en nebulosidad y, sobre todo, en
+  las **nebulosas oscuras** (los Barnard), que un catálogo de puntos no cuenta.
+  El DSS no sirve más de **2°**: con un campo mayor la placa se recorta y el
+  modal lo avisa.
+
+La base solo distingue `simulada` de `subida`, así que al reabrir una
+observación guardada la insignia vuelve a ser *«simulada»* a secas.
 
 ### 3 · Exploración (opcional)
 
