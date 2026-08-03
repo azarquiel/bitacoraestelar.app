@@ -3957,27 +3957,41 @@ add_action( 'wp_head', 'bitacora_inyectar_publico' );
  * que la música siga sonando mientras se navega por la bitácora.
  *
  * Va en el pie y no en la cabecera porque necesita que el menú ya esté pintado.
- * El icono viaja incrustado (es el mismo dibujo que resources/icono-reproductor.svg)
- * para no gastar una petición en un archivo de medio kilobyte.
+ * El icono viaja incrustado (es el dibujo de resources/playlist.svg) para no
+ * gastar una petición en un archivo de dos kilobytes. Los identificadores de
+ * los degradados llevan el prefijo "repro-" porque en la página conviven con
+ * los de la plantilla y no pueden repetirse.
  */
 function bitacora_inyectar_reproductor_menu() {
     $url = esc_url( content_url( '/uploads/bitacora/reproductor.html' ) );
     ?>
 <style>
 .bitacora-musica {display:inline-flex; align-items:center; gap:.5em;}
-.bitacora-musica svg {width:1.15em; height:1.15em; flex:none;}
+.bitacora-musica svg {width:1.5em; height:1.5em; flex:none;}
 </style>
 <script>
 (function () {
-  var ICONO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"' +
-    ' stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"' +
+  var ICONO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"' +
     ' aria-hidden="true" focusable="false">' +
-    '<path d="M9.4 17V5.6l9-2.1v11.4"/><path d="M9.4 8.6l9-2.1"/>' +
-    '<ellipse cx="6.9" cy="17.2" rx="2.5" ry="1.9" transform="rotate(-18 6.9 17.2)" fill="currentColor" stroke="none"/>' +
-    '<ellipse cx="15.9" cy="14.9" rx="2.5" ry="1.9" transform="rotate(-18 15.9 14.9)" fill="currentColor" stroke="none"/>' +
-    '<path d="M4.6 3.1 5.2 5.6 7.7 6.2 5.2 6.8 4.6 9.3 4 6.8 1.5 6.2 4 5.6 Z" fill="currentColor" stroke="none"/>' +
-    '<circle cx="20.6" cy="18.4" r="1" fill="currentColor" stroke="none"/>' +
-    '<circle cx="2.4" cy="12.6" r="0.7" fill="currentColor" stroke="none"/></svg>';
+    '<defs>' +
+    '<radialGradient id="repro-fondo" cx="50%" cy="50%" r="50%">' +
+    '<stop offset="0%" stop-color="#1A2744"/><stop offset="100%" stop-color="#0A111F"/>' +
+    '</radialGradient>' +
+    '<linearGradient id="repro-plata" x1="0%" y1="0%" x2="100%" y2="100%">' +
+    '<stop offset="0%" stop-color="#E0E5EC"/><stop offset="40%" stop-color="#8B95A5"/>' +
+    '<stop offset="100%" stop-color="#C8D0D8"/>' +
+    '</linearGradient>' +
+    '</defs>' +
+    '<circle cx="50" cy="50" r="45" fill="url(#repro-fondo)" stroke="url(#repro-plata)" stroke-width="4"/>' +
+    '<circle cx="50" cy="50" r="35" fill="none" stroke="#2A3B5C" stroke-width="1.5"/>' +
+    '<circle cx="50" cy="8" r="2" fill="#8B95A5" opacity="0.6"/>' +
+    '<circle cx="50" cy="92" r="2" fill="#8B95A5" opacity="0.6"/>' +
+    '<circle cx="8" cy="50" r="2" fill="#8B95A5" opacity="0.6"/>' +
+    '<circle cx="92" cy="50" r="2" fill="#8B95A5" opacity="0.6"/>' +
+    '<path d="M 30 22 L 72 50 L 30 78 L 30 60 L 20 50 L 30 40 Z" fill="#F2C94C" stroke="#D4A017" stroke-width="1.5"/>' +
+    '<line x1="45" y1="32" x2="55" y2="37" stroke="#0A111F" stroke-width="1.5" opacity="0.5"/>' +
+    '<line x1="45" y1="68" x2="55" y2="63" stroke="#0A111F" stroke-width="1.5" opacity="0.5"/>' +
+    '</svg>';
 
   var URL_REPRODUCTOR = <?php echo wp_json_encode( $url ); ?>;
 
