@@ -4,8 +4,12 @@ declare(strict_types=1);
 /* ════════════════════════════════════════════════════════════════════════════
    PROXY DEL DSS CON CACHÉ LRU EN DISCO  (respaldo servidor del simulador)
    ────────────────────────────────────────────────────────────────────────────
-   Recibe ra/dec/x/y/Sky-Survey, descarga la placa del DSS (archive.eso.org) y
-   la cachea en disco: una vez cacheada, se sirve del disco sin volver a pedirla.
+   Recibe ra/dec/x/y/Sky-Survey/fuente, descarga la placa del DSS y la cachea en
+   disco: una vez cacheada, se sirve del disco sin volver a pedirla.
+
+   Dos fuentes de la MISMA placa (parámetro `fuente`, ver dss_url):
+     · eso     — archive.eso.org, la placa Schmidt tal cual (por defecto).
+     · skyview — skyview.gsfc.nasa.gov, remuestreada con el norte arriba.
 
    Caché LRU en disco con tope de tamaño (150 MB), limpieza incremental (no en
    cada petición), y bloqueo flock para evitar estampidas y escrituras a medias
@@ -27,6 +31,9 @@ const DSS_CLEANUP_MAX_DEL = 300;                 // nº máx. de entradas a borr
 const DSS_CLIENT_MAXAGE   = 31536000;            // s: Cache-Control max-age que se anuncia al navegador (1 año)
 const DSS_ORPHAN_TTL      = 3600;                // s: edad mínima de un .lock/.tmp huérfano para retirarlo
 const DSS_SURVEYS         = ['DSS1', 'DSS2-red', 'DSS2-blue', 'DSS2-infrared'];
+const DSS_FUENTES         = ['eso', 'skyview'];   // de dónde bajar la placa (ver dss_url)
+/* El mismo reconocimiento, con el nombre que le da cada servicio. */
+const DSS_SKYVIEW         = ['DSS1' => 'dss1r', 'DSS2-red' => 'dss2r', 'DSS2-blue' => 'dss2b', 'DSS2-infrared' => 'dss2ir'];
 
 /* La política de caché LRU (qué se evicta y cuándo se limpia) es la misma que la
    del proxy de Gaia y vive en el módulo compartido. */
@@ -52,9 +59,14 @@ function dss_acotar_campo(float $v): float {
     return min((float) DSS_MAX_ARCMIN, max(1.0, $v));
 }
 
+/** Normaliza la fuente a la lista blanca; por defecto el archivo del ESO. */
+function dss_fuente_valida(string $f): string {
+    return in_array($f, DSS_FUENTES, true) ? $f : 'eso';
+}
+
 /** Clave de caché determinista a partir de los parámetros (ya normalizados). */
-function dss_clave(string $ra, string $dec, float $x, float $y, string $sv): string {
-    return md5($ra . '|' . $dec . '|' . $x . '|' . $y . '|' . $sv);
+function dss_clave(string $ra, string $dec, float $x, float $y, string $sv, string $fuente): string {
+    return md5($ra . '|' . $dec . '|' . $x . '|' . $y . '|' . $sv . '|' . $fuente);
 }
 
 /** Ruta del fichero de caché (GIF) de una clave. */
@@ -62,8 +74,40 @@ function dss_ruta(string $clave): string {
     return DSS_CACHE_DIR . '/' . $clave . '.gif';
 }
 
-/** URL del archivo del ESO para descargar la placa. */
-function dss_url(string $ra, string $dec, float $x, float $y, string $sv): string {
+/**
+ * Lado en píxeles que se le pide a SkyView. El ESO devuelve la placa a su escala
+ * nativa (~1,7"/px en el DSS1) y el tamaño le sale solo; a SkyView hay que
+ * decírselo, así que se le pide ese mismo detalle, acotado para no pedir un
+ * sello de correos en campos diminutos ni un mural en los de 2°.
+ */
+function dss_pixels(float $arcmin): int {
+    return (int) min(1200, max(300, round($arcmin * 60 / 1.7)));
+}
+
+/**
+ * URL de la que descargar la placa, según la fuente:
+ *
+ *  · 'eso'     — archivo del ESO: la placa Schmidt TAL CUAL, en el sistema de la
+ *                placa original. Sale ligeramente girada respecto al norte (ver
+ *                README, "Orientación del campo"), pero conserva el grano y el
+ *                contraste originales de la placa.
+ *  · 'skyview' — SkyView (NASA/GSFC): las mismas placas REMUESTREADAS sobre una
+ *                rejilla TAN con el norte arriba y el este a la izquierda, la
+ *                misma convención del render de Gaia.
+ */
+function dss_url(string $ra, string $dec, float $x, float $y, string $sv, string $fuente): string {
+    if ($fuente === 'skyview') {
+        $px = dss_pixels(max($x, $y));
+        return 'https://skyview.gsfc.nasa.gov/current/cgi/pskcall'
+            . '?survey=' . rawurlencode(DSS_SKYVIEW[$sv])
+            . '&position=' . rawurlencode($ra . ',' . $dec)
+            . '&size=' . round($x / 60, 4) . ',' . round($y / 60, 4)
+            . '&pixels=' . $px
+            . '&projection=Tan&coordinates=J2000'
+            // Lineal y fijado: flujoDePlaca() lee el nivel de gris como brillo
+            // superficial, así que el estirado no puede quedar al gusto del día.
+            . '&scaling=Linear&return=GIF';
+    }
     return 'https://archive.eso.org/dss/dss/image'
         . '?ra=' . rawurlencode($ra)
         . '&dec=' . rawurlencode($dec)
@@ -93,7 +137,9 @@ function dss_fetch(string $url): ?string {
         ]);
         $body = curl_exec($ch);
         $http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        // Sin curl_close(): no-op desde PHP 8, y en PHP 8.5 emite un deprecation
+        // notice que se cuela DENTRO del GIF si display_errors está On (mismo
+        // motivo que en gaia_proxy.php).
     } else {
         $ctx = stream_context_create(['http' => [
             'timeout' => DSS_REQUEST_TIMEOUT,
@@ -168,13 +214,14 @@ $dec = $_GET['dec'] ?? '';
 $x   = dss_acotar_campo(floatval($_GET['x'] ?? 30));
 $y   = dss_acotar_campo(floatval($_GET['y'] ?? 30));
 $sv  = dss_survey_valido($_GET['Sky-Survey'] ?? 'DSS1');
+$fte = dss_fuente_valida((string) ($_GET['fuente'] ?? 'eso'));
 
 if (!dss_validar_coord($ra) || !dss_validar_coord($dec)) {
     http_response_code(400);
     exit('Coordenadas no válidas');
 }
 
-$clave   = dss_clave($ra, $dec, $x, $y, $sv);
+$clave   = dss_clave($ra, $dec, $x, $y, $sv, $fte);
 $fichero = dss_ruta($clave);
 
 // ── ACIERTO de caché ── (las placas son inmutables; no caducan)
@@ -193,7 +240,7 @@ if ($lock && flock($lock, LOCK_EX)) {
         dss_servir($fichero, $clave);    // termina
     }
 
-    $datos = dss_fetch(dss_url($ra, $dec, $x, $y, $sv));
+    $datos = dss_fetch(dss_url($ra, $dec, $x, $y, $sv, $fte));
 
     if ($datos === null) {
         flock($lock, LOCK_UN);
@@ -233,7 +280,7 @@ if ($lock && flock($lock, LOCK_EX)) {
 if ($lock) {
     fclose($lock);
 }
-$datos = dss_fetch(dss_url($ra, $dec, $x, $y, $sv));
+$datos = dss_fetch(dss_url($ra, $dec, $x, $y, $sv, $fte));
 if ($datos !== null) {
     dss_servir_directo($datos);          // termina
 }

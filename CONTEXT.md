@@ -75,7 +75,13 @@ y por **Mi flota**, sin DOM ni WordPress.
 - **`nombreTelescopio(item)`** → rótulo del telescopio: el **nombre** propio que el
   observador le puso en Mi flota, o `vendor + modelo` en su defecto. Mismo rótulo
   en la lista de Mi flota y en el selector del simulador.
-- **Test:** `scripts/test_equipo.js` fija el contrato de ambos.
+- **`flotaPrimero(flota, catalogo)`** → una sola lista para el selector de
+  **telescopios** del simulador: delante los **de Mi flota** (copiados con
+  `esFlota:true`, sin tocar la respuesta de la API), detrás el **catálogo global**.
+  Solo hay flota con sesión iniciada, que es de donde sale la diferencia entre lo
+  que ve un visitante y un observador logueado. Oculares y auxiliares no pasan por
+  aquí: salen del catálogo global tal cual.
+- **Test:** `scripts/test_equipo.js` fija el contrato de los tres.
 
 ## Astrometría de la sesión
 
@@ -216,8 +222,20 @@ paralelo a las capas difusas sintéticas del Canvas-2D.
   negro que PanSTARRS deja en el centro de una estrella brillante) y
   `flujoDePlaca(v, esHips)` (luma 0-255 → brillo superficial entre `SB_OBJ_MIN` y
   `SB_OBJ_MAX` → flujo).
-- **Consumidor:** el **simulador de oculares**, que conserva solo lo que es suyo:
-  `lumas()`, que lee los píxeles de la placa del DOM, y la orquestación.
+- **Consumidores:** el **simulador de oculares**, que conserva su orquestación
+  (avisos, respaldo a `<img>` si el navegador bloquea los píxeles, superposición
+  de Gaia), y el **formulario de registro**, que entra por `renderPlaca(canvas,
+  opts)`: el gemelo fotográfico de `render()` —misma vista, misma fotometría—
+  que pide las dos placas, las fusiona, las pinta y realza encima las estrellas
+  brillantes de Gaia. La URL del proxy la arma `urlPlaca()`, fuente única de los
+  dos (test: `scripts/test_url_placa.js`): las coordenadas van en sexagesimal
+  llano porque el validador de `dss-proxy.php` no admite ni «h» ni «°», y el
+  campo se acota a los 2° que el DSS sirve.
+- **Por qué dos fuentes en el registro:** el catálogo dibujado gana en cúmulos y
+  dobles; la placa gana en nebulosidad y, sobre todo, en las **nebulosas
+  oscuras** (los Barnard), que son ausencia de estrellas sobre un fondo rico y
+  un catálogo de puntos no puede contar. El observador elige en el modal y
+  compara antes de decidir.
 - **No es fotometría calibrada:** es un mapeo heurístico con parámetros puestos a
   ojo, y están para tocarlos. Lo que el test fija son los **invariantes**: más luma
   nunca es menos flujo, un píxel apagado no inventa luz (flujo 0), la escala es

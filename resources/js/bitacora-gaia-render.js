@@ -26,6 +26,10 @@
  *           pupilaSalida, pupilaOjo,  // para el gris de fondo
  *           carbono,            // bool: realce rojo de la estrella central
  *           conGlow }           // bool (def. true): glow de estrellas no resueltas
+ *   BitacoraGaiaRender.renderPlaca(canvas, opts) → Promise<{fuente}>
+ *       La MISMA vista, pero con la placa fotográfica del DSS (vía dss-proxy.php)
+ *       en vez del catálogo: mismas opts, más { dssProxy, fuente, conGaia }.
+ *   BitacoraGaiaRender.urlPlaca({ base, survey, ra, dec, arcmin, fuente }) → URL del proxy
  *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
  *   BitacoraGaiaRender.magLimite({ apertura, aumentos, transmision, sqm }) → number|null
@@ -195,6 +199,21 @@
   // Nivel de gris del fondo de cielo (0–255). Mismo cálculo que ctxFotometrico,
   // redondeado, para quien solo necesita rellenar el lienzo.
   function nivelFondo(o) { return Math.round(ctxFotometrico(o).nivelFondo); }
+
+  /* Píxeles a los que dibujar un lienzo que se enseña a `anchoCss` píxeles CSS
+     en una pantalla de densidad `dpr`: los que de verdad tiene el hueco. Con
+     720 fijos, una pantalla Retina a pantalla completa ampliaba x2 y la imagen
+     salía borrosa. Todo el render sale de ctx.canvas.width (la escala, el radio
+     de desenfoque, el tamaño de las estrellas), así que subirlo no descoloca
+     nada; lo que sube es el coste, con el CUADRADO del lado, y por eso el techo
+     lo pone quien llama: el de Gaia es solo CPU (el catálogo ya está bajado) y
+     el de las placas son bytes de un servidor ajeno. El suelo de 720 es el
+     tamaño con el que se ajustó el render: por debajo no se baja. */
+  var TAM_LIENZO_MIN = 720;
+  function tamLienzo(anchoCss, dpr, tope) {
+    var px = Math.round((anchoCss || 0) * (dpr > 0 ? dpr : 1));
+    return Math.max(TAM_LIENZO_MIN, Math.min(tope || TAM_LIENZO_MIN, px));
+  }
 
   /* Desenfoque gaussiano de un array de GRISES (0–255) usando el filtro nativo
      del canvas. Ojo: recorta a 0–255, así que no sirve para arrays de flujo. */
@@ -672,6 +691,67 @@
     cacheGaia[clave] = nueva;
     nueva.promise.catch(function () { if (cacheGaia[clave] === nueva) delete cacheGaia[clave]; });
     return nueva.promise;
+  }
+
+  /* ── Placas del DSS: URL del proxy ──────────────────────────────────────────
+     Fuente única de la petición a dss-proxy.php, compartida por el simulador y
+     por el formulario de registro. El proxy valida las coordenadas con
+     /^[0-9+\-.: ]{1,24}$/, así que aquí NO caben ni "h" ni "°": los grados se
+     escriben en sexagesimal llano. Una coordenada que ya viene en texto (el
+     catálogo del simulador) pasa tal cual. */
+  var DSS_PROXY_URL   = '/wp-content/uploads/bitacora/dss-proxy.php';
+  var DSS_MAX_ARCMIN  = 120;   // el servidor del DSS no sirve más de 2°
+  var DSS_MIN_ARCMIN  = 1;
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function gradosAHms(deg) {
+    var h = (((deg % 360) + 360) % 360) / 15, hh = Math.floor(h), m = (h - hh) * 60, mm = Math.floor(m), ss = Math.round((m - mm) * 60);
+    if (ss === 60) { ss = 0; mm++; } if (mm === 60) { mm = 0; hh = (hh + 1) % 24; }
+    return pad2(hh) + ' ' + pad2(mm) + ' ' + pad2(ss);
+  }
+  function gradosADms(deg) {
+    var sign = deg < 0 ? '-' : '+', a = Math.abs(deg), dd = Math.floor(a), m = (a - dd) * 60, mm = Math.floor(m), ss = Math.round((m - mm) * 60);
+    if (ss === 60) { ss = 0; mm++; } if (mm === 60) { mm = 0; dd++; }
+    return sign + pad2(dd) + ' ' + pad2(mm) + ' ' + pad2(ss);
+  }
+  function acotarPlaca(arcmin) {
+    return Math.min(DSS_MAX_ARCMIN, Math.max(DSS_MIN_ARCMIN, arcmin || DSS_MIN_ARCMIN));
+  }
+  function urlPlaca(o) {
+    var ra  = (typeof o.ra === 'number')  ? gradosAHms(o.ra)  : String(o.ra);
+    var dec = (typeof o.dec === 'number') ? gradosADms(o.dec) : String(o.dec);
+    var lado = acotarPlaca(o.arcmin).toFixed(1);
+    return (o.base || DSS_PROXY_URL) +
+      '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) +
+      '&equinox=J2000&name=' +
+      '&x=' + lado + '&y=' + lado +
+      '&Sky-Survey=' + encodeURIComponent(o.survey || 'DSS2-red') +
+      '&fuente=' + encodeURIComponent(o.fuente || 'skyview') +
+      '&mime-type=download-gif';
+  }
+
+  /* Carga una placa; resuelve a null si el servidor no responde (para poder
+     decidir el respaldo en vez de dejar el lienzo negro). */
+  function cargarPlaca(url) {
+    return new Promise(function (res) {
+      var im = new Image();
+      im.crossOrigin = 'anonymous';
+      im.onload = function () { res(im); };
+      im.onerror = function () { res(null); };
+      im.src = url;
+    });
+  }
+  // Luma (0-255) por píxel de una placa ya cargada; null si el navegador
+  // bloquea la lectura (CORS).
+  function lumasDePlaca(imagen, SIZE) {
+    var c = document.createElement('canvas'); c.width = c.height = SIZE;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(imagen, 0, 0, SIZE, SIZE);
+    var dd;
+    try { dd = ctx.getImageData(0, 0, SIZE, SIZE).data; } catch (e) { return null; }
+    var v = new Float32Array(SIZE * SIZE);
+    for (var i = 0, j = 0; j < v.length; i += 4, j++) v[j] = (dd[i] + dd[i + 1] + dd[i + 2]) / 3;
+    return v;
   }
 
   // Ganancia global del dibujo actual (ver capaEstrellas).
@@ -1360,6 +1440,66 @@
     });
   }
 
+  /* ── Entrada de alto nivel: la MISMA vista, pero con la placa del DSS ──
+     El gemelo fotográfico de render(): en vez de dibujar las estrellas de Gaia
+     sobre el fondo de cielo, pinta la placa del DSS pasada por la cadena
+     fotométrica (fusión HDR de la profunda con la corta → flujo → pintarFot) y
+     realza encima las estrellas brillantes de Gaia, igual que la vista DSS del
+     simulador. Las nebulosas oscuras (los Barnard) y la nebulosidad tenue salen
+     mucho mejor así: es una foto de verdad, no un catálogo de puntos.
+
+     Devuelve Promise<{fuente}>: 'skyview' (norte arriba) o 'eso' (la misma
+     placa, algo girada) si SkyView no respondió. Rechaza si no hay placa o si
+     el navegador bloquea la lectura de píxeles. */
+  function renderPlaca(canvas, o) {
+    var SIZE = canvas.width;
+    var ctx = canvas.getContext('2d');
+    var t = (o.transmision > 0) ? o.transmision : (transmisionOptica(o.optica) || TRANSMISION_DEFECTO);
+    var arana = (typeof o.arana === 'boolean') ? o.arana : opticaTieneArana(o.optica);
+    var arcmin = acotarPlaca(o.arcmin);
+    var cielo = {
+      pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm,
+      transmision: t, aumentos: o.aumentos
+    };
+    function pedir(fuente) {
+      function url(survey) {
+        return urlPlaca({ base: o.dssProxy, survey: survey, ra: o.ra, dec: o.dec, arcmin: arcmin, fuente: fuente });
+      }
+      return Promise.all([cargarPlaca(url('DSS2-red')), cargarPlaca(url('DSS1'))]).then(function (res) {
+        var profunda = res[0], corta = res[1];
+        if (!profunda && !corta) {
+          // SkyView caído: se reintenta UNA vez con el archivo del ESO, que es la
+          // misma placa girada respecto al norte. Antes eso que un círculo negro.
+          if (fuente === 'skyview') return pedir('eso');
+          throw new Error('sin placa');
+        }
+        var v = lumasDePlaca(profunda || corta, SIZE);
+        if (!v) throw new Error('cors');
+        if (profunda && corta) {
+          var vs = lumasDePlaca(corta, SIZE);
+          if (vs) v = fusionarPlacas(v, vs);
+        }
+        pintarFot(flujoDePlaca(v, false), ctx, cielo);
+        return { fuente: fuente };
+      });
+    }
+    return pedir(o.fuente || 'skyview').then(function (r) {
+      // Realce de las brillantes con Gaia: la placa las quema y pierde su color.
+      // El límite es mucho más brillante que la magnitud límite del equipo (que
+      // sí manda en la vista de Gaia): aquí el campo débil ya lo trae la placa.
+      if (o.conGaia === false || !(o.apertura > 0)) return r;
+      var mlim = 7.7 + 5 * Math.log10(o.apertura / 100);
+      return consultar(o.ra, o.dec, arcmin, magConsultaGaia(o.apertura, t)).then(function (estrellas) {
+        dibujar(ctx, estrellas, {
+          ra: o.ra, dec: o.dec, arcmin: arcmin, mlim: mlim, afov: o.afov,
+          apertura: o.apertura, conGlow: false,
+          carbono: !!o.carbono, carbonoMag: o.carbonoMag, arana: arana
+        });
+        return r;
+      }, function () { return r; });   // sin Gaia se queda la placa, que ya vale
+    });
+  }
+
   window.BitacoraGaiaRender = {
     config: CFG,
     fot: FOT,
@@ -1369,6 +1509,7 @@
     magLimite: magLimite,
     magConsultaGaia: magConsultaGaia,
     nivelFondo: nivelFondo,
+    tamLienzo: tamLienzo,
     nivelCielo: nivelCielo,
     tono: TONO,
     capaEstrellas: capaEstrellas,
@@ -1407,7 +1548,12 @@
     suave: suave,
     transmisionOptica: transmisionOptica,
     opticaTieneArana: opticaTieneArana,
+    urlPlaca: urlPlaca,
+    renderPlaca: renderPlaca,
+    dssMaxArcmin: DSS_MAX_ARCMIN,
     set proxyUrl(u) { PROXY_URL = u; },
-    get proxyUrl() { return PROXY_URL; }
+    get proxyUrl() { return PROXY_URL; },
+    set dssProxyUrl(u) { DSS_PROXY_URL = u; },
+    get dssProxyUrl() { return DSS_PROXY_URL; }
   };
 })();

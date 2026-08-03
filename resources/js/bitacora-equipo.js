@@ -16,6 +16,10 @@
      nombreTelescopio(item) -> string
        Rótulo a mostrar de un telescopio: su nombre propio (si el observador se lo
        puso en Mi flota) o, en su defecto, "vendor modelo".
+
+     flotaPrimero(flota, catalogo) -> [items]
+       Lista para elegir equipo: primero las piezas de "Mi flota" (marcadas con
+       esFlota:true), luego las del catálogo global. Sin mutar la entrada.
    ============================================================================ */
 
 (function () {
@@ -46,9 +50,21 @@
     return (vendor + ' ' + modelo).trim();
   }
 
+  /* Lista de telescopios a ofrecer al observador: SU flota delante, el catálogo
+     global detrás. Las piezas propias se copian marcadas con `esFlota:true` (la
+     entrada no se toca: es la respuesta de la API, que otros ya están leyendo).
+     No hace falta descartar repetidos: flota y catálogo salen de la misma tabla
+     —solo cambia el usuario_id—, así que el id no puede estar en las dos. */
+  function flotaPrimero(flota, catalogo) {
+    return (flota || [])
+      .map(function (p) { return Object.assign({}, p, { esFlota: true }); })
+      .concat(catalogo || []);
+  }
+
   var API = {
     focalEfectiva: focalEfectiva,
-    nombreTelescopio: nombreTelescopio
+    nombreTelescopio: nombreTelescopio,
+    flotaPrimero: flotaPrimero
   };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }

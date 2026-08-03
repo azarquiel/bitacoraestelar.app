@@ -40,21 +40,52 @@ eq(dss_acotar_campo(999.0), 120.0, 'por encima → 120');
 eq(dss_acotar_campo(0.0),   1.0,   'por debajo → 1');
 
 echo "dss_clave (determinista y sensible):\n";
-eq(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1'),
-   dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1'), 'misma entrada → misma clave');
-ok(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1') !== dss_clave('05 35 18', '-05 23 28', 84.0, 84.0, 'DSS1'),
+eq(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso'),
+   dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso'), 'misma entrada → misma clave');
+ok(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso') !== dss_clave('05 35 18', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso'),
    'ra distinta → clave distinta');
-ok(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1') !== dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS2-red'),
+ok(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso') !== dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS2-red', 'eso'),
    'reconocimiento distinto → clave distinta');
 
 // La expulsión LRU y la limpieza ya no son de este proxy: son la política
 // compartida con el de Gaia. Su test es scripts/test_cache_lru.php.
 
-echo "dss_url (URL del archivo del ESO):\n";
-$u = dss_url('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1');
+echo "dss_fuente_valida (whitelist, por defecto el ESO):\n";
+eq(dss_fuente_valida('skyview'), 'skyview', 'skyview válida');
+eq(dss_fuente_valida('eso'),     'eso',     'eso válida');
+eq(dss_fuente_valida('otra'),    'eso',     'desconocida → eso');
+eq(dss_fuente_valida(''),        'eso',     'vacía → eso');
+
+echo "dss_url, fuente eso (archivo del ESO, la placa tal cual):\n";
+$u = dss_url('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso');
 ok(strpos($u, 'archive.eso.org') !== false, 'apunta al archivo del ESO');
 ok(strpos($u, 'ra=05%2035%2017') !== false, 'ra codificada (espacios → %20)');
 ok(strpos($u, 'Sky-Survey=DSS1') !== false, 'incluye el reconocimiento');
+
+echo "dss_url, fuente skyview (misma placa, remuestreada norte arriba):\n";
+$s = dss_url('16 41 41', '+36 27 36', 30.0, 30.0, 'DSS2-red', 'skyview');
+ok(strpos($s, 'skyview.gsfc.nasa.gov') !== false, 'apunta a SkyView');
+ok(strpos($s, 'survey=dss2r') !== false,          'traduce el reconocimiento al nombre de SkyView');
+ok(strpos($s, 'position=16%2041%2041%2C%2B36%2027%2036') !== false, 'posición "ra,dec" codificada');
+// SkyView pide el tamaño en GRADOS, no en minutos como el ESO.
+ok(strpos($s, 'size=0.5,0.5') !== false,          'tamaño en grados');
+ok(strpos($s, 'projection=Tan') !== false,        'proyección TAN (norte arriba, este a la izquierda)');
+ok(strpos($s, 'coordinates=J2000') !== false,     'equinoccio J2000, como el resto del simulador');
+ok(strpos($s, 'scaling=Linear') !== false,        'estirado lineal fijado (la fotometría depende del nivel)');
+ok(strpos($s, 'return=GIF') !== false,            'GIF, el mismo formato que ya cachea el proxy');
+eq(dss_url('16 41 41', '+36 27 36', 30.0, 30.0, 'DSS1', 'skyview') !== $s, true,
+   'reconocimiento distinto → URL distinta');
+
+echo "dss_pixels (lado en píxeles que se le pide a SkyView):\n";
+// La escala de la placa del DSS ronda 1,7"/px: se pide ese detalle, sin pasarse.
+eq(dss_pixels(30.0),  1059, '30\' a 1,7"/px');
+eq(dss_pixels(1.0),   300,  'campo diminuto → suelo de 300 px');
+eq(dss_pixels(120.0), 1200, 'campo máximo → techo de 1200 px');
+
+echo "dss_clave (la fuente forma parte de la clave):\n";
+ok(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso')
+   !== dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'skyview'),
+   'fuente distinta → clave distinta (no se mezclan en la caché)');
 
 if ($fallos) { echo "\n$fallos fallo(s).\n"; exit(1); }
 echo "\nTodo verde.\n";

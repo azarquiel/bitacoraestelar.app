@@ -111,7 +111,20 @@
       // campo ancho y binoculares.
       var GAIA_MAX_ARCMIN = 360;
       var AFOV_REF = 110;
+      /* Lado del lienzo en píxeles, RECALCULADO en cada render (ver tamRender):
+         el hueco donde se enseña mide una cosa en la página y otra a pantalla
+         completa. Techos distintos porque el coste no es el mismo: el Canvas-2D
+         de Gaia solo gasta CPU —el catálogo ya está en cacheGaia, la red no
+         entra—, mientras que PanSTARRS pide al servidor width×height píxeles y
+         el DSS no da para más (dss-proxy.php sirve 1200 px como mucho). */
       var PROC = 720;
+      var PROC_MAX_GAIA = 1440;
+      var PROC_MAX_PLACA = 1200;
+      function tamRender(origen) {
+        var vista = $('sim-vista');
+        return BitacoraGaiaRender.tamLienzo(vista ? vista.clientWidth : 0, window.devicePixelRatio,
+          origen === 'canvas-2d' ? PROC_MAX_GAIA : PROC_MAX_PLACA);
+      }
 
       // Transmisión luminosa del telescopio (fracción de luz aprovechada), usada
       // en la magnitud límite (Método del umbral). Torres Lapasió toma 0,9 para
@@ -146,7 +159,15 @@
 
       /* ══════════════════ ESTADO ══════════════════ */
       var WP = window.BITACORA_WP || null;
+      /* ¿Hay sesión iniciada? El plugin solo inyecta BITACORA_WP (con su nonce)
+         para usuarios logueados, así que es la señal de sesión de la página. De
+         ella dependen las dos opciones reservadas del simulador: apuntar a
+         "Cualquier objeto" y elegir el telescopio de "Mi flota". Ninguna de las
+         dos es un control de acceso —el endpoint de equipo personal ya exige
+         login en el servidor—: aquí solo se decide qué se ofrece. */
+      function haySesion() { return !!(WP && WP.nonce); }
       var catalogo = { telescopios: [], oculares: [], auxiliares: [] };
+      var hayFlota = false;   // el observador tiene telescopios propios en Mi flota
       var teleSel = null;
       var ocularSel = null;
       var auxSel = null;   // óptica auxiliar activa (Barlow/reductor); null = ninguna
@@ -165,7 +186,10 @@
       // compartido con la flota), o "vendor modelo" en su defecto.
       function nombreTele(p) { return BitacoraEquipo.nombreTelescopio(p) || '(sin nombre)'; }
       function itemPorId(cat, id) { var arr = catalogo[cat] || []; for (var i = 0; i < arr.length; i++) { if (String(arr[i].id) === String(id)) return arr[i]; } return null; }
-      function specsTele(p) { var s = []; if (num(p.apertura_mm) != null) s.push(num(p.apertura_mm) + ' mm'); if (num(p.focal_mm) != null) s.push('f=' + num(p.focal_mm) + ' mm'); return s.join(' · '); }
+      // Características del telescopio: apertura y focal. Las piezas de Mi flota
+      // se etiquetan como tales, que si no un nombre propio ("El de viaje") no
+      // dice de dónde sale.
+      function specsTele(p) { var s = []; if (p.esFlota) s.push('Mi flota'); if (num(p.apertura_mm) != null) s.push(num(p.apertura_mm) + ' mm'); if (num(p.focal_mm) != null) s.push('f=' + num(p.focal_mm) + ' mm'); return s.join(' · '); }
       function specsOcular(p) { var s = []; if (num(p.focal_mm) != null) s.push(num(p.focal_mm) + ' mm'); if (num(p.campo_aparente) != null) s.push(num(p.campo_aparente) + '°'); return s.join(' · '); }
       // Specs de una óptica auxiliar: el factor (Barlow >1, reductor <1) y, si lo
       // trae, la extensión focal fija en mm.
@@ -184,15 +208,45 @@
         if (PUB.catalogoEquipo) return PUB.catalogoEquipo;
         return location.origin + '/wp-json/bitacora/v1/equipo/catalogo';
       }
+      /* Equipo PERSONAL del observador ("Mi flota"), SOLO con sesión: el endpoint
+         /equipo exige login (y el nonce), así que sin sesión no se pide siquiera.
+         Un fallo aquí no es grave —se sigue con el catálogo global—, por eso
+         devuelve null en vez de propagar el error. */
+      function cargarFlota() {
+        if (!haySesion() || !WP.endpoint) return Promise.resolve(null);
+        var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
+        return fetch(API, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; });
+      }
+
       function cargarCatalogo() {
         var API = urlCatalogo();
         var headers = (WP && WP.nonce) ? { 'X-WP-Nonce': WP.nonce } : {};
-        fetch(API, { credentials: 'same-origin', headers: headers })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) {
+        Promise.all([
+          fetch(API, { credentials: 'same-origin', headers: headers })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; }),
+          cargarFlota()
+        ])
+          .then(function (res) {
+            var d = res[0], flota = res[1];
             if (!d || (!(d.telescopios || []).length && !(d.oculares || []).length)) { usarEjemplo('No se pudo leer el catálogo de equipo. Se usa un equipo de ejemplo.'); return; }
-            catalogo = { telescopios: d.telescopios || [], oculares: d.oculares || [], auxiliares: d.auxiliares || [] };
-            var hint = $('sim-eq-hint'); if (hint) hint.textContent = 'Telescopio y ocular elegidos del catálogo de equipo.';
+            // Telescopios: los de Mi flota delante del catálogo global (helper
+            // compartido con la flota). Oculares y auxiliares siguen saliendo del
+            // catálogo global tal cual.
+            var mios = (flota && flota.telescopios) || [];
+            hayFlota = mios.length > 0;
+            catalogo = {
+              telescopios: BitacoraEquipo.flotaPrimero(mios, d.telescopios || []),
+              oculares: d.oculares || [], auxiliares: d.auxiliares || []
+            };
+            var hint = $('sim-eq-hint');
+            if (hint) {
+              hint.textContent = hayFlota
+                ? 'Tus telescopios de Mi flota salen los primeros de la lista; detrás, el catálogo de equipo.'
+                : 'Telescopio y ocular elegidos del catálogo de equipo.';
+            }
             poblarEquipo();
           })
           .catch(function () { usarEjemplo('No se pudo leer el catálogo de equipo. Se usa un equipo de ejemplo.'); });
@@ -211,6 +265,12 @@
           input: $('sim-tele-input'), suggest: $('sim-tele-sugg'),
           fuente: function () { return (catalogo.telescopios || []).filter(function (p) { return num(p.focal_mm) > 0; }); },
           texto: nombreTele, specs: specsTele,
+          // Con flota propia, al enfocar se listan ya sus telescopios (van los
+          // primeros): un nombre propio como "El de viaje" no se encuentra
+          // tecleando la marca, así que hay que poder verlos sin buscar. Sin
+          // flota no se lista nada: el catálogo global es enorme y las 12
+          // primeras entradas no le sirven a nadie.
+          todosSiVacio: hayFlota,
           onElegir: function (it) { teleSel = it; $('sim-tele-input').value = nombreTele(it); limpiarTeleManual(); actualizar(); }
         });
         BitacoraBase.montarBuscadorCatalogo({
@@ -405,6 +465,7 @@
           : (magOpt - MARGEN_MAGLIM).toFixed(1) + '–' + magOpt.toFixed(1) + '<em>m</em>');
 
         var origen = $('sim-origen').value;
+        PROC = tamRender(origen);
 
         /* Recorte del cielo: lado = campo real, limitado por el origen. El tope de
            2° es de las PLACAS (el servidor del DSS no sirve más); el Canvas-2D de
@@ -448,16 +509,35 @@
       // Carga y compone la placa DSS (fusión HDR: DSS2-red profunda + DSS1 corta).
       // Extraído de actualizar() para poder reutilizarlo como RESPALDO cuando la
       // consulta a Gaia (Canvas 2D) falla —así una caída de VizieR no deja negro—.
-      function renderDSS(arcmin, peticion) {
+      /* `fuente` por defecto SkyView, que sirve las placas con el norte arriba.
+         Si SkyView no responde se reintenta UNA vez con el archivo del ESO: es
+         la misma placa, girada respecto al norte (ver README, "Orientación del
+         campo"), pero antes eso que un círculo negro. Se avisa, porque el campo
+         girado no casa con la superposición de Gaia. */
+      function renderDSS(arcmin, peticion, fuente) {
+        fuente = fuente || 'skyview';
+        // Techo de placa aunque se llegue aquí de respaldo desde Gaia, que tiene
+        // el suyo más alto: ampliar una placa de 1059 px cuesta CPU y no añade
+        // detalle.
+        PROC = tamRender('dss');
         var cargando = $('sim-cargando');
         var ra = objetoSel.ra, dec = objetoSel.dec;
-        var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin);
-        var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin);
+        var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin, fuente);
+        var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin, fuente);
         Promise.all([cargarPlaca(urlProfunda), cargarPlaca(urlCorta)])
           .then(function (res) {
             var profunda = res[0], corta = res[1];
             if (peticion !== contadorPeticion) return;
-            if (!profunda && !corta) { cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?'; return; }
+            if (!profunda && !corta) {
+              if (fuente === 'skyview') {
+                cargando.textContent = 'SkyView no responde: probando con el archivo del ESO…';
+                $('sim-aviso').textContent = 'SkyView no responde: se muestra la placa del archivo del ESO, que llega ligeramente girada respecto al norte.';
+                renderDSS(arcmin, peticion, 'eso');
+                return;
+              }
+              cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?';
+              return;
+            }
             cargando.style.display = 'none';
             renderizar(profunda || corta, profunda ? corta : null, urlProfunda);
           });
@@ -570,7 +650,13 @@
       }
 
       /* ══════════════════ URLS Y PROCESADO FOTOMÉTRICO ══════════════════ */
-      function urlPlaca(survey, ra, dec, arcmin) { return DSS_BASE + '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) + '&equinox=J2000&name=&x=' + arcmin.toFixed(1) + '&y=' + arcmin.toFixed(1) + '&Sky-Survey=' + survey + '&mime-type=download-gif'; }
+      // `fuente` elige de dónde saca el proxy la MISMA placa: 'eso' (tal cual) o
+      // 'skyview' (remuestreada con el norte arriba). El proxy la valida.
+      // La URL la arma el módulo compartido (fuente única con el formulario de
+      // registro, que también pide placas); aquí solo se le pasa la base del proxy.
+      function urlPlaca(survey, ra, dec, arcmin, fuente) {
+        return BitacoraGaiaRender.urlPlaca({ base: DSS_BASE, survey: survey, ra: ra, dec: dec, arcmin: arcmin, fuente: fuente || 'eso' });
+      }
       function sexToDeg(s, esRA) { var sig = /^\s*-/.test(s) ? -1 : 1; var p = s.trim().replace(/[+\-]/g, '').replace(/:/g, ' ').split(/\s+/).map(Number); var abs = (p[0] || 0) + (p[1] || 0) / 60 + (p[2] || 0) / 3600; return sig * abs * (esRA ? 15 : 1); }
       function urlHips(ra, dec, arcmin) { return 'https://alasky.cds.unistra.fr/hips-image-services/hips2fits?hips=' + encodeURIComponent('CDS/P/PanSTARRS/DR1/color-z-zg-g') + '&ra=' + sexToDeg(ra, true).toFixed(5) + '&dec=' + sexToDeg(dec, false).toFixed(5) + '&fov=' + (arcmin / 60).toFixed(4) + '&width=' + PROC + '&height=' + PROC + '&projection=TAN&format=jpg'; }
       function cargarPlaca(url) { return new Promise(function (res) { var im = new Image(); im.crossOrigin = 'anonymous'; im.onload = function () { res(im); }; im.onerror = function () { res(null); }; im.src = url; }); }
@@ -663,6 +749,111 @@
         consultarGaia(ra0, dec0, arcmin).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3: se muestra solo la imagen.'; });
       }
 
+      /* ══════════════════ ACCIONES SOBRE LA IMAGEN DEL OCULAR ══════════════════
+         Ver a pantalla completa y descargar lo que se está viendo. Para TODOS,
+         con o sin sesión: no tocan datos del observador, solo la imagen que la
+         página ya ha pintado. */
+
+      // Nombre del archivo descargado: objeto, aumentos y origen, sin acentos ni
+      // caracteres que incomoden al sistema de ficheros.
+      function nombreArchivo() {
+        var nombre = (objetoSel && objetoSel.nombre ? objetoSel.nombre : 'objeto').split('·')[0];
+        var partes = ['ocular', nombre];
+        if (teleSel && ocularSel && teleFocal() && num(ocularSel.focal_mm)) {
+          partes.push(datosOcular().aumentos.toFixed(0) + 'x');
+        }
+        partes.push($('sim-origen').value);
+        return partes.join('-')
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+      }
+
+      /* Copia del lienzo con el MISMO recorte circular que el CSS aplica a la
+         vista: lo que se descarga es lo que se ve por el ocular, no el cuadrado
+         completo con sus esquinas (que en la página no se ven). */
+      function recorteCircular(fuente) {
+        var lado = fuente.width;
+        var c = document.createElement('canvas');
+        c.width = c.height = lado;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, lado, lado);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(lado / 2, lado / 2, lado / 2, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(fuente, 0, 0);
+        ctx.restore();
+        return c;
+      }
+
+      function descargarVista() {
+        var canvas = $('sim-lienzo'), img = $('sim-img');
+        // 'block' EXPLÍCITO, no "distinto de none": el lienzo nace oculto desde el
+        // CSS con el style en línea vacío, así que antes del primer render bajaría
+        // un PNG negro de 300 px.
+        if (canvas.style.display === 'block') {
+          try {
+            // toBlob revienta (SecurityError) si el lienzo quedó contaminado por
+            // una placa servida sin CORS: en ese caso se cae a la imagen suelta.
+            recorteCircular(canvas).toBlob(function (blob) {
+              if (!blob) return;
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url; a.download = nombreArchivo() + '.png';
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+            });
+            return;
+          } catch (e) {
+            $('sim-aviso').textContent = 'El navegador no deja exportar el lienzo (CORS): se abre la placa en una pestaña nueva.';
+          }
+        }
+        // Modo de reserva (sin lienzo): la placa tal cual, en otra pestaña. El
+        // atributo download no sirve con una imagen de otro dominio.
+        if (img.src) window.open(img.src, '_blank', 'noopener');
+      }
+
+      /* Pantalla completa sobre la ZONA (círculo + botones), no solo sobre el
+         círculo: así los dos botones siguen a mano dentro de la pantalla
+         completa. El tamaño lo pone el CSS con la clase .es-completa —no un
+         :fullscreen a pelo— para no tener que duplicar cada regla con el
+         prefijo -webkit- de Safari. */
+      function montarAccionesVista() {
+        var zona = $('sim-zona'), btnFull = $('sim-pantalla-completa'), btnDesc = $('sim-descargar');
+        if (btnDesc) btnDesc.addEventListener('click', descargarVista);
+        if (!zona || !btnFull) return;
+        var pedir = zona.requestFullscreen || zona.webkitRequestFullscreen;
+        if (!pedir) { btnFull.hidden = true; return; }   // iPhone: sin API de pantalla completa
+        btnFull.addEventListener('click', function () {
+          var actual = document.fullscreenElement || document.webkitFullscreenElement;
+          if (actual) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+          else {
+            // Devuelve promesa (salvo en el webkit viejo); si el navegador la
+            // deniega no hay nada que hacer, pero sí que tragarse el rechazo.
+            var p = pedir.call(zona);
+            if (p && p.catch) p.catch(function () {});
+          }
+        });
+        ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
+          document.addEventListener(ev, function () {
+            var dentro = (document.fullscreenElement || document.webkitFullscreenElement) === zona;
+            zona.classList.toggle('es-completa', dentro);
+            var txt = dentro ? 'Salir de pantalla completa' : 'Ver a pantalla completa';
+            btnFull.title = txt;
+            btnFull.setAttribute('aria-label', txt);
+            /* El círculo cambia de tamaño, así que el lienzo de 720 se vería
+               ampliado: se vuelve a dibujar al tamaño nuevo. Solo si de verdad
+               cambia —si ya estaba en su techo, ampliar la ventana no obliga a
+               repetir el render, que no es gratis—. La clase ya está puesta
+               arriba, así que clientWidth mide el hueco DEFINITIVO. */
+            if (tamRender($('sim-origen').value) !== $('sim-lienzo').width) actualizar();
+          });
+        });
+      }
+
       function aplicarPupila(img, p) { var pOjo = pupilaOjo(), pEf = Math.min(p, pOjo); var brilloPercibido = Math.pow(Math.pow(pEf / pOjo, 2), 0.5); var umbral = 0.30 * (1 - pEf / pOjo); var pendiente = brilloPercibido / (1 - umbral); var despl = -pendiente * umbral; ['R', 'G', 'B'].forEach(function (c) { var f = document.querySelector('#sim-transfer-pupila feFunc' + c); if (f) { f.setAttribute('slope', pendiente.toFixed(4)); f.setAttribute('intercept', despl.toFixed(4)); } }); img.style.filter = 'grayscale(1) url(#sim-filtro-pupila)'; }
 
       // Pinta la ficha del objeto activo. Para estrellas de carbono añade una
@@ -743,10 +934,12 @@
       }
 
       /* ══════════════════ MODO "CUALQUIER OBJETO" ══════════════════
-         Apuntar a RA/Dec arbitrarias o buscar por nombre en SIMBAD. Ahora viene
-         ENCENDIDO: sin él no hay forma de apuntar a una galaxia o a un globular,
-         que se pintan como capa por campo y no tienen pestaña propia en el
-         selector. Para ocultarlo, window.BITACORA_OCULAR_LIBRE = false.
+         Apuntar a RA/Dec arbitrarias o buscar por nombre en SIMBAD. Reservado a
+         usuarios CON SESIÓN (ver haySesion): es la única forma de apuntar a una
+         galaxia o a una nebulosa, que se pintan como capa por campo y no tienen
+         pestaña propia en el selector. Sin sesión, la página pública se queda con
+         los cuatro catálogos cerrados. Para ocultarlo también a quien tiene
+         sesión, window.BITACORA_OCULAR_LIBRE = false.
          El objeto libre se pinta con carbono:true y doble:false fijos (la
          clasificación real vendrá en el futuro). */
       function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -818,8 +1011,10 @@
           sinResultados: 'Sin coincidencias en esta lista',
           onElegir: function (o) { input.value = ''; elegirObjeto(o); }
         });
-        // 4ª pestaña "Cualquier objeto": encendida salvo que se apague a mano.
-        var libreOn = (window.BITACORA_OCULAR_LIBRE !== false);
+        // Pestaña "Cualquier objeto": SOLO con sesión iniciada. Sigue pudiendo
+        // apagarse a mano (window.BITACORA_OCULAR_LIBRE = false) también para
+        // quien la tiene.
+        var libreOn = (window.BITACORA_OCULAR_LIBRE !== false) && haySesion();
         var tabLibre = $('sim-tab-libre'), panelLibre = $('sim-libre');
         if (tabLibre) tabLibre.hidden = !libreOn;
         if (panelLibre) panelLibre.hidden = true;
@@ -852,6 +1047,7 @@
       window.addEventListener('resize', function () { actualizar(); });
       montarTeleManual();
       montarSelectorObjeto();
+      montarAccionesVista();
       pintarObjeto();
 
       /* ══════════════════ ARRANQUE ══════════════════ */

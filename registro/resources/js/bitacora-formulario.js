@@ -848,13 +848,21 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // GENERAR LA IMAGEN DEL OCULAR CON EL SIMULADOR (estrellas de Gaia)
+  // GENERAR LA IMAGEN DEL OCULAR CON EL SIMULADOR (Gaia DR3 o placa del DSS)
   // Reutiliza el motor del simulador (BitacoraGaiaRender) con el equipo de la
   // FLOTA de esta entrada + el objeto de la observación + el cielo de la sesión.
+  // Dos fuentes, a elegir en el modal y comparables repintando: las estrellas de
+  // Gaia (render) o la placa fotográfica del DSS (renderPlaca), que cuenta mucho
+  // mejor la nebulosidad y las nebulosas oscuras (los Barnard).
   // La imagen se sube como un adjunto más, marcada origen:'simulada'.
   // ═══════════════════════════════════════════════════════════════════════
   var AFOV_REF_SIM = 110;   // campo aparente de referencia (igual que el simulador)
-  var _simModal = null, _simUsar = null;
+  var _simModal = null, _simUsar = null, _simEntrada = null, _simPeticion = 0;
+
+  // Rótulo de la fuente de una imagen simulada. Sin fuente conocida (una imagen
+  // ya guardada: la base solo distingue 'simulada' de 'subida') se queda en
+  // «simulada» a secas, que es lo único cierto.
+  function etiquetaFuente(fuente){ return fuente==='dss' ? 'DSS' : 'Gaia'; }
 
   // Reúne el equipo de una entrada para el render; {error} si falta algo (coords,
   // telescopio de flota, ocular de flota). Solo la flota trae apertura/focal/óptica.
@@ -892,7 +900,12 @@
     ov.className='sim-gen-ov'; ov.style.display='none';
     ov.innerHTML =
       '<div class="sim-gen">'+
-        '<div class="sim-gen-head"><strong>Imagen del simulador · Gaia DR3</strong>'+
+        '<div class="sim-gen-head"><strong>Imagen del simulador</strong>'+
+          '<label class="sim-gen-fuente"><span>Fuente</span>'+
+            '<select class="sim-gen-origen">'+
+              '<option value="gaia">Estrellas de Gaia DR3</option>'+
+              '<option value="dss">DSS (placas fotográficas)</option>'+
+            '</select></label>'+
           '<button type="button" class="sim-gen-x" title="Cerrar">×</button></div>'+
         '<div class="sim-gen-info"></div>'+
         '<div class="sim-gen-vista"><canvas class="sim-gen-canvas" width="900" height="900"></canvas>'+
@@ -906,11 +919,17 @@
     // "Usar esta imagen" pierde el dorado. Es position:fixed, así que el padre no
     // afecta al layout.
     ($('mw-obs-form') || document.body).appendChild(ov);
-    function cerrar(){ ov.style.display='none'; _simUsar=null; }
+    // Cerrar invalida lo que esté en vuelo (_simPeticion): una placa que llegue
+    // tarde no debe reactivar "Usar esta imagen" con el modal ya cerrado.
+    function cerrar(){ ov.style.display='none'; _simUsar=null; _simEntrada=null; _simPeticion++; }
     ov.querySelector('.sim-gen-x').addEventListener('click', cerrar);
     ov.querySelector('.sim-gen-cancel').addEventListener('click', cerrar);
     ov.addEventListener('click', function(e){ if(e.target===ov) cerrar(); });
     ov.querySelector('.sim-gen-usar').addEventListener('click', function(){ if(_simUsar) _simUsar(); });
+    // Cambiar de fuente REPINTA el mismo campo: el observador compara Gaia y DSS
+    // sobre la marcha y se queda con la que mejor cuente lo que vio (las nebulosas
+    // oscuras de Barnard, por ejemplo, salen mucho mejor en la placa).
+    ov.querySelector('.sim-gen-origen').addEventListener('change', function(){ if(_simEntrada) pintarSim(); });
     _simModal=ov; return ov;
   }
 
@@ -921,41 +940,67 @@
     if(d.error){ if(st){ st.textContent=d.error; st.className='gen-status err'; } return; }
     if(!window.BitacoraGaiaRender){ if(st){ st.textContent='El módulo del simulador no está cargado.'; st.className='gen-status err'; } return; }
     var ov=construirModalSim();
+    _simEntrada={ el:el, d:d };
+    ov.style.display='flex';
+    pintarSim();
+  }
+
+  // Pinta (o repinta) la vista con la fuente elegida en el modal. La imagen que
+  // se sube es la que se está viendo: el observador decide DESPUÉS de verla.
+  function pintarSim(){
+    var ov=_simModal, el=_simEntrada.el, d=_simEntrada.d;
+    var fuente=ov.querySelector('.sim-gen-origen').value;
     var canvas=ov.querySelector('.sim-gen-canvas'), ctx=canvas.getContext('2d');
     var spin=ov.querySelector('.sim-gen-spin'), usar=ov.querySelector('.sim-gen-usar');
+    // El DSS no sirve más de 2°: con un campo mayor la placa se recorta, y hay
+    // que decirlo porque la imagen ya no cubre todo lo que se ve por el ocular.
+    var maxDss=BitacoraGaiaRender.dssMaxArcmin;
+    var arcmin=(fuente==='dss') ? Math.min(d.arcmin, maxDss) : d.arcmin;
     ov.querySelector('.sim-gen-info').innerHTML =
       BitacoraBase.esc(d.objeto)+' · '+BitacoraBase.esc(d.telescopio)+' · '+BitacoraBase.esc(d.ocular)+
-      ' · '+d.aumentos+'× · campo '+fmtCampo(d.arcmin/60);
-    usar.disabled=true; spin.style.display='flex'; spin.textContent='consultando estrellas de Gaia DR3…';
-    ov.style.display='flex';
+      ' · '+d.aumentos+'× · campo '+fmtCampo(arcmin/60)+
+      (arcmin<d.arcmin ? ' (recortado del máximo del DSS)' : '');
+    ov.querySelector('.sim-gen-badge').textContent='simulada ('+etiquetaFuente(fuente)+')';
+    usar.disabled=true; spin.style.display='flex';
+    spin.textContent=(fuente==='dss') ? 'descargando la placa del DSS…' : 'consultando estrellas de Gaia DR3…';
     ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
     // Diámetro del campo ∝ campo aparente del ocular (como el simulador en pantalla).
     var D=Math.max(60, Math.round(900*Math.min(1, d.afov/AFOV_REF_SIM)));
     var off=document.createElement('canvas'); off.width=off.height=D;
-    BitacoraGaiaRender.render(off, {
-      ra:d.ra, dec:d.dec, arcmin:d.arcmin, apertura:d.apertura, aumentos:d.aumentos,
+    var opciones={
+      ra:d.ra, dec:d.dec, arcmin:arcmin, apertura:d.apertura, aumentos:d.aumentos,
       optica:d.optica, arana:d.arana, sqm:d.sqm, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
       // El campo aparente fija el tamaño de las estrellas: el lienzo se muestra a
       // un diámetro ∝ afov, así que el radio en píxeles va con 1/afov.
       afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, conGlow:true
-    }).then(function(){
+    };
+    var pet=++_simPeticion;
+    var promesa=(fuente==='dss')
+      ? BitacoraGaiaRender.renderPlaca(off, opciones)
+      : BitacoraGaiaRender.render(off, opciones);
+    promesa.then(function(){
+      if(pet!==_simPeticion) return;   // el observador ya cambió de fuente
       ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
       ctx.save(); ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.clip();
       ctx.drawImage(off, 450-D/2, 450-D/2);
       ctx.restore();
       spin.style.display='none'; usar.disabled=false;
+      _simUsar=function(){ usarImagenGenerada(canvas, el, d, fuente); };
     }).catch(function(){
-      spin.style.display='flex'; spin.textContent='Gaia DR3 no respondió. Cierra e inténtalo de nuevo.';
+      if(pet!==_simPeticion) return;
+      spin.style.display='flex';
+      spin.textContent=(fuente==='dss')
+        ? 'No se pudo cargar la placa del DSS. Prueba con las estrellas de Gaia.'
+        : 'Gaia DR3 no respondió. Prueba con el DSS o inténtalo de nuevo.';
     });
-    _simUsar=function(){ usarImagenGenerada(canvas, el, d); };
   }
 
-  function usarImagenGenerada(canvas, el, d){
+  function usarImagenGenerada(canvas, el, d, fuente){
     var listaP=el.querySelector('.lista-principales');
     function subir(blob, ext){
-      var nombre='sim-'+(resolved&&resolved.num?('m'+resolved.num):'obj')+'-'+d.aumentos+'x.'+ext;
+      var nombre='sim-'+(resolved&&resolved.num?('m'+resolved.num):'obj')+'-'+d.aumentos+'x-'+fuente+'.'+ext;
       var file=new File([blob], nombre, { type:blob.type });
-      var row=crearImagen(listaP, 'principal', { origen:'simulada' });
+      var row=crearImagen(listaP, 'principal', { origen:'simulada', fuente:fuente });
       subirImagen(file, row, row.querySelector('.img-status'));
     }
     canvas.toBlob(function(b){
@@ -997,7 +1042,8 @@
 
     if(origen==='simulada'){
       var badge=document.createElement('span');
-      badge.className='img-origen'; badge.textContent='simulada (Gaia)';
+      badge.className='img-origen';
+      badge.textContent='simulada'+(datos.fuente ? ' ('+etiquetaFuente(datos.fuente)+')' : '');
       row.insertBefore(badge, row.firstChild);
     }
 

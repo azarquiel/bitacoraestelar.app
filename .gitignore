@@ -5,3 +5,6 @@ Gaia_s_sky_in_colour.png
 
 # Ignorar ficheros creados por MacOS
 .DS_Store
+
+# Ignorar la caché de Python de los scripts
+scripts/__pycache__/
