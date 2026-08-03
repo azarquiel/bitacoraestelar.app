@@ -12,12 +12,16 @@
      <button type="button" onclick="window.open(
        '/wp-content/uploads/bitacora/reproductor.html',
        'bitacoraReproductor',
-       'width=440,height=560,menubar=no,toolbar=no,location=no')">
+       'width=380,height=260,menubar=no,toolbar=no,location=no')">
        Música de fondo
      </button>
 
      El nombre de ventana "bitacoraReproductor" hace que un segundo
      clic reutilice la ventana ya abierta en vez de crear otra.
+
+     El reproductor de YouTube va oculto: se ve solo la carátula de
+     controles. El vídeo se sigue descargando (YouTube no ofrece
+     una vía de solo audio), pero no se dibuja.
      ============================================================ -->
 <html lang="es">
 <head>
@@ -29,34 +33,106 @@
 :root {
   --noche:#0a0e1a; --noche-2:#111725; --tinta:#e8eef7;
   --tinta-tenue:#8ea0bd; --linea:#25304a; --ambar:#f4c76b;
+  --ambar-suave:rgba(244,199,107,0.14);
 }
 html,body {height:100%;}
 body {
   margin:0; background:var(--noche); color:var(--tinta);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  display:flex; flex-direction:column; gap:12px; padding:14px; box-sizing:border-box;
+  display:flex; flex-direction:column; gap:14px; padding:16px; box-sizing:border-box;
 }
 .eyebrow {
   margin:0; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
   color:var(--ambar);
 }
-.marco {
-  flex:1; min-height:220px; border:1px solid var(--linea);
-  border-radius:10px; overflow:hidden; background:var(--noche-2);
+/* El iframe se renderiza a tamaño normal dentro de una caja de 0px:
+   YouTube trata mal los reproductores diminutos, así que lo recortamos
+   en vez de encogerlo. */
+.oculto {width:0; height:0; overflow:hidden;}
+
+#pista {
+  margin:0; font-size:15px; line-height:1.35; min-height:2.7em;
+  display:flex; align-items:center;
 }
-.marco iframe {width:100%; height:100%; border:0; display:block;}
-.pie {margin:0; font-size:12px; color:var(--tinta-tenue);}
+#pista.esperando {color:var(--tinta-tenue);}
+
+.mandos {display:flex; align-items:center; gap:8px;}
+.mandos button {
+  background:var(--noche-2); border:1px solid var(--linea); border-radius:8px;
+  color:var(--tinta); font-size:15px; line-height:1; padding:10px 13px; cursor:pointer;
+  transition:border-color .15s, background .15s;
+}
+.mandos button:hover {background:var(--ambar-suave); border-color:var(--ambar);}
+.mandos button:focus-visible {outline:none; border-color:var(--ambar); box-shadow:0 0 0 3px var(--ambar-suave);}
+#alternar {flex:1; font-weight:600;}
+
+label.volumen {display:flex; align-items:center; gap:9px; font-size:12px; color:var(--tinta-tenue);}
+label.volumen input {flex:1; accent-color:var(--ambar);}
 </style>
 </head>
 <body>
   <p class="eyebrow">Bitácora · Música de guardia</p>
-  <div class="marco">
-    <iframe
-      src="https://www.youtube.com/embed/videoseries?list=PLXj65nwjQ0QE"
-      title="Playlist de fondo"
-      allow="autoplay; encrypted-media; picture-in-picture"
-      allowfullscreen></iframe>
+
+  <p id="pista" class="esperando">Cargando la lista…</p>
+
+  <!-- Los mandos nacen desactivados: la API de YouTube tarda un momento
+       en cargar y hasta entonces no hay reproductor al que hablar. -->
+  <div class="mandos">
+    <button type="button" id="anterior" title="Pista anterior" aria-label="Pista anterior" disabled>◀◀</button>
+    <button type="button" id="alternar" aria-label="Reproducir" disabled>Reproducir</button>
+    <button type="button" id="siguiente" title="Pista siguiente" aria-label="Pista siguiente" disabled>▶▶</button>
   </div>
-  <p class="pie">Deja esta ventana abierta detrás del portal. Sigue sonando aunque cambies de página.</p>
+
+  <label class="volumen">
+    Volumen
+    <input type="range" id="volumen" min="0" max="100" value="60" aria-label="Volumen" />
+  </label>
+
+  <div class="oculto"><div id="reproductor"></div></div>
+
+<script>
+var LISTA = 'PLXj65nwjQ0QE';
+
+var reproductor;
+var pista     = document.getElementById('pista');
+var alternar  = document.getElementById('alternar');
+var volumen   = document.getElementById('volumen');
+
+function onYouTubeIframeAPIReady() {
+  reproductor = new YT.Player('reproductor', {
+    width: 640, height: 360,
+    playerVars: {listType:'playlist', list:LISTA, playsinline:1},
+    events: {onReady:alListo, onStateChange:alCambiarEstado}
+  });
+}
+
+function alListo() {
+  reproductor.setVolume(Number(volumen.value));
+  pista.textContent = 'Lista lista. Pulsa reproducir.';
+  document.querySelectorAll('.mandos button').forEach(function (b) { b.disabled = false; });
+}
+
+function alCambiarEstado(ev) {
+  var sonando = ev.data === YT.PlayerState.PLAYING;
+  alternar.textContent = sonando ? 'Pausa' : 'Reproducir';
+  alternar.setAttribute('aria-label', sonando ? 'Pausar' : 'Reproducir');
+
+  var datos = reproductor.getVideoData();
+  if (datos && datos.title) {
+    pista.textContent = datos.title;
+    pista.classList.remove('esperando');
+    document.title = datos.title + ' · Bitácora';
+  }
+}
+
+alternar.onclick = function () {
+  if (reproductor.getPlayerState() === YT.PlayerState.PLAYING) reproductor.pauseVideo();
+  else reproductor.playVideo();
+};
+document.getElementById('anterior').onclick  = function () { reproductor.previousVideo(); };
+document.getElementById('siguiente').onclick = function () { reproductor.nextVideo(); };
+volumen.oninput = function () { reproductor.setVolume(Number(volumen.value)); };
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
