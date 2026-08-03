@@ -488,15 +488,20 @@
             renderizar(im, null, u);
           });
         } else {
-          renderDSS(arcmin, peticion, origen === 'skyview' ? 'skyview' : 'eso');
+          renderDSS(arcmin, peticion);
         }
       }
 
       // Carga y compone la placa DSS (fusión HDR: DSS2-red profunda + DSS1 corta).
       // Extraído de actualizar() para poder reutilizarlo como RESPALDO cuando la
       // consulta a Gaia (Canvas 2D) falla —así una caída de VizieR no deja negro—.
-      // `fuente` por defecto 'eso': el respaldo no cambia de servicio.
+      /* `fuente` por defecto SkyView, que sirve las placas con el norte arriba.
+         Si SkyView no responde se reintenta UNA vez con el archivo del ESO: es
+         la misma placa, girada respecto al norte (ver README, "Orientación del
+         campo"), pero antes eso que un círculo negro. Se avisa, porque el campo
+         girado no casa con la superposición de Gaia. */
       function renderDSS(arcmin, peticion, fuente) {
+        fuente = fuente || 'skyview';
         var cargando = $('sim-cargando');
         var ra = objetoSel.ra, dec = objetoSel.dec;
         var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin, fuente);
@@ -505,7 +510,16 @@
           .then(function (res) {
             var profunda = res[0], corta = res[1];
             if (peticion !== contadorPeticion) return;
-            if (!profunda && !corta) { cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?'; return; }
+            if (!profunda && !corta) {
+              if (fuente === 'skyview') {
+                cargando.textContent = 'SkyView no responde: probando con el archivo del ESO…';
+                $('sim-aviso').textContent = 'SkyView no responde: se muestra la placa del archivo del ESO, que llega ligeramente girada respecto al norte.';
+                renderDSS(arcmin, peticion, 'eso');
+                return;
+              }
+              cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?';
+              return;
+            }
             cargando.style.display = 'none';
             renderizar(profunda || corta, profunda ? corta : null, urlProfunda);
           });

@@ -42,15 +42,12 @@ un bloque HTML.
   oscuro a urbano) y observa cómo se lava lo tenue.
 - **Lecturas al instante**: aumentos, campo real, campo aparente, pupila de salida,
   brillo superficial, fondo de cielo en el ocular y **magnitud límite** del conjunto.
-- **Cuatro vistas del mismo campo**:
+- **Tres vistas del mismo campo**:
   - **PanSTARRS DR1 (HiPS)** — foto real en color, sin dependencias de servidor propio.
-  - **DSS (placas fotográficas)** — la placa Schmidt **tal cual** la sirve el archivo
-    del ESO, con su grano y su contraste originales (así se ven las nebulosas oscuras
-    de Barnard). Servidas por un proxy propio con caché LRU en disco (anti-estampida,
-    ETag/304).
-  - **DSS remuestreado (SkyView, norte arriba)** — las **mismas placas**, reproyectadas
-    por SkyView (NASA/GSFC) sobre una rejilla con el norte arriba, la misma orientación
-    que el render de Gaia (ver *Orientación del campo*). Mismo proxy y misma caché.
+  - **DSS (placas fotográficas)** — servidas por un proxy propio con caché LRU en disco
+    (anti-estampida, ETag/304). Las sirve **SkyView** (NASA/GSFC), que las reproyecta
+    con el **norte arriba**, la misma orientación que el render de Gaia; si SkyView no
+    responde se cae al **archivo del ESO** (ver *Orientación del campo*).
   - **Estrellas de Gaia DR3 (Canvas 2D)** — posiciones y colores reales de las
     estrellas, con brillo, tamaño y color según cada estrella, glow de las no
     resueltas y **cruz de difracción** de la araña en los reflectores.
@@ -371,9 +368,9 @@ de Gaia (norte arriba) sobre la placa del DSS (girada), así que la superposici�
 el centro y deriva hacia los bordes**, unos 20″–60″ según el tamaño del campo y el giro de
 esa placa.
 
-#### La salida: SkyView como origen aparte
+#### La salida: SkyView sirve el DSS, el ESO queda de respaldo
 
-El origen **DSS remuestreado (SkyView)** sirve las **mismas placas** reproyectadas por
+El origen **DSS** sirve las **mismas placas**, reproyectadas por
 [SkyView](https://skyview.gsfc.nasa.gov) sobre la rejilla que se le pide. Pedidas con los
 parámetros que arma `dss_url(..., 'skyview')`, sus cabeceras traen `RA---TAN`/`DEC--TAN`,
 `CDELT1` negativo, `CDELT2` positivo y **ninguna** `CROTA` ni matriz `CD`: norte arriba y
@@ -381,16 +378,21 @@ este a la izquierda exactos. La tercera parte de `scripts/test_orientacion_campo
 esa rejilla con la proyección del render de Gaia y comprueba que colocan la misma estrella
 en el mismo punto del campo (a 10⁻⁶ del lado).
 
-Se añade **como origen aparte, no en sustitución del DSS del ESO**, porque el remuestreo
-suaviza el grano de la placa original —justo lo que da carácter a las nebulosas oscuras de
-Barnard—. Además, SkyView aplica su propio estirado a 8 bits, algo más apagado que el del
-ESO (mismo campo de M13 en DSS2-red: mediana 40→32, p90 73→60), y `flujoDePlaca()` lee el
-nivel de gris como brillo superficial, así que la vista de SkyView sale un punto más
-oscura. No se compensa con una constante: son dos representaciones distintas de la misma
-placa, y quien quiera la fotometría afinada tiene el origen del ESO.
+SkyView es además **el que compone bien la fusión HDR**. Del ESO, DSS1 y DSS2-red llegan
+como dos placas distintas —1059×1059 con `CROTA2` +1,910° una, 1782×1786 con otro giro la
+otra—, así que `fusionarPlacas()` regresiona píxeles que no son del mismo trozo de cielo.
+Remuestreadas por SkyView las dos caen en la **misma rejilla** y la fusión compara lo mismo.
 
-Elige SkyView cuando importe la **orientación** (comparar con la vista de Gaia, o con lo
-que se ve por el ocular) y el ESO cuando importe la **textura** de la placa.
+Por eso el origen **DSS** del simulador es SkyView, y **el ESO se queda solo como respaldo
+automático**: si SkyView no responde, `renderDSS()` reintenta una vez con `fuente=eso` y
+avisa de que el campo llega girado. No se ofrece a elegir —dos entradas de DSS en el combo
+confundían—, pero sigue ahí como segundo proveedor: SkyView es un servicio único y con
+paradas de mantenimiento.
+
+Lo que se pierde con el remuestreo: **grano**. SkyView suaviza la textura de la placa
+original y aplica su propio estirado a 8 bits, algo más apagado que el del ESO (mismo campo
+de M13 en DSS2-red: mediana 40→32, p90 73→60). Como `flujoDePlaca()` lee el nivel de gris
+como brillo superficial, la vista sale un punto más oscura que con el ESO.
 
 Descartadas, probadas: leer el `CROTA2` de cada placa y desgirar en el cliente —el archivo
 del ESO **no admite peticiones `Range`** (devuelve `200` con los 2,26 MB del FITS entero),
