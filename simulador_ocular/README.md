@@ -335,6 +335,43 @@ CSV fuente (en `mapa/datos/`) en uno solo:
 Añadir un catálogo futuro = soltar su CSV en `mapa/datos/` y añadir una entrada a la lista
 `FUENTES` de `gen_dobles.py` (con el mapeo de sus columnas). No editar el `.js` a mano.
 
+### Orientación del campo
+
+Al comparar la vista de Gaia con la del DSS **el campo parece levemente girado**. Medido:
+**el render de Gaia es el correcto** y **la placa del DSS es la que llega girada**.
+
+- **Gaia** proyecta `x = SIZE/2 − Δα·cos(δ₀)·escala`, `y = SIZE/2 − (δ − δ₀)·escala`: norte
+  arriba y este a la izquierda **exactos**, sin giro ni cizalla (comprobado a 0,000 px).
+  Es la misma convención que sirve hips2fits para PanSTARRS (`projection=TAN`).
+- **El DSS del ESO** (`archive.eso.org/dss/dss/image`) no reproyecta: recorta un trozo de
+  la **placa Schmidt original** (6,5° de lado) y lo devuelve **en el sistema de esa placa**,
+  cuyos ejes se alinearon con el norte en el **centro de la placa**, no en el del recorte.
+  Entre esos dos puntos los meridianos convergen, así que el norte del recorte queda girado
+  **≈ −Δα·sen(δ)**. El propio FITS lo declara en `CROTA2` (y avisa de que es *inaccurate due
+  to considerable skew*):
+
+  | Campo | Placa | `CROTA2` del FITS | `−Δα·sen(δ)` |
+  |---|---|---|---|
+  | M39 | E589  | +1,373° | +1,024° |
+  | M35 | E1278 | +0,228° | +0,408° |
+  | M13 | E1069 | +1,910° | +1,711° |
+  | M42 | J8979 | −0,161° | −0,169° |
+
+  El modelo acierta siempre el signo y queda a <0,35°; el resto es la inclinación con que se
+  expuso cada placa. Prueba: `node scripts/test_orientacion_campo.js`.
+
+**No se corrige**, porque el giro **cambia de campo en campo y hasta de signo** (0,2°–1,9°
+en la muestra): no hay constante que descontar. Las dos salidas posibles tienen coste real
+y se han dejado fuera: leer el `CROTA2` de cada placa obliga a bajar el **FITS completo**
+por el proxy (el doble de ancho de banda), y cambiar la fuente al **HiPS de DSS2 vía
+hips2fits** —que sí viene norte arriba— rompe la fusión HDR DSS2-rojo + DSS1 y deja sin uso
+`dss-proxy.php`.
+
+**Consecuencia práctica**: `superponerGaia()` pinta estrellas de Gaia (norte arriba) sobre
+la placa del DSS (girada), así que la superposición **casa en el centro y deriva hacia los
+bordes**, unos 20″–60″ según el tamaño del campo y el giro de esa placa.
+
+
 ---
 
 ## Configuración
