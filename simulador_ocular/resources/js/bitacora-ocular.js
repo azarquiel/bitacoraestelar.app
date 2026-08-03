@@ -488,18 +488,19 @@
             renderizar(im, null, u);
           });
         } else {
-          renderDSS(arcmin, peticion);
+          renderDSS(arcmin, peticion, origen === 'skyview' ? 'skyview' : 'eso');
         }
       }
 
       // Carga y compone la placa DSS (fusión HDR: DSS2-red profunda + DSS1 corta).
       // Extraído de actualizar() para poder reutilizarlo como RESPALDO cuando la
       // consulta a Gaia (Canvas 2D) falla —así una caída de VizieR no deja negro—.
-      function renderDSS(arcmin, peticion) {
+      // `fuente` por defecto 'eso': el respaldo no cambia de servicio.
+      function renderDSS(arcmin, peticion, fuente) {
         var cargando = $('sim-cargando');
         var ra = objetoSel.ra, dec = objetoSel.dec;
-        var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin);
-        var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin);
+        var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin, fuente);
+        var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin, fuente);
         Promise.all([cargarPlaca(urlProfunda), cargarPlaca(urlCorta)])
           .then(function (res) {
             var profunda = res[0], corta = res[1];
@@ -617,7 +618,9 @@
       }
 
       /* ══════════════════ URLS Y PROCESADO FOTOMÉTRICO ══════════════════ */
-      function urlPlaca(survey, ra, dec, arcmin) { return DSS_BASE + '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) + '&equinox=J2000&name=&x=' + arcmin.toFixed(1) + '&y=' + arcmin.toFixed(1) + '&Sky-Survey=' + survey + '&mime-type=download-gif'; }
+      // `fuente` elige de dónde saca el proxy la MISMA placa: 'eso' (tal cual) o
+      // 'skyview' (remuestreada con el norte arriba). El proxy la valida.
+      function urlPlaca(survey, ra, dec, arcmin, fuente) { return DSS_BASE + '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) + '&equinox=J2000&name=&x=' + arcmin.toFixed(1) + '&y=' + arcmin.toFixed(1) + '&Sky-Survey=' + survey + '&fuente=' + (fuente || 'eso') + '&mime-type=download-gif'; }
       function sexToDeg(s, esRA) { var sig = /^\s*-/.test(s) ? -1 : 1; var p = s.trim().replace(/[+\-]/g, '').replace(/:/g, ' ').split(/\s+/).map(Number); var abs = (p[0] || 0) + (p[1] || 0) / 60 + (p[2] || 0) / 3600; return sig * abs * (esRA ? 15 : 1); }
       function urlHips(ra, dec, arcmin) { return 'https://alasky.cds.unistra.fr/hips-image-services/hips2fits?hips=' + encodeURIComponent('CDS/P/PanSTARRS/DR1/color-z-zg-g') + '&ra=' + sexToDeg(ra, true).toFixed(5) + '&dec=' + sexToDeg(dec, false).toFixed(5) + '&fov=' + (arcmin / 60).toFixed(4) + '&width=' + PROC + '&height=' + PROC + '&projection=TAN&format=jpg'; }
       function cargarPlaca(url) { return new Promise(function (res) { var im = new Image(); im.crossOrigin = 'anonymous'; im.onload = function () { res(im); }; im.onerror = function () { res(null); }; im.src = url; }); }

@@ -42,10 +42,15 @@ un bloque HTML.
   oscuro a urbano) y observa cómo se lava lo tenue.
 - **Lecturas al instante**: aumentos, campo real, campo aparente, pupila de salida,
   brillo superficial, fondo de cielo en el ocular y **magnitud límite** del conjunto.
-- **Tres vistas del mismo campo**:
+- **Cuatro vistas del mismo campo**:
   - **PanSTARRS DR1 (HiPS)** — foto real en color, sin dependencias de servidor propio.
-  - **DSS (placas fotográficas)** — servidas por un proxy propio con caché LRU en
-    disco (anti-estampida, ETag/304).
+  - **DSS (placas fotográficas)** — la placa Schmidt **tal cual** la sirve el archivo
+    del ESO, con su grano y su contraste originales (así se ven las nebulosas oscuras
+    de Barnard). Servidas por un proxy propio con caché LRU en disco (anti-estampida,
+    ETag/304).
+  - **DSS remuestreado (SkyView, norte arriba)** — las **mismas placas**, reproyectadas
+    por SkyView (NASA/GSFC) sobre una rejilla con el norte arriba, la misma orientación
+    que el render de Gaia (ver *Orientación del campo*). Mismo proxy y misma caché.
   - **Estrellas de Gaia DR3 (Canvas 2D)** — posiciones y colores reales de las
     estrellas, con brillo, tamaño y color según cada estrella, glow de las no
     resueltas y **cruz de difracción** de la araña en los reflectores.
@@ -64,7 +69,7 @@ un bloque HTML.
 | `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
-| `dss-proxy.php` | Proxy de placas del DSS con caché en disco acotada | Servidor, junto al JS/CSS |
+| `dss-proxy.php` | Proxy de placas del DSS con caché en disco acotada, de dos fuentes (`fuente=eso` y `fuente=skyview`) | Servidor, junto al JS/CSS |
 | `generar_niveles.py`, `ps1_service.py` | Pipeline/servicio **experimental** de placas fotométricas (ver más abajo) | Herramientas offline, no requeridas |
 
 Depende además de dos piezas **compartidas** con el resto de la web:
@@ -360,16 +365,37 @@ Al comparar la vista de Gaia con la del DSS **el campo parece levemente girado**
   El modelo acierta siempre el signo y queda a <0,35°; el resto es la inclinación con que se
   expuso cada placa. Prueba: `node scripts/test_orientacion_campo.js`.
 
-**No se corrige**, porque el giro **cambia de campo en campo y hasta de signo** (0,2°–1,9°
-en la muestra): no hay constante que descontar. Las dos salidas posibles tienen coste real
-y se han dejado fuera: leer el `CROTA2` de cada placa obliga a bajar el **FITS completo**
-por el proxy (el doble de ancho de banda), y cambiar la fuente al **HiPS de DSS2 vía
-hips2fits** —que sí viene norte arriba— rompe la fusión HDR DSS2-rojo + DSS1 y deja sin uso
-`dss-proxy.php`.
+El giro **cambia de campo en campo y hasta de signo** (0,2°–1,9° en la muestra), así que no
+hay constante que descontar. **Consecuencia práctica**: `superponerGaia()` pinta estrellas
+de Gaia (norte arriba) sobre la placa del DSS (girada), así que la superposición **casa en
+el centro y deriva hacia los bordes**, unos 20″–60″ según el tamaño del campo y el giro de
+esa placa.
 
-**Consecuencia práctica**: `superponerGaia()` pinta estrellas de Gaia (norte arriba) sobre
-la placa del DSS (girada), así que la superposición **casa en el centro y deriva hacia los
-bordes**, unos 20″–60″ según el tamaño del campo y el giro de esa placa.
+#### La salida: SkyView como origen aparte
+
+El origen **DSS remuestreado (SkyView)** sirve las **mismas placas** reproyectadas por
+[SkyView](https://skyview.gsfc.nasa.gov) sobre la rejilla que se le pide. Pedidas con los
+parámetros que arma `dss_url(..., 'skyview')`, sus cabeceras traen `RA---TAN`/`DEC--TAN`,
+`CDELT1` negativo, `CDELT2` positivo y **ninguna** `CROTA` ni matriz `CD`: norte arriba y
+este a la izquierda exactos. La tercera parte de `scripts/test_orientacion_campo.js` cruza
+esa rejilla con la proyección del render de Gaia y comprueba que colocan la misma estrella
+en el mismo punto del campo (a 10⁻⁶ del lado).
+
+Se añade **como origen aparte, no en sustitución del DSS del ESO**, porque el remuestreo
+suaviza el grano de la placa original —justo lo que da carácter a las nebulosas oscuras de
+Barnard—. Además, SkyView aplica su propio estirado a 8 bits, algo más apagado que el del
+ESO (mismo campo de M13 en DSS2-red: mediana 40→32, p90 73→60), y `flujoDePlaca()` lee el
+nivel de gris como brillo superficial, así que la vista de SkyView sale un punto más
+oscura. No se compensa con una constante: son dos representaciones distintas de la misma
+placa, y quien quiera la fotometría afinada tiene el origen del ESO.
+
+Elige SkyView cuando importe la **orientación** (comparar con la vista de Gaia, o con lo
+que se ve por el ocular) y el ESO cuando importe la **textura** de la placa.
+
+Descartadas, probadas: leer el `CROTA2` de cada placa y desgirar en el cliente —el archivo
+del ESO **no admite peticiones `Range`** (devuelve `200` con los 2,26 MB del FITS entero),
+así que costaría bajar el FITS completo por campo solo para un keyword—; y el **HiPS de
+DSS2 vía hips2fits**, que agotó el tiempo de espera a los 75 s.
 
 
 ---

@@ -136,5 +136,46 @@ var giros = PLACAS.map(function (p) { return p.crota2; });
 ok(Math.max.apply(null, giros) - Math.min.apply(null, giros) > 1.5,
   'el giro del DSS varía > 1,5° entre campos: no es una constante corregible');
 
+console.log('3. La rejilla de SkyView cae donde la pone la proyección de Gaia');
+/* SkyView (skyview.gsfc.nasa.gov) sirve LAS MISMAS placas del DSS, pero
+   remuestreadas sobre una rejilla que se le pide (projection=Tan). Cabeceras
+   reales de dos campos, pedidas con los mismos parámetros que arma
+   dss_url(..., 'skyview'), 2026-08-03: ni CROTA ni matriz CD, solo CDELT, y el
+   centro exacto en el píxel central. Eso es norte arriba y este a la izquierda,
+   sin giro; el CROTA2 del mismo campo en el ESO era +1,910° (M13). */
+var SKYVIEW = {
+  ctype: ['RA---TAN', 'DEC--TAN'],
+  cdelt1: -0.0008333333333333333,   // negativo = RA crece hacia la IZQUIERDA
+  cdelt2: 0.0008333333333333333,
+  crpix: 300.5, lado: 600           // 600 px de 3" = 0,5°, el mismo campo que TAM
+};
+(function () {
+  var s = SKYVIEW;
+  ok(s.ctype[0] === 'RA---TAN' && s.ctype[1] === 'DEC--TAN', 'proyección tangente, como la de Gaia');
+  ok(s.cdelt1 < 0, 'CDELT1 negativo: el este cae a la izquierda');
+  ok(s.cdelt2 > 0, 'CDELT2 positivo: el norte cae arriba');
+  cerca(Math.abs(s.cdelt1), s.cdelt2, 1e-12, 'misma escala en los dos ejes');
+
+  /* La prueba de verdad: la MISMA estrella, colocada por los dos caminos
+     independientes —la rejilla que pide el proxy y la proyección que dibuja el
+     render de Gaia—, tiene que caer en el mismo sitio del campo. Se compara la
+     distancia al centro en fracción del lado, que es lo único que comparten
+     (600 px de SkyView contra 720 del lienzo). */
+  var ra0 = 322.95, dec0 = 48.448, d = 0.1;
+  function fraccionSkyview(dra, ddec) {       // dra ya en grados de arco (este +)
+    return {
+      x: ((s.crpix + dra / s.cdelt1) - s.crpix) / s.lado,
+      y: ((s.crpix + ddec / s.cdelt2) - s.crpix) / s.lado
+    };
+  }
+  var n = nucleos([[ra0, dec0 + d, 8, 0.5]], ra0, dec0);
+  var e = nucleos([[ra0 + d / Math.cos(dec0 * Math.PI / 180), dec0, 8, 0.5]], ra0, dec0);
+  var fN = fraccionSkyview(0, d), fE = fraccionSkyview(d, 0);
+  // En el lienzo la y crece hacia abajo; en la rejilla FITS, hacia arriba.
+  cerca((SIZE / 2 - n[0].y) / SIZE, fN.y, 1e-6, 'la estrella del norte, a la misma altura en las dos rejillas');
+  cerca((e[0].x - SIZE / 2) / SIZE, fE.x, 1e-6, 'la estrella del este, en la misma columna en las dos rejillas');
+  ok(fE.x < 0 && fN.y > 0, 'este a la izquierda y norte arriba en SkyView');
+})();
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');
