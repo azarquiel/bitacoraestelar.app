@@ -143,14 +143,15 @@ label.volumen input {flex:1; accent-color:var(--ambar);}
 <script>
 var LISTA = 'PLXj65nwjQ0QE';
 var TODOS = '*';           // valor del selector para "toda la lista"
-var SIN_ALBUM = 'Sueltas'; // pistas añadidas a la lista después de generar la tabla
+var SIN_ALBUM = 'Sueltas'; // pistas sin ficha y álbumes de una sola pista
 
 /* Ficha de cada pista de la lista. YouTube no expone el álbum ni por la
    IFrame API ni por oEmbed: sale de la etiqueta <meta name="keywords">
    de la página del vídeo, así que se vuelca aquí una sola vez en vez de
    rascarla en cada carga. Si añades pistas a la lista en YouTube, sonarán
    igual: aparecen bajo "Sueltas" con el título pedido por oEmbed. Para
-   agruparlas, añade su ficha a mano aquí. */
+   agruparlas, añade su ficha a mano aquí; hasta que ese álbum tenga dos
+   pistas en la lista seguirá saliendo en "Sueltas". */
 var PISTAS = [
   {id:"oOKWF3IHu0I", titulo:"David Bowie - Starman (Live on Top Of The Pops) [Official Video] [HD]", artista:"David Bowie", album:"The Rise and Fall of Ziggy Stardust"},
   {id:"FqlpJUvC15E", titulo:"Dreaming of the Crash", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
@@ -215,6 +216,7 @@ PISTAS.forEach(function (p) { fichaPorId[p.id] = p; });
 
 var todos  = [];   // la lista de YouTube entera, tal como llegó al abrir
 var enCola = [];   // identificadores realmente cargados en el reproductor
+var albumPorId = {};  // álbum de cada pista, ya con las sueltas apartadas
 
 function onYouTubeIframeAPIReady() {
   reproductor = new YT.Player('reproductor', {
@@ -230,6 +232,7 @@ function alListo() {
   document.querySelectorAll('.mandos button').forEach(function (b) { b.disabled = false; });
   selAlbum.disabled = false;
   todos = reproductor.getPlaylist() || [];
+  albumPorId = repartirAlbumes(todos, fichaPorId, SIN_ALBUM);
   pintarAlbumes();
   pintarLista();
 }
@@ -248,16 +251,38 @@ function alCambiarEstado(ev) {
   marcarSonando();
 }
 
-function albumDe(id) {
-  return fichaPorId[id] ? fichaPorId[id].album : SIN_ALBUM;
+/* Reparto identificador → álbum de una lista de pistas. Un álbum que solo
+   aporta una pista a la lista no es un álbum: esa pista cae en "Sueltas",
+   para no llenar el selector de huecos de una sola canción. Pura: el test
+   scripts/test_reproductor_albumes.js la saca de aquí tal cual. */
+function repartirAlbumes(ids, fichas, sinAlbum) {
+  var cuenta = {};
+  ids.forEach(function (id) {
+    var a = fichas[id] ? fichas[id].album : sinAlbum;
+    cuenta[a] = (cuenta[a] || 0) + 1;
+  });
+  var reparto = {};
+  ids.forEach(function (id) {
+    var a = fichas[id] ? fichas[id].album : sinAlbum;
+    reparto[id] = cuenta[a] > 1 ? a : sinAlbum;
+  });
+  return reparto;
 }
 
-/* Un hueco por álbum, en el orden en que aparecen en la lista. */
+function albumDe(id) {
+  return albumPorId[id] || SIN_ALBUM;
+}
+
+/* Un hueco por álbum, en el orden en que aparecen en la lista, con las
+   sueltas al final: es el cajón de sastre, no un álbum más. */
 function pintarAlbumes() {
   var vistos = [];
   todos.forEach(function (id) {
     var a = albumDe(id);
     if (vistos.indexOf(a) === -1) vistos.push(a);
+  });
+  vistos.sort(function (a, b) {
+    return (a === SIN_ALBUM ? 1 : 0) - (b === SIN_ALBUM ? 1 : 0);
   });
 
   selAlbum.textContent = '';
