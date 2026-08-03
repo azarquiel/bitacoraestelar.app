@@ -9,15 +9,28 @@
      Para lanzarla, pega este bloque donde quieras el botón
      (bloque "HTML personalizado" de Gutenberg):
 
-     <button type="button" onclick="window.open(
-       '/wp-content/uploads/bitacora/reproductor.html',
-       'bitacoraReproductor',
-       'width=400,height=600,menubar=no,toolbar=no,location=no')">
+     <button type="button" onclick="(function(){
+       var an = 340, al = Math.min(860, screen.availHeight - 40);
+       var v = window.open(
+         '/wp-content/uploads/bitacora/reproductor.html',
+         'bitacoraReproductor',
+         'width=' + an + ',height=' + al +
+         ',left=' + (screen.availWidth - an - 20) + ',top=20' +
+         ',menubar=no,toolbar=no,location=no,resizable=yes');
+       v.resizeTo(an, al);
+       v.focus();
+     })()">
        Música de fondo
      </button>
 
      El nombre de ventana "bitacoraReproductor" hace que un segundo
-     clic reutilice la ventana ya abierta en vez de crear otra.
+     clic reutilice la ventana ya abierta en vez de crear otra. Ojo:
+     al reutilizarla el navegador ignora el ancho y el alto pedidos,
+     y por eso hace falta el resizeTo() de después.
+
+     Para cambiar la forma de la ventana, toca "an" (ancho) y "al"
+     (alto). El "left" la aparca pegada al borde derecho de la
+     pantalla, fuera del sitio donde trabajas.
 
      El reproductor de YouTube va oculto: se ve solo la carátula de
      controles. El vídeo se sigue descargando (YouTube no ofrece
