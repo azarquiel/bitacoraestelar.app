@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     REPRODUCTOR AUXILIAR · Bitácora Messier
+
+     Página suelta que se abre en una ventana emergente y sigue
+     sonando mientras navegas por el portal. Súbela por FTP a
+     /wp-content/uploads/bitacora/reproductor.html
+
+     DESDE EL MENÚ DEL SITIO (lo cómodo)
+     En Apariencia > Menús, añade un "Enlace personalizado" con la URL
+     "#reproductor" y el texto que quieras. El plugin Bitácora Registro
+     le pone el icono delante y convierte el clic en esta ventana; el
+     dibujo del icono está en resources/playlist.svg.
+
+     DESDE UN BOTÓN SUELTO
+     Pega este bloque donde quieras el botón (bloque "HTML
+     personalizado" de Gutenberg):
+
+     <button type="button" onclick="(function(){
+       var an = 340, al = Math.min(860, screen.availHeight - 40);
+       var v = window.open(
+         '/wp-content/uploads/bitacora/reproductor.html',
+         'bitacoraReproductor',
+         'width=' + an + ',height=' + al +
+         ',left=' + (screen.availWidth - an - 20) + ',top=20' +
+         ',menubar=no,toolbar=no,location=no,resizable=yes');
+       v.resizeTo(an, al);
+       v.focus();
+     })()">
+       Música de fondo
+     </button>
+
+     El nombre de ventana "bitacoraReproductor" hace que un segundo
+     clic reutilice la ventana ya abierta en vez de crear otra. Ojo:
+     al reutilizarla el navegador ignora el ancho y el alto pedidos,
+     y por eso hace falta el resizeTo() de después.
+
+     Para cambiar la forma de la ventana, toca "an" (ancho) y "al"
+     (alto). El "left" la aparca pegada al borde derecho de la
+     pantalla, fuera del sitio donde trabajas.
+
+     El reproductor de YouTube va oculto: se ve solo la carátula de
+     controles. El vídeo se sigue descargando (YouTube no ofrece
+     una vía de solo audio), pero no se dibuja.
+     ============================================================ -->
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reproductor · Bitácora Messier</title>
+<link rel="icon" href="/wp-content/uploads/bitacora/playlist.svg" />
+<style>
+:root {
+  --noche:#0a0e1a; --noche-2:#111725; --tinta:#e8eef7;
+  --tinta-tenue:#8ea0bd; --linea:#25304a; --ambar:#f4c76b;
+  --ambar-suave:rgba(244,199,107,0.14);
+}
+html,body {height:100%;}
+body {
+  margin:0; background:var(--noche); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  display:flex; flex-direction:column; gap:12px; padding:16px; box-sizing:border-box;
+}
+.eyebrow {
+  margin:0; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ambar);
+}
+/* El iframe se renderiza a tamaño normal dentro de una caja de 0px:
+   YouTube trata mal los reproductores diminutos, así que lo recortamos
+   en vez de encogerlo. */
+.oculto {width:0; height:0; overflow:hidden;}
+
+#pista {
+  margin:0; font-size:15px; line-height:1.35; min-height:2.7em;
+  display:flex; align-items:center;
+}
+#pista.esperando {color:var(--tinta-tenue);}
+
+#album {
+  width:100%; background:var(--noche-2); border:1px solid var(--linea); border-radius:8px;
+  color:var(--tinta); font-family:inherit; font-size:13px; padding:9px 11px;
+  cursor:pointer; color-scheme:dark;
+}
+#album:focus {outline:none; border-color:var(--ambar); box-shadow:0 0 0 3px var(--ambar-suave);}
+
+.mandos {display:flex; align-items:center; gap:8px;}
+.mandos button {
+  background:var(--noche-2); border:1px solid var(--linea); border-radius:8px;
+  color:var(--tinta); font-size:15px; line-height:1; padding:10px 13px; cursor:pointer;
+  transition:border-color .15s, background .15s;
+}
+.mandos button:hover {background:var(--ambar-suave); border-color:var(--ambar);}
+.mandos button:focus-visible {outline:none; border-color:var(--ambar); box-shadow:0 0 0 3px var(--ambar-suave);}
+#alternar {flex:1; font-weight:600;}
+
+label.volumen {display:flex; align-items:center; gap:9px; font-size:12px; color:var(--tinta-tenue);}
+label.volumen input {flex:1; accent-color:var(--ambar);}
+
+#lista {
+  flex:1; min-height:80px; overflow-y:auto; list-style:none; margin:0; padding:0;
+  border:1px solid var(--linea); border-radius:8px; background:var(--noche-2);
+}
+#lista li + li {border-top:1px solid var(--linea);}
+#lista button {
+  display:flex; gap:9px; width:100%; text-align:left; background:none; border:none;
+  color:var(--tinta); font-family:inherit; font-size:13px; line-height:1.35;
+  padding:9px 11px; cursor:pointer;
+}
+#lista button:hover {background:var(--ambar-suave);}
+#lista button:focus-visible {outline:none; background:var(--ambar-suave);}
+#lista .num {
+  font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--tinta-tenue);
+  flex:none; padding-top:2px; min-width:1.6em;
+}
+#lista li.sonando button {color:var(--ambar);}
+#lista li.sonando .num {color:var(--ambar);}
+</style>
+</head>
+<body>
+  <p class="eyebrow">Bitácora · Música de guardia</p>
+
+  <p id="pista" class="esperando">Cargando la lista…</p>
+
+  <select id="album" aria-label="Álbum" disabled></select>
+
+  <!-- Los mandos nacen desactivados: la API de YouTube tarda un momento
+       en cargar y hasta entonces no hay reproductor al que hablar. -->
+  <div class="mandos">
+    <button type="button" id="anterior" title="Pista anterior" aria-label="Pista anterior" disabled>◀◀</button>
+    <button type="button" id="alternar" aria-label="Reproducir" disabled>Reproducir</button>
+    <button type="button" id="siguiente" title="Pista siguiente" aria-label="Pista siguiente" disabled>▶▶</button>
+  </div>
+
+  <label class="volumen">
+    Volumen
+    <input type="range" id="volumen" min="0" max="100" value="60" aria-label="Volumen" />
+  </label>
+
+  <ul id="lista"></ul>
+
+  <div class="oculto"><div id="reproductor"></div></div>
+
+<script>
+var LISTA = 'PLXj65nwjQ0QE';
+var TODOS = '*';           // valor del selector para "toda la lista"
+var SIN_ALBUM = 'Sueltas'; // pistas añadidas a la lista después de generar la tabla
+
+/* Ficha de cada pista de la lista. YouTube no expone el álbum ni por la
+   IFrame API ni por oEmbed: sale de la etiqueta <meta name="keywords">
+   de la página del vídeo, así que se vuelca aquí una sola vez en vez de
+   rascarla en cada carga. Si añades pistas a la lista en YouTube, sonarán
+   igual: aparecen bajo "Sueltas" con el título pedido por oEmbed. Para
+   agruparlas, añade su ficha a mano aquí. */
+var PISTAS = [
+  {id:"oOKWF3IHu0I", titulo:"David Bowie - Starman (Live on Top Of The Pops) [Official Video] [HD]", artista:"David Bowie", album:"The Rise and Fall of Ziggy Stardust"},
+  {id:"FqlpJUvC15E", titulo:"Dreaming of the Crash", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"7GlsxNI4LVI", titulo:"Cornfield Chase", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"iSQcqtKY1cA", titulo:"Dust", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"UgkvcWx8oXw", titulo:"Day One", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"zVbldiNLalo", titulo:"Stay", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"hLydgs1Ummk", titulo:"Message from Home", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"mksYlcizgw4", titulo:"The Wormhole", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"arNkB9vxS3Q", titulo:"Mountains", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"6kDaf9aTXqQ", titulo:"Afraid of Time", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"nqsm10CTzUw", titulo:"A Place Among the Stars", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"ZeXZ5Ja7YBQ", titulo:"Running Out", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"3DwLIlE4xqw", titulo:"I'm Going Home", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"XnKzQRE4Olw", titulo:"Coward", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"O-zP6qdF1x8", titulo:"Detach", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"MU3EOO4fWQo", titulo:"S.T.A.Y.", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"39zPuBFPOhE", titulo:"Where We're Going", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"55TYgbk4kZs", titulo:"First Step", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"X_eVK-mPbxg", titulo:"Flying Drone", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"Ff89t2BGFaM", titulo:"Atmospheric Entry", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"YGC9DfI0Mr4", titulo:"No Need to Come Back", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"C4eSxl53-T0", titulo:"Imperfect Lock", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"2o9KfyPqQzY", titulo:"No Time for Caution", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"IhDNUQAvoIw", titulo:"What Happens Now?", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"1__63FIOqgQ", titulo:"Who's They?", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"s9Hf-yyLsA0", titulo:"Murph", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"H1PZGDh_2Pk", titulo:"Organ Variation", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"3X7t1mpboco", titulo:"Tick-Tock", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"Sj6UATyEJfQ", titulo:"Day One (Original Demo)", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"Rzb2VyjL6XQ", titulo:"Day One Dark", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"-mihz-uTD58", titulo:"Do Not Go Gentle Into That Good Night", artista:"Hans Zimmer", album:"Interstellar (Original Motion Picture Soundtrack)"},
+  {id:"dGnIFAbRa1k", titulo:"Arabesque No. 1", artista:"Isao Tomita", album:"Snowflakes Are Dancing"},
+  {id:"YQtIRr0_UYU", titulo:"In the Beginning", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"fRKmK4K6Jew", titulo:"Let There Be Light", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"AdTEQkBNFag", titulo:"Supernova", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"UU9zh9BOZGA", titulo:"Magellan", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"eRH_Oc_5XyQ", titulo:"First Landing", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"aG-_7xXTHjk", titulo:"Oceania", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"WbYj-GLfTf4", titulo:"Only Time Will Tell", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"QdxsMmION3Y", titulo:"Prayer for the Earth", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"gaOO15cxzOg", titulo:"Lament for Atlantis", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"Bf6kUqz08pk", titulo:"The Chamber", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"pdTGjjhL5G4", titulo:"Hibernaculum", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"P9HZ8UPFikY", titulo:"Tubular World", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"RiwJGZIUT-E", titulo:"The Shining Ones", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"tOBZ-pAhbp4", titulo:"Crystal Clear", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"DhGBHAPKHfg", titulo:"The Sunken Forest", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"b6wqfiMBEik", titulo:"Ascension", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+  {id:"7Z5uzDKPQP4", titulo:"A New Beginning", artista:"Mike Oldfield", album:"The Songs of Distant Earth"},
+];
+
+var reproductor;
+var pista     = document.getElementById('pista');
+var alternar  = document.getElementById('alternar');
+var volumen   = document.getElementById('volumen');
+var lista     = document.getElementById('lista');
+var selAlbum  = document.getElementById('album');
+
+var fichaPorId = {};
+PISTAS.forEach(function (p) { fichaPorId[p.id] = p; });
+
+var todos  = [];   // la lista de YouTube entera, tal como llegó al abrir
+var enCola = [];   // identificadores realmente cargados en el reproductor
+
+function onYouTubeIframeAPIReady() {
+  reproductor = new YT.Player('reproductor', {
+    width: 640, height: 360,
+    playerVars: {listType:'playlist', list:LISTA, playsinline:1},
+    events: {onReady:alListo, onStateChange:alCambiarEstado}
+  });
+}
+
+function alListo() {
+  reproductor.setVolume(Number(volumen.value));
+  pista.textContent = 'Lista lista. Pulsa reproducir.';
+  document.querySelectorAll('.mandos button').forEach(function (b) { b.disabled = false; });
+  selAlbum.disabled = false;
+  todos = reproductor.getPlaylist() || [];
+  pintarAlbumes();
+  pintarLista();
+}
+
+function alCambiarEstado(ev) {
+  var sonando = ev.data === YT.PlayerState.PLAYING;
+  alternar.textContent = sonando ? 'Pausa' : 'Reproducir';
+  alternar.setAttribute('aria-label', sonando ? 'Pausar' : 'Reproducir');
+
+  var datos = reproductor.getVideoData();
+  if (datos && datos.title) {
+    pista.textContent = datos.title;
+    pista.classList.remove('esperando');
+    document.title = datos.title + ' · Bitácora';
+  }
+  marcarSonando();
+}
+
+function albumDe(id) {
+  return fichaPorId[id] ? fichaPorId[id].album : SIN_ALBUM;
+}
+
+/* Un hueco por álbum, en el orden en que aparecen en la lista. */
+function pintarAlbumes() {
+  var vistos = [];
+  todos.forEach(function (id) {
+    var a = albumDe(id);
+    if (vistos.indexOf(a) === -1) vistos.push(a);
+  });
+
+  selAlbum.textContent = '';
+  selAlbum.append(new Option('Toda la lista', TODOS));
+  vistos.forEach(function (a) { selAlbum.append(new Option(a, a)); });
+}
+
+/* Cambiar de álbum recarga la cola del reproductor con solo esas pistas.
+   "Toda la lista" vuelve a cargar la lista de YouTube entera, de modo que
+   las pistas nuevas aparecen sin tocar este archivo. */
+selAlbum.onchange = function () {
+  if (selAlbum.value === TODOS) {
+    reproductor.loadPlaylist({listType:'playlist', list:LISTA});
+  } else {
+    reproductor.loadPlaylist(idsDelAlbum(selAlbum.value));
+  }
+  pintarLista();
+};
+
+/* Se filtra siempre sobre la lista entera, no sobre la cola en curso:
+   si no, al saltar de un álbum a otro solo quedarían las pistas del
+   primero y la lista saldría vacía. */
+function idsDelAlbum(album) {
+  return todos.filter(function (id) { return albumDe(id) === album; });
+}
+
+/* La cola manda: las filas son lo que el reproductor tiene cargado, así
+   playVideoAt() y el número de fila hablan del mismo índice. */
+function pintarLista() {
+  enCola = selAlbum.value === TODOS ? todos : idsDelAlbum(selAlbum.value);
+
+  lista.textContent = '';
+  enCola.forEach(function (id, i) {
+    var fila = document.createElement('li');
+    var boton = document.createElement('button');
+    boton.type = 'button';
+    boton.onclick = function () { reproductor.playVideoAt(i); };
+
+    var num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = (i + 1) + '.';
+
+    var titulo = document.createElement('span');
+    titulo.textContent = fichaPorId[id] ? fichaPorId[id].titulo : 'Pista ' + (i + 1);
+
+    boton.append(num, titulo);
+    fila.append(boton);
+    lista.append(fila);
+
+    /* Solo las pistas sin ficha necesitan que se les pregunte el título:
+       oEmbed lo da sin clave de API y con CORS abierto. */
+    if (!fichaPorId[id]) {
+      fetch('https://www.youtube.com/oembed?format=json&url=' +
+            encodeURIComponent('https://www.youtube.com/watch?v=' + id))
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (d) { titulo.textContent = d.title; })
+        .catch(function () { /* sin título: se queda "Pista N", que suena igual */ });
+    }
+  });
+  marcarSonando();
+}
+
+function marcarSonando() {
+  var datos = reproductor.getVideoData();
+  var id = datos && datos.video_id;
+  Array.prototype.forEach.call(lista.children, function (fila, i) {
+    fila.classList.toggle('sonando', enCola[i] === id);
+  });
+}
+
+alternar.onclick = function () {
+  if (reproductor.getPlayerState() === YT.PlayerState.PLAYING) reproductor.pauseVideo();
+  else reproductor.playVideo();
+};
+document.getElementById('anterior').onclick  = function () { reproductor.previousVideo(); };
+document.getElementById('siguiente').onclick = function () { reproductor.nextVideo(); };
+volumen.oninput = function () { reproductor.setVolume(Number(volumen.value)); };
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

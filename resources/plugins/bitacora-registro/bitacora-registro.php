@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.21.0
+ * Version:     1.22.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.21.0' );
+define( 'BITACORA_VERSION', '1.22.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -3947,6 +3947,77 @@ function bitacora_inyectar_publico() {
     );
 }
 add_action( 'wp_head', 'bitacora_inyectar_publico' );
+
+/**
+ * Lanzador del reproductor de música en el menú del sitio.
+ *
+ * En Apariencia > Menús se añade un "Enlace personalizado" con la URL
+ * "#reproductor" y el texto que se quiera. Esta función se encarga del resto:
+ * le pone delante el icono y convierte el clic en una ventana emergente, para
+ * que la música siga sonando mientras se navega por la bitácora.
+ *
+ * Va en el pie y no en la cabecera porque necesita que el menú ya esté pintado.
+ * El icono viaja incrustado (es el dibujo de resources/playlist.svg) para no
+ * gastar una petición en un archivo de dos kilobytes. Los identificadores de
+ * los degradados llevan el prefijo "repro-" porque en la página conviven con
+ * los de la plantilla y no pueden repetirse.
+ */
+function bitacora_inyectar_reproductor_menu() {
+    $url = esc_url( content_url( '/uploads/bitacora/reproductor.html' ) );
+    ?>
+<style>
+.bitacora-musica {display:inline-flex; align-items:center; gap:.5em;}
+.bitacora-musica svg {width:1.5em; height:1.5em; flex:none;}
+</style>
+<script>
+(function () {
+  var ICONO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"' +
+    ' aria-hidden="true" focusable="false">' +
+    '<defs>' +
+    '<radialGradient id="repro-fondo" cx="50%" cy="50%" r="50%">' +
+    '<stop offset="0%" stop-color="#1A2744"/><stop offset="100%" stop-color="#0A111F"/>' +
+    '</radialGradient>' +
+    '<linearGradient id="repro-plata" x1="0%" y1="0%" x2="100%" y2="100%">' +
+    '<stop offset="0%" stop-color="#E0E5EC"/><stop offset="40%" stop-color="#8B95A5"/>' +
+    '<stop offset="100%" stop-color="#C8D0D8"/>' +
+    '</linearGradient>' +
+    '</defs>' +
+    '<circle cx="50" cy="50" r="45" fill="url(#repro-fondo)" stroke="url(#repro-plata)" stroke-width="4"/>' +
+    '<circle cx="50" cy="50" r="35" fill="none" stroke="#2A3B5C" stroke-width="1.5"/>' +
+    '<circle cx="50" cy="8" r="2" fill="#8B95A5" opacity="0.6"/>' +
+    '<circle cx="50" cy="92" r="2" fill="#8B95A5" opacity="0.6"/>' +
+    '<circle cx="8" cy="50" r="2" fill="#8B95A5" opacity="0.6"/>' +
+    '<circle cx="92" cy="50" r="2" fill="#8B95A5" opacity="0.6"/>' +
+    '<path d="M 30 22 L 72 50 L 30 78 L 30 60 L 20 50 L 30 40 Z" fill="#F2C94C" stroke="#D4A017" stroke-width="1.5"/>' +
+    '<line x1="45" y1="32" x2="55" y2="37" stroke="#0A111F" stroke-width="1.5" opacity="0.5"/>' +
+    '<line x1="45" y1="68" x2="55" y2="63" stroke="#0A111F" stroke-width="1.5" opacity="0.5"/>' +
+    '</svg>';
+
+  var URL_REPRODUCTOR = <?php echo wp_json_encode( $url ); ?>;
+
+  function abrir() {
+    var an = 340, al = Math.min(860, screen.availHeight - 40);
+    var v = window.open(
+      URL_REPRODUCTOR, 'bitacoraReproductor',
+      'width=' + an + ',height=' + al +
+      ',left=' + (screen.availWidth - an - 20) + ',top=20' +
+      ',menubar=no,toolbar=no,location=no,resizable=yes');
+    /* Al reutilizar una ventana ya abierta por su nombre, el navegador se salta
+       las medidas pedidas en window.open(): hay que insistir con resizeTo(). */
+    if (v) { v.resizeTo(an, al); v.focus(); }
+  }
+
+  document.querySelectorAll('a[href*="#reproductor"]').forEach(function (a) {
+    if (a.classList.contains('bitacora-musica')) return;  // por si el menú sale dos veces
+    a.classList.add('bitacora-musica');
+    a.insertAdjacentHTML('afterbegin', ICONO);
+    a.addEventListener('click', function (e) { e.preventDefault(); abrir(); });
+  });
+})();
+</script>
+    <?php
+}
+add_action( 'wp_footer', 'bitacora_inyectar_reproductor_menu' );
 
 /* ===========================================================================
  * 5. PANTALLA DE ADMINISTRACIÓN

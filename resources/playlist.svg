@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
+  <defs>
+    <!-- Fondo espacial TNG -->
+    <radialGradient id="tng-bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1A2744" />
+      <stop offset="100%" stop-color="#0A111F" />
+    </radialGradient>
+    <!-- Bisel metálico plateado (típico de las consolas TNG) -->
+    <linearGradient id="tng-silver" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E0E5EC" />
+      <stop offset="40%" stop-color="#8B95A5" />
+      <stop offset="100%" stop-color="#C8D0D8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Círculo exterior (la "carcasa" del reproductor) -->
+  <circle cx="50" cy="50" r="45" fill="url(#tng-bg)" stroke="url(#tng-silver)" stroke-width="4" />
+  
+  <!-- Anillo interior decorativo (estilo LCARS) -->
+  <circle cx="50" cy="50" r="35" fill="none" stroke="#2A3B5C" stroke-width="1.5" />
+  
+  <!-- Pequeños puntos técnicos en las esquinas (como los displays de la Enterprise-D) -->
+  <circle cx="50" cy="8" r="2" fill="#8B95A5" opacity="0.6" />
+  <circle cx="50" cy="92" r="2" fill="#8B95A5" opacity="0.6" />
+  <circle cx="8" cy="50" r="2" fill="#8B95A5" opacity="0.6" />
+  <circle cx="92" cy="50" r="2" fill="#8B95A5" opacity="0.6" />
+
+  <!-- DELTA TNG (apuntando a la derecha) -->
+  <!-- El trazo angular y la muesca en la base izquierda (M 30 40 L 20 50 L 30 60) lo identifican como TNG -->
+  <path d="M 30 22 
+           L 72 50 
+           L 30 78 
+           L 30 60 
+           L 20 50 
+           L 30 40 
+           Z" 
+        fill="#F2C94C" stroke="#D4A017" stroke-width="1.5" />
+
+  <!-- Detalle característico: pequeña línea de corte en la parte superior (como la insignia real) -->
+  <line x1="45" y1="32" x2="55" y2="37" stroke="#0A111F" stroke-width="1.5" opacity="0.5" />
+  <line x1="45" y1="68" x2="55" y2="63" stroke="#0A111F" stroke-width="1.5" opacity="0.5" />
+</svg>
