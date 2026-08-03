@@ -471,12 +471,41 @@ disponibles **para todos**:
   para no duplicar cada regla con el prefijo `-webkit-` de Safari. El
   `!important` del ancho/alto es necesario porque `actualizar()` fija el
   diámetro **en línea** en cada render. Sin API de pantalla completa (iPhone),
-  el botón se oculta.
+  el botón se oculta. Al entrar y al salir se **vuelve a dibujar al tamaño
+  nuevo** (ver *Resolución del lienzo*), que si no la imagen saldría ampliada.
 - **Descargar la imagen** — exporta el lienzo con el **mismo recorte circular**
   que el CSS aplica a la vista (lo que se descarga es lo que se ve), en PNG y con
   el nombre `ocular-<objeto>-<aumentos>x-<origen>.png`. Si el lienzo quedó
   contaminado por una placa servida sin CORS, `toBlob` lanza `SecurityError` y se
   cae a abrir la placa suelta en otra pestaña.
+
+### Resolución del lienzo
+
+El lienzo se dibujaba siempre a 720 px de lado. A pantalla completa el círculo mide
+`min(94vw, 88vh)`, así que en un portátil Retina son 792 px CSS × 2 de densidad =
+**1584 px de dispositivo enseñando 720**: el navegador ampliaba x2,2 y la imagen salía
+borrosa.
+
+Ahora el lado sale de `BitacoraGaiaRender.tamLienzo(anchoCss, dpr, techo)` (test:
+`node scripts/test_tam_lienzo.js`) y `actualizar()` lo recalcula en cada render: **ancho
+real del hueco × densidad de pantalla**, con suelo de 720 —el tamaño con el que se ajustó
+todo el render, por debajo no se baja— y un techo por origen:
+
+| Origen | Techo | Por qué |
+| --- | --- | --- |
+| Gaia DR3 (Canvas 2D) | 1440 px | Solo cuesta CPU: el catálogo ya está en `cacheGaia`, así que **redibujar más grande no baja un solo byte**. |
+| PanSTARRS (HiPS) | 1200 px | `urlHips` pide `width`/`height` al servidor: los bytes van con el **área**. |
+| DSS | 1200 px | `dss_pixels()` sirve ~1,7″/px (1059 px en un campo de 30′, tope 1200): a 720 se tiraba detalle **ya descargado**. |
+
+El coste de dibujar va con el **cuadrado del lado** (720→1080 es 2,25×; 720→1440, 4×), y
+se lo llevan los bucles por píxel: los `Float32Array(lado²)`, `adaptacionLocal` →
+`desenfocar` (dos lienzos, `putImageData` + `getImageData` por pasada), `repararNucleos` y
+el `createImageData` de `pintarFot`. Las estrellas son las mismas: solo crece el área de
+sus gradientes.
+
+Que se pueda subir sin retocar nada es porque **el render es invariante de escala**: todo
+sale de `ctx.canvas.width` —la escala `escv`, el `pxPorAs`, el radio de desenfoque
+`SIZE/60`, el tamaño de cada estrella—, no hay constantes en píxeles absolutos.
 
 ### Caché del DSS
 

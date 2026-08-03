@@ -196,6 +196,21 @@
   // redondeado, para quien solo necesita rellenar el lienzo.
   function nivelFondo(o) { return Math.round(ctxFotometrico(o).nivelFondo); }
 
+  /* Píxeles a los que dibujar un lienzo que se enseña a `anchoCss` píxeles CSS
+     en una pantalla de densidad `dpr`: los que de verdad tiene el hueco. Con
+     720 fijos, una pantalla Retina a pantalla completa ampliaba x2 y la imagen
+     salía borrosa. Todo el render sale de ctx.canvas.width (la escala, el radio
+     de desenfoque, el tamaño de las estrellas), así que subirlo no descoloca
+     nada; lo que sube es el coste, con el CUADRADO del lado, y por eso el techo
+     lo pone quien llama: el de Gaia es solo CPU (el catálogo ya está bajado) y
+     el de las placas son bytes de un servidor ajeno. El suelo de 720 es el
+     tamaño con el que se ajustó el render: por debajo no se baja. */
+  var TAM_LIENZO_MIN = 720;
+  function tamLienzo(anchoCss, dpr, tope) {
+    var px = Math.round((anchoCss || 0) * (dpr > 0 ? dpr : 1));
+    return Math.max(TAM_LIENZO_MIN, Math.min(tope || TAM_LIENZO_MIN, px));
+  }
+
   /* Desenfoque gaussiano de un array de GRISES (0–255) usando el filtro nativo
      del canvas. Ojo: recorta a 0–255, así que no sirve para arrays de flujo. */
   function desenfocar(v, radio, SIZE) {
@@ -1369,6 +1384,7 @@
     magLimite: magLimite,
     magConsultaGaia: magConsultaGaia,
     nivelFondo: nivelFondo,
+    tamLienzo: tamLienzo,
     nivelCielo: nivelCielo,
     tono: TONO,
     capaEstrellas: capaEstrellas,

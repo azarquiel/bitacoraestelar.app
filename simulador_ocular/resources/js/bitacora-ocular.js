@@ -111,7 +111,20 @@
       // campo ancho y binoculares.
       var GAIA_MAX_ARCMIN = 360;
       var AFOV_REF = 110;
+      /* Lado del lienzo en píxeles, RECALCULADO en cada render (ver tamRender):
+         el hueco donde se enseña mide una cosa en la página y otra a pantalla
+         completa. Techos distintos porque el coste no es el mismo: el Canvas-2D
+         de Gaia solo gasta CPU —el catálogo ya está en cacheGaia, la red no
+         entra—, mientras que PanSTARRS pide al servidor width×height píxeles y
+         el DSS no da para más (dss-proxy.php sirve 1200 px como mucho). */
       var PROC = 720;
+      var PROC_MAX_GAIA = 1440;
+      var PROC_MAX_PLACA = 1200;
+      function tamRender(origen) {
+        var vista = $('sim-vista');
+        return BitacoraGaiaRender.tamLienzo(vista ? vista.clientWidth : 0, window.devicePixelRatio,
+          origen === 'canvas-2d' ? PROC_MAX_GAIA : PROC_MAX_PLACA);
+      }
 
       // Transmisión luminosa del telescopio (fracción de luz aprovechada), usada
       // en la magnitud límite (Método del umbral). Torres Lapasió toma 0,9 para
@@ -452,6 +465,7 @@
           : (magOpt - MARGEN_MAGLIM).toFixed(1) + '–' + magOpt.toFixed(1) + '<em>m</em>');
 
         var origen = $('sim-origen').value;
+        PROC = tamRender(origen);
 
         /* Recorte del cielo: lado = campo real, limitado por el origen. El tope de
            2° es de las PLACAS (el servidor del DSS no sirve más); el Canvas-2D de
@@ -502,6 +516,10 @@
          girado no casa con la superposición de Gaia. */
       function renderDSS(arcmin, peticion, fuente) {
         fuente = fuente || 'skyview';
+        // Techo de placa aunque se llegue aquí de respaldo desde Gaia, que tiene
+        // el suyo más alto: ampliar una placa de 1059 px cuesta CPU y no añade
+        // detalle.
+        PROC = tamRender('dss');
         var cargando = $('sim-cargando');
         var ra = objetoSel.ra, dec = objetoSel.dec;
         var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin, fuente);
@@ -822,6 +840,12 @@
             var txt = dentro ? 'Salir de pantalla completa' : 'Ver a pantalla completa';
             btnFull.title = txt;
             btnFull.setAttribute('aria-label', txt);
+            /* El círculo cambia de tamaño, así que el lienzo de 720 se vería
+               ampliado: se vuelve a dibujar al tamaño nuevo. Solo si de verdad
+               cambia —si ya estaba en su techo, ampliar la ventana no obliga a
+               repetir el render, que no es gratis—. La clase ya está puesta
+               arriba, así que clientWidth mide el hueco DEFINITIVO. */
+            if (tamRender($('sim-origen').value) !== $('sim-lienzo').width) actualizar();
           });
         });
       }
