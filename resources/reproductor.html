@@ -12,7 +12,7 @@
      <button type="button" onclick="window.open(
        '/wp-content/uploads/bitacora/reproductor.html',
        'bitacoraReproductor',
-       'width=380,height=260,menubar=no,toolbar=no,location=no')">
+       'width=380,height=560,menubar=no,toolbar=no,location=no')">
        Música de fondo
      </button>
 
@@ -68,6 +68,25 @@ body {
 
 label.volumen {display:flex; align-items:center; gap:9px; font-size:12px; color:var(--tinta-tenue);}
 label.volumen input {flex:1; accent-color:var(--ambar);}
+
+#lista {
+  flex:1; min-height:80px; overflow-y:auto; list-style:none; margin:0; padding:0;
+  border:1px solid var(--linea); border-radius:8px; background:var(--noche-2);
+}
+#lista li + li {border-top:1px solid var(--linea);}
+#lista button {
+  display:flex; gap:9px; width:100%; text-align:left; background:none; border:none;
+  color:var(--tinta); font-family:inherit; font-size:13px; line-height:1.35;
+  padding:9px 11px; cursor:pointer;
+}
+#lista button:hover {background:var(--ambar-suave);}
+#lista button:focus-visible {outline:none; background:var(--ambar-suave);}
+#lista .num {
+  font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--tinta-tenue);
+  flex:none; padding-top:2px; min-width:1.6em;
+}
+#lista li.sonando button {color:var(--ambar);}
+#lista li.sonando .num {color:var(--ambar);}
 </style>
 </head>
 <body>
@@ -88,6 +107,8 @@ label.volumen input {flex:1; accent-color:var(--ambar);}
     <input type="range" id="volumen" min="0" max="100" value="60" aria-label="Volumen" />
   </label>
 
+  <ul id="lista"></ul>
+
   <div class="oculto"><div id="reproductor"></div></div>
 
 <script>
@@ -97,6 +118,7 @@ var reproductor;
 var pista     = document.getElementById('pista');
 var alternar  = document.getElementById('alternar');
 var volumen   = document.getElementById('volumen');
+var lista     = document.getElementById('lista');
 
 function onYouTubeIframeAPIReady() {
   reproductor = new YT.Player('reproductor', {
@@ -110,6 +132,7 @@ function alListo() {
   reproductor.setVolume(Number(volumen.value));
   pista.textContent = 'Lista lista. Pulsa reproducir.';
   document.querySelectorAll('.mandos button').forEach(function (b) { b.disabled = false; });
+  pintarLista(reproductor.getPlaylist() || []);
 }
 
 function alCambiarEstado(ev) {
@@ -123,6 +146,44 @@ function alCambiarEstado(ev) {
     pista.classList.remove('esperando');
     document.title = datos.title + ' · Bitácora';
   }
+  marcarSonando(reproductor.getPlaylistIndex());
+}
+
+/* La IFrame API solo entrega los identificadores de la lista, no los
+   títulos. oEmbed los da sin clave de API y con CORS abierto, así que
+   se piden uno a uno y cada fila se rellena cuando llega el suyo. */
+function pintarLista(ids) {
+  lista.textContent = '';
+  ids.forEach(function (id, i) {
+    var fila = document.createElement('li');
+    var boton = document.createElement('button');
+    boton.type = 'button';
+    boton.onclick = function () { reproductor.playVideoAt(i); };
+
+    var num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = (i + 1) + '.';
+
+    var titulo = document.createElement('span');
+    titulo.textContent = 'Pista ' + (i + 1);
+
+    boton.append(num, titulo);
+    fila.append(boton);
+    lista.append(fila);
+
+    fetch('https://www.youtube.com/oembed?format=json&url=' +
+          encodeURIComponent('https://www.youtube.com/watch?v=' + id))
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (d) { titulo.textContent = d.title; })
+      .catch(function () { /* sin título: se queda "Pista N", que sigue sonando igual */ });
+  });
+  marcarSonando(reproductor.getPlaylistIndex());
+}
+
+function marcarSonando(indice) {
+  Array.prototype.forEach.call(lista.children, function (fila, i) {
+    fila.classList.toggle('sonando', i === indice);
+  });
 }
 
 alternar.onclick = function () {
