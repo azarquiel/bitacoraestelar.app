@@ -6,22 +6,26 @@ reproduce el campo, el brillo y —en la vista de Gaia— hasta el color de las
 estrellas, tal como los verías por el ocular.
 
 Funciona en el navegador (móvil u ordenador), **sin instalar nada y sin necesidad
-de iniciar sesión**. Vive en la web WordPress del proyecto
-([bitacoraestelar.app](https://bitacoraestelar.app)) como un bloque HTML.
+de iniciar sesión** (con sesión se desbloquean dos extras: ver
+[*Qué cambia al iniciar sesión*](#qué-cambia-al-iniciar-sesión)). Vive en la web
+WordPress del proyecto ([bitacoraestelar.app](https://bitacoraestelar.app)) como
+un bloque HTML.
 
-> El **objeto** lo elige el usuario en un selector de cuatro pestañas: **cúmulos
+> El **objeto** lo elige el usuario en un selector de pestañas: **cúmulos
 > abiertos** (de momento M35, M39 y NGC 7789), **cúmulos globulares** (los 149 del
 > catálogo de Harris), **estrellas de carbono** (las ~100 del programa de la
-> Astronomical League) o **estrellas dobles** (188, fusión de tres catálogos). El
-> equipo y el cielo también los elige el usuario.
+> Astronomical League) o **estrellas dobles** (188, fusión de tres catálogos); con
+> sesión iniciada se añade una quinta, **cualquier objeto** (por nombre o
+> coordenadas). El equipo y el cielo también los elige el usuario.
 
 ---
 
 ## Qué hace
 
-- **Elige el objeto**: en un selector de cuatro pestañas, un **cúmulo abierto**, un
+- **Elige el objeto**: en el selector de pestañas, un **cúmulo abierto**, un
   **cúmulo globular**, una **estrella de carbono** de la Astronomical League o una
-  **estrella doble**. Al elegir un globular, la vista de Gaia pinta su **halo no
+  **estrella doble** (y, con sesión iniciada, **cualquier objeto** por nombre o
+  coordenadas). Al elegir un globular, la vista de Gaia pinta su **halo no
   resuelto** (perfil de King) además de las estrellas individuales del catálogo. Al
   elegir una estrella de carbono, la ficha resalta su magnitud, tipo y su característico
   **color rojo-anaranjado** (mejor visible en la vista de Gaia). Al elegir una doble, la
@@ -29,6 +33,11 @@ de iniciar sesión**. Vive en la web WordPress del proyecto
   aparece y un **veredicto de si tu equipo la resuelve** (ver más abajo).
 - **Elige tu equipo**: telescopio y ocular de un catálogo de cientos de modelos,
   o **introdúcelos a mano** (apertura, focal y tipo óptico) si no están en la lista.
+  Con **sesión iniciada**, los telescopios de **Mi flota** salen los primeros de la
+  lista (con su nombre propio delante y sus características detrás).
+- **Pantalla completa y descarga**: dos botones discretos bajo el círculo del ocular
+  (para todos, con o sin sesión) amplían la vista a toda la pantalla o guardan la
+  imagen tal y como se ve, con el mismo recorte circular.
 - **Ajusta el cielo** del observador (brillo de fondo en mag/arcsec², de rural
   oscuro a urbano) y observa cómo se lava lo tenue.
 - **Lecturas al instante**: aumentos, campo real, campo aparente, pupila de salida,
@@ -363,6 +372,46 @@ El simulador funciona **sin iniciar sesión**. Para ello:
 La **página** que contiene el bloque debe estar **publicada y pública** (no privada
 ni protegida por contraseña). Si un plugin de seguridad bloquea la REST API a
 usuarios no autenticados, hay que permitir esa ruta.
+
+### Qué cambia al iniciar sesión
+
+`window.BITACORA_WP` solo lo inyecta el plugin para usuarios logueados
+(`bitacora_inyectar_datos`), así que su *nonce* es la señal de sesión de la página
+(`haySesion()` en `bitacora-ocular.js`). Con sesión se añaden dos cosas:
+
+| Opción | Sin sesión | Con sesión |
+|---|---|---|
+| Pestaña **"Cualquier objeto"** (RA/Dec o SIMBAD) | Oculta | Visible (salvo `window.BITACORA_OCULAR_LIBRE = false`) |
+| Telescopios de **Mi flota** | No se piden | Los **primeros** del buscador, marcados `Mi flota`, y la lista se despliega al enfocar |
+
+Ninguna de las dos es un control de acceso: el equipo personal (`GET
+bitacora/v1/equipo`) ya exige login **en el servidor**, y el modo libre solo
+consulta servicios públicos (Sesame/SIMBAD). En el cliente se decide qué se
+**ofrece**, no a qué se puede llegar.
+
+El orden "flota primero" lo fija el helper puro compartido
+`BitacoraEquipo.flotaPrimero(flota, catalogo)` (`../resources/js/bitacora-equipo.js`),
+que copia las piezas propias marcándolas `esFlota:true` sin tocar la respuesta de
+la API. Test: `node scripts/test_equipo.js`.
+
+### Ver a pantalla completa y descargar la imagen
+
+Dos botones discretos (solo icono, con su rótulo en el `title`) bajo el círculo,
+disponibles **para todos**:
+
+- **Ver a pantalla completa** — la Fullscreen API se pide sobre la *zona*
+  (`#sim-zona` = círculo + botones), no sobre el círculo, para no perder los
+  botones al entrar. El tamaño lo pone la clase `.es-completa` que el JS
+  conmuta en `fullscreenchange`; se hace con una clase y no con `:fullscreen`
+  para no duplicar cada regla con el prefijo `-webkit-` de Safari. El
+  `!important` del ancho/alto es necesario porque `actualizar()` fija el
+  diámetro **en línea** en cada render. Sin API de pantalla completa (iPhone),
+  el botón se oculta.
+- **Descargar la imagen** — exporta el lienzo con el **mismo recorte circular**
+  que el CSS aplica a la vista (lo que se descarga es lo que se ve), en PNG y con
+  el nombre `ocular-<objeto>-<aumentos>x-<origen>.png`. Si el lienzo quedó
+  contaminado por una placa servida sin CORS, `toBlob` lanza `SecurityError` y se
+  cae a abrir la placa suelta en otra pestaña.
 
 ### Caché del DSS
 

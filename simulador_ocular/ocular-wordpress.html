@@ -17,15 +17,19 @@
 
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
 
-     PESTAÑA "Cualquier objeto" (RA/Dec o SIMBAD): ENCENDIDA por defecto. Es la
-     única forma de apuntar a una galaxia, una nebulosa o un globular, que se
-     pintan como capa por campo y no tienen pestaña propia en el selector.
-     Para ocultarla, añade esta línea antes de los <script src>:
+     SOLO CON SESIÓN INICIADA (el resto de la página sigue siendo pública):
+       · la pestaña "Cualquier objeto" (RA/Dec o SIMBAD), única forma de apuntar
+         a una galaxia o a una nebulosa, que se pintan como capa por campo y no
+         tienen pestaña propia en el selector;
+       · los telescopios de "Mi flota", que salen los primeros del buscador de
+         telescopio, por delante del catálogo global.
+     Para ocultar además "Cualquier objeto" a quien sí tiene sesión, añade esta
+     línea antes de los <script src>:
          <script>window.BITACORA_OCULAR_LIBRE = false;</script>
      ============================================================ -->
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260720_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260729_1600" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260803_1000" />
 
 <!-- Filtro de respuesta del ojo según la pupila de salida (modo de reserva
      sin canvas): y = pendiente·x + desplazamiento. -->
@@ -154,10 +158,26 @@
     <!-- ══════════ ZONA DE OBSERVACIÓN ══════════ -->
     <main class="observacion">
 
-      <div class="vista" id="sim-vista">
-        <img id="sim-img" crossorigin="anonymous" alt="Vista del objeto a través del ocular">
-        <canvas id="sim-lienzo" aria-label="Vista del objeto"></canvas>
-        <div class="cargando" id="sim-cargando">preparando el simulador…</div>
+      <!-- Zona de la vista: el círculo del ocular y sus dos acciones. Es esta
+           ZONA (no solo el círculo) la que se pone a pantalla completa, para que
+           los botones sigan a mano dentro de ella. -->
+      <div class="vista-zona" id="sim-zona">
+        <div class="vista" id="sim-vista">
+          <img id="sim-img" crossorigin="anonymous" alt="Vista del objeto a través del ocular">
+          <canvas id="sim-lienzo" aria-label="Vista del objeto"></canvas>
+          <div class="cargando" id="sim-cargando">preparando el simulador…</div>
+        </div>
+
+        <!-- Acciones sobre la imagen (para todos, con o sin sesión): discretas,
+             solo icono, con su rótulo en el title al pasar el ratón. -->
+        <div class="vista-acciones">
+          <button type="button" class="accion-vista" id="sim-pantalla-completa" title="Ver a pantalla completa" aria-label="Ver a pantalla completa">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 4H4v5M20 9V4h-5M9 20H4v-5M15 20h5v-5"/></svg>
+          </button>
+          <button type="button" class="accion-vista" id="sim-descargar" title="Descargar la imagen" aria-label="Descargar la imagen">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>
+          </button>
+        </div>
       </div>
 
       <!-- Barra "Capas y vista": va aquí, pegada a la imagen, y no en el lateral,
@@ -213,5 +233,5 @@
 <script src="/wp-content/uploads/bitacora/galaxias-datos.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/nebulosas-datos.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260801_0009" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260722_1500" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260802_1000" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260803_1000" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260803_1000" defer></script>

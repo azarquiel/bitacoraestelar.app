@@ -75,7 +75,13 @@ y por **Mi flota**, sin DOM ni WordPress.
 - **`nombreTelescopio(item)`** → rótulo del telescopio: el **nombre** propio que el
   observador le puso en Mi flota, o `vendor + modelo` en su defecto. Mismo rótulo
   en la lista de Mi flota y en el selector del simulador.
-- **Test:** `scripts/test_equipo.js` fija el contrato de ambos.
+- **`flotaPrimero(flota, catalogo)`** → una sola lista para el selector de
+  **telescopios** del simulador: delante los **de Mi flota** (copiados con
+  `esFlota:true`, sin tocar la respuesta de la API), detrás el **catálogo global**.
+  Solo hay flota con sesión iniciada, que es de donde sale la diferencia entre lo
+  que ve un visitante y un observador logueado. Oculares y auxiliares no pasan por
+  aquí: salen del catálogo global tal cual.
+- **Test:** `scripts/test_equipo.js` fija el contrato de los tres.
 
 ## Astrometría de la sesión
 

@@ -122,6 +122,41 @@
   background:#000;border-radius:50%;text-align:center;padding:0 24px;
 }
 
+/* ── Acciones sobre la imagen del ocular (pantalla completa y descarga) ──
+   Discretas a propósito: solo el icono, tenue, y se encienden al pasar el ratón.
+   Van pegadas al círculo, dentro de la misma zona que se pone a pantalla
+   completa, para no perderlas al entrar en ella. */
+#mw-obs-form .vista-zona {display:flex;flex-direction:column;align-items:center;}
+#mw-obs-form .vista-acciones {display:flex;gap:8px;margin-top:12px;}
+#mw-obs-form .accion-vista {
+  display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;padding:0;
+  border:1px solid var(--linea);border-radius:8px;background:transparent;
+  color:var(--tinta-tenue);opacity:.6;cursor:pointer;
+  transition:opacity .18s, color .18s, border-color .18s;
+}
+/* El display de arriba pisaría el [hidden] del navegador, y el botón de pantalla
+   completa se esconde así donde no hay API (iPhone). */
+#mw-obs-form .accion-vista[hidden] {display:none;}
+#mw-obs-form .accion-vista:hover, #mw-obs-form .accion-vista:focus-visible {
+  opacity:1;color:var(--ambar);border-color:var(--ambar);
+}
+#mw-obs-form .accion-vista svg {
+  width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+
+/* Pantalla completa: el círculo pasa a ocupar el lado corto de la pantalla. El
+   !important pisa el width/height EN LÍNEA que actualizar() fija en cada
+   render. La clase la pone el JS al entrar/salir (evita duplicar todo con el
+   :fullscreen prefijado de Safari). */
+#mw-obs-form .vista-zona.es-completa {
+  width:100vw;height:100vh;justify-content:center;background:#05060A;
+}
+#mw-obs-form .vista-zona.es-completa .vista {
+  width:min(94vw, 88vh) !important;height:min(94vw, 88vh) !important;margin-top:0;
+}
+
 /* ── Barra "Capas y vista", bajo el ocular ──
    Los controles que deciden QUÉ SE VE viven aquí, pegados a la imagen que
    afectan, en vez de en el lateral. */
