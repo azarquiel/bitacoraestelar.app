@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     REPRODUCTOR AUXILIAR · Bitácora Messier
+
+     Página suelta que se abre en una ventana emergente y sigue
+     sonando mientras navegas por el portal. Súbela por FTP a
+     /wp-content/uploads/bitacora/reproductor.html
+
+     Para lanzarla, pega este bloque donde quieras el botón
+     (bloque "HTML personalizado" de Gutenberg):
+
+     <button type="button" onclick="window.open(
+       '/wp-content/uploads/bitacora/reproductor.html',
+       'bitacoraReproductor',
+       'width=440,height=560,menubar=no,toolbar=no,location=no')">
+       Música de fondo
+     </button>
+
+     El nombre de ventana "bitacoraReproductor" hace que un segundo
+     clic reutilice la ventana ya abierta en vez de crear otra.
+     ============================================================ -->
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reproductor · Bitácora Messier</title>
+<link rel="icon" href="/wp-content/uploads/bitacora/favicon-bitacora_estelar.svg" />
+<style>
+:root {
+  --noche:#0a0e1a; --noche-2:#111725; --tinta:#e8eef7;
+  --tinta-tenue:#8ea0bd; --linea:#25304a; --ambar:#f4c76b;
+}
+html,body {height:100%;}
+body {
+  margin:0; background:var(--noche); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  display:flex; flex-direction:column; gap:12px; padding:14px; box-sizing:border-box;
+}
+.eyebrow {
+  margin:0; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ambar);
+}
+.marco {
+  flex:1; min-height:220px; border:1px solid var(--linea);
+  border-radius:10px; overflow:hidden; background:var(--noche-2);
+}
+.marco iframe {width:100%; height:100%; border:0; display:block;}
+.pie {margin:0; font-size:12px; color:var(--tinta-tenue);}
+</style>
+</head>
+<body>
+  <p class="eyebrow">Bitácora · Música de guardia</p>
+  <div class="marco">
+    <iframe
+      src="https://www.youtube.com/embed/videoseries?list=PLXj65nwjQ0QE"
+      title="Playlist de fondo"
+      allow="autoplay; encrypted-media; picture-in-picture"
+      allowfullscreen></iframe>
+  </div>
+  <p class="pie">Deja esta ventana abierta detrás del portal. Sigue sonando aunque cambies de página.</p>
+</body>
+</html>
