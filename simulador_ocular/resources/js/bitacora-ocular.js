@@ -32,13 +32,20 @@
       if (!$('sim-vista')) return;   // el bloque del simulador no está en la página
 
       /* ══════════════════ CONFIGURACIÓN ══════════════════ */
-      // Cúmulos abiertos (de momento una selección; a futuro, un catálogo mayor).
+      // Cúmulos abiertos: 3 destacados con nombre propio, más el catálogo general
+      // cargado desde cumulos-abiertos-datos.js (window.BITACORA_CUMULOS_ABIERTOS).
       // Cada entrada lleva su marca `carbono:false` para el render de la ficha.
       var CATALOGO_CUMULOS = [
           { id: 'M35',      nombre: 'M35 · Cúmulo abierto (NGC 2168)',   constelacion: 'Gemini',    ra: '06 08 54', dec: '+24 20 00', tipo: 'cúmulo abierto', carbono: false },
           { id: 'M39',      nombre: 'M39 · Cúmulo abierto (NGC 7092)',   constelacion: 'Cygnus',    ra: '21 31 48', dec: '+48 26 55', tipo: 'cúmulo abierto', carbono: false },
           { id: 'NGC 7789', nombre: 'NGC 7789 · Rosa de Carolina',       constelacion: 'Cassiopeia', ra: '23 57 24', dec: '+56 42 56', tipo: 'cúmulo abierto', carbono: false }
-      ];
+      ].concat((window.BITACORA_CUMULOS_ABIERTOS || []).map(function (e) {
+        return {
+          id: e[0], nombre: e[0] + ' · Cúmulo abierto', constelacion: e[1],
+          ra: degAHms(e[2]), dec: degADms(e[3]), mag: e[4],
+          tipo: 'cúmulo abierto', carbono: false
+        };
+      }));
       // Estrellas de carbono: catálogo de la Astronomical League, cargado desde el
       // módulo estrellas-carbono-datos.js (window.BITACORA_CARBONO). Se marca
       // `carbono:true` para que la ficha resalte su color rojo-anaranjado.
@@ -805,7 +812,7 @@
             if (o.carbono) return (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '') || o.abrev || '';
             if (o.doble) return [o.constelacion, (o.sep != null ? o.sep + '″' : '')].filter(Boolean).join('  ·  ');
             if (o.globular) return 'μV₀ ' + o.muV0.toFixed(1) + '  ·  r_t ' + o.rTidal.toFixed(0) + '′';
-            return o.constelacion || '';
+            return [o.constelacion, (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '')].filter(Boolean).join('  ·  ');
           },
           max: 40, todosSiVacio: true,
           sinResultados: 'Sin coincidencias en esta lista',
