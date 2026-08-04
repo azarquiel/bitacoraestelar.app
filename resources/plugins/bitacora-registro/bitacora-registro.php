@@ -3968,8 +3968,16 @@ function bitacora_inyectar_reproductor_menu() {
     $url = esc_url( content_url( '/uploads/bitacora/reproductor.html' ) );
     ?>
 <style>
-.bitacora-musica {display:inline-flex; align-items:center; gap:.5em;}
-.bitacora-musica svg {width:1.5em; height:1.5em; flex:none;}
+/* El hueco y la altura del icono se piden sobre el propio SVG, no sobre el
+   enlace: muchos temas fijan el "display" de los enlaces del menú con más
+   peso que esta hoja, y entonces no hay caja flexible que valga. Con
+   "vertical-align" el icono queda centrado también cuando el enlace se
+   pinta en línea, que es lo que pasa en la mayoría de los temas. */
+.bitacora-musica {display:inline-flex; align-items:center;}
+.bitacora-musica svg {
+  width:1.5em; height:1.5em; flex:none;
+  margin-right:.4em; vertical-align:middle;
+}
 </style>
 <script>
 (function () {
