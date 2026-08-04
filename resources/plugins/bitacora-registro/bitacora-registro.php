@@ -3952,9 +3952,11 @@ add_action( 'wp_head', 'bitacora_inyectar_publico' );
  * Lanzador del reproductor de música en el menú del sitio.
  *
  * En Apariencia > Menús se añade un "Enlace personalizado" con la URL
- * "#reproductor" y el texto que se quiera. Esta función se encarga del resto:
- * le pone delante el icono y convierte el clic en una ventana emergente, para
- * que la música siga sonando mientras se navega por la bitácora.
+ * "#reproductor" y el texto que se quiera. Vale también la ruta entera al
+ * archivo (.../uploads/bitacora/reproductor.html): así el enlace sigue
+ * llevando a alguna parte si el plugin está apagado. Esta función se encarga
+ * del resto: le pone delante el icono y convierte el clic en una ventana
+ * emergente, para que la música siga sonando mientras se navega.
  *
  * Va en el pie y no en la cabecera porque necesita que el menú ya esté pintado.
  * El icono viaja incrustado (es el dibujo de resources/playlist.svg) para no
@@ -4007,7 +4009,8 @@ function bitacora_inyectar_reproductor_menu() {
     if (v) { v.resizeTo(an, al); v.focus(); }
   }
 
-  document.querySelectorAll('a[href*="#reproductor"]').forEach(function (a) {
+  var ENLACES = 'a[href*="#reproductor"], a[href*="reproductor.html"]';
+  document.querySelectorAll(ENLACES).forEach(function (a) {
     if (a.classList.contains('bitacora-musica')) return;  // por si el menú sale dos veces
     a.classList.add('bitacora-musica');
     a.insertAdjacentHTML('afterbegin', ICONO);
