@@ -3955,11 +3955,16 @@ function bitacora_base_salud( WP_REST_Request $peticion ) {
          WHERE base_id = %d AND borrada_en IS NULL
            AND ( cielo_sqm IS NOT NULL OR cielo_ir IS NOT NULL OR seeing IS NOT NULL )", $id
     ), ARRAY_A );
+    $obr = bitacora_nombre_tabla_observadores();
+    // El observador viene del catálogo: la columna 'nombre' del viaje es el
+    // título de la noche, no quién midió.
     $salidas = $wpdb->get_results( $wpdb->prepare(
-        "SELECT noche, cielo_sqm, cielo_ir, seeing, usuario_id, nombre
-         FROM $via
-         WHERE base_id = %d
-           AND ( cielo_sqm IS NOT NULL OR cielo_ir IS NOT NULL OR seeing IS NOT NULL )", $id
+        "SELECT v.noche, v.cielo_sqm, v.cielo_ir, v.seeing, v.usuario_id,
+                COALESCE( ob.nombre, '' ) AS observador
+         FROM $via v
+         LEFT JOIN $obr ob ON ob.id = v.observador_id
+         WHERE v.base_id = %d
+           AND ( v.cielo_sqm IS NOT NULL OR v.cielo_ir IS NOT NULL OR v.seeing IS NOT NULL )", $id
     ), ARRAY_A );
     $mediciones = bitacora_salud_mediciones( $filas ? $filas : array(), $salidas ? $salidas : array() );
     return new WP_REST_Response( array( 'base' => $base, 'mediciones' => $mediciones ), 200 );

@@ -197,7 +197,7 @@ function bitacora_viaje_base_efectiva( $base_viaje, $base_observacion ) {
  *
  * @param array $observaciones Filas con fecha_observacion, hora_observacion,
  *                             cielo_sqm, cielo_ir, seeing, observador.
- * @param array $viajes        Filas con noche, cielo_sqm, cielo_ir, seeing, nombre.
+ * @param array $viajes        Filas con noche, cielo_sqm, cielo_ir, seeing, observador.
  * @return array Puntos ordenados en el tiempo, sin los que no midieron nada.
  */
 function bitacora_salud_mediciones( $observaciones, $viajes ) {
@@ -241,8 +241,9 @@ function bitacora_salud_mediciones( $observaciones, $viajes ) {
             'noche'      => $noche,
             'fecha'      => $noche,
             'hora'       => '',   // la ficha resume la noche entera, no un instante
-            // La columna dice quién o qué anotó la medida; en un viaje, su nombre.
-            'observador' => isset( $v['nombre'] ) ? $v['nombre'] : '',
+            // La columna dice QUIÉN midió: el compañero que salió esa noche, no
+            // el nombre de la salida, que es el título de la noche.
+            'observador' => isset( $v['observador'] ) ? $v['observador'] : '',
         );
         $tiene = false;
         foreach ( $medidas as $clave => $columna ) {
