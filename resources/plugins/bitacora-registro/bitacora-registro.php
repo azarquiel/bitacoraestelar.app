@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.22.0
+ * Version:     1.24.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.22.0' );
+define( 'BITACORA_VERSION', '1.24.1' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -43,6 +43,13 @@ define( 'BITACORA_TABLA_AUXILIARES', 'bitacora_auxiliares' );
 // Bases del observador (lugares de observación reutilizables) y su compartición.
 define( 'BITACORA_TABLA_BASES', 'bitacora_bases' );
 define( 'BITACORA_TABLA_BASE_COMPARTIDA', 'bitacora_base_compartida' );
+// Viajes interestelares (sesiones de observación) y su tripulación.
+define( 'BITACORA_TABLA_VIAJES', 'bitacora_viajes' );
+define( 'BITACORA_TABLA_VIAJE_TRIPULACION', 'bitacora_viaje_tripulacion' );
+
+// A qué viaje pertenece una observación: función pura, sin WordPress ni BD, y
+// la única costura con test propio (scripts/test_viaje_noche.php).
+require_once __DIR__ . '/bitacora-viaje.php';
 
 /**
  * Nombre real de la tabla, con el prefijo que use esta instalación
@@ -93,6 +100,18 @@ function bitacora_nombre_tabla_bases() {
 function bitacora_nombre_tabla_base_compartida() {
     global $wpdb;
     return $wpdb->prefix . BITACORA_TABLA_BASE_COMPARTIDA;
+}
+
+/** Nombre real de la tabla de viajes (sesiones de observación). */
+function bitacora_nombre_tabla_viajes() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_VIAJES;
+}
+
+/** Nombre real de la tabla de tripulación (viaje ↔ observador acompañante). */
+function bitacora_nombre_tabla_viaje_tripulacion() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_VIAJE_TRIPULACION;
 }
 
 /** Nombre real de la tabla de telescopios (catálogo global + equipo personal). */
@@ -153,6 +172,8 @@ function bitacora_crear_tabla() {
         origen varchar(16) NOT NULL DEFAULT 'formulario',
         observador_id bigint(20) unsigned DEFAULT NULL,
         usuario_id bigint(20) unsigned NOT NULL,
+        base_id bigint(20) unsigned DEFAULT NULL,
+        viaje_id bigint(20) unsigned DEFAULT NULL,
         creado_en datetime NOT NULL,
         actualizado_en datetime DEFAULT NULL,
         borrada_en datetime DEFAULT NULL,
@@ -160,7 +181,10 @@ function bitacora_crear_tabla() {
         KEY objeto (objeto),
         KEY usuario_id (usuario_id),
         KEY observador_id (observador_id),
-        KEY borrada_en (borrada_en)
+        KEY borrada_en (borrada_en),
+        KEY activas (borrada_en, creado_en),
+        KEY base_activas (base_id, borrada_en),
+        KEY viaje_id (viaje_id)
     ) $collate;";
 
     // Tabla hija: las entradas de una observación, una por ocular/aumento.
@@ -362,6 +386,53 @@ function bitacora_crear_tabla() {
         UNIQUE KEY base_usuario (base_id, usuario_id)
     ) $collate;";
 
+    // El VIAJE INTERESTELAR: la salida de un observador, una noche, desde una
+    // base. Todas las observaciones de esa noche cuelgan de él (viaje_id). El
+    // telescopio NO entra en la identidad —cambiar de tubo no parte la salida en
+    // dos—, así que vive donde vivía: en la observación y en la entrada.
+    //
+    // El LUGAR es del viaje y es opcional: base_id 0 significa "sin lugar". Cero
+    // y no NULL porque MySQL admite varios NULL en un índice único, y entonces
+    // cada guardado de una noche sin lugar abriría un viaje nuevo.
+    $tabla_viajes = bitacora_nombre_tabla_viajes();
+    $sql_viajes = "CREATE TABLE $tabla_viajes (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        usuario_id bigint(20) unsigned NOT NULL,
+        observador_id bigint(20) unsigned DEFAULT NULL,
+        base_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        noche date NOT NULL,
+        nombre varchar(160) NOT NULL DEFAULT '',
+        comienzo varchar(8) NOT NULL DEFAULT '',
+        fin varchar(8) NOT NULL DEFAULT '',
+        cielo_sqm double DEFAULT NULL,
+        cielo_ir double DEFAULT NULL,
+        cielo_bortle tinyint DEFAULT NULL,
+        seeing tinyint DEFAULT NULL,
+        meteo varchar(255) NOT NULL DEFAULT '',
+        cronica longtext NOT NULL,
+        imagen_url varchar(255) NOT NULL DEFAULT '',
+        creado_en datetime NOT NULL,
+        actualizado_en datetime DEFAULT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY viaje (usuario_id, noche, base_id),
+        KEY noche (noche),
+        KEY base_id (base_id)
+    ) $collate;";
+
+    // Tripulación: con quién se salió esa noche. Un compañero puede constar
+    // aunque no registrara nada él mismo. Si también registró lo suyo, tendrá su
+    // PROPIO viaje (misma noche y base), y cada uno manda sobre el suyo.
+    $tabla_tripulacion = bitacora_nombre_tabla_viaje_tripulacion();
+    $sql_tripulacion = "CREATE TABLE $tabla_tripulacion (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        viaje_id bigint(20) unsigned NOT NULL,
+        observador_id bigint(20) unsigned NOT NULL,
+        creado_en datetime NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY viaje_observador (viaje_id, observador_id),
+        KEY observador_id (observador_id)
+    ) $collate;";
+
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql );
     dbDelta( $sql_entradas );
@@ -374,6 +445,14 @@ function bitacora_crear_tabla() {
     dbDelta( $sql_auxiliares );
     dbDelta( $sql_bases );
     dbDelta( $sql_base_comp );
+    // El lugar del viaje pasó de "NULL = sin base" a "0 = sin lugar". Los NULL se
+    // convierten ANTES de que dbDelta ponga la columna NOT NULL: con el modo
+    // estricto de MySQL, un ALTER a NOT NULL sobre datos con NULL falla.
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $tabla_viajes ) ) ) {
+        $wpdb->query( "UPDATE $tabla_viajes SET base_id = 0 WHERE base_id IS NULL" );
+    }
+    dbDelta( $sql_viajes );
+    dbDelta( $sql_tripulacion );
 
     // Columnas de asociación observación/entrada → equipo (idempotente: dbDelta no
     // añade columnas nuevas a tablas ya creadas de forma fiable, así que se hace a
@@ -392,6 +471,10 @@ function bitacora_crear_tabla() {
     // desde la que se observó, para calcular alt/az y agregar la "salud" del sitio.
     bitacora_asegurar_columna( $tabla, 'cielo_ir', "double DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla, 'base_id', "bigint(20) unsigned DEFAULT NULL" );
+    // El viaje (sesión) al que pertenece la observación. Nulo solo en las
+    // históricas que aún no se han repartido: desde el formulario, la sesión es
+    // obligatoria aunque no se diga desde dónde se observaba.
+    bitacora_asegurar_columna( $tabla, 'viaje_id', "bigint(20) unsigned DEFAULT NULL" );
     // Origen de cada imagen: 'subida' (foto/boceto del observador) o 'simulada' (Gaia).
     bitacora_asegurar_columna( $tabla_imagenes, 'origen', "varchar(16) NOT NULL DEFAULT 'subida'" );
     // Nombre propio que el observador da a su telescopio personal en Mi flota.
@@ -533,6 +616,16 @@ function bitacora_crear_tabla() {
         update_option( 'bitacora_reparar_img_url_v1', 1 );
     }
 
+    // Reparte en viajes lo ya registrado. No borra ni reescribe nada: solo
+    // rellena viaje_id donde está vacío, así que es seguro relanzarlo. La
+    // bandera evita repasar la tabla entera en cada carga.
+    // v2 vuelve a pasar: en v1 las observaciones sin base se quedaban fuera, y
+    // ahora una noche sin lugar también es un viaje.
+    if ( ! get_option( 'bitacora_viajes_backfill_v2' ) ) {
+        bitacora_viajes_backfill();
+        update_option( 'bitacora_viajes_backfill_v2', 1 );
+    }
+
     update_option( 'bitacora_db_version', BITACORA_VERSION );
 
     // El catálogo global pudo (re)sembrarse: invalida su caché para que la
@@ -552,6 +645,598 @@ function bitacora_comprobar_version() {
     }
 }
 add_action( 'plugins_loaded', 'bitacora_comprobar_version' );
+
+/* ===========================================================================
+ * 1-BIS. VIAJES INTERESTELARES (sesiones de observación)
+ *
+ * A qué viaje pertenece una observación lo decide bitacora_viaje_clave()
+ * (bitacora-viaje.php, función pura con test propio). Aquí solo se traduce esa
+ * clave a una fila: se busca el viaje y, si no existe, se crea. La misma
+ * entrada da siempre la misma clave, y de ahí que el backfill se pueda
+ * relanzar sin duplicar nada.
+ * =========================================================================== */
+
+/**
+ * Devuelve el id del viaje de esa noche/base/observador, creándolo si hace
+ * falta. Null si la observación no puede pertenecer a ninguno (sin base o sin
+ * fecha usable), que es un estado legítimo, no un error.
+ */
+function bitacora_viaje_asegurar( $usuario_id, $base_id, $fecha, $hora, $observador_id = null ) {
+    global $wpdb;
+    $clave = bitacora_viaje_clave( $usuario_id, $base_id, $fecha, $hora );
+    if ( ! $clave ) {
+        return null;
+    }
+    $tabla = bitacora_nombre_tabla_viajes();
+    $id    = $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM $tabla WHERE usuario_id = %d AND noche = %s AND base_id = %d",
+        $clave['usuario_id'], $clave['noche'], $clave['base_id']
+    ) );
+    if ( $id ) {
+        // Un viaje dado de alta desde el formulario nace sin observador (aún no
+        // hay observación de la que sacarlo); la primera que llegue lo pone.
+        if ( $observador_id ) {
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE $tabla SET observador_id = %d WHERE id = %d AND observador_id IS NULL",
+                intval( $observador_id ), intval( $id )
+            ) );
+        }
+        return intval( $id );
+    }
+    $wpdb->insert( $tabla, array(
+        'usuario_id'    => $clave['usuario_id'],
+        'observador_id' => $observador_id ? intval( $observador_id ) : null,
+        'base_id'       => $clave['base_id'],
+        'noche'         => $clave['noche'],
+        'cronica'       => '',
+        'creado_en'     => current_time( 'mysql', true ),
+    ) );
+    return $wpdb->insert_id ? intval( $wpdb->insert_id ) : null;
+}
+
+/**
+ * Rellena los huecos de cielo del viaje con lo que traiga la observación. El
+ * hogar del dato pasa a ser el viaje (se mide una vez por noche, no una por
+ * objeto), pero NO se pisa lo que el observador ya escribiera en el viaje.
+ */
+function bitacora_viaje_heredar_cielo( $viaje_id, $obs ) {
+    global $wpdb;
+    if ( ! $viaje_id || ! $obs ) {
+        return;
+    }
+    $tabla = bitacora_nombre_tabla_viajes();
+    $v     = $wpdb->get_row( $wpdb->prepare( "SELECT cielo_sqm, cielo_ir, cielo_bortle FROM $tabla WHERE id = %d", $viaje_id ) );
+    if ( ! $v ) {
+        return;
+    }
+    $huecos = array();
+    foreach ( array( 'cielo_sqm', 'cielo_ir', 'cielo_bortle' ) as $c ) {
+        if ( null === $v->$c && isset( $obs->$c ) && null !== $obs->$c && '' !== $obs->$c ) {
+            $huecos[ $c ] = $obs->$c;
+        }
+    }
+    if ( $huecos ) {
+        $wpdb->update( $tabla, $huecos, array( 'id' => intval( $viaje_id ) ) );
+    }
+}
+
+/**
+ * Recalcula y guarda el viaje de una observación ya escrita en la tabla. Se
+ * llama al registrar y al editar: si cambia la fecha, la hora o la base, la
+ * observación se muda al viaje que le toca.
+ */
+function bitacora_viaje_sincronizar( $observacion_id, $viaje_elegido = 0 ) {
+    global $wpdb;
+    $obs = bitacora_obtener( $observacion_id );
+    if ( ! $obs ) {
+        return null;
+    }
+    // El formulario manda el viaje que eligió el observador; solo si no lo manda
+    // (edición antigua, importación) se deduce de la fecha y la base. Se acepta
+    // únicamente si el viaje es suyo: si no, se cae en la deducción de siempre.
+    $viaje_id = 0;
+    $cambios  = array();
+    if ( $viaje_elegido ) {
+        $elegido = bitacora_viaje_obtener( $viaje_elegido );
+        if ( $elegido && intval( $elegido->usuario_id ) === intval( $obs->usuario_id ) ) {
+            $viaje_id = intval( $elegido->id );
+            // El lugar es del viaje, no del objeto. Si el viaje ya lo tiene, manda
+            // él; si no lo tenía, lo adopta del primer objeto que lo diga, y por
+            // eso el formulario deja de preguntarlo para el resto de la noche.
+            $lugar = bitacora_viaje_base_efectiva( $elegido->base_id, $obs->base_id );
+            if ( $lugar !== intval( $elegido->base_id ) ) {
+                // El lugar forma parte de la identidad del viaje: si ya hay otra
+                // salida de esa noche desde ese sitio, subirlo rompería la clave
+                // única. Se deja el viaje sin lugar (el objeto conserva el suyo)
+                // y el observador lo arregla en la ficha del viaje.
+                $choca = $wpdb->get_var( $wpdb->prepare(
+                    'SELECT id FROM ' . bitacora_nombre_tabla_viajes() . '
+                     WHERE usuario_id = %d AND noche = %s AND base_id = %d AND id <> %d',
+                    $elegido->usuario_id,
+                    $elegido->noche,
+                    $lugar,
+                    $elegido->id
+                ) );
+                if ( ! $choca ) {
+                    $wpdb->update(
+                        bitacora_nombre_tabla_viajes(),
+                        array(
+                            'base_id'        => $lugar,
+                            'actualizado_en' => current_time( 'mysql', true ),
+                        ),
+                        array( 'id' => intval( $elegido->id ) )
+                    );
+                }
+            }
+            // La observación copia el lugar del viaje para que la salud de la
+            // base siga contándola sin mirar dos tablas.
+            if ( $lugar > 0 && $lugar !== intval( $obs->base_id ) ) {
+                $cambios['base_id'] = $lugar;
+            }
+        }
+    }
+    if ( ! $viaje_id ) {
+        $viaje_id = bitacora_viaje_asegurar(
+            $obs->usuario_id,
+            isset( $obs->base_id ) ? $obs->base_id : null,
+            isset( $obs->fecha_observacion ) ? $obs->fecha_observacion : '',
+            isset( $obs->hora_observacion ) ? $obs->hora_observacion : '',
+            isset( $obs->observador_id ) ? $obs->observador_id : null
+        );
+    }
+    $cambios['viaje_id'] = $viaje_id;
+    $wpdb->update(
+        bitacora_nombre_tabla(),
+        $cambios,
+        array( 'id' => intval( $observacion_id ) ),
+        null,
+        array( '%d' )
+    );
+    bitacora_viaje_heredar_cielo( $viaje_id, $obs );
+    return $viaje_id;
+}
+
+/**
+ * Reparte en viajes las observaciones ya registradas. Idempotente: solo toca
+ * las que aún no tienen viaje, y la clave es estable, así que relanzarlo tras
+ * un corte no duplica ni descoloca nada.
+ */
+function bitacora_viajes_backfill() {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla();
+    $filas = $wpdb->get_results(
+        "SELECT id, usuario_id, observador_id, base_id, fecha_observacion, hora_observacion,
+                cielo_sqm, cielo_ir, cielo_bortle
+         FROM $tabla
+         WHERE viaje_id IS NULL
+         ORDER BY id ASC"
+    );
+    $repartidas = 0;
+    foreach ( $filas as $o ) {
+        $viaje_id = bitacora_viaje_asegurar(
+            $o->usuario_id, $o->base_id, $o->fecha_observacion, $o->hora_observacion, $o->observador_id
+        );
+        if ( ! $viaje_id ) {
+            continue;
+        }
+        $wpdb->update( $tabla, array( 'viaje_id' => $viaje_id ), array( 'id' => intval( $o->id ) ), array( '%d' ), array( '%d' ) );
+        bitacora_viaje_heredar_cielo( $viaje_id, $o );
+        $repartidas++;
+    }
+    return $repartidas;
+}
+
+/**
+ * Añade al viaje lo que necesita quien lo va a pintar o a usar para calcular:
+ * su BASE entera (lat/lon/huso, de donde salen la altura y el azimut) y cuántos
+ * objetos lleva. Con base 0 —el viaje no registró lugar— `base` es null, que es
+ * justo lo que hace que el formulario vuelva a preguntarlo.
+ */
+function bitacora_viaje_adornar( $viaje ) {
+    global $wpdb;
+    if ( ! $viaje ) {
+        return null;
+    }
+    $viaje->base = intval( $viaje->base_id ) > 0
+        ? $wpdb->get_row( $wpdb->prepare(
+            'SELECT id, nombre, lat, lon, altitud_m, tz FROM ' . bitacora_nombre_tabla_bases() . ' WHERE id = %d',
+            $viaje->base_id
+        ) )
+        : null;
+    $viaje->base_nombre = $viaje->base ? $viaje->base->nombre : '';
+    $viaje->num_objetos = bitacora_viaje_num_objetos( $viaje->id );
+    return $viaje;
+}
+
+/** El viaje que pide el formulario en el cuerpo de la petición, o 0. */
+function bitacora_viaje_pedido( $params ) {
+    return ( isset( $params['viajeId'] ) && is_numeric( $params['viajeId'] ) && $params['viajeId'] > 0 )
+        ? intval( $params['viajeId'] ) : 0;
+}
+
+/** Cuántas observaciones vivas tiene un viaje (la papelera no cuenta). */
+function bitacora_viaje_num_objetos( $viaje_id ) {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla();
+    return intval( $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM $tabla WHERE viaje_id = %d AND borrada_en IS NULL", $viaje_id
+    ) ) );
+}
+
+/** Recupera un viaje por id, o null. */
+function bitacora_viaje_obtener( $id ) {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla_viajes();
+    return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $tabla WHERE id = %d", intval( $id ) ) );
+}
+
+/** La regla de oro, también aquí: solo el dueño toca su viaje. */
+function bitacora_viaje_puede_modificar( $viaje ) {
+    if ( ! $viaje ) {
+        return new WP_Error( 'no_encontrado', 'Ese viaje no existe.', array( 'status' => 404 ) );
+    }
+    if ( intval( $viaje->usuario_id ) !== get_current_user_id() ) {
+        return new WP_Error( 'no_autorizado', 'Ese viaje no es tuyo.', array( 'status' => 403 ) );
+    }
+    return true;
+}
+
+/**
+ * Lista de viajes, del más reciente al más antiguo. Filtros opcionales: mios,
+ * base, observador y rango de noches (desde/hasta).
+ */
+function bitacora_viajes_listar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $t_via = bitacora_nombre_tabla_viajes();
+    $t_obs = bitacora_nombre_tabla();
+    $t_bas = bitacora_nombre_tabla_bases();
+
+    $where  = '1=1';
+    $params = array();
+    if ( '1' === (string) $peticion->get_param( 'mios' ) ) {
+        $where   .= ' AND v.usuario_id = %d';
+        $params[] = get_current_user_id();
+    }
+    $base = intval( $peticion->get_param( 'base' ) );
+    if ( $base ) {
+        $where   .= ' AND v.base_id = %d';
+        $params[] = $base;
+    }
+    $observador = intval( $peticion->get_param( 'observador' ) );
+    if ( $observador ) {
+        $where   .= ' AND v.observador_id = %d';
+        $params[] = $observador;
+    }
+    foreach ( array( 'desde' => '>=', 'hasta' => '<=' ) as $campo => $op ) {
+        $valor = sanitize_text_field( (string) $peticion->get_param( $campo ) );
+        if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $valor ) ) {
+            $where   .= " AND v.noche $op %s";
+            $params[] = $valor;
+        }
+    }
+
+    // El recuento de objetos se calcula, no se guarda: guardarlo obligaría a
+    // mantenerlo al día en cada borrado y cada mudanza de observación.
+    $orden = ( 'objetos' === $peticion->get_param( 'orden' ) )
+        ? 'num_objetos DESC, v.noche DESC'
+        : 'v.noche DESC, v.id DESC';
+
+    // La base entera viaja con cada fila (el formulario de registro calcula con
+    // ella la altura y el azimut), y se trae en el mismo JOIN: adornar viaje a
+    // viaje serían 500 consultas más.
+    $sql = "SELECT v.*, b.nombre AS base_nombre,
+                   b.lat AS base_lat, b.lon AS base_lon, b.tz AS base_tz, b.altitud_m AS base_altitud_m,
+                   ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_objetos
+            FROM $t_via v
+            LEFT JOIN $t_bas b ON b.id = v.base_id
+            WHERE $where
+            ORDER BY $orden
+            LIMIT 500";
+    if ( $params ) {
+        $sql = $wpdb->prepare( $sql, $params );
+    }
+    $filas = $wpdb->get_results( $sql );
+    $uid   = get_current_user_id();
+    foreach ( $filas as $f ) {
+        $f->num_objetos = intval( $f->num_objetos );
+        $f->mio         = ( intval( $f->usuario_id ) === $uid );
+        // base null = el viaje no registró lugar; es lo que hace que el
+        // formulario de registro vuelva a preguntarlo.
+        $f->base = intval( $f->base_id ) > 0 ? array(
+            'id'        => intval( $f->base_id ),
+            'nombre'    => $f->base_nombre,
+            'lat'       => $f->base_lat,
+            'lon'       => $f->base_lon,
+            'tz'        => $f->base_tz,
+            'altitud_m' => $f->base_altitud_m,
+        ) : null;
+        unset( $f->base_lat, $f->base_lon, $f->base_tz, $f->base_altitud_m );
+    }
+    return new WP_REST_Response( $filas, 200 );
+}
+
+/**
+ * Los viajes de UNA noche concreta, para el formulario de registro: antes de
+ * guardar la observación hay que decir a qué sesión pertenece, y si esa noche
+ * todavía no tiene ninguna, poder darla de alta sin salir del formulario.
+ *
+ *   GET  /viajes/de-la-noche?fecha=2026-08-05&hora=02:15  -> los de esa noche
+ *   POST /viajes/de-la-noche  {fecha, hora}               -> da de alta uno
+ *
+ * La NOCHE la calcula el servidor, nunca el cliente: la regla del mediodía vive
+ * en bitacora_viaje_clave() y en ningún otro sitio, así que el JavaScript que
+ * pinta el selector no tiene que saber que las 02:15 son de la noche anterior.
+ *
+ * El LUGAR no entra: es del viaje, se pone en su ficha, y una misma noche puede
+ * tener varias salidas desde sitios distintos. De ahí que la respuesta sea una
+ * LISTA —vacía si es la primera observación de la salida, que es normal y no un
+ * error— y que el alta desde aquí cree el viaje sin lugar (base 0).
+ */
+function bitacora_viaje_de_la_noche( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $uid   = get_current_user_id();
+    $fecha = sanitize_text_field( (string) $peticion->get_param( 'fecha' ) );
+    $hora  = sanitize_text_field( (string) $peticion->get_param( 'hora' ) );
+
+    $clave = bitacora_viaje_clave( $uid, 0, $fecha, $hora );
+    if ( ! $clave ) {
+        return new WP_Error(
+            'bitacora_noche_incompleta',
+            'Para saber a qué noche pertenece la observación hace falta una fecha válida.',
+            array( 'status' => 400 )
+        );
+    }
+
+    if ( 'POST' === $peticion->get_method() ) {
+        $id = bitacora_viaje_asegurar( $uid, 0, $fecha, $hora );
+        if ( ! $id ) {
+            return new WP_Error( 'bitacora_viaje_no_creado', 'No se pudo dar de alta el viaje.', array( 'status' => 500 ) );
+        }
+        return new WP_REST_Response( array(
+            'noche' => $clave['noche'],
+            'viaje' => bitacora_viaje_adornar( bitacora_viaje_obtener( $id ) ),
+        ), 200 );
+    }
+
+    $tabla = bitacora_nombre_tabla_viajes();
+    $filas = $wpdb->get_results( $wpdb->prepare(
+        "SELECT * FROM $tabla WHERE usuario_id = %d AND noche = %s ORDER BY base_id ASC, id ASC",
+        $clave['usuario_id'], $clave['noche']
+    ) );
+    $viajes = array();
+    foreach ( (array) $filas as $fila ) {
+        $viajes[] = bitacora_viaje_adornar( $fila );
+    }
+    return new WP_REST_Response( array( 'noche' => $clave['noche'], 'viajes' => $viajes ), 200 );
+}
+
+/**
+ * Un viaje con lo que cuelga de él: sus objetos en el orden en que se cazaron,
+ * los instrumentos que se usaron, la tripulación y los viajes hermanos (los de
+ * otros observadores esa misma noche desde esa misma base).
+ */
+function bitacora_viaje_leer( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $viaje = bitacora_viaje_obtener( $peticion['id'] );
+    if ( ! $viaje ) {
+        return new WP_Error( 'no_encontrado', 'Ese viaje no existe.', array( 'status' => 404 ) );
+    }
+    $t_obs = bitacora_nombre_tabla();
+    $t_via = bitacora_nombre_tabla_viajes();
+    $t_tri = bitacora_nombre_tabla_viaje_tripulacion();
+    $t_obr = bitacora_nombre_tabla_observadores();
+    $t_ent = bitacora_nombre_tabla_entradas();
+    $t_tel = bitacora_nombre_tabla_telescopios();
+    $t_ocu = bitacora_nombre_tabla_oculares();
+    $t_bas = bitacora_nombre_tabla_bases();
+
+    $viaje->base = $viaje->base_id
+        ? $wpdb->get_row( $wpdb->prepare( "SELECT id, nombre, lat, lon, altitud_m, tz FROM $t_bas WHERE id = %d", $viaje->base_id ) )
+        : null;
+
+    // Por hora de observación: es el orden en que ocurrió la salida. Las que no
+    // la registraron van detrás, por id.
+    $viaje->objetos = $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, objeto, objeto_etiqueta, tipo, num, fecha_observacion, hora_observacion, telescopio
+         FROM $t_obs WHERE viaje_id = %d AND borrada_en IS NULL
+         ORDER BY ( hora_observacion = '' ) ASC, hora_observacion ASC, id ASC", $viaje->id
+    ) );
+
+    // Los instrumentos NO definen el viaje, pero se recuerdan: con qué lo vi.
+    $viaje->telescopios = $wpdb->get_col( $wpdb->prepare(
+        "SELECT DISTINCT COALESCE( NULLIF( t.nombre, '' ), NULLIF( CONCAT_WS( ' ', t.vendor, t.modelo ), '' ), o.telescopio )
+         FROM $t_obs o LEFT JOIN $t_tel t ON t.id = o.telescopio_id
+         WHERE o.viaje_id = %d AND o.borrada_en IS NULL", $viaje->id
+    ) );
+    $viaje->oculares = $wpdb->get_col( $wpdb->prepare(
+        "SELECT DISTINCT NULLIF( CONCAT_WS( ' ', oc.vendor, oc.modelo ), '' )
+         FROM $t_obs o JOIN $t_ent e ON e.observacion_id = o.id
+         JOIN $t_ocu oc ON oc.id = e.ocular_id
+         WHERE o.viaje_id = %d AND o.borrada_en IS NULL", $viaje->id
+    ) );
+    $viaje->telescopios = array_values( array_filter( (array) $viaje->telescopios ) );
+    $viaje->oculares    = array_values( array_filter( (array) $viaje->oculares ) );
+
+    $viaje->tripulacion = $wpdb->get_results( $wpdb->prepare(
+        "SELECT ob.id, ob.nombre FROM $t_tri tr JOIN $t_obr ob ON ob.id = tr.observador_id
+         WHERE tr.viaje_id = %d ORDER BY ob.nombre ASC", $viaje->id
+    ) );
+
+    // Viajes hermanos: la misma noche y la misma base, de otro observador.
+    $viaje->hermanos = $viaje->base_id ? $wpdb->get_results( $wpdb->prepare(
+        "SELECT v.id, v.nombre, v.usuario_id,
+                ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_objetos
+         FROM $t_via v
+         WHERE v.noche = %s AND v.base_id = %d AND v.id <> %d",
+        $viaje->noche, $viaje->base_id, $viaje->id
+    ) ) : array();
+
+    $viaje->num_objetos = count( $viaje->objetos );
+    $viaje->mio         = ( intval( $viaje->usuario_id ) === get_current_user_id() );
+    return new WP_REST_Response( $viaje, 200 );
+}
+
+/**
+ * Edita la ficha del viaje: nombre, LUGAR, horas, condiciones de cielo y
+ * relato. La noche y el observador NO se tocan: cambiarlos sería otra salida.
+ *
+ * El lugar sí, porque desde ahora es del viaje y no de cada observación: se
+ * indica una vez para toda la noche, y al mudarlo se mudan con él las
+ * observaciones de esa salida.
+ */
+function bitacora_viaje_editar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $viaje   = bitacora_viaje_obtener( $peticion['id'] );
+    $permiso = bitacora_viaje_puede_modificar( $viaje );
+    if ( is_wp_error( $permiso ) ) {
+        return $permiso;
+    }
+    $p     = (array) $peticion->get_json_params();
+    $datos = array();
+
+    if ( isset( $p['nombre'] ) ) {
+        $datos['nombre'] = mb_substr( sanitize_text_field( $p['nombre'] ), 0, 160 );
+    }
+    if ( isset( $p['meteo'] ) ) {
+        $datos['meteo'] = mb_substr( sanitize_text_field( $p['meteo'] ), 0, 255 );
+    }
+    if ( isset( $p['cronica'] ) ) {
+        $datos['cronica'] = wp_kses_post( $p['cronica'] );
+    }
+    if ( isset( $p['imagenUrl'] ) ) {
+        $datos['imagen_url'] = mb_substr( sanitize_text_field( $p['imagenUrl'] ), 0, 255 );
+    }
+    foreach ( array( 'comienzo' => 'comienzo', 'fin' => 'fin' ) as $clave => $col ) {
+        if ( isset( $p[ $clave ] ) ) {
+            $h = sanitize_text_field( $p[ $clave ] );
+            $datos[ $col ] = preg_match( '/^([01]\d|2[0-3]):[0-5]\d$/', $h ) ? $h : '';
+        }
+    }
+    // Rangos: los mismos que valida el registro, para que el dato signifique lo
+    // mismo venga de donde venga.
+    $rangos = array(
+        'cieloSqm'    => array( 'cielo_sqm',    0,   25, 'float' ),
+        'cieloIr'     => array( 'cielo_ir',     -50, 50, 'float' ),
+        'cieloBortle' => array( 'cielo_bortle', 1,   9,  'int'   ),
+        'seeing'      => array( 'seeing',       1,   5,  'int'   ),
+    );
+    foreach ( $rangos as $clave => $r ) {
+        if ( ! array_key_exists( $clave, $p ) ) {
+            continue;
+        }
+        if ( null === $p[ $clave ] || '' === $p[ $clave ] ) {
+            $datos[ $r[0] ] = null;
+            continue;
+        }
+        if ( ! is_numeric( $p[ $clave ] ) || $p[ $clave ] < $r[1] || $p[ $clave ] > $r[2] ) {
+            return new WP_Error( 'campo_invalido', "El campo '$clave' está fuera de rango.", array( 'status' => 400 ) );
+        }
+        $datos[ $r[0] ] = ( 'int' === $r[3] ) ? intval( $p[ $clave ] ) : floatval( $p[ $clave ] );
+    }
+
+    // El LUGAR de la salida. Es lo único editable que forma parte de la identidad
+    // del viaje (observador + noche + base), así que mudarlo puede chocar con
+    // otro viaje de esa misma noche: se avisa en vez de romper la clave única.
+    // 0 vacía el lugar, y entonces el formulario de registro vuelve a pedirlo.
+    if ( array_key_exists( 'baseId', $p ) ) {
+        $nueva = ( is_numeric( $p['baseId'] ) && $p['baseId'] > 0 ) ? intval( $p['baseId'] ) : 0;
+        if ( $nueva > 0 && ! bitacora_base_legible( $nueva, get_current_user_id() ) ) {
+            return new WP_Error( 'base_invalida', 'Esa base no existe o no puedes usarla.', array( 'status' => 400 ) );
+        }
+        if ( $nueva !== intval( $viaje->base_id ) ) {
+            $choca = $wpdb->get_var( $wpdb->prepare(
+                'SELECT id FROM ' . bitacora_nombre_tabla_viajes() . '
+                 WHERE usuario_id = %d AND noche = %s AND base_id = %d AND id <> %d',
+                $viaje->usuario_id, $viaje->noche, $nueva, $viaje->id
+            ) );
+            if ( $choca ) {
+                return new WP_Error(
+                    'viaje_duplicado',
+                    'Ya tienes otro viaje de esa noche desde ese lugar.',
+                    array( 'status' => 409 )
+                );
+            }
+            $datos['base_id'] = $nueva;
+        }
+    }
+
+    if ( ! $datos ) {
+        return new WP_REST_Response( bitacora_viaje_adornar( bitacora_viaje_obtener( $viaje->id ) ), 200 );
+    }
+    $datos['actualizado_en'] = current_time( 'mysql', true );
+    $wpdb->update( bitacora_nombre_tabla_viajes(), $datos, array( 'id' => intval( $viaje->id ) ) );
+    // El lugar es del viaje: si se muda, se lleva con él las observaciones de esa
+    // salida, que es lo que mantiene en pie la salud de la base.
+    if ( isset( $datos['base_id'] ) ) {
+        $wpdb->update(
+            bitacora_nombre_tabla(),
+            array( 'base_id' => $datos['base_id'] ? $datos['base_id'] : null ),
+            array( 'viaje_id' => intval( $viaje->id ) )
+        );
+    }
+    return new WP_REST_Response( bitacora_viaje_adornar( bitacora_viaje_obtener( $viaje->id ) ), 200 );
+}
+
+/**
+ * Borra un viaje VACÍO. Con observaciones dentro no se borra: un borrado en
+ * cascada aquí se llevaría por delante la bitácora de una noche entera.
+ */
+function bitacora_viaje_borrar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $viaje   = bitacora_viaje_obtener( $peticion['id'] );
+    $permiso = bitacora_viaje_puede_modificar( $viaje );
+    if ( is_wp_error( $permiso ) ) {
+        return $permiso;
+    }
+    $cuantas = bitacora_viaje_num_objetos( $viaje->id );
+    if ( $cuantas > 0 ) {
+        return new WP_Error(
+            'viaje_con_objetos',
+            "Ese viaje todavía tiene $cuantas observación(es). Muévelas o bórralas antes.",
+            array( 'status' => 409 )
+        );
+    }
+    $wpdb->delete( bitacora_nombre_tabla_viaje_tripulacion(), array( 'viaje_id' => intval( $viaje->id ) ), array( '%d' ) );
+    $wpdb->delete( bitacora_nombre_tabla_viajes(), array( 'id' => intval( $viaje->id ) ), array( '%d' ) );
+    return new WP_REST_Response( array( 'ok' => true ), 200 );
+}
+
+/**
+ * Fija la tripulación del viaje: la lista completa de observadores que salieron
+ * esa noche. Se reemplaza entera, que es como la manda el formulario.
+ */
+function bitacora_viaje_tripulacion_guardar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $viaje   = bitacora_viaje_obtener( $peticion['id'] );
+    $permiso = bitacora_viaje_puede_modificar( $viaje );
+    if ( is_wp_error( $permiso ) ) {
+        return $permiso;
+    }
+    $p     = (array) $peticion->get_json_params();
+    $ids   = isset( $p['observadores'] ) && is_array( $p['observadores'] ) ? $p['observadores'] : array();
+    $t_tri = bitacora_nombre_tabla_viaje_tripulacion();
+    $t_obr = bitacora_nombre_tabla_observadores();
+
+    $wpdb->delete( $t_tri, array( 'viaje_id' => intval( $viaje->id ) ), array( '%d' ) );
+    $puestos = array();
+    foreach ( $ids as $oid ) {
+        $oid = intval( $oid );
+        // Solo observadores que existen de verdad, y sin repetir.
+        if ( $oid <= 0 || isset( $puestos[ $oid ] ) ) {
+            continue;
+        }
+        if ( ! $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t_obr WHERE id = %d", $oid ) ) ) {
+            continue;
+        }
+        $wpdb->insert( $t_tri, array(
+            'viaje_id'      => intval( $viaje->id ),
+            'observador_id' => $oid,
+            'creado_en'     => current_time( 'mysql', true ),
+        ), array( '%d', '%d', '%s' ) );
+        $puestos[ $oid ] = true;
+    }
+    return new WP_REST_Response( array( 'ok' => true, 'tripulacion' => array_keys( $puestos ) ), 200 );
+}
 
 /* ===========================================================================
  * 2. VALIDACIÓN DE LOS DATOS RECIBIDOS
@@ -1010,6 +1695,27 @@ function bitacora_registrar_rutas() {
     ) );
     register_rest_route( 'bitacora/v1', '/bases/(?P<id>\d+)/compartir', array(
         'methods' => 'PUT', 'callback' => 'bitacora_base_compartir', 'permission_callback' => $solo_logueados,
+    ) );
+
+    // ── Viajes interestelares (sesiones de observación) ──
+    // El listado es público (los viajes se leen sin cuenta, como el mapa); tocar
+    // uno exige ser su dueño, y eso se comprueba en cada manejador.
+    register_rest_route( 'bitacora/v1', '/viajes', array(
+        'methods' => 'GET', 'callback' => 'bitacora_viajes_listar', 'permission_callback' => '__return_true',
+    ) );
+    // El viaje de una noche concreta: lo consulta el formulario de registro
+    // para ofrecer dar de alta la sesión antes de guardar el primer objeto.
+    register_rest_route( 'bitacora/v1', '/viajes/de-la-noche', array(
+        array( 'methods' => 'GET',  'callback' => 'bitacora_viaje_de_la_noche', 'permission_callback' => $solo_logueados ),
+        array( 'methods' => 'POST', 'callback' => 'bitacora_viaje_de_la_noche', 'permission_callback' => $solo_logueados ),
+    ) );
+    register_rest_route( 'bitacora/v1', '/viajes/(?P<id>\d+)', array(
+        array( 'methods' => 'GET',    'callback' => 'bitacora_viaje_leer',   'permission_callback' => '__return_true' ),
+        array( 'methods' => 'PUT',    'callback' => 'bitacora_viaje_editar', 'permission_callback' => $solo_logueados ),
+        array( 'methods' => 'DELETE', 'callback' => 'bitacora_viaje_borrar', 'permission_callback' => $solo_logueados ),
+    ) );
+    register_rest_route( 'bitacora/v1', '/viajes/(?P<id>\d+)/tripulacion', array(
+        'methods' => 'PUT', 'callback' => 'bitacora_viaje_tripulacion_guardar', 'permission_callback' => $solo_logueados,
     ) );
 }
 add_action( 'rest_api_init', 'bitacora_registrar_rutas' );
@@ -3257,6 +3963,10 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
 
     $id = $wpdb->insert_id;
     bitacora_asignar_observador( $id, $datos['observador'], get_current_user_id() );
+    // El viaje (sesión) al que pertenece: el que eligió el observador en el
+    // formulario o, si no eligió, el de esa noche. Va DESPUÉS de asignar el
+    // observador para que el viaje recién creado nazca ya con él.
+    bitacora_viaje_sincronizar( $id, bitacora_viaje_pedido( $params ) );
     bitacora_guardar_entradas( $id, $entradas );
     // Si se eligió base, el cliente manda la astrometría ya calculada: se siembra
     // la ficha (lat/lon + alt/az + sol/luna) en este mismo momento.
@@ -3338,6 +4048,10 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
     }
 
     bitacora_asignar_observador( $id, $datos['observador'], intval( $obs->usuario_id ) );
+    // Si cambió el viaje elegido —o, sin elegir ninguno, la fecha o la base—, la
+    // observación se muda al que le toca ahora. El viaje que deja atrás se
+    // queda, aunque se vacíe: es del observador y puede tener crónica escrita.
+    bitacora_viaje_sincronizar( $id, bitacora_viaje_pedido( $params ) );
 
     // Reemplaza el conjunto de entradas por el recibido.
     bitacora_guardar_entradas( $id, $entradas );
@@ -3844,6 +4558,14 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
     if ( $filtro_observador ) {
         $where   .= ' AND observador_id = %d';
         $params[] = $filtro_observador;
+    }
+
+    // Los objetos de un viaje concreto, para la ficha del viaje y para llegar
+    // desde una observación al resto de su noche.
+    $filtro_viaje = intval( $peticion->get_param( 'viaje' ) );
+    if ( $filtro_viaje ) {
+        $where   .= ' AND viaje_id = %d';
+        $params[] = $filtro_viaje;
     }
 
     $sql = "SELECT * FROM $tabla WHERE $where ORDER BY creado_en DESC, id DESC LIMIT 200";

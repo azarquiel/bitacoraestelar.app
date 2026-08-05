@@ -233,6 +233,105 @@ window.BitacoraBase = (function () {
     };
   }
 
+  /* ── Selector de viaje del formulario de registro ──────────────────────────
+     Toda observación pertenece a una sesión —el viaje interestelar—, y la
+     sesión es obligatoria: es ella la que dice desde dónde se observaba, y la
+     que da casa a la crónica, la meteo y la tripulación de esa noche.
+
+     A qué NOCHE pertenece una hora lo decide el SERVIDOR: la regla del mediodía
+     (antes de las 12:00 la noche es la del día anterior) vive en un solo sitio,
+     bitacora-viaje.php, y copiarla aquí sería tener dos.
+
+     De una noche pueden colgar VARIOS viajes (dos salidas desde sitios
+     distintos), así que la respuesta es siempre una lista y elegir es cosa de
+     quien la pinta.
+
+     Sin DOM ni red: cada pantalla cablea sus textos y sus llamadas.
+
+     Interfaz:
+       avisoViaje({ consultar, alta, onEstado })
+         -> { actualizar(fecha, hora), registrar() }
+
+       consultar({fecha, hora}) -> Promise<viaje[]>
+       alta({fecha, hora})      -> Promise<viaje>
+       onEstado(estado, viajes) 'sin-datos'   falta la fecha: nada que preguntar
+                                'consultando' respuesta en vuelo
+                                'sin-viaje'   la noche no tiene ninguno: ofrécelo
+                                'con-viaje'   los que tiene (segundo argumento)
+                                'error'       no se pudo saber */
+  function avisoViaje(opts) {
+    opts = opts || {};
+    var consultarSrv = opts.consultar || function () { return Promise.resolve([]); };
+    var altaSrv = opts.alta || function () { return Promise.reject(); };
+    var onEstado = opts.onEstado || function () {};
+    var datos = null, turno = 0, ultima = '', lista = [];
+
+    function emitir(estado, viajes) { onEstado(estado, viajes || []); }
+
+    // El deduplicado es por fecha + hora exactas, no por noche: saber si dos
+    // horas caen en la misma noche exige la regla del mediodía, que vive en el
+    // servidor. Una consulta de más sale más barata que una copia de la regla.
+    function firma(d) { return d ? d.fecha + '|' + d.hora : ''; }
+
+    function consultar() {
+      var mio = ++turno;                 // el turno descarta las respuestas rezagadas
+      emitir('consultando');
+      consultarSrv(datos).then(function (viajes) {
+        if (mio !== turno) return;       // llegó tarde: ya se pregunta por otra noche
+        lista = viajes || [];
+        emitir(lista.length ? 'con-viaje' : 'sin-viaje', lista);
+      }).catch(function () {
+        if (mio === turno) { ultima = ''; emitir('error'); }
+      });
+    }
+
+    return {
+      actualizar: function (fecha, hora) {
+        if (!fecha) {
+          datos = null; ultima = ''; lista = []; turno++;   // lo que vuele deja de valer
+          emitir('sin-datos');
+          return;
+        }
+        var nuevos = { fecha: fecha, hora: hora || '' };
+        if (firma(nuevos) === ultima) return;
+        datos = nuevos; ultima = firma(nuevos);
+        consultar();
+      },
+      registrar: function () {
+        if (!datos) return Promise.resolve(null);
+        var mio = ++turno;               // el alta manda sobre cualquier consulta en vuelo
+        return altaSrv(datos).then(function (viaje) {
+          if (mio === turno && viaje) {
+            lista = lista.concat([viaje]);   // se suma: la noche puede tener varias salidas
+            emitir('con-viaje', lista);
+          }
+          return viaje;
+        });
+      }
+    };
+  }
+
+  /* ── El lugar de una observación ───────────────────────────────────────────
+     El lugar es del VIAJE: se sale una noche desde un sitio, no se cambia de
+     sitio objeto a objeto. Pero la altura y el azimut del objeto, del Sol y de
+     la Luna se calculan al registrar cada observación, y sin lugar no hay cómo.
+
+     De ahí la regla: manda la base del viaje y, solo si el viaje no registró
+     ninguna, el formulario vuelve a preguntarla. Seguir sin lugar cuesta la
+     altura y el azimut, no la observación: el lugar es opcional, la sesión no.
+
+       lugarDeObservacion(viaje, baseFormulario)
+         -> { base, pedirBase, faltaViaje } */
+  function lugarDeObservacion(viaje, baseFormulario) {
+    if (!viaje) {
+      return { base: null, pedirBase: false, faltaViaje: true };
+    }
+    if (viaje.base) {
+      return { base: viaje.base, pedirBase: false, faltaViaje: false };
+    }
+    return { base: baseFormulario || null, pedirBase: true, faltaViaje: false };
+  }
+
   // ── Parsers/formatos de coordenadas ecuatoriales (RA/Dec) ──
   // Fuente única, compartida por el registro y el simulador de ocular. RA en
   // grados internamente. Aceptan sexagesimal ("21h 40m 22s" / "21 40 22" /
@@ -352,6 +451,8 @@ window.BitacoraBase = (function () {
     TRANSPARENCIA: TRANSPARENCIA,
     transparenciaPorIr: transparenciaPorIr,
     montarTransparencia: montarTransparencia,
+    avisoViaje: avisoViaje,
+    lugarDeObservacion: lugarDeObservacion,
     parseRA: parseRA,
     parseDec: parseDec,
     formatRA: formatRA,

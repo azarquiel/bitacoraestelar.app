@@ -336,29 +336,37 @@
     var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
     return v.toFixed(1)+'° <small>'+dirs[Math.round(v/22.5)%16]+'</small>';
   }
-  // Base elegida (objeto de la flota de bases) y su astrometría calculada.
+  // Viaje elegido (la sesión de esa noche) y base elegida a mano, solo si el
+  // viaje no registró la suya.
+  var viajeSel=null;
   var baseSel=null, basesCargadas=false, listaBases=[];
   var astroActual=null;   // {lat,lon,objAlt,objAz,sunAlt,moonAlt,fechaHoraUTC,fechaHoraLocal} o null
+
+  // El lugar es del VIAJE: se sale una noche desde un sitio, no se cambia de
+  // sitio objeto a objeto. La regla (y la excepción del viaje sin base) vive en
+  // BitacoraBase, probada en scripts/test_lugar_observacion.js.
+  function lugarActual(){ return BitacoraBase.lugarDeObservacion(viajeSel, baseSel); }
 
   // Calcula alt/az del objeto, el Sol y la Luna desde la base + fecha + hora, y
   // pinta la previsualización. Devuelve el objeto de astrometría o null.
   function calcularAstro(){
     var prev=$('astroPreview');
+    var base=lugarActual().base;
     astroActual=null;
     if(prev) prev.hidden=true;
-    if(!baseSel || !resolved) return null;
+    if(!base || !resolved) return null;
     var fecha=$('fechaObs')?$('fechaObs').value:'', hora=$('horaObs')?$('horaObs').value:'';
     if(!fecha) return null;
     var fechaHoraLocal = fecha+'T'+(hora||'00:00');
     // El módulo devuelve null si falta cualquier dato (base a medias, objeto sin
     // coordenadas): aquí no hace falta volver a comprobarlos.
     var p = BitacoraAstro.posiciones({
-      fechaHoraLocal: fechaHoraLocal, tz: baseSel.tz||'',
-      lat: baseSel.lat, lon: baseSel.lon, ra: resolved.ra, dec: resolved.dec
+      fechaHoraLocal: fechaHoraLocal, tz: base.tz||'',
+      lat: base.lat, lon: base.lon, ra: resolved.ra, dec: resolved.dec
     });
     if(!p) return null;
     astroActual={
-      lat:parseFloat(baseSel.lat), lon:parseFloat(baseSel.lon),
+      lat:parseFloat(base.lat), lon:parseFloat(base.lon),
       objAlt:p.objeto.alt, objAz:p.objeto.az,
       sunAlt:p.sol.alt, moonAlt:p.luna.alt,
       fechaHoraLocal: fechaHoraLocal,
@@ -374,16 +382,23 @@
   }
 
   var lastComputed=null;
-  // Observación lista cuando hay objeto resuelto, observador, fecha y telescopio.
-  // La base es OPCIONAL: si la hay, se calcula y adjunta la astrometría (siembra
-  // la ficha en el servidor); si no, se registra sin altitud/azimut.
+  // Observación lista cuando hay objeto resuelto, observador, fecha, telescopio
+  // y VIAJE: toda observación pertenece a una salida, y sin salida no se guarda.
+  // El lugar sigue siendo OPCIONAL: si lo hay (del viaje, o del selector cuando
+  // el viaje no lo registró) se calcula y adjunta la astrometría; si no, se
+  // registra sin altitud/azimut.
   function recompute(){
     if(typeof actualizarExplNombre==='function') actualizarExplNombre();
+    refrescarAvisoViaje();   // el aviso no espera al objeto ni al telescopio
+    var lugar=lugarActual();
+    // El selector de base solo asoma cuando el viaje no dice desde dónde se
+    // observaba: es la única forma de seguir calculando alt/az en ese caso.
+    if($('baseCampo')) $('baseCampo').hidden = !lugar.pedirBase;
     lastComputed=null; submitBtn.disabled=true; jsonOut.classList.remove('show');
     var haveObj=resolved!==null, haveObs=$('observer').value.trim()!=='';
     var haveFecha=(!!$('fechaObs') && $('fechaObs').value!=='');
     var haveTele=telescopioNombre!=='';   // telescopio SIEMPRE de la flota (o heredado)
-    if(!(haveObj&&haveObs&&haveFecha&&haveTele)){ return; }
+    if(!(haveObj&&haveObs&&haveFecha&&haveTele&&!lugar.faltaViaje)){ return; }
     var cielo = cieloCtrl ? cieloCtrl.leer() : { sqm:null, clase:null, etiqueta:null };
     var transp = transpCtrl ? transpCtrl.leer() : { ir:null, etiqueta:null };
     var astro = calcularAstro();   // null si no hay base
@@ -393,7 +408,8 @@
       ra:resolved.ra, dec:resolved.dec,
       observador:$('observer').value.trim(), telescopio:telescopioNombre,
       telescopioId: telescopioIdSel,
-      baseId: baseSel ? baseSel.id : null,
+      viajeId: viajeSel ? viajeSel.id : null,
+      baseId: lugar.base ? lugar.base.id : null,
       fechaObservacion:($('fechaObs')?$('fechaObs').value:''),
       horaObservacion:($('horaObs')?$('horaObs').value:''),
       cieloSqm: cielo.sqm, cieloBortle: cielo.clase, cieloBortleEtiqueta: cielo.etiqueta,
@@ -450,6 +466,102 @@
       baseSel = baseSelect.value ? basePorId(baseSelect.value) : null;
       recompute();
     });
+  }
+
+  // ── Viaje de la noche (sesión de observación) ──
+  // Toda observación pertenece a una salida, y la salida es OBLIGATORIA: es
+  // ella la que dice desde dónde se observaba y la que da casa a la crónica, la
+  // meteo y la tripulación. Con la fecha se le pregunta al servidor qué viajes
+  // tiene esa noche (la regla del mediodía es suya); si no tiene ninguno, se
+  // ofrece darlo de alta aquí mismo. El ciclo (cuándo preguntar, respuestas
+  // rezagadas, alta) es de BitacoraBase.
+  var viajeBox = $('viajeAviso'), viajeTxt = $('viajeAvisoTxt'), viajeBtn = $('viajeAvisoBtn');
+  var viajeCampo = $('viajeCampo'), viajeSelect = $('viajeSelect');
+  var listaViajes = [], viajePendiente = null, viajeElegidoId = null;   // pendiente: id a recuperar en modo edición
+  var VIAJES_API = WP ? WP.endpoint.replace(/observaciones\/?$/, 'viajes/de-la-noche') : '';
+  function pedirViaje(datos, metodo){
+    var q = '?fecha='+encodeURIComponent(datos.fecha)+'&hora='+encodeURIComponent(datos.hora);
+    return fetch(VIAJES_API+q, { method:metodo, credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
+      .then(function(r){ if(!r.ok) throw new Error('viaje'); return r.json(); });
+  }
+  function etiquetaViaje(v){
+    var nombre = v.nombre || ('Viaje del '+(v.noche||''));
+    var partes = [];
+    if(v.base_nombre) partes.push(v.base_nombre);
+    partes.push(v.num_objetos ? v.num_objetos+(v.num_objetos===1?' objeto':' objetos') : 'todavía sin objetos');
+    return nombre+' — '+partes.join(' · ');
+  }
+  // Pinta el selector y deja elegido un viaje. Con una sola salida no hay nada
+  // que elegir; con dos (se cambió de sitio a media noche) elige el observador,
+  // porque colgarla de la primera la dejaría en el lugar equivocado.
+  function pintarViajes(){
+    if(!viajeSelect) return;
+    viajeSelect.innerHTML = listaViajes.map(function(v){
+      return '<option value="'+v.id+'">'+BitacoraBase.esc(etiquetaViaje(v))+'</option>';
+    }).join('');
+    // Cada consulta trae objetos nuevos, así que lo elegido se recuerda por id:
+    // cambiar la hora no debe devolver la observación al primer viaje de la lista.
+    var quiero = (viajePendiente!=null) ? String(viajePendiente)
+               : (viajeElegidoId!=null) ? String(viajeElegidoId) : null;
+    viajeSel = null;
+    for(var i=0;i<listaViajes.length;i++){ if(String(listaViajes[i].id)===quiero) viajeSel=listaViajes[i]; }
+    if(!viajeSel) viajeSel = listaViajes.length ? listaViajes[0] : null;
+    viajePendiente = null;
+    viajeElegidoId = viajeSel ? viajeSel.id : null;
+    if(viajeSel) viajeSelect.value = String(viajeSel.id);
+    if(viajeCampo) viajeCampo.hidden = listaViajes.length<2;
+  }
+  if(viajeSelect){
+    viajeSelect.addEventListener('change', function(){
+      viajeSel = null;
+      for(var i=0;i<listaViajes.length;i++){ if(String(listaViajes[i].id)===viajeSelect.value) viajeSel=listaViajes[i]; }
+      viajeElegidoId = viajeSel ? viajeSel.id : null;
+      recompute();
+    });
+  }
+  var avisoViaje = (WP && window.BitacoraBase && BitacoraBase.avisoViaje && viajeBox)
+    ? BitacoraBase.avisoViaje({
+        consultar: function(d){ return pedirViaje(d,'GET').then(function(j){ return j.viajes||[]; }); },
+        alta:      function(d){ return pedirViaje(d,'POST').then(function(j){ return j.viaje; }); },
+        onEstado: function(estado, viajes){
+          listaViajes = viajes || [];
+          if(estado!=='con-viaje'){ viajeSel = null; if(viajeCampo) viajeCampo.hidden = true; }
+          if(viajeBtn) viajeBtn.hidden = (estado!=='sin-viaje');
+          if(estado==='sin-datos'){ viajeBox.hidden=true; return; }
+          viajeBox.hidden=false;
+          viajeBox.className = 'viaje-aviso '+estado;
+          if(estado==='consultando'){ viajeTxt.textContent='Buscando tu sesión de esa noche…'; }
+          else if(estado==='sin-viaje'){ viajeTxt.innerHTML='<strong>Registra primero tu sesión de observación (viaje estelar)</strong> — esa noche todavía no tiene ninguna. Sin ella, la crónica y la tripulación de la salida no tienen dónde ir.'; }
+          else if(estado==='con-viaje'){
+            pintarViajes();
+            viajeTxt.innerHTML = listaViajes.length>1
+              ? 'Esa noche tiene <strong>'+listaViajes.length+' salidas</strong>: elige a cuál pertenece esta observación.'
+              : 'Esta observación se sumará a <strong>'+BitacoraBase.esc(etiquetaViaje(listaViajes[0]))+'</strong>';
+          }
+          else { viajeTxt.textContent='No se pudo comprobar la sesión de esa noche. Cambia la fecha o recarga para volver a intentarlo.'; }
+          // Solo con respuesta firme: recompute() vuelve a preguntar, y en
+          // 'error' la pregunta se rearma —dos estados que se llamarían entre sí
+          // sin parar. Sin viaje el formulario ya queda bloqueado por sí solo.
+          if(estado==='con-viaje' || estado==='sin-viaje') recompute();
+        }
+      })
+    : null;
+  if(viajeBtn && avisoViaje){
+    viajeBtn.addEventListener('click', function(){
+      viajeBtn.disabled = true;
+      avisoViaje.registrar()
+        .catch(function(){ viajeTxt.textContent='No se pudo dar de alta el viaje. Inténtalo de nuevo.'; })
+        .then(function(){ viajeBtn.disabled = false; });
+    });
+  }
+  // La fecha y la hora son lo único que sitúa la observación en una noche; este
+  // es el punto por el que pasan las dos, así que aquí se refresca el selector.
+  function refrescarAvisoViaje(){
+    if(!avisoViaje) return;
+    avisoViaje.actualizar(
+      $('fechaObs') ? $('fechaObs').value : '',
+      $('horaObs') ? $('horaObs').value : ''
+    );
   }
   function cargarBases(){
     if(!WP) return;
@@ -699,6 +811,9 @@
     }
     // Base: se preselecciona al cargar la lista de bases (basePendiente).
     if(obs.base_id){ basePendiente = obs.base_id; if(basesCargadas){ baseSel = basePorId(obs.base_id); if(baseSelect) baseSelect.value=String(obs.base_id); } }
+    // Viaje: la lista de esa noche llega con la consulta que dispara la fecha,
+    // así que aquí solo se apunta cuál era el suyo (viajePendiente).
+    if(obs.viaje_id) viajePendiente = obs.viaje_id;
 
     // MySQL devuelve todo como texto; los campos de RA/Dec aceptan decimales.
     // Para los no-Messier hay que rellenarlos ANTES de resolver, porque
@@ -1303,6 +1418,11 @@
           txt += ' <span style="color:var(--ambar,#c88)">El objeto no se ha podido situar en el mapa automáticamente: ' + res.data.aviso + '</span>';
         }
         $('outNote').innerHTML='<span style="color:var(--verde)">'+txt+'</span>';
+        // Si esta observación ha dicho el lugar, el servidor lo sube al viaje: hay
+        // que releerlo para que el selector de base desaparezca sin recargar. El
+        // aviso descarta consultas repetidas de la misma noche, así que se le
+        // borra la fecha antes de volver a pedírsela.
+        if(avisoViaje){ avisoViaje.actualizar('',''); refrescarAvisoViaje(); }
         return;
       }
       var msg=(res.data && res.data.message) ? res.data.message : 'Error '+res.status;

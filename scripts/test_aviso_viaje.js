@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+/* Test del SELECTOR DE VIAJE del formulario de registro
+   (`BitacoraBase.avisoViaje`, resources/js/bitacora-base.js).
+
+   Toda observación pertenece a una sesión —un viaje interestelar—, y ahora la
+   sesión es obligatoria: es ella la que dice desde dónde se observaba. Quién
+   decide a qué noche pertenece una hora es el servidor (la regla del mediodía
+   vive en un solo sitio, bitacora-viaje.php), así que lo que se prueba aquí es
+   el ciclo que rodea a esa pregunta: cuándo se pregunta, cuándo NO, y qué se
+   enseña mientras la respuesta vuela.
+
+   La BASE ya no entra: el formulario de registro dejó de preguntarla, así que
+   la noche se identifica solo con fecha y hora, y de ella pueden colgar VARIOS
+   viajes (dos salidas desde sitios distintos la misma noche).
+
+   Sin dependencias ni red: consultar/alta son de mentira y se resuelven a mano.
+   node scripts/test_aviso_viaje.js  */
+'use strict';
+
+global.window = {};
+require('../resources/js/bitacora-base.js');
+var B = global.window.BitacoraBase;
+
+var fallos = 0;
+function ok(cond, etiqueta) {
+  if (cond) { console.log('  ok   ' + etiqueta); }
+  else { fallos++; console.error('  FALLA ' + etiqueta); }
+}
+function seccion(t) { console.log('\n' + t); }
+
+var SIERRA = { id: 12, nombre: '', noche: '2026-08-04', base_nombre: 'Sierra de Béjar' };
+var BALCON = { id: 13, nombre: 'Desde casa', noche: '2026-08-04', base_nombre: 'Balcón' };
+
+/* Un aviso con las dos llamadas al servidor bajo control: cada consulta queda
+   pendiente hasta que el test la resuelve, que es como se reproducen las
+   respuestas que llegan tarde. */
+function nuevo() {
+  var v = { consultas: [], altas: [], estados: [], viajes: [] };
+  v.aviso = B.avisoViaje({
+    consultar: function (datos) {
+      return new Promise(function (res, rej) { v.consultas.push({ datos: datos, res: res, rej: rej }); });
+    },
+    alta: function (datos) {
+      return new Promise(function (res, rej) { v.altas.push({ datos: datos, res: res, rej: rej }); });
+    },
+    onEstado: function (estado, viajes) { v.estados.push(estado); v.viajes.push(viajes || null); }
+  });
+  return v;
+}
+function ultimo(a) { return a.length ? a[a.length - 1] : null; }
+// Deja correr las promesas ya resueltas antes de mirar el resultado.
+function vuelta() { return new Promise(function (res) { setTimeout(res, 0); }); }
+
+Promise.resolve()
+
+  /* ── 1. Sin fecha no hay noche a la que preguntar ───────────────────────────
+     La fecha es lo único que sitúa la observación en una noche. Sin ella no hay
+     pregunta que hacer, y exigir la sesión antes de tenerla sería pedir algo
+     imposible. */
+  .then(function () {
+    seccion('Sin fecha, ni se pregunta:');
+    var v = nuevo();
+    v.aviso.actualizar('', '22:40');
+    ok(v.consultas.length === 0, 'sin fecha no se consulta');
+    ok(ultimo(v.estados) === 'sin-datos', 'estado sin-datos');
+  })
+
+  /* ── 2. La noche no tiene ninguna sesión ────────────────────────────────────
+     El caso que motiva todo: es la primera observación de la noche, nadie ha
+     dado de alta la sesión, y sin sesión no se registra. El formulario debe
+     poder ofrecer el alta aquí mismo. */
+  .then(function () {
+    seccion('La noche todavía no tiene viaje:');
+    var v = nuevo();
+    v.aviso.actualizar('2026-08-05', '02:15');
+    ok(v.consultas.length === 1, 'se consulta una vez');
+    ok(ultimo(v.estados) === 'consultando', 'mientras vuela, estado consultando');
+    ok(v.consultas[0].datos.fecha === '2026-08-05' && v.consultas[0].datos.hora === '02:15',
+      'se manda fecha y hora tal cual');
+    ok(!('baseId' in v.consultas[0].datos), 'la base ya no forma parte de la pregunta');
+    v.consultas[0].res([]);
+    return vuelta().then(function () {
+      ok(ultimo(v.estados) === 'sin-viaje', 'sin viaje: hay que ofrecer darlo de alta');
+      ok(ultimo(v.viajes).length === 0, 'y no se enseña ninguno');
+    });
+  })
+
+  /* ── 3. La noche ya tiene sesión ────────────────────────────────────────────
+     Una sola: el formulario la da por elegida sin preguntar nada. */
+  .then(function () {
+    seccion('La noche ya tiene viaje:');
+    var v = nuevo();
+    v.aviso.actualizar('2026-08-04', '22:40');
+    v.consultas[0].res([SIERRA]);
+    return vuelta().then(function () {
+      ok(ultimo(v.estados) === 'con-viaje', 'estado con-viaje');
+      ok(ultimo(v.viajes)[0] === SIERRA, 'se entrega el viaje para pintarlo');
+    });
+  })
+
+  /* ── 4. Dos salidas la misma noche ──────────────────────────────────────────
+     Se puede cambiar de sitio a media noche, y entonces la noche tiene dos
+     viajes. La clave única los permite, así que el aviso los entrega todos y es
+     el observador quien elige: colgar la observación del primero que aparezca la
+     dejaría en el lugar equivocado. */
+  .then(function () {
+    seccion('La misma noche con dos viajes:');
+    var v = nuevo();
+    v.aviso.actualizar('2026-08-04', '22:40');
+    v.consultas[0].res([SIERRA, BALCON]);
+    return vuelta().then(function () {
+      ok(ultimo(v.estados) === 'con-viaje', 'estado con-viaje');
+      ok(ultimo(v.viajes).length === 2, 'se entregan los dos, sin elegir por el observador');
+    });
+  })
+
+  /* ── 5. La respuesta que llega tarde no pisa a la nueva ─────────────────────
+     Cambiar la fecha mientras la consulta vuela es lo normal: se rellena el
+     formulario de arriba abajo. Si la respuesta vieja pintara al volver, el
+     formulario ofrecería la sesión de OTRA noche, y la observación acabaría
+     colgada de la salida equivocada. */
+  .then(function () {
+    seccion('Respuestas que llegan tarde:');
+    var v = nuevo();
+    v.aviso.actualizar('2026-08-04', '22:40');
+    v.aviso.actualizar('2026-08-05', '22:40');      // se arrepiente de la fecha
+    ok(v.consultas.length === 2, 'la fecha nueva se consulta de nuevo');
+    v.consultas[1].res([]);                          // la nueva vuelve primero
+    return vuelta().then(function () {
+      ok(ultimo(v.estados) === 'sin-viaje', 'manda la respuesta de la fecha nueva');
+      v.consultas[0].res([SIERRA]);                  // y ahora la vieja
+      return vuelta().then(function () {
+        ok(ultimo(v.estados) === 'sin-viaje', 'la respuesta vieja no pisa a la nueva');
+        ok(ultimo(v.viajes).length === 0, 'no se cuela el viaje de la noche anterior');
+      });
+    });
+  })
+
+  /* ── 6. Lo mismo no se consulta dos veces ───────────────────────────────────
+     El formulario recalcula en cada tecla; preguntar por lo mismo una y otra
+     vez sería castigar al servidor sin cambiar nada de lo que se ve.
+
+     El deduplicado es por fecha + hora EXACTAS, no por noche: saber si dos
+     horas caen en la misma noche exige la regla del mediodía, y esa regla vive
+     solo en el servidor. Cambiar la hora vuelve a consultar aunque la noche no
+     cambie —una petición de más es más barata que una segunda copia de la
+     regla. */
+  .then(function () {
+    seccion('Deduplicado de la consulta:');
+    var v = nuevo();
+    v.aviso.actualizar('2026-08-04', '22:40');
+    v.consultas[0].res([]);
+    return vuelta().then(function () {
+      v.aviso.actualizar('2026-08-04', '22:40');
+      ok(v.consultas.length === 1, 'los mismos datos no se vuelven a consultar');
+      ok(ultimo(v.estados) === 'sin-viaje', 'y el aviso se queda como estaba');
+      v.aviso.actualizar('2026-08-04', '23:10');
+      ok(v.consultas.length === 2, 'otra hora sí se consulta (la noche la decide el servidor)');
+      v.aviso.actualizar('2026-08-05', '23:10');
+      ok(v.consultas.length === 3, 'otra fecha también');
+    });
+  })
+
+  /* ── 7. Dar de alta la sesión desde el propio formulario ────────────────────
+     Es lo que el aviso ofrece: registrar la salida sin salir de aquí, con los
+     mismos datos por los que se preguntó. Nace SIN lugar —el lugar se pone en la
+     ficha del viaje—, y al volver ya es el viaje de la noche. */
+  .then(function () {
+    seccion('Alta del viaje desde el aviso:');
+    var v = nuevo();
+    v.aviso.actualizar('2026-08-05', '02:15');
+    v.consultas[0].res([]);
+    return vuelta().then(function () {
+      v.aviso.registrar();
+      ok(v.altas.length === 1, 'se da de alta una vez');
+      ok(v.altas[0].datos.fecha === '2026-08-05' && v.altas[0].datos.hora === '02:15',
+        'con los mismos datos de la consulta');
+      v.altas[0].res(SIERRA);
+      return vuelta().then(function () {
+        ok(ultimo(v.estados) === 'con-viaje', 'tras el alta, la noche ya tiene viaje');
+        ok(ultimo(v.viajes)[0] === SIERRA, 'y es el recién creado');
+      });
+    });
+  })
+
+  /* ── 8. El alta se suma a lo que ya había ───────────────────────────────────
+     Si la noche ya tenía una salida y se registra otra, la lista pasa a tener
+     las dos: la primera no desaparece del selector por dar de alta la segunda. */
+  .then(function () {
+    seccion('Alta con viajes ya existentes:');
+    var v = nuevo();
+    v.aviso.actualizar('2026-08-04', '22:40');
+    v.consultas[0].res([SIERRA]);
+    return vuelta().then(function () {
+      v.aviso.registrar();
+      v.altas[0].res(BALCON);
+      return vuelta().then(function () {
+        ok(ultimo(v.viajes).length === 2, 'el nuevo se suma, no sustituye');
+        ok(ultimo(v.viajes)[1] === BALCON, 'y el recién creado va el último');
+      });
+    });
+  })
+
+  /* ── 9. Si el servidor no contesta, se vuelve a intentar ────────────────────
+     Sin sesión no se registra, así que no saber si la hay es un callejón sin
+     salida: se avisa, y como no se llegó a saber nada, el siguiente intento
+     vuelve a preguntar. */
+  .then(function () {
+    seccion('El servidor no contesta:');
+    var v = nuevo();
+    v.aviso.actualizar('2026-08-04', '22:40');
+    v.consultas[0].rej(new Error('sin red'));
+    return vuelta().then(function () {
+      ok(ultimo(v.estados) === 'error', 'estado error');
+      v.aviso.actualizar('2026-08-04', '22:40');
+      ok(v.consultas.length === 2, 'lo que falló se reintenta');
+    });
+  })
+
+  .then(function () {
+    console.log(fallos ? '\n' + fallos + ' FALLO(S)' : '\nok · el selector de viaje pregunta cuando debe');
+    process.exit(fallos ? 1 : 0);
+  })
+  .catch(function (e) { console.error(e); process.exit(1); });

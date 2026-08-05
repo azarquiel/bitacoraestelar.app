@@ -12,7 +12,7 @@
      ============================================================ -->
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260727_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260803_2100" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260805_1900" />
 
 <style>
 /* Selectores de equipo (telescopio / ocular / auxiliar), con el mismo aspecto
@@ -73,9 +73,17 @@
         <select id="scopeSelect"><option value="">— Elige un telescopio de tu flota —</option></select></label>
       <p class="hint" id="scopeHint" style="margin:-8px 0 0;font-size:12.5px;">Elige tu telescopio de la flota y, en cada ocular, uno de tus oculares: los aumentos, la pupila y el campo real se calculan solos. Gestiona tu equipo en <a href="/mi-flota/">Mi flota</a>.</p>
 
-      <label class="field" style="margin-top:14px"><span class="lab">Base de observación (opcional)</span>
-        <select id="baseSelect"><option value="">— Sin base (no se calcula altitud/azimut) —</option></select></label>
-      <p class="hint" id="baseHint" style="margin:-8px 0 0;font-size:12.5px;">Elige desde dónde observaste: con la base + la fecha + la hora se calculan la altura y el azimut del objeto, del Sol y de la Luna. Gestiona tus lugares en <a href="/mis-bases/">Mis bases</a>.</p>
+      <div class="viaje-aviso" id="viajeAviso" hidden>
+        <p id="viajeAvisoTxt"></p>
+        <label class="field" id="viajeCampo" hidden><span class="lab">Viaje estelar de esa noche</span>
+          <select id="viajeSelect"></select></label>
+        <button type="button" id="viajeAvisoBtn" hidden>Registrar el viaje de esa noche</button>
+      </div>
+      <div id="baseCampo" hidden>
+        <label class="field" style="margin-top:14px"><span class="lab">Base de observación (opcional)</span>
+          <select id="baseSelect"><option value="">— Sin base (no se calcula altitud/azimut) —</option></select></label>
+        <p class="hint" id="baseHint" style="margin:-8px 0 0;font-size:12.5px;">Este viaje no dice desde dónde se observaba. Elige el lugar para calcular la altura y el azimut del objeto, del Sol y de la Luna, o déjalo en blanco y se registrará sin ellos. Lo suyo es ponerlo en la <a href="/mis-viajes/">ficha del viaje</a>, donde vale para toda la noche; gestiona tus lugares en <a href="/mis-bases/">Mis bases</a>.</p>
+      </div>
       <div class="astro-preview" id="astroPreview" hidden>
         <span>Objeto <b id="apObj">—</b></span><span>Sol <b id="apSun">—</b></span><span>Luna <b id="apMoon">—</b></span>
       </div>
@@ -132,7 +140,7 @@
 </div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260730_1000" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260805_1900" defer></script>
 <script src="/wp-content/uploads/bitacora/estrellas-carbono-datos.js?v=20260721_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260731_2200" defer></script>
 <script src="/wp-content/uploads/bitacora/globulares-datos.js?v=20260729_1600" defer></script>
@@ -140,4 +148,4 @@
 <script src="/wp-content/uploads/bitacora/nebulosas-datos.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260803_2100" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-astro.js?v=20260729_1900" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=20260803_2100" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=20260805_2130" defer></script>

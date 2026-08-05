@@ -29,6 +29,8 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `bitacora-listado.css` | Estilos del listado | Servidor, por FTP |
 | `mi-flota-wordpress.html` | Fragmento de "Mi flota" (equipo del observador) | Editor de WordPress |
 | `bitacora-flota.js` | Lógica de "Mi flota" | Servidor, por FTP |
+| `mis-viajes-wordpress.html` | Fragmento de "Mis viajes" (sesiones de observación: lugar, crónica, meteo, cielo) | Editor de WordPress |
+| `bitacora-viajes.js` | Lógica de "Mis viajes" | Servidor, por FTP |
 | `resources/datos/{telescopios,oculares,auxiliares}.csv` | Catálogo de equipo (semilla) | Bundled en el plugin (`…/bitacora-registro/datos/`) |
 | `…/bitacora-registro/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
 
@@ -58,6 +60,13 @@ secciones:
   - Cualquier otro objeto (`NGC 6826`, `IC 1396`…) se acepta, pero pide su
     **RA y Dec a mano**, porque sin coordenadas no hay cálculo posible.
     Admite formato sexagesimal (`21h 40m 22s`) o decimal (`325.09`).
+- **Viaje estelar** de esa noche (**obligatorio**). En cuanto hay fecha, el
+  formulario pregunta al servidor qué salidas tienes esa noche: si hay una, lo
+  dice; si hay varias, aparece un selector; si no hay ninguna, ofrece darla de
+  alta allí mismo. Sin viaje no se guarda.
+- **Base de observación** (opcional), y **solo si el viaje no tiene lugar**: el
+  lugar es de la salida, no del objeto. Lo que contestes aquí sube al viaje, así
+  que se pregunta una vez por salida y no una vez por objeto.
 - Observador y **telescopio**. El telescopio es **siempre de la flota** del
   observador (ver *Mi flota* más abajo): no hay texto libre, para que todo el
   equipo tenga apertura/focal/óptica reales (necesarias para generar la imagen
@@ -194,6 +203,21 @@ puede reimportarse desde el panel de administración de Bitácora.
 
 ---
 
+## Mis viajes (las sesiones de observación)
+
+`mis-viajes-wordpress.html` lista tus salidas y edita su ficha: **nombre**,
+**lugar**, hora de **comienzo** y **fin**, **meteorología**, **cielo** (SQM o
+Bortle, transparencia, seeing) y la **crónica** de la noche. Todo eso es de la
+salida, no del objeto, y por eso vive aquí y no en el formulario de registro.
+
+La **noche** no se edita: es la identidad del viaje junto al observador y el
+lugar. Un viaje solo se puede borrar cuando ya no le cuelga ninguna observación.
+
+Un viaje se puede crear desde aquí, o desde el propio formulario de registro
+cuando esa noche todavía no tiene ninguno.
+
+---
+
 ## La ficha en Word (.docx)
 
 Cada tarjeta del listado tiene un botón **Ficha** que descarga la observación
@@ -326,9 +350,35 @@ se guarda en tablas hijas, y hay catálogos independientes:
 | `wp_bitacora_telescopios` | Telescopios: catálogo global (`usuario_id` NULL) + flotas personales |
 | `wp_bitacora_oculares` | Oculares: catálogo global + flotas personales |
 | `wp_bitacora_auxiliares` | Auxiliares (Barlow/reductores): catálogo global + flotas personales |
+| `wp_bitacora_bases` | Las bases de observación del usuario (nombre, lat/lon, altitud, huso) |
+| `wp_bitacora_viajes` | Los **viajes interestelares**: una salida = un observador, una noche, una base. Guarda lo que es de la salida y no del objeto (lugar, crónica, meteo, cielo, comienzo y fin). `base_id = 0` = salida sin lugar registrado |
+| `wp_bitacora_viaje_tripulacion` | Quién más iba en ese viaje |
 
 La observación referencia el `telescopio_id`, y cada entrada su `ocular_id` y
 `auxiliar_id` (el equipo usado en ese aumento).
+
+La observación referencia también su `viaje_id` y su `base_id`. El **viaje es
+obligatorio**: se elige al registrar, entre los que tenga esa noche (o se da de
+alta allí mismo). La **noche** la calcula el servidor con el convenio de mediodía
+(antes de las 12:00 la noche es la del día anterior, así la madrugada no se
+separa de su tarde), y la terna observador + noche + base es la identidad del
+viaje, con `UNIQUE` en la tabla. El telescopio **no** entra: cambiar de tubo no
+parte la salida en dos.
+
+El **lugar es del viaje**, no de la observación: se indica una vez en su ficha
+(*Mis viajes*) y vale para toda la noche. Un viaje sin lugar es legítimo y lleva
+`base_id = 0` —no `NULL`, que la clave única de MySQL admitiría por duplicado—;
+en ese caso el registro pregunta la base, que es lo único que permite seguir
+calculando altura y azimut, y esa respuesta **sube al viaje**: se pregunta una
+vez por salida, no una vez por objeto. Ya con lugar, manda el del viaje y
+cambiarlo es cosa de su ficha; al mudarlo se mudan con él las observaciones de
+esa salida.
+
+El único caso en que el lugar **no** sube es cuando esa noche ya tienes otra
+salida desde ese mismo sitio: subirlo chocaría con el `UNIQUE`. Entonces el
+viaje se queda sin lugar, la observación conserva el suyo, y se resuelve a mano
+en *Mis viajes*. Poner `baseId = 0` en la ficha vacía el lugar a propósito, y el
+registro vuelve a preguntarlo.
 
 Todo sigue siendo SQL estándar con columnas explícitas: portable con un
 `export`/`import`.
@@ -341,7 +391,7 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 
 | Método | Ruta | Sesión | Qué hace |
 |---|---|---|---|
-| `POST` | `/observaciones` | Sí | Crea una observación |
+| `POST` | `/observaciones` | Sí | Crea una observación. `viajeId` es **obligatorio**; `baseId` solo si ese viaje aún no tiene lugar, y entonces sube a él |
 | `GET` | `/observaciones` | Sí | Lista las activas. `?borradas=1` para la papelera, `?mias=1` para filtrar por autor |
 | `GET` | `/observaciones/{id}` | Sí | Devuelve una, para precargar el formulario |
 | `PUT` | `/observaciones/{id}` | Sí | La modifica *(solo el autor)* |
@@ -349,6 +399,13 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | `POST` | `/observaciones/{id}/restaurar` | Sí | Deshace el borrado *(solo el autor)* |
 | `GET` | `/observaciones/{id}/ficha` | Sí | Genera y **descarga** la ficha `.docx` |
 | `GET`/`PUT` | `/observaciones/{id}/ficha-datos` | Sí | Lee/guarda la astrometría de la ficha |
+| `GET` | `/viajes` | No | Lista viajes. `?mios=1`, `?base=`, `?observador=`, `?desde=`/`?hasta=` (`YYYY-MM-DD`), `?orden=objetos` |
+| `GET` | `/viajes/de-la-noche?fecha=&hora=` | Sí | `{noche, viajes[]}`: los viajes que tengo esa noche (lista vacía si aún no hay ninguno). La **noche** la calcula el servidor |
+| `POST` | `/viajes/de-la-noche` | Sí | Da de alta un viaje de esa noche **sin lugar**; el lugar se pone luego en su ficha |
+| `GET` | `/viajes/{id}` | No | Un viaje con sus objetos, telescopios, oculares y tripulación |
+| `PUT` | `/viajes/{id}` | Sí | Edita nombre, **lugar** (`baseId`, 0 = sin lugar), crónica, meteo, cielo, comienzo y fin *(solo el autor)*. La noche no se toca. Mudar el lugar muda con él sus observaciones, y devuelve `409` si esa noche ya tiene otro viaje desde ese sitio |
+| `DELETE` | `/viajes/{id}` | Sí | Lo borra *(solo el autor, y solo si ya no le cuelga ninguna observación)* |
+| `PUT` | `/viajes/{id}/tripulacion` | Sí | Sustituye la lista de acompañantes *(solo el autor)* |
 | `GET` | `/objetos` | No | Lista los objetos del mapa |
 | `POST` | `/objetos` | Sí | Registra un objeto por identificador (lo resuelve en SIMBAD y calcula su posición) |
 | `GET` | `/resolver?q=M104` | No | Localiza un objeto en SIMBAD **sin guardarlo** (para el buscador del mapa) |
@@ -404,7 +461,19 @@ bitacora-formulario.css
 bitacora-listado.js
 bitacora-listado.css
 bitacora-flota.js
+bitacora-base.js
+bitacora-base.css
+bitacora-bases.js
+bitacora-viajes.js
+bitacora-astro.js
+bitacora-equipo.js
+bitacora-ficha.js
 ```
+
+Y, para el botón *Generar con el simulador*, los del simulador de ocular:
+`bitacora-gaia-render.js`, `bitacora-gaia-color.js` y sus catálogos
+(`galaxias-datos.js`, `globulares-datos.js`, `nebulosas-datos.js`,
+`estrellas-carbono-datos.js`).
 
 > WordPress **no permite** subir `.js` desde la biblioteca de medios.
 
@@ -420,6 +489,13 @@ contenido de `registrar-observacion-wordpress.html`. Publica.
 **Página de "Mi flota".** Otra página, título "Mi flota", con un bloque **HTML
 personalizado** y el contenido de `mi-flota-wordpress.html`. Si su ruta no es
 `/mi-flota/`, ajusta el enlace del formulario de registro.
+
+**Página de "Mis bases".** Igual, con `mis-bases-wordpress.html`: los lugares
+desde los que observas (nombre, lat/lon, altitud, huso).
+
+**Página de "Mis viajes".** Igual, con `mis-viajes-wordpress.html`: las sesiones
+de observación. Si su ruta no es `/mis-viajes/`, ajusta el enlace que el
+formulario de registro muestra cuando un viaje no tiene lugar.
 
 En el fragmento del listado, ajusta la ruta de la página del formulario si no
 coincide con la tuya. Aparece en dos sitios:
@@ -437,7 +513,7 @@ Control** (gratuito):
 1. *Content Control → Restrictions → Add Restriction*.
 2. En **General**: *¿Quién puede ver este contenido?* → **Usuarios conectados**,
    rol **Any**.
-3. En **Contenido**: selecciona las dos páginas.
+3. En **Contenido**: selecciona todas esas páginas.
 4. En **Protección**: redirigir al login, o mostrar un mensaje.
 5. Guardar.
 

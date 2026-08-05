@@ -83,6 +83,52 @@ y por **Mi flota**, sin DOM ni WordPress.
   aquí: salen del catálogo global tal cual.
 - **Test:** `scripts/test_equipo.js` fija el contrato de los tres.
 
+## Viaje interestelar
+
+La **sesión de observación**: la salida de UN observador, UNA noche, desde UNA
+[[base]]. Todo objeto observado bajo esa terna cuelga del mismo viaje, y ahí
+viven los datos que son de la salida y no del objeto (lugar, crónica, meteo,
+cielo, comienzo y fin, tripulación). Se gestionan en **Mis viajes**
+(`registro/mis-viajes-wordpress.html` + `bitacora-viajes.js`).
+
+- **Fuente única de la identidad:** `bitacora-viaje.php` (puro, sin WordPress),
+  `bitacora_viaje_noche(fecha, hora)` y `bitacora_viaje_clave(usuario, base, fecha, hora)`.
+- **Convenio de mediodía:** la noche de una observación es la del día anterior si
+  la hora es menor que las 12:00, igual que la fecha juliana cuenta desde el
+  mediodía. Así el objeto de las 22:40 y el de las 02:15 caen en la misma salida.
+  La cuenta va sobre el reloj de PARED de la base, así que el horario de verano
+  no la mueve.
+- **El telescopio NO entra en la identidad:** cambiar de tubo a media noche no
+  parte la salida en dos. Es la convención de Open Astronomy Log, donde `scope`
+  cuelga de la observación y la `session` se define por tiempo y sitio.
+- **El lugar es del viaje, no de la observación:** se indica una vez para toda
+  la noche, en la ficha del viaje. Un viaje SIN lugar es legítimo (`base_id = 0`,
+  el sentinela: con `NULL` la clave única de MySQL admitiría duplicados), y
+  entonces el registro pregunta la base, que es lo único que permite seguir
+  calculando alt/az. Regla en `BitacoraBase.lugarDeObservacion`, test
+  `scripts/test_lugar_observacion.js`.
+- **El lugar SUBE al viaje, y no vuelve a bajar:** la base que se conteste al
+  registrar un objeto se escribe en el viaje, así que se pregunta una vez por
+  salida y no una vez por objeto. En cuanto el viaje tiene lugar manda él:
+  cambiarlo se hace en su ficha, no registrando un objeto —si no, el último
+  objeto de la noche mudaría de sitio la salida entera—. Regla en
+  `bitacora_viaje_base_efectiva` (`bitacora-viaje.php`), test
+  `scripts/test_viaje_noche.php`.
+- **La sesión es obligatoria, el lugar no:** sin viaje no se guarda una
+  observación; sin lugar sí, a cambio de quedarse sin altura ni azimut.
+- **El cielo NO sube al viaje:** `cielo_sqm`/`cielo_ir`/`cielo_bortle` siguen
+  siendo de cada observación, porque las condiciones cambian mientras se observa
+  y el registro puede rellenarse antes de salir. El viaje las copia como
+  **resumen** de la noche (el primer valor no nulo), no como hogar único.
+- **Selector de viaje al registrar:** el formulario le pregunta al servidor qué
+  viajes tiene esa noche (`avisoViaje` en `bitacora-base.js` +
+  `/viajes/de-la-noche`, que responde una LISTA: una noche puede tener dos
+  salidas desde sitios distintos). Si no tiene ninguno, ofrece darlo de alta sin
+  lugar; si tiene varios, elige el observador. Test: `scripts/test_aviso_viaje.js`.
+- **Invariante:** la misma observación da siempre la misma clave, que es lo que
+  hace relanzable el reparto histórico (backfill) sin duplicar viajes.
+  Test: `scripts/test_viaje_noche.php`.
+
 ## Astrometría de la sesión
 
 La altura y el azimut que se registran de una observación: los del **objeto**, los

@@ -27,6 +27,7 @@
       var flash = $('flash');
       var tabActivas = $('tabActivas');
       var tabPapelera = $('tabPapelera');
+      var tabViajes = $('tabViajes');
 
       // URL de la página del formulario, para los enlaces de "Editar".
       // Se toma del atributo data-form del contenedor; si falta, se asume esta ruta.
@@ -35,6 +36,10 @@
       var URL_FICHA = (contenedor && contenedor.getAttribute('data-ficha')) || '/datos-de-ficha/';
 
       var viendoPapelera = false;
+      // Agrupar por viaje es una FORMA DE VER lo mismo, no otra consulta: las
+      // observaciones son las mismas y solo cambia cómo se reparten en la
+      // página. La lista plana sigue disponible para buscar un objeto suelto.
+      var porViajes = false;
 
       if (!WP) {
         mostrarMensaje('Inicia sesión para ver tus observaciones.', true);
@@ -110,7 +115,7 @@
       // PINTAR EL LISTADO
       // ═══════════════════════════════════════════════════════════════════
 
-      function pintar(filas) {
+      function pintar(filas, viajes) {
         if (!filas.length) {
           mostrarMensaje(viendoPapelera
             ? 'La papelera está vacía.'
@@ -119,9 +124,78 @@
         }
 
         cards.innerHTML = '';
+        if (porViajes) {
+          pintarPorViajes(filas, viajes || []);
+          return;
+        }
         filas.forEach(function (obs) {
           cards.appendChild(crearTarjeta(obs));
         });
+      }
+
+      // Una cabecera por viaje y debajo sus objetos. El servidor manda los
+      // viajes de la noche más reciente a la más antigua, y ese es el orden en
+      // que se pintan; lo que no tiene viaje (registrado sin base) cae al final,
+      // bajo su propio epígrafe, para que no desaparezca de la vista.
+      function pintarPorViajes(filas, viajes) {
+        var porId = {};
+        filas.forEach(function (obs) {
+          var k = obs.viaje_id ? String(obs.viaje_id) : 'sin';
+          (porId[k] = porId[k] || []).push(obs);
+        });
+
+        var pintados = 0;
+        viajes.forEach(function (v) {
+          var suyas = porId[String(v.id)];
+          if (!suyas || !suyas.length) return;   // viaje vacío: nada que enseñar aquí
+          cards.appendChild(cabeceraViaje(v, suyas.length));
+          suyas.forEach(function (obs) { cards.appendChild(crearTarjeta(obs)); });
+          pintados += suyas.length;
+        });
+
+        if (porId.sin && porId.sin.length) {
+          cards.appendChild(cabeceraSueltas(porId.sin.length));
+          porId.sin.forEach(function (obs) { cards.appendChild(crearTarjeta(obs)); });
+          pintados += porId.sin.length;
+        }
+
+        // Cinturón de seguridad: si alguna observación apunta a un viaje que no
+        // vino en la lista, se pinta igual antes que perderla de vista.
+        if (pintados < filas.length) {
+          var huerfanas = filas.filter(function (obs) {
+            return obs.viaje_id && !viajes.some(function (v) { return String(v.id) === String(obs.viaje_id); });
+          });
+          if (huerfanas.length) {
+            cards.appendChild(cabeceraSueltas(huerfanas.length, 'Sin viaje reconocible'));
+            huerfanas.forEach(function (obs) { cards.appendChild(crearTarjeta(obs)); });
+          }
+        }
+      }
+
+      function cabeceraViaje(v, cuantas) {
+        var h = document.createElement('div');
+        h.className = 'viaje-head';
+        var titulo = v.nombre || ('Viaje del ' + fmtFecha(v.noche));
+        var detalle = [];
+        if (v.nombre) detalle.push(fmtFecha(v.noche));
+        if (v.base_nombre) detalle.push(v.base_nombre);
+        if (v.cielo_sqm) detalle.push('SQM ' + v.cielo_sqm);
+        if (v.cielo_bortle) detalle.push('Bortle ' + v.cielo_bortle);
+        h.innerHTML =
+          '<div class="viaje-t">' + esc(titulo) + '</div>' +
+          '<div class="viaje-d">' + esc(detalle.join(' · ')) + '</div>' +
+          '<div class="viaje-n">' + cuantas + (cuantas === 1 ? ' objeto' : ' objetos') + '</div>';
+        return h;
+      }
+
+      function cabeceraSueltas(cuantas, titulo) {
+        var h = document.createElement('div');
+        h.className = 'viaje-head suelto';
+        h.innerHTML =
+          '<div class="viaje-t">' + esc(titulo || 'Sin viaje') + '</div>' +
+          '<div class="viaje-d">Registradas sin base, así que no se pueden agrupar por noche</div>' +
+          '<div class="viaje-n">' + cuantas + (cuantas === 1 ? ' objeto' : ' objetos') + '</div>';
+        return h;
       }
 
       function crearTarjeta(obs) {
@@ -320,28 +394,46 @@
         // "Mis observaciones": solo las del usuario en sesión (mias=1). La
         // papelera muestra, igualmente, solo las suyas ya borradas.
         var url = WP.endpoint + '?mias=1' + (viendoPapelera ? '&borradas=1' : '');
-        api(url)
-          .then(function (res) {
+        // Agrupado: hacen falta los viajes para sus cabeceras (nombre, base,
+        // cielo). Si esa petición falla, el listado se pinta plano en vez de no
+        // pintarse: ver las observaciones importa más que agruparlas.
+        var viajes = porViajes
+          // BITACORA_WP solo expone el endpoint de observaciones; el de viajes
+          // es hermano suyo en la misma raíz de la API.
+          ? api(WP.endpoint.replace(/\/observaciones$/, '/viajes') + '?mios=1').then(function (r) {
+              return (r.ok && Array.isArray(r.data)) ? r.data : [];
+            }).catch(function () { return []; })
+          : Promise.resolve([]);
+
+        Promise.all([api(url), viajes])
+          .then(function (r) {
+            var res = r[0];
             if (!res.ok) {
               mostrarMensaje(mensajeError(res, 'No se pudieron cargar las observaciones'), true);
               return;
             }
-            pintar(Array.isArray(res.data) ? res.data : []);
+            pintar(Array.isArray(res.data) ? res.data : [], r[1]);
           })
           .catch(function () {
             mostrarMensaje('No se pudo contactar con el servidor.', true);
           });
       }
 
-      function cambiarPestana(papelera) {
+      function cambiarPestana(papelera, agrupado) {
         viendoPapelera = papelera;
-        tabActivas.classList.toggle('active', !papelera);
+        // La papelera nunca se agrupa: son restos sueltos, no una salida.
+        porViajes = papelera ? false : !!agrupado;
+        tabActivas.classList.toggle('active', !papelera && !porViajes);
         tabPapelera.classList.toggle('active', papelera);
+        if (tabViajes) tabViajes.classList.toggle('active', porViajes);
         cargar();
       }
 
-      tabActivas.addEventListener('click', function () { cambiarPestana(false); });
-      tabPapelera.addEventListener('click', function () { cambiarPestana(true); });
+      tabActivas.addEventListener('click', function () { cambiarPestana(false, false); });
+      tabPapelera.addEventListener('click', function () { cambiarPestana(true, false); });
+      if (tabViajes) {
+        tabViajes.addEventListener('click', function () { cambiarPestana(false, true); });
+      }
 
       cargar();
 
