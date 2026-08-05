@@ -11,7 +11,7 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260727_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260805_2300" />
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260805_1900" />
 
 <style>
@@ -103,7 +103,16 @@
         <label class="field"><span class="lab">IR del cielo (ºC)</span>
           <input type="number" id="cieloIr" min="-50" max="50" step="1" placeholder="−20" /></label>
       </div>
-      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">El brillo (SQM) y la transparencia (IR) del cielo de la sesión. El SQM se usa para la magnitud límite al <strong>generar la imagen del simulador</strong>; ambos quedan registrados y alimentan la <strong>salud de la base</strong>.</p>
+      <label class="field" style="margin-top:14px"><span class="lab">Seeing (1 excelente – 5 pésimo)</span>
+        <select id="seeing">
+          <option value="">— Sin anotar —</option>
+          <option value="1">1 · Excelente</option>
+          <option value="2">2 · Bueno</option>
+          <option value="3">3 · Regular</option>
+          <option value="4">4 · Malo</option>
+          <option value="5">5 · Pésimo</option>
+        </select></label>
+      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">El brillo (SQM), la transparencia (IR) y el seeing del cielo de la sesión. El SQM se usa para la magnitud límite al <strong>generar la imagen del simulador</strong>; los tres quedan registrados y alimentan la <strong>salud de la base</strong>. El seeing se anota por observación porque se mide con el ocular puesto y cambia a lo largo de la noche.</p>
     </fieldset>
 
     <!-- 2 · LO QUE VISTE, POR OCULAR -->
@@ -143,7 +152,7 @@
 </div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260805_1900" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260806_1100" defer></script>
 <script src="/wp-content/uploads/bitacora/estrellas-carbono-datos.js?v=20260721_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260731_2200" defer></script>
 <script src="/wp-content/uploads/bitacora/globulares-datos.js?v=20260729_1600" defer></script>

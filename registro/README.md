@@ -218,6 +218,32 @@ cuando esa noche todavía no tiene ninguno.
 
 ---
 
+## La salud de una base
+
+Cada lugar acumula su histórico de cielo: **SQM** (mag/arcsec², mayor = más
+oscuro), **IR** de transparencia (ºC, más negativo = mejor) y **seeing**
+(Antoniadi 1–5, menor = mejor). Se ve en «Mis bases» → *Salud*
+(`?salud=ID`, `GET /bases/{id}/salud`).
+
+Las tres se miden en dos sitios: en la **observación** —el seeing se anota ahí
+porque se mide con el ocular puesto y cambia durante la noche— y en la **ficha
+del viaje**, para quien prefiera apuntarlo una vez por salida. Como el viaje
+hereda de su primera observación lo que él no tuviera, juntar las dos tablas sin
+más contaría la misma medición dos veces: `bitacora_salud_mediciones()`
+(`bitacora-viaje.php`) las fusiona con la regla inversa a la de heredar —manda
+la observación, y el viaje solo aporta lo que ninguna observación **suya** dijo,
+medida a medida—. La salida es de un observador, así que dos compañeros que
+salgan la misma noche al mismo sitio no se tapan el uno al otro.
+
+La gráfica es **una sola** con las tres líneas, y cada una se puede apagar. Como
+son tres unidades y dos direcciones, cada serie se escala a su propio rango y se
+orienta igual —**arriba es siempre mejor cielo**—, así que lo que se compara
+entre líneas es la forma, no la altura; los números de verdad están en la
+leyenda. Eso lo decide `BitacoraBase.seriesSalud()` (`bitacora-base.js`), y la
+página solo pinta lo que devuelve.
+
+---
+
 ## La ficha en Word (.docx)
 
 Cada tarjeta del listado tiene un botón **Ficha** que descarga la observación

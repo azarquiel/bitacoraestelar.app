@@ -3,8 +3,9 @@
  * ---------------------------------------------------------------------------
  * Listar / añadir / editar / borrar bases (nombre, coords, altitud, zona
  * horaria IANA) y compartirlas (privada / pública / seleccionada). Cada base
- * acumula la "salud" del sitio: histórico de SQM/IR de las observaciones
- * ligadas a ella, con dos mini-gráficas SVG (vista aparte ?salud=ID).
+ * acumula la "salud" del sitio: histórico de SQM, IR y seeing de todo lo medido
+ * allí —en cada observación y en la ficha de cada viaje—, en una gráfica SVG
+ * de tres series que se encienden y apagan (vista aparte ?salud=ID).
  * Habla con /wp-json/bitacora/v1/bases*. Reutiliza el mapa (tiles CLAROS).
  *
  * Va SUBIDO POR FTP a /wp-content/uploads/bitacora/ (como el resto de .js).
@@ -265,7 +266,7 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SALUD DE LA BASE (vista aparte ?salud=ID): dos mini-gráficas SVG apiladas
+    // SALUD DE LA BASE (vista aparte ?salud=ID): una gráfica, tres series
     // ═══════════════════════════════════════════════════════════════════════
     function irASalud(id) {
       var u = new URL(window.location.href); u.searchParams.set('salud', id);
@@ -287,59 +288,75 @@
         if (!res.ok || !res.data) { $('saludGraficas').innerHTML = '<p class="sub" style="color:var(--rojo)">✗ ' + esc(errorDe(res, 'No se pudo cargar la salud')) + '</p>'; return; }
         var base = res.data.base || {}, med = res.data.mediciones || [];
         $('saludTitulo').textContent = 'Salud de ' + (base.nombre || 'la base');
-        var puntos = med.map(function (m) {
-          var t = new Date((m.fecha_observacion || '1970-01-01') + 'T' + (m.hora_observacion || '00:00')).getTime();
-          return { t: t, sqm: numOrNull(m.cielo_sqm), ir: numOrNull(m.cielo_ir), fecha: m.fecha_observacion, hora: m.hora_observacion || '', obs: m.observador || '' };
-        }).filter(function (p) { return !isNaN(p.t); }).sort(function (a, b) { return a.t - b.t; });
-        if (!puntos.length) { $('saludGraficas').innerHTML = '<p class="sub">Todavía no hay mediciones de SQM/IR en observaciones desde esta base.</p>'; return; }
-        $('saludGraficas').innerHTML =
-          grafica('Brillo del cielo · SQM (mayor = más oscuro)', puntos, 'sqm', 'var(--verde)') +
-          grafica('Transparencia · IR (menor = más transparente)', puntos, 'ir', 'var(--azul)');
-        $('saludTablaCont').innerHTML = tabla(puntos);
+        // Escalar y orientar las tres medidas es de BitacoraBase.seriesSalud;
+        // aquí solo se pinta lo que devuelve.
+        var salud = BitacoraBase.seriesSalud(med);
+        if (!salud.series.length) { $('saludGraficas').innerHTML = '<p class="sub">Todavía no hay mediciones de SQM, IR ni seeing desde esta base.</p>'; return; }
+        $('saludGraficas').innerHTML = grafica(salud);
+        montarInterruptores();
+        $('saludTablaCont').innerHTML = tabla(med);
       });
     }
-    function numOrNull(v) { if (v == null || v === '') return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
 
-    // Mini-gráfica de líneas SVG (una serie). puntos: [{t, [key], fecha, hora, obs}].
-    function grafica(titulo, puntos, key, color) {
-      var W = 600, H = 190, ml = 44, mr = 12, mt = 12, mb = 26;
-      var datos = puntos.filter(function (p) { return p[key] != null; });
-      if (!datos.length) return '<div class="salud-graf"><h3>' + esc(titulo) + '</h3><p class="sub">Sin datos.</p></div>';
-      var tMin = datos[0].t, tMax = datos[datos.length - 1].t; if (tMax === tMin) tMax = tMin + 1;
-      var vs = datos.map(function (p) { return p[key]; });
-      var vMin = Math.min.apply(null, vs), vMax = Math.max.apply(null, vs);
-      if (vMax === vMin) { vMax += 0.5; vMin -= 0.5; }
-      var pad = (vMax - vMin) * 0.1; vMin -= pad; vMax += pad;
-      var px = function (t) { return ml + (t - tMin) / (tMax - tMin) * (W - ml - mr); };
-      var py = function (v) { return mt + (vMax - v) / (vMax - vMin) * (H - mt - mb); };
-      var pts = datos.map(function (p) { return px(p.t) + ',' + py(p[key]); }).join(' ');
-      var circ = datos.map(function (p) {
-        return '<circle cx="' + px(p.t).toFixed(1) + '" cy="' + py(p[key]).toFixed(1) + '" r="3.2" fill="' + color + '">' +
-          '<title>' + esc(p.fecha + ' ' + p.hora + ' · ' + p[key] + ' · ' + p.obs) + '</title></circle>';
-      }).join('');
-      // Ejes Y (min/med/max) y X (primera/última fecha)
-      var yLab = function (v, y) { return '<text x="' + (ml - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="10" fill="var(--tinta-tenue)">' + (Math.round(v * 100) / 100) + '</text>'; };
+    /* Gráfica única con las tres series. Cada una lleva su propia escala y va
+       orientada "arriba = mejor cielo", así que el eje vertical no tiene
+       números: los de verdad están en la leyenda, cada uno en su color. */
+    function grafica(salud) {
+      var W = 680, H = 230, ml = 12, mr = 12, mt = 14, mb = 26;
+      var tMin = salud.tMin, tMax = salud.tMax;
+      var px = function (t) { return tMax === tMin ? W / 2 : ml + (t - tMin) / (tMax - tMin) * (W - ml - mr); };
+      var py = function (y) { return mt + (1 - y) * (H - mt - mb); };
+      var redondo = function (v) { return Math.round(v * 100) / 100; };
       var fechaTxt = function (t) { return new Date(t).toISOString().slice(0, 10); };
+
+      var capas = salud.series.map(function (s) {
+        var pts = s.puntos.map(function (p) { return px(p.t).toFixed(1) + ',' + py(p.y).toFixed(1); }).join(' ');
+        var circ = s.puntos.map(function (p) {
+          return '<circle cx="' + px(p.t).toFixed(1) + '" cy="' + py(p.y).toFixed(1) + '" r="3.2" fill="' + s.color + '">' +
+            '<title>' + esc(p.fecha + (p.hora ? ' ' + p.hora : '') + ' · ' + s.titulo + ' ' + p.valor + ' ' + s.unidad + (p.observador ? ' · ' + p.observador : '')) + '</title></circle>';
+        }).join('');
+        return '<g data-serie="' + s.clave + '">' +
+          (s.puntos.length > 1 ? '<polyline points="' + pts + '" fill="none" stroke="' + s.color + '" stroke-width="1.6"/>' : '') +
+          circ + '</g>';
+      }).join('');
+
       var svg =
-        '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">' +
-          '<line x1="' + ml + '" y1="' + mt + '" x2="' + ml + '" y2="' + (H - mb) + '" stroke="var(--linea)"/>' +
+        '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" id="saludSvg">' +
           '<line x1="' + ml + '" y1="' + (H - mb) + '" x2="' + (W - mr) + '" y2="' + (H - mb) + '" stroke="var(--linea)"/>' +
-          yLab(vMax, py(vMax)) + yLab((vMax + vMin) / 2, py((vMax + vMin) / 2)) + yLab(vMin, py(vMin)) +
           '<text x="' + ml + '" y="' + (H - 8) + '" font-size="10" fill="var(--tinta-tenue)">' + fechaTxt(tMin) + '</text>' +
           '<text x="' + (W - mr) + '" y="' + (H - 8) + '" text-anchor="end" font-size="10" fill="var(--tinta-tenue)">' + fechaTxt(tMax) + '</text>' +
-          (datos.length > 1 ? '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="1.6"/>' : '') +
-          circ +
+          capas +
         '</svg>';
-      return '<div class="salud-graf"><h3>' + esc(titulo) + '</h3>' + svg + '</div>';
-    }
-    function tabla(puntos) {
-      var filas = puntos.slice().reverse().map(function (p) {
-        return '<tr><td>' + esc(p.fecha) + (p.hora ? ' ' + esc(p.hora) : '') + '</td>' +
-          '<td>' + (p.sqm != null ? p.sqm : '—') + '</td>' +
-          '<td>' + (p.ir != null ? p.ir : '—') + '</td>' +
-          '<td>' + esc(p.obs) + '</td></tr>';
+
+      // Cada casilla enciende o apaga su línea, con el rango real de la medida:
+      // es lo que sustituye a los números del eje vertical.
+      var leyenda = salud.series.map(function (s) {
+        return '<label class="salud-serie"><input type="checkbox" data-serie="' + s.clave + '" checked />' +
+          '<span class="salud-punto" style="background:' + s.color + '"></span>' +
+          '<span>' + esc(s.titulo) + ' · ' + redondo(s.abajo) + ' – ' + redondo(s.arriba) + ' ' + esc(s.unidad) +
+          ' <span class="sub">(' + esc(s.pista) + ')</span></span></label>';
       }).join('');
-      return '<table class="salud-tabla"><thead><tr><th>Fecha</th><th>SQM</th><th>IR</th><th>Observador</th></tr></thead><tbody>' + filas + '</tbody></table>';
+
+      return '<div class="salud-graf"><h3>Cómo estaba el cielo (arriba = mejor)</h3>' + svg +
+        '<div class="salud-leyenda">' + leyenda + '</div></div>';
+    }
+    function montarInterruptores() {
+      var casillas = $('saludGraficas').querySelectorAll('input[data-serie]');
+      Array.prototype.forEach.call(casillas, function (c) {
+        c.addEventListener('change', function () {
+          var g = $('saludSvg').querySelector('g[data-serie="' + c.getAttribute('data-serie') + '"]');
+          if (g) g.style.display = c.checked ? '' : 'none';
+        });
+      });
+    }
+    function tabla(mediciones) {
+      var celda = function (v) { return v == null || v === '' ? '—' : esc(v); };
+      var filas = mediciones.slice().reverse().map(function (m) {
+        return '<tr><td>' + esc(m.fecha || m.noche || '') + (m.hora ? ' ' + esc(m.hora) : '') + '</td>' +
+          '<td>' + celda(m.sqm) + '</td><td>' + celda(m.ir) + '</td><td>' + celda(m.seeing) + '</td>' +
+          '<td>' + esc(m.observador || '') + '</td></tr>';
+      }).join('');
+      return '<table class="salud-tabla"><thead><tr><th>Fecha</th><th>SQM</th><th>IR</th><th>Seeing</th><th>Observador</th></tr></thead><tbody>' + filas + '</tbody></table>';
     }
 
     // ── Enrutado por ?salud=ID ──

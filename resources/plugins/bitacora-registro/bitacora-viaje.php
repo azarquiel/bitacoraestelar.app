@@ -183,6 +183,105 @@ function bitacora_viaje_base_efectiva( $base_viaje, $base_observacion ) {
 }
 
 /**
+ * Las MEDICIONES de cielo de una base, en una sola línea de tiempo.
+ *
+ * El sitio se juzga por tres números: el SQM (brillo del fondo), el IR
+ * (transparencia) y el seeing. Viven en dos sitios —la observación y la ficha
+ * del viaje—, y el viaje HEREDA de su primera observación lo que no tuviera,
+ * así que juntar las dos tablas sin más contaría la misma medición dos veces.
+ *
+ * La regla es la de heredar, en espejo: manda la observación, que es donde se
+ * anota el dato, y el viaje solo aporta lo que ninguna observación suya dijo
+ * —el caso normal del seeing, que se apunta una vez para toda la salida—. Se
+ * decide medida a medida: un viaje puede aportar el IR y callar el SQM.
+ *
+ * @param array $observaciones Filas con fecha_observacion, hora_observacion,
+ *                             cielo_sqm, cielo_ir, seeing, observador.
+ * @param array $viajes        Filas con noche, cielo_sqm, cielo_ir, seeing, nombre.
+ * @return array Puntos ordenados en el tiempo, sin los que no midieron nada.
+ */
+function bitacora_salud_mediciones( $observaciones, $viajes ) {
+    $medidas = array( 'sqm' => 'cielo_sqm', 'ir' => 'cielo_ir', 'seeing' => 'seeing' );
+    $puntos  = array();
+    // Qué medidas ya dijo cada salida, para saber qué callar de su ficha. La
+    // salida es de UN observador: dos compañeros pueden salir la misma noche al
+    // mismo sitio, y el SQM de la ficha de uno no lo heredó del otro.
+    $dichas = array();   // "usuario|noche" => medida => true
+
+    foreach ( $observaciones as $o ) {
+        $noche = bitacora_viaje_noche( $o['fecha_observacion'], isset( $o['hora_observacion'] ) ? $o['hora_observacion'] : '' );
+        if ( null === $noche ) {
+            continue;   // sin fecha utilizable no hay dónde colocar la medición
+        }
+        $salida = intval( isset( $o['usuario_id'] ) ? $o['usuario_id'] : 0 ) . '|' . $noche;
+        $punto = array(
+            'noche'      => $noche,
+            'fecha'      => $o['fecha_observacion'],
+            'hora'       => isset( $o['hora_observacion'] ) ? (string) $o['hora_observacion'] : '',
+            'observador' => isset( $o['observador'] ) ? $o['observador'] : '',
+        );
+        $tiene = false;
+        foreach ( $medidas as $clave => $columna ) {
+            $v = bitacora_salud_valor( isset( $o[ $columna ] ) ? $o[ $columna ] : null, 'seeing' === $clave );
+            $punto[ $clave ] = $v;
+            if ( null !== $v ) {
+                $tiene = true;
+                $dichas[ $salida ][ $clave ] = true;
+            }
+        }
+        if ( $tiene ) {
+            $puntos[] = $punto;
+        }
+    }
+
+    foreach ( $viajes as $v ) {
+        $noche  = isset( $v['noche'] ) ? (string) $v['noche'] : '';
+        $salida = intval( isset( $v['usuario_id'] ) ? $v['usuario_id'] : 0 ) . '|' . $noche;
+        $punto  = array(
+            'noche'      => $noche,
+            'fecha'      => $noche,
+            'hora'       => '',   // la ficha resume la noche entera, no un instante
+            // La columna dice quién o qué anotó la medida; en un viaje, su nombre.
+            'observador' => isset( $v['nombre'] ) ? $v['nombre'] : '',
+        );
+        $tiene = false;
+        foreach ( $medidas as $clave => $columna ) {
+            $v_med = isset( $dichas[ $salida ][ $clave ] )
+                ? null   // ya lo dijo una observación de esa salida: no se repite
+                : bitacora_salud_valor( isset( $v[ $columna ] ) ? $v[ $columna ] : null, 'seeing' === $clave );
+            $punto[ $clave ] = $v_med;
+            if ( null !== $v_med ) {
+                $tiene = true;
+            }
+        }
+        if ( $tiene ) {
+            $puntos[] = $punto;
+        }
+    }
+
+    usort( $puntos, function ( $a, $b ) {
+        if ( $a['noche'] !== $b['noche'] ) {
+            return strcmp( $a['noche'], $b['noche'] );
+        }
+        // La ficha del viaje no tiene hora: es el resumen de la salida y cierra
+        // su noche, detrás de lo que sí se anotó a una hora concreta.
+        if ( ( '' === $a['hora'] ) !== ( '' === $b['hora'] ) ) {
+            return '' === $a['hora'] ? 1 : -1;
+        }
+        return strcmp( $a['hora'], $b['hora'] );
+    } );
+    return $puntos;
+}
+
+/** Un número de la base de datos, que llega como texto, o null si no se midió. */
+function bitacora_salud_valor( $bruto, $entero = false ) {
+    if ( null === $bruto || '' === $bruto ) {
+        return null;
+    }
+    return $entero ? intval( $bruto ) : floatval( $bruto );
+}
+
+/**
  * La CLAVE del viaje al que pertenece una observación, o null si la fecha no
  * sirve para situarla en ninguna noche.
  *
