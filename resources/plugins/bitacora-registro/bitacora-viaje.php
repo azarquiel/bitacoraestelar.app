@@ -105,14 +105,22 @@ function bitacora_viaje_dia_siguiente( $dia ) {
 }
 
 /**
- * Las salidas a las que puede pertenecer una observación, la mejor delante: es
- * lo que el formulario de registro deja elegido sin preguntar.
+ * Las salidas a las que puede pertenecer una observación. Con una sola no hay
+ * nada que preguntar: es LA salida, y el formulario la da por elegida.
  *
  * Manda la VENTANA: si el instante de la observación cae entre el comienzo y el
- * fin de una salida, es esa, aunque el convenio de mediodía la coloque en otra
- * noche —que es justo lo que pasa cuando la salida se alarga más allá de las
- * 12:00—. Detrás van las de su noche que no dicen sus horas o no lo contienen,
- * que es el reparto de siempre y sigue siendo el caso normal.
+ * fin de una salida, es esa y solo esa —nadie observa desde dos sitios a la vez,
+ * así que ofrecer además las otras de la noche sería preguntar algo que ya se
+ * sabe—. Y vale aunque el convenio de mediodía la coloque en otra noche, que es
+ * lo que pasa cuando la salida se alarga más allá de las 12:00.
+ *
+ * Solo cuando NINGUNA ventana lo contiene se vuelve al reparto de siempre, el de
+ * la noche: es el caso de las fichas que no dicen sus horas, y el de la hora que
+ * cae en el hueco entre dos salidas.
+ *
+ * Si dos ventanas se pisan salen las dos, porque eso NO es una elección sino un
+ * error en las fichas —el observador no pudo estar en las dos a la vez— y quien
+ * lo pinta tiene que poder cantarlo.
  *
  * Las que ni contienen el instante ni son de su noche se descartan: pertenecen
  * a otra salida y ofrecerlas sería invitar a colgar el objeto donde no va.
@@ -120,7 +128,7 @@ function bitacora_viaje_dia_siguiente( $dia ) {
  * @param array  $viajes Filas de viajes del observador, de noches cercanas.
  * @param string $fecha  'YYYY-MM-DD' de la observación (hora local de la base).
  * @param string $hora   'HH:MM' de la observación, o '' si no se registró.
- * @return array Las candidatas, la que contiene el instante primero.
+ * @return array Las que contienen el instante; si ninguna, las de su noche.
  */
 function bitacora_viajes_candidatos( $viajes, $fecha, $hora ) {
     $noche    = bitacora_viaje_noche( $fecha, $hora );
@@ -137,7 +145,7 @@ function bitacora_viajes_candidatos( $viajes, $fecha, $hora ) {
             $fuera[] = $viaje;
         }
     }
-    return array_merge( $dentro, $fuera );
+    return $dentro ? $dentro : $fuera;
 }
 
 /**

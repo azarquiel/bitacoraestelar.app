@@ -158,13 +158,24 @@ eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '22:00', '13:00', 1)),
 // Y no se cuela la de otra noche que no contiene el instante.
 eq($ids(bitacora_viajes_candidatos(array($v('2026-08-04', '22:00', '02:00', 1)), '2026-08-06', '01:30')),
    array(), 'una salida de otra noche que no lo contiene no sale');
-// Dos salidas la misma noche (se cambió de sitio): manda la que contiene la hora,
-// que es la que el formulario deja elegida.
+// Dos salidas la misma noche (se cambió de sitio): la que contiene la hora es LA
+// respuesta, no la primera de dos. Nadie observa desde dos sitios a la vez, así
+// que ofrecer también la otra sería preguntar algo que ya se sabe.
 $dos = array($v('2026-08-05', '21:00', '23:00', 1), $v('2026-08-05', '00:30', '03:00', 2));
-eq($ids(bitacora_viajes_candidatos($dos, '2026-08-06', '01:00')), array(2, 1),
-   'de dos salidas de la noche, primero la que contiene la hora');
-eq($ids(bitacora_viajes_candidatos($dos, '2026-08-05', '22:00')), array(1, 2),
+eq($ids(bitacora_viajes_candidatos($dos, '2026-08-06', '01:00')), array(2),
+   'de dos salidas de la noche, solo la que contiene la hora');
+eq($ids(bitacora_viajes_candidatos($dos, '2026-08-05', '22:00')), array(1),
    'y al revés con la hora de la primera');
+// Entre las dos ventanas (se recogió a las 23:00 y se volvió a salir a las 00:30)
+// no hay salida abierta: vuelven las de la noche, que es lo único sensato que
+// ofrecer.
+eq($ids(bitacora_viajes_candidatos($dos, '2026-08-05', '23:40')), array(1, 2),
+   'en el hueco entre dos salidas se ofrecen las de la noche');
+// Dos fichas que se pisan: el observador no pudo estar en las dos. Se devuelven
+// las dos para que el formulario lo cante como el error que es.
+$pisadas = array($v('2026-08-05', '21:00', '02:00', 1), $v('2026-08-05', '22:00', '03:00', 2));
+eq($ids(bitacora_viajes_candidatos($pisadas, '2026-08-05', '23:00')), array(1, 2),
+   'dos salidas solapadas se devuelven las dos');
 // Sin hora no hay instante que contener: se vuelve a la noche de siempre.
 eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '22:00', '03:00', 1), $v('2026-08-06', '22:00', '03:00', 2)), '2026-08-05', '')),
    array(1), 'sin hora manda la noche');

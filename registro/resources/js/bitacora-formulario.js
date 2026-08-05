@@ -475,7 +475,7 @@
   // tiene esa noche (la regla del mediodía es suya); si no tiene ninguno, se
   // ofrece darlo de alta aquí mismo. El ciclo (cuándo preguntar, respuestas
   // rezagadas, alta) es de BitacoraBase.
-  var viajeBox = $('viajeAviso'), viajeTxt = $('viajeAvisoTxt'), viajeBtn = $('viajeAvisoBtn');
+  var viajeBox = $('viajeAviso'), viajeBtn = $('viajeAvisoBtn');
   var viajeCampo = $('viajeCampo'), viajeSelect = $('viajeSelect');
   var listaViajes = [], viajePendiente = null, viajeElegidoId = null;   // pendiente: id a recuperar en modo edición
   var VIAJES_API = WP ? WP.endpoint.replace(/observaciones\/?$/, 'viajes/de-la-noche') : '';
@@ -491,9 +491,10 @@
     partes.push(v.num_objetos ? v.num_objetos+(v.num_objetos===1?' objeto':' objetos') : 'todavía sin objetos');
     return nombre+' — '+partes.join(' · ');
   }
-  // Pinta el selector y deja elegido un viaje. Con una sola salida no hay nada
-  // que elegir; con dos (se cambió de sitio a media noche) elige el observador,
-  // porque colgarla de la primera la dejaría en el lugar equivocado.
+  // Pinta el selector y deja elegido un viaje. El servidor manda ya la salida
+  // que contiene la hora, así que lo normal es que solo venga una y no haya nada
+  // que elegir; si vienen dos es que sus fichas se pisan, y ahí sí desempata el
+  // observador (quién enseña el selector lo decide mensajeViaje).
   function pintarViajes(){
     if(!viajeSelect) return;
     viajeSelect.innerHTML = listaViajes.map(function(v){
@@ -509,7 +510,6 @@
     viajePendiente = null;
     viajeElegidoId = viajeSel ? viajeSel.id : null;
     if(viajeSel) viajeSelect.value = String(viajeSel.id);
-    if(viajeCampo) viajeCampo.hidden = listaViajes.length<2;
   }
   if(viajeSelect){
     viajeSelect.addEventListener('change', function(){
@@ -525,20 +525,17 @@
         alta:      function(d){ return pedirViaje(d,'POST').then(function(j){ return j.viaje; }); },
         onEstado: function(estado, viajes){
           listaViajes = viajes || [];
-          if(estado!=='con-viaje'){ viajeSel = null; if(viajeCampo) viajeCampo.hidden = true; }
-          if(viajeBtn) viajeBtn.hidden = (estado!=='sin-viaje');
-          if(estado==='sin-datos'){ viajeBox.hidden=true; return; }
-          viajeBox.hidden=false;
-          viajeBox.className = 'viaje-aviso '+estado;
-          if(estado==='consultando'){ viajeTxt.textContent='Buscando tu sesión de esa noche…'; }
-          else if(estado==='sin-viaje'){ viajeTxt.innerHTML='<strong>Registra primero tu sesión de observación (viaje estelar)</strong> — esa noche todavía no tiene ninguna. Sin ella, la crónica y la tripulación de la salida no tienen dónde ir.'; }
-          else if(estado==='con-viaje'){
-            pintarViajes();
-            viajeTxt.innerHTML = listaViajes.length>1
-              ? 'Esa noche tiene <strong>'+listaViajes.length+' salidas</strong>: elige a cuál pertenece esta observación.'
-              : 'Esta observación se sumará a <strong>'+BitacoraBase.esc(etiquetaViaje(listaViajes[0]))+'</strong>';
-          }
-          else { viajeTxt.textContent='No se pudo comprobar la sesión de esa noche. Cambia la fecha o recarga para volver a intentarlo.'; }
+          if(estado!=='con-viaje') viajeSel = null;
+          if(estado==='con-viaje') pintarViajes();
+          // Qué se dice y con qué cara lo decide BitacoraBase, en el mismo
+          // lenguaje que el objeto que resuelve SIMBAD: línea .status y un ✓.
+          var m = BitacoraBase.mensajeViaje(estado, listaViajes.map(etiquetaViaje));
+          if(viajeBtn) viajeBtn.hidden = !m.alta;
+          if(viajeCampo) viajeCampo.hidden = !m.elegir;
+          viajeBox.hidden = m.oculto;
+          if(m.oculto) return;
+          viajeBox.className = 'status '+m.clase;
+          viajeBox.textContent = m.texto;   // texto plano: nada que escapar
           // Solo con respuesta firme: recompute() vuelve a preguntar, y en
           // 'error' la pregunta se rearma —dos estados que se llamarían entre sí
           // sin parar. Sin viaje el formulario ya queda bloqueado por sí solo.
@@ -550,7 +547,10 @@
     viajeBtn.addEventListener('click', function(){
       viajeBtn.disabled = true;
       avisoViaje.registrar()
-        .catch(function(){ viajeTxt.textContent='No se pudo dar de alta el viaje. Inténtalo de nuevo.'; })
+        .catch(function(){
+        viajeBox.className='status err';
+        viajeBox.textContent='No se pudo dar de alta el viaje. Inténtalo de nuevo.';
+      })
         .then(function(){ viajeBtn.disabled = false; });
     });
   }
