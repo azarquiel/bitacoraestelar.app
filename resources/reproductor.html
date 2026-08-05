@@ -297,13 +297,28 @@ function pintarAlbumes() {
    "Toda la lista" vuelve a cargar la lista de YouTube entera, de modo que
    las pistas nuevas aparecen sin tocar este archivo. */
 selAlbum.onchange = function () {
-  if (selAlbum.value === TODOS) {
-    reproductor.loadPlaylist({listType:'playlist', list:LISTA});
-  } else {
-    reproductor.loadPlaylist(idsDelAlbum(selAlbum.value));
-  }
+  cargarCola(0);
   pintarLista();
 };
+
+function cargarCola(indice) {
+  if (selAlbum.value === TODOS) {
+    reproductor.loadPlaylist({listType:'playlist', list:LISTA, index:indice});
+  } else {
+    reproductor.loadPlaylist(idsDelAlbum(selAlbum.value), indice);
+  }
+}
+
+/* loadPlaylist() tarda: getPlaylist() sigue devolviendo la cola anterior
+   hasta que YouTube trae la nueva. Pedir una pista por índice mientras tanto
+   hace sonar la que ocupa esa posición en el álbum de antes, así que el
+   índice solo se usa si la cola cargada coincide ahí; si no, se recarga
+   pidiendo esa pista de salida. */
+function reproducirEnCola(i) {
+  var cargada = reproductor.getPlaylist() || [];
+  if (cargada[i] === enCola[i]) reproductor.playVideoAt(i);
+  else cargarCola(i);
+}
 
 /* Se filtra siempre sobre la lista entera, no sobre la cola en curso:
    si no, al saltar de un álbum a otro solo quedarían las pistas del
@@ -322,7 +337,7 @@ function pintarLista() {
     var fila = document.createElement('li');
     var boton = document.createElement('button');
     boton.type = 'button';
-    boton.onclick = function () { reproductor.playVideoAt(i); };
+    boton.onclick = function () { reproducirEnCola(i); };
 
     var num = document.createElement('span');
     num.className = 'num';
