@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.24.1
+ * Version:     1.25.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.24.1' );
+define( 'BITACORA_VERSION', '1.25.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -470,6 +470,11 @@ function bitacora_crear_tabla() {
     // el observador en el registro); la ficha los LEE para mostrarse. Y la base
     // desde la que se observó, para calcular alt/az y agregar la "salud" del sitio.
     bitacora_asegurar_columna( $tabla, 'cielo_ir', "double DEFAULT NULL" );
+    // Seeing (escala de Antoniadi, 1 excelente – 5 pésimo). El viaje ya lo tenía,
+    // pero se mide con el ocular puesto y cambia a lo largo de la noche, así que
+    // su hogar es la observación, igual que el SQM y el IR: el viaje se queda el
+    // primero no nulo como resumen de la salida.
+    bitacora_asegurar_columna( $tabla, 'seeing', "tinyint DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla, 'base_id', "bigint(20) unsigned DEFAULT NULL" );
     // El viaje (sesión) al que pertenece la observación. Nulo solo en las
     // históricas que aún no se han repartido: desde el formulario, la sesión es
@@ -705,12 +710,12 @@ function bitacora_viaje_heredar_cielo( $viaje_id, $obs ) {
         return;
     }
     $tabla = bitacora_nombre_tabla_viajes();
-    $v     = $wpdb->get_row( $wpdb->prepare( "SELECT cielo_sqm, cielo_ir, cielo_bortle FROM $tabla WHERE id = %d", $viaje_id ) );
+    $v     = $wpdb->get_row( $wpdb->prepare( "SELECT cielo_sqm, cielo_ir, cielo_bortle, seeing FROM $tabla WHERE id = %d", $viaje_id ) );
     if ( ! $v ) {
         return;
     }
     $huecos = array();
-    foreach ( array( 'cielo_sqm', 'cielo_ir', 'cielo_bortle' ) as $c ) {
+    foreach ( array( 'cielo_sqm', 'cielo_ir', 'cielo_bortle', 'seeing' ) as $c ) {
         if ( null === $v->$c && isset( $obs->$c ) && null !== $obs->$c && '' !== $obs->$c ) {
             $huecos[ $c ] = $obs->$c;
         }
@@ -806,7 +811,7 @@ function bitacora_viajes_backfill() {
     $tabla = bitacora_nombre_tabla();
     $filas = $wpdb->get_results(
         "SELECT id, usuario_id, observador_id, base_id, fecha_observacion, hora_observacion,
-                cielo_sqm, cielo_ir, cielo_bortle
+                cielo_sqm, cielo_ir, cielo_bortle, seeing
          FROM $tabla
          WHERE viaje_id IS NULL
          ORDER BY id ASC"
@@ -1379,6 +1384,15 @@ function bitacora_validar_datos( $d ) {
         }
         $cielo_ir = floatval( $d['cieloIr'] );
     }
+    // --- Seeing (escala de Antoniadi: 1 excelente – 5 pésimo). Opcional, y se
+    //     anota por observación porque se mide con el ocular puesto y empeora o
+    //     mejora a lo largo de la noche. Fuera de rango se descarta en vez de
+    //     rechazar el registro entero: es un dato accesorio, como el Bortle. ---
+    $seeing = null;
+    if ( isset( $d['seeing'] ) && '' !== $d['seeing'] && null !== $d['seeing'] ) {
+        $s = intval( $d['seeing'] );
+        $seeing = ( $s >= 1 && $s <= 5 ) ? $s : null;
+    }
     // --- Base de observación (opcional): lugar reutilizable del observador. Su
     //     propiedad/visibilidad se comprueba al guardar (bitacora_base_legible). ---
     $base_id = ( isset( $d['baseId'] ) && is_numeric( $d['baseId'] ) && $d['baseId'] > 0 )
@@ -1417,6 +1431,7 @@ function bitacora_validar_datos( $d ) {
         'cielo_sqm'         => $cielo_sqm,
         'cielo_bortle'      => $cielo_bortle,
         'cielo_ir'          => $cielo_ir,
+        'seeing'            => $seeing,
         'base_id'           => $base_id,
     );
 }
@@ -3904,7 +3919,13 @@ function bitacora_base_compartir( WP_REST_Request $peticion ) {
     return new WP_REST_Response( array( 'ok' => true, 'id' => intval( $peticion['id'] ) ), 200 );
 }
 
-/** GET /bases/{id}/salud → histórico SQM/IR de las observaciones de esa base. */
+/**
+ * GET /bases/{id}/salud → histórico de SQM, IR y seeing del sitio.
+ *
+ * Bebe de las dos tablas donde se mide el cielo: la observación y la ficha del
+ * viaje. Fusionarlas es de bitacora_salud_mediciones(), que evita contar dos
+ * veces lo que el viaje heredó de su primera observación.
+ */
 function bitacora_base_salud( WP_REST_Request $peticion ) {
     global $wpdb;
     $id = intval( $peticion['id'] );
@@ -3912,16 +3933,23 @@ function bitacora_base_salud( WP_REST_Request $peticion ) {
         return new WP_Error( 'no_autorizado', 'No puedes ver esta base.', array( 'status' => 403 ) );
     }
     $obs = bitacora_nombre_tabla();
+    $via = bitacora_nombre_tabla_viajes();
     $t   = bitacora_nombre_tabla_bases();
     $base = $wpdb->get_row( $wpdb->prepare( "SELECT id, nombre, lat, lon, altitud_m, tz FROM $t WHERE id = %d", $id ) );
     $filas = $wpdb->get_results( $wpdb->prepare(
-        "SELECT fecha_observacion, hora_observacion, cielo_sqm, cielo_ir, observador
+        "SELECT fecha_observacion, hora_observacion, cielo_sqm, cielo_ir, seeing, usuario_id, observador
          FROM $obs
          WHERE base_id = %d AND borrada_en IS NULL
-           AND ( cielo_sqm IS NOT NULL OR cielo_ir IS NOT NULL )
-         ORDER BY fecha_observacion ASC, hora_observacion ASC", $id
-    ) );
-    return new WP_REST_Response( array( 'base' => $base, 'mediciones' => $filas ), 200 );
+           AND ( cielo_sqm IS NOT NULL OR cielo_ir IS NOT NULL OR seeing IS NOT NULL )", $id
+    ), ARRAY_A );
+    $salidas = $wpdb->get_results( $wpdb->prepare(
+        "SELECT noche, cielo_sqm, cielo_ir, seeing, usuario_id, nombre
+         FROM $via
+         WHERE base_id = %d
+           AND ( cielo_sqm IS NOT NULL OR cielo_ir IS NOT NULL OR seeing IS NOT NULL )", $id
+    ), ARRAY_A );
+    $mediciones = bitacora_salud_mediciones( $filas ? $filas : array(), $salidas ? $salidas : array() );
+    return new WP_REST_Response( array( 'base' => $base, 'mediciones' => $mediciones ), 200 );
 }
 
 /**

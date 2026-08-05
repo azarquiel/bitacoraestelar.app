@@ -73,13 +73,20 @@
 #mw-obs-form label.field {display:block;margin-bottom:18px;}
 #mw-obs-form label.field > span.lab {display:block;font-size:13px;color:var(--tinta-tenue);margin-bottom:6px;
     font-family:ui-monospace,Menlo,monospace;letter-spacing:0.02em;}
-#mw-obs-form input[type=text], #mw-obs-form input[type=number],
-#mw-obs-form input[type=datetime-local], #mw-obs-form input[type=date], #mw-obs-form input[type=time] {
+#mw-obs-form input[type=text], #mw-obs-form input[type=number], #mw-obs-form input[type=url],
+#mw-obs-form input[type=datetime-local], #mw-obs-form input[type=date], #mw-obs-form input[type=time],
+#mw-obs-form textarea {
     width:100%;background:var(--noche-2);border:1px solid var(--linea);border-radius:8px;
     color:var(--tinta);font-family:inherit;font-size:16px;padding:11px 13px;transition:border-color .15s,box-shadow .15s;}
 #mw-obs-form input[type=date], #mw-obs-form input[type=time] {color-scheme:dark;}
-#mw-obs-form input:focus {outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
-#mw-obs-form input::placeholder {color:#54617d;}
+#mw-obs-form input:focus, #mw-obs-form textarea:focus {
+    outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
+#mw-obs-form input::placeholder, #mw-obs-form textarea::placeholder {color:#54617d;}
+
+/* El textarea toma la caja del input y añade lo suyo: varias líneas, y que se
+   pueda estirar a lo alto (a lo ancho lo manda el campo). `display:block` quita
+   el hueco que deja debajo por ser en línea. */
+#mw-obs-form textarea {min-height:96px;line-height:1.5;resize:vertical;display:block;}
 
 /* Selects (mismo aspecto que los inputs).
    height:auto y line-height explícito anulan cualquier altura fija que el tema

@@ -233,6 +233,68 @@ window.BitacoraBase = (function () {
     };
   }
 
+  /* ── Salud de una base: las tres medidas en un solo papel ─────────────────
+     El sitio se juzga por el SQM (mag/arcsec², mayor = más oscuro), el IR (ºC,
+     más negativo = más transparente) y el seeing (Antoniadi 1–5, menor = más
+     quieto). Tres unidades y dos direcciones: en un eje común, el 21.4 del SQM
+     y el −20 del IR caerían en extremos opuestos, y una noche buena bajaría en
+     una línea mientras sube en otra.
+
+     Así que cada serie se escala a SU propio rango y se orienta igual: arriba
+     es siempre mejor cielo. Lo que se compara entre líneas es la FORMA —qué
+     noches fueron mejores para cada cosa—, no la altura absoluta; por eso cada
+     serie viaja con su mínimo y su máximo de verdad para etiquetar su eje. */
+  var MEDIDAS_SALUD = [
+    { clave: 'sqm',    titulo: 'Brillo del cielo · SQM', unidad: 'mag/arcsec²', pista: 'mayor = más oscuro',       color: 'var(--verde)', mayorEsMejor: true },
+    { clave: 'ir',     titulo: 'Transparencia · IR',     unidad: 'ºC',          pista: 'menor = más transparente', color: 'var(--azul)',  mayorEsMejor: false },
+    { clave: 'seeing', titulo: 'Seeing · Antoniadi',     unidad: '1–5',         pista: 'menor = más quieto',       color: 'var(--ambar)', mayorEsMejor: false }
+  ];
+  function numeroONulo(v) {
+    if (v == null || v === '') return null;
+    var n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  }
+  function seriesSalud(mediciones) {
+    var fechados = [];
+    (mediciones || []).forEach(function (m) {
+      var fecha = m.fecha || m.noche || '';
+      var t = fecha ? new Date(fecha + 'T' + (m.hora || '00:00')).getTime() : NaN;
+      if (isNaN(t)) return;   // sin fecha utilizable no hay dónde ponerlo en el eje
+      fechados.push({ t: t, m: m });
+    });
+    fechados.sort(function (a, b) { return a.t - b.t; });
+    var series = [];
+    MEDIDAS_SALUD.forEach(function (def) {
+      var puntos = [];
+      fechados.forEach(function (x) {
+        var v = numeroONulo(x.m[def.clave]);
+        if (v === null) return;
+        puntos.push({ t: x.t, valor: v, y: 0.5, fecha: x.m.fecha || x.m.noche || '',
+                      hora: x.m.hora || '', observador: x.m.observador || '' });
+      });
+      // Una medida que nadie anotó no es una línea: ni leyenda ni interruptor.
+      if (!puntos.length) return;
+      var valores = puntos.map(function (p) { return p.valor; });
+      var min = Math.min.apply(null, valores), max = Math.max.apply(null, valores);
+      puntos.forEach(function (p) {
+        // Sin rango (una sola medición, o todas iguales) no hay altura que
+        // repartir: al centro, que además evita el 0/0.
+        var alto = (max === min) ? 0.5 : (p.valor - min) / (max - min);
+        p.y = def.mayorEsMejor ? alto : 1 - alto;
+      });
+      series.push({ clave: def.clave, titulo: def.titulo, unidad: def.unidad, pista: def.pista,
+                    color: def.color, min: min, max: max,
+                    arriba: def.mayorEsMejor ? max : min,
+                    abajo:  def.mayorEsMejor ? min : max,
+                    puntos: puntos });
+    });
+    return {
+      tMin: fechados.length ? fechados[0].t : 0,
+      tMax: fechados.length ? fechados[fechados.length - 1].t : 0,
+      series: series
+    };
+  }
+
   /* ── Selector de viaje del formulario de registro ──────────────────────────
      Toda observación pertenece a una sesión —el viaje interestelar—, y la
      sesión es obligatoria: es ella la que dice desde dónde se observaba, y la
@@ -451,6 +513,7 @@ window.BitacoraBase = (function () {
     TRANSPARENCIA: TRANSPARENCIA,
     transparenciaPorIr: transparenciaPorIr,
     montarTransparencia: montarTransparencia,
+    seriesSalud: seriesSalud,
     avisoViaje: avisoViaje,
     lugarDeObservacion: lugarDeObservacion,
     parseRA: parseRA,

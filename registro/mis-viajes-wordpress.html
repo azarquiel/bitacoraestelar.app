@@ -17,7 +17,7 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260727_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260805_2300" />
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260805_1900" />
 
 <style>
@@ -37,7 +37,9 @@
 #mw-obs-form .vi-btn:hover:not(:disabled) {color:var(--tinta);border-color:var(--ambar);}
 #mw-obs-form .vi-btn.danger:hover:not(:disabled) {color:var(--rojo);border-color:var(--rojo);}
 #mw-obs-form .vi-btn:disabled {opacity:.4;cursor:not-allowed;}
-#mw-obs-form textarea#vCronica {min-height:150px;resize:vertical;}
+/* La crónica es de las largas: más alta que un textarea normal. El resto del
+   aspecto lo pone bitacora-base.css, como en cualquier otro campo. */
+#mw-obs-form textarea#vCronica {min-height:150px;}
 #mw-obs-form .flash {position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;
     background:var(--noche-2);border:1px solid var(--linea);border-radius:10px;padding:11px 18px;
     color:var(--tinta);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;}
@@ -122,5 +124,5 @@
 <div class="flash" id="flash"></div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260805_1900" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260806_1100" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20260805_1900" defer></script>

@@ -413,7 +413,8 @@
       fechaObservacion:($('fechaObs')?$('fechaObs').value:''),
       horaObservacion:($('horaObs')?$('horaObs').value:''),
       cieloSqm: cielo.sqm, cieloBortle: cielo.clase, cieloBortleEtiqueta: cielo.etiqueta,
-      cieloIr: transp.ir, cieloTransparencia: transp.etiqueta
+      cieloIr: transp.ir, cieloTransparencia: transp.etiqueta,
+      seeing: ($('seeing') && $('seeing').value !== '') ? parseInt($('seeing').value, 10) : null
     };
     // Astrometría (solo si hay base): el servidor la usa para sembrar la ficha.
     if(astro){
@@ -437,6 +438,10 @@
   var transpCtrl = (window.BitacoraBase && BitacoraBase.montarTransparencia && $('transpSel') && $('cieloIr'))
     ? BitacoraBase.montarTransparencia($('transpSel'), $('cieloIr')) : null;
   if ($('cieloIr')) $('cieloIr').addEventListener('change', recompute);
+
+  // Seeing (Antoniadi 1–5): se anota por observación, no por viaje, porque se
+  // mide con el ocular puesto y cambia a lo largo de la noche.
+  if ($('seeing')) $('seeing').addEventListener('change', recompute);
 
   // ── Bases de observación (lugares reutilizables del observador) ──
   // Se cargan de /bases (mías + públicas + compartidas conmigo) y se agrupan en el
@@ -809,6 +814,7 @@
       $('cieloIr').value = obs.cielo_ir;
       if (transpCtrl) $('cieloIr').dispatchEvent(new Event('input', { bubbles: true }));
     }
+    if($('seeing') && obs.seeing != null && obs.seeing !== '') $('seeing').value = String(obs.seeing);
     // Base: se preselecciona al cargar la lista de bases (basePendiente).
     if(obs.base_id){ basePendiente = obs.base_id; if(basesCargadas){ baseSel = basePorId(obs.base_id); if(baseSelect) baseSelect.value=String(obs.base_id); } }
     // Viaje: la lista de esa noche llega con la consulta que dispara la fecha,

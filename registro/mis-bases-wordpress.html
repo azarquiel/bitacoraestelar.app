@@ -12,7 +12,7 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260727_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260805_2300" />
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260727_1300" />
 
 <style>
@@ -59,6 +59,13 @@
 #mw-obs-form table.salud-tabla {width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
 #mw-obs-form table.salud-tabla th, #mw-obs-form table.salud-tabla td {text-align:left;padding:6px 8px;border-bottom:1px solid var(--linea);}
 #mw-obs-form table.salud-tabla th {color:var(--tinta-tenue);font-weight:600;}
+/* Leyenda de la gráfica: una casilla por medida, que la enciende o la apaga. Es
+   además la que da los números, porque el eje vertical no los tiene (cada serie
+   va con su propia escala). */
+#mw-obs-form .salud-leyenda {display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;}
+#mw-obs-form .salud-serie {display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer;}
+#mw-obs-form .salud-serie input {accent-color:var(--ambar);cursor:pointer;}
+#mw-obs-form .salud-punto {width:11px;height:11px;border-radius:50%;flex:none;}
 </style>
 
 <div id="mw-obs-form">
@@ -66,7 +73,7 @@
   <header class="masthead">
     <p class="eyebrow">Bitácora · Lugares de observación</p>
     <h1>Mis bases
-      <span class="sub">Tus lugares de observación reutilizables. Se eligen al registrar para calcular la altura y el azimut, y guardan la salud del cielo (SQM/IR) del sitio.</span>
+      <span class="sub">Tus lugares de observación reutilizables. Se eligen al registrar para calcular la altura y el azimut, y guardan la salud del cielo (SQM, transparencia IR y seeing) del sitio.</span>
     </h1>
   </header>
 
@@ -131,7 +138,7 @@
   <div id="vistaSalud" style="display:none">
     <button type="button" class="bi-btn" id="saludVolver">← Volver a mis bases</button>
     <h2 id="saludTitulo" style="margin-top:14px">Salud de la base</h2>
-    <p class="sub" id="saludSub">Evolución del brillo (SQM) y la transparencia (IR) del cielo en este lugar.</p>
+    <p class="sub" id="saludSub">Evolución del brillo (SQM), la transparencia (IR) y el seeing del cielo en este lugar, con lo medido en cada observación y en la ficha de cada viaje. Apaga las que no quieras ver.</p>
     <div id="saludGraficas"></div>
     <div id="saludTablaCont"></div>
   </div>
@@ -139,5 +146,5 @@
 <div class="flash" id="flash"></div>
 </div>
 
-<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260805_1900" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-bases.js?v=20260730_1500" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260806_1100" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-bases.js?v=20260806_1100" defer></script>
