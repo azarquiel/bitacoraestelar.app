@@ -379,17 +379,17 @@ window.BitacoraBase = (function () {
      delante. Es la misma idea —«esto te lo hemos rellenado nosotros»— y merece
      el mismo lenguaje visual.
 
-     Elegir es la excepción, no la regla: solo se pide cuando la hora cae dentro
-     de DOS salidas, que no es una opción legítima sino un error de sus fichas
-     (nadie observa desde dos sitios a la vez), y por eso va en rojo.
+     Nunca se elige: si la hora cae dentro de DOS salidas eso no es una opción
+     legítima sino un error de sus fichas (nadie observa desde dos sitios a la
+     vez), así que va en rojo y se arregla en la ficha del viaje, no aquí.
 
      Devuelve TEXTO PLANO: quien lo pinta lo mete con textContent, y así el
      nombre de una salida no puede inyectar nada.
 
-       mensajeViaje(estado, etiquetas) -> { oculto, clase, texto, elegir, alta } */
+       mensajeViaje(estado, etiquetas) -> { oculto, clase, texto, alta } */
   function mensajeViaje(estado, etiquetas) {
     etiquetas = etiquetas || [];
-    var m = { oculto: false, clase: 'info', texto: '', elegir: false, alta: false };
+    var m = { oculto: false, clase: 'info', texto: '', alta: false };
     if (estado === 'sin-datos') {
       m.oculto = true;
     } else if (estado === 'consultando') {
@@ -404,9 +404,8 @@ window.BitacoraBase = (function () {
       m.texto = '✓ Esta observación se suma a la sesión “' + etiquetas[0] + '”.';
     } else if (estado === 'con-viaje') {
       m.clase = 'err';
-      m.elegir = true;
       m.texto = '✗ Esa hora cae dentro de ' + etiquetas.length + ' sesiones a la vez, y no pudiste '
-        + 'estar en todas: revisa sus horas de comienzo y fin, o elige a cuál pertenece.';
+        + 'estar en todas: corrige sus horas de comienzo y fin en Mis viajes.';
     } else {
       m.clase = 'err';
       m.texto = 'No se pudo comprobar la sesión de esa noche. Cambia la fecha o recarga '
