@@ -198,8 +198,6 @@
    aquí solo van el selector de desempate y el botón de alta, que asoman poco. */
 #mw-obs-form .viaje-sesion {margin:10px 0 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 #mw-obs-form .viaje-sesion .status {flex:1 1 100%;margin-top:0;}
-/* Selector de la salida: solo asoma cuando dos contienen la misma hora. */
-#mw-obs-form .viaje-sesion .field {flex:1 1 100%;margin:0;}
 #mw-obs-form .viaje-sesion button {background:var(--ambar,#f4c76b);color:#1a1206;border:none;
   font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;
   padding:9px 16px;border-radius:8px;cursor:pointer;white-space:nowrap;}

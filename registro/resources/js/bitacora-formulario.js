@@ -481,8 +481,7 @@
   // ofrece darlo de alta aquí mismo. El ciclo (cuándo preguntar, respuestas
   // rezagadas, alta) es de BitacoraBase.
   var viajeBox = $('viajeAviso'), viajeBtn = $('viajeAvisoBtn');
-  var viajeCampo = $('viajeCampo'), viajeSelect = $('viajeSelect');
-  var listaViajes = [], viajePendiente = null, viajeElegidoId = null;   // pendiente: id a recuperar en modo edición
+  var listaViajes = [], viajePendiente = null;   // pendiente: id a recuperar en modo edición
   var VIAJES_API = WP ? WP.endpoint.replace(/observaciones\/?$/, 'viajes/de-la-noche') : '';
   function pedirViaje(datos, metodo){
     var q = '?fecha='+encodeURIComponent(datos.fecha)+'&hora='+encodeURIComponent(datos.hora);
@@ -496,33 +495,20 @@
     partes.push(v.num_objetos ? v.num_objetos+(v.num_objetos===1?' objeto':' objetos') : 'todavía sin objetos');
     return nombre+' — '+partes.join(' · ');
   }
-  // Pinta el selector y deja elegido un viaje. El servidor manda ya la salida
-  // que contiene la hora, así que lo normal es que solo venga una y no haya nada
-  // que elegir; si vienen dos es que sus fichas se pisan, y ahí sí desempata el
-  // observador (quién enseña el selector lo decide mensajeViaje).
-  function pintarViajes(){
-    if(!viajeSelect) return;
-    viajeSelect.innerHTML = listaViajes.map(function(v){
-      return '<option value="'+v.id+'">'+BitacoraBase.esc(etiquetaViaje(v))+'</option>';
-    }).join('');
-    // Cada consulta trae objetos nuevos, así que lo elegido se recuerda por id:
-    // cambiar la hora no debe devolver la observación al primer viaje de la lista.
-    var quiero = (viajePendiente!=null) ? String(viajePendiente)
-               : (viajeElegidoId!=null) ? String(viajeElegidoId) : null;
+  // La salida no se elige: el servidor manda la que contiene la hora, así que
+  // viene una y esa es. Si vienen dos, sus fichas se pisan —el observador no
+  // estuvo en las dos— y la observación se queda SIN viaje hasta que se arreglen
+  // las horas: colgarla de una de ellas sería inventarse cuál.
+  //
+  // En modo edición, el viaje que ya tenía la observación manda sobre la ventana:
+  // lo que se guardó es un hecho, no una deducción.
+  function elegirViaje(){
     viajeSel = null;
-    for(var i=0;i<listaViajes.length;i++){ if(String(listaViajes[i].id)===quiero) viajeSel=listaViajes[i]; }
-    if(!viajeSel) viajeSel = listaViajes.length ? listaViajes[0] : null;
+    for(var i=0;i<listaViajes.length;i++){
+      if(viajePendiente!=null && String(listaViajes[i].id)===String(viajePendiente)) viajeSel=listaViajes[i];
+    }
+    if(!viajeSel && listaViajes.length===1) viajeSel = listaViajes[0];
     viajePendiente = null;
-    viajeElegidoId = viajeSel ? viajeSel.id : null;
-    if(viajeSel) viajeSelect.value = String(viajeSel.id);
-  }
-  if(viajeSelect){
-    viajeSelect.addEventListener('change', function(){
-      viajeSel = null;
-      for(var i=0;i<listaViajes.length;i++){ if(String(listaViajes[i].id)===viajeSelect.value) viajeSel=listaViajes[i]; }
-      viajeElegidoId = viajeSel ? viajeSel.id : null;
-      recompute();
-    });
   }
   var avisoViaje = (WP && window.BitacoraBase && BitacoraBase.avisoViaje && viajeBox)
     ? BitacoraBase.avisoViaje({
@@ -530,13 +516,12 @@
         alta:      function(d){ return pedirViaje(d,'POST').then(function(j){ return j.viaje; }); },
         onEstado: function(estado, viajes){
           listaViajes = viajes || [];
-          if(estado!=='con-viaje') viajeSel = null;
-          if(estado==='con-viaje') pintarViajes();
+          viajeSel = null;
+          if(estado==='con-viaje') elegirViaje();
           // Qué se dice y con qué cara lo decide BitacoraBase, en el mismo
           // lenguaje que el objeto que resuelve SIMBAD: línea .status y un ✓.
           var m = BitacoraBase.mensajeViaje(estado, listaViajes.map(etiquetaViaje));
           if(viajeBtn) viajeBtn.hidden = !m.alta;
-          if(viajeCampo) viajeCampo.hidden = !m.elegir;
           viajeBox.hidden = m.oculto;
           if(m.oculto) return;
           viajeBox.className = 'status '+m.clase;

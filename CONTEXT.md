@@ -141,7 +141,12 @@ cielo, comienzo y fin, tripulación). Se gestionan en **Mis viajes**
   no tiene ventana y vale solo por su noche, como siempre.
 - **Dos ventanas que se pisan son un ERROR, no una elección:** el observador no
   pudo estar en las dos, así que salen las dos y el formulario lo canta en rojo
-  pidiendo que se revisen sus horas. Es el único caso en que asoma el selector.
+  pidiendo que se corrijan sus horas en *Mis viajes*. La observación se queda sin
+  viaje hasta entonces: colgarla de una sería inventarse cuál.
+- **NUNCA hay selector:** el formulario no ofrece elegir la salida en ningún
+  caso. Por eso el aviso va pegado a la fecha y la hora, que son lo único que la
+  decide. En modo edición manda el `viaje_id` guardado, que es un hecho, no una
+  deducción.
 - **Se anuncia como lo que resuelve SIMBAD:** misma línea `.status` con su ✓ y
   su clase (`ok`/`info`/`err`), porque es la misma idea —«esto te lo hemos
   rellenado nosotros»—. El texto lo decide `BitacoraBase.mensajeViaje(estado,

@@ -220,7 +220,7 @@ Promise.resolve()
   /* ── 10. Lo que se enseña, con el mismo diseño que SIMBAD ───────────────────
      El viaje se resuelve solo, así que se anuncia como se anuncia el objeto que
      SIMBAD resuelve: una línea `status` con su clase (ok/info/err) y un ✓ o un ✗
-     delante. Nada de elegir en el caso normal —la salida es una— y nada de
+     delante. Nunca se elige —la salida la deciden la fecha y la hora— y nada de
      bloque aparte, que era otro lenguaje visual para la misma idea.
 
      `mensajeViaje(estado, etiquetas)` devuelve solo texto plano: quien lo pinta
@@ -232,7 +232,7 @@ Promise.resolve()
     ok(m.clase === 'ok', 'una sola salida es un acierto (clase ok)');
     ok(m.texto.indexOf('✓') === 0, 'y se marca con ✓, como el objeto resuelto');
     ok(m.texto.indexOf('Sierra de Béjar · 3 objetos') > 0, 'el texto nombra la salida');
-    ok(m.elegir === false, 'con una sola no se elige nada');
+    ok(!('elegir' in m), 'no hay selector que enseñar: la salida no se elige nunca');
     ok(m.alta === false, 'ni se ofrece dar de alta otra');
     ok(m.oculto === false, 'y se ve');
 
@@ -241,12 +241,11 @@ Promise.resolve()
     var dos = B.mensajeViaje('con-viaje', ['Sierra · 2 objetos', 'Balcón · 1 objeto']);
     ok(dos.clase === 'err', 'dos salidas a la misma hora es un error, no una opción');
     ok(dos.texto.indexOf('✗') === 0, 'y se marca con ✗');
-    ok(dos.elegir === true, 'aun así hay que poder desempatar a mano');
+    ok(dos.texto.indexOf('Mis viajes') > 0, 'y se arregla en la ficha del viaje, no eligiendo aquí');
 
     var sin = B.mensajeViaje('sin-viaje', []);
     ok(sin.clase === 'err', 'sin sesión no se puede guardar: error');
     ok(sin.alta === true, 'y se ofrece registrarla ahí mismo');
-    ok(sin.elegir === false, 'sin salidas no hay nada que elegir');
 
     var buscando = B.mensajeViaje('consultando', []);
     ok(buscando.clase === 'info', 'mientras se busca, en tono neutro');
@@ -260,7 +259,7 @@ Promise.resolve()
   })
 
   .then(function () {
-    console.log(fallos ? '\n' + fallos + ' FALLO(S)' : '\nok · el selector de viaje pregunta cuando debe');
+    console.log(fallos ? '\n' + fallos + ' FALLO(S)' : '\nok · el viaje de la noche se resuelve solo');
     process.exit(fallos ? 1 : 0);
   })
   .catch(function (e) { console.error(e); process.exit(1); });
