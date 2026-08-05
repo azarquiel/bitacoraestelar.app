@@ -1,0 +1,126 @@
+<!-- ============================================================
+     MIS VIAJES · Sesiones de observación · Bitácora Messier
+
+     Pega este bloque en un bloque "HTML personalizado" de Gutenberg,
+     en una página nueva ("Mis viajes", ruta /mis-viajes/), protegida
+     por login.
+
+     Aquí vive el LUGAR de la salida: se indica una vez para toda la
+     noche, y el formulario de registro solo vuelve a preguntarlo si el
+     viaje no lo tiene.
+
+     Reutiliza bitacora-base.css + bitacora-formulario.css (wrapper
+     #mw-obs-form) y añade estilos propios. El JS va subido por FTP a
+     /wp-content/uploads/bitacora/ (no lo pegues aquí: el editor escapa
+     los "&" y rompería el JavaScript).
+
+     Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
+     ============================================================ -->
+
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260727_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260805_1900" />
+
+<style>
+/* Estilos propios de "Mis viajes", encapsulados bajo #mw-obs-form. */
+#mw-obs-form .viajes-list {display:flex;flex-direction:column;gap:10px;margin:6px 0 22px;}
+#mw-obs-form .viajes-empty {color:var(--tinta-tenue);font-size:14px;font-style:italic;margin:2px 0 18px;}
+#mw-obs-form .viaje-item {display:flex;align-items:flex-start;gap:12px;background:var(--noche-2);
+    border:1px solid var(--linea);border-radius:10px;padding:12px 14px;}
+#mw-obs-form .viaje-item .vi-main {flex:1 1 auto;min-width:0;}
+#mw-obs-form .viaje-item .vi-nom {font-size:16px;font-weight:600;}
+#mw-obs-form .viaje-item .vi-specs {font-size:13px;color:var(--azul);
+    font-family:ui-monospace,Menlo,monospace;margin-top:3px;}
+#mw-obs-form .viaje-item .vi-meta {font-size:12px;color:var(--tinta-tenue);margin-top:3px;}
+#mw-obs-form .viaje-item .vi-acts {display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
+#mw-obs-form .vi-btn {background:none;border:1px solid var(--linea);border-radius:14px;color:var(--tinta-tenue);
+    font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:5px 11px;cursor:pointer;transition:.15s;}
+#mw-obs-form .vi-btn:hover:not(:disabled) {color:var(--tinta);border-color:var(--ambar);}
+#mw-obs-form .vi-btn.danger:hover:not(:disabled) {color:var(--rojo);border-color:var(--rojo);}
+#mw-obs-form .vi-btn:disabled {opacity:.4;cursor:not-allowed;}
+#mw-obs-form textarea#vCronica {min-height:150px;resize:vertical;}
+#mw-obs-form .flash {position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:10px;padding:11px 18px;
+    color:var(--tinta);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;}
+#mw-obs-form .flash.show {opacity:1;}
+#mw-obs-form .flash.err {border-color:var(--rojo);color:var(--rojo);}
+</style>
+
+<div id="mw-obs-form">
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Bitácora · Sesiones de observación</p>
+    <h1>Mis viajes
+      <span class="sub">Cada salida es un viaje: una noche, un lugar, un observador. Aquí se dice desde dónde se observó —vale para toda la noche— y se escribe la crónica de la sesión.</span>
+    </h1>
+  </header>
+
+  <fieldset>
+    <legend><div class="leg"><span class="num">1</span>
+      <div><h2>Mis salidas</h2><p>De la más reciente a la más antigua. Solo se borran las que no tienen observaciones dentro.</p></div></div></legend>
+    <div class="viajes-list" id="viajesMios"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend><div class="leg"><span class="num">2</span>
+      <div><h2 id="viajeFormTitulo">Registrar una salida</h2><p>Da de alta la noche antes de registrar sus objetos: el registro de observaciones la exige.</p></div></div></legend>
+
+    <form id="viajeForm" autocomplete="off">
+      <div class="row">
+        <label class="field"><span class="lab">Noche de la salida</span>
+          <input type="date" id="vNoche" required /></label>
+        <label class="field"><span class="lab">Nombre del viaje (opcional)</span>
+          <input type="text" id="vNombre" placeholder="Perseidas desde la sierra" /></label>
+      </div>
+
+      <label class="field"><span class="lab">Lugar de observación (base)</span>
+        <select id="vBase"><option value="">— Sin lugar —</option></select></label>
+      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">El lugar es de la salida entera: con él se calculan la altura y el azimut del objeto, del Sol y de la Luna de cada observación de esa noche. Si lo dejas en blanco, el formulario de registro volverá a preguntarlo objeto a objeto. Gestiona tus lugares en <a href="/mis-bases/">Mis bases</a>.</p>
+
+      <div class="row" style="margin-top:14px">
+        <label class="field"><span class="lab">Comienzo (hora local)</span>
+          <input type="time" id="vComienzo" /></label>
+        <label class="field"><span class="lab">Fin (hora local)</span>
+          <input type="time" id="vFin" /></label>
+      </div>
+
+      <label class="field" style="margin-top:14px"><span class="lab">Meteorología</span>
+        <input type="text" id="vMeteo" placeholder="Despejado, 12 °C, sin viento" /></label>
+
+      <div class="row" style="margin-top:14px">
+        <label class="field"><span class="lab">Cielo (escala Bortle)</span>
+          <select id="vBortle"></select></label>
+        <label class="field"><span class="lab">SQM del cielo (mag/arcsec²)</span>
+          <input type="number" id="vSqm" min="14" max="22" step="0.05" value="21.4" /></label>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <label class="field"><span class="lab">Transparencia (escala IR)</span>
+          <select id="vTransp"></select></label>
+        <label class="field"><span class="lab">Índice IR</span>
+          <input type="number" id="vIr" min="-50" max="50" step="1" placeholder="−20" /></label>
+      </div>
+      <label class="field" style="margin-top:14px"><span class="lab">Seeing (1 excelente – 5 pésimo)</span>
+        <select id="vSeeing">
+          <option value="">— Sin anotar —</option>
+          <option value="1">1 · Excelente</option>
+          <option value="2">2 · Bueno</option>
+          <option value="3">3 · Regular</option>
+          <option value="4">4 · Malo</option>
+          <option value="5">5 · Pésimo</option>
+        </select></label>
+
+      <label class="field" style="margin-top:14px"><span class="lab">Crónica de la noche</span>
+        <textarea id="vCronica" placeholder="Cómo fue la salida: quién vino, qué se buscó, qué se vio, qué se torció…"></textarea></label>
+
+      <div class="actions">
+        <button type="submit" class="primary" id="viajeGuardar">Guardar salida</button>
+        <button type="button" class="vi-btn" id="viajeCancelar" style="display:none">Cancelar edición</button>
+        <span class="out-note" id="viajeFormNota"></span>
+      </div>
+    </form>
+  </fieldset>
+</div>
+<div class="flash" id="flash"></div>
+</div>
+
+<script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260805_1900" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20260805_1900" defer></script>
