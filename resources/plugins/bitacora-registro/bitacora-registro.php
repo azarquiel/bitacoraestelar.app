@@ -971,6 +971,11 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
  * tener varias salidas desde sitios distintos. De ahí que la respuesta sea una
  * LISTA —vacía si es la primera observación de la salida, que es normal y no un
  * error— y que el alta desde aquí cree el viaje sin lugar (base 0).
+ *
+ * La lista viene ORDENADA: delante la salida cuya ventana (comienzo-fin de su
+ * ficha) contiene la hora de la observación, que es la que el formulario deja
+ * elegida sin preguntar. La noche sola no basta para eso: dice a qué salida
+ * pertenece un objeto, no cuál de las dos de esa noche estaba abierta a esa hora.
  */
 function bitacora_viaje_de_la_noche( WP_REST_Request $peticion ) {
     global $wpdb;
@@ -998,13 +1003,21 @@ function bitacora_viaje_de_la_noche( WP_REST_Request $peticion ) {
         ), 200 );
     }
 
+    // Se traen también las noches vecinas: una salida que se alarga más allá de
+    // las 12:00 sigue conteniendo la hora del objeto aunque el convenio de
+    // mediodía ya lo haya pasado a la noche siguiente. Cuál de las traídas vale
+    // —y en qué orden— lo decide bitacora_viajes_candidatos(), que compara el
+    // instante con la ventana comienzo-fin de cada una.
     $tabla = bitacora_nombre_tabla_viajes();
     $filas = $wpdb->get_results( $wpdb->prepare(
-        "SELECT * FROM $tabla WHERE usuario_id = %d AND noche = %s ORDER BY base_id ASC, id ASC",
-        $clave['usuario_id'], $clave['noche']
+        "SELECT * FROM $tabla
+          WHERE usuario_id = %d
+            AND noche BETWEEN DATE_SUB( %s, INTERVAL 1 DAY ) AND DATE_ADD( %s, INTERVAL 1 DAY )
+          ORDER BY base_id ASC, id ASC",
+        $clave['usuario_id'], $clave['noche'], $clave['noche']
     ) );
     $viajes = array();
-    foreach ( (array) $filas as $fila ) {
+    foreach ( bitacora_viajes_candidatos( $filas, $fecha, $hora ) as $fila ) {
         $viajes[] = bitacora_viaje_adornar( $fila );
     }
     return new WP_REST_Response( array( 'noche' => $clave['noche'], 'viajes' => $viajes ), 200 );

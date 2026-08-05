@@ -73,8 +73,11 @@
         <select id="scopeSelect"><option value="">— Elige un telescopio de tu flota —</option></select></label>
       <p class="hint" id="scopeHint" style="margin:-8px 0 0;font-size:12.5px;">Elige tu telescopio de la flota y, en cada ocular, uno de tus oculares: los aumentos, la pupila y el campo real se calculan solos. Gestiona tu equipo en <a href="/mi-flota/">Mi flota</a>.</p>
 
-      <div class="viaje-aviso" id="viajeAviso" hidden>
-        <p id="viajeAvisoTxt"></p>
+      <!-- La sesión se resuelve sola con la fecha y la hora, así que se anuncia
+           como el objeto que trae SIMBAD: una línea .status con su ✓. Solo se
+           elige cuando la hora cae dentro de dos salidas, que es un error. -->
+      <div class="viaje-sesion">
+        <div class="status info" id="viajeAviso" hidden></div>
         <label class="field" id="viajeCampo" hidden><span class="lab">Viaje estelar de esa noche</span>
           <select id="viajeSelect"></select></label>
         <button type="button" id="viajeAvisoBtn" hidden>Registrar el viaje de esa noche</button>

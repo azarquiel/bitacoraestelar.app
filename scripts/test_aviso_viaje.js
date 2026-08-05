@@ -217,6 +217,48 @@ Promise.resolve()
     });
   })
 
+  /* ── 10. Lo que se enseña, con el mismo diseño que SIMBAD ───────────────────
+     El viaje se resuelve solo, así que se anuncia como se anuncia el objeto que
+     SIMBAD resuelve: una línea `status` con su clase (ok/info/err) y un ✓ o un ✗
+     delante. Nada de elegir en el caso normal —la salida es una— y nada de
+     bloque aparte, que era otro lenguaje visual para la misma idea.
+
+     `mensajeViaje(estado, etiquetas)` devuelve solo texto plano: quien lo pinta
+     lo mete con textContent, así que una salida llamada `<b>` no puede inyectar
+     nada. */
+  .then(function () {
+    seccion('El aviso habla el idioma de SIMBAD:');
+    var m = B.mensajeViaje('con-viaje', ['Sierra de Béjar · 3 objetos']);
+    ok(m.clase === 'ok', 'una sola salida es un acierto (clase ok)');
+    ok(m.texto.indexOf('✓') === 0, 'y se marca con ✓, como el objeto resuelto');
+    ok(m.texto.indexOf('Sierra de Béjar · 3 objetos') > 0, 'el texto nombra la salida');
+    ok(m.elegir === false, 'con una sola no se elige nada');
+    ok(m.alta === false, 'ni se ofrece dar de alta otra');
+    ok(m.oculto === false, 'y se ve');
+
+    // Dos salidas que contienen la misma hora NO son una elección: son un error
+    // de las fichas, porque nadie observa desde dos sitios a la vez.
+    var dos = B.mensajeViaje('con-viaje', ['Sierra · 2 objetos', 'Balcón · 1 objeto']);
+    ok(dos.clase === 'err', 'dos salidas a la misma hora es un error, no una opción');
+    ok(dos.texto.indexOf('✗') === 0, 'y se marca con ✗');
+    ok(dos.elegir === true, 'aun así hay que poder desempatar a mano');
+
+    var sin = B.mensajeViaje('sin-viaje', []);
+    ok(sin.clase === 'err', 'sin sesión no se puede guardar: error');
+    ok(sin.alta === true, 'y se ofrece registrarla ahí mismo');
+    ok(sin.elegir === false, 'sin salidas no hay nada que elegir');
+
+    var buscando = B.mensajeViaje('consultando', []);
+    ok(buscando.clase === 'info', 'mientras se busca, en tono neutro');
+    ok(buscando.alta === false, 'sin ofrecer el alta antes de saber si hace falta');
+
+    var nada = B.mensajeViaje('sin-datos', []);
+    ok(nada.oculto === true, 'sin fecha no se enseña nada');
+
+    var mal = B.mensajeViaje('error', []);
+    ok(mal.clase === 'err' && mal.alta === false, 'un fallo del servidor no invita a crear nada');
+  })
+
   .then(function () {
     console.log(fallos ? '\n' + fallos + ' FALLO(S)' : '\nok · el selector de viaje pregunta cuando debe');
     process.exit(fallos ? 1 : 0);

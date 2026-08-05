@@ -311,6 +311,48 @@ window.BitacoraBase = (function () {
     };
   }
 
+  /* ── Lo que el formulario enseña de la salida ───────────────────────────────
+     El viaje se resuelve solo con la fecha y la hora, así que se anuncia igual
+     que el objeto que SIMBAD resuelve: una línea `status` con su clase y un ✓
+     delante. Es la misma idea —«esto te lo hemos rellenado nosotros»— y merece
+     el mismo lenguaje visual.
+
+     Elegir es la excepción, no la regla: solo se pide cuando la hora cae dentro
+     de DOS salidas, que no es una opción legítima sino un error de sus fichas
+     (nadie observa desde dos sitios a la vez), y por eso va en rojo.
+
+     Devuelve TEXTO PLANO: quien lo pinta lo mete con textContent, y así el
+     nombre de una salida no puede inyectar nada.
+
+       mensajeViaje(estado, etiquetas) -> { oculto, clase, texto, elegir, alta } */
+  function mensajeViaje(estado, etiquetas) {
+    etiquetas = etiquetas || [];
+    var m = { oculto: false, clase: 'info', texto: '', elegir: false, alta: false };
+    if (estado === 'sin-datos') {
+      m.oculto = true;
+    } else if (estado === 'consultando') {
+      m.texto = 'Buscando la sesión de observación de esa fecha y hora…';
+    } else if (estado === 'sin-viaje') {
+      m.clase = 'err';
+      m.alta = true;
+      m.texto = '✗ Esa noche todavía no tiene sesión de observación (viaje estelar). '
+        + 'Regístrala para poder guardar la observación.';
+    } else if (estado === 'con-viaje' && etiquetas.length === 1) {
+      m.clase = 'ok';
+      m.texto = '✓ Esta observación se suma a la sesión “' + etiquetas[0] + '”.';
+    } else if (estado === 'con-viaje') {
+      m.clase = 'err';
+      m.elegir = true;
+      m.texto = '✗ Esa hora cae dentro de ' + etiquetas.length + ' sesiones a la vez, y no pudiste '
+        + 'estar en todas: revisa sus horas de comienzo y fin, o elige a cuál pertenece.';
+    } else {
+      m.clase = 'err';
+      m.texto = 'No se pudo comprobar la sesión de esa noche. Cambia la fecha o recarga '
+        + 'para volver a intentarlo.';
+    }
+    return m;
+  }
+
   /* ── El lugar de una observación ───────────────────────────────────────────
      El lugar es del VIAJE: se sale una noche desde un sitio, no se cambia de
      sitio objeto a objeto. Pero la altura y el azimut del objeto, del Sol y de
@@ -452,6 +494,7 @@ window.BitacoraBase = (function () {
     transparenciaPorIr: transparenciaPorIr,
     montarTransparencia: montarTransparencia,
     avisoViaje: avisoViaje,
+    mensajeViaje: mensajeViaje,
     lugarDeObservacion: lugarDeObservacion,
     parseRA: parseRA,
     parseDec: parseDec,

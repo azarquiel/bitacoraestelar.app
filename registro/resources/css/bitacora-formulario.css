@@ -193,19 +193,15 @@
 #mw-obs-form .sim-gen-usar:hover {filter:brightness(1.08);}
 #mw-obs-form .sim-gen-usar:disabled {opacity:0.45;cursor:default;filter:none;}
 
-/* Aviso del viaje (sesión de observación) al que irá esta observación.
-   Solo el caso "sin-viaje" grita: es el único que pide algo del observador. */
-#mw-obs-form .viaje-aviso {margin:10px 0 0;padding:12px 14px;border-radius:10px;
-  border:1px solid var(--linea);background:rgba(126,200,255,0.04);
-  display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
-#mw-obs-form .viaje-aviso p {margin:0;flex:1 1 240px;font-size:13px;color:var(--tinta-tenue);}
-#mw-obs-form .viaje-aviso.sin-viaje {border-color:var(--ambar);background:var(--ambar-suave);}
-#mw-obs-form .viaje-aviso.sin-viaje p {color:var(--tinta);}
-#mw-obs-form .viaje-aviso.error {border-color:var(--rojo);}
-/* Selector de la salida: solo asoma cuando la noche tiene más de una. */
-#mw-obs-form .viaje-aviso .field {flex:1 1 100%;margin:0;}
-#mw-obs-form .viaje-aviso button {background:var(--ambar,#f4c76b);color:#1a1206;border:none;
+/* La sesión (viaje interestelar) a la que irá esta observación. Se resuelve
+   sola, así que se anuncia con la misma línea .status que el objeto de SIMBAD;
+   aquí solo van el selector de desempate y el botón de alta, que asoman poco. */
+#mw-obs-form .viaje-sesion {margin:10px 0 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+#mw-obs-form .viaje-sesion .status {flex:1 1 100%;margin-top:0;}
+/* Selector de la salida: solo asoma cuando dos contienen la misma hora. */
+#mw-obs-form .viaje-sesion .field {flex:1 1 100%;margin:0;}
+#mw-obs-form .viaje-sesion button {background:var(--ambar,#f4c76b);color:#1a1206;border:none;
   font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;
   padding:9px 16px;border-radius:8px;cursor:pointer;white-space:nowrap;}
-#mw-obs-form .viaje-aviso button:hover {filter:brightness(1.08);}
-#mw-obs-form .viaje-aviso button:disabled {opacity:0.45;cursor:default;filter:none;}
+#mw-obs-form .viaje-sesion button:hover {filter:brightness(1.08);}
+#mw-obs-form .viaje-sesion button:disabled {opacity:0.45;cursor:default;filter:none;}

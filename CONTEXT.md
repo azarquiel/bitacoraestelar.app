@@ -124,7 +124,29 @@ cielo, comienzo y fin, tripulación). Se gestionan en **Mis viajes**
   viajes tiene esa noche (`avisoViaje` en `bitacora-base.js` +
   `/viajes/de-la-noche`, que responde una LISTA: una noche puede tener dos
   salidas desde sitios distintos). Si no tiene ninguno, ofrece darlo de alta sin
-  lugar; si tiene varios, elige el observador. Test: `scripts/test_aviso_viaje.js`.
+  lugar. Test: `scripts/test_aviso_viaje.js`.
+- **La salida no se elige, se deduce:** manda la **ventana** de la salida (el
+  `comienzo`–`fin` de su ficha). Si la fecha y la hora de la observación caen
+  dentro, es esa y **solo** esa —`bitacora_viajes_candidatos`, test
+  `scripts/test_viaje_noche.php`—: nadie observa desde dos sitios a la vez, así
+  que ofrecer además las otras de la noche sería preguntar algo que ya se sabe.
+  La noche sola no llega: dice a qué salida pertenece un objeto, no cuál de las
+  dos de esa noche estaba abierta a esa hora, y una salida que se alarga pasado
+  el mediodía cae ya en la noche siguiente (por eso la consulta trae también las
+  noches vecinas). Una salida ajena que no contenga el instante NO se ofrece.
+- **La ventana cruza el día, que es lo normal:** se lee con el convenio de
+  mediodía invertido (`comienzo` < 12:00 = madrugada del día siguiente) y el fin
+  va detrás del comienzo, así que un `fin` que no sea mayor significa que se
+  pasó la medianoche: 22:00–03:00 son **dos días**. Una ficha sin las dos horas
+  no tiene ventana y vale solo por su noche, como siempre.
+- **Dos ventanas que se pisan son un ERROR, no una elección:** el observador no
+  pudo estar en las dos, así que salen las dos y el formulario lo canta en rojo
+  pidiendo que se revisen sus horas. Es el único caso en que asoma el selector.
+- **Se anuncia como lo que resuelve SIMBAD:** misma línea `.status` con su ✓ y
+  su clase (`ok`/`info`/`err`), porque es la misma idea —«esto te lo hemos
+  rellenado nosotros»—. El texto lo decide `BitacoraBase.mensajeViaje(estado,
+  etiquetas)`, en texto plano (se pinta con `textContent`, así que el nombre de
+  una salida no inyecta nada). Test: `scripts/test_aviso_viaje.js`.
 - **Invariante:** la misma observación da siempre la misma clave, que es lo que
   hace relanzable el reparto histórico (backfill) sin duplicar viajes.
   Test: `scripts/test_viaje_noche.php`.
