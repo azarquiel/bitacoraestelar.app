@@ -26,9 +26,9 @@ function obs(string $fecha, string $hora, $sqm = null, $ir = null, $seeing = nul
                  'cielo_sqm' => $sqm, 'cielo_ir' => $ir, 'seeing' => $seeing,
                  'usuario_id' => $usuario, 'observador' => 'Isra');
 }
-function viaje(string $noche, $sqm = null, $ir = null, $seeing = null, int $usuario = 1): array {
+function viaje(string $noche, $sqm = null, $ir = null, $seeing = null, int $usuario = 1, string $quien = 'Ana'): array {
     return array('noche' => $noche, 'cielo_sqm' => $sqm, 'cielo_ir' => $ir,
-                 'seeing' => $seeing, 'usuario_id' => $usuario, 'nombre' => 'Salida');
+                 'seeing' => $seeing, 'usuario_id' => $usuario, 'observador' => $quien);
 }
 /** Los valores de una medida concreta, en orden, para comprobar una serie. */
 function serie(array $puntos, string $campo): array {
@@ -114,6 +114,12 @@ $puntos = bitacora_salud_mediciones(
     array(viaje('2026-08-04', 21.4, null, null, 7), viaje('2026-08-04', 20.6, null, null, 9))
 );
 eq(serie($puntos, 'sqm'), array(21.4, 20.6), 'el viaje del otro observador sigue contando');
+
+echo "la medición del viaje la firma su observador, no el nombre de la salida:\n";
+// La columna "Observador" de la tabla dice QUIÉN midió. El nombre del viaje
+// ("Reencuentro con el 61 cm") es el título de la noche, no un compañero.
+$puntos = bitacora_salud_mediciones(array(), array(viaje('2026-08-04', null, null, 3, 1, 'Ángel L. Huelmo')));
+eq($puntos[0]['observador'], 'Ángel L. Huelmo', 'firma el compañero');
 
 echo "los puntos salen ordenados aunque las dos fuentes lleguen revueltas:\n";
 $puntos = bitacora_salud_mediciones(
