@@ -125,6 +125,17 @@ cielo, comienzo y fin, tripulación). Se gestionan en **Mis viajes**
   `/viajes/de-la-noche`, que responde una LISTA: una noche puede tener dos
   salidas desde sitios distintos). Si no tiene ninguno, ofrece darlo de alta sin
   lugar; si tiene varios, elige el observador. Test: `scripts/test_aviso_viaje.js`.
+- **La salida en curso viene elegida:** el servidor manda la lista ordenada, y
+  delante va la salida cuya **ventana** (el `comienzo`–`fin` de su ficha)
+  contiene la hora de la observación —`bitacora_viajes_candidatos`, test
+  `scripts/test_viaje_noche.php`—. La noche sola no lo sabe: dice a qué salida
+  pertenece un objeto, no cuál de las dos de esa noche estaba abierta a esa
+  hora, y una salida que se alarga pasado el mediodía cae ya en la noche
+  siguiente. Por eso la consulta trae también las noches vecinas, y una salida
+  ajena que no contenga el instante NO se ofrece. La ventana se lee con el
+  convenio de mediodía invertido (comienzo < 12:00 = madrugada del día
+  siguiente); una ficha sin las dos horas no tiene ventana y vale solo por su
+  noche, como siempre.
 - **Invariante:** la misma observación da siempre la misma clave, que es lo que
   hace relanzable el reparto histórico (backfill) sin duplicar viajes.
   Test: `scripts/test_viaje_noche.php`.

@@ -62,6 +62,97 @@ function bitacora_viaje_noche( $fecha, $hora = '' ) {
 }
 
 /**
+ * La VENTANA de una salida —del instante en que se abrió el tubo al instante en
+ * que se cerró—, en 'Y-m-d H:i', o null si su ficha no dice las dos horas.
+ *
+ * La noche del viaje es la del convenio de mediodía, así que el comienzo se
+ * coloca sobre ella con el convenio INVERSO: a partir de las 12:00 es la tarde
+ * de esa misma fecha; antes de las 12:00, la madrugada del día siguiente. El fin
+ * va detrás del comienzo, y si su hora de reloj no es mayor es que se cruzó la
+ * medianoche. Así una salida de 22:00 a 03:00, otra de 00:30 a 03:00 y una que
+ * se alarga hasta las 13:00 se describen todas sin más datos que los suyos.
+ *
+ * @param object|array $viaje Con noche, comienzo y fin.
+ * @return array{ini:string,fin:string}|null
+ */
+function bitacora_viaje_ventana( $viaje ) {
+    $v     = (array) $viaje;
+    $noche = isset( $v['noche'] ) ? trim( (string) $v['noche'] ) : '';
+    if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $noche ) ) {
+        return null;
+    }
+    $ini = bitacora_viaje_hora( isset( $v['comienzo'] ) ? $v['comienzo'] : '' );
+    $fin = bitacora_viaje_hora( isset( $v['fin'] ) ? $v['fin'] : '' );
+    if ( null === $ini || null === $fin ) {
+        return null;   // una ficha a medias no describe ninguna ventana
+    }
+    $dia_ini = ( intval( substr( $ini, 0, 2 ) ) >= 12 ) ? $noche : bitacora_viaje_dia_siguiente( $noche );
+    $dia_fin = ( $fin > $ini ) ? $dia_ini : bitacora_viaje_dia_siguiente( $dia_ini );
+    return array( 'ini' => $dia_ini . ' ' . $ini, 'fin' => $dia_fin . ' ' . $fin );
+}
+
+/** Una hora de reloj 'HH:MM' normalizada, o null si no lo es. */
+function bitacora_viaje_hora( $hora ) {
+    return preg_match( '/^([01]\d|2[0-3]):([0-5]\d)/', trim( (string) $hora ), $h )
+        ? $h[1] . ':' . $h[2]
+        : null;
+}
+
+/** El día de calendario siguiente a 'Y-m-d'. UTC fijo: solo se suma un día. */
+function bitacora_viaje_dia_siguiente( $dia ) {
+    $d = new DateTimeImmutable( $dia . ' 00:00:00', new DateTimeZone( 'UTC' ) );
+    return $d->modify( '+1 day' )->format( 'Y-m-d' );
+}
+
+/**
+ * Las salidas a las que puede pertenecer una observación, la mejor delante: es
+ * lo que el formulario de registro deja elegido sin preguntar.
+ *
+ * Manda la VENTANA: si el instante de la observación cae entre el comienzo y el
+ * fin de una salida, es esa, aunque el convenio de mediodía la coloque en otra
+ * noche —que es justo lo que pasa cuando la salida se alarga más allá de las
+ * 12:00—. Detrás van las de su noche que no dicen sus horas o no lo contienen,
+ * que es el reparto de siempre y sigue siendo el caso normal.
+ *
+ * Las que ni contienen el instante ni son de su noche se descartan: pertenecen
+ * a otra salida y ofrecerlas sería invitar a colgar el objeto donde no va.
+ *
+ * @param array  $viajes Filas de viajes del observador, de noches cercanas.
+ * @param string $fecha  'YYYY-MM-DD' de la observación (hora local de la base).
+ * @param string $hora   'HH:MM' de la observación, o '' si no se registró.
+ * @return array Las candidatas, la que contiene el instante primero.
+ */
+function bitacora_viajes_candidatos( $viajes, $fecha, $hora ) {
+    $noche    = bitacora_viaje_noche( $fecha, $hora );
+    $instante = bitacora_viaje_instante( $fecha, $hora );
+    $dentro   = array();
+    $fuera    = array();
+    foreach ( (array) $viajes as $viaje ) {
+        $fila    = (array) $viaje;
+        $ventana = ( null === $instante ) ? null : bitacora_viaje_ventana( $viaje );
+        $suya    = ( null !== $noche ) && isset( $fila['noche'] ) && (string) $fila['noche'] === $noche;
+        if ( $ventana && $instante >= $ventana['ini'] && $instante <= $ventana['fin'] ) {
+            $dentro[] = $viaje;
+        } elseif ( $suya ) {
+            $fuera[] = $viaje;
+        }
+    }
+    return array_merge( $dentro, $fuera );
+}
+
+/**
+ * El instante de una observación en 'Y-m-d H:i', comparable como texto con las
+ * ventanas, o null si no hay fecha y hora con las que situarlo.
+ */
+function bitacora_viaje_instante( $fecha, $hora ) {
+    if ( ! preg_match( '/^(\d{4}-\d{2}-\d{2})/', trim( (string) $fecha ), $f ) ) {
+        return null;
+    }
+    $h = bitacora_viaje_hora( $hora );
+    return ( null === $h ) ? null : $f[1] . ' ' . $h;
+}
+
+/**
  * El LUGAR que le queda al viaje después de guardar una observación suya.
  *
  * El lugar es de la salida, no del objeto, pero el registro sigue pidiéndolo

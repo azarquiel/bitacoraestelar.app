@@ -123,5 +123,56 @@ eq(bitacora_viaje_clave(7, 3, '2026-08-04', '22:05') === bitacora_viaje_clave(7,
 eq(bitacora_viaje_clave(7, 3, '2026-08-05', '02:15') === bitacora_viaje_clave(7, 3, '2026-08-05', '02:15'), true,
    'la clave es estable entre llamadas');
 
+echo "la salida que estaba EN CURSO se reconoce por sus horas:\n";
+// El formulario de registro tiene que decir a qué salida se suma la observación
+// SIN preguntar. La noche sola no basta: la ficha del viaje guarda la fecha en la
+// que la salida empezó, y una que arranca de madrugada (los cometas del alba) o
+// una que el observador fechó por el día en que volvió caen en una noche de
+// mediodía distinta de la de sus propios objetos. Las horas de la ficha
+// (comienzo–fin) son lo que sí sitúa el instante.
+$v = function ($noche, $comienzo = '', $fin = '', $id = 0) {
+    return (object) array('id' => $id, 'noche' => $noche, 'comienzo' => $comienzo, 'fin' => $fin);
+};
+$ids = function ($viajes) { return array_map(function ($x) { return $x->id; }, $viajes); };
+
+eq(bitacora_viajes_candidatos(array(), '2026-08-05', '23:25'), array(), 'sin viajes no hay candidatos');
+// Lo de siempre: la salida de esa noche sale aunque no diga sus horas.
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '', '', 1)), '2026-08-06', '01:00')),
+   array(1), 'la salida de esa noche sale aunque no tenga horas');
+// La ventana cruza la medianoche: la fecha de la observación ya no es la del viaje.
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '22:00', '03:00', 1)), '2026-08-06', '01:30')),
+   array(1), 'la madrugada cae dentro de la salida que empezó anoche');
+// El caso que hoy se pierde: la salida fechada el día en que arrancó, 23:25, y la
+// observación de ese mismo instante. Misma noche de mediodía, así que también
+// salía antes; lo que cambia es que ahora se sabe que CONTIENE el instante.
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '23:25', '03:00', 1)), '2026-08-05', '23:25')),
+   array(1), 'el comienzo exacto ya está dentro');
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '23:25', '03:00', 1)), '2026-08-06', '03:00')),
+   array(1), 'el fin exacto todavía está dentro');
+// La salida que se alarga PASADO EL MEDIODÍA: a las 12:00 se abre noche nueva,
+// así que el objeto de las 12:30 pertenece por noche a la salida siguiente —que
+// no existe— mientras que por horas sigue dentro de la que no se ha acostado.
+// Es lo que la noche sola no puede saber.
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '22:00', '13:00', 1)), '2026-08-06', '12:30')),
+   array(1), 'la salida que pasa del mediodía sigue conteniendo sus horas');
+// Y no se cuela la de otra noche que no contiene el instante.
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-04', '22:00', '02:00', 1)), '2026-08-06', '01:30')),
+   array(), 'una salida de otra noche que no lo contiene no sale');
+// Dos salidas la misma noche (se cambió de sitio): manda la que contiene la hora,
+// que es la que el formulario deja elegida.
+$dos = array($v('2026-08-05', '21:00', '23:00', 1), $v('2026-08-05', '00:30', '03:00', 2));
+eq($ids(bitacora_viajes_candidatos($dos, '2026-08-06', '01:00')), array(2, 1),
+   'de dos salidas de la noche, primero la que contiene la hora');
+eq($ids(bitacora_viajes_candidatos($dos, '2026-08-05', '22:00')), array(1, 2),
+   'y al revés con la hora de la primera');
+// Sin hora no hay instante que contener: se vuelve a la noche de siempre.
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '22:00', '03:00', 1), $v('2026-08-06', '22:00', '03:00', 2)), '2026-08-05', '')),
+   array(1), 'sin hora manda la noche');
+// Una ficha a medias no inventa ventana: sigue valiendo por su noche, y solo por ella.
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-04', '22:00', '', 1)), '2026-08-06', '01:30')),
+   array(), 'sin hora de fin no hay ventana que alcance a otra noche');
+eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '22:00', '', 1)), '2026-08-06', '01:30')),
+   array(1), 'sin fin, la salida de esa noche sigue saliendo por su noche');
+
 echo $fallos ? "\n$fallos FALLO(S)\n" : "\nok · el reparto en viajes respeta el convenio de mediodía\n";
 exit($fallos ? 1 : 0);
