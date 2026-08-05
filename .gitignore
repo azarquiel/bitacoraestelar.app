@@ -8,3 +8,9 @@ Gaia_s_sky_in_colour.png
 
 # Ignorar la caché de Python de los scripts
 scripts/__pycache__/
+
+# Ignorar el entorno virtual de Python (se recrea con pip install)
+headroom/
+
+# Ignorar los ajustes de los asistentes de código (son de cada máquina)
+.claude/
