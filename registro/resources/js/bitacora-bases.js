@@ -294,6 +294,7 @@
         if (!salud.series.length) { $('saludGraficas').innerHTML = '<p class="sub">Todavía no hay mediciones de SQM, IR ni seeing desde esta base.</p>'; return; }
         $('saludGraficas').innerHTML = grafica(salud);
         montarInterruptores();
+        montarGlobo();
         $('saludTablaCont').innerHTML = tabla(med);
       });
     }
@@ -312,8 +313,19 @@
       var capas = salud.series.map(function (s) {
         var pts = s.puntos.map(function (p) { return px(p.t).toFixed(1) + ',' + py(p.y).toFixed(1); }).join(' ');
         var circ = s.puntos.map(function (p) {
-          return '<circle cx="' + px(p.t).toFixed(1) + '" cy="' + py(p.y).toFixed(1) + '" r="3.2" fill="' + s.color + '">' +
-            '<title>' + esc(p.fecha + (p.hora ? ' ' + p.hora : '') + ' · ' + s.titulo + ' ' + p.valor + ' ' + s.unidad + (p.observador ? ' · ' + p.observador : '')) + '</title></circle>';
+          // Lo que dirá el punto al pasar el ratón viaja con él, en crudo: el
+          // globo lo arma el JS con textContent, así que nada de aquí se
+          // interpreta como HTML. No va en <title> porque el globo del
+          // navegador tarda un segundo en salir y no se puede vestir; quien no
+          // use ratón tiene la tabla de abajo, con las mismas mediciones.
+          // El aro transparente solo agranda la diana: un punto de 3,2 px de
+          // radio es difícil de cazar con el ratón.
+          return '<circle cx="' + px(p.t).toFixed(1) + '" cy="' + py(p.y).toFixed(1) + '" r="3.2" fill="' + s.color + '"' +
+            ' stroke="transparent" stroke-width="12"' +
+            ' data-cuando="' + esc(p.fecha + (p.hora ? ' ' + p.hora : '')) + '"' +
+            ' data-medida="' + esc(s.titulo) + '"' +
+            ' data-valor="' + esc(String(p.valor) + ' ' + s.unidad) + '"' +
+            ' data-quien="' + esc(p.observador || '') + '"/>';
         }).join('');
         return '<g data-serie="' + s.clave + '">' +
           (s.puntos.length > 1 ? '<polyline points="' + pts + '" fill="none" stroke="' + s.color + '" stroke-width="1.6"/>' : '') +
@@ -339,6 +351,49 @@
 
       return '<div class="salud-graf"><h3>Cómo estaba el cielo (arriba = mejor)</h3>' + svg +
         '<div class="salud-leyenda">' + leyenda + '</div></div>';
+    }
+    /* El globo de datos: al pasar el ratón por un punto dice de qué noche es,
+       qué medida y cuánto marcó. Se coloca sobre el punto (no sobre el cursor)
+       y se pega a los bordes de la caja para no salirse por los extremos, que
+       es donde caen la primera y la última noche. */
+    function montarGlobo() {
+      var graf = $('saludGraficas').querySelector('.salud-graf');
+      var svg = $('saludSvg');
+      if (!graf || !svg) return;
+      var globo = document.createElement('div');
+      globo.className = 'salud-tip';
+      globo.hidden = true;
+      graf.appendChild(globo);
+
+      function punto(destino) { return destino && destino.closest ? destino.closest('circle[data-cuando]') : null; }
+      function linea(texto, clase) {
+        if (!texto) return;
+        var d = document.createElement('div');
+        if (clase) d.className = clase;
+        d.textContent = texto;      // crudo: nada de lo que traiga se interpreta
+        globo.appendChild(d);
+      }
+      svg.addEventListener('mouseover', function (e) {
+        var c = punto(e.target);
+        if (!c) return;
+        globo.innerHTML = '';
+        linea(c.getAttribute('data-cuando'), 'salud-tip-cuando');
+        linea(c.getAttribute('data-medida'));
+        linea(c.getAttribute('data-valor'), 'salud-tip-valor');
+        linea(c.getAttribute('data-quien'), 'sub');
+        globo.style.borderColor = c.getAttribute('fill');
+        globo.hidden = false;
+        // El SVG se estira con la caja, así que las coordenadas de dibujo no
+        // valen: las de pantalla sí.
+        var r = c.getBoundingClientRect(), g = graf.getBoundingClientRect();
+        var x = r.left + r.width / 2 - g.left, ancho = globo.offsetWidth;
+        x = Math.max(ancho / 2 + 4, Math.min(g.width - ancho / 2 - 4, x));
+        globo.style.left = x + 'px';
+        globo.style.top = (r.top - g.top - 8) + 'px';
+      });
+      svg.addEventListener('mouseout', function (e) {
+        if (punto(e.target)) globo.hidden = true;
+      });
     }
     function montarInterruptores() {
       var casillas = $('saludGraficas').querySelectorAll('input[data-serie]');

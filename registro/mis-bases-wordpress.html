@@ -53,9 +53,20 @@
 #mw-obs-form .flash.show {opacity:1;}
 #mw-obs-form .flash.err {border-color:var(--rojo);color:var(--rojo);}
 /* Salud de la base */
-#mw-obs-form .salud-graf {background:var(--noche-2);border:1px solid var(--linea);border-radius:12px;padding:14px;margin:10px 0;}
+#mw-obs-form .salud-graf {background:var(--noche-2);border:1px solid var(--linea);border-radius:12px;padding:14px;margin:10px 0;
+    position:relative;}
 #mw-obs-form .salud-graf h3 {margin:0 0 6px;font-size:14px;}
 #mw-obs-form .salud-graf svg {width:100%;height:auto;display:block;}
+#mw-obs-form .salud-graf circle {cursor:pointer;}
+#mw-obs-form .salud-graf circle:hover {r:5;}
+/* Globo con los datos del punto: se coloca sobre él y no estorba al ratón, o
+   parpadearía al taparse a sí mismo. */
+#mw-obs-form .salud-tip {position:absolute;transform:translate(-50%,-100%);pointer-events:none;z-index:5;
+    background:var(--noche);border:1px solid var(--linea);border-radius:9px;padding:7px 10px;
+    font-size:12.5px;line-height:1.35;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.45);}
+#mw-obs-form .salud-tip[hidden] {display:none;}
+#mw-obs-form .salud-tip-cuando {font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--tinta-tenue);}
+#mw-obs-form .salud-tip-valor {font-weight:600;}
 #mw-obs-form table.salud-tabla {width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
 #mw-obs-form table.salud-tabla th, #mw-obs-form table.salud-tabla td {text-align:left;padding:6px 8px;border-bottom:1px solid var(--linea);}
 #mw-obs-form table.salud-tabla th {color:var(--tinta-tenue);font-weight:600;}
@@ -147,4 +158,4 @@
 </div>
 
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260806_1100" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-bases.js?v=20260806_1100" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-bases.js?v=20260806_2200" defer></script>
