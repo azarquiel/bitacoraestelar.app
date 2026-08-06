@@ -230,6 +230,13 @@ lugar. Un viaje solo se puede borrar cuando ya no le cuelga ninguna observación
 Un viaje se puede crear desde aquí, o desde el propio formulario de registro
 cuando esa noche todavía no tiene ninguno.
 
+Cada salida enseña además su **ruta**: los objetos que se visitaron, en el orden
+en que se observaron (hora ascendente y, sin hora, al final por antigüedad de
+registro). El orden lo decide el servidor, así que la lista y la línea que dibuja
+el mapa cuentan siempre el mismo recorrido. El botón **«Ver en el mapa»** abre
+`mapa.html?viaje=<id>`, que deja en el mapa solo esos objetos unidos por la línea
+dorada del viaje. Una salida sin objetos no tiene ruta que enseñar ni botón.
+
 ---
 
 ## La salud de una base
@@ -447,7 +454,7 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | `POST` | `/observaciones/{id}/restaurar` | Sí | Deshace el borrado *(solo el autor)* |
 | `GET` | `/observaciones/{id}/ficha` | Sí | Genera y **descarga** la ficha `.docx` |
 | `GET`/`PUT` | `/observaciones/{id}/ficha-datos` | Sí | Lee/guarda la astrometría de la ficha |
-| `GET` | `/viajes` | No | Lista viajes. `?mios=1`, `?base=`, `?observador=`, `?desde=`/`?hasta=` (`YYYY-MM-DD`), `?orden=objetos` |
+| `GET` | `/viajes` | No | Lista viajes. `?mios=1`, `?base=`, `?observador=`, `?desde=`/`?hasta=` (`YYYY-MM-DD`), `?orden=objetos`. Cada uno trae `objetos[]`: su **ruta**, los objetos visitados en el orden en que se observaron |
 | `GET` | `/viajes/de-la-noche?fecha=&hora=` | Sí | `{noche, viajes[]}`: los viajes que tengo esa noche (lista vacía si aún no hay ninguno). La **noche** la calcula el servidor |
 | `POST` | `/viajes/de-la-noche` | Sí | Da de alta un viaje de esa noche **sin lugar**; el lugar se pone luego en su ficha |
 | `GET` | `/viajes/{id}` | No | Un viaje con sus objetos, telescopios, oculares y tripulación |
@@ -458,7 +465,7 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | `POST` | `/objetos` | Sí | Registra un objeto por identificador (lo resuelve en SIMBAD y calcula su posición) |
 | `GET` | `/resolver?q=M104` | No | Localiza un objeto en SIMBAD **sin guardarlo** (para el buscador del mapa) |
 | `GET` | `/observadores` | No | Lista los observadores |
-| `GET` | `/datos.js` | No | Emite `OBSERVADORES`/`OBJECTS`/`OBSERVACIONES` como JavaScript para el visor |
+| `GET` | `/datos.js` | No | Emite `OBSERVADORES`/`OBJECTS`/`OBSERVACIONES`/`VIAJES` como JavaScript para el visor |
 | `GET` | `/equipo/catalogo` | Sí | Catálogo global de telescopios/oculares/auxiliares |
 | `GET` | `/equipo` | Sí | Equipo personal del usuario |
 | `POST` | `/equipo/{telescopio\|ocular\|auxiliar}` | Sí | Añade una pieza a su flota (del catálogo o a medida) |

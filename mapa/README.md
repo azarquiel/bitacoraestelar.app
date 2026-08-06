@@ -40,8 +40,17 @@ galaxias observadas fuera de ella.
   aumento, zoom sobre los bocetos y anexos de detalle.
 - **Descubrir observaciones de otros observadores**: con un observador
   seleccionado, los objetos que él no ha observado (pero sí otros) se muestran
-  atenuados en gris; al pulsarlos, la ficha permite ver la observación de cada
-  uno de los demás observadores. Es configurable (`observacionesAjenas.activo`).
+  atenuados en gris; al pulsarlos, la ficha lista las demás observaciones que hay
+  de ese objeto, cada una con el viaje en el que se registró. El botón
+  **← Descubrir** lleva a esa lista desde cualquier ficha. Es configurable
+  (`observacionesAjenas.activo`).
+- **Recorrer un viaje interestelar**: una sesión de observación (la salida de un
+  observador una noche) se puede ver dibujada. Quedan solo los objetos de esa
+  salida, unidos por una **línea dorada** que va de uno a otro en el orden en que
+  se observaron, con un punteado que corre hacia el destino. Se elige en el combo
+  *Viajes interestelares* —solo tiene contenido con un observador seleccionado,
+  porque un viaje es de alguien— o se llega directo con `mapa.html?viaje=<id>`,
+  el enlace que reparte *Mis viajes*.
 
 El catálogo de la Vía Láctea contiene, de partida, **30 objetos**:
 
@@ -62,22 +71,24 @@ Bitácora Registro** desde la base de datos (ver la carpeta `registro/`).
 
 | Archivo | Qué es | Dónde va |
 |---|---|---|
-| `index.html` | Fragmento HTML para pegar en la página | Editor de WordPress |
+| `mapa.html` | Fragmento HTML para pegar en la página | Editor de WordPress |
 | `js/via-lactea-config.js` | **Ajustes**. El único que se edita a menudo | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-app.js` | La lógica del visor de la galaxia | Servidor (`/bitacora-mapa/js/`) |
 | `js/grupo-local.js` | La capa del atlas del Grupo Local | Servidor (`/bitacora-mapa/js/`) |
+| `js/vecindario-solar.js` | La capa de las estrellas cercanas al Sol | Servidor (`/bitacora-mapa/js/`) |
+| `js/via-lactea-viaje.js` | La ruta de un viaje: orden, tramos y trazo dorado | Servidor (`/bitacora-mapa/js/`) |
 | `images/` | Imágenes del mapa (cenital, de canto y bocetos) | Servidor (`/bitacora-mapa/images/`) |
 
 Los **datos** (objetos y fichas) no son un archivo: los emite el plugin en
 `/wp-json/bitacora/v1/datos.js`, en el mismo formato `OBSERVADORES` /
 `OBJECTS` / `OBSERVACIONES` que usaba el antiguo `via-lactea-datos.js` (que
-sigue funcionando como respaldo si se descomenta en `index.html`).
+sigue funcionando como respaldo si se descomenta en `mapa.html`).
 
 **Por qué los `.js` van por FTP y no pegados en el editor.** El editor de
 bloques de WordPress escapa el carácter `&` al guardar: convierte cada `&&`
 del código en `&#038;&#038;`, lo que rompe el JavaScript con un `SyntaxError`.
 Sirviéndolos como archivos `.js`, el servidor los entrega intactos. El
-fragmento `index.html` que sí se pega **no contiene lógica**.
+fragmento `mapa.html` que sí se pega **no contiene lógica**.
 
 ---
 
@@ -86,13 +97,10 @@ fragmento `index.html` que sí se pega **no contiene lógica**.
 ### 1. Subir los archivos JavaScript
 
 Por FTP (o el gestor de archivos del hosting), sube a la carpeta que sirva la
-ruta `/bitacora-mapa/js/`:
-
-```
-via-lactea-config.js
-via-lactea-app.js
-grupo-local.js
-```
+ruta `/bitacora-mapa/js/` **todos** los `.js` de `mapa/js/`. La lista exacta y,
+sobre todo, **el orden en que se cargan** están al final de `mapa.html`, que es
+la fuente de la verdad: hay dependencias entre ellos (`via-lactea-viaje.js` antes
+que las capas que lo usan, `bitacora-gaia-color.js` antes que el vecindario…).
 
 > WordPress **no permite** subir archivos `.js` desde la biblioteca de medios.
 > Hay que hacerlo por FTP.
@@ -112,14 +120,16 @@ En `/bitacora-mapa/images/`:
 ### 3. Crear la página
 
 En WordPress: **Páginas → Añadir nueva**. Añade un bloque **HTML personalizado**
-y pega dentro todo el contenido de `index.html`. Publica.
+y pega dentro todo el contenido de `mapa.html`. Publica.
 
 Si tus rutas no coinciden, ajusta las del final del fragmento:
 
 ```html
 <script src="/bitacora-mapa/js/via-lactea-config.js?v=1"></script>
 <script src="/wp-json/bitacora/v1/datos.js?v=1"></script>
+<script src="/bitacora-mapa/js/via-lactea-viaje.js?v=1"></script>
 <script src="/bitacora-mapa/js/grupo-local.js?v=1"></script>
+<!-- …y el resto, en el orden que trae mapa.html… -->
 <script src="/bitacora-mapa/js/via-lactea-app.js?v=1"></script>
 ```
 
@@ -210,11 +220,18 @@ otros):
 - `true` (por defecto): esos objetos **no se ocultan**, se muestran **atenuados
   en gris** (con algo de su color, como "deshabilitados"), tanto en la Vía Láctea
   como en el atlas del Grupo Local. Al pulsar uno, su ficha muestra la
-  información básica con el rótulo **NO VISITADO** y una lista de los
-  observadores que sí lo han observado; al elegir uno se ve su observación, con
-  un botón **← Descubrir** para volver a la lista.
+  información básica con el rótulo **NO VISITADO** y la lista de las
+  observaciones que sí hay de él.
 - `false`: comportamiento clásico. Los objetos que el observador seleccionado no
   ha observado simplemente **se ocultan**.
+
+El botón **← Descubrir** lleva a esa misma lista, y no solo se usa para volver:
+aparece en **cualquier** ficha cuyo objeto tenga más observaciones que la que se
+está viendo (entonces el rótulo del panel es **OTRAS OBSERVACIONES**). Cada
+observación se lista con el **viaje** en el que se registró —«Israel Pérez de
+Tudela Vázquez · Perseidas desde la sierra»—, que es lo que las distingue: un
+mismo observador puede haber visitado el objeto en dos salidas distintas, y las
+dos se pueden abrir.
 
 > Solo se aprecia cuando hay **varios observadores** con observaciones en la base
 > de datos: con uno solo no hay nada "ajeno" que descubrir y el mapa se ve igual.
@@ -268,8 +285,9 @@ Los objetos **extragalácticos** llevan además `l`, `b`, `dist` (años luz) y
 
 ## Estructura de los datos
 
-Tres bloques que emite el plugin: `OBSERVADORES`, `OBJECTS` y `OBSERVACIONES`
-(mismo formato que el antiguo `via-lactea-datos.js`).
+Cuatro bloques que emite el plugin: `OBSERVADORES`, `OBJECTS`, `OBSERVACIONES` y
+`VIAJES` (los tres primeros, en el mismo formato que el antiguo
+`via-lactea-datos.js`).
 
 ### Un objeto
 
@@ -327,6 +345,34 @@ Las imágenes con nombre relativo (`m27_98x.webp`) se resuelven contra
 `/bitacora-mapa/images/<objeto>/`; las que son una URL absoluta (subidas desde
 el formulario) se usan tal cual.
 
+### Los viajes
+
+`VIAJES` es un mapa `id → salida`, y cada observación lleva el `viaje` al que
+pertenece. Es lo que alimenta el combo y la ruta dorada:
+
+```javascript
+VIAJES = {
+  '7': {
+    nombre: 'Perseidas desde la sierra',   // vacío si no se le puso ninguno
+    noche: '2026-08-05',
+    observador: 'israel',
+    objetos: ['m13', 'm92', 'm57']         // EN EL ORDEN DEL RECORRIDO
+  }
+}
+```
+
+El **orden lo decide el servidor** (hora ascendente y, sin hora, al final por
+`id`), no el visor: así la ruta dibuja siempre la misma forma y *Mis viajes* y el
+mapa cuentan el mismo recorrido.
+
+Es un payload **público**, como el resto: lleva lo que hace falta para dibujar la
+ruta y nada más. La crónica, la meteorología, el cielo y el lugar de la salida se
+quedan en `/viajes/{id}`, detrás de la sesión.
+
+Un objeto visitado que **no esté en `OBJECTS`** (sin marcador en el mapa)
+desaparece en silencio de la ruta y del recuento del combo; el viaje sigue
+pudiéndose seleccionar.
+
 ---
 
 ## Controles
@@ -338,8 +384,13 @@ el formulario) se usan tal cual.
 | Rotar | `Ctrl` o `Mayús` + arrastrar | Girar dos dedos |
 | Abrir ficha | Clic en el punto | Toque |
 
-Y en pantalla: registrar observación, buscador, cambio de vista, deslizador de
-rotación, botones de zoom y leyenda.
+Y en pantalla, de arriba abajo: registrar observación, buscador, deslizadores de
+rotación, cambio de vista, filtro de **observador** y combo de **viajes
+interestelares**; a la derecha los botones de zoom, y abajo la leyenda.
+
+Mientras se recorre un viaje el **buscador queda en pausa**: navegar a otro
+objeto rompería el recorrido. Se sale eligiendo «— Todo el catálogo del
+observador —» o cambiando de observador.
 
 ---
 

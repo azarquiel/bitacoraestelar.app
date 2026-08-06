@@ -150,6 +150,8 @@
       a.style.left = (r.left + r.width  * xPct) + 'px';
       a.style.top  = (r.top  + r.height * yPct) + 'px';
     }
+
+    dibujarRuta(); // la ruta se apoya en las posiciones que acaban de fijarse
   }
 
   // --------------------------------------------------------------------------
@@ -233,6 +235,64 @@
     anchor.appendChild(scaleEl);
     img.appendChild(anchor);
     return anchor;
+  }
+
+  // --------------------------------------------------------------------------
+  // RUTA DEL VIAJE INTERESTELAR (tramo de la Vía Láctea)
+  // La salida se dibuja como una polilínea dorada que arranca en el SOL y va de
+  // un objeto a otro en el orden en que se observaron. Vive DENTRO de
+  // #mw-content, el contenedor que ya se desplaza, escala y gira, así que la
+  // ruta acompaña a los marcadores sin geometría propia; el grosor y el
+  // punteado se mantienen constantes en pantalla con vector-effect
+  // ("non-scaling-stroke"), y el movimiento lo pone una animación CSS sobre
+  // stroke-dashoffset (ver #mw-ruta en mapa.html, donde también se fija que
+  // quede por encima de la imagen y por debajo de los marcadores).
+  // --------------------------------------------------------------------------
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var rutaSvg = document.createElementNS(SVG_NS, 'svg');
+  rutaSvg.setAttribute('id', 'mw-ruta');
+  rutaSvg.style.display = 'none';
+  var rutaTrazos = ['estela', 'base', 'flujo'].map(function (clase) {
+    var pl = document.createElementNS(SVG_NS, 'polyline');
+    pl.setAttribute('class', 'mw-ruta-' + clase);
+    pl.setAttribute('vector-effect', 'non-scaling-stroke');
+    rutaSvg.appendChild(pl);
+    return pl;
+  });
+  img.appendChild(rutaSvg);
+
+  // Viaje que se está recorriendo ('' = ninguno). Lo fija aplicarViaje().
+  var viajeActivo = '';
+
+  // Los puntos de la ruta en el sistema del contenedor, leídos de los propios
+  // marcadores: ya los ha colocado repositionAnchors() y así no hay una segunda
+  // manera de calcular una posición. Un objeto apagado desde la leyenda no está
+  // en pantalla y tampoco en la línea.
+  function puntosRuta() {
+    var sufijo = isEdgeView ? '-edge' : '';
+    var sol = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
+    var pts = [];
+    if (sol) pts.push(parseFloat(sol.style.left) + ',' + parseFloat(sol.style.top));
+    var tramo = VLViaje.rutaDe(viajeActivo).galaxia;
+    for (var i = 0; i < tramo.length; i++) {
+      var a = document.getElementById(tramo[i].id + sufijo + '-anchor');
+      if (!a || a.style.display === 'none' || !a.style.left) continue;
+      pts.push(parseFloat(a.style.left) + ',' + parseFloat(a.style.top));
+    }
+    return pts;
+  }
+
+  function dibujarRuta() {
+    var pts = viajeActivo ? puntosRuta() : [];
+    if (pts.length < 2) {           // el Sol solo no es un viaje
+      rutaSvg.style.display = 'none';
+      return;
+    }
+    rutaSvg.style.width  = img.clientWidth + 'px';
+    rutaSvg.style.height = img.clientHeight + 'px';
+    var puntos = pts.join(' ');
+    rutaTrazos.forEach(function (pl) { pl.setAttribute('points', puntos); });
+    rutaSvg.style.display = '';
   }
 
   OBJECTS.forEach(function (obj) {
@@ -588,15 +648,16 @@
     };
   }
 
+  // Controles de la interfaz superpuesta: el gesto que empieza en uno de ellos
+  // es suyo, no del mapa. Sin esto, el preventDefault() del arrastre impide
+  // enfocar el buscador o desplegar un combo. Todo control nuevo que se añada
+  // al mapa tiene que entrar en esta lista.
+  var CONTROLES_UI = '#mw-search, #mw-observador, #mw-viaje, #mw-nuevo,' +
+                     ' #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control';
+
   viewer.addEventListener('mousedown', function (e) {
     if (overlayOpen()) return;
-    // No arrastrar el mapa si el clic se originó en un control de la interfaz
-    // superpuesta (buscador, botones, leyenda). Sin esto, el preventDefault()
-    // de más abajo impediría enfocar el campo de búsqueda.
-    if (e.target.closest &&
-        e.target.closest('#mw-search, #mw-observador, #mw-nuevo, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
-      return;
-    }
+    if (e.target.closest && e.target.closest(CONTROLES_UI)) return;
     // Con el vecindario solar dominando, su capa gestiona la rotación: no
     // arrastramos ni rotamos la galaxia por debajo (descentraría el Sol).
     if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.interactivo && VecindarioSolar.interactivo()) return;
@@ -729,12 +790,7 @@
 
   viewer.addEventListener('touchstart', function (e) {
     if (overlayOpen()) return;
-    // No capturar el gesto si el toque empezó en un control de la interfaz
-    // (buscador, botones, leyenda), para que el campo pueda recibir el foco.
-    if (e.target.closest &&
-        e.target.closest('#mw-search, #mw-observador, #mw-nuevo, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
-      return;
-    }
+    if (e.target.closest && e.target.closest(CONTROLES_UI)) return;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
     if (e.touches.length === 1) {
@@ -1013,9 +1069,17 @@
   var fichaAnexosRight = document.getElementById('ficha-anexos-right');
   var fichaBackBtn = document.getElementById('ficha-back');
   var fichaCurrent = -1;
-  // Contexto de "descubrimiento": si la observación mostrada se alcanzó desde la
-  // pantalla NO VISITADO, guarda cómo volver a ella (para el botón ← Descubrir).
-  var fichaVolverA = null;
+  // A dónde lleva "← Descubrir" desde la ficha que se está viendo: la pantalla
+  // de descubrimiento de este objeto, con la observación actual excluida. null
+  // cuando no hay nada más que descubrir (y entonces el botón no se muestra).
+  var fichaDescubrir = null;
+
+  // Índice de una observación dentro de OBSERVACIONES[id]. Es su identidad: un
+  // mismo observador puede tener varias del mismo objeto, en distintos viajes.
+  function indiceObservacion(id, f) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
+    return lista ? lista.indexOf(f) : -1;
+  }
 
   // El boceto se lee de resources/images/<objeto>/<archivo>. Si la entrada
   // no tiene imagen (img: null, p. ej. "Exploración"), se oculta el área.
@@ -1323,12 +1387,18 @@
   // Muestra la ficha "normal" (boceto + texto) de una observación concreta.
   //   f    : objeto observación (de OBSERVACIONES) con su _id ya asignado.
   //   info : { title, coords, pdf } para la cabecera.
-  //   opts : { volverA, observadorNombre } (opcional). Si volverA está definido,
-  //          la observación se alcanzó desde la pantalla de descubrimiento y se
-  //          muestra el botón "← Descubrir" para regresar a la lista.
+  //   opts : { volverA, observadorNombre } (opcional). volverA es la pantalla de
+  //          descubrimiento de la que se salió, para regresar a ella tal cual.
+  //          Si no la hay, "← Descubrir" se ofrece igualmente cuando el objeto
+  //          tiene MÁS observaciones que la que se está viendo: el botón es uno
+  //          solo, y siempre lleva al mismo sitio.
   function renderFichaNormal(f, info, opts) {
     opts = opts || {};
-    fichaVolverA = opts.volverA || null;
+    var idx = indiceObservacion(f._id, f);
+    fichaDescubrir = opts.volverA ||
+      (VLViaje.otrasObservaciones(f._id, idx).length
+        ? { id: f._id, info: info, excluir: idx, desdeFicha: true }
+        : null);
 
     // Restaura el modo normal (por si venimos de la pantalla de descubrimiento).
     fichaLeftCol.style.display = '';
@@ -1341,7 +1411,7 @@
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = coords;
     fichaPdfLink.href = f.pdf || (info && info.pdf) || '#';
-    fichaBackBtn.style.display = fichaVolverA ? '' : 'none';
+    fichaBackBtn.style.display = fichaDescubrir ? '' : 'none';
 
     buildFichaButtons(f);
     fichaOverlay.style.display = 'flex';
@@ -1367,10 +1437,18 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // Pantalla "NO VISITADO": información básica del objeto + la lista de los
-  // observadores que sí lo han observado, para descubrir sus observaciones.
-  function abrirFichaDescubrimiento(id, info) {
-    fichaVolverA = null;
+  // Pantalla de descubrimiento: información básica del objeto + la lista de las
+  // DEMÁS observaciones que hay de él. Es la misma pantalla se llegue desde
+  // donde se llegue, y solo cambia el rótulo: "NO VISITADO" cuando se entra
+  // desde el mapa (el observador activo no lo ha observado) y "OTRAS
+  // OBSERVACIONES" cuando se llega desde una ficha con el botón "← Descubrir".
+  //
+  // Las observaciones se identifican por su ÍNDICE, no por observador: un mismo
+  // observador puede haber visitado el objeto en dos salidas distintas y las dos
+  // tienen que poder abrirse. 'ctx' es { excluir, desdeFicha }.
+  function abrirFichaDescubrimiento(id, info, ctx) {
+    ctx = ctx || {};
+    fichaDescubrir = null;
     fichaBackBtn.style.display = 'none';
     fichaPdfLink.style.display = 'none';
     fichaLeftCol.style.display = 'none';         // solo se usa la columna de texto
@@ -1381,35 +1459,35 @@
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = (info && info.coords) || '';
 
-    var otros = VLO.observadoresDe(id, VLO.getActivo());
-    var items = otros.map(function (o) {
-      return '<li><button type="button" class="ficha-descubrir-item" data-clave="' +
-        escHtml(o.clave) + '" style="' +
+    var otras = VLViaje.otrasObservaciones(id, ctx.excluir);
+    var items = otras.map(function (o) {
+      return '<li><button type="button" class="ficha-descubrir-item" data-indice="' + o.indice + '" style="' +
         'display:block;width:100%;text-align:left;cursor:pointer;' +
         'background:rgba(126,200,255,0.10);color:#cfe6f7;' +
         'border:1px solid rgba(126,200,255,0.35);border-radius:10px;' +
         'padding:10px 14px;margin:6px 0;font-family:sans-serif;font-size:14px;">' +
-        '✦ ' + escHtml(o.nombre) + '</button></li>';
+        '✦ ' + escHtml(o.etiqueta) + '</button></li>';
     }).join('');
 
     fichaText.innerHTML =
       '<div style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;font-size:12px;' +
         'letter-spacing:.18em;text-transform:uppercase;color:#f4c76b;' +
         'border:1px solid rgba(244,199,107,.35);border-radius:8px;' +
-        'padding:8px 12px;text-align:center;margin:0 0 18px;">NO VISITADO</div>' +
+        'padding:8px 12px;text-align:center;margin:0 0 18px;">' +
+        (ctx.desdeFicha ? 'OTRAS OBSERVACIONES' : 'NO VISITADO') + '</div>' +
       '<div style="font-family:sans-serif;font-size:13px;color:#9fb6c9;margin:0 0 6px;">' +
-        'Descubrir observaciones de otros observadores</div>' +
-      (otros.length
+        'Otras observaciones</div>' +
+      (otras.length
         ? '<ul style="list-style:none;padding:0;margin:0;">' + items + '</ul>'
         : '<div style="font-family:sans-serif;font-size:13px;color:#7f93a6;">' +
           'Nadie más ha observado este objeto todavía.</div>');
     fichaText.scrollTop = 0;
 
-    // Delegación: un clic en un ítem abre la observación de ese observador.
+    // Delegación: un clic en un ítem abre esa observación concreta.
     var botones = fichaText.querySelectorAll('.ficha-descubrir-item');
     for (var i = 0; i < botones.length; i++) {
       botones[i].addEventListener('click', function () {
-        abrirFichaDeObservador(id, this.getAttribute('data-clave'), info);
+        abrirObservacionPorIndice(id, parseInt(this.getAttribute('data-indice'), 10), info, ctx);
       });
     }
 
@@ -1419,15 +1497,18 @@
     hideHint();
   }
 
-  // Muestra la observación de un observador concreto, con el botón "← Descubrir"
-  // para volver a la pantalla de la lista (abrirFichaDescubrimiento).
-  function abrirFichaDeObservador(id, clave, info) {
-    var f = VLO.fichaDeObservador(id, clave);
+  // Muestra una observación concreta de la lista de descubrimiento, con el botón
+  // "← Descubrir" para volver a la MISMA pantalla de la que se salió (por eso
+  // vuelve con su ctx: el rótulo y la observación excluida se conservan).
+  function abrirObservacionPorIndice(id, indice, info, ctx) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
+    var f = (lista && lista[indice]) ? lista[indice] : null;
     if (!f) return;
     f._id = id;
-    var nombre = (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
-      ? OBSERVADORES[clave].nombre : clave;
-    renderFichaNormal(f, info, { volverA: { id: id, info: info }, observadorNombre: nombre });
+    renderFichaNormal(f, info, {
+      volverA: { id: id, info: info, excluir: ctx && ctx.excluir, desdeFicha: ctx && ctx.desdeFicha },
+      observadorNombre: VLO.nombreObservador(f.observador)
+    });
   }
 
   function closeFicha() {
@@ -1481,10 +1562,12 @@
     };
   }
 
-  // Botón "← Descubrir": vuelve a la pantalla NO VISITADO desde la observación
-  // de otro observador.
+  // Botón "← Descubrir": lleva a las demás observaciones de este objeto, tanto
+  // si se llegó desde esa misma lista como si se está viendo una ficha normal.
   fichaBackBtn.addEventListener('click', function () {
-    if (fichaVolverA) abrirFichaDescubrimiento(fichaVolverA.id, fichaVolverA.info);
+    if (fichaDescubrir) {
+      abrirFichaDescubrimiento(fichaDescubrir.id, fichaDescubrir.info, fichaDescubrir);
+    }
   });
 
   fichaCloseBtn.addEventListener('click', closeFicha);
@@ -1523,22 +1606,27 @@
     if (sunTop) sunTop.style.display = isEdgeView ? 'none' : '';
     if (sunEdge) sunEdge.style.display = isEdgeView ? '' : 'none';
 
-    // La visibilidad de cada marcador combina TRES filtros: la vista activa
-    // (cenital/canto), el tipo (leyenda) y el observador seleccionado. Deben
-    // aplicarse juntos: si no, el filtro de observador podría revelar el
-    // marcador de la otra vista (a su posición 'edge'), que aparecería como un
-    // duplicado en una zona distinta del mapa.
+    // La visibilidad de cada marcador combina CUATRO filtros: la vista activa
+    // (cenital/canto), el tipo (leyenda), el observador seleccionado y, si se
+    // está recorriendo un viaje, la propia ruta. Deben aplicarse juntos: si no,
+    // el filtro de observador podría revelar el marcador de la otra vista (a su
+    // posición 'edge'), que aparecería como un duplicado en una zona distinta
+    // del mapa.
     var objs = img.querySelectorAll('.mw-object-anchor');
     for (var i = 0; i < objs.length; i++) {
       var a = objs[i];
+      var id = a.getAttribute('data-id');
       var inView = a.getAttribute('data-view') === currentView;
       var typeHidden = !!hiddenColors[a.getAttribute('data-color')];
-      var estado = VLO.estadoObservador(a.getAttribute('data-id'));
-      a.style.display = (inView && !typeHidden && estado !== 'ninguna') ? '' : 'none';
+      var estado = VLO.estadoObservador(id);
+      var enRuta = !viajeActivo || VLViaje.enViaje(viajeActivo, id);
+      a.style.display = (inView && !typeHidden && enRuta && estado !== 'ninguna') ? '' : 'none';
       // Objeto observado solo por otros: se muestra atenuado (gris con algo de
       // su color), como "deshabilitado". El filtro no afecta a los clics, así
       // que sigue pudiéndose pulsar para descubrir las observaciones ajenas.
-      a.style.filter = (estado === 'ajena') ? 'grayscale(0.82) opacity(0.55)' : '';
+      // Durante un viaje los objetos de la ruta van siempre a todo color: son
+      // las escalas de la travesía, no observaciones ajenas.
+      a.style.filter = (estado === 'ajena' && !viajeActivo) ? 'grayscale(0.82) opacity(0.55)' : '';
     }
   }
 
@@ -1700,6 +1788,8 @@
 
     observadorSelect.addEventListener('change', function () {
       VLO.setActivo(observadorSelect.value);
+      poblarViajes();          // los viajes son de cada observador: se rehacen
+      aplicarViaje('');        // y el que se estuviera recorriendo termina aquí
       aplicarFiltroObservador();
       var fO = document.getElementById('ficha-overlay');
       if (fO && fO.style.display === 'flex' && typeof closeFicha === 'function') closeFicha();
@@ -1757,9 +1847,167 @@
     }, CONFIG.busqueda.avisoSegundos * 1000);
   }
 
+  // ===========================================================================
+  // VIAJES INTERESTELARES
+  // Recorrer un viaje deja en el mapa solo los objetos de esa salida, unidos por
+  // la ruta dorada. El combo se llena con los viajes del observador activo (los
+  // viajes son de cada observador: sin observador no hay nada que ofrecer) y se
+  // puede llegar directamente con ?viaje=<id>. Mientras dura el viaje el
+  // buscador queda desactivado: navegar a otro objeto rompería el recorrido.
+  // ===========================================================================
+  var viajeSelect = document.getElementById('mw-viaje');
+
+  function poblarViajes() {
+    if (!viajeSelect) return;
+    var activo = VLO.getActivo();
+    var lista = VLViaje.viajesDe(activo);
+    if (!lista.length) {
+      // Sin observador no hay nada que ofrecer; con observador pero sin viajes
+      // el combo tiene que decir eso, no volver a pedir un observador ya puesto.
+      viajeSelect.innerHTML = '<option value="">' + (activo
+        ? 'Este observador no tiene viajes registrados'
+        : 'Seleccione un observador para ver sus viajes') + '</option>';
+      viajeSelect.disabled = true;
+      return;
+    }
+    var html = '<option value="">— Todo el catálogo del observador —</option>';
+    lista.forEach(function (v) {
+      html += '<option value="' + v.id + '">' +
+        v.etiqueta.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
+    });
+    viajeSelect.innerHTML = html;
+    viajeSelect.disabled = false;
+  }
+
+  // Encuadra dos puntos del mapa (en % de la imagen): centra su punto medio y
+  // aleja lo justo para que ambos quepan con holgura. Sirve para que el viaje
+  // arranque enseñando el puerto de salida y la primera escala a la vez.
+  function encuadrarDosPuntos(a, b) {
+    var activeImg = isEdgeView
+      ? document.getElementById('mw-image-edge')
+      : document.getElementById('mw-image');
+    if (!activeImg || !activeImg.naturalWidth) return;
+    var r = getImgRect(activeImg);
+    var dx = (a.x - b.x) / 100 * r.width;
+    var dy = (a.y - b.y) / 100 * r.height;
+    var sep = Math.sqrt(dx * dx + dy * dy);
+    var vr = viewer.getBoundingClientRect();
+    var s = (sep > 1) ? (Math.min(vr.width, vr.height) * 0.6) / sep : CONFIG.busqueda.zoom;
+    centerOnAnchor((a.x + b.x) / 2, (a.y + b.y) / 2, s);
+  }
+
+  // Entra en la capa del vecindario solar con el Sol centrado y el campo justo
+  // para ver la primera estrella. El tope de zoom normal (25) no llega hasta
+  // aquí: se usa el del vecindario, el mismo que habilita acercarse al Sol.
+  function irAlVecindario(obj) {
+    if (isEdgeView) performViewSwap();   // el vecindario solo existe en cenital
+    var galImg = document.getElementById('mw-image');
+    var vr = viewer.getBoundingClientRect();
+    var R = Math.min(vr.width, vr.height) * 0.42;
+    var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : R;
+    var fovFin = (CONFIG.vecindario && CONFIG.vecindario.fovFinalAl) || 900;
+    var fov = Math.min(fovFin * 0.8, Math.max((obj.dist || 10) * 2.5, 12));
+    var s = (imgW > 0) ? (R * CONFIG.fisica.anchoImagenAl) / (imgW * fov) : MAXSCALE_VECINDARIO;
+    centerOnAnchor(CONFIG.sol.cenital.x, CONFIG.sol.cenital.y,
+                   Math.min(s, MAXSCALE_VECINDARIO), MAXSCALE_VECINDARIO);
+  }
+
+  // Entra en el atlas del Grupo Local con la primera galaxia del viaje a la
+  // vista. No se usa el camino del buscador (irAObjetoRegistrado): dejaría el
+  // objeto con el anillo de "localizado", y el viaje se enseña con su ruta
+  // dorada, no marcando una escala como si se hubiera buscado.
+  function encuadrarEnAtlas(obj) {
+    hideHint();
+    busquedaMaxDist = obj.dist;
+    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.encuadrar) {
+      GrupoLocal.encuadrar({ l: obj.l, b: obj.b, d: obj.dist });
+    }
+    irAlAtlasConDistancia(obj.dist);
+  }
+
+  // Deja la vista donde empieza el viaje: la capa del primer objeto visitado,
+  // con el origen del tramo a la vista. A partir de ahí manda el usuario.
+  function encuadrarViaje(id) {
+    var inicio = VLViaje.capaInicial(id);
+    if (!inicio) return;
+    if (inicio.capa === 'vecindario') { irAlVecindario(inicio.objeto); return; }
+    if (inicio.capa === 'grupoLocal') { encuadrarEnAtlas(inicio.objeto); return; }
+    if (isEdgeView) {
+      var g = GAL[inicio.objeto.id];
+      encuadrarDosPuntos(
+        { x: (edgeRotation !== 0) ? sunEdgeXAt(edgeRotation) : CONFIG.sol.canto.x,
+          y: CONFIG.sol.canto.y },
+        { x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : inicio.objeto.edge.x,
+          y: inicio.objeto.edge.y });
+    } else {
+      encuadrarDosPuntos(CONFIG.sol.cenital, inicio.objeto.top);
+    }
+  }
+
+  // Un viaje puede cruzar escalas (una estrella cercana, un Messier y una
+  // galaxia son tres capas distintas). El mapa no puede enseñarlas a la vez, así
+  // que se avisa de dónde sigue la ruta y el usuario llega con el zoom.
+  function avisarCambioDeCapa(id) {
+    var nombres = {
+      vecindario: 'el vecindario solar (acercándose al Sol)',
+      galaxia: 'la Vía Láctea',
+      grupoLocal: 'el Grupo Local (alejándose)'
+    };
+    var escalas = VLViaje.escalasDe(id);
+    if (escalas.length > 1) {
+      showToast('Este viaje cruza varias escalas: continúa en ' +
+        escalas.map(function (e) { return nombres[e]; }).join(' y ') + '.');
+    }
+  }
+
+  function aplicarViaje(id) {
+    viajeActivo = id || '';
+    if (viajeSelect && viajeSelect.value !== viajeActivo) viajeSelect.value = viajeActivo;
+
+    // Sin viaje va null: cada capa vuelve a enseñar su catálogo entero. Con
+    // viaje va la lista, aunque venga vacía, y esa capa se queda sin objetos
+    // (el viaje no pasa por su escala).
+    var ruta = VLViaje.rutaDe(viajeActivo);
+    var idsDe = function (objs) {
+      return viajeActivo ? objs.map(function (o) { return o.id; }) : null;
+    };
+    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setViaje) {
+      GrupoLocal.setViaje(idsDe(ruta.grupoLocal));
+      // Una búsqueda anterior deja su anillo puesto: en el viaje sobra, porque
+      // ninguna escala está más señalada que las demás.
+      if (viajeActivo && GrupoLocal.clearTarget) GrupoLocal.clearTarget();
+    }
+    if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.setViaje) {
+      VecindarioSolar.setViaje(idsDe(ruta.vecindario));
+    }
+    // Durante el viaje el buscador no navega: se apaga y se dice por qué.
+    if (searchInput) {
+      searchInput.disabled = !!viajeActivo;
+      searchInput.placeholder = viajeActivo ? 'Buscador en pausa durante el viaje' : 'Buscar objeto…';
+      searchInput.style.opacity = viajeActivo ? '0.5' : '';
+    }
+    refreshAnchors();
+    repositionAnchors();
+
+    // La URL refleja el viaje para poder compartirlo tal cual se está viendo.
+    if (window.history && history.replaceState) {
+      var u = new URL(window.location.href);
+      if (viajeActivo) u.searchParams.set('viaje', viajeActivo);
+      else u.searchParams.delete('viaje');
+      history.replaceState(null, '', u.toString());
+    }
+    if (viajeActivo) { encuadrarViaje(viajeActivo); avisarCambioDeCapa(viajeActivo); }
+  }
+
+  if (viajeSelect) {
+    viajeSelect.addEventListener('change', function () { aplicarViaje(viajeSelect.value); });
+  }
+
   // Centra el mapa en un ancla concreta (posición en % de la imagen) y aplica
   // el zoom pedido. Reutiliza la misma geometría que repositionAnchors().
-  function centerOnAnchor(xPct, yPct, targetScale) {
+  // topeMax eleva el tope de zoom por encima del normal: solo lo usa la entrada
+  // al vecindario solar, que vive mucho más cerca que el resto del mapa.
+  function centerOnAnchor(xPct, yPct, targetScale, topeMax) {
     var activeImg = isEdgeView
       ? document.getElementById('mw-image-edge')
       : document.getElementById('mw-image');
@@ -1784,7 +2032,7 @@
       ay = ny + dx * Math.sin(a) + dy * Math.cos(a);
     }
 
-    scale = Math.min(maxScale, Math.max(minScale, targetScale));
+    scale = Math.min(topeMax || maxScale, Math.max(minScale, targetScale));
     // Para que (ax,ay) quede en el centro del visor:
     //   posición_en_pantalla = (ax - W/2) * scale + posX = 0  →  posX = -(ax-W/2)*scale
     posX = -(ax - W / 2) * scale;
@@ -2125,4 +2373,39 @@
 
   applyTransform();
   repositionAnchors();
+
+  // --------------------------------------------------------------------------
+  // ARRANQUE CON UN VIAJE: mapa.html?viaje=<id>
+  // El enlace lo reparte "Mis viajes". Manda sobre el arranque normal (que abre
+  // el mapa con las observaciones propias): selecciona al dueño del viaje y
+  // recorre su ruta. Si el viaje ya no existe, se avisa y se arranca normal.
+  // El encuadre necesita las dimensiones reales de la imagen, así que espera a
+  // que haya cargado.
+  // --------------------------------------------------------------------------
+  poblarViajes();
+  var viajePedido = (function () {
+    try { return new URL(window.location.href).searchParams.get('viaje') || ''; }
+    catch (e) { return ''; }
+  })();
+  if (viajePedido) {
+    var arrancarViaje = function () {
+      var duenyo = VLViaje.observadorDe(viajePedido);
+      if (!duenyo) {
+        showToast('Ese viaje ya no está disponible.');
+        if (history.replaceState) {
+          var u = new URL(window.location.href);
+          u.searchParams.delete('viaje');
+          history.replaceState(null, '', u.toString());
+        }
+        return;
+      }
+      if (observadorSelect) observadorSelect.value = duenyo;
+      VLO.setActivo(duenyo);
+      aplicarFiltroObservador();
+      poblarViajes();
+      aplicarViaje(viajePedido);
+    };
+    if (_galImg && _galImg.complete && _galImg.naturalWidth) arrancarViaje();
+    else if (_galImg) _galImg.addEventListener('load', arrancarViaje);
+  }
 })();

@@ -12,7 +12,7 @@
  * módulo carga DESPUÉS su propia hoja con lo que le es específico
  * (bitacora-formulario.css, bitacora-listado.css, bitacora-ocular.css).
  *
- * NOTA: el mapa cenital (mapa/index.html) es una superficie distinta (canvas a
+ * NOTA: el mapa cenital (mapa/mapa.html) es una superficie distinta (canvas a
  * pantalla completa) y no usa esta base.
  *
  * Subir por FTP a /wp-content/uploads/bitacora/ e incrementar el ?v=N al

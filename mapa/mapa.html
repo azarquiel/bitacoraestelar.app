@@ -29,7 +29,8 @@
   /* Controles del mapa: oscuros y muy translúcidos, con desenfoque y texto
      claro (el fondo del mapa es negro). La leyenda queda intacta. */
   #mw-zoom-in, #mw-zoom-out, #mw-reset, #mw-toggle-view, #mw-search,
-  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo, #mw-observador {
+  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo,
+  #mw-observador, #mw-viaje {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     color: #eaf1fb !important;
@@ -132,6 +133,44 @@
     transition: opacity 0.3s;
   }
   #vs-scale b { color: #ffe08a; font-weight: 500; }
+
+  /* RUTA DEL VIAJE INTERESTELAR (tramo de la Vía Láctea). Vive dentro de
+     #mw-content, que se desplaza, escala y gira: la línea acompaña sola a los
+     marcadores. non-scaling-stroke (lo pone el JS) mantiene el grosor y el
+     punteado constantes en pantalla pese al zoom. Los tres trazos se superponen:
+     la estela ancha da el resplandor, la base marca el camino recorrido y el
+     flujo es el punteado que corre hacia el destino, como una nave entrando en
+     el hiperespacio. El ciclo del punteado (14+10 px) a 26 px/s = 0,923 s.
+     Los tres colores son el mismo oro #f4c76b (244,199,107) de "Registrar".
+
+     La ruta va por encima de la imagen de la galaxia y por debajo de los
+     marcadores: la línea pasa bajo los puntos, no por encima. El orden del DOM
+     no basta (los marcadores del Sol están escritos aquí arriba, antes que el
+     <svg>, que lo crea el JS), así que lo fijan estos dos z-index. */
+  #mw-ruta {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: visible;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  #mw-content .mw-object-anchor, #mw-sun-anchor, #sun-edge-anchor { z-index: 2; }
+  .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 7; }
+  .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 1.2; }
+  .mw-ruta-flujo {
+    stroke: rgba(244,199,107,0.9);
+    stroke-width: 2;
+    stroke-dasharray: 14 10;
+    filter: drop-shadow(0 0 4px rgba(244,199,107,0.75));
+    animation: mw-ruta-flujo 0.923s linear infinite;
+  }
+  @keyframes mw-ruta-flujo { to { stroke-dashoffset: -24; } }
+  @media (prefers-reduced-motion: reduce) {
+    .mw-ruta-flujo { animation: none; }
+  }
 </style>
 
 <div id="mw-viewer" style="
@@ -349,21 +388,13 @@
     max-width: calc(100vw - 90px);
     z-index: 20;
   ">
-    <!-- Fila 1: registrar observación + selector de observador -->
+    <!-- Fila 1: registrar observación -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <a id="mw-nuevo" href="https://bitacoraestelar.app/registro-de-observacion/" style="
         text-decoration:none;border-radius:20px;
         background:rgba(12,16,28,0.32);color:#f4c76b;font-weight:600;
         font-size:13px;padding:8px 16px;font-family:sans-serif;white-space:nowrap;
       ">✦ Registrar observación</a>
-
-      <select id="mw-observador" title="Filtrar por observador" style="
-        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-        font-size:13px;padding:8px 12px;width:186px;
-        font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
-      ">
-        <option value="">Todas las observaciones</option>
-      </select>
     </div>
 
     <!-- Fila 2: buscar objeto (debajo de registrar observación) -->
@@ -428,6 +459,30 @@
         border:none;border-radius:20px;background:rgba(12,16,28,0.32);
         font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
       ">🔄 Vista de canto</button>
+    </div>
+
+    <!-- Fila 5: quién observa -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="mw-observador" title="Filtrar por observador" style="
+        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
+        font-size:13px;padding:8px 12px;width:186px;
+        font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
+      ">
+        <option value="">Todas las observaciones</option>
+      </select>
+    </div>
+
+    <!-- Fila 6: viajes interestelares. Los viajes son de cada observador, así
+         que este combo solo tiene contenido cuando hay uno seleccionado arriba;
+         mientras tanto va deshabilitado y lo dice. Lo llena via-lactea-app.js. -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="mw-viaje" title="Recorrer un viaje interestelar" disabled style="
+        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
+        font-size:13px;padding:8px 12px;width:186px;
+        font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
+      ">
+        <option value="">Seleccione un observador para ver sus viajes</option>
+      </select>
     </div>
   </div>
   <div id="mw-search-toast" style="
@@ -724,8 +779,8 @@
         <div id="ficha-title" style="color: #7ec8ff; font-size: 14px; font-weight: 600;"></div>
         <div id="ficha-coords" style="color: #9fb6c9; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
       </div>
-      <!-- Solo visible al ver la observación de OTRO observador alcanzada desde
-           la pantalla de descubrimiento: vuelve a la lista de observadores. -->
+      <!-- Lleva a las DEMÁS observaciones de este objeto (las de otros y las de
+           otras salidas del mismo observador). Solo se ve si hay alguna. -->
       <button id="ficha-back" type="button" style="
         display: none;
         color: #7ec8ff;
@@ -870,20 +925,23 @@
      ============================================================ -->
 <script src="/bitacora-mapa/js/via-lactea-config.js?v=20260721_1900"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
-     El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript, en el
-     mismo formato que el antiguo via-lactea-datos.js, asi que es intercambiable.
-     Si el endpoint no respondiera, descomenta la linea del archivo estatico. -->
-<script src="/wp-json/bitacora/v1/datos.js?v=20260714_0100"></script>
+     El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
+     Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
+     el mismo formato, pero sin VIAJES, y el mapa se queda sin rutas. -->
+<script src="/wp-json/bitacora/v1/datos.js?v=20260806_1200"></script>
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
+<!-- VIAJES INTERESTELARES: lo consultan las tres capas y la app, así que va
+     ANTES que todas ellas (necesita VIAJES/OBSERVACIONES/OBJECTS de los datos). -->
+<script src="/bitacora-mapa/js/via-lactea-viaje.js?v=20260806_2100"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260716_1900"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260806_2100"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260731_2200"></script>
 <!-- Selección pura de estrellas del vecindario: ANTES de vecindario-solar.js y
      DESPUÉS de bitacora-gaia-color.js (necesita claseEspectral). -->
 <script src="/bitacora-mapa/js/via-lactea-vecindario-catalogo.js?v=20260722_1600"></script>
-<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260722_1600"></script>
+<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260806_2100"></script>
 <!-- SUBMÓDULOS de la app (extraídos del módulo-dios): cargar ANTES de
      via-lactea-app.js. observadores necesita OBSERVACIONES/OBSERVADORES (datos)
      y CONFIG; zoom-imagen necesita CONFIG. -->
@@ -891,5 +949,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260722_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260722_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260806_2100"></script>
 </li>

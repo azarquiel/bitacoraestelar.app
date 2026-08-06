@@ -19,7 +19,7 @@
 var GrupoLocal = (function () {
 
   // ---- Colores por clase de Hubble (leyenda del Grupo Local) ----------------
-  // Deben coincidir con la leyenda #mw-legend-hubble de index.html y con
+  // Deben coincidir con la leyenda #mw-legend-hubble de mapa.html y con
   // bitacora_color_por_clase() del plugin PHP.
   var HUBBLE_COLORS = {
     E:   '#f4c76b', // elíptica
@@ -138,14 +138,14 @@ var GrupoLocal = (function () {
   // localiza en SIMBAD para enseñar dónde está (se dibuja resaltado). Ver focus().
   var target = null;
 
-  // ---- Elementos del DOM (se inyectan en index.html) ------------------------
+  // ---- Elementos del DOM (se inyectan en mapa.html) ------------------------
   var canvas = document.getElementById('gl-sky');
   var tip = document.getElementById('gl-tip');
   var scaleTag = document.getElementById('gl-scale');
   var stage = document.getElementById('mw-viewer');
   if (!canvas || !stage) {
     // Sin la capa no hay nada que hacer; el visor de la galaxia sigue igual.
-    return { ready: false, sync: function () {} };
+    return { ready: false, sync: function () {}, setViaje: function () {} };
   }
   var ctx = canvas.getContext('2d');
 
@@ -274,6 +274,30 @@ var GrupoLocal = (function () {
     }
   }
 
+  // ---- Ruta del viaje interestelar ------------------------------------------
+  // El tramo EXTRAGALÁCTICO de una salida: la nave sale de la Vía Láctea —que
+  // aquí ya es un punto, el origen del atlas— y va de una galaxia a otra en el
+  // orden en que se observaron. El tramo interior lo dibuja la vista de la
+  // galaxia, y el salto entre las dos escalas es el propio fundido del zoom.
+  // Los ids los fija el visor principal con setViaje(). null = no se está
+  // recorriendo ningún viaje (el atlas enseña todo); [] = viaje en marcha que
+  // no pasa por aquí, y entonces el atlas se queda vacío, como debe.
+  var rutaIds = null;
+
+  function drawRutaViaje() {
+    if (!rutaIds || !rutaIds.length || typeof VLViaje === 'undefined') return;
+    var puntos = [project({ x: 0, y: 0, z: 0 })];   // la Vía Láctea, el puerto de origen
+    for (var i = 0; i < rutaIds.length; i++) {
+      for (var j = 0; j < objects.length; j++) {
+        if (objects[j].id !== rutaIds[i]) continue;
+        if (hiddenTipos && hiddenTipos[objects[j].tipo || '']) break;  // apagada en la leyenda
+        puntos.push(project(objects[j]));
+        break;
+      }
+    }
+    VLViaje.trazarCanvas(ctx, puntos, VLViaje.fase(), layerAlpha);
+  }
+
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
   function render() {
@@ -290,10 +314,13 @@ var GrupoLocal = (function () {
 
     drawStars();
     drawGrid();
+    drawRutaViaje();
 
-    // Se omiten los tipos de Hubble ocultados desde la leyenda.
+    // Se omiten los tipos de Hubble ocultados desde la leyenda y, si se está
+    // recorriendo un viaje, todo lo que no forme parte de esa salida.
     var projected = objects
       .filter(function (o) { return !(hiddenTipos && hiddenTipos[o.tipo || '']); })
+      .filter(function (o) { return !rutaIds || rutaIds.indexOf(o.id) >= 0; })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
 
@@ -520,14 +547,19 @@ var GrupoLocal = (function () {
     focus(o.l, o.b, o.d, o.name, o.tipo, true);
   }
 
-  function focus(l, b, d, name, tipo, soloAnillo) {
+  // Encuadra un objeto del atlas SIN señalarlo: mueve la cámara igual que
+  // focus(), pero no deja el anillo de "objeto buscado". Lo usa la ruta de un
+  // viaje, que se enseña con su línea dorada y no con la marca del buscador.
+  function encuadrar(o) { orientarHacia(o.l, o.b, o.d); }
+
+  // Orienta la cámara para que el objeto quede centrado en horizontal pero
+  // DESPLAZADO por encima del centro (no sobre la Vía Láctea, que siempre se
+  // proyecta en el origen). El desplazamiento en pantalla es (y2/margen)·R;
+  // se busca ~0,45·R eligiendo y2 = frac. Cierre analítico: con el yaw que
+  // anula la componente horizontal, y2 = cos(pitch + psi), psi = atan2(uz, h).
+  function orientarHacia(l, b, d) {
     var margen = (window.CONFIG && CONFIG.busqueda && CONFIG.busqueda.margenExtragalactico) || 1.8;
     FOV_MAX = Math.max(FOV_MAX, d * (margen + 0.6));
-    // Se orienta la vista para que el objeto quede centrado en horizontal pero
-    // DESPLAZADO por encima del centro (no sobre la Vía Láctea, que siempre se
-    // proyecta en el origen). El desplazamiento en pantalla es (y2/margen)·R;
-    // se busca ~0,45·R eligiendo y2 = frac. Cierre analítico: con el yaw que
-    // anula la componente horizontal, y2 = cos(pitch + psi), psi = atan2(uz, h).
     var u = galToXYZ(l, b, 1);
     yaw = Math.atan2(u.x, u.y);
     var h = Math.sqrt(u.x * u.x + u.y * u.y);
@@ -535,6 +567,10 @@ var GrupoLocal = (function () {
     var psi = Math.atan2(u.z, h);
     var p = Math.acos(Math.max(-1, Math.min(1, frac))) - psi;
     pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p));
+  }
+
+  function focus(l, b, d, name, tipo, soloAnillo) {
+    orientarHacia(l, b, d);
     var pos = galToXYZ(l, b, d);
     target = { name: name || '', desc: '', l: l, b: b, d: d, tipo: tipo || '',
                color: colorDe({ tipo: tipo }), x: pos.x, y: pos.y, z: pos.z,
@@ -593,6 +629,7 @@ var GrupoLocal = (function () {
   // permitir alejar la vista hasta que ese objeto sea visible.
   // buscar/focusObject: localizar y enfocar un objeto YA presente en el atlas.
   // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
+  // encuadrar: mover la vista hasta un objeto SIN marcarlo como buscado.
   // onObjectClick: lo asigna via-lactea-app.js para abrir la ficha al hacer clic.
   // setObservador: el visor principal comunica el observador activo del filtro y
   // si la funcionalidad de descubrir observaciones ajenas está activa, para
@@ -601,11 +638,18 @@ var GrupoLocal = (function () {
     activeObs = clave || '';
     ajenasActivo = !!activo;
   }
+  // setViaje: el tramo extragaláctico de la salida que se está recorriendo, como
+  // ids de objeto EN ORDEN. null (o nada) = se acabó el viaje y vuelve el atlas
+  // entero; lista vacía = hay viaje, pero no llega hasta aquí.
+  function setViaje(ids) {
+    rutaIds = ids || null;
+  }
   var API = {
     ready: true, sync: sync, maxDist: maxDist, alcanceMax: ALCANCE_MAX,
     buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
     focusObject: focusObject, focus: focus, clearTarget: clearTarget,
-    setObservador: setObservador,
+    encuadrar: encuadrar,
+    setObservador: setObservador, setViaje: setViaje,
     onObjectClick: null
   };
   return API;
