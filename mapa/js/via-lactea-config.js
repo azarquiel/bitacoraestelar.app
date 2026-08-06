@@ -197,13 +197,15 @@
     //   fovFinalAl  : campo (al) en que el fundido está COMPLETO (solo vecindario).
     //   fovMinAl    : campo mínimo (radio, al) al que se puede acercar (~8 al ≈ 16 al de diámetro).
     //   distMaxAl   : distancia máxima (al) para considerar una estrella "del vecindario".
+    //                 fovFinalAl debe ser ≳ 0,84 × distMaxAl: si no, la escena se
+    //                 vuelve opaca con las estrellas más lejanas ya fuera de cuadro.
     //   autoGiro    : giro ambiental lento de la escena (radianes por fotograma).
     // -------------------------------------------------------------------------
     vecindario: {
       zoomMaximo: 6500,
       proximidad: 0.28,
-      fovInicioAl: 2500,
-      fovFinalAl: 900,
+      fovInicioAl: 5000,
+      fovFinalAl: 1800,
       fovMinAl: 8,
       distMaxAl: 1000,
       autoGiro: 0.0006
