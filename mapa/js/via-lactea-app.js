@@ -1912,13 +1912,26 @@
                    Math.min(s, MAXSCALE_VECINDARIO), MAXSCALE_VECINDARIO);
   }
 
+  // Entra en el atlas del Grupo Local con la primera galaxia del viaje a la
+  // vista. No se usa el camino del buscador (irAObjetoRegistrado): dejaría el
+  // objeto con el anillo de "localizado", y el viaje se enseña con su ruta
+  // dorada, no marcando una escala como si se hubiera buscado.
+  function encuadrarEnAtlas(obj) {
+    hideHint();
+    busquedaMaxDist = obj.dist;
+    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.encuadrar) {
+      GrupoLocal.encuadrar({ l: obj.l, b: obj.b, d: obj.dist });
+    }
+    irAlAtlasConDistancia(obj.dist);
+  }
+
   // Deja la vista donde empieza el viaje: la capa del primer objeto visitado,
   // con el origen del tramo a la vista. A partir de ahí manda el usuario.
   function encuadrarViaje(id) {
     var inicio = VLViaje.capaInicial(id);
     if (!inicio) return;
     if (inicio.capa === 'vecindario') { irAlVecindario(inicio.objeto); return; }
-    if (inicio.capa === 'grupoLocal') { irAObjetoRegistrado(inicio.objeto); return; }
+    if (inicio.capa === 'grupoLocal') { encuadrarEnAtlas(inicio.objeto); return; }
     if (isEdgeView) {
       var g = GAL[inicio.objeto.id];
       encuadrarDosPuntos(
@@ -1960,6 +1973,9 @@
     };
     if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setViaje) {
       GrupoLocal.setViaje(idsDe(ruta.grupoLocal));
+      // Una búsqueda anterior deja su anillo puesto: en el viaje sobra, porque
+      // ninguna escala está más señalada que las demás.
+      if (viajeActivo && GrupoLocal.clearTarget) GrupoLocal.clearTarget();
     }
     if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.setViaje) {
       VecindarioSolar.setViaje(idsDe(ruta.vecindario));
