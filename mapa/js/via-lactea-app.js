@@ -500,8 +500,10 @@
     if (isEdgeView) return false;
     var el = document.getElementById('mw-sun-anchor');
     if (!el) return false;
+    // El ancla mide 0x0 (sus hijos son absolutos): su caja ES su posición, así
+    // que no se puede exigir que tenga tamaño. Sin colocar aún, no hay Sol.
+    if (!el.style.left) return false;
     var r = el.getBoundingClientRect();
-    if (!r.width && !r.height) return false;
     var vr = viewer.getBoundingClientRect();
     var dx = (r.left + r.width / 2) - (vr.left + vr.width / 2);
     var dy = (r.top + r.height / 2) - (vr.top + vr.height / 2);
