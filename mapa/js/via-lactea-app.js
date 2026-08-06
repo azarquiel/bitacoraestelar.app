@@ -1767,6 +1767,8 @@
 
     observadorSelect.addEventListener('change', function () {
       VLO.setActivo(observadorSelect.value);
+      poblarViajes();          // los viajes son de cada observador: se rehacen
+      aplicarViaje('');        // y el que se estuviera recorriendo termina aquí
       aplicarFiltroObservador();
       var fO = document.getElementById('ficha-overlay');
       if (fO && fO.style.display === 'flex' && typeof closeFicha === 'function') closeFicha();
@@ -1824,9 +1826,138 @@
     }, CONFIG.busqueda.avisoSegundos * 1000);
   }
 
+  // ===========================================================================
+  // VIAJES INTERESTELARES
+  // Recorrer un viaje deja en el mapa solo los objetos de esa salida, unidos por
+  // la ruta dorada. El combo se llena con los viajes del observador activo (los
+  // viajes son de cada observador: sin observador no hay nada que ofrecer) y se
+  // puede llegar directamente con ?viaje=<id>. Mientras dura el viaje el
+  // buscador queda desactivado: navegar a otro objeto rompería el recorrido.
+  // ===========================================================================
+  var viajeSelect = document.getElementById('mw-viaje');
+
+  function poblarViajes() {
+    if (!viajeSelect) return;
+    var lista = VLViaje.viajesDe(VLO.getActivo());
+    if (!lista.length) {
+      viajeSelect.innerHTML = '<option value="">Seleccione un observador para ver sus viajes</option>';
+      viajeSelect.disabled = true;
+      return;
+    }
+    var html = '<option value="">— Todo el catálogo del observador —</option>';
+    lista.forEach(function (v) {
+      html += '<option value="' + v.id + '">' +
+        v.etiqueta.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
+    });
+    viajeSelect.innerHTML = html;
+    viajeSelect.disabled = false;
+  }
+
+  // Encuadra dos puntos del mapa (en % de la imagen): centra su punto medio y
+  // aleja lo justo para que ambos quepan con holgura. Sirve para que el viaje
+  // arranque enseñando el puerto de salida y la primera escala a la vez.
+  function encuadrarDosPuntos(a, b) {
+    var activeImg = isEdgeView
+      ? document.getElementById('mw-image-edge')
+      : document.getElementById('mw-image');
+    if (!activeImg || !activeImg.naturalWidth) return;
+    var r = getImgRect(activeImg);
+    var dx = (a.x - b.x) / 100 * r.width;
+    var dy = (a.y - b.y) / 100 * r.height;
+    var sep = Math.sqrt(dx * dx + dy * dy);
+    var vr = viewer.getBoundingClientRect();
+    var s = (sep > 1) ? (Math.min(vr.width, vr.height) * 0.6) / sep : CONFIG.busqueda.zoom;
+    centerOnAnchor((a.x + b.x) / 2, (a.y + b.y) / 2, s);
+  }
+
+  // Entra en la capa del vecindario solar con el Sol centrado y el campo justo
+  // para ver la primera estrella. El tope de zoom normal (25) no llega hasta
+  // aquí: se usa el del vecindario, el mismo que habilita acercarse al Sol.
+  function irAlVecindario(obj) {
+    if (isEdgeView) performViewSwap();   // el vecindario solo existe en cenital
+    var galImg = document.getElementById('mw-image');
+    var vr = viewer.getBoundingClientRect();
+    var R = Math.min(vr.width, vr.height) * 0.42;
+    var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : R;
+    var fovFin = (CONFIG.vecindario && CONFIG.vecindario.fovFinalAl) || 900;
+    var fov = Math.min(fovFin * 0.8, Math.max((obj.dist || 10) * 2.5, 12));
+    var s = (imgW > 0) ? (R * CONFIG.fisica.anchoImagenAl) / (imgW * fov) : MAXSCALE_VECINDARIO;
+    centerOnAnchor(CONFIG.sol.cenital.x, CONFIG.sol.cenital.y,
+                   Math.min(s, MAXSCALE_VECINDARIO), MAXSCALE_VECINDARIO);
+  }
+
+  // Deja la vista donde empieza el viaje: la capa del primer objeto visitado,
+  // con el origen del tramo a la vista. A partir de ahí manda el usuario.
+  function encuadrarViaje(id) {
+    var inicio = VLViaje.capaInicial(id);
+    if (!inicio) return;
+    if (inicio.capa === 'vecindario') { irAlVecindario(inicio.objeto); return; }
+    if (inicio.capa === 'grupoLocal') { irAObjetoRegistrado(inicio.objeto); return; }
+    if (isEdgeView) {
+      var g = GAL[inicio.objeto.id];
+      encuadrarDosPuntos(
+        { x: (edgeRotation !== 0) ? sunEdgeXAt(edgeRotation) : CONFIG.sol.canto.x,
+          y: CONFIG.sol.canto.y },
+        { x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : inicio.objeto.edge.x,
+          y: inicio.objeto.edge.y });
+    } else {
+      encuadrarDosPuntos(CONFIG.sol.cenital, inicio.objeto.top);
+    }
+  }
+
+  // Un viaje puede cruzar escalas (una estrella cercana, un Messier y una
+  // galaxia son tres capas distintas). El mapa no puede enseñarlas a la vez, así
+  // que se avisa de dónde sigue la ruta y el usuario llega con el zoom.
+  function avisarCambioDeCapa(id) {
+    var ruta = VLViaje.rutaDe(id);
+    var otras = [];
+    if (ruta.vecindario.length) otras.push('el vecindario solar (acercándose al Sol)');
+    if (ruta.galaxia.length) otras.push('la Vía Láctea');
+    if (ruta.grupoLocal.length) otras.push('el Grupo Local (alejándose)');
+    if (otras.length > 1) {
+      showToast('Este viaje cruza varias escalas: continúa en ' + otras.join(' y ') + '.');
+    }
+  }
+
+  function aplicarViaje(id) {
+    viajeActivo = id || '';
+    if (viajeSelect && viajeSelect.value !== viajeActivo) viajeSelect.value = viajeActivo;
+
+    var ruta = VLViaje.rutaDe(viajeActivo);
+    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setViaje) {
+      GrupoLocal.setViaje(ruta.grupoLocal.map(function (o) { return o.id; }));
+    }
+    if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.setViaje) {
+      VecindarioSolar.setViaje(ruta.vecindario.map(function (o) { return o.id; }));
+    }
+    // Durante el viaje el buscador no navega: se apaga y se dice por qué.
+    if (searchInput) {
+      searchInput.disabled = !!viajeActivo;
+      searchInput.placeholder = viajeActivo ? 'Buscador en pausa durante el viaje' : 'Buscar objeto…';
+      searchInput.style.opacity = viajeActivo ? '0.5' : '';
+    }
+    refreshAnchors();
+    repositionAnchors();
+
+    // La URL refleja el viaje para poder compartirlo tal cual se está viendo.
+    if (window.history && history.replaceState) {
+      var u = new URL(window.location.href);
+      if (viajeActivo) u.searchParams.set('viaje', viajeActivo);
+      else u.searchParams.delete('viaje');
+      history.replaceState(null, '', u.toString());
+    }
+    if (viajeActivo) { encuadrarViaje(viajeActivo); avisarCambioDeCapa(viajeActivo); }
+  }
+
+  if (viajeSelect) {
+    viajeSelect.addEventListener('change', function () { aplicarViaje(viajeSelect.value); });
+  }
+
   // Centra el mapa en un ancla concreta (posición en % de la imagen) y aplica
   // el zoom pedido. Reutiliza la misma geometría que repositionAnchors().
-  function centerOnAnchor(xPct, yPct, targetScale) {
+  // topeMax eleva el tope de zoom por encima del normal: solo lo usa la entrada
+  // al vecindario solar, que vive mucho más cerca que el resto del mapa.
+  function centerOnAnchor(xPct, yPct, targetScale, topeMax) {
     var activeImg = isEdgeView
       ? document.getElementById('mw-image-edge')
       : document.getElementById('mw-image');
@@ -1851,7 +1982,7 @@
       ay = ny + dx * Math.sin(a) + dy * Math.cos(a);
     }
 
-    scale = Math.min(maxScale, Math.max(minScale, targetScale));
+    scale = Math.min(topeMax || maxScale, Math.max(minScale, targetScale));
     // Para que (ax,ay) quede en el centro del visor:
     //   posición_en_pantalla = (ax - W/2) * scale + posX = 0  →  posX = -(ax-W/2)*scale
     posX = -(ax - W / 2) * scale;
@@ -2192,4 +2323,39 @@
 
   applyTransform();
   repositionAnchors();
+
+  // --------------------------------------------------------------------------
+  // ARRANQUE CON UN VIAJE: mapa.html?viaje=<id>
+  // El enlace lo reparte "Mis viajes". Manda sobre el arranque normal (que abre
+  // el mapa con las observaciones propias): selecciona al dueño del viaje y
+  // recorre su ruta. Si el viaje ya no existe, se avisa y se arranca normal.
+  // El encuadre necesita las dimensiones reales de la imagen, así que espera a
+  // que haya cargado.
+  // --------------------------------------------------------------------------
+  poblarViajes();
+  var viajePedido = (function () {
+    try { return new URL(window.location.href).searchParams.get('viaje') || ''; }
+    catch (e) { return ''; }
+  })();
+  if (viajePedido) {
+    var arrancarViaje = function () {
+      var duenyo = VLViaje.observadorDe(viajePedido);
+      if (!duenyo) {
+        showToast('Ese viaje ya no está disponible.');
+        if (history.replaceState) {
+          var u = new URL(window.location.href);
+          u.searchParams.delete('viaje');
+          history.replaceState(null, '', u.toString());
+        }
+        return;
+      }
+      if (observadorSelect) observadorSelect.value = duenyo;
+      VLO.setActivo(duenyo);
+      aplicarFiltroObservador();
+      poblarViajes();
+      aplicarViaje(viajePedido);
+    };
+    if (_galImg && _galImg.complete && _galImg.naturalWidth) arrancarViaje();
+    else if (_galImg) _galImg.addEventListener('load', arrancarViaje);
+  }
 })();

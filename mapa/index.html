@@ -29,7 +29,8 @@
   /* Controles del mapa: oscuros y muy translúcidos, con desenfoque y texto
      claro (el fondo del mapa es negro). La leyenda queda intacta. */
   #mw-zoom-in, #mw-zoom-out, #mw-reset, #mw-toggle-view, #mw-search,
-  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo, #mw-observador {
+  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo,
+  #mw-observador, #mw-viaje {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     color: #eaf1fb !important;
@@ -381,21 +382,13 @@
     max-width: calc(100vw - 90px);
     z-index: 20;
   ">
-    <!-- Fila 1: registrar observación + selector de observador -->
+    <!-- Fila 1: registrar observación -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <a id="mw-nuevo" href="https://bitacoraestelar.app/registro-de-observacion/" style="
         text-decoration:none;border-radius:20px;
         background:rgba(12,16,28,0.32);color:#f4c76b;font-weight:600;
         font-size:13px;padding:8px 16px;font-family:sans-serif;white-space:nowrap;
       ">✦ Registrar observación</a>
-
-      <select id="mw-observador" title="Filtrar por observador" style="
-        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-        font-size:13px;padding:8px 12px;width:186px;
-        font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
-      ">
-        <option value="">Todas las observaciones</option>
-      </select>
     </div>
 
     <!-- Fila 2: buscar objeto (debajo de registrar observación) -->
@@ -460,6 +453,30 @@
         border:none;border-radius:20px;background:rgba(12,16,28,0.32);
         font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
       ">🔄 Vista de canto</button>
+    </div>
+
+    <!-- Fila 5: quién observa -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="mw-observador" title="Filtrar por observador" style="
+        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
+        font-size:13px;padding:8px 12px;width:186px;
+        font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
+      ">
+        <option value="">Todas las observaciones</option>
+      </select>
+    </div>
+
+    <!-- Fila 6: viajes interestelares. Los viajes son de cada observador, así
+         que este combo solo tiene contenido cuando hay uno seleccionado arriba;
+         mientras tanto va deshabilitado y lo dice. Lo llena via-lactea-app.js. -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="mw-viaje" title="Recorrer un viaje interestelar" disabled style="
+        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
+        font-size:13px;padding:8px 12px;width:186px;
+        font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
+      ">
+        <option value="">Seleccione un observador para ver sus viajes</option>
+      </select>
     </div>
   </div>
   <div id="mw-search-toast" style="

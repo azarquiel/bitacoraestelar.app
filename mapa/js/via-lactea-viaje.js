@@ -86,6 +86,13 @@
       + (n ? ' · ' + n + (n === 1 ? ' objeto' : ' objetos') : '');
   }
 
+  // De quién es el viaje. Lo necesita el enlace ?viaje=<id>: para enseñar una
+  // ruta hay que seleccionar antes a su dueño.
+  function observadorDe(id) {
+    var v = viajeDe(id);
+    return (v && v.observador) ? v.observador : '';
+  }
+
   // Nombre corto del viaje para acompañar al observador en "← Descubrir":
   // el que le puso el observador o, en su defecto, 'Viaje del <noche>'.
   function nombreViaje(id) {
@@ -285,6 +292,7 @@
     etiquetaViaje: etiquetaViaje,
     numObjetos: numObjetos,
     nombreViaje: nombreViaje,
+    observadorDe: observadorDe,
     enViaje: enViaje,
     rutaDe: rutaDe,
     capaInicial: capaInicial,

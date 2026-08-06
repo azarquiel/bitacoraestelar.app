@@ -64,6 +64,10 @@ console.log('nombreViaje (acompaña al observador en "← Descubrir"):');
 eq(VLV.nombreViaje('7'), 'Perseidas desde la sierra', 'el nombre que le puso el observador');
 eq(VLV.nombreViaje('8'), 'Viaje del 2026-08-12', 'sin nombre -> "Viaje del <noche>"');
 
+console.log('observadorDe (a quién selecciona el enlace ?viaje=<id>):');
+eq(VLV.observadorDe('9'), 'ana', 'el dueño del viaje');
+eq(VLV.observadorDe('404'), '', 'viaje inexistente -> nadie a quien seleccionar');
+
 console.log('rutaDe (orden del recorrido y reparto por capa):');
 var r = VLV.rutaDe('7');
 eq(ids(r.galaxia), ['proxima', 'm13', 'm92'], 'tramo de la galaxia, en el orden del servidor');
