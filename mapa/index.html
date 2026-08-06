@@ -142,16 +142,21 @@
      flujo es el punteado que corre hacia el destino, como una nave entrando en
      el hiperespacio. El ciclo del punteado (14+10 px) a 26 px/s = 0,923 s.
      Los tres colores son el mismo oro #f4c76b (244,199,107) de "Registrar". */
+  /* La ruta va por encima de la imagen de la galaxia y por debajo de los
+     marcadores: la línea pasa bajo los puntos, no por encima. El orden del DOM
+     no basta (los marcadores del Sol están escritos aquí arriba, antes que el
+     <svg>, que lo crea el JS), así que lo fijan estos dos z-index. */
   #mw-ruta {
     position: absolute;
     inset: 0;
-    z-index: 5;             /* por debajo de los marcadores */
+    z-index: 1;
     pointer-events: none;
     overflow: visible;
     fill: none;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
+  #mw-content .mw-object-anchor, #mw-sun-anchor, #sun-edge-anchor { z-index: 2; }
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 7; }
   .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 1.2; }
   .mw-ruta-flujo {

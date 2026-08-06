@@ -245,10 +245,8 @@
   // ruta acompaña a los marcadores sin geometría propia; el grosor y el
   // punteado se mantienen constantes en pantalla con vector-effect
   // ("non-scaling-stroke"), y el movimiento lo pone una animación CSS sobre
-  // stroke-dashoffset (ver #mw-ruta en index.html).
-  //
-  // Se crea ANTES que los marcadores para que quede por detrás de ellos en el
-  // orden del DOM: la línea pasa bajo los puntos, no por encima.
+  // stroke-dashoffset (ver #mw-ruta en index.html, donde también se fija que
+  // quede por encima de la imagen y por debajo de los marcadores).
   // --------------------------------------------------------------------------
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var rutaSvg = document.createElementNS(SVG_NS, 'svg');
