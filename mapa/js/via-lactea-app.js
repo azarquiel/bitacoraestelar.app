@@ -1075,9 +1075,17 @@
   var fichaAnexosRight = document.getElementById('ficha-anexos-right');
   var fichaBackBtn = document.getElementById('ficha-back');
   var fichaCurrent = -1;
-  // Contexto de "descubrimiento": si la observación mostrada se alcanzó desde la
-  // pantalla NO VISITADO, guarda cómo volver a ella (para el botón ← Descubrir).
-  var fichaVolverA = null;
+  // A dónde lleva "← Descubrir" desde la ficha que se está viendo: la pantalla
+  // de descubrimiento de este objeto, con la observación actual excluida. null
+  // cuando no hay nada más que descubrir (y entonces el botón no se muestra).
+  var fichaDescubrir = null;
+
+  // Índice de una observación dentro de OBSERVACIONES[id]. Es su identidad: un
+  // mismo observador puede tener varias del mismo objeto, en distintos viajes.
+  function indiceObservacion(id, f) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
+    return lista ? lista.indexOf(f) : -1;
+  }
 
   // El boceto se lee de resources/images/<objeto>/<archivo>. Si la entrada
   // no tiene imagen (img: null, p. ej. "Exploración"), se oculta el área.
@@ -1385,12 +1393,18 @@
   // Muestra la ficha "normal" (boceto + texto) de una observación concreta.
   //   f    : objeto observación (de OBSERVACIONES) con su _id ya asignado.
   //   info : { title, coords, pdf } para la cabecera.
-  //   opts : { volverA, observadorNombre } (opcional). Si volverA está definido,
-  //          la observación se alcanzó desde la pantalla de descubrimiento y se
-  //          muestra el botón "← Descubrir" para regresar a la lista.
+  //   opts : { volverA, observadorNombre } (opcional). volverA es la pantalla de
+  //          descubrimiento de la que se salió, para regresar a ella tal cual.
+  //          Si no la hay, "← Descubrir" se ofrece igualmente cuando el objeto
+  //          tiene MÁS observaciones que la que se está viendo: el botón es uno
+  //          solo, y siempre lleva al mismo sitio.
   function renderFichaNormal(f, info, opts) {
     opts = opts || {};
-    fichaVolverA = opts.volverA || null;
+    var idx = indiceObservacion(f._id, f);
+    fichaDescubrir = opts.volverA ||
+      (VLViaje.otrasObservaciones(f._id, idx).length
+        ? { id: f._id, info: info, excluir: idx, desdeFicha: true }
+        : null);
 
     // Restaura el modo normal (por si venimos de la pantalla de descubrimiento).
     fichaLeftCol.style.display = '';
@@ -1403,7 +1417,7 @@
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = coords;
     fichaPdfLink.href = f.pdf || (info && info.pdf) || '#';
-    fichaBackBtn.style.display = fichaVolverA ? '' : 'none';
+    fichaBackBtn.style.display = fichaDescubrir ? '' : 'none';
 
     buildFichaButtons(f);
     fichaOverlay.style.display = 'flex';
@@ -1429,10 +1443,18 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // Pantalla "NO VISITADO": información básica del objeto + la lista de los
-  // observadores que sí lo han observado, para descubrir sus observaciones.
-  function abrirFichaDescubrimiento(id, info) {
-    fichaVolverA = null;
+  // Pantalla de descubrimiento: información básica del objeto + la lista de las
+  // DEMÁS observaciones que hay de él. Es la misma pantalla se llegue desde
+  // donde se llegue, y solo cambia el rótulo: "NO VISITADO" cuando se entra
+  // desde el mapa (el observador activo no lo ha observado) y "OTRAS
+  // OBSERVACIONES" cuando se llega desde una ficha con el botón "← Descubrir".
+  //
+  // Las observaciones se identifican por su ÍNDICE, no por observador: un mismo
+  // observador puede haber visitado el objeto en dos salidas distintas y las dos
+  // tienen que poder abrirse. 'ctx' es { excluir, desdeFicha }.
+  function abrirFichaDescubrimiento(id, info, ctx) {
+    ctx = ctx || {};
+    fichaDescubrir = null;
     fichaBackBtn.style.display = 'none';
     fichaPdfLink.style.display = 'none';
     fichaLeftCol.style.display = 'none';         // solo se usa la columna de texto
@@ -1443,35 +1465,35 @@
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = (info && info.coords) || '';
 
-    var otros = VLO.observadoresDe(id, VLO.getActivo());
-    var items = otros.map(function (o) {
-      return '<li><button type="button" class="ficha-descubrir-item" data-clave="' +
-        escHtml(o.clave) + '" style="' +
+    var otras = VLViaje.otrasObservaciones(id, ctx.excluir);
+    var items = otras.map(function (o) {
+      return '<li><button type="button" class="ficha-descubrir-item" data-indice="' + o.indice + '" style="' +
         'display:block;width:100%;text-align:left;cursor:pointer;' +
         'background:rgba(126,200,255,0.10);color:#cfe6f7;' +
         'border:1px solid rgba(126,200,255,0.35);border-radius:10px;' +
         'padding:10px 14px;margin:6px 0;font-family:sans-serif;font-size:14px;">' +
-        '✦ ' + escHtml(o.nombre) + '</button></li>';
+        '✦ ' + escHtml(o.etiqueta) + '</button></li>';
     }).join('');
 
     fichaText.innerHTML =
       '<div style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;font-size:12px;' +
         'letter-spacing:.18em;text-transform:uppercase;color:#f4c76b;' +
         'border:1px solid rgba(244,199,107,.35);border-radius:8px;' +
-        'padding:8px 12px;text-align:center;margin:0 0 18px;">NO VISITADO</div>' +
+        'padding:8px 12px;text-align:center;margin:0 0 18px;">' +
+        (ctx.desdeFicha ? 'OTRAS OBSERVACIONES' : 'NO VISITADO') + '</div>' +
       '<div style="font-family:sans-serif;font-size:13px;color:#9fb6c9;margin:0 0 6px;">' +
-        'Descubrir observaciones de otros observadores</div>' +
-      (otros.length
+        'Otras observaciones</div>' +
+      (otras.length
         ? '<ul style="list-style:none;padding:0;margin:0;">' + items + '</ul>'
         : '<div style="font-family:sans-serif;font-size:13px;color:#7f93a6;">' +
           'Nadie más ha observado este objeto todavía.</div>');
     fichaText.scrollTop = 0;
 
-    // Delegación: un clic en un ítem abre la observación de ese observador.
+    // Delegación: un clic en un ítem abre esa observación concreta.
     var botones = fichaText.querySelectorAll('.ficha-descubrir-item');
     for (var i = 0; i < botones.length; i++) {
       botones[i].addEventListener('click', function () {
-        abrirFichaDeObservador(id, this.getAttribute('data-clave'), info);
+        abrirObservacionPorIndice(id, parseInt(this.getAttribute('data-indice'), 10), info, ctx);
       });
     }
 
@@ -1481,15 +1503,18 @@
     hideHint();
   }
 
-  // Muestra la observación de un observador concreto, con el botón "← Descubrir"
-  // para volver a la pantalla de la lista (abrirFichaDescubrimiento).
-  function abrirFichaDeObservador(id, clave, info) {
-    var f = VLO.fichaDeObservador(id, clave);
+  // Muestra una observación concreta de la lista de descubrimiento, con el botón
+  // "← Descubrir" para volver a la MISMA pantalla de la que se salió (por eso
+  // vuelve con su ctx: el rótulo y la observación excluida se conservan).
+  function abrirObservacionPorIndice(id, indice, info, ctx) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
+    var f = (lista && lista[indice]) ? lista[indice] : null;
     if (!f) return;
     f._id = id;
-    var nombre = (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
-      ? OBSERVADORES[clave].nombre : clave;
-    renderFichaNormal(f, info, { volverA: { id: id, info: info }, observadorNombre: nombre });
+    renderFichaNormal(f, info, {
+      volverA: { id: id, info: info, excluir: ctx && ctx.excluir, desdeFicha: ctx && ctx.desdeFicha },
+      observadorNombre: VLO.nombreObservador(f.observador)
+    });
   }
 
   function closeFicha() {
@@ -1543,10 +1568,12 @@
     };
   }
 
-  // Botón "← Descubrir": vuelve a la pantalla NO VISITADO desde la observación
-  // de otro observador.
+  // Botón "← Descubrir": lleva a las demás observaciones de este objeto, tanto
+  // si se llegó desde esa misma lista como si se está viendo una ficha normal.
   fichaBackBtn.addEventListener('click', function () {
-    if (fichaVolverA) abrirFichaDescubrimiento(fichaVolverA.id, fichaVolverA.info);
+    if (fichaDescubrir) {
+      abrirFichaDescubrimiento(fichaDescubrir.id, fichaDescubrir.info, fichaDescubrir);
+    }
   });
 
   fichaCloseBtn.addEventListener('click', closeFicha);
