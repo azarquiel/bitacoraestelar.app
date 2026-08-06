@@ -115,6 +115,20 @@ Una **síntesis de la observación o los retos** a los que se enfrenta el
 observador, **sin datos de ocular**. En la ficha del mapa aparece como
 «M30. Exploración».
 
+### Añadir otra (encadenar objetos de la misma noche)
+
+Una noche se pasa saltando de objeto en objeto, así que al guardar aparece el
+botón **«Añadir otra»**. Vacía el objeto, sus coordenadas y todo lo que se vio
+de él, y **conserva lo que no cambia de un objeto al siguiente**: viaje, fecha,
+telescopio, observador, base y cielo. La hora avanza **20 minutos**, de modo
+que la siguiente observación cae sola en la misma sesión (el viaje se deduce de
+la fecha y la hora). Si el salto cruza la medianoche, la fecha avanza con ella:
+23:50 + 20 min es el día siguiente. Prueba:
+`node scripts/test_otra_observacion.js`.
+
+En modo edición el botón no aparece: allí se modifica una observación vieja, no
+se está observando.
+
 ### El cielo de esa noche (paso aparte)
 
 La astrometría —fecha/hora exacta, lugar, altitud y azimut del objeto, altura
