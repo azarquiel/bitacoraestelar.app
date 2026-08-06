@@ -162,6 +162,19 @@
     return ruta;
   }
 
+  // Las escalas por las que pasa el viaje, en orden de acercamiento. Cada objeto
+  // cuenta UNA vez: una estrella cercana viaja en la ruta de la galaxia y en la
+  // del vecindario (ruta.vecindario es un subconjunto de ruta.galaxia), pero es
+  // una sola escala, y el mapa no debe avisar de un cruce que no existe.
+  function escalasDe(id) {
+    var ruta = rutaDe(id);
+    var out = [];
+    if (ruta.vecindario.length) out.push('vecindario');
+    if (ruta.galaxia.length > ruta.vecindario.length) out.push('galaxia');
+    if (ruta.grupoLocal.length) out.push('grupoLocal');
+    return out;
+  }
+
   // La capa en la que empieza el viaje, que es donde aterriza el mapa al
   // seleccionarlo: la del PRIMER objeto de la ruta.
   function capaInicial(id) {
@@ -295,6 +308,7 @@
     observadorDe: observadorDe,
     enViaje: enViaje,
     rutaDe: rutaDe,
+    escalasDe: escalasDe,
     capaInicial: capaInicial,
     otrasObservaciones: otrasObservaciones,
     movimientoReducido: movimientoReducido,

@@ -648,15 +648,16 @@
     };
   }
 
+  // Controles de la interfaz superpuesta: el gesto que empieza en uno de ellos
+  // es suyo, no del mapa. Sin esto, el preventDefault() del arrastre impide
+  // enfocar el buscador o desplegar un combo. Todo control nuevo que se añada
+  // al mapa tiene que entrar en esta lista.
+  var CONTROLES_UI = '#mw-search, #mw-observador, #mw-viaje, #mw-nuevo,' +
+                     ' #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control';
+
   viewer.addEventListener('mousedown', function (e) {
     if (overlayOpen()) return;
-    // No arrastrar el mapa si el clic se originó en un control de la interfaz
-    // superpuesta (buscador, botones, leyenda). Sin esto, el preventDefault()
-    // de más abajo impediría enfocar el campo de búsqueda.
-    if (e.target.closest &&
-        e.target.closest('#mw-search, #mw-observador, #mw-nuevo, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
-      return;
-    }
+    if (e.target.closest && e.target.closest(CONTROLES_UI)) return;
     // Con el vecindario solar dominando, su capa gestiona la rotación: no
     // arrastramos ni rotamos la galaxia por debajo (descentraría el Sol).
     if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.interactivo && VecindarioSolar.interactivo()) return;
@@ -789,12 +790,7 @@
 
   viewer.addEventListener('touchstart', function (e) {
     if (overlayOpen()) return;
-    // No capturar el gesto si el toque empezó en un control de la interfaz
-    // (buscador, botones, leyenda), para que el campo pueda recibir el foco.
-    if (e.target.closest &&
-        e.target.closest('#mw-search, #mw-observador, #mw-nuevo, #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control')) {
-      return;
-    }
+    if (e.target.closest && e.target.closest(CONTROLES_UI)) return;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
     if (e.touches.length === 1) {
@@ -1863,9 +1859,14 @@
 
   function poblarViajes() {
     if (!viajeSelect) return;
-    var lista = VLViaje.viajesDe(VLO.getActivo());
+    var activo = VLO.getActivo();
+    var lista = VLViaje.viajesDe(activo);
     if (!lista.length) {
-      viajeSelect.innerHTML = '<option value="">Seleccione un observador para ver sus viajes</option>';
+      // Sin observador no hay nada que ofrecer; con observador pero sin viajes
+      // el combo tiene que decir eso, no volver a pedir un observador ya puesto.
+      viajeSelect.innerHTML = '<option value="">' + (activo
+        ? 'Este observador no tiene viajes registrados'
+        : 'Seleccione un observador para ver sus viajes') + '</option>';
       viajeSelect.disabled = true;
       return;
     }
@@ -1934,13 +1935,15 @@
   // galaxia son tres capas distintas). El mapa no puede enseñarlas a la vez, así
   // que se avisa de dónde sigue la ruta y el usuario llega con el zoom.
   function avisarCambioDeCapa(id) {
-    var ruta = VLViaje.rutaDe(id);
-    var otras = [];
-    if (ruta.vecindario.length) otras.push('el vecindario solar (acercándose al Sol)');
-    if (ruta.galaxia.length) otras.push('la Vía Láctea');
-    if (ruta.grupoLocal.length) otras.push('el Grupo Local (alejándose)');
-    if (otras.length > 1) {
-      showToast('Este viaje cruza varias escalas: continúa en ' + otras.join(' y ') + '.');
+    var nombres = {
+      vecindario: 'el vecindario solar (acercándose al Sol)',
+      galaxia: 'la Vía Láctea',
+      grupoLocal: 'el Grupo Local (alejándose)'
+    };
+    var escalas = VLViaje.escalasDe(id);
+    if (escalas.length > 1) {
+      showToast('Este viaje cruza varias escalas: continúa en ' +
+        escalas.map(function (e) { return nombres[e]; }).join(' y ') + '.');
     }
   }
 
@@ -1948,12 +1951,18 @@
     viajeActivo = id || '';
     if (viajeSelect && viajeSelect.value !== viajeActivo) viajeSelect.value = viajeActivo;
 
+    // Sin viaje va null: cada capa vuelve a enseñar su catálogo entero. Con
+    // viaje va la lista, aunque venga vacía, y esa capa se queda sin objetos
+    // (el viaje no pasa por su escala).
     var ruta = VLViaje.rutaDe(viajeActivo);
+    var idsDe = function (objs) {
+      return viajeActivo ? objs.map(function (o) { return o.id; }) : null;
+    };
     if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setViaje) {
-      GrupoLocal.setViaje(ruta.grupoLocal.map(function (o) { return o.id; }));
+      GrupoLocal.setViaje(idsDe(ruta.grupoLocal));
     }
     if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.setViaje) {
-      VecindarioSolar.setViaje(ruta.vecindario.map(function (o) { return o.id; }));
+      VecindarioSolar.setViaje(idsDe(ruta.vecindario));
     }
     // Durante el viaje el buscador no navega: se apaga y se dice por qué.
     if (searchInput) {

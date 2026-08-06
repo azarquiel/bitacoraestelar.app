@@ -27,7 +27,10 @@ global.VIAJES = {
   '7': { nombre: 'Perseidas desde la sierra', noche: '2026-08-05', observador: 'israel',
          objetos: ['proxima', 'm13', 'm92', 'm31', 'fantasma'] },
   '8': { nombre: '', noche: '2026-08-12', observador: 'israel', objetos: ['m57'] },
-  '9': { nombre: 'Noche de Ana', noche: '2026-07-01', observador: 'ana', objetos: ['m13'] }
+  '9': { nombre: 'Noche de Ana', noche: '2026-07-01', observador: 'ana', objetos: ['m13'] },
+  // Una sola estrella cercana: está en el tramo del vecindario y en el de la
+  // galaxia, pero es UNA escala; el mapa no debe avisar de ningún cruce.
+  '12': { nombre: 'Solo Próxima', noche: '2026-05-01', observador: 'carmen', objetos: ['proxima'] }
 };
 
 global.OBSERVACIONES = {
@@ -75,6 +78,12 @@ eq(ids(r.grupoLocal), ['m31'], 'lo extragaláctico va al atlas y NO al tramo de 
 eq(ids(r.vecindario), ['proxima'], 'la estrella cercana entra además en el vecindario');
 eq(ids(VLV.rutaDe('8').galaxia), ['m57'], 'un objeto sin distancia se queda en la galaxia');
 eq(VLV.rutaDe('404'), { vecindario: [], galaxia: [], grupoLocal: [] }, 'viaje inexistente -> ruta vacía');
+
+console.log('escalasDe (de qué avisa el mapa cuando el viaje continúa en otra escala):');
+eq(VLV.escalasDe('7'), ['vecindario', 'galaxia', 'grupoLocal'], 'del Sol al Grupo Local, de cerca a lejos');
+eq(VLV.escalasDe('12'), ['vecindario'], 'una estrella cercana es UNA escala, no dos');
+eq(VLV.escalasDe('8'), ['galaxia'], 'un objeto de la galaxia, sin cruce');
+eq(VLV.escalasDe('404'), [], 'viaje inexistente -> ninguna escala');
 
 console.log('  (el objeto "fantasma" del viaje 7 no está en OBJECTS y se descarta en silencio)');
 eq(r.galaxia.length + r.grupoLocal.length, 4, 'lo visitado sin marcador no se dibuja');

@@ -195,11 +195,12 @@ var VecindarioSolar = (function () {
   // ---- Ruta del viaje interestelar ------------------------------------------
   // El tramo del VECINDARIO de una salida: la nave sale del Sol —el origen de
   // esta escena— y va de una estrella cercana a otra en el orden en que se
-  // observaron. Los ids los fija el visor principal con setViaje().
-  var rutaIds = [];
+  // observaron. Los ids los fija el visor principal con setViaje(): null = no
+  // hay viaje (se ven todas las estrellas); [] = viaje que no pasa por aquí.
+  var rutaIds = null;
 
   function drawRutaViaje() {
-    if (!rutaIds.length || typeof VLViaje === 'undefined') return;
+    if (!rutaIds || !rutaIds.length || typeof VLViaje === 'undefined') return;
     var puntos = [project({ x: 0, y: 0, z: 0 })];   // el Sol, el puerto de origen
     for (var i = 0; i < rutaIds.length; i++) {
       for (var j = 0; j < objects.length; j++) {
@@ -232,7 +233,7 @@ var VecindarioSolar = (function () {
     var projected = objects
       .filter(function (o) { return !(hiddenClases && hiddenClases[o.clase || '']); })
       // Recorriendo un viaje, solo se ven las estrellas de esa salida.
-      .filter(function (o) { return !rutaIds.length || rutaIds.indexOf(o.id) >= 0; })
+      .filter(function (o) { return !rutaIds || rutaIds.indexOf(o.id) >= 0; })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
 
@@ -455,9 +456,10 @@ var VecindarioSolar = (function () {
   }
 
   // setViaje: el tramo del vecindario de la salida que se está recorriendo, como
-  // ids de objeto EN ORDEN. Lista vacía = no hay viaje activo.
+  // ids de objeto EN ORDEN. null (o nada) = se acabó el viaje y vuelven todas
+  // las estrellas; lista vacía = hay viaje, pero no llega hasta aquí.
   function setViaje(ids) {
-    rutaIds = ids || [];
+    rutaIds = ids || null;
   }
 
   var API = {

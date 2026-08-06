@@ -279,11 +279,13 @@ var GrupoLocal = (function () {
   // aquí ya es un punto, el origen del atlas— y va de una galaxia a otra en el
   // orden en que se observaron. El tramo interior lo dibuja la vista de la
   // galaxia, y el salto entre las dos escalas es el propio fundido del zoom.
-  // Los ids los fija el visor principal con setViaje().
-  var rutaIds = [];
+  // Los ids los fija el visor principal con setViaje(). null = no se está
+  // recorriendo ningún viaje (el atlas enseña todo); [] = viaje en marcha que
+  // no pasa por aquí, y entonces el atlas se queda vacío, como debe.
+  var rutaIds = null;
 
   function drawRutaViaje() {
-    if (!rutaIds.length || typeof VLViaje === 'undefined') return;
+    if (!rutaIds || !rutaIds.length || typeof VLViaje === 'undefined') return;
     var puntos = [project({ x: 0, y: 0, z: 0 })];   // la Vía Láctea, el puerto de origen
     for (var i = 0; i < rutaIds.length; i++) {
       for (var j = 0; j < objects.length; j++) {
@@ -318,7 +320,7 @@ var GrupoLocal = (function () {
     // recorriendo un viaje, todo lo que no forme parte de esa salida.
     var projected = objects
       .filter(function (o) { return !(hiddenTipos && hiddenTipos[o.tipo || '']); })
-      .filter(function (o) { return !rutaIds.length || rutaIds.indexOf(o.id) >= 0; })
+      .filter(function (o) { return !rutaIds || rutaIds.indexOf(o.id) >= 0; })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
 
@@ -627,9 +629,10 @@ var GrupoLocal = (function () {
     ajenasActivo = !!activo;
   }
   // setViaje: el tramo extragaláctico de la salida que se está recorriendo, como
-  // ids de objeto EN ORDEN. Lista vacía = no hay viaje activo y no se traza nada.
+  // ids de objeto EN ORDEN. null (o nada) = se acabó el viaje y vuelve el atlas
+  // entero; lista vacía = hay viaje, pero no llega hasta aquí.
   function setViaje(ids) {
-    rutaIds = ids || [];
+    rutaIds = ids || null;
   }
   var API = {
     ready: true, sync: sync, maxDist: maxDist, alcanceMax: ALCANCE_MAX,
