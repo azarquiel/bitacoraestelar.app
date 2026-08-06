@@ -2,7 +2,7 @@
 """Test de la CLASIFICACIÓN DE OBJETO DEL MAPA.
 
 Parsea la tabla de reglas REAL de bitacora_clasificar_objeto() en el plugin PHP
-(no duplica la tabla) y la leyenda del mapa en mapa/index.html, y verifica:
+(no duplica la tabla) y la leyenda del mapa en mapa/mapa.html, y verifica:
   1. Mapeos dorados: otype de SIMBAD -> (tipo, color) esperados.
   2. Sincronía: todo color que asigna el clasificador a un objeto MW existe como
      data-color en la leyenda #mw-legend (si no, un objeto se pintaría con un color
@@ -14,7 +14,7 @@ import re, sys, pathlib
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 PHP = (RAIZ / "resources/plugins/bitacora-registro/bitacora-registro.php").read_text(encoding="utf-8")
-HTML = (RAIZ / "mapa/index.html").read_text(encoding="utf-8")
+HTML = (RAIZ / "mapa/mapa.html").read_text(encoding="utf-8")
 
 fallos = []
 def check(cond, etiqueta):

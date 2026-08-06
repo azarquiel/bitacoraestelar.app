@@ -54,7 +54,7 @@ carbono, `GlC` globular, `OpC`/`Cl*` abierto, `PN` planetaria, `HII`/`EmO` emisi
 `otro` neutro `#dfe7f5`.
 
 - **Invariante:** los colores del clasificador coinciden con la leyenda `#mw-legend`
-  (`data-color`) de `mapa/index.html`; los de galaxia, con `HUBBLE_COLORS` de
+  (`data-color`) de `mapa/mapa.html`; los de galaxia, con `HUBBLE_COLORS` de
   `grupo-local.js` y la leyenda `#mw-legend-hubble`. El test
   `scripts/test_clasificacion_objeto.py` verifica mapeos y sincronía.
 - **Default neutro:** un otype desconocido NO reutiliza un color de la leyenda, para

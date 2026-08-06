@@ -2677,7 +2677,7 @@ function bitacora_color_por_clase( $clase ) {
  *      no disfrazarse de otra categoría).
  *
  * Los colores DEBEN coincidir con la leyenda #mw-legend (data-color) de
- * mapa/index.html. El test scripts/test_clasificacion_objeto.py verifica la sincronía.
+ * mapa/mapa.html. El test scripts/test_clasificacion_objeto.py verifica la sincronía.
  *
  * Devuelve array( 'tipo' => string, 'color' => '#rrggbb' ).
  */

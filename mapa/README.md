@@ -71,7 +71,7 @@ Bitácora Registro** desde la base de datos (ver la carpeta `registro/`).
 
 | Archivo | Qué es | Dónde va |
 |---|---|---|
-| `index.html` | Fragmento HTML para pegar en la página | Editor de WordPress |
+| `mapa.html` | Fragmento HTML para pegar en la página | Editor de WordPress |
 | `js/via-lactea-config.js` | **Ajustes**. El único que se edita a menudo | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-app.js` | La lógica del visor de la galaxia | Servidor (`/bitacora-mapa/js/`) |
 | `js/grupo-local.js` | La capa del atlas del Grupo Local | Servidor (`/bitacora-mapa/js/`) |
@@ -82,13 +82,13 @@ Bitácora Registro** desde la base de datos (ver la carpeta `registro/`).
 Los **datos** (objetos y fichas) no son un archivo: los emite el plugin en
 `/wp-json/bitacora/v1/datos.js`, en el mismo formato `OBSERVADORES` /
 `OBJECTS` / `OBSERVACIONES` que usaba el antiguo `via-lactea-datos.js` (que
-sigue funcionando como respaldo si se descomenta en `index.html`).
+sigue funcionando como respaldo si se descomenta en `mapa.html`).
 
 **Por qué los `.js` van por FTP y no pegados en el editor.** El editor de
 bloques de WordPress escapa el carácter `&` al guardar: convierte cada `&&`
 del código en `&#038;&#038;`, lo que rompe el JavaScript con un `SyntaxError`.
 Sirviéndolos como archivos `.js`, el servidor los entrega intactos. El
-fragmento `index.html` que sí se pega **no contiene lógica**.
+fragmento `mapa.html` que sí se pega **no contiene lógica**.
 
 ---
 
@@ -98,7 +98,7 @@ fragmento `index.html` que sí se pega **no contiene lógica**.
 
 Por FTP (o el gestor de archivos del hosting), sube a la carpeta que sirva la
 ruta `/bitacora-mapa/js/` **todos** los `.js` de `mapa/js/`. La lista exacta y,
-sobre todo, **el orden en que se cargan** están al final de `index.html`, que es
+sobre todo, **el orden en que se cargan** están al final de `mapa.html`, que es
 la fuente de la verdad: hay dependencias entre ellos (`via-lactea-viaje.js` antes
 que las capas que lo usan, `bitacora-gaia-color.js` antes que el vecindario…).
 
@@ -120,7 +120,7 @@ En `/bitacora-mapa/images/`:
 ### 3. Crear la página
 
 En WordPress: **Páginas → Añadir nueva**. Añade un bloque **HTML personalizado**
-y pega dentro todo el contenido de `index.html`. Publica.
+y pega dentro todo el contenido de `mapa.html`. Publica.
 
 Si tus rutas no coinciden, ajusta las del final del fragmento:
 
@@ -129,7 +129,7 @@ Si tus rutas no coinciden, ajusta las del final del fragmento:
 <script src="/wp-json/bitacora/v1/datos.js?v=1"></script>
 <script src="/bitacora-mapa/js/via-lactea-viaje.js?v=1"></script>
 <script src="/bitacora-mapa/js/grupo-local.js?v=1"></script>
-<!-- …y el resto, en el orden que trae index.html… -->
+<!-- …y el resto, en el orden que trae mapa.html… -->
 <script src="/bitacora-mapa/js/via-lactea-app.js?v=1"></script>
 ```
 

@@ -19,7 +19,7 @@
 var GrupoLocal = (function () {
 
   // ---- Colores por clase de Hubble (leyenda del Grupo Local) ----------------
-  // Deben coincidir con la leyenda #mw-legend-hubble de index.html y con
+  // Deben coincidir con la leyenda #mw-legend-hubble de mapa.html y con
   // bitacora_color_por_clase() del plugin PHP.
   var HUBBLE_COLORS = {
     E:   '#f4c76b', // elíptica
@@ -138,7 +138,7 @@ var GrupoLocal = (function () {
   // localiza en SIMBAD para enseñar dónde está (se dibuja resaltado). Ver focus().
   var target = null;
 
-  // ---- Elementos del DOM (se inyectan en index.html) ------------------------
+  // ---- Elementos del DOM (se inyectan en mapa.html) ------------------------
   var canvas = document.getElementById('gl-sky');
   var tip = document.getElementById('gl-tip');
   var scaleTag = document.getElementById('gl-scale');
