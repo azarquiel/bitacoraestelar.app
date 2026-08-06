@@ -184,6 +184,9 @@ observaron. Módulo puro `mapa/js/via-lactea-viaje.js` (`window.VLViaje`), test
   no pasa por aquí» son cosas distintas (`null` frente a lista vacía). Si no se
   distinguen, el atlas del Grupo Local sigue enseñando todas las galaxias
   mientras el mapa solo enseña la ruta.
+- **El viaje encuadra, no señala:** al arrancar, el mapa lleva la vista a la
+  primera escala, pero sin el anillo ni el parpadeo del buscador. En un viaje
+  ninguna escala está más marcada que las demás: lo que lo cuenta es la ruta.
 - **El Sol siempre se ve:** de él parte la travesía. Los objetos de la ruta van
   siempre a todo color, aunque sean de otro observador: son escalas del viaje, no
   observaciones ajenas.
