@@ -205,7 +205,7 @@
       fovInicioAl: 2500,
       fovFinalAl: 900,
       fovMinAl: 8,
-      distMaxAl: 500,
+      distMaxAl: 1000,
       autoGiro: 0.0006
     }
 
