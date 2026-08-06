@@ -141,8 +141,9 @@
      la estela ancha da el resplandor, la base marca el camino recorrido y el
      flujo es el punteado que corre hacia el destino, como una nave entrando en
      el hiperespacio. El ciclo del punteado (14+10 px) a 26 px/s = 0,923 s.
-     Los tres colores son el mismo oro #f4c76b (244,199,107) de "Registrar". */
-  /* La ruta va por encima de la imagen de la galaxia y por debajo de los
+     Los tres colores son el mismo oro #f4c76b (244,199,107) de "Registrar".
+
+     La ruta va por encima de la imagen de la galaxia y por debajo de los
      marcadores: la línea pasa bajo los puntos, no por encima. El orden del DOM
      no basta (los marcadores del Sol están escritos aquí arriba, antes que el
      <svg>, que lo crea el JS), así que lo fijan estos dos z-index. */
@@ -924,10 +925,10 @@
      ============================================================ -->
 <script src="/bitacora-mapa/js/via-lactea-config.js?v=20260721_1900"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
-     El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript, en el
-     mismo formato que el antiguo via-lactea-datos.js, asi que es intercambiable.
-     Si el endpoint no respondiera, descomenta la linea del archivo estatico. -->
-<script src="/wp-json/bitacora/v1/datos.js?v=20260714_0100"></script>
+     El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
+     Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
+     el mismo formato, pero sin VIAJES, y el mapa se queda sin rutas. -->
+<script src="/wp-json/bitacora/v1/datos.js?v=20260806_1200"></script>
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
 <!-- VIAJES INTERESTELARES: lo consultan las tres capas y la app, así que va
      ANTES que todas ellas (necesita VIAJES/OBSERVACIONES/OBJECTS de los datos). -->
