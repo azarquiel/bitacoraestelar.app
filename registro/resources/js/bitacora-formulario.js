@@ -1418,6 +1418,10 @@
         // aviso descarta consultas repetidas de la misma noche, así que se le
         // borra la fecha antes de volver a pedírsela.
         if(avisoViaje){ avisoViaje.actualizar('',''); refrescarAvisoViaje(); }
+        // Una noche se pasa saltando de objeto en objeto: al guardar uno se
+        // ofrece encadenar el siguiente. En edición no: allí se modifica una
+        // observación vieja, no se está observando.
+        if(otraBtn && !editando) otraBtn.hidden = false;
         return;
       }
       var msg=(res.data && res.data.message) ? res.data.message : 'Error '+res.status;
@@ -1432,6 +1436,31 @@
 
     jsonOut.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // AÑADIR OTRA: el siguiente objeto de la misma noche
+  // Lo que no cambia de un objeto al siguiente —viaje, fecha, telescopio,
+  // observador, base y cielo— se queda tal cual; solo se borra el objeto y lo
+  // que se vio de él. La hora avanza 20 minutos: el viaje sale de la fecha y la
+  // hora, así que la observación cae sola en la misma sesión.
+  var otraBtn = $('otraBtn');
+  if(otraBtn){
+    otraBtn.addEventListener('click', function(){
+      var t = BitacoraBase.sumarMinutos($('fechaObs').value, $('horaObs').value, 20);
+      $('fechaObs').value = t.fecha;
+      $('horaObs').value  = t.hora;
+
+      objInput.value=''; raManual.value=''; decManual.value=''; coordsAuto=false;
+      if(explDesc) explDesc.innerHTML='';
+      if(entradasBox){ entradasBox.innerHTML=''; crearEntrada(); }
+      otraBtn.hidden = true;
+      $('outNote').textContent = 'Listo para el siguiente objeto de la misma noche.';
+
+      resolveObject();   // objeto vacío: rearma el estado y llama a recompute()
+      objInput.focus();
+      objInput.scrollIntoView({behavior:'smooth',block:'center'});
+    });
+  }
 
    }catch(err){
      // Si algo falla, lo decimos en la página en vez de morir en silencio.

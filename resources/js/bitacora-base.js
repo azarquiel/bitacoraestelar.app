@@ -435,6 +435,25 @@ window.BitacoraBase = (function () {
     return { base: baseFormulario || null, pedirBase: true, faltaViaje: false };
   }
 
+  /* Suma minutos a una fecha+hora locales y devuelve las dos otra vez.
+     Se usa al encadenar observaciones de la misma noche: el siguiente objeto se
+     apunta unos minutos después del anterior. La fecha viaja con la hora porque
+     una noche cruza la medianoche: 23:50 + 20 min es el día siguiente, y dejar
+     la fecha quieta guardaría la observación con la del día anterior.
+       sumarMinutos('2026-08-05', '23:50', 20) -> { fecha:'2026-08-06', hora:'00:10' } */
+  function sumarMinutos(fecha, hora, minutos) {
+    if (!fecha) return { fecha: fecha || '', hora: hora || '' };
+    if (!hora) return { fecha: fecha, hora: '' };
+    var d = new Date(fecha + 'T' + hora);
+    if (isNaN(d.getTime())) return { fecha: fecha, hora: hora };
+    d.setMinutes(d.getMinutes() + minutos);
+    function dd(n) { return (n < 10 ? '0' : '') + n; }
+    return {
+      fecha: d.getFullYear() + '-' + dd(d.getMonth() + 1) + '-' + dd(d.getDate()),
+      hora: dd(d.getHours()) + ':' + dd(d.getMinutes())
+    };
+  }
+
   // ── Parsers/formatos de coordenadas ecuatoriales (RA/Dec) ──
   // Fuente única, compartida por el registro y el simulador de ocular. RA en
   // grados internamente. Aceptan sexagesimal ("21h 40m 22s" / "21 40 22" /
@@ -558,6 +577,7 @@ window.BitacoraBase = (function () {
     avisoViaje: avisoViaje,
     mensajeViaje: mensajeViaje,
     lugarDeObservacion: lugarDeObservacion,
+    sumarMinutos: sumarMinutos,
     parseRA: parseRA,
     parseDec: parseDec,
     formatRA: formatRA,
