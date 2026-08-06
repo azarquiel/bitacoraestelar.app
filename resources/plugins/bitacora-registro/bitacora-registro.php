@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.25.1
+ * Version:     1.26.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.25.1' );
+define( 'BITACORA_VERSION', '1.26.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -929,9 +929,20 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
     // La base entera viaja con cada fila (el formulario de registro calcula con
     // ella la altura y el azimut), y se trae en el mismo JOIN: adornar viaje a
     // viaje serían 500 consultas más.
+    //
+    // Los objetos visitados viajan como una cadena separada por «|»: "Mis
+    // viajes" los pinta en el orden del recorrido (el mismo de la ficha del
+    // viaje) sin pedir la ficha de cada salida.
+    // ponytail: GROUP_CONCAT se corta en group_concat_max_len (1024 por
+    // defecto, ~90 etiquetas); si una salida llega a tantos objetos, subirlo
+    // con SET SESSION antes de la consulta.
     $sql = "SELECT v.*, b.nombre AS base_nombre,
                    b.lat AS base_lat, b.lon AS base_lon, b.tz AS base_tz, b.altitud_m AS base_altitud_m,
-                   ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_objetos
+                   ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_objetos,
+                   ( SELECT GROUP_CONCAT( COALESCE( NULLIF( o.objeto_etiqueta, '' ), o.objeto )
+                                          ORDER BY ( o.hora_observacion = '' ) ASC, o.hora_observacion ASC, o.id ASC
+                                          SEPARATOR '|' )
+                     FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS objetos_ruta
             FROM $t_via v
             LEFT JOIN $t_bas b ON b.id = v.base_id
             WHERE $where
@@ -945,6 +956,8 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
     foreach ( $filas as $f ) {
         $f->num_objetos = intval( $f->num_objetos );
         $f->mio         = ( intval( $f->usuario_id ) === $uid );
+        $f->objetos     = $f->objetos_ruta ? explode( '|', $f->objetos_ruta ) : array();
+        unset( $f->objetos_ruta );
         // base null = el viaje no registró lugar; es lo que hace que el
         // formulario de registro vuelva a preguntarlo.
         $f->base = intval( $f->base_id ) > 0 ? array(
@@ -2321,7 +2334,25 @@ function bitacora_boton_de_entrada( $e ) {
     return implode( ' - ', $partes );
 }
 
-/** Emite el JavaScript de datos del visor (OBSERVADORES, OBJECTS, OBSERVACIONES). */
+/**
+ * El orden del recorrido de una salida: por hora de observación, y las que no
+ * la registraron al final por id. Es el mismo criterio del ORDER BY de
+ * bitacora_viaje_leer, aquí en PHP porque la ruta se arma sobre filas ya
+ * traídas y una segunda consulta solo para ordenarlas sobraría.
+ */
+function bitacora_orden_de_la_ruta( $a, $b ) {
+    $sin_a = ( '' === $a['hora'] ) ? 1 : 0;
+    $sin_b = ( '' === $b['hora'] ) ? 1 : 0;
+    if ( $sin_a !== $sin_b ) {
+        return $sin_a - $sin_b;
+    }
+    if ( ! $sin_a && $a['hora'] !== $b['hora'] ) {
+        return strcmp( $a['hora'], $b['hora'] );
+    }
+    return $a['id'] - $b['id'];
+}
+
+/** Emite el JavaScript de datos del visor (OBSERVADORES, OBJECTS, OBSERVACIONES, VIAJES). */
 function bitacora_datos_js( WP_REST_Request $peticion ) {
     global $wpdb;
     $t_ob  = bitacora_nombre_tabla();
@@ -2375,8 +2406,14 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
         $objetos[] = $obj;
     }
 
-    // OBSERVACIONES { slug: [ { observador, fecha, lugar, instrumento, pdf, defaultIndex, entries } ] }
-    $observaciones = array();
+    // OBSERVACIONES { slug: [ { observador, fecha, lugar, instrumento, viaje, pdf, defaultIndex, entries } ] }
+    // VIAJES       { id: { nombre, noche, observador, objetos: [ slug, ... ] } }
+    // El ORDEN de los objetos de un viaje se decide AQUÍ y no en el navegador:
+    // es el mismo de la ficha del viaje (bitacora_viaje_leer) —por hora de
+    // observación, y las que no la tienen al final por id—, así que la ruta que
+    // dibuja el mapa y la lista que se lee en "Mis viajes" no pueden divergir.
+    $observaciones  = array();
+    $viaje_objetos  = array();
     $obs_rows = $wpdb->get_results( "SELECT * FROM $t_ob WHERE borrada_en IS NULL ORDER BY id ASC" );
     foreach ( $obs_rows as $ob ) {
         $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', $ob->objeto ) );
@@ -2423,6 +2460,7 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
             $entries[] = $entry;
         }
 
+        $viaje_id = isset( $ob->viaje_id ) ? intval( $ob->viaje_id ) : 0;
         $registro = array(
             'observador'   => isset( $clave_por_id[ (int) $ob->observador_id ] ) ? $clave_por_id[ (int) $ob->observador_id ] : '',
             'fecha'        => isset( $ob->fecha_observacion ) ? $ob->fecha_observacion : '',
@@ -2432,10 +2470,58 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
             'defaultIndex' => (int) $ob->default_index,
             'entries'      => $entries,
         );
+        if ( $viaje_id ) {
+            $registro['viaje'] = $viaje_id;
+            $viaje_objetos[ $viaje_id ][] = array(
+                'slug' => $slug,
+                'hora' => isset( $ob->hora_observacion ) ? (string) $ob->hora_observacion : '',
+                'id'   => (int) $ob->id,
+            );
+        }
         if ( ! isset( $observaciones[ $slug ] ) ) {
             $observaciones[ $slug ] = array();
         }
         $observaciones[ $slug ][] = $registro;
+    }
+
+    // VIAJES: solo los que alguna observación viva referencia (los vacíos no los
+    // dibuja nadie). Del viaje sale lo justo para el mapa —nombre, noche, dueño
+    // y ruta—: la crónica, la meteo, el cielo y la base son de su ficha, y este
+    // payload es público.
+    $viajes = array();
+    if ( $viaje_objetos ) {
+        $ids = array_map( 'intval', array_keys( $viaje_objetos ) );
+        $t_via = bitacora_nombre_tabla_viajes();
+        $filas = $wpdb->get_results(
+            "SELECT id, nombre, noche, observador_id FROM $t_via WHERE id IN (" . implode( ',', $ids ) . ')'
+        );
+        foreach ( $filas as $v ) {
+            $lista = $viaje_objetos[ (int) $v->id ];
+            usort( $lista, 'bitacora_orden_de_la_ruta' );
+            $slugs = array();
+            foreach ( $lista as $o ) {
+                if ( ! in_array( $o['slug'], $slugs, true ) ) {
+                    $slugs[] = $o['slug'];
+                }
+            }
+            // El dueño sale del viaje; si la fila es antigua y no lo tiene, del
+            // primer objeto de su ruta (todos son del mismo observador).
+            $clave = isset( $clave_por_id[ (int) $v->observador_id ] ) ? $clave_por_id[ (int) $v->observador_id ] : '';
+            if ( '' === $clave && isset( $observaciones[ $slugs[0] ] ) ) {
+                foreach ( $observaciones[ $slugs[0] ] as $o ) {
+                    if ( isset( $o['viaje'] ) && (int) $o['viaje'] === (int) $v->id ) {
+                        $clave = $o['observador'];
+                        break;
+                    }
+                }
+            }
+            $viajes[ (string) $v->id ] = array(
+                'nombre'     => $v->nombre,
+                'noche'      => $v->noche,
+                'observador' => $clave,
+                'objetos'    => $slugs,
+            );
+        }
     }
 
     while ( ob_get_level() > 0 ) {
@@ -2450,6 +2536,7 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
     echo 'var OBSERVADORES = ' . wp_json_encode( (object) $observadores ) . ";\n";
     echo 'var OBJECTS = ' . wp_json_encode( $objetos ) . ";\n";
     echo 'var OBSERVACIONES = ' . wp_json_encode( (object) $observaciones ) . ";\n";
+    echo 'var VIAJES = ' . wp_json_encode( (object) $viajes ) . ";\n";
     exit;
 }
 
