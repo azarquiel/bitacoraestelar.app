@@ -204,10 +204,10 @@
     vecindario: {
       zoomMaximo: 6500,
       proximidad: 0.28,
-      fovInicioAl: 5000,
-      fovFinalAl: 1800,
+      fovInicioAl: 4000,
+      fovFinalAl: 1500,
       fovMinAl: 8,
-      distMaxAl: 1000,
+      distMaxAl: 1500,
       autoGiro: 0.0006
     }
 

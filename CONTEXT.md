@@ -442,7 +442,7 @@ Test: `scripts/test_observadores.js`.
 
 ## Vecindario solar (estrellas cercanas)
 
-Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (1000 al) del Sol,
+Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (1500 al) del Sol,
 que aparece al hacer zoom máximo sobre el Sol en la vista cenital. Se puebla
 desde los **objetos del mapa** que tengan coordenadas galácticas y esa distancia.
 
@@ -456,6 +456,6 @@ desde los **objetos del mapa** que tengan coordenadas galácticas y esa distanci
   objeto del mapa guarda `bp_rp` (columna nueva); lo resuelve el plugin al
   registrar (Gaia por ra/dec, mismo failover CDS→GAVO que el proxy) y lo emite
   `datos.js`. Sin `bp_rp`, la estrella sale con color neutro.
-- **Requisito de datos:** sin objetos a ≤ 1000 al, la escena avisa "aún no hay
+- **Requisito de datos:** sin objetos a ≤ 1500 al, la escena avisa "aún no hay
   estrellas cercanas registradas" en vez de quedar muda con solo el Sol. Un
   botón del admin completa el `bp_rp` de los objetos cercanos ya registrados.

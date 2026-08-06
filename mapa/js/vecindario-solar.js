@@ -49,7 +49,7 @@ var VecindarioSolar = (function () {
   // ==========================================================================
   // CATÁLOGO
   // ==========================================================================
-  var DIST_MAX = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.distMaxAl) || 1000;
+  var DIST_MAX = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.distMaxAl) || 1500;
 
   var DEG = Math.PI / 180;
 
