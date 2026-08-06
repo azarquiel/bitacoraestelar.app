@@ -177,7 +177,13 @@ observaron. Módulo puro `mapa/js/via-lactea-viaje.js` (`window.VLViaje`), test
   Láctea (`Sol → M13 →…`) y Grupo Local (`Vía Láctea → M31 →…`). Cada capa
   dibuja el suyo con su proyección y su origen, porque el salto entre escalas ya
   lo hace el fundido del zoom; no hay una proyección común que inventar. Un viaje
-  que cruza escalas se avisa, no se fuerza.
+  que cruza escalas se avisa, no se fuerza, y cada objeto cuenta en **una sola**
+  escala: la estrella cercana está en el tramo de la galaxia y en el del
+  vecindario, pero no cruza nada (`VLViaje.escalasDe`).
+- **Una capa sin tramo se queda vacía, no llena:** «no hay viaje» y «hay viaje y
+  no pasa por aquí» son cosas distintas (`null` frente a lista vacía). Si no se
+  distinguen, el atlas del Grupo Local sigue enseñando todas las galaxias
+  mientras el mapa solo enseña la ruta.
 - **El Sol siempre se ve:** de él parte la travesía. Los objetos de la ruta van
   siempre a todo color, aunque sean de otro observador: son escalas del viaje, no
   observaciones ajenas.
