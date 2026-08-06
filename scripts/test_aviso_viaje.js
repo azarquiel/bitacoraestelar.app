@@ -258,6 +258,28 @@ Promise.resolve()
     ok(mal.clase === 'err' && mal.alta === false, 'un fallo del servidor no invita a crear nada');
   })
 
+  /* ── 11. El aviso llega a montarse ──────────────────────────────────────────
+     Todo lo de arriba da igual si el formulario nunca construye el aviso, y eso
+     es justo lo que pasaba: `var WP = window.BITACORA_WP || null` estaba escrito
+     MÁS ABAJO que el bloque del viaje. Como `var` se iza sin su valor, al llegar
+     a la línea del aviso WP valía `undefined`, así que `avisoViaje` nacía `null`
+     y `VIAJES_API` cadena vacía: no se preguntaba por la sesión jamás, en
+     silencio y sin error en consola.
+
+     No hay DOM aquí, así que se comprueba sobre el propio fuente: la declaración
+     de WP tiene que ir ANTES de todo lo que la lee al cargar el módulo. */
+  .then(function () {
+    seccion('El formulario monta el aviso de verdad:');
+    var src = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'registro/resources/js/bitacora-formulario.js'), 'utf8');
+    var declara = src.indexOf('var WP = window.BITACORA_WP');
+    ok(declara !== -1, 'el formulario lee los datos que inyecta WordPress');
+    ok(declara < src.indexOf('BitacoraBase.avisoViaje('),
+       'y los lee ANTES de montar el aviso, o el aviso nace null');
+    ok(declara < src.indexOf('var VIAJES_API'),
+       'y antes de armar la URL de los viajes, o se queda vacía');
+  })
+
   .then(function () {
     console.log(fallos ? '\n' + fallos + ' FALLO(S)' : '\nok · el viaje de la noche se resuelve solo');
     process.exit(fallos ? 1 : 0);

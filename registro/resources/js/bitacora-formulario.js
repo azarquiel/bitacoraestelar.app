@@ -473,6 +473,14 @@
     });
   }
 
+  // Datos que WordPress inyecta en la página (ver el plugin). Si no existen, el
+  // formulario funciona en modo local: solo muestra el JSON, sin guardar.
+  //
+  // Va aquí arriba y no junto al envío porque el bloque del viaje lo lee al
+  // cargar el módulo: `var` se iza sin su valor, así que declararlo más abajo
+  // dejaba WP en `undefined` justo en esas líneas y el aviso nacía null.
+  var WP = window.BITACORA_WP || null;
+
   // ── Viaje de la noche (sesión de observación) ──
   // Toda observación pertenece a una salida, y la salida es OBLIGATORIA: es
   // ella la que dice desde dónde se observaba y la que da casa a la crónica, la
@@ -594,10 +602,6 @@
   // ═══════════════════════════════════════════════════════════════════════
   // ENVÍO: por ahora, genera el bloque de datos de la observación
   // ═══════════════════════════════════════════════════════════════════════
-  // Datos que WordPress inyecta en la página (ver el plugin). Si no existen,
-  // el formulario funciona en modo local: solo muestra el JSON, sin guardar.
-  var WP = window.BITACORA_WP || null;
-
   // ═══════════════════════════════════════════════════════════════════════
   // EQUIPO DEL OBSERVADOR ("Mi flota"): telescopio + oculares + auxiliares.
   // Al elegir telescopio y, por entrada, ocular (y opcionalmente auxiliar), se
