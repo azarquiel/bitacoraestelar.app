@@ -132,6 +132,38 @@
     transition: opacity 0.3s;
   }
   #vs-scale b { color: #ffe08a; font-weight: 500; }
+
+  /* RUTA DEL VIAJE INTERESTELAR (tramo de la Vía Láctea). Vive dentro de
+     #mw-content, que se desplaza, escala y gira: la línea acompaña sola a los
+     marcadores. non-scaling-stroke (lo pone el JS) mantiene el grosor y el
+     punteado constantes en pantalla pese al zoom. Los tres trazos se superponen:
+     la estela ancha da el resplandor, la base marca el camino recorrido y el
+     flujo es el punteado que corre hacia el destino, como una nave entrando en
+     el hiperespacio. El ciclo del punteado (14+10 px) a 26 px/s = 0,923 s.
+     Los tres colores son el mismo oro #f4c76b (244,199,107) de "Registrar". */
+  #mw-ruta {
+    position: absolute;
+    inset: 0;
+    z-index: 5;             /* por debajo de los marcadores */
+    pointer-events: none;
+    overflow: visible;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 7; }
+  .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 1.2; }
+  .mw-ruta-flujo {
+    stroke: rgba(244,199,107,0.9);
+    stroke-width: 2;
+    stroke-dasharray: 14 10;
+    filter: drop-shadow(0 0 4px rgba(244,199,107,0.75));
+    animation: mw-ruta-flujo 0.923s linear infinite;
+  }
+  @keyframes mw-ruta-flujo { to { stroke-dashoffset: -24; } }
+  @media (prefers-reduced-motion: reduce) {
+    .mw-ruta-flujo { animation: none; }
+  }
 </style>
 
 <div id="mw-viewer" style="
@@ -875,15 +907,18 @@
      Si el endpoint no respondiera, descomenta la linea del archivo estatico. -->
 <script src="/wp-json/bitacora/v1/datos.js?v=20260714_0100"></script>
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
+<!-- VIAJES INTERESTELARES: lo consultan las tres capas y la app, así que va
+     ANTES que todas ellas (necesita VIAJES/OBSERVACIONES/OBJECTS de los datos). -->
+<script src="/bitacora-mapa/js/via-lactea-viaje.js?v=20260806_1200"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260716_1900"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260806_1200"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260731_2200"></script>
 <!-- Selección pura de estrellas del vecindario: ANTES de vecindario-solar.js y
      DESPUÉS de bitacora-gaia-color.js (necesita claseEspectral). -->
 <script src="/bitacora-mapa/js/via-lactea-vecindario-catalogo.js?v=20260722_1600"></script>
-<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260722_1600"></script>
+<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260806_1200"></script>
 <!-- SUBMÓDULOS de la app (extraídos del módulo-dios): cargar ANTES de
      via-lactea-app.js. observadores necesita OBSERVACIONES/OBSERVADORES (datos)
      y CONFIG; zoom-imagen necesita CONFIG. -->
@@ -891,5 +926,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260722_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260722_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260806_1200"></script>
 </li>

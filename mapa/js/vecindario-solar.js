@@ -69,7 +69,7 @@ var VecindarioSolar = (function () {
   var scaleTag = document.getElementById('vs-scale');
   var stage = document.getElementById('mw-viewer');
   if (!canvas || !stage) {
-    return { ready: false, sync: function () {}, interactivo: function () { return false; } };
+    return { ready: false, sync: function () {}, setViaje: function () {}, interactivo: function () { return false; } };
   }
   var ctx = canvas.getContext('2d');
 
@@ -192,6 +192,26 @@ var VecindarioSolar = (function () {
     }
   }
 
+  // ---- Ruta del viaje interestelar ------------------------------------------
+  // El tramo del VECINDARIO de una salida: la nave sale del Sol —el origen de
+  // esta escena— y va de una estrella cercana a otra en el orden en que se
+  // observaron. Los ids los fija el visor principal con setViaje().
+  var rutaIds = [];
+
+  function drawRutaViaje() {
+    if (!rutaIds.length || typeof VLViaje === 'undefined') return;
+    var puntos = [project({ x: 0, y: 0, z: 0 })];   // el Sol, el puerto de origen
+    for (var i = 0; i < rutaIds.length; i++) {
+      for (var j = 0; j < objects.length; j++) {
+        if (objects[j].id !== rutaIds[i]) continue;
+        if (hiddenClases && hiddenClases[objects[j].clase || '']) break;  // apagada en la leyenda
+        puntos.push(project(objects[j]));
+        break;
+      }
+    }
+    VLViaje.trazarCanvas(ctx, puntos, VLViaje.fase(), layerAlpha);
+  }
+
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
   function render() {
@@ -207,9 +227,12 @@ var VecindarioSolar = (function () {
 
     drawStars();
     drawGrid();
+    drawRutaViaje();
 
     var projected = objects
       .filter(function (o) { return !(hiddenClases && hiddenClases[o.clase || '']); })
+      // Recorriendo un viaje, solo se ven las estrellas de esa salida.
+      .filter(function (o) { return !rutaIds.length || rutaIds.indexOf(o.id) >= 0; })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
 
@@ -431,9 +454,16 @@ var VecindarioSolar = (function () {
     }
   }
 
+  // setViaje: el tramo del vecindario de la salida que se está recorriendo, como
+  // ids de objeto EN ORDEN. Lista vacía = no hay viaje activo.
+  function setViaje(ids) {
+    rutaIds = ids || [];
+  }
+
   var API = {
     ready: true,
     sync: sync,
+    setViaje: setViaje,
     interactivo: function () { return interactive; },
     onObjectClick: null
   };

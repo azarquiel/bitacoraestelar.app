@@ -150,6 +150,8 @@
       a.style.left = (r.left + r.width  * xPct) + 'px';
       a.style.top  = (r.top  + r.height * yPct) + 'px';
     }
+
+    dibujarRuta(); // la ruta se apoya en las posiciones que acaban de fijarse
   }
 
   // --------------------------------------------------------------------------
@@ -233,6 +235,66 @@
     anchor.appendChild(scaleEl);
     img.appendChild(anchor);
     return anchor;
+  }
+
+  // --------------------------------------------------------------------------
+  // RUTA DEL VIAJE INTERESTELAR (tramo de la Vía Láctea)
+  // La salida se dibuja como una polilínea dorada que arranca en el SOL y va de
+  // un objeto a otro en el orden en que se observaron. Vive DENTRO de
+  // #mw-content, el contenedor que ya se desplaza, escala y gira, así que la
+  // ruta acompaña a los marcadores sin geometría propia; el grosor y el
+  // punteado se mantienen constantes en pantalla con vector-effect
+  // ("non-scaling-stroke"), y el movimiento lo pone una animación CSS sobre
+  // stroke-dashoffset (ver #mw-ruta en index.html).
+  //
+  // Se crea ANTES que los marcadores para que quede por detrás de ellos en el
+  // orden del DOM: la línea pasa bajo los puntos, no por encima.
+  // --------------------------------------------------------------------------
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var rutaSvg = document.createElementNS(SVG_NS, 'svg');
+  rutaSvg.setAttribute('id', 'mw-ruta');
+  rutaSvg.style.display = 'none';
+  var rutaTrazos = ['estela', 'base', 'flujo'].map(function (clase) {
+    var pl = document.createElementNS(SVG_NS, 'polyline');
+    pl.setAttribute('class', 'mw-ruta-' + clase);
+    pl.setAttribute('vector-effect', 'non-scaling-stroke');
+    rutaSvg.appendChild(pl);
+    return pl;
+  });
+  img.appendChild(rutaSvg);
+
+  // Viaje que se está recorriendo ('' = ninguno). Lo fija aplicarViaje().
+  var viajeActivo = '';
+
+  // Los puntos de la ruta en el sistema del contenedor, leídos de los propios
+  // marcadores: ya los ha colocado repositionAnchors() y así no hay una segunda
+  // manera de calcular una posición. Un objeto apagado desde la leyenda no está
+  // en pantalla y tampoco en la línea.
+  function puntosRuta() {
+    var sufijo = isEdgeView ? '-edge' : '';
+    var sol = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
+    var pts = [];
+    if (sol) pts.push(parseFloat(sol.style.left) + ',' + parseFloat(sol.style.top));
+    var tramo = VLViaje.rutaDe(viajeActivo).galaxia;
+    for (var i = 0; i < tramo.length; i++) {
+      var a = document.getElementById(tramo[i].id + sufijo + '-anchor');
+      if (!a || a.style.display === 'none' || !a.style.left) continue;
+      pts.push(parseFloat(a.style.left) + ',' + parseFloat(a.style.top));
+    }
+    return pts;
+  }
+
+  function dibujarRuta() {
+    var pts = viajeActivo ? puntosRuta() : [];
+    if (pts.length < 2) {           // el Sol solo no es un viaje
+      rutaSvg.style.display = 'none';
+      return;
+    }
+    rutaSvg.style.width  = img.clientWidth + 'px';
+    rutaSvg.style.height = img.clientHeight + 'px';
+    var puntos = pts.join(' ');
+    rutaTrazos.forEach(function (pl) { pl.setAttribute('points', puntos); });
+    rutaSvg.style.display = '';
   }
 
   OBJECTS.forEach(function (obj) {
@@ -1523,22 +1585,27 @@
     if (sunTop) sunTop.style.display = isEdgeView ? 'none' : '';
     if (sunEdge) sunEdge.style.display = isEdgeView ? '' : 'none';
 
-    // La visibilidad de cada marcador combina TRES filtros: la vista activa
-    // (cenital/canto), el tipo (leyenda) y el observador seleccionado. Deben
-    // aplicarse juntos: si no, el filtro de observador podría revelar el
-    // marcador de la otra vista (a su posición 'edge'), que aparecería como un
-    // duplicado en una zona distinta del mapa.
+    // La visibilidad de cada marcador combina CUATRO filtros: la vista activa
+    // (cenital/canto), el tipo (leyenda), el observador seleccionado y, si se
+    // está recorriendo un viaje, la propia ruta. Deben aplicarse juntos: si no,
+    // el filtro de observador podría revelar el marcador de la otra vista (a su
+    // posición 'edge'), que aparecería como un duplicado en una zona distinta
+    // del mapa.
     var objs = img.querySelectorAll('.mw-object-anchor');
     for (var i = 0; i < objs.length; i++) {
       var a = objs[i];
+      var id = a.getAttribute('data-id');
       var inView = a.getAttribute('data-view') === currentView;
       var typeHidden = !!hiddenColors[a.getAttribute('data-color')];
-      var estado = VLO.estadoObservador(a.getAttribute('data-id'));
-      a.style.display = (inView && !typeHidden && estado !== 'ninguna') ? '' : 'none';
+      var estado = VLO.estadoObservador(id);
+      var enRuta = !viajeActivo || VLViaje.enViaje(viajeActivo, id);
+      a.style.display = (inView && !typeHidden && enRuta && estado !== 'ninguna') ? '' : 'none';
       // Objeto observado solo por otros: se muestra atenuado (gris con algo de
       // su color), como "deshabilitado". El filtro no afecta a los clics, así
       // que sigue pudiéndose pulsar para descubrir las observaciones ajenas.
-      a.style.filter = (estado === 'ajena') ? 'grayscale(0.82) opacity(0.55)' : '';
+      // Durante un viaje los objetos de la ruta van siempre a todo color: son
+      // las escalas de la travesía, no observaciones ajenas.
+      a.style.filter = (estado === 'ajena' && !viajeActivo) ? 'grayscale(0.82) opacity(0.55)' : '';
     }
   }
 

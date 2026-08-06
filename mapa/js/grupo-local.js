@@ -145,7 +145,7 @@ var GrupoLocal = (function () {
   var stage = document.getElementById('mw-viewer');
   if (!canvas || !stage) {
     // Sin la capa no hay nada que hacer; el visor de la galaxia sigue igual.
-    return { ready: false, sync: function () {} };
+    return { ready: false, sync: function () {}, setViaje: function () {} };
   }
   var ctx = canvas.getContext('2d');
 
@@ -274,6 +274,28 @@ var GrupoLocal = (function () {
     }
   }
 
+  // ---- Ruta del viaje interestelar ------------------------------------------
+  // El tramo EXTRAGALÁCTICO de una salida: la nave sale de la Vía Láctea —que
+  // aquí ya es un punto, el origen del atlas— y va de una galaxia a otra en el
+  // orden en que se observaron. El tramo interior lo dibuja la vista de la
+  // galaxia, y el salto entre las dos escalas es el propio fundido del zoom.
+  // Los ids los fija el visor principal con setViaje().
+  var rutaIds = [];
+
+  function drawRutaViaje() {
+    if (!rutaIds.length || typeof VLViaje === 'undefined') return;
+    var puntos = [project({ x: 0, y: 0, z: 0 })];   // la Vía Láctea, el puerto de origen
+    for (var i = 0; i < rutaIds.length; i++) {
+      for (var j = 0; j < objects.length; j++) {
+        if (objects[j].id !== rutaIds[i]) continue;
+        if (hiddenTipos && hiddenTipos[objects[j].tipo || '']) break;  // apagada en la leyenda
+        puntos.push(project(objects[j]));
+        break;
+      }
+    }
+    VLViaje.trazarCanvas(ctx, puntos, VLViaje.fase(), layerAlpha);
+  }
+
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
   function render() {
@@ -290,10 +312,13 @@ var GrupoLocal = (function () {
 
     drawStars();
     drawGrid();
+    drawRutaViaje();
 
-    // Se omiten los tipos de Hubble ocultados desde la leyenda.
+    // Se omiten los tipos de Hubble ocultados desde la leyenda y, si se está
+    // recorriendo un viaje, todo lo que no forme parte de esa salida.
     var projected = objects
       .filter(function (o) { return !(hiddenTipos && hiddenTipos[o.tipo || '']); })
+      .filter(function (o) { return !rutaIds.length || rutaIds.indexOf(o.id) >= 0; })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
 
@@ -601,11 +626,16 @@ var GrupoLocal = (function () {
     activeObs = clave || '';
     ajenasActivo = !!activo;
   }
+  // setViaje: el tramo extragaláctico de la salida que se está recorriendo, como
+  // ids de objeto EN ORDEN. Lista vacía = no hay viaje activo y no se traza nada.
+  function setViaje(ids) {
+    rutaIds = ids || [];
+  }
   var API = {
     ready: true, sync: sync, maxDist: maxDist, alcanceMax: ALCANCE_MAX,
     buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
     focusObject: focusObject, focus: focus, clearTarget: clearTarget,
-    setObservador: setObservador,
+    setObservador: setObservador, setViaje: setViaje,
     onObjectClick: null
   };
   return API;
