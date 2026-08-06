@@ -39,6 +39,8 @@
     var API_VIAJES = WP.endpoint.replace(/observaciones\/?$/, 'viajes');
     var API_NOCHE  = API_VIAJES + '/de-la-noche';
     var API_BASES  = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+    // El mapa interestelar, donde se ve la ruta de un viaje (?viaje=<id>).
+    var MAPA_URL   = 'https://bitacoraestelar.app/mapa.html';
 
     function api(url, opts) {
       opts = opts || {}; opts.credentials = 'same-origin';
@@ -94,14 +96,27 @@
       cont.innerHTML = viajes.map(function (v) {
         var lugar = v.base_nombre ? esc(v.base_nombre) : 'sin lugar registrado';
         var horas = (v.comienzo || v.fin) ? (esc(v.comienzo || '?') + '–' + esc(v.fin || '?')) : '';
+        // La ruta: los objetos visitados en el orden en que se observaron (lo
+        // decide el servidor, ver objetos_ruta). Solo texto, sin enlaces: el
+        // recorrido entero se ve en el mapa con el botón de al lado.
+        var ruta = (v.objetos && v.objetos.length)
+          ? '<div class="vi-ruta">' + v.objetos.map(function (o) {
+              return '<span class="vi-obj">' + esc(o) + '</span>';
+            }).join('<span class="vi-flecha">→</span>') + '</div>'
+          : '';
         return '<div class="viaje-item" data-id="' + v.id + '">'
           + '<div class="vi-main">'
           + '<div class="vi-nom">' + esc(v.nombre || ('Viaje del ' + v.noche)) + '</div>'
           + '<div class="vi-specs">' + esc(v.noche) + ' · ' + lugar + (horas ? ' · ' + horas : '') + '</div>'
           + '<div class="vi-meta">' + (v.num_objetos ? v.num_objetos + (v.num_objetos === 1 ? ' objeto' : ' objetos') : 'todavía sin objetos')
           + (v.meteo ? ' · ' + esc(v.meteo) : '') + '</div>'
+          + ruta
           + '</div>'
           + '<div class="vi-acts">'
+          + (v.num_objetos
+              ? '<a class="vi-btn mapa" target="_blank" rel="noopener"'
+                + ' href="' + MAPA_URL + '?viaje=' + v.id + '">Ver en el mapa</a>'
+              : '')
           + '<button type="button" class="vi-btn" data-accion="editar">Editar</button>'
           + '<button type="button" class="vi-btn danger" data-accion="borrar"' + (v.num_objetos ? ' disabled title="Tiene observaciones dentro"' : '') + '>Borrar</button>'
           + '</div></div>';

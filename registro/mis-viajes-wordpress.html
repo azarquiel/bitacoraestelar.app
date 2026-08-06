@@ -31,9 +31,17 @@
 #mw-obs-form .viaje-item .vi-specs {font-size:13px;color:var(--azul);
     font-family:ui-monospace,Menlo,monospace;margin-top:3px;}
 #mw-obs-form .viaje-item .vi-meta {font-size:12px;color:var(--tinta-tenue);margin-top:3px;}
+/* La ruta de la noche: los objetos visitados, en el orden en que se observaron.
+   Solo texto; el recorrido dibujado está en el mapa ("Ver en el mapa"). */
+#mw-obs-form .viaje-item .vi-ruta {display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:8px;}
+#mw-obs-form .viaje-item .vi-obj {border:1px solid var(--linea);border-radius:12px;padding:2px 9px;
+    font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--tinta);}
+#mw-obs-form .viaje-item .vi-flecha {color:var(--ambar);font-size:11px;opacity:.7;}
 #mw-obs-form .viaje-item .vi-acts {display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
 #mw-obs-form .vi-btn {background:none;border:1px solid var(--linea);border-radius:14px;color:var(--tinta-tenue);
-    font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:5px 11px;cursor:pointer;transition:.15s;}
+    font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:5px 11px;cursor:pointer;transition:.15s;
+    text-decoration:none;display:inline-block;line-height:1.5;}
+#mw-obs-form .vi-btn.mapa {color:var(--ambar);border-color:rgba(244,199,107,.35);}
 #mw-obs-form .vi-btn:hover:not(:disabled) {color:var(--tinta);border-color:var(--ambar);}
 #mw-obs-form .vi-btn.danger:hover:not(:disabled) {color:var(--rojo);border-color:var(--rojo);}
 #mw-obs-form .vi-btn:disabled {opacity:.4;cursor:not-allowed;}
@@ -125,4 +133,4 @@
 </div>
 
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260806_1100" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20260805_1900" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20260806_1200" defer></script>
