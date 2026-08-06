@@ -156,6 +156,47 @@ cielo, comienzo y fin, tripulación). Se gestionan en **Mis viajes**
   hace relanzable el reparto histórico (backfill) sin duplicar viajes.
   Test: `scripts/test_viaje_noche.php`.
 
+### La ruta en el mapa
+
+Un viaje se puede **recorrer** en el mapa interestelar: quedan solo sus objetos,
+unidos por una línea dorada que va de uno a otro en el orden en que se
+observaron. Módulo puro `mapa/js/via-lactea-viaje.js` (`window.VLViaje`), test
+`scripts/test_viaje_mapa.js`.
+
+- **El orden lo decide el SERVIDOR:** hora ascendente y, sin hora, al final por
+  `id` —el mismo criterio con el que se listan las observaciones de una salida—.
+  Así la ruta dibuja siempre la misma forma, y *Mis viajes* y el mapa cuentan el
+  mismo recorrido. Nunca es aleatorio.
+- **Los viajes viajan con los datos:** `bitacora_datos_js` emite `var VIAJES` con
+  `{nombre, noche, observador, objetos}` y un `viaje` en cada observación. Es un
+  payload **público**: la crónica, la meteo, el cielo y la base se quedan fuera.
+- **Un viaje es de alguien:** el combo de viajes del mapa solo tiene contenido
+  con un observador seleccionado; sin él dice «Seleccione un observador para ver
+  sus viajes». Cambiar de observador termina el viaje en curso.
+- **Tres tramos, uno por escala:** vecindario solar (`Sol → estrella…`), Vía
+  Láctea (`Sol → M13 →…`) y Grupo Local (`Vía Láctea → M31 →…`). Cada capa
+  dibuja el suyo con su proyección y su origen, porque el salto entre escalas ya
+  lo hace el fundido del zoom; no hay una proyección común que inventar. Un viaje
+  que cruza escalas se avisa, no se fuerza.
+- **El Sol siempre se ve:** de él parte la travesía. Los objetos de la ruta van
+  siempre a todo color, aunque sean de otro observador: son escalas del viaje, no
+  observaciones ajenas.
+- **El objeto sin marcador no se dibuja ni se cuenta:** lo visitado que no está
+  en `OBJECTS` desaparece en silencio de la ruta y del recuento del combo, o el
+  rótulo prometería un objeto que el mapa no enseña. El viaje sigue siendo
+  seleccionable.
+- **El buscador se apaga durante el viaje:** navegar a otro objeto rompería el
+  recorrido.
+- **Enlace compartible:** `mapa.html?viaje=<id>` selecciona al dueño y recorre la
+  ruta, por delante del arranque con las observaciones propias. El combo
+  reescribe la URL (`replaceState`); un viaje que ya no existe avisa y arranca
+  normal.
+- **Una observación se identifica por su ÍNDICE en `OBSERVACIONES[objeto]`**, no
+  por su observador: el mismo observador puede haber visitado el objeto en dos
+  salidas y las dos tienen que poder abrirse. Es lo que lista «← Descubrir»,
+  botón único que desde cualquier ficha lleva a las demás observaciones del
+  objeto y solo aparece si las hay.
+
 ## Astrometría de la sesión
 
 La altura y el azimut que se registran de una observación: los del **objeto**, los
