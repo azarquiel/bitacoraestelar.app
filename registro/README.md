@@ -256,6 +256,14 @@ entre líneas es la forma, no la altura; los números de verdad están en la
 leyenda. Eso lo decide `BitacoraBase.seriesSalud()` (`bitacora-base.js`), y la
 página solo pinta lo que devuelve.
 
+Al **pasar el ratón por un punto** sale un globo con la noche, la medida y su
+valor real (y quién lo anotó): es la única forma de leer el número exacto de una
+noche, porque el eje vertical no tiene escala. El globo es propio, no el
+`<title>` del navegador —que tarda un segundo en salir y no se puede vestir—, y
+cada punto lleva un aro transparente para que la diana sea mayor que el punto.
+Quien no use ratón tiene debajo la tabla con las mismas mediciones. Prueba:
+`node scripts/test_salud_globo.js`.
+
 ---
 
 ## La ficha en Word (.docx)
