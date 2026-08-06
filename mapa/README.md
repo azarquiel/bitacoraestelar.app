@@ -10,7 +10,9 @@ con los bocetos de lo que se vio por el ocular.
 
 Al **alejar el zoom** más allá de la galaxia, la vista se funde con un **atlas
 del Grupo Local**: la Vía Láctea se encoge hasta ser un punto y aparecen las
-galaxias observadas fuera de ella.
+galaxias observadas fuera de ella. Y al **acercarlo del todo sobre el Sol**, al
+revés: la galaxia se funde en el **vecindario solar**, las estrellas registradas
+a menos de 1500 años luz vistas en 3D desde casa.
 
 ---
 
@@ -27,6 +29,12 @@ galaxias observadas fuera de ella.
   funde hacia una capa de atlas dibujada detrás. El relevo es continuo: la
   galaxia, al encogerse, pasa a ser el punto «Vía Láctea» del centro del atlas,
   y siguiendo el zoom out aparecen las galaxias observadas.
+- **Tránsito al Vecindario Solar**: el simétrico al anterior, pero al hacer
+  *zoom in* **sobre el Sol**. La galaxia funde hacia una escena 3D de las
+  estrellas registradas a menos de **1500 años luz**, con el Sol en el origen y
+  cada estrella en su color real de Gaia. Entrar exige tener el Sol centrado;
+  una vez dentro, la escena se queda hasta que se aleja bastante (2500 al), para
+  que el vaivén del zoom no mezcle las dos imágenes.
 - **Buscador** de objetos con autocompletado. Además de los objetos del
   registro, localiza **cualquier objeto** (también fuera de la Vía Láctea)
   resolviéndolo en SIMBAD; centra, amplía o aleja según convenga y lo resalta.
@@ -75,7 +83,8 @@ Bitácora Registro** desde la base de datos (ver la carpeta `registro/`).
 | `js/via-lactea-config.js` | **Ajustes**. El único que se edita a menudo | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-app.js` | La lógica del visor de la galaxia | Servidor (`/bitacora-mapa/js/`) |
 | `js/grupo-local.js` | La capa del atlas del Grupo Local | Servidor (`/bitacora-mapa/js/`) |
-| `js/vecindario-solar.js` | La capa de las estrellas cercanas al Sol | Servidor (`/bitacora-mapa/js/`) |
+| `js/vecindario-solar.js` | La capa de las estrellas cercanas al Sol (dibujo) | Servidor (`/bitacora-mapa/js/`) |
+| `js/via-lactea-vecindario-catalogo.js` | Qué estrellas entran en esa escena y cómo funde | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-viaje.js` | La ruta de un viaje: orden, tramos y trazo dorado | Servidor (`/bitacora-mapa/js/`) |
 | `images/` | Imágenes del mapa (cenital, de canto y bocetos) | Servidor (`/bitacora-mapa/images/`) |
 
@@ -196,6 +205,16 @@ grupoLocal: {
   escalaMinima: 0.0015, // zoom out máximo (menor = se llega más lejos en el atlas)
   autoGiro: 0.0004    // giro ambiental lento del atlas
 },
+vecindario: {
+  zoomMaximo: 6500,   // tope de zoom cuando el Sol está centrado (fuera de ahí, 25)
+  proximidad: 0.28,   // cuánto debe acercarse el Sol al centro para poder entrar
+  fovInicioAl: 4000,  // campo (al) en que EMPIEZA el fundido a la escena
+  fovFinalAl: 1500,   // campo (al) en que el fundido está COMPLETO
+  fovSalidaAl: 2500,  // ya dentro, campo hasta el que la escena aguanta (histéresis)
+  fovMinAl: 8,        // lo más cerca que se puede llegar (radio, al)
+  distMaxAl: 1500,    // radio del vecindario: qué estrellas entran
+  autoGiro: 0.0006    // giro ambiental lento de la escena
+},
 observacionesAjenas: {
   activo: true        // descubrir observaciones de otros observadores (ver abajo)
 },
@@ -206,6 +225,11 @@ marcadores:{ puntoDiametro: 5, textoTamano: '11px' }
 
 Los tres interruptores de `giros` activan o desactivan funcionalidades
 completas cambiando una sola palabra.
+
+Al tocar el **radio del vecindario** (`distMaxAl`) hay que mover con él los
+campos de visión, o la escena se vuelve opaca con las estrellas más lejanas ya
+fuera de cuadro: `fovFinalAl` debe ser **≳ 0,84 × `distMaxAl`**, y `fovSalidaAl`,
+un valor intermedio entre `fovFinalAl` y `fovInicioAl`.
 
 > El **zoom out máximo** se amplía además de forma automática si hace falta:
 > si el objeto más lejano del catálogo (o uno buscado) queda fuera del alcance
