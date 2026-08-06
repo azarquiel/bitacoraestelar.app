@@ -69,5 +69,26 @@ eq(V.estrellasVecindario([], 500).length, 0, 'lista vacía -> []');
 eq(V.estrellasVecindario(null, 500).length, 0, 'null -> []');
 eq(V.estrellasVecindario(objs, 0).length, 0, 'distMax 0 -> nada entra');
 
+console.log('fundidoVecindario (histéresis del tránsito):');
+var CFG = { fovInicioAl: 4000, fovFinalAl: 1500, fovSalidaAl: 2500 };
+function fun(fov, cerca, dentro) { return V.fundidoVecindario(fov, cerca, dentro, CFG); }
+
+eq(fun(5000, true, false).alpha, 0, 'lejos del vecindario -> capa apagada');
+eq(fun(1200, false, false).alpha, 0, 'sin el Sol centrado no se entra');
+eq(fun(1200, true, false).alpha, 1, 'Sol centrado y campo bajo fovFinalAl -> entra');
+eq(fun(1200, true, false).dentro, true, 'al fundirse del todo queda "dentro"');
+eq(fun(3000, true, false).dentro, false, 'a medio fundido aún no está "dentro"');
+
+// El fallo que se arregla: dentro del vecindario, descentrar el Sol al hacer
+// zoom apagaba la capa de golpe (galaxia gigante mezclada con la escena).
+eq(fun(1200, false, true).alpha, 1, 'ya dentro, perder el centro NO apaga la capa');
+eq(fun(2400, false, true).alpha, 1, 'ya dentro, opaco hasta fovSalidaAl');
+eq(fun(2400, false, true).dentro, true, 'ya dentro, sigue dentro');
+eq(fun(3250, true, true).alpha, 0.5, 'salir se funde entre fovSalidaAl y fovInicioAl');
+eq(fun(4000, true, true).alpha, 0, 'por encima de fovInicioAl se sale');
+eq(fun(4000, true, true).dentro, false, 'y deja de estar dentro');
+eq(V.fundidoVecindario(2400, true, false, { fovInicioAl: 4000, fovFinalAl: 1500 }).alpha < 1,
+  true, 'sin fovSalidaAl no hay histéresis (entrada de siempre)');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

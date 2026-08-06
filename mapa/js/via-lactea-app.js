@@ -513,8 +513,12 @@
 
   // Tope de zoom vigente: elevado SOLO al acercarse al Sol en la vista cenital
   // (para entrar al vecindario); en cualquier otro caso, el tope normal (25).
+  // Ya dentro del vecindario el tope sigue elevado aunque el Sol se descentre:
+  // si no, el primer zoom tras descentrarlo recortaría la escala de golpe.
+  var dentroVecindario = false;
   function effMaxScale() {
-    return (!isEdgeView && cercaDelSol()) ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
+    return (!isEdgeView && (dentroVecindario || cercaDelSol()))
+      ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
   }
 
   function updateVecindario() {
@@ -532,10 +536,13 @@
     }
     // Fundido: 0 salvo que el Sol esté centrado (cenital) y el campo baje del
     // umbral. Completo por debajo de fovFinalAl.
-    var fovIni = cfg.fovInicioAl || 2500, fovFin = cfg.fovFinalAl || 900;
     var alpha = 0;
-    if (!isEdgeView && cercaDelSol() && fov < fovIni) {
-      alpha = (fov <= fovFin) ? 1 : (fovIni - fov) / (fovIni - fovFin);
+    if (isEdgeView) {
+      dentroVecindario = false;
+    } else {
+      var f = VLVecindarioCatalogo.fundidoVecindario(fov, cercaDelSol(), dentroVecindario, cfg);
+      alpha = f.alpha;
+      dentroVecindario = f.dentro;
     }
     // Al dominar el vecindario, se oculta la imagen de la galaxia y sus
     // marcadores dejan de capturar clics (para que lleguen a la capa).

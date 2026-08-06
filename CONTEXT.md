@@ -456,6 +456,14 @@ desde los **objetos del mapa** que tengan coordenadas galácticas y esa distanci
   objeto del mapa guarda `bp_rp` (columna nueva); lo resuelve el plugin al
   registrar (Gaia por ra/dec, mismo failover CDS→GAVO que el proxy) y lo emite
   `datos.js`. Sin `bp_rp`, la estrella sale con color neutro.
+- **Tránsito con histéresis:** `fundidoVecindario(fov, cerca, dentro, cfg)` (mismo
+  módulo puro) decide la opacidad de la capa. Para ENTRAR hacen falta el Sol
+  centrado y un campo bajo `fovFinalAl`; una vez dentro, la escena se mantiene
+  opaca hasta `fovSalidaAl` aunque el Sol se descentre, y el tope de zoom sigue
+  elevado. Sin esa memoria, hacer zoom descentraba el Sol, la capa se apagaba de
+  golpe y la galaxia (ya gigante) se mezclaba con la escena.
+- **El campo manda sobre la distancia:** `fovFinalAl` debe ser ≳ 0,84 × `distMaxAl`,
+  o la escena se vuelve opaca con las estrellas más lejanas ya fuera de cuadro.
 - **Requisito de datos:** sin objetos a ≤ 1500 al, la escena avisa "aún no hay
   estrellas cercanas registradas" en vez de quedar muda con solo el Sol. Un
   botón del admin completa el `bp_rp` de los objetos cercanos ya registrados.

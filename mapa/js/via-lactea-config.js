@@ -195,6 +195,11 @@
     //                 al centro para elevar el tope y activar la capa.
     //   fovInicioAl : campo de visión (al) en que EMPIEZA el fundido al vecindario.
     //   fovFinalAl  : campo (al) en que el fundido está COMPLETO (solo vecindario).
+    //   fovSalidaAl : histéresis. Una vez DENTRO del vecindario, la escena sigue
+    //                 opaca hasta este campo (mayor que fovFinalAl) y solo
+    //                 entonces empieza a devolver la galaxia. Entrar cuesta más
+    //                 que quedarse: sin esto, descentrar el Sol al hacer zoom
+    //                 apagaba la capa de golpe y las dos imágenes se mezclaban.
     //   fovMinAl    : campo mínimo (radio, al) al que se puede acercar (~8 al ≈ 16 al de diámetro).
     //   distMaxAl   : distancia máxima (al) para considerar una estrella "del vecindario".
     //                 fovFinalAl debe ser ≳ 0,84 × distMaxAl: si no, la escena se
@@ -206,6 +211,7 @@
       proximidad: 0.28,
       fovInicioAl: 4000,
       fovFinalAl: 1500,
+      fovSalidaAl: 2500,
       fovMinAl: 8,
       distMaxAl: 1500,
       autoGiro: 0.0006
