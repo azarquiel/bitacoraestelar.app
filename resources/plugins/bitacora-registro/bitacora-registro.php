@@ -3346,6 +3346,49 @@ function bitacora_backfill_bprp() {
     return $completados;
 }
 
+/**
+ * Coloca en el mapa los objetos de observaciones ya guardadas que se quedaron
+ * sin fila en el catálogo. Pasa cuando al registrarlas no se les pudo sacar la
+ * distancia: la observación se guarda igual (no bloquea) y solo se avisa, así
+ * que el objeto no vuelve a intentarse nunca, ni siquiera cuando la escalera de
+ * distancias aprende a resolverlo. Aquí se reintentan todos de una vez.
+ *
+ * Solo mira observaciones cuyo slug NO está ya en el catálogo, así que repetirlo
+ * no cuesta red por los que ya están. Devuelve
+ * array( 'colocados' => n, 'problemas' => array( 'NGC 2022' => 'motivo', ... ) ).
+ */
+function bitacora_objetos_backfill() {
+    global $wpdb;
+    $t_ob  = bitacora_nombre_tabla();
+    $t_obj = bitacora_nombre_tabla_objetos();
+    // El slug del objeto se deriva igual que en bitacora_asegurar_objeto_mapa
+    // ("NGC 2022" -> "ngc2022"), así que la comparación se hace aquí, en PHP,
+    // sobre los objetos que ya existen: en SQL habría que replicar la regla.
+    $ya = array();
+    foreach ( (array) $wpdb->get_col( "SELECT slug FROM $t_obj" ) as $slug ) {
+        $ya[ $slug ] = true;
+    }
+    $filas = $wpdb->get_results(
+        "SELECT objeto, objeto_etiqueta, ra, decl, tipo FROM $t_ob WHERE borrada_en IS NULL AND objeto <> '' ORDER BY id ASC"
+    );
+    $colocados = 0;
+    $problemas = array();
+    foreach ( (array) $filas as $o ) {
+        $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $o->objeto ) );
+        if ( '' === $slug || isset( $ya[ $slug ] ) || isset( $problemas[ $o->objeto ] ) ) {
+            continue;
+        }
+        $res = bitacora_asegurar_objeto_mapa( $o->objeto, $o->objeto_etiqueta, $o->ra, $o->decl, (string) $o->tipo );
+        if ( is_wp_error( $res ) ) {
+            $problemas[ $o->objeto ] = $res->get_error_message();
+            continue;
+        }
+        $ya[ $slug ] = true;
+        $colocados++;
+    }
+    return array( 'colocados' => $colocados, 'problemas' => $problemas );
+}
+
 /** Lista todos los objetos del mapa (para el visor y para comprobación). */
 function bitacora_listar_objetos( WP_REST_Request $peticion ) {
     global $wpdb;
@@ -3874,6 +3917,21 @@ function bitacora_panel_objetos() {
     wp_nonce_field( 'bitacora_backfill_bprp' );
     echo '<button type="submit" name="bitacora_backfill_bprp" value="1" class="button">Completar color BP–RP de objetos cercanos</button>';
     echo ' <span style="color:#646970">Consulta Gaia el color de las estrellas cercanas para el vecindario solar. Pendientes: <strong>' . $sin_bprp . '</strong>. Idempotente. Los objetos nuevos ya lo obtienen al registrarse.</span>';
+    echo '</form>';
+
+    // ── Backfill de objetos observados que se quedaron fuera del mapa ──
+    if ( isset( $_POST['bitacora_backfill_objetos'] ) && check_admin_referer( 'bitacora_backfill_objetos' ) ) {
+        $r = bitacora_objetos_backfill();
+        echo '<div class="notice notice-success"><p>Colocados en el mapa: <strong>' . intval( $r['colocados'] ) . '</strong> objeto(s).</p>';
+        foreach ( $r['problemas'] as $obj => $motivo ) {
+            echo '<p>' . esc_html( $obj ) . ': ' . esc_html( $motivo ) . '</p>';
+        }
+        echo '</div>';
+    }
+    echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
+    wp_nonce_field( 'bitacora_backfill_objetos' );
+    echo '<button type="submit" name="bitacora_backfill_objetos" value="1" class="button">Colocar en el mapa los objetos observados que falten</button>';
+    echo ' <span style="color:#646970">Reintenta los objetos de observaciones ya guardadas que no se pudieron situar en su día (p. ej. porque entonces no se les encontró la distancia). Idempotente.</span>';
     echo '</form></div>';
 
     // ── Catálogo de equipo (telescopios / oculares / auxiliares) ──

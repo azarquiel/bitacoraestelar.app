@@ -3,6 +3,13 @@
 Glosario de términos del proyecto (ubicuo). Los módulos y su vocabulario de
 arquitectura se nombran con estos términos.
 
+El sitio en producción es **https://bitacoraestelar.app** (WordPress con el
+plugin `resources/plugins/bitacora-registro`). Sus datos públicos se pueden
+mirar sin sesión, que es la forma más rápida de comprobar qué ve el mapa de
+verdad: `/wp-json/bitacora/v1/objetos` (catálogo del mapa),
+`/wp-json/bitacora/v1/datos.js` (lo que carga el visor) y
+`/wp-json/bitacora/v1/resolver?q=NGC+2022` (lo que resuelve el buscador).
+
 ## Modelo de color Gaia
 
 El mapeo canónico **índice BP–RP → color RGB** de una estrella, anclado a los
@@ -37,6 +44,15 @@ Una entrada en la tabla `{prefix}bitacora_objetos` que se pinta en el mapa de la
 Vía Láctea (slug, etiqueta, color, tipo, morfología, coordenadas galácticas,
 distancia). Los objetos cercanos aparecen en el mapa MW; los lejanos, en la vista
 extragaláctica (grupo local).
+
+Toda observación debería tener el suyo: lo asegura `bitacora_asegurar_objeto_mapa()`
+al registrar, al editar y al importar un OAL. Como no bloquea el guardado (una
+observación sin distancia se guarda igual, solo se avisa), pueden quedar objetos
+huérfanos: observación sí, marcador no. Se rescatan con
+`bitacora_objetos_backfill()`, el botón «Colocar en el mapa los objetos observados
+que falten» del panel de administración. Síntoma del hueco: el buscador del mapa
+SÍ encuentra el objeto —resuelve en SIMBAD al vuelo y dibuja un punto de mira—
+pero no hay marcador. `scripts/test_oal_objeto_mapa.php` fija las dos vías.
 
 ## Distancia al Sol de un objeto
 
