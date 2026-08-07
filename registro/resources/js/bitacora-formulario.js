@@ -1207,12 +1207,19 @@
       '<div class="row entry-equipo">'+
         '<label class="field"><span class="lab">Ocular (de tu flota)</span>'+
           '<select class="e-ocular"><option value="">— Elige un ocular —</option></select></label>'+
-        '<label class="field"><span class="lab">Auxiliar (opcional)</span>'+
-          '<select class="e-auxiliar"><option value="">— Sin auxiliar —</option></select></label>'+
+        // Va en un <div> y no en un <label>: el "+" es un botón y, dentro de una
+        // etiqueta, el clic se reenviaría al select y lo desplegaría.
+        '<div class="field"><span class="lab">Auxiliar (opcional)</span>'+
+          '<span class="aux-fila">'+
+            '<select class="e-auxiliar"><option value="">— Sin auxiliar —</option></select>'+
+            '<button type="button" class="e-aux-mas" title="Añadir un segundo auxiliar detrás">+</button>'+
+          '</span></div>'+
         // El segundo hueco va DETRÁS del primero en el tren óptico (un Paracorr y
         // luego una Barlow, por ejemplo). Con factores puros el orden da igual;
-        // con extensión fija en mm, no.
-        '<label class="field"><span class="lab">Segundo auxiliar (opcional)</span>'+
+        // con extensión fija en mm, no. Encadenar dos es raro, así que el hueco
+        // nace oculto y lo saca el "+" de al lado del primero (o la propia
+        // observación que se edita, si ya venía con dos).
+        '<label class="field e-aux2-wrap" hidden><span class="lab">Segundo auxiliar (opcional)</span>'+
           '<select class="e-auxiliar2"><option value="">— Sin segundo auxiliar —</option></select></label>'+
         '<label class="field"><span class="lab">Filtro (opcional)</span>'+
           '<select class="e-filtro"><option value="">— Sin filtro —</option></select></label>'+
@@ -1263,6 +1270,16 @@
     if (datos.auxiliar_id) el._auxPre = datos.auxiliar_id;
     if (datos.auxiliar2_id) el._aux2Pre = datos.auxiliar2_id;
     if (datos.filtro_id) el._filPre = datos.filtro_id;
+
+    // El segundo auxiliar solo aparece si se pide (el "+") o si la observación
+    // que se edita ya lo traía.
+    function mostrarAux2(){
+      el.querySelector('.e-aux2-wrap').hidden = false;
+      el.querySelector('.e-aux-mas').hidden = true;
+    }
+    el.querySelector('.e-aux-mas').addEventListener('click', mostrarAux2);
+    if (datos.auxiliar2_id) mostrarAux2();
+
     poblarEntrada(el);
     el.querySelector('.e-ocular').addEventListener('change', function(){ recalcEntrada(el, true); });
     el.querySelector('.e-auxiliar').addEventListener('change', function(){ recalcEntrada(el, false); });
