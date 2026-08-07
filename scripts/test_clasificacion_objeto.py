@@ -79,6 +79,16 @@ for tipo, codes, color in reglas:
     check(color in leyenda, f"color de '{tipo}' ({color}) presente en la leyenda")
 check(color_otro in leyenda, f"color 'otro' ({color_otro}) presente en la leyenda")
 
+# ── 3) El nombre del tipo cabe en la columna `tipo` de la tabla de objetos ────
+# NGC 2022 (PN) no llegó nunca al mapa: 'planetaria' son 10 caracteres y la
+# columna era varchar(8), así que MySQL en modo estricto rechazaba el INSERT.
+m_col = re.search(r"CREATE TABLE \$tabla_objetos.*?\n\s*tipo varchar\((\d+)\)", PHP, re.S)
+ancho = int(m_col.group(1)) if m_col else None
+check(ancho is not None, f"ancho de la columna `tipo` parseado ({ancho})")
+print("Cada tipo del clasificador cabe en la columna:")
+for tipo, _codes, _color in reglas + [("otro", [], "")]:
+    check(ancho is not None and len(tipo) <= ancho, f"'{tipo}' ({len(tipo)} car.) cabe en varchar({ancho})")
+
 if fallos:
     print(f"\n{len(fallos)} fallo(s).")
     sys.exit(1)
