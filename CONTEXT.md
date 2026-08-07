@@ -38,6 +38,34 @@ Vía Láctea (slug, etiqueta, color, tipo, morfología, coordenadas galácticas,
 distancia). Los objetos cercanos aparecen en el mapa MW; los lejanos, en la vista
 extragaláctica (grupo local).
 
+## Distancia al Sol de un objeto
+
+Lo que separa una dirección del cielo de un sitio en el mapa: sin distancia el
+objeto no se puede pintar y la observación se queda guardada sin representación.
+La **escalera de fuentes**, de más específica a más general:
+
+1. Las medidas publicadas de SIMBAD (`mesDistance`), por su **mediana**: las
+   distancias de un mismo objeto se separan a veces por un factor 2 y una medida
+   vieja y disparatada no debe arrastrar al resto.
+2. La **paralaje** de SIMBAD (`basic.plx_value`), que viaja gratis en la misma
+   consulta y está cuando las medidas no: es la que coloca a NGC 2022.
+3. **VizieR** (`B/ocl`, cúmulos abiertos de Dias), la segunda base de datos, por
+   nombre de catálogo. Cubre la familia con más huecos en SIMBAD (M11, NGC 869,
+   NGC 457 están allí y en `mesDistance` no).
+4. La que escriba **a mano** el observador, único recurso para lo que ninguna
+   base de datos sabe: las nebulosas difusas galácticas (NGC 2024 no tiene ni
+   medida, ni paralaje, ni entrada en `B/ocl`).
+
+- **Fuente única de la regla:** `bitacora-distancia.php`, puro y sin WordPress
+  (`bitacora_distancia_al`, `bitacora_nombre_catalogo`); las consultas de red
+  viven en `bitacora-registro.php`. Test `scripts/test_distancia_objeto.php`.
+- **Una paralaje ≤ 0 no es una distancia:** el ruido de medida daría un valor
+  negativo, que colocaría el objeto en el lado contrario del mapa.
+- **El aviso tiene que llevar a algún sitio:** cuando no se puede situar, la
+  observación se guarda igual y el formulario **pide la distancia** (contra
+  `POST /objetos`, que resuelve solo coordenadas, tipo y color). Antes el aviso
+  decía «indícala a mano» y no había ningún sitio donde escribirla.
+
 ## Clasificación de objeto del mapa
 
 El seam que decide **`tipo` + `color`** de un objeto a partir de su `otype` de
