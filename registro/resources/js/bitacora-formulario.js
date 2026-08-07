@@ -603,13 +603,15 @@
   // ENVÍO: por ahora, genera el bloque de datos de la observación
   // ═══════════════════════════════════════════════════════════════════════
   // ═══════════════════════════════════════════════════════════════════════
-  // EQUIPO DEL OBSERVADOR ("Mi flota"): telescopio + oculares + auxiliares.
-  // Al elegir telescopio y, por entrada, ocular (y opcionalmente auxiliar), se
-  // autocalculan aumento, pupila de salida y campo real (todos editables).
-  //   aumentos = focal_tele × factor_aux / focal_ocular
+  // EQUIPO DEL OBSERVADOR ("Mi flota"): telescopio + oculares + auxiliares +
+  // filtros. Al elegir telescopio y, por entrada, ocular (y opcionalmente hasta
+  // dos auxiliares), se autocalculan aumento, pupila de salida y campo real
+  // (todos editables).
+  //   aumentos = focal_efectiva / focal_ocular     (la efectiva la da BitacoraEquipo)
   //   pupila   = apertura / aumentos     campo_real = campo_aparente / aumentos
+  // El FILTRO no entra en ninguna de las tres: solo deja anotado con qué se miró.
   // ═══════════════════════════════════════════════════════════════════════
-  var flota = { telescopios: [], oculares: [], auxiliares: [] };
+  var flota = { telescopios: [], oculares: [], auxiliares: [], filtros: [] };
   var flotaCargada = false;
   var telescopioSel = null;             // telescopio elegido (objeto) o null
   var telescopioIdSel = null;           // su id (para guardar en la observación)
@@ -634,6 +636,10 @@
     } else if (cat === 'oculares') {
       if (n(p.focal_mm) != null) s.push(n(p.focal_mm) + 'mm');
       if (n(p.campo_aparente) != null) s.push(n(p.campo_aparente) + '°');
+    } else if (cat === 'filtros') {
+      // Un filtro no tiene números: lo que lo identifica es el tipo ("Oxygen III"),
+      // porque su nombre suele ser un código ("LP-3", "#58").
+      if (p.tipo) s.push(String(p.tipo));
     } else {
       if (n(p.factor) != null) s.push('×' + n(p.factor));
     }
@@ -660,14 +666,20 @@
     return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  // Cálculo óptico. Devuelve { aumento, pupila, campoReal(grados) } o null.
-  function calcularOptica(tele, ocular, aux) {
+  // Cálculo óptico. 'auxs' es la lista de ópticas auxiliares montadas, EN ORDEN
+  // (la primera, la más cercana al telescopio); los huecos vacíos se ignoran.
+  // Devuelve { aumento, pupila, campoReal(grados) } o null.
+  function calcularOptica(tele, ocular, auxs) {
     if (!tele || !ocular) return null;
     var Ftel = parseFloat(tele.focal_mm), fo = parseFloat(ocular.focal_mm);
     if (!(Ftel > 0) || !(fo > 0)) return null;
     var D = parseFloat(tele.apertura_mm), afov = parseFloat(ocular.campo_aparente);
-    var factor = (aux && parseFloat(aux.factor) > 0) ? parseFloat(aux.factor) : 1;
-    var aumento = (Ftel * factor) / fo;
+    // La focal efectiva sale del helper compartido con el simulador: es el único
+    // sitio donde vive la regla de encadenarlas (y el que tiene en cuenta la
+    // extensión fija en mm, no solo el factor).
+    var Fef = BitacoraEquipo.focalConAuxiliares(Ftel, auxs || []);
+    if (!(Fef > 0)) return null;
+    var aumento = Fef / fo;
     return {
       aumento: Math.round(aumento),
       pupila: (D > 0) ? Math.round((D / aumento) * 10) / 10 : null,
@@ -675,19 +687,29 @@
     };
   }
 
+  // Las dos ópticas auxiliares de una entrada, EN ORDEN de montaje. Devuelve la
+  // lista con sus huecos (null donde no hay nada): así el orden de los elegidos se
+  // respeta, que es lo que decide el resultado cuando alguna trae extensión fija.
+  function auxsDe(el) {
+    var s1 = el.querySelector('.e-auxiliar'), s2 = el.querySelector('.e-auxiliar2');
+    return [
+      (s1 && s1.value) ? piezaPorId('auxiliares', s1.value) : null,
+      (s2 && s2.value) ? piezaPorId('auxiliares', s2.value) : null
+    ];
+  }
+
   // Recalcula (y rellena) los campos ópticos de una entrada a partir de su
-  // ocular/auxiliar y del telescopio elegido. Con 'ponerTitulo', también fija el
+  // ocular/auxiliares y del telescopio elegido. Con 'ponerTitulo', también fija el
   // nombre del ocular. Solo actúa cuando hay telescopio y ocular seleccionados.
   function recalcEntrada(el, ponerTitulo) {
-    var so = el.querySelector('.e-ocular'), sa = el.querySelector('.e-auxiliar');
+    var so = el.querySelector('.e-ocular');
     var ocular = (so && so.value) ? piezaPorId('oculares', so.value) : null;
-    var aux = (sa && sa.value) ? piezaPorId('auxiliares', sa.value) : null;
     if (ponerTitulo && ocular) {
       var tit = el.querySelector('.e-titulo');
       if (tit) tit.value = nombrePieza(ocular);
     }
     if (!telescopioSel || !ocular) return;
-    var r = calcularOptica(telescopioSel, ocular, aux);
+    var r = calcularOptica(telescopioSel, ocular, auxsDe(el));
     if (!r) return;
     el.querySelector('.e-aumento').value = (r.aumento != null) ? r.aumento : '';
     if (r.campoReal != null) el.querySelector('.e-campo').value = fmtCampo(r.campoReal);
@@ -696,12 +718,19 @@
   }
 
   // Rellena (una sola vez) los selects de equipo de una entrada y aplica la
-  // preselección guardada (modo edición: en._ocuPre / en._auxPre).
+  // preselección guardada (modo edición: en._ocuPre / _auxPre / _aux2Pre / _filPre).
   function poblarEntrada(el) {
     if (!flotaCargada) return;
-    var so = el.querySelector('.e-ocular'), sa = el.querySelector('.e-auxiliar');
-    if (so && !so._pob) { llenarSelect(so, 'oculares', '— Elige un ocular —'); so._pob = true; if (el._ocuPre) so.value = String(el._ocuPre); }
-    if (sa && !sa._pob) { llenarSelect(sa, 'auxiliares', '— Sin auxiliar —'); sa._pob = true; if (el._auxPre) sa.value = String(el._auxPre); }
+    var pob = function (sel, cat, placeholder, pre) {
+      if (!sel || sel._pob) return;
+      llenarSelect(sel, cat, placeholder);
+      sel._pob = true;
+      if (pre) sel.value = String(pre);
+    };
+    pob(el.querySelector('.e-ocular'), 'oculares', '— Elige un ocular —', el._ocuPre);
+    pob(el.querySelector('.e-auxiliar'), 'auxiliares', '— Sin auxiliar —', el._auxPre);
+    pob(el.querySelector('.e-auxiliar2'), 'auxiliares', '— Sin segundo auxiliar —', el._aux2Pre);
+    pob(el.querySelector('.e-filtro'), 'filtros', '— Sin filtro —', el._filPre);
   }
 
   // Rellena el select de telescopios y aplica la preselección pendiente.
@@ -751,7 +780,10 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d) return;
-        flota = { telescopios: d.telescopios || [], oculares: d.oculares || [], auxiliares: d.auxiliares || [] };
+        flota = {
+          telescopios: d.telescopios || [], oculares: d.oculares || [],
+          auxiliares: d.auxiliares || [], filtros: d.filtros || []
+        };
         flotaCargada = true;
         sincronizarFlota();
       })
@@ -985,9 +1017,7 @@
     var ocular=(so&&so.value)?piezaPorId('oculares', so.value):null;
     if(!ocular || !(parseFloat(ocular.focal_mm)>0) || !(parseFloat(ocular.campo_aparente)>0))
       return { error:'Elige un ocular de tu flota en esta entrada.' };
-    var sa=el.querySelector('.e-auxiliar');
-    var aux=(sa&&sa.value)?piezaPorId('auxiliares', sa.value):null;
-    var opt=calcularOptica(telescopioSel, ocular, aux);
+    var opt=calcularOptica(telescopioSel, ocular, auxsDe(el));
     if(!opt || !(opt.campoReal>0) || !(opt.aumento>0)) return { error:'No se pudo calcular la óptica.' };
     var cielo=cieloCtrl?cieloCtrl.leer():{ sqm:null };
     var D=parseFloat(telescopioSel.apertura_mm);
@@ -1179,6 +1209,13 @@
           '<select class="e-ocular"><option value="">— Elige un ocular —</option></select></label>'+
         '<label class="field"><span class="lab">Auxiliar (opcional)</span>'+
           '<select class="e-auxiliar"><option value="">— Sin auxiliar —</option></select></label>'+
+        // El segundo hueco va DETRÁS del primero en el tren óptico (un Paracorr y
+        // luego una Barlow, por ejemplo). Con factores puros el orden da igual;
+        // con extensión fija en mm, no.
+        '<label class="field"><span class="lab">Segundo auxiliar (opcional)</span>'+
+          '<select class="e-auxiliar2"><option value="">— Sin segundo auxiliar —</option></select></label>'+
+        '<label class="field"><span class="lab">Filtro (opcional)</span>'+
+          '<select class="e-filtro"><option value="">— Sin filtro —</option></select></label>'+
       '</div>'+
       '<div class="row">'+
         '<label class="field"><span class="lab">Aumento (✕) *</span>'+
@@ -1224,9 +1261,13 @@
     // selects (cuando la flota esté cargada) + recálculo al cambiar de pieza.
     if (datos.ocular_id) el._ocuPre = datos.ocular_id;
     if (datos.auxiliar_id) el._auxPre = datos.auxiliar_id;
+    if (datos.auxiliar2_id) el._aux2Pre = datos.auxiliar2_id;
+    if (datos.filtro_id) el._filPre = datos.filtro_id;
     poblarEntrada(el);
     el.querySelector('.e-ocular').addEventListener('change', function(){ recalcEntrada(el, true); });
     el.querySelector('.e-auxiliar').addEventListener('change', function(){ recalcEntrada(el, false); });
+    el.querySelector('.e-auxiliar2').addEventListener('change', function(){ recalcEntrada(el, false); });
+    // El filtro NO dispara recálculo: no toca aumentos, pupila ni campo.
 
     // Editor con formato: Enter crea párrafos <p>.
     try{ document.execCommand('defaultParagraphSeparator', false, 'p'); }catch(_e){}
@@ -1293,9 +1334,9 @@
       var titulo=el.querySelector('.e-titulo').value.trim();
       var descHtml=el.querySelector('.e-desc').innerHTML.trim();
       var imagenes=recogerImagenes(el);
-      var ocuSel=el.querySelector('.e-ocular'), auxSel=el.querySelector('.e-auxiliar');
-      var ocuId=(ocuSel&&ocuSel.value)?parseInt(ocuSel.value,10):null;
-      var auxId=(auxSel&&auxSel.value)?parseInt(auxSel.value,10):null;
+      var idSel=function(cls){ var s=el.querySelector(cls); return (s&&s.value)?parseInt(s.value,10):null; };
+      var ocuId=idSel('.e-ocular'), auxId=idSel('.e-auxiliar');
+      var aux2Id=idSel('.e-auxiliar2'), filId=idSel('.e-filtro');
       if(aum==='' && campo==='' && pup==='' && titulo==='' && textoPlano(descHtml)==='' && !imagenes.length) return;
       out.push({
         aumento: aum==='' ? null : parseFloat(aum),
@@ -1305,6 +1346,8 @@
         descripcion: descHtml,
         ocularId: ocuId,
         auxiliarId: auxId,
+        auxiliar2Id: aux2Id,
+        filtroId: filId,
         imagenes: imagenes
       });
     });
