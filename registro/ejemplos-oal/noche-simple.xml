@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<oal:observations version="2.1" xmlns:oal="https://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.0">
+  <sites>
+    <site id="lu1">
+      <name>El Culebrín II</name>
+      <longitude unit="deg">-6.20611111</longitude>
+      <latitude unit="deg">38.06416667</latitude>
+      <elevation>600</elevation>
+      <timezone>120</timezone>
+    </site>
+  </sites>
+  <scopes>
+    <scope id="te1">
+      <model>Skywatcher 12&quot;</model>
+      <aperture>305</aperture>
+      <focalLength>1494.5</focalLength>
+    </scope>
+  </scopes>
+  <eyepieces>
+    <eyepiece id="oc1">
+      <model>Nagler Type 4 22mm</model>
+      <focalLength>22</focalLength>
+      <apparentFOV unit="deg">82</apparentFOV>
+    </eyepiece>
+    <eyepiece id="oc2">
+      <model>Nagler Type 6 7mm</model>
+      <focalLength>7</focalLength>
+      <apparentFOV unit="deg">82</apparentFOV>
+    </eyepiece>
+  </eyepieces>
+  <lenses>
+  </lenses>
+  <observers>
+    <observer id="ob1">
+      <firstName>Ángel</firstName>
+      <lastName>L. Huelmo</lastName>
+      <contact>angel@ejemplo.es</contact>
+    </observer>
+    <observer id="co1">
+      <firstName>Israel Pérez de Tudela</firstName>
+    </observer>
+  </observers>
+  <targets>
+    <target id="tg1" xsi:type="oal:deepSkyGC">
+      <datasource>Sesame/CDS</datasource>
+      <name>M13</name>
+      <position>
+        <ra unit="deg">250.4235</ra>
+        <dec unit="deg">36.4613</dec>
+      </position>
+    </target>
+    <target id="tg2" xsi:type="oal:deepSkyPN">
+      <datasource>Sesame/CDS</datasource>
+      <name>M57</name>
+      <position>
+        <ra unit="deg">283.396</ra>
+        <dec unit="deg">33.0292</dec>
+      </position>
+    </target>
+    <target id="tg3" xsi:type="oal:deepSkyGN">
+      <datasource>Sesame/CDS</datasource>
+      <name>NGC 7000</name>
+      <position>
+        <ra unit="deg">314.75</ra>
+        <dec unit="deg">44.53</dec>
+      </position>
+    </target>
+  </targets>
+  <sessions>
+    <session id="no1">
+      <begin>2026-08-05T22:30:00+02:00</begin>
+      <end>2026-08-06T02:00:00+02:00</end>
+      <site>lu1</site>
+      <coObserver>co1</coObserver>
+      <weather>Despejado, algo de humedad al final</weather>
+      <comments>Primera salida del verano al Culebrín. El cielo aguantó toda la noche.</comments>
+      <bit:sqm>21.42</bit:sqm>
+      <bit:ir>-18</bit:ir>
+      <bit:seeing>3</bit:seeing>
+      <bit:bortle>4</bit:bortle>
+    </session>
+  </sessions>
+  <observation id="ob1">
+    <begin>2026-08-05T23:10:00+02:00</begin>
+    <session>no1</session>
+    <site>lu1</site>
+    <observer>ob1</observer>
+    <target>tg1</target>
+    <scope>te1</scope>
+    <eyepiece>oc1</eyepiece>
+    <result><description>Enorme y granulado ya a pocos aumentos.</description></result>
+    <magnification>67.9</magnification>
+  </observation>
+  <observation id="ob2">
+    <begin>2026-08-05T23:45:00+02:00</begin>
+    <session>no1</session>
+    <site>lu1</site>
+    <observer>ob1</observer>
+    <target>tg2</target>
+    <scope>te1</scope>
+    <eyepiece>oc2</eyepiece>
+    <result><description>El anillo, con el centro claramente más oscuro.</description></result>
+    <magnification>213.5</magnification>
+  </observation>
+  <observation id="ob3">
+    <begin>2026-08-06T01:20:00+02:00</begin>
+    <session>no1</session>
+    <site>lu1</site>
+    <observer>ob1</observer>
+    <target>tg3</target>
+    <scope>te1</scope>
+    <eyepiece>oc1</eyepiece>
+    <result><description>De madrugada, con el filtro puesto, el Muro se recorta solo.</description></result>
+    <magnification>67.9</magnification>
+  </observation>
+</oal:observations>

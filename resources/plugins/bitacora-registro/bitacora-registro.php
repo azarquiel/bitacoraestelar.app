@@ -55,6 +55,10 @@ define( 'BITACORA_TABLA_VIAJE_TRIPULACION', 'bitacora_viaje_tripulacion' );
 // la única costura con test propio (scripts/test_viaje_noche.php).
 require_once __DIR__ . '/bitacora-viaje.php';
 
+// Importar observaciones de los compañeros desde el XML de Open Astronomy Log
+// que escribe registro/plantilla-oal.html (scripts/test_oal_import.php).
+require_once __DIR__ . '/bitacora-oal.php';
+
 /**
  * Nombre real de la tabla, con el prefijo que use esta instalación
  * (normalmente wp_, pero puede ser otro).
@@ -180,6 +184,7 @@ function bitacora_crear_tabla() {
         fecha_observacion varchar(32) NOT NULL DEFAULT '',
         default_index smallint(6) NOT NULL DEFAULT 0,
         origen varchar(16) NOT NULL DEFAULT 'formulario',
+        oal_id varchar(64) NOT NULL DEFAULT '',
         observador_id bigint(20) unsigned DEFAULT NULL,
         usuario_id bigint(20) unsigned NOT NULL,
         base_id bigint(20) unsigned DEFAULT NULL,
@@ -194,7 +199,8 @@ function bitacora_crear_tabla() {
         KEY borrada_en (borrada_en),
         KEY activas (borrada_en, creado_en),
         KEY base_activas (base_id, borrada_en),
-        KEY viaje_id (viaje_id)
+        KEY viaje_id (viaje_id),
+        KEY oal_id (usuario_id, oal_id)
     ) $collate;";
 
     // Tabla hija: las entradas de una observación, una por ocular/aumento.
@@ -519,6 +525,11 @@ function bitacora_crear_tabla() {
     // históricas que aún no se han repartido: desde el formulario, la sesión es
     // obligatoria aunque no se diga desde dónde se observaba.
     bitacora_asegurar_columna( $tabla, 'viaje_id', "bigint(20) unsigned DEFAULT NULL" );
+    // Identidad que traía una observación importada de un XML de Open Astronomy
+    // Log: noche + objeto (bitacora_oal_id). Es lo que permite reimportar el
+    // mismo fichero corregido y ACTUALIZAR lo que ya entró en vez de duplicarlo.
+    // Vacía en todo lo registrado desde el formulario.
+    bitacora_asegurar_columna( $tabla, 'oal_id', "varchar(64) NOT NULL DEFAULT ''" );
     // Origen de cada imagen: 'subida' (foto/boceto del observador) o 'simulada' (Gaia).
     bitacora_asegurar_columna( $tabla_imagenes, 'origen', "varchar(16) NOT NULL DEFAULT 'subida'" );
     // Nombre propio que el observador da a su telescopio personal en Mi flota.
@@ -1796,6 +1807,13 @@ function bitacora_registrar_rutas() {
     ) );
     register_rest_route( 'bitacora/v1', '/viajes/(?P<id>\d+)/tripulacion', array(
         'methods' => 'PUT', 'callback' => 'bitacora_viaje_tripulacion_guardar', 'permission_callback' => $solo_logueados,
+    ) );
+
+    // Importar un XML de Open Astronomy Log. El destino es siempre el usuario
+    // de la sesión (bitacora_oal_rest_importar): desde aquí nadie importa a la
+    // cuenta de otro, eso solo se hace desde el panel del escritorio.
+    register_rest_route( 'bitacora/v1', '/importar-oal', array(
+        'methods' => 'POST', 'callback' => 'bitacora_oal_rest_importar', 'permission_callback' => $solo_logueados,
     ) );
 }
 add_action( 'rest_api_init', 'bitacora_registrar_rutas' );
@@ -5043,6 +5061,8 @@ function bitacora_pantalla_admin() {
     bitacora_panel_objetos();
 
     bitacora_panel_observadores();
+
+    bitacora_oal_panel();
 
     bitacora_panel_legacy();
 

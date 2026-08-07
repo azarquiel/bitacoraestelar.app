@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<oal:observations version="2.1" xmlns:oal="https://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.0">
+  <sites>
+    <site id="lu1">
+      <name>El Culebrín II</name>
+      <longitude unit="deg">-6.20611111</longitude>
+      <latitude unit="deg">38.06416667</latitude>
+      <elevation>600</elevation>
+      <timezone>120</timezone>
+    </site>
+    <site id="lu2">
+      <name>Observatorio Andaluz de Astronomía</name>
+      <longitude unit="deg">-3.95333333</longitude>
+      <latitude unit="deg">37.415</latitude>
+      <elevation>500</elevation>
+      <timezone>120</timezone>
+    </site>
+  </sites>
+  <scopes>
+    <scope id="te1">
+      <model>Skywatcher 12&quot;</model>
+      <aperture>305</aperture>
+      <focalLength>1494.5</focalLength>
+    </scope>
+  </scopes>
+  <eyepieces>
+    <eyepiece id="oc1">
+      <model>Nagler Type 4 22mm</model>
+      <focalLength>22</focalLength>
+      <apparentFOV unit="deg">82</apparentFOV>
+    </eyepiece>
+    <eyepiece id="oc2">
+      <model>Nagler Type 6 7mm</model>
+      <focalLength>7</focalLength>
+      <apparentFOV unit="deg">82</apparentFOV>
+    </eyepiece>
+  </eyepieces>
+  <lenses>
+    <lens id="au1">
+      <model>Barlow TeleVue 2x</model>
+      <factor>2</factor>
+    </lens>
+  </lenses>
+  <observers>
+    <observer id="ob1">
+      <firstName>Ángel</firstName>
+      <lastName>L. Huelmo</lastName>
+      <contact>angel@ejemplo.es</contact>
+    </observer>
+    <observer id="co1">
+      <firstName>Isra</firstName>
+    </observer>
+    <observer id="co2">
+      <firstName>Víctor</firstName>
+    </observer>
+  </observers>
+  <targets>
+    <target id="tg1" xsi:type="oal:deepSkyDS">
+      <datasource>Sesame/CDS</datasource>
+      <name>Almaak</name>
+      <position>
+        <ra unit="deg">30.9748</ra>
+        <dec unit="deg">42.3297</dec>
+      </position>
+    </target>
+    <target id="tg2" xsi:type="oal:deepSkyPN">
+      <datasource>Sesame/CDS</datasource>
+      <name>M27</name>
+      <position>
+        <ra unit="deg">299.9016</ra>
+        <dec unit="deg">22.7211</dec>
+      </position>
+    </target>
+  </targets>
+  <sessions>
+    <session id="no1">
+      <begin>2026-07-11T23:00:00+02:00</begin>
+      <end>2026-07-12T03:30:00+02:00</end>
+      <site>lu1</site>
+      <coObserver>co1</coObserver>
+      <coObserver>co2</coObserver>
+      <comments>Noche de dobles.</comments>
+      <bit:sqm>21.3</bit:sqm>
+      <bit:ir>-15</bit:ir>
+      <bit:seeing>2</bit:seeing>
+      <bit:bortle>4</bit:bortle>
+    </session>
+    <session id="no2">
+      <begin>2026-07-12T22:45:00+02:00</begin>
+      <site>lu2</site>
+      <weather>Viento del norte</weather>
+      <bit:seeing>4</bit:seeing>
+    </session>
+  </sessions>
+  <observation id="ob1">
+    <begin>2026-07-11T23:30:00+02:00</begin>
+    <session>no1</session>
+    <site>lu1</site>
+    <observer>ob1</observer>
+    <target>tg1</target>
+    <scope>te1</scope>
+    <eyepiece>oc1</eyepiece>
+    <result><description>A 68x ya se intuye la compañera azul.</description></result>
+    <magnification>67.9</magnification>
+  </observation>
+  <observation id="ob2">
+    <begin>2026-07-11T23:40:00+02:00</begin>
+    <session>no1</session>
+    <site>lu1</site>
+    <observer>ob1</observer>
+    <target>tg1</target>
+    <scope>te1</scope>
+    <eyepiece>oc2</eyepiece>
+    <lens>au1</lens>
+    <result><description>A 427x el contraste de color es descarado: naranja y azul.</description></result>
+    <magnification>427</magnification>
+  </observation>
+  <observation id="ob3">
+    <begin>2026-07-13T01:05:00+02:00</begin>
+    <session>no2</session>
+    <site>lu2</site>
+    <observer>ob1</observer>
+    <target>tg2</target>
+    <scope>te1</scope>
+    <eyepiece>oc1</eyepiece>
+    <result><description>La manzana mordida, de madrugada y ya alta.</description></result>
+    <magnification>67.9</magnification>
+  </observation>
+</oal:observations>
