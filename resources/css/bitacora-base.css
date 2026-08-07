@@ -19,6 +19,13 @@
  * actualizar para saltarse la caché del navegador.
  * =========================================================================== */
 
+/* Un elemento con `hidden` está escondido, y punto. El navegador lo esconde con
+ * una regla de usuario-agente que gana cualquier `.clase {display:...}` de aquí
+ * (así la caja de la distancia se quedaba siempre a la vista). El !important es
+ * lo único que no depende del orden de las hojas.
+ * Test: scripts/test_hidden_css.js */
+#mw-obs-form [hidden], #mw-obs-list [hidden] {display:none !important;}
+
 /* ── Paleta, fondo y tipografía · TODOS los wrappers de documento ── */
 #mw-obs-form, #mw-obs-list {
   --noche:#0a0e1a;            /* fondo cielo profundo */

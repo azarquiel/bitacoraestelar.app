@@ -1513,7 +1513,10 @@
 
   function pedirDistancia(objeto){
     objetoSinSituar = objeto || '';
-    if(!distCaja || !WP || !WP.objetos || !objetoSinSituar) return;
+    if(!distCaja || !WP || !WP.objetos) return;
+    // Sin objeto pendiente no hay nada que situar: la caja se cierra en vez de
+    // quedarse abierta con el objeto de la observación anterior.
+    if(!objetoSinSituar){ distCaja.hidden = true; return; }
     $('distAl').value = '';
     distNota.textContent = '';
     distCaja.hidden = false;
