@@ -162,8 +162,7 @@ objeto **sin posición**, el plugin lo resuelve en **SIMBAD** (servicio TAP) y
 calcula automáticamente todo lo necesario:
 
 - coordenadas galácticas `l`, `b` (a partir de RA/Dec);
-- la **distancia** al Sol (mediana de las medidas de SIMBAD; si SIMBAD no la
-  tiene, se indica a mano);
+- la **distancia** al Sol (ver abajo);
 - las posiciones `top` y `edge` sobre las imágenes del mapa (fórmula verificada
   contra el catálogo existente);
 - la **clase de Hubble** (elíptica, lenticular, espiral, barrada, irregular),
@@ -172,6 +171,22 @@ calcula automáticamente todo lo necesario:
 Ya no hace falta calcular la posición a mano. Las consultas a SIMBAD se cachean
 para no repetirlas. Si el objeto es extragaláctico, se dibuja en el atlas; si
 está dentro de la galaxia, en el mapa cenital/de canto.
+
+### De dónde sale la distancia
+
+Es el dato que más falta: SIMBAD no publica ninguna medida de distancia de buena
+parte de las nebulosas y cúmulos galácticos. Se prueba, por este orden:
+
+1. la **mediana de las medidas** de SIMBAD (`mesDistance`);
+2. la **paralaje** de SIMBAD, que muchas veces está cuando las medidas no (así
+   se coloca NGC 2022, por la paralaje Gaia de su estrella central);
+3. **VizieR**, la segunda base de datos: el catálogo de cúmulos abiertos de Dias
+   (`B/ocl`), que cubre la familia con más huecos en SIMBAD;
+4. la que **escriba el observador**, para lo que no sabe ninguna base de datos.
+
+Cuando no hay ninguna, la observación se guarda igual y el formulario avisa y
+pide la distancia en años luz ahí mismo: al escribirla, el objeto se da de alta
+y aparece en el mapa (es el caso de las nebulosas difusas, como NGC 2024).
 
 ---
 

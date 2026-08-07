@@ -1467,10 +1467,14 @@
         var txt = editando
           ? '✓ Cambios guardados en la observación nº ' + res.data.id + '.'
           : '✓ Observación guardada (registro nº ' + res.data.id + ').';
-        // Si el objeto no se pudo colocar en el mapa (p. ej. SIMBAD no tiene su
-        // distancia), se guarda igual pero se avisa para poder añadirlo a mano.
+        // Si el objeto no se pudo colocar en el mapa (p. ej. ninguna base de datos
+        // tiene su distancia), se guarda igual, se avisa y se ofrece escribir a
+        // mano lo que falta, que es lo único que separa al objeto del mapa.
         if(res.data.aviso){
           txt += ' <span style="color:var(--ambar,#c88)">El objeto no se ha podido situar en el mapa automáticamente: ' + res.data.aviso + '</span>';
+          pedirDistancia(res.data.objeto);
+        } else if(distCaja){
+          distCaja.hidden = true;
         }
         $('outNote').innerHTML='<span style="color:var(--verde)">'+txt+'</span>';
         // Si esta observación ha dicho el lugar, el servidor lo sube al viaje: hay
@@ -1496,6 +1500,56 @@
 
     jsonOut.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // DISTANCIA A MANO: lo único que le falta al objeto que no se pudo situar
+  // Ni SIMBAD ni VizieR saben a qué distancia está buena parte de las nebulosas
+  // galácticas, y sin distancia el mapa no tiene dónde pintarlas. El observador
+  // la escribe y el objeto se da de alta por POST /objetos, que resuelve por su
+  // cuenta todo lo demás (coordenadas, tipo y color).
+  // ═══════════════════════════════════════════════════════════════════════
+  var distCaja = $('distCaja'), distBtn = $('distBtn'), distNota = $('distNota');
+  var objetoSinSituar = '';
+
+  function pedirDistancia(objeto){
+    objetoSinSituar = objeto || '';
+    if(!distCaja || !WP || !WP.objetos || !objetoSinSituar) return;
+    $('distAl').value = '';
+    distNota.textContent = '';
+    distCaja.hidden = false;
+  }
+
+  if(distBtn){
+    distBtn.addEventListener('click', function(){
+      var al = parseFloat($('distAl').value);
+      if(!(al > 0)){
+        distNota.innerHTML='<span style="color:var(--rojo)">Escribe una distancia mayor que cero.</span>';
+        return;
+      }
+      distBtn.disabled = true;
+      distNota.textContent = 'Situando…';
+      fetch(WP.objetos,{
+        method:'POST',
+        credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json', 'X-WP-Nonce':WP.nonce },
+        body:JSON.stringify({ id:objetoSinSituar, label:objetoSinSituar, dist_al:al })
+      })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        distBtn.disabled = false;
+        if(res.ok){
+          distNota.innerHTML='<span style="color:var(--verde)">✓ '+objetoSinSituar+' ya está en el mapa.</span>';
+          return;
+        }
+        var msg=(res.data && res.data.message) ? res.data.message : 'No se pudo situar el objeto.';
+        distNota.innerHTML='<span style="color:var(--rojo)">✗ '+msg+'</span>';
+      })
+      .catch(function(){
+        distBtn.disabled = false;
+        distNota.innerHTML='<span style="color:var(--rojo)">✗ No se pudo contactar con el servidor.</span>';
+      });
+    });
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // AÑADIR OTRA: el siguiente objeto de la misma noche

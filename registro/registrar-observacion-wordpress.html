@@ -148,6 +148,16 @@
       <span class="out-note" id="outNote">Se generará el bloque de datos de la observación.</span>
     </div>
 
+    <!-- Sin distancia no hay sitio en el mapa. Si ninguna base de datos la sabe
+         (le pasa a casi todas las nebulosas galácticas), aparece esto para
+         escribirla a mano y que el objeto se pinte igual. -->
+    <div class="actions" id="distCaja" hidden>
+      <label for="distAl">Distancia al Sol (años luz)</label>
+      <input type="number" id="distAl" min="1" step="1" style="max-width:12ch">
+      <button type="button" class="add-entry" id="distBtn">Situar en el mapa</button>
+      <span class="out-note" id="distNota"></span>
+    </div>
+
     <div class="json-out" id="jsonOut">
       <textarea id="jsonArea" readonly></textarea>
     </div>
