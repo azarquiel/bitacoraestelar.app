@@ -31,6 +31,10 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `bitacora-flota.js` | Lógica de "Mi flota" | Servidor, por FTP |
 | `mis-viajes-wordpress.html` | Fragmento de "Mis viajes" (sesiones de observación: lugar, crónica, meteo, cielo) | Editor de WordPress |
 | `bitacora-viajes.js` | Lógica de "Mis viajes" | Servidor, por FTP |
+| `plantilla-oal.html` | La **plantilla** que se dan a los compañeros: un único archivo que anota sus noches y escribe el XML | Servidor, por FTP (se descarga desde la página de importar) |
+| `importar-oal-wordpress.html` | Fragmento de "Importar observaciones" | Editor de WordPress |
+| `bitacora-importar-oal.js` | Lógica de "Importar observaciones" | Servidor, por FTP |
+| `bitacora-oal.php` | Leer el XML e importarlo (mitad pura + mitad WordPress) | Junto al plugin, en el servidor |
 | `resources/datos/{telescopios,oculares,auxiliares,filtros}.csv` | Catálogo de equipo (semilla) | Bundled en el plugin (`…/bitacora-registro/datos/`) |
 | `…/bitacora-registro/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
 
@@ -250,6 +254,69 @@ dorada del viaje. Una salida sin objetos no tiene ruta que enseñar ni botón.
 
 ---
 
+## Traer las observaciones de un compañero (Open Astronomy Log)
+
+No todo el mundo observa con esta web delante. Un compañero anota su noche en
+papel y luego querría que estuviera aquí, con su nombre y en su cuenta. El
+puente son **dos piezas y un formato estándar**:
+
+**La plantilla** (`plantilla-oal.html`) es un **único archivo** que se descarga
+desde la página de importar y se abre en el navegador: no hay que instalar
+nada, ni tener cuenta, ni estar conectado. Se anota la noche (lugar, equipo,
+compañeros, cielo) y luego cada objeto, con una entrada por aumento. Guarda
+sola lo escrito en el propio navegador, así que se puede cerrar y seguir otro
+día, y el botón *Abrir XML* recupera un fichero ya empezado. Al nombrar un
+objeto lo resuelve en **Sesame/CDS** para traerse sus coordenadas y su tipo; si
+no hay red, se escriben a mano o se dejan en blanco.
+
+**El formato es [Open Astronomy Log](https://github.com/openastronomylog/openastronomylog) 2.1**,
+el estándar de los cuadernos de observación: el mismo XML lo leen otros
+programas de bitácora, así que el trabajo del compañero no queda preso aquí.
+Lo que OAL no sabe guardar —**SQM**, transparencia **IR**, **seeing** y clase
+**Bortle**— va en un espacio de nombres propio (`bit:`) dentro de la sesión,
+que un lector estándar simplemente ignora.
+
+**La importación** (`POST /importar-oal`, y el panel del escritorio) va en dos
+pasos: primero se ve **qué entraría** —cuántas noches y objetos, qué bases y
+qué equipo se crearían, **qué se reutiliza de lo que ya tienes** y qué filas
+están mal— y solo el segundo botón escribe. Las reglas que deciden todo eso:
+
+- **Una noche es un viaje.** La noche la calcula el mismo convenio de mediodía
+  de siempre, así que la madrugada no se separa de su tarde. El cielo de la
+  noche (SQM, IR, seeing, Bortle) va al viaje y también a cada observación, que
+  es de donde lo lee la ficha.
+- **Las coordenadas que falten las resuelve SIMBAD** al importar, igual que el
+  formulario; la vista previa no toca la red.
+- **Un objeto por noche es una observación**, y cada ocular del XML es una
+  **entrada** suya. En OAL una observación es objeto + ocular, así que M13 a
+  68× y a 210× llegan como dos y entran como una ficha con dos aumentos.
+- **El lugar se casa por nombre y, si no, por cercanía** (150 m). Importa
+  acertar: dos bases para el mismo cerro parten en dos la gráfica de salud del
+  sitio. El equipo se casa solo por modelo; lo que no exista se crea como
+  personal del observador.
+- **Reimportar no duplica.** Cada observación importada guarda su `oal_id`
+  (**fecha** de la noche + objeto, no el id de sesión del XML, que la plantilla
+  sortea), así que corregir una errata en la plantilla y volver a subir el
+  fichero **actualiza** lo que ya entró.
+- **Lo que está mal se avisa, no aborta.** Un objeto sin nombre o una noche sin
+  fecha se listan para repasarlos en la plantilla; el resto entra igual.
+
+Desde la página del frontend las observaciones entran **siempre en la cuenta de
+quien sube el fichero**. Elegir destinatario es cosa del panel del escritorio,
+donde hace falta ser administrador.
+
+El XML llega de fuera y se trata como entrada hostil: se parsea sin cargar
+entidades externas (XXE) ni tocar la red (`LIBXML_NONET`), con un tope de
+tamaño comprobado antes de parsear, y todo el texto pasa por
+`sanitize_text_field` o `wp_kses_post` según dónde vaya.
+
+Las reglas viven en la mitad **pura** de `bitacora-oal.php`, sin WordPress ni
+base de datos, y se prueban con los ficheros de `ejemplos-oal/`, escritos con la
+forma que escribe la plantilla. Pruebas: `php scripts/test_oal_import.php` (el
+importador) y `node scripts/test_oal_plantilla.js` (el motor de la plantilla).
+
+---
+
 ## La salud de una base
 
 Cada lugar acumula su histórico de cielo: **SQM** (mag/arcsec², mayor = más
@@ -398,6 +465,8 @@ WordPress se usa solo para lo que hace bien: autenticar al usuario.
 | `lat`, `lon` | `double` | lugar de observación |
 | `obj_alt`, `obj_az` | `double` | **calculados** |
 | `sun_alt`, `moon_alt` | `double` | **calculados** |
+| `origen` | `varchar(16)` | `formulario` u `oal` (importada de un XML) |
+| `oal_id` | `varchar(64)` | identidad que traía del XML (noche + objeto): permite reimportar sin duplicar. Vacío en lo registrado a mano |
 | `usuario_id` | `bigint` | lo fija el servidor, según la sesión |
 | `creado_en` | `datetime` | lo fija el servidor |
 | `actualizado_en` | `datetime` | al editar |
@@ -475,6 +544,7 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | `PUT` | `/viajes/{id}` | Sí | Edita nombre, **lugar** (`baseId`, 0 = sin lugar), crónica, meteo, cielo, comienzo y fin *(solo el autor)*. La noche no se toca. Mudar el lugar muda con él sus observaciones, y devuelve `409` si esa noche ya tiene otro viaje desde ese sitio |
 | `DELETE` | `/viajes/{id}` | Sí | Lo borra *(solo el autor, y solo si ya no le cuelga ninguna observación)* |
 | `PUT` | `/viajes/{id}/tripulacion` | Sí | Sustituye la lista de acompañantes *(solo el autor)* |
+| `POST` | `/importar-oal` | Sí | Importa un XML de Open Astronomy Log. `{xml, confirmar}`: sin `confirmar` devuelve la **vista previa** y no escribe nada. Entra siempre en la cuenta de la sesión |
 | `GET` | `/objetos` | No | Lista los objetos del mapa |
 | `POST` | `/objetos` | Sí | Registra un objeto por identificador (lo resuelve en SIMBAD y calcula su posición) |
 | `GET` | `/resolver?q=M104` | No | Localiza un objeto en SIMBAD **sin guardarlo** (para el buscador del mapa) |
@@ -495,12 +565,16 @@ de observaciones exigen sesión.
 
 ### 1. Instalar el plugin
 
-Crea una carpeta llamada `bitacora-registro` y mete dentro `bitacora-registro.php`
-y la carpeta `datos/` con los CSV del catálogo de equipo:
+Crea una carpeta llamada `bitacora-registro` y mete dentro `bitacora-registro.php`,
+los dos archivos que requiere (`bitacora-viaje.php` y `bitacora-oal.php`, sin los
+cuales el plugin no arranca) y la carpeta `datos/` con los CSV del catálogo de
+equipo:
 
 ```
 bitacora-registro/
 ├── bitacora-registro.php
+├── bitacora-viaje.php
+├── bitacora-oal.php
 └── datos/
     ├── telescopios.csv
     ├── oculares.csv
@@ -542,7 +616,13 @@ bitacora-viajes.js
 bitacora-astro.js
 bitacora-equipo.js
 bitacora-ficha.js
+bitacora-importar-oal.js
+plantilla-oal.html
 ```
+
+> `plantilla-oal.html` no es código de la web: es el archivo que se descargan
+> los compañeros desde la página de importar. Va aquí porque es lo que ya se
+> sirve por FTP y así el enlace de descarga no depende de nada más.
 
 Y, para el botón *Generar con el simulador*, los del simulador de ocular:
 `bitacora-gaia-render.js`, `bitacora-gaia-color.js` y sus catálogos
@@ -570,6 +650,11 @@ desde los que observas (nombre, lat/lon, altitud, huso).
 **Página de "Mis viajes".** Igual, con `mis-viajes-wordpress.html`: las sesiones
 de observación. Si su ruta no es `/mis-viajes/`, ajusta el enlace que el
 formulario de registro muestra cuando un viaje no tiene lugar.
+
+**Página de "Importar observaciones".** Igual, con
+`importar-oal-wordpress.html`: subir el XML que un compañero haya rellenado con
+la plantilla. Requiere haber subido también `plantilla-oal.html` por FTP, que
+es lo que descarga el botón de esa página.
 
 En el fragmento del listado, ajusta la ruta de la página del formulario si no
 coincide con la tuya. Aparece en dos sitios:

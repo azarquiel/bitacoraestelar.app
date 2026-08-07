@@ -1,0 +1,86 @@
+<!-- ============================================================
+     IMPORTAR OBSERVACIONES · Open Astronomy Log · Bitácora Messier
+
+     Pega este bloque en un bloque "HTML personalizado" de Gutenberg,
+     en una página nueva (p. ej. "Importar observaciones"), protegida
+     por login. Las observaciones entran SIEMPRE en la cuenta de quien
+     sube el fichero.
+
+     La plantilla que se descarga aquí (plantilla-oal.html) va subida
+     por FTP a /wp-content/uploads/bitacora/, igual que el JS. Es un
+     único fichero autocontenido: el compañero lo abre en su navegador
+     y no necesita nada más.
+
+     Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
+     ============================================================ -->
+
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260805_2300" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260727_1300" />
+
+<style>
+/* Estilos propios de "Importar observaciones", encapsulados bajo #mw-obs-form. */
+#mw-obs-form .imp-suelta {border:1px dashed var(--linea);border-radius:12px;padding:26px 18px;text-align:center;
+    color:var(--tinta-tenue);font-size:14px;background:var(--noche-2);}
+#mw-obs-form .imp-suelta.encima {border-color:var(--ambar);color:var(--tinta);}
+#mw-obs-form .imp-suelta input[type=file] {display:block;margin:12px auto 0;color:var(--tinta-tenue);}
+#mw-obs-form .imp-previa {background:var(--noche-2);border:1px solid var(--linea);border-radius:12px;
+    padding:14px 16px;margin:14px 0;}
+#mw-obs-form .imp-previa[hidden] {display:none;}
+#mw-obs-form .imp-cifras {display:flex;flex-wrap:wrap;gap:18px;margin:4px 0 10px;}
+#mw-obs-form .imp-cifra {font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--tinta-tenue);}
+#mw-obs-form .imp-cifra b {display:block;font-size:22px;color:var(--tinta);font-weight:600;}
+#mw-obs-form .imp-lista {list-style:disc;margin:6px 0 0 20px;font-size:13.5px;color:var(--tinta-tenue);}
+#mw-obs-form .imp-lista li {margin:2px 0;}
+#mw-obs-form .imp-avisos {border-top:1px solid var(--linea);margin-top:12px;padding-top:10px;}
+#mw-obs-form .imp-avisos h3 {margin:0;font-size:14px;color:var(--ambar);}
+#mw-obs-form .imp-hecho {color:var(--verde,#7ddc9a);}
+#mw-obs-form .flash {position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:10px;padding:11px 18px;
+    color:var(--tinta);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;}
+#mw-obs-form .flash.show {opacity:1;}
+#mw-obs-form .flash.err {border-color:var(--rojo);color:var(--rojo);}
+</style>
+
+<div id="mw-obs-form">
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Bitácora · Importar observaciones</p>
+    <h1>Importar observaciones
+      <span class="sub">Trae a tu bitácora lo que hayas anotado en la plantilla. El fichero es un XML de Open Astronomy Log, el formato estándar de los cuadernos de observación.</span>
+    </h1>
+  </header>
+
+  <fieldset>
+    <legend><div class="leg"><span class="num">1</span>
+      <div><h2>La plantilla</h2><p>Descárgala una vez y ábrela en tu navegador. Guarda sola lo que escribes, así que puedes cerrarla y seguir otro día.</p></div></div></legend>
+    <p><a class="button" href="/wp-content/uploads/bitacora/plantilla-oal.html" download>Descargar la plantilla</a></p>
+  </fieldset>
+
+  <fieldset>
+    <legend><div class="leg"><span class="num">2</span>
+      <div><h2>Tu fichero</h2><p>El XML que te descarga la plantilla al pulsar «Descargar XML».</p></div></div></legend>
+    <div class="imp-suelta" id="impSuelta">
+      Arrastra aquí tu XML, o elígelo:
+      <input type="file" id="impFichero" accept=".xml,text/xml,application/xml" />
+    </div>
+  </fieldset>
+
+  <div class="imp-previa" id="impPrevia" hidden>
+    <h2 id="impTitulo" style="margin-top:0">Esto es lo que entraría</h2>
+    <div class="imp-cifras" id="impCifras"></div>
+    <div id="impCambios"></div>
+    <div class="imp-avisos" id="impAvisos" hidden>
+      <h3>Para repasar en la plantilla</h3>
+      <ul class="imp-lista" id="impAvisosLista"></ul>
+      <p class="sub">Lo demás entra igual. Corrígelo en la plantilla y vuelve a subir el fichero cuando quieras: no se duplica nada.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary" id="impConfirmar">Importar a mi bitácora</button>
+      <span class="out-note" id="impNota"></span>
+    </div>
+  </div>
+</div>
+<div class="flash" id="flash"></div>
+</div>
+
+<script src="/wp-content/uploads/bitacora/bitacora-importar-oal.js?v=20260807_1200" defer></script>
