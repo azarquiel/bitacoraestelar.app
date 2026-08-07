@@ -79,7 +79,6 @@
     display:block;font-size:13px;color:var(--tinta-tenue);margin-bottom:6px;
     font-family:ui-monospace,Menlo,monospace;letter-spacing:0.02em;
   }
-#mw-obs-form .field[hidden] {display:none;}   /* label.field es display:block y gana al [hidden] del navegador */
 #mw-obs-form .aux-fila {display:flex;align-items:stretch;gap:6px;}
 #mw-obs-form .aux-fila select {flex:1;width:auto;min-width:0;}
 #mw-obs-form .e-aux-mas {
