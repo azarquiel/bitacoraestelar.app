@@ -43,6 +43,37 @@ eq(E.focalEfectiva(null, 2, 0), null, 'focal ausente -> null');
   eq(conReductor < sinAux, true, 'reductor baja el aumento');
 })();
 
+console.log('focalConAuxiliares (varias auxiliares encadenadas):');
+(function () {
+  var paracorr = { factor: 1.15, extension_mm: null };
+  var barlow2x = { factor: 2, extension_mm: null };
+  var anillo14 = { factor: null, extension_mm: 14 };
+
+  // Sin ninguna auxiliar (lista vacía, nula o con huecos) -> focal del tubo.
+  eq(E.focalConAuxiliares(1200, []), 1200, 'lista vacía -> focal sin cambio');
+  eq(E.focalConAuxiliares(1200, null), 1200, 'lista nula -> focal sin cambio');
+  eq(E.focalConAuxiliares(1200, [null, null]), 1200, 'los dos huecos vacíos -> focal sin cambio');
+  // Un hueco suelto da lo mismo esté en el primero o en el segundo: así el
+  // formulario no tiene que recolocar lo que el observador eligió.
+  eq(E.focalConAuxiliares(1200, [barlow2x, null]), 2400, 'solo el primer hueco');
+  eq(E.focalConAuxiliares(1200, [null, barlow2x]), 2400, 'solo el segundo hueco (mismo resultado)');
+  // Encadenado real: Paracorr 1,15x y detrás una Barlow 2x.
+  cerca(E.focalConAuxiliares(1200, [paracorr, barlow2x]), 2760, 'Paracorr 1,15x + Barlow 2x -> x2,3');
+  // Factores puros conmutan: el orden no cambia el número.
+  cerca(E.focalConAuxiliares(1200, [barlow2x, paracorr]),
+        E.focalConAuxiliares(1200, [paracorr, barlow2x]), 'factores puros: el orden da igual');
+  // Con extensión fija el orden SÍ importa, y es el de la lista: primero el hueco
+  // 1 (el montado más cerca del telescopio). Este es el caso que fija la regla.
+  eq(E.focalConAuxiliares(1000, [anillo14, barlow2x]), 2028, 'anillo +14 y luego Barlow 2x -> (1000+14)x2');
+  eq(E.focalConAuxiliares(1000, [barlow2x, anillo14]), 2014, 'Barlow 2x y luego anillo +14 -> 1000x2+14');
+  // Coma decimal europea, como en los CSV.
+  cerca(E.focalConAuxiliares(1000, [{ factor: '1,5' }, { factor: '2' }]), 3000, 'factores con coma decimal');
+  // Una sola auxiliar = el helper de siempre (no hay dos caminos para lo mismo).
+  eq(E.focalConAuxiliares(1200, [barlow2x]), E.focalEfectiva(1200, 2, null), 'una sola = focalEfectiva');
+  // Focal ausente -> null, igual que focalEfectiva.
+  eq(E.focalConAuxiliares(null, [barlow2x]), null, 'focal ausente -> null');
+})();
+
 console.log('nombreTelescopio (rótulo a mostrar):');
 eq(E.nombreTelescopio({ nombre: 'Mi Dobson', vendor: 'SkyWatcher', modelo: 'Flextube 250' }), 'Mi Dobson', 'nombre propio manda');
 eq(E.nombreTelescopio({ nombre: '', vendor: 'SkyWatcher', modelo: 'Flextube 250' }), 'SkyWatcher Flextube 250', 'sin nombre -> vendor modelo');
