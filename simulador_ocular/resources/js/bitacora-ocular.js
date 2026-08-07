@@ -171,6 +171,7 @@
       var teleSel = null;
       var ocularSel = null;
       var auxSel = null;   // óptica auxiliar activa (Barlow/reductor); null = ninguna
+      var aux2Sel = null;  // la segunda, montada DETRÁS de la primera; null = ninguna
 
       var corsFallo = false;
       var contadorPeticion = 0;
@@ -283,18 +284,23 @@
         // ÓPTICA AUXILIAR (opcional): Barlow, reductor, Powermate… Modifica la
         // focal efectiva del telescopio. Si no hay ninguna elegida, la simulación
         // usa la focal del tubo tal cual. El botón "sin auxiliar" la quita.
-        var auxInput = $('sim-aux-input');
-        if (auxInput) {
+        // Son DOS huecos porque es corriente encadenar (Paracorr + Barlow); se
+        // aplican en orden, el primero es el montado más cerca del telescopio.
+        function montarAux(idInput, idSugg, idClear, poner) {
+          var inp = $(idInput);
+          if (!inp) return;
           BitacoraBase.montarBuscadorCatalogo({
-            input: auxInput, suggest: $('sim-aux-sugg'),
+            input: inp, suggest: $(idSugg),
             fuente: function () { return (catalogo.auxiliares || []); },
             texto: nombrePieza, specs: specsAux,
             todosSiVacio: true,   // catálogo corto: al enfocar lista todas las opciones para elegir
-            onElegir: function (it) { auxSel = it; auxInput.value = nombrePieza(it); actualizar(); }
+            onElegir: function (it) { poner(it); inp.value = nombrePieza(it); actualizar(); }
           });
-          var auxClear = $('sim-aux-clear');
-          if (auxClear) auxClear.addEventListener('click', function () { auxSel = null; auxInput.value = ''; actualizar(); });
+          var clear = $(idClear);
+          if (clear) clear.addEventListener('click', function () { poner(null); inp.value = ''; actualizar(); });
         }
+        montarAux('sim-aux-input', 'sim-aux-sugg', 'sim-aux-clear', function (it) { auxSel = it; });
+        montarAux('sim-aux2-input', 'sim-aux2-sugg', 'sim-aux2-clear', function (it) { aux2Sel = it; });
 
         var t0 = (catalogo.telescopios || []).find(function (p) { return num(p.focal_mm) && num(p.apertura_mm); });
         if (t0) { teleSel = t0; $('sim-tele-input').value = nombreTele(t0); }
@@ -341,17 +347,14 @@
       }
 
       /* ══════════════════ CÁLCULO ÓPTICO ══════════════════ */
-      // Focal EFECTIVA del telescopio: la del tubo modificada por la óptica
-      // auxiliar activa (factor de Barlow/reductor + extensión fija). Sin auxiliar
-      // = la focal del tubo. Es el único punto donde entra el auxiliar: aumentos,
-      // pupila de salida, campo y magnitud límite heredan el cambio.
+      // Focal EFECTIVA del telescopio: la del tubo modificada por las ópticas
+      // auxiliares activas (factor de Barlow/reductor + extensión fija), aplicadas
+      // en orden de montaje. Sin auxiliares = la focal del tubo. Es el único punto
+      // donde entran: aumentos, pupila de salida, campo y magnitud límite heredan
+      // el cambio.
       function teleFocal() {
         if (!teleSel) return 0;
-        var f = BitacoraEquipo.focalEfectiva(
-          teleSel.focal_mm,
-          auxSel ? auxSel.factor : null,
-          auxSel ? auxSel.extension_mm : null);
-        return f || 0;
+        return BitacoraEquipo.focalConAuxiliares(teleSel.focal_mm, [auxSel, aux2Sel]) || 0;
       }
       function teleApertura() { return teleSel ? (num(teleSel.apertura_mm) || 0) : 0; }
       function pupilaOjo()    { return parseFloat($('sim-pupila-ojo').value) || 7; }

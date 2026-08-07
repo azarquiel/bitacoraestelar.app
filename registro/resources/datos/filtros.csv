@@ -1,0 +1,131 @@
+Vendor	Name	Type	Bandpass (nm)	Min.Exit Pupil	Description
+Altair	Quadband Filter V2	Pollution Block	478-502, 643-677		Combines Sii AND Ha into a red zone, and H-beta + Oiii into a green/blue zone.
+Altair	Triband Filter V2	Pollution Block	478-502, 649-663		Combines Ha into a red zone, and H-beta + Oiii into a green/blue zone.
+Astrodon	E-Series Blue	Blue	400-510		CCD imaging filter
+Astrodon	E-Series Green	Green	500-570		CCD imaging filter
+Astrodon	E-Series Luminance	Luminance	400-710		CCD imaging filter
+Astrodon	E-Series Red	Red	615-690		CCD imaging filter
+Baader	Blue	Blue	385-505		
+Baader	Green	Green	500-575		
+Baader	H-alpha	H-alpha	656,3-656,3		
+Baader	O-III	Oxygen III	502-502		
+Baader	Red	Red	595-680		
+Baader	S-II	Sulphur II	673-673		
+Baader	UHC-S	Nebula	450-525, 625-675		
+DGM Optics	Galaxy Contrast Filter	Rejection	100-540, 590-1000		The Galaxy Contrast Enhancement™ filter aids in the visual observation of galaxies and milky way dust clouds and dark lanes.
+DGM Optics	Narrow Band Nebula Filter	Narrowband	480-510		
+DGM Optics	O-III	Oxygen III	490-510		
+Johnson/Bessell	B	UBVRI filter	390-490		Nominal CW/L = 440nm. Nominal FWHM = 100nm. Nominal Transmission > 55%.
+Johnson/Bessell	I	UBVRI filter	750-1050		Nominal CW/L = 900nm. Nominal FWHM = 300nm. Nominal Transmission > 70%.
+Johnson/Bessell	R	UBVRI filter	570-690		Nominal CW/L = 630nm. Nominal FWHM = 120nm. Nominal Transmission > 70%.
+Johnson/Bessell	U	UBVRI filter	335-395		Nominal CW/L = 365nm. Nominal FWHM = 60nm. Nominal Transmission > 50%.
+Johnson/Bessell	V	UBVRI filter	505-595		Nominal CW/L = 550nm. Nominal FWHM = 90nm. Nominal Transmission > 70%.
+Kodak	Wratten #102	Yellow-green			
+Kodak	Wratten #106	Amber			
+Kodak	Wratten #11	Yellowish-green			Color Correction.
+Kodak	Wratten #12	Deep yellow			Minus blue filter.
+Kodak	Wratten #15	Deep yellow			
+Kodak	Wratten #16	Yellow-orange			
+Kodak	Wratten #18A	Deep violet-blue			Passes only IR/UV.
+Kodak	Wratten #1A	Skylight			Absorbs UV. Reduces haze.
+Kodak	Wratten #21	Orange			Blue and blue-green absorption.
+Kodak	Wratten #22	Deep orange			
+Kodak	Wratten #23	Light red			
+Kodak	Wratten #24	Red			Complements #47B and #61.
+Kodak	Wratten #25	Red tricolor			Infrared photography.
+Kodak	Wratten #25A	Red			
+Kodak	Wratten #26	Red			
+Kodak	Wratten #29	Deep red			Infrared photography.
+Kodak	Wratten #2A	Pale yellow			Absorbs UV.
+Kodak	Wratten #2B	Pale yellow			Absorbs UV, slightly less than #2A.
+Kodak	Wratten #2C				Absorbs UV.
+Kodak	Wratten #2E	Pale yellow			Absorbs UV, slightly more than #2A.
+Kodak	Wratten #3	Light yellow			Absorbs sky blue.
+Kodak	Wratten #32	Magenta			Minus-green. Complements #12 minus-blue and #44A minus-red.
+Kodak	Wratten #34A	Violet			
+Kodak	Wratten #38A	Blue			Absorbs red, UV and some green.
+Kodak	Wratten #4	Yellow			
+Kodak	Wratten #44	Light blue-green			Minus-red. UV absorption.
+Kodak	Wratten #44A	Light blue-green			
+Kodak	Wratten #47	Blue tricolor			Complements #29 and #61.
+Kodak	Wratten #47A	Light blue			
+Kodak	Wratten #47B	Deep blue tricolor			
+Kodak	Wratten #50	Deep blue			
+Kodak	Wratten #56	Light green			
+Kodak	Wratten #58	Green tricolor			
+Kodak	Wratten #58A	Green tricolor			
+Kodak	Wratten #6	Light yellow			
+Kodak	Wratten #61	Deep green tricolor			Complements #29 and #47.
+Kodak	Wratten #70	Red			Infrared photography.
+Kodak	Wratten #8	Yellow			Absorbs more blue than #3.
+Kodak	Wratten #80A	Blue			
+Kodak	Wratten #80B	Blue			
+Kodak	Wratten #80C	Blue			
+Kodak	Wratten #80D	Blue			
+Kodak	Wratten #81A	Pale orange			Opposite of 82A.
+Kodak	Wratten #81B	Pale orange			Opposite of 82B.
+Kodak	Wratten #81C	Pale orange			Opposite of 82C.
+Kodak	Wratten #81D	Pale orange			
+Kodak	Wratten #81EF	Pale orange			
+Kodak	Wratten #82A	Pale blue			Opposite of 81A.
+Kodak	Wratten #82B	Pale blue			Opposite of 81B.
+Kodak	Wratten #82C	Pale blue			Opposite of 81C.
+Kodak	Wratten #85	Amber			Opposite of 80A.
+Kodak	Wratten #85B	Amber			
+Kodak	Wratten #85C	Amber			
+Kodak	Wratten #85N3	Amber			Neutral Density of 1 stop. Opposite of 80A.
+Kodak	Wratten #85N6	Amber			Neutral Density of 2 stops. Opposite of 80A.
+Kodak	Wratten #85N9	Amber			Neutral Density of 3 stops. Opposite of 80A.
+Kodak	Wratten #87				
+Kodak	Wratten #87C	Opaque			Passes IR only.
+Kodak	Wratten #89B	Near-opaque			Passes IR, blocks visible wavelengths below 720 nm.
+Kodak	Wratten #9	Deep yellow			Absorbs more blue than #8.
+Kodak	Wratten #90	Dark grayish amber			
+Kodak	Wratten #92	Red			
+Kodak	Wratten #93	Green			
+Kodak	Wratten #94	Blue			
+Kodak	Wratten #96	Grayish			Neutral density filter.
+Kodak	Wratten #98	Blue			
+Kodak	Wratten #99	Green			
+Lumicon	Comet	Narrow-band	495-520		The Lumicon 1.25" Comet Filter, a narrow band-pass filter (25nm), isolates the 501nm OIII line and both C2 lines at 511nm and 514nm. The high contrast of the filter reveals the delicate ionized tail of gaseous comets, allowing you to see their full extent. The Comet Filter also helps you to better distinguish gaseous comets from dusty comets, which normally show little contrast gain.
+Lumicon	Deep Sky	Narrow-band	495-520		This nebula filter blocks all high & low pressure mercury and sodium vapor lamp light, neon lights and airglow, while transmitting the rest of the visible spectrum. Visually, the Deep Sky Filter enhances contrast of nebula under both light-polluted and dark skies. The Deep Sky Filter also passes infrared light, making it an excellent filter for photographing deep space objects through light-polluted skies.
+Lumicon	Hydrogen-Beta	H-Beta Nebula	482-491		Also known as the Horsehead Nebula filter, this filter isolates only the hydrogen-beta line of the spectrum (486nm) in a narrow pass-band just 9 nm wide, providing maximum contrast. You can view extremely faint nebulous objects such as the Horsehead, Cocoon and California Nebulae.
+Lumicon	Infrared Blocking	IR Blocking	750-1000		
+Lumicon	LF3025 UHC	UHC	496-501, 486-486		Ultra High Contrast nebula filter
+Orion	#11	Yellow-Green			Enhances: Darkens Maria features on Mars; Reduces color aberrations from achromatic refractor telescopes
+Orion	#12	Yellow			Enhances: Polar ice caps on Mars; Festoon features on Jupiter
+Orion	#15	Deep yellow			Boosts contrast of lunar features, accentuates red and orange features on Saturn, Jupiter, and Mars, reveals low-contrast cloud detail on Venus.
+Orion	#21	Orange			Sharpens visibility of dark surface markings and polar regions on Mars. Surface dust storms become easily visible.
+Orion	#23A	Light Red			Enhances: Polar regions of Jupiter; Belts of Saturn
+Orion	#25	Red			Enhances Martian surface details in large telescopes, reveals cloud definition on Venus, accentuates bluish cloud regions on Jupiter and Saturn.
+Orion	#29	Deep Red			Enhances: Transits of the moons of Jupiter; Contrast between the sky and planets Mercury and Venus
+Orion	#30	Light Magenta			Enhances: Red and blue features on Mars; Rings of Saturn
+Orion	#32	Magenta			Enhances: Ovals of Jupiter; Blue/green contrast on Uranus and Neptune
+Orion	#38A	Blue			Enhances: Clouds and atmospheric features of Venus; Atmospheric clouds on Mars
+Orion	#44A	Light Blue-Green			Enhances: Limb hazes of Mars; Lunar transient phenomenon (LTP)
+Orion	#46	Deep Blue			Enhances: Reduces the glare of Venus in large telescopes; Lunar detail in large telescopes
+Orion	#47	Violet			Enhances: Polar ice caps of Mars in large telescopes; Limb hazes and terminator clouds of Mars
+Orion	#56	Light Green			Enhances: Frost patches of Mars; Belts of Jupiter
+Orion	#57	Medium Green			Enhances: Rings of Saturn; Lunar detail in small telescopes
+Orion	#58	Green			Enhances contrast of blue and red structures on Jupiter (including Red Spot), melt lines around Martian polar ice caps, accentuates Saturn's cloud belts.
+Orion	#64	Blue-Green			Enhances: Ice fogs of Mars; Polar hazes of Mars
+Orion	#8	Light yellow			Enhances: Surface plains and Maria features on Mars; Orange and red belt features of Jupiter and Saturn
+Orion	#80A	Medium blue			Enhances details in Jupiter's belts and Red Spot, high clouds and polar caps on Mars, lunar surface details, Venus cloud features.
+Orion	#82A	Pale Blue			Enhances: Orange and purple cloud belts of Jupiter and Saturn; Areas of low contrast on the Moon, Mars, Jupiter and Saturn
+Orion	H-Beta	Hydrogen-Beta Nebula	480-492		By isolating the hydrogen-beta spectral line centered at 486.1 nm in a 12nm band-pass and blocking other wavelengths, Orion's Hydrogen-Beta Telescope Filter effectively blackens the background sky, allowing the faint nebula to become clearly defined.
+Orion	Mars	Mars filter			Enhances contrast of virtually all surface features. Dielectric coatings transmit violet/blue (< 505nm) and orange/red (> 615nm) wavelengths where detail is rich, while blocking overbearing yellow/green (515nm-615nm) wavelengths. Polar icecaps appear more sharply defined, and differences in landscape shading are nicely resolved. Polar hazes and cloud cover become visible.
+Orion	O-III	Oxygen III Nebula	490-510		Transmits close to 90% of the light corresponding to 2 oxygen-III spectral lines at 496nm and 501nm.
+Orion	SkyGlow	Broadband	450-540, 650-800		Enhances contrast of all celestial objects, particularly emission nebulas, in moderately light-polluted skies.
+Orion	UltraBlock	Narrowband	485-520		Light-pollution filter
+SkyTech	LPRO MAX 2" CCD	Pollution Block			95% transmission of main nebula emission lines (i.e. Ha 656nm, OIII 496nm & 500nm, SII 672nm and H-beta 486nm). 0.1% transmission of off-band, specifically the major emission lines of artificial light pollution (i.e. Na 589nm, Hg 435nm and 578nm). 
+Thousand Oaks	LP-1	Broadband	450-520, 650-800		
+Thousand Oaks	LP-2	Narrowband	480-510		
+Thousand Oaks	LP-3	Oxygen III	490-510		
+Thousand Oaks	LP-4	H-Beta	480-492		
+ZWO	Blue	Blue	385-495		
+ZWO	Green	Green	490-570		
+ZWO	Ha - 7nm	H-alpha	652,5-659,5		
+ZWO	Luminance	Luminance	385-695		
+ZWO	OIII - 7nm	Oxygen III	496,5-503,5		
+ZWO	Red	Red	585-695		
+ZWO	SII - 7nm	S II	668,5-675,5		

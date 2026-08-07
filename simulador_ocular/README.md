@@ -34,7 +34,9 @@ un bloque HTML.
 - **Elige tu equipo**: telescopio y ocular de un catálogo de cientos de modelos,
   o **introdúcelos a mano** (apertura, focal y tipo óptico) si no están en la lista.
   Con **sesión iniciada**, los telescopios de **Mi flota** salen los primeros de la
-  lista (con su nombre propio delante y sus características detrás).
+  lista (con su nombre propio delante y sus características detrás). Se pueden
+  poner **dos auxiliares** (Barlow, Powermate, reductor, Paracorr): se encadenan
+  en orden, el primero es el que va montado más cerca del tubo.
 - **Pantalla completa y descarga**: dos botones discretos bajo el círculo del ocular
   (para todos, con o sin sesión) amplían la vista a toda la pantalla o guardan la
   imagen tal y como se ve, con el mismo recorte circular.
@@ -94,6 +96,12 @@ aumentos      = F / f
 campo real    = AFOV / aumentos
 pupila salida = D / aumentos
 ```
+
+Con auxiliares puestos, `F` es la **focal efectiva**: cada uno aplica
+`F × factor + extension_mm` sobre la que trae el de antes. Se admiten **dos**,
+porque apilar Paracorr y Barlow es corriente, y se encadenan en orden: el
+primero es el que va montado más cerca del tubo. La cuenta es una sola función,
+`BitacoraEquipo.focalConAuxiliares()`, compartida con el formulario de registro.
 
 ### Magnitud límite (método del umbral de Torres Lapasió)
 

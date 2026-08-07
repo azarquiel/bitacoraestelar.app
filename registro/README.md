@@ -31,7 +31,7 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `bitacora-flota.js` | Lógica de "Mi flota" | Servidor, por FTP |
 | `mis-viajes-wordpress.html` | Fragmento de "Mis viajes" (sesiones de observación: lugar, crónica, meteo, cielo) | Editor de WordPress |
 | `bitacora-viajes.js` | Lógica de "Mis viajes" | Servidor, por FTP |
-| `resources/datos/{telescopios,oculares,auxiliares}.csv` | Catálogo de equipo (semilla) | Bundled en el plugin (`…/bitacora-registro/datos/`) |
+| `resources/datos/{telescopios,oculares,auxiliares,filtros}.csv` | Catálogo de equipo (semilla) | Bundled en el plugin (`…/bitacora-registro/datos/`) |
 | `…/bitacora-registro/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
 
 **Por qué el `.js` y el `.css` van por FTP y no pegados en el editor.** El
@@ -190,27 +190,38 @@ Muestra las observaciones como tarjetas, con dos pestañas: **Registradas** y
 ## Mi flota (equipo del observador)
 
 `mi-flota-wordpress.html` es una página aparte donde cada observador arma su
-**equipo personal**: telescopios, oculares y auxiliares (Barlow, Powermates,
-reductores). Sirve para que, al registrar, no haya que teclear la óptica a mano.
+**equipo personal**: telescopios, oculares, auxiliares (Barlow, Powermates,
+reductores) y filtros. Sirve para que, al registrar, no haya que teclear la
+óptica a mano.
 
-- **Catálogo global**: un catálogo común (~870 telescopios, ~660 oculares y
-  ~35 auxiliares) importado de 3 CSV incluidos en el plugin
+- **Catálogo global**: un catálogo común (~870 telescopios, ~660 oculares,
+  ~35 auxiliares y ~130 filtros) importado de 4 CSV incluidos en el plugin
   (`…/bitacora-registro/datos/`). El observador **busca** en él y añade modelos
   a su flota (se copian sus specs), o crea uno **a medida**. Cada pieza es suya
   (`usuario_id`); el catálogo global son filas con `usuario_id` a NULL.
 - **Cálculo óptico automático**: en el formulario de registro, al elegir un
-  telescopio y, por ocular, uno de sus oculares (y opcionalmente un auxiliar), se
-  autocalculan **aumento**, **pupila de salida** y **campo real** —todos
-  editables— con:
-  - `aumentos = focal_tele × factor_auxiliar / focal_ocular`
+  telescopio y, por ocular, uno de sus oculares (y opcionalmente **hasta dos
+  auxiliares**), se autocalculan **aumento**, **pupila de salida** y **campo
+  real** —todos editables— con:
+  - `focal_efectiva = focal_tele × factor + extension_mm`, aplicada una vez por
+    auxiliar puesto
+  - `aumentos = focal_efectiva / focal_ocular`
   - `pupila = apertura / aumentos`
   - `campo_real = campo_aparente / aumentos`
 
   El factor del auxiliar multiplica (Barlow) o reduce (reductor) la focal
-  efectiva. Los valores calculados son los que ya guardaba la observación, así
-  que **el mapa y la ficha no cambian**: el equipo solo los rellena.
-- La observación guarda además el `telescopio_id`, y cada entrada su `ocular_id`
-  y `auxiliar_id`, para poder reeditar y recalcular.
+  efectiva. Con dos auxiliares (el caso típico: Paracorr y luego Barlow) se
+  encadenan **en orden**, el primer hueco antes que el segundo: el primero es el
+  que va montado más cerca del tubo. La cuenta vive en una sola función,
+  `BitacoraEquipo.focalConAuxiliares()`, que comparten el formulario y el
+  simulador de oculares. Los valores calculados son los que ya guardaba la
+  observación, así que **el mapa y la ficha no cambian**: el equipo solo los
+  rellena.
+- **Filtros**: cada entrada puede anotar con qué filtro se miró (UHC, O-III,
+  lunar…). Es un dato de bitácora: **no toca la óptica**, no cambia aumento,
+  pupila ni campo. Uno por entrada, sin apilar.
+- La observación guarda además el `telescopio_id`, y cada entrada su `ocular_id`,
+  `auxiliar_id`, `auxiliar2_id` y `filtro_id`, para poder reeditar y recalcular.
 
 El catálogo se importa solo al activar/actualizar el plugin (idempotente) y
 puede reimportarse desde el panel de administración de Bitácora.
@@ -405,12 +416,15 @@ se guarda en tablas hijas, y hay catálogos independientes:
 | `wp_bitacora_telescopios` | Telescopios: catálogo global (`usuario_id` NULL) + flotas personales |
 | `wp_bitacora_oculares` | Oculares: catálogo global + flotas personales |
 | `wp_bitacora_auxiliares` | Auxiliares (Barlow/reductores): catálogo global + flotas personales |
+| `wp_bitacora_filtros` | Filtros (UHC, O-III, lunares…): catálogo global + flotas personales. `bandpass` es texto tal cual del catálogo |
 | `wp_bitacora_bases` | Las bases de observación del usuario (nombre, lat/lon, altitud, huso) |
 | `wp_bitacora_viajes` | Los **viajes interestelares**: una salida = un observador, una noche, una base. Guarda lo que es de la salida y no del objeto (lugar, crónica, meteo, cielo, comienzo y fin). `base_id = 0` = salida sin lugar registrado |
 | `wp_bitacora_viaje_tripulacion` | Quién más iba en ese viaje |
 
-La observación referencia el `telescopio_id`, y cada entrada su `ocular_id` y
-`auxiliar_id` (el equipo usado en ese aumento).
+La observación referencia el `telescopio_id`, y cada entrada su `ocular_id`,
+`auxiliar_id`, `auxiliar2_id` y `filtro_id` (el equipo usado en ese aumento).
+Los dos huecos de auxiliar son fijos y ordenados: el primero es el que va
+montado más cerca del tubo.
 
 La observación referencia también su `viaje_id` y su `base_id`. El **viaje es
 obligatorio**: se elige al registrar, entre los que tenga esa noche (o se da de
@@ -466,9 +480,9 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | `GET` | `/resolver?q=M104` | No | Localiza un objeto en SIMBAD **sin guardarlo** (para el buscador del mapa) |
 | `GET` | `/observadores` | No | Lista los observadores |
 | `GET` | `/datos.js` | No | Emite `OBSERVADORES`/`OBJECTS`/`OBSERVACIONES`/`VIAJES` como JavaScript para el visor |
-| `GET` | `/equipo/catalogo` | Sí | Catálogo global de telescopios/oculares/auxiliares |
+| `GET` | `/equipo/catalogo` | Sí | Catálogo global de telescopios/oculares/auxiliares/filtros |
 | `GET` | `/equipo` | Sí | Equipo personal del usuario |
-| `POST` | `/equipo/{telescopio\|ocular\|auxiliar}` | Sí | Añade una pieza a su flota (del catálogo o a medida) |
+| `POST` | `/equipo/{telescopio\|ocular\|auxiliar\|filtro}` | Sí | Añade una pieza a su flota (del catálogo o a medida) |
 | `PUT`/`DELETE` | `/equipo/{tipo}/{id}` | Sí | Edita/borra una pieza *(solo el dueño)* |
 
 Las rutas de lectura pública (`/objetos` GET, `/resolver`, `/observadores`,
@@ -490,8 +504,13 @@ bitacora-registro/
 └── datos/
     ├── telescopios.csv
     ├── oculares.csv
-    └── auxiliares.csv
+    ├── auxiliares.csv
+    └── filtros.csv
 ```
+
+> `filtros.csv` va separado por **tabuladores**, no por `;` como los otros tres:
+> el texto de sus descripciones ya contiene `;`. El lector del plugin recibe el
+> separador como parámetro, así que no hay que convertirlo.
 
 Comprime **la carpeta** (no el archivo suelto, o WordPress dirá que no
 encuentra ningún plugin válido). En WordPress: **Plugins → Añadir nuevo →
