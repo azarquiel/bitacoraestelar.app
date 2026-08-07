@@ -13,6 +13,13 @@
        (Barlow > 1 alarga, reductor < 1 acorta, vacío = 1 = neutro) y la extensión
        SUMA milímetros fijos (tuning rings raros). Sin auxiliar -> focal sin cambio.
 
+     focalConAuxiliares(focalMm, auxiliares) -> mm
+       Lo mismo con VARIAS ópticas auxiliares encadenadas (es corriente montar un
+       Paracorr y detrás una Barlow). Se aplican EN ORDEN de la lista: la primera
+       es la que va montada más cerca del telescopio. El orden solo cambia el
+       resultado cuando alguna trae extensión fija, pero se fija aquí —en un único
+       sitio— para que los tres puntos de cálculo no puedan divergir.
+
      nombreTelescopio(item) -> string
        Rótulo a mostrar de un telescopio: su nombre propio (si el observador se lo
        puso en Mi flota) o, en su defecto, "vendor modelo".
@@ -41,6 +48,18 @@
     return f * (fac != null ? fac : 1) + (ext != null ? ext : 0);
   }
 
+  /* Encadena varias auxiliares sobre la focal del tubo. Los huecos vacíos (null)
+     se saltan, así que "solo la primera puesta" y "solo la segunda" dan lo mismo
+     y no hay que ordenarlos en el formulario. */
+  function focalConAuxiliares(focalMm, auxiliares) {
+    var f = num(focalMm);
+    if (f == null) return null;
+    (auxiliares || []).forEach(function (a) {
+      if (a) f = focalEfectiva(f, a.factor, a.extension_mm);
+    });
+    return f;
+  }
+
   function nombreTelescopio(item) {
     if (!item) return '';
     var nombre = (item.nombre == null ? '' : String(item.nombre)).trim();
@@ -63,6 +82,7 @@
 
   var API = {
     focalEfectiva: focalEfectiva,
+    focalConAuxiliares: focalConAuxiliares,
     nombreTelescopio: nombreTelescopio,
     flotaPrimero: flotaPrimero
   };

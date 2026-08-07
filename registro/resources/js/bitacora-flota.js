@@ -1,8 +1,8 @@
 /* ===========================================================================
  * BITÁCORA MESSIER · Mi flota (equipo del observador)
  * ---------------------------------------------------------------------------
- * Gestiona el equipo PERSONAL del observador (telescopios, oculares y
- * auxiliares): listar, añadir desde el catálogo global (con buscador), añadir a
+ * Gestiona el equipo PERSONAL del observador (telescopios, oculares, auxiliares
+ * y filtros): listar, añadir desde el catálogo global (con buscador), añadir a
  * medida, editar y borrar. Habla con /wp-json/bitacora/v1/equipo*.
  *
  * Va SUBIDO POR FTP a /wp-content/uploads/bitacora/ (no se pega en el editor:
@@ -75,6 +75,27 @@
         if (num(it.extension_mm) != null) p.push('+' + num(it.extension_mm) + ' mm');
         return p.length ? p.join('  ·  ') : 'sin efecto óptico';
       }
+    },
+    // Los filtros no tienen campos ópticos: no cambian aumentos ni campo, solo qué
+    // luz llega al ojo. Se buscan por el TIPO además de por el nombre porque la
+    // mayoría se llaman "#58" o "LP-3", que no dicen nada; el tipo ("Green",
+    // "Oxygen III") es lo único por lo que alguien buscaría.
+    filtro: {
+      lista: 'listaFiltros', add: 'addFiltro', modeloCol: 'nombre',
+      etiquetaModelo: 'Nombre', singular: 'filtro',
+      campos: [
+        { k: 'tipo', lab: 'Tipo', tipo: 'text' },
+        { k: 'bandpass', lab: 'Banda que deja pasar (nm)', tipo: 'text' }
+      ],
+      buscarPor: function (it) {
+        return ((it.vendor ? it.vendor + ' ' : '') + (it.nombre || '') + ' ' + (it.tipo || '')).trim();
+      },
+      specs: function (it) {
+        var p = [];
+        if (it.tipo) p.push(it.tipo);
+        if (it.bandpass) p.push(it.bandpass + ' nm');
+        return p.length ? p.join('  ·  ') : 'sin datos de banda';
+      }
     }
   };
 
@@ -105,9 +126,9 @@
       function asegurarCatalogo() {
         if (!catalogoPromise) {
           catalogoPromise = api(API + '/catalogo').then(function (res) {
-            estado.catalogo = (res.ok && res.data) || { telescopios: [], oculares: [], auxiliares: [] };
+            estado.catalogo = (res.ok && res.data) || { telescopios: [], oculares: [], auxiliares: [], filtros: [] };
           }).catch(function () {
-            estado.catalogo = { telescopios: [], oculares: [], auxiliares: [] };
+            estado.catalogo = { telescopios: [], oculares: [], auxiliares: [], filtros: [] };
             catalogoPromise = null;   // permite reintentar si la carga falló
           });
         }
@@ -151,7 +172,7 @@
         return porDefecto + ' (error ' + res.status + ')';
       }
 
-      var plural = { telescopio: 'telescopios', ocular: 'oculares', auxiliar: 'auxiliares' };
+      var plural = { telescopio: 'telescopios', ocular: 'oculares', auxiliar: 'auxiliares', filtro: 'filtros' };
 
       // ── Pintado de cada sección ──
       function pintarCategoria(tipo) {
@@ -247,6 +268,7 @@
           contenedor: cont,
           fuente: function () { return (estado.catalogo && estado.catalogo[plural[tipo]]) || []; },
           texto: function (it) { return ((it.vendor ? it.vendor + ' ' : '') + (it[cfg.modeloCol] || '')).trim(); },
+          buscarPor: cfg.buscarPor,   // solo los filtros lo usan (se buscan por su tipo)
           specs: cfg.specs,
           onElegir: function (it) { crear(tipo, { catalogoId: parseInt(it.id, 10) }, null); }
         });
@@ -365,8 +387,8 @@
           mostrarFlash('No se pudo cargar tu flota.', true);
           return;
         }
-        estado.personal = res.data || { telescopios: [], oculares: [], auxiliares: [] };
-        ['telescopio', 'ocular', 'auxiliar'].forEach(function (tipo) {
+        estado.personal = res.data || { telescopios: [], oculares: [], auxiliares: [], filtros: [] };
+        ['telescopio', 'ocular', 'auxiliar', 'filtro'].forEach(function (tipo) {
           pintarCategoria(tipo);
           pintarAdd(tipo);
         });
