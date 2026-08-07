@@ -44,6 +44,14 @@
   #mw-nuevo { color: #f4c76b !important; border-color: rgba(244,199,107,0.35) !important; }
   #mw-nuevo:hover { background: rgba(244,199,107,0.16) !important; }
 
+  /* Selector de observador: solo el marco (sin tinte de fondo, el desenfoque de
+     arriba basta) y ancho automático, para que quepa el nombre con apellidos del
+     compañero más largo. El desplegable nativo sí necesita fondo propio: sin él
+     el sistema lo pinta claro y el texto claro no se leería. */
+  #mw-observador { background: transparent !important; }
+  #mw-observador:hover { background: rgba(30,38,56,0.35) !important; }
+  #mw-observador option { background: #0c101c; color: #eaf1fb; }
+
   /* CAPA DEL GRUPO LOCAL (atlas extragaláctico), detrás del mapa de la galaxia.
      Su opacidad y su zoom los controla el visor principal (grupo-local.js). */
   #gl-sky {
@@ -464,9 +472,11 @@
     <!-- Fila 5: quién observa -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <select id="mw-observador" title="Filtrar por observador" style="
-        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-        font-size:13px;padding:8px 12px;width:186px;
+        border:none;border-radius:20px;background:transparent;
+        font-size:13px;padding:8px 12px;
+        width:auto;min-width:186px;max-width:min(320px,60vw);
         font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
+        color-scheme:dark;
       ">
         <option value="">Todas las observaciones</option>
       </select>
