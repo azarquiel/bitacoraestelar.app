@@ -311,8 +311,11 @@ tamaño comprobado antes de parsear, y todo el texto pasa por
 `sanitize_text_field` o `wp_kses_post` según dónde vaya.
 
 Las reglas viven en la mitad **pura** de `bitacora-oal.php`, sin WordPress ni
-base de datos, y se prueban con los ficheros de `ejemplos-oal/`, escritos con la
-forma que escribe la plantilla. Pruebas: `php scripts/test_oal_import.php` (el
+base de datos, y se prueban con los ficheros de `ejemplos-oal/`. Dos de ellos
+los escribe **la propia plantilla** (`node scripts/generar_ejemplos_oal.js`),
+así que si plantilla e importador dejan de entenderse el test se entera; el
+tercero, `con-erratas.xml`, está a mano a propósito, porque es justo lo que la
+plantilla se niega a descargar. Pruebas: `php scripts/test_oal_import.php` (el
 importador) y `node scripts/test_oal_plantilla.js` (el motor de la plantilla).
 
 ---

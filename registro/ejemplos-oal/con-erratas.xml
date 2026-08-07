@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- ESTE fichero SÍ está escrito a mano, y a propósito.
+     Los otros dos ejemplos los escribe la propia plantilla
+     (node scripts/generar_ejemplos_oal.js); este no puede: la plantilla se
+     niega a descargar un estado con estas faltas, para eso avisa. Modela lo
+     que llega cuando alguien edita el XML por su cuenta o cuando lo escribe
+     otro programa: una observación sin objeto, otra colgada de una noche que
+     no está, una noche sin fecha y una descripción vacía. Nada de eso puede
+     abortar la importación: se avisa y lo demás entra. -->
 <oal:observations version="2.1" xmlns:oal="https://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.0">
   <sites>
     <site id="lu1">
