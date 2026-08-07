@@ -180,9 +180,15 @@ parte de las nebulosas y cúmulos galácticos. Se prueba, por este orden:
 1. la **mediana de las medidas** de SIMBAD (`mesDistance`);
 2. la **paralaje** de SIMBAD, que muchas veces está cuando las medidas no (así
    se coloca NGC 2022, por la paralaje Gaia de su estrella central);
-3. **VizieR**, la segunda base de datos: el catálogo de cúmulos abiertos de Dias
-   (`B/ocl`), que cubre la familia con más huecos en SIMBAD;
-4. la que **escriba el observador**, para lo que no sabe ninguna base de datos.
+3. **VizieR**: el catálogo de cúmulos abiertos de Dias (`B/ocl`), que cubre la
+   familia con más huecos en SIMBAD;
+4. el **Open Astronomy Catalog**, el catálogo abierto de los transitorios, que
+   sabe la distancia de las supernovas y sus restos (M1, la Cangrejo, se coloca
+   por ahí: responde como SN 1054);
+5. **NED**, por **corrimiento al rojo** y solo para lo lejano (a partir de
+   z = 0,01): es una estimación por la ley de Hubble, no una medida, y de cerca
+   la velocidad propia de la galaxia la estropea;
+6. la que **escriba el observador**, para lo que no sabe ninguna base de datos.
 
 Cuando no hay ninguna, la observación se guarda igual y el formulario avisa y
 pide la distancia en años luz ahí mismo: al escribirla, el objeto se da de alta

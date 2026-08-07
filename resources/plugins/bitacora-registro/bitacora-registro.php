@@ -3034,6 +3034,90 @@ function bitacora_vizier_dist_al( $identificador ) {
 }
 
 /**
+ * Distancia en años luz según el OPEN ASTRONOMY CATALOG (api.astrocats.space),
+ * o null. Se cachea 30 días por identificador.
+ *
+ * Es el catálogo abierto de los TRANSITORIOS —supernovas, mareas, kilonovas— y
+ * de ellos publica la distancia de luminosidad en megapársecs. Cubre un hueco
+ * que no tapa ningún otro: los restos históricos, que se registran por su nombre
+ * de toda la vida y no tienen distancia en SIMBAD. M1 (la Cangrejo) responde
+ * aquí como SN 1054, a 0,0019 Mpc (~6.200 años luz).
+ *
+ * Es estrecho a propósito y no se equivoca de objeto: preguntado por M31, M42,
+ * M51 o NGC 2024 contesta que no lo conoce, así que no puede colar la distancia
+ * de otro astro.
+ */
+function bitacora_oac_dist_al( $identificador ) {
+    $id = trim( (string) $identificador );
+    if ( '' === $id ) {
+        return null;
+    }
+    $cache_key = 'bitacora_oac_dist_' . md5( strtolower( $id ) );
+    $cache = get_transient( $cache_key );
+    if ( false !== $cache ) {
+        return ( 'nulo' === $cache ) ? null : floatval( $cache );
+    }
+
+    $respuesta = wp_remote_get(
+        'https://api.astrocats.space/' . rawurlencode( $id ) . '/lumdist',
+        array( 'timeout' => 20 )
+    );
+    if ( ! is_wp_error( $respuesta ) && 200 === wp_remote_retrieve_response_code( $respuesta ) ) {
+        $al = bitacora_oac_dist_al_desde_json( wp_remote_retrieve_body( $respuesta ) );
+        if ( null !== $al ) {
+            set_transient( $cache_key, (string) $al, 30 * DAY_IN_SECONDS );
+            return $al;
+        }
+    }
+
+    set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+    return null;
+}
+
+/**
+ * Distancia en años luz estimada a partir del corrimiento al rojo que da NED
+ * (NASA/IPAC Extragalactic Database), o null. Se cachea 30 días.
+ *
+ * NED es la referencia de lo extragaláctico y su servicio ObjectLookup resuelve
+ * el nombre y devuelve el z en un JSON pequeño. Lo que NO devuelve por ninguna
+ * vía automática son sus distancias independientes del corrimiento al rojo (la
+ * compilación NED-D): eso solo está en la página web, y raspar HTML dentro del
+ * plugin sería tan frágil como inútil el día que cambien la plantilla.
+ *
+ * Así que de NED sale el z, y del z sale una ESTIMACIÓN por la ley de Hubble,
+ * que es la última fuente de la escalera y solo se acepta lejos
+ * (bitacora_distancia_por_redshift explica por qué). A los objetos galácticos
+ * NED les devuelve z nulo, así que no estorban.
+ */
+function bitacora_ned_dist_al( $identificador ) {
+    $id = trim( (string) $identificador );
+    if ( '' === $id ) {
+        return null;
+    }
+    $cache_key = 'bitacora_ned_dist_' . md5( strtolower( $id ) );
+    $cache = get_transient( $cache_key );
+    if ( false !== $cache ) {
+        return ( 'nulo' === $cache ) ? null : floatval( $cache );
+    }
+
+    $respuesta = wp_remote_get(
+        add_query_arg( 'name', rawurlencode( $id ), 'https://ned.ipac.caltech.edu/srs/ObjectLookup' ),
+        array( 'timeout' => 20 )
+    );
+    if ( ! is_wp_error( $respuesta ) && 200 === wp_remote_retrieve_response_code( $respuesta ) ) {
+        $z  = bitacora_ned_redshift_desde_json( wp_remote_retrieve_body( $respuesta ) );
+        $al = bitacora_distancia_por_redshift( $z );
+        if ( null !== $al ) {
+            set_transient( $cache_key, (string) $al, 30 * DAY_IN_SECONDS );
+            return $al;
+        }
+    }
+
+    set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+    return null;
+}
+
+/**
  * Completa la posición y metadatos de un objeto del mapa a partir de su
  * identificador (etiqueta/slug). Resuelve el objeto en SIMBAD para obtener
  * distancia y tipo morfológico. Las coordenadas se toman de $ra_dado/$dec_dado
@@ -3056,12 +3140,19 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
         );
     }
 
-    // Distancia, por orden de preferencia: las medidas o la paralaje de SIMBAD,
-    // el catálogo de cúmulos de VizieR y, si ninguna base de datos la sabe, la
-    // que haya indicado a mano el observador (ver bitacora-distancia.php).
-    $dist_al = $sim ? $sim['dist_al'] : null;
+    // Distancia: se baja la escalera de fuentes de bitacora-distancia.php hasta
+    // que una responda. Cada peldaño es una consulta menos directa que el
+    // anterior, y el último es la mano del observador. Todas cachean, así que un
+    // objeto que ya se preguntó no vuelve a costar red.
+    $dist_al = $sim ? $sim['dist_al'] : null;                       // medidas o paralaje
     if ( null === $dist_al ) {
-        $dist_al = bitacora_vizier_dist_al( $identificador );
+        $dist_al = bitacora_vizier_dist_al( $identificador );       // cúmulos abiertos
+    }
+    if ( null === $dist_al ) {
+        $dist_al = bitacora_oac_dist_al( $identificador );          // transitorios y restos
+    }
+    if ( null === $dist_al ) {
+        $dist_al = bitacora_ned_dist_al( $identificador );          // estimación por z
     }
     if ( null === $dist_al ) {
         $dist_al = ( null !== $dist_manual_al ) ? floatval( $dist_manual_al ) : null;
@@ -3069,7 +3160,7 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
     if ( null === $dist_al || $dist_al <= 0 ) {
         return new WP_Error(
             'sin_distancia',
-            'No hay distancia para «' . $identificador . '» (no la tienen ni SIMBAD ni VizieR). Indícala a mano (años luz) para colocarlo en el mapa.'
+            'No hay distancia para «' . $identificador . '» (no la tienen SIMBAD, VizieR, el Open Astronomy Catalog ni NED). Indícala a mano (años luz) para colocarlo en el mapa.'
         );
     }
 
