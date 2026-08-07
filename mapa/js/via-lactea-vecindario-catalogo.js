@@ -65,9 +65,36 @@
     return out;
   }
 
+  // Fundido de la capa con HISTÉRESIS: entrar cuesta más que quedarse. Sin ella,
+  // el Sol se descentra al hacer zoom con la rueda, "cerca" cae y la escena se
+  // desvanece de golpe con la galaxia ya gigante detrás (las dos imágenes
+  // mezcladas), además de devolver el tope de zoom y dar un salto.
+  //   fov    : campo de visión actual (al).
+  //   cerca  : ¿el Sol está centrado? Solo hace falta para ENTRAR.
+  //   dentro : ¿veníamos ya dentro del vecindario?
+  // Devuelve { alpha, dentro }: alpha 1 = solo vecindario; dentro es el estado
+  // para el siguiente fotograma.
+  function fundidoVecindario(fov, cerca, dentro, cfg) {
+    var ini = cfg.fovInicioAl, fin = cfg.fovFinalAl;
+    var salida = (cfg.fovSalidaAl != null) ? cfg.fovSalidaAl : fin;
+    if (salida < fin) salida = fin;      // salida por debajo del fundido = sin histéresis
+    if (salida > ini) salida = ini;
+    var alpha;
+    if (dentro) {
+      // Ya dentro: opaco hasta fovSalidaAl y se apaga entre ahí y fovInicioAl.
+      alpha = (fov <= salida) ? 1 : (fov >= ini ? 0 : (ini - fov) / (ini - salida));
+    } else if (!cerca || fov >= ini) {
+      alpha = 0;
+    } else {
+      alpha = (fov <= fin) ? 1 : (ini - fov) / (ini - fin);
+    }
+    return { alpha: alpha, dentro: dentro ? alpha > 0 : alpha >= 1 };
+  }
+
   var API = {
     galToXYZ: galToXYZ,
-    estrellasVecindario: estrellasVecindario
+    estrellasVecindario: estrellasVecindario,
+    fundidoVecindario: fundidoVecindario
   };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }

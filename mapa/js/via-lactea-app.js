@@ -500,8 +500,10 @@
     if (isEdgeView) return false;
     var el = document.getElementById('mw-sun-anchor');
     if (!el) return false;
+    // El ancla mide 0x0 (sus hijos son absolutos): su caja ES su posición, así
+    // que no se puede exigir que tenga tamaño. Sin colocar aún, no hay Sol.
+    if (!el.style.left) return false;
     var r = el.getBoundingClientRect();
-    if (!r.width && !r.height) return false;
     var vr = viewer.getBoundingClientRect();
     var dx = (r.left + r.width / 2) - (vr.left + vr.width / 2);
     var dy = (r.top + r.height / 2) - (vr.top + vr.height / 2);
@@ -511,8 +513,12 @@
 
   // Tope de zoom vigente: elevado SOLO al acercarse al Sol en la vista cenital
   // (para entrar al vecindario); en cualquier otro caso, el tope normal (25).
+  // Ya dentro del vecindario el tope sigue elevado aunque el Sol se descentre:
+  // si no, el primer zoom tras descentrarlo recortaría la escala de golpe.
+  var dentroVecindario = false;
   function effMaxScale() {
-    return (!isEdgeView && cercaDelSol()) ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
+    return (!isEdgeView && (dentroVecindario || cercaDelSol()))
+      ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
   }
 
   function updateVecindario() {
@@ -530,10 +536,13 @@
     }
     // Fundido: 0 salvo que el Sol esté centrado (cenital) y el campo baje del
     // umbral. Completo por debajo de fovFinalAl.
-    var fovIni = cfg.fovInicioAl || 2500, fovFin = cfg.fovFinalAl || 900;
     var alpha = 0;
-    if (!isEdgeView && cercaDelSol() && fov < fovIni) {
-      alpha = (fov <= fovFin) ? 1 : (fovIni - fov) / (fovIni - fovFin);
+    if (isEdgeView) {
+      dentroVecindario = false;
+    } else {
+      var f = VLVecindarioCatalogo.fundidoVecindario(fov, cercaDelSol(), dentroVecindario, cfg);
+      alpha = f.alpha;
+      dentroVecindario = f.dentro;
     }
     // Al dominar el vecindario, se oculta la imagen de la galaxia y sus
     // marcadores dejan de capturar clics (para que lleguen a la capa).
@@ -1553,6 +1562,20 @@
   // Clic en una galaxia del atlas del Grupo Local -> abre su ficha.
   if (typeof GrupoLocal !== 'undefined' && GrupoLocal.ready) {
     GrupoLocal.onObjectClick = function (obj) {
+      abrirFichaObjeto({
+        ficha:  obj.ficha || obj.id,
+        pdf:    obj.pdf,
+        title:  obj.title || obj.name,
+        coords: obj.coords
+      });
+    };
+  }
+
+  // Clic en una estrella del vecindario solar -> su ficha, igual que en el
+  // atlas. Mientras la escena es interactiva el visor no ve los clics (los
+  // marcadores de la galaxia están detrás), así que sin esto no se abre nada.
+  if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.ready) {
+    VecindarioSolar.onObjectClick = function (obj) {
       abrirFichaObjeto({
         ficha:  obj.ficha || obj.id,
         pdf:    obj.pdf,
