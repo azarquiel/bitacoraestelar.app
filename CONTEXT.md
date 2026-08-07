@@ -42,25 +42,39 @@ extragaláctica (grupo local).
 
 Lo que separa una dirección del cielo de un sitio en el mapa: sin distancia el
 objeto no se puede pintar y la observación se queda guardada sin representación.
-La **escalera de fuentes**, de más específica a más general:
+La **escalera de fuentes**, de la medida más directa a la más indirecta:
 
 1. Las medidas publicadas de SIMBAD (`mesDistance`), por su **mediana**: las
    distancias de un mismo objeto se separan a veces por un factor 2 y una medida
    vieja y disparatada no debe arrastrar al resto.
 2. La **paralaje** de SIMBAD (`basic.plx_value`), que viaja gratis en la misma
    consulta y está cuando las medidas no: es la que coloca a NGC 2022.
-3. **VizieR** (`B/ocl`, cúmulos abiertos de Dias), la segunda base de datos, por
-   nombre de catálogo. Cubre la familia con más huecos en SIMBAD (M11, NGC 869,
-   NGC 457 están allí y en `mesDistance` no).
-4. La que escriba **a mano** el observador, único recurso para lo que ninguna
+3. **VizieR** (`B/ocl`, cúmulos abiertos de Dias), por nombre de catálogo. Cubre
+   la familia con más huecos en SIMBAD (M11, NGC 869, NGC 457 están allí y en
+   `mesDistance` no).
+4. El **Open Astronomy Catalog** (`api.astrocats.space`), el catálogo abierto de
+   los transitorios: da la distancia de luminosidad en Mpc de supernovas y sus
+   restos. Es quien coloca a **M1**, que responde como SN 1054.
+5. **NED**, por **corrimiento al rojo**: una ESTIMACIÓN por la ley de Hubble, no
+   una medida, y solo válida lejos (ver invariante).
+6. La que escriba **a mano** el observador, único recurso para lo que ninguna
    base de datos sabe: las nebulosas difusas galácticas (NGC 2024 no tiene ni
-   medida, ni paralaje, ni entrada en `B/ocl`).
+   medida, ni paralaje, ni entrada en `B/ocl`, ni z).
 
-- **Fuente única de la regla:** `bitacora-distancia.php`, puro y sin WordPress
-  (`bitacora_distancia_al`, `bitacora_nombre_catalogo`); las consultas de red
-  viven en `bitacora-registro.php`. Test `scripts/test_distancia_objeto.php`.
+- **Fuente única de la regla:** `bitacora-distancia.php`, puro y sin WordPress;
+  las consultas de red viven en `bitacora-registro.php`, una por fuente y todas
+  con caché de 30 días. Test `scripts/test_distancia_objeto.php`, que fija el
+  parseo con las respuestas reales de cada servicio.
 - **Una paralaje ≤ 0 no es una distancia:** el ruido de medida daría un valor
   negativo, que colocaría el objeto en el lado contrario del mapa.
+- **La ley de Hubble no vale de cerca** (`BITACORA_Z_MIN_HUBBLE`, z = 0,01): la
+  velocidad propia de una galaxia dentro de su grupo es del orden de la de
+  expansión y se come la señal. M104 tiene z = 0,00363, que por Hubble da ~51
+  millones de años luz cuando está a ~29. Por debajo del corte, NED se calla.
+- **De NED sale el z, no su distancia:** sus distancias independientes del
+  corrimiento al rojo (NED-D) no las publica ninguna API —solo la página web—, y
+  su TAP (`NEDTAP.objdir`) expone cuántas hay (`n_dist`) pero no cuáles. Raspar
+  HTML dentro del plugin no compensa.
 - **El aviso tiene que llevar a algún sitio:** cuando no se puede situar, la
   observación se guarda igual y el formulario **pide la distancia** (contra
   `POST /objetos`, que resuelve solo coordenadas, tipo y color). Antes el aviso
