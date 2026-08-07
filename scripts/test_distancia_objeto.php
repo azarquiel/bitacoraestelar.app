@@ -69,5 +69,48 @@ eq(bitacora_nombre_catalogo('Doble Cúmulo'), '', 'un nombre sin número, no');
 eq(bitacora_nombre_catalogo(''), '', 'vacío, no');
 eq(bitacora_nombre_catalogo('2024'), '', 'un número suelto no es un identificador');
 
+/* Las respuestas de abajo son las REALES de cada servicio, copiadas tal cual el
+   7 de agosto de 2026. Si algún día cambian de forma, el parseo falla aquí y no
+   en silencio delante del observador. */
+
+echo "bitacora_oac_dist_al_desde_json · Open Astronomy Catalog:\n";
+// M1 responde como el resto de SN 1054: 0,0019 Mpc, unos 6.200 años luz. Es el
+// hueco que solo tapa este catálogo (SIMBAD no le da distancia).
+eq(bitacora_oac_dist_al_desde_json('{"M1": {"lumdist": [{"value": "0.0019"}]}}'), 6197.0, 'M1, la Cangrejo, por su supernova');
+eq(bitacora_oac_dist_al_desde_json('{"SN2011fe": {"lumdist": [{"value": "3.56"}]}}'), 11611296.0, 'una supernova extragaláctica, en Mpc');
+eq(bitacora_oac_dist_al_desde_json('{"SN1987A": {"lumdist": [{"value": "0.043", "kind": "host"}]}}'), 140249.0, 'la distancia de la galaxia anfitriona también vale');
+// La clave del JSON es el nombre con el que responde el catálogo, no el que se
+// preguntó: el parseo no puede depender de acertarla.
+eq(bitacora_oac_dist_al_desde_json('{"SN 2011fe": {"lumdist": [{"value": "3.56"}]}}'), 11611296.0, 'da igual con qué nombre conteste');
+
+echo "cuando el Open Astronomy Catalog no sabe, no inventa:\n";
+eq(bitacora_oac_dist_al_desde_json('{"message": "Event \'NGC 2024\' not found in any catalog."}'), null, 'objeto desconocido');
+eq(bitacora_oac_dist_al_desde_json('{"M1": {"lumdist": []}}'), null, 'sin ninguna medida');
+eq(bitacora_oac_dist_al_desde_json('no es json'), null, 'respuesta ilegible');
+
+echo "bitacora_ned_redshift_desde_json · NED:\n";
+eq(bitacora_ned_redshift_desde_json('{"Preferred": {"Name": "NGC 4889", "Redshift": {"Value": 0.0215}}}'), 0.0215, 'el z de una galaxia lejana');
+// NED contesta a veces con otra designación del mismo astro (M104 responde como
+// la fuente de radio de su núcleo): el z sigue siendo el bueno.
+eq(bitacora_ned_redshift_desde_json('{"Preferred": {"Name": "ICRF J123959.4-113722", "Redshift": {"Value": 0.003633180125}}}'), 0.003633180125, 'aunque conteste con otro nombre del mismo objeto');
+eq(bitacora_ned_redshift_desde_json('{"Preferred": {"Name": "NGC 2022", "Redshift": {"Value": null}}}'), null, 'un objeto galáctico no tiene z');
+eq(bitacora_ned_redshift_desde_json('{"Preferred": {"Name": "X"}}'), null, 'sin bloque de z');
+eq(bitacora_ned_redshift_desde_json(''), null, 'respuesta vacía');
+
+echo "bitacora_distancia_por_redshift · solo de lejos:\n";
+eq(bitacora_distancia_por_redshift(0.0215), 300325232.0, 'NGC 4889, en el cúmulo de Coma');
+eq(bitacora_distancia_por_redshift(0.158338994), 2211776517.0, '3C 273, el cuásar');
+eq(bitacora_distancia_por_redshift(0.01), 139686154.0, 'justo en el corte, sí');
+
+echo "cerca la ley de Hubble no vale y se calla:\n";
+// M104: z = 0,00363 daría ~51 millones de años luz y está a ~29. La velocidad
+// propia dentro de su grupo es del orden de la de expansión, y el resultado no
+// es una distancia: es ruido con unidades.
+eq(bitacora_distancia_por_redshift(0.003633180125), null, 'M104 está demasiado cerca para estimarla así');
+eq(bitacora_distancia_por_redshift(0.001761), null, 'NGC 891, lo mismo');
+eq(bitacora_distancia_por_redshift(-0.001), null, 'M31 se acerca: eso no es expansión');
+eq(bitacora_distancia_por_redshift(0.0), null, 'z cero no es distancia cero');
+eq(bitacora_distancia_por_redshift(null), null, 'sin z, null');
+
 echo ($fallos ? "\n$fallos FALLOS\n" : "\nTodo en orden.\n");
 exit($fallos ? 1 : 0);
