@@ -59,6 +59,10 @@ require_once __DIR__ . '/bitacora-viaje.php';
 // que escribe registro/plantilla-oal.html (scripts/test_oal_import.php).
 require_once __DIR__ . '/bitacora-oal.php';
 
+// De dónde sale la distancia al Sol de un objeto, sin la cual no hay sitio en
+// el mapa: funciones puras, con test propio (scripts/test_distancia_objeto.php).
+require_once __DIR__ . '/bitacora-distancia.php';
+
 /**
  * Nombre real de la tabla, con el prefijo que use esta instalación
  * (normalmente wp_, pero puede ser otro).
@@ -2802,8 +2806,9 @@ function bitacora_coords_texto( $l, $b, $d ) {
 /**
  * Consulta SIMBAD (servicio TAP) por identificador y devuelve
  * array( 'ra', 'dec', 'dist_al', 'morph', 'otype' ) o null si no se encuentra o
- * falla la red. La distancia es la mediana de las medidas disponibles, en años
- * luz. Se cachea 30 días por identificador para no repetir peticiones.
+ * falla la red. La distancia es la mediana de las medidas disponibles y, si no
+ * hay ninguna, la que da la paralaje (ver bitacora_distancia_al). Se cachea 30
+ * días por identificador para no repetir peticiones.
  */
 function bitacora_simbad( $identificador ) {
     $id = trim( (string) $identificador );
@@ -2816,7 +2821,10 @@ function bitacora_simbad( $identificador ) {
         return is_array( $cache ) ? $cache : null;
     }
 
-    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, d.dist, d.unit "
+    // `plx_value` (paralaje, en mas) viaja en la misma consulta: es gratis y es
+    // la única distancia que SIMBAD tiene de muchos objetos cuyo `mesDistance`
+    // está vacío, como las nebulosas planetarias con estrella central en Gaia.
+    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, d.dist, d.unit, b.plx_value "
         . "FROM basic AS b JOIN ident AS i ON i.oidref = b.oid "
         . "LEFT JOIN mesDistance AS d ON d.oidref = b.oid "
         . "WHERE i.id = '" . str_replace( "'", "''", $id ) . "'";
@@ -2847,7 +2855,7 @@ function bitacora_simbad( $identificador ) {
     }
     array_shift( $lineas ); // cabecera
 
-    $ra = null; $dec = null; $morph = ''; $otype = '';
+    $ra = null; $dec = null; $morph = ''; $otype = ''; $plx = null;
     $distancias_al = array();
     // Factores a años luz por unidad de SIMBAD.
     $a_al = array( 'pc' => 3.2616, 'kpc' => 3261.6, 'mpc' => 3261600.0, 'ly' => 1.0, 'al' => 1.0 );
@@ -2857,7 +2865,7 @@ function bitacora_simbad( $identificador ) {
             continue;
         }
         $c = str_getcsv( $linea );
-        if ( count( $c ) < 6 ) {
+        if ( count( $c ) < 7 ) {
             continue;
         }
         if ( null === $ra && is_numeric( $c[0] ) ) {
@@ -2875,16 +2883,13 @@ function bitacora_simbad( $identificador ) {
         if ( is_numeric( $dist ) && isset( $a_al[ $unidad ] ) ) {
             $distancias_al[] = floatval( $dist ) * $a_al[ $unidad ];
         }
+        // La paralaje es del objeto, así que viene repetida en todas las filas.
+        if ( null === $plx && is_numeric( $c[6] ) ) {
+            $plx = floatval( $c[6] );
+        }
     }
 
-    $dist_al = null;
-    if ( ! empty( $distancias_al ) ) {
-        sort( $distancias_al );
-        $n = count( $distancias_al );
-        $mid = intdiv( $n, 2 );
-        $dist_al = ( $n % 2 ) ? $distancias_al[ $mid ] : ( $distancias_al[ $mid - 1 ] + $distancias_al[ $mid ] ) / 2.0;
-        $dist_al = round( $dist_al );
-    }
+    $dist_al = bitacora_distancia_al( $distancias_al, $plx );
 
     if ( null === $ra ) {
         set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
@@ -2973,6 +2978,62 @@ function bitacora_gaia_bprp( $ra, $dec ) {
 }
 
 /**
+ * Distancia en años luz según VizieR, la SEGUNDA base de datos: se pregunta por
+ * el nombre del objeto cuando SIMBAD no sabe a qué distancia está. Devuelve la
+ * distancia o null. Se cachea 30 días por nombre.
+ *
+ * Catálogo consultado: B/ocl (Dias, «Optically visible open clusters and
+ * Candidates»), que trae la distancia en pársecs de ~1.700 cúmulos abiertos, la
+ * familia con más huecos en el `mesDistance` de SIMBAD (M11, NGC 869 y NGC 457
+ * están aquí y allí no). Es una lista, no un catálogo general: las nebulosas
+ * difusas siguen sin tener fuente automática y se resuelven a mano.
+ */
+function bitacora_vizier_dist_al( $identificador ) {
+    // Los catálogos tabulados casan el nombre por texto exacto: "ngc2024" no es
+    // "NGC 2024". Si el identificador no tiene forma de prefijo+número (un nombre
+    // propio, una designación rara), no hay nada que preguntar aquí.
+    $nombre = bitacora_nombre_catalogo( $identificador );
+    if ( '' === $nombre ) {
+        return null;
+    }
+
+    $cache_key = 'bitacora_vizier_dist_' . md5( $nombre );
+    $cache = get_transient( $cache_key );
+    if ( false !== $cache ) {
+        return ( 'nulo' === $cache ) ? null : floatval( $cache );
+    }
+
+    $respuesta = wp_remote_post(
+        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync',
+        array(
+            'timeout' => 20,
+            'body'    => array(
+                'request' => 'doQuery',
+                'lang'    => 'ADQL',
+                'format'  => 'csv',
+                'query'   => 'SELECT TOP 1 Dist FROM "B/ocl/clusters"'
+                    . ' WHERE Cluster = \'' . str_replace( "'", "''", $nombre ) . '\' AND Dist > 0',
+            ),
+        )
+    );
+    if ( ! is_wp_error( $respuesta ) && 200 === wp_remote_retrieve_response_code( $respuesta ) ) {
+        $lineas = preg_split( '/\r?\n/', trim( wp_remote_retrieve_body( $respuesta ) ) );
+        if ( count( $lineas ) >= 2 ) {
+            $val = trim( $lineas[1], " \"\r\n" );
+            if ( is_numeric( $val ) && floatval( $val ) > 0 ) {
+                // La columna Dist de B/ocl viene en pársecs.
+                $al = round( floatval( $val ) * BITACORA_AL_POR_PARSEC );
+                set_transient( $cache_key, (string) $al, 30 * DAY_IN_SECONDS );
+                return $al;
+            }
+        }
+    }
+
+    set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+    return null;
+}
+
+/**
  * Completa la posición y metadatos de un objeto del mapa a partir de su
  * identificador (etiqueta/slug). Resuelve el objeto en SIMBAD para obtener
  * distancia y tipo morfológico. Las coordenadas se toman de $ra_dado/$dec_dado
@@ -2995,15 +3056,20 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
         );
     }
 
-    // Distancia: la de SIMBAD o, si no la tiene, la indicada a mano.
+    // Distancia, por orden de preferencia: las medidas o la paralaje de SIMBAD,
+    // el catálogo de cúmulos de VizieR y, si ninguna base de datos la sabe, la
+    // que haya indicado a mano el observador (ver bitacora-distancia.php).
     $dist_al = $sim ? $sim['dist_al'] : null;
+    if ( null === $dist_al ) {
+        $dist_al = bitacora_vizier_dist_al( $identificador );
+    }
     if ( null === $dist_al ) {
         $dist_al = ( null !== $dist_manual_al ) ? floatval( $dist_manual_al ) : null;
     }
     if ( null === $dist_al || $dist_al <= 0 ) {
         return new WP_Error(
             'sin_distancia',
-            'No hay distancia para «' . $identificador . '» (SIMBAD no la tiene). Indícala a mano (años luz) para colocarlo en el mapa.'
+            'No hay distancia para «' . $identificador . '» (no la tienen ni SIMBAD ni VizieR). Indícala a mano (años luz) para colocarlo en el mapa.'
         );
     }
 
@@ -4295,7 +4361,9 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
     $aviso   = is_wp_error( $obj_res ) ? $obj_res->get_error_message() : '';
 
     return new WP_REST_Response(
-        array( 'ok' => true, 'id' => $id, 'mensaje' => 'Observación actualizada.', 'aviso' => $aviso ),
+        // El objeto viaja de vuelta igual que al crear: es a él a quien hay que
+        // ponerle la distancia a mano si el aviso dice que no se pudo situar.
+        array( 'ok' => true, 'id' => $id, 'objeto' => $datos['objeto'], 'mensaje' => 'Observación actualizada.', 'aviso' => $aviso ),
         200
     );
 }
@@ -4872,6 +4940,9 @@ function bitacora_inyectar_datos() {
 
     $datos = array(
         'endpoint'        => esc_url_raw( rest_url( 'bitacora/v1/observaciones' ) ),
+        // Alta de un objeto del mapa: por aquí entra la distancia escrita a mano
+        // cuando ninguna base de datos la sabe y el objeto se queda sin pintar.
+        'objetos'         => esc_url_raw( rest_url( 'bitacora/v1/objetos' ) ),
         'media'           => esc_url_raw( rest_url( 'wp/v2/media' ) ),
         'nonce'           => wp_create_nonce( 'wp_rest' ),
         'usuarioId'       => $uid,
