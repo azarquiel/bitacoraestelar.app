@@ -21,12 +21,14 @@ def check(cond, etiqueta):
     print(("  ok   " if cond else "  FALLA ") + etiqueta)
     if not cond: fallos.append(etiqueta)
 
-# ── Parsear la tabla $reglas del clasificador ────────────────────────────────
+# ── Parsear la tabla de categorías (compartida clasificador/semilla) ─────────
 # array( 'carbono', array( 'C*' ), '#ff9d5a' ),
+tabla = PHP[PHP.index("function bitacora_categorias_mapa"):]
+tabla = tabla[:tabla.index("\n}\n")]
 cuerpo = PHP[PHP.index("function bitacora_clasificar_objeto"):]
 cuerpo = cuerpo[:cuerpo.index("\n}\n")]
 reglas = []  # (tipo, [codigos_mayus], color)
-for m in re.finditer(r"array\(\s*'([a-z]+)',\s*array\(([^)]*)\),\s*'(#[0-9a-fA-F]{6})'\s*\)", cuerpo):
+for m in re.finditer(r"array\(\s*'([a-z]+)',\s*array\(([^)]*)\),\s*'(#[0-9a-fA-F]{6})'\s*\)", tabla):
     tipo, codes_raw, color = m.group(1), m.group(2), m.group(3).lower()
     codes = [c.strip().strip("'").upper() for c in codes_raw.split(",") if c.strip()]
     reglas.append((tipo, codes, color))
@@ -88,6 +90,26 @@ check(ancho is not None, f"ancho de la columna `tipo` parseado ({ancho})")
 print("Cada tipo del clasificador cabe en la columna:")
 for tipo, _codes, _color in reglas + [("otro", [], "")]:
     check(ancho is not None and len(tipo) <= ancho, f"'{tipo}' ({len(tipo)} car.) cabe en varchar({ancho})")
+
+# ── 4) Todo objeto de la semilla acaba con tipo ──────────────────────────────
+# La semilla solo declara el color, así que el importador deriva el tipo con
+# bitacora_tipo_por_color(). Si un color de la semilla no está en la tabla, ese
+# objeto entra al mapa con el tipo vacío (le pasaba a las cinco planetarias).
+import json
+importador = PHP[PHP.index("function bitacora_importar_objetos_seed"):]
+importador = importador[:importador.index("\n}\n")]
+check("bitacora_tipo_por_color" in importador, "el importador de la semilla deriva el tipo del color")
+por_color = {color: tipo for tipo, _c, color in reglas}
+semilla = json.loads((RAIZ / "resources/plugins/bitacora-registro/datos/objetos-seed.json").read_text(encoding="utf-8"))
+check(len(semilla) > 0, f"semilla parseada ({len(semilla)} objetos)")
+sin_tipo = [o["id"] for o in semilla
+            if not o.get("tipo") and not por_color.get(str(o.get("color", "")).lower())]
+check(not sin_tipo, f"ningún objeto de la semilla se queda sin tipo (sin: {sin_tipo})")
+PLANETARIAS = ("ngc40", "ngc6826", "ngc6905", "m27", "m57")
+for slug in PLANETARIAS:
+    o = next((x for x in semilla if x.get("id") == slug), None)
+    tipo = o and (o.get("tipo") or por_color.get(str(o.get("color", "")).lower()))
+    check(tipo == "planetaria", f"{slug} -> {tipo!r} (esperado 'planetaria')")
 
 if fallos:
     print(f"\n{len(fallos)} fallo(s).")
