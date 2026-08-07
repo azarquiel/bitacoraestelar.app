@@ -8,9 +8,11 @@ declare(strict_types=1);
    base que ya existe, qué observaciones hermanas son en realidad UNA con dos
    aumentos, y qué filas están mal y hay que avisar en vez de tragárselas.
 
-   Los tres ficheros de registro/ejemplos-oal/ están escritos a mano con la
-   forma que escribe la plantilla (registro/plantilla-oal.html); del lado de la
-   plantilla vigila scripts/test_oal_plantilla.js.
+   Dos de los ficheros de registro/ejemplos-oal/ los escribe la propia plantilla
+   (node scripts/generar_ejemplos_oal.js), así que si plantilla e importador
+   dejan de entenderse, este test se entera. El tercero, con-erratas.xml, está
+   escrito a mano a propósito: la plantilla se niega a descargar un estado con
+   esas faltas, y aun así hay que saber leerlo.
 
    Sin framework:  php scripts/test_oal_import.php  */
 
