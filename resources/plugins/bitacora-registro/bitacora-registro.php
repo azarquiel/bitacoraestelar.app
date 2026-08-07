@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.27.0' );
+define( 'BITACORA_VERSION', '1.28.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -249,6 +249,11 @@ function bitacora_crear_tabla() {
     // Tabla independiente: los objetos del mapa de la Vía Láctea. Es metadato
     // de REPRESENTACIÓN (color, posiciones, enlace al PDF), no ligado a ninguna
     // observación concreta. Sustituye al bloque OBJECTS de via-lactea-datos.js.
+    // `tipo` guarda el nombre entero de la categoría de bitacora_clasificar_objeto():
+    // 'planetaria' son 10 caracteres y en el varchar(8) de antes el INSERT se caía
+    // en silencio (MySQL en modo estricto), así que NINGUNA nebulosa planetaria
+    // llegaba al mapa. scripts/test_clasificacion_objeto.py vigila que todas las
+    // categorías sigan cabiendo.
     $tabla_objetos = bitacora_nombre_tabla_objetos();
     $sql_objetos = "CREATE TABLE $tabla_objetos (
         id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -267,7 +272,7 @@ function bitacora_crear_tabla() {
         gal_b double DEFAULT NULL,
         dist_al double DEFAULT NULL,
         bp_rp double DEFAULT NULL,
-        tipo varchar(8) NOT NULL DEFAULT '',
+        tipo varchar(16) NOT NULL DEFAULT '',
         morph varchar(32) NOT NULL DEFAULT '',
         creado_en datetime NOT NULL,
         actualizado_en datetime DEFAULT NULL,
@@ -3239,7 +3244,10 @@ function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = nu
         ),
         $calc
     );
-    bitacora_guardar_objeto_fila( $slug, $fila );
+    $guardado = bitacora_guardar_objeto_fila( $slug, $fila );
+    if ( is_wp_error( $guardado ) ) {
+        return $guardado;
+    }
     return true;
 }
 
@@ -3278,7 +3286,12 @@ function bitacora_resolver_objeto( WP_REST_Request $peticion ) {
 /**
  * Inserta o actualiza (por slug) una fila de objeto del mapa. Deriva los
  * formatos de wpdb de cada columna y gestiona las marcas de tiempo. Devuelve
- * 'insertado' o 'actualizado'.
+ * 'insertado', 'actualizado' o WP_Error si la base de datos rechaza la fila.
+ *
+ * Ese error IMPORTA: cuando el objeto no se guarda, la observación se queda sin
+ * marcador en el mapa y el buscador sigue encontrándolo (lo resuelve en SIMBAD
+ * al vuelo), así que el hueco es invisible salvo que alguien lo cuente. Pasó con
+ * 'planetaria' en una columna varchar(8).
  */
 function bitacora_guardar_objeto_fila( $slug, $fila ) {
     global $wpdb;
@@ -3306,10 +3319,15 @@ function bitacora_guardar_objeto_fila( $slug, $fila ) {
     }
 
     if ( $existe ) {
-        $wpdb->update( $tabla, $fila, array( 'id' => intval( $existe ) ), $fmt, array( '%d' ) );
+        $ok = $wpdb->update( $tabla, $fila, array( 'id' => intval( $existe ) ), $fmt, array( '%d' ) );
+        if ( false === $ok ) {
+            return new WP_Error( 'objeto_no_guardado', 'La base de datos rechazó el objeto: ' . $wpdb->last_error );
+        }
         return 'actualizado';
     }
-    $wpdb->insert( $tabla, $fila, $fmt );
+    if ( false === $wpdb->insert( $tabla, $fila, $fmt ) ) {
+        return new WP_Error( 'objeto_no_guardado', 'La base de datos rechazó el objeto: ' . $wpdb->last_error );
+    }
     return 'insertado';
 }
 
@@ -3446,6 +3464,10 @@ function bitacora_crear_objeto( WP_REST_Request $peticion ) {
     );
 
     $res  = bitacora_guardar_objeto_fila( $slug, $fila );
+    if ( is_wp_error( $res ) ) {
+        $res->add_data( array( 'status' => 500 ) );
+        return $res;
+    }
     $fila_guardada = $wpdb->get_row(
         $wpdb->prepare( "SELECT * FROM " . bitacora_nombre_tabla_objetos() . " WHERE slug = %s", $slug )
     );
@@ -3670,7 +3692,9 @@ function bitacora_importar_objetos_seed() {
         }
 
         $res = bitacora_guardar_objeto_fila( $slug, $fila );
-        if ( 'actualizado' === $res ) {
+        if ( is_wp_error( $res ) ) {
+            $avisos[] = $slug . ': ' . $res->get_error_message();
+        } elseif ( 'actualizado' === $res ) {
             $actualizados++;
         } else {
             $insertados++;
