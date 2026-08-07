@@ -104,7 +104,7 @@
     <magnification>67.9</magnification>
   </observation>
   <observation id="ob2">
-    <begin>2026-07-11T23:40:00+02:00</begin>
+    <begin>2026-07-12T00:20:00+02:00</begin>
     <session>no1</session>
     <site>lu1</site>
     <observer>ob1</observer>
