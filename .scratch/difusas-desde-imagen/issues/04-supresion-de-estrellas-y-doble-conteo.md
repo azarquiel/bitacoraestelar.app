@@ -2,17 +2,20 @@
 
 **Type:** grilling
 **Status:** open
-**Blocked by:** 02, 03
+**Blocked by:** 03, 09
 
 ## Question
 
-Con la vía de formato ya elegida (03) y las opciones sobre la mesa (02),
-decidir **cómo queda solo el difuso**.
+Con la vía de formato ya elegida (03), el registro entre rejillas resuelto (09)
+y las opciones **ya medidas** en la 02, decidir **cómo queda solo el difuso**.
 
-Lo que hay que cerrar:
+La 02 dejó el método casi elegido: máscara en las posiciones del catálogo +
+relleno desde el entorno (1,3 ms, núcleo al 100 %, estrella al 1 %), con la
+apertura morfológica 7×7 sobre imagen estirada como alternativa viable (98 % del
+flujo, estrella a 0 %). Lo que queda no es *qué* método, es lo demás:
 
-- ¿Qué método? Resta informada por el catálogo de Gaia —que para este campo ya
-  está descargado, con posición y flujo exactos—, filtro morfológico, o mezcla.
+- ¿Se queda la máscara sola, o hace falta la apertura como red de seguridad
+  donde el catálogo no llega?
 - ¿Hasta qué magnitud se restan estrellas? Gaia trae muchas más de las que el
   ocular llega a ver; la imagen del cartografiado es más profunda que el ocular
   simulado. Las estrellas de la placa **por debajo** de la magnitud límite del

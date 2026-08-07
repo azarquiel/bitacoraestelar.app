@@ -17,6 +17,10 @@ decidir.
 - **Skills a consultar en cada sesión:** `/grilling`, `/domain-modeling`,
   `/prototype` para las fichas de tipo prototipo.
 - **Idioma:** todo el repo escribe en español, comentarios incluidos.
+- **Medidas.** `bench/` guarda los tres bancos que cerraron la ficha 02, todos
+  ejecutables con `node bench/<fichero>` sin dependencias: `bench_estrellas.js`
+  (coste por método), `bench_calidad.js` y `bench_calidad2.js` (cuánto se lleva
+  del objeto), `bench_proyeccion.js` (desvío lineal vs TAN, origen de la 09).
 
 ### Punto de partida (no volver a investigar)
 
@@ -52,7 +56,26 @@ decidir.
 
 <!-- una línea por ficha cerrada; el detalle vive en la ficha -->
 
-_(ninguna todavía)_
+- **01 — hips2fits sirve FITS, pero sin fotometría.** `format=fits` da float32
+  (`BITPIX=-32`) con WCS TAN completa y CORS abierto (`allow-origin: *`, se pide
+  desde el navegador sin proxy). Pero **sin `BUNIT` ni `MAGZP`**: el punto cero
+  no existe en la cabecera, habría que derivarlo por campo contra el catálogo
+  PS1. `CDS/P/PanSTARRS/DR1/g` existe. Peso: 2,0 MB por recorte de 720².
+  Y el servicio **se cayó entero durante la sesión**, los tres nombres a la vez,
+  arrastrando el JPG de color que ya está en producción.
+- **02 — la máscara por catálogo gana; y el estirado es un activo, no un
+  defecto.** Máscara en las posiciones de Gaia + relleno desde el entorno: 1,3 ms
+  en 720², núcleo al 100 %, estrella al 1 %. Mejor en coste **y** en calidad que
+  todo lo demás, y `desenfocar()`/`rellenarNucleo` ya están en el módulo. Sobre
+  imagen lineal, cualquier filtro morfológico que mate la estrella se lleva medio
+  objeto (esa es la «mancha uniforme» del intento anterior); sobre imagen
+  **estirada** la apertura 7×7 deja el 98 % del flujo. La resta de PSF solo gana
+  con centrado casi perfecto (0,5 px de error → 28 % de residuo).
+- **Consecuencia sobre la 03:** la vía B (FITS lineal) ha engordado —parser +
+  2 MB + segunda petición a MAST + fotometría en JS— y la vía A (JPG estirado) ha
+  ganado un argumento nuevo. La carga de la prueba se ha invertido.
+- **Ficha nueva 09:** `dibujar()` proyecta lineal, `hips2fits` entrega TAN. A
+  δ=70° y 30′ de campo son 4,8 px de desvío. Hay que decidir antes de la 04.
 
 ## Not yet specified
 

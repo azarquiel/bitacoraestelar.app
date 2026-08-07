@@ -23,6 +23,22 @@ Las dos vías:
   en JS: se escribió uno (`parseFITS`) para el intento de DESI Legacy y se
   decidió **no rescatarlo**. Habría que traerlo de vuelta o escribirlo otra vez.
 
+**Lo que la ficha 01 cambió de esta ficha, y es mucho.** La vía B se planteó
+suponiendo que el punto cero venía en la cabecera. **No viene**: el FITS de
+`hips2fits` trae WCS TAN completa pero **ni `BUNIT` ni `MAGZP`**. La vía B no es
+«parsear FITS y leer el punto cero», es: parser de FITS **+ 2,0 MB por recorte de
+720²** (float32 sin comprimir) **+ una segunda petición de red al catálogo PS1 en
+MAST + fotometría de apertura en JS para ajustar el punto cero campo a campo**.
+Ha engordado tres veces respecto a como estaba escrita arriba.
+
+Y la ficha 02 empujó al otro lado: sobre imagen **estirada** una apertura 7×7
+deja el 98 % del flujo de la galaxia y mata la estrella, mientras que sobre
+imagen **lineal** el mismo filtro se lleva la mitad del objeto. El estirado del
+JPG no es solo lo barato: es lo que hace fácil la supresión de estrellas.
+
+Con eso, la vía A ya no es «la chapucera»: la carga de la prueba se ha dado la
+vuelta y ahora es B quien tiene que justificarse.
+
 Preguntas que hay que cerrar:
 
 - ¿Se acepta que el brillo superficial del difuso sea heurístico (A), o el
