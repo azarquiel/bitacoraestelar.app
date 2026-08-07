@@ -2750,6 +2750,40 @@ function bitacora_color_por_clase( $clase ) {
 }
 
 /**
+ * Tabla de categorías del mapa MW, compartida por el clasificador y por la
+ * semilla: [ tipo, [códigos otype SIMBAD (mayúsculas)], color ].
+ *
+ * Los colores DEBEN coincidir con la leyenda #mw-legend (data-color) de
+ * mapa/mapa.html. El test scripts/test_clasificacion_objeto.py verifica la sincronía.
+ */
+function bitacora_categorias_mapa() {
+    // Categorías del mapa MW: [ tipo, [códigos otype SIMBAD (mayúsculas)], color ].
+    return array(
+        array( 'carbono',    array( 'C*' ),          '#ff9d5a' ),
+        array( 'globular',   array( 'GLC' ),         '#d7a4ff' ),
+        array( 'abierto',    array( 'OPC', 'CL*' ),  '#8aff9e' ),
+        array( 'planetaria', array( 'PN' ),          '#5fe0c8' ),
+        array( 'emision',    array( 'HII', 'EMO' ),  '#ff8a80' ),
+        array( 'snr',        array( 'SNR' ),         '#7ec8ff' ),
+    );
+}
+
+/**
+ * Tipo de una categoría del mapa a partir de su color, o '' si el color no es
+ * de la leyenda. Inverso de la tabla: el color y el tipo van 1:1, y la semilla
+ * (datos/objetos-seed.json) solo trae el color.
+ */
+function bitacora_tipo_por_color( $color ) {
+    $color = strtolower( trim( (string) $color ) );
+    foreach ( bitacora_categorias_mapa() as $r ) {
+        if ( strtolower( $r[2] ) === $color ) {
+            return $r[0];
+        }
+    }
+    return '';
+}
+
+/**
  * CLASIFICACIÓN DE OBJETO DEL MAPA — decide (tipo, color) de un objeto a partir de
  * su otype de SIMBAD, su morfología y el tipo declarado en la observación. Único
  * punto donde se decide categoría Y color juntos (antes estaban repartidos y el
@@ -2763,26 +2797,14 @@ function bitacora_color_por_clase( $clase ) {
  *   4. Nada reconocido → 'otro' neutro (NO reutiliza un color de la leyenda, para
  *      no disfrazarse de otra categoría).
  *
- * Los colores DEBEN coincidir con la leyenda #mw-legend (data-color) de
- * mapa/mapa.html. El test scripts/test_clasificacion_objeto.py verifica la sincronía.
- *
  * Devuelve array( 'tipo' => string, 'color' => '#rrggbb' ).
  */
 function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
     $codigo   = strtoupper( trim( (string) $otype ) );
     $tipo_obs = strtolower( trim( (string) $tipo_obs ) );
 
-    // Categorías del mapa MW: [ tipo, [códigos otype SIMBAD (mayúsculas)], color ].
-    // La primera cuya categoría venga en $tipo_obs, o cuyo código case con $otype, gana.
-    $reglas = array(
-        array( 'carbono',    array( 'C*' ),          '#ff9d5a' ),
-        array( 'globular',   array( 'GLC' ),         '#d7a4ff' ),
-        array( 'abierto',    array( 'OPC', 'CL*' ),  '#8aff9e' ),
-        array( 'planetaria', array( 'PN' ),          '#5fe0c8' ),
-        array( 'emision',    array( 'HII', 'EMO' ),  '#ff8a80' ),
-        array( 'snr',        array( 'SNR' ),         '#7ec8ff' ),
-    );
-    foreach ( $reglas as $r ) {
+    // La primera categoría que venga en $tipo_obs, o cuyo código case con $otype, gana.
+    foreach ( bitacora_categorias_mapa() as $r ) {
         if ( $tipo_obs === $r[0] || in_array( $codigo, $r[1], true ) ) {
             return array( 'tipo' => $r[0], 'color' => $r[2] );
         }
@@ -3669,7 +3691,14 @@ function bitacora_importar_objetos_seed() {
             'gal_b'        => isset( $o['b'] ) ? floatval( $o['b'] ) : null,
             'dist_al'      => isset( $o['dist_al'] ) ? floatval( $o['dist_al'] )
                               : ( isset( $o['dist'] ) ? floatval( $o['dist'] ) : null ),
-            'tipo'         => sanitize_text_field( isset( $o['tipo'] ) ? $o['tipo'] : '' ),
+            // La semilla no declara el tipo, solo el color de la leyenda, y ambos
+            // van 1:1: NGC 40, NGC 6826, NGC 6905, M27 y M57 son #5fe0c8 =
+            // 'planetaria'. Sin esto se quedaban en el mapa con el tipo vacío.
+            'tipo'         => sanitize_text_field(
+                ( isset( $o['tipo'] ) && '' !== $o['tipo'] )
+                    ? $o['tipo']
+                    : bitacora_tipo_por_color( isset( $o['color'] ) ? $o['color'] : '' )
+            ),
             'morph'        => sanitize_text_field( isset( $o['morph'] ) ? $o['morph'] : '' ),
         );
 
