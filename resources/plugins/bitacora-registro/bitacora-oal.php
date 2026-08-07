@@ -722,7 +722,23 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
         }
         bitacora_oal_entradas_guardar( $obs_id, $g, $datos, $equipo, $ahora );
         bitacora_oal_ficha_guardar( $obs_id, $g, $noche, $viaje['base_id'], $ahora );
+
+        // Lo importado también se pinta: si el objeto aún no está en el catálogo
+        // del mapa, se calcula su sitio, igual que al registrar desde el
+        // formulario. Sin esto la observación existe pero el mapa se queda
+        // vacío, y el buscador —que resuelve en SIMBAD al vuelo— sí lo
+        // encuentra, así que el hueco no se nota hasta que se busca. Se hace
+        // también en las actualizaciones: así una importación repetida coloca
+        // los objetos de lo que se importó antes de que esto existiera.
+        $obj_res = bitacora_asegurar_objeto_mapa( $g['objeto'], $g['objeto'], $g['ra'], $g['dec'], $g['tipo'] );
+        if ( is_wp_error( $obj_res ) ) {
+            $problemas[] = array(
+                'donde' => $g['objeto'],
+                'que'   => $obj_res->get_error_message(),
+            );
+        }
     }
+    $resumen['problemas'] = $problemas;
 
     $resumen['aplicado']     = true;
     $resumen['creadas']      = $creadas;
