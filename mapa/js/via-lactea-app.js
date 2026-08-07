@@ -1571,6 +1571,20 @@
     };
   }
 
+  // Clic en una estrella del vecindario solar -> su ficha, igual que en el
+  // atlas. Mientras la escena es interactiva el visor no ve los clics (los
+  // marcadores de la galaxia están detrás), así que sin esto no se abre nada.
+  if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.ready) {
+    VecindarioSolar.onObjectClick = function (obj) {
+      abrirFichaObjeto({
+        ficha:  obj.ficha || obj.id,
+        pdf:    obj.pdf,
+        title:  obj.title || obj.name,
+        coords: obj.coords
+      });
+    };
+  }
+
   // Botón "← Descubrir": lleva a las demás observaciones de este objeto, tanto
   // si se llegó desde esa misma lista como si se está viendo una ficha normal.
   fichaBackBtn.addEventListener('click', function () {

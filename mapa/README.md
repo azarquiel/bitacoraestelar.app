@@ -32,7 +32,8 @@ a menos de 1500 años luz vistas en 3D desde casa.
 - **Tránsito al Vecindario Solar**: el simétrico al anterior, pero al hacer
   *zoom in* **sobre el Sol**. La galaxia funde hacia una escena 3D de las
   estrellas registradas a menos de **1500 años luz**, con el Sol en el origen y
-  cada estrella en su color real de Gaia. Entrar exige tener el Sol centrado;
+  cada estrella en su color real de Gaia; al pulsar una se abre su ficha, igual
+  que en la galaxia. Entrar exige tener el Sol centrado;
   una vez dentro, la escena se queda hasta que se aleja bastante (2500 al), para
   que el vaivén del zoom no mezcle las dos imágenes.
 - **Buscador** de objetos con autocompletado. Además de los objetos del

@@ -90,5 +90,13 @@ eq(fun(4000, true, true).dentro, false, 'y deja de estar dentro');
 eq(V.fundidoVecindario(2400, true, false, { fovInicioAl: 4000, fovFinalAl: 1500 }).alpha < 1,
   true, 'sin fovSalidaAl no hay histéresis (entrada de siempre)');
 
+// La capa emite el clic por API.onObjectClick, pero el manejador lo pone el
+// visor. Sin esa línea, pulsar una estrella del vecindario no abre nada (el
+// visor además ignora sus propios clics mientras la escena es interactiva).
+console.log('cableado del clic (via-lactea-app.js):');
+var app = require('fs').readFileSync(__dirname + '/../mapa/js/via-lactea-app.js', 'utf8');
+eq(/GrupoLocal\.onObjectClick\s*=/.test(app), true, 'el atlas tiene manejador de clic');
+eq(/VecindarioSolar\.onObjectClick\s*=/.test(app), true, 'el vecindario tiene manejador de clic');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');
