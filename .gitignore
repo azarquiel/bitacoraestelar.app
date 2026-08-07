@@ -14,3 +14,6 @@ headroom/
 
 # Ignorar los ajustes de los asistentes de código (son de cada máquina)
 .claude/
+
+# Ignorar la hoja fuente de los cúmulos abiertos (solo hace falta para regenerar el catálogo)
+mapa/datos/cumulos_abiertos.xlsx
