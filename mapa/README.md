@@ -282,10 +282,12 @@ atlas del Grupo Local y del vecindario solar por igual.
 El botón **← Descubrir** lleva a esa misma lista, y no solo se usa para volver:
 aparece en **cualquier** ficha cuyo objeto tenga más observaciones que la que se
 está viendo (entonces el rótulo del panel es **OTRAS OBSERVACIONES**). Cada
-observación se lista con el **viaje** en el que se registró —«Israel Pérez de
-Tudela Vázquez · Perseidas desde la sierra»—, que es lo que las distingue: un
-mismo observador puede haber visitado el objeto en dos salidas distintas, y las
-dos se pueden abrir.
+observación se lista con el observador y **cuándo** se hizo —«Israel Pérez de
+Tudela Vázquez / Explorado en la fecha estelar 12 ago 2026»—, de la más reciente
+a la más antigua (las que no traen fecha, al final). La fecha es la de la
+observación y, si no la tiene, la noche de su viaje. Se identifican por índice,
+no por observador: uno mismo puede haber visitado el objeto en dos salidas
+distintas, y las dos se pueden abrir.
 
 > Solo se aprecia cuando hay **varios observadores** con observaciones en la base
 > de datos: con uno solo no hay nada "ajeno" que descubrir y el mapa se ve igual.
@@ -368,7 +370,8 @@ m30: [{
   observador: 'autor',
   fecha: null,
   lugar: 'SQM-L 21.40 · IR -1.3º · 18º amb.',
-  instrumento: 'Stargate 18”',
+  instrumento: 'Stargate 18”',   // texto libre (observaciones escritas a mano)
+  nave: { nombre: '', apertura_mm: 457, focal_mm: 2057, f_ratio: 4.5 },
   pdf: 'https://…/m30_inv.pdf',
   defaultIndex: 1,          // qué pestaña se abre primero
   entries: [
@@ -383,6 +386,15 @@ m30: [{
 
 La lista permite **varias observaciones del mismo objeto** (distintas noches
 o distintos observadores), y se puede filtrar por observador.
+
+**La nave del viaje.** La ficha abre con una tira monoespaciada: a la izquierda
+la **fecha estelar** y a la derecha la **nave**, el telescopio con el que se
+observó, porque la observación es tan suya como de la noche. Las **medidas van
+siempre** (`18" f/4.5`) y delante el **nombre propio** solo si el tubo lo tiene
+(`Excalibur · 18" f/4.5`). El rótulo lo compone `BitacoraEquipo.rotuloNave()`
+—fuente única con el simulador y Mi flota— a partir de `nave`, que el plugin
+saca de la tabla de telescopios; las observaciones antiguas, sin telescopio de la
+flota, se quedan con el texto libre de `instrumento`.
 
 Una entrada puede tener varias vistas de la misma imagen, en pestañas
 (por ejemplo, con filtro y sin él):

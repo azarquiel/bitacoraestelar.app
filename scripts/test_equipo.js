@@ -108,5 +108,35 @@ console.log('flotaPrimero (Mi flota delante del catálogo global):');
   eq(E.flotaPrimero(null, null).length, 0, 'sin nada -> lista vacía');
 })();
 
+console.log('rotuloNave (la nave que hizo el viaje, en la ficha del mapa):');
+eq(E.rotuloNave({ nombre: 'Excalibur', apertura_mm: 457, focal_mm: 2057 }), 'Excalibur · 18" f/4.5',
+   'las medidas van SIEMPRE; el nombre propio delante si lo tiene');
+eq(E.rotuloNave({ nombre: 'Excalibur' }), 'Excalibur',
+   'con nombre y sin medidas, queda el nombre');
+eq(E.rotuloNave({ vendor: 'Obsession', modelo: 'UC18', apertura_mm: 457, f_ratio: 4.5 }),
+   '18" f/4.5', 'sin nombre, solo las medidas: pulgadas y relación focal');
+eq(E.rotuloNave({ apertura_mm: 457, focal_mm: 2057 }), '18" f/4.5',
+   'sin f_ratio se calcula con focal/apertura');
+eq(E.rotuloNave({ apertura_mm: 305, focal_mm: 1525 }), '12" f/5',
+   'redondo se queda redondo (12", f/5), sin decimales de adorno');
+eq(E.rotuloNave({ apertura_mm: 114, focal_mm: 900 }), '4.5" f/7.9',
+   'apertura pequeña con decimal (notación f/ de siempre, con punto)');
+eq(E.rotuloNave({ vendor: 'Celestron', modelo: 'C8' }), 'Celestron C8',
+   'sin medidas, el rótulo de siempre');
+eq(E.rotuloNave(null), '', 'sin telescopio, sin rótulo');
+
+// La ficha del mapa enseña la nave junto a la fecha estelar. El rótulo sale de
+// aquí (fuente única); si la observación no trae telescopio de la flota, cae al
+// texto libre que se escribió a mano. Sin el <script>, rotuloNave no existiría
+// en el visor y la nave no saldría nunca.
+console.log('cableado de la nave en la ficha del mapa:');
+var fs = require('fs');
+var app = fs.readFileSync(__dirname + '/../mapa/js/via-lactea-app.js', 'utf8');
+var html = fs.readFileSync(__dirname + '/../mapa/mapa.html', 'utf8');
+eq(/BitacoraEquipo\.rotuloNave\(f\.nave\)/.test(app), true, 'la ficha compone el rótulo con BitacoraEquipo');
+eq(/f\.instrumento/.test(app), true, 'y cae al texto libre si no hay telescopio de la flota');
+eq(/barraEstelar\(f\)\s*\+\s*entry\.html/.test(app), true, 'la nave va en la misma barra que la fecha estelar');
+eq(/bitacora-equipo\.js/.test(html), true, 'mapa.html carga bitacora-equipo.js');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

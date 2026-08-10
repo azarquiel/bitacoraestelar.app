@@ -1343,6 +1343,35 @@
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // LA NAVE DEL VIAJE: el telescopio con el que se observó, al mismo nivel que la
+  // fecha estelar, porque la observación es tan suya como de la noche. El rótulo
+  // (nombre propio, o 18" f/4.5) lo compone BitacoraEquipo, fuente única con el
+  // simulador y Mi flota; si esa observación no trae telescopio de la flota, se
+  // cae al texto libre que se escribió a mano ('instrumento').
+  function rotuloNave(f) {
+    var r = (typeof BitacoraEquipo !== 'undefined') ? BitacoraEquipo.rotuloNave(f.nave) : '';
+    return r || String(f.instrumento == null ? '' : f.instrumento).trim();
+  }
+
+  // Cabecera de la ficha: fecha estelar a la izquierda y nave a la derecha, en la
+  // misma tira monoespaciada. Si falta una de las dos, la otra ocupa la tira.
+  function barraEstelar(f) {
+    var nave = rotuloNave(f);
+    if (!f.fecha && !nave) return '';
+    var esc = function (t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    var fecha = f.fecha
+      ? '<span>Bitácora Estelar · Fecha estelar ' + fmtFechaEstelar(f.fecha) + '</span>' : '<span></span>';
+    // La nave NO se pasa a mayúsculas: 18" f/4.5 se escribe así, con su f minúscula.
+    var naveHtml = nave
+      ? '<span class="ficha-nave" style="text-transform:none;color:#cfe6f7;font-weight:600;letter-spacing:.06em;white-space:nowrap;">' +
+        '<span style="color:#8fb2cf;font-weight:400;letter-spacing:.12em;text-transform:uppercase;">Nave · </span>' +
+        esc(nave) + '</span>' : '';
+    return '<div class="ficha-estelar" style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;' +
+      'font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8fb2cf;margin:0 0 10px;' +
+      'border-bottom:1px solid rgba(143,178,207,.2);padding-bottom:8px;display:flex;gap:10px;' +
+      'align-items:baseline;justify-content:space-between;flex-wrap:wrap;">' + fecha + naveHtml + '</div>';
+  }
+
   function selectFichaEntry(f, idx) {
     fichaCurrent = idx;
     var entry = f.entries[idx];
@@ -1352,10 +1381,7 @@
     } else {
       fichaImgTitle.style.display = 'none';
     }
-    var fechaLinea = f.fecha
-      ? '<div class="ficha-estelar" style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8fb2cf;margin:0 0 10px;border-bottom:1px solid rgba(143,178,207,.2);padding-bottom:8px;">Bit\u00e1cora Estelar \u00b7 Fecha estelar ' + fmtFechaEstelar(f.fecha) + '</div>'
-      : '';
-    fichaText.innerHTML = fechaLinea + entry.html;
+    fichaText.innerHTML = barraEstelar(f) + entry.html;
     fichaText.scrollTop = 0;
 
     // estilo activo/inactivo de la botonera
@@ -1514,14 +1540,19 @@
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = (info && info.coords) || '';
 
+    // Cada ítem: quién observó y CUÁNDO (la lista ya viene de la más reciente a
+    // la más antigua). El nombre del viaje no pinta nada aquí.
     var otras = VLViaje.otrasObservaciones(id, ctx.excluir);
     var items = otras.map(function (o) {
+      var cuando = o.fecha
+        ? '<span style="display:block;margin-top:3px;font-size:12px;color:#8fb2cf;">' +
+          'Explorado en la fecha estelar ' + fmtFechaEstelar(o.fecha) + '</span>' : '';
       return '<li><button type="button" class="ficha-descubrir-item" data-indice="' + o.indice + '" style="' +
         'display:block;width:100%;text-align:left;cursor:pointer;' +
         'background:rgba(126,200,255,0.10);color:#cfe6f7;' +
         'border:1px solid rgba(126,200,255,0.35);border-radius:10px;' +
         'padding:10px 14px;margin:6px 0;font-family:sans-serif;font-size:14px;">' +
-        '✦ ' + escHtml(o.etiqueta) + '</button></li>';
+        '✦ ' + escHtml(o.etiqueta) + cuando + '</button></li>';
     }).join('');
 
     fichaText.innerHTML =

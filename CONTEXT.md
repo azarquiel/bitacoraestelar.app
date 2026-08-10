@@ -139,7 +139,14 @@ y por **Mi flota**, sin DOM ni WordPress.
   Solo hay flota con sesión iniciada, que es de donde sale la diferencia entre lo
   que ve un visitante y un observador logueado. Oculares y auxiliares no pasan por
   aquí: salen del catálogo global tal cual.
-- **Test:** `scripts/test_equipo.js` fija el contrato de los tres.
+- **`rotuloNave(item)`** → cómo se presenta el telescopio en la **bitácora**: las
+  **medidas siempre** (`18" f/4.5`, apertura en pulgadas y relación focal, que es
+  como se reconoce un tubo en el campo) y **delante su nombre propio si lo tiene**
+  (`Excalibur · 18" f/4.5`). La relación focal sale de `f_ratio` y, si no viene,
+  de `focal/apertura`. Sin medidas queda el nombre o `nombreTelescopio()`. Lo usa
+  la ficha del mapa (ver `mapa/README.md`), que recibe las medidas del tubo en
+  `OBSERVACIONES[].nave`.
+- **Test:** `scripts/test_equipo.js` fija el contrato de los cuatro.
 
 ## Viaje interestelar
 
@@ -262,7 +269,9 @@ observaron. Módulo puro `mapa/js/via-lactea-viaje.js` (`window.VLViaje`), test
   por su observador: el mismo observador puede haber visitado el objeto en dos
   salidas y las dos tienen que poder abrirse. Es lo que lista «← Descubrir»,
   botón único que desde cualquier ficha lleva a las demás observaciones del
-  objeto y solo aparece si las hay.
+  objeto y solo aparece si las hay. Esa lista va por **fecha**, de la más
+  reciente a la más antigua («Explorado en la fecha estelar …»), no por el
+  nombre del viaje.
 
 ## Astrometría de la sesión
 

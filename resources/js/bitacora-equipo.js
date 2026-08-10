@@ -24,6 +24,11 @@
        Rótulo a mostrar de un telescopio: su nombre propio (si el observador se lo
        puso en Mi flota) o, en su defecto, "vendor modelo".
 
+     rotuloNave(item) -> string
+       Cómo se presenta el telescopio en la bitácora: sus medidas SIEMPRE
+       ('18" f/4.5') y delante su nombre propio si lo tiene ('Excalibur · 18"
+       f/4.5'). Sin medidas, el nombre o nombreTelescopio().
+
      flotaPrimero(flota, catalogo) -> [items]
        Lista para elegir equipo: primero las piezas de "Mi flota" (marcadas con
        esFlota:true), luego las del catálogo global. Sin mutar la entrada.
@@ -69,6 +74,29 @@
     return (vendor + ' ' + modelo).trim();
   }
 
+  /* Rótulo de la NAVE del viaje: cómo se presenta el telescopio con el que se
+     observó. Las MEDIDAS van siempre —18" f/4.5, apertura en pulgadas y relación
+     focal, que es como se reconoce un telescopio en el campo— y delante su nombre
+     propio SOLO si el observador se lo puso ('Excalibur · 18" f/4.5'). Sin
+     medidas queda el nombre, o el rótulo de siempre (vendor modelo). La razón
+     focal sale de f_ratio si viene calculada y, si no, de focal/apertura. */
+  function rotuloNave(item) {
+    if (!item) return '';
+    var nombre = (item.nombre == null ? '' : String(item.nombre)).trim();
+    var d = num(item.apertura_mm);
+    var razon = num(item.f_ratio);
+    var focal = num(item.focal_mm);
+    if (razon == null && focal != null && d) razon = focal / d;
+    var medidas = (d && razon) ? decimal(d / 25.4) + '" f/' + decimal(razon) : '';
+    if (!medidas) return nombre || nombreTelescopio(item);
+    return nombre ? nombre + ' · ' + medidas : medidas;
+  }
+
+  // Un decimal, y sin el ",0" cuando es redondo: 457mm -> 18", no 18,0".
+  function decimal(n) {
+    return String(Math.round(n * 10) / 10);
+  }
+
   /* Lista de telescopios a ofrecer al observador: SU flota delante, el catálogo
      global detrás. Las piezas propias se copian marcadas con `esFlota:true` (la
      entrada no se toca: es la respuesta de la API, que otros ya están leyendo).
@@ -84,6 +112,7 @@
     focalEfectiva: focalEfectiva,
     focalConAuxiliares: focalConAuxiliares,
     nombreTelescopio: nombreTelescopio,
+    rotuloNave: rotuloNave,
     flotaPrimero: flotaPrimero
   };
 
