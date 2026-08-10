@@ -18,9 +18,11 @@
      galaxia     (el resto de la Vía Láctea)      Sol -> M13 -> M92
      grupoLocal  (≥ 200.000 al, extragaláctico)   Vía Láctea -> M31 -> M51
 
-   Los tramos NO son excluyentes: una estrella del vecindario también tiene su
-   marcador en la vista de la galaxia, y ahí se dibuja igual. Lo que cambia es
-   la capa que la pinta.
+   El tramo del vecindario es un SUBCONJUNTO del de la galaxia (así escalasDe
+   sabe si además hay travesía galáctica), pero las VISTAS sí son excluyentes:
+   la galaxia no dibuja los marcadores de las estrellas que ya enseña el
+   vecindario (VLVecindarioCatalogo.enVecindario), igual que el atlas del Grupo
+   Local solo se queda con lo extragaláctico. Cada escala enseña la suya.
 
    Sin DOM y sin estado: lee VIAJES, OBSERVACIONES, OBJECTS, OBSERVADORES y
    CONFIG como globales EN TIEMPO DE LLAMADA, igual que via-lactea-observadores.js.

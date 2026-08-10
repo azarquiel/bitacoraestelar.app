@@ -506,9 +506,22 @@ desde los **objetos del mapa** que tengan coordenadas galácticas y esa distanci
 
 - **Selección pura:** `mapa/js/via-lactea-vecindario-catalogo.js`
   (`VLVecindarioCatalogo.estrellasVecindario(objects, distMaxAl)`): filtra por
-  distancia y coordenadas, resuelve el `bp_rp` (color) y proyecta a XYZ con el
-  Sol en el origen (`galToXYZ`). La capa `vecindario-solar.js` solo dibuja.
-  Test: `scripts/test_vecindario_catalogo.js`.
+  distancia, coordenadas y **que sea una estrella**, resuelve el `bp_rp` (color)
+  y proyecta a XYZ con el Sol en el origen (`galToXYZ`). La capa
+  `vecindario-solar.js` solo dibuja. Test: `scripts/test_vecindario_catalogo.js`.
+- **Reparto de escalas:** una vista no repite lo que enseña la de al lado.
+  `enVecindario(o, distMaxAl)` = `esEstrella(o)` + dentro del radio, y es la
+  MISMA función que usa la vista de la galaxia para NO marcar esas estrellas
+  (`EN_VECINDARIO` en `via-lactea-app.js`, que además desvía la búsqueda al
+  vecindario). Por arriba, el atlas del Grupo Local ya se queda solo con lo
+  extragaláctico. Así el espacio profundo cercano (Barnard 33, a 1.500 al) no se
+  cuela entre las estrellas y la leyenda de clases espectrales dice la verdad.
+- **`esEstrella(o)`:** el tipo del clasificador decide cuando es de espacio
+  profundo (`globular`, `abierto`, `planetaria`, `emision`, `snr`, clases de
+  Hubble) o estelar (`carbono`). El cajón `otro` mezcla estrella con «otype que
+  SIMBAD no encajó» (Sirio y Barnard 33 son los dos `otro`), así que ahí decide el
+  CATÁLOGO del nombre (`M`, `NGC`, `IC`, `B`, `Abell`… = espacio profundo). Cuando
+  `bitacora_clasificar_objeto()` aprenda a devolver `estrella`, esa lista sobra.
 - **Color:** cada estrella usa su índice **BP–RP** con el [[modelo de color Gaia]]
   compartido; por eso su color coincide con el del simulador de oculares. El
   objeto del mapa guarda `bp_rp` (columna nueva); lo resuelve el plugin al

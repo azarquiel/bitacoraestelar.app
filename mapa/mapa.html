@@ -461,8 +461,10 @@
       </div>
     </div>
     
-	<!-- Fila 4: vista de canto -->
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+	<!-- Fila 4: vista de canto. La fila entera lleva id porque se esconde cuando
+	     manda otra escala (el atlas o el vecindario): el botón es de la vista de
+	     la Vía Láctea. Ver VLCapas.controlesVisibles. -->
+    <div id="mw-vista-control" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button id="mw-toggle-view" style="
         border:none;border-radius:20px;background:rgba(12,16,28,0.32);
         font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
@@ -943,21 +945,25 @@
 <!-- VIAJES INTERESTELARES: lo consultan las tres capas y la app, así que va
      ANTES que todas ellas (necesita VIAJES/OBSERVACIONES/OBJECTS de los datos). -->
 <script src="/bitacora-mapa/js/via-lactea-viaje.js?v=20260806_2100"></script>
+<!-- OBSERVADORES: regla única de "visitado / no visitado". Lo consultan las tres
+     capas del mapa al dibujar, así que va ANTES que todas ellas. -->
+<script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20260810_1200"></script>
+<!-- QUÉ ESCALA MANDA y qué controles son suyos: lo consultan la app y el
+     cambio de vista. Pura, sin DOM. -->
+<script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260810_1500"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260806_2100"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260810_1500"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260731_2200"></script>
 <!-- Selección pura de estrellas del vecindario: ANTES de vecindario-solar.js y
      DESPUÉS de bitacora-gaia-color.js (necesita claseEspectral). -->
-<script src="/bitacora-mapa/js/via-lactea-vecindario-catalogo.js?v=20260722_1600"></script>
-<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260806_2100"></script>
+<script src="/bitacora-mapa/js/via-lactea-vecindario-catalogo.js?v=20260810_1600"></script>
+<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260810_1500"></script>
 <!-- SUBMÓDULOS de la app (extraídos del módulo-dios): cargar ANTES de
-     via-lactea-app.js. observadores necesita OBSERVACIONES/OBSERVADORES (datos)
-     y CONFIG; zoom-imagen necesita CONFIG. -->
-<script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20260722_1500"></script>
+     via-lactea-app.js. zoom-imagen necesita CONFIG. -->
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260722_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260806_2100"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260810_1600"></script>
 </li>

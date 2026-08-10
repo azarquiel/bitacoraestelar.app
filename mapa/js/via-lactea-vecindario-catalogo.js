@@ -34,6 +34,43 @@
     };
   }
 
+  // ---- Estrella o espacio profundo ------------------------------------------
+  // Cada vista enseña SU escala y no repite la de al lado: el vecindario es solo
+  // para estrellas, así que el espacio profundo cercano (Barnard 33 está a
+  // 1.500 al) se queda en la vista de la galaxia.
+  //
+  // Categorías del clasificador (bitacora_clasificar_objeto) que NO son
+  // estrellas, más las clases de Hubble de las galaxias del Grupo Local.
+  var TIPOS_PROFUNDOS = {
+    globular: 1, abierto: 1, planetaria: 1, emision: 1, snr: 1,
+    E: 1, S0: 1, S: 1, SB: 1, Irr: 1
+  };
+
+  // ponytail: el tipo 'otro' del clasificador mezcla «estrella» con «otype que
+  // SIMBAD no supo encajar» (Sirio y Barnard 33 son los dos 'otro'), así que ahí
+  // decide el CATÁLOGO del nombre: M, NGC, IC, B/Barnard, Abell… son catálogos de
+  // espacio profundo. Cuando el clasificador aprenda a devolver 'estrella', esta
+  // lista sobra y basta con el tipo.
+  var CATALOGOS_PROFUNDOS = /^(m|ngc|ic|b|barnard|abell|sh2?|ldn|lbn|vdb|cr|mel|stock|tr|pk|hcg|arp|caldwell|c)\s*-?\s*\d/i;
+
+  function esEstrella(o) {
+    if (!o) return false;
+    var tipo = (o.tipo || '').toString();
+    if (TIPOS_PROFUNDOS[tipo]) return false;
+    if (tipo === 'carbono' || tipo === 'estrella') return true;
+    var nombre = (o.label || o.name || o.id || '').toString().trim();
+    return !CATALOGOS_PROFUNDOS.test(nombre);
+  }
+
+  // ¿La enseña la vista del vecindario solar? Solo las estrellas dentro del
+  // radio: es también lo que la vista de la galaxia deja de repetir.
+  function enVecindario(o, distMaxAl) {
+    if (!o || typeof o.dist !== 'number' || o.dist <= 0) return false;
+    if (!(typeof distMaxAl === 'number' && distMaxAl > 0) || o.dist > distMaxAl) return false;
+    if (typeof o.l !== 'number' || typeof o.b !== 'number') return false;
+    return esEstrella(o);
+  }
+
   // Índice BP–RP de un objeto: bp_rp, o bprp como reserva, o null.
   function bpRpDe(o) {
     if (typeof o.bp_rp === 'number') return o.bp_rp;
@@ -49,8 +86,7 @@
     var max = (typeof distMaxAl === 'number' && distMaxAl > 0) ? distMaxAl : 0;
     for (var i = 0; i < lista.length; i++) {
       var o = lista[i];
-      if (typeof o.dist !== 'number' || o.dist <= 0 || o.dist > max) continue;
-      if (typeof o.l !== 'number' || typeof o.b !== 'number') continue;
+      if (!enVecindario(o, max)) continue;
       var bprp = bpRpDe(o);
       var p = galToXYZ(o.l, o.b, o.dist);
       out.push({
@@ -72,8 +108,13 @@
   //   fov    : campo de visión actual (al).
   //   cerca  : ¿el Sol está centrado? Solo hace falta para ENTRAR.
   //   dentro : ¿veníamos ya dentro del vecindario?
-  // Devuelve { alpha, dentro }: alpha 1 = solo vecindario; dentro es el estado
-  // para el siguiente fotograma.
+  // Devuelve { alpha, dentro, tomarControl }: alpha 1 = solo vecindario; dentro
+  // es el estado para el siguiente fotograma; tomarControl avisa a la app de que
+  // remate la entrada (ver abajo).
+  // Fundido a partir del cual la capa manda en pantalla (el mismo umbral de
+  // VLCapas: con él la app le pasa los clics y esconde los mandos de la galaxia).
+  var DOMINA = 0.5;
+
   function fundidoVecindario(fov, cerca, dentro, cfg) {
     var ini = cfg.fovInicioAl, fin = cfg.fovFinalAl;
     var salida = (cfg.fovSalidaAl != null) ? cfg.fovSalidaAl : fin;
@@ -88,11 +129,22 @@
     } else {
       alpha = (fov <= fin) ? 1 : (ini - fov) / (ini - fin);
     }
-    return { alpha: alpha, dentro: dentro ? alpha > 0 : alpha >= 1 };
+    // La capa TOMA EL CONTROL en cuanto pasa a mandar viniendo de fuera: la app
+    // remata el acercamiento de golpe (Sol al centro y el zoom de la capa) en vez
+    // de dejar al usuario a mitad de fundido, con la galaxia gigante translúcida
+    // detrás y el Sol descentrado. Solo al ENTRAR: al salir (dentro ya true) el
+    // fundido baja tranquilo y no reengancha, o no se podría volver a alejar.
+    return {
+      alpha: alpha,
+      dentro: dentro ? alpha > 0 : alpha >= 1,
+      tomarControl: !dentro && alpha > DOMINA
+    };
   }
 
   var API = {
     galToXYZ: galToXYZ,
+    esEstrella: esEstrella,
+    enVecindario: enVecindario,
     estrellasVecindario: estrellasVecindario,
     fundidoVecindario: fundidoVecindario
   };
