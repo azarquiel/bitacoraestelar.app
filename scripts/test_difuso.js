@@ -303,5 +303,53 @@ casi(alphaResuelta(14, 14), alphaGlow(14, 14 + 1e-9), 1e-6,
 ok(alphaGlow(14, 14.5) < alphaResuelta(14, 14) && alphaGlow(14, 15) < alphaGlow(14, 14.5),
   'pasado el límite el glow solo decae, nunca sube');
 
+/* ── 17. El salto de brillo entre dos estrellas es el de sus magnitudes ──────
+   Dos estrellas separadas por Δmag se diferencian en un factor 10^(0,4·Δmag)
+   de flujo, y eso es una propiedad de las ESTRELLAS: ningún telescopio la
+   cambia. En el render tiene que sobrevivir a dos conversiones seguidas —la
+   rampa de alpha de dibujar(), que es lineal en magnitudes, y el flujoDeValor()
+   de pintarFot(), que vuelve a flujo exponencialmente—, y solo se conserva si
+   las dos reparten las MISMAS magnitudes sobre el intervalo 0-1.
+
+   Con rangoBrillo=12 contra un rango de 11,5 no se conservaba: cada magnitud
+   se pintaba como 0,958 y un salto de 2 mag salía 5,84x en vez de 6,31x. De
+   ahí que rangoBrillo se derive ahora de SB_NEGRO-SB_BLANCO; este test es lo
+   que impide que vuelvan a separarse. */
+console.log('El salto de brillo entre dos magnitudes no depende del equipo:');
+var rangoTono = FOT.SB_NEGRO - FOT.SB_BLANCO;
+casi(CFG.rangoBrillo, rangoTono, 1e-9,
+  'rangoBrillo es el rango de tono, no un número suelto');
+// Flujo que pintarFot() reconstruye del valor de pantalla de una estrella, sin
+// el término -1 (que resta el cielo y es lo único que rompe la igualdad exacta
+// entre equipos; ver más abajo). Fref, no Fcielo: ver el comentario de pintarFot.
+var Fref = Math.pow(10, -0.4 * 21);
+function flujoPintado(mlim, g) {
+  return Fref * Math.pow(10, 255 * alphaResuelta(mlim, g) * rangoTono / (255 * 2.5));
+}
+[[15.91, '18" f/4.5 a 158x'], [14.72, '8" f/10 a 156x']].forEach(function (eq) {
+  casi(flujoPintado(eq[0], 8) / flujoPintado(eq[0], 10), Math.pow(10, 0.4 * 2), 1e-6,
+    'mag 8 vs mag 10 en un ' + eq[1] + ' = 6,31x');
+});
+// Y no es cosa de esas dos magnitudes ni de esos dos equipos: la ley vale en
+// todo el tramo donde la rampa no está ni saturada (alfa=1) ni en su suelo.
+var ratios = [];
+[15.91, 14.72, 12.0, 18.0].forEach(function (mlim) {
+  for (var g = mlim - CFG.rangoBrillo + 0.5; g < mlim - CFG.alfaMin * CFG.rangoBrillo - 1; g += 0.7) {
+    ratios.push(flujoPintado(mlim, g) / flujoPintado(mlim, g + 1));
+  }
+});
+ok(ratios.every(function (r) { return Math.abs(r - Math.pow(10, 0.4)) < 1e-6; }),
+  'una magnitud de diferencia son 2,512x en ' + ratios.length + ' puntos de 4 equipos distintos');
+// El -1 de flujoDeValor resta el cielo, así que el flujo reconstruido de verdad
+// no es exactamente proporcional: deja un residuo que SÍ depende del equipo.
+// Es correcto (el valor de pantalla es un incremento sobre el fondo, no un flujo
+// absoluto) y es pequeño; lo que se fija aquí es que siga siendo pequeño.
+function flujoReal(mlim, g) { return R.flujoDeValor(255 * alphaResuelta(mlim, g), Fref, rangoTono); }
+var r18 = flujoReal(15.91, 8) / flujoReal(15.91, 10);
+var r8 = flujoReal(14.72, 8) / flujoReal(14.72, 10);
+ok(Math.abs(r18 - r8) / r8 < 0.02,
+  'con el -1 del cielo, los dos equipos siguen coincidiendo al 2 % (' +
+  r18.toFixed(3) + ' vs ' + r8.toFixed(3) + ')');
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);
