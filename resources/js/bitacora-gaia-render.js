@@ -126,7 +126,25 @@
     // pinta en función de su brillo superficial en el ocular (SBe, mag/arcsec²,
     // atenuado por la pupila de salida). Por encima de SB_CIELO_NEGRO el fondo es
     // negro total; por debajo se aclara linealmente en magnitudes hasta blanco.
-    SB_CIELO_NEGRO: 22.5, SB_CIELO_BLANCO: 16.5,
+    // SB_CIELO_NEGRO era 22,5, y ese suelo se comía diferencias de cielo que el
+    // ojo SÍ ve: en un 18" a 158x la pupila de salida (2,9 mm) y la transmisión
+    // ya restan 2,3 mag, así que sqm 21 llega al ojo a SBe 23,3 y sqm 22 a 24,3
+    // -los dos por debajo de 22,5, los dos aplastados al mismo negro por el
+    // clamp de nivelCielo()-. El observador los distingue de sobra (reporte del
+    // usuario: separa 21,2 / 21,4 / 21,6 / 21,8 con ese equipo), porque el ojo
+    // adaptado no tiene un suelo absoluto en 22,5: ese número no era el umbral
+    // del ojo, era un redondeo.
+    // 24,5 abre el rango donde de verdad se observa y deja sqm 22 en ~6 niveles
+    // (0,03 % de luminancia en pantalla: negro a efectos prácticos), que casa
+    // con el otro extremo del mismo reporte -21,8 vs 22 ya no se separan-. La
+    // saturación hacia el negro NO se modela aquí: la aporta la gamma del
+    // monitor, que comprime los códigos bajos; la rampa se queda lineal en
+    // magnitudes, que es lo que mide el SQM.
+    // ponytail: perilla artística, no calibración. Depende de la luz ambiente de
+    // quien mire la pantalla. Subirla a 24,8 aclara el extremo oscuro sin llegar
+    // al gris franco; 25 ya pinta sqm 22 como gris visible y invierte el orden
+    // de discriminación (separa mejor los cielos excelentes que los normales).
+    SB_CIELO_NEGRO: 24.5, SB_CIELO_BLANCO: 16.5,
     // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el lado
     // brillante). 1 = simétrico → las siluetas oscuras recortan contra el fondo.
     REALCE_OSCURO: 1.0,
@@ -535,7 +553,19 @@
     // ensanchar esto para saturar antes a las estrellas brillantes de un campo
     // concreto "engorda" TODO el campo -la mayoría de estrellas tenues también
     // se acercan más rápido a alfaMin/saturación-, no es la corrección correcta.
-    rangoBrillo: 12,
+    //
+    // DERIVADO, no un número suelto: era 12 a ojo, y `flujoDeValor()` lee ese
+    // mismo intervalo 0-1 como FOT.SB_NEGRO-SB_BLANCO = 11,5 mag. Con 12 la
+    // rampa mete 12 magnitudes donde la conversión de vuelta espera 11,5, así
+    // que cada magnitud real se pintaba como 0,958: el salto de brillo entre
+    // dos estrellas salía comprimido un 4 % por magnitud (mag 8 vs mag 10 daba
+    // 5,84x en vez de 6,31x). La aureola, que usa 10^(-0,4g) directo sin rampa,
+    // sí daba 6,31x -disco y aureola de la MISMA estrella en escalas distintas.
+    // Igualadas, el render es lineal en flujo por construcción y el salto entre
+    // dos magnitudes no depende del equipo (el mlim se cancela al restar).
+    // Son la misma cantidad física: cuántas magnitudes caben en los 0-255 de la
+    // pantalla. Si se toca SB_NEGRO/SB_BLANCO, esto acompaña solo.
+    rangoBrillo: FOT.SB_NEGRO - FOT.SB_BLANCO,
     /* El glow de las estrellas por debajo de la magnitud límite es lo que da
        textura al halo de un globular, así que va calibrado en las mismas unidades
        aparentes: ~1,4 px de radio en pantalla. Su intensidad en g=mlim ANCLA a
