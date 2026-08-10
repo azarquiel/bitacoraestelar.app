@@ -43,5 +43,32 @@ var esperado = Math.max(12, Math.min(20, techo + colaEsperada + 0.3));
 ok(Math.abs(m8 - esperado) < 1e-6,
   'magConsultaGaia(200) coincide con techo+cola(alfaMin,glowCorte)+margen = ' + esperado.toFixed(3));
 
+/* La estrella JUSTO en mlim se dibuja igual en cualquier equipo: es lo que hace
+   que mlim signifique lo mismo en un 18" y en un 8". El alpha del render se
+   calibra contra mlim (no contra una magnitud absoluta), así que a g=mlim cae
+   siempre en el suelo alfaMin, y el glow de la que queda un pelo por debajo
+   ancla en ese mismo valor: el cruce es continuo. Lo único que cambia con la
+   apertura es el TAMAÑO (sueloEstrella usa el flujo absoluto), y a magnitudes
+   tan tenues ese término es despreciable. */
+console.log('La estrella en el límite se ve igual en todo equipo:');
+function pintadaEnLimite(D, F, t) {
+  var aum = F / 13, arcmin = 82 / aum * 60;
+  var mlim = R.magLimite({ apertura: D, aumentos: aum, transmision: t, sqm: 21 });
+  var o = { afov: 82, apertura: D, arcmin: arcmin, size: 720, g: mlim, blur: R.blurEstrella(mlim, D), mlim: mlim };
+  var Rtot = R.radioEstrella(o);
+  var alfa = Math.max(R.config.alfaMin, Math.min(1, (mlim - o.g) / R.config.rangoBrillo));
+  return { mlim: mlim, radio: Rtot, alfa: alfa * R.factorDilucion(R.sueloEstrella(o), Rtot) };
+}
+var e18 = pintadaEnLimite(457.2, 457.2 * 4.5, 0.7);   // 18" f/4.5, 13 mm → 158x
+var e8  = pintadaEnLimite(203.2, 203.2 * 10,  0.65);  // 8" f/10,  13 mm → 156x
+ok(e18.mlim > e8.mlim + 1, 'el 18" llega más profundo que el 8" a igual aumento (' +
+  e8.mlim.toFixed(2) + ' → ' + e18.mlim.toFixed(2) + ')');
+ok(Math.abs(e18.alfa - e8.alfa) < 1e-9 && Math.abs(e18.alfa - R.config.alfaMin) < 1e-9,
+  'una estrella en g=mlim se pinta con el mismo alpha (alfaMin) en ambos equipos');
+ok(Math.abs(e18.radio - e8.radio) / e8.radio < 0.02,
+  'y con el mismo tamaño (<2% de diferencia: ' + e8.radio.toFixed(3) + ' vs ' + e18.radio.toFixed(3) + ' px)');
+ok(Math.abs(R.config.alfaMin * Math.pow(10, -0.4 * 0) - R.config.alfaMin) < 1e-9,
+  'el glow de la primera no resuelta arranca en ese mismo alfaMin (cruce continuo)');
+
 console.log(fallos === 0 ? '\n✓ Todo correcto.' : '\n✗ ' + fallos + ' fallo(s).');
 process.exit(fallos === 0 ? 0 : 1);
