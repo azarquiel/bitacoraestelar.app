@@ -38,8 +38,14 @@ var VecindarioSolar = (function () {
     var c = BitacoraGaiaColor.colorPorBpRp(bprp);
     return '#' + [c[0], c[1], c[2]].map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
   }
-  function rgbaDe(bprp, a) {
+  // 'aten' = estrella NO VISITADA por el observador activo: se mezcla con el
+  // gris clarito común a las tres vistas y pierde opacidad (VLObservadores).
+  function rgbaDe(bprp, a, aten) {
     var c = BitacoraGaiaColor.colorPorBpRp(bprp);
+    if (aten) {
+      c = window.VLObservadores.grisNoVisitado(c[0], c[1], c[2]);
+      a = a * window.VLObservadores.OPACIDAD_NO_VISITADO;
+    }
     return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
   }
   // BP–RP representativo de cada clase espectral, para pintar los puntos de la
@@ -234,6 +240,7 @@ var VecindarioSolar = (function () {
       .filter(function (o) { return !(hiddenClases && hiddenClases[o.clase || '']); })
       // Recorriendo un viaje, solo se ven las estrellas de esa salida.
       .filter(function (o) { return !rutaIds || rutaIds.indexOf(o.id) >= 0; })
+      .filter(function (o) { return window.VLObservadores.visiblePorObservador(o.id); })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
 
@@ -271,7 +278,10 @@ var VecindarioSolar = (function () {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
       var r = Math.max(2.4, 4 * p.persp);
-      var col = rgbaDe(o.bprp, 1);         // COLOR EXACTO de Gaia (por BP–RP)
+      // Estrella observada solo por otros: se atenúa (gris + menos opacidad),
+      // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable.
+      var aten = window.VLObservadores.atenuadoPorObservador(o.id);
+      var col = rgbaDe(o.bprp, 1, aten);   // COLOR EXACTO de Gaia (por BP–RP)
 
       // Línea de caída al plano galáctico (z=0). DISCONTINUA si la estrella está
       // por DEBAJO del Sol (z<0); CONTINUA si está por ENCIMA (z>0).
@@ -281,19 +291,19 @@ var VecindarioSolar = (function () {
       ctx.beginPath();
       ctx.moveTo(foot.sx, foot.sy);
       ctx.lineTo(p.sx, p.sy);
-      ctx.strokeStyle = rgbaDe(o.bprp, 0.30);
+      ctx.strokeStyle = rgbaDe(o.bprp, 0.30, aten);
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.setLineDash([]);
 
       var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
-      halo.addColorStop(0, rgbaDe(o.bprp, 0.55));
-      halo.addColorStop(1, rgbaDe(o.bprp, 0));
+      halo.addColorStop(0, rgbaDe(o.bprp, 0.55, aten));
+      halo.addColorStop(1, rgbaDe(o.bprp, 0, aten));
       ctx.fillStyle = halo;
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
 
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff9ef'; ctx.fill();
+      ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#fff9ef'; ctx.fill();
 
       if (onView) {
         ctx.fillStyle = col;
@@ -393,8 +403,8 @@ var VecindarioSolar = (function () {
   loop();
 
   // ---- Leyenda espectral (cicleable) ----------------------------------------
-  var legendObjetos = document.getElementById('mw-legend');
-  var legendHubble = document.getElementById('mw-legend-hubble');
+  // Enseñarla o esconderla (y esconder las de las otras escalas) es cosa de la
+  // app con VLCapas; aquí solo se pinta y se escuchan sus clics.
   var legendEspectral = document.getElementById('mw-legend-espectral');
 
   // Pinta los puntos de color de la leyenda con la MISMA función de color de
@@ -411,16 +421,6 @@ var VecindarioSolar = (function () {
       }
     }
   }
-
-  function toggleLeyenda(esVecindario) {
-    if (legendEspectral) legendEspectral.style.display = esVecindario ? '' : 'none';
-    // Si el vecindario domina, ocultamos también las otras leyendas.
-    if (esVecindario) {
-      if (legendObjetos) legendObjetos.style.display = 'none';
-      if (legendHubble) legendHubble.style.display = 'none';
-    }
-  }
-  toggleLeyenda(false);
 
   var hiddenClases = {};
   if (legendEspectral) {
@@ -447,7 +447,6 @@ var VecindarioSolar = (function () {
     interactive = alpha > 0.5;
     if (tip && !interactive) tip.style.opacity = 0;
     if (scaleTag) scaleTag.style.opacity = alpha > 0.5 ? 1 : 0;
-    toggleLeyenda(alpha > 0.5);
     if (pxPerLy > 0) {
       var R = Math.min(W, H) * 0.42;
       var f = R / pxPerLy;

@@ -300,22 +300,13 @@
     edgeAnchors.push(createMarker(obj, 'edge'));
   });
 
-  // ¿Debe verse el marcador del objeto con el filtro de observador actual?
-  // Visible si el activo lo observó ('propia') o si lo observaron otros y la
-  // funcionalidad de descubrimiento está activa ('ajena', se pinta atenuado).
-  function objetoVisiblePorObservador(slug) {
-    return VLO.estadoObservador(slug) !== 'ninguna';
-  }
-
   // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los
   // tres filtros (vista + tipo + observador) sobre los marcadores de la vista
   // activa; así el filtro nunca revela el marcador de la otra vista.
   function aplicarFiltroObservador() {
     refreshAnchors();
-    // El atlas del Grupo Local atenúa por su cuenta las galaxias no observadas.
-    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setObservador) {
-      GrupoLocal.setObservador(VLO.getActivo(), VLO.observacionesAjenasActivo());
-    }
+    // Los dos lienzos (Grupo Local y vecindario solar) consultan la misma regla
+    // (VLO.atenuadoPorObservador) en cada fotograma: no hay nada que avisarles.
   }
 
   // --------------------------------------------------------------------------
@@ -456,6 +447,44 @@
   // es continua: la galaxia se encoge hasta ser el punto "Vía Láctea" del atlas
   // y, siguiendo el zoom out, aparecen las galaxias observadas del catálogo.
   // --------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // CONTROLES Y LEYENDA DE CADA ESCALA
+  // El cambio cenital/canto y los tres mandos de giro giran la IMAGEN de la
+  // galaxia: en el atlas del Grupo Local y en el vecindario solar no pintan
+  // nada, así que se esconden. La leyenda va igual: cada escala enseña la suya
+  // (tipos de objeto / clases de Hubble / clases espectrales) y esconde las
+  // otras dos, desde AQUÍ y solo aquí (antes cada lienzo escondía las de sus
+  // vecinas y el resultado dependía del orden de las llamadas).
+  // Quién manda en pantalla lo decide VLCapas con los fundidos de las dos
+  // capas, que actualizan updateGrupoLocal/updateVecindario.
+  // --------------------------------------------------------------------------
+  var alphaAtlas = 0, alphaVecindario = 0, capaEnPantalla = '';
+
+  function aplicarControlesDeCapa() {
+    var capa = VLCapas.capaActiva(alphaAtlas, alphaVecindario);
+    var v = VLCapas.controlesVisibles(capa, isEdgeView, (window.CONFIG && CONFIG.giros) || {});
+    capaEnPantalla = capa;
+    var mandos = [
+      ['mw-vista-control', v.vista, 'flex'],
+      ['mw-rotate-control', v.giroCenital, 'flex'],
+      ['mw-rotate-edge-control', v.giroCanto, 'flex'],
+      ['mw-rotate-plane-control', v.giroPlano, 'flex'],
+      ['mw-legend', v.leyendaObjetos, ''],
+      ['mw-legend-hubble', v.leyendaHubble, ''],
+      ['mw-legend-espectral', v.leyendaEspectral, '']
+    ];
+    for (var i = 0; i < mandos.length; i++) {
+      var el = document.getElementById(mandos[i][0]);
+      if (el) el.style.display = mandos[i][1] ? mandos[i][2] : 'none';
+    }
+  }
+
+  // Refresca los controles solo cuando cambia la escala que manda (esto corre en
+  // cada fotograma de zoom).
+  function sincronizarControlesDeCapa() {
+    if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== capaEnPantalla) aplicarControlesDeCapa();
+  }
+
   function updateGrupoLocal() {
     if (typeof GrupoLocal === 'undefined' || !GrupoLocal.ready) return;
     var cfg = (window.CONFIG && CONFIG.grupoLocal) || {};
@@ -486,6 +515,8 @@
     }
 
     GrupoLocal.sync(pxPerLy, atlasAlpha);
+    alphaAtlas = atlasAlpha;
+    sincronizarControlesDeCapa();
   }
 
   // --------------------------------------------------------------------------
@@ -516,6 +547,7 @@
   // Ya dentro del vecindario el tope sigue elevado aunque el Sol se descentre:
   // si no, el primer zoom tras descentrarlo recortaría la escala de golpe.
   var dentroVecindario = false;
+  var tomandoControl = false;   // rematando la entrada al vecindario (ver updateVecindario)
   function effMaxScale() {
     return (!isEdgeView && (dentroVecindario || cercaDelSol()))
       ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
@@ -543,6 +575,18 @@
       var f = VLVecindarioCatalogo.fundidoVecindario(fov, cercaDelSol(), dentroVecindario, cfg);
       alpha = f.alpha;
       dentroVecindario = f.dentro;
+
+      // La capa toma el control: en cuanto manda, se remata la entrada con el Sol
+      // centrado y el zoom de la vista, sin dejar al usuario a medio fundido
+      // viendo la galaxia por transparencia. tomandoControl corta la recursión:
+      // irAlVecindario -> applyTransform -> updateVecindario, que ya deja la capa
+      // sincronizada con la escala final (por eso aquí se vuelve sin más).
+      if (f.tomarControl && !tomandoControl) {
+        tomandoControl = true;
+        irAlVecindario();
+        tomandoControl = false;
+        return;
+      }
     }
     // Al dominar el vecindario, se oculta la imagen de la galaxia y sus
     // marcadores dejan de capturar clics (para que lleguen a la capa).
@@ -551,6 +595,8 @@
       img.style.pointerEvents = (alpha > 0.5) ? 'none' : '';
     }
     VecindarioSolar.sync(pxPerLy, alpha);
+    alphaVecindario = alpha;
+    sincronizarControlesDeCapa();
   }
 
   // --------------------------------------------------------------------------
@@ -1297,6 +1343,35 @@
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // LA NAVE DEL VIAJE: el telescopio con el que se observó, al mismo nivel que la
+  // fecha estelar, porque la observación es tan suya como de la noche. El rótulo
+  // (nombre propio, o 18" f/4.5) lo compone BitacoraEquipo, fuente única con el
+  // simulador y Mi flota; si esa observación no trae telescopio de la flota, se
+  // cae al texto libre que se escribió a mano ('instrumento').
+  function rotuloNave(f) {
+    var r = (typeof BitacoraEquipo !== 'undefined') ? BitacoraEquipo.rotuloNave(f.nave) : '';
+    return r || String(f.instrumento == null ? '' : f.instrumento).trim();
+  }
+
+  // Cabecera de la ficha: fecha estelar a la izquierda y nave a la derecha, en la
+  // misma tira monoespaciada. Si falta una de las dos, la otra ocupa la tira.
+  function barraEstelar(f) {
+    var nave = rotuloNave(f);
+    if (!f.fecha && !nave) return '';
+    var esc = function (t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    var fecha = f.fecha
+      ? '<span>Bitácora Estelar · Fecha estelar ' + fmtFechaEstelar(f.fecha) + '</span>' : '<span></span>';
+    // La nave NO se pasa a mayúsculas: 18" f/4.5 se escribe así, con su f minúscula.
+    var naveHtml = nave
+      ? '<span class="ficha-nave" style="text-transform:none;color:#cfe6f7;font-weight:600;letter-spacing:.06em;white-space:nowrap;">' +
+        '<span style="color:#8fb2cf;font-weight:400;letter-spacing:.12em;text-transform:uppercase;">Nave · </span>' +
+        esc(nave) + '</span>' : '';
+    return '<div class="ficha-estelar" style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;' +
+      'font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8fb2cf;margin:0 0 10px;' +
+      'border-bottom:1px solid rgba(143,178,207,.2);padding-bottom:8px;display:flex;gap:10px;' +
+      'align-items:baseline;justify-content:space-between;flex-wrap:wrap;">' + fecha + naveHtml + '</div>';
+  }
+
   function selectFichaEntry(f, idx) {
     fichaCurrent = idx;
     var entry = f.entries[idx];
@@ -1306,10 +1381,7 @@
     } else {
       fichaImgTitle.style.display = 'none';
     }
-    var fechaLinea = f.fecha
-      ? '<div class="ficha-estelar" style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8fb2cf;margin:0 0 10px;border-bottom:1px solid rgba(143,178,207,.2);padding-bottom:8px;">Bit\u00e1cora Estelar \u00b7 Fecha estelar ' + fmtFechaEstelar(f.fecha) + '</div>'
-      : '';
-    fichaText.innerHTML = fechaLinea + entry.html;
+    fichaText.innerHTML = barraEstelar(f) + entry.html;
     fichaText.scrollTop = 0;
 
     // estilo activo/inactivo de la botonera
@@ -1468,14 +1540,19 @@
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = (info && info.coords) || '';
 
+    // Cada ítem: quién observó y CUÁNDO (la lista ya viene de la más reciente a
+    // la más antigua). El nombre del viaje no pinta nada aquí.
     var otras = VLViaje.otrasObservaciones(id, ctx.excluir);
     var items = otras.map(function (o) {
+      var cuando = o.fecha
+        ? '<span style="display:block;margin-top:3px;font-size:12px;color:#8fb2cf;">' +
+          'Explorado en la fecha estelar ' + fmtFechaEstelar(o.fecha) + '</span>' : '';
       return '<li><button type="button" class="ficha-descubrir-item" data-indice="' + o.indice + '" style="' +
         'display:block;width:100%;text-align:left;cursor:pointer;' +
         'background:rgba(126,200,255,0.10);color:#cfe6f7;' +
         'border:1px solid rgba(126,200,255,0.35);border-radius:10px;' +
         'padding:10px 14px;margin:6px 0;font-family:sans-serif;font-size:14px;">' +
-        '✦ ' + escHtml(o.etiqueta) + '</button></li>';
+        '✦ ' + escHtml(o.etiqueta) + cuando + '</button></li>';
     }).join('');
 
     fichaText.innerHTML =
@@ -1619,6 +1696,18 @@
   // Colores (tipos de objeto) actualmente ocultados desde la leyenda
   var hiddenColors = {};
 
+  // Estrellas que ya enseña la vista del VECINDARIO SOLAR: cada vista muestra su
+  // escala y no repite la de al lado, así que la galaxia no las marca (el Grupo
+  // Local hace lo mismo por arriba, quedándose solo con lo extragaláctico).
+  var EN_VECINDARIO = (function () {
+    var rVec = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.distMaxAl) || 1500;
+    var set = {};
+    OBJECTS.forEach(function (o) {
+      if (VLVecindarioCatalogo.enVecindario(o, rVec)) set[o.id] = true;
+    });
+    return set;
+  })();
+
   // Decide la visibilidad de cada ancla según la vista activa y el filtro.
   // El Sol (sin data-color) sólo depende de la vista.
   function refreshAnchors() {
@@ -1629,9 +1718,10 @@
     if (sunTop) sunTop.style.display = isEdgeView ? 'none' : '';
     if (sunEdge) sunEdge.style.display = isEdgeView ? '' : 'none';
 
-    // La visibilidad de cada marcador combina CUATRO filtros: la vista activa
-    // (cenital/canto), el tipo (leyenda), el observador seleccionado y, si se
-    // está recorriendo un viaje, la propia ruta. Deben aplicarse juntos: si no,
+    // La visibilidad de cada marcador combina CINCO filtros: la vista activa
+    // (cenital/canto), el tipo (leyenda), el observador seleccionado, la escala
+    // (lo que ya enseña el vecindario no se repite aquí) y, si se está
+    // recorriendo un viaje, la propia ruta. Deben aplicarse juntos: si no,
     // el filtro de observador podría revelar el marcador de la otra vista (a su
     // posición 'edge'), que aparecería como un duplicado en una zona distinta
     // del mapa.
@@ -1641,15 +1731,16 @@
       var id = a.getAttribute('data-id');
       var inView = a.getAttribute('data-view') === currentView;
       var typeHidden = !!hiddenColors[a.getAttribute('data-color')];
-      var estado = VLO.estadoObservador(id);
       var enRuta = !viajeActivo || VLViaje.enViaje(viajeActivo, id);
-      a.style.display = (inView && !typeHidden && enRuta && estado !== 'ninguna') ? '' : 'none';
+      a.style.display = (inView && !typeHidden && enRuta && !EN_VECINDARIO[id]
+        && VLO.visiblePorObservador(id)) ? '' : 'none';
       // Objeto observado solo por otros: se muestra atenuado (gris con algo de
       // su color), como "deshabilitado". El filtro no afecta a los clics, así
       // que sigue pudiéndose pulsar para descubrir las observaciones ajenas.
       // Durante un viaje los objetos de la ruta van siempre a todo color: son
       // las escalas de la travesía, no observaciones ajenas.
-      a.style.filter = (estado === 'ajena' && !viajeActivo) ? 'grayscale(0.82) opacity(0.55)' : '';
+      a.style.filter = (VLO.atenuadoPorObservador(id) && !viajeActivo)
+        ? 'grayscale(' + VLO.MEZCLA_NO_VISITADO + ') opacity(' + VLO.OPACIDAD_NO_VISITADO + ')' : '';
     }
   }
 
@@ -1670,20 +1761,7 @@
     refreshAnchors();
     repositionAnchors();
 
-    // Visibilidad de los controles de giro según la vista.
-    var rotControl = document.getElementById('mw-rotate-control');
-    if (rotControl) rotControl.style.display = isEdgeView ? 'none' : 'flex';
-    var rotEdgeControl = document.getElementById('mw-rotate-edge-control');
-    if (rotEdgeControl) {
-      rotEdgeControl.style.display =
-        (isEdgeView && CONFIG.giros && CONFIG.giros.giroAzimutalCanto) ? 'flex' : 'none';
-    }
-    // El control de giro en plano de canto solo si el interruptor está activo.
-    var rotPlaneControl = document.getElementById('mw-rotate-plane-control');
-    if (rotPlaneControl) {
-      rotPlaneControl.style.display =
-        (isEdgeView && CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? 'flex' : 'none';
-    }
+    aplicarControlesDeCapa();
 
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     scale = 1;
@@ -1922,6 +2000,8 @@
   // Entra en la capa del vecindario solar con el Sol centrado y el campo justo
   // para ver la primera estrella. El tope de zoom normal (25) no llega hasta
   // aquí: se usa el del vecindario, el mismo que habilita acercarse al Sol.
+  // SIN objeto (el usuario acercándose al Sol con la rueda): el campo de entrada
+  // de la capa, ya opaca, que es donde remata el acercamiento.
   function irAlVecindario(obj) {
     if (isEdgeView) performViewSwap();   // el vecindario solo existe en cenital
     var galImg = document.getElementById('mw-image');
@@ -1929,7 +2009,8 @@
     var R = Math.min(vr.width, vr.height) * 0.42;
     var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : R;
     var fovFin = (CONFIG.vecindario && CONFIG.vecindario.fovFinalAl) || 900;
-    var fov = Math.min(fovFin * 0.8, Math.max((obj.dist || 10) * 2.5, 12));
+    var fov = obj ? Math.min(fovFin * 0.8, Math.max((obj.dist || 10) * 2.5, 12))
+                  : fovFin * 0.8;
     var s = (imgW > 0) ? (R * CONFIG.fisica.anchoImagenAl) / (imgW * fov) : MAXSCALE_VECINDARIO;
     centerOnAnchor(CONFIG.sol.cenital.x, CONFIG.sol.cenital.y,
                    Math.min(s, MAXSCALE_VECINDARIO), MAXSCALE_VECINDARIO);
@@ -2114,6 +2195,11 @@
     if (typeof GrupoLocal !== 'undefined' && GrupoLocal.clearTarget) GrupoLocal.clearTarget();
     busquedaMaxDist = 0;
     hideHint();
+
+    // Estrella del vecindario: su marcador ya no está en la galaxia (esa vista no
+    // repite lo que enseña la de abajo), así que la búsqueda entra al vecindario,
+    // igual que un objeto extragaláctico se busca en el atlas del Grupo Local.
+    if (EN_VECINDARIO[obj.id]) { irAlVecindario(obj); return; }
 
     // Si el tipo de este objeto estaba oculto por el filtro de la leyenda,
     // lo reactivamos (si no, el objeto seguiría invisible) y avisamos.

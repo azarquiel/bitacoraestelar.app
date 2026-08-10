@@ -64,6 +64,39 @@ var barnard = vec.filter(function (o) { return o.id === 'sinbprp'; })[0];
 eq(barnard.bprp, null, 'sin BP–RP -> bprp null');
 eq(barnard.clase, null, 'sin BP–RP -> clase null (color neutro en el render)');
 
+// Una vista no repite lo que enseña la de al lado: el vecindario es SOLO para
+// estrellas, así que el espacio profundo cercano (Barnard 33 está a 1.500 al)
+// se queda en la vista de la galaxia.
+console.log('esEstrella (estrella vs. espacio profundo):');
+eq(V.esEstrella({ id: 'sirius', tipo: 'otro' }), true, 'estrella sin clasificar (Sirio) es estrella');
+eq(V.esEstrella({ id: 'ycvn', tipo: 'carbono' }), true, 'estrella de carbono es estrella');
+eq(V.esEstrella({ id: 'ngc2024', tipo: 'abierto' }), false, 'cúmulo abierto no es estrella');
+eq(V.esEstrella({ id: 'm13', tipo: 'globular' }), false, 'globular no es estrella');
+eq(V.esEstrella({ id: 'ngc40', tipo: 'planetaria' }), false, 'planetaria no es estrella');
+eq(V.esEstrella({ id: 'm8', tipo: 'emision' }), false, 'nebulosa de emisión no es estrella');
+eq(V.esEstrella({ id: 'm1', tipo: 'snr' }), false, 'resto de supernova no es estrella');
+eq(V.esEstrella({ id: 'm31', tipo: 'S' }), false, 'galaxia (clase de Hubble) no es estrella');
+eq(V.esEstrella({ id: 'barnard33', label: 'Barnard 33', tipo: 'otro' }), false,
+  'sin clasificar pero de catálogo de espacio profundo (Barnard 33) no es estrella');
+eq(V.esEstrella({ id: 'abell12', label: 'Abell 12', tipo: 'otro' }), false,
+  'sin clasificar pero de catálogo de espacio profundo (Abell 12) no es estrella');
+
+console.log('estrellasVecindario (solo estrellas):');
+var mezcla = V.estrellasVecindario([
+  { id: 'sirius', label: 'Sirius', l: 227.2, b: -8.9, dist: 9, tipo: 'otro' },
+  { id: 'barnard33', label: 'Barnard 33', l: 207.0, b: -16.8, dist: 1500, tipo: 'otro' },
+  { id: 'ngc2024', label: 'NGC 2024', l: 206.5, b: -16.4, dist: 1350, tipo: 'abierto' }
+], 1500).map(function (o) { return o.id; });
+eq(mezcla.join(','), 'sirius', 'el espacio profundo cercano no entra en el vecindario');
+
+console.log('enVecindario (lo que la vista de la galaxia ya no repite):');
+eq(V.enVecindario({ id: 'sirius', l: 227.2, b: -8.9, dist: 9, tipo: 'otro' }, 1500), true,
+  'estrella cercana: la enseña el vecindario');
+eq(V.enVecindario({ id: 'barnard33', label: 'Barnard 33', l: 207.0, b: -16.8, dist: 1500, tipo: 'otro' }, 1500), false,
+  'espacio profundo cercano: sigue en la galaxia');
+eq(V.enVecindario({ id: 'ssvir', l: 300, b: 10, dist: 2037, tipo: 'carbono' }, 1500), false,
+  'estrella lejana: sigue en la galaxia');
+
 console.log('robustez:');
 eq(V.estrellasVecindario([], 500).length, 0, 'lista vacía -> []');
 eq(V.estrellasVecindario(null, 500).length, 0, 'null -> []');
@@ -89,6 +122,17 @@ eq(fun(4000, true, true).alpha, 0, 'por encima de fovInicioAl se sale');
 eq(fun(4000, true, true).dentro, false, 'y deja de estar dentro');
 eq(V.fundidoVecindario(2400, true, false, { fovInicioAl: 4000, fovFinalAl: 1500 }).alpha < 1,
   true, 'sin fovSalidaAl no hay histéresis (entrada de siempre)');
+
+// La capa toma el control al entrar: en cuanto manda, la app remata el zoom con
+// el Sol centrado (si no, se ve la galaxia gigante translúcida por detrás).
+console.log('tomarControl (la capa remata la entrada):');
+eq(fun(5000, true, false).tomarControl, false, 'lejos, nada que rematar');
+eq(fun(3000, true, false).tomarControl, false, 'fundido por debajo de la mitad: aún manda la galaxia');
+eq(fun(2000, true, false).tomarControl, true, 'en cuanto la capa manda, se remata la entrada');
+eq(fun(1200, true, false).tomarControl, true, 'de un salto al fundido completo, también');
+eq(fun(1200, false, false).tomarControl, false, 'sin el Sol centrado no se entra, luego no se remata');
+eq(fun(2000, true, true).tomarControl, false, 'ya dentro no se remata (si no, no se podría salir)');
+eq(fun(3250, true, true).tomarControl, false, 'saliendo, la capa deja marchar');
 
 // La capa emite el clic por API.onObjectClick, pero el manejador lo pone el
 // visor. Sin esa línea, pulsar una estrella del vecindario no abre nada (el

@@ -18,9 +18,11 @@
      galaxia     (el resto de la Vía Láctea)      Sol -> M13 -> M92
      grupoLocal  (≥ 200.000 al, extragaláctico)   Vía Láctea -> M31 -> M51
 
-   Los tramos NO son excluyentes: una estrella del vecindario también tiene su
-   marcador en la vista de la galaxia, y ahí se dibuja igual. Lo que cambia es
-   la capa que la pinta.
+   El tramo del vecindario es un SUBCONJUNTO del de la galaxia (así escalasDe
+   sabe si además hay travesía galáctica), pero las VISTAS sí son excluyentes:
+   la galaxia no dibuja los marcadores de las estrellas que ya enseña el
+   vecindario (VLVecindarioCatalogo.enVecindario), igual que el atlas del Grupo
+   Local solo se queda con lo extragaláctico. Cada escala enseña la suya.
 
    Sin DOM y sin estado: lee VIAJES, OBSERVACIONES, OBJECTS, OBSERVADORES y
    CONFIG como globales EN TIEMPO DE LLAMADA, igual que via-lactea-observadores.js.
@@ -199,6 +201,11 @@
    * en dos salidas distintas y las dos tienen que poder abrirse.
    *
    * 'excluir' es el índice de la que se está viendo (o null desde el mapa).
+   *
+   * Cada una sale con su FECHA (la de la observación o, si no la trae, la noche
+   * de su viaje): en la lista importa cuándo se exploró, no cómo se llamaba la
+   * salida. Van de la más reciente a la más antigua, y las que no tienen fecha
+   * al final, en el orden en que estaban.
    */
   function otrasObservaciones(objetoId, excluir) {
     var obs = tabla('OBSERVACIONES');
@@ -210,14 +217,21 @@
       if (excluir != null && i === excluir) continue;
       var clave = lista[i].observador;
       var nombre = (observadores[clave] && observadores[clave].nombre) ? observadores[clave].nombre : (clave || '');
+      var v = lista[i].viaje ? viajeDe(lista[i].viaje) : null;
       out.push({
         indice: i,
         clave: clave,
         observadorNombre: nombre,
-        viajeNombre: lista[i].viaje ? nombreViaje(lista[i].viaje) : '',
-        etiqueta: nombre + (lista[i].viaje ? ' · ' + nombreViaje(lista[i].viaje) : '')
+        fecha: lista[i].fecha || (v && v.noche ? v.noche : ''),
+        etiqueta: nombre
       });
     }
+    // Las fechas son ISO (YYYY-MM-DD), así que ordenan como texto.
+    out.sort(function (a, b) {
+      if (!a.fecha || !b.fecha) return (a.fecha ? 0 : 1) - (b.fecha ? 0 : 1);
+      if (a.fecha === b.fecha) return 0;
+      return a.fecha < b.fecha ? 1 : -1;
+    });
     return out;
   }
 

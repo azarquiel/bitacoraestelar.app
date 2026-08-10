@@ -14,6 +14,20 @@ galaxias observadas fuera de ella. Y al **acercarlo del todo sobre el Sol**, al
 revés: la galaxia se funde en el **vecindario solar**, las estrellas registradas
 a menos de 1500 años luz vistas en 3D desde casa.
 
+**Cada escala enseña lo suyo y no repite a la vecina.** El vecindario solar es
+**solo de estrellas** (el espacio profundo cercano —Barnard 33 está a 1.500 al—
+se queda en la galaxia, y así su leyenda de clases espectrales es cierta), la
+vista de la galaxia **no marca las estrellas que ya enseña el vecindario**, y el
+atlas del Grupo Local solo se queda con lo extragaláctico. El reparto lo decide
+`VLVecindarioCatalogo.enVecindario()`; buscar una estrella cercana lleva
+directamente al vecindario, como buscar una galaxia lleva al atlas.
+
+Los **mandos** siguen el mismo reparto: el cambio cenital/canto, los giros y la
+**leyenda** son de la escala que manda, y las demás se esconden. Quién manda y
+qué es suyo lo decide `VLCapas` (`mapa/js/via-lactea-capas.js`, pura, con test
+en `scripts/test_capas_controles.js`); el `display` lo aplica
+`aplicarControlesDeCapa()` en `via-lactea-app.js`, en un solo sitio.
+
 ---
 
 ## Qué hace
@@ -227,6 +241,13 @@ marcadores:{ puntoDiametro: 5, textoTamano: '11px' }
 Los tres interruptores de `giros` activan o desactivan funcionalidades
 completas cambiando una sola palabra.
 
+**El vecindario toma el control al entrar.** En cuanto su fundido pasa de la
+mitad viniendo de fuera, la app remata el acercamiento de golpe: Sol al centro y
+el zoom de la escena (`fovFinalAl × 0,8`), en vez de dejar la vista a medio
+fundido con la galaxia gigante translúcida por detrás. Lo decide
+`fundidoVecindario().tomarControl` y lo aplica `updateVecindario()`. Solo al
+entrar: al alejar, la escena deja marchar con su histéresis de siempre.
+
 Al tocar el **radio del vecindario** (`distMaxAl`) hay que mover con él los
 campos de visión, o la escena se vuelve opaca con las estrellas más lejanas ya
 fuera de cuadro: `fovFinalAl` debe ser **≳ 0,84 × `distMaxAl`**, y `fovSalidaAl`,
@@ -243,20 +264,30 @@ ocurre con los objetos que **ese** observador aún no ha observado (pero **sí**
 otros):
 
 - `true` (por defecto): esos objetos **no se ocultan**, se muestran **atenuados
-  en gris** (con algo de su color, como "deshabilitados"), tanto en la Vía Láctea
-  como en el atlas del Grupo Local. Al pulsar uno, su ficha muestra la
+  en gris** (con algo de su color, como "deshabilitados") en las **tres vistas**:
+  Vía Láctea, atlas del Grupo Local y vecindario solar. La regla y el gris son
+  únicos (`VLObservadores.atenuadoPorObservador` / `grisNoVisitado`, en
+  `via-lactea-observadores.js`); cada vista solo los aplica con su técnica
+  (filtro CSS en los marcadores, mezcla de color en los dos lienzos). Al pulsar
+  uno, su ficha muestra la
   información básica con el rótulo **NO VISITADO** y la lista de las
   observaciones que sí hay de él.
 - `false`: comportamiento clásico. Los objetos que el observador seleccionado no
   ha observado simplemente **se ocultan**.
 
+Ocultar sigue la misma regla única (`VLObservadores.visiblePorObservador`) en las
+tres vistas: lo que no ha observado nadie relevante desaparece del mapa, del
+atlas del Grupo Local y del vecindario solar por igual.
+
 El botón **← Descubrir** lleva a esa misma lista, y no solo se usa para volver:
 aparece en **cualquier** ficha cuyo objeto tenga más observaciones que la que se
 está viendo (entonces el rótulo del panel es **OTRAS OBSERVACIONES**). Cada
-observación se lista con el **viaje** en el que se registró —«Israel Pérez de
-Tudela Vázquez · Perseidas desde la sierra»—, que es lo que las distingue: un
-mismo observador puede haber visitado el objeto en dos salidas distintas, y las
-dos se pueden abrir.
+observación se lista con el observador y **cuándo** se hizo —«Israel Pérez de
+Tudela Vázquez / Explorado en la fecha estelar 12 ago 2026»—, de la más reciente
+a la más antigua (las que no traen fecha, al final). La fecha es la de la
+observación y, si no la tiene, la noche de su viaje. Se identifican por índice,
+no por observador: uno mismo puede haber visitado el objeto en dos salidas
+distintas, y las dos se pueden abrir.
 
 > Solo se aprecia cuando hay **varios observadores** con observaciones en la base
 > de datos: con uno solo no hay nada "ajeno" que descubrir y el mapa se ve igual.
@@ -339,7 +370,8 @@ m30: [{
   observador: 'autor',
   fecha: null,
   lugar: 'SQM-L 21.40 · IR -1.3º · 18º amb.',
-  instrumento: 'Stargate 18”',
+  instrumento: 'Stargate 18”',   // texto libre (observaciones escritas a mano)
+  nave: { nombre: '', apertura_mm: 457, focal_mm: 2057, f_ratio: 4.5 },
   pdf: 'https://…/m30_inv.pdf',
   defaultIndex: 1,          // qué pestaña se abre primero
   entries: [
@@ -354,6 +386,15 @@ m30: [{
 
 La lista permite **varias observaciones del mismo objeto** (distintas noches
 o distintos observadores), y se puede filtrar por observador.
+
+**La nave del viaje.** La ficha abre con una tira monoespaciada: a la izquierda
+la **fecha estelar** y a la derecha la **nave**, el telescopio con el que se
+observó, porque la observación es tan suya como de la noche. Las **medidas van
+siempre** (`18" f/4.5`) y delante el **nombre propio** solo si el tubo lo tiene
+(`Excalibur · 18" f/4.5`). El rótulo lo compone `BitacoraEquipo.rotuloNave()`
+—fuente única con el simulador y Mi flota— a partir de `nave`, que el plugin
+saca de la tabla de telescopios; las observaciones antiguas, sin telescopio de la
+flota, se quedan con el texto libre de `instrumento`.
 
 Una entrada puede tener varias vistas de la misma imagen, en pestañas
 (por ejemplo, con filtro y sin él):
