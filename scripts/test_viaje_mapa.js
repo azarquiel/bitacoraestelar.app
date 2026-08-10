@@ -38,7 +38,8 @@ global.OBSERVACIONES = {
     { observador: 'israel', viaje: 7 },
     { observador: 'ana',    viaje: 9 },
     { observador: 'israel', viaje: 8 },   // el MISMO observador, otra salida
-    { observador: 'israel' }              // histórica, sin viaje
+    { observador: 'israel', fecha: '2011-06-02' }, // histórica, sin viaje
+    { observador: 'ana' }                 // sin viaje y sin fecha
   ]
 };
 
@@ -101,13 +102,19 @@ eq(VLV.capaInicial('404'), null, 'viaje inexistente -> sin capa');
 
 console.log('otrasObservaciones (pantalla "← Descubrir"):');
 var otras = VLV.otrasObservaciones('m13', 0);
-eq(otras.length, 3, 'todas menos la que se está viendo');
-eq(otras.map(function (o) { return o.indice; }), [1, 2, 3], 'se identifican por ÍNDICE, no por observador');
-eq(otras[0].etiqueta, 'Ana · Noche de Ana', 'observador · nombre del viaje');
-eq(otras[1].etiqueta, 'Israel Pérez de Tudela · Viaje del 2026-08-12', 'el MISMO observador en otra salida sí aparece');
-eq(otras[2].etiqueta, 'Israel Pérez de Tudela', 'observación histórica sin viaje -> solo el nombre');
-eq(VLV.otrasObservaciones('m13', null).length, 4, 'sin excluir ninguna salen las cuatro');
+eq(otras.length, 4, 'todas menos la que se está viendo');
+eq(otras.map(function (o) { return o.indice; }), [2, 1, 3, 4], 'de la más reciente a la más antigua, y sin fecha al final');
+eq(otras[0].etiqueta, 'Israel Pérez de Tudela', 'la etiqueta es el observador, sin el nombre del viaje');
+eq(otras[0].fecha, '2026-08-12', 'sin fecha propia, la noche de su viaje');
+eq(otras[1].fecha, '2026-07-01', 'el MISMO observador en otra salida sí aparece');
+eq(otras[2].fecha, '2011-06-02', 'la fecha de la observación manda sobre la del viaje');
+eq(otras[3].fecha, '', 'sin viaje ni fecha -> sin fecha que enseñar');
+eq(VLV.otrasObservaciones('m13', null).length, 5, 'sin excluir ninguna salen las cinco');
 eq(VLV.otrasObservaciones('m42', null), [], 'objeto sin observaciones -> lista vacía');
+// La lista de la pantalla "← Descubrir" enseña esa fecha con su rótulo.
+eq(/Explorado en la fecha estelar/.test(
+     require('fs').readFileSync(__dirname + '/../mapa/js/via-lactea-app.js', 'utf8')),
+   true, 'la pantalla rotula la fecha, no el viaje');
 
 console.log('fase (el punteado en movimiento):');
 var ciclo = VLV.PATRON[0] + VLV.PATRON[1];

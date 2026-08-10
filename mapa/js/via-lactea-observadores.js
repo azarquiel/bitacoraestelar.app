@@ -21,6 +21,11 @@
      fichaDeObservador(id, clave) -> la observación de 'clave' sobre 'id', o null
      observadoresDe(id, excluir)  -> [{clave, nombre}] que observaron 'id'
      estadoObservador(id)         -> 'propia' | 'ajena' | 'ninguna'
+     visiblePorObservador(id)     -> ¿se dibuja con el filtro actual? (las 3 vistas)
+     atenuadoPorObservador(id)    -> ¿se pinta como "no visitado"? (las 3 vistas)
+     grisNoVisitado(r, g, b)      -> [r,g,b] del gris clarito de "no visitado"
+     OPACIDAD_NO_VISITADO         -> multiplicador de opacidad de lo no visitado
+     MEZCLA_NO_VISITADO           -> proporción de gris (para el filtro CSS)
    ============================================================================ */
 
 (function () {
@@ -97,7 +102,45 @@
     return 'ninguna';
   }
 
+  // ---- "No visitado": regla y aspecto ÚNICOS de las tres vistas -------------
+  // Las tres escalas del mapa (extragaláctica, Vía Láctea y vecindario solar)
+  // pintan igual lo que el observador activo no ha visitado: en gris clarito y
+  // con menos opacidad, pero visible y pulsable. Aquí viven la regla y las
+  // constantes; cada vista solo las aplica con su técnica (filtro CSS en los
+  // marcadores, mezcla de color en los dos lienzos).
+  var GRIS = 150;          // gris hacia el que se mezcla el color del objeto
+  var MEZCLA = 0.82;       // cuánto del gris (0 = color intacto, 1 = gris puro)
+  var OPACIDAD = 0.55;     // multiplicador de opacidad del objeto atenuado
+
+  // ¿Se dibuja el objeto con el filtro de observador actual? Sí si el activo lo
+  // observó ('propia') o si lo observaron otros y el descubrimiento está activo
+  // ('ajena', atenuado); no si no queda nadie relevante ('ninguna').
+  function visiblePorObservador(id) {
+    return estadoObservador(id) !== 'ninguna';
+  }
+
+  // ¿Se dibuja atenuado ("no visitado") para el observador activo? Solo cuando
+  // lo observaron OTROS: sin observaciones (o con el descubrimiento apagado) el
+  // objeto se oculta, no se atenúa.
+  function atenuadoPorObservador(id) {
+    return estadoObservador(id) === 'ajena';
+  }
+
+  // Color de un objeto no visitado: su RGB mezclado con el gris clarito.
+  function grisNoVisitado(r, g, b) {
+    return [
+      Math.round(r * (1 - MEZCLA) + GRIS * MEZCLA),
+      Math.round(g * (1 - MEZCLA) + GRIS * MEZCLA),
+      Math.round(b * (1 - MEZCLA) + GRIS * MEZCLA)
+    ];
+  }
+
   var API = {
+    visiblePorObservador: visiblePorObservador,
+    atenuadoPorObservador: atenuadoPorObservador,
+    grisNoVisitado: grisNoVisitado,
+    OPACIDAD_NO_VISITADO: OPACIDAD,
+    MEZCLA_NO_VISITADO: MEZCLA,
     getActivo: getActivo,
     setActivo: setActivo,
     getFicha: getFicha,

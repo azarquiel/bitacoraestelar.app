@@ -56,19 +56,17 @@ var GrupoLocal = (function () {
     return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
   }
 
-  // Componentes RGB de un color hex, opcionalmente mezclados ~82% hacia gris
-  // (para atenuar las galaxias no observadas, como el gris de los marcadores de
-  // la Vía Láctea, conservando algo de su tono original).
+  // Componentes RGB de un color hex, opcionalmente mezclados hacia el gris de
+  // "no visitado" (VLObservadores.grisNoVisitado: el mismo de las otras dos
+  // vistas), conservando algo de su tono original.
   function rgbDe(hex, gris) {
     var h = (hex || '#7ec8ff').replace('#', '');
     if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
     var n = parseInt(h, 16);
     var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
     if (gris) {
-      var G = 150, k = 0.82;
-      r = Math.round(r * (1 - k) + G * k);
-      g = Math.round(g * (1 - k) + G * k);
-      b = Math.round(b * (1 - k) + G * k);
+      var c = window.VLObservadores.grisNoVisitado(r, g, b);
+      r = c[0]; g = c[1]; b = c[2];
     }
     return { r: r, g: g, b: b };
   }
@@ -80,28 +78,11 @@ var GrupoLocal = (function () {
   }
 
   // ---- Filtro por observador (descubrir observaciones ajenas) ----------------
-  // El visor principal comunica quién es el observador activo y si la
-  // funcionalidad está activa (CONFIG.observacionesAjenas.activo) vía
-  // API.setObservador(). Con ella, las galaxias que el observador activo no ha
+  // La regla de "no visitado" es única para las tres vistas del mapa y vive en
+  // via-lactea-observadores.js: las galaxias que el observador activo no ha
   // observado (pero sí otros) se dibujan atenuadas, sin ocultarse.
-  var activeObs = '';
-  var ajenasActivo = false;
-
-  // ¿Ha observado el observador activo el objeto 'o'? En modo "todas"
-  // (activeObs vacío) se considera siempre observado (nada se atenúa).
-  function observadaPorActivo(o) {
-    if (!activeObs) return true;
-    var lista = (typeof OBSERVACIONES !== 'undefined' && o && o.id) ? OBSERVACIONES[o.id] : null;
-    if (!lista || !lista.length) return true; // sin datos: no atenuar
-    for (var i = 0; i < lista.length; i++) {
-      if (lista[i].observador === activeObs) return true;
-    }
-    return false;
-  }
-
-  // ¿Debe dibujarse 'o' atenuada por el filtro de observador?
   function atenuadaPorObservador(o) {
-    return ajenasActivo && !!activeObs && !observadaPorActivo(o);
+    return !!(o && o.id) && window.VLObservadores.atenuadoPorObservador(o.id);
   }
 
   // Construye el catálogo del atlas desde los OBJECTS reales de la base de datos:
@@ -321,6 +302,7 @@ var GrupoLocal = (function () {
     var projected = objects
       .filter(function (o) { return !(hiddenTipos && hiddenTipos[o.tipo || '']); })
       .filter(function (o) { return !rutaIds || rutaIds.indexOf(o.id) >= 0; })
+      .filter(function (o) { return window.VLObservadores.visiblePorObservador(o.id); })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
 
@@ -350,7 +332,7 @@ var GrupoLocal = (function () {
       // Galaxia observada solo por otros: se atenúa (gris + menor opacidad),
       // pero sigue siendo pulsable para descubrir esas observaciones.
       var aten = atenuadaPorObservador(o);
-      var am = aten ? 0.5 : 1; // multiplicador de opacidad
+      var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // multiplicador de opacidad
 
       // línea guía hasta el plano galáctico
       var foot = project({ x: o.x, y: o.y, z: 0 });
@@ -578,15 +560,9 @@ var GrupoLocal = (function () {
   }
   function clearTarget() { target = null; }
 
-  // Leyendas dependientes de la vista: la de tipos de objeto (galaxia) y la de
-  // clases de Hubble (Grupo Local). Se alternan según domine una vista u otra.
-  var legendObjetos = document.getElementById('mw-legend');
+  // Quién enseña su leyenda y quién la esconde lo decide la app con VLCapas
+  // (aplicarControlesDeCapa): aquí solo se usa la propia, para escuchar clics.
   var legendHubble = document.getElementById('mw-legend-hubble');
-  function toggleLeyenda(esAtlas) {
-    if (legendObjetos) legendObjetos.style.display = esAtlas ? 'none' : '';
-    if (legendHubble) legendHubble.style.display = esAtlas ? '' : 'none';
-  }
-  toggleLeyenda(false);
 
   // Leyenda interactiva del Grupo Local: pulsar una clase de Hubble la oculta o
   // muestra en el atlas (el objeto se filtra en render). La fila se atenúa y se
@@ -617,7 +593,6 @@ var GrupoLocal = (function () {
     atlasInteractive = alpha > 0.5;
     if (tip && !atlasInteractive) tip.style.opacity = 0;
     if (scaleTag) scaleTag.style.opacity = alpha > 0.5 ? 1 : 0;
-    toggleLeyenda(alpha > 0.5);
     if (pxPerLy > 0) {
       var R = Math.min(W, H) * 0.42;
       var f = R / pxPerLy;
@@ -631,13 +606,6 @@ var GrupoLocal = (function () {
   // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
   // encuadrar: mover la vista hasta un objeto SIN marcarlo como buscado.
   // onObjectClick: lo asigna via-lactea-app.js para abrir la ficha al hacer clic.
-  // setObservador: el visor principal comunica el observador activo del filtro y
-  // si la funcionalidad de descubrir observaciones ajenas está activa, para
-  // atenuar las galaxias que ese observador no ha observado.
-  function setObservador(clave, activo) {
-    activeObs = clave || '';
-    ajenasActivo = !!activo;
-  }
   // setViaje: el tramo extragaláctico de la salida que se está recorriendo, como
   // ids de objeto EN ORDEN. null (o nada) = se acabó el viaje y vuelve el atlas
   // entero; lista vacía = hay viaje, pero no llega hasta aquí.
@@ -649,7 +617,7 @@ var GrupoLocal = (function () {
     buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
     focusObject: focusObject, focus: focus, clearTarget: clearTarget,
     encuadrar: encuadrar,
-    setObservador: setObservador, setViaje: setViaje,
+    setViaje: setViaje,
     onObjectClick: null
   };
   return API;

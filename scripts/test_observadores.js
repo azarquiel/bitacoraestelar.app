@@ -34,5 +34,41 @@ var lista = VLO.observadoresDe('m13', null);
 eq(lista.length, 2, 'dos observadores');
 eq(lista[0].nombre, 'Israel Pérez de Tudela', 'nombre resuelto en la lista');
 
+console.log('atenuadoPorObservador (regla única de "no visitado" de las 3 vistas):');
+global.window = global;   // el módulo lee CONFIG a través de window
+global.CONFIG = { observacionesAjenas: { activo: true } };
+global.OBSERVACIONES = {
+  m13: [{ observador: 'israel' }, { observador: 'ana' }],
+  m57: [{ observador: 'ana' }],
+  m42: []
+};
+VLO.setActivo('');
+eq(VLO.atenuadoPorObservador('m57'), false, 'modo "todas": nada se atenúa');
+VLO.setActivo('israel');
+eq(VLO.atenuadoPorObservador('m13'), false, 'observado por el activo: a todo color');
+eq(VLO.atenuadoPorObservador('m57'), true, 'observado solo por otros: atenuado');
+eq(VLO.atenuadoPorObservador('m42'), false, 'sin observaciones: se oculta, no se atenúa');
+global.CONFIG.observacionesAjenas.activo = false;
+eq(VLO.atenuadoPorObservador('m57'), false, 'funcionalidad apagada: se oculta, no se atenúa');
+global.CONFIG.observacionesAjenas.activo = true;
+VLO.setActivo('');
+
+console.log('visiblePorObservador (regla única de ocultar de las 3 vistas):');
+VLO.setActivo('');
+eq(VLO.visiblePorObservador('m42'), true, 'modo "todas": todo visible');
+VLO.setActivo('israel');
+eq(VLO.visiblePorObservador('m13'), true, 'observado por el activo: visible');
+eq(VLO.visiblePorObservador('m57'), true, 'observado solo por otros: visible (atenuado)');
+eq(VLO.visiblePorObservador('m42'), false, 'sin observaciones: oculto');
+global.CONFIG.observacionesAjenas.activo = false;
+eq(VLO.visiblePorObservador('m57'), false, 'funcionalidad apagada: los ajenos se ocultan');
+global.CONFIG.observacionesAjenas.activo = true;
+VLO.setActivo('');
+
+console.log('grisNoVisitado (mismo gris clarito en las 3 vistas):');
+var gris = VLO.grisNoVisitado(255, 0, 0);
+eq(gris.join(','), '169,123,123', 'rojo mezclado al 82% con el gris 150');
+eq(VLO.grisNoVisitado(150, 150, 150).join(','), '150,150,150', 'el propio gris no cambia');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

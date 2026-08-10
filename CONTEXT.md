@@ -139,7 +139,14 @@ y por **Mi flota**, sin DOM ni WordPress.
   Solo hay flota con sesión iniciada, que es de donde sale la diferencia entre lo
   que ve un visitante y un observador logueado. Oculares y auxiliares no pasan por
   aquí: salen del catálogo global tal cual.
-- **Test:** `scripts/test_equipo.js` fija el contrato de los tres.
+- **`rotuloNave(item)`** → cómo se presenta el telescopio en la **bitácora**: las
+  **medidas siempre** (`18" f/4.5`, apertura en pulgadas y relación focal, que es
+  como se reconoce un tubo en el campo) y **delante su nombre propio si lo tiene**
+  (`Excalibur · 18" f/4.5`). La relación focal sale de `f_ratio` y, si no viene,
+  de `focal/apertura`. Sin medidas queda el nombre o `nombreTelescopio()`. Lo usa
+  la ficha del mapa (ver `mapa/README.md`), que recibe las medidas del tubo en
+  `OBSERVACIONES[].nave`.
+- **Test:** `scripts/test_equipo.js` fija el contrato de los cuatro.
 
 ## Viaje interestelar
 
@@ -262,7 +269,9 @@ observaron. Módulo puro `mapa/js/via-lactea-viaje.js` (`window.VLViaje`), test
   por su observador: el mismo observador puede haber visitado el objeto en dos
   salidas y las dos tienen que poder abrirse. Es lo que lista «← Descubrir»,
   botón único que desde cualquier ficha lleva a las demás observaciones del
-  objeto y solo aparece si las hay.
+  objeto y solo aparece si las hay. Esa lista va por **fecha**, de la más
+  reciente a la más antigua («Explorado en la fecha estelar …»), no por el
+  nombre del viaje.
 
 ## Astrometría de la sesión
 
@@ -506,9 +515,22 @@ desde los **objetos del mapa** que tengan coordenadas galácticas y esa distanci
 
 - **Selección pura:** `mapa/js/via-lactea-vecindario-catalogo.js`
   (`VLVecindarioCatalogo.estrellasVecindario(objects, distMaxAl)`): filtra por
-  distancia y coordenadas, resuelve el `bp_rp` (color) y proyecta a XYZ con el
-  Sol en el origen (`galToXYZ`). La capa `vecindario-solar.js` solo dibuja.
-  Test: `scripts/test_vecindario_catalogo.js`.
+  distancia, coordenadas y **que sea una estrella**, resuelve el `bp_rp` (color)
+  y proyecta a XYZ con el Sol en el origen (`galToXYZ`). La capa
+  `vecindario-solar.js` solo dibuja. Test: `scripts/test_vecindario_catalogo.js`.
+- **Reparto de escalas:** una vista no repite lo que enseña la de al lado.
+  `enVecindario(o, distMaxAl)` = `esEstrella(o)` + dentro del radio, y es la
+  MISMA función que usa la vista de la galaxia para NO marcar esas estrellas
+  (`EN_VECINDARIO` en `via-lactea-app.js`, que además desvía la búsqueda al
+  vecindario). Por arriba, el atlas del Grupo Local ya se queda solo con lo
+  extragaláctico. Así el espacio profundo cercano (Barnard 33, a 1.500 al) no se
+  cuela entre las estrellas y la leyenda de clases espectrales dice la verdad.
+- **`esEstrella(o)`:** el tipo del clasificador decide cuando es de espacio
+  profundo (`globular`, `abierto`, `planetaria`, `emision`, `snr`, clases de
+  Hubble) o estelar (`carbono`). El cajón `otro` mezcla estrella con «otype que
+  SIMBAD no encajó» (Sirio y Barnard 33 son los dos `otro`), así que ahí decide el
+  CATÁLOGO del nombre (`M`, `NGC`, `IC`, `B`, `Abell`… = espacio profundo). Cuando
+  `bitacora_clasificar_objeto()` aprenda a devolver `estrella`, esa lista sobra.
 - **Color:** cada estrella usa su índice **BP–RP** con el [[modelo de color Gaia]]
   compartido; por eso su color coincide con el del simulador de oculares. El
   objeto del mapa guarda `bp_rp` (columna nueva); lo resuelve el plugin al

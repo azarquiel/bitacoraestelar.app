@@ -2383,6 +2383,31 @@ function bitacora_equipo_borrar( WP_REST_Request $peticion ) {
  * =========================================================================== */
 
 /** Construye la cadena "lugar" del visor a partir de la ficha. */
+/**
+ * La NAVE de una observación para el visor: las medidas del tubo con el que se
+ * observó, tal cual salen de la tabla de telescopios. El RÓTULO no se arma aquí:
+ * lo compone el navegador con BitacoraEquipo.rotuloNave(), que es la fuente única
+ * de esa regla (nombre propio, o 18" f/4.5). Sin telescopio_id (observaciones
+ * viejas, con el tubo escrito a mano) se devuelve null y la ficha se queda con el
+ * texto libre de 'instrumento'.
+ */
+function bitacora_nave_visor( $telescopio_id ) {
+    global $wpdb;
+    static $cache = array();
+    $id = (int) $telescopio_id;
+    if ( ! $id ) {
+        return null;
+    }
+    if ( ! array_key_exists( $id, $cache ) ) {
+        $t = bitacora_nombre_tabla_telescopios();
+        $fila = $wpdb->get_row( $wpdb->prepare(
+            "SELECT nombre, vendor, modelo, apertura_mm, focal_mm, f_ratio FROM $t WHERE id = %d", $id
+        ), ARRAY_A );
+        $cache[ $id ] = $fila ? $fila : null;
+    }
+    return $cache[ $id ];
+}
+
 function bitacora_lugar_visor( $ficha ) {
     if ( ! $ficha ) {
         return '';
@@ -2493,7 +2518,7 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
         $objetos[] = $obj;
     }
 
-    // OBSERVACIONES { slug: [ { observador, fecha, lugar, instrumento, viaje, pdf, defaultIndex, entries } ] }
+    // OBSERVACIONES { slug: [ { observador, fecha, lugar, instrumento, nave, viaje, pdf, defaultIndex, entries } ] }
     // VIAJES       { id: { nombre, noche, observador, objetos: [ slug, ... ] } }
     // El ORDEN de los objetos de un viaje se decide AQUÍ y no en el navegador:
     // es el mismo de la ficha del viaje (bitacora_viaje_leer) —por hora de
@@ -2553,6 +2578,7 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
             'fecha'        => isset( $ob->fecha_observacion ) ? $ob->fecha_observacion : '',
             'lugar'        => bitacora_lugar_visor( $ficha ),
             'instrumento'  => $ob->telescopio,
+            'nave'         => bitacora_nave_visor( isset( $ob->telescopio_id ) ? $ob->telescopio_id : 0 ),
             'pdf'          => $ficha ? $ficha->pdf : '',
             'defaultIndex' => (int) $ob->default_index,
             'entries'      => $entries,
