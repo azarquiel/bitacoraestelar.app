@@ -39,27 +39,19 @@
   // para estrellas, así que el espacio profundo cercano (Barnard 33 está a
   // 1.500 al) se queda en la vista de la galaxia.
   //
-  // Categorías del clasificador (bitacora_clasificar_objeto) que NO son
-  // estrellas, más las clases de Hubble de las galaxias del Grupo Local.
-  var TIPOS_PROFUNDOS = {
-    globular: 1, abierto: 1, planetaria: 1, emision: 1, snr: 1,
-    E: 1, S0: 1, S: 1, SB: 1, Irr: 1
-  };
-
-  // ponytail: el tipo 'otro' del clasificador mezcla «estrella» con «otype que
-  // SIMBAD no supo encajar» (Sirio y Barnard 33 son los dos 'otro'), así que ahí
-  // decide el CATÁLOGO del nombre: M, NGC, IC, B/Barnard, Abell… son catálogos de
-  // espacio profundo. Cuando el clasificador aprenda a devolver 'estrella', esta
-  // lista sobra y basta con el tipo.
-  var CATALOGOS_PROFUNDOS = /^(m|ngc|ic|b|barnard|abell|sh2?|ldn|lbn|vdb|cr|mel|stock|tr|pk|hcg|arp|caldwell|c)\s*-?\s*\d/i;
-
+  // Lo decide ENTERO el clasificador (bitacora_clasificar_objeto): 'estrella' y
+  // 'carbono' son estelares y ya está. Aquí no se adivina nada.
+  //
+  // Un 'desconocido' NO entra, aunque esté a tiro: pintarlo sería darle clase
+  // espectral y color de estrella a algo que nadie ha clasificado. Antes esta capa
+  // partía el cajón 'otro' con un regex de prefijos de catálogo (M, NGC, Abell…),
+  // que colaba como estrella cualquier nebulosa de un catálogo fuera de esa lista
+  // (Gum, RCW, Ced). Los objetos guardados de antes vuelven cuando el backfill del
+  // panel de administración los reclasifique.
   function esEstrella(o) {
     if (!o) return false;
     var tipo = (o.tipo || '').toString();
-    if (TIPOS_PROFUNDOS[tipo]) return false;
-    if (tipo === 'carbono' || tipo === 'estrella') return true;
-    var nombre = (o.label || o.name || o.id || '').toString().trim();
-    return !CATALOGOS_PROFUNDOS.test(nombre);
+    return tipo === 'estrella' || tipo === 'carbono';
   }
 
   // ¿La enseña la vista del vecindario solar? Solo las estrellas dentro del

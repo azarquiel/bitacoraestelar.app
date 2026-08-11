@@ -109,11 +109,29 @@ cúmulos y estrellas de carbono caían en el default `#7ec8ff`, que en la leyend
 Prioridad: tipo del registro → tabla de categorías MW por código otype (`C*`
 carbono, `GlC` globular, `OpC`/`Cl*` abierto, `PN` planetaria, `HII`/`EmO` emisión,
 `SNR` resto de supernova) → galaxia por clase de Hubble (para grupo local) →
-`otro` neutro `#dfe7f5`.
+**`estrella`** si el otype es estelar → **`desconocido`** si no se pudo clasificar.
 
+- **«Es una estrella» y «no sé qué es» son hechos DISTINTOS.** Antes compartían el
+  cajón `otro` y el color `#dfe7f5`, rotulado en la leyenda «Estrella / otro»: el
+  término borroso llegaba impreso hasta el usuario. Sirio y Barnard 33 eran los dos
+  `otro`, y quien los separaba era un regex de prefijos de catálogo (`M`, `NGC`,
+  `Abell`…) en la capa del vecindario, a 300 km del clasificador. Un catálogo que no
+  estuviera en esa lista (`Gum`, `RCW`, `Ced`, `PGC`) colaba una nebulosa como
+  estrella. `desconocido` NO es un tipo de objeto: es la ausencia de clasificación.
+- **Estelar = el otype lleva `*`:** los códigos estelares de SIMBAD lo llevan (`*`,
+  `**`, `V*`, `PM*`, `WD*`, `RG*`, `EB*`, `Be*`, `WR*`…) y los de espacio profundo no
+  (`PN`, `HII`, `SNR`, `GlC`, `G`, `DNe`, `GNe`, `Cld`). `C*` y `Cl*` ya los ha
+  capturado la tabla antes de llegar aquí; la única excepción que hay que descontar es
+  `As*` (asterismo), que son varias estrellas y no una. Una regla en vez de una tabla
+  de treinta códigos que siempre se queda corta.
+- **Sin otype no se adivina:** un objeto que SIMBAD no resolvió cae en `desconocido`,
+  no en `estrella`. Abell 12 es el caso real —es una planetaria y estaba en `otro`
+  porque la consulta no devolvió `PN`, no porque tuviera nada de estelar.
 - **Invariante:** los colores del clasificador coinciden con la leyenda `#mw-legend`
   (`data-color`) de `mapa/mapa.html`; los de galaxia, con `HUBBLE_COLORS` de
-  `grupo-local.js` y la leyenda `#mw-legend-hubble`. El test
+  `grupo-local.js` y la leyenda `#mw-legend-hubble`. `estrella` y `desconocido` tienen
+  **entrada propia y color propio** en la leyenda: si comparten color, el cajón sigue
+  existiendo a ojos del observador aunque el modelo esté partido. El test
   `scripts/test_clasificacion_objeto.py` verifica mapeos y sincronía.
 - **Default neutro:** un otype desconocido NO reutiliza un color de la leyenda, para
   no disfrazarse de otra categoría (era la raíz del bug).
@@ -527,12 +545,15 @@ desde los **objetos del mapa** que tengan coordenadas galácticas y esa distanci
   vecindario). Por arriba, el atlas del Grupo Local ya se queda solo con lo
   extragaláctico. Así el espacio profundo cercano (Barnard 33, a 1.500 al) no se
   cuela entre las estrellas y la leyenda de clases espectrales dice la verdad.
-- **`esEstrella(o)`:** el tipo del clasificador decide cuando es de espacio
-  profundo (`globular`, `abierto`, `planetaria`, `emision`, `snr`, clases de
-  Hubble) o estelar (`carbono`). El cajón `otro` mezcla estrella con «otype que
-  SIMBAD no encajó» (Sirio y Barnard 33 son los dos `otro`), así que ahí decide el
-  CATÁLOGO del nombre (`M`, `NGC`, `IC`, `B`, `Abell`… = espacio profundo). Cuando
-  `bitacora_clasificar_objeto()` aprenda a devolver `estrella`, esa lista sobra.
+- **`esEstrella(o)` = `estrella` o `carbono`, y nada más.** Lo decide entero el
+  [[clasificación de objeto del mapa]]: la capa del vecindario ya no adivina por el
+  nombre. Un `desconocido` NO entra en la escena, aunque esté a tiro: pintarlo sería
+  darle clase espectral y color de estrella a algo que nadie ha clasificado, que es
+  justo lo que colaba nebulosas de catálogos raros entre las estrellas. Se queda en la
+  vista de la galaxia, con su color propio, hasta que se sepa qué es.
+- **Un objeto viejo no se reclasifica solo:** los que se guardaron como `otro` siguen
+  fuera del vecindario hasta que pasen por el backfill del panel de administración,
+  que vuelve a preguntar el otype y reescribe `tipo` y `color`.
 - **Color:** cada estrella usa su índice **BP–RP** con el [[modelo de color Gaia]]
   compartido; por eso su color coincide con el del simulador de oculares. El
   objeto del mapa guarda `bp_rp` (columna nueva); lo resuelve el plugin al
