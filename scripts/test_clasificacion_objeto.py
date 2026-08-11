@@ -34,10 +34,25 @@ for m in re.finditer(r"array\(\s*'([a-z]+)',\s*array\(([^)]*)\),\s*'(#[0-9a-fA-F
     reglas.append((tipo, codes, color))
 check(len(reglas) >= 6, f"tabla de reglas parseada ({len(reglas)} categorías MW)")
 
-# Color por defecto ('otro') del propio clasificador.
-m_otro = re.search(r"'tipo'\s*=>\s*'otro',\s*'color'\s*=>\s*'(#[0-9a-fA-F]{6})'", cuerpo)
-color_otro = m_otro.group(1).lower() if m_otro else None
-check(color_otro is not None, f"color 'otro' parseado ({color_otro})")
+# Los dos finales del clasificador: 'estrella' (el otype es estelar) y
+# 'desconocido' (no se pudo clasificar). Son hechos DISTINTOS, así que tienen tipo
+# y color propios: antes compartían el cajón 'otro' y quien los separaba era un
+# regex de prefijos de catálogo en la capa del vecindario del mapa.
+def color_final(tipo):
+    m = re.search(r"'tipo'\s*=>\s*'" + tipo + r"',\s*'color'\s*=>\s*'(#[0-9a-fA-F]{6})'", cuerpo)
+    return m.group(1).lower() if m else None
+
+color_estrella    = color_final("estrella")
+color_desconocido = color_final("desconocido")
+check(color_estrella is not None, f"color 'estrella' parseado ({color_estrella})")
+check(color_desconocido is not None, f"color 'desconocido' parseado ({color_desconocido})")
+check(color_estrella != color_desconocido,
+      "'estrella' y 'desconocido' NO comparten color (si no, el cajón sigue existiendo para el observador)")
+
+# La regla estelar del PHP, sin tabla de códigos: el otype lleva '*' (salvo 'As*',
+# un asterismo, que son varias estrellas y no una). Se comprueba que siga siendo esa.
+check("strpos( $codigo, '*' )" in cuerpo and "'AS*'" in cuerpo,
+      "la regla estelar es «el otype lleva '*', menos As*»")
 
 # ── Réplica del match (misma prioridad que el PHP; sin rama galaxia/Hubble) ───
 def clasificar_mw(otype, tipo_obs=""):
@@ -46,7 +61,9 @@ def clasificar_mw(otype, tipo_obs=""):
     for tipo, codes, color in reglas:
         if tob == tipo or cod in codes:
             return tipo, color
-    return "otro", color_otro
+    if "*" in cod and cod != "AS*":
+        return "estrella", color_estrella
+    return "desconocido", color_desconocido
 
 # ── 1) Mapeos dorados (otype real de SIMBAD, ver consulta en vivo) ────────────
 DORADOS = [
@@ -57,8 +74,18 @@ DORADOS = [
     ("SNR", "", "snr"),           # M1 (Crab)
     ("C*",  "", "carbono"),       # Y CVn
     ("glc", "", "globular"),      # case-insensitive
-    ("*",   "", "otro"),          # estrella normal -> neutro (NO snr)
-    ("G",   "", "otro"),          # galaxia sin morph -> neutro (Hubble lo cubre aparte)
+    ("*",   "", "estrella"),      # estrella normal (NO snr, NO 'desconocido')
+    ("**",  "", "estrella"),      # doble: Gamma And, Gamma Del
+    ("V*",  "", "estrella"),      # variable
+    ("PM*", "", "estrella"),      # movimiento propio alto: la estrella de Barnard
+    ("WD*", "", "estrella"),      # enana blanca: Sirio B
+    ("As*", "", "desconocido"),   # asterismo: lleva '*' pero son VARIAS estrellas
+    ("G",   "", "desconocido"),   # galaxia sin morph (Hubble lo cubre aparte)
+    ("DNe", "", "oscura"),        # nebulosa oscura: Barnard 33
+    ("glb", "", "oscura"),        # glóbulo de Bok (B68), case-insensitive
+    ("CGb", "", "oscura"),        # glóbulo cometario
+    ("MoC", "", "desconocido"),   # nube molecular: a propósito FUERA de 'oscura'
+    ("",    "", "desconocido"),   # SIMBAD no respondió: no se adivina que sea estrella
     ("PN",  "carbono", "carbono"),# override del registro gana sobre otype
 ]
 print("Mapeos otype -> tipo:")
@@ -79,7 +106,15 @@ check(len(leyenda) >= 6, f"leyenda #mw-legend parseada ({len(leyenda)} colores)"
 print("Sincronía clasificador -> leyenda:")
 for tipo, codes, color in reglas:
     check(color in leyenda, f"color de '{tipo}' ({color}) presente en la leyenda")
-check(color_otro in leyenda, f"color 'otro' ({color_otro}) presente en la leyenda")
+check(color_estrella in leyenda, f"color 'estrella' ({color_estrella}) presente en la leyenda")
+check(color_desconocido in leyenda, f"color 'desconocido' ({color_desconocido}) presente en la leyenda")
+
+# Dos entradas de leyenda, no una: el rótulo «Estrella / otro» era el cajón mezclado
+# llegando impreso hasta el usuario.
+rotulos = re.findall(r'<span class="mw-legend-text">([^<]+)</span>', HTML)
+check("Estrella" in rotulos, f"la leyenda rotula «Estrella» ({rotulos})")
+check("Sin clasificar" in rotulos, f"la leyenda rotula «Sin clasificar» ({rotulos})")
+check(not any("/" in r for r in rotulos), f"ningún rótulo de la leyenda mezcla dos categorías con «/» ({rotulos})")
 
 # ── 3) El nombre del tipo cabe en la columna `tipo` de la tabla de objetos ────
 # NGC 2022 (PN) no llegó nunca al mapa: 'planetaria' son 10 caracteres y la
@@ -88,7 +123,7 @@ m_col = re.search(r"CREATE TABLE \$tabla_objetos.*?\n\s*tipo varchar\((\d+)\)", 
 ancho = int(m_col.group(1)) if m_col else None
 check(ancho is not None, f"ancho de la columna `tipo` parseado ({ancho})")
 print("Cada tipo del clasificador cabe en la columna:")
-for tipo, _codes, _color in reglas + [("otro", [], "")]:
+for tipo, _codes, _color in reglas + [("estrella", [], ""), ("desconocido", [], "")]:
     check(ancho is not None and len(tipo) <= ancho, f"'{tipo}' ({len(tipo)} car.) cabe en varchar({ancho})")
 
 # ── 4) Todo objeto de la semilla acaba con tipo ──────────────────────────────
