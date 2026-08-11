@@ -1,7 +1,7 @@
 # 06 — Coste en el generador de imagen del formulario de registro
 
 **Type:** grilling
-**Status:** open
+**Status:** closed (11-ago-2026)
 **Blocked by:** 03
 
 ## Question
@@ -28,4 +28,24 @@ Cerrar:
 
 ## Answer
 
-_(pendiente)_
+**Entra en los dos**, con interruptor en el simulador y encendida por defecto.
+
+Motivo: justo en una observación de galaxia es donde la imagen generada hoy
+miente más —el objeto que motivó la observación es lo único que no sale—. Y el
+coste real es una petición por galaxia del campo, cacheada en servidor por la
+ficha 11, que además suele ser **la misma** que el usuario acaba de mirar en el
+simulador: casi siempre acierto de caché.
+
+- **¿Bloquea la generación de la imagen?** No. La imagen se genera con lo que
+  haya llegado; si el parche no está a tiempo o falla, sale sin difuso, que es
+  la imagen de hoy. Nunca se queda esperando a un tercero.
+- **Peso.** El riesgo 3 de las notas viejas (~2–4 MB descargados siempre) no
+  aplica: no hay asset all-sky. Lo que se descarga es un parche por galaxia
+  presente en el campo, y solo si hay alguna: en la inmensa mayoría de campos,
+  cero bytes.
+- **Los dos puntos de llamada.** El error de la vez anterior fue corregir uno y
+  olvidar el otro (`bitacora-ocular.js` y `bitacora-formulario.js:934`). Esta vez
+  la capa vive **dentro** del módulo compartido y se gobierna por una opción del
+  render, no por código duplicado en cada llamador: el formulario la hereda sin
+  tocar nada. El assert de los interruptores en `scripts/test_difuso.js` —que ya
+  existía y comprobaba que apagan de verdad— cubre esa opción.

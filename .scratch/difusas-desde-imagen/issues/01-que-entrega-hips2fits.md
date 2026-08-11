@@ -1,8 +1,18 @@
 # 01 — Qué entrega hips2fits, y en qué unidades
 
 **Type:** research
-**Status:** resolved
+**Status:** resolved — y **superada como fuente** el 11-ago-2026 (ver ficha 10)
 **Blocked by:** —
+
+> **Nota de 11-ago-2026.** Todo lo medido aquí sigue siendo cierto, pero
+> `hips2fits` **ya no es la fuente de la capa difusa**: el usuario eligió
+> ps1cutouts de STScI por el aspecto de sus imágenes, y de paso resuelve el
+> hallazgo central de esta ficha —la falta de punto cero en la cabecera—, que
+> aquí obligaba a una segunda petición a MAST y fotometría de apertura en JS.
+> `hips2fits` se queda sirviendo el JPG de color de la vista HiPS, que ya está
+> en producción y no se toca. El apartado 4 (la caída del servicio) conserva
+> todo su valor: es la razón por la que la ficha 05 no da por supuesto que haya
+> imagen.
 
 ## Question
 

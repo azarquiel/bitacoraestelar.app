@@ -5,10 +5,13 @@
 ## Destination
 
 Una spec confirmada de cómo la vista **Canvas-2D de Gaia** obtiene su componente
-difusa (galaxias y nebulosas) de **imágenes reales de cartografiado**, entrando
-por la cadena fotométrica que ya existe (`ctxFotometrico` → `Fobj` → `pintarFot`).
-Lista para implementar, no implementada: el mapa acaba cuando no quede nada que
-decidir.
+difusa de **imágenes reales de cartografiado**, entrando por la cadena
+fotométrica que ya existe (`ctxFotometrico` → `Fobj` → `pintarFot`).
+
+**Árbol cerrado el 11-ago-2026** (sesión de `/grilling`, 20 decisiones). Alcance
+final: **galaxias**, por **parche por objeto** desde **ps1cutouts de STScI**, en
+banda `g`, FITS lineal, con el nivel anclado a la mag V del RC3. Nebulosas y
+globulares quedan fuera. Queda implementar, en las tres fases de más abajo.
 
 ## Notes
 
@@ -44,6 +47,10 @@ decidir.
   gamma para PanSTARRS, y `repararNucleos` ya arregla el núcleo hundido de sus
   mosaicos. **La §5 de la spec (biblioteca de plantillas FITS + StarNet++) no
   hace falta: el campo entero llega en una petición.**
+  **Superado el 11-ago-2026:** eso sigue describiendo la vista HiPS que está en
+  producción, pero la **capa difusa** ya no sale de ahí. Va por ps1cutouts, con
+  parche por objeto y FITS lineal (fichas 03 y 10). `hips2fits` se queda donde
+  está, sirviendo su JPG de color a la vista HiPS, y nada más.
 - **La cadena fotométrica sobrevivió al borrado**: `ctxFotometrico`, `pintarFot`,
   `valorDeFlujo`/`flujoDeValor`, `visibilidadDifusa`, `realzarPerceptual`,
   `adaptacionLocal` siguen en `resources/js/bitacora-gaia-render.js`. La pupila y
@@ -76,26 +83,79 @@ decidir.
   ganado un argumento nuevo. La carga de la prueba se ha invertido.
 - **Ficha nueva 09:** `dibujar()` proyecta lineal, `hips2fits` entrega TAN. A
   δ=70° y 30′ de campo son 4,8 px de desvío. Hay que decidir antes de la 04.
+- **Cambio de fuente (11-ago-2026): ps1cutouts de STScI en lugar de hips2fits.**
+  Decisión del usuario, por el aspecto de las imágenes, contrastada contra el
+  servicio real en la misma sesión. `ps1filenames.py` + `fitscut.cgi`, CORS
+  abierto, y **punto cero en la cabecera** (`ZPT_0000…` ≈ 24,46), que es justo lo
+  que le faltaba a hips2fits y lo que había engordado la vía B de la 03. A
+  cambio, sirve **una skycell** (~26′), no un mosaico: un recorte que cruza el
+  borde sale recortado y sin avisar. Detalle y medidas en la ficha 10.
+- **03 — FITS lineal en banda `g`, con el nivel anclado al catálogo.** El `ZPT`
+  fija la escala, pero el residuo de cielo del stack manda a μ ≈ 24, así que el
+  nivel absoluto lo pone la **mag V del RC3**: restar cielo del borde, integrar,
+  reescalar. La imagen aporta forma y contraste interno; el catálogo, la luz.
+- **Alcance: solo galaxias, y por parche, no por campo.** Un recorte por objeto
+  del catálogo RC3, lado `min(6·r_e, 20′)`, `output_size` fijo. Independiente de
+  ocular y aumento, luego cacheable para siempre. Nebulosas y globulares, fuera.
+- **04 — máscara solo hasta la magnitud que el render pinta.** El método ganador
+  de la 02, con el corte de `magLimite`: lo más débil que PS1 ve y el ocular no
+  resuelve se queda, porque es luz difusa legítima, no doble conteo.
+  **Revisable:** si se ven estrellas de más, se pasa a máscara total.
+- **05 — δ < −30° sin capa**, con aviso que dice la causa. El respaldo austral
+  (DSS2, SkyMapper) es esfuerzo aparte, no de este.
+- **06 — la capa entra en el simulador y en el formulario**, con interruptor en
+  el simulador y encendida por defecto.
+- **09 — cerrada sin tocar la proyección.** Con parche por objeto el desvío
+  TAN–lineal interno es de milisegundos de arco; lo que queda es el giro del
+  marco local (≈ Δα·sin δ), ~1 px en el peor caso. Se pega directo.
+
+## Plan de trabajo (11-ago-2026)
+
+Tres fases, en este orden, y la primera acaba con un juicio del usuario:
+
+1. **Ficha 10 — la capa, contra el servicio directo.** Parche por objeto desde
+   `fitscut.cgi` sin proxy, interruptor apagado por defecto, pintado en el
+   Canvas-2D de verdad para poder juzgarlo dentro de la cadena fotométrica.
+   Lenta a propósito (hasta 8 peticiones por galaxia, 2,6 s cada una).
+   Con ella, los asserts nuevos de `scripts/test_difuso.js`.
+2. **Ficha 11 — proxy con caché.** Un tercer PHP junto a `dss-proxy.php`, que
+   resuelve skycells, fusiona los NaN y devuelve un parche listo. No cambia un
+   solo píxel: solo latencia. Con `scripts/test_ps1_proxy.php`.
+3. **Ficha 12 — interruptor, avisos y encendido por defecto**, en simulador y
+   formulario.
+
+Lo que quedó atado a *ver el resultado* en la fase 1, y por tanto no está
+decidido del todo: el corte de magnitud de la máscara (ficha 04, se puede pasar
+a máscara total) y la gamma perceptual sobre imagen real (`GAMMA_PERCEPTUAL`
+0,45, calibrada contra difuso sintético; sobre PS1 también realza el ruido).
 
 ## Not yet specified
 
-- **Caché y rendimiento de los recortes.** Hoy `hips2fits` se pide directo desde
-  el navegador. Existe `bitacora-cache-lru.php`, compartido por los dos proxies,
-  por si hiciera falta uno tercero. Depende de qué formato salga de la ficha 03.
-- **Comprobación.** `scripts/test_difuso.js` sigue vivo con las secciones de la
-  cadena fotométrica (las de capas difusas se borraron en `d0a3641`). Qué assert
-  guarda este camino se verá cuando la tubería esté decidida.
-- **UI.** La barra de casillas «Capas difusas» se retiró en `d0a3641`. Si vuelve
-  un interruptor, y con qué etiqueta, depende de 05 y 06.
-- **Color del difuso.** El Canvas-2D pinta las estrellas con color de B−P; el
-  HiPS que se pide hoy es `color-z-zg-g`. Qué color lleva la componente difusa
-  queda por decidir, y depende de si 03 elige banda única o color.
+- **Cuánto ruido del stack pasa el realce perceptual.** Si sobra, el arreglo
+  puede no ser la gamma sino suavizar el parche antes de sumarlo: código nuevo.
+- **Galaxias mayores del tope de 20′** (M31, M33). La corrección de Sérsic por
+  la luz que queda fuera del parche sube al 40–60 %: es el punto más frágil del
+  diseño, y solo se sabrá mirándolo.
+- **`output_size` definitivo.** 512 px de partida, a revisar contra un campo real.
+- **Solape entre skycells.** Dos skycells discrepan un 15 % (mediana) en los
+  píxeles compartidos. De momento, el primer píxel válido; promediar si se nota.
+- **`nebulosas-datos.js`.** El catálogo de galaxias se queda y ahora se usa
+  (ficha 08); el de nebulosas sigue cargándose sin que nadie lo lea.
 - **Interacción con el realce perceptual.** `GAMMA_PERCEPTUAL`,
   `visibilidadDifusa` y `realzarPerceptual` se calibraron contra difuso
   *sintético*. Con difuso de imagen real puede sobrar o cambiar de valor.
 
 ## Out of scope
 
+- **Nebulosas** (decidido el 11-ago-2026) — su luz está en líneas, y la banda
+  ancha que las capta bien (`r`, con Hα dentro) no es la que representa lo que ve
+  el ojo. Arrastran su propia decisión de banda: ficha aparte, si se quieren.
+- **Cielo austral, δ < −30°** — PS1 no llega. Son 365 de las 1295 galaxias del
+  RC3, NGC 55 y NGC 253 entre ellas. Se queda sin capa, con aviso (ficha 05). El
+  respaldo con DSS2 o SkyMapper sería otro esfuerzo, con su propio tratamiento de
+  cielo, escala y estirado.
+- **Galaxias fuera del RC3** — el catálogo es de galaxias brillantes, no un
+  censo. Sin fila, no hay parche: el nivel se ancla a su mag V (ficha 03).
 - **Telón difuso de conteos de Gaia y halo de King de globulares** — borrados en
   `d0a3641` junto a lo demás, pero no son imágenes de cartografiado y el encargo
   nombra galaxias y nebulosas. Vuelven, si vuelven, como otro esfuerzo.

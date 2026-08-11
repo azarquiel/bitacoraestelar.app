@@ -5,7 +5,20 @@ extensos (nebulosidad Hα, telón de la Vía Láctea, extinción por polvo, gala
 y componente no resuelta de globulares) en la vista **Canvas-2D de Gaia** del
 simulador de ocular.
 
-Fecha: 2026-07-29. Estado: **árbol resuelto, pendiente de confirmar e implementar**.
+Fecha: 2026-07-29. Estado: **implementado y borrado** (`d0a3641`, 31-jul-2026:
+«el resultado no convenció»), y **superado** por el árbol del 11-ago-2026.
+
+> **Aviso de 2026-08-11.** Este documento ya no describe el rumbo. La capa
+> difusa se rehace desde **imágenes reales de cartografiado**: parches por
+> objeto de ps1cutouts (STScI), banda `g`, FITS lineal, nivel anclado a la mag V
+> del RC3, y **solo galaxias**. Caen sus decisiones 3, 5, 7, 13, 17 y 21; siguen
+> en pie la 6 (el cielo se suma **detrás** del polvo, no delante) y el signo de
+> la atenuación (`−2,5·log10(B_rel)`). El árbol nuevo y sus medidas viven en
+> `.scratch/difusas-desde-imagen/` (mapa y fichas 01–12).
+>
+> Por qué no convenció el Sérsic, dicho por el usuario el 07-ago-2026: parecía
+> falso, salían galaxias con formas erróneas y el resultado era una mancha
+> uniforme.
 
 Punto de partida: una spec externa escrita para un stack Python (astropy,
 healpy, reproject, StarNet++) que había que contrastar contra el simulador real

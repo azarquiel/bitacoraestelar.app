@@ -1,7 +1,7 @@
 # 09 — La proyección del render no es TAN, y la imagen sí
 
 **Type:** grilling
-**Status:** open
+**Status:** closed (11-ago-2026) — sin tocar la proyección
 **Blocked by:** —
 
 ## Question
@@ -49,3 +49,35 @@ Cerrar, eligiendo una:
 La respuesta dice **cuál**, y si es la primera, si el cambio de proyección va en
 un commit aparte y antes que el difuso —que es lo suyo: es un arreglo con
 sentido propio, verificable solo, y así el difuso no carga con su regresión.
+
+## Answer
+
+**Ninguna de las tres: la pregunta se disolvió con el parche por objeto.** La
+tabla de arriba mide el desvío en la **esquina de un lienzo de campo entero**.
+Con la capa hecha de parches de 6′ (ficha 10) esa esquina ya no existe, y quedan
+dos cosas, ambas pequeñas:
+
+- **Dentro del parche**, la diferencia TAN–lineal va como θ²/3: para 10′ de
+  radio son ~3·10⁻⁶ en escala, milisegundos de arco. Invisible.
+- **Entre el parche y el render**, el punto de tangencia no coincide —el del
+  parche es la galaxia, el del render el centro del campo—, y la diferencia es
+  un **giro** del marco local ≈ Δα·sin δ. Peor caso realista (galaxia a 15′ del
+  centro, δ = 70°): ~0,7°, que en el borde de un parche de 6′ son **~1 px** a la
+  escala del render.
+
+Se pega **directo**: escala constante desde `CDELT`, centro colocado por la misma
+proyección que ya sitúa las estrellas, sin giro y sin remuestreo. Un difuso de
+baja frecuencia, con el borde perdiéndose en el umbral de visibilidad, no enseña
+un error de 1 px; y las estrellas —que sí son puntuales, donde el desvío se
+vería— siguen colocadas como siempre, así que la galaxia no se desalinea
+respecto de ellas más que eso.
+
+**`dibujar()` no se toca**, y con ello se evita la regresión que preocupaba a
+esta ficha: cambiar la proyección movía cada estrella de cada imagen ya generada
+por el formulario de registro.
+
+Si algún día vuelve el difuso **de campo entero** (nebulosidad, telón), esta
+ficha revive tal cual: entonces la tabla sí manda.
+
+`bench/bench_proyeccion.js` se queda: es el que produjo la tabla y el que habría
+que volver a correr en ese caso.
