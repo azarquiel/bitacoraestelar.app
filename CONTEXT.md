@@ -10,6 +10,46 @@ verdad: `/wp-json/bitacora/v1/objetos` (catálogo del mapa),
 `/wp-json/bitacora/v1/datos.js` (lo que carga el visor) y
 `/wp-json/bitacora/v1/resolver?q=NGC+2022` (lo que resuelve el buscador).
 
+## Observación
+
+El **acto de mirar UN objeto**: qué se miró, quién, cuándo y con qué tubo
+(`{prefix}bitacora`). Es la unidad que se registra y la que se borra; todo lo demás
+del proyecto cuelga de ella o la describe.
+
+- **Un objeto, no una noche.** Mirar M42 y luego M43 son DOS observaciones. Lo
+  común a la salida (lugar, cielo, crónica) no se repite en cada una: vive en el
+  [[viaje interestelar]], al que apunta por `viaje_id`.
+- **Jerarquía observación → entrada → imagen.** La observación guarda la
+  identidad de lo mirado; cada **entrada** es lo que se vio A UN AUMENTO (ocular,
+  campo real, pupila de salida, título, descripción), y cada entrada lleva sus
+  **imágenes** (una principal, las demás anexos). Cambiar de ocular añade una
+  entrada, no una observación. `default_index` dice qué entrada abre la ficha del
+  mapa.
+- **Tres nociones de persona, y no son la misma.** El `observador` (texto: quién
+  miró, puede ser un invitado sin cuenta), el `observador_id` (su ficha en el
+  catálogo de observadores, la que usa el mapa para rotular) y el `usuario_id`
+  (la cuenta de WordPress DUEÑA del registro, la única que puede editarlo o
+  borrarlo). Quien mira y quien escribe no tienen por qué coincidir.
+- **La identidad es asimétrica según por dónde entre, y eso es deuda, no diseño.**
+  Al importar un OAL, «mismo usuario + misma noche + mismo objeto» es LA MISMA
+  observación: la clave `oal_id` lo impone y reimportar el fichero no duplica. Por
+  el formulario no hay ninguna regla: la tabla no tiene más clave única que `id`,
+  así que registrar M42 dos veces la misma noche crea dos filas. Consecuencia
+  molesta del lado OAL: la clave cuelga de la NOCHE, no del viaje, así que un
+  objeto visto en las dos salidas de una misma noche se importa una sola vez.
+- **Borrar no borra:** `borrada_en` marca la fila (papelera restaurable) y todas
+  las consultas del mapa y del registro la filtran. Una observación borrada no
+  desaparece del histórico, deja de contar.
+- **De dónde vino:** `origen` distingue `formulario` (lo normal), `oal`
+  (importada) y `legacy` (migrada). No cambia lo que significa la observación,
+  solo qué garantías tiene.
+- **Lo que apunta a otras entradas del glosario:** el objeto mirado tiene o
+  debería tener su [[objeto del mapa]]; el sitio, su [[base]] (a través del
+  viaje); y las alturas y azimuts calculados, su [[astrometría de la sesión]].
+  El campo `tipo` de aquí es el TIPO DE LA OBSERVACIÓN (cómo se identificó el
+  objeto: `messier`, `carbono`, `otro`), homónimo peligroso del tipo del objeto
+  del mapa: ver el aviso en [[clasificación de objeto del mapa]].
+
 ## Modelo de color Gaia
 
 El mapeo canónico **índice BP–RP → color RGB** de una estrella, anclado a los
