@@ -37,10 +37,13 @@ global.OBSERVACIONES = {
   m13: [
     { observador: 'israel', viaje: 7 },
     { observador: 'ana',    viaje: 9 },
-    { observador: 'israel', viaje: 8 },   // el MISMO observador, otra salida
-    { observador: 'israel', fecha: '2011-06-02' }, // histórica, sin viaje
+    { observador: 'israel', viaje: 8,
+      nave: { nombre: 'Excalibur', apertura_mm: 457, f_ratio: 4.5 } },  // el MISMO observador, otra salida
+    { observador: 'israel', fecha: '2011-06-02',   // histórica, sin viaje
+      instrumento: 'prismáticos 10x50' },          // a mano, sin telescopio de la flota
     { observador: 'ana' }                 // sin viaje y sin fecha
-  ]
+  ],
+  m57: [ { observador: 'israel', viaje: 8 } ]   // una sola observación
 };
 
 var VLV = require('../mapa/js/via-lactea-viaje.js');
@@ -109,12 +112,29 @@ eq(otras[0].fecha, '2026-08-12', 'sin fecha propia, la noche de su viaje');
 eq(otras[1].fecha, '2026-07-01', 'el MISMO observador en otra salida sí aparece');
 eq(otras[2].fecha, '2011-06-02', 'la fecha de la observación manda sobre la del viaje');
 eq(otras[3].fecha, '', 'sin viaje ni fecha -> sin fecha que enseñar');
+// Con qué se miró: la lista lo lleva para poder rotular «fecha · Nave …» sin
+// volver a OBSERVACIONES. El rótulo lo compone BitacoraEquipo, igual que la ficha.
+eq(otras[0].nave, { nombre: 'Excalibur', apertura_mm: 457, f_ratio: 4.5 }, 'la nave de esa observación');
+eq(otras[2].instrumento, 'prismáticos 10x50', 'sin nave de la flota, el instrumento escrito a mano');
+eq(otras[1].nave, null, 'observación sin telescopio -> sin nave');
 eq(VLV.otrasObservaciones('m13', null).length, 5, 'sin excluir ninguna salen las cinco');
 eq(VLV.otrasObservaciones('m42', null), [], 'objeto sin observaciones -> lista vacía');
-// La lista de la pantalla "← Descubrir" enseña esa fecha con su rótulo.
-eq(/Explorado en la fecha estelar/.test(
-     require('fs').readFileSync(__dirname + '/../mapa/js/via-lactea-app.js', 'utf8')),
-   true, 'la pantalla rotula la fecha, no el viaje');
+// Cada ítem de la lista dice la fecha y CON QUÉ se miró («12 ago 2026 · Nave
+// Excalibur · 18" f/4.5»), con el mismo rótulo de telescopio que la ficha.
+var app = require('fs').readFileSync(__dirname + '/../mapa/js/via-lactea-app.js', 'utf8');
+var itemLista = app.slice(app.indexOf('function abrirFichaDescubrimiento'),
+                          app.indexOf('function abrirObservacionPorIndice'));
+eq(/rotuloNave\(/.test(itemLista), true, 'el ítem compone la nave con el rótulo de la ficha');
+eq(/Nave /.test(itemLista), true, 'y la rotula como tal');
+eq(/Explorado en la fecha estelar/.test(app), false, 'la fecha va sola, sin la perífrasis');
+// Y el clic en el marcador la usa para ELEGIR cuando hay más de una: sin esto,
+// el mapa abre una observación cualquiera por el usuario.
+eq(/VLViaje\.hayQueElegir\(/.test(app), true, 'el clic en el objeto consulta si hay que elegir');
+
+console.log('hayQueElegir (con varias observaciones se elige, no se abre una):');
+eq(VLV.hayQueElegir('m13'), true, 'cinco observaciones -> el mapa enseña la lista');
+eq(VLV.hayQueElegir('m57'), false, 'una sola observación -> se abre directamente');
+eq(VLV.hayQueElegir('m92'), false, 'objeto sin observaciones -> nada que elegir');
 
 console.log('fase (el punteado en movimiento):');
 var ciclo = VLV.PATRON[0] + VLV.PATRON[1];

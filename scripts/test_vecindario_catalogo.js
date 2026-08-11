@@ -142,5 +142,13 @@ var app = require('fs').readFileSync(__dirname + '/../mapa/js/via-lactea-app.js'
 eq(/GrupoLocal\.onObjectClick\s*=/.test(app), true, 'el atlas tiene manejador de clic');
 eq(/VecindarioSolar\.onObjectClick\s*=/.test(app), true, 'el vecindario tiene manejador de clic');
 
+// Los marcadores nacen visibles y es refreshAnchors() quien esconde los que ya
+// enseña el vecindario. Si solo se llama desde los manejadores (leyenda, cambio
+// de vista, filtro, viaje), al ABRIR el mapa la galaxia repite las estrellas del
+// vecindario —Sirius, Gamma Andromeda…— hasta que se toca algo. Hace falta una
+// llamada al arrancar, a nivel del módulo (sangría de dos espacios).
+console.log('estado inicial de los marcadores (via-lactea-app.js):');
+eq(/^ {2}refreshAnchors\(\);/m.test(app), true, 'al abrir el mapa ya se aplica el filtro de escala');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');
