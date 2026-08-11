@@ -81,7 +81,10 @@ DORADOS = [
     ("WD*", "", "estrella"),      # enana blanca: Sirio B
     ("As*", "", "desconocido"),   # asterismo: lleva '*' pero son VARIAS estrellas
     ("G",   "", "desconocido"),   # galaxia sin morph (Hubble lo cubre aparte)
-    ("DNe", "", "desconocido"),   # nebulosa oscura: Barnard 33, NO es una estrella
+    ("DNe", "", "oscura"),        # nebulosa oscura: Barnard 33
+    ("glb", "", "oscura"),        # glóbulo de Bok (B68), case-insensitive
+    ("CGb", "", "oscura"),        # glóbulo cometario
+    ("MoC", "", "desconocido"),   # nube molecular: a propósito FUERA de 'oscura'
     ("",    "", "desconocido"),   # SIMBAD no respondió: no se adivina que sea estrella
     ("PN",  "carbono", "carbono"),# override del registro gana sobre otype
 ]

@@ -79,8 +79,10 @@ eq(V.esEstrella({ id: 'ngc40', tipo: 'planetaria' }), false, 'planetaria no es e
 eq(V.esEstrella({ id: 'm8', tipo: 'emision' }), false, 'nebulosa de emisión no es estrella');
 eq(V.esEstrella({ id: 'm1', tipo: 'snr' }), false, 'resto de supernova no es estrella');
 eq(V.esEstrella({ id: 'm31', tipo: 'S' }), false, 'galaxia (clase de Hubble) no es estrella');
-eq(V.esEstrella({ id: 'barnard33', label: 'Barnard 33', tipo: 'desconocido' }), false,
-  'sin clasificar (Barnard 33) no es estrella: no se adivina');
+eq(V.esEstrella({ id: 'barnard33', label: 'Barnard 33', tipo: 'oscura' }), false,
+  'nebulosa oscura (Barnard 33) no es estrella');
+eq(V.esEstrella({ id: 'b68', label: 'Barnard 68', tipo: 'desconocido' }), false,
+  'sin clasificar no es estrella: no se adivina');
 eq(V.esEstrella({ id: 'abell12', label: 'Abell 12', tipo: 'desconocido' }), false,
   'sin clasificar (Abell 12, una planetaria que SIMBAD no resolvió) no es estrella');
 eq(V.esEstrella({ id: 'gum1', label: 'Gum 1', tipo: 'desconocido' }), false,
@@ -92,7 +94,7 @@ eq(V.esEstrella({ id: 'sintipo', label: 'X' }), false, 'sin tipo no es estrella'
 console.log('estrellasVecindario (solo estrellas):');
 var mezcla = V.estrellasVecindario([
   { id: 'sirius', label: 'Sirius', l: 227.2, b: -8.9, dist: 9, tipo: 'estrella' },
-  { id: 'barnard33', label: 'Barnard 33', l: 207.0, b: -16.8, dist: 1500, tipo: 'desconocido' },
+  { id: 'barnard33', label: 'Barnard 33', l: 207.0, b: -16.8, dist: 1500, tipo: 'oscura' },
   { id: 'ngc2024', label: 'NGC 2024', l: 206.5, b: -16.4, dist: 1350, tipo: 'abierto' }
 ], 1500).map(function (o) { return o.id; });
 eq(mezcla.join(','), 'sirius', 'el espacio profundo cercano no entra en el vecindario');
@@ -100,7 +102,7 @@ eq(mezcla.join(','), 'sirius', 'el espacio profundo cercano no entra en el vecin
 console.log('enVecindario (lo que la vista de la galaxia ya no repite):');
 eq(V.enVecindario({ id: 'sirius', l: 227.2, b: -8.9, dist: 9, tipo: 'estrella' }, 1500), true,
   'estrella cercana: la enseña el vecindario');
-eq(V.enVecindario({ id: 'barnard33', label: 'Barnard 33', l: 207.0, b: -16.8, dist: 1500, tipo: 'desconocido' }, 1500), false,
+eq(V.enVecindario({ id: 'barnard33', label: 'Barnard 33', l: 207.0, b: -16.8, dist: 1500, tipo: 'oscura' }, 1500), false,
   'espacio profundo cercano: sigue en la galaxia');
 eq(V.enVecindario({ id: 'ssvir', l: 300, b: 10, dist: 2037, tipo: 'carbono' }, 1500), false,
   'estrella lejana: sigue en la galaxia');

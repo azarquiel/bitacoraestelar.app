@@ -108,8 +108,18 @@ cúmulos y estrellas de carbono caían en el default `#7ec8ff`, que en la leyend
 
 Prioridad: tipo del registro → tabla de categorías MW por código otype (`C*`
 carbono, `GlC` globular, `OpC`/`Cl*` abierto, `PN` planetaria, `HII`/`EmO` emisión,
-`SNR` resto de supernova) → galaxia por clase de Hubble (para grupo local) →
-**`estrella`** si el otype es estelar → **`desconocido`** si no se pudo clasificar.
+`DNe`/`glb`/`CGb` oscura, `SNR` resto de supernova) → galaxia por clase de Hubble
+(para grupo local) → **`estrella`** si el otype es estelar → **`desconocido`** si no
+se pudo clasificar.
+
+- **La nebulosa oscura no emite: TAPA.** Es la silueta de polvo sobre un fondo rico
+  en estrellas (Barnard 33, los Barnard, las LDN), y por eso lleva el pardo del polvo
+  y no uno de los brillantes del resto de la leyenda. Es la misma familia que en el
+  simulador solo sabe contar la placa fotográfica y no el catálogo de puntos (ver
+  [[cadena de la placa (luma → flujo)]]). Quedan fuera a propósito `MoC` (nube
+  molecular) y `Cld` (nube a secas): son categorías de radio, no lo que se ve
+  recortado en el ocular, y `Cld` es tan ancho que se tragaría objetos que no son
+  esto. Un `MoC` cae en `desconocido`, que es la verdad.
 
 - **«Es una estrella» y «no sé qué es» son hechos DISTINTOS.** Antes compartían el
   cajón `otro` y el color `#dfe7f5`, rotulado en la leyenda «Estrella / otro»: el

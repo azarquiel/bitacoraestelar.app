@@ -2790,6 +2790,14 @@ function bitacora_categorias_mapa() {
         array( 'abierto',    array( 'OPC', 'CL*' ),  '#8aff9e' ),
         array( 'planetaria', array( 'PN' ),          '#5fe0c8' ),
         array( 'emision',    array( 'HII', 'EMO' ),  '#ff8a80' ),
+        // Nebulosa oscura: no emite, TAPA. Es la silueta de polvo sobre un fondo
+        // rico en estrellas (Barnard 33, los Barnard, las LDN), y por eso su color
+        // es el pardo del polvo y no uno de los brillantes del resto de la leyenda.
+        // 'DNe' es la nube oscura, 'glb' el glóbulo (los de Bok) y 'CGb' el glóbulo
+        // cometario. Fuera quedan a propósito 'MoC' (nube molecular) y 'Cld' (nube
+        // a secas): son categorías de radio, no lo que se ve recortado en el ocular,
+        // y 'Cld' es tan ancho que se tragaría objetos que no son esto.
+        array( 'oscura',     array( 'DNE', 'GLB', 'CGB' ), '#b08968' ),
         array( 'snr',        array( 'SNR' ),         '#7ec8ff' ),
     );
 }
