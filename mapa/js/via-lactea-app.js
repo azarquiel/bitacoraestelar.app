@@ -1503,12 +1503,16 @@
   }
 
   function openFicha(id, dot) {
-    var f = VLO.getFicha(id);
-    f._id = id;
-    renderFichaNormal(f, {
+    var info = {
       title:  dot.getAttribute('data-title') || '',
       coords: dot.getAttribute('data-coords') || ''
-    }, { observadorNombre: VLO.nombreObservador(f.observador) });
+    };
+    // Con más de una observación se elige: abrir una cualquiera sería elegir por
+    // el usuario.
+    if (VLViaje.hayQueElegir(id)) { abrirFichaDescubrimiento(id, info, { elegir: true }); return; }
+    var f = VLO.getFicha(id);
+    f._id = id;
+    renderFichaNormal(f, info, { observadorNombre: VLO.nombreObservador(f.observador) });
   }
 
   // Escapa texto para insertarlo con seguridad en HTML (nombres de observador).
@@ -1540,13 +1544,20 @@
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = (info && info.coords) || '';
 
-    // Cada ítem: quién observó y CUÁNDO (la lista ya viene de la más reciente a
-    // la más antigua). El nombre del viaje no pinta nada aquí.
+    // Cada ítem: quién observó, CUÁNDO y CON QUÉ (la lista ya viene de la más
+    // reciente a la más antigua) — «12 ago 2026 · Nave Excalibur · 18" f/4.5».
+    // La nave se rotula con el mismo BitacoraEquipo que la ficha, así que dice lo
+    // mismo aquí y dentro. El nombre del viaje no pinta nada aquí.
     var otras = VLViaje.otrasObservaciones(id, ctx.excluir);
     var items = otras.map(function (o) {
-      var cuando = o.fecha
+      var nave = rotuloNave(o);
+      var linea = [
+        o.fecha ? fmtFechaEstelar(o.fecha) : '',
+        nave ? 'Nave ' + escHtml(nave) : ''
+      ].filter(function (t) { return t; }).join(' · ');
+      var cuando = linea
         ? '<span style="display:block;margin-top:3px;font-size:12px;color:#8fb2cf;">' +
-          'Explorado en la fecha estelar ' + fmtFechaEstelar(o.fecha) + '</span>' : '';
+          linea + '</span>' : '';
       return '<li><button type="button" class="ficha-descubrir-item" data-indice="' + o.indice + '" style="' +
         'display:block;width:100%;text-align:left;cursor:pointer;' +
         'background:rgba(126,200,255,0.10);color:#cfe6f7;' +
@@ -1560,9 +1571,10 @@
         'letter-spacing:.18em;text-transform:uppercase;color:#f4c76b;' +
         'border:1px solid rgba(244,199,107,.35);border-radius:8px;' +
         'padding:8px 12px;text-align:center;margin:0 0 18px;">' +
-        (ctx.desdeFicha ? 'OTRAS OBSERVACIONES' : 'NO VISITADO') + '</div>' +
+        (ctx.elegir ? 'OBSERVACIONES'
+          : (ctx.desdeFicha ? 'OTRAS OBSERVACIONES' : 'NO VISITADO')) + '</div>' +
       '<div style="font-family:sans-serif;font-size:13px;color:#9fb6c9;margin:0 0 6px;">' +
-        'Otras observaciones</div>' +
+        (ctx.elegir ? 'Elige qué observación quieres ver' : 'Otras observaciones') + '</div>' +
       (otras.length
         ? '<ul style="list-style:none;padding:0;margin:0;">' + items + '</ul>'
         : '<div style="font-family:sans-serif;font-size:13px;color:#7f93a6;">' +
@@ -1592,7 +1604,8 @@
     if (!f) return;
     f._id = id;
     renderFichaNormal(f, info, {
-      volverA: { id: id, info: info, excluir: ctx && ctx.excluir, desdeFicha: ctx && ctx.desdeFicha },
+      volverA: { id: id, info: info, excluir: ctx && ctx.excluir,
+                 desdeFicha: ctx && ctx.desdeFicha, elegir: ctx && ctx.elegir },
       observadorNombre: VLO.nombreObservador(f.observador)
     });
   }
@@ -1608,6 +1621,10 @@
     if (!desc) return;
     var fichaId = desc.ficha;
     var info = { title: desc.title || '', coords: desc.coords || '', pdf: desc.pdf };
+    if (fichaId && VLViaje.hayQueElegir(fichaId)) {
+      abrirFichaDescubrimiento(fichaId, info, { elegir: true });
+      return;
+    }
     if (fichaId && VLO.getFicha(fichaId)) {
       var f = VLO.getFicha(fichaId);
       f._id = fichaId;
@@ -1743,6 +1760,11 @@
         ? 'grayscale(' + VLO.MEZCLA_NO_VISITADO + ') opacity(' + VLO.OPACIDAD_NO_VISITADO + ')' : '';
     }
   }
+
+  // Estado inicial: los marcadores nacen visibles, así que sin esta llamada la
+  // galaxia repetiría al abrir el mapa las estrellas del vecindario (Sirius,
+  // Gamma Andromeda…) hasta que se tocara la leyenda, la vista o un filtro.
+  refreshAnchors();
 
   // Cambia efectivamente de vista (imágenes, marcadores, controles y estado).
   function performViewSwap() {
