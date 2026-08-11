@@ -381,11 +381,14 @@ ok(Math.abs(r18 - r8) / r8 < 0.02,
    come el núcleo, o un parche pintado un poco corrido. */
 console.log('\nCapa de galaxias desde imagen real (ps1cutouts):');
 
-// La URL del recorte, con wcs=1 y el `size` en píxeles NATIVOS de 0,25″.
-var urlRec = R.ps1UrlRecorte('/rings.v3.skycell/1234/056/x.fits', 10.6847, 41.269, 3);
-ok(/[?&]wcs=1(&|$)/.test(urlRec), 'la URL del recorte lleva wcs=1');
-ok(/[?&]size=720(&|$)/.test(urlRec), 'size va en píxeles nativos (3′ = 720 px de 0,25″)');
-ok(/[?&]format=fits(&|$)/.test(urlRec), 'el recorte se pide en FITS, no en JPEG');
+/* La petición al proxy: objeto, lado y banda, y nada de ocular ni aumento (de
+   eso depende que el parche se pueda cachear para siempre). Lo que hay detrás
+   —skycells, wcs=1, el `size` en píxeles nativos— lo prueba
+   scripts/test_ps1_proxy.php, que es donde vive. */
+var urlPar = R.ps1UrlParche({ ra: 10.6847, dec: 41.269, ladoArcmin: 3 });
+ok(/[?&]lado=3\.00(&|$)/.test(urlPar), 'la URL del parche lleva el lado en minutos');
+ok(/[?&]banda=g(&|$)/.test(urlPar), 'y la banda');
+ok(!/aumento|pupila|ocular/.test(urlPar), 'y nada del equipo: el parche no depende de él');
 
 /* El lector de FITS, contra un fichero armado aquí mismo: float32 BIG-endian,
    cabecera en bloques de 2880 y un NaN que tiene que llegar como NaN (es la
@@ -397,7 +400,7 @@ var cards = ['SIMPLE  =                    T', 'BITPIX  =                  -32',
 var cab = cards.map(function (c) { while (c.length < 80) c += ' '; return c; }).join('');
 while (cab.length % 2880) cab += ' ';
 var buf = new ArrayBuffer(cab.length + 16), vistaB = new DataView(buf), bytesB = new Uint8Array(buf);
-for (i18 = 0; i18 < cab.length; i18++) bytesB[i18] = cab.charCodeAt(i18);
+for (var i18 = 0; i18 < cab.length; i18++) bytesB[i18] = cab.charCodeAt(i18);
 [1.5, -2.25, NaN, 100].forEach(function (v, k) { vistaB.setFloat32(cab.length + k * 4, v, false); });
 var fits = R.parseFITS(buf);
 ok(fits && fits.ancho === 2 && fits.alto === 2, 'el lector de FITS saca las dimensiones');
@@ -477,22 +480,7 @@ ok(luzLejos / luzTotal < 0.05,
 ok(pxConLuz < ANCHO_R * ANCHO_R * 0.25,
   'el fondo de ruido no queda encendido entero (' + pxConLuz + ' de ' + (ANCHO_R * ANCHO_R) + ' px con luz)');
 
-// Fusión por NaN: dos skycells complementarias no dejan hueco.
-var capaA = new Float32Array(ANCHO * ANCHO), capaB = new Float32Array(ANCHO * ANCHO);
-for (var i18 = 0; i18 < capaA.length; i18++) {
-  var izq = (i18 % ANCHO) < ANCHO / 2;
-  capaA[i18] = izq ? 7 : NaN;
-  capaB[i18] = izq ? NaN : 11;
-}
-var fus = R.ps1Fusionar([{ ancho: ANCHO, alto: ANCHO, datos: capaA, escalaAs: ESCALA },
-                         { ancho: ANCHO, alto: ANCHO, datos: capaB, escalaAs: ESCALA }]);
-var huecos = 0, mal = 0;
-for (i18 = 0; i18 < fus.datos.length; i18++) {
-  if (!(fus.datos[i18] === fus.datos[i18])) huecos++;
-  else if (fus.datos[i18] !== ((i18 % ANCHO) < ANCHO / 2 ? 7 : 11)) mal++;
-}
-ok(huecos === 0 && mal === 0, 'dos skycells complementarias se cosen sin huecos ni mezclas');
-ok(R.ps1Fusionar([null, null]) === null, 'sin ninguna capa válida, la fusión devuelve null');
+// (La costura de skycells por NaN se fue al proxy: scripts/test_ps1_proxy.php.)
 
 /* Supresión de estrellas: solo las que el render VA a pintar (hasta mlim), y
    nunca el núcleo. Al bajar la magnitud límite del equipo se enmascaran MENOS

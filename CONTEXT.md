@@ -181,11 +181,12 @@ Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de obj
 
 ## Caché LRU de los proxies
 
-Política con la que los dos proxies del simulador (`gaia_proxy.php` y `dss-proxy.php`) acotan su caché en disco. Las respuestas que guardan son **inmutables** —Gaia DR3 es catálogo fijo y el DSS archivo fijo—, así que no caducan: lo único que acota el disco es la **expulsión por tamaño**, y la limpieza es **incremental** (como mucho una pasada cada 5 min y un número máximo de borrados por pasada, para no escanear el directorio en cada petición).
+Política con la que los tres proxies del simulador (`gaia_proxy.php`, `dss-proxy.php` y `ps1-proxy.php`) acotan su caché en disco. Las respuestas que guardan son **inmutables** —Gaia DR3 es catálogo fijo y el DSS archivo fijo—, así que no caducan: lo único que acota el disco es la **expulsión por tamaño**, y la limpieza es **incremental** (como mucho una pasada cada 5 min y un número máximo de borrados por pasada, para no escanear el directorio en cada petición).
 
 - **Fuente única:** `simulador_ocular/bitacora-cache-lru.php`. `cache_lru_seleccionar_evict(lista, total, max_bytes, lowwater, max_del)` decide qué cae (pura, no toca disco) y `cache_lru_limpieza({dir, patron, max_bytes,
   lowwater, max_del, cada, huerfano_ttl})` la ejecuta, más el barrido de `.lock` y `.tmp` huérfanos ya envejecidos.
-- **Consumidores:** los dos proxies, cada uno con sus cifras (Gaia 500 MB y lowwater 0,90 sobre `*.json.gz`; DSS 150 MB y 0,80 sobre `*.gif`).
+- **Consumidores:** los tres proxies, cada uno con sus cifras (Gaia 500 MB y lowwater 0,90 sobre `*.json.gz`; DSS 150 MB y 0,80 sobre `*.gif`; PS1 150 MB y 0,80 sobre `*.fits`).
+- **`ps1-proxy.php`** (capa de galaxias desde imagen real): entrega el parche de una galaxia **ya cosido** de sus skycells —resuelve los nombres, pide el mismo recorte a cada una y se queda con el primer píxel no NaN—, así que el navegador hace **una** petición por galaxia en vez de ocho. Clave `ra|dec|lado|salida|banda`: sin ocular ni aumento, porque el parche no depende del equipo. `wcs=1` obligatorio, y el nombre de skycell lo resuelve el servidor. Test: `scripts/test_ps1_proxy.php`.
 - **Lo que NO es compartido:** la clave de caché, la ruta y el servido. Cada proxy sirve otra cosa (JSON con negociación gzip / GIF) y con sus propios cuerpos de error; unificarlo pediría más perillas de las que ahorra.
 - **Test:** `scripts/test_cache_lru.php`, sobre directorio temporal de verdad. La limpieza —el patrón que acota qué se borra, el stamp que evita escanear en cada petición, el barrido de huérfanos— no la cubría ningún test antes; los de cada proxy solo comprobaban su copia de la selección.
 

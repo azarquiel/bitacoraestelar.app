@@ -69,6 +69,7 @@ un bloque HTML.
 | `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
 | `dss-proxy.php` | Proxy de placas del DSS con caché en disco acotada, de dos fuentes (`fuente=eso` y `fuente=skyview`) | Servidor, junto al JS/CSS |
+| `ps1-proxy.php` | Proxy de `ps1cutouts` (STScI) con caché en disco: entrega el parche de una galaxia ya cosido de sus skycells (capa de galaxias desde imagen real) | Servidor, junto al JS/CSS |
 | `generar_niveles.py`, `ps1_service.py` | Pipeline/servicio **experimental** de placas fotométricas (ver más abajo) | Herramientas offline, no requeridas |
 
 Depende además de dos piezas **compartidas** con el resto de la web:
@@ -541,13 +542,34 @@ DSS tiene un único origen).
 Las funciones puras del proxy tienen su propio test sin framework:
 `php scripts/test_dss_proxy.php` (espejo de `scripts/test_gaia_proxy.php`).
 
+### Caché de los parches de PanSTARRS
+
+`ps1-proxy.php` guarda en `cache-ps1/` el parche de cada galaxia, con la misma
+política LRU (el módulo compartido `bitacora-cache-lru.php`) y el mismo
+anti-estampida y `ETag` que el DSS. Lo que hace de más:
+
+- **Una petición por galaxia, no ocho.** Resuelve en el servidor qué skycells
+  toca el parche (las cuatro esquinas contra `ps1filenames.py`), pide el MISMO
+  recorte a cada una y las **cose por los NaN** —fuera de su skycell, `fitscut`
+  devuelve NaN—, quedándose con el primer píxel válido. El navegador recibe un
+  solo FITS.
+- **`wcs=1` siempre**, y el nombre de skycell lo resuelve el servidor: si se
+  aceptara del cliente, esto sería un proxy abierto hacia STScI. Sin `wcs=1`,
+  `x`/`y` se leen como píxeles y el servicio responde 200 OK con un recorte de
+  otro sitio, sin error y sin aviso.
+- **La clave no lleva ni ocular ni aumento** (`ra|dec|lado|salida|banda`): el
+  parche no depende del equipo, así que se cachea para siempre.
+
+Test de las funciones puras: `php scripts/test_ps1_proxy.php`.
+
 ---
 
 ## Despliegue
 
 1. **JS y CSS** → por FTP a `/wp-content/uploads/bitacora/`.
    Al actualizar un archivo, **incrementa su `?v=N`** en el HTML para saltar la caché.
-2. **`dss-proxy.php`** → a esa misma carpeta (crea `cache-dss/` solo).
+2. **`dss-proxy.php`** y **`ps1-proxy.php`** → a esa misma carpeta, junto a
+   `bitacora-cache-lru.php` (crean `cache-dss/` y `cache-ps1/` solos).
 3. **`ocular-wordpress.html`** → pégalo en un bloque "HTML personalizado" de la página.
 4. **El plugin** (`bitacora-registro.php`) → a `wp-content/plugins/bitacora-registro/`
    (necesario para que el catálogo sea público). No hay que reactivarlo.

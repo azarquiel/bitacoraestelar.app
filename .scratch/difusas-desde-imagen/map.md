@@ -22,8 +22,13 @@ tiene ~35 asserts nuevos, sin red. `test_salud_globo` y `test_segundo_auxiliar`
 fallan también en `main`: no son de aquí.
 
 Para verlo: recargar el simulador y en consola
-`BitacoraGaiaRender.galaxiasImagen = true`. Sin proxy todavía: la primera galaxia
-tarda unos segundos.
+`BitacoraGaiaRender.galaxiasImagen = true`.
+
+**Fase 2 construida** (ficha 11, 11-ago-2026): `simulador_ocular/ps1-proxy.php`
+sirve el parche **ya cosido** con caché LRU en disco. El navegador hace una
+petición por galaxia en vez de ocho, y de la segunda vez en adelante sale del
+disco del servidor. No cambia un píxel. Requiere subir el PHP junto a los otros
+dos proxies; sin él, la capa no pinta (el `fetch` da null y se apaga sola).
 
 **Por dónde seguir, en orden:**
 
@@ -33,8 +38,8 @@ tarda unos segundos.
 2. **Decisiones abiertas de esa mirada**, las tres escritas en la Answer de la 07:
    estrellas de más (ficha 04), doble contabilidad en el solape M51/NGC 5195, y
    las aureolas de Gaia, que compiten con el disco.
-3. **Ficha 11** — proxy PHP con caché. **Ficha 12** — casilla, avisos y encendido
-   por defecto.
+3. **Ficha 12** — casilla, avisos y encendido por defecto. (La 11, el proxy con
+   caché, está cerrada.)
 
 ## Notes
 
@@ -131,6 +136,9 @@ tarda unos segundos.
 - **09 — cerrada sin tocar la proyección.** Con parche por objeto el desvío
   TAN–lineal interno es de milisegundos de arco; lo que queda es el giro del
   marco local (≈ Δα·sin δ), ~1 px en el peor caso. Se pega directo.
+- **11 — el parche se cose en el SERVIDOR y se sirve en FITS tal cual.**
+  `ps1-proxy.php`, con la caché LRU compartida. Resolver skycells, `wcs=1` y la
+  costura por NaN salen del JS y pasan al PHP: una sola implementación.
 
 ## Plan de trabajo (11-ago-2026)
 
@@ -141,9 +149,10 @@ Tres fases, en este orden, y la primera acaba con un juicio del usuario:
    Canvas-2D de verdad para poder juzgarlo dentro de la cadena fotométrica.
    Lenta a propósito (hasta 8 peticiones por galaxia, 2,6 s cada una).
    Con ella, los asserts nuevos de `scripts/test_difuso.js`.
-2. **Ficha 11 — proxy con caché.** Un tercer PHP junto a `dss-proxy.php`, que
-   resuelve skycells, fusiona los NaN y devuelve un parche listo. No cambia un
-   solo píxel: solo latencia. Con `scripts/test_ps1_proxy.php`.
+2. ~~**Ficha 11 — proxy con caché.**~~ **Hecha.** `ps1-proxy.php` resuelve
+   skycells, cose los NaN y devuelve el parche listo, con
+   `scripts/test_ps1_proxy.php`. Las funciones de red que vivían en el JS se
+   borraron de ahí: ahora viven solo en el proxy.
 3. **Ficha 12 — interruptor, avisos y encendido por defecto**, en simulador y
    formulario.
 

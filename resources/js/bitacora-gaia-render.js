@@ -1267,15 +1267,16 @@
       · **fitscut sirve UNA skycell (~26′), no un mosaico.** Fuera de ella devuelve
         NaN. Un parche que cruza el borde —le pasa a ~40 % de los objetos— se cose
         pidiendo el MISMO recorte a cada skycell que toque y quedándose con el
-        píxel válido. No hay que reproyectar: llegan sobre la rejilla pedida.
-      · **`wcs=1` es OBLIGATORIO.** Sin él, `x`/`y` se leen como coordenadas de
-        PÍXEL y el servicio responde 200 OK con un recorte de otro sitio, sin
-        error y sin aviso. Hay un test que lo vigila. */
+        píxel válido. Eso lo hace `ps1-proxy.php`, que entrega el parche ya
+        cosido en una sola petición; aquí solo se lee. No hay que reproyectar:
+        llega sobre la rejilla pedida.
+      · **Resolver skycells, armar la URL de fitscut y exigir `wcs=1` es cosa del
+        proxy** (test: `scripts/test_ps1_proxy.php`). Sin `wcs=1`, x/y se leen
+        como coordenadas de PÍXEL y el servicio responde 200 OK con un recorte de
+        otro sitio, sin error y sin aviso. */
   var PS1 = {
-    base: 'https://ps1images.stsci.edu/cgi-bin/',
     banda: 'g',            // la más cercana al pico escotópico (507 nm) y la más profunda del 3π
-    escalaNativa: 0.25,    // ″/px del stack; el parámetro `size` de fitscut va en estos píxeles
-    salida: 512,           // px del recorte que se pide (output_size remuestrea y corrige la WCS)
+    salida: 512,           // px del parche que se pide al proxy (él remuestrea y corrige la WCS)
     ladoFactor: 6,         // lado del parche = 6·r_e → radio 3·r_e ≈ 94 % de la luz de un disco
     ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
     ladoMin: 1.5,          // ′: por debajo no queda parche que mirar
@@ -1284,8 +1285,7 @@
     mascaraMaxAs: 8,       // ″: tope del radio de máscara de una estrella
     nucleoPx: 3,           // px: radio central que la máscara no toca nunca
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
-    kRuido: 1.5,            // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
-    timeout: 30000
+    kRuido: 1.5             // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
   };
 
   /* Interruptor de la capa, aquí y no en cada llamador: los dos puntos de uso
@@ -1301,50 +1301,22 @@
     return Math.max(PS1.ladoMin, Math.min(PS1.ladoMax, lado));
   }
 
-  function ps1UrlNombres(ra, dec) {
-    return PS1.base + 'ps1filenames.py?ra=' + Number(ra).toFixed(6) +
-      '&dec=' + Number(dec).toFixed(6) + '&filters=' + PS1.banda;
-  }
+  /* URL del parche en el proxy. El parche NO depende del ocular ni del aumento
+     (ficha 10), así que la petición solo lleva objeto, lado y banda: por eso el
+     proxy puede cachearlo para siempre. */
+  var PS1_PROXY_URL = '/wp-content/uploads/bitacora/ps1-proxy.php';
 
-  /* URL de un recorte. `size` va en píxeles NATIVOS (0,25″) y `output_size`
-     remuestrea; `wcs=1` es lo que hace que x/y sean RA/Dec y no píxeles. */
-  function ps1UrlRecorte(fichero, ra, dec, ladoArcmin, salida) {
-    var size = Math.round(ladoArcmin * 60 / PS1.escalaNativa);
-    return PS1.base + 'fitscut.cgi?red=' + fichero +
-      '&x=' + Number(ra).toFixed(6) + '&y=' + Number(dec).toFixed(6) +
-      '&size=' + size + '&output_size=' + (salida || PS1.salida) +
-      '&format=fits&wcs=1';
-  }
-
-  /* Las cuatro esquinas del parche, que es por donde se averigua qué skycells
-     toca. El paso en RA se abre con 1/cos(dec) porque el parche es cuadrado EN EL
-     CIELO, no en coordenadas. */
-  function ps1Esquinas(ra, dec, ladoArcmin) {
-    var mitad = ladoArcmin / 120;                       // grados
-    var cos = Math.cos(dec * Math.PI / 180);
-    var dra = mitad / Math.max(0.02, Math.abs(cos));
-    return [
-      [ra - dra, dec - mitad], [ra + dra, dec - mitad],
-      [ra - dra, dec + mitad], [ra + dra, dec + mitad]
-    ];
-  }
-
-  /* Nombre de skycell de la respuesta de ps1filenames.py (texto con cabecera;
-     la columna `filename` es la octava). */
-  function ps1ParseNombres(texto) {
-    var lineas = String(texto || '').trim().split('\n');
-    var out = [];
-    for (var i = 1; i < lineas.length; i++) {
-      var col = lineas[i].trim().split(/\s+/);
-      if (col.length >= 8 && col[7].charAt(0) === '/') out.push(col[7]);
-    }
-    return out;
+  function ps1UrlParche(gal, salida) {
+    return PS1_PROXY_URL +
+      '?ra=' + Number(gal.ra).toFixed(5) + '&dec=' + Number(gal.dec).toFixed(5) +
+      '&lado=' + Number(gal.ladoArcmin).toFixed(2) +
+      '&salida=' + (salida || PS1.salida) + '&banda=' + PS1.banda;
   }
 
   /* Lector de FITS mínimo: cabecera de tarjetas de 80 caracteres en bloques de
      2880 bytes, datos float32 BIG-ENDIAN (BITPIX=-32). Solo se leen las claves que
-     esta capa usa. Los píxeles fuera de la skycell llegan como NaN y se conservan
-     como NaN: son la marca de "aquí no hay dato", que es lo que usa ps1Fusionar. */
+     esta capa usa. Lo que ninguna skycell cubre llega como NaN y se conserva como
+     NaN: es la marca de "aquí no hay dato" que el proxy no pudo coser. */
   function parseFITS(buffer) {
     var bytes = new Uint8Array(buffer), cab = {}, datos = -1, i, j, linea, clave;
     for (i = 0; i + 80 <= bytes.length; i += 80) {
@@ -1371,26 +1343,6 @@
       escalaAs: Math.abs(num('CDELT2', num('CD2_2', 0))) * 3600,
       zpt: num('ZPT_0000', NaN)
     };
-  }
-
-  /* Cose los recortes de varias skycells: el mismo campo pedido a cada una, cada
-     una con NaN donde no llega. Se queda con el PRIMER píxel válido; el solape
-     entre dos skycells discrepa un 15 % (mediana), dominado por el ruido de cielo,
-     y promediar queda para si algún día se nota.
-     ponytail: primero válido, no media ponderada por distancia al borde. */
-  function ps1Fusionar(capas) {
-    var buenas = (capas || []).filter(function (c) { return c && c.datos && c.datos.length; });
-    if (!buenas.length) return null;
-    var n = buenas[0].datos.length, out = new Float32Array(n), i, k;
-    for (i = 0; i < n; i++) {
-      out[i] = NaN;
-      for (k = 0; k < buenas.length; k++) {
-        var v = buenas[k].datos[i];
-        if (v === v) { out[i] = v; break; }     // v===v descarta NaN
-      }
-    }
-    return { ancho: buenas[0].ancho, alto: buenas[0].alto, datos: out,
-             escalaAs: buenas[0].escalaAs, zpt: buenas[0].zpt };
   }
 
   /* Cielo del parche: mediana del BORDE. El stack ya viene restado, pero le queda
@@ -1644,49 +1596,27 @@
   }
 
   /* ── Descarga (efectos) ──────────────────────────────────────────────────────
-     Fase 1: se pide DIRECTO a STScI, sin proxy (CORS abierto). Son hasta cuatro
-     consultas de nombres más una de imagen por skycell, ~2,6 s cada recorte: lento
-     a propósito y temporalmente, hasta que la ficha 11 meta el proxy con caché.
-     La caché de aquí es solo de sesión: el parche no depende del ocular ni del
-     aumento, así que la clave es el objeto. */
+     Una petición por galaxia a ps1-proxy.php, que resuelve las skycells, pide los
+     recortes y devuelve el parche ya cosido; de la segunda vez en adelante sale de
+     su disco. La caché de aquí es solo de sesión, y la clave es el objeto: el
+     parche no depende del ocular ni del aumento. */
   var cachePS1 = {};
-  function ps1Texto(url) {
-    return fetch(url, { mode: 'cors' }).then(function (r) {
-      if (!r.ok) throw new Error('ps1filenames ' + r.status);
-      return r.text();
-    });
-  }
-  function ps1Fits(url) {
-    return fetch(url, { mode: 'cors' }).then(function (r) {
-      if (!r.ok) throw new Error('fitscut ' + r.status);
-      return r.arrayBuffer();
-    }).then(parseFITS);
-  }
 
   /* Descarga el parche de una galaxia, ya cosido. Resuelve a null si PS1 no lo
-     cubre o si el servicio no responde: la capa se apaga sola y el aviso lo da
-     quien llama. gal: {ra, dec, ladoArcmin, …}. */
+     cubre (502 del proxy) o si el servicio no responde: la capa se apaga sola y
+     el aviso lo da quien llama. gal: {ra, dec, ladoArcmin, …}. */
   function ps1DescargarParche(gal) {
     var clave = gal.ra.toFixed(5) + ',' + gal.dec.toFixed(5) + ',' + gal.ladoArcmin.toFixed(2);
     if (cachePS1[clave]) return cachePS1[clave];
-    var esquinas = ps1Esquinas(gal.ra, gal.dec, gal.ladoArcmin);
-    var p = Promise.all(esquinas.map(function (e) {
-      return ps1Texto(ps1UrlNombres(e[0], e[1])).then(ps1ParseNombres, function () { return []; });
-    })).then(function (listas) {
-      var vistos = {}, celdas = [];
-      listas.forEach(function (l) {
-        l.forEach(function (f) { if (!vistos[f]) { vistos[f] = 1; celdas.push(f); } });
-      });
-      if (!celdas.length) return null;
-      return Promise.all(celdas.map(function (c) {
-        return ps1Fits(ps1UrlRecorte(c, gal.ra, gal.dec, gal.ladoArcmin)).catch(function () { return null; });
-      })).then(function (capas) {
-        var f = ps1Fusionar(capas);
-        if (!f) return null;
-        f.ra = gal.ra; f.dec = gal.dec; f.ladoArcmin = gal.ladoArcmin;
-        if (!(f.escalaAs > 0)) f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
-        return f;
-      });
+    var p = fetch(ps1UrlParche(gal)).then(function (r) {
+      if (!r.ok) throw new Error('ps1-proxy ' + r.status);
+      return r.arrayBuffer();
+    }).then(function (buf) {
+      var f = parseFITS(buf);
+      if (!f) return null;
+      f.ra = gal.ra; f.dec = gal.dec; f.ladoArcmin = gal.ladoArcmin;
+      if (!(f.escalaAs > 0)) f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
+      return f;
     }).catch(function () { return null; });
     cachePS1[clave] = p;
     return p;
@@ -2069,12 +1999,8 @@
     renderPlaca: renderPlaca,
     ps1: PS1,
     ps1LadoArcmin: ps1LadoArcmin,
-    ps1UrlNombres: ps1UrlNombres,
-    ps1UrlRecorte: ps1UrlRecorte,
-    ps1Esquinas: ps1Esquinas,
-    ps1ParseNombres: ps1ParseNombres,
+    ps1UrlParche: ps1UrlParche,
     parseFITS: parseFITS,
-    ps1Fusionar: ps1Fusionar,
     ps1Cielo: ps1Cielo,
     ps1SigmaCielo: ps1SigmaCielo,
     ps1RadioMascaraAs: ps1RadioMascaraAs,
@@ -2092,6 +2018,8 @@
     set proxyUrl(u) { PROXY_URL = u; },
     get proxyUrl() { return PROXY_URL; },
     set dssProxyUrl(u) { DSS_PROXY_URL = u; },
-    get dssProxyUrl() { return DSS_PROXY_URL; }
+    get dssProxyUrl() { return DSS_PROXY_URL; },
+    set ps1ProxyUrl(u) { PS1_PROXY_URL = u; },
+    get ps1ProxyUrl() { return PS1_PROXY_URL; }
   };
 })();

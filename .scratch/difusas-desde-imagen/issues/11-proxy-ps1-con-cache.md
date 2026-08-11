@@ -1,7 +1,7 @@
 # 11 — Proxy de ps1cutouts con caché LRU (fase 2)
 
 **Type:** implementation
-**Status:** open — **no empezar antes de que la fase 1 convenza**
+**Status:** closed — construido el 11-ago-2026
 **Blocked by:** 10
 
 ## Question
@@ -55,4 +55,60 @@ funciones puras (el fichero no ejecuta el flujo web bajo CLI):
 
 ## Answer
 
-_(pendiente)_
+`simulador_ocular/ps1-proxy.php`, calcado del del DSS: misma caché LRU en disco
+por `bitacora-cache-lru.php` (150 MB, `*.fits`), mismo `flock` + temp/rename,
+mismo `ETag` = clave con `Cache-Control` de un año, mismos timeouts separados y
+mismo `return` temprano bajo CLI para poder testear las funciones puras.
+
+**Lo que se decidió al escribirlo:**
+
+- **Se sirve el parche cosido, en FITS float32 tal cual** (~1,05 MB a 512²). Sin
+  recomprimir ni cambiar de formato: el cliente ya tiene su lector de FITS
+  (`parseFITS`), y el nivel tiene que llegar lineal.
+- **La costura se hizo en PHP sin parsear la cabecera entera**: se busca la
+  tarjeta `END`, se redondea al bloque de 2880 y se comparan los datos palabra a
+  palabra con `unpack('N*')`. Un NaN de float32 big-endian es exponente a unos y
+  mantisa no nula, así que la marca de «fuera de la skycell» se detecta sobre el
+  entero, sin convertir a float. Los píxeles que hay que traer se parchean por
+  bytes en la propia cadena (`$datos[$p] = …`), que evita un `pack('N*', ...)`
+  de 262 144 argumentos.
+- **La cabecera es la de la primera capa.** Las cuatro se piden con el mismo
+  `x/y/size/output_size`, así que comparten rejilla; lo único que el cliente lee
+  de la cabecera es `NAXIS*`, `BITPIX`, `CDELT2` y `ZPT`.
+- **Peticiones en serie** dentro del PHP (~11-14 s en un fallo de caché de cuatro
+  skycells, medido). `curl_multi` queda anotado como techo; una vez por galaxia y
+  para siempre, no compensa.
+- **Validación de entrada:** ra/dec numéricos y en rango (aquí van en grados
+  decimales, no en sexagesimal como el DSS), lado acotado a [1,5′, 20′],
+  `output_size` a [64, 1024], banda de la lista blanca `grizy`, y como mucho
+  cuatro skycells por parche. El nombre de skycell no se acepta del cliente.
+
+**El cliente adelgaza**: `ps1UrlNombres`, `ps1UrlRecorte`, `ps1Esquinas`,
+`ps1ParseNombres` y `ps1Fusionar` se borran de `bitacora-gaia-render.js` —vivían
+ahí y ahora viven en el proxy, y tenerlo en los dos sitios es la duda de las 3 de
+la mañana sobre cuál corre—. Queda `ps1UrlParche(gal)` y un `fetch` que devuelve
+el parche ya listo. La caché de sesión del navegador sigue igual.
+
+**Medido contra el servicio de verdad** (no está en el test, que no toca red):
+
+| campo | skycells | NaN por capa | NaN tras coser | tiempo |
+|---|---|---|---|---|
+| M51, 8,5′ | 4 | 45 / 66 / 61 / 76 % | **0 %** | 11,4 s |
+| M31, 20′  | 4 | 89 / 75 / 74 / 40 % | **0 %** | 13,5 s |
+| M100, 12′ | 2 | 7 / 76 %            | **0 %** | — |
+
+Es decir: la costura hace lo que dice, y el 512² sale entero.
+
+**Comprobación:** `php scripts/test_ps1_proxy.php`, 40 asserts sin red (URL con
+`wcs=1` y `size` en píxeles nativos, validación de coordenadas, determinismo y
+sensibilidad de la clave, esquinas con 1/cos(dec), deduplicación de skycells,
+parseo de nombres, y la costura sobre FITS sintéticos: complementarias,
+solapadas, capa de otro tamaño, ninguna válida). `scripts/test_difuso.js` pierde
+los cuatro asserts que se fueron al proxy y gana los de `ps1UrlParche`.
+
+**Lo que NO se hizo:** gzip en disco (el FITS de un parche comprime bien, pero
+son 150 MB de tope y el ahorro no se ha medido), promediar el solape entre
+skycells (sigue mandando el primer píxel válido, ficha 10), y `Range`/tiles.
+
+Pendiente de la ficha 12: la casilla, los avisos y encender la capa por defecto.
+Y el despliegue: `ps1-proxy.php` sube junto a los otros dos proxies.
