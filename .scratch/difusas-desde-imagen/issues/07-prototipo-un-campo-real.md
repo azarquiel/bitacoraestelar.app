@@ -137,3 +137,83 @@ Medido en M51, μ real → μ pintada: 2,5′ 21,88→21,74 (antes 21,36) · 4,5
   flujo): es el modelo del ojo, no un fallo, pero explica por qué el DSS enseña
   disco continuo y nosotros no. Si el DSS es la referencia a igualar, eso es
   decisión de modelo.
+
+## Medido sin ojos (11-ago-2026, tras el proxy de la ficha 11)
+
+Los parches de M31, NGC 4565, M87 y un campo vacío (RA 200°, Dec +35°) bajados
+por `ps1-proxy.php` y pasados por `parseFITS` + `ps1AnclarACatalogo` en node, sin
+navegador. Esto **no sustituye la mirada**: contesta la pregunta 2 (¿ruidoso?) y
+saca un problema que el ojo habría visto como «la galaxia es pequeña».
+
+| campo | NaN | σ borde | encendido tras el corte | mag integrada (cat) |
+|---|---|---|---|---|
+| M31 (20′) | 0,00 % | 78,8 DN | 36 % | 6,35 (3,61, y el parche solo abarca el 8 % de la luz) |
+| NGC 4565 (18,6′) | 1,83 % | 13,0 DN | 13 % | 9,71 (9,67) |
+| M87 (10′) | 0,00 % | 24,1 DN | 26 % | 8,89 (8,63) |
+| vacío (10′) | 0,01 % | 22,3 DN | 8 % | — |
+
+- **El anclaje está bien** donde la galaxia cabe en el parche: NGC 4565 y M87
+  salen a 0,04 y 0,26 mag de su mag V del RC3.
+- **El corte en cielo + 1,5·σ se lleva ~31 puntos porcentuales de píxeles
+  encendidos en los tres campos** (M31 67→36 %, NGC 4565 46→13 %, M87 58→26 %),
+  igual que en M51. Es consistente, no un ajuste hecho para M51.
+- **En campo vacío, el 8 % de los píxeles queda por encima del corte.** Es el
+  suelo de ruido que se pintaría bajo cualquier parche; ninguna galaxia lo
+  ancla, así que no aparece difuso donde no hay galaxia —el catálogo decide qué
+  parches se piden—, pero es lo que se suma en las esquinas de un parche real.
+
+### Lo gordo: PanSTARRS ya no tiene el disco externo
+
+Perfil por la **cuña de ±20° sobre el eje mayor**, mediana menos cielo del borde:
+
+| | 1′ | 2′ | 3′ | 4′ | 6′ | 8′ |
+|---|---|---|---|---|---|---|
+| **M31** (PA 35°) | 12492 DN | 4314 | 1334 | 650 | 274 (3,5σ) | 73 (**0,9σ**) |
+| **NGC 4565** (PA 136°) | 1142 DN | 398 | 119 (9,2σ) | −2 (**−0,1σ**) | −12 | −2 |
+
+El modelo del propio RC3 (disco exponencial, n=1) predice para M31 —r_e = 36′—
+una caída de **0,35 mag entre 1′ y 8′**. Medido: **5,6 mag**, y a 8′ la señal ya
+es cielo. En NGC 4565 (r_e = 3,1′) el modelo cae 4,1 mag entre 1′ y 8′ y el disco
+desaparece del todo pasados los 3,5′, con D25 de ~8′ de semieje.
+
+No es nuestro corte: repitiendo el perfil con **k = 0** (sin restar σ) el
+resultado apenas se mueve (M31 a 8′: 24,17 → 23,64 mag/arcsec²). Es el **stack de
+PanSTARRS**, que resta el fondo por skycell y con él la emisión extendida de un
+objeto comparable a la propia skycell.
+
+Consecuencias, sin decidir nada todavía:
+
+1. **M31 y compañía tienen dos problemas, no uno.** Al tope de 20′ ya se sabía
+   que quedaba fuera el 92 % de la luz; ahora se sabe que lo que sí entra
+   tampoco trae disco más allá de ~6′. La corrección de Sérsic reparte la luz
+   del catálogo sobre una galaxia que la imagen dibuja mucho más pequeña.
+2. **El disco saldrá más corto que en el DSS** en cualquier galaxia grande, y
+   eso es del cartografiado, no del umbral de contraste ni del ojo. Suma a lo ya
+   anotado en la mirada de M51.
+3. **Salidas posibles** (para decidir mirando, no aquí): dejarlo así y aceptar
+   discos cortos; anclar solo la luz *dentro del radio donde la imagen tiene
+   señal* en vez de todo el `magV`; o descartar la imagen y volver al Sérsic
+   para las galaxias que topan el parche.
+
+Scripts de la medida: fueron desechables (`$CLAUDE_JOB_DIR/tmp`), no se guardan.
+Para rehacerla basta bajar el parche con `ps1_armar_parche()` y pasarlo por
+`parseFITS` + `ps1AnclarACatalogo`.
+
+## Guion de la mirada que falta (necesita ojos)
+
+Requisito: subir `ps1-proxy.php` (y `bitacora-cache-lru.php`) a
+`/wp-content/uploads/bitacora/`, más el JS nuevo. En consola:
+`BitacoraGaiaRender.galaxiasImagen = true`, y redibujar.
+
+| campo | qué mira | qué contestar |
+|---|---|---|
+| **M51** (ya visto) | brazos | convence como punto de partida |
+| **NGC 4565** | banda de polvo de canto | ¿se ve la banda, o es un huso liso? |
+| **M31** | el peor caso del anclaje | ¿parece M31 o un bulbo suelto? (ver arriba) |
+| **Virgo** (M87, M84/M86) | varias galaxias a la vez | ¿coste tolerable con la caché ya caliente? ¿se solapan mal? |
+| **campo vacío** a alta latitud | que no aparezca difuso | no debería pintarse nada |
+| **NGC 55** (δ −39°) | el aviso del sur | sin parche, sin romper nada (NGC 253 está a δ −25°: **sí** la cubre PS1, no sirve de caso austral) |
+| cualquiera, **dos aumentos** | pupila de salida | el difuso baja `(p1/p2)²`, no el doble |
+
+Las tres preguntas con consecuencia siguen siendo las mismas: estrellas de más
+(ficha 04), ruido del difuso (ficha 03), y si convence.

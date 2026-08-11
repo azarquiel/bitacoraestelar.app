@@ -32,9 +32,15 @@ dos proxies; sin él, la capa no pinta (el `fetch` da null y se apaga sola).
 
 **Por dónde seguir, en orden:**
 
-1. **Ficha 07** — solo se ha mirado **M51**. Faltan M31 (parche a 20′), NGC 4565,
-   Virgo, campo vacío, NGC 253 (aviso del sur) y los dos aumentos. Su Answer ya
-   recoge lo medido en M51.
+1. **Ficha 07** — solo se ha mirado **M51**. Faltan M31, NGC 4565, Virgo, campo
+   vacío, una galaxia austral y los dos aumentos; su Answer trae el guion.
+   **Medido ya sin ojos** (11-ago-2026): el anclaje acierta donde la galaxia
+   cabe en el parche (NGC 4565 y M87 a 0,04 y 0,26 mag del RC3), pero el stack de
+   PanSTARRS **ya no tiene el disco externo** —M31 cae 5,6 mag entre 1′ y 8′
+   sobre el eje mayor cuando su propio modelo del RC3 predice 0,35, y a 8′ es
+   cielo; NGC 4565 desaparece pasados los 3,5′—. No es nuestro corte de σ (con
+   k=0 apenas cambia): es la resta de fondo por skycell. Decisión pendiente de
+   mirarlo.
 2. **Decisiones abiertas de esa mirada**, las tres escritas en la Answer de la 07:
    estrellas de más (ficha 04), doble contabilidad en el solape M51/NGC 5195, y
    las aureolas de Gaia, que compiten con el disco.
