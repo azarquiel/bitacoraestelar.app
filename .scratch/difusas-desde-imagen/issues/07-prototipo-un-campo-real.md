@@ -83,6 +83,57 @@ Tres preguntas al usuario, y las tres tienen consecuencia escrita:
 3. **¿Convence?** Si no, esta ficha dice **qué** falla. Ese fue el dato que
    faltó la vez anterior.
 
-## Answer
 
-_(pendiente: se responde tras mirar los campos de arriba)_
+## Answer — parcial (11-ago-2026, primera mirada del usuario: M51)
+
+**Convence como punto de partida.** Los brazos SÍ se ven: la vía de imagen aporta
+sobre el Sérsic, que era la pregunta que abría esta ficha.
+
+Campos vistos: **solo M51**. Faltan M31, NGC 4565, Virgo, campo vacío, NGC 253 y
+la prueba de dos aumentos.
+
+### Lo que se arregló mirando M51
+
+1. **Galaxia espejada de arriba abajo** (`425ccb4`). La fila del FITS crece hacia
+   el NORTE y `ps1PintarParche` la leía al revés. Con M51 y NGC 5195 —que salen
+   en los dos parches— el espejo parecía una copia duplicada. La fusión de
+   skycells no tenía nada que ver: las cuatro llegan con la misma WCS.
+2. **Lo tenue, muy exagerado** (`5f4ba80`), que es la pregunta 2 de esta ficha
+   («¿sale ruidoso el difuso?»). Respuesta: **sí, y por dos causas medidas**:
+   - Recortar en el cielo pelado deja solo el ruido POSITIVO del stack: pedestal
+     falso por todo el parche (21 % del flujo en el equivalente sintético) que
+     además apagaba la galaxia, porque el anclaje reparte el catálogo entre ese
+     ruido. Corte nuevo en **cielo + 1,5·σ** (MAD del borde): píxeles encendidos
+     del 49 % del parche al 20 %, por un 3 % de galaxia real que el reescalado
+     devuelve.
+   - El realce perceptual, calibrado contra perfiles sintéticos que se acaban
+     sobre μ23, inflaba ×13 lo que una imagen real sí tiene ahí: 0,8 mag de
+     regalo. **Techo ×2, por capa**, solo cuando hay parche.
+
+Medido en M51, μ real → μ pintada: 2,5′ 21,88→21,74 (antes 21,36) · 4,5′
+22,36→22,70 (antes 21,63) · 3,0′ 23,05→24,66 (antes 22,52).
+
+### Lo que NO era
+
+- **Resta de cielo:** la mediana del borde sale −0,3 DN. El stack ya viene
+  restado; no le quitábamos galaxia.
+- **Huecos de skycell:** 0,03 % de NaN tras fusionar.
+- **Nivel absoluto:** el perfil da μ 21,5–21,9 entre 1′ y 2,5′, contra el 21,6 de
+  brillo medio que sale de V=8,21 dentro de D25. El anclaje está bien.
+- **`ZPT` de la cabecera:** da 5,7 mag para M51 contra 8,5 esperado. Su convención
+  no es la que se supuso — razón de más para que el nivel lo ponga el catálogo.
+
+### Abierto
+
+- **Pregunta 1 (estrellas de más)**: sin respuesta todavía; la ficha 04 sigue
+  provisional.
+- **Doble contabilidad en el solape**: M51 y NGC 5195 son dos filas del RC3, cada
+  parche contiene a las dos y cada uno se ancla a su propia mag V. En la zona
+  común la luz se suma dos veces. Salidas: anclar por grupo, o recortar cada
+  parche a su galaxia.
+- **Las aureolas de las estrellas de Gaia** son mucho más gordas que las del DSS y
+  compiten con el disco justo donde está al borde del umbral.
+- El **umbral de contraste** apaga el 83 % de los píxeles con luz (20 % del
+  flujo): es el modelo del ojo, no un fallo, pero explica por qué el DSS enseña
+  disco continuo y nosotros no. Si el DSS es la referencia a igualar, eso es
+  decisión de modelo.

@@ -13,6 +13,29 @@ final: **galaxias**, por **parche por objeto** desde **ps1cutouts de STScI**, en
 banda `g`, FITS lineal, con el nivel anclado a la mag V del RC3. Nebulosas y
 globulares quedan fuera. Queda implementar, en las tres fases de más abajo.
 
+## Estado al cerrar el 11-ago-2026 (rama `difusas-desde-imagen`)
+
+**Fase 1 construida y funcionando.** Tres commits: `eb0b0a5` (la capa entera),
+`425ccb4` (la galaxia salía espejada de arriba abajo), `5f4ba80` (lo tenue salía
+exagerado: corte en cielo + 1,5·σ y techo ×2 al realce). `scripts/test_difuso.js`
+tiene ~35 asserts nuevos, sin red. `test_salud_globo` y `test_segundo_auxiliar`
+fallan también en `main`: no son de aquí.
+
+Para verlo: recargar el simulador y en consola
+`BitacoraGaiaRender.galaxiasImagen = true`. Sin proxy todavía: la primera galaxia
+tarda unos segundos.
+
+**Por dónde seguir, en orden:**
+
+1. **Ficha 07** — solo se ha mirado **M51**. Faltan M31 (parche a 20′), NGC 4565,
+   Virgo, campo vacío, NGC 253 (aviso del sur) y los dos aumentos. Su Answer ya
+   recoge lo medido en M51.
+2. **Decisiones abiertas de esa mirada**, las tres escritas en la Answer de la 07:
+   estrellas de más (ficha 04), doble contabilidad en el solape M51/NGC 5195, y
+   las aureolas de Gaia, que compiten con el disco.
+3. **Ficha 11** — proxy PHP con caché. **Ficha 12** — casilla, avisos y encendido
+   por defecto.
+
 ## Notes
 
 - **Dominio:** simulador de ocular astronómico. JS de navegador + proxies PHP.
