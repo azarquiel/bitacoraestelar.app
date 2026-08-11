@@ -219,9 +219,23 @@ Para rehacerla basta bajar el parche con `ps1_armar_parche()` y pasarlo por
    que sí se comprueba es que no rompe nada: la fila se descarta por `decMin` y
    el campo se pinta como siempre.
 
-Sigue faltando: **Virgo** (varias galaxias a la vez), **campo vacío** en el
-render de verdad, y los **dos aumentos**. Y las preguntas 1 (¿estrellas de más?)
-y 3 (¿convence del todo?) sin cerrar.
+## Tercera mirada del usuario (11-ago-2026): Virgo y el corte de `fracMin` en vivo
+
+1. **Virgo (M86) sale bien**, con varias galaxias a la vez en el mismo campo. El
+   coste con la caché caliente no molestó y los parches no se estorban entre sí.
+   Es el campo que más se parece a lo que verá un usuario real.
+2. **M31 y M33 ya no se pintan**, y no es que tarden: es exactamente el corte
+   `PS1.fracMin = 0.4` recién puesto. Con `?v=20260811_2330` cargado, esas dos
+   filas ni siquiera piden parche.
+3. **Efecto secundario visible:** en el campo de M31 sí aparecen **M32 y M110**
+   (parche pequeño, luz completa), así que se ven las dos compañeras flotando
+   donde debería estar la galaxia grande. Feo, pero menos falso que el bulbo
+   suelto: el resto de la vista de M31 sigue siendo la de siempre (Gaia + fondo),
+   no un hueco. **No se toca**; si molesta, la salida es de la ficha 12 (aviso
+   «esta galaxia no tiene capa de imagen»), no del render.
+
+Sigue faltando: **campo vacío** en el render de verdad y los **dos aumentos**.
+Y las preguntas 1 (¿estrellas de más?) y 3 (¿convence del todo?) sin cerrar.
 
 ## Guion de la mirada que falta (necesita ojos)
 
@@ -234,7 +248,7 @@ Requisito: subir `ps1-proxy.php` (y `bitacora-cache-lru.php`) a
 | **M51** (ya visto) | brazos | convence como punto de partida |
 | ~~**NGC 4565**~~ | banda de polvo de canto | **visto: la banda se ve** |
 | ~~**M31**~~ | el peor caso del anclaje | **visto: bulbo suelto → sin capa (`PS1.fracMin`)** |
-| **Virgo** (M87, M84/M86) | varias galaxias a la vez | ¿coste tolerable con la caché ya caliente? ¿se solapan mal? |
+| ~~**Virgo** (M87, M84/M86)~~ | varias galaxias a la vez | **visto: bien, varias en el campo, coste tolerable** |
 | **campo vacío** a alta latitud | que no aparezca difuso | no debería pintarse nada |
 | ~~**NGC 55** (δ −39°)~~ | el aviso del sur | **visto: sin parche y sin aviso; el aviso es de la ficha 12** |
 | cualquiera, **dos aumentos** | pupila de salida | el difuso baja `(p1/p2)²`, no el doble |

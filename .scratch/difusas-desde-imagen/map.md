@@ -32,8 +32,8 @@ dos proxies; sin él, la capa no pinta (el `fetch` da null y se apaga sola).
 
 **Por dónde seguir, en orden:**
 
-1. **Ficha 07** — solo se ha mirado **M51**. Faltan M31, NGC 4565, Virgo, campo
-   vacío, una galaxia austral y los dos aumentos; su Answer trae el guion.
+1. **Ficha 07** — vistos ya **M51, NGC 4565, M31, NGC 55 y Virgo (M86)**. Faltan
+   solo el **campo vacío** y los **dos aumentos**; su Answer trae el guion.
    **Medido ya sin ojos** (11-ago-2026): el anclaje acierta donde la galaxia
    cabe en el parche (NGC 4565 y M87 a 0,04 y 0,26 mag del RC3), pero el stack de
    PanSTARRS **ya no tiene el disco externo** —M31 cae 5,6 mag entre 1′ y 8′
