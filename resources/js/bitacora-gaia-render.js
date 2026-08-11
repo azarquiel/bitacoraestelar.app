@@ -384,8 +384,15 @@
   /* Realce perceptual de un flujo difuso: expande su nivel en pantalla con
      FOT.GAMMA_PERCEPTUAL y lo devuelve a flujo, para que la suma con la capa de
      estrellas siga siendo aditiva y los núcleos sigan comprimiendo. Devuelve el
-     flujo tal cual si la gamma es 1. Ver FOT.GAMMA_PERCEPTUAL para el porqué. */
-  function realzarPerceptual(F, Fcielo, rango, s) {
+     flujo tal cual si la gamma es 1. Ver FOT.GAMMA_PERCEPTUAL para el porqué.
+
+     `techo` (opcional, factor máximo) lo usan las capas que traen IMAGEN REAL.
+     El realce se calibró contra perfiles sintéticos, que apenas tienen luz por
+     debajo de μ23; una imagen de PanSTARRS la tiene en todas partes y ahí el
+     boost llega a ×13, con lo que el brazo externo sale casi tan brillante como
+     el disco interior. Sin `techo`, la cadena es la de siempre: las placas, los
+     globulares y el caso de NGC 891 no se mueven. */
+  function realzarPerceptual(F, Fcielo, rango, s, techo) {
     if (FOT.GAMMA_PERCEPTUAL === 1 || !(F > 0)) return F;
     // s = visibilidadDifusa ya calculada en pintarFot (0 = justo en el umbral,
     // 1 = ya totalmente visible). Sin ella (llamadas antiguas), boost completo
@@ -395,7 +402,8 @@
     var t = (s == null) ? 0 : Math.max(0, Math.min(1, s));
     var gammaEfectiva = 1 + (FOT.GAMMA_PERCEPTUAL - 1) * (1 - t);
     var nivel = valorDeFlujo(F, Fcielo, rango);
-    return flujoDeValor(255 * Math.pow(nivel / 255, gammaEfectiva), Fcielo, rango);
+    var realzado = flujoDeValor(255 * Math.pow(nivel / 255, gammaEfectiva), Fcielo, rango);
+    return (techo > 0 && realzado > F * techo) ? F * techo : realzado;
   }
 
   function pintarFot(Fobj, ctx, o, estrellas) {
@@ -416,7 +424,7 @@
          y los núcleos sigan comprimiendo en vez de recortarse. Solo cuando el
          motor declara que su flujo está calibrado (o.perceptual): las placas
          entran por aquí con su heurístico y no deben tocarse. */
-      if (perceptual && difuso > 0) difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, s);
+      if (perceptual && difuso > 0) difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, s, o.realceMax);
       for (var ch = 0; ch < canales; ch++) {
         var F = difuso;
         if (estrellas) {
@@ -1275,6 +1283,8 @@
     seeingAs: 1.1,         // ″: FWHM típica del stack, suelo del radio de máscara
     mascaraMaxAs: 8,       // ″: tope del radio de máscara de una estrella
     nucleoPx: 3,           // px: radio central que la máscara no toca nunca
+    realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
+    kRuido: 1.5,            // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
     timeout: 30000
   };
 
@@ -1403,6 +1413,26 @@
     return m[m.length >> 1];
   }
 
+  /* Ruido del parche: σ robusta (MAD·1,4826) del mismo borde del que sale el
+     cielo. Robusta y no desviación típica porque en el borde también hay
+     estrellas, y una sola brillante dispararía la σ. En M51 sale 17 DN, contra
+     los ~5 DN que le queda de galaxia a 6′ del centro. */
+  function ps1SigmaCielo(datos, ancho, alto, cielo) {
+    var m = [], x, y;
+    var grosor = Math.max(1, Math.round(Math.min(ancho, alto) * 0.06));
+    for (y = 0; y < alto; y++) {
+      var borde = (y < grosor || y >= alto - grosor);
+      for (x = 0; x < ancho; x++) {
+        if (!borde && x >= grosor && x < ancho - grosor) continue;
+        var v = datos[y * ancho + x];
+        if (v === v) m.push(Math.abs(v - cielo));
+      }
+    }
+    if (!m.length) return 0;
+    m.sort(function (a, b) { return a - b; });
+    return 1.4826 * m[m.length >> 1];
+  }
+
   /* Radio de máscara de una estrella, en ″: crece con lo brillante que sea
      respecto al límite del equipo, acotado entre el seeing y mascaraMaxAs. */
   function ps1RadioMascaraAs(g, mlim) {
@@ -1524,12 +1554,24 @@
      o: {magV, n, reArcsec, ladoArcmin, escalaAs}. Devuelve Float32Array. */
   function ps1AnclarACatalogo(datos, ancho, alto, o) {
     var cielo = ps1Cielo(datos, ancho, alto);
+    /* El corte va en cielo + k·σ, no en el cielo pelado. Recortando en el cielo
+       solo sobrevive el ruido POSITIVO, y en un parche grande eso es un pedestal
+       falso repartido por todo el campo: en M51, el 21 % del flujo integrado
+       venía de donde ya no hay galaxia. Y no es solo fondo sucio —el anclaje
+       reparte la luz del catálogo entre ese ruido, así que la galaxia sale más
+       floja de lo que dice el catálogo—. Con k=1,5 se apaga el 60 % de los
+       píxeles encendidos (casi todos ruido: en M51, del 49 % del parche al
+       20 %) por un 3 % de galaxia real, que además el anclaje devuelve al
+       reescalar. Por encima de k=2 ya no queda pedestal que quitar y solo se
+       come disco externo. */
+    var sigma = ps1SigmaCielo(datos, ancho, alto, cielo);
+    var suelo = cielo + PS1.kRuido * sigma;
     var neto = new Float32Array(datos.length), suma = 0, i;
     for (i = 0; i < datos.length; i++) {
       var v = datos[i];
-      // Sin dato (NaN) o por debajo del cielo: cero. Donde la imagen no registró
+      // Sin dato (NaN) o por debajo del suelo: cero. Donde la imagen no registró
       // nada no se inventa luz, misma regla que flujoDePlaca.
-      var d = (v === v) ? v - cielo : 0;
+      var d = (v === v) ? v - suelo : 0;
       neto[i] = d > 0 ? d : 0;
       suma += neto[i];
     }
@@ -2034,6 +2076,7 @@
     parseFITS: parseFITS,
     ps1Fusionar: ps1Fusionar,
     ps1Cielo: ps1Cielo,
+    ps1SigmaCielo: ps1SigmaCielo,
     ps1RadioMascaraAs: ps1RadioMascaraAs,
     ps1QuitarEstrellas: ps1QuitarEstrellas,
     ps1FraccionLuz: ps1FraccionLuz,

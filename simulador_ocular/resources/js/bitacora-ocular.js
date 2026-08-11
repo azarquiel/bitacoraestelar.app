@@ -648,13 +648,20 @@
              de siempre. Solo aquí: con origen DSS o HiPS la imagen ya la trae la
              placa. Los avisos por objeto sin parche son de la ficha 12. */
           if (BitacoraGaiaRender.galaxiasImagen) {
+            /* Con imagen real hay luz a TODOS los brillos, y el realce perceptual
+               —calibrado contra perfiles sintéticos, que se acaban sobre μ23— la
+               inflaba hasta ×13: el brazo externo salía casi tan brillante como
+               el disco. De ahí el techo, que solo se aplica cuando hay parche. */
+            var cieloConParche = {};
+            for (var k in cieloGaia) if (cieloGaia.hasOwnProperty(k)) cieloConParche[k] = cieloGaia[k];
+            cieloConParche.realceMax = BitacoraGaiaRender.ps1.realceMax;
             BitacoraGaiaRender.ps1GalaxiasDelCampo(window.BITACORA_GALAXIAS, ra0, dec0, arcmin)
               .forEach(function (gal) {
                 BitacoraGaiaRender.ps1ParcheDeGalaxia(gal, estrellas, mlim).then(function (parche) {
                   if (!parche || peticion !== contadorPeticion) return;
                   BitacoraGaiaRender.ps1PintarParche(difuso, parche,
                     { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
-                  BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
+                  BitacoraGaiaRender.pintarFot(difuso, ctx, cieloConParche, capaEst);
                 });
               });
           }

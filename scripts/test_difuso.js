@@ -197,6 +197,28 @@ ok(Math.abs(boostCompleto - nivelDe(21.62, true)) < 0.5,
   's=0 (justo en el umbral): nivel ≈ igual que el realce de siempre (' + boostCompleto.toFixed(1) + ')');
 ok(sinBoost < boostCompleto, 'a más visibilidad, menos boost (' + sinBoost.toFixed(1) + ' < ' + boostCompleto.toFixed(1) + ')');
 
+/* ── 13c. Techo del realce, para las capas que traen imagen real ─────────────
+   El realce se calibró contra un Sérsic sintético y el halo de King, que apenas
+   tienen luz por debajo de μ23. Una imagen de PanSTARRS sí la tiene en todas
+   partes, y ahí el boost llega a ×13: el brazo externo de M51 y la nube sobre
+   NGC 5195 salían casi tan brillantes como el disco interior —0,8 mag de
+   regalo— cuando en ese telescopio apenas se intuirían. El techo es POR CAPA:
+   sin él, la cadena es exactamente la de antes, que es lo que mantiene quietas
+   las placas, los globulares y el caso de NGC 891. */
+function boostDe(mu, s, techo) {
+  var F = Math.pow(10, -0.4 * mu);
+  return R.realzarPerceptual(F, Fc2, rg, s, techo) / F;
+}
+[21, 22, 23, 24].forEach(function (mu) {
+  ok(boostDe(mu, 0.2, 2) <= 2 + 1e-9,
+    'con techo 2, μ=' + mu + ' no se infla más de ×2 (era ×' + boostDe(mu, 0.2).toFixed(1) + ')');
+});
+ok(boostDe(20, 0.95, 2) < 1.2, 'lo que ya se ve bien no lo toca el techo');
+[21, 23].forEach(function (mu) {
+  casi(boostDe(mu, 0.2, 0), boostDe(mu, 0.2), 1e-12,
+    'sin techo (0), μ=' + mu + ': la cadena de siempre, intacta');
+});
+
 /* ── 14. La apertura tiene que notarse en los objetos extensos ──────────────
    El brillo superficial NO puede subir con la apertura: a igual pupila de salida
    es idéntico, y eso es física. Lo que sí cambia es el tamaño en la retina, y un
@@ -416,6 +438,44 @@ casi(-2.5 * Math.log10(totalAnclado(0) / frac), magV, 1e-6,
 // Y el pedestal de cielo del stack no cambia el nivel: se resta antes de integrar.
 casi(totalAnclado(400) / totalAnclado(0), 1, 0.02,
   'un pedestal de cielo de 400 DN no mueve el nivel ni un 2 %');
+
+/* El ruido del stack no puede hacerse pasar por galaxia. Recortar en cero lo que
+   está por debajo del cielo conserva solo el ruido POSITIVO, así que un parche
+   grande acaba con un pedestal falso repartido por todas partes: medido sobre
+   M51, el 16 % del flujo integrado venía de más allá de 5′, donde ya no hay
+   señal. Eso apagaba la galaxia (el anclaje reparte su luz entre ese ruido) y
+   dejaba granulado en el fondo. El corte va en k·σ del borde. */
+var ANCHO_R = 128, LADO_R = ANCHO_R * ESCALA / 60;   // parche ancho: 6′ = 12·r_e
+function parcheConRuido(sigma) {
+  var d = new Float32Array(ANCHO_R * ANCHO_R), c = (ANCHO_R - 1) / 2, semilla = 12345;
+  function rnd() { semilla = (semilla * 1103515245 + 12345) & 0x7fffffff; return semilla / 0x7fffffff; }
+  for (var y = 0; y < ANCHO_R; y++) {
+    for (var x = 0; x < ANCHO_R; x++) {
+      var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c)) * ESCALA;
+      // Ruido gaussiano (suma de 12 uniformes) sobre un disco que muere pronto.
+      var g = 0; for (var k = 0; k < 12; k++) g += rnd();
+      d[y * ANCHO_R + x] = 1000 * Math.exp(-r / ps1H()) + (g - 6) * sigma;
+    }
+  }
+  return d;
+}
+var SIGMA = 17;                                   // DN, el del stack de PS1 medido en M51
+var anclado = R.ps1AnclarACatalogo(parcheConRuido(SIGMA), ANCHO_R, ANCHO_R,
+  { magV: magV, n: 1, reArcsec: RE, ladoArcmin: LADO_R, escalaAs: ESCALA });
+var luzLejos = 0, luzTotal = 0, pxConLuz = 0, cA = (ANCHO_R - 1) / 2;
+for (var yA = 0; yA < ANCHO_R; yA++) {
+  for (var xA = 0; xA < ANCHO_R; xA++) {
+    var vA = anclado[yA * ANCHO_R + xA];
+    if (!(vA > 0)) continue;
+    pxConLuz++; luzTotal += vA;
+    // Más allá de 4 r_e el disco ya no aporta nada: lo que quede ahí es ruido.
+    if (Math.sqrt((xA - cA) * (xA - cA) + (yA - cA) * (yA - cA)) * ESCALA > 4 * RE) luzLejos += vA;
+  }
+}
+ok(luzLejos / luzTotal < 0.05,
+  'el ruido del stack no se cuela como luz de galaxia (' + (100 * luzLejos / luzTotal).toFixed(1) + '% lejos)');
+ok(pxConLuz < ANCHO_R * ANCHO_R * 0.25,
+  'el fondo de ruido no queda encendido entero (' + pxConLuz + ' de ' + (ANCHO_R * ANCHO_R) + ' px con luz)');
 
 // Fusión por NaN: dos skycells complementarias no dejan hueco.
 var capaA = new Float32Array(ANCHO * ANCHO), capaB = new Float32Array(ANCHO * ANCHO);
