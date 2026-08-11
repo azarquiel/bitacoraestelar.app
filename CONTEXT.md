@@ -270,8 +270,10 @@ observaron. Módulo puro `mapa/js/via-lactea-viaje.js` (`window.VLViaje`), test
   salidas y las dos tienen que poder abrirse. Es lo que lista «← Descubrir»,
   botón único que desde cualquier ficha lleva a las demás observaciones del
   objeto y solo aparece si las hay. Esa lista va por **fecha**, de la más
-  reciente a la más antigua («Explorado en la fecha estelar …»), no por el
-  nombre del viaje.
+  reciente a la más antigua («12 ago 2026 · Nave Excalibur · 18" f/4.5»: cuándo y
+  con qué, no el nombre del viaje). Un objeto con **más de una** observación no
+  abre ninguna al pulsarlo: enseña esa lista para que el usuario elija
+  (`VLViaje.hayQueElegir`).
 
 ## Astrometría de la sesión
 

@@ -203,9 +203,11 @@
    * 'excluir' es el índice de la que se está viendo (o null desde el mapa).
    *
    * Cada una sale con su FECHA (la de la observación o, si no la trae, la noche
-   * de su viaje): en la lista importa cuándo se exploró, no cómo se llamaba la
-   * salida. Van de la más reciente a la más antigua, y las que no tienen fecha
-   * al final, en el orden en que estaban.
+   * de su viaje) y con la NAVE con que se miró (el telescopio de la flota, o el
+   * 'instrumento' escrito a mano; quien las rotula es BitacoraEquipo, en la
+   * pantalla): en la lista importa cuándo y con qué se exploró, no cómo se
+   * llamaba la salida. Van de la más reciente a la más antigua, y las que no
+   * tienen fecha al final, en el orden en que estaban.
    */
   function otrasObservaciones(objetoId, excluir) {
     var obs = tabla('OBSERVACIONES');
@@ -223,6 +225,8 @@
         clave: clave,
         observadorNombre: nombre,
         fecha: lista[i].fecha || (v && v.noche ? v.noche : ''),
+        nave: lista[i].nave || null,
+        instrumento: lista[i].instrumento || '',
         etiqueta: nombre
       });
     }
@@ -233,6 +237,17 @@
       return a.fecha < b.fecha ? 1 : -1;
     });
     return out;
+  }
+
+  /**
+   * ¿Hay que ELEGIR observación antes de abrir la ficha? Con más de una, abrir
+   * cualquiera de ellas sería elegir por el usuario: primero se enseña la lista
+   * de todas y él decide cuál mirar.
+   */
+  function hayQueElegir(objetoId) {
+    var obs = tabla('OBSERVACIONES');
+    var lista = (obs && obs[objetoId]) ? obs[objetoId] : null;
+    return !!(lista && lista.length > 1);
   }
 
   // ---------------------------------------------------------------------------
@@ -325,6 +340,7 @@
     escalasDe: escalasDe,
     capaInicial: capaInicial,
     otrasObservaciones: otrasObservaciones,
+    hayQueElegir: hayQueElegir,
     movimientoReducido: movimientoReducido,
     fase: fase,
     trazarCanvas: trazarCanvas

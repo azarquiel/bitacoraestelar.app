@@ -279,11 +279,18 @@ Ocultar sigue la misma regla única (`VLObservadores.visiblePorObservador`) en l
 tres vistas: lo que no ha observado nadie relevante desaparece del mapa, del
 atlas del Grupo Local y del vecindario solar por igual.
 
+Un objeto con **más de una observación** no abre ninguna directamente: al pulsarlo
+se enseña esa misma lista con el rótulo **OBSERVACIONES** para que el usuario
+elija cuál mirar (`VLViaje.hayQueElegir`). Con una sola, la ficha se abre sin
+rodeos.
+
 El botón **← Descubrir** lleva a esa misma lista, y no solo se usa para volver:
 aparece en **cualquier** ficha cuyo objeto tenga más observaciones que la que se
 está viendo (entonces el rótulo del panel es **OTRAS OBSERVACIONES**). Cada
-observación se lista con el observador y **cuándo** se hizo —«Israel Pérez de
-Tudela Vázquez / Explorado en la fecha estelar 12 ago 2026»—, de la más reciente
+observación se lista con el observador, **cuándo** se hizo y **con qué**
+—«Israel Pérez de Tudela Vázquez / 12 ago 2026 · Nave Excalibur · 18" f/4.5»,
+con el mismo rótulo de telescopio que la ficha (`BitacoraEquipo.rotuloNave`; sin
+telescopio de la flota, el instrumento escrito a mano)—, de la más reciente
 a la más antigua (las que no traen fecha, al final). La fecha es la de la
 observación y, si no la tiene, la noche de su viaje. Se identifican por índice,
 no por observador: uno mismo puede haber visitado el objeto en dos salidas
