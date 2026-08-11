@@ -642,6 +642,22 @@
           var cieloGaia = cieloOptica(datosOcular().pupila);
           cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
           BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
+          /* Galaxias del campo con su imagen real de PanSTARRS (ps1cutouts). El
+             parche tarda segundos, así que el campo de estrellas ya está pintado
+             y cada galaxia repinta cuando llega la suya; si no llega, se queda lo
+             de siempre. Solo aquí: con origen DSS o HiPS la imagen ya la trae la
+             placa. Los avisos por objeto sin parche son de la ficha 12. */
+          if (BitacoraGaiaRender.galaxiasImagen) {
+            BitacoraGaiaRender.ps1GalaxiasDelCampo(window.BITACORA_GALAXIAS, ra0, dec0, arcmin)
+              .forEach(function (gal) {
+                BitacoraGaiaRender.ps1ParcheDeGalaxia(gal, estrellas, mlim).then(function (parche) {
+                  if (!parche || peticion !== contadorPeticion) return;
+                  BitacoraGaiaRender.ps1PintarParche(difuso, parche,
+                    { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
+                  BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
+                });
+              });
+          }
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el

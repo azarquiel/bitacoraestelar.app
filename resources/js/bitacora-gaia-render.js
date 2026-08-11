@@ -1242,6 +1242,436 @@
     }
   }
 
+  /* ═══════════ CAPA DE GALAXIAS DESDE IMAGEN REAL (ps1cutouts, STScI) ═══════════
+     Una galaxia del RC3 se pinta con SU PROPIA imagen de PanSTARRS-1 en vez de con
+     un perfil sintético: un parche por objeto que entra en el mismo Float32Array
+     `difuso` que ya usa el halo de los globulares, y sale por pintarFot debajo de
+     las estrellas de Gaia.
+
+     Tres cosas hay que saber para leer lo que sigue (detalle y medidas en
+     .scratch/difusas-desde-imagen/, fichas 03 y 10):
+
+      · **El nivel absoluto lo pone el CATÁLOGO, no la imagen.** El `ZPT` de la
+        cabecera existe, pero a μ≈24 el residuo de cielo del stack desplaza el
+        brillo superficial más que cualquier error de punto cero. Así que se resta
+        cielo, se integra y se reescala a la mag V del RC3: la imagen aporta la
+        forma y el contraste interno; el catálogo, la luz.
+      · **fitscut sirve UNA skycell (~26′), no un mosaico.** Fuera de ella devuelve
+        NaN. Un parche que cruza el borde —le pasa a ~40 % de los objetos— se cose
+        pidiendo el MISMO recorte a cada skycell que toque y quedándose con el
+        píxel válido. No hay que reproyectar: llegan sobre la rejilla pedida.
+      · **`wcs=1` es OBLIGATORIO.** Sin él, `x`/`y` se leen como coordenadas de
+        PÍXEL y el servicio responde 200 OK con un recorte de otro sitio, sin
+        error y sin aviso. Hay un test que lo vigila. */
+  var PS1 = {
+    base: 'https://ps1images.stsci.edu/cgi-bin/',
+    banda: 'g',            // la más cercana al pico escotópico (507 nm) y la más profunda del 3π
+    escalaNativa: 0.25,    // ″/px del stack; el parámetro `size` de fitscut va en estos píxeles
+    salida: 512,           // px del recorte que se pide (output_size remuestrea y corrige la WCS)
+    ladoFactor: 6,         // lado del parche = 6·r_e → radio 3·r_e ≈ 94 % de la luz de un disco
+    ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
+    ladoMin: 1.5,          // ′: por debajo no queda parche que mirar
+    decMin: -30,           // PS1 no cubre más al sur (365 de las 1295 filas del RC3)
+    seeingAs: 1.1,         // ″: FWHM típica del stack, suelo del radio de máscara
+    mascaraMaxAs: 8,       // ″: tope del radio de máscara de una estrella
+    nucleoPx: 3,           // px: radio central que la máscara no toca nunca
+    timeout: 30000
+  };
+
+  /* Interruptor de la capa, aquí y no en cada llamador: los dos puntos de uso
+     (simulador y formulario de registro) tienen que responder al mismo mando.
+     Apagado durante las fases 1 y 2; lo enciende la ficha 12. */
+  var GALAXIAS_IMAGEN = false;
+
+  /* Lado del parche en minutos de arco. `r_e` viene en segundos (columna 4 del
+     catálogo). El tope de 20′ lo tocan 200 de las 1295 filas: en esas, parte de la
+     luz del catálogo cae fuera del parche y la corrige ps1FraccionLuz. */
+  function ps1LadoArcmin(reArcsec) {
+    var lado = PS1.ladoFactor * (reArcsec > 0 ? reArcsec : 0) / 60;
+    return Math.max(PS1.ladoMin, Math.min(PS1.ladoMax, lado));
+  }
+
+  function ps1UrlNombres(ra, dec) {
+    return PS1.base + 'ps1filenames.py?ra=' + Number(ra).toFixed(6) +
+      '&dec=' + Number(dec).toFixed(6) + '&filters=' + PS1.banda;
+  }
+
+  /* URL de un recorte. `size` va en píxeles NATIVOS (0,25″) y `output_size`
+     remuestrea; `wcs=1` es lo que hace que x/y sean RA/Dec y no píxeles. */
+  function ps1UrlRecorte(fichero, ra, dec, ladoArcmin, salida) {
+    var size = Math.round(ladoArcmin * 60 / PS1.escalaNativa);
+    return PS1.base + 'fitscut.cgi?red=' + fichero +
+      '&x=' + Number(ra).toFixed(6) + '&y=' + Number(dec).toFixed(6) +
+      '&size=' + size + '&output_size=' + (salida || PS1.salida) +
+      '&format=fits&wcs=1';
+  }
+
+  /* Las cuatro esquinas del parche, que es por donde se averigua qué skycells
+     toca. El paso en RA se abre con 1/cos(dec) porque el parche es cuadrado EN EL
+     CIELO, no en coordenadas. */
+  function ps1Esquinas(ra, dec, ladoArcmin) {
+    var mitad = ladoArcmin / 120;                       // grados
+    var cos = Math.cos(dec * Math.PI / 180);
+    var dra = mitad / Math.max(0.02, Math.abs(cos));
+    return [
+      [ra - dra, dec - mitad], [ra + dra, dec - mitad],
+      [ra - dra, dec + mitad], [ra + dra, dec + mitad]
+    ];
+  }
+
+  /* Nombre de skycell de la respuesta de ps1filenames.py (texto con cabecera;
+     la columna `filename` es la octava). */
+  function ps1ParseNombres(texto) {
+    var lineas = String(texto || '').trim().split('\n');
+    var out = [];
+    for (var i = 1; i < lineas.length; i++) {
+      var col = lineas[i].trim().split(/\s+/);
+      if (col.length >= 8 && col[7].charAt(0) === '/') out.push(col[7]);
+    }
+    return out;
+  }
+
+  /* Lector de FITS mínimo: cabecera de tarjetas de 80 caracteres en bloques de
+     2880 bytes, datos float32 BIG-ENDIAN (BITPIX=-32). Solo se leen las claves que
+     esta capa usa. Los píxeles fuera de la skycell llegan como NaN y se conservan
+     como NaN: son la marca de "aquí no hay dato", que es lo que usa ps1Fusionar. */
+  function parseFITS(buffer) {
+    var bytes = new Uint8Array(buffer), cab = {}, datos = -1, i, j, linea, clave;
+    for (i = 0; i + 80 <= bytes.length; i += 80) {
+      linea = '';
+      for (j = 0; j < 80; j++) linea += String.fromCharCode(bytes[i + j]);
+      clave = linea.slice(0, 8).trim();
+      if (clave === 'END') { datos = Math.ceil((i + 80) / 2880) * 2880; break; }
+      if (linea.charAt(8) === '=' && !(clave in cab)) cab[clave] = linea.slice(9);
+    }
+    if (datos < 0) return null;
+    function num(k, pordefecto) {
+      var v = cab[k] != null ? parseFloat(cab[k]) : NaN;
+      return isFinite(v) ? v : pordefecto;
+    }
+    var ancho = num('NAXIS1', 0), alto = num('NAXIS2', 0);
+    if (!(ancho > 0 && alto > 0) || num('BITPIX', 0) !== -32) return null;
+    if (datos + ancho * alto * 4 > bytes.length) return null;
+    var vista = new DataView(buffer), v = new Float32Array(ancho * alto);
+    var bzero = num('BZERO', 0), bscale = num('BSCALE', 1);
+    for (i = 0; i < v.length; i++) v[i] = bzero + bscale * vista.getFloat32(datos + i * 4, false);
+    return {
+      ancho: ancho, alto: alto, datos: v,
+      // CDELT en grados; el que interesa es el módulo, en ″/px.
+      escalaAs: Math.abs(num('CDELT2', num('CD2_2', 0))) * 3600,
+      zpt: num('ZPT_0000', NaN)
+    };
+  }
+
+  /* Cose los recortes de varias skycells: el mismo campo pedido a cada una, cada
+     una con NaN donde no llega. Se queda con el PRIMER píxel válido; el solape
+     entre dos skycells discrepa un 15 % (mediana), dominado por el ruido de cielo,
+     y promediar queda para si algún día se nota.
+     ponytail: primero válido, no media ponderada por distancia al borde. */
+  function ps1Fusionar(capas) {
+    var buenas = (capas || []).filter(function (c) { return c && c.datos && c.datos.length; });
+    if (!buenas.length) return null;
+    var n = buenas[0].datos.length, out = new Float32Array(n), i, k;
+    for (i = 0; i < n; i++) {
+      out[i] = NaN;
+      for (k = 0; k < buenas.length; k++) {
+        var v = buenas[k].datos[i];
+        if (v === v) { out[i] = v; break; }     // v===v descarta NaN
+      }
+    }
+    return { ancho: buenas[0].ancho, alto: buenas[0].alto, datos: out,
+             escalaAs: buenas[0].escalaAs, zpt: buenas[0].zpt };
+  }
+
+  /* Cielo del parche: mediana del BORDE. El stack ya viene restado, pero le queda
+     un pedestal que a μ≈24 pesa más que el punto cero, y sin quitarlo el difuso
+     llega al render con un suelo que no es del objeto. El borde, y no la mediana
+     global, porque en un parche de 6·r_e el objeto ocupa el centro entero. */
+  function ps1Cielo(datos, ancho, alto) {
+    var m = [], x, y;
+    var grosor = Math.max(1, Math.round(Math.min(ancho, alto) * 0.06));
+    for (y = 0; y < alto; y++) {
+      var borde = (y < grosor || y >= alto - grosor);
+      for (x = 0; x < ancho; x++) {
+        if (!borde && x >= grosor && x < ancho - grosor) continue;
+        var v = datos[y * ancho + x];
+        if (v === v) m.push(v);
+      }
+    }
+    if (!m.length) return 0;
+    m.sort(function (a, b) { return a - b; });
+    return m[m.length >> 1];
+  }
+
+  /* Radio de máscara de una estrella, en ″: crece con lo brillante que sea
+     respecto al límite del equipo, acotado entre el seeing y mascaraMaxAs. */
+  function ps1RadioMascaraAs(g, mlim) {
+    var sobre = (mlim != null && isFinite(mlim)) ? (mlim - g) : 0;
+    return Math.max(PS1.seeingAs, Math.min(PS1.mascaraMaxAs, PS1.seeingAs + 0.6 * Math.max(0, sobre)));
+  }
+
+  /* Quita las estrellas que el render VA A PINTAR (las de Gaia hasta mlim) y
+     rellena el hueco con la mediana de un anillo alrededor, tomada solo de píxeles
+     no enmascarados. Lo que PS1 ve por debajo de mlim se queda: no es doble
+     conteo, es luz difusa no resuelta, que es justo lo que se quiere pintar.
+
+     `estrellas` en píxeles del parche: [{x, y, rPx}]. Modifica `datos` y lo
+     devuelve. El núcleo (PS1.nucleoPx alrededor del centro) no se toca nunca: una
+     estrella de Gaia proyectada sobre el núcleo se llevaría el objeto entero. */
+  function ps1QuitarEstrellas(datos, ancho, alto, estrellas) {
+    if (!estrellas || !estrellas.length) return datos;
+    var mascara = new Uint8Array(datos.length), i, e, x, y;
+    var cx = (ancho - 1) / 2, cy = (alto - 1) / 2, rN = PS1.nucleoPx;
+    for (i = 0; i < estrellas.length; i++) {
+      e = estrellas[i];
+      var r = Math.max(1, e.rPx), r2 = r * r;
+      for (y = Math.max(0, Math.floor(e.y - r)); y <= Math.min(alto - 1, Math.ceil(e.y + r)); y++) {
+        for (x = Math.max(0, Math.floor(e.x - r)); x <= Math.min(ancho - 1, Math.ceil(e.x + r)); x++) {
+          var dx = x - e.x, dy = y - e.y;
+          if (dx * dx + dy * dy > r2) continue;
+          var nx = x - cx, ny = y - cy;
+          if (nx * nx + ny * ny <= rN * rN) continue;      // el núcleo no se toca
+          mascara[y * ancho + x] = 1;
+        }
+      }
+    }
+    var out = Float32Array.from ? Float32Array.from(datos) : new Float32Array(datos);
+    for (y = 0; y < alto; y++) {
+      for (x = 0; x < ancho; x++) {
+        i = y * ancho + x;
+        if (!mascara[i]) continue;
+        out[i] = ps1MedianaAnillo(datos, mascara, ancho, alto, x, y);
+      }
+    }
+    return out;
+  }
+
+  /* Mediana de un anillo creciente alrededor de (x,y), saltándose lo enmascarado
+     y los NaN. Se ensancha hasta encontrar muestras: en un cúmulo de estrellas
+     enmascaradas juntas, el primer anillo puede estar entero dentro de la máscara. */
+  function ps1MedianaAnillo(datos, mascara, ancho, alto, x, y) {
+    for (var rOut = 3; rOut <= 24; rOut *= 2) {
+      var rIn = rOut / 2, m = [], dx, dy;
+      for (dy = -rOut; dy <= rOut; dy++) {
+        var yy = y + dy; if (yy < 0 || yy >= alto) continue;
+        for (dx = -rOut; dx <= rOut; dx++) {
+          var xx = x + dx; if (xx < 0 || xx >= ancho) continue;
+          var d = Math.sqrt(dx * dx + dy * dy);
+          if (d < rIn || d > rOut) continue;
+          var i = yy * ancho + xx;
+          if (mascara[i]) continue;
+          var v = datos[i];
+          if (v === v) m.push(v);
+        }
+      }
+      if (m.length >= 8) { m.sort(function (a, b) { return a - b; }); return m[m.length >> 1]; }
+    }
+    return 0;
+  }
+
+  /* ── Fracción de luz dentro del parche (corrección del anclaje) ──
+     Para un perfil de Sérsic, la luz dentro de un radio R es la gamma incompleta
+     regularizada P(2n, b_n·(R/r_e)^(1/n)). Con lado = 6·r_e sale ~0,94 para un
+     disco exponencial; con el tope de 20′ sobre M31 baja al 40–60 %, y ahí el
+     nivel pasa a ser una extrapolación, no una medida (riesgo escrito en la 03).
+     ponytail: un solo Sérsic con la `n` del disco. El catálogo trae B/T pero no el
+     r_e del bulbo, así que un modelo de dos componentes tendría que inventárselo. */
+  function ps1BSersic(n) {
+    return 2 * n - 1 / 3 + 4 / (405 * n) + 46 / (25515 * n * n);
+  }
+  /* ln Γ(x) (Lanczos) y P(a,x) por serie/fracción continua, como el gammp clásico. */
+  function lnGamma(x) {
+    var c = [76.18009172947146, -86.50532032941677, 24.01409824083091,
+             -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+    var y = x, tmp = x + 5.5, ser = 1.000000000190015;
+    tmp -= (x + 0.5) * Math.log(tmp);
+    for (var j = 0; j < 6; j++) ser += c[j] / ++y;
+    return -tmp + Math.log(2.5066282746310005 * ser / x);
+  }
+  function gammaP(a, x) {
+    if (!(x > 0) || !(a > 0)) return 0;
+    var i;
+    if (x < a + 1) {                                   // serie
+      var ap = a, suma = 1 / a, del = suma;
+      for (i = 0; i < 300; i++) {
+        ap++; del *= x / ap; suma += del;
+        if (Math.abs(del) < Math.abs(suma) * 1e-12) break;
+      }
+      return suma * Math.exp(-x + a * Math.log(x) - lnGamma(a));
+    }
+    var b = x + 1 - a, c = 1e300, d = 1 / b, h = d;    // fracción continua → Q(a,x)
+    for (i = 1; i <= 300; i++) {
+      var an = -i * (i - a);
+      b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300;
+      c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300;
+      d = 1 / d;
+      var delta = d * c; h *= delta;
+      if (Math.abs(delta - 1) < 1e-12) break;
+    }
+    return 1 - Math.exp(-x + a * Math.log(x) - lnGamma(a)) * h;
+  }
+  function ps1FraccionLuz(n, radioEnRe) {
+    var nn = (n > 0.1) ? n : 1;
+    if (!(radioEnRe > 0)) return 0;
+    return Math.min(1, gammaP(2 * nn, ps1BSersic(nn) * Math.pow(radioEnRe, 1 / nn)));
+  }
+
+  /* Convierte el parche en BRILLO SUPERFICIAL (flujo por arcsec², las mismas
+     unidades que Fcielo y que el halo de King) anclando su luz total a la mag V
+     del catálogo. Orden obligatorio: cielo restado y estrellas quitadas ANTES de
+     integrar; anclar antes metería la luz de las estrellas en el total y apagaría
+     la galaxia.
+     o: {magV, n, reArcsec, ladoArcmin, escalaAs}. Devuelve Float32Array. */
+  function ps1AnclarACatalogo(datos, ancho, alto, o) {
+    var cielo = ps1Cielo(datos, ancho, alto);
+    var neto = new Float32Array(datos.length), suma = 0, i;
+    for (i = 0; i < datos.length; i++) {
+      var v = datos[i];
+      // Sin dato (NaN) o por debajo del cielo: cero. Donde la imagen no registró
+      // nada no se inventa luz, misma regla que flujoDePlaca.
+      var d = (v === v) ? v - cielo : 0;
+      neto[i] = d > 0 ? d : 0;
+      suma += neto[i];
+    }
+    if (!(suma > 0) || !(o.magV > 0)) return neto;
+    var radioEnRe = (o.reArcsec > 0) ? (o.ladoArcmin * 60 / 2) / o.reArcsec : Infinity;
+    var frac = ps1FraccionLuz(o.n, radioEnRe);
+    var Ftotal = Math.pow(10, -0.4 * o.magV) * (frac > 0.02 ? frac : 0.02);
+    var areaPx = o.escalaAs * o.escalaAs;               // arcsec² por píxel del parche
+    var k = Ftotal / (suma * areaPx);                   // DN → flujo por arcsec²
+    for (i = 0; i < neto.length; i++) neto[i] *= k;
+    return neto;
+  }
+
+  /* Suma el parche (flujo por arcsec²) sobre el array `difuso` de pintarFot.
+     Muestreo por vecino más próximo y sin giro: con parches de pocos minutos el
+     desvío TAN–lineal es de milisegundos de arco, y el giro del marco local queda
+     en ~1 px en el peor caso (galaxia a 15′ del centro, δ=70°; ficha 09).
+     parche: {datos, ancho, alto, ladoArcmin, ra, dec}.
+     o: {ra0, dec0, arcmin, size} = el campo que se está pintando. */
+  function ps1PintarParche(difuso, parche, o) {
+    var SIZE = o.size, escv = SIZE / (o.arcmin / 60);   // px por grado
+    var cos0 = Math.cos(o.dec0 * Math.PI / 180);
+    var dra = (((parche.ra - o.ra0 + 540) % 360) - 180) * cos0;
+    var cx = SIZE / 2 - dra * escv;                     // misma proyección que dibujar()
+    var cy = SIZE / 2 - (parche.dec - o.dec0) * escv;
+    var ladoPx = (parche.ladoArcmin / 60) * escv;       // lado del parche en px del render
+    if (!(ladoPx > 0.5)) return difuso;
+    var esc = parche.ancho / ladoPx;                    // px de parche por px de render
+    var x0 = Math.max(0, Math.floor(cx - ladoPx / 2)), x1 = Math.min(SIZE - 1, Math.ceil(cx + ladoPx / 2));
+    var y0 = Math.max(0, Math.floor(cy - ladoPx / 2)), y1 = Math.min(SIZE - 1, Math.ceil(cy + ladoPx / 2));
+    for (var y = y0; y <= y1; y++) {
+      var py = Math.round((y - cy) * esc + (parche.alto - 1) / 2);
+      if (py < 0 || py >= parche.alto) continue;
+      for (var x = x0; x <= x1; x++) {
+        var px = Math.round((x - cx) * esc + (parche.ancho - 1) / 2);
+        if (px < 0 || px >= parche.ancho) continue;
+        var f = parche.datos[py * parche.ancho + px];
+        if (f > 0) difuso[y * SIZE + x] += f;
+      }
+    }
+    return difuso;
+  }
+
+  /* Galaxias del catálogo RC3 que caen en el campo y que PS1 cubre. Cada fila:
+     [nombre, alt, RA°, Dec°, r_e″, b/a, PA°, magV, n, B/T, polvo]. El margen de
+     medio lado deja entrar a las que asoman por el borde con su centro fuera. */
+  function ps1GalaxiasDelCampo(catalogo, ra0, dec0, arcmin) {
+    var out = [], cos0 = Math.cos(dec0 * Math.PI / 180), radio = arcmin / 120;
+    for (var i = 0; i < (catalogo || []).length; i++) {
+      var g = catalogo[i];
+      if (!(g[3] > PS1.decMin)) continue;                       // sin cobertura al sur
+      var lado = ps1LadoArcmin(g[4]);
+      var margen = radio + lado / 120;
+      var dra = ((((g[2] - ra0) + 540) % 360) - 180) * cos0;
+      var ddec = g[3] - dec0;
+      if (Math.abs(dra) > margen || Math.abs(ddec) > margen) continue;
+      out.push({
+        nombre: g[0] || g[1], ra: g[2], dec: g[3], reArcsec: g[4],
+        magV: g[7], n: g[8], ladoArcmin: lado
+      });
+    }
+    return out;
+  }
+
+  /* ── Descarga (efectos) ──────────────────────────────────────────────────────
+     Fase 1: se pide DIRECTO a STScI, sin proxy (CORS abierto). Son hasta cuatro
+     consultas de nombres más una de imagen por skycell, ~2,6 s cada recorte: lento
+     a propósito y temporalmente, hasta que la ficha 11 meta el proxy con caché.
+     La caché de aquí es solo de sesión: el parche no depende del ocular ni del
+     aumento, así que la clave es el objeto. */
+  var cachePS1 = {};
+  function ps1Texto(url) {
+    return fetch(url, { mode: 'cors' }).then(function (r) {
+      if (!r.ok) throw new Error('ps1filenames ' + r.status);
+      return r.text();
+    });
+  }
+  function ps1Fits(url) {
+    return fetch(url, { mode: 'cors' }).then(function (r) {
+      if (!r.ok) throw new Error('fitscut ' + r.status);
+      return r.arrayBuffer();
+    }).then(parseFITS);
+  }
+
+  /* Descarga el parche de una galaxia, ya cosido. Resuelve a null si PS1 no lo
+     cubre o si el servicio no responde: la capa se apaga sola y el aviso lo da
+     quien llama. gal: {ra, dec, ladoArcmin, …}. */
+  function ps1DescargarParche(gal) {
+    var clave = gal.ra.toFixed(5) + ',' + gal.dec.toFixed(5) + ',' + gal.ladoArcmin.toFixed(2);
+    if (cachePS1[clave]) return cachePS1[clave];
+    var esquinas = ps1Esquinas(gal.ra, gal.dec, gal.ladoArcmin);
+    var p = Promise.all(esquinas.map(function (e) {
+      return ps1Texto(ps1UrlNombres(e[0], e[1])).then(ps1ParseNombres, function () { return []; });
+    })).then(function (listas) {
+      var vistos = {}, celdas = [];
+      listas.forEach(function (l) {
+        l.forEach(function (f) { if (!vistos[f]) { vistos[f] = 1; celdas.push(f); } });
+      });
+      if (!celdas.length) return null;
+      return Promise.all(celdas.map(function (c) {
+        return ps1Fits(ps1UrlRecorte(c, gal.ra, gal.dec, gal.ladoArcmin)).catch(function () { return null; });
+      })).then(function (capas) {
+        var f = ps1Fusionar(capas);
+        if (!f) return null;
+        f.ra = gal.ra; f.dec = gal.dec; f.ladoArcmin = gal.ladoArcmin;
+        if (!(f.escalaAs > 0)) f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
+        return f;
+      });
+    }).catch(function () { return null; });
+    cachePS1[clave] = p;
+    return p;
+  }
+
+  /* Parche listo para pintar: descargado, con las estrellas que el equipo ve
+     quitadas y anclado a la mag V del catálogo. `estrellas` es la muestra de Gaia
+     del campo ([ra, dec, g, …][]) y `mlim` el límite del equipo. */
+  function ps1ParcheDeGalaxia(gal, estrellas, mlim) {
+    return ps1DescargarParche(gal).then(function (f) {
+      if (!f) return null;
+      var enPx = [], cos0 = Math.cos(gal.dec * Math.PI / 180);
+      var pxPorAs = f.ancho / (gal.ladoArcmin * 60);
+      for (var i = 0; i < (estrellas || []).length; i++) {
+        var e = estrellas[i];
+        if (mlim != null && isFinite(mlim) && e[2] > mlim) continue;   // no la pinta el render: no es doble conteo
+        var dx = ((((e[0] - gal.ra) + 540) % 360) - 180) * cos0 * 3600 * pxPorAs;
+        var dy = (e[1] - gal.dec) * 3600 * pxPorAs;
+        var x = (f.ancho - 1) / 2 - dx, y = (f.alto - 1) / 2 - dy;
+        if (x < -8 || y < -8 || x > f.ancho + 8 || y > f.alto + 8) continue;
+        enPx.push({ x: x, y: y, rPx: ps1RadioMascaraAs(e[2], mlim) * pxPorAs });
+      }
+      var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto, enPx);
+      return {
+        ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
+        ancho: f.ancho, alto: f.alto,
+        datos: ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
+          magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
+          ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs
+        })
+      };
+    });
+  }
+
   function dibujarAureola(ctx, x, y, radio, rgb, alpha) {
     var col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
     var gr = ctx.createRadialGradient(x, y, 0, x, y, radio);
@@ -1580,7 +2010,26 @@
     opticaTieneArana: opticaTieneArana,
     urlPlaca: urlPlaca,
     renderPlaca: renderPlaca,
+    ps1: PS1,
+    ps1LadoArcmin: ps1LadoArcmin,
+    ps1UrlNombres: ps1UrlNombres,
+    ps1UrlRecorte: ps1UrlRecorte,
+    ps1Esquinas: ps1Esquinas,
+    ps1ParseNombres: ps1ParseNombres,
+    parseFITS: parseFITS,
+    ps1Fusionar: ps1Fusionar,
+    ps1Cielo: ps1Cielo,
+    ps1RadioMascaraAs: ps1RadioMascaraAs,
+    ps1QuitarEstrellas: ps1QuitarEstrellas,
+    ps1FraccionLuz: ps1FraccionLuz,
+    ps1AnclarACatalogo: ps1AnclarACatalogo,
+    ps1PintarParche: ps1PintarParche,
+    ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
+    ps1DescargarParche: ps1DescargarParche,
+    ps1ParcheDeGalaxia: ps1ParcheDeGalaxia,
     dssMaxArcmin: DSS_MAX_ARCMIN,
+    set galaxiasImagen(v) { GALAXIAS_IMAGEN = !!v; },
+    get galaxiasImagen() { return GALAXIAS_IMAGEN; },
     set proxyUrl(u) { PROXY_URL = u; },
     get proxyUrl() { return PROXY_URL; },
     set dssProxyUrl(u) { DSS_PROXY_URL = u; },

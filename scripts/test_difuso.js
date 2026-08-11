@@ -351,5 +351,166 @@ ok(Math.abs(r18 - r8) / r8 < 0.02,
   'con el -1 del cielo, los dos equipos siguen coincidiendo al 2 % (' +
   r18.toFixed(3) + ' vs ' + r8.toFixed(3) + ')');
 
+/* ── 18. La capa de galaxias desde imagen real (ps1cutouts) ──────────────────
+   Todo con un parche SINTÉTICO en memoria: sin red, sin FITS de verdad. Lo que
+   se vigila es lo que falla en silencio y sale visualmente plausible: una URL
+   sin wcs=1 (el servicio contesta 200 OK con un recorte de otro sitio), un
+   pedestal de cielo que se cuela en el nivel, una máscara de estrellas que se
+   come el núcleo, o un parche pintado un poco corrido. */
+console.log('\nCapa de galaxias desde imagen real (ps1cutouts):');
+
+// La URL del recorte, con wcs=1 y el `size` en píxeles NATIVOS de 0,25″.
+var urlRec = R.ps1UrlRecorte('/rings.v3.skycell/1234/056/x.fits', 10.6847, 41.269, 3);
+ok(/[?&]wcs=1(&|$)/.test(urlRec), 'la URL del recorte lleva wcs=1');
+ok(/[?&]size=720(&|$)/.test(urlRec), 'size va en píxeles nativos (3′ = 720 px de 0,25″)');
+ok(/[?&]format=fits(&|$)/.test(urlRec), 'el recorte se pide en FITS, no en JPEG');
+
+/* El lector de FITS, contra un fichero armado aquí mismo: float32 BIG-endian,
+   cabecera en bloques de 2880 y un NaN que tiene que llegar como NaN (es la
+   marca de "fuera de la skycell" que usa la fusión). */
+var cards = ['SIMPLE  =                    T', 'BITPIX  =                  -32',
+             'NAXIS   =                    2', 'NAXIS1  =                    2',
+             'NAXIS2  =                    2', 'CDELT2  =    2.7777777778E-04',
+             'ZPT_0000=                24.46', 'END'];
+var cab = cards.map(function (c) { while (c.length < 80) c += ' '; return c; }).join('');
+while (cab.length % 2880) cab += ' ';
+var buf = new ArrayBuffer(cab.length + 16), vistaB = new DataView(buf), bytesB = new Uint8Array(buf);
+for (i18 = 0; i18 < cab.length; i18++) bytesB[i18] = cab.charCodeAt(i18);
+[1.5, -2.25, NaN, 100].forEach(function (v, k) { vistaB.setFloat32(cab.length + k * 4, v, false); });
+var fits = R.parseFITS(buf);
+ok(fits && fits.ancho === 2 && fits.alto === 2, 'el lector de FITS saca las dimensiones');
+casi(fits.escalaAs, 1, 1e-6, 'CDELT2 se lee en ″/px');
+casi(fits.zpt, 24.46, 1e-6, 'el punto cero de la cabecera se lee (aunque el nivel lo ponga el catálogo)');
+ok(fits.datos[0] === 1.5 && fits.datos[1] === -2.25 && fits.datos[3] === 100,
+  'los píxeles llegan en big-endian, con su signo');
+ok(!(fits.datos[2] === fits.datos[2]), 'el NaN de fuera de la skycell sobrevive al lector');
+
+// Parche sintético: perfil exponencial (n=1) sobre un pedestal de cielo.
+var LADO = 3, RE = 30, ANCHO = 64;               // ′, ″, px
+var ESCALA = LADO * 60 / ANCHO;                  // ″/px
+function parcheSintetico(pedestal) {
+  var d = new Float32Array(ANCHO * ANCHO), c = (ANCHO - 1) / 2;
+  var h = ps1H();
+  for (var y = 0; y < ANCHO; y++) {
+    for (var x = 0; x < ANCHO; x++) {
+      var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c)) * ESCALA;
+      d[y * ANCHO + x] = pedestal + 1000 * Math.exp(-r / h);
+    }
+  }
+  return d;
+}
+function ps1H() { return RE / 1.678; }           // escala de un disco exponencial
+
+// El nivel absoluto lo pone el catálogo: la luz total del parche es la mag V del
+// RC3, corregida por la fracción de Sérsic que cae dentro del parche.
+var magV = 9.5, frac = R.ps1FraccionLuz(1, (LADO * 60 / 2) / RE);
+var opAncla = { magV: magV, n: 1, reArcsec: RE, ladoArcmin: LADO, escalaAs: ESCALA };
+function totalAnclado(pedestal) {
+  var a = R.ps1AnclarACatalogo(parcheSintetico(pedestal), ANCHO, ANCHO, opAncla);
+  var s = 0; for (var i = 0; i < a.length; i++) s += a[i];
+  return s * ESCALA * ESCALA;
+}
+ok(frac > 0.94 && frac < 0.98, 'con lado 6·r_e el parche recoge el ~96 % de la luz (' + frac.toFixed(3) + ')');
+casi(-2.5 * Math.log10(totalAnclado(0) / frac), magV, 1e-6,
+  'el parche anclado suma la mag V del catálogo');
+// Y el pedestal de cielo del stack no cambia el nivel: se resta antes de integrar.
+casi(totalAnclado(400) / totalAnclado(0), 1, 0.02,
+  'un pedestal de cielo de 400 DN no mueve el nivel ni un 2 %');
+
+// Fusión por NaN: dos skycells complementarias no dejan hueco.
+var capaA = new Float32Array(ANCHO * ANCHO), capaB = new Float32Array(ANCHO * ANCHO);
+for (var i18 = 0; i18 < capaA.length; i18++) {
+  var izq = (i18 % ANCHO) < ANCHO / 2;
+  capaA[i18] = izq ? 7 : NaN;
+  capaB[i18] = izq ? NaN : 11;
+}
+var fus = R.ps1Fusionar([{ ancho: ANCHO, alto: ANCHO, datos: capaA, escalaAs: ESCALA },
+                         { ancho: ANCHO, alto: ANCHO, datos: capaB, escalaAs: ESCALA }]);
+var huecos = 0, mal = 0;
+for (i18 = 0; i18 < fus.datos.length; i18++) {
+  if (!(fus.datos[i18] === fus.datos[i18])) huecos++;
+  else if (fus.datos[i18] !== ((i18 % ANCHO) < ANCHO / 2 ? 7 : 11)) mal++;
+}
+ok(huecos === 0 && mal === 0, 'dos skycells complementarias se cosen sin huecos ni mezclas');
+ok(R.ps1Fusionar([null, null]) === null, 'sin ninguna capa válida, la fusión devuelve null');
+
+/* Supresión de estrellas: solo las que el render VA a pintar (hasta mlim), y
+   nunca el núcleo. Al bajar la magnitud límite del equipo se enmascaran MENOS
+   estrellas y con radio más pequeño; lo que no puede pasar es lo contrario, que
+   un equipo peor borre más parche. El relleno es la mediana de un anillo, así
+   que reparte luz pero no la conserva al dígito: la suma se mira con holgura. */
+function tocadosTrasQuitar(mlim) {
+  var d = parcheSintetico(0), enPx = [], pxPorAs = ANCHO / (LADO * 60);
+  [[12, 8], [13.5, 20], [15, 45]].forEach(function (e, k) {   // [g, radio ″ desde el centro]
+    if (e[0] > mlim) return;
+    enPx.push({ x: (ANCHO - 1) / 2 + e[1] * pxPorAs, y: (ANCHO - 1) / 2 + (k - 1) * 6,
+                rPx: R.ps1RadioMascaraAs(e[0], mlim) * pxPorAs });
+  });
+  var out = R.ps1QuitarEstrellas(d, ANCHO, ANCHO, enPx);
+  var n = 0, s = 0;
+  for (var j = 0; j < out.length; j++) { if (out[j] !== d[j]) n++; s += out[j]; }
+  return { tocados: n, suma: s };
+}
+var q11 = tocadosTrasQuitar(11), q14 = tocadosTrasQuitar(14), q16 = tocadosTrasQuitar(16);
+ok(q11.tocados <= q14.tocados && q14.tocados <= q16.tocados,
+  'bajar la magnitud límite no borra más parche (' + q11.tocados + ' ≤ ' +
+  q14.tocados + ' ≤ ' + q16.tocados + ' px tocados)');
+ok(q11.tocados === 0 && q16.tocados > 0,
+  'por debajo del límite no se toca nada, y por encima sí (si no, la máscara no hace nada)');
+casi(q16.suma / q11.suma, 1, 0.02, 'quitar estrellas no mueve la luz del parche ni un 2 %');
+// Núcleo intacto aunque le caiga encima una estrella brillante y ancha.
+var dN = parcheSintetico(0);
+var outN = R.ps1QuitarEstrellas(dN, ANCHO, ANCHO,
+  [{ x: (ANCHO - 1) / 2, y: (ANCHO - 1) / 2, rPx: 12 }]);
+var cN = Math.round((ANCHO - 1) / 2), iN = cN * ANCHO + cN;
+casi(outN[iN], dN[iN], 1e-6, 'la máscara no toca el píxel central del núcleo');
+
+/* El parche cae donde dice el catálogo, a la escala que dice CDELT: una galaxia
+   desplazada 5′ al este y 2′ al norte del centro del campo aterriza en el píxel
+   que la proyección de dibujar() le asigna. */
+var CAMPO = 30, SIZE = 720, dec0 = 41;           // ′, px, °
+var cos0 = Math.cos(dec0 * Math.PI / 180);
+var galRA = 10 + (5 / 60) / cos0, galDec = dec0 + 2 / 60;
+var marca = new Float32Array(ANCHO * ANCHO);
+marca[Math.round((ANCHO - 1) / 2) * ANCHO + Math.round((ANCHO - 1) / 2)] = 1;
+var lienzo = new Float32Array(SIZE * SIZE);
+R.ps1PintarParche(lienzo, { datos: marca, ancho: ANCHO, alto: ANCHO, ladoArcmin: LADO,
+                            ra: galRA, dec: galDec },
+                  { ra0: 10, dec0: dec0, arcmin: CAMPO, size: SIZE });
+var mejor = -1, vMejor = 0;
+for (i18 = 0; i18 < lienzo.length; i18++) if (lienzo[i18] > vMejor) { vMejor = lienzo[i18]; mejor = i18; }
+var escv = SIZE / (CAMPO / 60);
+casi(mejor % SIZE, SIZE / 2 - (5 / 60) * escv, 1.5, 'el parche cae en su x (5′ al este)');
+casi(Math.floor(mejor / SIZE), SIZE / 2 - (2 / 60) * escv, 1.5, 'el parche cae en su y (2′ al norte)');
+// Y el parche ocupa en el render el lado que le toca, ni más ni menos.
+var minX = SIZE, maxX = -1;
+var lienzoLleno = new Float32Array(SIZE * SIZE);
+R.ps1PintarParche(lienzoLleno, { datos: parcheSintetico(0), ancho: ANCHO, alto: ANCHO,
+                                 ladoArcmin: LADO, ra: 10, dec: dec0 },
+                  { ra0: 10, dec0: dec0, arcmin: CAMPO, size: SIZE });
+for (var yy = 0; yy < SIZE; yy++) {
+  for (var xx = 0; xx < SIZE; xx++) {
+    if (lienzoLleno[yy * SIZE + xx] > 0) { if (xx < minX) minX = xx; if (xx > maxX) maxX = xx; }
+  }
+}
+casi(maxX - minX + 1, (LADO / 60) * escv, 2, 'el parche mide en el render sus ' + LADO + '′');
+
+// Selección del campo: PS1 no cubre por debajo de −30°, y esas filas no se piden.
+var catalogo = [
+  ['NGC 1', '', 10, 41.02, 30, 1, 0, 12, 1, 0.3, 0],       // dentro
+  ['NGC 2', '', 10, 41 + 5, 30, 1, 0, 12, 1, 0.3, 0],      // fuera del campo
+  ['NGC 3', '', 10, -45, 30, 1, 0, 12, 1, 0.3, 0]          // fuera de cobertura
+];
+var enCampo = R.ps1GalaxiasDelCampo(catalogo, 10, dec0, CAMPO).map(function (g) { return g.nombre; });
+ok(enCampo.length === 1 && enCampo[0] === 'NGC 1',
+  'solo entran las galaxias del campo que PS1 cubre (' + enCampo.join(',') + ')');
+casi(R.ps1LadoArcmin(8105), R.ps1.ladoMax, 1e-9, 'M31 se queda en el tope de 20′');
+casi(R.ps1LadoArcmin(1), R.ps1.ladoMin, 1e-9, 'una galaxia diminuta no baja del suelo de 1,5′');
+
+// Interruptor: apagado de fábrica durante las fases 1 y 2.
+ok(R.galaxiasImagen === false, 'la capa de galaxias viene apagada por defecto');
+R.galaxiasImagen = true; ok(R.galaxiasImagen === true, 'el interruptor se puede encender');
+R.galaxiasImagen = false;
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);
