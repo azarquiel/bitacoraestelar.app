@@ -2790,6 +2790,14 @@ function bitacora_categorias_mapa() {
         array( 'abierto',    array( 'OPC', 'CL*' ),  '#8aff9e' ),
         array( 'planetaria', array( 'PN' ),          '#5fe0c8' ),
         array( 'emision',    array( 'HII', 'EMO' ),  '#ff8a80' ),
+        // Nebulosa oscura: no emite, TAPA. Es la silueta de polvo sobre un fondo
+        // rico en estrellas (Barnard 33, los Barnard, las LDN), y por eso su color
+        // es el pardo del polvo y no uno de los brillantes del resto de la leyenda.
+        // 'DNe' es la nube oscura, 'glb' el glóbulo (los de Bok) y 'CGb' el glóbulo
+        // cometario. Fuera quedan a propósito 'MoC' (nube molecular) y 'Cld' (nube
+        // a secas): son categorías de radio, no lo que se ve recortado en el ocular,
+        // y 'Cld' es tan ancho que se tragaría objetos que no son esto.
+        array( 'oscura',     array( 'DNE', 'GLB', 'CGB' ), '#b08968' ),
         array( 'snr',        array( 'SNR' ),         '#7ec8ff' ),
     );
 }
@@ -2820,8 +2828,14 @@ function bitacora_tipo_por_color( $color ) {
  *   1. tipo declarado en el registro (p. ej. 'carbono' del selector) o el otype MW.
  *   2. Tabla de categorías del mapa MW por código otype de SIMBAD.
  *   3. Galaxia: clase de Hubble por morfología (para la vista extragaláctica).
- *   4. Nada reconocido → 'otro' neutro (NO reutiliza un color de la leyenda, para
+ *   4. Estelar (el otype lleva '*') → 'estrella'.
+ *   5. Nada reconocido → 'desconocido' (NO reutiliza un color de la leyenda, para
  *      no disfrazarse de otra categoría).
+ *
+ * "Es una estrella" y "no sé qué es" son hechos DISTINTOS y por eso son dos tipos:
+ * antes compartían el cajón 'otro' y su color, y quien los separaba era un regex de
+ * prefijos de catálogo en la capa del vecindario del mapa, que colaba como estrella
+ * cualquier nebulosa de un catálogo que no estuviera en su lista (Gum, RCW, Ced).
  *
  * Devuelve array( 'tipo' => string, 'color' => '#rrggbb' ).
  */
@@ -2842,8 +2856,21 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
         return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
     }
 
-    // Estrella normal / doble / variable / otype desconocido: neutro fuera de la leyenda.
-    return array( 'tipo' => 'otro', 'color' => '#dfe7f5' );
+    // Estrella normal / doble / variable: los otypes estelares de SIMBAD llevan '*'
+    // ('*', '**', 'V*', 'PM*', 'WD*', 'RG*', 'EB*', 'Be*', 'WR*'...) y los de espacio
+    // profundo no ('PN', 'HII', 'SNR', 'GlC', 'G', 'DNe', 'GNe', 'Cld'). 'C*' y 'Cl*'
+    // ya los ha capturado la tabla de categorías; la única excepción que descontar es
+    // 'As*' (asterismo), que son varias estrellas y no una. Una regla en vez de una
+    // tabla de treinta códigos que siempre se queda corta.
+    if ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) {
+        return array( 'tipo' => 'estrella', 'color' => '#dfe7f5' );
+    }
+
+    // Sin otype, o con uno que nadie encajó: 'desconocido' NO es un tipo de objeto,
+    // es la AUSENCIA de clasificación, y por eso no se adivina que sea una estrella.
+    // Abell 12 es el caso real: es una planetaria y caía aquí porque la consulta a
+    // SIMBAD no devolvió 'PN', no porque tuviera nada de estelar.
+    return array( 'tipo' => 'desconocido', 'color' => '#8e97a3' );
 }
 
 /** Texto de coordenadas legible, con el mismo formato que el catálogo existente. */
@@ -3455,6 +3482,44 @@ function bitacora_objetos_backfill() {
     return array( 'colocados' => $colocados, 'problemas' => $problemas );
 }
 
+/**
+ * RECLASIFICACIÓN de los objetos guardados con el antiguo cajón 'otro' (o sin
+ * tipo): vuelve a preguntar el otype a SIMBAD y reescribe `tipo` y `color` con
+ * bitacora_clasificar_objeto(), que ahora distingue 'estrella' de 'desconocido'.
+ *
+ * Hace falta una pasada explícita porque 'otro' NO se puede traducir sin saber el
+ * otype: era a la vez "es una estrella" y "no sé qué es". Mientras un objeto siga
+ * siendo 'otro' no es estrella para nadie y no sale en el vecindario solar.
+ *
+ * Solo toca esas dos columnas: la posición y la distancia ya guardadas se quedan
+ * como están, para que una reclasificación no pueda estropear datos buenos.
+ * Idempotente: los que ya tienen tipo nuevo no entran en la consulta.
+ */
+function bitacora_objetos_reclasificar() {
+    global $wpdb;
+    $t_obj = bitacora_nombre_tabla_objetos();
+    $filas = $wpdb->get_results(
+        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '') ORDER BY id ASC"
+    );
+    $hechos = 0;
+    foreach ( (array) $filas as $o ) {
+        $sim   = bitacora_simbad( '' !== $o->etiqueta ? $o->etiqueta : $o->slug );
+        $otype = $sim ? (string) $sim['otype'] : '';
+        // Sin respuesta de SIMBAD se conserva la morfología guardada: puede venir de
+        // una consulta anterior que sí funcionó.
+        $morph = ( $sim && '' !== (string) $sim['morph'] ) ? (string) $sim['morph'] : (string) $o->morph;
+
+        $c = bitacora_clasificar_objeto( $otype, $morph );
+        $wpdb->update(
+            $t_obj,
+            array( 'tipo' => $c['tipo'], 'color' => $c['color'], 'actualizado_en' => current_time( 'mysql' ) ),
+            array( 'id' => intval( $o->id ) )
+        );
+        $hechos++;
+    }
+    return $hechos;
+}
+
 /** Lista todos los objetos del mapa (para el visor y para comprobación). */
 function bitacora_listar_objetos( WP_REST_Request $peticion ) {
     global $wpdb;
@@ -4011,6 +4076,18 @@ function bitacora_panel_objetos() {
     wp_nonce_field( 'bitacora_backfill_objetos' );
     echo '<button type="submit" name="bitacora_backfill_objetos" value="1" class="button">Colocar en el mapa los objetos observados que falten</button>';
     echo ' <span style="color:#646970">Reintenta los objetos de observaciones ya guardadas que no se pudieron situar en su día (p. ej. porque entonces no se les encontró la distancia). Idempotente.</span>';
+    echo '</form>';
+
+    // ── Reclasificación del antiguo cajón 'otro' (estrella / desconocido) ──
+    if ( isset( $_POST['bitacora_reclasificar_objetos'] ) && check_admin_referer( 'bitacora_reclasificar_objetos' ) ) {
+        $n = bitacora_objetos_reclasificar();
+        echo '<div class="notice notice-success"><p>Reclasificados: <strong>' . intval( $n ) . '</strong> objeto(s).</p></div>';
+    }
+    $sin_clasificar = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $tabla WHERE tipo IN ('otro', '')" ) );
+    echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
+    wp_nonce_field( 'bitacora_reclasificar_objetos' );
+    echo '<button type="submit" name="bitacora_reclasificar_objetos" value="1" class="button">Reclasificar los objetos guardados como «otro»</button>';
+    echo ' <span style="color:#646970">El antiguo tipo «otro» mezclaba «es una estrella» con «no se pudo clasificar»; esto vuelve a preguntar el tipo a SIMBAD y los separa en «Estrella» y «Sin clasificar». Hasta entonces no salen en el vecindario solar. Pendientes: <strong>' . $sin_clasificar . '</strong>. Idempotente; no toca la posición ni la distancia.</span>';
     echo '</form></div>';
 
     // ── Catálogo de equipo (telescopios / oculares / auxiliares) ──
