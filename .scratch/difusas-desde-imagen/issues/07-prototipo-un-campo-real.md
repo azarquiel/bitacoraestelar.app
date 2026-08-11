@@ -199,6 +199,30 @@ Scripts de la medida: fueron desechables (`$CLAUDE_JOB_DIR/tmp`), no se guardan.
 Para rehacerla basta bajar el parche con `ps1_armar_parche()` y pasarlo por
 `parseFITS` + `ps1AnclarACatalogo`.
 
+## Segunda mirada del usuario (11-ago-2026): NGC 4565, M31, NGC 55
+
+1. **NGC 4565 enseña la banda de polvo.** La vía de imagen aporta también en las
+   de canto, que era la razón de tener este campo en la lista. La banda ya no es
+   sintética.
+2. **M31 «parece un bulbo suelto».** Confirma lo medido: el parche abarca el 8 %
+   de su luz *y* el stack no trae el disco, así que el anclaje aprieta toda la
+   luz del catálogo en lo poco que la imagen sí registra.
+   **Decidido:** las galaxias cuyo parche abarque menos del **40 %** de la luz
+   (`PS1.fracMin`) **se quedan sin capa**, como estaban. Son tres en todo el
+   catálogo al norte de −30°: **M31 (8 %), IC 342 (17 %) y M33 (23 %)**; la
+   siguiente ya está en el 66 %, así que el corte no está pegado a nadie.
+   Se descartaron las otras dos salidas: anclar solo la luz dentro del radio con
+   señal deja un disco truncado igual de falso, y volver al Sérsic para tres
+   objetos resucita justo lo que se borró en `d0a3641`.
+3. **NGC 55 no muestra ningún mensaje.** Es lo esperado hoy: la ficha 05 decidió
+   «sin capa, con aviso», y el aviso es de la **ficha 12**, que aún no está. Lo
+   que sí se comprueba es que no rompe nada: la fila se descarta por `decMin` y
+   el campo se pinta como siempre.
+
+Sigue faltando: **Virgo** (varias galaxias a la vez), **campo vacío** en el
+render de verdad, y los **dos aumentos**. Y las preguntas 1 (¿estrellas de más?)
+y 3 (¿convence del todo?) sin cerrar.
+
 ## Guion de la mirada que falta (necesita ojos)
 
 Requisito: subir `ps1-proxy.php` (y `bitacora-cache-lru.php`) a
@@ -208,11 +232,11 @@ Requisito: subir `ps1-proxy.php` (y `bitacora-cache-lru.php`) a
 | campo | qué mira | qué contestar |
 |---|---|---|
 | **M51** (ya visto) | brazos | convence como punto de partida |
-| **NGC 4565** | banda de polvo de canto | ¿se ve la banda, o es un huso liso? |
-| **M31** | el peor caso del anclaje | ¿parece M31 o un bulbo suelto? (ver arriba) |
+| ~~**NGC 4565**~~ | banda de polvo de canto | **visto: la banda se ve** |
+| ~~**M31**~~ | el peor caso del anclaje | **visto: bulbo suelto → sin capa (`PS1.fracMin`)** |
 | **Virgo** (M87, M84/M86) | varias galaxias a la vez | ¿coste tolerable con la caché ya caliente? ¿se solapan mal? |
 | **campo vacío** a alta latitud | que no aparezca difuso | no debería pintarse nada |
-| **NGC 55** (δ −39°) | el aviso del sur | sin parche, sin romper nada (NGC 253 está a δ −25°: **sí** la cubre PS1, no sirve de caso austral) |
+| ~~**NGC 55** (δ −39°)~~ | el aviso del sur | **visto: sin parche y sin aviso; el aviso es de la ficha 12** |
 | cualquiera, **dos aumentos** | pupila de salida | el difuso baja `(p1/p2)²`, no el doble |
 
 Las tres preguntas con consecuencia siguen siendo las mismas: estrellas de más

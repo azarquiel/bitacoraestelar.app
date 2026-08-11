@@ -589,6 +589,16 @@ var catalogo = [
 var enCampo = R.ps1GalaxiasDelCampo(catalogo, 10, dec0, CAMPO).map(function (g) { return g.nombre; });
 ok(enCampo.length === 1 && enCampo[0] === 'NGC 1',
   'solo entran las galaxias del campo que PS1 cubre (' + enCampo.join(',') + ')');
+
+/* Y las que no caben en el parche tampoco entran: con r_e = 36′ (M31) el parche
+   de 20′ abarca el 8 % de la luz, y el stack de PanSTARRS ya no trae ese disco,
+   así que el anclaje lo apretaría todo en el bulbo. La galaxia normal sí pasa. */
+var enormes = R.ps1GalaxiasDelCampo(
+  [['M31 (r_e 36′)', '', 10, 41.02, 2158.72, 0.324, 35, 3.61, 1, 0.3, 1],
+   ['normal (r_e 3′)', '', 10, 41.02, 186.19, 0.135, 136, 9.67, 1, 0.3, 1]],
+  10, dec0, CAMPO).map(function (g) { return g.nombre; });
+ok(enormes.length === 1 && enormes[0] === 'normal (r_e 3′)',
+  'la galaxia mucho mayor que el parche se queda sin capa (' + enormes.join(',') + ')');
 casi(R.ps1LadoArcmin(8105), R.ps1.ladoMax, 1e-9, 'M31 se queda en el tope de 20′');
 casi(R.ps1LadoArcmin(1), R.ps1.ladoMin, 1e-9, 'una galaxia diminuta no baja del suelo de 1,5′');
 

@@ -142,6 +142,11 @@ dos proxies; sin él, la capa no pinta (el `fetch` da null y se apaga sola).
 - **09 — cerrada sin tocar la proyección.** Con parche por objeto el desvío
   TAN–lineal interno es de milisegundos de arco; lo que queda es el giro del
   marco local (≈ Δα·sin δ), ~1 px en el peor caso. Se pega directo.
+- **07 (parcial) — la galaxia que no cabe en su parche se queda sin capa.**
+  `PS1.fracMin` = 0,4: M31, IC 342 y M33, y nadie más (la siguiente está en el
+  66 %). M31 se veía como «un bulbo suelto» porque el stack de PanSTARRS no trae
+  su disco y el anclaje aprieta toda la luz del catálogo en lo poco que queda.
+  NGC 4565 sí enseña su banda de polvo: la vía de imagen también sirve de canto.
 - **11 — el parche se cose en el SERVIDOR y se sirve en FITS tal cual.**
   `ps1-proxy.php`, con la caché LRU compartida. Resolver skycells, `wcs=1` y la
   costura por NaN salen del JS y pasan al PHP: una sola implementación.

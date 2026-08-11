@@ -1281,6 +1281,7 @@
     ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
     ladoMin: 1.5,          // ′: por debajo no queda parche que mirar
     decMin: -30,           // PS1 no cubre más al sur (365 de las 1295 filas del RC3)
+    fracMin: 0.4,          // fracción mínima de la luz del catálogo que el parche debe abarcar (ver ps1GalaxiasDelCampo)
     seeingAs: 1.1,         // ″: FWHM típica del stack, suelo del radio de máscara
     mascaraMaxAs: 8,       // ″: tope del radio de máscara de una estrella
     nucleoPx: 3,           // px: radio central que la máscara no toca nunca
@@ -1583,6 +1584,16 @@
       var g = catalogo[i];
       if (!(g[3] > PS1.decMin)) continue;                       // sin cobertura al sur
       var lado = ps1LadoArcmin(g[4]);
+      /* Galaxias mucho más grandes que el parche: fuera. Con M31 (el parche de
+         20′ abarca el 8 % de su luz) se ve por qué: el stack de PanSTARRS resta
+         el fondo por skycell y con él el disco extendido —a 8′ del centro la
+         señal ya es cielo, cuando el disco exponencial del propio RC3 predice
+         casi el mismo brillo que a 1′—, así que el anclaje mete toda esa luz en
+         lo poco que la imagen sí trae y sale un bulbo suelto. Juzgado por el
+         usuario, 11-ago-2026. Son tres en todo el catálogo al norte de −30°:
+         M31 (8 %), IC 342 (17 %) y M33 (23 %); la siguiente ya está en el 66 %.
+         Se quedan sin capa, como estaban. */
+      if (ps1FraccionLuz(g[8], (lado * 60 / 2) / (g[4] > 0 ? g[4] : 1e9)) < PS1.fracMin) continue;
       var margen = radio + lado / 120;
       var dra = ((((g[2] - ra0) + 540) % 360) - 180) * cos0;
       var ddec = g[3] - dec0;
