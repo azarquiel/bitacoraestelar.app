@@ -137,6 +137,17 @@ se pudo clasificar.
 - **Sin otype no se adivina:** un objeto que SIMBAD no resolvió cae en `desconocido`,
   no en `estrella`. Abell 12 es el caso real —es una planetaria y estaba en `otro`
   porque la consulta no devolvió `PN`, no porque tuviera nada de estelar.
+- **CUIDADO: `tipo` es un homónimo, y aquí se cruzan dos de sus sentidos.** La palabra
+  nombra cosas distintas según la tabla: el **tipo del objeto del mapa** (esta
+  categoría: `globular`, `oscura`, `estrella`, `desconocido`, clases de Hubble), el
+  **tipo de la observación** (`bitacora.tipo`: cómo se identificó el objeto —
+  `messier`, `carbono`, `otro`), el **tipo de la imagen** de una entrada y el **tipo
+  de una doble** (`doble`/`triple`/`múltiple`). El `$tipo_obs` que recibe el
+  clasificador es el de la OBSERVACIÓN, y se compara contra los nombres de las
+  categorías del MAPA: funciona solo porque `carbono` es la única palabra que existe
+  en los dos vocabularios. Es un acoplamiento por coincidencia de nombres, no por
+  diseño: dar de alta un tipo de observación que se llame como una categoría
+  activaría un override silencioso. Antes de tocar un `tipo`, mira de qué tabla es.
 - **Invariante:** los colores del clasificador coinciden con la leyenda `#mw-legend`
   (`data-color`) de `mapa/mapa.html`; los de galaxia, con `HUBBLE_COLORS` de
   `grupo-local.js` y la leyenda `#mw-legend-hubble`. `estrella` y `desconocido` tienen
@@ -175,6 +186,23 @@ y por **Mi flota**, sin DOM ni WordPress.
   la ficha del mapa (ver `mapa/README.md`), que recibe las medidas del tubo en
   `OBSERVACIONES[].nave`.
 - **Test:** `scripts/test_equipo.js` fija el contrato de los cuatro.
+
+## Base
+
+El **sitio desde el que se observa**: nombre, latitud, longitud, altitud y huso
+horario IANA (`{prefix}bitacora_bases`). Es lo que convierte una dirección del cielo
+en algo que se vio a una altura concreta a una hora concreta, así que sin base no hay
+[[astrometría de la sesión]] —ni altura, ni azimut, ni crepúsculo—.
+
+- **Es del observador, no del sistema:** cada usuario da de alta las suyas. La
+  `visibilidad` decide quién más la ve: `privada`, `seleccionada` (compartida con
+  usuarios concretos, y compartir es SOLO LECTURA: elegirla y ver su salud) o
+  `publica`.
+- **La base es del [[viaje interestelar]], no de la observación:** se indica una vez
+  por salida. Un viaje sin base es legítimo y usa el sentinela `base_id = 0`, no
+  `NULL`, porque con `NULL` la clave única de MySQL admitiría duplicados.
+- **No confundir con el lugar de la crónica:** la base es la geometría (dónde está el
+  observador en la Tierra); lo que se cuenta de la noche vive en el viaje.
 
 ## Viaje interestelar
 
@@ -374,8 +402,9 @@ fallo que se ve pero no se explica:
 - **Límite conocido:** la ventana deja de crecer en `AFOV_REF` (110°), así que por
   encima de ese campo aparente la compensación ya no es exacta. Es de la página, no
   de la ley.
-- El **veredicto de desdoble** de una doble (`resolucionDoble`) no depende de nada de
-  esto: es apertura (Dawes) y `aumentos · separación`. Un par de pocos segundos de
+- El **veredicto de desdoble** de una doble (`resolucionDoble`, que vive en el
+  simulador —`bitacora-ocular.js`—, no en el render) no depende de nada de esto: es
+  apertura (Dawes) y `aumentos · separación`. Un par de pocos segundos de
   arco cae por debajo del píxel en pantalla, así que en los pares justos el que dice
   si se resuelve es el veredicto, no la imagen.
 
@@ -569,6 +598,10 @@ desde los **objetos del mapa** que tengan coordenadas galácticas y esa distanci
   objeto del mapa guarda `bp_rp` (columna nueva); lo resuelve el plugin al
   registrar (Gaia por ra/dec, mismo failover CDS→GAVO que el proxy) y lo emite
   `datos.js`. Sin `bp_rp`, la estrella sale con color neutro.
+- **Son DOS radios, y a propósito:** el vecindario enseña hasta `distMaxAl` (1500 al,
+  cliente), pero el plugin resuelve el `bp_rp` hasta `BITACORA_BPRP_DIST_MAX_AL`
+  (2000 al, servidor). La holgura evita que subir el radio de la escena deje sin color
+  a las estrellas del borde, que ya lo tendrían guardado.
 - **Tránsito con histéresis:** `fundidoVecindario(fov, cerca, dentro, cfg)` (mismo
   módulo puro) decide la opacidad de la capa. Para ENTRAR hacen falta el Sol
   centrado y un campo bajo `fovFinalAl`; una vez dentro, la escena se mantiene
