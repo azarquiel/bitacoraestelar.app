@@ -1547,6 +1547,13 @@
      Muestreo por vecino más próximo y sin giro: con parches de pocos minutos el
      desvío TAN–lineal es de milisegundos de arco, y el giro del marco local queda
      en ~1 px en el peor caso (galaxia a 15′ del centro, δ=70°; ficha 09).
+
+     La FILA del FITS crece hacia el NORTE y en el lienzo el norte está arriba,
+     así que la fila se invierte. Sin invertirla la galaxia sale espejada en
+     vertical —el brazo de arriba aparece abajo—, y con dos galaxias vecinas
+     (M51 y su compañera) el espejo se ve como una copia duplicada: así se
+     descubrió. La COLUMNA no se invierte: crece hacia el oeste (PC001001 = −1),
+     igual que la x del lienzo.
      parche: {datos, ancho, alto, ladoArcmin, ra, dec}.
      o: {ra0, dec0, arcmin, size} = el campo que se está pintando. */
   function ps1PintarParche(difuso, parche, o) {
@@ -1561,7 +1568,7 @@
     var x0 = Math.max(0, Math.floor(cx - ladoPx / 2)), x1 = Math.min(SIZE - 1, Math.ceil(cx + ladoPx / 2));
     var y0 = Math.max(0, Math.floor(cy - ladoPx / 2)), y1 = Math.min(SIZE - 1, Math.ceil(cy + ladoPx / 2));
     for (var y = y0; y <= y1; y++) {
-      var py = Math.round((y - cy) * esc + (parche.alto - 1) / 2);
+      var py = Math.round((parche.alto - 1) / 2 - (y - cy) * esc);   // fila hacia el norte
       if (py < 0 || py >= parche.alto) continue;
       for (var x = x0; x <= x1; x++) {
         var px = Math.round((x - cx) * esc + (parche.ancho - 1) / 2);
@@ -1643,24 +1650,32 @@
     return p;
   }
 
+  /* Estrellas de Gaia ([ra, dec, g, …][]) en píxeles del parche, con su radio de
+     máscara. Solo las que el render VA a pintar (hasta mlim). Misma orientación
+     que ps1PintarParche: fila hacia el norte, columna hacia el oeste. */
+  function ps1EstrellasEnPixeles(f, gal, estrellas, mlim) {
+    var enPx = [], cos0 = Math.cos(gal.dec * Math.PI / 180);
+    var pxPorAs = f.ancho / (gal.ladoArcmin * 60);
+    for (var i = 0; i < (estrellas || []).length; i++) {
+      var e = estrellas[i];
+      if (mlim != null && isFinite(mlim) && e[2] > mlim) continue;   // no la pinta el render: no es doble conteo
+      var dx = ((((e[0] - gal.ra) + 540) % 360) - 180) * cos0 * 3600 * pxPorAs;
+      var dy = (e[1] - gal.dec) * 3600 * pxPorAs;
+      var x = (f.ancho - 1) / 2 - dx, y = (f.alto - 1) / 2 + dy;
+      if (x < -8 || y < -8 || x > f.ancho + 8 || y > f.alto + 8) continue;
+      enPx.push({ x: x, y: y, rPx: ps1RadioMascaraAs(e[2], mlim) * pxPorAs });
+    }
+    return enPx;
+  }
+
   /* Parche listo para pintar: descargado, con las estrellas que el equipo ve
      quitadas y anclado a la mag V del catálogo. `estrellas` es la muestra de Gaia
      del campo ([ra, dec, g, …][]) y `mlim` el límite del equipo. */
   function ps1ParcheDeGalaxia(gal, estrellas, mlim) {
     return ps1DescargarParche(gal).then(function (f) {
       if (!f) return null;
-      var enPx = [], cos0 = Math.cos(gal.dec * Math.PI / 180);
-      var pxPorAs = f.ancho / (gal.ladoArcmin * 60);
-      for (var i = 0; i < (estrellas || []).length; i++) {
-        var e = estrellas[i];
-        if (mlim != null && isFinite(mlim) && e[2] > mlim) continue;   // no la pinta el render: no es doble conteo
-        var dx = ((((e[0] - gal.ra) + 540) % 360) - 180) * cos0 * 3600 * pxPorAs;
-        var dy = (e[1] - gal.dec) * 3600 * pxPorAs;
-        var x = (f.ancho - 1) / 2 - dx, y = (f.alto - 1) / 2 - dy;
-        if (x < -8 || y < -8 || x > f.ancho + 8 || y > f.alto + 8) continue;
-        enPx.push({ x: x, y: y, rPx: ps1RadioMascaraAs(e[2], mlim) * pxPorAs });
-      }
-      var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto, enPx);
+      var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto,
+        ps1EstrellasEnPixeles(f, gal, estrellas, mlim));
       return {
         ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
         ancho: f.ancho, alto: f.alto,
@@ -2025,6 +2040,7 @@
     ps1AnclarACatalogo: ps1AnclarACatalogo,
     ps1PintarParche: ps1PintarParche,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
+    ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
     ps1DescargarParche: ps1DescargarParche,
     ps1ParcheDeGalaxia: ps1ParcheDeGalaxia,
     dssMaxArcmin: DSS_MAX_ARCMIN,

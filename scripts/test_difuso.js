@@ -482,6 +482,43 @@ for (i18 = 0; i18 < lienzo.length; i18++) if (lienzo[i18] > vMejor) { vMejor = l
 var escv = SIZE / (CAMPO / 60);
 casi(mejor % SIZE, SIZE / 2 - (5 / 60) * escv, 1.5, 'el parche cae en su x (5′ al este)');
 casi(Math.floor(mejor / SIZE), SIZE / 2 - (2 / 60) * escv, 1.5, 'el parche cae en su y (2′ al norte)');
+
+/* Y CON EL NORTE ARRIBA. Un parche centrado no basta para verlo: hay que pintar
+   una marca fuera del centro. En el FITS de PS1 la FILA crece hacia el NORTE
+   (medido sobre M51: NGC 5195, que está al norte, aparece en py = centro + dy) y
+   la COLUMNA crece hacia el OESTE (PC001001 = −1); en el lienzo el norte está
+   arriba (y decreciente) y el oeste a la derecha (x creciente). Sin invertir la
+   fila, la galaxia sale espejada en vertical: el brazo de arriba aparece abajo. */
+var kPx = (LADO / 60) * escv / ANCHO;            // px de lienzo por px de parche
+var marcaN = new Float32Array(ANCHO * ANCHO);
+var cM = Math.round((ANCHO - 1) / 2);
+marcaN[(cM + 10) * ANCHO + (cM - 6)] = 1;        // 10 px al norte, 6 px al este
+var lienzoN = new Float32Array(SIZE * SIZE);
+R.ps1PintarParche(lienzoN, { datos: marcaN, ancho: ANCHO, alto: ANCHO, ladoArcmin: LADO,
+                             ra: 10, dec: dec0 },
+                  { ra0: 10, dec0: dec0, arcmin: CAMPO, size: SIZE });
+var mejorN = -1, vN = 0;
+for (i18 = 0; i18 < lienzoN.length; i18++) if (lienzoN[i18] > vN) { vN = lienzoN[i18]; mejorN = i18; }
+casi(Math.floor(mejorN / SIZE), SIZE / 2 - 10 * kPx, 1.5,
+  'lo que está al norte en el parche sale ARRIBA en el lienzo (no espejado)');
+casi(mejorN % SIZE, SIZE / 2 - 6 * kPx, 1.5,
+  'lo que está al este en el parche sale a la izquierda en el lienzo');
+
+/* La misma orientación, en el otro sentido: las estrellas de Gaia que se van a
+   enmascarar. Una estrella al norte del centro de la galaxia tiene que caer en
+   una FILA MAYOR del parche; si no, la máscara borra el sitio simétrico y deja
+   la estrella intacta. */
+var galEst = { ra: 202.47208, dec: 47.19667, ladoArcmin: 18, magV: 8.2, n: 1, reArcsec: 180 };
+var estN = [[galEst.ra, galEst.dec + 3 / 60, 10]];                 // 3′ al norte
+var enPxN = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estN, 15);
+ok(enPxN.length === 1 && enPxN[0].y > (512 - 1) / 2,
+  'una estrella al norte se enmascara en una fila mayor del parche');
+var estE = [[galEst.ra + (3 / 60) / Math.cos(galEst.dec * Math.PI / 180), galEst.dec, 10]];
+var enPxE = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estE, 15);
+ok(enPxE.length === 1 && enPxE[0].x < (512 - 1) / 2,
+  'una estrella al este se enmascara en una columna menor del parche');
+ok(R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, [[galEst.ra, galEst.dec, 18]], 15).length === 0,
+  'una estrella por debajo de la magnitud límite no se enmascara');
 // Y el parche ocupa en el render el lado que le toca, ni más ni menos.
 var minX = SIZE, maxX = -1;
 var lienzoLleno = new Float32Array(SIZE * SIZE);
