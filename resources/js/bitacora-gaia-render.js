@@ -423,14 +423,28 @@
       // El desvanecido por umbral de contraste es para objetos EXTENSOS. A una
       // fuente puntual no se le aplica: su visibilidad la fija la magnitud
       // límite, que dibujar() ya ha aplicado.
-      var s = visibilidadDifusa(Fobj[i], c.Fcielo * c.Cmin, perceptual);
+      /* Halo extrapolado de una galaxia (ps1PintarParche lo marca en o.haloMask):
+         su desvanecido YA está aplicado, y es la rampa de contraste de
+         ps1Opacidad. Pasarlo otra vez por visibilidadDifusa es contar dos veces
+         el mismo umbral, y entre las dos lo dejaban en 0 DN sobre el cielo en
+         cualquier pupila. Aquí la rampa manda sola: sin s y con el realce a
+         gamma completa (t=0). Si otra capa difusa cae en el mismo píxel, su luz
+         entra en este trato; son unos pocos píxeles y ninguno decide nada. */
+      var esHalo = !!(o.haloMask && o.haloMask[i]);
+      var s = esHalo ? 1 : visibilidadDifusa(Fobj[i], c.Fcielo * c.Cmin, perceptual);
       var difuso = Fobj[i] * s;
       /* Realce perceptual del difuso: se expande su nivel en pantalla y se
          devuelve a flujo, para que la suma con las estrellas siga siendo aditiva
          y los núcleos sigan comprimiendo en vez de recortarse. Solo cuando el
          motor declara que su flujo está calibrado (o.perceptual): las placas
          entran por aquí con su heurístico y no deben tocarse. */
-      if (perceptual && difuso > 0) difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, s, o.realceMax);
+      /* El techo del realce es para la IMAGEN del parche, que trae luz a todos
+         los brillos. El halo no es imagen: es el perfil sintético contra el que
+         el realce se calibró, y con techo puesto no llegaba a verse. */
+      if (perceptual && difuso > 0) {
+        difuso = esHalo ? realzarPerceptual(difuso, c.Fcielo, c.rango, 0, 0)
+          : realzarPerceptual(difuso, c.Fcielo, c.rango, s, o.realceMax);
+      }
       for (var ch = 0; ch < canales; ch++) {
         var F = difuso;
         if (estrellas) {
@@ -1610,11 +1624,17 @@
      (″) respecto al centro de la galaxia. Cada componente se evalúa en SU radio
      sobre el semieje mayor: el punto se lleva al eje mayor (PA, medido del norte
      hacia el este) y el eje menor se estira por 1/q. */
+  /* Radio del punto sobre el SEMIEJE MAYOR (″), con el seno y el coseno del PA ya
+     calculados por quien recorre el bucle: el eje menor se estira por 1/q. */
+  function ps1RadioEje(cs, sn, norte, este, q) {
+    var eje = norte * cs + este * sn, tra = -norte * sn + este * cs;
+    return Math.sqrt(eje * eje + (tra / q) * (tra / q));
+  }
+
   function ps1FlujoModelo(comps, pa, norte, este) {
-    var a = pa * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
-    var eje = norte * cs + este * sn, tra = -norte * sn + este * cs, F = 0;
+    var a = pa * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a), F = 0;
     for (var i = 0; i < comps.length; i++) {
-      var c = comps[i], r = Math.sqrt(eje * eje + (tra / c.q) * (tra / c.q));
+      var c = comps[i], r = ps1RadioEje(cs, sn, norte, este, c.q);
       if (r > c.rMax) continue;
       F += c.Ie * Math.exp(-c.b * (Math.pow(r / c.re, 1 / c.n) - 1));
     }
@@ -1895,6 +1915,23 @@
     if (!halo) c = null;
     var haloPx = ps1RadioHaloAs(comps) * pxPorAs;       // el halo suele salirse del parche
     var alcance = Math.max(ladoPx / 2, haloPx);
+    /* Máscara de los píxeles que son HALO EXTRAPOLADO (perfil, no imagen, y más
+       allá de r_e). pintarFot los exime del techo del realce perceptual: ese
+       techo existe porque la IMAGEN de PS1 trae luz a todos los brillos y el
+       realce la inflaba ×13, pero el halo no es imagen —es el perfil sintético
+       contra el que el realce se calibró—, y con el techo puesto la rampa de
+       opacidad lo dejaba en 0 DN sobre el cielo en todas las pupilas. Vive en el
+       objeto `cielo` porque es el mismo que luego recibe pintarFot, y dura lo que
+       el render: cada galaxia que llega marca sobre la misma máscara. */
+    var paR = pa * Math.PI / 180, csPa = Math.cos(paR), snPa = Math.sin(paR);
+    var reDisco = 0, mascara = null;
+    for (var k = 0; k < comps.length; k++) if (comps[k].re > reDisco) reDisco = comps[k].re;
+    if (c && reDisco > 0) {
+      if (!(o.cielo.haloMask && o.cielo.haloMask.length === difuso.length)) {
+        o.cielo.haloMask = new Uint8Array(difuso.length);
+      }
+      mascara = o.cielo.haloMask;
+    }
     var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
     var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
     for (var y = y0; y <= y1; y++) {
@@ -1904,14 +1941,23 @@
       var norte = -(y - cy) / pxPorAs;
       for (var x = x0; x <= x1; x++) {
         var px = Math.round((x - cx) * esc + (parche.ancho - 1) / 2);
-        var f = 0;
+        var f = 0, extrapolado = false;
         if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
           f = parche.datos[py * parche.ancho + px];
         }
-        if (!(f > 0) && comps.length) f = ps1FlujoModelo(comps, pa, norte, -(x - cx) / pxPorAs);
+        var este = -(x - cx) / pxPorAs;
+        if (!(f > 0) && comps.length) {
+          f = ps1FlujoModelo(comps, pa, norte, este);
+          // Solo fuera de r_e: los rellenos de dentro (huecos de la máscara de
+          // estrellas, bandas de polvo) están donde la imagen manda y siguen con
+          // el techo puesto, para no encender el interior del disco.
+          extrapolado = ps1RadioEje(csPa, snPa, norte, este, comps[0].q) > reDisco;
+        }
         if (!(f > 0)) continue;
         if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), c.SBe), c);
-        if (f > 0) difuso[y * SIZE + x] += f;
+        if (!(f > 0)) continue;
+        difuso[y * SIZE + x] += f;
+        if (extrapolado && mascara) mascara[y * SIZE + x] = 1;
       }
     }
     return difuso;

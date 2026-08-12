@@ -812,6 +812,50 @@ var haloBajo = haloPintado(5, medH), haloAlto = haloPintado(1, medH);
 ok(haloAlto > haloBajo * 2, 'a más aumentos el halo emerge del fondo (' +
   haloAlto + ' px contra ' + haloBajo + ')');
 
+/* La exención del techo: ps1PintarParche marca en `cielo.haloMask` los píxeles
+   que salen del perfil MÁS ALLÁ de r_e, y pintarFot los trata aparte —la rampa
+   de opacidad es su único desvanecido—. Sin la marca, el halo se apagaba dos
+   veces (rampa y visibilidadDifusa) y encima el techo del realce le quitaba el
+   92 % del refuerzo: llegaba a 0 DN sobre el cielo en cualquier pupila. */
+function halo(pupila) {
+  var cielo = { sqm: 21, pupilaSalida: pupila, pupilaOjo: 7, transmision: 0.9,
+                perceptual: true, realceMax: R.ps1.realceMax };
+  var lienzo = new Float32Array(SH * SH);
+  R.ps1PintarParche(lienzo, {
+    datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
+    ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
+  }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cielo });
+  var c = R.ctxFotometrico(cielo), pxPorAs = (SH / (CAMPO_H / 60)) / 3600;
+  var i = Math.round(SH / 2) * SH + Math.round(SH / 2 + 1.5 * galH.reArcsec * pxPorAs);
+  // El mismo píxel por los dos caminos de pintarFot: exento y con el trato viejo.
+  var F = lienzo[i], sVieja = R.visibilidadDifusa(F, c.Fcielo * c.Cmin, true);
+  return {
+    marcado: !!(cielo.haloMask && cielo.haloMask[i]),
+    dn: F > 0 ? R.valorDeFlujo(R.realzarPerceptual(F, c.Fcielo, c.rango, 0, 0),
+      c.Fcielo, c.rango) : 0,
+    dnVieja: (F > 0 && sVieja > 0) ? R.valorDeFlujo(R.realzarPerceptual(F * sVieja,
+      c.Fcielo, c.rango, sVieja, R.ps1.realceMax), c.Fcielo, c.rango) : 0
+  };
+}
+var hAlto = halo(1);
+ok(hAlto.marcado === true, 'a 1,5 r_e el píxel queda marcado como halo extrapolado');
+ok(hAlto.dn > 1, 'y se ve: ' + hAlto.dn.toFixed(1) + ' DN sobre el cielo');
+ok(hAlto.dnVieja < 1, 'con el trato de las capas de imagen se quedaba en ' +
+  hAlto.dnVieja.toFixed(1) + ' DN');
+
+/* Dentro de r_e manda la imagen: ahí el perfil solo rellena huecos (máscara de
+   estrellas, polvo) y esos NO se eximen, o se encendería el interior del disco. */
+var cieloD = { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9,
+               perceptual: true, realceMax: R.ps1.realceMax };
+var lienzoD = new Float32Array(SH * SH);
+R.ps1PintarParche(lienzoD, {
+  datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
+  ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
+}, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloD });
+var pxAsD = (SH / (CAMPO_H / 60)) / 3600;
+var iD = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.5 * galH.reArcsec * pxAsD);
+ok(lienzoD[iD] > 0 && !cieloD.haloMask[iD], 'a 0,5 r_e se pinta pero NO se exime');
+
 // Interruptor: apagado de fábrica durante las fases 1 y 2.
 ok(R.galaxiasImagen === false, 'la capa de galaxias viene apagada por defecto');
 R.galaxiasImagen = true; ok(R.galaxiasImagen === true, 'el interruptor se puede encender');
