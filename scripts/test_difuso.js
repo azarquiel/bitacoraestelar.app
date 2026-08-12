@@ -635,6 +635,183 @@ ok(enormes.length === 1 && enormes[0] === 'normal (r_e 3′)',
 casi(R.ps1LadoArcmin(8105), R.ps1.ladoMax, 1e-9, 'M31 se queda en el tope de 20′');
 casi(R.ps1LadoArcmin(1), R.ps1.ladoMin, 1e-9, 'una galaxia diminuta no baja del suelo de 1,5′');
 
+/* ══════════════ HALO EXTRAPOLADO Y UMBRAL DE CONTRASTE ══════════════
+   El perfil que se extrapola más allá de la imagen tiene que ser EL MISMO que
+   el del catálogo (gen_galaxias.py): si el I_e no está bien normalizado, el
+   halo sale más brillante o más flojo que la galaxia a la que se pega. */
+// magV 11: con b25 = 3,2′ y μ = 22,68 pasa las dos condiciones con un cielo de
+// 21 (Δμ = 1,68). Con magV 10 el mismo perfil se queda en Δμ = 1,09 y no entra.
+var galH = { magV: 11, reArcsec: 60, n: 1, ba: 0.6, pa: 30, bt: 0,
+             nMedido: 1.2, ladoArcmin: 6 };
+var compsH = R.ps1ComponentesSersic(galH);
+ok(compsH.length === 1, 'una galaxia sin bulbo trae una sola componente');
+var rMaxH = R.ps1RadioHaloAs(compsH);
+casi(-2.5 * Math.log10(R.ps1FlujoModelo(compsH, galH.pa, rMaxH * Math.cos(galH.pa * Math.PI / 180),
+                                        rMaxH * Math.sin(galH.pa * Math.PI / 180))),
+     R.ps1.muHalo, 1e-6, 'el halo se extrapola justo hasta ' + R.ps1.muHalo + ' mag/arcsec²');
+ok(rMaxH > 3 * galH.reArcsec, 'y eso queda bastante más allá del parche (' +
+  (rMaxH / galH.reArcsec).toFixed(1) + '·r_e)');
+
+// Integrando el modelo se recupera la magnitud del catálogo (menos la luz que
+// queda más allá del corte de muHalo). Comprueba a la vez I_e, la elipse y el PA.
+var pasoH = 2, sumaH = 0;                     // ″ por celda
+for (var nH = -rMaxH; nH <= rMaxH; nH += pasoH) {
+  for (var eH = -rMaxH; eH <= rMaxH; eH += pasoH) {
+    sumaH += R.ps1FlujoModelo(compsH, galH.pa, nH, eH) * pasoH * pasoH;
+  }
+}
+var esperadoH = Math.pow(10, -0.4 * galH.magV) * R.ps1FraccionLuz(galH.n, rMaxH / galH.reArcsec);
+casi(sumaH / esperadoH, 1, 0.02, 'el halo integrado da la magnitud del catálogo');
+
+// Reparto bulbo/disco: con B/T = 1 toda la luz va al bulbo (n=4, r_e más chico).
+var compsB = R.ps1ComponentesSersic({ magV: 10, reArcsec: 60, n: 1, ba: 1, pa: 0, bt: 1 });
+ok(compsB.length === 1 && compsB[0].n === 4 && compsB[0].re < 60,
+  'con B/T = 1 solo queda el bulbo, más compacto que el disco');
+
+/* Umbral de Blackwell/Clark: por debajo del cielo no se ve nada, deltaPlena
+   mag por encima se ve entero, y en medio la potencia de PS1.deltaExp. */
+casi(R.ps1Opacidad(21, 21), 0, 1e-12, 'un halo tan brillante como el cielo no se ve');
+casi(R.ps1Opacidad(22, 21), 0, 1e-12, 'y uno más débil, tampoco');
+casi(R.ps1Opacidad(21 - R.ps1.deltaPlena, 21), 1, 1e-12, 'a Δ = ' + R.ps1.deltaPlena + ' se ve entero');
+casi(R.ps1Opacidad(21 - 5, 21), 1, 1e-12, 'y no pasa de 1 por mucho que suba');
+casi(R.ps1Opacidad(21 - 1.5, 21), Math.pow(1.5 / R.ps1.deltaPlena, R.ps1.deltaExp), 1e-12,
+  'en la transición sigue la potencia pedida');
+var opAnt = -1, monotona = true;
+for (var dOp = 0; dOp <= 4; dOp += 0.05) {
+  var opH = R.ps1Opacidad(21 - dOp, 21);
+  if (opH < opAnt - 1e-12) monotona = false;
+  opAnt = opH;
+}
+ok(monotona, 'la opacidad no retrocede en ningún punto (sin borde duro)');
+
+/* La mezcla con el fondo se hace sobre el flujo, pero tiene que salir la mezcla
+   de COLOR pedida: nivel = (1−op)·cielo + op·galaxia. */
+var cH = R.ctxFotometrico({ sqm: 21, pupilaSalida: 3, pupilaOjo: 7, transmision: 0.9 });
+var Fgal = cH.Fcielo * 4;
+var nivelPleno = 255 * 2.5 * Math.log10(1 + Fgal / cH.Fcielo) / cH.rango;
+casi(255 * 2.5 * Math.log10(1 + R.ps1FlujoConOpacidad(Fgal, 0.4, cH) / cH.Fcielo) / cH.rango,
+     0.4 * nivelPleno, 1e-9, 'la opacidad 0,4 deja el nivel a 0,4 del camino al color de la galaxia');
+casi(R.ps1FlujoConOpacidad(Fgal, 0, cH), 0, 1e-30, 'opacidad 0 = el píxel se queda en el cielo');
+casi(R.ps1FlujoConOpacidad(Fgal, 1, cH), Fgal, 1e-30, 'opacidad 1 = el píxel de la galaxia entero');
+
+/* ── Activación: no toda galaxia enseña halo ──────────────────────────────────
+   μ_medio = m + 2,5·log10(π·a·b/4) + 8,89, con a y b DIÁMETROS en ′. */
+casi(R.ps1BrilloMedio(10, 2, 1), 10 + 2.5 * Math.log10(Math.PI / 2) + 8.89, 1e-12,
+  'el brillo superficial medio sigue la fórmula pedida');
+
+// Los ejes salen de la isofota 25 del mismo modelo del catálogo.
+var medH = R.ps1MedidasHalo(galH, compsH);
+casi(-2.5 * Math.log10(R.ps1FlujoModelo(compsH, galH.pa,
+       (medH.aArcmin / 2) * 60 * Math.cos(galH.pa * Math.PI / 180),
+       (medH.aArcmin / 2) * 60 * Math.sin(galH.pa * Math.PI / 180))),
+     25, 1e-6, 'el eje mayor es el diámetro de la isofota de 25 mag/arcsec²');
+casi(medH.bArcmin / medH.aArcmin, galH.ba, 1e-12, 'y el menor va con el b/a del catálogo');
+
+// Condición A: por debajo de haloMenorMin no hay halo, sea cual sea el brillo.
+var difusa = { bArcmin: R.ps1.haloMenorMin + 0.01, muProm: R.ps1.haloMuFijo + 0.5 };
+ok(R.ps1HaloActivo({ bArcmin: R.ps1.haloMenorMin, muProm: difusa.muProm }) === false,
+  'una galaxia con el eje menor en el límite no entra (condición A)');
+ok(R.ps1HaloActivo(difusa) === true, 'y justo por encima, sí');
+// Condición B: brillo superficial medio, un absoluto de la galaxia.
+ok(R.ps1HaloActivo({ bArcmin: 20, muProm: R.ps1.haloMuFijo - 0.01 }) === false,
+  'una galaxia compacta se queda fuera por grande que sea (condición B)');
+ok(R.ps1HaloActivo({ bArcmin: 20, muProm: R.ps1.haloMuFijo + 0.01 }) === true,
+  'y una difusa entra');
+// Sin medidas, nada de halos inventados.
+ok(R.ps1HaloActivo(null) === false, 'sin medidas no hay halo');
+ok(R.ps1HaloActivo({ bArcmin: 20, muProm: Infinity }) === false,
+  'ni con un brillo medio sin definir');
+
+/* La puerta no mira ni el ocular ni el cielo: en su firma solo cabe la galaxia.
+   Mientras, SBe —el que sí manda en la rampa— se oscurece con el aumento. */
+ok(R.ps1HaloActivo.length === 1, 'la puerta se decide solo con la galaxia');
+var cielo5 = R.ctxFotometrico({ sqm: 21, pupilaSalida: 5, pupilaOjo: 7, transmision: 0.9 });
+var cielo1 = R.ctxFotometrico({ sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 });
+ok(cielo1.SBe > cielo5.SBe + 1, 'y eso que SBe sí se oscurece con el aumento (' +
+  cielo5.SBe.toFixed(2) + ' → ' + cielo1.SBe.toFixed(2) + ')');
+
+/* Filas reales de galaxias-datos.js: M82 (μ=22,11) y NGC 4565 (22,23) fuera;
+   M51 (22,39) y M101 (23,21) dentro; M49 (21,34), fuera. La columna 12 (n de
+   S4G) viaja en las medidas pero no decide: M82 mide 2,44 y M51 3,87. */
+function medidas(g) { return R.ps1MedidasHalo(g, R.ps1ComponentesSersic(g)); }
+var m82 = medidas({ reArcsec: 137.47, ba: 0.38, magV: 8.75, n: 1, bt: 0.03, nMedido: 2.44 });
+var m51 = medidas({ reArcsec: 180.35, ba: 0.617, magV: 8.21, n: 1, bt: 0.15, nMedido: 3.87 });
+var m101 = medidas({ reArcsec: 379.23, ba: 0.933, magV: 7.76, n: 1, bt: 0.08, nMedido: 1.31 });
+var m49 = medidas({ reArcsec: 115.38, ba: 0.813, magV: 8.47, n: 4, bt: 1, nMedido: 4.49 });
+var m4565 = medidas({ reArcsec: 186.19, ba: 0.135, magV: 9.67, n: 1, bt: 0.3, nMedido: 1.28 });
+ok(R.ps1HaloActivo(m82) === false, 'M82 se queda fuera (μ = ' + m82.muProm.toFixed(2) + ')');
+ok(R.ps1HaloActivo(m4565) === false, 'NGC 4565 tampoco, por poco (μ = ' +
+  m4565.muProm.toFixed(2) + ')');
+ok(R.ps1HaloActivo(m51) === true, 'M51 lleva halo (μ = ' + m51.muProm.toFixed(2) +
+  ') aunque su n de S4G sea 3,87');
+ok(R.ps1HaloActivo(m101) === true, 'M101 lleva halo (μ = ' + m101.muProm.toFixed(2) + ')');
+ok(R.ps1HaloActivo(m49) === false, 'M49, elíptica, no (μ = ' + m49.muProm.toFixed(2) + ')');
+ok(m82.n === 2.44, 'el n medido sigue viajando en las medidas, sin decidir');
+
+/* ── n medido en la imagen por concentración ──────────────────────────────────
+   Ya no abre la puerta (manda el brillo medio), pero se queda medido y probado:
+   la razón r90/r50 crece con n, y por eso se puede invertir. */
+var aEnRe = 3;
+ok(R.ps1ConcentracionTeorica(1, aEnRe) < R.ps1ConcentracionTeorica(4, aEnRe),
+  'un perfil concentrado tiene el r90/r50 mayor que uno exponencial (' +
+  R.ps1ConcentracionTeorica(1, aEnRe).toFixed(2) + ' contra ' +
+  R.ps1ConcentracionTeorica(4, aEnRe).toFixed(2) + ')');
+casi(R.ps1NDeConcentracion(R.ps1ConcentracionTeorica(2.2, aEnRe), aEnRe), 2.2, 1e-3,
+  'y la inversión devuelve el n del que salió');
+
+/* Vuelta entera sobre un parche SINTÉTICO: se pinta el perfil de un n conocido
+   y se recupera midiendo su curva de crecimiento. */
+function nDeParcheSintetico(n) {
+  var g = { magV: 10, reArcsec: 30, n: n, ba: 0.7, pa: 25, bt: 0, ladoArcmin: 6 };
+  var comps = R.ps1ComponentesSersic(g), lado = 256, escalaAs = g.ladoArcmin * 60 / lado;
+  var datos = new Float32Array(lado * lado);
+  for (var py = 0; py < lado; py++) {
+    var norte = (py - (lado - 1) / 2) * escalaAs;
+    for (var px = 0; px < lado; px++) {
+      datos[py * lado + px] = R.ps1FlujoModelo(comps, g.pa, norte,
+        ((lado - 1) / 2 - px) * escalaAs);
+    }
+  }
+  var ejes = R.ps1EjesArcmin(comps, g.ba);
+  return R.ps1ConcentracionN({ datos: datos, ancho: lado, alto: lado, escalaAs: escalaAs },
+    { pa: g.pa, ba: g.ba, aArcmin: ejes.a, reArcsec: g.reArcsec, ladoArcmin: g.ladoArcmin });
+}
+var nMedido1 = nDeParcheSintetico(1), nMedido4 = nDeParcheSintetico(4);
+ok(Math.abs(nMedido1 - 1) < 0.15, 'un disco exponencial se mide como n≈1 (' +
+  nMedido1.toFixed(2) + ')');
+ok(Math.abs(nMedido4 - 4) < 0.6, 'y un bulbo de de Vaucouleurs como n≈4 (' +
+  nMedido4.toFixed(2) + ')');
+ok(nMedido1 < R.ps1.haloSersicMax && nMedido4 > R.ps1.haloSersicMax,
+  'la medida cae a los dos lados del tope de Sérsic, por si vuelve a hacer falta');
+ok(R.ps1ConcentracionN({ datos: new Float32Array(16), ancho: 4, alto: 4, escalaAs: 1 },
+  { pa: 0, ba: 1, aArcmin: 2, reArcsec: 30, ladoArcmin: 6 }) === 0,
+  'un parche sin luz no inventa ninguna n');
+
+/* Y el efecto en el lienzo: con la galaxia ACTIVA el modelo pinta más allá del
+   parche; con la misma galaxia fuera de la regla, el parche vacío no pinta nada
+   —ni halo ni degradado—. El parche va vacío para medir solo lo extrapolado. */
+var SH = 240, CAMPO_H = 20;
+function haloPintado(pupila, medidas) {
+  var lienzoH = new Float32Array(SH * SH), n2 = 0;
+  R.ps1PintarParche(lienzoH, {
+    datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
+    ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medidas
+  }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
+       cielo: { sqm: 21, pupilaSalida: pupila, pupilaOjo: 7, transmision: 0.9 } });
+  for (var iH = 0; iH < lienzoH.length; iH++) if (lienzoH[iH] > 0) n2++;
+  return n2;
+}
+ok(R.ps1HaloActivo(medH) === true, 'la galaxia de prueba cumple las dos condiciones');
+ok(haloPintado(5, medH) > 0, 'y su halo se pinta (' + haloPintado(5, medH) + ' px)');
+ok(haloPintado(5, { bArcmin: 5, muProm: 21 }) === 0,
+  'la que no las cumple no pinta nada donde no hay imagen');
+/* Y con la puerta abierta vuelve lo de antes: el mismo cielo y la misma galaxia,
+   más aumentos (pupila menor) → el fondo se oscurece, Δ crece y el halo asoma
+   más lejos. La puerta ya no lo estorba, porque no depende del ocular. */
+var haloBajo = haloPintado(5, medH), haloAlto = haloPintado(1, medH);
+ok(haloAlto > haloBajo * 2, 'a más aumentos el halo emerge del fondo (' +
+  haloAlto + ' px contra ' + haloBajo + ')');
+
 // Interruptor: apagado de fábrica durante las fases 1 y 2.
 ok(R.galaxiasImagen === false, 'la capa de galaxias viene apagada por defecto');
 R.galaxiasImagen = true; ok(R.galaxiasImagen === true, 'el interruptor se puede encender');

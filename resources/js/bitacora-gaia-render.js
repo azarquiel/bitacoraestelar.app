@@ -207,9 +207,15 @@
       Cmin *= Math.max(FOT.C_MAG_MIN, Math.min(FOT.C_MAG_MAX,
         Math.pow(FOT.C_MAG_REF / o.aumentos, FOT.C_MAG_EXP)));
     }
+    // SBe = brillo superficial del cielo TAL COMO LLEGA AL OJO (mag/arcsec²),
+    // ya atenuado por la pupila de salida y por la transmisión del tubo. Es el
+    // "negro perceptual" de la escena: lo que pinta el fondo y contra lo que se
+    // mide el contraste del halo extrapolado (ver ps1Opacidad). Se expone para
+    // no recalcularlo en ningún otro sitio.
+    var SBe = sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T);
     return {
       Fcielo: Fcielo, Fref: Fref, Cmin: Cmin, dim: dim, T: T,
-      nivelFondo: nivelCielo(sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T)),
+      SBe: SBe, nivelFondo: nivelCielo(SBe),
       rango: FOT.SB_NEGRO - FOT.SB_BLANCO
     };
   }
@@ -1288,7 +1294,31 @@
     mascaraProf: 20,       // mag G hasta la que se piden estrellas para la máscara (tope del proxy)
     nucleoPx: 3,           // px: radio central que la máscara no toca nunca
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
-    kRuido: 1.5             // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
+    kRuido: 1.5,           // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
+    /* Halo extrapolado: hasta qué brillo superficial (mag/arcsec²) se sigue el
+       perfil del catálogo donde la imagen ya no trae señal. El stack de PS1 se
+       acaba cerca de μ≈25, pero la luz del disco sigue ahí: 28,5 es el suelo
+       habitual de la fotometría profunda de halos. */
+    muHalo: 28.5,
+    /* Umbral de contraste (Blackwell/Clark): magnitudes de brillo superficial
+       por encima del cielo a las que el halo se ve entero. Por debajo de
+       deltaMin es indistinguible del fondo y no se pinta.
+       ponytail: la ley es un contraste (Δ) contra el cielo YA atenuado por la
+       pupila, mientras el brillo del halo no lleva esa atenuación. Físicamente
+       el objeto se apaga igual que el cielo y el Δ real no cambia con el
+       aumento —lo que sí cambia es el UMBRAL, porque el objeto crece en la
+       retina (eso ya lo modela FOT.C_MAG_* en Cmin)—. Aquí el efecto se
+       consigue por el lado del cielo: es la perilla pedida, no una medida. */
+    deltaMin: 0.0, deltaPlena: 3.25, deltaExp: 1.8,
+    /* Condiciones de activación del halo (ver ps1HaloActivo): eje menor mínimo
+       de la isofota 25, en ′, y brillo superficial medio a partir del cual la
+       galaxia se considera difusa. El 22,25 sale de la separación natural de
+       los datos de prueba (M82 22,11 contra M51 22,39); si algún día a25/b25
+       dejan de reconstruirse y vienen del D25 del RC3, se reajusta aquí. */
+    haloMenorMin: 1.5, haloMuFijo: 22.25,
+    // Índice de Sérsic: ya NO decide (ver ps1HaloActivo), pero el tope se queda
+    // por si vuelve a hacer falta con ps1ConcentracionN.
+    haloSersicMax: 2.5
   };
 
   /* Interruptor de la capa, aquí y no en cada llamador: los dos puntos de uso
@@ -1524,6 +1554,262 @@
     return Math.min(1, gammaP(2 * nn, ps1BSersic(nn) * Math.pow(radioEnRe, 1 / nn)));
   }
 
+  /* ── Halo extrapolado: el perfil del catálogo más allá de la imagen ──────────
+     La imagen de PS1 se acaba donde se acaba su señal (μ≈25 en el mejor caso, y
+     antes si el parche es chico). El disco NO se acaba ahí: solo cae por debajo
+     del ruido del stack. Aquí se sigue el perfil hasta PS1.muHalo.
+
+     El perfil NO se ajusta a los píxeles: ya viene ajustado en el catálogo. Las
+     columnas r_e, b/a, PA, n y B/T salen de gen_galaxias.py, que resuelve r_e
+     para que la isofota de 25 caiga en el D25 del RC3 y reparte la luz entre
+     bulbo (n=4, r_e·0,2) y disco (n del tipo). Reproducir aquí ESE MISMO modelo
+     (`perfil_total` del generador) es lo consistente: un ajuste propio a las
+     alas ruidosas del parche daría un perfil distinto del que ya ancla el nivel
+     en ps1AnclarACatalogo, y las dos capas dejarían de casar. */
+  var PS1_RE_BULBO = 0.2, PS1_Q_BULBO_MIN = 0.6;   // = RE_BULBO_REL / Q_BULBO_MIN del generador
+
+  // Integral del perfil: L_total = I_e · r_e² · factor · (b/a). En logaritmos,
+  // que e^b y b^-2n se desbordan por separado para n grande.
+  function ps1FactorLuz(n) {
+    var b = ps1BSersic(n);
+    return 2 * Math.PI * n * Math.exp(b + lnGamma(2 * n) - 2 * n * Math.log(b));
+  }
+
+  /* Radio (″, sobre el SEMIEJE MAYOR) al que una componente cae a un brillo
+     superficial dado. 0 si ni en el centro llega. */
+  function ps1RadioIsofota(c, mu) {
+    var I = Math.pow(10, -0.4 * mu);
+    if (!(c.Ie > I)) return 0;
+    return c.re * Math.pow(1 + Math.log(c.Ie / I) / c.b, c.n);
+  }
+
+  /* Componentes del modelo de una galaxia: cada una con su I_e (flujo por
+     arcsec²), r_e (semieje MAYOR, ″), n, razón de ejes y el radio —también sobre
+     el semieje mayor— al que su brillo cae a PS1.muHalo.
+     gal: {magV, reArcsec, n, ba, bt}. Devuelve [] si falta el dato mínimo. */
+  function ps1ComponentesSersic(gal) {
+    var re = gal.reArcsec, q = (gal.ba > 0 && gal.ba <= 1) ? gal.ba : 1;
+    if (!(re > 0) || !(gal.magV > 0)) return [];
+    var Ftot = Math.pow(10, -0.4 * gal.magV);
+    var bt = (gal.bt >= 0 && gal.bt <= 1) ? gal.bt : 0;
+    var Ihalo = Math.pow(10, -0.4 * PS1.muHalo), out = [];
+    function comp(frac, reC, nC, qC) {
+      if (!(frac > 0)) return;
+      var Ie = Ftot * frac / (reC * reC * ps1FactorLuz(nC) * qC);
+      if (!(Ie > Ihalo)) return;                       // ni en el centro llega al umbral
+      var c = { Ie: Ie, re: reC, n: nC, b: ps1BSersic(nC), q: qC };
+      c.rMax = ps1RadioIsofota(c, PS1.muHalo);
+      out.push(c);
+    }
+    comp(1 - bt, re, (gal.n > 0.1) ? gal.n : 1, q);
+    comp(bt, re * PS1_RE_BULBO, 4, Math.max(q, PS1_Q_BULBO_MIN));
+    return out;
+  }
+
+  /* Flujo por arcsec² del modelo en un punto, dado en desplazamientos NORTE/ESTE
+     (″) respecto al centro de la galaxia. Cada componente se evalúa en SU radio
+     sobre el semieje mayor: el punto se lleva al eje mayor (PA, medido del norte
+     hacia el este) y el eje menor se estira por 1/q. */
+  function ps1FlujoModelo(comps, pa, norte, este) {
+    var a = pa * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
+    var eje = norte * cs + este * sn, tra = -norte * sn + este * cs, F = 0;
+    for (var i = 0; i < comps.length; i++) {
+      var c = comps[i], r = Math.sqrt(eje * eje + (tra / c.q) * (tra / c.q));
+      if (r > c.rMax) continue;
+      F += c.Ie * Math.exp(-c.b * (Math.pow(r / c.re, 1 / c.n) - 1));
+    }
+    return F;
+  }
+
+  // Radio (″, semieje mayor) que abarca todo el halo extrapolado.
+  function ps1RadioHaloAs(comps) {
+    var r = 0;
+    for (var i = 0; i < comps.length; i++) if (comps[i].rMax > r) r = comps[i].rMax;
+    return r;
+  }
+
+  /* ── Índice de Sérsic MEDIDO: el que decide la puerta ───────────────────────
+     El `n` de la columna 9 NO es una medida: gen_galaxias.py lo saca del tipo de
+     Hubble y solo vale 1 o 4. Vale para el perfil —r_e se resolvió con él— pero
+     no para decidir si una galaxia es tendida o concentrada, que es lo que la
+     puerta pregunta.
+     Primero manda el n AJUSTADO de S4G (columna 12; 617 de las 1295 filas). Donde
+     no lo hay, se mide en la propia imagen de PS1 por CONCENTRACIÓN: los radios
+     que encierran el 50 % y el 90 % de la luz dentro de la apertura, y el n del
+     Sérsic que daría esa misma razón. En ningún caso se recae en el tipo. */
+
+  // x tal que P(a,x) = p, por bisección: P crece con x y aquí p < P(a,xMax).
+  function ps1InvGammaP(a, p, xMax) {
+    var lo = 0, hi = xMax;
+    for (var i = 0; i < 60; i++) {
+      var med = 0.5 * (lo + hi);
+      if (gammaP(a, med) < p) lo = med; else hi = med;
+    }
+    return 0.5 * (lo + hi);
+  }
+
+  /* Concentración r90/r50 de un Sérsic de índice n, medida DENTRO de la misma
+     apertura que la imagen (semieje mayor A, en unidades de r_e). Crece con n
+     —un perfil concentrado deja el 50 % de su luz mucho más adentro que el
+     90 %—, así que se puede invertir. */
+  function ps1ConcentracionTeorica(n, aEnRe) {
+    if (!(n > 0) || !(aEnRe > 0)) return 0;
+    var b = ps1BSersic(n), xA = b * Math.pow(aEnRe, 1 / n), L = gammaP(2 * n, xA);
+    if (!(L > 0)) return 0;
+    var x50 = ps1InvGammaP(2 * n, 0.5 * L, xA), x90 = ps1InvGammaP(2 * n, 0.9 * L, xA);
+    if (!(x50 > 0)) return 0;
+    return Math.pow(x90 / x50, n);
+  }
+
+  var PS1_N_MIN = 0.3, PS1_N_MAX = 8;                 // rango en el que se busca
+
+  // n cuyo r90/r50 teórico es el medido. Fuera de rango, el extremo.
+  function ps1NDeConcentracion(c, aEnRe) {
+    if (!(c > 1) || !(aEnRe > 0)) return 0;
+    if (c <= ps1ConcentracionTeorica(PS1_N_MIN, aEnRe)) return PS1_N_MIN;
+    if (c >= ps1ConcentracionTeorica(PS1_N_MAX, aEnRe)) return PS1_N_MAX;
+    var lo = PS1_N_MIN, hi = PS1_N_MAX;
+    for (var i = 0; i < 40; i++) {
+      var med = 0.5 * (lo + hi);
+      if (ps1ConcentracionTeorica(med, aEnRe) < c) lo = med; else hi = med;
+    }
+    return 0.5 * (lo + hi);
+  }
+
+  /* n medido en la imagen ya anclada (curva de crecimiento en anillos elípticos
+     con el PA y el b/a del catálogo).
+     La apertura se queda en el menor de: el semieje de la isofota 25 y medio
+     lado del parche. Pasarse del parche no añade luz pero sí radio, y eso bajaría
+     el r90 y con él la n: la galaxia saldría más tendida de lo que es.
+     p: {datos, ancho, alto, escalaAs}; o: {pa, ba, aArcmin (DIÁMETRO de la
+     isofota 25, ′), reArcsec, ladoArcmin}. Devuelve 0 si no hay luz que medir. */
+  var PS1_ANILLOS = 120;
+  function ps1ConcentracionN(p, o) {
+    var A = Math.min(o.aArcmin * 60 / 2, o.ladoArcmin * 60 / 2);
+    if (!(A > 0) || !(o.reArcsec > 0) || !p || !p.datos) return 0;
+    var q = (o.ba > 0 && o.ba <= 1) ? o.ba : 1;
+    var a = (o.pa || 0) * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
+    var suma = new Float64Array(PS1_ANILLOS), total = 0;
+    // Misma orientación que ps1EstrellasEnPixeles: la fila crece al norte y la
+    // columna al oeste.
+    for (var py = 0; py < p.alto; py++) {
+      var norte = (py - (p.alto - 1) / 2) * p.escalaAs;
+      for (var px = 0; px < p.ancho; px++) {
+        var f = p.datos[py * p.ancho + px];
+        if (!(f > 0)) continue;
+        var este = ((p.ancho - 1) / 2 - px) * p.escalaAs;
+        var eje = norte * cs + este * sn, tra = (-norte * sn + este * cs) / q;
+        var r = Math.sqrt(eje * eje + tra * tra);
+        if (r >= A) continue;
+        suma[Math.floor(r / A * PS1_ANILLOS)] += f;
+        total += f;
+      }
+    }
+    if (!(total > 0)) return 0;
+    function radio(frac) {
+      var meta = frac * total, acum = 0;
+      for (var i = 0; i < PS1_ANILLOS; i++) {
+        if (acum + suma[i] >= meta) {
+          var t = suma[i] > 0 ? (meta - acum) / suma[i] : 0;
+          return (i + t) * A / PS1_ANILLOS;
+        }
+        acum += suma[i];
+      }
+      return A;
+    }
+    var r50 = radio(0.5);
+    if (!(r50 > 0)) return 0;
+    return ps1NDeConcentracion(radio(0.9) / r50, A / o.reArcsec);
+  }
+
+  /* ── Activación del halo: no toda galaxia lo enseña ─────────────────────────
+     Extrapolar el perfil de TODAS pinta halos donde el ojo no ve ninguno. La
+     que sí lo enseña es la grande y DIFUSA; una compacta se ve como la trae la
+     imagen y punto. Dos condiciones, las dos obligatorias:
+       A · eje MENOR de la isofota 25 > PS1.haloMenorMin (′): halo que quepa.
+       B · brillo superficial medio > PS1.haloMuFijo: la galaxia es difusa.
+     Las dos son propiedades del OBJETO: ni el ocular ni el cielo entran aquí. La
+     difusidad de una galaxia no cambia porque el observador se vaya a un sitio
+     más oscuro, así que el SQM no pinta nada en el permiso —una versión anterior
+     lo metía y cerraba la puerta justo con cielo oscuro, que es cuando el halo
+     se ve—. Lo que sí se mueve con el ocular es la rampa de opacidad, que va
+     contra SBe.
+     El índice de Sérsic MEDIDO se sigue calculando (columna 12 del catálogo, de
+     S4G) y viaja en las medidas, pero NO decide: ninguna de las dos fuentes de n
+     separaba los casos que el usuario quiere separados —S4G dejaba fuera a M51 y
+     la concentración óptica dejaba dentro a M82—.
+     Cuando no se cumplen, el parche se pinta tal cual llegó de PS1 y donde no
+     hay dato queda el cielo pelado: exactamente el render de la fase 1, y sin
+     recorrer un solo píxel de más. */
+
+  /* Ejes (DIÁMETROS, ′) de la isofota de 25 mag/arcsec² del modelo. El RC3 los
+     trae, pero galaxias-datos.js guarda r_e y b/a en su lugar: gen_galaxias.py
+     resuelve el uno del otro (resolver_re), así que reconstruirlos aquí del
+     mismo modelo devuelve el D25 del catálogo, no una medida nueva. */
+  var PS1_MU_ISOFOTA = 25.0;                          // = MU_ISOFOTA del generador
+  function ps1EjesArcmin(comps, ba) {
+    var r = 0;
+    for (var i = 0; i < comps.length; i++) {
+      var ri = ps1RadioIsofota(comps[i], PS1_MU_ISOFOTA);
+      if (ri > r) r = ri;
+    }
+    var a = 2 * r / 60, q = (ba > 0 && ba <= 1) ? ba : 1;
+    return { a: a, b: a * q };
+  }
+
+  /* Brillo superficial MEDIO dentro de esa isofota (mag/arcsec²):
+     μ = m + 2,5·log10(π·a·b/4) + 8,89, con a y b los DIÁMETROS en minutos
+     (8,89 = 2,5·log10(3600), el paso de arcmin² a arcsec²). */
+  function ps1BrilloMedio(magV, aArcmin, bArcmin) {
+    if (!(aArcmin > 0 && bArcmin > 0)) return Infinity;
+    return magV + 2.5 * Math.log10(Math.PI * aArcmin * bArcmin / 4) + 8.89;
+  }
+
+  /* Lo que se mide UNA VEZ por galaxia: los ejes de su isofota 25, su brillo
+     medio —que es lo que decide— y el índice de Sérsic medido de S4G, que viaja
+     como dato pero no abre ni cierra nada. La n de la imagen (ps1ConcentracionN)
+     no se calcula aquí: recorrer el parche entero para un valor que la puerta ya
+     no consulta es CPU tirada. */
+  function ps1MedidasHalo(gal, comps) {
+    var ejes = ps1EjesArcmin(comps || [], gal.ba);
+    return {
+      aArcmin: ejes.a, bArcmin: ejes.b, n: gal.nMedido > 0 ? gal.nMedido : 0,
+      muProm: ps1BrilloMedio(gal.magV, ejes.a, ejes.b)
+    };
+  }
+
+  /* Las dos condiciones. `gal` = lo que devuelve ps1MedidasHalo, y nada más: no
+     entra ningún dato del cielo ni del ocular. Sin medidas o sin ejes, false:
+     antes que un halo inventado, ninguno. */
+  function ps1HaloActivo(gal) {
+    if (!gal || !(gal.bArcmin > PS1.haloMenorMin) || !isFinite(gal.muProm)) return false;
+    return gal.muProm > PS1.haloMuFijo;
+  }
+
+  /* Umbral de detección de Blackwell/Clark aplicado como OPACIDAD: Δ es el
+     contraste en magnitudes del píxel sobre el cielo efectivo (SBe, el que ya
+     calcula ctxFotometrico). Por debajo de deltaMin el píxel es cielo y no se
+     pinta; a partir de deltaPlena se pinta entero; en medio, una potencia que
+     desvanece sin borde duro. */
+  function ps1Opacidad(sbPixel, sbCielo) {
+    var d = sbCielo - sbPixel;
+    if (!(d > PS1.deltaMin)) return 0;
+    if (d >= PS1.deltaPlena) return 1;
+    return Math.pow((d - PS1.deltaMin) / (PS1.deltaPlena - PS1.deltaMin), PS1.deltaExp);
+  }
+
+  /* Mezcla del píxel de la galaxia con el fondo de cielo, hecha sobre el FLUJO.
+     La mezcla pedida es de color: nivel = (1−op)·cielo + op·galaxia. Como el
+     nivel en pantalla es nivelFondo + valorDeFlujo(F) y las dos conversiones son
+     inversas exactas, reescalar el flujo así deja EXACTAMENTE esa mezcla cuando
+     pintarFot lo pinte, sin tener que componer RGB aparte ni tocar el resto de
+     capas (el halo de un globular se sigue sumando al mismo array). */
+  function ps1FlujoConOpacidad(F, op, c) {
+    if (op >= 1) return F;
+    if (!(op > 0) || !(F > 0)) return 0;
+    return flujoDeValor(op * valorDeFlujo(F, c.Fcielo, c.rango), c.Fcielo, c.rango);
+  }
+
   /* Convierte el parche en BRILLO SUPERFICIAL (flujo por arcsec², las mismas
      unidades que Fcielo y que el halo de King) anclando su luz total a la mag V
      del catálogo. Orden obligatorio: cielo restado y estrellas quitadas ANTES de
@@ -1574,8 +1860,20 @@
      (M51 y su compañera) el espejo se ve como una copia duplicada: así se
      descubrió. La COLUMNA no se invierte: crece hacia el oeste (PC001001 = −1),
      igual que la x del lienzo.
-     parche: {datos, ancho, alto, ladoArcmin, ra, dec}.
-     o: {ra0, dec0, arcmin, size} = el campo que se está pintando. */
+     Donde la imagen no trae señal —fuera del parche, o dentro pero por debajo
+     del suelo de ruido, que ps1AnclarACatalogo deja en cero— se pinta el HALO
+     EXTRAPOLADO del perfil del catálogo (ps1ComponentesSersic), hasta
+     PS1.muHalo. Solo donde la imagen no llega: donde sí hay medida, manda la
+     medida, y así las bandas de polvo y los brazos no los tapa un perfil liso.
+
+     Todo lo que sale de aquí —medido y extrapolado— pasa por el umbral de
+     contraste de ps1Opacidad contra el cielo efectivo. Es lo que hace que el
+     halo asome al subir aumentos, y también lo que evita un anillo en la unión:
+     las dos zonas se desvanecen con la misma ley.
+
+     parche: {datos, ancho, alto, ladoArcmin, ra, dec, comps, pa}.
+     o: {ra0, dec0, arcmin, size, cielo} = el campo que se está pintando; `cielo`
+     son los mismos parámetros ópticos que recibe pintarFot. */
   function ps1PintarParche(difuso, parche, o) {
     var SIZE = o.size, escv = SIZE / (o.arcmin / 60);   // px por grado
     var cos0 = Math.cos(o.dec0 * Math.PI / 180);
@@ -1585,15 +1883,34 @@
     var ladoPx = (parche.ladoArcmin / 60) * escv;       // lado del parche en px del render
     if (!(ladoPx > 0.5)) return difuso;
     var esc = parche.ancho / ladoPx;                    // px de parche por px de render
-    var x0 = Math.max(0, Math.floor(cx - ladoPx / 2)), x1 = Math.min(SIZE - 1, Math.ceil(cx + ladoPx / 2));
-    var y0 = Math.max(0, Math.floor(cy - ladoPx / 2)), y1 = Math.min(SIZE - 1, Math.ceil(cy + ladoPx / 2));
+    // Sin datos de cielo no hay contraste que medir: se pinta el flujo tal cual
+    // (así lo usan los tests de geometría, que no simulan ninguna óptica).
+    var c = o.cielo ? ctxFotometrico(o.cielo) : null;
+    var pxPorAs = escv / 3600;
+    /* Galaxia que no cumple las dos condiciones: ni halo extrapolado ni umbral
+       de contraste. Se pinta el recorte de PS1 tal cual y donde no hay dato se
+       queda el cielo, sin degradado ninguno (render de la fase 1). */
+    var halo = !!c && ps1HaloActivo(parche.halo);
+    var comps = halo ? (parche.comps || []) : [], pa = parche.pa || 0;
+    if (!halo) c = null;
+    var haloPx = ps1RadioHaloAs(comps) * pxPorAs;       // el halo suele salirse del parche
+    var alcance = Math.max(ladoPx / 2, haloPx);
+    var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
+    var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
     for (var y = y0; y <= y1; y++) {
       var py = Math.round((parche.alto - 1) / 2 - (y - cy) * esc);   // fila hacia el norte
-      if (py < 0 || py >= parche.alto) continue;
+      // El norte es hacia ARRIBA y el este hacia la IZQUIERDA (ver la proyección
+      // de cx/cy): los dos desplazamientos van con signo cambiado.
+      var norte = -(y - cy) / pxPorAs;
       for (var x = x0; x <= x1; x++) {
         var px = Math.round((x - cx) * esc + (parche.ancho - 1) / 2);
-        if (px < 0 || px >= parche.ancho) continue;
-        var f = parche.datos[py * parche.ancho + px];
+        var f = 0;
+        if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
+          f = parche.datos[py * parche.ancho + px];
+        }
+        if (!(f > 0) && comps.length) f = ps1FlujoModelo(comps, pa, norte, -(x - cx) / pxPorAs);
+        if (!(f > 0)) continue;
+        if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), c.SBe), c);
         if (f > 0) difuso[y * SIZE + x] += f;
       }
     }
@@ -1601,7 +1918,8 @@
   }
 
   /* Galaxias del catálogo RC3 que caen en el campo y que PS1 cubre. Cada fila:
-     [nombre, alt, RA°, Dec°, r_e″, b/a, PA°, magV, n, B/T, polvo]. El margen de
+     [nombre, alt, RA°, Dec°, r_e″, b/a, PA°, magV, n, B/T, polvo, n medido]. El
+     n medido es el de S4G (0 = no hay) y solo lo usa la puerta del halo. El margen de
      medio lado deja entrar a las que asoman por el borde con su centro fuera. */
   function ps1GalaxiasDelCampo(catalogo, ra0, dec0, arcmin) {
     var out = [], cos0 = Math.cos(dec0 * Math.PI / 180), radio = arcmin / 120;
@@ -1625,7 +1943,8 @@
       if (Math.abs(dra) > margen || Math.abs(ddec) > margen) continue;
       out.push({
         nombre: g[0] || g[1], ra: g[2], dec: g[3], reArcsec: g[4],
-        magV: g[7], n: g[8], ladoArcmin: lado
+        ba: g[5], pa: g[6], magV: g[7], n: g[8], bt: g[9],
+        nMedido: g[11] || 0, ladoArcmin: lado
       });
     }
     return out;
@@ -1686,9 +2005,14 @@
       if (!f) return null;
       var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto,
         ps1EstrellasEnPixeles(f, gal, estrellas));
+      var comps = ps1ComponentesSersic(gal);
       return {
         ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
         ancho: f.ancho, alto: f.alto,
+        // Modelo del catálogo para el halo de más allá de la imagen (ver
+        // ps1PintarParche). Se calcula una vez por galaxia, no por píxel; lo
+        // único que falta al pintar es el cielo de la escena.
+        comps: comps, pa: gal.pa, halo: ps1MedidasHalo(gal, comps),
         datos: ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
           magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
           ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs
@@ -2044,6 +2368,18 @@
     ps1RadioMascaraAs: ps1RadioMascaraAs,
     ps1QuitarEstrellas: ps1QuitarEstrellas,
     ps1FraccionLuz: ps1FraccionLuz,
+    ps1ComponentesSersic: ps1ComponentesSersic,
+    ps1FlujoModelo: ps1FlujoModelo,
+    ps1RadioHaloAs: ps1RadioHaloAs,
+    ps1ConcentracionTeorica: ps1ConcentracionTeorica,
+    ps1NDeConcentracion: ps1NDeConcentracion,
+    ps1ConcentracionN: ps1ConcentracionN,
+    ps1EjesArcmin: ps1EjesArcmin,
+    ps1BrilloMedio: ps1BrilloMedio,
+    ps1MedidasHalo: ps1MedidasHalo,
+    ps1HaloActivo: ps1HaloActivo,
+    ps1Opacidad: ps1Opacidad,
+    ps1FlujoConOpacidad: ps1FlujoConOpacidad,
     ps1AnclarACatalogo: ps1AnclarACatalogo,
     ps1PintarParche: ps1PintarParche,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,

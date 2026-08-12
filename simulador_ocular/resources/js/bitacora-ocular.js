@@ -659,8 +659,11 @@
               .forEach(function (gal) {
                 BitacoraGaiaRender.ps1ParcheDeGalaxia(gal, estrellas).then(function (parche) {
                   if (!parche || peticion !== contadorPeticion) return;
+                  // `cielo`: el mismo objeto que pinta el fondo. De ahí salen los
+                  // dos cielos del halo: SBe (atenuado por la pupila) para la
+                  // rampa de opacidad y SB0 (el SQM medido) para la puerta.
                   BitacoraGaiaRender.ps1PintarParche(difuso, parche,
-                    { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
+                    { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC, cielo: cieloConParche });
                   BitacoraGaiaRender.pintarFot(difuso, ctx, cieloConParche, capaEst);
                 });
               });
