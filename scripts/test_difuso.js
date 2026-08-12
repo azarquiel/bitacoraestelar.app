@@ -857,80 +857,81 @@ R.ps1PintarParche(lienzoD, {
 var pxAsD = (SH / (CAMPO_H / 60)) / 3600;
 var iD = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.5 * galH.reArcsec * pxAsD);
 ok(lienzoD[iD] > 0 && !!cieloD.haloMask[iD], 'a 0,5 r_e se pinta y se exime igual');
-/* El perfil no espera a que la imagen sea CERO: manda el mayor de los dos. Con
-   «solo donde es cero», al píxel con una pizca de ruido lo apagaba la rampa y su
-   vecino a cero se pintaba con el perfil: moteado y anillo apagado. */
-var conRuido = new Float32Array(4);
-conRuido[0] = conRuido[1] = conRuido[2] = conRuido[3] = 1e-12;   // señal ínfima, no cero
-var lienzoR = new Float32Array(SH * SH);
-var cieloR = { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9,
-               perceptual: true, realceMax: R.ps1.realceMax };
-R.ps1PintarParche(lienzoR, {
-  datos: conRuido, ancho: 2, alto: 2, ladoArcmin: 6,
-  ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
-}, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloR });
-var iR = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.2 * galH.reArcsec *
-  ((SH / (CAMPO_H / 60)) / 3600));
-ok(lienzoR[iR] > 0, 'una pizca de ruido no apaga el píxel: manda el perfil');
+/* ── Mezcla de imagen y perfil ───────────────────────────────────────────────
+   La regla vieja era `max(imagen, perfil)` y se descartó: medido sobre M51, el
+   perfil ganaba en el 70-95 % de los píxeles desde 0,3 r_e y metía el 154,6 %
+   de la luz del catálogo. Ahora la imagen manda donde midió, el perfil rellena
+   lo demás, y el peso hace el tránsito. */
+var LADO_W = 64, mitad = new Float32Array(LADO_W * LADO_W);
+for (var yW = 0; yW < LADO_W; yW++) {
+  for (var xW = 0; xW < LADO_W; xW++) if (xW < LADO_W / 2) mitad[yW * LADO_W + xW] = 1;
+}
+var wMitad = R.ps1PesoImagen(mitad, LADO_W, LADO_W, 2);        // caja de 25″ ≈ 12 px
+var filaW = Math.round(LADO_W / 2) * LADO_W;
+casi(wMitad[filaW + 4], 1, 1e-9, 'donde toda la vecindad trae señal el peso satura en 1');
+casi(wMitad[filaW + LADO_W - 4], 0, 1e-9, 'y donde no hay nada medido, en 0');
+var wBorde = wMitad[filaW + LADO_W / 2];
+ok(wBorde > 0 && wBorde < 1, 'en el borde de la señal el peso pasa por valores intermedios (' +
+  wBorde.toFixed(2) + '): el tránsito es continuo, no un escalón');
+var subeYBaja = true;
+for (var jW = 1; jW < LADO_W; jW++) if (wMitad[filaW + jW] > wMitad[filaW + jW - 1] + 1e-9) subeYBaja = false;
+ok(subeYBaja, 'y monótono: el peso solo baja al alejarse de la zona medida');
 
-/* ── Halo con parámetros propios ─────────────────────────────────────────────
-   Más allá de r_e manda otra ley (ps1ComponenteHalo): más alargada, más
-   extendida y de caída más lenta que el disco del catálogo. Lo que hay que
-   comprobar es que no reaparezca la costura del círculo negro. */
-var hM51 = R.ps1ComponenteHalo(galH, compsH);
-var radH = galH.pa * Math.PI / 180, csH = Math.cos(radH), snH = Math.sin(radH);
-function ejeMayor(r) { return { n: r * csH, e: r * snH }; }
-function ejeMenor(r) { return { n: -r * snH, e: r * csH }; }
-function flujoTotalH(p) {
-  return Math.max(R.ps1FlujoModelo(compsH, galH.pa, p.n, p.e), R.ps1FlujoHalo(hM51, p.n, p.e));
+/* El presupuesto de luz no lo amplía la mezcla: `s` devuelve al total lo que la
+   envolvente añadió, así que la galaxia sigue emitiendo lo que dice el catálogo. */
+var imgM = new Float32Array([4, 3, 0, 0]), wM = new Float32Array([1, 0.5, 0.25, 0]);
+var perfM = new Float32Array([2, 2, 2, 2]);
+var sM = R.ps1EscalaMezcla(imgM, wM, perfM), sumaM = 0, sumaImg = 0;
+for (var iM = 0; iM < imgM.length; iM++) {
+  sumaM += wM[iM] * sM * imgM[iM] + (1 - wM[iM]) * perfM[iM];
+  sumaImg += imgM[iM];
 }
-casi(hM51.q, R.ps1.haloBaFactor * galH.ba, 1e-9, 'el halo es más achatado que el disco');
-casi(hM51.re, R.ps1.haloReFactor * galH.reArcsec, 1e-9, 'y más extendido');
-ok(R.ps1FlujoHalo(hM51, ejeMayor(0.9 * galH.reArcsec).n, ejeMayor(0.9 * galH.reArcsec).e) === 0,
-  'dentro de r_e el halo no aporta nada: manda el disco');
-// La costura: el mismo píxel visto desde dentro y desde fuera de r_e, en los dos
-// ejes. Si el halo sustituyera al disco, en el eje menor habría un escalón.
-var dentroMayor = flujoTotalH(ejeMayor(0.999 * galH.reArcsec));
-var fueraMayor = flujoTotalH(ejeMayor(1.001 * galH.reArcsec));
-var dentroMenor = flujoTotalH(ejeMenor(0.999 * galH.reArcsec));
-var fueraMenor = flujoTotalH(ejeMenor(1.001 * galH.reArcsec));
-casi(fueraMayor / dentroMayor, 1, 0.01, 'la costura de r_e no da escalón en el eje mayor');
-casi(fueraMenor / dentroMenor, 1, 0.01, 'ni en el menor');
-// Y lejos, el halo alarga la galaxia: a 3 r_e el eje mayor pesa mucho más que el
-// menor, más de lo que el disco solo daría.
-var lejosMayor = flujoTotalH(ejeMayor(2 * galH.reArcsec));
-var lejosMenor = flujoTotalH(ejeMenor(2 * galH.reArcsec));
-var soloDisco = R.ps1FlujoModelo(compsH, galH.pa, ejeMayor(2 * galH.reArcsec).n,
-  ejeMayor(2 * galH.reArcsec).e);
-ok(lejosMayor / lejosMenor > 10, 'a 2 r_e el halo va muy estirado por el eje mayor (' +
-  (lejosMayor / lejosMenor).toFixed(0) + '×)');
-ok(lejosMayor > soloDisco * 2, 'y cae mucho más despacio que el disco (' +
-  (lejosMayor / soloDisco).toFixed(0) + '× su flujo)');
-ok(hM51.rMax > rMaxH, 'llega más lejos que el perfil del catálogo (' +
-  (hM51.rMax / galH.reArcsec).toFixed(1) + ' contra ' + (rMaxH / galH.reArcsec).toFixed(1) + '·r_e)');
-// Perilla por galaxia: PS1.haloAjustes pisa los valores por defecto.
-R.ps1.haloAjustes['prueba'] = { ba: 0.35, n: 0.9, reArcmin: 2, pa: 12, offsetX: 0.5 };
-var hAj = R.ps1ComponenteHalo({ magV: 11, reArcsec: 60, n: 1, ba: 0.6, pa: 30, bt: 0,
-  nombre: 'prueba' }, compsH);
-casi(hAj.q, 0.35, 1e-9, 'el ajuste por nombre manda sobre el b/a por defecto');
-casi(hAj.re, 120, 1e-9, 'y sobre el r_e, que va en minutos');
-casi(hAj.este0, 30, 1e-9, 'el centro del halo se puede desplazar');
-delete R.ps1.haloAjustes['prueba'];
-// En el lienzo: con el halo propio se pinta más lejos que sin él.
-function pxHalo(medidas) {
-  var l = new Float32Array(SH * SH), n2 = 0;
-  R.ps1PintarParche(l, {
-    datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
-    ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medidas
-  }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
-       cielo: { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 } });
-  for (var i2 = 0; i2 < l.length; i2++) if (l[i2] > 0) n2++;
-  return n2;
-}
-var medConHalo = R.ps1MedidasHalo(galH, compsH);
-ok(!!medConHalo.halo, 'las medidas de la galaxia traen su componente de halo');
-ok(pxHalo(medConHalo) > pxHalo({ bArcmin: medH.bArcmin, muProm: medH.muProm }),
-  'y con ella se pinta más superficie que solo con el perfil del catálogo');
+casi(sumaM, sumaImg, 1e-6, 'la mezcla suma exactamente lo que la imagen anclada');
+ok(sM > 0 && sM < 1, 'y el reanclaje baja la imagen para hacerle sitio (×' + sM.toFixed(3) + ')');
+ok(R.ps1EscalaMezcla(imgM, wM, new Float32Array([99, 99, 99, 99])) === 0,
+  'si la envolvente se pasa del presupuesto, el reanclaje se corta en 0 y no se resta luz');
+
+/* Y al pintar: con la vecindad medida la imagen manda aunque el perfil valga
+   más. Con `max()` ganaba el perfil y la morfología quedaba enterrada. */
+var LADO_P = 8, imgP = new Float32Array(LADO_P * LADO_P), unoP = 1e-9;
+for (var iP = 0; iP < imgP.length; iP++) imgP[iP] = unoP;
+var pesoP = new Float32Array(imgP.length);
+for (var iP2 = 0; iP2 < pesoP.length; iP2++) pesoP[iP2] = 1;
+var lienzoM = new Float32Array(SH * SH);
+R.ps1PintarParche(lienzoM, {
+  datos: imgP, ancho: LADO_P, alto: LADO_P, ladoArcmin: 6,
+  ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH,
+  peso: pesoP, escalaMezcla: 1
+}, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
+     cielo: { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 } });
+var iMz = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.2 * galH.reArcsec *
+  ((SH / (CAMPO_H / 60)) / 3600));
+var perfilAhi = R.ps1FlujoModelo(compsH, galH.pa, 0, -0.2 * galH.reArcsec);
+ok(lienzoM[iMz] < perfilAhi, 'donde la imagen midió, manda la imagen aunque el perfil valga más');
+
+/* ── Ni halo Sérsic ni componente extra ──────────────────────────────────────
+   Hubo una segunda ley de más allá de r_e con su propio r_e, n y b/a. Se
+   retiró: medido sobre el parche real de M51 (13-ago-2026) añadía el 52,6 % de
+   la luz del catálogo contra un presupuesto defendible del 3,9 %, y la caída
+   que decían las medidas de la imagen era un artefacto del suelo de ruido —el
+   corte de 1,5σ está en μ = 25,03 por píxel, así que más allá de ~1,6 r_e la
+   imagen no mide, no es que la galaxia se acabe—. La única ley que queda fuera
+   de la imagen es el perfil del catálogo, sin recortar. */
+ok(R.ps1ComponenteHalo === undefined && R.ps1FlujoHalo === undefined,
+  'el halo con ley propia ya no existe');
+ok(R.ps1MedidasHalo(galH, compsH).halo === undefined,
+  'y las medidas de la galaxia no traen componente extra ninguna');
+// Fuera de la imagen manda el perfil del catálogo tal cual, sin modular.
+var lienzoF = new Float32Array(SH * SH);
+R.ps1PintarParche(lienzoF, {
+  datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
+  ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
+}, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
+     cielo: { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 } });
+var pxAsF = (SH / (CAMPO_H / 60)) / 3600;
+var iF = Math.round(SH / 2) * SH + Math.round(SH / 2 + 1.5 * galH.reArcsec * pxAsF);
+ok(lienzoF[iF] > 0 && lienzoF[iF] <= R.ps1FlujoModelo(compsH, galH.pa, 0, -1.5 * galH.reArcsec),
+  'sin imagen que mezclar queda el perfil del catálogo, ni más ni menos');
 
 // Interruptor: apagado de fábrica durante las fases 1 y 2.
 ok(R.galaxiasImagen === false, 'la capa de galaxias viene apagada por defecto');

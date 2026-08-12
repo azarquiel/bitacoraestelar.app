@@ -1330,16 +1330,16 @@
        los datos de prueba (M82 22,11 contra M51 22,39); si algún día a25/b25
        dejan de reconstruirse y vienen del D25 del RC3, se reajusta aquí. */
     haloMenorMin: 1.5, haloMuFijo: 22.25,
-    /* Halo con parámetros PROPIOS, independientes del disco (ver
-       ps1ComponenteHalo): mirando M51 el halo no es el disco estirado —es más
-       alargado, más extendido y cae más despacio—. Estos son los valores por
-       defecto; `haloAjustes` los pisa por nombre de galaxia cuando una pide lo
-       suyo (b/a, n, r_e en ′, PA, y el desplazamiento del centro en ′). */
-    haloReFactor: 3.0,     // r_e del halo = 3·r_e del disco
-    haloN: 0.8,            // índice de Sérsic del halo: caída más lenta que la del disco
-    haloBaFactor: 0.4,     // b/a del halo = 0,4·b/a del disco (M51: 0,617 → 0,247)
-    haloBaMin: 0.15,       // suelo del b/a: por debajo el halo sale como una raya
-    haloAjustes: {},
+    /* Mezcla de imagen y perfil (ver ps1PesoImagen). `mezclaCajaAs` es el lado
+       de la vecindad donde se mide cuánta información trae la imagen y
+       `mezclaW0` la fracción a partir de la cual la imagen manda del todo.
+       Medido en M51 (13-ago-2026): la caja mueve poco la fotometría y bastante
+       el detalle (contraste azimutal 2,18 con 6″ contra 1,42 con 100″); la
+       perilla que manda es w0. Con 0,5 los brazos, el puente y el polvo
+       destacan y el borde del parche no se ve; con 0,2 el detalle sube pero
+       asoma el CUADRADO del parche, porque el peso satura hasta el mismo
+       borde. */
+    mezclaCajaAs: 25, mezclaW0: 0.5,
     // Índice de Sérsic: ya NO decide (ver ps1HaloActivo), pero el tope se queda
     // por si vuelve a hacer falta con ps1ConcentracionN.
     haloSersicMax: 2.5
@@ -1651,61 +1651,92 @@
     return F;
   }
 
-  /* ── Halo con parámetros propios ────────────────────────────────────────────
-     Más allá de r_e el disco deja de mandar: mirando M51 el halo es más
-     alargado (b/a menor), más extendido (r_e mayor) y cae más despacio (n < 1)
-     que el disco del catálogo. Aquí se construye ESA segunda ley, con su propio
-     r_e, n, b/a, PA y centro; los valores salen de PS1.halo* y los pisa
-     PS1.haloAjustes[nombre].
+  /* ── Mezcla de imagen y perfil ───────────────────────────────────────────────
+     `w` = fracción de píxeles con señal en una caja de PS1.mezclaCajaAs,
+     saturada con un smoothstep en PS1.mezclaW0: 0 donde la imagen no trae nada,
+     1 donde la vecindad ya está medida, y un tránsito continuo y derivable en
+     medio. NO es una relación señal-ruido ni una confianza estadística: es una
+     heurística de PRESENCIA DE INFORMACIÓN. Quien quiera convertirla en S/N
+     tiene que recalibrarla antes.
 
-     La amplitud NO es un parámetro: se ancla al perfil del disco en r_e sobre
-     el eje mayor. Es lo que evita repetir el círculo negro de M101 —dos leyes
-     cosidas por un radio dejan escalón en la costura si no coinciden ahí—, y
-     además deja el flujo total anclado donde estaba (ps1AnclarACatalogo mide
-     sobre la imagen, no sobre el modelo). Fuera del eje mayor el halo queda por
-     DEBAJO del disco en la costura, y por eso quien pinta se queda con el mayor
-     de los dos: así la unión es continua en toda la elipse.
-     Devuelve null si no hay disco al que anclarse. */
-  function ps1ComponenteHalo(gal, comps) {
-    if (!gal || !comps || !comps.length || !(gal.reArcsec > 0)) return null;
-    var aj = PS1.haloAjustes[gal.nombre] || {};
-    var qd = (gal.ba > 0 && gal.ba <= 1) ? gal.ba : 1, paD = gal.pa || 0;
-    var re = (aj.reArcmin > 0) ? aj.reArcmin * 60 : PS1.haloReFactor * gal.reArcsec;
-    var n = (aj.n > 0) ? aj.n : PS1.haloN;
-    var q = (aj.ba > 0 && aj.ba <= 1) ? aj.ba
-      : Math.max(PS1.haloBaMin, PS1.haloBaFactor * qd);
-    var pa = isFinite(aj.pa) ? aj.pa : paD;
-    var a = pa * Math.PI / 180, aD = paD * Math.PI / 180;
-    var h = {
-      re: re, n: n, b: ps1BSersic(n), q: q,
-      cs: Math.cos(a), sn: Math.sin(a),
-      norte0: (aj.offsetY || 0) * 60, este0: (aj.offsetX || 0) * 60,   // ′ → ″
-      // El disco, para saber dónde acaba su ley y dónde empieza la del halo.
-      reDisco: gal.reArcsec, qD: qd, csD: Math.cos(aD), snD: Math.sin(aD)
-    };
-    // Anclaje: el punto de r_e sobre el eje mayor del DISCO.
-    var norte = gal.reArcsec * h.csD, este = gal.reArcsec * h.snD;
-    var forma = ps1FormaHalo(h, norte, este);
-    var fDisco = ps1FlujoModelo(comps, paD, norte, este);
-    if (!(forma > 0) || !(fDisco > 0)) return null;
-    h.Ie = fDisco / forma;
-    h.rMax = ps1RadioIsofota(h, PS1.muHalo);
-    return (h.rMax > 0) ? h : null;
+     Sustituye a `f = max(imagen, perfil)`, que quedó descartada: medido sobre el
+     parche real de M51 (13-ago-2026), el perfil ganaba en el 70-95 % de los
+     píxeles desde 0,3 r_e —un perfil liso vale la MEDIA azimutal y en una
+     galaxia con brazos la mayoría de los píxeles están por debajo de la media—,
+     enterraba la morfología bajo un óvalo liso y metía el 154,6 % de la luz del
+     catálogo cuando el anclaje ya la había cerrado en el 96,1 %. El moteado del
+     borde que en su día hundió la regla anterior («perfil solo donde la imagen
+     es cero») lo arregla el peso continuo, no el máximo. */
+  function ps1PesoImagen(datos, ancho, alto, escalaAs) {
+    var rad = Math.max(1, Math.round(PS1.mezclaCajaAs / (escalaAs > 0 ? escalaAs : 1) / 2));
+    var señal = new Float32Array(datos.length), i;
+    for (i = 0; i < datos.length; i++) señal[i] = datos[i] > 0 ? 1 : 0;
+    var w = ps1CajaSeparable(señal, ancho, alto, rad), w0 = PS1.mezclaW0;
+    for (i = 0; i < w.length; i++) {
+      var t = w[i] / w0;
+      t = t > 1 ? 1 : (t > 0 ? t : 0);
+      w[i] = t * t * (3 - 2 * t);
+    }
+    return w;
   }
 
-  // Perfil del halo normalizado a su I_e, en el punto dado (″ al norte y al este).
-  function ps1FormaHalo(h, norte, este) {
-    var r = ps1RadioEje(h.cs, h.sn, norte - h.norte0, este - h.este0, h.q);
-    return Math.exp(-h.b * (Math.pow(r / h.re, 1 / h.n) - 1));
+  // Media en una caja de (2·rad+1)², separable y por sumas corridas.
+  function ps1CajaSeparable(datos, ancho, alto, rad) {
+    var tmp = new Float32Array(datos.length), out = new Float32Array(datos.length), x, y, i;
+    for (y = 0; y < alto; y++) {
+      var acc = 0, n = 0;
+      for (x = -rad; x <= rad; x++) { i = Math.min(ancho - 1, Math.max(0, x)); acc += datos[y * ancho + i]; n++; }
+      for (x = 0; x < ancho; x++) {
+        tmp[y * ancho + x] = acc / n;
+        var sale = Math.min(ancho - 1, Math.max(0, x - rad));
+        var entra = Math.min(ancho - 1, Math.max(0, x + rad + 1));
+        acc += datos[y * ancho + entra] - datos[y * ancho + sale];
+      }
+    }
+    for (x = 0; x < ancho; x++) {
+      var acc2 = 0, n2 = 0;
+      for (y = -rad; y <= rad; y++) { i = Math.min(alto - 1, Math.max(0, y)); acc2 += tmp[i * ancho + x]; n2++; }
+      for (y = 0; y < alto; y++) {
+        out[y * ancho + x] = acc2 / n2;
+        var sale2 = Math.min(alto - 1, Math.max(0, y - rad));
+        var entra2 = Math.min(alto - 1, Math.max(0, y + rad + 1));
+        acc2 += tmp[entra2 * ancho + x] - tmp[sale2 * ancho + x];
+      }
+    }
+    return out;
   }
 
-  /* Flujo del halo en un punto. Dentro de r_e del disco devuelve 0: ahí manda el
-     disco, que es lo que la imagen de PS1 trae medido. */
-  function ps1FlujoHalo(h, norte, este) {
-    if (!h) return 0;
-    if (!(ps1RadioEje(h.csD, h.snD, norte, este, h.qD) > h.reDisco)) return 0;
-    if (ps1RadioEje(h.cs, h.sn, norte - h.norte0, este - h.este0, h.q) > h.rMax) return 0;
-    return h.Ie * ps1FormaHalo(h, norte, este);
+  /* Factor que devuelve el presupuesto de luz a su sitio. La mezcla
+     `w·s·imagen + (1−w)·perfil` mete luz de modelo donde la imagen no llega, y
+     el anclaje ya había fijado la luz del parche a la magnitud del catálogo, así
+     que sin `s` el objeto emitiría de más. `s` se resuelve para que la suma de
+     la mezcla sobre el parche sea exactamente la de la imagen anclada: el
+     presupuesto lo pone el catálogo y ninguna componente lo amplía por su cuenta.
+     Devuelve 1 si no hay perfil o no hay imagen que repartir. */
+  function ps1EscalaMezcla(datos, w, perfil) {
+    var objetivo = 0, Iw = 0, Ip = 0, i;
+    for (i = 0; i < datos.length; i++) {
+      objetivo += datos[i];
+      Iw += w[i] * datos[i];
+      Ip += (1 - w[i]) * perfil[i];
+    }
+    if (!(Iw > 0)) return 1;
+    var s = (objetivo - Ip) / Iw;
+    return s > 0 ? s : 0;
+  }
+
+  /* El perfil del catálogo muestreado en la retícula del parche, que es donde se
+     mide el presupuesto (ps1EscalaMezcla). Fila hacia el norte y columna hacia
+     el oeste, igual que ps1PintarParche. */
+  function ps1PerfilEnParche(comps, pa, ancho, alto, escalaAs) {
+    var out = new Float32Array(ancho * alto), c0 = (ancho - 1) / 2, r0 = (alto - 1) / 2;
+    for (var y = 0; y < alto; y++) {
+      var norte = (y - r0) * escalaAs;
+      for (var x = 0; x < ancho; x++) {
+        out[y * ancho + x] = ps1FlujoModelo(comps, pa, norte, (c0 - x) * escalaAs);
+      }
+    }
+    return out;
   }
 
   // Radio (″, semieje mayor) que abarca todo el halo extrapolado.
@@ -1861,12 +1892,7 @@
     var ejes = ps1EjesArcmin(comps || [], gal.ba);
     return {
       aArcmin: ejes.a, bArcmin: ejes.b, n: gal.nMedido > 0 ? gal.nMedido : 0,
-      muProm: ps1BrilloMedio(gal.magV, ejes.a, ejes.b),
-      /* La segunda ley, la de más allá de r_e (ps1ComponenteHalo). Va aquí y no
-         en `comps` a propósito: los ejes de la isofota 25 —y con ellos la
-         puerta— se miden solo del disco, así que meterla en comps movería qué
-         galaxias tienen halo. */
-      halo: ps1ComponenteHalo(gal, comps || [])
+      muProm: ps1BrilloMedio(gal.magV, ejes.a, ejes.b)
     };
   }
 
@@ -1985,14 +2011,10 @@
     var halo = !!c && ps1HaloActivo(parche.halo);
     var comps = halo ? (parche.comps || []) : [], pa = parche.pa || 0;
     if (!halo) c = null;
-    // Más allá de r_e manda la ley del halo, con sus propios r_e, n, b/a, PA y
-    // centro (ps1ComponenteHalo). Dentro de r_e devuelve 0 y no estorba.
-    var hc = halo ? ((parche.halo && parche.halo.halo) || null) : null;
-    var haloPx = ps1RadioHaloAs(comps) * pxPorAs;       // el halo suele salirse del parche
-    if (hc) {
-      var alcanceHalo = hc.rMax + Math.abs(hc.norte0) + Math.abs(hc.este0);
-      if (alcanceHalo * pxPorAs > haloPx) haloPx = alcanceHalo * pxPorAs;
-    }
+    // Peso y reanclaje de la mezcla; sin perfil que mezclar, la imagen va tal cual.
+    var peso = halo ? (parche.peso || null) : null;
+    var sMezcla = peso ? parche.escalaMezcla : 1;
+    var haloPx = ps1RadioHaloAs(comps) * pxPorAs;       // el perfil suele salirse del parche
     var alcance = Math.max(ladoPx / 2, haloPx);
     /* Máscara de los píxeles de una galaxia CON HALO: pintarFot les aplica otra
        ley —la rampa de opacidad ya es su desvanecido, así que no vuelven a pasar
@@ -2021,27 +2043,20 @@
       var norte = -(y - cy) / pxPorAs;
       for (var x = x0; x <= x1; x++) {
         var px = Math.round((x - cx) * esc + (parche.ancho - 1) / 2);
-        var f = 0;
+        var f = 0, k = -1;
         if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
-          f = parche.datos[py * parche.ancho + px];
+          k = py * parche.ancho + px;
+          f = parche.datos[k];
         }
-        /* El perfil no rellena solo los ceros: manda el MAYOR de los dos. Con
-           «solo donde la imagen es cero», un píxel al que le sobrevivió una pizca
-           de ruido sobre el suelo se quedaba con ese valor —que la rampa apaga—
-           mientras su vecino, exactamente a cero, se pintaba con el perfil. El
-           resultado era un moteado en el borde de la señal y, más adentro, un
-           anillo apagado justo donde la imagen se acaba. */
+        /* La mezcla: la imagen manda donde midió, el perfil solo rellena lo que
+           la imagen no cubre, y el tránsito es continuo porque el peso lo es
+           (ps1PesoImagen). Fuera del parche el peso vale 0 y queda el perfil
+           solo, sin costura: en el borde w ya venía bajando. */
         if (comps.length) {
           var este = -(x - cx) / pxPorAs;
           var fm = ps1FlujoModelo(comps, pa, norte, este);
-          /* El mayor de disco y halo, no el halo a secas: el halo se ancló al
-             disco sobre el EJE MAYOR, así que en el resto de la elipse queda por
-             debajo en la costura y sustituirlo dejaría el escalón de siempre. */
-          if (hc) {
-            var fh = ps1FlujoHalo(hc, norte, este);
-            if (fh > fm) fm = fh;
-          }
-          if (fm > f) f = fm;
+          var w = (peso && k >= 0) ? peso[k] : 0;
+          f = w * sMezcla * f + (1 - w) * fm;
         }
         if (!(f > 0)) continue;
         if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), c.SBe), c);
@@ -2142,17 +2157,23 @@
       var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto,
         ps1EstrellasEnPixeles(f, gal, estrellas));
       var comps = ps1ComponentesSersic(gal);
+      var datos = ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
+        magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
+        ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs
+      });
+      /* Peso y reanclaje de la mezcla: una vez por galaxia, no por fotograma ni
+         por píxel. Dependen solo del parche y del catálogo, no de la escena. */
+      var peso = ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
+      var perfil = ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.escalaAs);
       return {
         ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
         ancho: f.ancho, alto: f.alto,
-        // Modelo del catálogo para el halo de más allá de la imagen (ver
+        // Modelo del catálogo para lo de más allá de la imagen (ver
         // ps1PintarParche). Se calcula una vez por galaxia, no por píxel; lo
         // único que falta al pintar es el cielo de la escena.
         comps: comps, pa: gal.pa, halo: ps1MedidasHalo(gal, comps),
-        datos: ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
-          magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
-          ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs
-        })
+        peso: peso, escalaMezcla: ps1EscalaMezcla(datos, peso, perfil),
+        datos: datos
       };
     });
   }
@@ -2507,8 +2528,9 @@
     ps1ComponentesSersic: ps1ComponentesSersic,
     ps1FlujoModelo: ps1FlujoModelo,
     ps1RadioHaloAs: ps1RadioHaloAs,
-    ps1ComponenteHalo: ps1ComponenteHalo,
-    ps1FlujoHalo: ps1FlujoHalo,
+    ps1PesoImagen: ps1PesoImagen,
+    ps1PerfilEnParche: ps1PerfilEnParche,
+    ps1EscalaMezcla: ps1EscalaMezcla,
     ps1ConcentracionTeorica: ps1ConcentracionTeorica,
     ps1NDeConcentracion: ps1NDeConcentracion,
     ps1ConcentracionN: ps1ConcentracionN,
