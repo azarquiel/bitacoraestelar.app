@@ -438,12 +438,12 @@
          y los núcleos sigan comprimiendo en vez de recortarse. Solo cuando el
          motor declara que su flujo está calibrado (o.perceptual): las placas
          entran por aquí con su heurístico y no deben tocarse. */
-      /* El techo del realce es para la IMAGEN del parche, que trae luz a todos
-         los brillos. El halo no es imagen: es el perfil sintético contra el que
-         el realce se calibró, y con techo puesto no llegaba a verse. */
+      /* El techo se queda puesto también en el halo —sigue habiendo imagen bajo
+         la misma máscara, y sin él el brazo externo se iguala con el disco—; lo
+         que cambia para el halo es la gamma, que va completa (t=0) porque su
+         desvanecido ya lo hizo la rampa. */
       if (perceptual && difuso > 0) {
-        difuso = esHalo ? realzarPerceptual(difuso, c.Fcielo, c.rango, 0, 0)
-          : realzarPerceptual(difuso, c.Fcielo, c.rango, s, o.realceMax);
+        difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, esHalo ? 0 : s, o.realceMax);
       }
       for (var ch = 0; ch < canales; ch++) {
         var F = difuso;
@@ -1915,18 +1915,19 @@
     if (!halo) c = null;
     var haloPx = ps1RadioHaloAs(comps) * pxPorAs;       // el halo suele salirse del parche
     var alcance = Math.max(ladoPx / 2, haloPx);
-    /* Máscara de los píxeles que son HALO EXTRAPOLADO (perfil, no imagen, y más
-       allá de r_e). pintarFot los exime del techo del realce perceptual: ese
-       techo existe porque la IMAGEN de PS1 trae luz a todos los brillos y el
-       realce la inflaba ×13, pero el halo no es imagen —es el perfil sintético
-       contra el que el realce se calibró—, y con el techo puesto la rampa de
-       opacidad lo dejaba en 0 DN sobre el cielo en todas las pupilas. Vive en el
-       objeto `cielo` porque es el mismo que luego recibe pintarFot, y dura lo que
-       el render: cada galaxia que llega marca sobre la misma máscara. */
-    var paR = pa * Math.PI / 180, csPa = Math.cos(paR), snPa = Math.sin(paR);
-    var reDisco = 0, mascara = null;
-    for (var k = 0; k < comps.length; k++) if (comps[k].re > reDisco) reDisco = comps[k].re;
-    if (c && reDisco > 0) {
+    /* Máscara de los píxeles de una galaxia CON HALO: pintarFot les aplica otra
+       ley —la rampa de opacidad ya es su desvanecido, así que no vuelven a pasar
+       por visibilidadDifusa— y el realce va a gamma completa.
+       Se marca TODO el parche de esa galaxia, imagen incluida, y no solo el trozo
+       extrapolado. Partir el objeto en dos leyes por un radio dejaba un ESCALÓN
+       en la costura: el anillo de dentro se quedaba a nivel de cielo y el halo de
+       fuera saltaba a 10 DN, que en pantalla es un círculo negro rodeado de un
+       halo claro (M101 a 146x). Un perfil que decrece hacia fuera tiene que
+       pintarse con una sola ley, o la costura se ve.
+       Vive en el objeto `cielo` porque es el mismo que luego recibe pintarFot, y
+       dura lo que el render: cada galaxia que llega marca sobre la misma. */
+    var mascara = null;
+    if (halo) {
       if (!(o.cielo.haloMask && o.cielo.haloMask.length === difuso.length)) {
         o.cielo.haloMask = new Uint8Array(difuso.length);
       }
@@ -1941,23 +1942,25 @@
       var norte = -(y - cy) / pxPorAs;
       for (var x = x0; x <= x1; x++) {
         var px = Math.round((x - cx) * esc + (parche.ancho - 1) / 2);
-        var f = 0, extrapolado = false;
+        var f = 0;
         if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
           f = parche.datos[py * parche.ancho + px];
         }
-        var este = -(x - cx) / pxPorAs;
-        if (!(f > 0) && comps.length) {
-          f = ps1FlujoModelo(comps, pa, norte, este);
-          // Solo fuera de r_e: los rellenos de dentro (huecos de la máscara de
-          // estrellas, bandas de polvo) están donde la imagen manda y siguen con
-          // el techo puesto, para no encender el interior del disco.
-          extrapolado = ps1RadioEje(csPa, snPa, norte, este, comps[0].q) > reDisco;
+        /* El perfil no rellena solo los ceros: manda el MAYOR de los dos. Con
+           «solo donde la imagen es cero», un píxel al que le sobrevivió una pizca
+           de ruido sobre el suelo se quedaba con ese valor —que la rampa apaga—
+           mientras su vecino, exactamente a cero, se pintaba con el perfil. El
+           resultado era un moteado en el borde de la señal y, más adentro, un
+           anillo apagado justo donde la imagen se acaba. */
+        if (comps.length) {
+          var fm = ps1FlujoModelo(comps, pa, norte, -(x - cx) / pxPorAs);
+          if (fm > f) f = fm;
         }
         if (!(f > 0)) continue;
         if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), c.SBe), c);
         if (!(f > 0)) continue;
         difuso[y * SIZE + x] += f;
-        if (extrapolado && mascara) mascara[y * SIZE + x] = 1;
+        if (mascara) mascara[y * SIZE + x] = 1;
       }
     }
     return difuso;

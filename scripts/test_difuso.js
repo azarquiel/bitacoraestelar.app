@@ -843,8 +843,10 @@ ok(hAlto.dn > 1, 'y se ve: ' + hAlto.dn.toFixed(1) + ' DN sobre el cielo');
 ok(hAlto.dnVieja < 1, 'con el trato de las capas de imagen se quedaba en ' +
   hAlto.dnVieja.toFixed(1) + ' DN');
 
-/* Dentro de r_e manda la imagen: ahí el perfil solo rellena huecos (máscara de
-   estrellas, polvo) y esos NO se eximen, o se encendería el interior del disco. */
+/* Y la ley es ÚNICA para todo el parche de esa galaxia: partirla por un radio
+   dejaba un escalón en la costura —anillo a nivel de cielo dentro, halo a 10 DN
+   fuera: el círculo negro que se vio en M101 a 146x—. Un perfil que decrece
+   hacia fuera se pinta con una sola ley o la costura se ve. */
 var cieloD = { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9,
                perceptual: true, realceMax: R.ps1.realceMax };
 var lienzoD = new Float32Array(SH * SH);
@@ -854,7 +856,22 @@ R.ps1PintarParche(lienzoD, {
 }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloD });
 var pxAsD = (SH / (CAMPO_H / 60)) / 3600;
 var iD = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.5 * galH.reArcsec * pxAsD);
-ok(lienzoD[iD] > 0 && !cieloD.haloMask[iD], 'a 0,5 r_e se pinta pero NO se exime');
+ok(lienzoD[iD] > 0 && !!cieloD.haloMask[iD], 'a 0,5 r_e se pinta y se exime igual');
+/* El perfil no espera a que la imagen sea CERO: manda el mayor de los dos. Con
+   «solo donde es cero», al píxel con una pizca de ruido lo apagaba la rampa y su
+   vecino a cero se pintaba con el perfil: moteado y anillo apagado. */
+var conRuido = new Float32Array(4);
+conRuido[0] = conRuido[1] = conRuido[2] = conRuido[3] = 1e-12;   // señal ínfima, no cero
+var lienzoR = new Float32Array(SH * SH);
+var cieloR = { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9,
+               perceptual: true, realceMax: R.ps1.realceMax };
+R.ps1PintarParche(lienzoR, {
+  datos: conRuido, ancho: 2, alto: 2, ladoArcmin: 6,
+  ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
+}, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloR });
+var iR = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.3 * galH.reArcsec *
+  ((SH / (CAMPO_H / 60)) / 3600));
+ok(lienzoR[iR] > 0, 'una pizca de ruido no apaga el píxel: manda el perfil');
 
 // Interruptor: apagado de fábrica durante las fases 1 y 2.
 ok(R.galaxiasImagen === false, 'la capa de galaxias viene apagada por defecto');
