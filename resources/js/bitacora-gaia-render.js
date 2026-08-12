@@ -1330,6 +1330,16 @@
        los datos de prueba (M82 22,11 contra M51 22,39); si algún día a25/b25
        dejan de reconstruirse y vienen del D25 del RC3, se reajusta aquí. */
     haloMenorMin: 1.5, haloMuFijo: 22.25,
+    /* Halo con parámetros PROPIOS, independientes del disco (ver
+       ps1ComponenteHalo): mirando M51 el halo no es el disco estirado —es más
+       alargado, más extendido y cae más despacio—. Estos son los valores por
+       defecto; `haloAjustes` los pisa por nombre de galaxia cuando una pide lo
+       suyo (b/a, n, r_e en ′, PA, y el desplazamiento del centro en ′). */
+    haloReFactor: 3.0,     // r_e del halo = 3·r_e del disco
+    haloN: 0.8,            // índice de Sérsic del halo: caída más lenta que la del disco
+    haloBaFactor: 0.4,     // b/a del halo = 0,4·b/a del disco (M51: 0,87 → 0,35)
+    haloBaMin: 0.15,       // suelo del b/a: por debajo el halo sale como una raya
+    haloAjustes: {},
     // Índice de Sérsic: ya NO decide (ver ps1HaloActivo), pero el tope se queda
     // por si vuelve a hacer falta con ps1ConcentracionN.
     haloSersicMax: 2.5
@@ -1641,6 +1651,63 @@
     return F;
   }
 
+  /* ── Halo con parámetros propios ────────────────────────────────────────────
+     Más allá de r_e el disco deja de mandar: mirando M51 el halo es más
+     alargado (b/a menor), más extendido (r_e mayor) y cae más despacio (n < 1)
+     que el disco del catálogo. Aquí se construye ESA segunda ley, con su propio
+     r_e, n, b/a, PA y centro; los valores salen de PS1.halo* y los pisa
+     PS1.haloAjustes[nombre].
+
+     La amplitud NO es un parámetro: se ancla al perfil del disco en r_e sobre
+     el eje mayor. Es lo que evita repetir el círculo negro de M101 —dos leyes
+     cosidas por un radio dejan escalón en la costura si no coinciden ahí—, y
+     además deja el flujo total anclado donde estaba (ps1AnclarACatalogo mide
+     sobre la imagen, no sobre el modelo). Fuera del eje mayor el halo queda por
+     DEBAJO del disco en la costura, y por eso quien pinta se queda con el mayor
+     de los dos: así la unión es continua en toda la elipse.
+     Devuelve null si no hay disco al que anclarse. */
+  function ps1ComponenteHalo(gal, comps) {
+    if (!gal || !comps || !comps.length || !(gal.reArcsec > 0)) return null;
+    var aj = PS1.haloAjustes[gal.nombre] || {};
+    var qd = (gal.ba > 0 && gal.ba <= 1) ? gal.ba : 1, paD = gal.pa || 0;
+    var re = (aj.reArcmin > 0) ? aj.reArcmin * 60 : PS1.haloReFactor * gal.reArcsec;
+    var n = (aj.n > 0) ? aj.n : PS1.haloN;
+    var q = (aj.ba > 0 && aj.ba <= 1) ? aj.ba
+      : Math.max(PS1.haloBaMin, PS1.haloBaFactor * qd);
+    var pa = isFinite(aj.pa) ? aj.pa : paD;
+    var a = pa * Math.PI / 180, aD = paD * Math.PI / 180;
+    var h = {
+      re: re, n: n, b: ps1BSersic(n), q: q,
+      cs: Math.cos(a), sn: Math.sin(a),
+      norte0: (aj.offsetY || 0) * 60, este0: (aj.offsetX || 0) * 60,   // ′ → ″
+      // El disco, para saber dónde acaba su ley y dónde empieza la del halo.
+      reDisco: gal.reArcsec, qD: qd, csD: Math.cos(aD), snD: Math.sin(aD)
+    };
+    // Anclaje: el punto de r_e sobre el eje mayor del DISCO.
+    var norte = gal.reArcsec * h.csD, este = gal.reArcsec * h.snD;
+    var forma = ps1FormaHalo(h, norte, este);
+    var fDisco = ps1FlujoModelo(comps, paD, norte, este);
+    if (!(forma > 0) || !(fDisco > 0)) return null;
+    h.Ie = fDisco / forma;
+    h.rMax = ps1RadioIsofota(h, PS1.muHalo);
+    return (h.rMax > 0) ? h : null;
+  }
+
+  // Perfil del halo normalizado a su I_e, en el punto dado (″ al norte y al este).
+  function ps1FormaHalo(h, norte, este) {
+    var r = ps1RadioEje(h.cs, h.sn, norte - h.norte0, este - h.este0, h.q);
+    return Math.exp(-h.b * (Math.pow(r / h.re, 1 / h.n) - 1));
+  }
+
+  /* Flujo del halo en un punto. Dentro de r_e del disco devuelve 0: ahí manda el
+     disco, que es lo que la imagen de PS1 trae medido. */
+  function ps1FlujoHalo(h, norte, este) {
+    if (!h) return 0;
+    if (!(ps1RadioEje(h.csD, h.snD, norte, este, h.qD) > h.reDisco)) return 0;
+    if (ps1RadioEje(h.cs, h.sn, norte - h.norte0, este - h.este0, h.q) > h.rMax) return 0;
+    return h.Ie * ps1FormaHalo(h, norte, este);
+  }
+
   // Radio (″, semieje mayor) que abarca todo el halo extrapolado.
   function ps1RadioHaloAs(comps) {
     var r = 0;
@@ -1794,7 +1861,12 @@
     var ejes = ps1EjesArcmin(comps || [], gal.ba);
     return {
       aArcmin: ejes.a, bArcmin: ejes.b, n: gal.nMedido > 0 ? gal.nMedido : 0,
-      muProm: ps1BrilloMedio(gal.magV, ejes.a, ejes.b)
+      muProm: ps1BrilloMedio(gal.magV, ejes.a, ejes.b),
+      /* La segunda ley, la de más allá de r_e (ps1ComponenteHalo). Va aquí y no
+         en `comps` a propósito: los ejes de la isofota 25 —y con ellos la
+         puerta— se miden solo del disco, así que meterla en comps movería qué
+         galaxias tienen halo. */
+      halo: ps1ComponenteHalo(gal, comps || [])
     };
   }
 
@@ -1913,7 +1985,14 @@
     var halo = !!c && ps1HaloActivo(parche.halo);
     var comps = halo ? (parche.comps || []) : [], pa = parche.pa || 0;
     if (!halo) c = null;
+    // Más allá de r_e manda la ley del halo, con sus propios r_e, n, b/a, PA y
+    // centro (ps1ComponenteHalo). Dentro de r_e devuelve 0 y no estorba.
+    var hc = halo ? ((parche.halo && parche.halo.halo) || null) : null;
     var haloPx = ps1RadioHaloAs(comps) * pxPorAs;       // el halo suele salirse del parche
+    if (hc) {
+      var alcanceHalo = hc.rMax + Math.abs(hc.norte0) + Math.abs(hc.este0);
+      if (alcanceHalo * pxPorAs > haloPx) haloPx = alcanceHalo * pxPorAs;
+    }
     var alcance = Math.max(ladoPx / 2, haloPx);
     /* Máscara de los píxeles de una galaxia CON HALO: pintarFot les aplica otra
        ley —la rampa de opacidad ya es su desvanecido, así que no vuelven a pasar
@@ -1953,7 +2032,15 @@
            resultado era un moteado en el borde de la señal y, más adentro, un
            anillo apagado justo donde la imagen se acaba. */
         if (comps.length) {
-          var fm = ps1FlujoModelo(comps, pa, norte, -(x - cx) / pxPorAs);
+          var este = -(x - cx) / pxPorAs;
+          var fm = ps1FlujoModelo(comps, pa, norte, este);
+          /* El mayor de disco y halo, no el halo a secas: el halo se ancló al
+             disco sobre el EJE MAYOR, así que en el resto de la elipse queda por
+             debajo en la costura y sustituirlo dejaría el escalón de siempre. */
+          if (hc) {
+            var fh = ps1FlujoHalo(hc, norte, este);
+            if (fh > fm) fm = fh;
+          }
           if (fm > f) f = fm;
         }
         if (!(f > 0)) continue;
@@ -2420,6 +2507,8 @@
     ps1ComponentesSersic: ps1ComponentesSersic,
     ps1FlujoModelo: ps1FlujoModelo,
     ps1RadioHaloAs: ps1RadioHaloAs,
+    ps1ComponenteHalo: ps1ComponenteHalo,
+    ps1FlujoHalo: ps1FlujoHalo,
     ps1ConcentracionTeorica: ps1ConcentracionTeorica,
     ps1NDeConcentracion: ps1NDeConcentracion,
     ps1ConcentracionN: ps1ConcentracionN,

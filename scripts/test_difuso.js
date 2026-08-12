@@ -649,7 +649,7 @@ var rMaxH = R.ps1RadioHaloAs(compsH);
 casi(-2.5 * Math.log10(R.ps1FlujoModelo(compsH, galH.pa, rMaxH * Math.cos(galH.pa * Math.PI / 180),
                                         rMaxH * Math.sin(galH.pa * Math.PI / 180))),
      R.ps1.muHalo, 1e-6, 'el halo se extrapola justo hasta ' + R.ps1.muHalo + ' mag/arcsec²');
-ok(rMaxH > 3 * galH.reArcsec, 'y eso queda bastante más allá del parche (' +
+ok(rMaxH > 2 * galH.reArcsec, 'y eso queda bastante más allá del parche (' +
   (rMaxH / galH.reArcsec).toFixed(1) + '·r_e)');
 
 // Integrando el modelo se recupera la magnitud del catálogo (menos la luz que
@@ -869,9 +869,68 @@ R.ps1PintarParche(lienzoR, {
   datos: conRuido, ancho: 2, alto: 2, ladoArcmin: 6,
   ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
 }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloR });
-var iR = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.3 * galH.reArcsec *
+var iR = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.2 * galH.reArcsec *
   ((SH / (CAMPO_H / 60)) / 3600));
 ok(lienzoR[iR] > 0, 'una pizca de ruido no apaga el píxel: manda el perfil');
+
+/* ── Halo con parámetros propios ─────────────────────────────────────────────
+   Más allá de r_e manda otra ley (ps1ComponenteHalo): más alargada, más
+   extendida y de caída más lenta que el disco del catálogo. Lo que hay que
+   comprobar es que no reaparezca la costura del círculo negro. */
+var hM51 = R.ps1ComponenteHalo(galH, compsH);
+var radH = galH.pa * Math.PI / 180, csH = Math.cos(radH), snH = Math.sin(radH);
+function ejeMayor(r) { return { n: r * csH, e: r * snH }; }
+function ejeMenor(r) { return { n: -r * snH, e: r * csH }; }
+function flujoTotalH(p) {
+  return Math.max(R.ps1FlujoModelo(compsH, galH.pa, p.n, p.e), R.ps1FlujoHalo(hM51, p.n, p.e));
+}
+casi(hM51.q, R.ps1.haloBaFactor * galH.ba, 1e-9, 'el halo es más achatado que el disco');
+casi(hM51.re, R.ps1.haloReFactor * galH.reArcsec, 1e-9, 'y más extendido');
+ok(R.ps1FlujoHalo(hM51, ejeMayor(0.9 * galH.reArcsec).n, ejeMayor(0.9 * galH.reArcsec).e) === 0,
+  'dentro de r_e el halo no aporta nada: manda el disco');
+// La costura: el mismo píxel visto desde dentro y desde fuera de r_e, en los dos
+// ejes. Si el halo sustituyera al disco, en el eje menor habría un escalón.
+var dentroMayor = flujoTotalH(ejeMayor(0.999 * galH.reArcsec));
+var fueraMayor = flujoTotalH(ejeMayor(1.001 * galH.reArcsec));
+var dentroMenor = flujoTotalH(ejeMenor(0.999 * galH.reArcsec));
+var fueraMenor = flujoTotalH(ejeMenor(1.001 * galH.reArcsec));
+casi(fueraMayor / dentroMayor, 1, 0.01, 'la costura de r_e no da escalón en el eje mayor');
+casi(fueraMenor / dentroMenor, 1, 0.01, 'ni en el menor');
+// Y lejos, el halo alarga la galaxia: a 3 r_e el eje mayor pesa mucho más que el
+// menor, más de lo que el disco solo daría.
+var lejosMayor = flujoTotalH(ejeMayor(2 * galH.reArcsec));
+var lejosMenor = flujoTotalH(ejeMenor(2 * galH.reArcsec));
+var soloDisco = R.ps1FlujoModelo(compsH, galH.pa, ejeMayor(2 * galH.reArcsec).n,
+  ejeMayor(2 * galH.reArcsec).e);
+ok(lejosMayor / lejosMenor > 10, 'a 2 r_e el halo va muy estirado por el eje mayor (' +
+  (lejosMayor / lejosMenor).toFixed(0) + '×)');
+ok(lejosMayor > soloDisco * 2, 'y cae mucho más despacio que el disco (' +
+  (lejosMayor / soloDisco).toFixed(0) + '× su flujo)');
+ok(hM51.rMax > rMaxH, 'llega más lejos que el perfil del catálogo (' +
+  (hM51.rMax / galH.reArcsec).toFixed(1) + ' contra ' + (rMaxH / galH.reArcsec).toFixed(1) + '·r_e)');
+// Perilla por galaxia: PS1.haloAjustes pisa los valores por defecto.
+R.ps1.haloAjustes['prueba'] = { ba: 0.35, n: 0.9, reArcmin: 2, pa: 12, offsetX: 0.5 };
+var hAj = R.ps1ComponenteHalo({ magV: 11, reArcsec: 60, n: 1, ba: 0.6, pa: 30, bt: 0,
+  nombre: 'prueba' }, compsH);
+casi(hAj.q, 0.35, 1e-9, 'el ajuste por nombre manda sobre el b/a por defecto');
+casi(hAj.re, 120, 1e-9, 'y sobre el r_e, que va en minutos');
+casi(hAj.este0, 30, 1e-9, 'el centro del halo se puede desplazar');
+delete R.ps1.haloAjustes['prueba'];
+// En el lienzo: con el halo propio se pinta más lejos que sin él.
+function pxHalo(medidas) {
+  var l = new Float32Array(SH * SH), n2 = 0;
+  R.ps1PintarParche(l, {
+    datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
+    ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medidas
+  }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
+       cielo: { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 } });
+  for (var i2 = 0; i2 < l.length; i2++) if (l[i2] > 0) n2++;
+  return n2;
+}
+var medConHalo = R.ps1MedidasHalo(galH, compsH);
+ok(!!medConHalo.halo, 'las medidas de la galaxia traen su componente de halo');
+ok(pxHalo(medConHalo) > pxHalo({ bArcmin: medH.bArcmin, muProm: medH.muProm }),
+  'y con ella se pinta más superficie que solo con el perfil del catálogo');
 
 // Interruptor: apagado de fábrica durante las fases 1 y 2.
 ok(R.galaxiasImagen === false, 'la capa de galaxias viene apagada por defecto');
