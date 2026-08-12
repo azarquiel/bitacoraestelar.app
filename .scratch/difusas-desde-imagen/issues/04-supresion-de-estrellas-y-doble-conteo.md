@@ -1,7 +1,7 @@
 # 04 — Supresión de estrellas y doble conteo con la capa de Gaia
 
 **Type:** grilling
-**Status:** closed (11-ago-2026), con una revisión pendiente de mirar el resultado
+**Status:** closed (12-ago-2026): la revisión se resolvió en **máscara total**
 **Blocked by:** 03, 09
 
 ## Question
@@ -60,3 +60,39 @@ parche sale granulado de estrellas débiles de PS1, la alternativa es quitar tod
 lo puntiforme, sabiendo lo que cuesta sobre imagen lineal (ficha 02: medio
 objeto con apertura 7×7) — y entonces habría que buscar otro método, no
 simplemente subir el corte.
+
+### Resuelta (12-ago-2026): máscara total, por catálogo
+
+> «sí que se ven estrellas de más, hay que eliminarlas, ensucia la imagen»
+
+Visto el resultado en el simulador, el argumento de «luz difusa no resuelta» no
+se sostiene en la práctica: lo que PS1 registra entre la magnitud límite del
+equipo y la profundidad de Gaia **se ve como estrellas**, no como fondo, y
+ensucia más de lo que aporta. Cambios:
+
+- **`ps1EstrellasEnPixeles` ya no filtra por `mlim`**: se enmascaran todas las
+  estrellas de la muestra de Gaia del campo. La muestra la fija
+  `magConsultaGaia()` (límite teórico del equipo + cola de glow, tope 20).
+- **`ps1RadioMascaraAs(g)` pierde el parámetro `mlim`**: el radio crece con lo
+  brillante que sea la estrella contra una referencia fija
+  (`PS1.mascaraMagRef = 20`), entre `seeingAs` (1,1″) y `mascaraMaxAs` (8″).
+  Antes se medía contra el equipo, lo que hacía que el mismo parche se limpiara
+  distinto según el ocular.
+- Consecuencia: **`ps1ParcheDeGalaxia(gal, estrellas)` ya no recibe `mlim`** y la
+  limpieza es independiente del equipo. (Cachear el parche ya limpio es ahora
+  posible; no se hace: YAGNI hasta que se note.)
+
+**No es máscara morfológica.** Sigue siendo por catálogo, así que no se lleva
+medio objeto (el riesgo de la ficha 02) y el núcleo sigue protegido por
+`PS1.nucleoPx`.
+
+**Lo que queda fuera:** lo que PS1 ve por debajo de la profundidad de Gaia
+(llega a g ≈ 23) sigue en el parche. Si eso todavía granula, el siguiente paso
+sería una consulta aparte a profundidad fija para la máscara, como hace el halo
+de globulares — más tráfico, y solo si se ve.
+
+La comprobación de la ficha (el flujo no crece al bajar `mlim`) ya no aplica: el
+flujo del parche no depende de `mlim`. En su sitio, `scripts/test_difuso.js`
+comprueba que una estrella más débil que cualquier equipo también se enmascara,
+que más estrellas limpian más parche, que el radio crece con el brillo y tiene
+suelo y tope, y que la luz total no se mueve ni un 2 %.

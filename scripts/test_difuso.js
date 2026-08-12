@@ -482,30 +482,33 @@ ok(pxConLuz < ANCHO_R * ANCHO_R * 0.25,
 
 // (La costura de skycells por NaN se fue al proxy: scripts/test_ps1_proxy.php.)
 
-/* Supresión de estrellas: solo las que el render VA a pintar (hasta mlim), y
-   nunca el núcleo. Al bajar la magnitud límite del equipo se enmascaran MENOS
-   estrellas y con radio más pequeño; lo que no puede pasar es lo contrario, que
-   un equipo peor borre más parche. El relleno es la mediana de un anillo, así
-   que reparte luz pero no la conserva al dígito: la suma se mira con holgura. */
-function tocadosTrasQuitar(mlim) {
+/* Supresión de estrellas: TODAS las de la muestra de Gaia (máscara total, ficha
+   04 revisada el 11-ago-2026), nunca el núcleo, y con un radio que depende solo
+   de lo brillante que sea la estrella, no del equipo. El relleno es la mediana de
+   un anillo, así que reparte luz pero no la conserva al dígito: suma con holgura. */
+function tocadosTrasQuitar(estrellas) {
   var d = parcheSintetico(0), enPx = [], pxPorAs = ANCHO / (LADO * 60);
-  [[12, 8], [13.5, 20], [15, 45]].forEach(function (e, k) {   // [g, radio ″ desde el centro]
-    if (e[0] > mlim) return;
+  estrellas.forEach(function (e, k) {                         // [g, radio ″ desde el centro]
     enPx.push({ x: (ANCHO - 1) / 2 + e[1] * pxPorAs, y: (ANCHO - 1) / 2 + (k - 1) * 6,
-                rPx: R.ps1RadioMascaraAs(e[0], mlim) * pxPorAs });
+                rPx: R.ps1RadioMascaraAs(e[0]) * pxPorAs });
   });
   var out = R.ps1QuitarEstrellas(d, ANCHO, ANCHO, enPx);
   var n = 0, s = 0;
   for (var j = 0; j < out.length; j++) { if (out[j] !== d[j]) n++; s += out[j]; }
   return { tocados: n, suma: s };
 }
-var q11 = tocadosTrasQuitar(11), q14 = tocadosTrasQuitar(14), q16 = tocadosTrasQuitar(16);
-ok(q11.tocados <= q14.tocados && q14.tocados <= q16.tocados,
-  'bajar la magnitud límite no borra más parche (' + q11.tocados + ' ≤ ' +
-  q14.tocados + ' ≤ ' + q16.tocados + ' px tocados)');
-ok(q11.tocados === 0 && q16.tocados > 0,
-  'por debajo del límite no se toca nada, y por encima sí (si no, la máscara no hace nada)');
-casi(q16.suma / q11.suma, 1, 0.02, 'quitar estrellas no mueve la luz del parche ni un 2 %');
+var qCero = tocadosTrasQuitar([]);
+var qDebil = tocadosTrasQuitar([[19, 20]]);
+var qTodas = tocadosTrasQuitar([[12, 8], [13.5, 20], [19, 45]]);
+ok(qCero.tocados === 0 && qDebil.tocados > 0,
+  'una estrella más débil que cualquier equipo también se enmascara (' + qDebil.tocados + ' px)');
+ok(qTodas.tocados > qDebil.tocados,
+  'cuantas más estrellas, más parche limpiado (' + qDebil.tocados + ' < ' + qTodas.tocados + ')');
+ok(R.ps1RadioMascaraAs(12) > R.ps1RadioMascaraAs(19),
+  'la estrella brillante se enmascara con más radio que la débil');
+casi(R.ps1RadioMascaraAs(2), R.ps1.mascaraMaxAs, 1e-9, 'el radio de máscara tiene tope');
+casi(R.ps1RadioMascaraAs(25), R.ps1.seeingAs, 1e-9, 'y suelo en el seeing del stack');
+casi(qTodas.suma / qCero.suma, 1, 0.02, 'quitar estrellas no mueve la luz del parche ni un 2 %');
 // Núcleo intacto aunque le caiga encima una estrella brillante y ancha.
 var dN = parcheSintetico(0);
 var outN = R.ps1QuitarEstrellas(dN, ANCHO, ANCHO,
@@ -558,15 +561,15 @@ casi(mejorN % SIZE, SIZE / 2 - 6 * kPx, 1.5,
    la estrella intacta. */
 var galEst = { ra: 202.47208, dec: 47.19667, ladoArcmin: 18, magV: 8.2, n: 1, reArcsec: 180 };
 var estN = [[galEst.ra, galEst.dec + 3 / 60, 10]];                 // 3′ al norte
-var enPxN = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estN, 15);
+var enPxN = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estN);
 ok(enPxN.length === 1 && enPxN[0].y > (512 - 1) / 2,
   'una estrella al norte se enmascara en una fila mayor del parche');
 var estE = [[galEst.ra + (3 / 60) / Math.cos(galEst.dec * Math.PI / 180), galEst.dec, 10]];
-var enPxE = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estE, 15);
+var enPxE = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estE);
 ok(enPxE.length === 1 && enPxE[0].x < (512 - 1) / 2,
   'una estrella al este se enmascara en una columna menor del parche');
-ok(R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, [[galEst.ra, galEst.dec, 18]], 15).length === 0,
-  'una estrella por debajo de la magnitud límite no se enmascara');
+ok(R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, [[galEst.ra, galEst.dec, 18]]).length === 1,
+  'una estrella por debajo de la magnitud límite del equipo TAMBIÉN se enmascara');
 // Y el parche ocupa en el render el lado que le toca, ni más ni menos.
 var minX = SIZE, maxX = -1;
 var lienzoLleno = new Float32Array(SIZE * SIZE);

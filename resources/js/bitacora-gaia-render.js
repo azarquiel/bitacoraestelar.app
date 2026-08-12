@@ -1284,6 +1284,7 @@
     fracMin: 0.4,          // fracción mínima de la luz del catálogo que el parche debe abarcar (ver ps1GalaxiasDelCampo)
     seeingAs: 1.1,         // ″: FWHM típica del stack, suelo del radio de máscara
     mascaraMaxAs: 8,       // ″: tope del radio de máscara de una estrella
+    mascaraMagRef: 20,     // mag G a la que el radio de máscara es el seeing (ver ps1RadioMascaraAs)
     nucleoPx: 3,           // px: radio central que la máscara no toca nunca
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
     kRuido: 1.5             // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
@@ -1386,17 +1387,18 @@
     return 1.4826 * m[m.length >> 1];
   }
 
-  /* Radio de máscara de una estrella, en ″: crece con lo brillante que sea
-     respecto al límite del equipo, acotado entre el seeing y mascaraMaxAs. */
-  function ps1RadioMascaraAs(g, mlim) {
-    var sobre = (mlim != null && isFinite(mlim)) ? (mlim - g) : 0;
-    return Math.max(PS1.seeingAs, Math.min(PS1.mascaraMaxAs, PS1.seeingAs + 0.6 * Math.max(0, sobre)));
+  /* Radio de máscara de una estrella, en ″: crece con lo brillante que SEA, no con
+     el equipo, acotado entre el seeing y mascaraMaxAs. Antes se medía contra la
+     magnitud límite del equipo, porque solo se enmascaraba lo que el render iba a
+     pintar; desde la máscara total (ver ps1EstrellasEnPixeles) el equipo ya no
+     entra, y el mismo parche vale para cualquier ocular. */
+  function ps1RadioMascaraAs(g) {
+    return Math.max(PS1.seeingAs,
+      Math.min(PS1.mascaraMaxAs, PS1.seeingAs + 0.6 * Math.max(0, PS1.mascaraMagRef - g)));
   }
 
-  /* Quita las estrellas que el render VA A PINTAR (las de Gaia hasta mlim) y
-     rellena el hueco con la mediana de un anillo alrededor, tomada solo de píxeles
-     no enmascarados. Lo que PS1 ve por debajo de mlim se queda: no es doble
-     conteo, es luz difusa no resuelta, que es justo lo que se quiere pintar.
+  /* Quita TODAS las estrellas de Gaia del campo y rellena el hueco con la mediana
+     de un anillo alrededor, tomada solo de píxeles no enmascarados.
 
      `estrellas` en píxeles del parche: [{x, y, rPx}]. Modifica `datos` y lo
      devuelve. El núcleo (PS1.nucleoPx alrededor del centro) no se toca nunca: una
@@ -1634,31 +1636,33 @@
   }
 
   /* Estrellas de Gaia ([ra, dec, g, …][]) en píxeles del parche, con su radio de
-     máscara. Solo las que el render VA a pintar (hasta mlim). Misma orientación
-     que ps1PintarParche: fila hacia el norte, columna hacia el oeste. */
-  function ps1EstrellasEnPixeles(f, gal, estrellas, mlim) {
+     máscara. TODAS las de la muestra, no solo las que el render pinta: mirando el
+     resultado (ficha 04, 11-ago-2026) el parche salía granulado de estrellas más
+     débiles que el límite del equipo, y eso ensucia más de lo que aporta la luz no
+     resuelta que aportaban. Lo que quede por debajo de la profundidad de la
+     consulta (magConsultaGaia, tope 20) sí sigue ahí: PS1 llega a g ≈ 23.
+     Misma orientación que ps1PintarParche: fila al norte, columna al oeste. */
+  function ps1EstrellasEnPixeles(f, gal, estrellas) {
     var enPx = [], cos0 = Math.cos(gal.dec * Math.PI / 180);
     var pxPorAs = f.ancho / (gal.ladoArcmin * 60);
     for (var i = 0; i < (estrellas || []).length; i++) {
       var e = estrellas[i];
-      if (mlim != null && isFinite(mlim) && e[2] > mlim) continue;   // no la pinta el render: no es doble conteo
       var dx = ((((e[0] - gal.ra) + 540) % 360) - 180) * cos0 * 3600 * pxPorAs;
       var dy = (e[1] - gal.dec) * 3600 * pxPorAs;
       var x = (f.ancho - 1) / 2 - dx, y = (f.alto - 1) / 2 + dy;
       if (x < -8 || y < -8 || x > f.ancho + 8 || y > f.alto + 8) continue;
-      enPx.push({ x: x, y: y, rPx: ps1RadioMascaraAs(e[2], mlim) * pxPorAs });
+      enPx.push({ x: x, y: y, rPx: ps1RadioMascaraAs(e[2]) * pxPorAs });
     }
     return enPx;
   }
 
-  /* Parche listo para pintar: descargado, con las estrellas que el equipo ve
-     quitadas y anclado a la mag V del catálogo. `estrellas` es la muestra de Gaia
-     del campo ([ra, dec, g, …][]) y `mlim` el límite del equipo. */
-  function ps1ParcheDeGalaxia(gal, estrellas, mlim) {
+  /* Parche listo para pintar: descargado, sin estrellas y anclado a la mag V del
+     catálogo. `estrellas` es la muestra de Gaia del campo ([ra, dec, g, …][]). */
+  function ps1ParcheDeGalaxia(gal, estrellas) {
     return ps1DescargarParche(gal).then(function (f) {
       if (!f) return null;
       var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto,
-        ps1EstrellasEnPixeles(f, gal, estrellas, mlim));
+        ps1EstrellasEnPixeles(f, gal, estrellas));
       return {
         ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
         ancho: f.ancho, alto: f.alto,

@@ -234,8 +234,14 @@ Para rehacerla basta bajar el parche con `ps1_armar_parche()` y pasarlo por
    no un hueco. **No se toca**; si molesta, la salida es de la ficha 12 (aviso
    «esta galaxia no tiene capa de imagen»), no del render.
 
+4. **Pregunta 1 contestada: sí se ven estrellas de más.** «Ensucia la imagen».
+   Con eso la ficha **04** pasa de máscara hasta `mlim` a **máscara total** sobre
+   la muestra de Gaia del campo, con radio por brillo absoluto y sin `mlim` en
+   ninguna parte de la cadena. Detalle y lo que queda fuera (PS1 llega más
+   profundo que Gaia), en la Answer de la 04.
+
 Sigue faltando: **campo vacío** en el render de verdad y los **dos aumentos**.
-Y las preguntas 1 (¿estrellas de más?) y 3 (¿convence del todo?) sin cerrar.
+Y la pregunta 3 (¿convence del todo?) sin cerrar.
 
 ## Guion de la mirada que falta (necesita ojos)
 
@@ -253,5 +259,5 @@ Requisito: subir `ps1-proxy.php` (y `bitacora-cache-lru.php`) a
 | ~~**NGC 55** (δ −39°)~~ | el aviso del sur | **visto: sin parche y sin aviso; el aviso es de la ficha 12** |
 | cualquiera, **dos aumentos** | pupila de salida | el difuso baja `(p1/p2)²`, no el doble |
 
-Las tres preguntas con consecuencia siguen siendo las mismas: estrellas de más
-(ficha 04), ruido del difuso (ficha 03), y si convence.
+De las tres preguntas con consecuencia queda una: ~~estrellas de más (ficha 04:
+contestada, máscara total)~~, ruido del difuso (ficha 03), y si convence.

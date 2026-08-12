@@ -657,7 +657,7 @@
             cieloConParche.realceMax = BitacoraGaiaRender.ps1.realceMax;
             BitacoraGaiaRender.ps1GalaxiasDelCampo(window.BITACORA_GALAXIAS, ra0, dec0, arcmin)
               .forEach(function (gal) {
-                BitacoraGaiaRender.ps1ParcheDeGalaxia(gal, estrellas, mlim).then(function (parche) {
+                BitacoraGaiaRender.ps1ParcheDeGalaxia(gal, estrellas).then(function (parche) {
                   if (!parche || peticion !== contadorPeticion) return;
                   BitacoraGaiaRender.ps1PintarParche(difuso, parche,
                     { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });

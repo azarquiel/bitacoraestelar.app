@@ -41,9 +41,9 @@ dos proxies; sin él, la capa no pinta (el `fetch` da null y se apaga sola).
    cielo; NGC 4565 desaparece pasados los 3,5′—. No es nuestro corte de σ (con
    k=0 apenas cambia): es la resta de fondo por skycell. Decisión pendiente de
    mirarlo.
-2. **Decisiones abiertas de esa mirada**, las tres escritas en la Answer de la 07:
-   estrellas de más (ficha 04), doble contabilidad en el solape M51/NGC 5195, y
-   las aureolas de Gaia, que compiten con el disco.
+2. **Decisiones abiertas de esa mirada**: doble contabilidad en el solape
+   M51/NGC 5195 y las aureolas de Gaia, que compiten con el disco. (Las estrellas
+   de más ya están resueltas: máscara total, ficha 04.)
 3. **Ficha 12** — casilla, avisos y encendido por defecto. (La 11, el proxy con
    caché, está cerrada.)
 
@@ -147,6 +147,11 @@ dos proxies; sin él, la capa no pinta (el `fetch` da null y se apaga sola).
   66 %). M31 se veía como «un bulbo suelto» porque el stack de PanSTARRS no trae
   su disco y el anclaje aprieta toda la luz del catálogo en lo poco que queda.
   NGC 4565 sí enseña su banda de polvo: la vía de imagen también sirve de canto.
+- **04 (revisada, 12-ago-2026) — máscara TOTAL de estrellas.** El usuario ve
+  «estrellas de más» que ensucian, así que se enmascaran todas las de la muestra
+  de Gaia, no solo hasta `mlim`. El radio va por brillo absoluto
+  (`PS1.mascaraMagRef`), no contra el equipo: la limpieza del parche deja de
+  depender del ocular. Sigue siendo por catálogo, no morfológica.
 - **11 — el parche se cose en el SERVIDOR y se sirve en FITS tal cual.**
   `ps1-proxy.php`, con la caché LRU compartida. Resolver skycells, `wcs=1` y la
   costura por NaN salen del JS y pasan al PHP: una sola implementación.
