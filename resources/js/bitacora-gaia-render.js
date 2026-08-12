@@ -1337,7 +1337,7 @@
        suyo (b/a, n, r_e en ′, PA, y el desplazamiento del centro en ′). */
     haloReFactor: 3.0,     // r_e del halo = 3·r_e del disco
     haloN: 0.8,            // índice de Sérsic del halo: caída más lenta que la del disco
-    haloBaFactor: 0.4,     // b/a del halo = 0,4·b/a del disco (M51: 0,87 → 0,35)
+    haloBaFactor: 0.4,     // b/a del halo = 0,4·b/a del disco (M51: 0,617 → 0,247)
     haloBaMin: 0.15,       // suelo del b/a: por debajo el halo sale como una raya
     haloAjustes: {},
     // Índice de Sérsic: ya NO decide (ver ps1HaloActivo), pero el tope se queda
