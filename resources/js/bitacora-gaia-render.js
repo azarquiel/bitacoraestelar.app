@@ -1283,8 +1283,9 @@
     decMin: -30,           // PS1 no cubre más al sur (365 de las 1295 filas del RC3)
     fracMin: 0.4,          // fracción mínima de la luz del catálogo que el parche debe abarcar (ver ps1GalaxiasDelCampo)
     seeingAs: 1.1,         // ″: FWHM típica del stack, suelo del radio de máscara
-    mascaraMaxAs: 8,       // ″: tope del radio de máscara de una estrella
-    mascaraMagRef: 20,     // mag G a la que el radio de máscara es el seeing (ver ps1RadioMascaraAs)
+    mascaraMaxAs: 25,      // ″: tope del radio de máscara de una estrella (una de g≈8 ya lo toca)
+    mascaraMagRef: 22,     // mag G a la que el radio de máscara es el seeing (≈ el fondo del stack; ver ps1RadioMascaraAs)
+    mascaraProf: 20,       // mag G hasta la que se piden estrellas para la máscara (tope del proxy)
     nucleoPx: 3,           // px: radio central que la máscara no toca nunca
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
     kRuido: 1.5             // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
@@ -1391,18 +1392,33 @@
      el equipo, acotado entre el seeing y mascaraMaxAs. Antes se medía contra la
      magnitud límite del equipo, porque solo se enmascaraba lo que el render iba a
      pintar; desde la máscara total (ver ps1EstrellasEnPixeles) el equipo ya no
-     entra, y el mismo parche vale para cualquier ocular. */
+     entra, y el mismo parche vale para cualquier ocular.
+
+     Crece GEOMÉTRICAMENTE, no lineal: el ala de una PSF va como r^-3, así que el
+     radio donde el perfil cruza el mismo umbral se ensancha 10^(0,4/3) ≈ 1,35 por
+     magnitud. Con la ley lineal de antes (0,6″/mag) la máscara se quedaba dentro
+     del ala de las estrellas medianas y el relleno tomaba su mediana justo del
+     ala: quedaba un disco apagado rodeado del anillo brillante que sobraba —el
+     «halo con hueco» que se vio en el simulador el 12-ago-2026—. */
   function ps1RadioMascaraAs(g) {
-    return Math.max(PS1.seeingAs,
-      Math.min(PS1.mascaraMaxAs, PS1.seeingAs + 0.6 * Math.max(0, PS1.mascaraMagRef - g)));
+    var r = PS1.seeingAs * Math.pow(10, 0.4 * (PS1.mascaraMagRef - g) / 3);
+    return Math.max(PS1.seeingAs, Math.min(PS1.mascaraMaxAs, r));
   }
 
-  /* Quita TODAS las estrellas de Gaia del campo y rellena el hueco con la mediana
-     de un anillo alrededor, tomada solo de píxeles no enmascarados.
+  /* Quita TODAS las estrellas de Gaia del campo: marca el disco de cada una y lo
+     rellena, entero, con la mediana del anillo que la rodea POR FUERA de su propia
+     máscara, saltándose lo enmascarado por las demás y los NaN.
 
-     `estrellas` en píxeles del parche: [{x, y, rPx}]. Modifica `datos` y lo
-     devuelve. El núcleo (PS1.nucleoPx alrededor del centro) no se toca nunca: una
-     estrella de Gaia proyectada sobre el núcleo se llevaría el objeto entero. */
+     Un valor por estrella, no un degradado por píxel: el degradado tomaba la
+     mediana a pocos píxeles de cada píxel tapado, o sea del ala de la estrella que
+     se estaba quitando, y devolvía el borde brillante junto al centro apagado (el
+     «halo con hueco»). Un disco plano se nota sobre el gradiente de la galaxia,
+     pero mucho menos que ese anillo; si algún día molesta, lo que toca es
+     interpolar el fondo, no volver a muestrear el ala.
+
+     `estrellas` en píxeles del parche: [{x, y, rPx}]. Devuelve una copia. El núcleo
+     (PS1.nucleoPx alrededor del centro) no se toca nunca: una estrella de Gaia
+     proyectada sobre el núcleo se llevaría el objeto entero. */
   function ps1QuitarEstrellas(datos, ancho, alto, estrellas) {
     if (!estrellas || !estrellas.length) return datos;
     var mascara = new Uint8Array(datos.length), i, e, x, y;
@@ -1421,26 +1437,33 @@
       }
     }
     var out = Float32Array.from ? Float32Array.from(datos) : new Float32Array(datos);
-    for (y = 0; y < alto; y++) {
-      for (x = 0; x < ancho; x++) {
-        i = y * ancho + x;
-        if (!mascara[i]) continue;
-        out[i] = ps1MedianaAnillo(datos, mascara, ancho, alto, x, y);
+    for (i = 0; i < estrellas.length; i++) {
+      e = estrellas[i];
+      var rE = Math.max(1, e.rPx), fondo = ps1FondoAlrededor(datos, mascara, ancho, alto, e.x, e.y, rE);
+      if (fondo == null) continue;                         // sin muestras limpias: mejor dejarlo como está
+      var rE2 = rE * rE;
+      for (y = Math.max(0, Math.floor(e.y - rE)); y <= Math.min(alto - 1, Math.ceil(e.y + rE)); y++) {
+        for (x = Math.max(0, Math.floor(e.x - rE)); x <= Math.min(ancho - 1, Math.ceil(e.x + rE)); x++) {
+          var ex = x - e.x, ey = y - e.y;
+          if (ex * ex + ey * ey > rE2) continue;
+          if (mascara[y * ancho + x]) out[y * ancho + x] = fondo;
+        }
       }
     }
     return out;
   }
 
-  /* Mediana de un anillo creciente alrededor de (x,y), saltándose lo enmascarado
-     y los NaN. Se ensancha hasta encontrar muestras: en un cúmulo de estrellas
-     enmascaradas juntas, el primer anillo puede estar entero dentro de la máscara. */
-  function ps1MedianaAnillo(datos, mascara, ancho, alto, x, y) {
-    for (var rOut = 3; rOut <= 24; rOut *= 2) {
-      var rIn = rOut / 2, m = [], dx, dy;
-      for (dy = -rOut; dy <= rOut; dy++) {
-        var yy = y + dy; if (yy < 0 || yy >= alto) continue;
-        for (dx = -rOut; dx <= rOut; dx++) {
-          var xx = x + dx; if (xx < 0 || xx >= ancho) continue;
+  /* Mediana del anillo [r, 1,6r] alrededor de (x,y), saltándose lo enmascarado y
+     los NaN. Se ensancha hasta encontrar muestras (una estrella pegada a otra
+     puede tener el primer anillo entero dentro de la máscara vecina) y devuelve
+     null si no encuentra ninguna. */
+  function ps1FondoAlrededor(datos, mascara, ancho, alto, x, y, r) {
+    for (var k = 0; k < 4; k++) {
+      var rIn = r * Math.pow(1.6, k), rOut = rIn * 1.6, m = [], dx, dy;
+      for (dy = -Math.ceil(rOut); dy <= Math.ceil(rOut); dy++) {
+        var yy = Math.round(y + dy); if (yy < 0 || yy >= alto) continue;
+        for (dx = -Math.ceil(rOut); dx <= Math.ceil(rOut); dx++) {
+          var xx = Math.round(x + dx); if (xx < 0 || xx >= ancho) continue;
           var d = Math.sqrt(dx * dx + dy * dy);
           if (d < rIn || d > rOut) continue;
           var i = yy * ancho + xx;
@@ -1451,7 +1474,7 @@
       }
       if (m.length >= 8) { m.sort(function (a, b) { return a - b; }); return m[m.length >> 1]; }
     }
-    return 0;
+    return null;
   }
 
   /* ── Fracción de luz dentro del parche (corrección del anclaje) ──

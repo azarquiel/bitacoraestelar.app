@@ -751,6 +751,14 @@
          Aquí quedan solo los adaptadores que le pasan el equipo/cielo del simulador. */
       function consultarGaia(ra0, dec0, arcmin) {
         var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva());
+        /* Con la capa de imagen encendida la consulta baja hasta el tope del proxy:
+           la máscara del parche necesita TODAS las estrellas que PanSTARRS registra,
+           no solo las que este equipo llega a ver, y con un equipo modesto
+           magConsultaGaia se queda en 15-16 y el parche salía granulado. Pintar no
+           cambia: dibujar() sigue cortando en la magnitud límite. El proxy ordena
+           por Gmag, así que si el TOP se agota se pierden las débiles, no las
+           brillantes. */
+        if (BitacoraGaiaRender.galaxiasImagen) mag = Math.max(mag, BitacoraGaiaRender.ps1.mascaraProf);
         return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {

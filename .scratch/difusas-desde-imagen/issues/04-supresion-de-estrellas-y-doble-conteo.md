@@ -91,6 +91,44 @@ medio objeto (el riesgo de la ficha 02) y el núcleo sigue protegido por
 sería una consulta aparte a profundidad fija para la máscara, como hace el halo
 de globulares — más tráfico, y solo si se ve.
 
+### Segunda pasada (12-ago-2026): consulta profunda y el «halo con hueco»
+
+> «aún se ve el grano de algunas estrellas traídas desde PS1 que además aparecen
+> con un halo y un hueco (horrible)»
+
+Dos fallos distintos, los dos arreglados:
+
+**1. Faltaban estrellas en la lista.** `magConsultaGaia()` pide la profundidad
+que ese equipo puede aprovechar (15-16 con un equipo modesto), y todo lo que PS1
+registra por debajo se quedaba sin enmascarar. Ahora, **con la capa encendida la
+consulta baja al tope del proxy** (`PS1.mascaraProf = 20`, = `GAIA_MAX_MAG` de
+`gaia_proxy.php`), en `consultarGaia()` del simulador. No hace falta consulta
+aparte: es la misma, más profunda, y el caché de `consultar()` ya reutiliza una
+entrada más profunda para una petición más somera. Lo pintado no cambia:
+`dibujar()` sigue cortando en `mlim` y el glow se corta en `CFG.glowCorte`.
+
+**2. El radio de máscara era demasiado corto, y el relleno tomaba el ala.**
+La ley lineal (0,6″/mag) dejaba la máscara DENTRO del ala de las estrellas
+medianas; encima, el relleno era la mediana de un anillo a pocos píxeles de cada
+píxel tapado, o sea del ala misma. Resultado: disco apagado + anillo brillante.
+Dos cambios:
+
+- **`ps1RadioMascaraAs` crece geométricamente**: `seeing · 10^(0,4·(magRef−g)/3)`,
+  que es el radio donde un ala en `r^-3` cruza el mismo umbral. `mascaraMagRef`
+  sube a 22 (fondo del stack) y `mascaraMaxAs` de 8″ a 25″ (la tocan las de
+  g ≲ 11,7).
+- **El relleno es un valor por estrella**, no un degradado por píxel: la mediana
+  del anillo [r, 1,6r] **por fuera** de su propia máscara (`ps1FondoAlrededor`,
+  que sustituye a `ps1MedianaAnillo`). Un disco plano se nota sobre el gradiente
+  de la galaxia, mucho menos que el anillo. Si algún día molesta, lo que toca es
+  interpolar el fondo, no volver a muestrear el ala.
+
+Comprobación nueva en `scripts/test_difuso.js`: sobre un fondo plano con un ala
+en `r^-3` normalizada al propio criterio de la máscara, tras quitar la estrella
+no queda nada por encima del 115 % del fondo (halo) ni por debajo del 90 %
+(hueco). Falla si se vuelve a acortar el radio o si el relleno vuelve a
+muestrear el ala.
+
 La comprobación de la ficha (el flujo no crece al bajar `mlim`) ya no aplica: el
 flujo del parche no depende de `mlim`. En su sitio, `scripts/test_difuso.js`
 comprueba que una estrella más débil que cualquier equipo también se enmascara,

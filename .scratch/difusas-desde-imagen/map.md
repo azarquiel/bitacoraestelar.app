@@ -152,6 +152,12 @@ dos proxies; sin él, la capa no pinta (el `fetch` da null y se apaga sola).
   de Gaia, no solo hasta `mlim`. El radio va por brillo absoluto
   (`PS1.mascaraMagRef`), no contra el equipo: la limpieza del parche deja de
   depender del ocular. Sigue siendo por catálogo, no morfológica.
+  **Segunda pasada del mismo día**, tras ver «grano, halo y hueco»: con la capa
+  encendida la consulta a Gaia baja al tope del proxy (mag 20) para que la lista
+  no se quede corta; el radio pasa a crecer geométricamente
+  (`seeing·10^(0,4·Δmag/3)`, tope 25″) porque la máscara se quedaba dentro del ala;
+  y el relleno pasa a ser **un valor por estrella**, tomado por FUERA de su propia
+  máscara, porque el degradado por píxel muestreaba justo el ala que se quitaba.
 - **11 — el parche se cose en el SERVIDOR y se sirve en FITS tal cual.**
   `ps1-proxy.php`, con la caché LRU compartida. Resolver skycells, `wcs=1` y la
   costura por NaN salen del JS y pasan al PHP: una sola implementación.

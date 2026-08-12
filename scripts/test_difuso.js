@@ -499,7 +499,7 @@ function tocadosTrasQuitar(estrellas) {
 }
 var qCero = tocadosTrasQuitar([]);
 var qDebil = tocadosTrasQuitar([[19, 20]]);
-var qTodas = tocadosTrasQuitar([[12, 8], [13.5, 20], [19, 45]]);
+var qTodas = tocadosTrasQuitar([[12, 60], [13.5, 45], [19, 30]]);
 ok(qCero.tocados === 0 && qDebil.tocados > 0,
   'una estrella más débil que cualquier equipo también se enmascara (' + qDebil.tocados + ' px)');
 ok(qTodas.tocados > qDebil.tocados,
@@ -509,6 +509,36 @@ ok(R.ps1RadioMascaraAs(12) > R.ps1RadioMascaraAs(19),
 casi(R.ps1RadioMascaraAs(2), R.ps1.mascaraMaxAs, 1e-9, 'el radio de máscara tiene tope');
 casi(R.ps1RadioMascaraAs(25), R.ps1.seeingAs, 1e-9, 'y suelo en el seeing del stack');
 casi(qTodas.suma / qCero.suma, 1, 0.02, 'quitar estrellas no mueve la luz del parche ni un 2 %');
+
+/* El caso que se vio en el simulador el 12-ago-2026: una estrella real deja un
+   ala ancha, y si la máscara se queda dentro de ella el relleno sale del propio
+   ala y aparece «un halo con un hueco». Sobre un fondo plano con una PSF de ala
+   r^-3, tras quitarla no puede quedar NADA por encima del fondo (halo) ni muy por
+   debajo (hueco) en todo el entorno de la estrella. */
+var FONDO = 100, N = 201, PXAS = 0.7, xEst = 60, yEst = 60;  // ″/px, como un parche de 6′ a 512 px
+/* Ala en r^-3 normalizada al propio criterio de la máscara: una estrella de
+   `mascaraMagRef` asoma un 10 % del fondo a un radio de seeing, y las demás suben
+   con su flujo. Si la ley de ps1RadioMascaraAs es la correcta, el borde de la
+   máscara cae SIEMPRE en ese mismo 10 %, sea cual sea la magnitud. */
+var sEst = R.ps1.seeingAs, gEst = 14;
+var picoEst = 0.1 * FONDO * Math.pow(10, 0.4 * (R.ps1.mascaraMagRef - gEst));
+var conEstrella = new Float32Array(N * N);
+for (var yP = 0; yP < N; yP++) {
+  for (var xP = 0; xP < N; xP++) {
+    var rAs = Math.max(sEst, Math.sqrt((xP - xEst) * (xP - xEst) + (yP - yEst) * (yP - yEst)) * PXAS);
+    conEstrella[yP * N + xP] = FONDO + picoEst / Math.pow(rAs / sEst, 3);
+  }
+}
+var sinEstrella = R.ps1QuitarEstrellas(conEstrella, N, N,
+  [{ x: xEst, y: yEst, rPx: R.ps1RadioMascaraAs(gEst) / PXAS }]);
+var maxRes = -Infinity, minRes = Infinity;
+for (var iR = 0; iR < sinEstrella.length; iR++) {
+  if (sinEstrella[iR] > maxRes) maxRes = sinEstrella[iR];
+  if (sinEstrella[iR] < minRes) minRes = sinEstrella[iR];
+}
+ok(maxRes < FONDO * 1.15, 'quitada la estrella no queda halo (máximo ' + maxRes.toFixed(1) +
+  ' sobre un fondo de ' + FONDO + ')');
+ok(minRes > FONDO * 0.9, 'ni hueco (mínimo ' + minRes.toFixed(1) + ')');
 // Núcleo intacto aunque le caiga encima una estrella brillante y ancha.
 var dN = parcheSintetico(0);
 var outN = R.ps1QuitarEstrellas(dN, ANCHO, ANCHO,
