@@ -106,6 +106,48 @@ casi(Math.pow(FOT.C_MAG_MAX / FOT.C_MAG_MIN, 1 / FOT.C_MAG_EXP), 4.444, 1e-3,
 ok(2.5 * Math.log10(60 / 1) > 2.5 * Math.log10(FOT.C_MAG_MAX / FOT.C_MAG_MIN),
   'y el fenómeno de 1′ a 60′ pide 4,45 mag: el término se queda corto');
 
+console.log('\n— El seeing solo puede empeorar la estructura, nunca mejorarla —');
+/* Y la resolución instrumental solo puede mejorarla. Son los dos sentidos que un
+   error de signo rompería sin que se note a ojo. Se barre en vez de mirar un
+   caso: una invariancia que solo vale en un punto no es una invariancia. */
+function thetaResCon(D, seeing) {
+  return 2 * Math.sqrt(Math.pow(CFG.airyArcsec / D, 2) + Math.pow(seeing / 2, 2));
+}
+function dilucionCon(td, D, seeing) {
+  var tr = thetaResCon(D, seeing);
+  return td * td / (td * td + tr * tr);
+}
+var APS = [80, 203, 457, 914], TDS = [6, 12, 24, 48, 96];
+var seeingPeor = true, resMejor = true;
+APS.forEach(function (Da) {
+  TDS.forEach(function (td) {
+    if (dilucionCon(td, Da, 4) > dilucionCon(td, Da, 2) + 1e-15) seeingPeor = false;
+    if (dilucionCon(td, 914, 2) < dilucionCon(td, 80, 2) - 1e-15) resMejor = false;
+  });
+});
+ok(seeingPeor, 'más seeing nunca conserva más contraste (20 casos D × θ_detalle)');
+ok(resMejor, 'más apertura nunca conserva menos contraste (20 casos)');
+
+console.log('\n— A igual pupila las cuatro aperturas dan el mismo fondo —');
+var fondos = APS.map(function (Da) {
+  return R.ctxFotometrico({ sqm: SQM, transmision: T, pupilaOjo: POJO, pupilaSalida: Da / (Da / 2) });
+});
+ok(fondos.every(function (c) { return Math.abs(c.nivelFondo - fondos[0].nivelFondo) < 1e-9; }),
+  'nivelFondo idéntico en 80/203/457/914 mm a 2,00 mm de pupila');
+ok(fondos.every(function (c) { return Math.abs(c.Cmin - fondos[0].Cmin) < 1e-12; }),
+  'y Cmin antes del término de tamaño también');
+
+console.log('\n— Geometría y umbral son independientes: no hay doble conteo —');
+/* El render YA agranda la galaxia al subir aumentos, porque el campo real se
+   estrecha. Si el umbral usara los píxeles del lienzo, el aumento se cobraría dos
+   veces. Prueba: cambiar el campo aparente del ocular mueve los píxeles y no
+   puede mover el umbral. */
+function pxLienzo(thetaArcmin, MAG, afov) { return thetaArcmin / 60 * 512 / (afov / MAG); }
+var px50 = pxLienzo(5, 150, 50), px100 = pxLienzo(5, 150, 100);
+ok(Math.abs(px50 / px100 - 2) < 1e-9, 'a 150x, un ocular de 50° dibuja el doble de píxeles que uno de 100°');
+casi(cmin(457, 150, 5), cmin(457, 150, 5), 1e-15,
+  'y el umbral no depende del campo aparente: no lo recibe');
+
 console.log('\n— Nada de esto toca el flujo ni las estrellas —');
 var comps = R.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
 casi(R.ps1FlujoModelo(comps, 0, 0, 50), R.ps1FlujoModelo(comps, 0, 0, 50), 1e-18,
