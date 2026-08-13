@@ -18,6 +18,8 @@ headroom/
 # Ignorar la hoja fuente de los cúmulos abiertos (solo hace falta para regenerar el catálogo)
 mapa/datos/cumulos_abiertos.xlsx
 
-# Ignorar el borrador de trabajo de los asistentes y la caché local del proxy de PS1
+# Ignorar el borrador de trabajo de los asistentes y las cachés locales de los proxies
+# (las crean los .php solos en el servidor; en local son datos descargados, no fuente)
 .scratch/
 simulador_ocular/cache-ps1/
+simulador_ocular/cache_gaia/
