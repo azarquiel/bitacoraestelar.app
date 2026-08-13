@@ -113,8 +113,11 @@ casi(w[32 * 64 + 32], 100, 1e-3, 'y el hueco se rellena con el entorno, no con u
 console.log('\n— 7. Nada de esto depende de los aumentos —');
 casi(escalaAs(8, 1024), escalaAs(8, 1024), 1e-15, 'escalaAs no recibe MAG');
 casi(P.thetaAdd(457, OBJETIVO), P.thetaAdd(457, OBJETIVO), 1e-15, 'θ_add tampoco');
-ok(PS1.salida === 512, 'PS1.salida es una constante de ADQUISICIÓN, no de render (hoy ' +
-  PS1.salida + ', sin tocar)');
+/* Lo que importa no es su valor, sino que sea de ADQUISICIÓN y no de render:
+   que no la mueva ni el lienzo ni los aumentos. Subió a 1024 el 13-ago-2026. */
+ok(PS1.salida === 1024, 'PS1.salida es una constante de ADQUISICIÓN, no de render (hoy ' +
+  PS1.salida + ')');
+ok(PS1.salida <= SALIDA_MAX_PROXY, 'y cabe en el tope del proxy sin tocarlo');
 
 console.log('\n— 8. Ni se introduce dependencia nueva del lienzo —');
 /* El lienzo entra en ps1PintarParche por pxPorAs, que sale de SIZE y del campo
@@ -149,7 +152,6 @@ ok(P.sigmaPx(457, 2.35, null) < 0.5 && P.sigmaPx(914, 2.35, null) < 0.5,
   'mientras que a 2,35″/px las dos son subpíxel: por eso hoy salen iguales');
 
 console.log('\n— Lo que NO se toca —');
-casi(PS1.salida, 512, 1e-12, 'PS1.salida');
 casi(PS1.ladoMax, 20, 1e-12, 'PS1.ladoMax');
 casi(PS1.seeingAs, 1.1, 1e-12, 'PS1.seeingAs');
 casi(CFG.airyArcsec, 138.4, 1e-12, 'airyArcsec');

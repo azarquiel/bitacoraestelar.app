@@ -1319,7 +1319,15 @@
         otro sitio, sin error y sin aviso. */
   var PS1 = {
     banda: 'g',            // la más cercana al pico escotópico (507 nm) y la más profunda del 3π
-    salida: 512,           // px del parche que se pide al proxy (él remuestrea y corrige la WCS)
+    /* px del parche que se pide al proxy (él remuestrea y corrige la WCS). A 512
+       la escala salía a lado/512 —2,35″/px en una galaxia de 20′— y a esa escala
+       la PSF del telescopio (ps1PsfParche) es literalmente la identidad: con
+       σ = 0,14 px el kernel gaussiano en float32 sale [8e-12, 1, 8e-12], así que
+       un 457 y un 914 mm daban la MISMA imagen, bit a bit. A 1024 la diferencia
+       entre esos dos aparece a 1–3 σ del ruido de cielo, 213× el suelo de
+       sensibilidad del método. Es el tope del proxy (PS1_SALIDA_MAX, ps1-proxy.php:46);
+       llegar a 0,67″/px en una galaxia de 20′ pediría 1794 px, y son otros 12 MB. */
+    salida: 1024,
     ladoFactor: 6,         // lado del parche = 6·r_e → radio 3·r_e ≈ 94 % de la luz de un disco
     ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
     ladoMin: 1.5,          // ′: por debajo no queda parche que mirar
@@ -2147,6 +2155,107 @@
      parche: {datos, ancho, alto, ladoArcmin, ra, dec, comps, pa}.
      o: {ra0, dec0, arcmin, size, cielo} = el campo que se está pintando; `cielo`
      son los mismos parámetros ópticos que recibe pintarFot. */
+
+  /* ── La PSF del telescopio sobre el parche ────────────────────────────────
+     El parche de PS1 no es la galaxia: es la galaxia ya convolucionada por el
+     stack de PanSTARRS. Lo que falta para que sea lo que ve un ocular es la
+     DIFERENCIA entre el borrón del telescopio y el que la imagen ya trae, en
+     cuadratura. Cero constantes nuevas: airyArcsec, seeingArcsec y PS1.seeingAs
+     ya estaban, y radioImagenEstelar ya las combinaba para las estrellas.
+
+     El borrón que el parche YA trae son DOS cosas: el seeing del stack y el
+     propio píxel del recorte, que es una caja de escalaAs de lado. Una caja de
+     lado w tiene varianza w²/12, o sea una gaussiana equivalente de FWHM
+     w·2,3548/√12. Ignorar el segundo término haría que la resta en cuadratura
+     diese de más y el parche saldría con MÁS borrón del que le toca. Ni 2,3548
+     (FWHM→σ) ni √12 son constantes físicas: son definición y geometría.
+
+     Si el parche ya viniera más borroso que el telescopio, θ_add sale 0 y no se
+     toca nada: no se puede desconvolucionar, y fingir que sí es inventar
+     resolución que no existe.
+
+     `desenfocar` NO sirve aquí y su propio comentario lo dice: pasa por un
+     canvas de 8 bits y recorta a 0–255. Esto son flujos, no grises. */
+  var FWHM_A_SIGMA = 2 * Math.sqrt(2 * Math.LN2);      // 2,3548
+  var CAJA_A_FWHM = FWHM_A_SIGMA / Math.sqrt(12);      // 0,6796
+
+  function ps1ThetaAdd(aperturaMm, escalaAs) {
+    var tr = 2 * radioImagenEstelar(aperturaMm);       // FWHM del telescopio, ″
+    var ps1 = (PS1.seeingAs > 0) ? PS1.seeingAs : 0;
+    var caja = (escalaAs > 0 ? escalaAs : 0) * CAJA_A_FWHM;
+    var d2 = tr * tr - (ps1 * ps1 + caja * caja);
+    return d2 > 0 ? Math.sqrt(d2) : 0;
+  }
+
+  /* Gaussiana separable sobre Float32. El borde se replica en vez de rellenarse
+     con ceros: con ceros el perímetro del parche se oscurecería, y el borde es
+     justo una de las cosas que no debe fabricar estructura.
+
+     Los no finitos se saltan y se renormaliza por el peso que sí se usó. Pero
+     además se RESTAURAN al final, y eso no es cosmética: los huecos del stack
+     están en el centro de las estrellas saturadas —en NGC 205 la mediana de su
+     entorno vale 12473 contra −1,06 del cielo—, así que rellenarlos con su
+     propio entorno mete un 4–5 % de flujo que no está en el cielo y pinta
+     puntos brillantes inventados. Con la máscara conservada el flujo se queda
+     por debajo del 0,3 %. Es el mismo criterio que sigue el bucle de abajo con
+     su `if (!(f > 0)) continue;`. */
+  function ps1PsfParche(datos, ancho, alto, escalaAs, aperturaMm) {
+    var fwhm = ps1ThetaAdd(aperturaMm, escalaAs);
+    var esc = (escalaAs > 0) ? escalaAs : 1;
+    var sigma = fwhm / FWHM_A_SIGMA / esc;             // px del parche
+    if (!(sigma > 0.01)) return datos;                 // nada que añadir: el mismo array
+
+    var n = datos.length, i, j, x, y, acc, w, p, val;
+    var rad = Math.max(1, Math.ceil(3 * sigma)), m = 2 * rad + 1;
+    var k = new Float64Array(m), s = 0;
+    for (i = 0; i < m; i++) { k[i] = Math.exp(-((i - rad) * (i - rad)) / (2 * sigma * sigma)); s += k[i]; }
+    for (i = 0; i < m; i++) k[i] /= s;
+
+    var tmp = new Float32Array(n), out = new Float32Array(n);
+    for (y = 0; y < alto; y++) {                       // horizontal
+      for (x = 0; x < ancho; x++) {
+        acc = 0; w = 0;
+        for (j = 0; j < m; j++) {
+          p = x + j - rad;
+          if (p < 0) p = 0; else if (p >= ancho) p = ancho - 1;
+          val = datos[y * ancho + p];
+          if (isFinite(val)) { acc += k[j] * val; w += k[j]; }
+        }
+        tmp[y * ancho + x] = w > 0 ? acc / w : NaN;
+      }
+    }
+    for (y = 0; y < alto; y++) {                       // vertical
+      for (x = 0; x < ancho; x++) {
+        acc = 0; w = 0;
+        for (j = 0; j < m; j++) {
+          p = y + j - rad;
+          if (p < 0) p = 0; else if (p >= alto) p = alto - 1;
+          val = tmp[p * ancho + x];
+          if (isFinite(val)) { acc += k[j] * val; w += k[j]; }
+        }
+        out[y * ancho + x] = w > 0 ? acc / w : NaN;
+      }
+    }
+    // La máscara original, restaurada exactamente: lo que era hueco vuelve a serlo.
+    for (i = 0; i < n; i++) if (!isFinite(datos[i])) out[i] = datos[i];
+    return out;
+  }
+
+  /* Los datos del parche ya con la PSF de ESTA apertura, cacheados en el propio
+     parche. Se calcula una vez por apertura, no por fotograma ni por píxel: sin
+     la caché, cada repintado volvería a convolucionar sobre el resultado
+     anterior y la borrosidad se acumularía —que es exactamente la doble
+     contabilización que hay que evitar—. Por eso también se convoluciona SIEMPRE
+     desde `parche.datos`, que no se toca nunca. */
+  function ps1DatosConPsf(parche, escalaAs, aperturaMm) {
+    var D = (aperturaMm > 0) ? aperturaMm : 0;
+    if (!(D > 0)) return parche.datos;
+    if (parche.psfD === D && parche.psfDatos) return parche.psfDatos;
+    parche.psfDatos = ps1PsfParche(parche.datos, parche.ancho, parche.alto, escalaAs, D);
+    parche.psfD = D;
+    return parche.psfDatos;
+  }
+
   function ps1PintarParche(difuso, parche, o) {
     var SIZE = o.size, escv = SIZE / (o.arcmin / 60);   // px por grado
     var cos0 = Math.cos(o.dec0 * Math.PI / 180);
@@ -2181,6 +2290,25 @@
     var sMezcla = peso ? parche.escalaMezcla : 1;
     var haloPx = ps1RadioHaloAs(comps) * pxPorAs;       // el perfil suele salirse del parche
     var alcance = Math.max(ladoPx / 2, haloPx);
+    /* La PSF del telescopio, justo antes de la mezcla imagen/modelo y una sola
+       vez por parche. Va en los píxeles del PARCHE, no en los del lienzo, y esa
+       es la razón de que no pueda contarse dos veces: el borrón queda fijo en
+       segundos de arco, así que al subir aumentos crece en pantalla lo mismo que
+       crece la galaxia —aumentar no resuelve, que es lo que hace la naturaleza—
+       y ni el campo aparente ni MAG entran en el cálculo.
+
+       La apertura es la misma D que ya usan magLimite y el disco de Airy de las
+       estrellas: `render` la pasa tal cual. El respaldo es para un llamador que
+       solo traiga el cielo —pupila = D/MAG por definición, así que su producto
+       ES D y los aumentos se cancelan: no es una dependencia nueva de MAG, es
+       álgebra— y es aproximado, porque el formulario redondea la pupila a 0,1 mm.
+       Sin ninguna de las dos no hay óptica que simular y el parche va tal cual. */
+    var escParche = (parche.ladoArcmin * 60) / parche.ancho;   // ″/px del recorte
+    var D = o.apertura;
+    if (!(D > 0) && o.cielo && o.cielo.pupilaSalida > 0 && o.cielo.aumentos > 0) {
+      D = o.cielo.pupilaSalida * o.cielo.aumentos;
+    }
+    var datos = c ? ps1DatosConPsf(parche, escParche, D) : parche.datos;
     /* Máscara de los píxeles de la capa de galaxias: pintarFot ya no les aplica
        visibilidadDifusa —la rampa de opacidad es su desvanecido y mide contra el
        MISMO umbral, así que pasar por las dos es contarlo dos veces— y el realce
@@ -2214,7 +2342,7 @@
         var f = 0, k = -1;
         if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
           k = py * parche.ancho + px;
-          f = parche.datos[k];
+          f = datos[k];
         }
         /* La mezcla: la imagen manda donde midió, el perfil solo rellena lo que
            la imagen no cubre, y el tránsito es continuo porque el peso lo es
@@ -2432,7 +2560,8 @@
         // contraste de la rampa de opacidad (Fcielo·Cmin); la puerta del halo no
         // mira el cielo, solo el objeto.
         ps1PintarParche(difuso, parche, {
-          ra0: o.ra0, dec0: o.dec0, arcmin: o.arcmin, size: o.size, cielo: cieloParche
+          ra0: o.ra0, dec0: o.dec0, arcmin: o.arcmin, size: o.size, cielo: cieloParche,
+          apertura: o.apertura
         });
         pintarFot(difuso, ctx, cieloParche, capaEst);
       }).catch(function () { /* una galaxia que falla no tumba el campo entero */ });
@@ -2683,7 +2812,8 @@
          campo sin la galaxia. Si el parche no llega, esto resuelve igual y la
          imagen sale como salía antes de esta capa. */
       return ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
-        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, estrellas: estrellas
+        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, estrellas: estrellas,
+        apertura: o.apertura   // la PSF del parche va como 1/D, igual que el disco de Airy
       }).then(function (capa) {
         return { estrellas: estrellas, mlim: mlim, fondo: fondo, aviso: capa.aviso };
       });
@@ -2829,6 +2959,9 @@
     ps1FlujoConOpacidad: ps1FlujoConOpacidad,
     ps1AnclarACatalogo: ps1AnclarACatalogo,
     ps1PintarParche: ps1PintarParche,
+    ps1PsfParche: ps1PsfParche,
+    ps1ThetaAdd: ps1ThetaAdd,
+    ps1DatosConPsf: ps1DatosConPsf,
     ps1CabeEnParche: ps1CabeEnParche,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
