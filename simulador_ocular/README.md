@@ -266,7 +266,9 @@ La cadena, en orden:
    las pinta dos veces (una del catálogo, otra de la foto).
 3. **`ps1AnclarACatalogo`** — apaga lo que no llega a cielo + `kRuido`·σ y
    reparte el presupuesto de luz que dicta la mag V del catálogo.
-4. **La mezcla E** — `campo = w·s·imagen + (1-w)·perfil`, con `w`
+4. **`ps1PsfParche`** — el borrón del telescopio, lo que separa lo que ve un
+   80 mm de lo que ve un 400 mm (ver *La resolución del recorte* más abajo).
+5. **La mezcla E** — `campo = w·s·imagen + (1-w)·perfil`, con `w`
    (`ps1PesoImagen`) la fracción de píxeles con señal en una caja de
    `mezclaCajaAs`, y `s` (`ps1EscalaMezcla`) el factor que **cierra la
    fotometría exactamente**. Donde la imagen midió, manda la imagen; donde no
@@ -299,6 +301,72 @@ avisa **con la causa**, porque cada una deja al observador en un sitio distinto:
 De las **compañeras** del campo no se dice nada (en Virgo saldrían cinco líneas
 sobre galaxias que nadie buscaba), y de un objeto que no está en el RC3 tampoco:
 no había nada prometido.
+
+#### La resolución del recorte, y por qué la apertura no se notaba
+
+El parche **no es la galaxia**: es la galaxia ya emborronada dos veces, por el
+seeing del stack de PS1 (`PS1.seeingAs` = 1,1″ de FWHM) y por el **propio píxel
+del recorte**, que es una caja de `escalaAs` de lado. Lo que falta para que sea
+lo que se ve por un ocular es la **diferencia en cuadratura** con el borrón del
+telescopio:
+
+```
+θ_res(D) = 2 · radioImagenEstelar(D)                    ← Airy ⊕ seeing, ya existía
+θ_parche = √(PS1.seeingAs² + (0,6796·escalaAs)²)
+θ_add    = √(max(0, θ_res² − θ_parche²))                 ← lo que ps1PsfParche añade
+```
+
+Cero constantes físicas nuevas: `airyArcsec`, `seeingArcsec` y `PS1.seeingAs` ya
+estaban, y `radioImagenEstelar` ya las combinaba para las estrellas. El 2,3548
+(FWHM→σ) y el 0,6796 (caja→gaussiana, `2,3548/√12`) son definición y geometría.
+Si el parche ya viene más borroso que el telescopio, `θ_add` sale **0** y no se
+toca nada: no se puede desconvolucionar, y fingir que sí es inventar resolución.
+
+**Lo que costó descubrir esto.** `PS1.salida` estuvo mucho tiempo en 512 px, así
+que `escalaAs = ladoArcmin·60/512` — 2,35″/px en una galaxia de 20′, nunca la
+nativa de 0,25″ de PanSTARRS. A esa escala la PSF de una apertura grande no es
+que sea pequeña: **es la identidad en float32**. Con σ = 0,14 px el kernel
+gaussiano sale `[8e-12, 1, 8e-12]`, de modo que un 457 y un 914 mm daban la
+**misma imagen bit a bit**. Cualquier intento de que la apertura se notara en la
+estructura de una galaxia chocaba antes con el muestreo que con la física.
+
+A `salida = 1024` (1,17″/px en 20′) esos dos se separan entre **1,0 y 3,3 σ del
+ruido de cielo** en M51/M81/M101/NGC 205, unas **213 veces el suelo de
+sensibilidad** del método —medido comparando 914 contra 920 mm, dos aperturas
+indistinguibles en la práctica— y con el signo correcto: más apertura, menos
+borrón añadido (`θ_add` = 3,76″ a 80 mm, 2,00″ a 203, 1,59″ a 457, 1,50″ a 914).
+
+> **Dónde se aplica importa tanto como cuánto.** Va en los píxeles del **parche**,
+> una sola vez por parche y apertura (cacheada en `parche.psfDatos`/`psfD`), y
+> **antes** de la mezcla. Consecuencias que hay que preservar si se toca esto:
+> el lienzo, el campo aparente y los aumentos **no entran** en el cálculo; la
+> borrosidad es angular y fija (″), así que al subir aumentos crece en pantalla
+> lo mismo que crece la galaxia —**aumentar no resuelve**, que es lo que hace la
+> naturaleza—; y sin la caché cada repintado convolucionaría sobre el resultado
+> anterior y el borrón se **acumularía**. `parche.datos` no se muta nunca.
+
+`desenfocar()`, el que ya había, **no sirve aquí** y su propio comentario lo dice:
+pasa por un canvas de 8 bits y recorta a 0–255. El parche son flujos, no grises.
+
+#### La máscara de no finitos se restaura después de convolucionar
+
+No es cosmética. Los píxeles no finitos del parche **no están repartidos al azar:
+están en el centro de las estrellas saturadas del stack**. En NGC 205 la mediana
+del entorno de sus 75 huecos vale 12473, contra −1,06 de mediana de cielo.
+
+La convolución es NaN-aware —salta los no finitos y renormaliza por el peso que
+sí usó, o cada hueco se comería un disco de 3σ—, pero eso **los rellena con su
+propio entorno saturado**, que es lo más brillante de la imagen: el flujo total
+subía un **4,44 % en M81 y un 5,18 % en NGC 205**, y aparecían puntos brillantes
+que no están en el cielo. Restaurando la máscara original al final, el Δ de flujo
+baja de 0,3 % en los cuatro objetos de prueba.
+
+> **En M51 y M101 el efecto no se ve** (0,01 %), porque sus huecos no caen en
+> estrellas. Si solo se prueba con M51, este fallo pasa desapercibido — y no lo
+> detecta la métrica obvia (RMS global), solo la suma de flujo.
+
+Es el mismo criterio que ya seguía el bucle de pintado con su `if (!(f > 0))
+continue;`: una ausencia de dato no debe convertirse en dato.
 
 #### El radio de máscara de cada estrella
 
@@ -360,10 +428,45 @@ sitúan el cruce: el relleno plano da 0,999 de 25 a 40″ y 0,025 a 56″.
   baja a 0,774 en M81. Es el peor caso medido y ningún cambio reciente lo toca.
 - **Un detector de estrellas residuales queda descartado**: se probó y empeoraba
   el resultado. Lo que fallaba era la WCS, no la falta de un segundo detector.
+- **1024 px no llega a la resolución ideal en las galaxias grandes.** A 20′ da
+  1,17″/px, con la PSF en σ = 0,54–0,72 px: representable, pero **marginal**
+  (bandas de diagnóstico: <0,5 subpíxel · 0,5–1 marginal · ≥1 representable).
+  Llegar a 0,67″/px pediría 1794 px, por encima de `PS1_SALIDA_MAX` = 1024 del
+  proxy, y cuadruplicaría otra vez el peso. En las galaxias pequeñas (parche de
+  1,5–8′) la escala ya es holgada. Subir el tope del proxy es una decisión de
+  ancho de banda, no de física.
+- **El parche se muestrea con el vecino más próximo** en `ps1PintarParche`. A
+  1024 px el pixelado asoma menos que antes, pero la interpolación bilineal
+  sigue pendiente: es **reconstrucción/remuestreo, no una fuente de resolución**,
+  y hay que medirla por separado de la PSF para no atribuirle mérito que no
+  tiene.
+- **Estelas de sangrado y huecos**: la máscara conservada deja los huecos como
+  huecos, que es lo correcto, pero no los *rellena* con nada plausible. Ahí la
+  mezcla E pone `(1-w)·perfil`.
 
 Los tests de todo esto están en `scripts/test_difuso.js` (`node
 scripts/test_difuso.js`), incluidos los que fijan la monotonía y la continuidad
 de `R(g)`, el máximo absoluto, y los dos regímenes de relleno.
+
+Los de la resolución y la PSF van aparte, porque necesitan parches de verdad:
+
+| Script | Qué fija | Red |
+|---|---|---|
+| `test_resolucion_ps1.js` | Que `escalaAs` es de **adquisición** y no de render (ni el lienzo ni los aumentos la mueven), que remuestrear conserva el brillo superficial y que el pico deja de subir al llegar a nativo | no: los números medidos están clavados |
+| `test_psf_parche.js` | La física de `θ_add` sola, contra la MTF analítica | no |
+| `test_psf_produccion.js` | El camino de producción contra el harness ya validado, sobre M51/M81/M101/NGC 205: convolución idéntica **bit a bit**, máscara conservada, flujo, PSF aplicada **una sola vez**, 457 ≠ 914, y el pintado entero de `ps1PintarParche` | sí, la primera vez (deja los parches en `$TMPDIR/bitacora-ps1-harness`) |
+| `harness_decision_psf_resolucion.js` | El experimento que decidió el 1024: cuatro configuraciones × cuatro objetos × cuatro aperturas × cinco seeings | sí |
+
+> **Si mides estructura, no normalices por la σ de cada imagen.** Convolucionar
+> baja el ruido de fondo, así que el denominador encoge justo cuando la
+> estructura cae y la métrica **sube al revés**. Hay que usar una σ de
+> referencia fija por objeto. Y un «suelo de ruido» que compare un cálculo
+> consigo mismo da cero y no dice nada: el suelo se mide con dos aperturas
+> prácticamente iguales (914 contra 920 mm).
+>
+> **Y la rejilla de medida ha de ser al menos tan fina como el parche más fino
+> que se compare.** Medir un parche de 1024 px sobre un lienzo de 512 tira tres
+> de cada cuatro píxeles y produce un aliasing que se confunde con física.
 
 ### Halo de los cúmulos globulares (perfil de King)
 
@@ -539,6 +642,7 @@ la lógica:
 | Bloque | Controla |
 |---|---|
 | `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo de estrella** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **halo de cúmulo globular** (`globular.rangoMag` = margen de la amortiguación cerca de estrellas resueltas, `globular.magResta`/`globular.restaMaxFrac` = profundidad fija y tope de la resta de luz ya resuelta — ver *Halo de los cúmulos globulares* más arriba); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo`); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
+| `PS1` (= `BitacoraGaiaRender.ps1`) | Capa de galaxias desde imagen: **adquisición** (`salida` = px del recorte que se pide al proxy, hoy 1024 y tope del proxy — leer antes *La resolución del recorte*; `banda`, `seeingAs` = 1,1″ del stack, `ladoFactor`/`ladoMin`/`ladoMax` = campo del parche, `fracMin` = puerta de cobertura); **máscara de estrellas** (`mascaraMaxAs` = 60″, `rellenoPlanoMaxAs` = 40″ — **si tocas estos, mide antes**); **mezcla E** (`mezclaCajaAs`, `mezclaW0`); **halo** (`haloMenorMin`, `haloMuFijo`, `muHalo`, `deltaPlena`, `realceMax`). |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
@@ -679,6 +783,13 @@ anti-estampida y `ETag` que el DSS. Lo que hace de más:
   otro sitio, sin error y sin aviso.
 - **La clave no lleva ni ocular ni aumento** (`ra|dec|lado|salida|banda`): el
   parche no depende del equipo, así que se cachea para siempre.
+
+> **Al subir `PS1.salida`, la caché queda fría y el disco pesa cuatro veces
+> más.** `salida` forma parte de la clave, así que 1024 no reaprovecha ni un
+> parche de los guardados a 512: las primeras visitas de cada galaxia vuelven a
+> ir a STScI. Y los bytes van con el **área**: 512→1024 es ×4 por parche. Los
+> viejos no estorban —la LRU los va desalojando por antigüedad—, pero conviene
+> revisar el tope de disco antes de desplegar.
 
 Test de las funciones puras: `php scripts/test_ps1_proxy.php`.
 
