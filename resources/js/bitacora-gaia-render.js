@@ -2190,22 +2190,28 @@
      [nombre, alt, RA°, Dec°, r_e″, b/a, PA°, magV, n, B/T, polvo, n medido]. El
      n medido es el de S4G (0 = no hay) y solo lo usa la puerta del halo. El margen de
      medio lado deja entrar a las que asoman por el borde con su centro fuera. */
+  /* Galaxias mucho más grandes que el parche: fuera. Con M31 (el parche de 20′
+     abarca el 8 % de su luz) se ve por qué: el stack de PanSTARRS resta el fondo
+     por skycell y con él el disco extendido —a 8′ del centro la señal ya es
+     cielo, cuando el disco exponencial del propio RC3 predice casi el mismo
+     brillo que a 1′—, así que el anclaje mete toda esa luz en lo poco que la
+     imagen sí trae y sale un bulbo suelto. Juzgado por el usuario, 11-ago-2026.
+     Son tres en todo el catálogo al norte de −30°: M31 (8 %), IC 342 (17 %) y
+     M33 (23 %); la siguiente ya está en el 66 %. Se quedan sin capa, como
+     estaban — y el aviso de la ficha 12 lo dice, así que la ley vive aquí y no
+     repetida en los dos sitios. */
+  function ps1CabeEnParche(g) {
+    var lado = ps1LadoArcmin(g[4]);
+    return ps1FraccionLuz(g[8], (lado * 60 / 2) / (g[4] > 0 ? g[4] : 1e9)) >= PS1.fracMin;
+  }
+
   function ps1GalaxiasDelCampo(catalogo, ra0, dec0, arcmin) {
     var out = [], cos0 = Math.cos(dec0 * Math.PI / 180), radio = arcmin / 120;
     for (var i = 0; i < (catalogo || []).length; i++) {
       var g = catalogo[i];
       if (!(g[3] > PS1.decMin)) continue;                       // sin cobertura al sur
+      if (!ps1CabeEnParche(g)) continue;
       var lado = ps1LadoArcmin(g[4]);
-      /* Galaxias mucho más grandes que el parche: fuera. Con M31 (el parche de
-         20′ abarca el 8 % de su luz) se ve por qué: el stack de PanSTARRS resta
-         el fondo por skycell y con él el disco extendido —a 8′ del centro la
-         señal ya es cielo, cuando el disco exponencial del propio RC3 predice
-         casi el mismo brillo que a 1′—, así que el anclaje mete toda esa luz en
-         lo poco que la imagen sí trae y sale un bulbo suelto. Juzgado por el
-         usuario, 11-ago-2026. Son tres en todo el catálogo al norte de −30°:
-         M31 (8 %), IC 342 (17 %) y M33 (23 %); la siguiente ya está en el 66 %.
-         Se quedan sin capa, como estaban. */
-      if (ps1FraccionLuz(g[8], (lado * 60 / 2) / (g[4] > 0 ? g[4] : 1e9)) < PS1.fracMin) continue;
       var margen = radio + lado / 120;
       var dra = ((((g[2] - ra0) + 540) % 360) - 180) * cos0;
       var ddec = g[3] - dec0;
@@ -2383,12 +2389,15 @@
       }).catch(function () { /* una galaxia que falla no tumba el campo entero */ });
     })).then(function () {
       /* Aviso SOLO del objeto apuntado, y con la causa: cambia lo que el
-         observador puede hacer. Por el sur no hay nada que esperar; por caída,
-         sí. Fuera del RC3, o dentro pero demasiado grande para su parche
-         (PS1.fracMin), no se avisa: no había nada prometido. */
+         observador puede hacer. Por el sur no hay nada que esperar; por tamaño
+         tampoco, pero el motivo es otro y merece decirse; por caída, sí.
+         Fuera del RC3 no se avisa: no había nada prometido. */
       var aviso = '';
       if (apuntada && !(apuntada[3] > PS1.decMin)) {
         aviso = 'sin imagen de cartografiado: PanSTARRS no cubre por debajo de −30° de declinación';
+      } else if (apuntada && !ps1CabeEnParche(apuntada)) {
+        aviso = 'sin imagen de cartografiado: esta galaxia es mayor que el recorte que sirve PanSTARRS, ' +
+          'y el stack pierde su disco exterior al restar el fondo; se muestra el campo sin ella';
       } else if (apuntadaSinParche) {
         aviso = 'el servicio de imágenes no responde; se muestra el campo sin la galaxia';
       }
@@ -2770,6 +2779,7 @@
     ps1FlujoConOpacidad: ps1FlujoConOpacidad,
     ps1AnclarACatalogo: ps1AnclarACatalogo,
     ps1PintarParche: ps1PintarParche,
+    ps1CabeEnParche: ps1CabeEnParche,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
     ps1DescargarParche: ps1DescargarParche,

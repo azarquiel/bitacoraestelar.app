@@ -287,12 +287,18 @@ gris. Con la capa encendida la consulta de Gaia de esa vista baja hasta el tope
 del proxy (`ps1MagConsulta`), porque la máscara necesita todas las estrellas que
 PS1 registra; el realce sobre las placas no paga esa profundidad.
 
-Cuando el objeto **apuntado** es una galaxia del RC3 y se queda sin parche, se
-avisa con la causa, porque cambia lo que se puede hacer: por debajo de −30° de
-declinación PanSTARRS no llega y no hay nada que esperar; si el servicio no
-responde, sí. De las compañeras del campo no se dice nada (en Virgo saldrían
-cinco líneas sobre galaxias que nadie buscaba), y de las que se quedan fuera por
-`fracMin` —M31, IC 342, M33— tampoco: no había nada prometido.
+Cuando el objeto **apuntado** es una galaxia del RC3 y se queda sin capa, se
+avisa **con la causa**, porque cada una deja al observador en un sitio distinto:
+
+| Causa | Qué se dice | Qué puede hacer |
+|---|---|---|
+| δ < −30° | PanSTARRS no cubre por debajo de −30° de declinación | nada: ahí no hay cartografiado |
+| no cabe en su parche (`fracMin`) | la galaxia es mayor que el recorte que sirve PanSTARRS, y el stack pierde su disco exterior al restar el fondo | nada: son M31, IC 342 y M33, y con el parche saldría un bulbo suelto |
+| el servicio no responde | el servicio de imágenes no responde | volver a intentarlo |
+
+De las **compañeras** del campo no se dice nada (en Virgo saldrían cinco líneas
+sobre galaxias que nadie buscaba), y de un objeto que no está en el RC3 tampoco:
+no había nada prometido.
 
 #### El radio de máscara de cada estrella
 

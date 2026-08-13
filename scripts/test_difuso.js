@@ -1038,6 +1038,8 @@ ok(R.galaxiasImagen === true, 'la capa de galaxias viene encendida por defecto')
 // [nombre, alt, RA°, Dec°, r_e″, b/a, PA°, magV, n, B/T, polvo, n medido]
 var galNorte = ['NGC 0000', '', 180, 40, 60, 0.7, 0, 10, 1, 0.2, 0, 0];
 var galSur   = ['NGC 0001', '', 180, -40, 60, 0.7, 0, 10, 1, 0.2, 0, 0];
+// Como M31: tan grande que el parche de 20′ no abarca ni la mitad de su luz.
+var galEnorme = ['NGC 0224', '', 180, 40, 1200, 0.7, 0, 10, 1, 0.2, 0, 0];
 var opCapa = { arcmin: 20, size: 2, estrellas: [] };
 function capa(gal, ra0, dec0) {
   var o = { ra0: ra0, dec0: dec0, arcmin: opCapa.arcmin, size: opCapa.size,
@@ -1058,6 +1060,11 @@ capa(galNorte, 180, 40).then(function (r) {
   return capa(galSur, 180, -40);
 }).then(function (r) {
   ok(/PanSTARRS no cubre/.test(r.aviso), 'al sur de −30° se avisa de la cobertura');
+  // Más grande que su parche (M31, IC 342, M33): tercera causa, texto propio.
+  ok(R.ps1CabeEnParche(galEnorme) === false, 'la galaxia enorme no cabe en su parche');
+  return capa(galEnorme, 180, 40);
+}).then(function (r) {
+  ok(/mayor que el recorte/.test(r.aviso), 'a la que no cabe en su parche se le dice por qué');
   // Un campo que no cae sobre ninguna galaxia del RC3 no promete nada.
   return capa(galNorte, 0, 0);
 }).then(function (r) {
