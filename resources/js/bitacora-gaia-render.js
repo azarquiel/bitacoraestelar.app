@@ -423,27 +423,29 @@
       // El desvanecido por umbral de contraste es para objetos EXTENSOS. A una
       // fuente puntual no se le aplica: su visibilidad la fija la magnitud
       // límite, que dibujar() ya ha aplicado.
-      /* Halo extrapolado de una galaxia (ps1PintarParche lo marca en o.haloMask):
-         su desvanecido YA está aplicado, y es la rampa de contraste de
-         ps1Opacidad. Pasarlo otra vez por visibilidadDifusa es contar dos veces
-         el mismo umbral, y entre las dos lo dejaban en 0 DN sobre el cielo en
-         cualquier pupila. Aquí la rampa manda sola: sin s y con el realce a
-         gamma completa (t=0). Si otra capa difusa cae en el mismo píxel, su luz
-         entra en este trato; son unos pocos píxeles y ninguno decide nada. */
-      var esHalo = !!(o.haloMask && o.haloMask[i]);
-      var s = esHalo ? 1 : visibilidadDifusa(Fobj[i], c.Fcielo * c.Cmin, perceptual);
+      /* Píxel de la capa de galaxias (ps1PintarParche lo marca en o.galaxiaMask):
+         su desvanecido YA está aplicado, y es la rampa de ps1Opacidad, que mide
+         contra ESTE MISMO umbral (Fcielo·Cmin). Las dos funciones son la misma
+         ley con otra forma —las dos dependen solo de log10(F/Fumbral)—, así que
+         pasarlo otra vez por visibilidadDifusa es contar dos veces el mismo
+         umbral, y entre las dos lo dejaban en 0 DN sobre el cielo en cualquier
+         pupila. Aquí la rampa manda sola: sin s y con el realce a gamma completa
+         (t=0). Si otra capa difusa cae en el mismo píxel, su luz entra en este
+         trato; son unos pocos píxeles y ninguno decide nada. */
+      var esGalaxia = !!(o.galaxiaMask && o.galaxiaMask[i]);
+      var s = esGalaxia ? 1 : visibilidadDifusa(Fobj[i], c.Fcielo * c.Cmin, perceptual);
       var difuso = Fobj[i] * s;
       /* Realce perceptual del difuso: se expande su nivel en pantalla y se
          devuelve a flujo, para que la suma con las estrellas siga siendo aditiva
          y los núcleos sigan comprimiendo en vez de recortarse. Solo cuando el
          motor declara que su flujo está calibrado (o.perceptual): las placas
          entran por aquí con su heurístico y no deben tocarse. */
-      /* El techo se queda puesto también en el halo —sigue habiendo imagen bajo
-         la misma máscara, y sin él el brazo externo se iguala con el disco—; lo
-         que cambia para el halo es la gamma, que va completa (t=0) porque su
+      /* El techo se queda puesto también en la galaxia —sigue habiendo imagen
+         bajo la misma máscara, y sin él el brazo externo se iguala con el
+         disco—; lo que cambia es la gamma, que va completa (t=0) porque el
          desvanecido ya lo hizo la rampa. */
       if (perceptual && difuso > 0) {
-        difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, esHalo ? 0 : s, o.realceMax);
+        difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, esGalaxia ? 0 : s, o.realceMax);
       }
       for (var ch = 0; ch < canales; ch++) {
         var F = difuso;
@@ -1316,14 +1318,20 @@
        habitual de la fotometría profunda de halos. */
     muHalo: 28.5,
     /* Umbral de contraste (Blackwell/Clark): magnitudes de brillo superficial
-       por encima del cielo a las que el halo se ve entero. Por debajo de
-       deltaMin es indistinguible del fondo y no se pinta.
-       ponytail: la ley es un contraste (Δ) contra el cielo YA atenuado por la
-       pupila, mientras el brillo del halo no lleva esa atenuación. Físicamente
-       el objeto se apaga igual que el cielo y el Δ real no cambia con el
-       aumento —lo que sí cambia es el UMBRAL, porque el objeto crece en la
-       retina (eso ya lo modela FOT.C_MAG_* en Cmin)—. Aquí el efecto se
-       consigue por el lado del cielo: es la perilla pedida, no una medida. */
+       por encima del UMBRAL DE DETECCIÓN (sbUmbralContraste, o sea Fcielo·Cmin)
+       a las que la galaxia se pinta entera. Por debajo de deltaMin es
+       indetectable y no se pinta.
+       El Δ se medía antes contra SBe —el cielo ya atenuado por la pupila—
+       mientras el brillo del objeto NO llevaba esa atenuación. Eso metía un
+       término 2,5·log10(1/dim) en el contraste que, a igual aumento, restaba
+       1,76 mag al pasar de 8″ a 18″: más apertura pintaba MENOS galaxia. La
+       física es la contraria: el objeto se apaga igual que el cielo y el Δ real
+       no cambia; lo que cambia es el UMBRAL, por luminancia retinal y por
+       tamaño aparente, y las dos ya viven en Cmin (FOT.C_EXP y FOT.C_MAG_*).
+       ponytail: deltaPlena y deltaExp se quedan con los valores de la ley
+       anterior, sin recalibrar. Contra el umbral el Δ típico baja ~2 mag, así
+       que 3,25 deja las galaxias más transparentes que antes; la calibración es
+       una iteración aparte. */
     deltaMin: 0.0, deltaPlena: 3.25, deltaExp: 1.8,
     /* Condiciones de activación del halo (ver ps1HaloActivo): eje menor mínimo
        de la isofota 25, en ′, y brillo superficial medio a partir del cual la
@@ -1963,7 +1971,8 @@
      más oscuro, así que el SQM no pinta nada en el permiso —una versión anterior
      lo metía y cerraba la puerta justo con cielo oscuro, que es cuando el halo
      se ve—. Lo que sí se mueve con el ocular es la rampa de opacidad, que va
-     contra SBe.
+     contra el umbral de contraste del ojo (sbUmbralContraste) y se aplica a
+     TODAS las galaxias, cumplan o no estas dos condiciones.
      El índice de Sérsic MEDIDO se sigue calculando (columna 12 del catálogo, de
      S4G) y viaja en las medidas, pero NO decide: ninguna de las dos fuentes de n
      separaba los casos que el usuario quiere separados —S4G dejaba fuera a M51 y
@@ -2016,13 +2025,22 @@
     return gal.muProm > PS1.haloMuFijo;
   }
 
+  /* Brillo superficial (mag/arcsec²) al que un objeto extenso llega al UMBRAL de
+     detección del ojo: el flujo Fcielo·Cmin que ya calcula ctxFotometrico. Cmin
+     lleva las dos vías por las que la apertura influye en una fuente extensa —la
+     luminancia que llega al ojo, vía pupila de salida, y el tamaño aparente, vía
+     aumentos— y ninguna de las dos toca el brillo superficial del objeto, que es
+     invariante con D. Es el umbral que usa TODA capa difusa (ver
+     visibilidadDifusa en pintarFot); aquí se expresa en magnitudes. */
+  function sbUmbralContraste(c) { return -2.5 * Math.log10(c.Fcielo * c.Cmin); }
+
   /* Umbral de detección de Blackwell/Clark aplicado como OPACIDAD: Δ es el
-     contraste en magnitudes del píxel sobre el cielo efectivo (SBe, el que ya
-     calcula ctxFotometrico). Por debajo de deltaMin el píxel es cielo y no se
-     pinta; a partir de deltaPlena se pinta entero; en medio, una potencia que
-     desvanece sin borde duro. */
-  function ps1Opacidad(sbPixel, sbCielo) {
-    var d = sbCielo - sbPixel;
+     contraste en magnitudes del píxel sobre el UMBRAL (sbUmbralContraste). Por
+     debajo de deltaMin el píxel es indetectable y no se pinta; a partir de
+     deltaPlena se pinta entero; en medio, una potencia que desvanece sin borde
+     duro. */
+  function ps1Opacidad(sbPixel, sbUmbral) {
+    var d = sbUmbral - sbPixel;
     if (!(d > PS1.deltaMin)) return 0;
     if (d >= PS1.deltaPlena) return 1;
     return Math.pow((d - PS1.deltaMin) / (PS1.deltaPlena - PS1.deltaMin), PS1.deltaExp);
@@ -2122,22 +2140,28 @@
     // Sin datos de cielo no hay contraste que medir: se pinta el flujo tal cual
     // (así lo usan los tests de geometría, que no simulan ninguna óptica).
     var c = o.cielo ? ctxFotometrico(o.cielo) : null;
+    var umbral = c ? sbUmbralContraste(c) : 0;   // constante en todo el parche
     var pxPorAs = escv / 3600;
-    /* Galaxia que no cumple las dos condiciones: ni halo extrapolado ni umbral
-       de contraste. Se pinta el recorte de PS1 tal cual y donde no hay dato se
-       queda el cielo, sin degradado ninguno (render de la fase 1). */
+    /* El halo extrapolado y el umbral de contraste son decisiones INDEPENDIENTES.
+       `halo` decide si se rellena con el perfil del catálogo lo que la imagen no
+       cubre: eso sí depende del tamaño y del brillo medio de la galaxia. La ley
+       de visibilidad, en cambio, es la misma para todas —la marca el ojo, no la
+       galaxia—, así que el umbral se aplica siempre que haya óptica que simular.
+       Antes iban atadas (`if (!halo) c = null`) y el render acababa con DOS leyes
+       ópticas conviviendo, con dependencia de apertura de signo contrario. */
     var halo = !!c && ps1HaloActivo(parche.halo);
     var comps = halo ? (parche.comps || []) : [], pa = parche.pa || 0;
-    if (!halo) c = null;
     // Peso y reanclaje de la mezcla; sin perfil que mezclar, la imagen va tal cual.
     var peso = halo ? (parche.peso || null) : null;
     var sMezcla = peso ? parche.escalaMezcla : 1;
     var haloPx = ps1RadioHaloAs(comps) * pxPorAs;       // el perfil suele salirse del parche
     var alcance = Math.max(ladoPx / 2, haloPx);
-    /* Máscara de los píxeles de una galaxia CON HALO: pintarFot les aplica otra
-       ley —la rampa de opacidad ya es su desvanecido, así que no vuelven a pasar
-       por visibilidadDifusa— y el realce va a gamma completa.
-       Se marca TODO el parche de esa galaxia, imagen incluida, y no solo el trozo
+    /* Máscara de los píxeles de la capa de galaxias: pintarFot ya no les aplica
+       visibilidadDifusa —la rampa de opacidad es su desvanecido y mide contra el
+       MISMO umbral, así que pasar por las dos es contarlo dos veces— y el realce
+       va a gamma completa. No es una ley distinta: es la marca de que la ley ya
+       se aplicó.
+       Se marca TODO el parche de la galaxia, imagen incluida, y no solo el trozo
        extrapolado. Partir el objeto en dos leyes por un radio dejaba un ESCALÓN
        en la costura: el anillo de dentro se quedaba a nivel de cielo y el halo de
        fuera saltaba a 10 DN, que en pantalla es un círculo negro rodeado de un
@@ -2146,11 +2170,11 @@
        Vive en el objeto `cielo` porque es el mismo que luego recibe pintarFot, y
        dura lo que el render: cada galaxia que llega marca sobre la misma. */
     var mascara = null;
-    if (halo) {
-      if (!(o.cielo.haloMask && o.cielo.haloMask.length === difuso.length)) {
-        o.cielo.haloMask = new Uint8Array(difuso.length);
+    if (c) {
+      if (!(o.cielo.galaxiaMask && o.cielo.galaxiaMask.length === difuso.length)) {
+        o.cielo.galaxiaMask = new Uint8Array(difuso.length);
       }
-      mascara = o.cielo.haloMask;
+      mascara = o.cielo.galaxiaMask;
     }
     var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
     var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
@@ -2177,7 +2201,7 @@
           f = w * sMezcla * f + (1 - w) * fm;
         }
         if (!(f > 0)) continue;
-        if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), c.SBe), c);
+        if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), umbral), c);
         if (!(f > 0)) continue;
         difuso[y * SIZE + x] += f;
         if (mascara) mascara[y * SIZE + x] = 1;
@@ -2379,9 +2403,9 @@
         var esLaApuntada = !!apuntada && gal.ra === apuntada[2] && gal.dec === apuntada[3];
         if (!parche) { if (esLaApuntada) apuntadaSinParche = true; return; }
         if (!vivo()) return;
-        // `cielo`: el mismo objeto que pinta el fondo. De ahí salen los dos
-        // cielos del halo: SBe (atenuado por la pupila) para la rampa de
-        // opacidad y SB0 (el SQM medido) para la puerta.
+        // `cielo`: el mismo objeto que pinta el fondo. De ahí sale el umbral de
+        // contraste de la rampa de opacidad (Fcielo·Cmin); la puerta del halo no
+        // mira el cielo, solo el objeto.
         ps1PintarParche(difuso, parche, {
           ra0: o.ra0, dec0: o.dec0, arcmin: o.arcmin, size: o.size, cielo: cieloParche
         });
@@ -2776,6 +2800,7 @@
     ps1MedidasHalo: ps1MedidasHalo,
     ps1HaloActivo: ps1HaloActivo,
     ps1Opacidad: ps1Opacidad,
+    sbUmbralContraste: sbUmbralContraste,
     ps1FlujoConOpacidad: ps1FlujoConOpacidad,
     ps1AnclarACatalogo: ps1AnclarACatalogo,
     ps1PintarParche: ps1PintarParche,

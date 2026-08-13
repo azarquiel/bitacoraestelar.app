@@ -886,34 +886,155 @@ ok(R.ps1ConcentracionN({ datos: new Float32Array(16), ancho: 4, alto: 4, escalaA
    parche; con la misma galaxia fuera de la regla, el parche vacío no pinta nada
    —ni halo ni degradado—. El parche va vacío para medir solo lo extrapolado. */
 var SH = 240, CAMPO_H = 20;
-function haloPintado(pupila, medidas) {
+/* `equipo` va entero (apertura y aumentos), no solo la pupila: el umbral de
+   contraste depende de las DOS —de la pupila por la luminancia que llega al ojo,
+   del aumento por el tamaño aparente— y pasar solo una deja fuera media ley. */
+function haloPintado(equipo, medidas) {
   var lienzoH = new Float32Array(SH * SH), n2 = 0;
   R.ps1PintarParche(lienzoH, {
     datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
     ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medidas
   }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
-       cielo: { sqm: 21, pupilaSalida: pupila, pupilaOjo: 7, transmision: 0.9 } });
+       cielo: { sqm: 21, pupilaOjo: 7, transmision: 0.9,
+                pupilaSalida: equipo.D / equipo.MAG, aumentos: equipo.MAG } });
   for (var iH = 0; iH < lienzoH.length; iH++) if (lienzoH[iH] > 0) n2++;
   return n2;
 }
+var OCHO = { D: 203, MAG: 100 }, DIECIOCHO = { D: 457, MAG: 100 };
 ok(R.ps1HaloActivo(medH) === true, 'la galaxia de prueba cumple las dos condiciones');
-ok(haloPintado(5, medH) > 0, 'y su halo se pinta (' + haloPintado(5, medH) + ' px)');
-ok(haloPintado(5, { bArcmin: 5, muProm: 21 }) === 0,
+ok(haloPintado(OCHO, medH) > 0, 'y su halo se pinta (' + haloPintado(OCHO, medH) + ' px)');
+ok(haloPintado(OCHO, { bArcmin: 5, muProm: 21 }) === 0,
   'la que no las cumple no pinta nada donde no hay imagen');
-/* Y con la puerta abierta vuelve lo de antes: el mismo cielo y la misma galaxia,
-   más aumentos (pupila menor) → el fondo se oscurece, Δ crece y el halo asoma
-   más lejos. La puerta ya no lo estorba, porque no depende del ocular. */
-var haloBajo = haloPintado(5, medH), haloAlto = haloPintado(1, medH);
-ok(haloAlto > haloBajo * 2, 'a más aumentos el halo emerge del fondo (' +
-  haloAlto + ' px contra ' + haloBajo + ')');
 
-/* La exención del techo: ps1PintarParche marca en `cielo.haloMask` los píxeles
-   que salen del perfil MÁS ALLÁ de r_e, y pintarFot los trata aparte —la rampa
-   de opacidad es su único desvanecido—. Sin la marca, el halo se apagaba dos
-   veces (rampa y visibilidadDifusa) y encima el techo del realce le quitaba el
-   92 % del refuerzo: llegaba a 0 DN sobre el cielo en cualquier pupila. */
-function halo(pupila) {
-  var cielo = { sqm: 21, pupilaSalida: pupila, pupilaOjo: 7, transmision: 0.9,
+/* ── La apertura, a igual aumento ────────────────────────────────────────────
+   El criterio de esta ley: más apertura NUNCA puede pintar menos galaxia. El
+   brillo superficial no sube con D —eso es física y ps1AnclarACatalogo lo
+   respeta—, pero la pupila de salida sí, y con ella baja el umbral del ojo.
+   Con la ley anterior (Δ contra SBe, el cielo atenuado, contra un objeto sin
+   atenuar) el signo salía AL REVÉS: a 150x el 18″ perdía 1,76 mag de contraste
+   contra el 8″ y pintaba menos galaxia. Este ok() es el que lo habría cazado. */
+var px8 = haloPintado(OCHO, medH), px18 = haloPintado(DIECIOCHO, medH);
+ok(px18 > px8, 'a igual aumento, más apertura pinta MÁS galaxia (18″ ' + px18 +
+  ' px contra 8″ ' + px8 + ')');
+
+/* ── La apertura, a igual PUPILA DE SALIDA ───────────────────────────────────
+   Aquí el brillo superficial que llega al ojo es idéntico por física: los dos
+   equipos entregan la misma luminancia. Lo único que puede separarlos es el
+   tamaño aparente, y el 18″ llega a 183x donde el 8″ se queda en 81x. Así que
+   la igualdad tiene que ser de LUMINANCIA (el fondo de cielo, bit a bit) y la
+   ventaja, de UMBRAL. */
+var pupC = { D: 203, MAG: 203 / 2.5 }, pupD = { D: 457, MAG: 457 / 2.5 };
+function ctxEquipo(e) {
+  return R.ctxFotometrico({ sqm: 21, pupilaOjo: 7, transmision: 0.9,
+                            pupilaSalida: e.D / e.MAG, aumentos: e.MAG });
+}
+casi(ctxEquipo(pupD).nivelFondo, ctxEquipo(pupC).nivelFondo, 1e-12,
+  'a igual pupila el fondo de cielo es el MISMO (la apertura no lo mueve)');
+ok(R.sbUmbralContraste(ctxEquipo(pupD)) > R.sbUmbralContraste(ctxEquipo(pupC)),
+  'y aun así el 18″ llega más hondo, por tamaño aparente (' +
+  R.sbUmbralContraste(ctxEquipo(pupD)).toFixed(2) + ' contra ' +
+  R.sbUmbralContraste(ctxEquipo(pupC)).toFixed(2) + ' mag/arcsec²)');
+
+/* ── Cmin llega de verdad a las galaxias ─────────────────────────────────────
+   La rampa de opacidad mide contra sbUmbralContraste, que es Fcielo·Cmin: si
+   alguien vuelve a atarla al cielo pelado o a SBe, esto se entera. Se comprueba
+   moviendo SOLO el término de tamaño aparente de Cmin (los aumentos) con la
+   pupila clavada: si el umbral no se mueve, Cmin no está llegando. */
+function umbralCon(pupila, aumentos) {
+  return R.sbUmbralContraste(R.ctxFotometrico({ sqm: 21, pupilaOjo: 7,
+    transmision: 0.9, pupilaSalida: pupila, aumentos: aumentos }));
+}
+ok(umbralCon(2.5, 200) > umbralCon(2.5, 50),
+  'con la pupila clavada, el umbral sigue los aumentos: Cmin llega a la rampa');
+
+/* ── Ley ÚNICA: la puerta del halo no decide la óptica ───────────────────────
+   `ps1HaloActivo` decide si se extrapola el perfil donde la imagen no llega.
+   Eso es una propiedad del OBJETO. La ley de visibilidad la marca el ojo, y
+   tiene que ser la misma para las dos poblaciones. Antes iban atadas (un
+   `if (!halo) c = null`) y el render acababa con dos leyes ópticas de signo
+   contrario conviviendo. Se comprueba con una galaxia que NO abre la puerta y
+   sí trae imagen: debe pasar por la rampa y quedar marcada igual. */
+var sinPuerta = { bArcmin: 5, muProm: 21 };   // eje grande pero brillante: no es difusa
+ok(R.ps1HaloActivo(sinPuerta) === false, 'la galaxia de control no abre la puerta del halo');
+var cieloU = { sqm: 21, pupilaSalida: 2.5, pupilaOjo: 7, transmision: 0.9,
+               aumentos: 100, perceptual: true };
+var lienzoU = new Float32Array(SH * SH);
+var imagenU = new Float32Array(4);
+for (var iU = 0; iU < 4; iU++) imagenU[iU] = Math.pow(10, -0.4 * 20);   // μ=20, bien sobre el umbral
+R.ps1PintarParche(lienzoU, {
+  datos: imagenU, ancho: 2, alto: 2, ladoArcmin: 6,
+  ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: sinPuerta
+}, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloU });
+var nU = 0, marcadosU = 0;
+for (iU = 0; iU < lienzoU.length; iU++) {
+  if (lienzoU[iU] > 0) nU++;
+  if (cieloU.galaxiaMask && cieloU.galaxiaMask[iU]) marcadosU++;
+}
+ok(nU > 0 && marcadosU === nU,
+  'una galaxia SIN halo pasa por la misma rampa y queda marcada igual (' + nU + ' px)');
+var cU = R.ctxFotometrico(cieloU);
+// Cociente y no diferencia: el lienzo es Float32Array y estos flujos son ~1e-8,
+// donde el épsilon absoluto de la precisión simple ya es ~1e-15.
+casi(lienzoU[Math.round(SH / 2) * SH + Math.round(SH / 2)] /
+  R.ps1FlujoConOpacidad(imagenU[0], R.ps1Opacidad(20, R.sbUmbralContraste(cU)), cU),
+  1, 1e-6,
+  'y su píxel sale exactamente de la MISMA ley que el de una galaxia con halo');
+
+/* ── El presupuesto fotométrico no lo toca ninguna apertura ──────────────────
+   ps1AnclarACatalogo es lo ÚNICO que fija cuánta luz tiene la galaxia, y va
+   antes de toda óptica: ni la apertura ni el aumento entran en su firma. Este
+   es el guardia contra la tentación de "arreglar" la apertura metiendo un D² en
+   el flujo de la galaxia —que es justo lo que NO hay que hacer: el brillo
+   superficial de una fuente extensa es invariante con D—. Se comprueba que el
+   flujo integrado del parche anclado es el del catálogo, al bit. */
+var LADO_P = 6, PX_P = 48, ESCALA_P = LADO_P * 60 / PX_P;
+var crudoP = new Float32Array(PX_P * PX_P), iP;
+for (iP = 0; iP < crudoP.length; iP++) {
+  var yP = ((PX_P - 1) / 2 - Math.floor(iP / PX_P)) * ESCALA_P;
+  var xP = ((PX_P - 1) / 2 - (iP % PX_P)) * ESCALA_P;
+  crudoP[iP] = 1000 + R.ps1FlujoModelo(compsH, galH.pa, yP, xP) * 1e9;
+}
+var netoP = R.ps1AnclarACatalogo(crudoP, PX_P, PX_P, {
+  magV: galH.magV, n: galH.n, reArcsec: galH.reArcsec,
+  ladoArcmin: LADO_P, escalaAs: ESCALA_P
+});
+var sumaP = 0;
+for (iP = 0; iP < netoP.length; iP++) sumaP += netoP[iP];
+var esperadoP = Math.pow(10, -0.4 * galH.magV) *
+  Math.max(R.ps1FraccionLuz(galH.n, (LADO_P * 60 / 2) / galH.reArcsec), 0.02);
+casi(sumaP * ESCALA_P * ESCALA_P / esperadoP, 1, 1e-6,
+  'el parche anclado integra EXACTAMENTE la luz del catálogo');
+ok(R.ps1AnclarACatalogo.length === 4,
+  'y su firma no admite apertura ninguna: (datos, ancho, alto, o)');
+
+/* ── PENDIENTE (segunda iteración): la dependencia con el AUMENTO ────────────
+   No es un ok(): es una medida, y sale con el signo equivocado.
+   A apertura fija, Cmin ∝ MAG^(2·C_EXP − C_MAG_EXP) = MAG^0,20 con los valores
+   de hoy (C_EXP 0,35, C_MAG_EXP 0,5). O sea: subir aumentos ALEJA el umbral en
+   vez de acercarlo, y el halo se apaga en vez de asomar. Con la ley anterior
+   asomaba, pero por el motivo equivocado (el término de pupila en el Δ, que es
+   justo el que metía la inversión con la apertura).
+   Para que el halo vuelva a emerger con el aumento hace falta
+   C_MAG_EXP > 2·C_EXP = 0,70. Eso es calibración y va aparte, con deltaPlena. */
+console.log('\n  medida (pendiente de calibrar) · umbral de detección contra aumentos, D=203 mm:');
+[50, 100, 200, 400].forEach(function (m) {
+  console.log('    ' + m + 'x → ' + umbralCon(203 / m, m).toFixed(3) + ' mag/arcsec²');
+});
+console.log('    exponente neto Cmin ∝ MAG^' + (2 * FOT.C_EXP - FOT.C_MAG_EXP).toFixed(2) +
+  '  (hace falta < 0 para que el halo asome al subir aumentos)');
+
+/* La exención del techo: ps1PintarParche marca en `cielo.galaxiaMask` los píxeles
+   que salen del perfil, y pintarFot los trata aparte —la rampa de opacidad es su
+   único desvanecido—. Sin la marca, el halo se apaga DOS veces: la rampa y
+   visibilidadDifusa miden las dos contra el mismo umbral (Fcielo·Cmin), así que
+   son la misma ley aplicada dos veces, y encima el techo del realce le quitaba
+   el refuerzo. El radio de sondeo es 0,5·r_e y no 1,5·r_e como antes: contra el
+   umbral de detección esta galaxia de prueba ya no llega tan lejos (ver la nota
+   de deltaPlena en PS1). */
+var R_SONDEO = 0.5;
+function halo(equipo) {
+  var cielo = { sqm: 21, pupilaSalida: equipo.D / equipo.MAG, pupilaOjo: 7,
+                transmision: 0.9, aumentos: equipo.MAG,
                 perceptual: true, realceMax: R.ps1.realceMax };
   var lienzo = new Float32Array(SH * SH);
   R.ps1PintarParche(lienzo, {
@@ -921,28 +1042,29 @@ function halo(pupila) {
     ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
   }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cielo });
   var c = R.ctxFotometrico(cielo), pxPorAs = (SH / (CAMPO_H / 60)) / 3600;
-  var i = Math.round(SH / 2) * SH + Math.round(SH / 2 + 1.5 * galH.reArcsec * pxPorAs);
+  var i = Math.round(SH / 2) * SH + Math.round(SH / 2 + R_SONDEO * galH.reArcsec * pxPorAs);
   // El mismo píxel por los dos caminos de pintarFot: exento y con el trato viejo.
   var F = lienzo[i], sVieja = R.visibilidadDifusa(F, c.Fcielo * c.Cmin, true);
   return {
-    marcado: !!(cielo.haloMask && cielo.haloMask[i]),
+    marcado: !!(cielo.galaxiaMask && cielo.galaxiaMask[i]),
     dn: F > 0 ? R.valorDeFlujo(R.realzarPerceptual(F, c.Fcielo, c.rango, 0, 0),
       c.Fcielo, c.rango) : 0,
     dnVieja: (F > 0 && sVieja > 0) ? R.valorDeFlujo(R.realzarPerceptual(F * sVieja,
       c.Fcielo, c.rango, sVieja, R.ps1.realceMax), c.Fcielo, c.rango) : 0
   };
 }
-var hAlto = halo(1);
-ok(hAlto.marcado === true, 'a 1,5 r_e el píxel queda marcado como halo extrapolado');
+var hAlto = halo(DIECIOCHO);
+ok(hAlto.marcado === true, 'a ' + R_SONDEO + ' r_e el píxel queda marcado como capa de galaxia');
 ok(hAlto.dn > 1, 'y se ve: ' + hAlto.dn.toFixed(1) + ' DN sobre el cielo');
-ok(hAlto.dnVieja < 1, 'con el trato de las capas de imagen se quedaba en ' +
-  hAlto.dnVieja.toFixed(1) + ' DN');
+ok(hAlto.dnVieja < hAlto.dn, 'pasarlo OTRA VEZ por visibilidadDifusa lo apagaría a ' +
+  hAlto.dnVieja.toFixed(1) + ' DN: es el mismo umbral contado dos veces');
 
 /* Y la ley es ÚNICA para todo el parche de esa galaxia: partirla por un radio
    dejaba un escalón en la costura —anillo a nivel de cielo dentro, halo a 10 DN
    fuera: el círculo negro que se vio en M101 a 146x—. Un perfil que decrece
    hacia fuera se pinta con una sola ley o la costura se ve. */
-var cieloD = { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9,
+var cieloD = { sqm: 21, pupilaSalida: DIECIOCHO.D / DIECIOCHO.MAG, pupilaOjo: 7,
+               transmision: 0.9, aumentos: DIECIOCHO.MAG,
                perceptual: true, realceMax: R.ps1.realceMax };
 var lienzoD = new Float32Array(SH * SH);
 R.ps1PintarParche(lienzoD, {
@@ -951,7 +1073,7 @@ R.ps1PintarParche(lienzoD, {
 }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloD });
 var pxAsD = (SH / (CAMPO_H / 60)) / 3600;
 var iD = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.5 * galH.reArcsec * pxAsD);
-ok(lienzoD[iD] > 0 && !!cieloD.haloMask[iD], 'a 0,5 r_e se pinta y se exime igual');
+ok(lienzoD[iD] > 0 && !!cieloD.galaxiaMask[iD], 'a 0,5 r_e se pinta y se exime igual');
 /* ── Mezcla de imagen y perfil ───────────────────────────────────────────────
    La regla vieja era `max(imagen, perfil)` y se descartó: medido sobre M51, el
    perfil ganaba en el 70-95 % de los píxeles desde 0,3 r_e y metía el 154,6 %
@@ -1022,10 +1144,11 @@ R.ps1PintarParche(lienzoF, {
   datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
   ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
 }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
-     cielo: { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 } });
+     cielo: { sqm: 21, pupilaSalida: DIECIOCHO.D / DIECIOCHO.MAG, pupilaOjo: 7,
+              transmision: 0.9, aumentos: DIECIOCHO.MAG } });
 var pxAsF = (SH / (CAMPO_H / 60)) / 3600;
-var iF = Math.round(SH / 2) * SH + Math.round(SH / 2 + 1.5 * galH.reArcsec * pxAsF);
-ok(lienzoF[iF] > 0 && lienzoF[iF] <= R.ps1FlujoModelo(compsH, galH.pa, 0, -1.5 * galH.reArcsec),
+var iF = Math.round(SH / 2) * SH + Math.round(SH / 2 + R_SONDEO * galH.reArcsec * pxAsF);
+ok(lienzoF[iF] > 0 && lienzoF[iF] <= R.ps1FlujoModelo(compsH, galH.pa, 0, -R_SONDEO * galH.reArcsec),
   'sin imagen que mezclar queda el perfil del catálogo, ni más ni menos');
 
 /* ── Interruptor y avisos de la capa (ficha 12) ──────────────────────────────
