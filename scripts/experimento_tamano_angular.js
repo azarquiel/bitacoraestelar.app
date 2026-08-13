@@ -23,9 +23,8 @@ var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot;
 
 var SQM = 21.3, T = 0.82, POJO = 7, D = 457;   // 18", fijo: la apertura no es la variable
-var MU_E = 22.5;                               // brillo superficial en r_e, IGUAL para todos
-var N_SERSIC = 3, BA = 1;                      // morfología normalizada, circular (pa irrelevante)
-var TAMANOS = [0.5, 1, 2, 5, 10, 20, 30];      // DIÁMETRO de la isofota 25, en ′
+var G = require('./lib_galaxias_sinteticas.js')(R);   // los siete objetos, compartidos
+var MU_E = G.MU_E, N_SERSIC = G.N_SERSIC, BA = G.BA, TAMANOS = G.TAMANOS;
 var MUS = [21, 22, 23, 24];
 
 /* Blackwell: el umbral de contraste deja de bajar cuando el objeto llena ~1° de
@@ -40,42 +39,8 @@ var THETA_REF = PLATEAU_ARCMIN * Math.pow(FOT.C_MAG_MIN, 1 / FOT.C_MAG_EXP);
 function f(v, d) { return (v == null || !isFinite(v)) ? '-' : v.toFixed(d == null ? 3 : d); }
 function fila(c) { console.log(c.join(' | ')); }
 
-/* ── Los objetos ──────────────────────────────────────────────────────────
-   Se fija μ(r_e) = MU_E y se despeja magV: el flujo escala como 10^(−0,4·magV),
-   así que un solo paso corrige exacto. Luego se busca el r_e que da el D25
-   pedido. Escalar r_e NO cambia μ(r/r_e): eso es justo lo que se quiere, y se
-   comprueba abajo en vez de darlo por hecho. */
-function mu(comps, r) { return -2.5 * Math.log10(R.ps1FlujoModelo(comps, 0, 0, r)); }
-function compsDe(re, magV) {
-  return R.ps1ComponentesSersic({ magV: magV, reArcsec: re, n: N_SERSIC, ba: BA, bt: 0 });
-}
-function magVpara(re) {
-  var c = compsDe(re, 10);
-  // Sumar Δ a magV apaga el objeto Δ magnitudes, así que μ sube Δ: para llevar
-  // μ(r_e) de donde está a MU_E hace falta Δ = MU_E − μ actual.
-  return 10 + (MU_E - mu(c, re));      // corrección exacta, no iterativa
-}
-/* Radio (″) de la isofota μ, por bisección sobre el perfil (monótono). */
-function radioIsofota(comps, muObj) {
-  var lo = 1e-4, hi = 1e6;
-  if (mu(comps, lo) > muObj) return 0;
-  for (var i = 0; i < 60; i++) {
-    var m = Math.sqrt(lo * hi);
-    if (mu(comps, m) <= muObj) lo = m; else hi = m;
-  }
-  return lo;
-}
-function objeto(d25Arcmin) {
-  // r_e que produce ese D25: r(25)/r_e es fijo para n y μ_e dados, así que
-  // basta escalar. Se calcula con un r_e patrón y se reescala.
-  var rePatron = 100, cP = compsDe(rePatron, magVpara(rePatron));
-  var razon = radioIsofota(cP, 25) / rePatron;              // r25 / r_e, invariante
-  var re = (d25Arcmin * 60 / 2) / razon;
-  var magV = magVpara(re), comps = compsDe(re, magV);
-  return { d25: d25Arcmin, re: re, magV: magV, comps: comps,
-           dHalo: 2 * radioIsofota(comps, R.ps1.muHalo) / 60 };
-}
-var OBJETOS = TAMANOS.map(objeto);
+// Los objetos y sus utilidades salen de lib_galaxias_sinteticas.js.
+var mu = G.mu, radioIsofota = G.radioIsofota, OBJETOS = G.objetos;
 
 console.log('Objetos sintéticos: n=' + N_SERSIC + ', b/a=' + BA + ', μ(r_e)=' + MU_E +
   ' · cielo sqm ' + SQM + ', T ' + T + ' · apertura ' + D + ' mm (18") fija');
