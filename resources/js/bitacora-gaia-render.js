@@ -1348,8 +1348,9 @@
 
   /* Interruptor de la capa, aquí y no en cada llamador: los dos puntos de uso
      (simulador y formulario de registro) tienen que responder al mismo mando.
-     Apagado durante las fases 1 y 2; lo enciende la ficha 12. */
-  var GALAXIAS_IMAGEN = false;
+     Encendido desde la ficha 12; la casilla del simulador lo apaga, y el
+     formulario lo hereda sin casilla propia. */
+  var GALAXIAS_IMAGEN = true;
 
   /* Lado del parche en minutos de arco. `r_e` viene en segundos (columna 4 del
      catálogo). El tope de 20′ lo tocan 200 de las 1295 filas: en esas, parte de la
@@ -2308,6 +2309,93 @@
     });
   }
 
+  /* Profundidad de la consulta de Gaia con la capa encendida: la máscara del
+     parche necesita TODAS las estrellas que PanSTARRS registra, no solo las que
+     este equipo llega a ver. Con un equipo modesto magConsultaGaia se queda en
+     15-16 y el parche salía granulado. Pintar no cambia: dibujar() sigue
+     cortando en la magnitud límite. El proxy ordena por Gmag, así que si el TOP
+     se agota se pierden las débiles, no las brillantes. Lo aplica cada llamador
+     a SU consulta, y solo donde la capa se pinta: la vista de placa no la
+     necesita. */
+  function ps1MagConsulta(mag) {
+    return GALAXIAS_IMAGEN ? Math.max(mag, PS1.mascaraProf) : mag;
+  }
+
+  /* Fila del RC3 del objeto que se está mirando, si el campo está centrado en
+     una galaxia del catálogo. La tolerancia es de 2′ porque el centro del RC3 y
+     el del catálogo del simulador no siempre coinciden al segundo. Solo la usa
+     el aviso: de las compañeras del campo no se dice nada (en Virgo saldrían
+     cinco líneas sobre galaxias que el observador ni buscaba). */
+  var APUNTADA_ARCMIN = 2;
+
+  function ps1FilaApuntada(catalogo, ra0, dec0) {
+    var cos0 = Math.cos(dec0 * Math.PI / 180), tol = APUNTADA_ARCMIN / 60;
+    var mejor = null, dmin = Infinity;
+    for (var i = 0; i < (catalogo || []).length; i++) {
+      var g = catalogo[i];
+      var dra = ((((g[2] - ra0) + 540) % 360) - 180) * cos0;
+      var d = Math.hypot(dra, g[3] - dec0);
+      if (d <= tol && d < dmin) { dmin = d; mejor = g; }
+    }
+    return mejor;
+  }
+
+  /* Capa de galaxias del campo con su imagen real de PanSTARRS. Vive aquí, y no
+     en cada llamador, porque los dos puntos de uso —el simulador y el generador
+     de imagen del formulario de registro— tienen que pintar lo mismo; la vez
+     anterior se tocó uno y se olvidó el otro.
+
+     El parche tarda segundos, así que el campo de estrellas ya está pintado
+     cuando esto arranca y cada galaxia repinta cuando llega la suya; si no
+     llega, se queda lo de siempre. La promesa resuelve cuando no queda parche
+     pendiente —el formulario la espera para subir la imagen ya completa— y
+     nunca rechaza: sin imagen, la vista es la de antes de esta capa.
+
+     `o`: {ra0, dec0, arcmin, size, estrellas, catalogo, vivo}. `vivo` es el
+     testigo de que la petición sigue siendo la actual (el observador puede haber
+     cambiado de campo mientras el parche viajaba). */
+  function ps1CapaGalaxias(difuso, ctx, cielo, capaEst, o) {
+    if (!GALAXIAS_IMAGEN) return Promise.resolve({ aviso: '' });
+    /* Con imagen real hay luz a TODOS los brillos, y el realce perceptual
+       —calibrado contra perfiles sintéticos, que se acaban sobre μ23— la
+       inflaba hasta ×13: el brazo externo salía casi tan brillante como el
+       disco. De ahí el techo, que solo se aplica cuando hay parche. */
+    var cieloParche = {};
+    for (var k in cielo) if (Object.prototype.hasOwnProperty.call(cielo, k)) cieloParche[k] = cielo[k];
+    cieloParche.realceMax = PS1.realceMax;
+    var catalogo = o.catalogo || (typeof window !== 'undefined' ? window.BITACORA_GALAXIAS : null);
+    var campo = ps1GalaxiasDelCampo(catalogo, o.ra0, o.dec0, o.arcmin);
+    var apuntada = ps1FilaApuntada(catalogo, o.ra0, o.dec0);
+    var vivo = o.vivo || function () { return true; };
+    var apuntadaSinParche = false;
+    return Promise.all(campo.map(function (gal) {
+      return ps1ParcheDeGalaxia(gal, o.estrellas).then(function (parche) {
+        var esLaApuntada = !!apuntada && gal.ra === apuntada[2] && gal.dec === apuntada[3];
+        if (!parche) { if (esLaApuntada) apuntadaSinParche = true; return; }
+        if (!vivo()) return;
+        // `cielo`: el mismo objeto que pinta el fondo. De ahí salen los dos
+        // cielos del halo: SBe (atenuado por la pupila) para la rampa de
+        // opacidad y SB0 (el SQM medido) para la puerta.
+        ps1PintarParche(difuso, parche, {
+          ra0: o.ra0, dec0: o.dec0, arcmin: o.arcmin, size: o.size, cielo: cieloParche
+        });
+        pintarFot(difuso, ctx, cieloParche, capaEst);
+      }).catch(function () { /* una galaxia que falla no tumba el campo entero */ });
+    })).then(function () {
+      /* Aviso SOLO del objeto apuntado, y con la causa: cambia lo que el
+         observador puede hacer. Por el sur no hay nada que esperar; por caída,
+         sí. Fuera del RC3, o dentro pero demasiado grande para su parche
+         (PS1.fracMin), no se avisa: no había nada prometido. */
+      var aviso = '';
+      if (apuntada && !(apuntada[3] > PS1.decMin)) {
+        aviso = 'sin imagen de cartografiado: PanSTARRS no cubre por debajo de −30° de declinación';
+      } else if (apuntadaSinParche) {
+        aviso = 'el servicio de imágenes no responde; se muestra el campo sin la galaxia';
+      }
+      return { aviso: aviso };
+    });
+  }
+
   function dibujarAureola(ctx, x, y, radio, rgb, alpha) {
     var col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
     var gr = ctx.createRadialGradient(x, y, 0, x, y, radio);
@@ -2521,7 +2609,7 @@
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t,
       aumentos: o.aumentos, perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
-    return consultar(o.ra, o.dec, o.arcmin, magConsultaGaia(o.apertura, t)).then(function (estrellas) {
+    return consultar(o.ra, o.dec, o.arcmin, ps1MagConsulta(magConsultaGaia(o.apertura, t))).then(function (estrellas) {
       /* Estrellas y fondo se mapean en una sola curva de tono: el fondo pasa
          por la curva logarítmica y las estrellas se dibujan encima en 8
          bits, saltándosela; por eso el fondo va plano (sin capas difusas). */
@@ -2532,7 +2620,15 @@
         conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
       }, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst);
-      return { estrellas: estrellas, mlim: mlim, fondo: fondo };
+      /* La capa de galaxias se espera: la imagen que el formulario sube es la
+         que se ve, y si se resolviera antes de que llegue el parche subiría el
+         campo sin la galaxia. Si el parche no llega, esto resuelve igual y la
+         imagen sale como salía antes de esta capa. */
+      return ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
+        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, estrellas: estrellas
+      }).then(function (capa) {
+        return { estrellas: estrellas, mlim: mlim, fondo: fondo, aviso: capa.aviso };
+      });
     });
   }
 
@@ -2678,6 +2774,9 @@
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
     ps1DescargarParche: ps1DescargarParche,
     ps1ParcheDeGalaxia: ps1ParcheDeGalaxia,
+    ps1MagConsulta: ps1MagConsulta,
+    ps1FilaApuntada: ps1FilaApuntada,
+    ps1CapaGalaxias: ps1CapaGalaxias,
     dssMaxArcmin: DSS_MAX_ARCMIN,
     set galaxiasImagen(v) { GALAXIAS_IMAGEN = !!v; },
     get galaxiasImagen() { return GALAXIAS_IMAGEN; },

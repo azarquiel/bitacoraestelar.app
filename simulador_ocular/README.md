@@ -272,6 +272,28 @@ La cadena, en orden:
    fotometría exactamente**. Donde la imagen midió, manda la imagen; donde no
    hay información, manda el perfil del catálogo.
 
+#### Dónde se enciende, y qué se dice cuando no hay imagen
+
+La capa va **encendida** y se apaga con la casilla *Galaxias con imagen real*,
+junto al selector de origen. La casilla no gobierna una variable del simulador
+sino la **opción del módulo compartido** (`BitacoraGaiaRender.galaxiasImagen`),
+que es lo que hace que el generador de imagen del formulario de registro pinte
+lo mismo sin casilla propia: `ps1CapaGalaxias` es el único sitio donde la capa
+se monta, y lo llaman los dos.
+
+Solo se pinta en la vista **Canvas 2D de Gaia**: en las placas del DSS o de
+PanSTARRS la galaxia ya viene en la propia imagen, y ahí la casilla se apaga en
+gris. Con la capa encendida la consulta de Gaia de esa vista baja hasta el tope
+del proxy (`ps1MagConsulta`), porque la máscara necesita todas las estrellas que
+PS1 registra; el realce sobre las placas no paga esa profundidad.
+
+Cuando el objeto **apuntado** es una galaxia del RC3 y se queda sin parche, se
+avisa con la causa, porque cambia lo que se puede hacer: por debajo de −30° de
+declinación PanSTARRS no llega y no hay nada que esperar; si el servicio no
+responde, sí. De las compañeras del campo no se dice nada (en Virgo saldrían
+cinco líneas sobre galaxias que nadie buscaba), y de las que se quedan fuera por
+`fracMin` —M31, IC 342, M33— tampoco: no había nada prometido.
+
 #### El radio de máscara de cada estrella
 
 `ps1RadioMascaraAs(g)` crece **geométricamente**, ×10^(0,4/3) ≈ 1,359 por

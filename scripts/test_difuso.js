@@ -1028,10 +1028,40 @@ var iF = Math.round(SH / 2) * SH + Math.round(SH / 2 + 1.5 * galH.reArcsec * pxA
 ok(lienzoF[iF] > 0 && lienzoF[iF] <= R.ps1FlujoModelo(compsH, galH.pa, 0, -1.5 * galH.reArcsec),
   'sin imagen que mezclar queda el perfil del catálogo, ni más ni menos');
 
-// Interruptor: apagado de fábrica durante las fases 1 y 2.
-ok(R.galaxiasImagen === false, 'la capa de galaxias viene apagada por defecto');
-R.galaxiasImagen = true; ok(R.galaxiasImagen === true, 'el interruptor se puede encender');
-R.galaxiasImagen = false;
+/* ── Interruptor y avisos de la capa (ficha 12) ──────────────────────────────
+   El interruptor tiene que APAGAR de verdad: apagado, ps1CapaGalaxias no puede
+   ni pedir el parche (aquí no hay fetch que valga) ni tocar el lienzo. Y el
+   aviso solo habla del objeto apuntado, con la causa: por el sur no hay nada
+   que esperar, por caída sí. */
+ok(R.galaxiasImagen === true, 'la capa de galaxias viene encendida por defecto');
 
-console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
-process.exit(fallos === 0 ? 0 : 1);
+// [nombre, alt, RA°, Dec°, r_e″, b/a, PA°, magV, n, B/T, polvo, n medido]
+var galNorte = ['NGC 0000', '', 180, 40, 60, 0.7, 0, 10, 1, 0.2, 0, 0];
+var galSur   = ['NGC 0001', '', 180, -40, 60, 0.7, 0, 10, 1, 0.2, 0, 0];
+var opCapa = { arcmin: 20, size: 2, estrellas: [] };
+function capa(gal, ra0, dec0) {
+  var o = { ra0: ra0, dec0: dec0, arcmin: opCapa.arcmin, size: opCapa.size,
+            estrellas: opCapa.estrellas, catalogo: [gal] };
+  return R.ps1CapaGalaxias(new Float32Array(4), null, { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 }, null, o);
+}
+
+R.galaxiasImagen = false;
+capa(galNorte, 180, 40).then(function (r) {
+  ok(r.aviso === '', 'apagada, la capa no pide parche ni avisa de nada');
+  R.galaxiasImagen = true;
+  // Servicio caído: el parche no llega y se dice, porque hay algo que esperar.
+  global.fetch = function () { return Promise.reject(new Error('sin servicio')); };
+  return capa(galNorte, 180, 40);
+}).then(function (r) {
+  ok(/no responde/.test(r.aviso), 'con el servicio caído se avisa de la caída');
+  // Bajo −30° PanSTARRS no llega: otra causa, otro aviso, y sin pedir nada.
+  return capa(galSur, 180, -40);
+}).then(function (r) {
+  ok(/PanSTARRS no cubre/.test(r.aviso), 'al sur de −30° se avisa de la cobertura');
+  // Un campo que no cae sobre ninguna galaxia del RC3 no promete nada.
+  return capa(galNorte, 0, 0);
+}).then(function (r) {
+  ok(r.aviso === '', 'fuera del catálogo, silencio');
+  console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
+  process.exit(fallos === 0 ? 0 : 1);
+});
