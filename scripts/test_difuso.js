@@ -510,6 +510,67 @@ casi(R.ps1RadioMascaraAs(2), R.ps1.mascaraMaxAs, 1e-9, 'el radio de máscara tie
 casi(R.ps1RadioMascaraAs(25), R.ps1.seeingAs, 1e-9, 'y suelo en el seeing del stack');
 casi(qTodas.suma / qCero.suma, 1, 0.02, 'quitar estrellas no mueve la luz del parche ni un 2 %');
 
+/* La ley magnitud → radio, contra lo medido en .scratch/alas-brillantes: 19031
+   estrellas de 33 parches de PS1, apiladas por tramos y con un testigo del mismo
+   radio galactocéntrico restado. Lo que se fija aquí es lo que costó medir. */
+var gAntes = null, rAntes = null, escalones = 0;
+for (var gM = 20; gM >= 4; gM -= 0.05) {
+  var rM = R.ps1RadioMascaraAs(gM);
+  if (rAntes != null) {
+    if (rM < rAntes - 1e-9) escalones = -1;                       // se hizo MENOR al brillar más
+    else if (escalones >= 0 && rM - rAntes > 0.02 * rAntes) escalones++;   // salto de más del 2 %
+  }
+  gAntes = gM; rAntes = rM;
+}
+ok(escalones === 0, 'R(g) no baja al brillar la estrella y no da saltos: es continua y monótona');
+ok(R.ps1RadioMascaraAs(-1.5) <= R.ps1.mascaraMaxAs + 1e-9,
+  'ni Sirio se salta el máximo absoluto (' + R.ps1RadioMascaraAs(-1.5).toFixed(1) + '″)');
+/* La FORMA es lo medido: el radio crece ×10^(0,4/3) = 1,359 por magnitud, y el
+   ajuste sobre los datos dio ×1,362 (α = 2,98 contra el 3 de la ley). Se
+   comprueba donde el tope no manda todavía. */
+casi(R.ps1RadioMascaraAs(15) / R.ps1RadioMascaraAs(16), Math.pow(10, 0.4 / 3), 1e-6,
+  'y crece ×1,359 por magnitud, el ala r^-3 que dicen los perfiles apilados');
+/* Los dos casos reales de M81 que dispararon la campaña. La estrella de g=11,3
+   del parche pide ~30″: con el tope viejo de 25″ se quedaba corta, y las medidas
+   por estrella piden 35–37″ en el tramo g 10–12. La de g=15,4, en cambio, ya
+   estaba bien servida y no puede crecer por el cambio de tope. */
+ok(R.ps1RadioMascaraAs(11.29) > 25,
+  'la estrella de g=11,3 de M81 pasa de los 25″ que la recortaban (' +
+  R.ps1RadioMascaraAs(11.29).toFixed(1) + '″)');
+casi(R.ps1RadioMascaraAs(15.4), 8.3, 0.1,
+  'y la de g=15,4 del mismo parche no se entera del cambio de tope');
+
+/* Relleno de la máscara. Hasta rellenoPlanoMaxAs manda la mediana de alrededor,
+   que sobre un gradiente suave es el mejor dato local; por encima el disco se
+   deja al nivel del cielo, porque ahí el anillo del que sale la mediana ya cae
+   en la periferia y el disco salía como un hoyo (campo/perfil 0,025 medido en la
+   estrella de g=9,2 de NGC 5055). */
+var GRAD = new Float32Array(ANCHO * ANCHO);              // rampa: 10 DN de cielo + gradiente
+for (var yG = 0; yG < ANCHO; yG++) for (var xG = 0; xG < ANCHO; xG++)
+  GRAD[yG * ANCHO + xG] = 10 + 400 * Math.exp(-Math.hypot(xG - 20, yG - 20) / 25);
+var ESC_AS = 2;                                          // ″/px
+function rellenoEn(rAs) {
+  var e = { x: 60, y: 60, rPx: rAs / ESC_AS, rAs: rAs };
+  var o = R.ps1QuitarEstrellas(GRAD, ANCHO, ANCHO, [e]);
+  return o[60 * ANCHO + 60];
+}
+var cieloGrad = R.ps1Cielo(GRAD, ANCHO, ANCHO);
+ok(rellenoEn(R.ps1.rellenoPlanoMaxAs - 2) > cieloGrad + 1,
+  'una máscara estrecha se rellena con lo de alrededor, no con el cielo');
+casi(rellenoEn(R.ps1.rellenoPlanoMaxAs + 2), cieloGrad, 1e-6,
+  'y una ancha se deja al cielo, para que la apague el anclaje y la rellene el perfil');
+ok(R.ps1.rellenoPlanoMaxAs < R.ps1.mascaraMaxAs,
+  'el tope de máscara llega más lejos que el relleno plano: si no, el hueco no se usaría nunca');
+// Sin `rAs` (una llamada que no lo traiga) se conserva el trato de siempre.
+var sinRAs = R.ps1QuitarEstrellas(GRAD, ANCHO, ANCHO, [{ x: 60, y: 60, rPx: 60 / ESC_AS }]);
+ok(sinRAs[60 * ANCHO + 60] > cieloGrad + 1, 'sin rAs se rellena como antes, sea cual sea el radio');
+// Y ps1EstrellasEnPixeles lo trae, que es de donde sale en producción.
+var enPxRAs = R.ps1EstrellasEnPixeles(
+  { ancho: ANCHO, alto: ANCHO, escalaAs: LADO * 60 / ANCHO },
+  { ra: 10, dec: 41, ladoArcmin: LADO }, [[10, 41, 9]]);
+ok(enPxRAs.length === 1 && Math.abs(enPxRAs[0].rAs - R.ps1RadioMascaraAs(9)) < 1e-9,
+  'ps1EstrellasEnPixeles trae el radio en ″ además de en px');
+
 /* El caso que se vio en el simulador el 12-ago-2026: una estrella real deja un
    ala ancha, y si la máscara se queda dentro de ella el relleno sale del propio
    ala y aparece «un halo con un hueco». Sobre un fondo plano con una PSF de ala

@@ -1303,9 +1303,10 @@
     decMin: -30,           // PS1 no cubre más al sur (365 de las 1295 filas del RC3)
     fracMin: 0.4,          // fracción mínima de la luz del catálogo que el parche debe abarcar (ver ps1GalaxiasDelCampo)
     seeingAs: 1.1,         // ″: FWHM típica del stack, suelo del radio de máscara
-    mascaraMaxAs: 25,      // ″: tope del radio de máscara de una estrella (una de g≈8 ya lo toca)
+    mascaraMaxAs: 60,      // ″: tope del radio de máscara de una estrella (una de g≈9 ya lo toca)
     mascaraMagRef: 22,     // mag G a la que el radio de máscara es el seeing (≈ el fondo del stack; ver ps1RadioMascaraAs)
     mascaraProf: 20,       // mag G hasta la que se piden estrellas para la máscara (tope del proxy)
+    rellenoPlanoMaxAs: 40, // ″: hasta este radio la máscara se rellena con la mediana de alrededor; por encima se deja al cielo (ver ps1QuitarEstrellas)
     nucleoPx: 3,           // px: radio central que la máscara no toca nunca
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
     kRuido: 1.5,           // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
@@ -1518,7 +1519,17 @@
      magnitud. Con la ley lineal de antes (0,6″/mag) la máscara se quedaba dentro
      del ala de las estrellas medianas y el relleno tomaba su mediana justo del
      ala: quedaba un disco apagado rodeado del anillo brillante que sobraba —el
-     «halo con hueco» que se vio en el simulador el 12-ago-2026—. */
+     «halo con hueco» que se vio en el simulador el 12-ago-2026—.
+
+     La FORMA está medida, no supuesta: apilando 19031 estrellas de 33 parches
+     de PS1 y restando un testigo del mismo radio galactocéntrico, el radio de
+     contaminación crece ×1,36 por magnitud (α = 2,98 contra el 3 de la ley).
+     Lo que estaba mal era el tope: con 25″ la ley se cortaba en g≈11,6, y de
+     ahí para arriba las medidas piden 35–37″ (g 10–12) y 48″ para la única de
+     g=8,5 del muestreo. 60″ cubre todo lo medido; por encima ya es
+     extrapolación y se corta. Subir a 90″ no cambió nada medible ni siquiera
+     en el parche que tiene la estrella más brillante
+     (.scratch/alas-brillantes/INFORME.md). */
   function ps1RadioMascaraAs(g) {
     var r = PS1.seeingAs * Math.pow(10, 0.4 * (PS1.mascaraMagRef - g) / 3);
     return Math.max(PS1.seeingAs, Math.min(PS1.mascaraMaxAs, r));
@@ -1535,12 +1546,34 @@
      pero mucho menos que ese anillo; si algún día molesta, lo que toca es
      interpolar el fondo, no volver a muestrear el ala.
 
-     `estrellas` en píxeles del parche: [{x, y, rPx}]. Devuelve una copia. El núcleo
+     Ese disco plano solo vale mientras la galaxia apenas cambie de brillo entre
+     r y 1,6r. En una máscara ancha —las de g<11, que llegan a 56″— el anillo cae
+     ya en la periferia y la mediana que trae es decenas de veces más floja que
+     lo que había dentro: el disco sale como un hoyo, y encima `w` se lo cree
+     (la meseta pasa del umbral de anclaje, así que `w`=1 dentro y el perfil no
+     puede rellenar). Medido en NGC 5055, campo/perfil dentro del disco de la
+     estrella de g=9,2: 0,025. Por eso, pasado rellenoPlanoMaxAs, el disco se
+     deja al nivel del cielo: el anclaje lo apaga, `w` cae a 0 dentro y lo
+     rellena (1-w)·perfil, que es lo que la arquitectura ya hace con una zona
+     sin información. La misma medida sube entonces a 1,000.
+
+     El umbral está donde lo pusieron las medidas: el disco plano sale a 0,999
+     de 25 a 40″ y se hunde a 0,025 a 56″. No se baja más porque el hueco tiene
+     su propio precio en el borde —mientras `w` recorre la rampa hay datos a
+     cero, así que el anillo queda a (1-w)·perfil y se ve—; con el umbral en la
+     caja de la mezcla (25″) los discos de ~30″ de M81 salían dibujados como
+     dos aros oscuros. Y por debajo de todo eso el disco plano es además el
+     mejor dato local: con hueco, las máscaras de pocos píxeles se apagan
+     enteras (0,245 contra 0,774 en M81) porque la caja de `w` sigue viendo
+     galaxia alrededor.
+
+     `estrellas` en píxeles del parche: [{x, y, rPx, rAs}]. Sin `rAs` (llamadas
+     viejas) se usa siempre el disco plano. Devuelve una copia. El núcleo
      (PS1.nucleoPx alrededor del centro) no se toca nunca: una estrella de Gaia
      proyectada sobre el núcleo se llevaría el objeto entero. */
   function ps1QuitarEstrellas(datos, ancho, alto, estrellas) {
     if (!estrellas || !estrellas.length) return datos;
-    var mascara = new Uint8Array(datos.length), i, e, x, y;
+    var mascara = new Uint8Array(datos.length), i, e, x, y, cielo = null;
     var cx = (ancho - 1) / 2, cy = (alto - 1) / 2, rN = PS1.nucleoPx;
     for (i = 0; i < estrellas.length; i++) {
       e = estrellas[i];
@@ -1558,7 +1591,13 @@
     var out = Float32Array.from ? Float32Array.from(datos) : new Float32Array(datos);
     for (i = 0; i < estrellas.length; i++) {
       e = estrellas[i];
-      var rE = Math.max(1, e.rPx), fondo = ps1FondoAlrededor(datos, mascara, ancho, alto, e.x, e.y, rE);
+      var rE = Math.max(1, e.rPx), fondo;
+      if (e.rAs > PS1.rellenoPlanoMaxAs) {                 // disco ancho: ausencia, que la rellene el perfil
+        if (cielo == null) cielo = ps1Cielo(datos, ancho, alto);
+        fondo = cielo;
+      } else {
+        fondo = ps1FondoAlrededor(datos, mascara, ancho, alto, e.x, e.y, rE);
+      }
       if (fondo == null) continue;                         // sin muestras limpias: mejor dejarlo como está
       var rE2 = rE * rE;
       for (y = Math.max(0, Math.floor(e.y - rE)); y <= Math.min(alto - 1, Math.ceil(e.y + rE)); y++) {
@@ -2230,7 +2269,9 @@
         p = [a.cx + a.xe * este + a.xn * norte, a.cy + a.ye * este + a.yn * norte];
       }
       if (p[0] < -8 || p[1] < -8 || p[0] > f.ancho + 8 || p[1] > f.alto + 8) continue;
-      enPx.push({ x: p[0], y: p[1], rPx: ps1RadioMascaraAs(e[2]) / esc });
+      // `rAs` además de `rPx`: ps1QuitarEstrellas decide con él cómo rellenar.
+      var rAs = ps1RadioMascaraAs(e[2]);
+      enPx.push({ x: p[0], y: p[1], rPx: rAs / esc, rAs: rAs, g: e[2] });
     }
     return enPx;
   }
