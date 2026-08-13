@@ -228,10 +228,18 @@ console.log('Apertura y umbral de contraste:');
 function ctxDe(pupila, aumentos) {
   return R.ctxFotometrico({ pupilaSalida: pupila, pupilaOjo: 7, sqm: 21, transmision: 0.7, aumentos: aumentos });
 }
-// Mismo ocular en un 12" y en un 18": más aumentos, umbral más bajo.
+/* Mismo ocular en un 12" y en un 18": más aumentos, umbral más bajo. El margen
+   era 0,9 y ya no se cumple, pero no porque la ley empeore: con C_MAG_EXP 1,0
+   el clamp C_MAG_MIN entra en 222x, y 254x y 343x están LOS DOS pasados, así
+   que el término de tamaño aporta lo mismo a ambos y la ventaja del 18" es
+   solo la pupila de salida. Se comprueba contra esa predicción exacta en vez
+   de contra un margen a ojo. */
 var doce = ctxDe(305 / 254, 254), diecoicho = ctxDe(457 / 343, 343);
-ok(diecoicho.Cmin < doce.Cmin * 0.9,
+ok(diecoicho.Cmin < doce.Cmin,
   'un 18" baja el umbral respecto a un 12" (' + doce.Cmin.toFixed(3) + ' → ' + diecoicho.Cmin.toFixed(3) + ')');
+casi(diecoicho.Cmin / doce.Cmin,
+  Math.pow(diecoicho.dim / doce.dim, -FOT.C_EXP), 1e-9,
+  'y la ventaja es EXACTAMENTE el término de pupila: los dos van pasados del aumento óptimo');
 
 /* Pero el FONDO solo depende de la pupila de salida, nunca de la apertura: si
    esto se rompiera, el simulador estaría inventando luz que el telescopio no
@@ -1007,21 +1015,24 @@ casi(sumaP * ESCALA_P * ESCALA_P / esperadoP, 1, 1e-6,
 ok(R.ps1AnclarACatalogo.length === 4,
   'y su firma no admite apertura ninguna: (datos, ancho, alto, o)');
 
-/* ── PENDIENTE (segunda iteración): la dependencia con el AUMENTO ────────────
-   No es un ok(): es una medida, y sale con el signo equivocado.
-   A apertura fija, Cmin ∝ MAG^(2·C_EXP − C_MAG_EXP) = MAG^0,20 con los valores
-   de hoy (C_EXP 0,35, C_MAG_EXP 0,5). O sea: subir aumentos ALEJA el umbral en
-   vez de acercarlo, y el halo se apaga en vez de asomar. Con la ley anterior
-   asomaba, pero por el motivo equivocado (el término de pupila en el Δ, que es
-   justo el que metía la inversión con la apertura).
-   Para que el halo vuelva a emerger con el aumento hace falta
-   C_MAG_EXP > 2·C_EXP = 0,70. Eso es calibración y va aparte, con deltaPlena. */
-console.log('\n  medida (pendiente de calibrar) · umbral de detección contra aumentos, D=203 mm:');
-[50, 100, 200, 400].forEach(function (m) {
-  console.log('    ' + m + 'x → ' + umbralCon(203 / m, m).toFixed(3) + ' mag/arcsec²');
-});
-console.log('    exponente neto Cmin ∝ MAG^' + (2 * FOT.C_EXP - FOT.C_MAG_EXP).toFixed(2) +
-  '  (hace falta < 0 para que el halo asome al subir aumentos)');
+/* ── La dependencia con el AUMENTO, a apertura fija ─────────────────────────
+   Dos términos tiran en sentidos opuestos: la pupila de salida encoge con los
+   aumentos (peor luminancia retinal, MAG^(2·C_EXP)) y el objeto crece en la
+   retina (mejor umbral, MAG^(−C_MAG_EXP)). El neto, Cmin ∝ MAG^(2·C_EXP −
+   C_MAG_EXP), tiene que salir NEGATIVO o subir aumentos apaga el objeto en vez
+   de sacarlo. Con C_MAG_EXP 0,5 salía +0,20 y el halo se apagaba.
+   Y no puede mejorar para siempre: el clamp C_MAG_MIN corta el término de
+   tamaño en MAG_sat y a partir de ahí solo queda la pupila, así que la curva
+   tiene un máximo. Ese máximo es el aumento óptimo del modelo. */
+ok(2 * FOT.C_EXP - FOT.C_MAG_EXP < 0,
+  'el exponente neto del umbral con los aumentos es NEGATIVO (' +
+  (2 * FOT.C_EXP - FOT.C_MAG_EXP).toFixed(2) + '): más aumentos sacan el objeto');
+var MAG_SAT = FOT.C_MAG_REF * Math.pow(FOT.C_MAG_MIN, -1 / FOT.C_MAG_EXP);
+ok(umbralCon(203 / 150, 150) > umbralCon(203 / 50, 50),
+  'y se mide: a apertura fija, 150x llega más hondo que 50x');
+ok(umbralCon(203 / (2 * MAG_SAT), 2 * MAG_SAT) < umbralCon(203 / MAG_SAT, MAG_SAT),
+  'pero la mejora NO crece sin fin: pasado ' + Math.round(MAG_SAT) +
+  'x (clamp C_MAG_MIN) vaciar la pupila vuelve a empeorar');
 
 /* La exención del techo: ps1PintarParche marca en `cielo.galaxiaMask` los píxeles
    que salen del perfil, y pintarFot los trata aparte —la rampa de opacidad es su

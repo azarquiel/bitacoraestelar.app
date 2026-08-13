@@ -120,8 +120,29 @@
        se usan los aumentos como medida.
 
        C_MAG_MIN/MAX acotan el factor: el beneficio satura cuando el objeto ya
-       llena el campo, y por abajo no tiene sentido penalizar sin límite. */
-    C_MAG_REF: 100, C_MAG_EXP: 0.5, C_MAG_MIN: 0.45, C_MAG_MAX: 2.0,
+       llena el campo, y por abajo no tiene sentido penalizar sin límite.
+
+       C_MAG_EXP era 0,5, y con eso la ley salía con el SIGNO CAMBIADO. A
+       apertura fija, subir aumentos encoge la pupila de salida, así que el
+       término de luminancia empeora el umbral como MAG^(2·C_EXP); el término de
+       tamaño lo mejora como MAG^(−C_MAG_EXP). El neto es MAG^(2·C_EXP−C_MAG_EXP),
+       o sea que hace falta C_MAG_EXP > 2·C_EXP = 0,70 solo para empatar. Con 0,5
+       el neto era MAG^0,20: subir aumentos APAGABA el objeto. Antes no se notaba
+       porque ps1Opacidad medía contra SBe y ahí la pupila entraba otra vez, con
+       el signo contrario; al unificar la ley en Cmin el fallo quedó al aire.
+
+       1,0 es la pendiente log-log del umbral con el tamaño en los datos de
+       Blackwell, y deja el neto en 0,75 mag/dex. El clamp C_MAG_MIN corta el
+       término de tamaño en MAG = C_MAG_REF·C_MAG_MIN^(−1/C_MAG_EXP) = 222x, y
+       desde ahí solo queda la pupila: la curva tiene un máximo ahí, que en un
+       18" cae en pupila 2,06 mm. Que exista ese óptimo es lo que impide que más
+       aumentos mejoren para siempre. Medido en scripts/barrido_cmagexp.js.
+
+       ponytail: el término de tamaño usa los AUMENTOS como medida, no el tamaño
+       aparente real (diámetro del objeto × aumentos). Por eso el óptimo sale en
+       el mismo aumento para una galaxia de 30' y una de 2', que es falso. El
+       dato existe (reArcsec del catálogo); meterlo es la mejora de verdad. */
+    C_MAG_REF: 100, C_MAG_EXP: 1.0, C_MAG_MIN: 0.45, C_MAG_MAX: 2.0,
     // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo se
     // pinta en función de su brillo superficial en el ocular (SBe, mag/arcsec²,
     // atenuado por la pupila de salida). Por encima de SB_CIELO_NEGRO el fondo es
@@ -1328,11 +1349,15 @@
        física es la contraria: el objeto se apaga igual que el cielo y el Δ real
        no cambia; lo que cambia es el UMBRAL, por luminancia retinal y por
        tamaño aparente, y las dos ya viven en Cmin (FOT.C_EXP y FOT.C_MAG_*).
-       ponytail: deltaPlena y deltaExp se quedan con los valores de la ley
-       anterior, sin recalibrar. Contra el umbral el Δ típico baja ~2 mag, así
-       que 3,25 deja las galaxias más transparentes que antes; la calibración es
-       una iteración aparte. */
-    deltaMin: 0.0, deltaPlena: 3.25, deltaExp: 1.8,
+       deltaPlena era 3,25, heredado de cuando el Δ se medía contra SBe y valía
+       ~2 mag más. Medido contra el umbral, 3,25 pide 20× el contraste umbral
+       para pintar la galaxia entera y la dejaba translúcida en todo el cuerpo.
+       2,5 mag = 10× el contraste umbral, que es donde Blackwell deja de ver el
+       objeto «al límite» y lo ve de forma franca. Con eso el disco de M81 a un
+       radio efectivo sale a opacidad 0,61 en un 8" y plena en un 18": la
+       apertura se nota justo donde tiene que notarse, en el cuerpo débil.
+       deltaExp sin tocar. Medido en scripts/barrido_deltaplena.js. */
+    deltaMin: 0.0, deltaPlena: 2.5, deltaExp: 1.8,
     /* Condiciones de activación del halo (ver ps1HaloActivo): eje menor mínimo
        de la isofota 25, en ′, y brillo superficial medio a partir del cual la
        galaxia se considera difusa. El 22,25 sale de la separación natural de
