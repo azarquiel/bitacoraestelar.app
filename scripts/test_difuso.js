@@ -1041,18 +1041,26 @@ var galSur   = ['NGC 0001', '', 180, -40, 60, 0.7, 0, 10, 1, 0.2, 0, 0];
 // Como M31: tan grande que el parche de 20′ no abarca ni la mitad de su luz.
 var galEnorme = ['NGC 0224', '', 180, 40, 1200, 0.7, 0, 10, 1, 0.2, 0, 0];
 var opCapa = { arcmin: 20, size: 2, estrellas: [] };
+var lienzoCapa = null, peticionesParche = 0;
 function capa(gal, ra0, dec0) {
   var o = { ra0: ra0, dec0: dec0, arcmin: opCapa.arcmin, size: opCapa.size,
             estrellas: opCapa.estrellas, catalogo: [gal] };
-  return R.ps1CapaGalaxias(new Float32Array(4), null, { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 }, null, o);
+  lienzoCapa = new Float32Array(4);
+  peticionesParche = 0;
+  return R.ps1CapaGalaxias(lienzoCapa, null, { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 }, null, o);
+}
+function lienzoIntacto() {
+  for (var i = 0; i < lienzoCapa.length; i++) if (lienzoCapa[i] !== 0) return false;
+  return true;
 }
 
 R.galaxiasImagen = false;
 capa(galNorte, 180, 40).then(function (r) {
   ok(r.aviso === '', 'apagada, la capa no pide parche ni avisa de nada');
+  ok(lienzoIntacto(), 'y el lienzo se queda como estaba');
   R.galaxiasImagen = true;
   // Servicio caído: el parche no llega y se dice, porque hay algo que esperar.
-  global.fetch = function () { return Promise.reject(new Error('sin servicio')); };
+  global.fetch = function () { peticionesParche++; return Promise.reject(new Error('sin servicio')); };
   return capa(galNorte, 180, 40);
 }).then(function (r) {
   ok(/no responde/.test(r.aviso), 'con el servicio caído se avisa de la caída');
@@ -1065,10 +1073,19 @@ capa(galNorte, 180, 40).then(function (r) {
   return capa(galEnorme, 180, 40);
 }).then(function (r) {
   ok(/mayor que el recorte/.test(r.aviso), 'a la que no cabe en su parche se le dice por qué');
-  // Un campo que no cae sobre ninguna galaxia del RC3 no promete nada.
+  ok(peticionesParche === 0, 'y no se pide el parche de una galaxia que no cabe');
+  /* CAMPO VACÍO (ficha 07). No hace falta mirarlo con ojos: quien decide qué
+     parches se piden es el CATÁLOGO, así que un campo sin ninguna fila del RC3
+     no pide nada, no pinta nada y no avisa de nada. Con el catálogo real, RA
+     200° / Dec +35° (b = 80°) es uno de esos campos. El suelo de ruido del stack
+     —el 8 % de los píxeles de un parche vacío sobrevive al corte de 1,5σ— solo
+     puede aparecer DENTRO del parche de una galaxia de verdad, nunca en cielo
+     pelado. */
   return capa(galNorte, 0, 0);
 }).then(function (r) {
   ok(r.aviso === '', 'fuera del catálogo, silencio');
+  ok(peticionesParche === 0 && lienzoIntacto(),
+    'en campo vacío no se pide parche ni se pinta un solo píxel');
   console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
   process.exit(fallos === 0 ? 0 : 1);
 });
