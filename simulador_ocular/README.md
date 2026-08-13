@@ -67,6 +67,7 @@ un bloque HTML.
 | `resources/js/globulares-datos.js` | Catálogo de cúmulos globulares (`window.BITACORA_GLOBULARES`), generado del catálogo de Harris | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
+| `resources/js/galaxias-datos.js` | Catálogo de galaxias (`window.BITACORA_GALAXIAS`), con r_e, b/a, PA, n y mag V: es el presupuesto de luz al que se ancla el parche de PS1. Generado por `scripts/gen_galaxias.py` desde `mapa/datos/galaxias.csv`; no editar a mano | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
 | `dss-proxy.php` | Proxy de placas del DSS con caché en disco acotada, de dos fuentes (`fuente=eso` y `fuente=skyview`) | Servidor, junto al JS/CSS |
 | `ps1-proxy.php` | Proxy de `ps1cutouts` (STScI) con caché en disco: entrega el parche de una galaxia ya cosido de sus skycells (capa de galaxias desde imagen real) | Servidor, junto al JS/CSS |
@@ -244,6 +245,97 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   > No implementado porque añade una complejidad (censo de densidad local) que no
   > se ha pedido todavía — ver el comentario `ponytail:` junto a `CFG.alfaMin` en
   > `bitacora-gaia-render.js`.
+
+### Galaxias desde imagen real (parche de PanSTARRS)
+
+Una galaxia no se pinta con un elipsoide analítico y ya está: se pinta con el
+**parche real del stack 3π de PS1** (banda g), que trae los brazos, el polvo y
+las regiones HII que ningún perfil de Sérsic sabe inventar. El parche llega por
+`ps1-proxy.php` (ver *Caché de los parches de PanSTARRS*) y toda la cadena vive
+en `bitacora-gaia-render.js`, en las funciones `ps1*`.
+
+La cadena, en orden:
+
+1. **`ps1AfinParche` / `ps1CieloAPixel`** — la WCS. El recorte **no viene con el
+   norte arriba**: llega en la rejilla de su skycell, girada respecto al norte
+   (−3,607° en M81). Las estrellas se proyectan con la TAN completa
+   (`CRVAL`/`CRPIX`/`CDELT`·`PC`), no con una fórmula lineal: con la lineal, las
+   máscaras de M81 caían **12 px** fuera de su estrella.
+2. **`ps1QuitarEstrellas`** — quita las estrellas de Gaia del parche. Son
+   estrellas de nuestra galaxia delante de la imagen: si se dejan, el simulador
+   las pinta dos veces (una del catálogo, otra de la foto).
+3. **`ps1AnclarACatalogo`** — apaga lo que no llega a cielo + `kRuido`·σ y
+   reparte el presupuesto de luz que dicta la mag V del catálogo.
+4. **La mezcla E** — `campo = w·s·imagen + (1-w)·perfil`, con `w`
+   (`ps1PesoImagen`) la fracción de píxeles con señal en una caja de
+   `mezclaCajaAs`, y `s` (`ps1EscalaMezcla`) el factor que **cierra la
+   fotometría exactamente**. Donde la imagen midió, manda la imagen; donde no
+   hay información, manda el perfil del catálogo.
+
+#### El radio de máscara de cada estrella
+
+`ps1RadioMascaraAs(g)` crece **geométricamente**, ×10^(0,4/3) ≈ 1,359 por
+magnitud, acotado entre el seeing del stack y `mascaraMaxAs`. No es un número
+elegido a ojo: apilando **19 031 estrellas de Gaia sobre 33 parches de PS1**, y
+restando a cada una un testigo del mismo radio galactocéntrico para que la
+galaxia se vaya en la resta, el radio de contaminación medido crece **×1,362 por
+magnitud** (α = 2,98 contra el α = 3 que supone la ley: un ala de PSF r^-3).
+
+Lo que sí estuvo mal mucho tiempo fue el **tope**, no la forma. Con
+`mascaraMaxAs = 25″` la ley se cortaba en g ≈ 11,6, y de ahí para arriba las
+medidas piden 35–37″ (g 10–12) y 48″ para la estrella de g=8,5 del muestreo.
+Está en **60″**, que cubre todo el rango medido; más allá ya sería
+extrapolación, y por eso se corta.
+
+> **Si tocas este número, mide antes.** La saturación del stack es real y está
+> cuantificada (empieza en g ≈ 12,5 y se hunde 1 dex por debajo de g=11), pero
+> **no** justifica una ley aparte para las saturadas: sus radios siguen la misma.
+> Y subir el tope a 90″ no cambió nada medible ni siquiera en el parche que
+> tiene la estrella más brillante de las 33.
+
+#### Cómo se rellena la máscara, y por qué depende del tamaño
+
+Al tapar una estrella queda un agujero que hay que rellenar con algo. Hasta
+`rellenoPlanoMaxAs` (40″) se usa la **mediana de un anillo alrededor**
+(`ps1FondoAlrededor`), que es el mejor dato local que hay.
+
+Por encima, **no**: el disco se deja al nivel del cielo, el anclaje lo apaga,
+`w` cae a 0 dentro y lo rellena `(1-w)·perfil`.
+
+La razón es que el relleno plano solo vale mientras la galaxia apenas cambie de
+brillo entre `r` y `1,6r`. En una máscara ancha el anillo cae ya en la periferia
+y trae decenas de veces menos luz de la que había dentro. Y el fallo se
+realimenta: esa meseta pasa el umbral de anclaje, así que **`w` la cuenta como
+señal**, se queda en 1 dentro del disco y el perfil no puede corregir nada. En
+NGC 5055, `campo/perfil` dentro del disco de la estrella de g=9,2 daba **0,025**:
+un disco negro en mitad de la galaxia. Con el relleno hueco sube a 1,000.
+
+El umbral tampoco se puede bajar sin más: el hueco tiene su propio precio en el
+**borde** (mientras `w` recorre la rampa hay datos a cero, y el anillo queda a
+`(1-w)·perfil`). Con el umbral puesto en la caja de la mezcla (25″), los discos
+de ~30″ de M81 salían dibujados como dos aros oscuros. 40″ es donde las medidas
+sitúan el cruce: el relleno plano da 0,999 de 25 a 40″ y 0,025 a 56″.
+
+> **La regla general, que vale más que los números concretos:** un relleno que
+> ha dejado de representar el fondo local **no es imagen válida**, y no debe
+> conservarse como si lo fuera. Esa región es *ausencia de información*, y le
+> toca a la mezcla E reconstruirla con `(1-w)·perfil`. Es el mismo error, un
+> paso más adelante, que creer que una ausencia de señal tras el corte de 1,5σ
+> demuestra que allí no hay galaxia: no lo demuestra, solo dice que no se midió.
+
+#### Lo que sigue sin estar resuelto
+
+- **Estelas de sangrado** de las estrellas saturadas: barras largas que cruzan
+  el parche. Una máscara **circular** no las cubre sin tragarse media galaxia;
+  haría falta otra *forma* de máscara, no más radio.
+- **Discos de máscara muy pequeños (< 3″) en zona brillante**: `campo/perfil`
+  baja a 0,774 en M81. Es el peor caso medido y ningún cambio reciente lo toca.
+- **Un detector de estrellas residuales queda descartado**: se probó y empeoraba
+  el resultado. Lo que fallaba era la WCS, no la falta de un segundo detector.
+
+Los tests de todo esto están en `scripts/test_difuso.js` (`node
+scripts/test_difuso.js`), incluidos los que fijan la monotonía y la continuidad
+de `R(g)`, el máximo absoluto, y los dos regímenes de relleno.
 
 ### Halo de los cúmulos globulares (perfil de King)
 
