@@ -1394,12 +1394,77 @@
     var vista = new DataView(buffer), v = new Float32Array(ancho * alto);
     var bzero = num('BZERO', 0), bscale = num('BSCALE', 1);
     for (i = 0; i < v.length; i++) v[i] = bzero + bscale * vista.getFloat32(datos + i * 4, false);
+    /* La WCS entera, no solo la escala. El recorte llega en la rejilla PROPIA de
+       la skycell, cuyo punto de tangencia (CRVAL) puede quedar a grados del
+       objeto; ahí el norte del cielo sale GIRADO dentro del parche. En M81 el
+       giro son 3,6°, que en el borde del parche son 16 px: colocar las estrellas
+       de Gaia suponiendo norte arriba dejaba la estrella sin tapar y la máscara
+       excavando un agujero al lado (ver .scratch/estrellas-de-mas/rotacion.js).
+       Grados por píxel con el PC ya dentro; si la matriz tiene términos cruzados
+       —ninguna skycell de PS1 los trae— se devuelve null y todo se cae al
+       supuesto de siempre, que es lo que había antes. */
+    function ejeGrados(cdelt, pcA, pcB, cd) {
+      var c = num(cdelt, NaN);
+      return isFinite(c) ? c * num(pcA, num(pcB, 1)) : num(cd, NaN);
+    }
+    var gx = ejeGrados('CDELT1', 'PC001001', 'PC1_1', 'CD1_1');
+    var gy = ejeGrados('CDELT2', 'PC002002', 'PC2_2', 'CD2_2');
+    var cruce = num('PC001002', num('PC1_2', 0)) || num('PC002001', num('PC2_1', 0)) ||
+                num('CD1_2', 0) || num('CD2_1', 0);
+    var ra0 = num('CRVAL1', NaN), dec0 = num('CRVAL2', NaN);
+    var rx = num('CRPIX1', NaN), ry = num('CRPIX2', NaN);
+    var completa = !cruce && gx && gy && isFinite(gx) && isFinite(gy) &&
+      isFinite(ra0) && isFinite(dec0) && isFinite(rx) && isFinite(ry);
     return {
       ancho: ancho, alto: alto, datos: v,
       // CDELT en grados; el que interesa es el módulo, en ″/px.
       escalaAs: Math.abs(num('CDELT2', num('CD2_2', 0))) * 3600,
+      // CRPIX es 1-based en el FITS; aquí todo va 0-based.
+      wcs: completa ? { ra0: ra0, dec0: dec0, x0: rx - 1, y0: ry - 1, gx: gx, gy: gy } : null,
       zpt: num('ZPT_0000', NaN)
     };
+  }
+
+  /* (α, δ) → píxel del parche (0-based) por la gnomónica de su WCS. null si el
+     punto cae en el otro lado del cielo, donde la TAN ya no existe. */
+  function ps1CieloAPixel(w, ra, dec) {
+    var G = Math.PI / 180;
+    var a0 = w.ra0 * G, d0 = w.dec0 * G, a = ra * G, d = dec * G;
+    var sd = Math.sin(d), cd = Math.cos(d), da = a - a0;
+    var cosc = Math.sin(d0) * sd + Math.cos(d0) * cd * Math.cos(da);
+    if (!(cosc > 0)) return null;
+    var xi = cd * Math.sin(da) / cosc;
+    var eta = (Math.cos(d0) * sd - Math.sin(d0) * cd * Math.cos(da)) / cosc;
+    return [(xi / G) / w.gx + w.x0, (eta / G) / w.gy + w.y0];
+  }
+
+  /* El parche visto como una AFÍN alrededor del objeto: lleva un desplazamiento
+     en ″ (este, norte) desde el centro del objeto hasta un píxel del parche, y
+     al revés. Es el jacobiano de la TAN ahí mismo, así que recoge el giro y la
+     escala de verdad; lo único que deja fuera es la curvatura de la proyección,
+     que en un parche de 20′ vale 0,5 px de mediana y 2 px en el peor caso
+     (.scratch/estrellas-de-mas/afin.js). Se usa donde se paga por píxel; para
+     las estrellas, que son pocas, se evalúa la TAN exacta.
+     Sin WCS sale lo de siempre: norte arriba, este a la izquierda. */
+  function ps1AfinParche(f, gal) {
+    var esc = (f.escalaAs > 0) ? f.escalaAs : gal.ladoArcmin * 60 / f.ancho;
+    var a = { cx: (f.ancho - 1) / 2, cy: (f.alto - 1) / 2,
+              xe: -1 / esc, xn: 0, ye: 0, yn: 1 / esc };
+    var c = f.wcs ? ps1CieloAPixel(f.wcs, gal.ra, gal.dec) : null;
+    if (c) {
+      var cd = Math.cos(gal.dec * Math.PI / 180), paso = 1 / 3600;
+      var pe = ps1CieloAPixel(f.wcs, gal.ra + paso / (cd || 1), gal.dec);
+      var pn = ps1CieloAPixel(f.wcs, gal.ra, gal.dec + paso);
+      if (pe && pn) {
+        a = { cx: c[0], cy: c[1], xe: pe[0] - c[0], ye: pe[1] - c[1],
+              xn: pn[0] - c[0], yn: pn[1] - c[1] };
+      }
+    }
+    // La vuelta: de píxel (dx, dy respecto al centro) a (este, norte) en ″.
+    var det = a.xe * a.yn - a.xn * a.ye || 1e-12;
+    a.ex = a.yn / det; a.ey = -a.xn / det;
+    a.nx = -a.ye / det; a.ny = a.xe / det;
+    return a;
   }
 
   /* Cielo del parche: mediana del BORDE. El stack ya viene restado, pero le queda
@@ -1726,14 +1791,17 @@
   }
 
   /* El perfil del catálogo muestreado en la retícula del parche, que es donde se
-     mide el presupuesto (ps1EscalaMezcla). Fila hacia el norte y columna hacia
-     el oeste, igual que ps1PintarParche. */
-  function ps1PerfilEnParche(comps, pa, ancho, alto, escalaAs) {
-    var out = new Float32Array(ancho * alto), c0 = (ancho - 1) / 2, r0 = (alto - 1) / 2;
+     mide el presupuesto (ps1EscalaMezcla). La retícula no está al norte: `a` es
+     la afín del parche (ps1AfinParche) y es ella quien dice hacia dónde caen el
+     norte y el este en cada píxel. */
+  function ps1PerfilEnParche(comps, pa, ancho, alto, a) {
+    var out = new Float32Array(ancho * alto);
     for (var y = 0; y < alto; y++) {
-      var norte = (y - r0) * escalaAs;
+      var dy = y - a.cy;
       for (var x = 0; x < ancho; x++) {
-        out[y * ancho + x] = ps1FlujoModelo(comps, pa, norte, (c0 - x) * escalaAs);
+        var dx = x - a.cx;
+        out[y * ancho + x] = ps1FlujoModelo(comps, pa,
+          a.nx * dx + a.ny * dy, a.ex * dx + a.ey * dy);
       }
     }
     return out;
@@ -1808,14 +1876,18 @@
     var q = (o.ba > 0 && o.ba <= 1) ? o.ba : 1;
     var a = (o.pa || 0) * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
     var suma = new Float64Array(PS1_ANILLOS), total = 0;
-    // Misma orientación que ps1EstrellasEnPixeles: la fila crece al norte y la
-    // columna al oeste.
+    // Hacia dónde caen el norte y el este lo dice la afín del parche
+    // (ps1AfinParche), que viene girada; sin ella, norte arriba y este a la
+    // izquierda como siempre.
+    var af = p.afin || { cx: (p.ancho - 1) / 2, cy: (p.alto - 1) / 2,
+                         ex: -p.escalaAs, ey: 0, nx: 0, ny: p.escalaAs };
     for (var py = 0; py < p.alto; py++) {
-      var norte = (py - (p.alto - 1) / 2) * p.escalaAs;
+      var dy = py - af.cy;
       for (var px = 0; px < p.ancho; px++) {
         var f = p.datos[py * p.ancho + px];
         if (!(f > 0)) continue;
-        var este = ((p.ancho - 1) / 2 - px) * p.escalaAs;
+        var dx = px - af.cx;
+        var norte = af.nx * dx + af.ny * dy, este = af.ex * dx + af.ey * dy;
         var eje = norte * cs + este * sn, tra = (-norte * sn + este * cs) / q;
         var r = Math.sqrt(eje * eje + tra * tra);
         if (r >= A) continue;
@@ -2000,7 +2072,13 @@
     var cy = SIZE / 2 - (parche.dec - o.dec0) * escv;
     var ladoPx = (parche.ladoArcmin / 60) * escv;       // lado del parche en px del render
     if (!(ladoPx > 0.5)) return difuso;
-    var esc = parche.ancho / ladoPx;                    // px de parche por px de render
+    /* Del lienzo al parche. El lienzo SÍ está al norte (lo fija la proyección de
+       cx/cy, igual que dibujar()); el parche no, así que el paso de uno a otro es
+       la afín de ps1AfinParche y no un simple cambio de escala. Sin afín se cae
+       al supuesto de siempre, que es justo esa escala. */
+    var q = parche.ancho / (parche.ladoArcmin * 60);    // px de parche por ″
+    var a = parche.afin || { cx: (parche.ancho - 1) / 2, cy: (parche.alto - 1) / 2,
+                             xe: -q, xn: 0, ye: 0, yn: q };
     // Sin datos de cielo no hay contraste que medir: se pinta el flujo tal cual
     // (así lo usan los tests de geometría, que no simulan ninguna óptica).
     var c = o.cielo ? ctxFotometrico(o.cielo) : null;
@@ -2037,12 +2115,13 @@
     var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
     var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
     for (var y = y0; y <= y1; y++) {
-      var py = Math.round((parche.alto - 1) / 2 - (y - cy) * esc);   // fila hacia el norte
       // El norte es hacia ARRIBA y el este hacia la IZQUIERDA (ver la proyección
       // de cx/cy): los dos desplazamientos van con signo cambiado.
       var norte = -(y - cy) / pxPorAs;
       for (var x = x0; x <= x1; x++) {
-        var px = Math.round((x - cx) * esc + (parche.ancho - 1) / 2);
+        var este = -(x - cx) / pxPorAs;
+        var px = Math.round(a.cx + a.xe * este + a.xn * norte);
+        var py = Math.round(a.cy + a.ye * este + a.yn * norte);
         var f = 0, k = -1;
         if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
           k = py * parche.ancho + px;
@@ -2053,7 +2132,6 @@
            (ps1PesoImagen). Fuera del parche el peso vale 0 y queda el perfil
            solo, sin costura: en el borde w ya venía bajando. */
         if (comps.length) {
-          var este = -(x - cx) / pxPorAs;
           var fm = ps1FlujoModelo(comps, pa, norte, este);
           var w = (peso && k >= 0) ? peso[k] : 0;
           f = w * sMezcla * f + (1 - w) * fm;
@@ -2134,17 +2212,25 @@
      débiles que el límite del equipo, y eso ensucia más de lo que aporta la luz no
      resuelta que aportaban. Lo que quede por debajo de la profundidad de la
      consulta (magConsultaGaia, tope 20) sí sigue ahí: PS1 llega a g ≈ 23.
-     Misma orientación que ps1PintarParche: fila al norte, columna al oeste. */
+     La posición sale de la WCS del propio recorte, evaluando la TAN estrella a
+     estrella: son unos cientos y se hace una vez por galaxia, así que aquí no
+     hay por qué conformarse con la afín. Con el supuesto anterior —norte arriba
+     y centro en el ra/dec pedido— las máscaras de M81 caían 12 px de mediana
+     fuera de su estrella (.scratch/estrellas-de-mas/rotacion.js). */
   function ps1EstrellasEnPixeles(f, gal, estrellas) {
-    var enPx = [], cos0 = Math.cos(gal.dec * Math.PI / 180);
-    var pxPorAs = f.ancho / (gal.ladoArcmin * 60);
+    var a = f.afin || ps1AfinParche(f, gal), enPx = [];
+    var esc = 1 / Math.hypot(a.xn, a.yn);               // ″ por píxel, giro incluido
+    var cos0 = Math.cos(gal.dec * Math.PI / 180);
     for (var i = 0; i < (estrellas || []).length; i++) {
       var e = estrellas[i];
-      var dx = ((((e[0] - gal.ra) + 540) % 360) - 180) * cos0 * 3600 * pxPorAs;
-      var dy = (e[1] - gal.dec) * 3600 * pxPorAs;
-      var x = (f.ancho - 1) / 2 - dx, y = (f.alto - 1) / 2 + dy;
-      if (x < -8 || y < -8 || x > f.ancho + 8 || y > f.alto + 8) continue;
-      enPx.push({ x: x, y: y, rPx: ps1RadioMascaraAs(e[2]) * pxPorAs });
+      var p = f.wcs ? ps1CieloAPixel(f.wcs, e[0], e[1]) : null;
+      if (!p) {
+        var este = ((((e[0] - gal.ra) + 540) % 360) - 180) * cos0 * 3600;
+        var norte = (e[1] - gal.dec) * 3600;
+        p = [a.cx + a.xe * este + a.xn * norte, a.cy + a.ye * este + a.yn * norte];
+      }
+      if (p[0] < -8 || p[1] < -8 || p[0] > f.ancho + 8 || p[1] > f.alto + 8) continue;
+      enPx.push({ x: p[0], y: p[1], rPx: ps1RadioMascaraAs(e[2]) / esc });
     }
     return enPx;
   }
@@ -2154,6 +2240,9 @@
   function ps1ParcheDeGalaxia(gal, estrellas) {
     return ps1DescargarParche(gal).then(function (f) {
       if (!f) return null;
+      // Cómo está puesta la rejilla del recorte respecto al cielo. Una vez por
+      // galaxia: no depende del ocular ni del aumento.
+      f.afin = ps1AfinParche(f, gal);
       var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto,
         ps1EstrellasEnPixeles(f, gal, estrellas));
       var comps = ps1ComponentesSersic(gal);
@@ -2164,10 +2253,10 @@
       /* Peso y reanclaje de la mezcla: una vez por galaxia, no por fotograma ni
          por píxel. Dependen solo del parche y del catálogo, no de la escena. */
       var peso = ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
-      var perfil = ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.escalaAs);
+      var perfil = ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.afin);
       return {
         ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
-        ancho: f.ancho, alto: f.alto,
+        ancho: f.ancho, alto: f.alto, afin: f.afin,
         // Modelo del catálogo para lo de más allá de la imagen (ver
         // ps1PintarParche). Se calcula una vez por galaxia, no por píxel; lo
         // único que falta al pintar es el cielo de la escena.
@@ -2520,6 +2609,8 @@
     ps1LadoArcmin: ps1LadoArcmin,
     ps1UrlParche: ps1UrlParche,
     parseFITS: parseFITS,
+    ps1CieloAPixel: ps1CieloAPixel,
+    ps1AfinParche: ps1AfinParche,
     ps1Cielo: ps1Cielo,
     ps1SigmaCielo: ps1SigmaCielo,
     ps1RadioMascaraAs: ps1RadioMascaraAs,

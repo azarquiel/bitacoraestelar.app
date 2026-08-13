@@ -600,6 +600,40 @@ ok(enPxE.length === 1 && enPxE[0].x < (512 - 1) / 2,
   'una estrella al este se enmascara en una columna menor del parche');
 ok(R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, [[galEst.ra, galEst.dec, 18]]).length === 1,
   'una estrella por debajo de la magnitud límite del equipo TAMBIÉN se enmascara');
+
+/* Y con la rejilla GIRADA. El recorte llega en la rejilla de la skycell, cuyo
+   punto de tangencia puede quedar a grados del objeto: allí el norte del cielo
+   no apunta hacia arriba dentro del parche. En M81 son 3,6°, o sea 16 px en el
+   borde, y con el supuesto de norte arriba las máscaras caían 12 px fuera de su
+   estrella —la estrella quedaba sin tapar y la máscara abría un hoyo al lado.
+   Se monta una WCS con CRVAL lejos en α, que es lo que produce el giro. */
+var escGrad = (18 / 60) / 512;                      // 18′ en 512 px, en grados/px
+var fGirado = { ancho: 512, alto: 512, escalaAs: escGrad * 3600,
+                wcs: { ra0: galEst.ra + 4, dec0: galEst.dec, x0: 255.5, y0: 255.5,
+                       gx: -escGrad, gy: escGrad } };
+// El punto de referencia se mueve al sitio donde de verdad cae el objeto.
+var cGir = R.ps1CieloAPixel(fGirado.wcs, galEst.ra, galEst.dec);
+fGirado.wcs.x0 = 255.5 - (cGir[0] - 255.5); fGirado.wcs.y0 = 255.5 - (cGir[1] - 255.5);
+var aGir = R.ps1AfinParche(fGirado, galEst);
+var giroGrados = Math.atan2(aGir.xn, aGir.yn) * 180 / Math.PI;
+ok(Math.abs(giroGrados + 4 * Math.sin(galEst.dec * Math.PI / 180)) < 0.15,
+  'la afín del parche recoge el giro de la rejilla (' + giroGrados.toFixed(2) + '°)');
+var pGir = R.ps1EstrellasEnPixeles(fGirado, galEst, estN)[0];
+var pRecto = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estN)[0];
+// La estrella está a 85 px del centro, así que 2,94° la mueven ~4,4 px: mucho
+// más que el radio de máscara de una débil, que es de un píxel escaso.
+ok(Math.hypot(pGir.x - pRecto.x, pGir.y - pRecto.y) > 3,
+  'y la estrella se enmascara donde la pone la WCS, no donde la ponía el norte arriba');
+// Contra la verdad: la TAN llevada a mano hasta esa estrella.
+var espN = R.ps1CieloAPixel(fGirado.wcs, estN[0][0], estN[0][1]);
+ok(Math.hypot(pGir.x - espN[0], pGir.y - espN[1]) < 0.01,
+  'y coincide con la gnomónica de su propia cabecera');
+// Y la vuelta de la afín deshace la ida: un píxel del parche da su (norte, este).
+var dxA = 40, dyA = -25;
+var norteA = aGir.nx * dxA + aGir.ny * dyA, esteA = aGir.ex * dxA + aGir.ey * dyA;
+ok(Math.abs(aGir.xe * esteA + aGir.xn * norteA - dxA) < 1e-6 &&
+   Math.abs(aGir.ye * esteA + aGir.yn * norteA - dyA) < 1e-6,
+  'la afín y su inversa se deshacen, que es lo que une el perfil con la imagen');
 // Y el parche ocupa en el render el lado que le toca, ni más ni menos.
 var minX = SIZE, maxX = -1;
 var lienzoLleno = new Float32Array(SIZE * SIZE);
