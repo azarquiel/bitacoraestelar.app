@@ -107,7 +107,11 @@
   var FOT = {
     SB_OBJ_MAX: 14.0, SB_OBJ_MIN: 24.0, SB_NEGRO: 25.5, SB_BLANCO: 14.0,
     C_MIN: 0.08, C_EXP: 0.35, GAMMA_HIPS: 2.0,
-    /* Dependencia del umbral de contraste con el TAMAÑO APARENTE del objeto.
+    /* LEY HISTÓRICA C_MAG — hoy VÍA MUERTA: solo corre si H2C se apaga a mano
+       (H2C = null), y se conserva únicamente como regresión histórica. En
+       producción manda H2c (ver H2C más abajo). El razonamiento original:
+
+       Dependencia del umbral de contraste con el TAMAÑO APARENTE del objeto.
        Sin esto, el umbral solo dependía del brillo del fondo, y entonces cambiar
        de un 12" a un 18" no mejoraba nada en objetos extensos: a igual pupila de
        salida el brillo superficial es idéntico —eso es física—, así que la imagen
@@ -143,6 +147,23 @@
        el mismo aumento para una galaxia de 30' y una de 2', que es falso. El
        dato existe (reArcsec del catálogo); meterlo es la mejora de verdad. */
     C_MAG_REF: 100, C_MAG_EXP: 1.0, C_MAG_MIN: 0.45, C_MAG_MAX: 2.0,
+    /* Ley H2c del umbral por tamaño — LEY DE PRODUCCIÓN (Blackwell 1946,
+       ajuste conjunto medido en scripts/harness_ricco_seeing.js):
+         Cmin *= (1 + θR(SBe) / θapp)²,  θapp = θeff·aumentos (arcmin),
+         θeff = √(θint² + θseeing²),     log10 θR = THETA_R_A + THETA_R_B·SBe.
+       Corrige el defecto documentado arriba (ponytail): usa el tamaño aparente
+       real del objeto (θint·aumentos), no los aumentos solos. Sustituye al
+       bloque C_MAG completo cuando está activa Y el objeto trae θint; los
+       clamps C_MAG_MIN/MAX sobran porque el plateau (factor→1 en objetos
+       grandes) y la ley de flujo (pendiente −2 en pequeños) acotan solos.
+       El nivel absoluto (K≈2 = conservar C_MIN) quedó validado en campo:
+       12 observaciones reales, 10/12 acordes, y los márgenes ordenan
+       visto/lateral/no_visto (scripts/campo_h2c.js, docs/ricco/campo/).
+       SEEING_AS = 2″ fijo: sin modelo por noche, a propósito.
+       H2C = null la apaga y recupera la vía C_MAG histórica, bit a bit:
+       solo para regresión. */
+    H2C: null, // el literal no puede autorreferirse: se fija a H2C_DEFECTO justo tras el objeto
+    H2C_DEFECTO: { THETA_R_A: 0.094, THETA_R_B: 0.081, SEEING_AS: 2.0 },
     // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo se
     // pinta en función de su brillo superficial en el ocular (SBe, mag/arcsec²,
     // atenuado por la pupila de salida). Por encima de SB_CIELO_NEGRO el fondo es
@@ -191,6 +212,7 @@
        Las placas conservan el desvanecido original. */
     UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4
   };
+  FOT.H2C = FOT.H2C_DEFECTO; // H2c activa por defecto (validada en campo)
 
   function nivelCielo(SBe) {
     var t = (FOT.SB_CIELO_NEGRO - SBe) / (FOT.SB_CIELO_NEGRO - FOT.SB_CIELO_BLANCO);
@@ -213,7 +235,11 @@
 
      AQUÍ vive el término de pupila (−2,5·log10(dim·T)). Ningún motor que produzca
      un Fobj debe volver a aplicarlo, o lo contaría dos veces. */
-  function ctxFotometrico(o) {
+  /* `thetaIntArcmin` (opcional): diámetro intrínseco del objeto en MINUTOS DE
+     ARCO —la isofota μ=25 circularizada, ver ps1ThetaIntArcmin—. Solo lo usa la
+     ley H2c y solo con FOT.H2C activa; sin ella se ignora y la cadena es la de
+     siempre. */
+  function ctxFotometrico(o, thetaIntArcmin) {
     var pOjo = o.pupilaOjo || 7, pEf = Math.min(o.pupilaSalida, pOjo);
     var sqm = (o.sqm != null) ? o.sqm : 21;
     var T = (o.transmision > 0) ? o.transmision : TRANSMISION_DEFECTO;
@@ -221,19 +247,29 @@
     var Fcielo = Math.pow(10, -0.4 * sqm);
     var Fref = Math.pow(10, -0.4 * 21);
     var Cmin = FOT.C_MIN * Math.pow(Fref / (Fcielo * dim), FOT.C_EXP);
-    // Un objeto mayor en la retina se detecta con menos contraste: los aumentos
-    // fijan su tamaño aparente. Aquí es donde la apertura extra se nota en los
-    // objetos extensos, ya que el brillo superficial no puede subir.
-    if (o.aumentos > 0) {
-      Cmin *= Math.max(FOT.C_MAG_MIN, Math.min(FOT.C_MAG_MAX,
-        Math.pow(FOT.C_MAG_REF / o.aumentos, FOT.C_MAG_EXP)));
-    }
     // SBe = brillo superficial del cielo TAL COMO LLEGA AL OJO (mag/arcsec²),
     // ya atenuado por la pupila de salida y por la transmisión del tubo. Es el
     // "negro perceptual" de la escena: lo que pinta el fondo y contra lo que se
     // mide el contraste del halo extrapolado (ver ps1Opacidad). Se expone para
     // no recalcularlo en ningún otro sitio.
     var SBe = sqm - 2.5 * Math.log10(dim) - 2.5 * Math.log10(T);
+    // Un objeto mayor en la retina se detecta con menos contraste: los aumentos
+    // fijan su tamaño aparente. Aquí es donde la apertura extra se nota en los
+    // objetos extensos, ya que el brillo superficial no puede subir.
+    if (FOT.H2C && thetaIntArcmin > 0 && o.aumentos > 0) {
+      /* Ley H2c (ver FOT.H2C). El seeing entra en cuadratura —mismo patrón que
+         radioImagenEstelar (Airy+seeing)— y pone el suelo de θeff: un objeto
+         bajo el seeing no gana resolución, gana la del seeing. Sin PSF aquí:
+         la detección no depende de ella (invariancia F). */
+      var thEff = Math.sqrt(thetaIntArcmin * thetaIntArcmin
+        + Math.pow(FOT.H2C.SEEING_AS / 60, 2));
+      var thR = Math.pow(10, FOT.H2C.THETA_R_A + FOT.H2C.THETA_R_B * SBe);
+      var raz = 1 + thR / (thEff * o.aumentos);
+      Cmin *= raz * raz;
+    } else if (o.aumentos > 0) {
+      Cmin *= Math.max(FOT.C_MAG_MIN, Math.min(FOT.C_MAG_MAX,
+        Math.pow(FOT.C_MAG_REF / o.aumentos, FOT.C_MAG_EXP)));
+    }
     return {
       Fcielo: Fcielo, Fref: Fref, Cmin: Cmin, dim: dim, T: T,
       SBe: SBe, nivelFondo: nivelCielo(SBe),
@@ -1943,6 +1979,18 @@
     return out;
   }
 
+  /* Diámetro intrínseco del objeto para la ley H2c: 2·r(μ=25) del modelo del
+     catálogo, en MINUTOS DE ARCO y CIRCULARIZADO por √(b/a) —la detección
+     integra área, no semieje—. r(μ25) se toma como el mayor de los radios
+     isofotales de las componentes: en el cruce de μ=25 domina una sola (el
+     disco) y la analítica de ps1RadioIsofota ya lo resuelve exacto; la suma
+     solo lo movería un pelo hacia fuera, y ±40 % de θint son ±0,05 dex de
+     umbral (medido en scripts/harness_h2c_anclaje_render.js, M104). */
+  function ps1ThetaIntArcmin(comps, ba) {
+    var e = ps1EjesArcmin(comps || [], ba);   // los MISMOS ejes que decide el halo
+    return Math.sqrt(e.a * e.b);              // = 2·r(μ25)/60·√(b/a)
+  }
+
   // Radio (″, semieje mayor) que abarca todo el halo extrapolado.
   function ps1RadioHaloAs(comps) {
     var r = 0;
@@ -2328,7 +2376,10 @@
                              xe: -q, xn: 0, ye: 0, yn: q };
     // Sin datos de cielo no hay contraste que medir: se pinta el flujo tal cual
     // (así lo usan los tests de geometría, que no simulan ninguna óptica).
-    var c = o.cielo ? ctxFotometrico(o.cielo) : null;
+    // El θint del parche entra aquí, en el contexto DE ESTA galaxia: el umbral
+    // de la escena (pintarFot) no lo lleva, porque las otras capas difusas no
+    // tienen tamaño intrínseco propio. Con FOT.H2C nula el argumento se ignora.
+    var c = o.cielo ? ctxFotometrico(o.cielo, parche.thetaIntArcmin) : null;
     var umbral = c ? sbUmbralContraste(c) : 0;   // constante en todo el parche
     var pxPorAs = escv / 3600;
     /* El halo extrapolado y el umbral de contraste son decisiones INDEPENDIENTES.
@@ -2563,6 +2614,8 @@
         // ps1PintarParche). Se calcula una vez por galaxia, no por píxel; lo
         // único que falta al pintar es el cielo de la escena.
         comps: comps, pa: gal.pa, halo: ps1MedidasHalo(gal, comps),
+        // Tamaño intrínseco (arcmin) para la ley H2c; inerte con FOT.H2C nula.
+        thetaIntArcmin: ps1ThetaIntArcmin(comps, gal.ba),
         peso: peso, escalaMezcla: ps1EscalaMezcla(datos, peso, perfil),
         datos: datos
       };
@@ -3020,7 +3073,7 @@
     ps1FraccionLuz: ps1FraccionLuz,
     ps1ComponentesSersic: ps1ComponentesSersic,
     ps1FlujoModelo: ps1FlujoModelo,
-    ps1RadioHaloAs: ps1RadioHaloAs,
+    ps1RadioHaloAs: ps1RadioHaloAs, ps1ThetaIntArcmin: ps1ThetaIntArcmin,
     ps1PesoImagen: ps1PesoImagen,
     ps1PerfilEnParche: ps1PerfilEnParche,
     ps1EscalaMezcla: ps1EscalaMezcla,

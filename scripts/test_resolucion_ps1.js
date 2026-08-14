@@ -84,7 +84,9 @@ var c2 = R.ctxFotometrico({ sqm: SQM, transmision: T, pupilaOjo: POJO, pupilaSal
 casi(c.Cmin, c2.Cmin, 1e-15, 'Cmin idéntico con cualquier resolución de parche');
 casi(c.nivelFondo, c2.nivelFondo, 1e-15, 'nivelFondo idéntico');
 casi(c.rango, c2.rango, 1e-15, 'rango (lo que consumen las estrellas) idéntico');
-ok(R.ctxFotometrico.length <= 1, 'ctxFotometrico toma UN objeto de óptica: sin hueco para escalaAs');
+/* El 2º argumento (thetaIntArcmin, ley H2c) es tamaño del OBJETO en el cielo,
+   no del parche: escalaAs y la resolución siguen sin tener por dónde entrar. */
+ok(R.ctxFotometrico.length <= 2, 'ctxFotometrico toma la óptica y a lo sumo θint: sin hueco para escalaAs');
 
 console.log('\n— 5. El campo angular cubierto no se toca —');
 /* La propuesta sube `salida`, no baja `lado`. Es la diferencia entre afinar el

@@ -203,7 +203,11 @@ function correr(parches) {
   casi(c1.Cmin, c2.Cmin, 0, 'Cmin');
   casi(c1.nivelFondo, c2.nivelFondo, 0, 'nivelFondo');
   casi(c1.rango, c2.rango, 0, 'rango');
-  ok(R.ctxFotometrico.length <= 1, 'ctxFotometrico toma UN objeto de óptica: sin hueco para el parche');
+  /* El 2º argumento (thetaIntArcmin, ley H2c) es tamaño INTRÍNSECO del objeto
+     en el cielo, no resolución del parche: la guarda sigue siendo que ninguna
+     PSF ni escala de píxel entra en la fotometría. */
+  ok(R.ctxFotometrico.length <= 2, 'ctxFotometrico toma la óptica y a lo sumo θint: sin hueco para el parche ni su PSF');
+  casi(R.ctxFotometrico(opt, 8).Cmin, c1.Cmin, 0, 'sin aumentos en la óptica, θint no mueve Cmin');
   casi(R.nivelFondo({ pupilaSalida: 457 / 150, pupilaOjo: 7, sqm: 21.3, transmision: 0.82 }),
     R.nivelFondo({ pupilaSalida: 457 / 150, pupilaOjo: 7, sqm: 21.3, transmision: 0.82 }), 0,
     'nivelFondo del render');
