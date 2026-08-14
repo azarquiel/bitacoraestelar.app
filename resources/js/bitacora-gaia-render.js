@@ -1337,8 +1337,7 @@
     mascaraMaxAs: 60,      // ″: tope del radio de máscara de una estrella (una de g≈9 ya lo toca)
     mascaraMagRef: 22,     // mag G a la que el radio de máscara es el seeing (≈ el fondo del stack; ver ps1RadioMascaraAs)
     mascaraProf: 20,       // mag G hasta la que se piden estrellas para la máscara (tope del proxy)
-    rellenoPlanoMaxAs: 40, // ″: hasta este radio la máscara se rellena con la mediana de alrededor; por encima se deja al cielo (ver ps1QuitarEstrellas)
-    nucleoPx: 3,           // px: radio central que la máscara no toca nunca
+    rellenoPlanoMaxAs: 40, // ″: hasta este radio la máscara se rellena con el fondo local; por encima se deja al cielo (ver ps1QuitarEstrellas)
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
     kRuido: 1.5,           // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
     /* Halo extrapolado: hasta qué brillo superficial (mag/arcsec²) se sigue el
@@ -1610,43 +1609,99 @@
      galaxia alrededor.
 
      `estrellas` en píxeles del parche: [{x, y, rPx, rAs}]. Sin `rAs` (llamadas
-     viejas) se usa siempre el disco plano. Devuelve una copia. El núcleo
-     (PS1.nucleoPx alrededor del centro) no se toca nunca: una estrella de Gaia
-     proyectada sobre el núcleo se llevaría el objeto entero. */
-  function ps1QuitarEstrellas(datos, ancho, alto, estrellas) {
+     viejas) se usa siempre el disco plano. Devuelve una copia.
+
+     `geo` ({afin, ba, pa}) es la geometría de la galaxia, y con ella:
+     — una fuente es NUCLEAR si su máscara cubre el centro de la galaxia
+       (dist(fuente, centro) < rAs, todo en ″: nada en píxeles, vale a
+       cualquier resolución). Una fuente nuclear NO se enmascara: Gaia trae el
+       núcleo puntual de la galaxia (AGN, núcleo compacto) como estrella, y
+       quitarlo fabricaba una «bola dentro de un anillo oscuro» (M104, M81;
+       validado sobre 5 galaxias en scripts/harness_quitar_estrellas_general.js).
+       La protección es POR FUENTE, no una zona ciega alrededor del centro: si
+       la máscara de una estrella normal atraviesa el disco nuclear, esa parte
+       se elimina igual.
+     — el relleno estrecho deja de ser plano: mediana por banda de ISOFOTA
+       elíptica (b/a y PA del catálogo, bandas de 1 px de radio elíptico), que
+       es el fondo galáctico local de verdad; el plano hundía el bulbo al nivel
+       del anillo exterior. El disco ancho (rAs > rellenoPlanoMaxAs) se sigue
+       dejando al cielo: esa arquitectura está medida aparte (ver arriba).
+     Sin `geo` (llamadas viejas y tests sintéticos): sin protección nuclear y
+     relleno plano, como siempre. */
+  function ps1QuitarEstrellas(datos, ancho, alto, estrellas, geo) {
     if (!estrellas || !estrellas.length) return datos;
-    var mascara = new Uint8Array(datos.length), i, e, x, y, cielo = null;
-    var cx = (ancho - 1) / 2, cy = (alto - 1) / 2, rN = PS1.nucleoPx;
+    var a = geo && geo.afin, esc = a ? 1 / Math.hypot(a.xn, a.yn) : 0;
+    var mascara = new Uint8Array(datos.length), quitar = [], i, e, x, y, cielo = null;
     for (i = 0; i < estrellas.length; i++) {
       e = estrellas[i];
+      if (a && Math.hypot(e.x - a.cx, e.y - a.cy) * esc < e.rAs) continue;   // nuclear: se conserva entera
+      quitar.push(e);
       var r = Math.max(1, e.rPx), r2 = r * r;
       for (y = Math.max(0, Math.floor(e.y - r)); y <= Math.min(alto - 1, Math.ceil(e.y + r)); y++) {
         for (x = Math.max(0, Math.floor(e.x - r)); x <= Math.min(ancho - 1, Math.ceil(e.x + r)); x++) {
           var dx = x - e.x, dy = y - e.y;
           if (dx * dx + dy * dy > r2) continue;
-          var nx = x - cx, ny = y - cy;
-          if (nx * nx + ny * ny <= rN * rN) continue;      // el núcleo no se toca
           mascara[y * ancho + x] = 1;
         }
       }
     }
+    /* Isofotas: banda = radio elíptico redondeado a píxeles, mediana de lo no
+       enmascarado (mín. 8 muestras, como ps1FondoAlrededor). El radio elíptico
+       sale del afín inverso, así que respeta el giro de la skycell. */
+    var isofotas = null, banda = null;
+    if (a) {
+      var ba = (geo.ba > 0 && geo.ba <= 1) ? geo.ba : 1;
+      var paR = (geo.pa || 0) * Math.PI / 180, sinPA = Math.sin(paR), cosPA = Math.cos(paR);
+      banda = function (px, py) {
+        var dx = px - a.cx, dy = py - a.cy;
+        var este = a.ex * dx + a.ey * dy, norte = a.nx * dx + a.ny * dy;
+        var u = este * sinPA + norte * cosPA, v = -este * cosPA + norte * sinPA;
+        return Math.round(Math.hypot(u, v / ba) / esc);
+      };
+      var muestras = [];
+      for (y = 0; y < alto; y++) {
+        for (x = 0; x < ancho; x++) {
+          i = y * ancho + x;
+          if (mascara[i]) continue;
+          var vM = datos[i];
+          if (vM !== vM) continue;
+          var bM = banda(x, y);
+          (muestras[bM] || (muestras[bM] = [])).push(vM);
+        }
+      }
+      isofotas = muestras.map(function (m) {
+        if (!m || m.length < 8) return null;
+        m.sort(function (p, q) { return p - q; });
+        return m[m.length >> 1];
+      });
+    }
     var out = Float32Array.from ? Float32Array.from(datos) : new Float32Array(datos);
-    for (i = 0; i < estrellas.length; i++) {
-      e = estrellas[i];
-      var rE = Math.max(1, e.rPx), fondo;
+    for (i = 0; i < quitar.length; i++) {
+      e = quitar[i];
+      var rE = Math.max(1, e.rPx), fondo = null;
       if (e.rAs > PS1.rellenoPlanoMaxAs) {                 // disco ancho: ausencia, que la rellene el perfil
         if (cielo == null) cielo = ps1Cielo(datos, ancho, alto);
         fondo = cielo;
-      } else {
+      } else if (!isofotas) {
         fondo = ps1FondoAlrededor(datos, mascara, ancho, alto, e.x, e.y, rE);
+        if (fondo == null) continue;                       // sin muestras limpias: mejor dejarlo como está
       }
-      if (fondo == null) continue;                         // sin muestras limpias: mejor dejarlo como está
       var rE2 = rE * rE;
       for (y = Math.max(0, Math.floor(e.y - rE)); y <= Math.min(alto - 1, Math.ceil(e.y + rE)); y++) {
         for (x = Math.max(0, Math.floor(e.x - rE)); x <= Math.min(ancho - 1, Math.ceil(e.x + rE)); x++) {
           var ex = x - e.x, ey = y - e.y;
           if (ex * ex + ey * ey > rE2) continue;
-          if (mascara[y * ancho + x]) out[y * ancho + x] = fondo;
+          var j = y * ancho + x;
+          if (!mascara[j]) continue;
+          var v = fondo;
+          if (v == null) {                                 // disco estrecho con isofotas
+            var b = banda(x, y);
+            v = isofotas[b];
+            // banda sin muestras (borde, campo cargado): la vecina más próxima
+            for (var k = 1; v == null && k < 8; k++) v = isofotas[b + k] != null ? isofotas[b + k] : isofotas[b - k];
+            if (v == null) continue;
+          }
+          out[j] = v;
         }
       }
     }
@@ -2469,7 +2524,7 @@
       // galaxia: no depende del ocular ni del aumento.
       f.afin = ps1AfinParche(f, gal);
       var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto,
-        ps1EstrellasEnPixeles(f, gal, estrellas));
+        ps1EstrellasEnPixeles(f, gal, estrellas), { afin: f.afin, ba: gal.ba, pa: gal.pa });
       var comps = ps1ComponentesSersic(gal);
       var datos = ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
         magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,

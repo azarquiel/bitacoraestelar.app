@@ -263,7 +263,12 @@ La cadena, en orden:
    máscaras de M81 caían **12 px** fuera de su estrella.
 2. **`ps1QuitarEstrellas`** — quita las estrellas de Gaia del parche. Son
    estrellas de nuestra galaxia delante de la imagen: si se dejan, el simulador
-   las pinta dos veces (una del catálogo, otra de la foto).
+   las pinta dos veces (una del catálogo, otra de la foto). Excepción: la
+   fuente **nuclear** (su máscara cubre el centro de la galaxia,
+   dist < radio de máscara) no se toca — Gaia trae los núcleos puntuales como
+   estrellas, y quitarlos dejaba una «bola dentro de un anillo oscuro» (M104,
+   M81). La protección es por fuente; una estrella normal que pise el disco
+   nuclear se elimina igual.
 3. **`ps1AnclarACatalogo`** — apaga lo que no llega a cielo + `kRuido`·σ y
    reparte el presupuesto de luz que dicta la mag V del catálogo.
 4. **`ps1PsfParche`** — el borrón del telescopio, lo que separa lo que ve un
@@ -392,8 +397,11 @@ extrapolación, y por eso se corta.
 #### Cómo se rellena la máscara, y por qué depende del tamaño
 
 Al tapar una estrella queda un agujero que hay que rellenar con algo. Hasta
-`rellenoPlanoMaxAs` (40″) se usa la **mediana de un anillo alrededor**
-(`ps1FondoAlrededor`), que es el mejor dato local que hay.
+`rellenoPlanoMaxAs` (40″) se usa la **mediana de la banda de isofota elíptica**
+del píxel (b/a y PA del catálogo): el fondo galáctico local a ese radio. El
+relleno plano de antes (mediana de un anillo circular, `ps1FondoAlrededor`)
+hundía el bulbo al nivel del anillo exterior y queda solo para llamadas sin
+geometría de galaxia.
 
 Por encima, **no**: el disco se deja al nivel del cielo, el anclaje lo apaga,
 `w` cae a 0 dentro y lo rellena `(1-w)·perfil`.

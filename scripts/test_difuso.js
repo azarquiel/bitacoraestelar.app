@@ -491,9 +491,11 @@ ok(pxConLuz < ANCHO_R * ANCHO_R * 0.25,
 // (La costura de skycells por NaN se fue al proxy: scripts/test_ps1_proxy.php.)
 
 /* Supresión de estrellas: TODAS las de la muestra de Gaia (máscara total, ficha
-   04 revisada el 11-ago-2026), nunca el núcleo, y con un radio que depende solo
-   de lo brillante que sea la estrella, no del equipo. El relleno es la mediana de
-   un anillo, así que reparte luz pero no la conserva al dígito: suma con holgura. */
+   04 revisada el 11-ago-2026), salvo la fuente nuclear de la galaxia (ver
+   scripts/test_quitar_estrellas.js), y con un radio que depende solo de lo
+   brillante que sea la estrella, no del equipo. Sin `geo` el relleno es la
+   mediana de un anillo: reparte luz pero no la conserva al dígito, suma con
+   holgura. */
 function tocadosTrasQuitar(estrellas) {
   var d = parcheSintetico(0), enPx = [], pxPorAs = ANCHO / (LADO * 60);
   estrellas.forEach(function (e, k) {                         // [g, radio ″ desde el centro]
@@ -608,12 +610,15 @@ for (var iR = 0; iR < sinEstrella.length; iR++) {
 ok(maxRes < FONDO * 1.15, 'quitada la estrella no queda halo (máximo ' + maxRes.toFixed(1) +
   ' sobre un fondo de ' + FONDO + ')');
 ok(minRes > FONDO * 0.9, 'ni hueco (mínimo ' + minRes.toFixed(1) + ')');
-// Núcleo intacto aunque le caiga encima una estrella brillante y ancha.
+/* El núcleo ya no se protege por píxel central (nucleoPx murió): la protección
+   es por fuente nuclear con la geometría de la galaxia, y la ejercita
+   scripts/test_quitar_estrellas.js. Sin `geo`, la máscara trata el centro como
+   cualquier otro píxel. */
 var dN = parcheSintetico(0);
 var outN = R.ps1QuitarEstrellas(dN, ANCHO, ANCHO,
   [{ x: (ANCHO - 1) / 2, y: (ANCHO - 1) / 2, rPx: 12 }]);
 var cN = Math.round((ANCHO - 1) / 2), iN = cN * ANCHO + cN;
-casi(outN[iN], dN[iN], 1e-6, 'la máscara no toca el píxel central del núcleo');
+ok(outN[iN] !== dN[iN], 'sin geometría de galaxia no hay zona ciega en el centro');
 
 /* El parche cae donde dice el catálogo, a la escala que dice CDELT: una galaxia
    desplazada 5′ al este y 2′ al norte del centro del campo aterriza en el píxel
