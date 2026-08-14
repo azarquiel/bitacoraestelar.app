@@ -2392,22 +2392,44 @@
       var norte = -(y - cy) / pxPorAs;
       for (var x = x0; x <= x1; x++) {
         var este = -(x - cx) / pxPorAs;
-        var px = Math.round(a.cx + a.xe * este + a.xn * norte);
-        var py = Math.round(a.cy + a.ye * este + a.yn * norte);
-        var f = 0, k = -1;
-        if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
-          k = py * parche.ancho + px;
-          f = datos[k];
+        /* Remuestreo bilineal sobre la rejilla del PARCHE (medido en
+           harness_remuestreo_parche.js: mismo flujo, menos escalonado). Con
+           cuatro vecinos ya no hay un `k` único que reutilizar para `peso[k]`:
+           cada vecino aporta su mezcla COMPLETA —su flujo y su peso—, y el
+           vecino más próximo queda como el caso particular pe = 1. La mezcla
+           sigue siendo la de siempre: la imagen manda donde midió, el perfil
+           rellena lo que la imagen no cubre, y el tránsito es continuo porque
+           el peso lo es (ps1PesoImagen). Fuera del parche el vecino vale flujo
+           0 y peso 0 —lo mismo que valía con Math.round—, así que en el borde
+           queda el perfil solo, sin costura. Los huecos del stack (NaN) se
+           saltan y se renormaliza, igual que la convolución de
+           lib_psf_parche.js: no se esparcen ni se rellenan. */
+        var fx = a.cx + a.xe * este + a.xn * norte;
+        var fy = a.cy + a.ye * este + a.yn * norte;
+        var px0 = Math.floor(fx), py0 = Math.floor(fy);
+        var tx = fx - px0, ty = fy - py0;
+        var fm = comps.length ? ps1FlujoModelo(comps, pa, norte, este) : 0;
+        var acc = 0, cubierto = 0;
+        for (var vj = 0; vj < 2; vj++) {
+          var cvj = vj ? ty : 1 - ty;
+          if (!(cvj > 0)) continue;
+          var py = py0 + vj;
+          for (var vi = 0; vi < 2; vi++) {
+            var pe = cvj * (vi ? tx : 1 - tx);
+            if (!(pe > 0)) continue;
+            var px = px0 + vi, fv = 0, wv = 0;
+            if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
+              var k = py * parche.ancho + px;
+              var v = datos[k];
+              if (!isFinite(v)) continue;
+              fv = v; wv = peso ? peso[k] : 0;
+            }
+            acc += pe * (comps.length ? wv * sMezcla * fv + (1 - wv) * fm : fv);
+            cubierto += pe;
+          }
         }
-        /* La mezcla: la imagen manda donde midió, el perfil solo rellena lo que
-           la imagen no cubre, y el tránsito es continuo porque el peso lo es
-           (ps1PesoImagen). Fuera del parche el peso vale 0 y queda el perfil
-           solo, sin costura: en el borde w ya venía bajando. */
-        if (comps.length) {
-          var fm = ps1FlujoModelo(comps, pa, norte, este);
-          var w = (peso && k >= 0) ? peso[k] : 0;
-          f = w * sMezcla * f + (1 - w) * fm;
-        }
+        if (!(cubierto > 0)) continue;   // los cuatro vecinos son huecos: el hueco se queda
+        var f = acc / cubierto;
         if (!(f > 0)) continue;
         if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), umbral), c);
         if (!(f > 0)) continue;
