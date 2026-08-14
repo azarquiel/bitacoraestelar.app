@@ -270,7 +270,10 @@ La cadena, en orden:
    M81). La protección es por fuente; una estrella normal que pise el disco
    nuclear se elimina igual.
 3. **`ps1AnclarACatalogo`** — apaga lo que no llega a cielo + `kRuido`·σ y
-   reparte el presupuesto de luz que dicta la mag V del catálogo.
+   reparte el presupuesto de luz que dicta la mag V del catálogo. Tres casos,
+   no dos: lo que cae **por debajo de cielo − `kAusencia`·σ** no es cielo, es
+   **sobresustracción del stack** (píxeles negativos dentro del cuerpo), y se
+   marca NaN = *ausencia de medida* (ver *Las depresiones oscuras* más abajo).
 4. **`ps1PsfParche`** — el borrón del telescopio, lo que separa lo que ve un
    80 mm de lo que ve un 400 mm (ver *La resolución del recorte* más abajo).
 5. **La mezcla E** — `campo = w·s·imagen + (1-w)·perfil`, con `w`
@@ -453,6 +456,40 @@ sitúan el cruce: el relleno plano da 0,999 de 25 a 40″ y 0,025 a 56″.
 > paso más adelante, que creer que una ausencia de señal tras el corte de 1,5σ
 > demuestra que allí no hay galaxia: no lo demuestra, solo dice que no se midió.
 
+#### Las depresiones oscuras (M51/M81) y la semántica de ausencia
+
+M51 salía con un **foso negro** alrededor del cuerpo y M81 con la envolvente
+apagada. El diagnóstico (dos experimentos con réplica bit a bit del pintado)
+exoneró a H2c, a `ps1QuitarEstrellas` y a la máscara de escena: el problema
+eran dos, y se corrigen por separado.
+
+- **M51: sobresustracción del stack.** El 27,6 % de los píxeles del anillo
+  venía por debajo del suelo del anclaje, muchos **negativos** — el mismo
+  mecanismo que deja a M31 sin disco exterior, a escala menor. Anclarlos a 0
+  los convertía en una *medida falsa de oscuridad* que `w` contaba como señal
+  (w≈1 dentro del cuerpo), así que el perfil no podía rellenar nada. La regla:
+  `v < cielo − kAusencia·σ` (k = 2, meseta medida en k = 1–3) pasa a **NaN**, y
+  el NaN se trata en el pintado **igual que el vecino de fuera del parche**
+  (flujo 0, peso 0, cuenta en cobertura): lo rellena `(1-w)·perfil`. La
+  variante «hueco» (saltar y renormalizar) está medida y **no funciona**,
+  porque `ps1PesoImagen` no distingue NaN de 0. Es la regla general del relleno
+  de máscara aplicada un paso antes: una ausencia de señal no demuestra que
+  allí no haya galaxia, solo que no se midió.
+- **M81: la rampa de opacidad amplificaba el contraste.** `ps1Opacidad` eleva
+  el margen sobre el umbral a `deltaExp`; la amplificación entre dos zonas es
+  `(Δ1/Δ2)^deltaExp` — con 1,8, un contraste ×5 de imagen salía **×37 en
+  pantalla** (interbrazo real pintado de negro). Con `deltaExp = 1.0` queda en
+  ×11,8 (imagen ×5,3 más el realce perceptual). Subir `deltaPlena` en su lugar
+  **apaga los brazos**: no es el mando correcto y se queda en 2,5.
+
+Con el cambio, la semántica de NaN queda **unificada en toda la cadena**
+(antes el anclaje lo convertía en 0 y la rama de «hueco» del pintado era
+código muerto): los huecos de estrellas saturadas también reciben ahora el
+perfil en la mezcla con halo — la protección que importa (no rellenarlos con
+su entorno saturado, sección anterior) sigue intacta, porque el relleno es el
+modelo, no el entorno. El guardián de todo esto es
+`scripts/test_ps1_nan_ausencia.js`.
+
 #### Lo que sigue sin estar resuelto
 
 - **Estelas de sangrado** de las estrellas saturadas: barras largas que cruzan
@@ -472,6 +509,13 @@ sitúan el cruce: el relleno plano da 0,999 de 25 a 40″ y 0,025 a 56″.
 - **Estelas de sangrado y huecos**: la máscara conservada deja los huecos como
   huecos, que es lo correcto, pero no los *rellena* con nada plausible. Ahí la
   mezcla E pone `(1-w)·perfil`.
+- **La PSF renormaliza en los bordes de hueco**: `ps1PsfParche` salta los NaN y
+  reparte el kernel entre lo que queda, así que los píxeles pegados al hueco
+  suben (~+7 niveles en los brazos de M51) sin información nueva — flujo no
+  conservativo localizado. Medir antes de tocar, en un experimento propio.
+- **NaN aislados dentro del cuerpo con w≈1 dejan punteado fino**: el vecino
+  único ausente deja `(1-w)·perfil ≈ 0` en su píxel de lienzo. Candidatos
+  (cierre morfológico de la máscara de ausencia, o dejarlo estar) por medir.
 
 Los tests de todo esto están en `scripts/test_difuso.js` (`node
 scripts/test_difuso.js`), incluidos los que fijan la monotonía y la continuidad
@@ -486,6 +530,7 @@ Los de la resolución y la PSF van aparte, porque necesitan parches de verdad:
 | `test_psf_produccion.js` | El camino de producción contra el harness ya validado, sobre M51/M81/M101/NGC 205: convolución idéntica **bit a bit**, máscara conservada, flujo, PSF aplicada **una sola vez**, 457 ≠ 914, y el pintado entero de `ps1PintarParche` | sí, la primera vez (deja los parches en `$TMPDIR/bitacora-ps1-harness`) |
 | `harness_decision_psf_resolucion.js` | El experimento que decidió el 1024: cuatro configuraciones × cuatro objetos × cuatro aperturas × cinco seeings | sí |
 | `test_bilineal_parche.js` | El paso al lienzo por bilineal: conserva flujo, no inventa resolución, no crece frente al vecino | no |
+| `test_ps1_nan_ausencia.js` | La semántica de ausencia: sobresustraído y NaN del stack se rellenan con el perfil exacto, el píxel válido ancla bit a bit igual, el peso no cambia, y M51/NGC 205 de verdad (foso fuera, sin halo artificial, sin puntos nuevos) | sí, la primera vez |
 | `test_h2c_invariancias.js` | La ley H2c: activa por defecto, invariancias A–F (plateau, mismo θapp mismo factor, pendiente de Ricco, suelo de seeing, sin PSF) y la vía C_MAG intacta con `FOT.H2C = null` | no |
 | `campo_h2c.js` | No es test: contrasta el umbral contra observaciones reales (`docs/ricco/campo/observaciones.csv`); con él se validó K = 2.0 | no |
 

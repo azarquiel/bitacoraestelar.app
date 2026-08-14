@@ -1377,6 +1377,15 @@
     muEscena: 25,          // mag/arcsec²: isofota que delimita la escena difusa protegida (ver ps1EscenaEnParche)
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
     kRuido: 1.5,           // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
+    /* σ por debajo del CIELO a partir de las cuales el píxel no es ruido sino
+       sobresustracción del stack (el fondo restado por skycell se comió señal:
+       M51 tenía el 27,6 % del anillo 60–160″ así, con DN negativos, y salía un
+       foso negro pegado a los brazos). Ese píxel no vale 0 —un 0 es una medida—
+       sino AUSENCIA (NaN), la misma que los huecos de estrellas saturadas, y el
+       pintado lo rellena con (1−w)·perfil. k=2 está en la meseta medida k=1–3
+       (los observables varían <3 %): por encima de 2σ bajo el cielo ya no hay
+       ruido que confundir. Medido en .scratch/diagnostico-oscuros/INFORME2.md. */
+    kAusencia: 2,
     /* Halo extrapolado: hasta qué brillo superficial (mag/arcsec²) se sigue el
        perfil del catálogo donde la imagen ya no trae señal. El stack de PS1 se
        acaba cerca de μ≈25, pero la luz del disco sigue ahí: 28,5 es el suelo
@@ -1400,8 +1409,16 @@
        objeto «al límite» y lo ve de forma franca. Con eso el disco de M81 a un
        radio efectivo sale a opacidad 0,61 en un 8" y plena en un 18": la
        apertura se nota justo donde tiene que notarse, en el cuerpo débil.
-       deltaExp sin tocar. Medido en scripts/barrido_deltaplena.js. */
-    deltaMin: 0.0, deltaPlena: 2.5, deltaExp: 1.8,
+       Medido en scripts/barrido_deltaplena.js.
+       deltaExp era 1,8 y ese exponente era el AMPLIFICADOR del contraste: la
+       rampa convierte un cociente de contrastes en (Δ1/Δ2)^exp, así que el
+       interbrazo real de M81 (μ22,45, Δ=0,55) contra su brazo (μ20,6, Δ=2,40)
+       pasaba de ×5 en la imagen a ×14 en pantalla — una envolvente negra que
+       la imagen no trae. Con 1,0 queda en ×4,3, pegado al contraste real, y el
+       brazo no se toca (op 0,95). La rejilla deltaPlena 2,5/4/6 × deltaExp
+       1,0/1,8 está medida en .scratch/diagnostico-oscuros/INFORME2.md: subir
+       deltaPlena NO arregla el foso, solo apaga los brazos. */
+    deltaMin: 0.0, deltaPlena: 2.5, deltaExp: 1.0,
     /* Condiciones de activación del halo (ver ps1HaloActivo): eje menor mínimo
        de la isofota 25, en ′, y brillo superficial medio a partir del cual la
        galaxia se considera difusa. El 22,25 sale de la separación natural de
@@ -1960,8 +1977,13 @@
   function ps1EscalaMezcla(datos, w, perfil) {
     var objetivo = 0, Iw = 0, Ip = 0, i;
     for (i = 0; i < datos.length; i++) {
-      objetivo += datos[i];
-      Iw += w[i] * datos[i];
+      var v = datos[i];
+      // La ausencia (NaN, ver ps1AnclarACatalogo) queda fuera del presupuesto
+      // por completo: ni aporta objetivo ni cuenta su relleno de perfil. Sin
+      // este salto un solo NaN dejaba la suma en NaN y s caía al respaldo 1.
+      if (v !== v) continue;
+      objetivo += v;
+      Iw += w[i] * v;
       Ip += (1 - w[i]) * perfil[i];
     }
     if (!(Iw > 0)) return 1;
@@ -2221,12 +2243,19 @@
        come disco externo. */
     var sigma = ps1SigmaCielo(datos, ancho, alto, cielo);
     var suelo = cielo + PS1.kRuido * sigma;
+    var corte = cielo - PS1.kAusencia * sigma;
     var neto = new Float32Array(datos.length), suma = 0, i;
     for (i = 0; i < datos.length; i++) {
       var v = datos[i];
-      // Sin dato (NaN) o por debajo del suelo: cero. Donde la imagen no registró
-      // nada no se inventa luz, misma regla que flujoDePlaca.
-      var d = (v === v) ? v - suelo : 0;
+      /* Tres casos, no dos. Sin dato (NaN del stack) o SOBRESUSTRAÍDO (más de
+         kAusencia·σ por debajo del cielo): AUSENCIA — se conserva NaN para que
+         el pintado rellene con el perfil, porque un 0 aquí es una medida falsa
+         que además bloquea el relleno (w sigue alto alrededor). Por debajo del
+         suelo de ruido pero dentro del ruido: cero, donde la imagen no registró
+         nada no se inventa luz, misma regla que flujoDePlaca. El NaN no entra
+         en la suma del anclaje, igual que antes no entraba el 0. */
+      if (v !== v || v < corte) { neto[i] = NaN; continue; }
+      var d = v - suelo;
       neto[i] = d > 0 ? d : 0;
       suma += neto[i];
     }
@@ -2459,9 +2488,9 @@
            rellena lo que la imagen no cubre, y el tránsito es continuo porque
            el peso lo es (ps1PesoImagen). Fuera del parche el vecino vale flujo
            0 y peso 0 —lo mismo que valía con Math.round—, así que en el borde
-           queda el perfil solo, sin costura. Los huecos del stack (NaN) se
-           saltan y se renormaliza, igual que la convolución de
-           lib_psf_parche.js: no se esparcen ni se rellenan. */
+           queda el perfil solo, sin costura. El NaN (hueco del stack o
+           sobresustracción) recibe el MISMO trato que el de fuera del parche:
+           es ausencia, no medida, y el perfil lo rellena (ver el bucle). */
         var fx = a.cx + a.xe * este + a.xn * norte;
         var fy = a.cy + a.ye * este + a.yn * norte;
         var px0 = Math.floor(fx), py0 = Math.floor(fy);
@@ -2479,14 +2508,19 @@
             if (py >= 0 && py < parche.alto && px >= 0 && px < parche.ancho) {
               var k = py * parche.ancho + px;
               var v = datos[k];
-              if (!isFinite(v)) continue;
-              fv = v; wv = peso ? peso[k] : 0;
+              // El NaN (hueco del stack o sobresustracción, ver
+              // ps1AnclarACatalogo) es AUSENCIA: aporta flujo 0 y peso 0, igual
+              // que el vecino de fuera del parche, y deja que (1−w)·perfil
+              // rellene. Saltarlo y renormalizar NO rellena —el peso no
+              // distingue NaN de 0 y dentro del cuerpo w≈1— y era lo que
+              // dejaba el foso negro de M51 (INFORME2, experimento A1/A2).
+              if (isFinite(v)) { fv = v; wv = peso ? peso[k] : 0; }
             }
             acc += pe * (comps.length ? wv * sMezcla * fv + (1 - wv) * fm : fv);
             cubierto += pe;
           }
         }
-        if (!(cubierto > 0)) continue;   // los cuatro vecinos son huecos: el hueco se queda
+        if (!(cubierto > 0)) continue;   // punto degenerado (pe=0 en los cuatro)
         var f = acc / cubierto;
         if (!(f > 0)) continue;
         if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), umbral), c);

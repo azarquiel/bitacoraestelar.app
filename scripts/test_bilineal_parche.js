@@ -119,6 +119,11 @@ function pintarVecino(difuso, parche, o) {
         k = py * parche.ancho + px;
         f = datos[k];
       }
+      // El NaN es AUSENCIA y recibe el trato del vecino de fuera del parche
+      // (flujo 0, peso 0 → queda el perfil), la misma regla que producción
+      // desde el cambio de semántica del INFORME2/3. Antes envenenaba la
+      // mezcla y el píxel quedaba sin pintar.
+      if (!isFinite(f)) { f = 0; k = -1; }
       if (comps.length) {
         var fm = R.ps1FlujoModelo(comps, pa, norte, este);
         var w = (peso && k >= 0) ? peso[k] : 0;
