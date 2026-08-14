@@ -122,6 +122,20 @@
   background:#000;border-radius:50%;text-align:center;padding:0 24px;
 }
 
+/* ── Indicador de procesado de la capa difusa (galaxia/nubosidad) ──
+   A diferencia de .cargando (que tapa el círculo entero), esto convive con el
+   campo ya pintado: una pastilla pequeña abajo, tenue, que dice que el parche
+   del objeto aún se está procesando sin competir con el render ni parecer un
+   error. La muestra y la quita bitacora-ocular.js con el estado REAL de la
+   capa: nada de temporizadores. */
+#mw-obs-form .vista .procesando {
+  position:absolute;left:50%;bottom:14%;transform:translateX(-50%);
+  font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--tinta-tenue);
+  background:rgba(0,0,0,.55);border-radius:12px;padding:3px 12px;
+  pointer-events:none;white-space:nowrap;
+}
+#mw-obs-form .vista .procesando[hidden] {display:none;}
+
 /* ── Acciones sobre la imagen del ocular (pantalla completa y descarga) ──
    Discretas a propósito: solo el icono, tenue, y se encienden al pasar el ratón.
    Van pegadas al círculo, dentro de la misma zona que se pone a pantalla

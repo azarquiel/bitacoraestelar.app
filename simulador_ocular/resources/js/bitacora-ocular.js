@@ -429,6 +429,10 @@
         if (objetoSel && objetoSel.doble) pintarObjeto();
         var lecturas = ['sim-v-aum', 'sim-v-real', 'sim-v-apar', 'sim-v-pupila', 'sim-v-brillo', 'sim-v-cielo', 'sim-v-maglim'];
         var cargando = $('sim-cargando');
+        // Cada render pasa por aquí: cualquier indicador de procesado de la
+        // petición anterior muere ahora, también si aquella acabó en error.
+        var procesando = $('sim-procesando');
+        if (procesando) procesando.hidden = true;
         var img = $('sim-img');
         var canvas = $('sim-lienzo');
 
@@ -652,12 +656,25 @@
              generador de imagen del formulario pinte exactamente esto mismo.
              Solo se llama aquí: con origen DSS o HiPS la imagen ya la trae la
              placa. */
+          /* «procesando información»: solo si la capa está encendida y hay de
+             verdad un objeto difuso que procesar en el campo —la misma criba
+             que hará la capa—; así el indicador refleja trabajo real y no
+             parpadea en campos vacíos. Lo quita la promesa de la propia capa,
+             que resuelve también cuando el parche falla (nunca rechaza), y
+             cualquier render posterior lo mata al entrar en actualizar(). */
+          var procesando = $('sim-procesando');
+          var hayDifuso = BitacoraGaiaRender.galaxiasImagen && BitacoraGaiaRender
+            .ps1GalaxiasDelCampo(window.BITACORA_GALAXIAS, ra0, dec0, arcmin).length > 0;
+          if (procesando && hayDifuso && peticion === contadorPeticion) procesando.hidden = false;
           BitacoraGaiaRender.ps1CapaGalaxias(difuso, ctx, cieloGaia, capaEst, {
             ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
             estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
             catalogo: window.BITACORA_GALAXIAS,
             vivo: function () { return peticion === contadorPeticion; }
           }).then(function (capa) {
+            // Solo esta petición apaga SU indicador: si otra más nueva ya está
+            // en marcha, el suyo lo gestiona ella (y actualizar() lo ha reseteado).
+            if (procesando && peticion === contadorPeticion) procesando.hidden = true;
             // El aviso no pisa a los que ya puso actualizar() (campo recortado,
             // pupila, catálogo agotado): esos son del equipo y mandan.
             if (peticion !== contadorPeticion || !capa.aviso) return;
@@ -665,6 +682,10 @@
           });
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
+          // Cualquier error de la vista de Gaia mata también el indicador de
+          // procesado: no debe quedarse encendido sobre la placa de respaldo.
+          var procesando = $('sim-procesando');
+          if (procesando) procesando.hidden = true;
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el
           // canvas en negro, mostramos la placa DSS del mismo campo como respaldo.
           cargando.style.display = 'flex';
