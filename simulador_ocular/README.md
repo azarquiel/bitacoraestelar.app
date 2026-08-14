@@ -482,6 +482,24 @@ eran dos, y se corrigen por separado.
   ×11,8 (imagen ×5,3 más el realce perceptual). Subir `deltaPlena` en su lugar
   **apaga los brazos**: no es el mando correcto y se queda en 2,5.
 
+Bajar `deltaExp` alivió el síntoma, pero no la causa: **la rampa es la ley de
+DETECCIÓN**, y dentro de un objeto que el observador ya ha detectado volvía a
+decidir píxel a píxel, esculpiendo estructura interna que no está en los datos
+(el anillo negro alrededor del bulbo de M81, el negro entre los brazos de M51,
+que se lleva del 60 al 82 % del contraste que la zona tenía sobre el cielo).
+La separación es conceptual, no un parámetro más: **dentro de la escena difusa
+la opacidad es 1; fuera, la rampa de siempre** (`PS1.opacidadInternaEscena`).
+«Dentro» es la misma `ps1EscenaEnParche` que ya decide qué estrellas conserva
+el parche —la unión de elipses isofotales μ=25 de *todos* los componentes
+catalogados—, así que la compañera está protegida igual que la galaxia
+apuntada. Medido en las cuatro galaxias: ningún píxel baja y lo brillante no se
+mueve un nivel; M81 recupera los brazos, M51 el puente hacia NGC 5195, M101 el
+disco exterior sin perder las regiones HII, y M104 no cambia. Juzgar la
+opacidad con el **perfil del catálogo** en vez de con la escena está probado y
+**descartado**: el modelo solo representa la galaxia apuntada, así que borraba
+todo lo demás (NGC 5195 casi desaparecía). Guardián:
+`scripts/test_opacidad_escena.js`.
+
 Con el cambio, la semántica de NaN queda **unificada en toda la cadena**
 (antes el anclaje lo convertía en 0 y la rama de «hueco» del pintado era
 código muerto): los huecos de estrellas saturadas también reciben ahora el

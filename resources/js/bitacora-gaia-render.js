@@ -1437,7 +1437,16 @@
     mezclaCajaAs: 25, mezclaW0: 0.5,
     // Índice de Sérsic: ya NO decide (ver ps1HaloActivo), pero el tope se queda
     // por si vuelve a hacer falta con ps1ConcentracionN.
-    haloSersicMax: 2.5
+    haloSersicMax: 2.5,
+    /* EXPERIMENTAL, apagada: reposición de flujo en el vecino ausente
+       (ver ps1ReponerNaN). Apagada, el render es bit a bit el de siempre. */
+    confianzaLocalNaN: false,
+    /* Dentro de la escena difusa ya detectada (ps1EscenaEnParche) la rampa de
+       opacidad no vuelve a decidir: es la ley de DETECCIÓN, y aplicada píxel a
+       píxel dentro del objeto esculpía estructura interna que no está en los
+       datos (el anillo negro de M81, el negro entre los brazos de M51). Fuera
+       de la escena, la rampa de siempre. Apagada, el render es el de antes. */
+    opacidadInternaEscena: true
   };
 
   /* Interruptor de la capa, aquí y no en cada llamador: los dos puntos de uso
@@ -2338,7 +2347,7 @@
      puntos brillantes inventados. Con la máscara conservada el flujo se queda
      por debajo del 0,3 %. Es el mismo criterio que sigue el bucle de abajo con
      su `if (!(f > 0)) continue;`. */
-  function ps1PsfParche(datos, ancho, alto, escalaAs, aperturaMm) {
+  function ps1PsfParche(datos, ancho, alto, escalaAs, aperturaMm, sinRestaurar) {
     var fwhm = ps1ThetaAdd(aperturaMm, escalaAs);
     var esc = (escalaAs > 0) ? escalaAs : 1;
     var sigma = fwhm / FWHM_A_SIGMA / esc;             // px del parche
@@ -2376,6 +2385,10 @@
       }
     }
     // La máscara original, restaurada exactamente: lo que era hueco vuelve a serlo.
+    // `sinRestaurar` (solo ps1ReponerNaN) devuelve lo que la convolución sí sabe
+    // del hueco —la media gaussiana de sus vecinos válidos— para poder juzgarla
+    // antes de usarla; el camino normal no lo pide y no cambia.
+    if (sinRestaurar) return out;
     for (i = 0; i < n; i++) if (!isFinite(datos[i])) out[i] = datos[i];
     return out;
   }
@@ -2393,6 +2406,78 @@
     parche.psfDatos = ps1PsfParche(parche.datos, parche.ancho, parche.alto, escalaAs, D);
     parche.psfD = D;
     return parche.psfDatos;
+  }
+
+  /* ── Confianza local del vecino ausente (EXPERIMENTAL, PS1.confianzaLocalNaN)
+     El punteado claro de M51/M81 nace en la mezcla: un vecino NaN entra con
+     peso 0, y su término (1−w)·perfil aporta el perfil ENTERO justo donde los
+     otros vecinos del pincel ya traen imagen medida —la estructura acaba
+     representada dos veces (INFORME5/INFORME7). Pero NaN sigue siendo ausencia:
+     reponer flujo solo es legítimo donde de verdad falta información, no donde
+     la vecindad válida ya la trae. Tres puertas, todas sobre lo que el pipeline
+     ya calcula:
+
+       w ≥ 0,95            la vecindad está medida            (ps1PesoImagen)
+       cobCaja(r5) ≥ 0,8   hueco pequeño, no el borde de uno grande
+       κ ≤ 3               lo que la PSF reconstruye no excede lo que la
+                           estructura modelada explica
+
+     κ = (rep / mediana del anillo válido 3–8 px) ÷ (perfil / mediana del perfil
+     en ese mismo anillo): el exceso local que el modelo NO explica. La razón
+     sola no vale —el núcleo de Sérsic sube 5,1 veces sobre su anillo sin nada
+     raro—; dividir por la misma razón medida en el perfil cancela la curvatura
+     y lo deja en 0,63, mientras el halo de una estrella saturada se queda en
+     8,5 o más (M81, 35 px). Devuelve el flujo a reponer en cada ausente, NaN
+     donde no procede: allí el pintado sigue siendo el de siempre. */
+  var REP_W = 0.95, REP_COB = 0.8, REP_KAPPA = 3, REP_CAJA = 5, REP_R0 = 3, REP_R1 = 8;
+  var repAnillo = null;
+  function ps1AnilloOffsets() {
+    if (repAnillo) return repAnillo;
+    repAnillo = [];
+    for (var dy = -REP_R1; dy <= REP_R1; dy++) for (var dx = -REP_R1; dx <= REP_R1; dx++) {
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d >= REP_R0 && d <= REP_R1) repAnillo.push(dx, dy);
+    }
+    return repAnillo;
+  }
+  function ps1MedianaAnillo(datos, ancho, alto, k) {
+    var off = ps1AnilloOffsets(), x = k % ancho, y = (k / ancho) | 0, v = [];
+    for (var i = 0; i < off.length; i += 2) {
+      var qx = x + off[i], qy = y + off[i + 1];
+      if (qx < 0 || qy < 0 || qx >= ancho || qy >= alto) continue;
+      var val = datos[qy * ancho + qx];
+      if (isFinite(val)) v.push(val);
+    }
+    if (!v.length) return NaN;
+    v.sort(function (a, b) { return a - b; });
+    return v[v.length >> 1];
+  }
+  function ps1ReponerNaN(parche, escalaAs, aperturaMm) {
+    var D = (aperturaMm > 0) ? aperturaMm : 0;
+    if (!(D > 0) || !parche.peso || !parche.perfil) return null;
+    if (parche.repD === D) return parche.repuesto;
+    var anc = parche.datos, ancho = parche.ancho, alto = parche.alto, n = anc.length;
+    var rep = ps1PsfParche(anc, ancho, alto, escalaAs, D, true);
+    // Cobertura de caja con la MISMA caja separable del peso: distingue el
+    // hueco suelto rodeado de medida del borde de uno grande, que el kernel de
+    // la PSF (±2 px) confunde.
+    var ind = new Float32Array(n), i;
+    for (i = 0; i < n; i++) ind[i] = isFinite(anc[i]) ? 1 : 0;
+    var cob = ps1CajaSeparable(ind, ancho, alto, REP_CAJA);
+    var out = new Float32Array(n).fill(NaN);
+    for (i = 0; i < n; i++) {
+      if (isFinite(anc[i])) continue;
+      if (!(parche.peso[i] >= REP_W) || !(cob[i] >= REP_COB) || !isFinite(rep[i])) continue;
+      if (!(parche.perfil[i] > 0)) continue;
+      var ma = ps1MedianaAnillo(anc, ancho, alto, i);
+      var mp = ps1MedianaAnillo(parche.perfil, ancho, alto, i);
+      if (!(ma > 0) || !(mp > 0)) continue;
+      var kappa = (rep[i] / ma) / (parche.perfil[i] / mp);
+      if (kappa <= REP_KAPPA) out[i] = rep[i];
+    }
+    parche.repuesto = out;
+    parche.repD = D;
+    return out;
   }
 
   function ps1PintarParche(difuso, parche, o) {
@@ -2451,6 +2536,11 @@
       D = o.cielo.pupilaSalida * o.cielo.aumentos;
     }
     var datos = c ? ps1DatosConPsf(parche, escParche, D) : parche.datos;
+    /* EXPERIMENTAL (PS1.confianzaLocalNaN): flujo a reponer en los vecinos
+       ausentes donde la medida dice que falta información de verdad. Con la
+       bandera apagada vale null y el bucle de abajo es el de siempre. */
+    var repuesto = (PS1.confianzaLocalNaN && c && peso && comps.length)
+      ? ps1ReponerNaN(parche, escParche, D) : null;
     /* Máscara de los píxeles de la capa de galaxias: pintarFot ya no les aplica
        visibilidadDifusa —la rampa de opacidad es su desvanecido y mide contra el
        MISMO umbral, así que pasar por las dos es contarlo dos veces— y el realce
@@ -2515,6 +2605,9 @@
               // distingue NaN de 0 y dentro del cuerpo w≈1— y era lo que
               // dejaba el foso negro de M51 (INFORME2, experimento A1/A2).
               if (isFinite(v)) { fv = v; wv = peso ? peso[k] : 0; }
+              // Ausente con información que reponer (ver ps1ReponerNaN): entra
+              // con SU peso, y el perfil solo cubre la parte que ese peso deja.
+              else if (repuesto && isFinite(repuesto[k])) { fv = repuesto[k]; wv = peso[k]; }
             }
             acc += pe * (comps.length ? wv * sMezcla * fv + (1 - wv) * fm : fv);
             cubierto += pe;
@@ -2523,7 +2616,17 @@
         if (!(cubierto > 0)) continue;   // punto degenerado (pe=0 en los cuatro)
         var f = acc / cubierto;
         if (!(f > 0)) continue;
-        if (c) f = ps1FlujoConOpacidad(f, ps1Opacidad(-2.5 * Math.log10(f), umbral), c);
+        if (c) {
+          /* PS1.opacidadInternaEscena: dentro de la escena difusa
+             —las mismas elipses isofotales de ps1EscenaEnParche que ya deciden
+             qué estrellas conserva el parche— el objeto YA está detectado, y la
+             rampa, que es la ley de DETECCIÓN, no puede volver a decidir píxel a
+             píxel. Fuera de la escena, la rampa de siempre. */
+          var op = (PS1.opacidadInternaEscena && parche.escena &&
+                    ps1FuenteEnEscena(parche.escena, a, fx, fy))
+            ? 1 : ps1Opacidad(-2.5 * Math.log10(f), umbral);
+          f = ps1FlujoConOpacidad(f, op, c);
+        }
         if (!(f > 0)) continue;
         difuso[y * SIZE + x] += f;
         if (mascara) mascara[y * SIZE + x] = 1;
@@ -2740,9 +2843,14 @@
         // Tamaño intrínseco (arcmin) para la ley H2c; inerte con FOT.H2C nula.
         thetaIntArcmin: ps1ThetaIntArcmin(comps, gal.ba),
         peso: peso, escalaMezcla: ps1EscalaMezcla(datos, peso, perfil),
+        // El perfil en la rejilla del parche solo lo necesita ps1ReponerNaN, y
+        // son 4 MB por galaxia: sin bandera no se guarda.
+        perfil: PS1.confianzaLocalNaN ? perfil : null,
         // Fuentes Gaia conservadas dentro de la escena: la capa de estrellas
         // las excluye para no representarlas dos veces (parche + sprite).
         enEscena: ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena),
+        // La misma escena, para PS1.opacidadInternaEscena (unas pocas elipses).
+        escena: escena,
         datos: datos
       };
     });
@@ -3237,6 +3345,7 @@
     ps1AnclarACatalogo: ps1AnclarACatalogo,
     ps1PintarParche: ps1PintarParche,
     ps1PsfParche: ps1PsfParche,
+    ps1ReponerNaN: ps1ReponerNaN,
     ps1ThetaAdd: ps1ThetaAdd,
     ps1DatosConPsf: ps1DatosConPsf,
     ps1CabeEnParche: ps1CabeEnParche,
