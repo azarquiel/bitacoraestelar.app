@@ -1,5 +1,13 @@
 #!/usr/bin/env node
-/* HARNESS: validación general del algoritmo candidato para ps1QuitarEstrellas.
+/* HARNESS HISTÓRICO — SUPERADO (ago-2026). Validó la regla nuclear por fuente,
+   que después evolucionó a la protección de ESCENA (`geo.escena`,
+   ps1EscenaEnParche): ahora se conserva TODO lo proyectado dentro de la unión
+   de elipses isofotales de los componentes catalogados, no solo el núcleo. La
+   comparación B de abajo (producción con geo ≡ candidato) ya no cuadra:
+   producción sin `escena` no protege nada. La validación vigente vive en
+   scripts/harness_escena_quitar_estrellas.js y scripts/test_quitar_estrellas.js.
+
+   HARNESS: validación general del algoritmo candidato para ps1QuitarEstrellas.
 
    Algoritmo candidato (regla geométrica, sin constantes físicas nuevas):
      - una fuente de Gaia es NUCLEAR si su máscara cubre el centro de la

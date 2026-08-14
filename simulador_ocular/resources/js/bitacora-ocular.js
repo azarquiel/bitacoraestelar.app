@@ -630,7 +630,7 @@
                 estrellasHalo, ra0, dec0, datosOcular().aumentos)
             : null;
           if (halo) BitacoraGaiaRender.pintarHaloGlobular(difuso, halo, { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
-          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, {
+          var opEst = {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
             // Solo si el objeto es una doble: el suelo de visibilidad de SUS dos
@@ -642,7 +642,8 @@
             conGlow: true, carbono: !!objetoSel.carbono,
             carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana(),
             globular: halo
-          }, PROC);
+          };
+          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, opEst, PROC);
           var cieloGaia = cieloOptica(datosOcular().pupila);
           cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
           BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
@@ -653,7 +654,8 @@
              placa. */
           BitacoraGaiaRender.ps1CapaGalaxias(difuso, ctx, cieloGaia, capaEst, {
             ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
-            estrellas: estrellas, catalogo: window.BITACORA_GALAXIAS,
+            estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
+            catalogo: window.BITACORA_GALAXIAS,
             vivo: function () { return peticion === contadorPeticion; }
           }).then(function (capa) {
             // El aviso no pisa a los que ya puso actualizar() (campo recortado,

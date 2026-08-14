@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-/* EXPERIMENTO CONTROLADO: M104 a 400x con 200/9, 350/5 y 450/4.
+/* EXPERIMENTO CONTROLADO (CERRADO): M104 a 400x con 200/9, 350/5 y 450/4.
+   Nota ago-2026: la variante `conGeo` de aquí usaba la protección nuclear por
+   fuente, sustituida después por la protección de escena (`geo.escena`); con
+   la producción actual esa variante corre SIN protección. Documento histórico.
 
    Pregunta: ¿por qué 200/350/450 mm se parecen tanto a 400x? Separa CUATRO
    efectos sin mezclarlos:

@@ -1374,6 +1374,7 @@
     mascaraMagRef: 22,     // mag G a la que el radio de máscara es el seeing (≈ el fondo del stack; ver ps1RadioMascaraAs)
     mascaraProf: 20,       // mag G hasta la que se piden estrellas para la máscara (tope del proxy)
     rellenoPlanoMaxAs: 40, // ″: hasta este radio la máscara se rellena con el fondo local; por encima se deja al cielo (ver ps1QuitarEstrellas)
+    muEscena: 25,          // mag/arcsec²: isofota que delimita la escena difusa protegida (ver ps1EscenaEnParche)
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
     kRuido: 1.5,           // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
     /* Halo extrapolado: hasta qué brillo superficial (mag/arcsec²) se sigue el
@@ -1647,30 +1648,36 @@
      `estrellas` en píxeles del parche: [{x, y, rPx, rAs}]. Sin `rAs` (llamadas
      viejas) se usa siempre el disco plano. Devuelve una copia.
 
-     `geo` ({afin, ba, pa}) es la geometría de la galaxia, y con ella:
-     — una fuente es NUCLEAR si su máscara cubre el centro de la galaxia
-       (dist(fuente, centro) < rAs, todo en ″: nada en píxeles, vale a
-       cualquier resolución). Una fuente nuclear NO se enmascara: Gaia trae el
-       núcleo puntual de la galaxia (AGN, núcleo compacto) como estrella, y
-       quitarlo fabricaba una «bola dentro de un anillo oscuro» (M104, M81;
-       validado sobre 5 galaxias en scripts/harness_quitar_estrellas_general.js).
-       La protección es POR FUENTE, no una zona ciega alrededor del centro: si
-       la máscara de una estrella normal atraviesa el disco nuclear, esa parte
-       se elimina igual.
+     `geo` ({afin, ba, pa, escena}) es la geometría de la galaxia, y con ella:
+     — solo se elimina lo que queda FUERA de la escena difusa que se está
+       reproduciendo: `escena` es la unión de elipses isofotales (μ=muEscena)
+       de los componentes difusos del parche (ver ps1EscenaEnParche), y una
+       fuente que cae dentro de cualquiera de ellas se conserva ENTERA. No se
+       pregunta si la estrella «pertenece» físicamente al objeto —eso no se
+       puede saber desde aquí—, solo si está proyectada dentro de la escena.
+       La protección nuclear de antes (dist < rAs) es el caso particular
+       trivial: el núcleo está a radio elíptico ~0 de su propia elipse, así que
+       queda dentro sin regla aparte; y el núcleo de una COMPAÑERA catalogada
+       (NGC 5195 sobre el parche de M51) queda protegido por SU elipse, sin
+       condiciones por nombre de objeto. La decisión es por fuente y
+       determinista: radio elíptico ≤ r25, en ″ del cielo, a cualquier
+       resolución.
      — el relleno estrecho deja de ser plano: mediana por banda de ISOFOTA
        elíptica (b/a y PA del catálogo, bandas de 1 px de radio elíptico), que
        es el fondo galáctico local de verdad; el plano hundía el bulbo al nivel
        del anillo exterior. El disco ancho (rAs > rellenoPlanoMaxAs) se sigue
        dejando al cielo: esa arquitectura está medida aparte (ver arriba).
-     Sin `geo` (llamadas viejas y tests sintéticos): sin protección nuclear y
-     relleno plano, como siempre. */
+     Sin `geo` (llamadas viejas y tests sintéticos): sin protección y relleno
+     plano, como siempre. Sin `geo.escena` pero con `afin`: relleno por
+     isofotas, sin protección (la escena la construye quien conoce el campo). */
   function ps1QuitarEstrellas(datos, ancho, alto, estrellas, geo) {
     if (!estrellas || !estrellas.length) return datos;
     var a = geo && geo.afin, esc = a ? 1 / Math.hypot(a.xn, a.yn) : 0;
+    var escena = (geo && geo.escena && geo.escena.length) ? geo.escena : null;
     var mascara = new Uint8Array(datos.length), quitar = [], i, e, x, y, cielo = null;
     for (i = 0; i < estrellas.length; i++) {
       e = estrellas[i];
-      if (a && Math.hypot(e.x - a.cx, e.y - a.cy) * esc < e.rAs) continue;   // nuclear: se conserva entera
+      if (a && escena && ps1FuenteEnEscena(escena, a, e.x, e.y)) continue;   // dentro de la escena: se conserva entera
       quitar.push(e);
       var r = Math.max(1, e.rPx), r2 = r * r;
       for (y = Math.max(0, Math.floor(e.y - r)); y <= Math.min(alto - 1, Math.ceil(e.y + r)); y++) {
@@ -2583,21 +2590,103 @@
       if (p[0] < -8 || p[1] < -8 || p[0] > f.ancho + 8 || p[1] > f.alto + 8) continue;
       // `rAs` además de `rPx`: ps1QuitarEstrellas decide con él cómo rellenar.
       var rAs = ps1RadioMascaraAs(e[2]);
-      enPx.push({ x: p[0], y: p[1], rPx: rAs / esc, rAs: rAs, g: e[2] });
+      // `i`: fila de `estrellas` de la que sale esta posición, para que la capa
+      // de estrellas pueda excluir exactamente las que el parche conserva.
+      enPx.push({ x: p[0], y: p[1], rPx: rAs / esc, rAs: rAs, g: e[2], i: i });
     }
     return enPx;
   }
 
-  /* Parche listo para pintar: descargado, sin estrellas y anclado a la mag V del
-     catálogo. `estrellas` es la muestra de Gaia del campo ([ra, dec, g, …][]). */
-  function ps1ParcheDeGalaxia(gal, estrellas) {
+  /* ¿La fuente (x, y, en píxeles del parche) cae dentro de algún componente de
+     la escena? El punto se lleva al cielo con el afín inverso (″ de norte/este,
+     giro de la skycell incluido) y se compara su radio elíptico —b/a y PA del
+     componente, sobre el semieje mayor, igual que ps1FlujoModelo— con el radio
+     isofotal r25As. Comparación de dos números en ″: determinista, sin borde
+     rasterizado, el mismo veredicto a cualquier resolución. */
+  function ps1FuenteEnEscena(escena, a, x, y) {
+    for (var i = 0; i < escena.length; i++) {
+      var c = escena[i], dx = x - c.cx, dy = y - c.cy;
+      var este = a.ex * dx + a.ey * dy, norte = a.nx * dx + a.ny * dy;
+      if (ps1RadioEje(c.cos, c.sin, norte, este, c.ba) <= c.r25As) return true;
+    }
+    return false;
+  }
+
+  /* Filas de `estrellas` que el parche CONSERVA por caer dentro de la escena:
+     el mismo veredicto que ps1QuitarEstrellas (misma ps1FuenteEnEscena, mismas
+     posiciones enPx), calculado una sola vez. Cada fuente Gaia tiene un único
+     propietario visual: si el parche la conserva, la capa de estrellas no debe
+     pintarla otra vez encima (ver ps1CapaGalaxias). */
+  function ps1FuentesEnEscena(estrellas, enPx, afin, escena) {
+    var out = [];
+    if (!escena || !escena.length) return out;
+    for (var i = 0; i < enPx.length; i++) {
+      var e = enPx[i];
+      if (ps1FuenteEnEscena(escena, afin, e.x, e.y)) out.push(estrellas[e.i]);
+    }
+    return out;
+  }
+
+  /* Escena difusa del parche: los componentes del catálogo que asoman por él,
+     cada uno como elipse isofotal en píxeles del parche. `campo` son las filas
+     ya mapeadas de ps1GalaxiasDelCampo (la propia galaxia incluida): así el
+     parche de M51 protege también a NGC 5195 sin saber quién es, y una escena
+     futura con más componentes difusos (nebulosa + cúmulo asociado) entra por
+     la misma puerta. El radio es el de la isofota μ=muEscena del mismo modelo
+     de Sérsic que ancla el nivel (r_e del catálogo se resolvió para que esa
+     isofota caiga en el D25): la escena es lo que se está REPRODUCIENDO, no
+     una opinión sobre a quién pertenece cada estrella.
+     El centro sale de la WCS del recorte si la hay, como las estrellas; con el
+     afín solo, igual de válido a estas distancias. Componentes cuya elipse no
+     toca el parche se descartan: no pueden decidir sobre ninguna fuente. */
+  function ps1EscenaEnParche(f, gal, campo) {
+    var a = f.afin || ps1AfinParche(f, gal);
+    var esc = 1 / Math.hypot(a.xn, a.yn);
+    var cos0 = Math.cos(gal.dec * Math.PI / 180);
+    var out = [];
+    for (var i = 0; i < (campo || []).length; i++) {
+      var g = campo[i], comps = ps1ComponentesSersic(g), r25 = 0;
+      for (var j = 0; j < comps.length; j++) {
+        var r = ps1RadioIsofota(comps[j], PS1.muEscena);
+        if (r > r25) r25 = r;
+      }
+      if (!(r25 > 0)) continue;
+      var p = f.wcs ? ps1CieloAPixel(f.wcs, g.ra, g.dec) : null;
+      if (!p) {
+        var este = ((((g.ra - gal.ra) + 540) % 360) - 180) * cos0 * 3600;
+        var norte = (g.dec - gal.dec) * 3600;
+        p = [a.cx + a.xe * este + a.xn * norte, a.cy + a.ye * este + a.yn * norte];
+      }
+      var mPx = r25 / esc;
+      if (p[0] < -mPx || p[1] < -mPx || p[0] > f.ancho + mPx || p[1] > f.alto + mPx) continue;
+      var paR = (g.pa || 0) * Math.PI / 180;
+      out.push({
+        cx: p[0], cy: p[1], cos: Math.cos(paR), sin: Math.sin(paR),
+        ba: (g.ba > 0 && g.ba <= 1) ? g.ba : 1, r25As: r25
+      });
+    }
+    return out;
+  }
+
+  /* Parche listo para pintar: descargado, sin las estrellas ajenas a la escena
+     y anclado a la mag V del catálogo. `estrellas` es la muestra de Gaia del
+     campo ([ra, dec, g, …][]); `catalogo` (opcional), el catálogo de galaxias:
+     de él sale la escena que decide qué fuentes se conservan (las compañeras
+     que asoman por el parche incluidas). Sin catálogo, la escena es la propia
+     galaxia sola, que ya protege su núcleo. */
+  function ps1ParcheDeGalaxia(gal, estrellas, catalogo) {
     return ps1DescargarParche(gal).then(function (f) {
       if (!f) return null;
       // Cómo está puesta la rejilla del recorte respecto al cielo. Una vez por
       // galaxia: no depende del ocular ni del aumento.
       f.afin = ps1AfinParche(f, gal);
-      var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto,
-        ps1EstrellasEnPixeles(f, gal, estrellas), { afin: f.afin, ba: gal.ba, pa: gal.pa });
+      // La escena se busca alrededor de la GALAXIA con el lado de SU parche:
+      // entra todo componente catalogado que pueda asomar por él.
+      var vecinos = catalogo ? ps1GalaxiasDelCampo(catalogo, gal.ra, gal.dec, gal.ladoArcmin) : [gal];
+      var enPx = ps1EstrellasEnPixeles(f, gal, estrellas);
+      var escena = ps1EscenaEnParche(f, gal, vecinos);
+      var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto, enPx,
+        { afin: f.afin, ba: gal.ba, pa: gal.pa, escena: escena });
       var comps = ps1ComponentesSersic(gal);
       var datos = ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
         magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
@@ -2617,6 +2706,9 @@
         // Tamaño intrínseco (arcmin) para la ley H2c; inerte con FOT.H2C nula.
         thetaIntArcmin: ps1ThetaIntArcmin(comps, gal.ba),
         peso: peso, escalaMezcla: ps1EscalaMezcla(datos, peso, perfil),
+        // Fuentes Gaia conservadas dentro de la escena: la capa de estrellas
+        // las excluye para no representarlas dos veces (parche + sprite).
+        enEscena: ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena),
         datos: datos
       };
     });
@@ -2681,11 +2773,30 @@
     var apuntada = ps1FilaApuntada(catalogo, o.ra0, o.dec0);
     var vivo = o.vivo || function () { return true; };
     var apuntadaSinParche = false;
+    /* Propietario visual único: las fuentes que un parche conserva dentro de su
+       escena salen del dibujo de estrellas antes del repintado, para no verse
+       dos veces (en la imagen del parche Y como sprite). Se acumulan entre
+       parches —en un campo con varios cada repintado respeta las de todos— y
+       la capa se reconstruye de las filas crudas (el raster ya mezclado no se
+       puede filtrar). Sin parche no se excluye nada: las estrellas quedan
+       pintadas como siempre. */
+    var excluidas = [];
+    function capaSinExcluidas() {
+      if (!excluidas.length || !o.estrellasDibujo || !o.opEstrellas) return capaEst;
+      var filtradas = [];
+      for (var i = 0; i < o.estrellasDibujo.length; i++) {
+        if (excluidas.indexOf(o.estrellasDibujo[i]) === -1) filtradas.push(o.estrellasDibujo[i]);
+      }
+      return capaEstrellas(filtradas, o.opEstrellas, o.size);
+    }
     return Promise.all(campo.map(function (gal) {
-      return ps1ParcheDeGalaxia(gal, o.estrellas).then(function (parche) {
+      return ps1ParcheDeGalaxia(gal, o.estrellas, catalogo).then(function (parche) {
         var esLaApuntada = !!apuntada && gal.ra === apuntada[2] && gal.dec === apuntada[3];
         if (!parche) { if (esLaApuntada) apuntadaSinParche = true; return; }
         if (!vivo()) return;
+        for (var x = 0; x < (parche.enEscena || []).length; x++) {
+          if (excluidas.indexOf(parche.enEscena[x]) === -1) excluidas.push(parche.enEscena[x]);
+        }
         // `cielo`: el mismo objeto que pinta el fondo. De ahí sale el umbral de
         // contraste de la rampa de opacidad (Fcielo·Cmin); la puerta del halo no
         // mira el cielo, solo el objeto.
@@ -2693,7 +2804,7 @@
           ra0: o.ra0, dec0: o.dec0, arcmin: o.arcmin, size: o.size, cielo: cieloParche,
           apertura: o.apertura
         });
-        pintarFot(difuso, ctx, cieloParche, capaEst);
+        pintarFot(difuso, ctx, cieloParche, capaSinExcluidas());
       }).catch(function () { /* una galaxia que falla no tumba el campo entero */ });
     })).then(function () {
       /* Aviso SOLO del objeto apuntado, y con la causa: cambia lo que el
@@ -2931,11 +3042,12 @@
          por la curva logarítmica y las estrellas se dibujan encima en 8
          bits, saltándosela; por eso el fondo va plano (sin capas difusas). */
       var difuso = new Float32Array(SIZE * SIZE);
-      var capaEst = capaEstrellas(estrellas, {
+      var opEst = {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
         apertura: o.apertura,   // el disco de Airy va como 1/D
         conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
-      }, SIZE);
+      };
+      var capaEst = capaEstrellas(estrellas, opEst, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst);
       /* La capa de galaxias se espera: la imagen que el formulario sube es la
          que se ve, y si se resolviera antes de que llegue el parche subiría el
@@ -2943,6 +3055,7 @@
          imagen sale como salía antes de esta capa. */
       return ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
         ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, estrellas: estrellas,
+        estrellasDibujo: estrellas, opEstrellas: opEst,
         apertura: o.apertura   // la PSF del parche va como 1/D, igual que el disco de Airy
       }).then(function (capa) {
         return { estrellas: estrellas, mlim: mlim, fondo: fondo, aviso: capa.aviso };
@@ -3095,6 +3208,9 @@
     ps1CabeEnParche: ps1CabeEnParche,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
+    ps1EscenaEnParche: ps1EscenaEnParche,
+    ps1FuenteEnEscena: ps1FuenteEnEscena,
+    ps1FuentesEnEscena: ps1FuentesEnEscena,
     ps1DescargarParche: ps1DescargarParche,
     ps1ParcheDeGalaxia: ps1ParcheDeGalaxia,
     ps1MagConsulta: ps1MagConsulta,
