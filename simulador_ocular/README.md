@@ -278,6 +278,32 @@ La cadena, en orden:
    `mezclaCajaAs`, y `s` (`ps1EscalaMezcla`) el factor que **cierra la
    fotometría exactamente**. Donde la imagen midió, manda la imagen; donde no
    hay información, manda el perfil del catálogo.
+6. **`ps1PintarParche`** — el paso al lienzo va por interpolación **bilineal**
+   (mezcla por vecino): reconstrucción/remuestreo, no una fuente de resolución
+   (`scripts/test_bilineal_parche.js`).
+
+#### El umbral de contraste depende del tamaño aparente (ley H2c)
+
+Al pintar, el parche entra en la cadena fotométrica (`ctxFotometrico`) con el
+**tamaño intrínseco** de la galaxia (`ps1ThetaIntArcmin`: la isofota μ=25
+circularizada, los mismos ejes que deciden el halo). El umbral de contraste ya
+no depende de los aumentos a secas, sino del **tamaño aparente real** del
+objeto en el ocular:
+
+    Cmin *= (1 + θR(SBe) / (θeff·aumentos))²
+    θeff = √(θint² + seeing²),  log10 θR = 0.094 + 0.081·SBe
+
+con θR(fondo) medido sobre los datos de Blackwell (1946). Un objeto grande está
+en el *plateau* (factor ≈ 1: no se le regala nada); uno pequeño paga la
+pendiente de Ricco; el seeing pone el suelo de θeff. El nivel absoluto
+(K = 2.0 = conservar `C_MIN`) quedó **validado en campo** con 12 observaciones
+reales (10/12 acordes, y los márgenes ordenan visto / lateral / no visto):
+`scripts/campo_h2c.js` + `docs/ricco/campo/observaciones.csv`.
+
+La ley vive tras `FOT.H2C`, **activa por defecto**; `FOT.H2C = null` recupera
+la vía histórica C_MAG bit a bit, que queda solo como regresión
+(`scripts/test_h2c_invariancias.js`, invariancias A–F). Las capas difusas que
+no traen θint siguen en la vía C_MAG mientras no lo traigan.
 
 #### Dónde se enciende, y qué se dice cuando no hay imagen
 
@@ -443,11 +469,6 @@ sitúan el cruce: el relleno plano da 0,999 de 25 a 40″ y 0,025 a 56″.
   proxy, y cuadruplicaría otra vez el peso. En las galaxias pequeñas (parche de
   1,5–8′) la escala ya es holgada. Subir el tope del proxy es una decisión de
   ancho de banda, no de física.
-- **El parche se muestrea con el vecino más próximo** en `ps1PintarParche`. A
-  1024 px el pixelado asoma menos que antes, pero la interpolación bilineal
-  sigue pendiente: es **reconstrucción/remuestreo, no una fuente de resolución**,
-  y hay que medirla por separado de la PSF para no atribuirle mérito que no
-  tiene.
 - **Estelas de sangrado y huecos**: la máscara conservada deja los huecos como
   huecos, que es lo correcto, pero no los *rellena* con nada plausible. Ahí la
   mezcla E pone `(1-w)·perfil`.
@@ -464,6 +485,9 @@ Los de la resolución y la PSF van aparte, porque necesitan parches de verdad:
 | `test_psf_parche.js` | La física de `θ_add` sola, contra la MTF analítica | no |
 | `test_psf_produccion.js` | El camino de producción contra el harness ya validado, sobre M51/M81/M101/NGC 205: convolución idéntica **bit a bit**, máscara conservada, flujo, PSF aplicada **una sola vez**, 457 ≠ 914, y el pintado entero de `ps1PintarParche` | sí, la primera vez (deja los parches en `$TMPDIR/bitacora-ps1-harness`) |
 | `harness_decision_psf_resolucion.js` | El experimento que decidió el 1024: cuatro configuraciones × cuatro objetos × cuatro aperturas × cinco seeings | sí |
+| `test_bilineal_parche.js` | El paso al lienzo por bilineal: conserva flujo, no inventa resolución, no crece frente al vecino | no |
+| `test_h2c_invariancias.js` | La ley H2c: activa por defecto, invariancias A–F (plateau, mismo θapp mismo factor, pendiente de Ricco, suelo de seeing, sin PSF) y la vía C_MAG intacta con `FOT.H2C = null` | no |
+| `campo_h2c.js` | No es test: contrasta el umbral contra observaciones reales (`docs/ricco/campo/observaciones.csv`); con él se validó K = 2.0 | no |
 
 > **Si mides estructura, no normalices por la σ de cada imagen.** Convolucionar
 > baja el ruido de fondo, así que el denominador encoge justo cuando la
@@ -654,7 +678,7 @@ la lógica:
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
-| `FOT` | Curvas de la fotometría: brillo del objeto y del fondo de cielo. |
+| `FOT` | Curvas de la fotometría: brillo del objeto y del fondo de cielo. Incluye `H2C` (ley del umbral por tamaño aparente, activa por defecto; `null` = vía histórica C_MAG, solo regresión) y `H2C_DEFECTO` (`THETA_R_A/B` de Blackwell, `SEEING_AS` = 2″ fijo). |
 | `TRANSMISION_TELE` / `TRANSMISION_OPTICA` | Transmisión por defecto y por tipo óptico. |
 | `MARGEN_MAGLIM` | Margen entre el límite típico y el óptimo. |
 | `GAIA_MAG_MAX` / `TOP` | Profundidad y tope de la consulta a Gaia (afecta al rendimiento). |
