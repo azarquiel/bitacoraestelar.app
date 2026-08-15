@@ -2832,6 +2832,33 @@
     return out;
   }
 
+  /* Compañeras demasiado débiles para el RC3 (BT_MAX de gen_galaxias.py corta
+     en 13,0, "no se ve por un ocular") pero SÍ visibles con equipo real —caso
+     NGC 7335, B=14,44, junto a NGC 7331— y catalogadas en SIMBAD/NED. Sin
+     modelo de Sérsic ni anclaje: solo protegen su núcleo en ps1EscenaEnParche
+     con un radio dado, no calculado, para que ps1QuitarEstrellas no lo trate
+     como estrella Gaia suelta. Engordar esta lista NO es enmascarar por
+     nombre (ver ps1EscenaEnParche/NGC 5195): es dato astrométrico real de una
+     fuente que el RC3 no cubre, igual que el propio RC3 es dato real de las
+     que sí cubre. Cada fila: [nombre, RA°, Dec°, radio de protección ″ sobre
+     el semieje mayor, b/a, PA°]. Fuente: SIMBAD (query 15-ago-2026). */
+  var PS1_PROTECCION_SIN_MODELO = [
+    ['NGC 7335', 339.33088, 34.44785, 43.3, 0.64, 150]
+  ];
+
+  /* Proyección cielo→píxel del parche: WCS del recorte si la hay, afín si no.
+     Compartida por los dos orígenes de la escena (catálogo y protección sin
+     modelo) para no duplicar la fórmula. */
+  function ps1ProyectarEnParche(f, gal, a, cos0, ra, dec) {
+    var p = f.wcs ? ps1CieloAPixel(f.wcs, ra, dec) : null;
+    if (!p) {
+      var este = ((((ra - gal.ra) + 540) % 360) - 180) * cos0 * 3600;
+      var norte = (dec - gal.dec) * 3600;
+      p = [a.cx + a.xe * este + a.xn * norte, a.cy + a.ye * este + a.yn * norte];
+    }
+    return p;
+  }
+
   /* Escena difusa del parche: los componentes del catálogo que asoman por él,
      cada uno como elipse isofotal en píxeles del parche. `campo` son las filas
      ya mapeadas de ps1GalaxiasDelCampo (la propia galaxia incluida): así el
@@ -2843,7 +2870,9 @@
      una opinión sobre a quién pertenece cada estrella.
      El centro sale de la WCS del recorte si la hay, como las estrellas; con el
      afín solo, igual de válido a estas distancias. Componentes cuya elipse no
-     toca el parche se descartan: no pueden decidir sobre ninguna fuente. */
+     toca el parche se descartan: no pueden decidir sobre ninguna fuente.
+     Además de `campo`, PS1_PROTECCION_SIN_MODELO aporta compañeras sin
+     Sérsic con su propio radio de protección (no calculado, dado). */
   function ps1EscenaEnParche(f, gal, campo) {
     var a = f.afin || ps1AfinParche(f, gal);
     var esc = 1 / Math.hypot(a.xn, a.yn);
@@ -2856,18 +2885,24 @@
         if (r > r25) r25 = r;
       }
       if (!(r25 > 0)) continue;
-      var p = f.wcs ? ps1CieloAPixel(f.wcs, g.ra, g.dec) : null;
-      if (!p) {
-        var este = ((((g.ra - gal.ra) + 540) % 360) - 180) * cos0 * 3600;
-        var norte = (g.dec - gal.dec) * 3600;
-        p = [a.cx + a.xe * este + a.xn * norte, a.cy + a.ye * este + a.yn * norte];
-      }
+      var p = ps1ProyectarEnParche(f, gal, a, cos0, g.ra, g.dec);
       var mPx = r25 / esc;
       if (p[0] < -mPx || p[1] < -mPx || p[0] > f.ancho + mPx || p[1] > f.alto + mPx) continue;
       var paR = (g.pa || 0) * Math.PI / 180;
       out.push({
         cx: p[0], cy: p[1], cos: Math.cos(paR), sin: Math.sin(paR),
         ba: (g.ba > 0 && g.ba <= 1) ? g.ba : 1, r25As: r25
+      });
+    }
+    for (var k = 0; k < PS1_PROTECCION_SIN_MODELO.length; k++) {
+      var pr = PS1_PROTECCION_SIN_MODELO[k], r25b = pr[3];
+      var p2 = ps1ProyectarEnParche(f, gal, a, cos0, pr[1], pr[2]);
+      var mPx2 = r25b / esc;
+      if (p2[0] < -mPx2 || p2[1] < -mPx2 || p2[0] > f.ancho + mPx2 || p2[1] > f.alto + mPx2) continue;
+      var paR2 = (pr[5] || 0) * Math.PI / 180;
+      out.push({
+        cx: p2[0], cy: p2[1], cos: Math.cos(paR2), sin: Math.sin(paR2),
+        ba: (pr[4] > 0 && pr[4] <= 1) ? pr[4] : 1, r25As: r25b
       });
     }
     return out;
