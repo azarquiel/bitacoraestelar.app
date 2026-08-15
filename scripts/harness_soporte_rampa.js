@@ -19,9 +19,10 @@
         NaN y negativos entran como «sin señal» (bin 0), igual que producción.
      E2 (propagación de opacidad): --variante E2 --decaimiento exp --alcance 100
         componente(x) = max_y op_rampa25(y)·k(dist), k exp(−3d/L) o max(0,1−d/L),
-        por chamfer de dos pasadas ×2 (métrica chamfer ≈ euclídea; verificación
-        contra la definición directa en una ROI, tolerancia reportada). Los NaN
-        no aportan ni reciben opacidad (la distancia es euclídea, sin caminos).
+        exacto por niveles de op (128) × EDT euclídea de Felzenszwalb;
+        verificación por corrida contra la definición directa en una ROI,
+        tolerancia 0,02. Los NaN no aportan ni reciben opacidad (la distancia
+        es euclídea, sin caminos).
      --calientes N (solo sensibilidad E1, exploratoria): inyecta N píxeles
         sintéticos a nivel p99,9 en una COPIA del parche (mezcla y componente
         los ven, como un caliente real); desactiva el asserto de SHA-1.
@@ -262,60 +263,65 @@ function percentilCaja(datos, ancho, alto, rad, P, umbral) {
    lin: se arrastra (op0, d) del mejor candidato (aprox. codiciosa).
    La verificación contra la definición directa (euclídea) se hace fuera. */
 function propagarOp(op, nan, ancho, alto, escalaAs, alcance, tipo) {
-  var n = op.length;
-  var comp = new Float32Array(n), op0 = new Float32Array(n), dist = new Float32Array(n);
-  /* NaN: no siembran (op 0) ni reciben (comp final 0), pero NO bloquean el
-     paso — la definición directa es euclídea, sin noción de camino */
+  /* Exacto por niveles: comp(x) = max_q q·k(d_q(x)) con q = niveles de op
+     cuantizados a 1/128 (error ≤ 1/256, muy por debajo de la tolerancia de
+     0,02) y d_q = distancia EUCLÍDEA exacta (Felzenszwalb, O(n) por nivel) al
+     píxel más cercano con op ≥ q. Sustituye al chamfer: sin error métrico.
+     NaN: no siembran (op 0) ni reciben (comp final 0); la distancia es
+     euclídea, sin noción de camino, así que tampoco pueden bloquear nada. */
+  var n = op.length, NQ = 128;
+  var comp = new Float32Array(n);
+  var INF = 1e20;
+  var f = new Float64Array(Math.max(ancho, alto));
+  var d1 = new Float64Array(Math.max(ancho, alto));
+  var v1 = new Int32Array(Math.max(ancho, alto));
+  var z1 = new Float64Array(Math.max(ancho, alto) + 1);
+  function edt1d(nn) {                       /* Felzenszwalb 1-D sobre f */
+    var k = 0; v1[0] = 0; z1[0] = -INF; z1[1] = INF;
+    for (var q = 1; q < nn; q++) {
+      var s2;
+      for (;;) {
+        s2 = ((f[q] + q * q) - (f[v1[k]] + v1[k] * v1[k])) / (2 * q - 2 * v1[k]);
+        if (s2 <= z1[k]) k--; else break;
+      }
+      k++; v1[k] = q; z1[k] = s2; z1[k + 1] = INF;
+    }
+    k = 0;
+    for (var q2 = 0; q2 < nn; q2++) {
+      while (z1[k + 1] < q2) k++;
+      d1[q2] = (q2 - v1[k]) * (q2 - v1[k]) + f[v1[k]];
+    }
+  }
+  var g = new Float64Array(n);
+  /* qué niveles existen de verdad (op cuantizada hacia el más próximo) */
+  var hayNivel = new Uint8Array(NQ + 1);
+  var opQ = new Uint8Array(n);
   for (var i = 0; i < n; i++) {
-    if (nan[i]) { comp[i] = 0; op0[i] = 0; dist[i] = 0; continue; }
-    comp[i] = op[i]; op0[i] = op[i]; dist[i] = 0;
+    if (nan[i] || !(op[i] > 0)) continue;
+    var q3 = Math.min(NQ, Math.round(op[i] * NQ));
+    opQ[i] = q3; if (q3 > 0) hayNivel[q3] = 1;
   }
-  /* vecindad 5×5 (con saltos de caballo): error métrico ≤ ~2 % frente al 7,6 %
-     del 3×3, necesario para que |chamfer−directo| quede bajo la tolerancia */
-  var pasoA = escalaAs, pasoD = escalaAs * Math.SQRT2, pasoC = escalaAs * Math.sqrt(5);
-  var kA = Math.exp(-3 * pasoA / alcance), kD = Math.exp(-3 * pasoD / alcance),
-      kC = Math.exp(-3 * pasoC / alcance);
-  function candidato(i, j, paso, kMul) {
-    var v;
-    if (tipo === 'exp') {
-      v = comp[j] * kMul;
-      if (v > comp[i]) { comp[i] = v; }
-    } else {
-      var d2 = dist[j] + paso;
-      v = op0[j] * Math.max(0, 1 - d2 / alcance);
-      if (v > comp[i]) { comp[i] = v; op0[i] = op0[j]; dist[i] = d2; }
+  for (var nivel = 1; nivel <= NQ; nivel++) {
+    if (!hayNivel[nivel]) continue;
+    /* EDT del conjunto {op ≥ nivel} */
+    for (i = 0; i < n; i++) g[i] = opQ[i] >= nivel ? 0 : INF;
+    for (var x = 0; x < ancho; x++) {           /* columnas */
+      for (var y = 0; y < alto; y++) f[y] = g[y * ancho + x];
+      edt1d(alto);
+      for (y = 0; y < alto; y++) g[y * ancho + x] = d1[y];
     }
-  }
-  for (var it = 0; it < 2; it++) {
-    for (var y = 0; y < alto; y++) for (var x = 0; x < ancho; x++) {
-      var i2 = y * ancho + x;
-      if (x > 0) candidato(i2, i2 - 1, pasoA, kA);
-      if (y > 0) candidato(i2, i2 - ancho, pasoA, kA);
-      if (x > 0 && y > 0) candidato(i2, i2 - ancho - 1, pasoD, kD);
-      if (x < ancho - 1 && y > 0) candidato(i2, i2 - ancho + 1, pasoD, kD);
-      if (y > 1) {
-        if (x > 0) candidato(i2, i2 - 2 * ancho - 1, pasoC, kC);
-        if (x < ancho - 1) candidato(i2, i2 - 2 * ancho + 1, pasoC, kC);
-      }
-      if (y > 0) {
-        if (x > 1) candidato(i2, i2 - ancho - 2, pasoC, kC);
-        if (x < ancho - 2) candidato(i2, i2 - ancho + 2, pasoC, kC);
-      }
+    for (var y2 = 0; y2 < alto; y2++) {         /* filas */
+      var base = y2 * ancho;
+      for (x = 0; x < ancho; x++) f[x] = g[base + x];
+      edt1d(ancho);
+      for (x = 0; x < ancho; x++) g[base + x] = d1[x];
     }
-    for (var y2 = alto - 1; y2 >= 0; y2--) for (var x2 = ancho - 1; x2 >= 0; x2--) {
-      var i3 = y2 * ancho + x2;
-      if (x2 < ancho - 1) candidato(i3, i3 + 1, pasoA, kA);
-      if (y2 < alto - 1) candidato(i3, i3 + ancho, pasoA, kA);
-      if (x2 < ancho - 1 && y2 < alto - 1) candidato(i3, i3 + ancho + 1, pasoD, kD);
-      if (x2 > 0 && y2 < alto - 1) candidato(i3, i3 + ancho - 1, pasoD, kD);
-      if (y2 < alto - 2) {
-        if (x2 < ancho - 1) candidato(i3, i3 + 2 * ancho + 1, pasoC, kC);
-        if (x2 > 0) candidato(i3, i3 + 2 * ancho - 1, pasoC, kC);
-      }
-      if (y2 < alto - 1) {
-        if (x2 < ancho - 2) candidato(i3, i3 + ancho + 2, pasoC, kC);
-        if (x2 > 1) candidato(i3, i3 + ancho - 2, pasoC, kC);
-      }
+    var qv = nivel / NQ;
+    for (i = 0; i < n; i++) {
+      var dAs = Math.sqrt(g[i]) * escalaAs;
+      var v = tipo === 'exp' ? qv * Math.exp(-3 * dAs / alcance)
+                             : qv * Math.max(0, 1 - dAs / alcance);
+      if (v > comp[i]) comp[i] = v;
     }
   }
   for (i = 0; i < n; i++) if (nan[i]) comp[i] = 0;
