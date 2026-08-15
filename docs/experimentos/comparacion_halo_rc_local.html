@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>V2-RC local — comparación visual experimentoRcLocal false/true</title>
+<style>
+  body { background: #111; color: #ddd; font: 14px/1.4 system-ui, sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  p.nota { color: #999; max-width: 900px; }
+  .controles { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+  .controles label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #aaa; }
+  .lienzos { display: flex; gap: 12px; flex-wrap: wrap; }
+  .col { text-align: center; }
+  .col h2 { font-size: 13px; font-weight: 600; margin: 4px 0; }
+  canvas { background: #000; border: 1px solid #333; }
+  #estado { color: #8f8; min-height: 18px; }
+  #estado.error { color: #f88; }
+</style>
+</head>
+<body>
+<h1>V2-RC local — CFG.globular.experimentoRcLocal: false (izq, producción) vs true (der, experimento)</h1>
+<p class="nota">
+  Misma consulta a Gaia DR3, mismo equipo, mismo aumento, misma escena, un único
+  parámetro distinto entre las dos columnas (<code>experimentoRcLocal</code>).
+  No toca V2-B, Glow/King ni H2c: solo llama a las funciones ya exportadas de
+  <code>bitacora-gaia-render.js</code> sin modificarlo. Ver
+  <code>scripts/test_globulares_rc_local.js</code> para la parte numérica.
+</p>
+<div class="controles">
+  <label>Cúmulo
+    <select id="cumulo"></select>
+  </label>
+  <label>Apertura (mm)
+    <input id="apertura" type="number" value="250" min="50" max="1000" step="10">
+  </label>
+  <label>Aumentos
+    <input id="aumentos" type="number" value="150" min="20" max="500" step="10">
+  </label>
+  <label>Campo (arcmin)
+    <input id="arcmin" type="number" value="30" min="5" max="120" step="1">
+  </label>
+  <label>SQM
+    <input id="sqm" type="number" value="21.5" min="17" max="22" step="0.1">
+  </label>
+  <label>anchoRc (solo derecha)
+    <input id="anchoRc" type="number" value="0.1" min="0.01" max="0.6" step="0.01">
+  </label>
+  <label>&nbsp;
+    <button id="ir">Renderizar</button>
+  </label>
+</div>
+<div id="estado"></div>
+<div class="lienzos">
+  <div class="col">
+    <h2>experimentoRcLocal = false (producción)</h2>
+    <canvas id="cvFalse" width="600" height="600"></canvas>
+  </div>
+  <div class="col">
+    <h2>experimentoRcLocal = true (experimento)</h2>
+    <canvas id="cvTrue" width="600" height="600"></canvas>
+  </div>
+</div>
+
+<script>window.BITACORA_OCULAR_LIBRE = false;</script>
+<!-- El JS de ESTE worktree (con experimentoRcLocal), no el de producción: solo
+     el proxy de datos (gaia_proxy.php) apunta a producción, ver más abajo. -->
+<script src="../../resources/js/bitacora-gaia-color.js"></script>
+<script src="../../resources/js/bitacora-gaia-render.js"></script>
+<script>
+'use strict';
+// Consulta Gaia directamente contra producción: gaia_proxy.php manda
+// Access-Control-Allow-Origin: * (ver simulador_ocular/gaia_proxy.php),
+// así este HTML puede abrirse en local (file://) sin servidor propio.
+window.BitacoraGaiaRender.proxyUrl = 'https://bitacoraestelar.app/wp-content/uploads/bitacora/gaia_proxy.php';
+
+// Catálogo de Harris (mismos valores que mapa/datos/globulares.csv), solo
+// los tres cúmulos de prueba de tareas.md.
+var CUMULOS = {
+  'M13':     { ra: 250.42183, dec: 36.45986, rc: 0.62, c: 1.53, muV0: 16.59 },
+  'M92':     { ra: 259.28079, dec: 43.13594, rc: 0.26, c: 1.68, muV0: 15.47 },
+  '47 Tuc':  { ra: 6.02363,   dec: -72.08128, rc: 0.36, c: 2.07, muV0: 14.38 }
+};
+
+var selCumulo = document.getElementById('cumulo');
+Object.keys(CUMULOS).forEach(function (n) {
+  var op = document.createElement('option'); op.value = n; op.textContent = n; selCumulo.appendChild(op);
+});
+
+var R = window.BitacoraGaiaRender;
+var estado = document.getElementById('estado');
+
+function renderColumna(canvasId, experimentoRcLocal) {
+  var canvas = document.getElementById(canvasId);
+  var ctx = canvas.getContext('2d');
+  var SIZE = canvas.width;
+
+  var nombre = selCumulo.value;
+  var cluster = CUMULOS[nombre];
+  var apertura = parseFloat(document.getElementById('apertura').value) || 250;
+  var aumentos = parseFloat(document.getElementById('aumentos').value) || 150;
+  var arcmin = parseFloat(document.getElementById('arcmin').value) || 30;
+  var sqm = parseFloat(document.getElementById('sqm').value) || 21.5;
+  var anchoRc = parseFloat(document.getElementById('anchoRc').value) || 0.1;
+  var transmision = 0.85, pupilaOjo = 6, afov = 50;
+  var pupilaSalida = apertura / aumentos;
+
+  // Único parámetro que cambia entre columnas: experimentoRcLocal (y anchoRc,
+  // que solo pesa si experimentoRcLocal=true). Todo lo demás -equipo, cielo,
+  // consulta, orden de las capas- es idéntico en ambas.
+  R.config.globular.experimentoRcLocal = !!experimentoRcLocal;
+  R.config.globular.anchoRc = anchoRc;
+
+  var ra0 = cluster.ra, dec0 = cluster.dec;
+  var rc = cluster.rc, rt = cluster.rc * Math.pow(10, cluster.c);
+
+  var fondo = R.nivelFondo({ pupilaSalida: pupilaSalida, pupilaOjo: pupilaOjo, sqm: sqm, transmision: transmision });
+  var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
+  ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE);
+
+  var mlim = R.magLimite({ apertura: apertura, aumentos: aumentos, transmision: transmision, sqm: sqm });
+  var magConsulta = R.magConsultaGaia(apertura, transmision);
+
+  return Promise.all([
+    R.consultar(ra0, dec0, arcmin, magConsulta),
+    R.consultar(ra0, dec0, Math.max(rt * 2.2, 10), R.config.globular.magResta).catch(function () { return []; })
+  ]).then(function (res) {
+    var estrellas = res[0], estrellasHalo = res[1];
+    var difuso = new Float32Array(SIZE * SIZE);
+    // Misma secuencia que renderGaia2D en simulador_ocular/resources/js/bitacora-ocular.js:
+    // haloGlobular -> pintarHaloGlobular -> capaEstrellas -> pintarFot.
+    var halo = R.haloGlobular({ rc: rc, rt: rt, muV0: cluster.muV0 }, estrellasHalo, ra0, dec0, aumentos, apertura);
+    R.pintarHaloGlobular(difuso, halo, { ra0: ra0, dec0: dec0, arcmin: arcmin, size: SIZE });
+    var opEst = {
+      ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: afov,
+      apertura: apertura, conGlow: true, globular: halo
+    };
+    var capaEst = R.capaEstrellas(estrellas, opEst, SIZE);
+    var cielo = { pupilaSalida: pupilaSalida, pupilaOjo: pupilaOjo, sqm: sqm, transmision: transmision, aumentos: aumentos, perceptual: true };
+    R.pintarFot(difuso, ctx, cielo, capaEst);
+    return estrellas.length;
+  });
+}
+
+document.getElementById('ir').addEventListener('click', function () {
+  estado.className = ''; estado.textContent = 'consultando Gaia DR3…';
+  Promise.all([
+    renderColumna('cvFalse', false),
+    renderColumna('cvTrue', true)
+  ]).then(function (ns) {
+    estado.textContent = ns[0] + ' estrellas en el campo.';
+  }).catch(function (err) {
+    estado.className = 'error';
+    estado.textContent = 'error: ' + (err && err.message ? err.message : err);
+  });
+});
+
+document.getElementById('ir').click();
+</script>
+</body>
+</html>
