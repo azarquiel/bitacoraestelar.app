@@ -1,0 +1,390 @@
+{
+ "obj": "M51",
+ "gal": {
+  "nombre": "NGC 5194",
+  "ra": 202.47208,
+  "dec": 47.19667,
+  "reArcsec": 180.35,
+  "ba": 0.617,
+  "pa": 163,
+  "magV": 8.21,
+  "n": 1,
+  "bt": 0.15,
+  "nMedido": 3.87,
+  "ladoArcmin": 18.035
+ },
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "fecha": "2026-08-15",
+ "flags": {
+  "opacidadInternaEscena": false,
+  "confianzaLocalNaN": false,
+  "deltaMin": 0,
+  "deltaPlena": 2.5,
+  "deltaExp": 1,
+  "kRuido": 1.5,
+  "kAusencia": 2,
+  "H2C": true
+ },
+ "parche": {
+  "ancho": 1024,
+  "alto": 1024,
+  "escalaAs": 1.0566406369318824,
+  "ladoArcmin": 18.035,
+  "cielo": -0.6406702995300293,
+  "sigma": 27.594760581493375,
+  "estrellas": 208,
+  "escalaMezcla": 0.8685606419961814,
+  "thetaIntArcmin": 12.92118488928559
+ },
+ "ctx": {
+  "Fcielo": 3.3113112148259078e-9,
+  "Cmin": 0.195830259165331,
+  "umbralSB": 22.970300503329245,
+  "nivelFondo": 23.555557146433237,
+  "rango": 11.5,
+  "SBe": 23.76100212873935
+ },
+ "invarianteProtocolo": {
+  "pintadosDentroEscena": 142468,
+  "conOpMenor1": 137641,
+  "nota": "con opacidadInternaEscena=false NO es invariante: es el comportamiento vigente"
+ },
+ "clasificacion": {
+  "negros": 149549,
+  "a": 839,
+  "b": 48205,
+  "c": 62063,
+  "d": 38403,
+  "e": 39
+ },
+ "solape": {
+  "cYop": 62039,
+  "dYop": 79336,
+  "soloOp": 49044,
+  "cSolo": 24,
+  "dSolo": 0
+ },
+ "clasificacionPct": {
+  "a": 0.5610201338691666,
+  "b": 32.233582304127744,
+  "c": 41.50011033173074,
+  "d": 25.679208821189043,
+  "e": 0.026078409083310487
+ },
+ "HA": {
+  "negros": 149549,
+  "fuera": 41442,
+  "dentro": 108107,
+  "fracFuera": 0.2771131869821931,
+  "histDEsc": [
+   7,
+   932,
+   2318,
+   6568,
+   18123,
+   21997,
+   26861,
+   31301,
+   20313,
+   10350,
+   5519,
+   3610,
+   1590,
+   60,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "histPaso": 0.125,
+  "fracBorde": 0.26608001390848485,
+  "fracInterbrazoFueraEscena": 0
+ },
+ "HB": {
+  "medianaInterbrazoSig": 2.0628097240176015,
+  "medianaCieloSig": -0.19011658125698017,
+  "mannWhitneyZ": 28.403606052283124,
+  "nInter": 3844,
+  "nCielo": 3721,
+  "fracBandaInter": 0.15634755463059313,
+  "profMediaSig": 0.91556710446343,
+  "propagacion": {
+   "pxBanda": 207,
+   "wMedio": 0.5384878602935055,
+   "opMedio": 0.04561083092481339
+  }
+ },
+ "HC": {
+  "negros": 149549,
+  "conSenalLineal": 18158,
+  "sinSenal": 131391,
+  "aplastadosPorMapeo": 18158,
+  "fracAplastados": 0.1214183979832697,
+  "negrosConMezclaPositiva": 149546
+ },
+ "veredictos": {
+  "HA": "DESCARTADA",
+  "HB": "DESCARTADA",
+  "HC": "DESCARTADA"
+ },
+ "rois": [
+  {
+   "nombre": "IB-O",
+   "tipo": "interbrazo",
+   "caja": [
+    345,
+    450,
+    375,
+    480
+   ],
+   "pxParche": {
+    "validos": 961,
+    "nans": 0
+   },
+   "crudo": {
+    "mediana": 55.92391920089722,
+    "medianaSig": 2.026613676742787,
+    "sigmaRob": 107.19501313591003,
+    "enBandaSobresustraccion": 209,
+    "fracBanda": 0.21748178980228927,
+    "profMediaSig": 0.8678240040641365
+   },
+   "lienzo": {
+    "px": 289,
+    "negros": 249,
+    "clases": {
+     "c": 68,
+     "d": 0,
+     "a": 0,
+     "b": 181,
+     "e": 0
+    },
+    "fracNegros": 0.8615916955017301,
+    "fracFueraEscena": 0
+   }
+  },
+  {
+   "nombre": "IB-E",
+   "tipo": "interbrazo",
+   "caja": [
+    585,
+    560,
+    615,
+    590
+   ],
+   "pxParche": {
+    "validos": 961,
+    "nans": 0
+   },
+   "crudo": {
+    "mediana": 56.95541715621948,
+    "medianaSig": 2.0639938871010552,
+    "sigmaRob": 422.7286042350769,
+    "enBandaSobresustraccion": 42,
+    "fracBanda": 0.043704474505723206,
+    "profMediaSig": 1.0334678873879033
+   },
+   "lienzo": {
+    "px": 306,
+    "negros": 89,
+    "clases": {
+     "c": 11,
+     "d": 0,
+     "a": 0,
+     "b": 78,
+     "e": 0
+    },
+    "fracNegros": 0.2908496732026144,
+    "fracFueraEscena": 0
+   }
+  },
+  {
+   "nombre": "IB-SE",
+   "tipo": "interbrazo",
+   "caja": [
+    560,
+    330,
+    590,
+    360
+   ],
+   "pxParche": {
+    "validos": 961,
+    "nans": 0
+   },
+   "crudo": {
+    "mediana": 58.20500898361206,
+    "medianaSig": 2.10927754968991,
+    "sigmaRob": 125.37429391136169,
+    "enBandaSobresustraccion": 165,
+    "fracBanda": 0.1716961498439126,
+    "profMediaSig": 0.9752651611499096
+   },
+   "lienzo": {
+    "px": 324,
+    "negros": 284,
+    "clases": {
+     "c": 58,
+     "d": 0,
+     "a": 0,
+     "b": 226,
+     "e": 0
+    },
+    "fracNegros": 0.8765432098765432,
+    "fracFueraEscena": 0
+   }
+  },
+  {
+   "nombre": "IB-SO",
+   "tipo": "interbrazo",
+   "caja": [
+    375,
+    375,
+    405,
+    405
+   ],
+   "pxParche": {
+    "validos": 961,
+    "nans": 0
+   },
+   "crudo": {
+    "mediana": 57.575854778289795,
+    "medianaSig": 2.086477779296388,
+    "sigmaRob": 134.51940228424073,
+    "enBandaSobresustraccion": 185,
+    "fracBanda": 0.19250780437044746,
+    "profMediaSig": 0.8894930274221078
+   },
+   "lienzo": {
+    "px": 289,
+    "negros": 191,
+    "clases": {
+     "c": 58,
+     "d": 0,
+     "a": 0,
+     "b": 133,
+     "e": 0
+    },
+    "fracNegros": 0.6608996539792388,
+    "fracFueraEscena": 0
+   }
+  },
+  {
+   "nombre": "BRAZO",
+   "tipo": "brazo",
+   "caja": [
+    420,
+    580,
+    450,
+    610
+   ],
+   "pxParche": {
+    "validos": 961,
+    "nans": 0
+   },
+   "crudo": {
+    "mediana": 1463.686812877655,
+    "medianaSig": 53.04220011458578,
+    "sigmaRob": 1039.34313984375,
+    "enBandaSobresustraccion": 1,
+    "fracBanda": 0.001040582726326743,
+    "profMediaSig": 0.04568060121525591
+   },
+   "lienzo": {
+    "px": 289,
+    "negros": 0,
+    "clases": {
+     "c": 0,
+     "d": 0,
+     "a": 0,
+     "b": 0,
+     "e": 0
+    },
+    "fracNegros": 0,
+    "fracFueraEscena": 0
+   }
+  },
+  {
+   "nombre": "CIELO",
+   "tipo": "cielo",
+   "caja": [
+    80,
+    120,
+    140,
+    180
+   ],
+   "pxParche": {
+    "validos": 3721,
+    "nans": 0
+   },
+   "crudo": {
+    "mediana": -5.246221542358398,
+    "medianaSig": -0.19011658125698017,
+    "sigmaRob": 21.095082031345367,
+    "enBandaSobresustraccion": 2274,
+    "fracBanda": 0.611126041386724,
+    "profMediaSig": 0.6466601975465729
+   },
+   "lienzo": {
+    "px": 1156,
+    "negros": 0,
+    "clases": {
+     "c": 0,
+     "d": 0,
+     "a": 0,
+     "b": 0,
+     "e": 0
+    },
+    "fracNegros": 0,
+    "fracFueraEscena": 1
+   }
+  },
+  {
+   "nombre": "PUENTE",
+   "tipo": "puente",
+   "caja": [
+    480,
+    625,
+    510,
+    655
+   ],
+   "pxParche": {
+    "validos": 961,
+    "nans": 0
+   },
+   "crudo": {
+    "mediana": 412.38081312179565,
+    "medianaSig": 14.944170720523005,
+    "sigmaRob": 465.28784460754395,
+    "enBandaSobresustraccion": 52,
+    "fracBanda": 0.054110301768990635,
+    "profMediaSig": 1.1577098548403315
+   },
+   "lienzo": {
+    "px": 306,
+    "negros": 60,
+    "clases": {
+     "c": 14,
+     "d": 0,
+     "a": 0,
+     "b": 46,
+     "e": 0
+    },
+    "fracNegros": 0.19607843137254902,
+    "fracFueraEscena": 0
+   }
+  }
+ ]
+}
