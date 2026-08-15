@@ -6,26 +6,27 @@ reproduce el campo, el brillo y —en la vista de Gaia— hasta el color de las
 estrellas, tal como los verías por el ocular.
 
 Funciona en el navegador (móvil u ordenador), **sin instalar nada y sin necesidad
-de iniciar sesión** (con sesión se desbloquean dos extras: ver
+de iniciar sesión** (con sesión se desbloquea un extra: ver
 [*Qué cambia al iniciar sesión*](#qué-cambia-al-iniciar-sesión)). Vive en la web
 WordPress del proyecto ([bitacoraestelar.app](https://bitacoraestelar.app)) como
 un bloque HTML.
 
-> El **objeto** lo elige el usuario en un selector de pestañas: **cúmulos
-> abiertos** (de momento M35, M39 y NGC 7789), **cúmulos globulares** (los 149 del
-> catálogo de Harris), **estrellas de carbono** (las ~100 del programa de la
-> Astronomical League) o **estrellas dobles** (188, fusión de tres catálogos); con
-> sesión iniciada se añade una quinta, **cualquier objeto** (por nombre o
-> coordenadas). El equipo y el cielo también los elige el usuario.
+> El **objeto** lo elige el usuario en un selector de pestañas: **estrellas de
+> carbono** (las ~100 del programa de la Astronomical League), **estrellas
+> dobles** (188, fusión de tres catálogos), **cúmulos globulares** (los 149 del
+> catálogo de Harris) o **cualquier objeto** (cúmulos abiertos, galaxias y
+> nebulosas del catálogo local con sugerencias, o cualquier otro nombre/RA/Dec
+> vía SIMBAD). El equipo y el cielo también los elige el usuario.
 
 ---
 
 ## Qué hace
 
-- **Elige el objeto**: en el selector de pestañas, un **cúmulo abierto**, un
-  **cúmulo globular**, una **estrella de carbono** de la Astronomical League o una
-  **estrella doble** (y, con sesión iniciada, **cualquier objeto** por nombre o
-  coordenadas). Al elegir un globular, la vista de Gaia pinta su **halo no
+- **Elige el objeto**: en el selector de pestañas, una **estrella de carbono** de
+  la Astronomical League, una **estrella doble**, un **cúmulo globular** o
+  **cualquier objeto** (cúmulos abiertos, galaxias y nebulosas con sugerencias
+  del catálogo local, o cualquier otro nombre/coordenadas vía SIMBAD). Al elegir
+  un globular, la vista de Gaia pinta su **halo no
   resuelto** (perfil de King) además de las estrellas individuales del catálogo. Al
   elegir una estrella de carbono, la ficha resalta su magnitud, tipo y su característico
   **color rojo-anaranjado** (mejor visible en la vista de Gaia). Al elegir una doble, la
@@ -789,17 +790,18 @@ usuarios no autenticados, hay que permitir esa ruta.
 
 `window.BITACORA_WP` solo lo inyecta el plugin para usuarios logueados
 (`bitacora_inyectar_datos`), así que su *nonce* es la señal de sesión de la página
-(`haySesion()` en `bitacora-ocular.js`). Con sesión se añaden dos cosas:
+(`haySesion()` en `bitacora-ocular.js`). Con sesión se añade una cosa:
 
 | Opción | Sin sesión | Con sesión |
 |---|---|---|
-| Pestaña **"Cualquier objeto"** (RA/Dec o SIMBAD) | Oculta | Visible (salvo `window.BITACORA_OCULAR_LIBRE = false`) |
 | Telescopios de **Mi flota** | No se piden | Los **primeros** del buscador, marcados `Mi flota`, y la lista se despliega al enfocar |
 
-Ninguna de las dos es un control de acceso: el equipo personal (`GET
-bitacora/v1/equipo`) ya exige login **en el servidor**, y el modo libre solo
-consulta servicios públicos (Sesame/SIMBAD). En el cliente se decide qué se
-**ofrece**, no a qué se puede llegar.
+No es un control de acceso: el equipo personal (`GET bitacora/v1/equipo`) ya
+exige login **en el servidor**; en el cliente solo se decide qué se **ofrece**,
+no a qué se puede llegar. La pestaña "Cualquier objeto" (cúmulos abiertos,
+galaxias y nebulosas del catálogo local, o cualquier nombre/RA/Dec vía SIMBAD)
+es pública igual que el resto; consulta solo servicios públicos (Sesame/SIMBAD)
+y se puede apagar con `window.BITACORA_OCULAR_LIBRE = false`.
 
 El orden "flota primero" lo fija el helper puro compartido
 `BitacoraEquipo.flotaPrimero(flota, catalogo)` (`../resources/js/bitacora-equipo.js`),

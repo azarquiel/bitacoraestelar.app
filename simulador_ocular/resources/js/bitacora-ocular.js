@@ -94,8 +94,10 @@
       };
 
       // Categorías del selector de objeto. La clave coincide con data-cat del HTML.
-      var CATALOGOS_OBJ = { cumulos: CATALOGO_CUMULOS, carbono: CATALOGO_CARBONO, dobles: CATALOGO_DOBLES, globulares: CATALOGO_GLOBULARES };
-      var objetoSel = CATALOGO_CUMULOS[0];   // M35 por defecto
+      // Los cúmulos abiertos no tienen pestaña propia: viven en el buscador de
+      // "Cualquier objeto" (ver catalogoLibre), junto a galaxias y nebulosas.
+      var CATALOGOS_OBJ = { carbono: CATALOGO_CARBONO, dobles: CATALOGO_DOBLES, globulares: CATALOGO_GLOBULARES };
+      var objetoSel = CATALOGO_CARBONO[0];   // primera estrella de carbono por defecto
 
       var TELE_EJEMPLO = [{ id: '_t200', vendor: '', modelo: 'Newton 200/1200 (ejemplo)', optica: 'Newtonian', apertura_mm: 200, focal_mm: 1200 }];
       var OCULARES_EJEMPLO = [
@@ -985,14 +987,15 @@
       }
 
       /* ══════════════════ MODO "CUALQUIER OBJETO" ══════════════════
-         Apuntar a RA/Dec arbitrarias o buscar por nombre en SIMBAD. Reservado a
-         usuarios CON SESIÓN (ver haySesion): es la única forma de apuntar a una
-         galaxia o a una nebulosa, que se pintan como capa por campo y no tienen
-         pestaña propia en el selector. Sin sesión, la página pública se queda con
-         los cuatro catálogos cerrados. Para ocultarlo también a quien tiene
-         sesión, window.BITACORA_OCULAR_LIBRE = false.
-         El objeto libre se pinta con carbono:true y doble:false fijos (la
-         clasificación real vendrá en el futuro). */
+         Pública, sin sesión (para ocultarla, window.BITACORA_OCULAR_LIBRE =
+         false). El campo nombre sugiere primero contra el catálogo local
+         (cúmulos abiertos + galaxias + nebulosas, ver catalogoLibre); si no hay
+         coincidencia, cae a buscar por nombre en SIMBAD o admite RA/Dec a mano.
+         Es la única forma de apuntar a una galaxia o a una nebulosa, que se
+         pintan como capa por campo y no tienen pestaña propia en el selector.
+         El objeto libre se pinta con carbono:false y doble:false fijos (la
+         clasificación real vendrá en el futuro), salvo el que llega ya
+         clasificado desde catalogoLibre (p.ej. los cúmulos abiertos). */
       function pad2(n) { return (n < 10 ? '0' : '') + n; }
       // Grados -> sexagesimal PLANO ("HH MM SS" / "±DD MM SS"), que es lo que
       // consume sexToDeg() (el formato "21h 40m 22s" de formatRA NO vale aquí).
@@ -1033,12 +1036,49 @@
           else { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); }
         }
       });
+      // Catálogo combinado (cúmulos abiertos + galaxias + nebulosas) para sugerir
+      // en modo libre antes de tirar de SIMBAD. Los cúmulos ya vienen como
+      // objetos completos (CATALOGO_CUMULOS); galaxias/nebulosas son filas
+      // crudas [nombre, alt, RA°, Dec°, ...] en grados (ver galaxias-datos.js /
+      // nebulosas-datos.js), que se normalizan al mismo formato sexagesimal
+      // plano ("HH MM SS") que ya usan los cúmulos.
+      function catalogoLibre() {
+        function filas(arr, tipo) {
+          return (arr || []).map(function (f) {
+            return {
+              id: f[0] || f[1], nombre: f[0] || f[1], constelacion: '',
+              ra: degAHms(f[2]), dec: degADms(f[3]), mag: f[7],
+              tipo: tipo, carbono: false, doble: false
+            };
+          }).filter(function (o) { return o.id; });
+        }
+        return CATALOGO_CUMULOS
+          .concat(filas(window.BITACORA_GALAXIAS, 'galaxia'))
+          .concat(filas(window.BITACORA_NEBULOSAS, 'nebulosa'));
+      }
       function montarObjetoLibre() {
         var nom = $('sim-libre-nombre');
         if (nom) nom.addEventListener('input', function () { resolutor.programar(nom.value); });
         ['sim-libre-ra', 'sim-libre-dec'].forEach(function (id) {
           var el = $(id); if (el) el.addEventListener('change', function () { fijarObjetoLibre($('sim-libre-nombre').value.trim(), ''); });
         });
+        if (nom && window.BitacoraBase && $('sim-libre-sugg')) {
+          BitacoraBase.montarBuscadorCatalogo({
+            input: nom, suggest: $('sim-libre-sugg'),
+            fuente: catalogoLibre,
+            texto: function (o) { return o.nombre; },
+            specs: function (o) { return [o.constelacion, (o.mag != null ? 'mag ' + Number(o.mag).toFixed(1) : '')].filter(Boolean).join('  ·  '); },
+            max: 12,
+            sinResultados: 'Sin coincidencias en el catálogo local · sigue escribiendo para buscar en SIMBAD',
+            onElegir: function (o) {
+              nom.value = o.nombre;
+              $('sim-libre-ra').value = BitacoraBase.formatRA(sexToDeg(o.ra, true));
+              $('sim-libre-dec').value = BitacoraBase.formatDec(sexToDeg(o.dec, false));
+              libreEstado('✓ ' + o.nombre + '  ·  AR ' + o.ra + '  ·  Dec ' + o.dec, 'ok');
+              elegirObjeto(o);
+            }
+          });
+        }
       }
 
       // Selector de objeto: pestañas (cúmulos / carbono / dobles [+ libre]) sobre
@@ -1047,7 +1087,7 @@
       function montarSelectorObjeto() {
         var input = $('sim-obj-input');
         if (!input) return;
-        var categoria = 'cumulos';
+        var categoria = 'carbono';
         BitacoraBase.montarBuscadorCatalogo({
           input: input, suggest: $('sim-obj-sugg'),
           fuente: function () { return CATALOGOS_OBJ[categoria] || []; },
@@ -1062,10 +1102,9 @@
           sinResultados: 'Sin coincidencias en esta lista',
           onElegir: function (o) { input.value = ''; elegirObjeto(o); }
         });
-        // Pestaña "Cualquier objeto": SOLO con sesión iniciada. Sigue pudiendo
-        // apagarse a mano (window.BITACORA_OCULAR_LIBRE = false) también para
-        // quien la tiene.
-        var libreOn = (window.BITACORA_OCULAR_LIBRE !== false) && haySesion();
+        // Pestaña "Cualquier objeto": pública. Se puede apagar a mano con
+        // window.BITACORA_OCULAR_LIBRE = false.
+        var libreOn = (window.BITACORA_OCULAR_LIBRE !== false);
         var tabLibre = $('sim-tab-libre'), panelLibre = $('sim-libre');
         if (tabLibre) tabLibre.hidden = !libreOn;
         if (panelLibre) panelLibre.hidden = true;
@@ -1075,7 +1114,7 @@
         var tabs = document.querySelectorAll('.obj-tab');
         tabs.forEach(function (t) {
           t.addEventListener('click', function () {
-            categoria = t.getAttribute('data-cat') || 'cumulos';
+            categoria = t.getAttribute('data-cat') || 'carbono';
             tabs.forEach(function (x) {
               var act = (x === t);
               x.classList.toggle('is-activa', act);
