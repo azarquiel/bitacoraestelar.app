@@ -17,15 +17,15 @@
 
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
 
+     La pestaña "Cualquier objeto" (cúmulos abiertos, galaxias y nebulosas del
+     catálogo local con sugerencias, o cualquier otro nombre/RA/Dec vía SIMBAD)
+     es pública, sin sesión. Para ocultarla, añade esta línea antes de los
+     <script src>:
+         <script>window.BITACORA_OCULAR_LIBRE = false;</script>
+
      SOLO CON SESIÓN INICIADA (el resto de la página sigue siendo pública):
-       · la pestaña "Cualquier objeto" (RA/Dec o SIMBAD), única forma de apuntar
-         a una galaxia o a una nebulosa, que se pintan como capa por campo y no
-         tienen pestaña propia en el selector;
        · los telescopios de "Mi flota", que salen los primeros del buscador de
          telescopio, por delante del catálogo global.
-     Para ocultar además "Cualquier objeto" a quien sí tiene sesión, añade esta
-     línea antes de los <script src>:
-         <script>window.BITACORA_OCULAR_LIBRE = false;</script>
      ============================================================ -->
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260808_1200" />
@@ -110,11 +110,10 @@
       <div class="bloque">
         <h2>Objeto a observar</h2>
         <div class="obj-tabs" role="tablist" aria-label="Tipo de objeto">
-          <button type="button" class="obj-tab is-activa" role="tab" aria-selected="true" data-cat="cumulos">Cúmulos abiertos</button>
-          <button type="button" class="obj-tab" role="tab" aria-selected="false" data-cat="carbono">Estrellas de carbono</button>
+          <button type="button" class="obj-tab is-activa" role="tab" aria-selected="true" data-cat="carbono">Estrellas de carbono</button>
           <button type="button" class="obj-tab" role="tab" aria-selected="false" data-cat="dobles">Estrellas dobles</button>
           <button type="button" class="obj-tab" role="tab" aria-selected="false" data-cat="globulares">Cúmulos globulares</button>
-          <button type="button" class="obj-tab" role="tab" aria-selected="false" data-cat="libre" id="sim-tab-libre" hidden>Cualquier objeto</button>
+          <button type="button" class="obj-tab" role="tab" aria-selected="false" data-cat="libre" id="sim-tab-libre">Cualquier objeto</button>
         </div>
         <div class="obj-wrap">
           <input type="text" id="sim-obj-input" placeholder="— Escribe para buscar objeto —" aria-label="Objeto a observar" autocomplete="off">
@@ -123,7 +122,7 @@
         <!-- Panel "Cualquier objeto": nace oculto para que no parpadee antes de que
              cargue el JS, que lo muestra al activarse la pestaña. -->
         <div class="obj-libre" id="sim-libre" hidden>
-          <label class="field"><span class="lab">Nombre (catálogo de galaxias/nebulosas o SIMBAD)</span></label>
+          <label class="field"><span class="lab">Nombre (catálogo de cúmulos/galaxias/nebulosas o SIMBAD)</span></label>
           <div class="obj-wrap">
             <input type="text" id="sim-libre-nombre" placeholder="NGC 6826, IC 1396, Barnard 33…" autocomplete="off">
             <div class="suggest" id="sim-libre-sugg"></div>
@@ -255,4 +254,4 @@
 <script src="/wp-content/uploads/bitacora/nebulosas-datos.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260814_1900" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260807_1200" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260815_2144" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260815_2155" defer></script>
