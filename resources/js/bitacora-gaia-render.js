@@ -757,8 +757,31 @@
          una estrella brillante justo fuera de rc puede saltar de tPin=0 a
          tPin=1 sin transición-. true: usa la MISMA fórmula continua también
          dentro de rc, sin caso especial. No consolidar sin verificación
-         visual (solo medido numéricamente, ver test_globulares_rc_v2.js). */
-      experimentoRcV2: false
+         visual (solo medido numéricamente, ver test_globulares_rc_v2.js).
+         DESCARTADO tras medir: mu(0) de un cúmulo típico (~muV0 del
+         catálogo) no es especialmente brillante frente a una estrella
+         resuelta de campo, así que la fórmula continua da tPin~1 (sin
+         amortiguar) para CASI CUALQUIER estrella dentro de rc, no solo la
+         excepcional -el corte duro no era una simplificación de un límite
+         que la fórmula ya alcanzaba sola, era una decisión perceptual
+         aparte-. Quitarlo cambia el aspecto de casi todo el núcleo: EMPEORA.
+         Ver worktree-experimento-halo-globular-v2, fase V2-RC. */
+      experimentoRcV2: false,
+      /* EXPERIMENTO Rc LOCAL (fase 2 de V2-RC, sustituye al intento anterior
+         de arriba). En vez de usar la fórmula continua en TODO r<rc -eso
+         cambiaba el aspecto de casi todo el núcleo, ver experimentoRcV2-,
+         solo suaviza la propia transición en una banda estrecha alrededor
+         de rc: [rc·(1-anchoRc), rc]. Por debajo de esa banda, tPin=0 -igual
+         que producción, el núcleo denso sigue forzado a puntual-. Desde
+         rc en adelante, la fórmula es EXACTAMENTE la de producción (sin
+         tocar). Dentro de la banda, interpola con suave() entre 0 y el
+         valor que la fórmula continua ya daría en cada r -así en r=rc el
+         valor coincide exactamente con "fuera de rc" (continuidad C0) y en
+         el borde interior de la banda vale 0 (mismo comportamiento que
+         producción ahí). anchoRc: fracción de rc que ocupa la banda (0.1 =
+         10% de rc). No consolidar sin verificación visual, ver
+         scripts/test_globulares_rc_v2.js. */
+      experimentoRcLocal: false, anchoRc: 0.1
     }
   };
 
@@ -1346,10 +1369,21 @@
      corte duro, pero sin el salto-. No es el comportamiento por defecto: es
      un experimento aparte, no consolidado (ver
      scripts/test_globulares_rc_v2.js). */
-  function tPinGlobular(halo, rArcsec, g) {
-    if (!CFG.globular.experimentoRcV2 && rArcsec <= halo.rcAs) return 0;
+  function tPinContinuo(halo, rArcsec, g) {
     var dm = muGlobular(halo, rArcsec) - g;
     return suave(0.5 + dm / (2 * CFG.globular.rangoMag));
+  }
+  function tPinGlobular(halo, rArcsec, g) {
+    if (CFG.globular.experimentoRcLocal) {
+      var banda = halo.rcAs * CFG.globular.anchoRc;
+      var borde = halo.rcAs - banda;
+      if (rArcsec <= borde) return 0;
+      if (rArcsec >= halo.rcAs) return tPinContinuo(halo, rArcsec, g);
+      var peso = suave((rArcsec - borde) / banda);
+      return peso * tPinContinuo(halo, rArcsec, g);
+    }
+    if (!CFG.globular.experimentoRcV2 && rArcsec <= halo.rcAs) return 0;
+    return tPinContinuo(halo, rArcsec, g);
   }
 
   /* V2-B: mapa de resta LOCAL del flujo de las estrellas Gaia ya dibujadas,
