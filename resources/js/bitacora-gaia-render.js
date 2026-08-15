@@ -1461,7 +1461,15 @@
        como un mapa de curvas de nivel—. Una protección que no dibuje geometría
        tiene que mirar el entorno del píxel, no la elipse; queda pendiente.
        El sitio donde la escena SÍ manda sigue siendo ps1QuitarEstrellas. */
-    opacidadInternaEscena: false
+    opacidadInternaEscena: false,
+    /* Apagado a propósito, no diagnóstico: el óvalo del Sérsic más allá de la
+       isofota 25 (y el relleno de perfil dentro del parche) se descartó por
+       resultado —el usuario prefiere el render sin él—. ps1HaloActivo queda
+       siempre false. Las funciones que lo alimentan (ps1PesoImagen,
+       ps1EscalaMezcla, ps1FlujoModelo, ps1PerfilEnParche, ps1MedidasHalo...)
+       se conservan porque las usan los harness/test de la investigación de
+       las fases 1-4; con el flag a false quedan inertes en el render. */
+    haloExtrapolado: false
   };
 
   /* Interruptor de la capa, aquí y no en cada llamador: los dos puntos de uso
@@ -2228,6 +2236,7 @@
      entra ningún dato del cielo ni del ocular. Sin medidas o sin ejes, false:
      antes que un halo inventado, ninguno. */
   function ps1HaloActivo(gal) {
+    if (!PS1.haloExtrapolado) return false;
     if (!gal || !(gal.bArcmin > PS1.haloMenorMin) || !isFinite(gal.muProm)) return false;
     return gal.muProm > PS1.haloMuFijo;
   }
@@ -3398,6 +3407,7 @@
     ps1BrilloMedio: ps1BrilloMedio,
     ps1MedidasHalo: ps1MedidasHalo,
     ps1HaloActivo: ps1HaloActivo,
+    PS1: PS1,
     ps1Opacidad: ps1Opacidad,
     ps1SoporteLocal: ps1SoporteLocal,
     sbUmbralContraste: sbUmbralContraste,
