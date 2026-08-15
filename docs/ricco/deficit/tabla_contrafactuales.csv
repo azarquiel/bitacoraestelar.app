@@ -1,0 +1,8 @@
+objeto,contrafactual,recuperacion_mediana,dFlujo020_pct,dFlujoCampo_pct,invariantes_Cmin_nivel_rango,rmsNivel,cumple_recuperacion_60pct,cumple_fotometria_05pct,veredicto
+M51,s1,1.517,15.13,10.71,si,0.502,si,no,RECHAZADO
+M51,sdebil,-8.255,-100,-70.79,si,5.722,no,no,RECHAZADO
+M51,cielo,0.036,0.02,-0.0,si,0.009,no,si,RECHAZADO
+M51,suelo,-0.305,-5.4,-0.0,si,0.143,no,no,RECHAZADO
+M51,psf,0.089,0,0.29,si,0.096,no,si,RECHAZADO
+M81,s1,0.835,24.73,17.64,si,0.819,si,no,RECHAZADO
+M81,suelo,-0.688,-4.71,0.01,si,0.203,no,no,RECHAZADO

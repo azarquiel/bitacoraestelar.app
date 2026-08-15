@@ -1,0 +1,83 @@
+{
+ "obj": "M104",
+ "fecha": "2026-08-15",
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "shaFotometriaPre": "f3c0e80d6921a34e6edfba99fe7291d2474575d8",
+ "flags": {
+  "opacidadInternaEscena": false,
+  "confianzaLocalNaN": false,
+  "kRuido": 1.5,
+  "kAusencia": 2,
+  "mezclaCajaAs": 25,
+  "mezclaW0": 0.5
+ },
+ "parche": {
+  "ancho": 1024,
+  "alto": 1024,
+  "escalaAs": 0.7763672186814528,
+  "cielo": -4.1215057373046875,
+  "sigma": 35.87166490631103,
+  "suelo": 49.685991622161865,
+  "kanc": 2.566637673885055e-12,
+  "escalaMezcla": 0.9509353582900094,
+  "thetaAddAs": 1.696470103307755,
+  "fwhmPx": 2.185138850046718
+ },
+ "ctx": {
+  "Fcielo": 3.3113112148259078e-9,
+  "Cmin": 0.20416290416051097,
+  "umbralSB": 22.925057912992038,
+  "nivelFondo": 23.555557146433237,
+  "rango": 11.5
+ },
+ "ceros": {
+  "cieloParcheDN": -4.1215057373046875,
+  "sigmaDN": 35.87166490631103,
+  "sueloDN": 49.685991622161865,
+  "kanc": 2.566637673885055e-12,
+  "offsetFlujo": 1.3810434986027747e-10,
+  "offsetSobreFcielo": 0.041706846895554726,
+  "magOffsetEnUmbral": 1.7244236926872993,
+  "nota": "offset deliberado (suelo=cielo+kRuido·σ, ps1AnclarACatalogo); el test sintético --ceros verifica que no hay ninguna resta adicional"
+ },
+ "balance": {},
+ "cierreDescomposicion": {
+  "total": 0,
+  "malos": 0
+ },
+ "firma": {
+  "global": null,
+  "porRoi": {},
+  "veredicto": "SIN DATOS",
+  "deficitMediano": null,
+  "interceptoEnSigmaK": null
+ },
+ "atribucionPct": {
+  "psf": null,
+  "bilineal": null,
+  "mezcla_s": null,
+  "mezcla_perfil": null
+ },
+ "hf4": {},
+ "fotometria": {
+  "flujo020_pre": 0.00003829546624889435,
+  "flujo020_post": 0.00003829546624889435,
+  "flujoCampo_pre": 0.0001443616075544951,
+  "flujoCampo_post": 0.00012909176166288875,
+  "rois": {}
+ },
+ "shaEtapas": {
+  "anc": "e2fdc9bfd95857227e30e5dba5d446ef2f721980",
+  "psf": "46f9f348f1541a5e0b3c5a33c7f8ad5a34f95c93",
+  "bil": "8a234c74fe326dfeff9e14ba1461770e0b5ab421",
+  "mez": "f3c0e80d6921a34e6edfba99fe7291d2474575d8",
+  "post": "fb08b10ec2a28feecfeac79dae22647087915018"
+ }
+}

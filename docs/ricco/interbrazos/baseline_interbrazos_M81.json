@@ -1,0 +1,130 @@
+{
+ "obj": "M81",
+ "gal": {
+  "nombre": "NGC 3031",
+  "ra": 148.88958,
+  "dec": 69.06667,
+  "reArcsec": 336.33,
+  "ba": 0.525,
+  "pa": 157,
+  "magV": 7.14,
+  "n": 1,
+  "bt": 0.3,
+  "nMedido": 3.42,
+  "ladoArcmin": 20
+ },
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "fecha": "2026-08-15",
+ "flags": {
+  "opacidadInternaEscena": false,
+  "confianzaLocalNaN": false,
+  "deltaMin": 0,
+  "deltaPlena": 2.5,
+  "deltaExp": 1,
+  "kRuido": 1.5,
+  "kAusencia": 2,
+  "H2C": true
+ },
+ "parche": {
+  "ancho": 1024,
+  "alto": 1024,
+  "escalaAs": 1.1718749999999953,
+  "ladoArcmin": 20,
+  "cielo": -0.20035839080810547,
+  "sigma": 25.589530705833432,
+  "estrellas": 401,
+  "escalaMezcla": 0.8017080356490326,
+  "thetaIntArcmin": 20.806562154656127
+ },
+ "ctx": {
+  "Fcielo": 3.3113112148259078e-9,
+  "Cmin": 0.18982321508507413,
+  "umbralSB": 23.00412668779603,
+  "nivelFondo": 23.555557146433237,
+  "rango": 11.5,
+  "SBe": 23.76100212873935
+ },
+ "invarianteProtocolo": {
+  "pintadosDentroEscena": 327551,
+  "conOpMenor1": 317633,
+  "nota": "con opacidadInternaEscena=false NO es invariante: es el comportamiento vigente"
+ },
+ "clasificacion": {
+  "negros": 338413,
+  "a": 1246,
+  "b": 122305,
+  "c": 156071,
+  "d": 58054,
+  "e": 737
+ },
+ "solape": {
+  "cYop": 155674,
+  "dYop": 131469,
+  "soloOp": 123551,
+  "cSolo": 397,
+  "dSolo": 273
+ },
+ "clasificacionPct": {
+  "a": 0.3681891653098433,
+  "b": 36.14075109407735,
+  "c": 46.11850017582067,
+  "d": 17.15477833298366,
+  "e": 0.21778123180847073
+ },
+ "HA": {
+  "negros": 338413,
+  "fuera": 73111,
+  "dentro": 265302,
+  "fracFuera": 0.21604075493553734,
+  "histDEsc": [
+   0,
+   1510,
+   20709,
+   30450,
+   49761,
+   61265,
+   53233,
+   48374,
+   28908,
+   19087,
+   13303,
+   8215,
+   3453,
+   145,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "histPaso": 0.125,
+  "fracBorde": 0.20540877566760143
+ },
+ "HB": null,
+ "HC": {
+  "negros": 338413,
+  "conSenalLineal": 46248,
+  "sinSenal": 292165,
+  "aplastadosPorMapeo": 46248,
+  "fracAplastados": 0.13666141667134538,
+  "negrosConMezclaPositiva": 338407
+ },
+ "veredictos": {
+  "HA": "DESCARTADA",
+  "HB": "SIN ROIS",
+  "HC": "DESCARTADA"
+ },
+ "rois": []
+}

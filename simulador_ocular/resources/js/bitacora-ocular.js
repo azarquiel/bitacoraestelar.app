@@ -429,6 +429,10 @@
         if (objetoSel && objetoSel.doble) pintarObjeto();
         var lecturas = ['sim-v-aum', 'sim-v-real', 'sim-v-apar', 'sim-v-pupila', 'sim-v-brillo', 'sim-v-cielo', 'sim-v-maglim'];
         var cargando = $('sim-cargando');
+        // Cada render pasa por aquí: cualquier indicador de procesado de la
+        // petición anterior muere ahora, también si aquella acabó en error.
+        var procesando = $('sim-procesando');
+        if (procesando) procesando.hidden = true;
         var img = $('sim-img');
         var canvas = $('sim-lienzo');
 
@@ -469,6 +473,10 @@
 
         var origen = $('sim-origen').value;
         PROC = tamRender(origen);
+        // La capa solo se pinta en la vista de Gaia: en las placas la galaxia ya
+        // viene en la propia imagen. Fuera de ella la casilla se apaga en gris.
+        var grupoCapa = $('sim-capa-grupo');
+        if (grupoCapa) grupoCapa.classList.toggle('esta-off', origen !== 'canvas-2d');
 
         /* Recorte del cielo: lado = campo real, limitado por el origen. El tope de
            2° es de las PLACAS (el servidor del DSS no sirve más); el Canvas-2D de
@@ -588,7 +596,7 @@
           ? BitacoraGaiaRender.consultar(ra0, dec0, Math.max(objetoSel.rTidal * 2.2, 10),
               BitacoraGaiaRender.config.globular.magResta).catch(function () { return []; })
           : Promise.resolve([]);
-        Promise.all([consultarGaia(ra0, dec0, arcmin), haloQuery]).then(function (res) {
+        Promise.all([consultarGaia(ra0, dec0, arcmin, true), haloQuery]).then(function (res) {
           var estrellas = res[0], estrellasHalo = res[1];
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
@@ -626,7 +634,7 @@
                 estrellasHalo, ra0, dec0, datosOcular().aumentos)
             : null;
           if (halo) BitacoraGaiaRender.pintarHaloGlobular(difuso, halo, { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
-          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, {
+          var opEst = {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
             // Solo si el objeto es una doble: el suelo de visibilidad de SUS dos
@@ -638,12 +646,46 @@
             conGlow: true, carbono: !!objetoSel.carbono,
             carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana(),
             globular: halo
-          }, PROC);
+          };
+          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, opEst, PROC);
           var cieloGaia = cieloOptica(datosOcular().pupila);
           cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
           BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
+          /* Galaxias del campo con su imagen real de PanSTARRS (ps1cutouts).
+             Toda la capa vive en el módulo compartido, que es lo que hace que el
+             generador de imagen del formulario pinte exactamente esto mismo.
+             Solo se llama aquí: con origen DSS o HiPS la imagen ya la trae la
+             placa. */
+          /* «procesando información»: solo si la capa está encendida y hay de
+             verdad un objeto difuso que procesar en el campo —la misma criba
+             que hará la capa—; así el indicador refleja trabajo real y no
+             parpadea en campos vacíos. Lo quita la promesa de la propia capa,
+             que resuelve también cuando el parche falla (nunca rechaza), y
+             cualquier render posterior lo mata al entrar en actualizar(). */
+          var procesando = $('sim-procesando');
+          var hayDifuso = BitacoraGaiaRender.galaxiasImagen && BitacoraGaiaRender
+            .ps1GalaxiasDelCampo(window.BITACORA_GALAXIAS, ra0, dec0, arcmin).length > 0;
+          if (procesando && hayDifuso && peticion === contadorPeticion) procesando.hidden = false;
+          BitacoraGaiaRender.ps1CapaGalaxias(difuso, ctx, cieloGaia, capaEst, {
+            ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
+            estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
+            catalogo: window.BITACORA_GALAXIAS,
+            vivo: function () { return peticion === contadorPeticion; }
+          }).then(function (capa) {
+            // Solo esta petición apaga SU indicador: si otra más nueva ya está
+            // en marcha, el suyo lo gestiona ella (y actualizar() lo ha reseteado).
+            if (procesando && peticion === contadorPeticion) procesando.hidden = true;
+            // El aviso no pisa a los que ya puso actualizar() (campo recortado,
+            // pupila, catálogo agotado): esos son del equipo y mandan.
+            if (peticion !== contadorPeticion || !capa.aviso) return;
+            if (!$('sim-aviso').textContent) $('sim-aviso').textContent = capa.aviso;
+          });
         }).catch(function () {
           if (peticion !== contadorPeticion) return;
+          // Cualquier error de la vista de Gaia mata también el indicador de
+          // procesado: no debe quedarse encendido sobre la placa de respaldo.
+          var procesando = $('sim-procesando');
+          if (procesando) procesando.hidden = true;
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el
           // canvas en negro, mostramos la placa DSS del mismo campo como respaldo.
           cargando.style.display = 'flex';
@@ -726,8 +768,14 @@
          rendirse; renderGaia2D, si TODOS fallan, cae a la placa DSS. */
       /* Consulta y dibujo de Gaia: delegados al módulo compartido BitacoraGaiaRender.
          Aquí quedan solo los adaptadores que le pasan el equipo/cielo del simulador. */
-      function consultarGaia(ra0, dec0, arcmin) {
+      function consultarGaia(ra0, dec0, arcmin, paraCapa) {
+        /* `paraCapa`: solo la vista de Gaia pinta la capa de galaxias, y solo
+           ella necesita la consulta hasta el tope del proxy —la máscara del
+           parche quiere TODAS las estrellas que PanSTARRS registra
+           (ps1MagConsulta, en el módulo compartido)—. El realce sobre las placas
+           no pinta capa, así que no paga esa profundidad. */
         var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva());
+        if (paraCapa) mag = BitacoraGaiaRender.ps1MagConsulta(mag);
         return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
@@ -1047,6 +1095,19 @@
       if (window.BitacoraBase && $('sim-bortle') && $('sim-sqm')) BitacoraBase.montarCielo($('sim-bortle'), $('sim-sqm'));
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
       $('sim-origen').addEventListener('change', actualizar);
+      /* Casilla de la capa de galaxias: gobierna la OPCIÓN del módulo compartido,
+         no una variable de aquí, para que el generador del formulario de registro
+         y el simulador respondan al mismo mando. El estado inicial lo pone el
+         `checked` del HTML, no al revés: así la casilla y la capa no pueden
+         empezar en desacuerdo. */
+      var capaGal = $('sim-capa-galaxias');
+      if (capaGal) {
+        BitacoraGaiaRender.galaxiasImagen = capaGal.checked;
+        capaGal.addEventListener('change', function () {
+          BitacoraGaiaRender.galaxiasImagen = capaGal.checked;
+          actualizar();
+        });
+      }
       window.addEventListener('resize', function () { actualizar(); });
       montarTeleManual();
       montarSelectorObjeto();

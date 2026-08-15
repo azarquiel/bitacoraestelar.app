@@ -35,11 +35,18 @@ import os
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(RAIZ, 'mapa', 'datos', 'rc3_brillantes.tsv')
+SRC_N = os.path.join(RAIZ, 'mapa', 'datos', 'sersic_s4g.tsv')
 OUT_CSV = os.path.join(RAIZ, 'mapa', 'datos', 'galaxias.csv')
 OUT_JS = os.path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js')
 
 FUENTE = ('de Vaucouleurs+ (1991) RC3, vía VizieR VII/155/rc3 · '
           'https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=VII/155')
+FUENTE_N = ('Salo+ (2015) S4G, ajuste de Sérsic único a 3,6 µm, vía VizieR '
+            'J/ApJS/219/4 · descarga: -out=Name,_RA,_DE,n,Re,q')
+
+# Radio de cruce con S4G. Los centros de los dos catálogos no coinciden al
+# segundo: 20″ recoge los emparejamientos buenos sin colar vecinas.
+CRUCE_ARCSEC = 20.0
 
 MU_ISOFOTA = 25.0        # mag/arcsec² en B: la isofota que define D25
 BT_MAX = 13.0            # tope de magnitud; más débil no se ve por un ocular
@@ -58,6 +65,44 @@ def color_bv(t):
 
 def indice_sersic(t):
     return 4.0 if (t is not None and t <= -0.5) else 1.0
+
+
+def lee_sersic_medido():
+    """[(RA°, Dec°, n)] del ajuste de Sérsic único de S4G.
+
+    Es un índice MEDIDO, no el del tipo de Hubble. Va a una columna aparte
+    (n_medido) y solo lo usa la PUERTA del halo del simulador: el perfil que se
+    pinta sigue saliendo de sersic_n, porque r_e se resolvió con ESE n y
+    cambiarlo movería el tamaño de todas las galaxias."""
+    if not os.path.exists(SRC_N):
+        return []
+    out = []
+    for linea in open(SRC_N, encoding='utf-8'):
+        if linea.startswith('#'):
+            continue
+        c = linea.rstrip('\n').split('\t')
+        if len(c) < 4:
+            continue
+        ra, dec, n = numero(c[1]), numero(c[2]), numero(c[3])
+        if ra is None or dec is None or n is None or not (0.1 < n < 20):
+            continue
+        out.append((ra, dec, n))
+    return out
+
+
+def sersic_medido(medidos, ra, dec):
+    """n medido de la fuente más cercana dentro de CRUCE_ARCSEC, o 0 si no hay."""
+    cos_d = math.cos(math.radians(dec))
+    tope = CRUCE_ARCSEC / 3600.0
+    mejor, mejor_d = 0.0, tope
+    for m_ra, m_dec, n in medidos:
+        d_dec = m_dec - dec
+        if abs(d_dec) > tope:
+            continue
+        d = math.hypot((m_ra - ra) * cos_d, d_dec)
+        if d < mejor_d:
+            mejor, mejor_d = n, d
+    return mejor
 
 
 def fraccion_bulbo(t):
@@ -202,7 +247,8 @@ def main():
         lineas = fh.read().splitlines()
     inicio = next(k for k, l in enumerate(lineas) if l.startswith('---'))
 
-    filas, sin_datos, de_d25 = [], 0, 0
+    medidos = lee_sersic_medido()
+    filas, sin_datos, de_d25, con_n = [], 0, 0, 0
     for linea in lineas[inicio + 1:]:
         if not linea.strip():
             continue
@@ -245,6 +291,9 @@ def main():
         # Banda de polvo: solo en espirales vistas suficientemente de canto. Es lo
         # que parte en dos a NGC 891, y no aparece si la galaxia se ve de frente.
         polvo = 1 if (t is not None and t >= 1 and q <= 0.35) else 0
+        n_medido = sersic_medido(medidos, ra, dec)
+        if n_medido:
+            con_n += 1
 
         filas.append({
             'nombre': limpia_nombre(c[0]),
@@ -258,6 +307,7 @@ def main():
             'sersic_n': n,
             'frac_bulbo': round(frac_bulbo, 2),
             'polvo': polvo,
+            'n_medido': round(n_medido, 2),
         })
 
     filas.sort(key=lambda f: f['ra_grados'])
@@ -271,20 +321,24 @@ def main():
         fh.write('/* Galaxias — GENERADO, no editar a mano.\n')
         fh.write('   Regenerar con: python3 scripts/gen_galaxias.py\n')
         fh.write('   Fuente: %s\n' % FUENTE)
-        fh.write('   Campos: [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n, B/T, polvo]\n')
+        fh.write('   n medido: %s\n' % FUENTE_N)
+        fh.write('   Campos: [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n, B/T, polvo,\n')
+        fh.write('            n medido]\n')
         fh.write('   r_e es el semieje mayor efectivo DEL DISCO; n el índice de Sérsic del\n')
         fh.write('   disco; B/T la fracción de luz del bulbo; polvo=1 marca espiral de canto\n')
-        fh.write('   con banda de polvo. */\n')
+        fh.write('   con banda de polvo. «n medido» es el Sérsic AJUSTADO de S4G (0 = no hay):\n')
+        fh.write('   no lo usa el perfil —ese va con n, con el que se resolvió r_e—, solo la\n')
+        fh.write('   puerta del halo extrapolado del simulador. */\n')
         fh.write('window.BITACORA_GALAXIAS = [\n')
         for f in filas:
-            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s],\n' % (
+            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s],\n' % (
                 f['nombre'], f['alt'], f['ra_grados'], f['dec_grados'],
                 f['re_arcsec'], f['razon_ejes'], f['pa_grados'], f['mag_v'],
-                int(f['sersic_n']), f['frac_bulbo'], f['polvo']))
+                int(f['sersic_n']), f['frac_bulbo'], f['polvo'], f['n_medido']))
         fh.write('];\n')
 
-    print('galaxias: %d  (r_e resuelto desde D25 en %d; descartadas %d)'
-          % (len(filas), de_d25, sin_datos))
+    print('galaxias: %d  (r_e resuelto desde D25 en %d; descartadas %d; n medido en %d)'
+          % (len(filas), de_d25, sin_datos, con_n))
     print('->', OUT_CSV)
     print('->', OUT_JS)
 

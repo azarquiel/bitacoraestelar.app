@@ -1,0 +1,102 @@
+{
+ "obj": "M51",
+ "cf": "sdebil",
+ "fecha": "2026-08-15",
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "detalles": {
+  "sProduccion": 0.8685606419961814,
+  "sContrafactual": 0
+ },
+ "comparacion": {
+  "rois": {
+   "IB-O": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.8615916955017301,
+    "fracNegrosCF": 1,
+    "dMagPre": -0.03556288290085874,
+    "dNivelMediana": -0.025777816772460938,
+    "deficitBase": 6.800709995147258e-11,
+    "deficitCF": 5.311620587811205e-10,
+    "recuperacion": -6.810391255620938
+   },
+   "IB-E": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.2908496732026144,
+    "fracNegrosCF": 0.5065359477124183,
+    "dMagPre": -0.4127816153172219,
+    "dNivelMediana": -4.467033386230469,
+    "deficitBase": 1.0098033520478111e-10,
+    "deficitCF": 9.721051567879169e-10,
+    "recuperacion": -8.626677855807817
+   },
+   "IB-SE": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.8765432098765432,
+    "fracNegrosCF": 1,
+    "dMagPre": 0.02777630975105083,
+    "dNivelMediana": -0.05366706848144531,
+    "deficitBase": 4.469141723362213e-11,
+    "deficitCF": 4.1362274716405523e-10,
+    "recuperacion": -8.25508235735428
+   },
+   "IB-SO": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.6608996539792388,
+    "fracNegrosCF": 0.8788927335640139,
+    "dMagPre": 0.038073258202288685,
+    "dNivelMediana": -0.8291530609130859,
+    "deficitBase": 5.6168358159025544e-11,
+    "deficitCF": 5.948156966972817e-10,
+    "recuperacion": -9.589871525409762
+   },
+   "BRAZO": {
+    "tipo": "brazo",
+    "fracNegrosBase": 0,
+    "fracNegrosCF": 0.9965397923875432,
+    "dMagPre": 1.1670572927644471,
+    "dNivelMediana": -34.42136764526367
+   },
+   "CIELO": {
+    "tipo": "cielo",
+    "fracNegrosBase": 1,
+    "fracNegrosCF": 1,
+    "dMagPre": 0.0028931764701525253,
+    "dNivelMediana": 0
+   },
+   "PUENTE": {
+    "tipo": "puente",
+    "fracNegrosBase": 0.19607843137254902,
+    "fracNegrosCF": 0.8954248366013072,
+    "dMagPre": 0.6073759183075147,
+    "dNivelMediana": -10.405109405517578,
+    "deficitBase": 2.1134782812737285e-10,
+    "deficitCF": 2.1517390091929656e-9,
+    "recuperacion": -9.181032037368174
+   },
+   "RESID": {
+    "tipo": "fuente",
+    "fracNegrosBase": 0,
+    "fracNegrosCF": 1,
+    "dMagPre": 6.8036318635258475,
+    "dNivelMediana": -51.338186264038086
+   }
+  },
+  "fotometria": {
+   "dFlujo020_pre": -1,
+   "dFlujo020_post": -1,
+   "dFlujoCampo_pre": -0.7079476665136322,
+   "CminIgual": true,
+   "nivelFondoIgual": true,
+   "rangoIgual": true
+  },
+  "recuperacionInterbrazoMediana": -8.25508235735428,
+  "rmsNivel": 5.722334678094696
+ }
+}

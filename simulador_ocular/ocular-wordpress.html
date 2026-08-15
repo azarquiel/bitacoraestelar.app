@@ -171,6 +171,9 @@
           <img id="sim-img" crossorigin="anonymous" alt="Vista del objeto a través del ocular">
           <canvas id="sim-lienzo" aria-label="Vista del objeto"></canvas>
           <div class="cargando" id="sim-cargando">preparando el simulador…</div>
+          <!-- Estado real de la capa difusa (galaxia/nubosidad): aparece cuando
+               empieza su procesado y lo quita quien lo termina, sin temporizadores. -->
+          <div class="procesando" id="sim-procesando" hidden>procesando información</div>
         </div>
 
         <!-- Acciones sobre la imagen (para todos, con o sin sesión): discretas,
@@ -198,6 +201,13 @@
             <option value="dss">DSS (placas fotográficas)</option>
             <option value="canvas-2d">Estrellas de Gaia DR3 (Canvas 2D)</option>
           </select></label>
+        <!-- Una sola casilla, no la barra de capas que se retiró en d0a3641: la
+             única capa difusa que hay es esta. Se apaga (esta-off) fuera de la
+             vista de Gaia, donde la placa ya trae la galaxia en la imagen. -->
+        <div class="capa-grupo" id="sim-capa-grupo">
+          <label class="capa" title="Galaxias del campo con su imagen real de PanSTARRS, anclada a la magnitud del catálogo RC3. Solo en la vista de Gaia: en las placas la galaxia ya viene en la propia imagen.">
+            <input type="checkbox" id="sim-capa-galaxias" checked> Galaxias con imagen real</label>
+        </div>
       </div>
 
       <div class="lecturas">
@@ -238,8 +248,8 @@
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260731_2200" defer></script>
 <script src="/wp-content/uploads/bitacora/globulares-datos.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/cumulos-abiertos-datos.js?v=20260802_1000" defer></script>
-<script src="/wp-content/uploads/bitacora/galaxias-datos.js?v=20260729_1600" defer></script>
+<script src="/wp-content/uploads/bitacora/galaxias-datos.js?v=20260812_1230" defer></script>
 <script src="/wp-content/uploads/bitacora/nebulosas-datos.js?v=20260729_1600" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260810_2105" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260814_1900" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260807_1200" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260807_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260813_2200" defer></script>

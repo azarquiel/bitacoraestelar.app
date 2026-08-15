@@ -1,0 +1,14 @@
+{
+  "objeto": "M51",
+  "nota": "Coordenadas de PARCHE (1024x1024 de M51, y crece al norte; centro de NGC 5194 en ~(505,495)). Elegidas sobre el render de referencia (457.2 mm, 190x, sqm 21.2): las interbrazo son cajas SIN NaN con mediana cruda 2-3 sigma sobre el cielo (senal debil real entre brazos) en cuatro acimuts; el brazo es la caja no nuclear de mediana maxima (53 sigma); el puente, senal intermedia real (15 sigma) entre NGC 5194 y NGC 5195; el cielo, esquina sin galaxias. La colocacion se ajusto con busca_cajas (una pasada, documentada en el README) ANTES de congelar el baseline; desde entonces no se mueven. RESID (Fase 3, 15-ago-2026): estrella residual detectada con el mismo buscador de maximos compactos que rois_M101.json (una iteracion): fuente puntual (radio de media luz 1 px) con fondo local 0 a 395 px del centro, fuera de la escena; las cajas de la Fase 1 no se tocaron.",
+  "cajas": [
+    { "nombre": "IB-O",  "tipo": "interbrazo", "x0": 345, "y0": 450, "x1": 375, "y1": 480 },
+    { "nombre": "IB-E",  "tipo": "interbrazo", "x0": 585, "y0": 560, "x1": 615, "y1": 590 },
+    { "nombre": "IB-SE", "tipo": "interbrazo", "x0": 560, "y0": 330, "x1": 590, "y1": 360 },
+    { "nombre": "IB-SO", "tipo": "interbrazo", "x0": 375, "y0": 375, "x1": 405, "y1": 405 },
+    { "nombre": "BRAZO", "tipo": "brazo",      "x0": 420, "y0": 580, "x1": 450, "y1": 610 },
+    { "nombre": "CIELO", "tipo": "cielo",      "x0": 80,  "y0": 120, "x1": 140, "y1": 180 },
+    { "nombre": "PUENTE","tipo": "puente",     "x0": 480, "y0": 625, "x1": 510, "y1": 655 },
+    { "nombre": "RESID", "tipo": "fuente",     "cx": 371, "cy": 143, "radioPx": 4 }
+  ]
+}

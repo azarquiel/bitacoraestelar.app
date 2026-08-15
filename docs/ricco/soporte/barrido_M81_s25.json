@@ -1,0 +1,135 @@
+{
+ "obj": "M81",
+ "etiqueta": "s25",
+ "escalas": [
+  25
+ ],
+ "rads": [
+  11
+ ],
+ "multi": false,
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "fecha": "2026-08-15",
+ "flags": {
+  "opacidadInternaEscena": false,
+  "confianzaLocalNaN": false,
+  "mezclaCajaAs": 25,
+  "deltaMin": 0,
+  "deltaPlena": 2.5,
+  "deltaExp": 1
+ },
+ "parche": {
+  "ancho": 1024,
+  "alto": 1024,
+  "escalaAs": 1.1718749999999953,
+  "escParche": 1.171875,
+  "cielo": -0.20035839080810547,
+  "sigma": 25.589530705833432
+ },
+ "ctx": {
+  "SBe": 23.76100212873935,
+  "umbralSB": 23.00412668779603,
+  "nivelFondo": 23.555557146433237,
+  "Cmin": 0.18982321508507413
+ },
+ "thetaR": {
+  "aparenteArcmin": 104.38573954649831,
+  "intrinsecoArcsec": 32.963917751525784
+ },
+ "shaFotometriaPre": "86b664ffc38eae265b9f6e5316e9b61415f0c60a",
+ "msSoporte": 23.8,
+ "clasificacion": {
+  "negros": 338413,
+  "a": 1246,
+  "b": 122305,
+  "c": 156071,
+  "d": 58054,
+  "e": 737
+ },
+ "soloRampa": 123551,
+ "rois": [],
+ "cieloCampo": {
+  "px": 11789,
+  "fracOpPos": 0.049961828823479514,
+  "nivelMedio": 23.716606892139133
+ },
+ "anillos": [
+  {
+   "dLo": 1,
+   "dHi": 1.1,
+   "px": 37678,
+   "fMedio": 4.3188578317300365e-11,
+   "nivelMedio": 23.699845456578398
+  },
+  {
+   "dLo": 1.1,
+   "dHi": 1.2,
+   "px": 27689,
+   "fMedio": 1.8313773648394149e-10,
+   "nivelMedio": 23.77216021359955
+  },
+  {
+   "dLo": 1.2,
+   "dHi": 1.3,
+   "px": 18341,
+   "fMedio": 3.884621181104295e-11,
+   "nivelMedio": 23.6602544419008
+  },
+  {
+   "dLo": 1.3,
+   "dHi": 1.4,
+   "px": 13972,
+   "fMedio": 6.403752459439786e-11,
+   "nivelMedio": 23.73636985965011
+  },
+  {
+   "dLo": 1.4,
+   "dHi": 1.5,
+   "px": 10304,
+   "fMedio": 3.63965216542708e-12,
+   "nivelMedio": 23.577480012030335
+  },
+  {
+   "dLo": 1.5,
+   "dHi": 1.6,
+   "px": 6986,
+   "fMedio": 3.511451499946952e-11,
+   "nivelMedio": 23.662487878316185
+  },
+  {
+   "dLo": 1.6,
+   "dHi": 1.7,
+   "px": 3870,
+   "fMedio": 4.120577358817637e-11,
+   "nivelMedio": 23.688383853527927
+  },
+  {
+   "dLo": 1.7,
+   "dHi": 1.8,
+   "px": 933,
+   "fMedio": 2.8166800928135287e-10,
+   "nivelMedio": 24.238899057190007
+  },
+  {
+   "dLo": 1.8,
+   "dHi": 1.9,
+   "px": 0,
+   "fMedio": 0,
+   "nivelMedio": 0
+  },
+  {
+   "dLo": 1.9,
+   "dHi": 2,
+   "px": 0,
+   "fMedio": 0,
+   "nivelMedio": 0
+  }
+ ]
+}

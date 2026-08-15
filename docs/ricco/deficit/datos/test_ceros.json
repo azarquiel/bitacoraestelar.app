@@ -1,0 +1,69 @@
+{
+ "fecha": "2026-08-15",
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "sintetico": {
+  "N": 64,
+  "escalaAs": 3,
+  "cielo": 100,
+  "sigma": 8
+ },
+ "estimados": {
+  "cielo": 99.635009765625,
+  "sigma": 8.357259379577636,
+  "kE2": 1.0881167754651097e-8,
+  "kE1": 7.820076679795823e-10,
+  "suelo": 112.17089883499145,
+  "kRuido": 1.5,
+  "kAusencia": 2
+ },
+ "thetaAdd": 0,
+ "resultados": [
+  {
+   "inyeccion": "cielo exacto",
+   "dnCrudo": 100,
+   "lienzo": [
+    341,
+    359
+   ],
+   "ancE2": 0,
+   "ancE1_cieloPelado": 2.8542516201891493e-10,
+   "nivelPipeline": 23.555557250976562,
+   "nivelModelo": 23.555557146433237,
+   "dNivel": 1.0454332510789754e-7
+  },
+  {
+   "inyeccion": "cielo+1σ",
+   "dnCrudo": 108,
+   "lienzo": [
+    361,
+    359
+   ],
+   "ancE2": 0,
+   "ancE1_cieloPelado": 6.5414865058555735e-9,
+   "nivelPipeline": 23.555557250976562,
+   "nivelModelo": 23.555557146433237,
+   "dNivel": 1.0454332510789754e-7
+  },
+  {
+   "inyeccion": "cielo+3σ",
+   "dnCrudo": 124,
+   "lienzo": [
+    380,
+    359
+   ],
+   "ancE2": 1.287144341631968e-7,
+   "ancE1_cieloPelado": 1.905360919352889e-8,
+   "nivelPipeline": 119.93232727050781,
+   "nivelModelo": 119.93232402390223,
+   "dNivel": 0.0000032466055870372656
+  }
+ ],
+ "conclusion": "ver informe: si todos los ok pasan, no hay doble resta de cielo ni δ con referencia distinta (H-F3 descartada); el offset E2−E1 es el suelo kRuido·σ del anclaje, deliberado y documentado en ps1AnclarACatalogo."
+}

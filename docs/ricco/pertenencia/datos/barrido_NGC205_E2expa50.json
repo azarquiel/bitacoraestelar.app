@@ -1,0 +1,160 @@
+{
+ "obj": "NGC205",
+ "etiqueta": "E2expa50",
+ "variante": "E2",
+ "escalas": [
+  25
+ ],
+ "rads": [
+  11
+ ],
+ "percentil": null,
+ "decaimiento": "exp",
+ "alcance": 50,
+ "calientes": [],
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "fecha": "2026-08-15",
+ "flags": {
+  "opacidadInternaEscena": false,
+  "confianzaLocalNaN": false,
+  "mezclaCajaAs": 25,
+  "deltaMin": 0,
+  "deltaPlena": 2.5,
+  "deltaExp": 1
+ },
+ "parche": {
+  "ancho": 1024,
+  "alto": 1024,
+  "escalaAs": 1.1718749999999953,
+  "escParche": 1.171875,
+  "cielo": -2.6106581687927246,
+  "sigma": 18.03307958078384
+ },
+ "ctx": {
+  "SBe": 23.76100212873935,
+  "umbralSB": 22.93475479938996,
+  "nivelFondo": 23.555557146433237,
+  "Cmin": 0.20234761050953654
+ },
+ "thetaR": {
+  "aparenteArcmin": 104.38573954649831,
+  "intrinsecoArcsec": 32.963917751525784
+ },
+ "shaFotometriaPre": "b2d2539816c43fa885a5beea5130313948b10928",
+ "msSoporte": 29.6,
+ "msComponente": 9108.6,
+ "verifChamfer": 0.0038757920265197754,
+ "borrados": 0,
+ "clasificacion": {
+  "negros": 66922,
+  "a": 0,
+  "b": 0,
+  "c": 26531,
+  "d": 40391,
+  "e": 0
+ },
+ "soloRampa": 0,
+ "clasificacionProd": {
+  "negros": 71550,
+  "b": 0,
+  "soloRampa": 0
+ },
+ "rois": [],
+ "cieloCampo": {
+  "px": 266477,
+  "fracOpPos": 0.8149971667348401,
+  "fracOpPosProd": 0.008255871988952142,
+  "nivelMedio": 23.74567064610171,
+  "nivelMedioProd": 23.634610332191155
+ },
+ "anillos": [
+  {
+   "dLo": 1,
+   "dHi": 1.1,
+   "px": 14796,
+   "fMedio": 4.1763172707276746e-11,
+   "fMedioProd": 3.0982682947189924e-11,
+   "deltaMag": -0.3241861534161622
+  },
+  {
+   "dLo": 1.1,
+   "dHi": 1.2,
+   "px": 16216,
+   "fMedio": 2.359970316201589e-11,
+   "fMedioProd": 1.504507859442135e-11,
+   "deltaMag": -0.4887801990651108
+  },
+  {
+   "dLo": 1.2,
+   "dHi": 1.3,
+   "px": 17612,
+   "fMedio": 1.1354191728813242e-11,
+   "fMedioProd": 4.226930660348293e-12,
+   "deltaMag": -1.0728277497803325
+  },
+  {
+   "dLo": 1.3,
+   "dHi": 1.4,
+   "px": 19016,
+   "fMedio": 6.338469214170342e-12,
+   "fMedioProd": 1.2719543872656685e-12,
+   "deltaMag": -1.743782119177992
+  },
+  {
+   "dLo": 1.4,
+   "dHi": 1.5,
+   "px": 20470,
+   "fMedio": 6.8425344155211145e-12,
+   "fMedioProd": 1.8943213083484374e-12,
+   "deltaMag": -1.394408364910442
+  },
+  {
+   "dLo": 1.5,
+   "dHi": 1.6,
+   "px": 20944,
+   "fMedio": 1.468350259463343e-11,
+   "fMedioProd": 6.749641173387939e-12,
+   "deltaMag": -0.8438724474102741
+  },
+  {
+   "dLo": 1.6,
+   "dHi": 1.7,
+   "px": 18360,
+   "fMedio": 1.6002458291559087e-11,
+   "fMedioProd": 9.692705882090718e-12,
+   "deltaMag": -0.5443541733450965
+  },
+  {
+   "dLo": 1.7,
+   "dHi": 1.8,
+   "px": 17271,
+   "fMedio": 1.2127031622493812e-11,
+   "fMedioProd": 4.730644859838064e-12,
+   "deltaMag": -1.0220854105795145
+  },
+  {
+   "dLo": 1.8,
+   "dHi": 1.9,
+   "px": 16640,
+   "fMedio": 7.37725730552827e-11,
+   "fMedioProd": 6.753037989667736e-11,
+   "deltaMag": -0.09598934564211514
+  },
+  {
+   "dLo": 1.9,
+   "dHi": 2,
+   "px": 16212,
+   "fMedio": 1.36306797366871e-11,
+   "fMedioProd": 5.685749192833276e-12,
+   "deltaMag": -0.9493245386414342
+  }
+ ],
+ "rmsNivelVsProd": 0.6721
+}

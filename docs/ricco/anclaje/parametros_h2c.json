@@ -1,0 +1,17 @@
+{
+  "ley": "Cmin = C_MIN·(Fref/(Fcielo·dim))^C_EXP · (1+θR(SBe)/θeff_app)²",
+  "thetaR": "log10 θR(arcmin) = 0.094 + 0.081·SBe",
+  "seeingArcsec": 2,
+  "anclaje": "conserva C_MIN=0.08 (K=2.005 sobre Blackwell 50% lab, fondo 21)",
+  "thetaInt": "2·r(μ25 del modelo Sérsic del catálogo)·√(b/a)",
+  "leyA_rama": {
+    "C_MAG_EXP": 1,
+    "C_MAG_MIN": 0.45,
+    "C_MAG_MAX": 2
+  },
+  "leyA0_main": {
+    "C_MAG_EXP": 0.5,
+    "C_MAG_MIN": 0.45,
+    "C_MAG_MAX": 2
+  }
+}

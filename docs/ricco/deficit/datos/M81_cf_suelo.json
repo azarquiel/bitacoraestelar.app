@@ -1,0 +1,90 @@
+{
+ "obj": "M81",
+ "cf": "suelo",
+ "fecha": "2026-08-15",
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "detalles": {
+  "regla": "v>=suelo → v−cielo; corte NaN intacto",
+  "suelo": 38.18393766794205,
+  "cielo": -0.20035839080810547,
+  "kanc2": 4.9478030961810095e-12,
+  "nanAntes": 77393,
+  "nanDespues": 77393,
+  "sContrafactual": 0.8075202685896758
+ },
+ "comparacion": {
+  "rois": {
+   "IB-N": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.296398891966759,
+    "fracNegrosCF": 0.296398891966759,
+    "dMagPre": -0.0002968276483379384,
+    "dNivelMediana": 0.002597808837890625,
+    "deficitBase": -3.8140718361390213e-10,
+    "deficitCF": -2.574694346613171e-10,
+    "recuperacion": null
+   },
+   "IB-E": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.997229916897507,
+    "fracNegrosCF": 0.997229916897507,
+    "dMagPre": -0.7262248287459414,
+    "dNivelMediana": 0,
+    "deficitBase": 4.9961687564881174e-11,
+    "deficitCF": 1.1556922085986798e-10,
+    "recuperacion": -1.3131568706478869
+   },
+   "IB-O": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.9501385041551247,
+    "fracNegrosCF": 0.9196675900277008,
+    "dMagPre": -0.4920146864282131,
+    "dNivelMediana": 0.3249073028564453,
+    "deficitBase": 6.251890671826743e-11,
+    "deficitCF": 1.0553311002858834e-10,
+    "recuperacion": -0.6880191220258906
+   },
+   "IB-S": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.8781163434903048,
+    "fracNegrosCF": 0.8753462603878116,
+    "dMagPre": -0.40936140526397935,
+    "dNivelMediana": 0,
+    "deficitBase": 7.710292126983376e-11,
+    "deficitCF": 1.2813264338440433e-10,
+    "recuperacion": -0.6618390234007355
+   },
+   "BRAZO": {
+    "tipo": "brazo",
+    "fracNegrosBase": 0.8657894736842106,
+    "fracNegrosCF": 0.8236842105263158,
+    "dMagPre": -0.4082955876365162,
+    "dNivelMediana": 0.23633193969726562
+   },
+   "CIELO": {
+    "tipo": "cielo",
+    "fracNegrosBase": 1,
+    "fracNegrosCF": 1,
+    "dMagPre": -0.004176707987063821,
+    "dNivelMediana": 0
+   }
+  },
+  "fotometria": {
+   "dFlujo020_pre": -0.04707364722918768,
+   "dFlujo020_post": -0.04707364722918768,
+   "dFlujoCampo_pre": 0.00007457835107624588,
+   "CminIgual": true,
+   "nivelFondoIgual": true,
+   "rangoIgual": true
+  },
+  "recuperacionInterbrazoMediana": -0.6880191220258906,
+  "rmsNivel": 0.2033455893014325
+ }
+}
