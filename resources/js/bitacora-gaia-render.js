@@ -1367,7 +1367,6 @@
     ladoFactor: 6,         // lado del parche = 6·r_e → radio 3·r_e ≈ 94 % de la luz de un disco
     ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
     ladoMin: 1.5,          // ′: por debajo no queda parche que mirar
-    r25EscenaMinAs: 45,    // ″: protección mínima de núcleo sin Sérsic resoluble (ver ps1EscenaEnParche), mitad de ladoMin
     decMin: -30,           // PS1 no cubre más al sur (365 de las 1295 filas del RC3)
     fracMin: 0.4,          // fracción mínima de la luz del catálogo que el parche debe abarcar (ver ps1GalaxiasDelCampo)
     seeingAs: 1.1,         // ″: FWHM típica del stack, suelo del radio de máscara
@@ -2842,10 +2841,6 @@
      de Sérsic que ancla el nivel (r_e del catálogo se resolvió para que esa
      isofota caiga en el D25): la escena es lo que se está REPRODUCIENDO, no
      una opinión sobre a quién pertenece cada estrella.
-     Componente sin Sérsic resoluble (falta r_e o magV, ps1ComponentesSersic
-     devuelve []) no queda fuera de la escena: su núcleo cae con r25EscenaMinAs
-     para que ps1QuitarEstrellas no lo trate como estrella suelta y lo rellene
-     de cielo (caso NGC 7335, sin parámetros de Sérsic en el catálogo).
      El centro sale de la WCS del recorte si la hay, como las estrellas; con el
      afín solo, igual de válido a estas distancias. Componentes cuya elipse no
      toca el parche se descartan: no pueden decidir sobre ninguna fuente. */
@@ -2860,7 +2855,7 @@
         var r = ps1RadioIsofota(comps[j], PS1.muEscena);
         if (r > r25) r25 = r;
       }
-      if (!(r25 > 0)) r25 = PS1.r25EscenaMinAs;
+      if (!(r25 > 0)) continue;
       var p = f.wcs ? ps1CieloAPixel(f.wcs, g.ra, g.dec) : null;
       if (!p) {
         var este = ((((g.ra - gal.ra) + 540) % 360) - 180) * cos0 * 3600;
