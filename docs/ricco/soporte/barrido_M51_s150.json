@@ -1,0 +1,309 @@
+{
+ "obj": "M51",
+ "etiqueta": "s150",
+ "escalas": [
+  150
+ ],
+ "rads": [
+  71
+ ],
+ "multi": false,
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "fecha": "2026-08-15",
+ "flags": {
+  "opacidadInternaEscena": false,
+  "confianzaLocalNaN": false,
+  "mezclaCajaAs": 25,
+  "deltaMin": 0,
+  "deltaPlena": 2.5,
+  "deltaExp": 1
+ },
+ "parche": {
+  "ancho": 1024,
+  "alto": 1024,
+  "escalaAs": 1.0566406369318824,
+  "escParche": 1.05673828125,
+  "cielo": -0.6406702995300293,
+  "sigma": 27.594760581493375
+ },
+ "ctx": {
+  "SBe": 23.76100212873935,
+  "umbralSB": 22.970300503329245,
+  "nivelFondo": 23.555557146433237,
+  "Cmin": 0.195830259165331
+ },
+ "thetaR": {
+  "aparenteArcmin": 104.38573954649831,
+  "intrinsecoArcsec": 32.963917751525784
+ },
+ "shaFotometriaPre": "7bdeab598616e1f7d70986ec3cb5b34bc5aa9183",
+ "msSoporte": 27.3,
+ "clasificacion": {
+  "negros": 145905,
+  "a": 839,
+  "b": 44755,
+  "c": 61856,
+  "d": 38403,
+  "e": 52
+ },
+ "soloRampa": 45594,
+ "rois": [
+  {
+   "nombre": "IB-O",
+   "tipo": "interbrazo",
+   "px": 289,
+   "negros": 228,
+   "negrosB": 160,
+   "fracNegros": 0.7889273356401384,
+   "fracNegrosB": 0.5536332179930796,
+   "op": {
+    "mediana": 0.2823004424571991,
+    "p10": 0.19503775238990784,
+    "p90": 0.3768753111362457
+   }
+  },
+  {
+   "nombre": "IB-E",
+   "tipo": "interbrazo",
+   "px": 306,
+   "negros": 44,
+   "negrosB": 35,
+   "fracNegros": 0.1437908496732026,
+   "fracNegrosB": 0.11437908496732026,
+   "op": {
+    "mediana": 0.4814130365848541,
+    "p10": 0.28849491477012634,
+    "p90": 0.6891226768493652
+   }
+  },
+  {
+   "nombre": "IB-SE",
+   "tipo": "interbrazo",
+   "px": 324,
+   "negros": 260,
+   "negrosB": 202,
+   "fracNegros": 0.8024691358024691,
+   "fracNegrosB": 0.6234567901234568,
+   "op": {
+    "mediana": 0.3154081404209137,
+    "p10": 0.2256760597229004,
+    "p90": 0.3543834984302521
+   }
+  },
+  {
+   "nombre": "IB-SO",
+   "tipo": "interbrazo",
+   "px": 289,
+   "negros": 202,
+   "negrosB": 144,
+   "fracNegros": 0.698961937716263,
+   "fracNegrosB": 0.4982698961937716,
+   "op": {
+    "mediana": 0.06353902071714401,
+    "p10": 0,
+    "p90": 0.42150062322616577
+   }
+  },
+  {
+   "nombre": "BRAZO",
+   "tipo": "brazo",
+   "px": 289,
+   "negros": 0,
+   "negrosB": 0,
+   "fracNegros": 0,
+   "fracNegrosB": 0,
+   "op": {
+    "mediana": 0.9153505563735962,
+    "p10": 0.6224205493927002,
+    "p90": 1
+   }
+  },
+  {
+   "nombre": "CIELO",
+   "tipo": "cielo",
+   "px": 1156,
+   "negros": 0,
+   "negrosB": 0,
+   "fracNegros": 0,
+   "fracNegrosB": 0,
+   "op": {
+    "mediana": 0,
+    "p10": 0,
+    "p90": 0
+   }
+  },
+  {
+   "nombre": "PUENTE",
+   "tipo": "puente",
+   "px": 306,
+   "negros": 55,
+   "negrosB": 43,
+   "fracNegros": 0.17973856209150327,
+   "fracNegrosB": 0.14052287581699346,
+   "op": {
+    "mediana": 0.4233873188495636,
+    "p10": 0.35528841614723206,
+    "p90": 0.7978965640068054
+   }
+  }
+ ],
+ "cieloCampo": {
+  "px": 76576,
+  "fracOpPos": 0,
+  "nivelMedio": 23.555557250976562
+ },
+ "anillos": [
+  {
+   "dLo": 1,
+   "dHi": 1.1,
+   "px": 28239,
+   "fMedio": 1.3096856122276346e-13,
+   "nivelMedio": 23.557202746963622
+  },
+  {
+   "dLo": 1.1,
+   "dHi": 1.2,
+   "px": 27410,
+   "fMedio": 0,
+   "nivelMedio": 23.555557250976562
+  },
+  {
+   "dLo": 1.2,
+   "dHi": 1.3,
+   "px": 24118,
+   "fMedio": 2.8513801467092857e-12,
+   "nivelMedio": 23.580868071965668
+  },
+  {
+   "dLo": 1.3,
+   "dHi": 1.4,
+   "px": 22992,
+   "fMedio": 1.2032717479029203e-13,
+   "nivelMedio": 23.557040153399225
+  },
+  {
+   "dLo": 1.4,
+   "dHi": 1.5,
+   "px": 22763,
+   "fMedio": 0,
+   "nivelMedio": 23.555557250976562
+  },
+  {
+   "dLo": 1.5,
+   "dHi": 1.6,
+   "px": 22326,
+   "fMedio": 0,
+   "nivelMedio": 23.555557250976562
+  },
+  {
+   "dLo": 1.6,
+   "dHi": 1.7,
+   "px": 20438,
+   "fMedio": 0,
+   "nivelMedio": 23.555557250976562
+  },
+  {
+   "dLo": 1.7,
+   "dHi": 1.8,
+   "px": 12018,
+   "fMedio": 0,
+   "nivelMedio": 23.555557250976562
+  },
+  {
+   "dLo": 1.8,
+   "dHi": 1.9,
+   "px": 7800,
+   "fMedio": 0,
+   "nivelMedio": 23.555557250976562
+  },
+  {
+   "dLo": 1.9,
+   "dHi": 2,
+   "px": 5894,
+   "fMedio": 0,
+   "nivelMedio": 23.555557250976562
+  }
+ ],
+ "rmsNivelVsBase": 0.7745611461172336,
+ "anillosDeltaMag": [
+  {
+   "dLo": 1,
+   "dHi": 1.1,
+   "deltaMag": 0.041841324277600206,
+   "fMedio": 1.3096856122276346e-13,
+   "fMedioBase": 1.3611424740739878e-13
+  },
+  {
+   "dLo": 1.1,
+   "dHi": 1.2,
+   "deltaMag": 0,
+   "fMedio": 0,
+   "fMedioBase": 0
+  },
+  {
+   "dLo": 1.2,
+   "dHi": 1.3,
+   "deltaMag": 0.012799259593911589,
+   "fMedio": 2.8513801467092857e-12,
+   "fMedioBase": 2.88519270378954e-12
+  },
+  {
+   "dLo": 1.3,
+   "dHi": 1.4,
+   "deltaMag": 0.06444337292241908,
+   "fMedio": 1.2032717479029203e-13,
+   "fMedioBase": 1.276853493370169e-13
+  },
+  {
+   "dLo": 1.4,
+   "dHi": 1.5,
+   "deltaMag": 0,
+   "fMedio": 0,
+   "fMedioBase": 0
+  },
+  {
+   "dLo": 1.5,
+   "dHi": 1.6,
+   "deltaMag": 0,
+   "fMedio": 0,
+   "fMedioBase": 0
+  },
+  {
+   "dLo": 1.6,
+   "dHi": 1.7,
+   "deltaMag": 0,
+   "fMedio": 0,
+   "fMedioBase": 0
+  },
+  {
+   "dLo": 1.7,
+   "dHi": 1.8,
+   "deltaMag": 0,
+   "fMedio": 0,
+   "fMedioBase": 0
+  },
+  {
+   "dLo": 1.8,
+   "dHi": 1.9,
+   "deltaMag": 0,
+   "fMedio": 0,
+   "fMedioBase": 0
+  },
+  {
+   "dLo": 1.9,
+   "dHi": 2,
+   "deltaMag": 0,
+   "fMedio": 0,
+   "fMedioBase": 0
+  }
+ ],
+ "cieloDeltaFracOpPos": 0,
+ "cieloDeltaNivel": 0
+}
