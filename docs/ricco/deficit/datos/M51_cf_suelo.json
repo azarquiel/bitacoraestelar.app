@@ -1,0 +1,107 @@
+{
+ "obj": "M51",
+ "cf": "suelo",
+ "fecha": "2026-08-15",
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "detalles": {
+  "regla": "v>=suelo → v−cielo; corte NaN intacto",
+  "suelo": 40.75147057271003,
+  "cielo": -0.6406702995300293,
+  "kanc2": 3.9124976178085725e-12,
+  "nanAntes": 105328,
+  "nanDespues": 105328,
+  "sContrafactual": 0.8828122194753593
+ },
+ "comparacion": {
+  "rois": {
+   "IB-O": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.8615916955017301,
+    "fracNegrosCF": 0.8269896193771626,
+    "dMagPre": -0.2054090004814597,
+    "dNivelMediana": 0.17629241943359375,
+    "deficitBase": 6.800709995147258e-11,
+    "deficitCF": 8.872197421183614e-11,
+    "recuperacion": -0.3045987003584177
+   },
+   "IB-E": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.2908496732026144,
+    "fracNegrosCF": 0.2679738562091503,
+    "dMagPre": -0.025611655529740318,
+    "dNivelMediana": 0.4009418487548828,
+    "deficitBase": 1.0098033520478111e-10,
+    "deficitCF": 1.1121847887096692e-10,
+    "recuperacion": -0.10138749931284702
+   },
+   "IB-SE": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.8765432098765432,
+    "fracNegrosCF": 0.8549382716049383,
+    "dMagPre": -0.19119776915178477,
+    "dNivelMediana": 0.11870002746582031,
+    "deficitBase": 4.469141723362213e-11,
+    "deficitCF": 8.296874298707735e-11,
+    "recuperacion": -0.8564804636506026
+   },
+   "IB-SO": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.6608996539792388,
+    "fracNegrosCF": 0.643598615916955,
+    "dMagPre": -0.099418208050146,
+    "dNivelMediana": 0.3669013977050781,
+    "deficitBase": 5.6168358159025544e-11,
+    "deficitCF": 7.684686220699177e-11,
+    "recuperacion": -0.36815218969763414
+   },
+   "BRAZO": {
+    "tipo": "brazo",
+    "fracNegrosBase": 0,
+    "fracNegrosCF": 0,
+    "dMagPre": 0.03329982862364034,
+    "dNivelMediana": -0.6814460754394531
+   },
+   "CIELO": {
+    "tipo": "cielo",
+    "fracNegrosBase": 1,
+    "fracNegrosCF": 1,
+    "dMagPre": -0.0016029576969813775,
+    "dNivelMediana": 0
+   },
+   "PUENTE": {
+    "tipo": "puente",
+    "fracNegrosBase": 0.19607843137254902,
+    "fracNegrosCF": 0.1895424836601307,
+    "dMagPre": -0.028052879824979726,
+    "dNivelMediana": 0.14262008666992188,
+    "deficitBase": 2.1134782812737285e-10,
+    "deficitCF": 2.0671411804507045e-10,
+    "recuperacion": 0.021924569196470782
+   },
+   "RESID": {
+    "tipo": "fuente",
+    "fracNegrosBase": 0,
+    "fracNegrosCF": 0,
+    "dMagPre": 0.04970334815533661,
+    "dNivelMediana": -1.0022506713867188
+   }
+  },
+  "fotometria": {
+   "dFlujo020_pre": -0.053997839623078525,
+   "dFlujo020_post": -0.053997839623078525,
+   "dFlujoCampo_pre": -0.000038761054758947516,
+   "CminIgual": true,
+   "nivelFondoIgual": true,
+   "rangoIgual": true
+  },
+  "recuperacionInterbrazoMediana": -0.3045987003584177,
+  "rmsNivel": 0.14261431305824848
+ }
+}

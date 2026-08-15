@@ -1,0 +1,6 @@
+objeto,s_mezcla,dmag_s,cielo_DN,sigma_DN,suelo_DN,atrib_psf_pct,atrib_bilineal_pct,atrib_mezcla_s_pct,atrib_mezcla_perfil_pct,IB_mag_crudo,IB_mag_anclado,IB_mag_mezcla,firma_pendiente,firma_r2,sha_fotometria
+M51,0.869,0.153,-0.64,27.59,40.75,14.6,12.5,115.1,0,24.07,25.52,23.42,0.305,0.631,7bdeab598616e1f7d70986ec3cb5b34bc5aa9183
+M81,0.802,0.24,-0.2,25.59,38.18,32.7,11.5,110.0,0,23.61,24.5,24.07,0.291,0.34,86b664ffc38eae265b9f6e5316e9b61415f0c60a
+M104,0.951,0.055,-4.12,35.87,49.69,,,,,,,,,,f3c0e80d6921a34e6edfba99fe7291d2474575d8
+M101,0.654,0.461,-3.65,31.08,42.98,,,,,,,,,,da559812c70b756d20b035af26eeef964a954dd9
+NGC205,1.022,-0.023,-2.61,18.03,24.44,,,,,,,,,,b2d2539816c43fa885a5beea5130313948b10928

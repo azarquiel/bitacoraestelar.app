@@ -1,0 +1,285 @@
+{
+ "obj": "M101",
+ "fecha": "2026-08-15",
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "shaFotometriaPre": "da559812c70b756d20b035af26eeef964a954dd9",
+ "flags": {
+  "opacidadInternaEscena": false,
+  "confianzaLocalNaN": false,
+  "kRuido": 1.5,
+  "kAusencia": 2,
+  "mezclaCajaAs": 25,
+  "mezclaW0": 0.5
+ },
+ "parche": {
+  "ancho": 1024,
+  "alto": 1024,
+  "escalaAs": 1.1718749999999953,
+  "cielo": -3.6491923332214355,
+  "sigma": 31.08399942598343,
+  "suelo": 42.97680680575371,
+  "kanc": 8.265210429850588e-12,
+  "escalaMezcla": 0.6539131129977586,
+  "thetaAddAs": 1.5880627860933523,
+  "fwhmPx": 1.3551469107996605
+ },
+ "ctx": {
+  "Fcielo": 3.3113112148259078e-9,
+  "Cmin": 0.18882491205716478,
+  "umbralSB": 23.009851772244897,
+  "nivelFondo": 23.555557146433237,
+  "rango": 11.5
+ },
+ "ceros": {
+  "cieloParcheDN": -3.6491923332214355,
+  "sigmaDN": 31.08399942598343,
+  "sueloDN": 42.97680680575371,
+  "kanc": 8.265210429850588e-12,
+  "offsetFlujo": 3.853736943856619e-10,
+  "offsetSobreFcielo": 0.11638099513576616,
+  "magOffsetEnUmbral": 0.5254430617973043,
+  "nota": "offset deliberado (suelo=cielo+kRuido·σ, ps1AnclarACatalogo); el test sintético --ceros verifica que no hay ninguna resta adicional"
+ },
+ "balance": {
+  "HII-A": {
+   "tipo": "fuente",
+   "px": 19,
+   "conSenalAnclada": 19,
+   "crudoSigma": {
+    "n": 19,
+    "mediana": 49.426178485162524,
+    "p10": 7.83800745046262,
+    "p90": 762.0014774999903
+   },
+   "dmag_suelo_anclaje": {
+    "n": 19,
+    "mediana": 0.03346057233829569,
+    "p10": 0.0021393788869410457,
+    "p90": 0.2306323068648588
+   },
+   "dmag_anclaje_psf": {
+    "n": 19,
+    "mediana": -0.4719878702080891,
+    "p10": -0.8358719404023027,
+    "p90": -0.22928851969957265
+   },
+   "dmag_psf_bilineal": {
+    "n": 19,
+    "mediana": -0.02688922794357751,
+    "p10": -0.9991734633785896,
+    "p90": 0.527647804357894
+   },
+   "dmag_bilineal_mezcla": {
+    "n": 19,
+    "mediana": 0.4611998881642734,
+    "p10": 0.4611998476934751,
+    "p90": 0.46119993819802474
+   },
+   "dmag_mezcla_op": {
+    "n": 19,
+    "mediana": 0,
+    "p10": 0,
+    "p90": 0
+   },
+   "dmag_total": {
+    "n": 19,
+    "mediana": -0.1876006471156586,
+    "p10": -0.9725293573150111,
+    "p90": 0.5838812402687701
+   },
+   "deficitFlujo": {
+    "n": 19,
+    "mediana": -1.249202519204573e-9,
+    "p10": -9.595424010910847e-9,
+    "p90": 4.403580078360392e-8
+   },
+   "comp_psf": {
+    "n": 19,
+    "mediana": -7.213356134627702e-9,
+    "p10": -4.134946607337042e-8,
+    "p90": -7.412107594362283e-10
+   },
+   "comp_bilineal": {
+    "n": 19,
+    "mediana": -6.336933200401518e-10,
+    "p10": -8.270569562540686e-9,
+    "p90": 1.985043240892992e-8
+   },
+   "comp_mezcla_s": {
+    "n": 19,
+    "mediana": 7.3436040923779184e-9,
+    "p10": 1.8154405822719132e-9,
+    "p90": 8.010225833930384e-8
+   },
+   "comp_mezcla_perfil": {
+    "n": 19,
+    "mediana": 0,
+    "p10": 0,
+    "p90": 0
+   },
+   "wkMenorQue1": 0,
+   "fracWkMenor": 0,
+   "medianasFlujo": {
+    "crudoNeto": 1.2698366001461467e-8,
+    "anclado": 1.2312992403451517e-8,
+    "psf": 2.810182131440797e-8,
+    "bilineal": 2.1218960810642784e-8,
+    "mezcla": 1.3875356863479738e-8,
+    "mag": {
+     "crudoNeto": 19.74063039883137,
+     "anclado": 19.774090971169667,
+     "psf": 18.878163830026963,
+     "bilineal": 19.183189723242066,
+     "mezcla": 19.6443895958561
+    }
+   }
+  },
+  "HII-B": {
+   "tipo": "fuente",
+   "px": 21,
+   "conSenalAnclada": 21,
+   "crudoSigma": {
+    "n": 21,
+    "mediana": 66.41540211565477,
+    "p10": 25.601364777746923,
+    "p90": 727.7472056788758
+   },
+   "dmag_suelo_anclaje": {
+    "n": 21,
+    "mediana": 0.024802678101458753,
+    "p10": 0.002240216966757913,
+    "p90": 0.06555374029476368
+   },
+   "dmag_anclaje_psf": {
+    "n": 21,
+    "mediana": -0.22334707530664488,
+    "p10": -0.32213945186545345,
+    "p90": -0.020962786473909034
+   },
+   "dmag_psf_bilineal": {
+    "n": 21,
+    "mediana": -0.0392874095877751,
+    "p10": -0.4429668939657212,
+    "p90": 0.4118552825747397
+   },
+   "dmag_bilineal_mezcla": {
+    "n": 21,
+    "mediana": 0.46119987888528513,
+    "p10": 0.46119984485074994,
+    "p90": 0.4611999542093663
+   },
+   "dmag_mezcla_op": {
+    "n": 21,
+    "mediana": 0,
+    "p10": 0,
+    "p90": 0
+   },
+   "dmag_total": {
+    "n": 21,
+    "mediana": 0.25609515450204157,
+    "p10": -0.19078665901049163,
+    "p90": 0.6968486343377336
+   },
+   "deficitFlujo": {
+    "n": 21,
+    "mediana": 1.4843619666748964e-9,
+    "p10": -3.9764227466321245e-9,
+    "p90": 1.041969355242145e-7
+   },
+   "comp_psf": {
+    "n": 21,
+    "mediana": -2.404607180039875e-9,
+    "p10": -3.315373220402762e-8,
+    "p90": -1.2071366128907357e-10
+   },
+   "comp_bilineal": {
+    "n": 21,
+    "mediana": -3.5059244396506983e-10,
+    "p10": -1.4515409318960337e-8,
+    "p90": 3.992769848082389e-8
+   },
+   "comp_mezcla_s": {
+    "n": 21,
+    "mediana": 7.313297587927813e-9,
+    "p10": 2.9532657918337123e-9,
+    "p90": 5.2899038630165753e-8
+   },
+   "comp_mezcla_perfil": {
+    "n": 21,
+    "mediana": 0,
+    "p10": 0,
+    "p90": 0
+   },
+   "wkMenorQue1": 0,
+   "fracWkMenor": 0,
+   "medianasFlujo": {
+    "crudoNeto": 1.7063165918279454e-8,
+    "anclado": 1.6677791592201174e-8,
+    "psf": 2.1260133209466403e-8,
+    "bilineal": 2.113139174753087e-8,
+    "mezcla": 1.3818094224404831e-8,
+    "mag": {
+     "crudoNeto": 19.419850965559423,
+     "anclado": 19.44465364366088,
+     "psf": 19.181085046620826,
+     "bilineal": 19.187679746677297,
+     "mezcla": 19.648879625562582
+    }
+   }
+  }
+ },
+ "cierreDescomposicion": {
+  "total": 40,
+  "malos": 0
+ },
+ "firma": {
+  "global": null,
+  "porRoi": {},
+  "veredicto": "SIN DATOS",
+  "deficitMediano": null,
+  "interceptoEnSigmaK": null
+ },
+ "atribucionPct": {
+  "psf": null,
+  "bilineal": null,
+  "mezcla_s": null,
+  "mezcla_perfil": null
+ },
+ "hf4": {},
+ "fotometria": {
+  "flujo020_pre": 0.000005949822615924916,
+  "flujo020_post": 0.000005949822615924916,
+  "flujoCampo_pre": 0.00020798271159791357,
+  "flujoCampo_post": 0.00007890736059555772,
+  "rois": {
+   "HII-A": {
+    "px": 19,
+    "negros": 0,
+    "fracNegros": 0,
+    "magPreMediana": 19.6443895958561,
+    "nivelMediana": 77.4509048461914
+   },
+   "HII-B": {
+    "px": 21,
+    "negros": 0,
+    "fracNegros": 0,
+    "magPreMediana": 19.648879625562582,
+    "nivelMediana": 77.36197662353516
+   }
+  }
+ },
+ "shaEtapas": {
+  "anc": "c10017c77f2b1361daaf5ba8634cba1047fae765",
+  "psf": "7f954fed285f87f468352528330607e1a5ab5859",
+  "bil": "a0e8fa53d2c722876627cd1865d15b732dd5481f",
+  "mez": "da559812c70b756d20b035af26eeef964a954dd9",
+  "post": "e8c8b4871d36a7c74dc8e1d8c947917840307548"
+ }
+}

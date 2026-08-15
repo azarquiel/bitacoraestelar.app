@@ -1,0 +1,85 @@
+{
+ "obj": "M81",
+ "cf": "s1",
+ "fecha": "2026-08-15",
+ "cfg": {
+  "D": 457.2,
+  "M": 190,
+  "sqm": 21.2,
+  "delta": 2,
+  "SIZE": 720,
+  "AFOV": 70
+ },
+ "detalles": {
+  "sProduccion": 0.8017080356490326,
+  "sContrafactual": 1
+ },
+ "comparacion": {
+  "rois": {
+   "IB-N": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.296398891966759,
+    "fracNegrosCF": 0.296398891966759,
+    "dMagPre": -0.000022866103364549417,
+    "dNivelMediana": 0.0002002716064453125,
+    "deficitBase": -3.8140718361390213e-10,
+    "deficitCF": -4.161193056795298e-10,
+    "recuperacion": null
+   },
+   "IB-E": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.997229916897507,
+    "fracNegrosCF": 0.997229916897507,
+    "dMagPre": -0.15430795238123807,
+    "dNivelMediana": 0,
+    "deficitBase": 4.9961687564881174e-11,
+    "deficitCF": 1.601469651335563e-11,
+    "recuperacion": 0.6794604567237916
+   },
+   "IB-O": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.9501385041551247,
+    "fracNegrosCF": 0.9224376731301939,
+    "dMagPre": -0.2399594162948766,
+    "dNivelMediana": 0.11245918273925781,
+    "deficitBase": 6.251890671826743e-11,
+    "deficitCF": -4.643924134128952e-12,
+    "recuperacion": 1.0742803157940066
+   },
+   "IB-S": {
+    "tipo": "interbrazo",
+    "fracNegrosBase": 0.8781163434903048,
+    "fracNegrosCF": 0.8753462603878116,
+    "dMagPre": -0.21531725899613718,
+    "dNivelMediana": 0,
+    "deficitBase": 7.710292126983376e-11,
+    "deficitCF": 1.270952787457702e-11,
+    "recuperacion": 0.8351615261100415
+   },
+   "BRAZO": {
+    "tipo": "brazo",
+    "fracNegrosBase": 0.8657894736842106,
+    "fracNegrosCF": 0.8342105263157895,
+    "dMagPre": -0.23764005220471063,
+    "dNivelMediana": 0
+   },
+   "CIELO": {
+    "tipo": "cielo",
+    "fracNegrosBase": 1,
+    "fracNegrosCF": 1,
+    "dMagPre": -0.0005048694398794851,
+    "dNivelMediana": 0
+   }
+  },
+  "fotometria": {
+   "dFlujo020_pre": 0.24733688406349116,
+   "dFlujo020_post": 0.24733688406349116,
+   "dFlujoCampo_pre": 0.17638259737466724,
+   "CminIgual": true,
+   "nivelFondoIgual": true,
+   "rangoIgual": true
+  },
+  "recuperacionInterbrazoMediana": 0.8351615261100415,
+  "rmsNivel": 0.8188850377471136
+ }
+}
