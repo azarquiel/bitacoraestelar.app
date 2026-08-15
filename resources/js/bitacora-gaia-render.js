@@ -740,7 +740,17 @@
       // gammaHalo). Valores iniciales: gamma≈1.33 a 100x, ≈1.67 a 200x,
       // ≈2.0 a 300x -ajustar gammaA/gammaRef si el halo aún cierra poco o
       // mucho a los aumentos reales que uses-.
-      gammaA: 0.5, gammaRef: 150, gammaExp: 1, gammaMax: 4
+      gammaA: 0.5, gammaRef: 150, gammaExp: 1, gammaMax: 4,
+      /* EXPERIMENTO V2 (ver prompt_tareas.md, fase "Experimento V2 — Mejora
+         del halo de cúmulos globulares"). null: comportamiento de producción
+         intacto (King(r)^gammaHalo). 'A': King(r) sin exponente -Fcentral ya
+         está calibrado contra areaKing (perfil SIN exponente), así que
+         Fhalo=Fcentral·King(r) conserva el flujo neto por construcción,
+         independiente de los aumentos; el ^gamma de producción no. 'B':
+         además de 'A', resta espacial (PSF) del flujo Gaia en vez de resta
+         global uniforme -ver ps1RestaGlobularLocal-. Nunca activar por
+         defecto en producción: cambiar aquí es la única ruta de vuelta. */
+      experimentoHaloV2: null
     }
   };
 
@@ -1257,7 +1267,7 @@
      consulta, y con ella Fresuelto, y el halo podía aparecer o desaparecer de
      golpe sin que el cúmulo hubiera cambiado. Con margen, además, para que la
      resta nunca llegue a apagar el halo del todo (ver restaMaxFrac). */
-  function haloGlobular(cluster, estrellas, ra0, dec0, aumentos) {
+  function haloGlobular(cluster, estrellas, ra0, dec0, aumentos, apertura) {
     var rcAs = cluster.rc * 60, rtAs = cluster.rt * 60;
     var k = rtAs / rcAs;
     var areaAs2 = areaKing(k) * rcAs * rcAs;
@@ -1270,11 +1280,23 @@
       if (dra * dra + ddec * ddec <= rtAs * rtAs) Fresuelto += Math.pow(10, -0.4 * estrellas[i][2]);
     }
     Fresuelto = Math.min(Fresuelto, Ftotal * CFG.globular.restaMaxFrac);
-    var Fneto = (Ftotal - Fresuelto) / areaAs2;
+    /* V2-B (ver prompt_tareas.md): la resta deja de ser una cantidad GLOBAL
+       repartida uniforme por toda el área (Fresuelto/areaAs2) y pasa a
+       restarse ESPACIALMENTE, estrella a estrella, en pintarHaloGlobular
+       -así una estrella resuelta cerca del núcleo no adelgaza también el
+       halo del borde-. Aquí Fcentral se queda en Ftotal/areaAs2 SIN restar
+       nada (restaMaxFrac dejó de aplicar: la cota de "nunca apagar el halo
+       del todo" la impone ahora el max(...,0) por píxel de la resta local,
+       no un tope global). Se guardan las estrellas y ra0/dec0/apertura para
+       que pintarHaloGlobular pueda construir su mapa de resta. */
+    var v2 = CFG.globular.experimentoHaloV2;
+    var Fneto = (v2 === 'B') ? (Ftotal / areaAs2) : ((Ftotal - Fresuelto) / areaAs2);
     // Nótese: Fneto/areaAs2 se calibran con el perfil SIN modificar (gamma no
     // entra aquí), así que subir gamma para la cola externa no descuadra el
     // descuento de estrellas resueltas hecho arriba (ver gammaHalo).
-    return { rcAs: rcAs, rtAs: rtAs, Fcentral: Fneto, gamma: gammaHalo(aumentos) };
+    var halo = { rcAs: rcAs, rtAs: rtAs, Fcentral: Fneto, gamma: gammaHalo(aumentos) };
+    if (v2 === 'B') halo.restaLocal = { estrellas: estrellas, ra0: ra0, dec0: dec0, apertura: apertura };
+    return halo;
   }
 
   /* Potencia extra sobre el perfil normalizado (exp>1 hunde solo la cola
@@ -1292,7 +1314,9 @@
   }
 
   function fobjGlobular(halo, rArcsec) {
-    var gamma = (halo.gamma != null) ? halo.gamma : 1;
+    // V2-A/V2-B: aíslan el efecto de gammaHalo (ver CFG.globular.experimentoHaloV2).
+    var v2 = CFG.globular.experimentoHaloV2;
+    var gamma = (v2 === 'A' || v2 === 'B') ? 1 : ((halo.gamma != null) ? halo.gamma : 1);
     return halo.Fcentral * Math.pow(perfilKing(rArcsec, halo.rcAs, halo.rtAs), gamma);
   }
 
@@ -1307,6 +1331,44 @@
     return f > 0 ? -2.5 * Math.log10(f) : Infinity;
   }
 
+  /* V2-B: mapa de resta LOCAL del flujo de las estrellas Gaia ya dibujadas,
+     una por una, con la misma imagen estelar física (Airy+seeing en
+     cuadratura) que ya calibra el tamaño de disco de una estrella resuelta
+     -radioImagenEstelar(), ver dibujar()/radioEstrella()-, no una PSF nueva.
+     Se trata como una gaussiana 2D de esa anchura: HWHM→sigma (FWHM=2·HWHM=
+     2,3548·sigma). Cada estrella solo se acumula en su caja de 4σ -igual que
+     pintarHaloGlobular acota al radio de marea-, así que el coste es O(nº
+     estrellas · píxeles de su caja), no O(estrellas · SIZE²).
+     ponytail: sin caché de la gaussiana entre estrellas (recalcula exp() por
+     píxel); si el perfilado con cúmulos muy pobladas (miles de estrellas) lo
+     pide, precalcular un stamp 2D reutilizable por sigma. */
+  function mapaRestaLocalGaia(estrellas, ra0, dec0, rtAs, apertura, SIZE, pxPorAs, cx, cy) {
+    var out = new Float32Array(SIZE * SIZE);
+    var cos0 = Math.cos(dec0 * Math.PI / 180);
+    var theta = radioImagenEstelar(apertura);   // ″: Airy+seeing en cuadratura, sin equipo -> null
+    var sigmaAs = (theta > 0) ? theta / 1.1774 : 1;   // HWHM -> sigma de una gaussiana
+    var sigmaPx = Math.max(0.3, sigmaAs * pxPorAs);
+    var corte = sigmaPx * 4;   // 4σ: >99,99% del flujo de una gaussiana 2D
+    var norm = 1 / (2 * Math.PI * sigmaAs * sigmaAs);   // flujo/arcsec², integra a 1 sobre toda la gaussiana
+    for (var i = 0; i < estrellas.length; i++) {
+      var dra = (((estrellas[i][0] - ra0 + 540) % 360) - 180) * cos0 * 3600;
+      var ddec = (estrellas[i][1] - dec0) * 3600;
+      if (dra * dra + ddec * ddec >= rtAs * rtAs) continue;   // mismo radio de marea que la resta global
+      var F = Math.pow(10, -0.4 * estrellas[i][2]);
+      var fx = cx - dra * pxPorAs, fy = cy - ddec * pxPorAs;   // mismo signo que dibujar()
+      var x0 = Math.max(0, Math.floor(fx - corte)), x1 = Math.min(SIZE - 1, Math.ceil(fx + corte));
+      var y0 = Math.max(0, Math.floor(fy - corte)), y1 = Math.min(SIZE - 1, Math.ceil(fy + corte));
+      for (var y = y0; y <= y1; y++) {
+        for (var x = x0; x <= x1; x++) {
+          var ddx = (x - fx) / pxPorAs, ddy = (y - fy) / pxPorAs;
+          var r2 = ddx * ddx + ddy * ddy;
+          out[y * SIZE + x] += F * norm * Math.exp(-r2 / (2 * sigmaAs * sigmaAs));
+        }
+      }
+    }
+    return out;
+  }
+
   /* Suma el velo del cúmulo (en flujo) sobre el array 'difuso' de pintarFot,
      limitado a su radio de marea en píxeles. o: {ra, dec, arcmin, size} =
      mismo objeto que ya recibe dibujar(); el cúmulo está siempre centrado
@@ -1319,12 +1381,21 @@
     var cx = SIZE / 2, cy = SIZE / 2;
     var x0 = Math.max(0, Math.floor(cx - Rpx)), x1 = Math.min(SIZE - 1, Math.ceil(cx + Rpx));
     var y0 = Math.max(0, Math.floor(cy - Rpx)), y1 = Math.min(SIZE - 1, Math.ceil(cy + Rpx));
+    // V2-B: mapa de resta local, una sola vez para todo el parche (ver
+    // haloGlobular). Sin él (producción y V2-A), restaMap es null y el max()
+    // de abajo no cambia nada -Math.max(f, 0) = f porque fobjGlobular ya es >= 0-.
+    var restaMap = halo.restaLocal
+      ? mapaRestaLocalGaia(halo.restaLocal.estrellas, halo.restaLocal.ra0, halo.restaLocal.dec0,
+          halo.rtAs, halo.restaLocal.apertura, SIZE, pxPorAs, cx, cy)
+      : null;
     for (var y = y0; y <= y1; y++) {
       for (var x = x0; x <= x1; x++) {
         var dx = (x - cx) / pxPorAs, dy = (y - cy) / pxPorAs;
         var rAs = Math.sqrt(dx * dx + dy * dy);
         if (rAs >= halo.rtAs) continue;
-        difuso[y * SIZE + x] += fobjGlobular(halo, rAs);
+        var f = fobjGlobular(halo, rAs);
+        if (restaMap) f = Math.max(0, f - restaMap[y * SIZE + x]);
+        difuso[y * SIZE + x] += f;
       }
     }
   }

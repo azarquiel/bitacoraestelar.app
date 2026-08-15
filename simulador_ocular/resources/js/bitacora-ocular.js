@@ -631,7 +631,7 @@
           var halo = objetoSel.globular
             ? BitacoraGaiaRender.haloGlobular(
                 { rc: objetoSel.rCore, rt: objetoSel.rTidal, muV0: objetoSel.muV0 },
-                estrellasHalo, ra0, dec0, datosOcular().aumentos)
+                estrellasHalo, ra0, dec0, datosOcular().aumentos, teleApertura())
             : null;
           if (halo) BitacoraGaiaRender.pintarHaloGlobular(difuso, halo, { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
           var opEst = {
