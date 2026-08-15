@@ -123,8 +123,11 @@
         <!-- Panel "Cualquier objeto": nace oculto para que no parpadee antes de que
              cargue el JS, que lo muestra al activarse la pestaña. -->
         <div class="obj-libre" id="sim-libre" hidden>
-          <label class="field"><span class="lab">Nombre (busca en SIMBAD)</span>
-            <input type="text" id="sim-libre-nombre" placeholder="NGC 6826, IC 1396, Barnard 33…" autocomplete="off"></label>
+          <label class="field"><span class="lab">Nombre (catálogo de galaxias/nebulosas o SIMBAD)</span></label>
+          <div class="obj-wrap">
+            <input type="text" id="sim-libre-nombre" placeholder="NGC 6826, IC 1396, Barnard 33…" autocomplete="off">
+            <div class="suggest" id="sim-libre-sugg"></div>
+          </div>
           <div class="row">
             <label class="field"><span class="lab">Ascensión recta (RA)</span>
               <input type="text" id="sim-libre-ra" placeholder="19h 44m 48s  ·  ó  296.20"></label>
@@ -252,4 +255,4 @@
 <script src="/wp-content/uploads/bitacora/nebulosas-datos.js?v=20260729_1600" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js?v=20260814_1900" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260807_1200" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260813_2200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260815_2144" defer></script>

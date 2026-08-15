@@ -1033,12 +1033,39 @@
           else { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); }
         }
       });
+      // Catálogo combinado (galaxias + nebulosas) para sugerir en modo libre antes
+      // de tirar de SIMBAD: mismas filas crudas [nombre, alt, RA°, Dec°, ...] que
+      // consume la capa difusa (ver galaxias-datos.js / nebulosas-datos.js).
+      function catalogoLibre() {
+        function filas(arr, tipo) {
+          return (arr || []).map(function (f) {
+            return { id: f[0] || f[1], nombre: f[0] || f[1], ra: f[2], dec: f[3], mag: f[7], tipo: tipo };
+          }).filter(function (o) { return o.id; });
+        }
+        return filas(window.BITACORA_GALAXIAS, 'galaxia').concat(filas(window.BITACORA_NEBULOSAS, 'nebulosa'));
+      }
       function montarObjetoLibre() {
         var nom = $('sim-libre-nombre');
         if (nom) nom.addEventListener('input', function () { resolutor.programar(nom.value); });
         ['sim-libre-ra', 'sim-libre-dec'].forEach(function (id) {
           var el = $(id); if (el) el.addEventListener('change', function () { fijarObjetoLibre($('sim-libre-nombre').value.trim(), ''); });
         });
+        if (nom && window.BitacoraBase && $('sim-libre-sugg')) {
+          BitacoraBase.montarBuscadorCatalogo({
+            input: nom, suggest: $('sim-libre-sugg'),
+            fuente: catalogoLibre,
+            texto: function (o) { return o.nombre; },
+            specs: function (o) { return o.mag != null ? 'mag ' + Number(o.mag).toFixed(1) : ''; },
+            max: 12,
+            sinResultados: 'Sin coincidencias en el catálogo local · sigue escribiendo para buscar en SIMBAD',
+            onElegir: function (o) {
+              nom.value = o.nombre;
+              $('sim-libre-ra').value = BitacoraBase.formatRA(o.ra);
+              $('sim-libre-dec').value = BitacoraBase.formatDec(o.dec);
+              fijarObjetoLibre(o.nombre, o.tipo);
+            }
+          });
+        }
       }
 
       // Selector de objeto: pestañas (cúmulos / carbono / dobles [+ libre]) sobre
