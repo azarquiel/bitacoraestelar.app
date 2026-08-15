@@ -736,21 +736,29 @@
     // nunca llegue a apagarse del todo.
     globular: {
       rangoMag: 3, magResta: 17, restaMaxFrac: 0.85,
-      // gamma(M) = 1 + gammaA·(M/gammaRef)^gammaExp, tope en gammaMax (ver
-      // gammaHalo). Valores iniciales: gamma≈1.33 a 100x, ≈1.67 a 200x,
-      // ≈2.0 a 300x -ajustar gammaA/gammaRef si el halo aún cierra poco o
-      // mucho a los aumentos reales que uses-.
-      gammaA: 0.5, gammaRef: 150, gammaExp: 1, gammaMax: 4,
-      /* EXPERIMENTO V2 (ver prompt_tareas.md, fase "Experimento V2 — Mejora
-         del halo de cúmulos globulares"). null: comportamiento de producción
-         intacto (King(r)^gammaHalo). 'A': King(r) sin exponente -Fcentral ya
-         está calibrado contra areaKing (perfil SIN exponente), así que
-         Fhalo=Fcentral·King(r) conserva el flujo neto por construcción,
-         independiente de los aumentos; el ^gamma de producción no. 'B':
-         además de 'A', resta espacial (PSF) del flujo Gaia en vez de resta
-         global uniforme -ver ps1RestaGlobularLocal-. Nunca activar por
-         defecto en producción: cambiar aquí es la única ruta de vuelta. */
-      experimentoHaloV2: null
+      /* EXPERIMENTO V2-B (ver prompt_tareas.md / worktree-experimento-halo-
+         globular-v2). null: producción (resta global uniforme del flujo
+         Gaia resuelto). 'B': resta espacial (PSF) estrella a estrella en
+         vez de resta global -ver mapaRestaLocalGaia-. Nunca activar por
+         defecto en producción sin evidencia visual real (solo verificado
+         numéricamente, ver INCONCLUSO en el informe del experimento).
+         V2-A (King(r) sin el exponente gammaHalo, antes detrás de este
+         mismo flag) quedó CONSOLIDADO como producción: gammaHalo rompía la
+         conservación de flujo -hasta 86% de pérdida a 450x en M13- y
+         contraía el halo artificialmente al subir aumentos (r50 M13:
+         81"->34" de 50x a 300x pese a tamaño angular real fijo). El
+         exponente y su calibración (gammaA/gammaRef/gammaExp/gammaMax) se
+         retiraron del código; recuperables del historial de git si hiciera
+         falta revertir. */
+      experimentoHaloV2: null,
+      /* EXPERIMENTO Rc (independiente de V2-A/V2-B, ver tPinGlobular). false:
+         producción, corte duro en rc (dentro, siempre puntual; fuera, la
+         transición continua de siempre) -frontera artificial confirmada:
+         una estrella brillante justo fuera de rc puede saltar de tPin=0 a
+         tPin=1 sin transición-. true: usa la MISMA fórmula continua también
+         dentro de rc, sin caso especial. No consolidar sin verificación
+         visual (solo medido numéricamente, ver test_globulares_rc_v2.js). */
+      experimentoRcV2: false
     }
   };
 
@@ -1267,6 +1275,8 @@
      consulta, y con ella Fresuelto, y el halo podía aparecer o desaparecer de
      golpe sin que el cúmulo hubiera cambiado. Con margen, además, para que la
      resta nunca llegue a apagar el halo del todo (ver restaMaxFrac). */
+  // aumentos: ya no alimenta el perfil (gammaHalo se retiró, ver fobjGlobular);
+  // se conserva en la firma por compatibilidad con las llamadas existentes.
   function haloGlobular(cluster, estrellas, ra0, dec0, aumentos, apertura) {
     var rcAs = cluster.rc * 60, rtAs = cluster.rt * 60;
     var k = rtAs / rcAs;
@@ -1291,33 +1301,22 @@
        que pintarHaloGlobular pueda construir su mapa de resta. */
     var v2 = CFG.globular.experimentoHaloV2;
     var Fneto = (v2 === 'B') ? (Ftotal / areaAs2) : ((Ftotal - Fresuelto) / areaAs2);
-    // Nótese: Fneto/areaAs2 se calibran con el perfil SIN modificar (gamma no
-    // entra aquí), así que subir gamma para la cola externa no descuadra el
-    // descuento de estrellas resueltas hecho arriba (ver gammaHalo).
-    var halo = { rcAs: rcAs, rtAs: rtAs, Fcentral: Fneto, gamma: gammaHalo(aumentos) };
+    var halo = { rcAs: rcAs, rtAs: rtAs, Fcentral: Fneto };
     if (v2 === 'B') halo.restaLocal = { estrellas: estrellas, ra0: ra0, dec0: dec0, apertura: apertura };
     return halo;
   }
 
-  /* Potencia extra sobre el perfil normalizado (exp>1 hunde solo la cola
-     externa: perfilKing vale 1 en r=0 por construcción, así que ^exp no
-     toca el centro -1^exp=1-, y para r>0 los valores <1 caen más rápido
-     cuanto mayor exp). Dinámica con los aumentos: a más M, más estrellas del
-     halo exterior se resuelven y dejan de aportar luz difusa, así que lo que
-     queda debe decaer más rápido con r. gamma(M)=1+A·(M/Mref)^B tiende a 1
-     sola cuando M→0 (sin necesidad de umbral duro que rompa continuidad),
-     acotada arriba en gammaMax para no vaciar el halo del todo. */
-  function gammaHalo(aumentos) {
-    var g = CFG.globular;
-    if (!(aumentos > 0)) return 1;
-    return Math.min(g.gammaMax, 1 + g.gammaA * Math.pow(aumentos / g.gammaRef, g.gammaExp));
-  }
-
+  /* King(r) puro, sin exponente. Antes llevaba un gammaHalo(aumentos) que
+     endurecía la cola exterior (King(r)^gamma) para "cerrar" el halo a más
+     aumentos -retirado: rompía la conservación de flujo (Fcentral se
+     calibra contra areaKing, la integral de King SIN exponente) con un error
+     que crecía con los aumentos -hasta 86% de pérdida a 450x en M13- y
+     contraía el halo artificialmente (r50 de M13: 81"->34" de 50x a 300x)
+     pese a que el tamaño angular real del cúmulo no cambia con el ocular.
+     Ver worktree-experimento-halo-globular-v2 para la medición completa;
+     recuperable del historial de git si hiciera falta revertir. */
   function fobjGlobular(halo, rArcsec) {
-    // V2-A/V2-B: aíslan el efecto de gammaHalo (ver CFG.globular.experimentoHaloV2).
-    var v2 = CFG.globular.experimentoHaloV2;
-    var gamma = (v2 === 'A' || v2 === 'B') ? 1 : ((halo.gamma != null) ? halo.gamma : 1);
-    return halo.Fcentral * Math.pow(perfilKing(rArcsec, halo.rcAs, halo.rtAs), gamma);
+    return halo.Fcentral * perfilKing(rArcsec, halo.rcAs, halo.rtAs);
   }
 
   /* Brillo superficial LOCAL del halo (mag/arcsec²), para comparar directamente
@@ -1329,6 +1328,28 @@
   function muGlobular(halo, rArcsec) {
     var f = fobjGlobular(halo, rArcsec);
     return f > 0 ? -2.5 * Math.log10(f) : Infinity;
+  }
+
+  /* Factor de amortiguación (0..1) de blur/aureola de una estrella resuelta
+     dentro de un halo globular: 0 = totalmente puntual (nunca "difuminada"
+     por el fondo), 1 = sin amortiguar. Producción (experimentoRcV2=false):
+     corte DURO en rc -dentro, siempre puntual sin excepción; fuera, la
+     transición suave de siempre según cuánto domina el King local (dm) sobre
+     la estrella-. Ese corte es una frontera artificial real: al cruzar rc
+     tPin salta de 0 a lo que dé la fórmula continua justo ahí, que para una
+     estrella brillante puede ser 1 (sin amortiguar nada) de golpe -medido en
+     M13 a 100x: g=10 salta 0->1.000 al cruzar rc-. experimentoRcV2=true
+     (CFG.globular.experimentoRcV2) quita esa excepción y usa la MISMA
+     fórmula continua también dentro de rc -mu(r) crece deprisa hacia el
+     centro (King(0)=1, el pico del perfil), así que para una estrella
+     típica el resultado sigue siendo ~0 cerca del núcleo sin necesidad del
+     corte duro, pero sin el salto-. No es el comportamiento por defecto: es
+     un experimento aparte, no consolidado (ver
+     scripts/test_globulares_rc_v2.js). */
+  function tPinGlobular(halo, rArcsec, g) {
+    if (!CFG.globular.experimentoRcV2 && rArcsec <= halo.rcAs) return 0;
+    var dm = muGlobular(halo, rArcsec) - g;
+    return suave(0.5 + dm / (2 * CFG.globular.rangoMag));
   }
 
   /* V2-B: mapa de resta LOCAL del flujo de las estrellas Gaia ya dibujadas,
@@ -3199,21 +3220,7 @@
       // implementaciones anteriores (ver perfilKing).
       if (o.globular) {
         var rAsPin = Math.sqrt(Math.pow(deltaRA(ra) * cos0 * 3600, 2) + Math.pow((dec - dec0) * 3600, 2));
-        var tPin;
-        if (rAsPin <= o.globular.rcAs) {
-          // Dentro del radio de núcleo: puntual sin excepción, pase lo que
-          // pase con su magnitud -el ojo nunca resuelve halo individual ahí,
-          // solo el brillo difuso del cúmulo (ver captura del usuario,
-          // 2026-08-01)-.
-          tPin = 0;
-        } else {
-          // Fuera del núcleo: la transición suave de siempre (dm > 0: el
-          // fondo es más tenue que la estrella, no amortigua; dm < 0: el
-          // fondo pesa más, la empuja a puntual). rangoMag ancha o estrecha
-          // la transición -es el "k" a ajustar tras ver M13/M92 en el ocular-.
-          var dm = muGlobular(o.globular, rAsPin) - g;
-          tPin = suave(0.5 + dm / (2 * CFG.globular.rangoMag));
-        }
+        var tPin = tPinGlobular(o.globular, rAsPin, g);
         blurG = CFG.blurMin + (blurG - CFG.blurMin) * tPin;
       }
       // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
@@ -3438,9 +3445,9 @@
     perfilKing: perfilKing,
     areaKing: areaKing,
     haloGlobular: haloGlobular,
-    gammaHalo: gammaHalo,
     fobjGlobular: fobjGlobular,
     muGlobular: muGlobular,
+    tPinGlobular: tPinGlobular,
     pintarHaloGlobular: pintarHaloGlobular,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,

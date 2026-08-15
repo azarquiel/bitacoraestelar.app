@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-/* Experimento V2-A (ver prompt_tareas.md): King(r)^gammaHalo vs King(r) puro.
-
-   Hipótesis: Fcentral se calibra contra areaKing, que integra el perfil de
-   King SIN exponente. Al pintar King(r)^gamma con gamma>1, la integral
-   efectiva deja de ser areaKing, así que el flujo total mostrado en pantalla
-   deja de coincidir con Ftotal-Fresuelto, y ese error crece con gamma (y por
-   tanto con los aumentos, ver gammaHalo). V2-A (CFG.globular.experimentoHaloV2
-   = 'A') fuerza gamma=1 y debe conservar el flujo con error ~0 a cualquier
-   aumento.
+/* Regresión: conservación de flujo del halo de King, independiente de los
+   aumentos. Consolida el experimento V2-A (ver worktree-experimento-halo-
+   globular-v2): producción usaba King(r)^gammaHalo, que rompía la
+   conservación de flujo -Fcentral se calibra contra areaKing, la integral
+   de King SIN exponente- con un error que crecía con los aumentos (34% de
+   pérdida a 50x, 86% a 450x en M13). Consolidado: fobjGlobular ya no lleva
+   exponente, así que el flujo pintado debe coincidir con Ftotal-Fresuelto a
+   CUALQUIER aumento, sin excepción.
 
    Sin dependencias: node scripts/test_globulares_v2.js */
 'use strict';
@@ -25,9 +24,8 @@ function ok(cond, etiqueta) {
 var M13 = { rc: 0.62, rt: 0.62 * Math.pow(10, 1.53), muV0: 16.59 };
 var AUMENTOS = [50, 100, 150, 200, 300, 450];
 
-/* Integral numérica (trapecios) de Fcentral·King(r)^gamma·2πr dr, 0..rt: el
-   mismo método de contraste que ya usa test_globulares.js para areaKing,
-   aplicado aquí al perfil YA elevado a gamma. */
+/* Integral numérica (trapecios) de Fcentral·King(r)·2πr dr, 0..rt: mismo
+   método que test_globulares.js usa para contrastar areaKing. */
 function integralHalo(halo) {
   var N = 20000, h = halo.rtAs / N, suma = 0;
   for (var j = 0; j < N; j++) {
@@ -38,7 +36,7 @@ function integralHalo(halo) {
   return 2 * Math.PI * suma;
 }
 
-console.log('V2-A: conservación de flujo del halo pintado, King(r) vs King(r)^gamma, por aumentos:');
+console.log('Conservación de flujo del halo pintado, independiente de los aumentos:');
 
 var halo0 = R.haloGlobular(M13, [], 250.42183, 36.45986, 1);
 var rcAsM13 = M13.rc * 60, rtAsM13 = M13.rt * 60, k13 = rtAsM13 / rcAsM13;
@@ -46,37 +44,17 @@ var areaAs2 = R.areaKing(k13) * rcAsM13 * rcAsM13;
 var Ftotal = Math.pow(10, -0.4 * M13.muV0) * areaAs2;
 var Fneto = halo0.Fcentral * areaAs2;   // = Ftotal (sin estrellas resueltas en esta prueba)
 
-console.log('\n  -- BASE (producción, King^gammaHalo): el error crece con los aumentos --');
-R.config.globular.experimentoHaloV2 = null;
-var erroresBase = [];
-AUMENTOS.forEach(function (aum) {
-  var halo = R.haloGlobular(M13, [], 250.42183, 36.45986, aum);
-  var integral = integralHalo(halo);
-  var errRel = Math.abs(integral - Fneto) / Fneto;
-  erroresBase.push(errRel);
-  console.log('  ' + aum + 'x: gamma=' + halo.gamma.toFixed(3) + '  integral/Ftotal=' +
-    (integral / Fneto).toFixed(4) + '  error=' + (errRel * 100).toFixed(2) + '%');
-});
-ok(erroresBase[erroresBase.length - 1] > erroresBase[0],
-  'BASE: el error de conservación crece al subir los aumentos (confirma la hipótesis)');
-ok(erroresBase[erroresBase.length - 1] > 0.05,
-  'BASE: a 450x el error ya no es despreciable (>5%)');
-
-console.log('\n  -- V2-A (experimentoHaloV2="A", King puro): el flujo se conserva a cualquier aumento --');
-R.config.globular.experimentoHaloV2 = 'A';
 AUMENTOS.forEach(function (aum) {
   var halo = R.haloGlobular(M13, [], 250.42183, 36.45986, aum);
   var integral = integralHalo(halo);
   var errRel = Math.abs(integral - Fneto) / Fneto;
   console.log('  ' + aum + 'x: integral/Ftotal=' + (integral / Fneto).toFixed(6) +
     '  error=' + (errRel * 100).toFixed(4) + '%');
-  ok(errRel < 1e-3, aum + 'x: V2-A conserva el flujo (error<0,1%)');
+  ok(errRel < 1e-3, aum + 'x: conserva el flujo (error<0,1%)');
 });
-R.config.globular.experimentoHaloV2 = null;   // deja el módulo como lo encontró
 
-console.log('\nV2-A: pintarHaloGlobular (grid discreto) también conserva, no solo el cerrado analítico:');
+console.log('\npintarHaloGlobular (grid discreto) también conserva, no solo el cerrado analítico:');
 [100, 300].forEach(function (aum) {
-  R.config.globular.experimentoHaloV2 = 'A';
   var SIZE = 400, arcmin = 60;
   var halo = R.haloGlobular(M13, [], 250.42183, 36.45986, aum);
   var difuso = new Float32Array(SIZE * SIZE);
@@ -90,7 +68,6 @@ console.log('\nV2-A: pintarHaloGlobular (grid discreto) también conserva, no so
   console.log('  ' + aum + 'x: integral pintada/Ftotal=' + (integralPintada / Fneto).toFixed(4) +
     '  error=' + (errRel * 100).toFixed(2) + '%');
   ok(errRel < 0.02, aum + 'x: grid discreto (400px) conserva el flujo dentro de la resolución del muestreo (<2%)');
-  R.config.globular.experimentoHaloV2 = null;
 });
 
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
