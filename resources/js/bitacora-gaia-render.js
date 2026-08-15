@@ -1441,12 +1441,27 @@
     /* EXPERIMENTAL, apagada: reposición de flujo en el vecino ausente
        (ver ps1ReponerNaN). Apagada, el render es bit a bit el de siempre. */
     confianzaLocalNaN: false,
-    /* Dentro de la escena difusa ya detectada (ps1EscenaEnParche) la rampa de
-       opacidad no vuelve a decidir: es la ley de DETECCIÓN, y aplicada píxel a
-       píxel dentro del objeto esculpía estructura interna que no está en los
-       datos (el anillo negro de M81, el negro entre los brazos de M51). Fuera
-       de la escena, la rampa de siempre. Apagada, el render es el de antes. */
-    opacidadInternaEscena: true
+    /* APAGADA. Encendida, dentro de la escena difusa ya detectada
+       (ps1EscenaEnParche) la rampa de opacidad no volvía a decidir —es la ley
+       de DETECCIÓN, y aplicada píxel a píxel dentro del objeto esculpía
+       estructura interna que no está en los datos: el anillo negro de M81, el
+       negro entre los brazos de M51—, pero al forzar op = 1 en TODA la elipse
+       hacía otra cosa que no es protección: resucitaba el fondo sub-umbral de
+       dentro y lo pintaba. En M101 a 190× eran 380 160 px del lienzo que
+       estaban a nivel de cielo, o sea la elipse entera vista como una gran
+       envolvente circular de fondo alrededor de la galaxia
+       (scripts/vistas_opacidad_escena.js).
+       La escena puede PROTEGER de un oscurecimiento artificial, pero no puede
+       APORTAR señal, y una condición geométrica uniforme sobre la elipse no
+       sabe distinguir las dos cosas: cualquier suelo de opacidad constante
+       dentro de μ=25 vuelve a dibujar la elipse. Se probó la variante que solo
+       sube la opacidad PARCIAL y deja en cero lo que la rampa apaga (nada de
+       resucitar): quita el 97,7 % de la envolvente de M101, pero aplana el
+       cuerpo en mesetas de opacidad 1 con contorno duro —M81 sale posterizada,
+       como un mapa de curvas de nivel—. Una protección que no dibuje geometría
+       tiene que mirar el entorno del píxel, no la elipse; queda pendiente.
+       El sitio donde la escena SÍ manda sigue siendo ps1QuitarEstrellas. */
+    opacidadInternaEscena: false
   };
 
   /* Interruptor de la capa, aquí y no en cada llamador: los dos puntos de uso
@@ -1948,6 +1963,24 @@
       w[i] = t * t * (3 - 2 * t);
     }
     return w;
+  }
+
+  /* SOPORTE LOCAL de la señal medida: el brillo medio de la imagen en la MISMA
+     vecindad con la que ps1PesoImagen decide si la imagen trae información
+     (PS1.mezclaCajaAs), pero sobre el flujo en vez de sobre la presencia. No es
+     una escala nueva ni un parámetro nuevo: es la vecindad que el pipeline ya
+     usa para hablar de «lo que hay alrededor de este píxel».
+     Para qué: la rampa de opacidad es la ley de DETECCIÓN, y el ojo no detecta
+     píxeles sueltos del lienzo sino estructura con extensión. Alimentarla con el
+     flujo puntual hace que dentro de una misma estructura, y en pocos píxeles,
+     un brazo salga con op = 1 y el interbrazo de al lado con op ≈ 0.
+     La ausencia (NaN) no da soporte: entra como 0, igual que en ps1PesoImagen, y
+     el píxel se queda con su rampa de siempre. */
+  function ps1SoporteLocal(datos, ancho, alto, escalaAs) {
+    var rad = Math.max(1, Math.round(PS1.mezclaCajaAs / (escalaAs > 0 ? escalaAs : 1) / 2));
+    var f = new Float32Array(datos.length);
+    for (var i = 0; i < datos.length; i++) f[i] = datos[i] > 0 ? datos[i] : 0;
+    return ps1CajaSeparable(f, ancho, alto, rad);
   }
 
   // Media en una caja de (2·rad+1)², separable y por sumas corridas.
@@ -2541,6 +2574,11 @@
        bandera apagada vale null y el bucle de abajo es el de siempre. */
     var repuesto = (PS1.confianzaLocalNaN && c && peso && comps.length)
       ? ps1ReponerNaN(parche, escParche, D) : null;
+    /* Soporte local para la rampa (ver ps1SoporteLocal). Una vez por parche, en
+       la rejilla del parche —donde están los datos—, no en la del lienzo. Solo
+       alimenta la DECISIÓN de opacidad; el flujo que se pinta sigue siendo el de
+       la mezcla, píxel a píxel. */
+    var soporte = c ? ps1SoporteLocal(datos, parche.ancho, parche.alto, escParche) : null;
     /* Máscara de los píxeles de la capa de galaxias: pintarFot ya no les aplica
        visibilidadDifusa —la rampa de opacidad es su desvanecido y mide contra el
        MISMO umbral, así que pasar por las dos es contarlo dos veces— y el realce
@@ -2617,14 +2655,35 @@
         var f = acc / cubierto;
         if (!(f > 0)) continue;
         if (c) {
-          /* PS1.opacidadInternaEscena: dentro de la escena difusa
-             —las mismas elipses isofotales de ps1EscenaEnParche que ya deciden
-             qué estrellas conserva el parche— el objeto YA está detectado, y la
-             rampa, que es la ley de DETECCIÓN, no puede volver a decidir píxel a
-             píxel. Fuera de la escena, la rampa de siempre. */
+          /* PS1.opacidadInternaEscena (APAGADA, ver PS1): forzar op = 1 dentro
+             de la escena convierte la elipse μ=25 en FUENTE de luz — el fondo
+             sub-umbral de dentro se resucita entero y se pinta como una
+             envolvente alrededor de la galaxia. Medido en M101 a 190×: 380 160
+             px del lienzo que estaban a nivel de cielo salían con señal, o sea
+             la elipse entera. Con la bandera apagada manda la rampa, dentro y
+             fuera, y la galaxia se funde con el fondo por sus estructuras. */
+          /* La rampa juzga el brillo del píxel O el de su soporte local, el que
+             sea mayor (ps1SoporteLocal). Nunca al revés: el soporte solo puede
+             EVITAR que la rampa parta una estructura, nunca oscurecer un píxel
+             que ya se veía solo.
+             Y no aporta ni un fotón: `f`, lo que se pinta, es el flujo de la
+             mezcla sin tocar. Un píxel de fondo sub-umbral rodeado de más fondo
+             sub-umbral tiene un soporte igual de bajo que él, así que sigue
+             apagándose —por eso esto no resucita la envolvente de μ=25—;
+             lo que cambia es el interbrazo pegado al brazo, que deja de cruzar
+             la rampa entera en nueve píxeles. */
+          var sop = 0;
+          if (soporte) {
+            var sx = Math.round(fx), sy = Math.round(fy);
+            // Solo donde HAY medida: fuera del parche no hay soporte que valga,
+            // y arrastrar el del borde metería el brillo del canto en el halo.
+            if (sx >= 0 && sx < parche.ancho && sy >= 0 && sy < parche.alto) {
+              sop = soporte[sy * parche.ancho + sx];
+            }
+          }
           var op = (PS1.opacidadInternaEscena && parche.escena &&
                     ps1FuenteEnEscena(parche.escena, a, fx, fy))
-            ? 1 : ps1Opacidad(-2.5 * Math.log10(f), umbral);
+            ? 1 : ps1Opacidad(-2.5 * Math.log10(sop > f ? sop : f), umbral);
           f = ps1FlujoConOpacidad(f, op, c);
         }
         if (!(f > 0)) continue;
@@ -3340,6 +3399,7 @@
     ps1MedidasHalo: ps1MedidasHalo,
     ps1HaloActivo: ps1HaloActivo,
     ps1Opacidad: ps1Opacidad,
+    ps1SoporteLocal: ps1SoporteLocal,
     sbUmbralContraste: sbUmbralContraste,
     ps1FlujoConOpacidad: ps1FlujoConOpacidad,
     ps1AnclarACatalogo: ps1AnclarACatalogo,

@@ -214,13 +214,21 @@ console.log('── sintético (A–D), modo ' + MODO + ' ──');
   // <0,2 px de parche, dentro del interior del bloque).
   var pB = lienzoDe(bx + 1.5, by + 1.5), pC = lienzoDe(cxp, cyp), pD = lienzoDe(dx0 + 1.5, dy0 + 1.5);
   var fB = difuso[pB.y * SIZE + pB.x], fC = difuso[pC.y * SIZE + pC.x], fD = difuso[pD.y * SIZE + pD.x];
-  // Modelo con su rampa en un punto del parche (lo que debe quedar si el bloque
-  // es AUSENCIA pura: fv=0, wv=0 → f = perfil).
+  /* Modelo con su rampa en un punto del parche (lo que debe quedar si el bloque
+     es AUSENCIA pura: fv=0, wv=0 → f = perfil).
+     La rampa la alimenta el brillo del píxel O el de su soporte local, el que
+     sea mayor (ps1SoporteLocal): la referencia tiene que usar la MISMA regla que
+     el pintado, o este test mediría la rampa antigua en vez de lo que vigila,
+     que es la semántica de la ausencia. La fuente de flujo sigue siendo el
+     perfil, que es lo que se comprueba. */
+  var soporte = R.ps1SoporteLocal(R.ps1PsfParche(anc, N, N, escalaAs, o.apertura), N, N, escalaAs);
   function modeloConRampa(px, py) {
     var este = (a.cx - px) / q, norte = (py - a.cy) / q;
     var fm = R.ps1FlujoModelo(parche.comps, parche.pa, norte, este);
     if (!(fm > 0)) return 0;
-    return R.ps1FlujoConOpacidad(fm, R.ps1Opacidad(-2.5 * Math.log10(fm), umbral), c);
+    var sx = Math.round(px), sy = Math.round(py);
+    var sop = (sx >= 0 && sx < N && sy >= 0 && sy < N) ? soporte[sy * N + sx] : 0;
+    return R.ps1FlujoConOpacidad(fm, R.ps1Opacidad(-2.5 * Math.log10(sop > fm ? sop : fm), umbral), c);
   }
   var mB = modeloConRampa(bx + 1.5, by + 1.5), mD = modeloConRampa(dx0 + 1.5, dy0 + 1.5);
   nuevaBase.sintPintado = { fB: fB, fC: fC, fD: fD };
@@ -278,7 +286,12 @@ B.bajar(gal205.ra, gal205.dec, gal205.ladoArcmin, PS1.salida).then(function (F20
       m.maxE.toFixed(2) + ' ≤ ' + base.n205.maxE.toFixed(2) + '+2)');
     exige(m.fueraPct <= base.n205.fueraPct + 5, 'sin halo artificial fuera del cuerpo (' +
       m.fueraPct.toFixed(1) + ' % ≤ ' + base.n205.fueraPct.toFixed(1) + '+5)');
-    exige(Math.abs(m.flujoTotal - base.n205.flujoTotal) / base.n205.flujoTotal < 0.10,
+    /* La línea base es el módulo PREVIO a la semántica NaN, y desde entonces se
+       han acumulado dos cambios que suben flujo legítimamente: el NaN (+8,3 %,
+       INFORME3) y la opacidad por soporte local (+2,7 %). El margen sube a 15 %;
+       lo que vigila el caso E son los puntos brillantes y el halo, que siguen
+       en su sitio (max y fuera% estables). */
+    exige(Math.abs(m.flujoTotal - base.n205.flujoTotal) / base.n205.flujoTotal < 0.15,
       'flujo total estable (Δ ' + (100 * (m.flujoTotal - base.n205.flujoTotal) / base.n205.flujoTotal).toFixed(2) + ' %)');
   }
 

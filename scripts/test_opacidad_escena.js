@@ -84,7 +84,12 @@ function enLienzo(px, py) {
   return (180 - py) * SIZE + (px + 60);
 }
 
-ok(PS1.opacidadInternaEscena === true, 'la bandera está activa por defecto');
+/* Apagada en producción: forzar op = 1 en toda la elipse μ=25 pintaba el fondo
+   sub-umbral de dentro como una envolvente alrededor de la galaxia (380 160 px
+   en M101 a 190×). Lo de abajo sigue midiendo la regla con la bandera puesta a
+   mano, porque la protección contra el oscurecimiento sigue haciendo falta y
+   este es el banco donde se probará su sustituta. */
+ok(PS1.opacidadInternaEscena === false, 'la bandera está apagada por defecto');
 
 var conOp = pintar(ESCENA, true);
 var sinEscena = pintar(ESCENA, false);          // rampa en todo el parche

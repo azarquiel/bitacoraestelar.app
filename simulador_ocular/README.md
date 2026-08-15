@@ -487,18 +487,37 @@ DETECCIÓN**, y dentro de un objeto que el observador ya ha detectado volvía a
 decidir píxel a píxel, esculpiendo estructura interna que no está en los datos
 (el anillo negro alrededor del bulbo de M81, el negro entre los brazos de M51,
 que se lleva del 60 al 82 % del contraste que la zona tenía sobre el cielo).
-La separación es conceptual, no un parámetro más: **dentro de la escena difusa
-la opacidad es 1; fuera, la rampa de siempre** (`PS1.opacidadInternaEscena`).
-«Dentro» es la misma `ps1EscenaEnParche` que ya decide qué estrellas conserva
-el parche —la unión de elipses isofotales μ=25 de *todos* los componentes
-catalogados—, así que la compañera está protegida igual que la galaxia
-apuntada. Medido en las cuatro galaxias: ningún píxel baja y lo brillante no se
-mueve un nivel; M81 recupera los brazos, M51 el puente hacia NGC 5195, M101 el
-disco exterior sin perder las regiones HII, y M104 no cambia. Juzgar la
-opacidad con el **perfil del catálogo** en vez de con la escena está probado y
-**descartado**: el modelo solo representa la galaxia apuntada, así que borraba
-todo lo demás (NGC 5195 casi desaparecía). Guardián:
-`scripts/test_opacidad_escena.js`.
+El intento de separarlo con la escena —**dentro de la escena difusa la opacidad
+es 1; fuera, la rampa de siempre** (`PS1.opacidadInternaEscena`), con «dentro» =
+la misma `ps1EscenaEnParche` que decide qué estrellas conserva el parche— está
+probado y **apagado**. Recupera los brazos de M81 y el puente hacia NGC 5195,
+sí, pero hace algo que no es protección: dentro de la elipse μ=25 **resucita el
+fondo sub-umbral y lo pinta**. En M101 a 190× son 380 160 px del lienzo que
+estaban a nivel de cielo (M81 257 456, M51 97 957, M104 17 835): la elipse
+entera, vista como una gran envolvente circular de fondo alrededor de la
+galaxia. Una condición **geométrica** uniforme sobre la elipse no distingue
+«protección contra un oscurecimiento artificial» de «fuente de luminancia», y
+no se arregla suavizando el borde; la variante que solo sube la opacidad
+*parcial* y nunca resucita nada quita el 97,7 % de la envolvente pero aplana el
+cuerpo en mesetas de contorno duro (M81 posterizada). Juzgar la opacidad con el
+**perfil del catálogo** también está probado y **descartado**: el modelo solo
+representa la galaxia apuntada, así que borraba todo lo demás (NGC 5195 casi
+desaparecía). La protección que falta tendrá que mirar el entorno del píxel, no
+la elipse. Guardianes: `scripts/test_opacidad_escena.js` (la regla, con la
+bandera puesta a mano) y `scripts/vistas_opacidad_escena.js` (las vistas).
+
+Esa protección es la **opacidad por soporte local** (`ps1SoporteLocal`): la
+rampa se evalúa con `max(flujo del píxel, media de la caja de mezcla)` —la caja
+de `PS1.mezclaCajaAs` = 25″ que el pipeline ya usa para `ps1PesoImagen`, sin
+escala nueva ni parámetro nuevo—, así que **decide** con el brillo de la
+vecindad pero **pinta** el flujo real del píxel y la mezcla de siempre. Un
+píxel tenue rodeado de estructura deja de ser juzgado como si estuviera solo;
+uno tenue rodeado de fondo sigue sin protección (no vuelve la envolvente).
+Medido a 190×/21,2: ningún píxel baja, los brazos salen **bit a bit iguales**,
+y la amplificación de la rampa (contraste de imagen → contraste pintado) cae de
+×1,6-×178 a ×1,00-×2,03; el salto brazo−zona oscura baja un 8-21 % y el flujo
+total sube del 1,6 % (M104) al 13 % (M101). Harness: `harness_depresiones_cielo.js`
+(el diagnóstico) y `scripts/vistas_opacidad_vecindad.js` (las vistas).
 
 Con el cambio, la semántica de NaN queda **unificada en toda la cadena**
 (antes el anclaje lo convertía en 0 y la rama de «hueco» del pintado era
