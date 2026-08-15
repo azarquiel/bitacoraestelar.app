@@ -1,28 +1,38 @@
 #!/usr/bin/env node
-/* FASE 2 — Barrido de escala del soporte de la rampa de opacidad (H-D / H-D-multi).
-   SOLO diagnóstico: no toca producción. Réplica del bucle VIGENTE de
-   ps1PintarParche (bilineal + soporte local c99b72c, opacidadInternaEscena
-   apagada) con el soporte recalculado a la escala pedida. Con --escala 25 la
-   réplica DEBE ser bit a bit idéntica a producción (dmax=0) y reproducir el
-   baseline de la Fase 1: si no, aborta y ningún resultado del barrido vale.
+/* FASES 2 y 3 — Barridos del soporte de la rampa de opacidad. SOLO diagnóstico:
+   no toca producción. Réplica del bucle VIGENTE de ps1PintarParche (bilineal +
+   soporte local c99b72c, opacidadInternaEscena apagada), verificada bit a bit.
 
-   Soporte de producción (línea base conceptual, ps1SoporteLocal):
-     media en caja de (2·rad+1)² px de parche, rad = round(PS1.mezclaCajaAs /
-     escParche / 2) con mezclaCajaAs = 25″ INTRÍNSECOS y escParche = ″/px del
-     parche; NaN y negativos entran como 0; la rampa evalúa
-     op = ps1Opacidad(−2,5·log10(max(f_píxel, soporte)), umbral).
-   Aquí solo cambia el 25: --escala S usa rad = round(S/escParche/2).
-   Multiescala (--multi "25+75"): sop_eff = máx de los mapas de soporte — como
-   ps1Opacidad es monótona en el flujo, el máximo del contraste soportado es la
-   opacidad del soporte máximo.
+   FASE 2 (--escala S | --multi A+B): el soporte de media de caja recalculado a
+   otra escala. Veredicto: H-D descartada (docs/ricco/soporte/).
 
-   Uso (un comando por objeto y escala; determinista, parche cacheado):
-     node scripts/harness_soporte_rampa.js --obj M51 --escala 25    # baseline (primero)
-     node scripts/harness_soporte_rampa.js --obj M51 --escala 75
-     node scripts/harness_soporte_rampa.js --obj M51 --multi 25+75
+   FASE 3 (--variante E1|E2): patrón NO DESTRUCTIVO
+       op_final(x) = max( op_produccion_25(x), componente_variante(x) )
+   con la rampa de producción intacta dentro del max. La misma pasada pinta los
+   DOS renders (producción y variante): todas las diferencias (anillos, cielo,
+   ROIs, RMS) se miden contra la producción de la propia corrida, que con la
+   variante apagada es bit a bit la de ps1PintarParche.
+     E1 (estadístico de orden): --variante E1 --percentil 90 --escala 100
+        componente = Opacidad(percentil de la caja) sobre la rejilla del parche.
+        Percentil por histograma deslizante de 256 niveles sobre magnitud en
+        [umbral−8, umbral+4] (ancho de bin 0,047 mag; tolerancia ±0,024 mag).
+        NaN y negativos entran como «sin señal» (bin 0), igual que producción.
+     E2 (propagación de opacidad): --variante E2 --decaimiento exp --alcance 100
+        componente(x) = max_y op_rampa25(y)·k(dist), k exp(−3d/L) o max(0,1−d/L),
+        por chamfer de dos pasadas ×2 (métrica chamfer ≈ euclídea; verificación
+        contra la definición directa en una ROI, tolerancia reportada). Los NaN
+        no aportan ni reciben opacidad (la distancia es euclídea, sin caminos).
+     --calientes N (solo sensibilidad E1, exploratoria): inyecta N píxeles
+        sintéticos a nivel p99,9 en una COPIA del parche (mezcla y componente
+        los ven, como un caliente real); desactiva el asserto de SHA-1.
+
+   Uso (un comando por objeto/variante/parámetros; determinista, parche cacheado):
+     node scripts/harness_soporte_rampa.js --obj M51 --escala 25          # paridad
+     node scripts/harness_soporte_rampa.js --obj M51 --variante E1 --percentil 90 --escala 100
+     node scripts/harness_soporte_rampa.js --obj M101 --variante E2 --decaimiento exp --alcance 100
    Objetos: M51 M81 M104 M101 NGC205.
    Opciones: --D mm --M x --sqm v --delta niveles (defecto 457.2/190/21.2/2)
-   Salidas: .scratch/soporte/<obj>/  (JSON por escala, PNGs, E_s25.bin) */
+   Salidas: .scratch/soporte/<obj>/  (JSON por corrida, PNGs, E_s25.bin) */
 'use strict';
 
 var fs = require('fs'), path = require('path'), zlib = require('zlib'), crypto = require('crypto');
@@ -46,11 +56,20 @@ var CFG = {
   sqm: parseFloat(arg('sqm', '21.2')), delta: parseInt(arg('delta', '2'), 10),
   SIZE: 720, AFOV: 70
 };
+var VARIANTE = arg('variante', null);            // null | E1 | E2
+var PCT = parseFloat(arg('percentil', '90'));
+var DECAI = String(arg('decaimiento', 'exp'));   // exp | lin
+var ALCANCE = parseFloat(arg('alcance', '100')); // arcsec intrínsecos (E2)
+var CALIENTES = parseInt(arg('calientes', '0'), 10);
 /* escalas del soporte, en arcsec INTRÍNSECOS (como PS1.mezclaCajaAs) */
 var MULTI = arg('multi', null);
 var ESCALAS = MULTI ? MULTI.split('+').map(Number) : [parseFloat(arg('escala', '25'))];
-var ETIQ = MULTI ? 'm' + MULTI : 's' + ESCALAS[0];
-var ES_BASE = !MULTI && ESCALAS.length === 1 && ESCALAS[0] === PS1.mezclaCajaAs;
+var ETIQ = VARIANTE === 'E1' ? 'E1p' + PCT + 's' + ESCALAS[0]
+         : VARIANTE === 'E2' ? 'E2' + DECAI + 'a' + ALCANCE
+         : MULTI ? 'm' + MULTI : 's' + ESCALAS[0];
+if (CALIENTES) ETIQ += 'cal' + CALIENTES;
+var ES_BASE = !VARIANTE && !MULTI && ESCALAS.length === 1 &&
+              ESCALAS[0] === PS1.mezclaCajaAs && !CALIENTES;
 
 var OBJS = {
   M51:    { cat: 'NGC 5194', csv: 'gaia_ngc5194.csv' },
@@ -63,7 +82,8 @@ if (!OBJS[OBJ]) { console.error('objeto desconocido: ' + OBJ); process.exit(2); 
 var OUT = path.join(RAIZ, '.scratch', 'soporte', OBJ);
 fs.mkdirSync(OUT, { recursive: true });
 var IN_GAIA = path.join(RAIZ, '.scratch', 'quitar-general');
-var ROIS_FICH = OBJ === 'M51' ? path.join(RAIZ, 'scripts', 'rois_M51.json') : null;
+var ROIS_FICH = OBJ === 'M51' ? path.join(RAIZ, 'scripts', 'rois_M51.json')
+              : OBJ === 'M101' ? path.join(RAIZ, 'scripts', 'rois_M101.json') : null;
 var BASE_F1 = path.join(RAIZ, 'docs', 'ricco', 'interbrazos', 'baseline_interbrazos_' + OBJ + '.json');
 
 var fallos = 0;
@@ -178,9 +198,158 @@ function soporteEscala(datos, ancho, alto, escalaAs, S) {
   return { mapa: cajaSeparable(f, ancho, alto, rad), rad: rad };
 }
 
-/* ── réplica del bucle VIGENTE de ps1PintarParche, con soporte inyectado ──
-   (idéntica a pintarInstr de harness_interbrazos.js salvo `soportes`). */
-function pintar(parche, o, soportes) {
+/* ── E1: percentil deslizante por histogramas de columna (Huang/Perreault) ──
+   Cuantización: bin 0 = sin señal (NaN, ≤0, o más débil que magMax); bins
+   1..255 lineales en magnitud sobre [magMin, magMax] = [umbral−8, umbral+4]
+   (más brillante → bin más alto). El percentil P de la caja (contando los
+   bin 0, como cuenta producción los ceros en la media) se devuelve como flujo
+   del centro del bin. Bordes por replicación, como ps1CajaSeparable. */
+function percentilCaja(datos, ancho, alto, rad, P, umbral) {
+  var NB = 256, magMin = umbral - 8, magMax = umbral + 4;
+  var esc = (NB - 2) / (magMax - magMin);      // bins 1..255
+  var q = new Uint8Array(datos.length);
+  for (var i = 0; i < datos.length; i++) {
+    var v = datos[i];
+    if (!(v > 0)) continue;                    // NaN/≤0 → bin 0 (sin señal)
+    var mg = -2.5 * Math.log10(v);
+    var b = 1 + Math.round((magMax - mg) * esc);
+    q[i] = b < 1 ? 0 : b > 255 ? 255 : b;
+  }
+  var flujoBin = new Float64Array(NB);
+  for (var b2 = 1; b2 < NB; b2++) flujoBin[b2] = Math.pow(10, -0.4 * (magMax - (b2 - 1) / esc));
+  var out = new Float32Array(datos.length);
+  var colH = new Uint16Array(ancho * NB);      // histograma por columna
+  var ker = new Int32Array(NB);
+  var idxCol = function (x) { return Math.min(ancho - 1, Math.max(0, x)); };
+  // primas: filas −rad..rad con replicación
+  for (var x0 = 0; x0 < ancho; x0++) {
+    for (var y0 = -rad; y0 <= rad; y0++) {
+      var yy = Math.min(alto - 1, Math.max(0, y0));
+      colH[x0 * NB + q[yy * ancho + x0]]++;
+    }
+  }
+  var ladoN = 2 * rad + 1, total = ladoN * ladoN;
+  for (var y = 0; y < alto; y++) {
+    if (y > 0) {  // desliza las columnas una fila
+      var ySale = Math.min(alto - 1, Math.max(0, y - 1 - rad));
+      var yEntra = Math.min(alto - 1, Math.max(0, y + rad));
+      for (var xc = 0; xc < ancho; xc++) {
+        colH[xc * NB + q[ySale * ancho + xc]]--;
+        colH[xc * NB + q[yEntra * ancho + xc]]++;
+      }
+    }
+    ker.fill(0);
+    for (var xk = -rad; xk <= rad; xk++) {
+      var c0 = idxCol(xk) * NB;
+      for (var bb = 0; bb < NB; bb++) ker[bb] += colH[c0 + bb];
+    }
+    var objetivo = Math.max(1, Math.ceil(P / 100 * total));
+    for (var x = 0; x < ancho; x++) {
+      var acc = 0, binP = 0;
+      for (var b3 = 0; b3 < NB; b3++) { acc += ker[b3]; if (acc >= objetivo) { binP = b3; break; } }
+      out[y * ancho + x] = flujoBin[binP];
+      var cSale = idxCol(x - rad) * NB, cEntra = idxCol(x + rad + 1) * NB;
+      for (var b4 = 0; b4 < NB; b4++) ker[b4] += colH[cEntra + b4] - colH[cSale + b4];
+    }
+  }
+  return out;
+}
+
+/* ── E2: propagación de opacidad con decaimiento, por chamfer ──
+   comp(x) = max_y op(y)·k(d(x,y)); dos pasadas raster ×2 iteraciones. Los NaN
+   (mascara=1) no aportan (op=0), no reciben (comp=0) y bloquean el paso.
+   exp: k multiplica por paso (exacto sobre la métrica chamfer).
+   lin: se arrastra (op0, d) del mejor candidato (aprox. codiciosa).
+   La verificación contra la definición directa (euclídea) se hace fuera. */
+function propagarOp(op, nan, ancho, alto, escalaAs, alcance, tipo) {
+  var n = op.length;
+  var comp = new Float32Array(n), op0 = new Float32Array(n), dist = new Float32Array(n);
+  /* NaN: no siembran (op 0) ni reciben (comp final 0), pero NO bloquean el
+     paso — la definición directa es euclídea, sin noción de camino */
+  for (var i = 0; i < n; i++) {
+    if (nan[i]) { comp[i] = 0; op0[i] = 0; dist[i] = 0; continue; }
+    comp[i] = op[i]; op0[i] = op[i]; dist[i] = 0;
+  }
+  /* vecindad 5×5 (con saltos de caballo): error métrico ≤ ~2 % frente al 7,6 %
+     del 3×3, necesario para que |chamfer−directo| quede bajo la tolerancia */
+  var pasoA = escalaAs, pasoD = escalaAs * Math.SQRT2, pasoC = escalaAs * Math.sqrt(5);
+  var kA = Math.exp(-3 * pasoA / alcance), kD = Math.exp(-3 * pasoD / alcance),
+      kC = Math.exp(-3 * pasoC / alcance);
+  function candidato(i, j, paso, kMul) {
+    var v;
+    if (tipo === 'exp') {
+      v = comp[j] * kMul;
+      if (v > comp[i]) { comp[i] = v; }
+    } else {
+      var d2 = dist[j] + paso;
+      v = op0[j] * Math.max(0, 1 - d2 / alcance);
+      if (v > comp[i]) { comp[i] = v; op0[i] = op0[j]; dist[i] = d2; }
+    }
+  }
+  for (var it = 0; it < 2; it++) {
+    for (var y = 0; y < alto; y++) for (var x = 0; x < ancho; x++) {
+      var i2 = y * ancho + x;
+      if (x > 0) candidato(i2, i2 - 1, pasoA, kA);
+      if (y > 0) candidato(i2, i2 - ancho, pasoA, kA);
+      if (x > 0 && y > 0) candidato(i2, i2 - ancho - 1, pasoD, kD);
+      if (x < ancho - 1 && y > 0) candidato(i2, i2 - ancho + 1, pasoD, kD);
+      if (y > 1) {
+        if (x > 0) candidato(i2, i2 - 2 * ancho - 1, pasoC, kC);
+        if (x < ancho - 1) candidato(i2, i2 - 2 * ancho + 1, pasoC, kC);
+      }
+      if (y > 0) {
+        if (x > 1) candidato(i2, i2 - ancho - 2, pasoC, kC);
+        if (x < ancho - 2) candidato(i2, i2 - ancho + 2, pasoC, kC);
+      }
+    }
+    for (var y2 = alto - 1; y2 >= 0; y2--) for (var x2 = ancho - 1; x2 >= 0; x2--) {
+      var i3 = y2 * ancho + x2;
+      if (x2 < ancho - 1) candidato(i3, i3 + 1, pasoA, kA);
+      if (y2 < alto - 1) candidato(i3, i3 + ancho, pasoA, kA);
+      if (x2 < ancho - 1 && y2 < alto - 1) candidato(i3, i3 + ancho + 1, pasoD, kD);
+      if (x2 > 0 && y2 < alto - 1) candidato(i3, i3 + ancho - 1, pasoD, kD);
+      if (y2 < alto - 2) {
+        if (x2 < ancho - 1) candidato(i3, i3 + 2 * ancho + 1, pasoC, kC);
+        if (x2 > 0) candidato(i3, i3 + 2 * ancho - 1, pasoC, kC);
+      }
+      if (y2 < alto - 1) {
+        if (x2 < ancho - 2) candidato(i3, i3 + ancho + 2, pasoC, kC);
+        if (x2 > 1) candidato(i3, i3 + ancho - 2, pasoC, kC);
+      }
+    }
+  }
+  for (i = 0; i < n; i++) if (nan[i]) comp[i] = 0;
+  return comp;
+}
+/* definición directa (euclídea) en una caja, para verificar el chamfer */
+function propagarDirecto(op, nan, ancho, alto, escalaAs, alcance, tipo, x0, y0, x1, y1) {
+  /* exp no se anula en d=alcance: extender hasta que la cola quede < 0,002 */
+  var radAs = tipo === 'exp' ? alcance * (-Math.log(0.002) / 3) : alcance;
+  var radPx = Math.ceil(radAs / escalaAs), out = new Float32Array((x1 - x0 + 1) * (y1 - y0 + 1));
+  var k = 0;
+  for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++, k++) {
+    if (nan[y * ancho + x]) { out[k] = 0; continue; }
+    var mejor = 0;
+    for (var dy = -radPx; dy <= radPx; dy++) {
+      var yy = y + dy; if (yy < 0 || yy >= alto) continue;
+      for (var dx = -radPx; dx <= radPx; dx++) {
+        var xx = x + dx; if (xx < 0 || xx >= ancho) continue;
+        var j = yy * ancho + xx;
+        if (nan[j] || !(op[j] > 0)) continue;
+        var d = Math.sqrt(dx * dx + dy * dy) * escalaAs;
+        var v = tipo === 'exp' ? op[j] * Math.exp(-3 * d / alcance)
+                               : op[j] * Math.max(0, 1 - d / alcance);
+        if (v > mejor) mejor = v;
+      }
+    }
+    out[k] = mejor;
+  }
+  return out;
+}
+
+/* ── réplica del bucle VIGENTE de ps1PintarParche; pinta a la vez producción
+   (soporte 25″) y, si hay variante, op_final = max(op_prod, componente) ── */
+function pintar(parche, o, soportes, compPatch) {
   var SIZE = CFG.SIZE;
   var escv = SIZE / (o.arcmin / 60);
   var cos0 = Math.cos(o.dec0 * Math.PI / 180);
@@ -189,11 +358,13 @@ function pintar(parche, o, soportes) {
   var ladoPx = (parche.ladoArcmin / 60) * escv;
   var n = SIZE * SIZE;
   var res = {
-    fPre: new Float32Array(n), fPost: new Float32Array(n),
+    fPre: new Float32Array(n), fPost: new Float32Array(n), fPostProd: new Float32Array(n),
     wMap: new Float32Array(n), fmMap: new Float32Array(n),
-    opMap: new Float32Array(n).fill(NaN),
+    opMap: new Float32Array(n).fill(NaN), opProdMap: new Float32Array(n).fill(NaN),
+    compMap: new Float32Array(n),
     fx: new Float32Array(n).fill(NaN), fy: new Float32Array(n).fill(NaN),
-    pintado: new Uint8Array(n), ctx: null, x0: 0, x1: -1, y0: 0, y1: -1
+    pintado: new Uint8Array(n), ctx: null, x0: 0, x1: -1, y0: 0, y1: -1,
+    borrados: 0
   };
   if (!(ladoPx > 0.5)) return res;
   var q = parche.ancho / (parche.ladoArcmin * 60);
@@ -209,8 +380,7 @@ function pintar(parche, o, soportes) {
   var sMezcla = peso ? parche.escalaMezcla : 1;
   var haloPx = R.ps1RadioHaloAs(comps) * pxPorAs;
   var alcance = Math.max(ladoPx / 2, haloPx);
-  var escParche = (parche.ladoArcmin * 60) / parche.ancho;
-  var datos = c ? R.ps1DatosConPsf(parche, escParche, o.apertura) : parche.datos;
+  var datos = parche.datosPsf;   // ya calculado fuera (con calientes si tocan)
   res.datosPsf = datos;
   var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
   var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
@@ -251,8 +421,9 @@ function pintar(parche, o, soportes) {
       res.wMap[i] = accW / cubierto;
       if (!(f > 0)) continue;
       res.fPre[i] = f;
+      var fPr = f, fVar = f;
       if (c) {
-        var sop = 0;
+        var sop = 0, comp = 0;
         var sx = Math.round(fx), sy = Math.round(fy);
         if (sx >= 0 && sx < parche.ancho && sy >= 0 && sy < parche.alto) {
           var kS = sy * parche.ancho + sx;
@@ -260,13 +431,20 @@ function pintar(parche, o, soportes) {
             var v2 = soportes[s2][kS];
             if (v2 > sop) sop = v2;
           }
+          if (compPatch) comp = compPatch[kS];
         }
-        var op = R.ps1Opacidad(-2.5 * Math.log10(sop > f ? sop : f), umbral);
-        res.opMap[i] = op;
-        f = R.ps1FlujoConOpacidad(f, op, c);
+        var opProd = R.ps1Opacidad(-2.5 * Math.log10(sop > f ? sop : f), umbral);
+        res.opProdMap[i] = opProd;
+        res.compMap[i] = comp;
+        var opFin = compPatch ? Math.max(opProd, comp) : opProd;
+        res.opMap[i] = opFin;
+        if (opFin < opProd) res.borrados++;
+        fPr = R.ps1FlujoConOpacidad(f, opProd, c);
+        fVar = compPatch ? R.ps1FlujoConOpacidad(f, opFin, c) : fPr;
       }
-      if (!(f > 0)) continue;
-      res.fPost[i] = f;
+      if (fPr > 0) res.fPostProd[i] = fPr;
+      if (!(fVar > 0)) continue;
+      res.fPost[i] = fVar;
       res.pintado[i] = 1;
     }
   }
@@ -286,7 +464,7 @@ function nivelPantalla(fPost, c) {
 /* ═════════════════════════ ejecución ═════════════════════════ */
 var O = OBJS[OBJ];
 var gal = galDeFila(filaCat(O.cat));
-console.log('═══ ' + OBJ + ' (' + gal.nombre + ')  escala=' + ETIQ + '  D=' + CFG.D +
+console.log('═══ ' + OBJ + ' (' + gal.nombre + ')  ' + ETIQ + '  D=' + CFG.D +
   'mm M=' + CFG.M + 'x sqm=' + CFG.sqm + ' δ=' + CFG.delta + ' ═══');
 
 B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
@@ -317,29 +495,92 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
   var o = { ra0: gal.ra, dec0: gal.dec, arcmin: CFG.AFOV / CFG.M * 60,
             size: CFG.SIZE, cielo: cielo, apertura: CFG.D };
   var escParche = (gal.ladoArcmin * 60) / W;
+  var ctx0 = R.ctxFotometrico(cielo, parche.thetaIntArcmin);
+  var umbral0 = R.sbUmbralContraste(ctx0);
 
-  /* mapas de soporte a las escalas pedidas, cronometrados */
   var datosPsf = R.ps1DatosConPsf(parche, escParche, CFG.D);
+  /* píxeles calientes sintéticos (solo sensibilidad, exploratoria): a p99,9 del
+     parche, en posiciones fijas (centros de ROI + rejilla), sobre una COPIA. */
+  var posCalientes = [];
+  if (CALIENTES) {
+    var pos = [], m9 = [];
+    for (var i9 = 0; i9 < datosPsf.length; i9 += 13) if (datosPsf[i9] > 0) m9.push(datosPsf[i9]);
+    m9.sort(function (a, b) { return a - b; });
+    var v999 = m9[Math.floor(m9.length * 0.999)];
+    if (ROIS_FICH && fs.existsSync(ROIS_FICH)) {
+      JSON.parse(fs.readFileSync(ROIS_FICH, 'utf8')).cajas.forEach(function (rr) {
+        if (rr.x0 != null) pos.push([(rr.x0 + rr.x1) >> 1, (rr.y0 + rr.y1) >> 1]);
+      });
+    }
+    for (var g9 = 0; pos.length < CALIENTES; g9++) pos.push([100 + g9 * 190, 150 + g9 * 160]);
+    pos = pos.slice(0, CALIENTES);
+    var copia = new Float32Array(datosPsf);
+    pos.forEach(function (p9) { copia[p9[1] * W + p9[0]] = v999; });
+    datosPsf = copia; posCalientes = pos;
+    console.log('  calientes: ' + pos.length + ' px a v=' + v999.toExponential(3));
+  }
+  parche.datosPsf = datosPsf;
+
+  /* soporte de producción (o el barrido de Fase 2) */
   var soportes = [], rads = [], msSoporte = 0;
-  ESCALAS.forEach(function (S) {
+  var escalasSoporte = VARIANTE ? [PS1.mezclaCajaAs] : ESCALAS;
+  escalasSoporte.forEach(function (S) {
     var t0 = process.hrtime.bigint();
     var s = soporteEscala(datosPsf, W, H, escParche, S);
     msSoporte += Number(process.hrtime.bigint() - t0) / 1e6;
     soportes.push(s.mapa); rads.push(s.rad);
   });
-  console.log('  soporte: rads=[' + rads.join(',') + '] px de parche (escParche=' +
-    escParche.toFixed(3) + '″/px), coste=' + msSoporte.toFixed(1) + ' ms');
 
-  /* PARIDAD: con la escala de producción, réplica ≡ producción bit a bit y
-     mapa de soporte ≡ ps1SoporteLocal elemento a elemento. */
+  /* componente de la variante, sobre la rejilla del parche */
+  var compPatch = null, msComp = 0, verifChamfer = null;
+  if (VARIANTE === 'E1') {
+    var radE1 = Math.max(1, Math.round(ESCALAS[0] / escParche / 2));
+    var tE1 = process.hrtime.bigint();
+    var sopP = percentilCaja(datosPsf, W, H, radE1, PCT, umbral0);
+    compPatch = new Float32Array(sopP.length);
+    for (var iC = 0; iC < sopP.length; iC++) {
+      compPatch[iC] = sopP[iC] > 0 ? R.ps1Opacidad(-2.5 * Math.log10(sopP[iC]), umbral0) : 0;
+    }
+    msComp = Number(process.hrtime.bigint() - tE1) / 1e6;
+    console.log('  E1: p' + PCT + ' caja ' + ESCALAS[0] + '″ (rad=' + radE1 + ' px), ' + msComp.toFixed(0) + ' ms');
+  } else if (VARIANTE === 'E2') {
+    var tE2 = process.hrtime.bigint();
+    var nanM = new Uint8Array(datosPsf.length);
+    var opPatch = new Float32Array(datosPsf.length);
+    for (var iN = 0; iN < datosPsf.length; iN++) {
+      var vN = datosPsf[iN];
+      if (!isFinite(vN)) { nanM[iN] = 1; continue; }
+      var sN = soportes[0][iN];
+      var mx = vN > sN ? vN : sN;
+      if (mx > 0) opPatch[iN] = R.ps1Opacidad(-2.5 * Math.log10(mx), umbral0);
+    }
+    compPatch = propagarOp(opPatch, nanM, W, H, escParche, ALCANCE, DECAI);
+    msComp = Number(process.hrtime.bigint() - tE2) / 1e6;
+    /* verificación chamfer vs definición directa en la primera ROI (o caja fija) */
+    var vx0 = 400, vy0 = 400, vx1 = 439, vy1 = 439;
+    if (ROIS_FICH && fs.existsSync(ROIS_FICH)) {
+      var r0 = JSON.parse(fs.readFileSync(ROIS_FICH, 'utf8')).cajas[0];
+      if (r0.x0 != null) { vx0 = r0.x0; vy0 = r0.y0; vx1 = Math.min(r0.x1, r0.x0 + 39); vy1 = Math.min(r0.y1, r0.y0 + 39); }
+    }
+    var directo = propagarDirecto(opPatch, nanM, W, H, escParche, ALCANCE, DECAI, vx0, vy0, vx1, vy1);
+    var dver = 0, kv = 0;
+    for (var yv = vy0; yv <= vy1; yv++) for (var xv = vx0; xv <= vx1; xv++, kv++) {
+      dver = Math.max(dver, Math.abs(compPatch[yv * W + xv] - directo[kv]));
+    }
+    verifChamfer = dver;
+    console.log('  E2: ' + DECAI + ' alcance ' + ALCANCE + '″, ' + msComp.toFixed(0) +
+      ' ms; |chamfer−directo|max en ROI = ' + dver.toFixed(4));
+    exige(dver <= 0.02, 'chamfer ≈ definición directa (tolerancia 0,02 de op)');
+  }
+
+  var I = pintar(parche, o, soportes, compPatch);
+
+  /* PARIDAD (variante apagada, escala 25): réplica ≡ producción bit a bit */
   if (ES_BASE) {
     var sopProd = R.ps1SoporteLocal(datosPsf, W, H, escParche);
     var dSop = 0;
     for (var iS = 0; iS < sopProd.length; iS++) if (sopProd[iS] !== soportes[0][iS]) dSop++;
     exige(dSop === 0, 'soporte(25″) ≡ ps1SoporteLocal (' + dSop + ' px distintos)');
-  }
-  var I = pintar(parche, o, soportes);
-  if (ES_BASE) {
     var prod = new Float32Array(CFG.SIZE * CFG.SIZE);
     R.ps1PintarParche(prod, parche, o);
     var dmax = 0;
@@ -347,26 +588,25 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
     exige(dmax === 0, 'réplica = producción bit a bit (dmax=' + dmax + ')');
     if (dmax !== 0) { process.exit(1); }
   }
+  /* invariante de no-borrado, en toda corrida con variante */
+  if (VARIANTE) exige(I.borrados === 0, 'no-borrado: 0 px con op_final < op_prod (' + I.borrados + ')');
 
   var c = I.ctx, umbral = R.sbUmbralContraste(c);
   var SIZE = CFG.SIZE, n = SIZE * SIZE;
   var E = nivelPantalla(I.fPost, c);
+  var Eprod = VARIANTE ? nivelPantalla(I.fPostProd, c) : E;
   var fondoNivel = Math.round(c.nivelFondo);
 
-  /* fotometría pre-opacidad: huella para exigir que el barrido no la toca */
   var shaPre = crypto.createHash('sha1')
     .update(Buffer.from(I.fPre.buffer, I.fPre.byteOffset, I.fPre.byteLength)).digest('hex');
 
-  /* θR de la config (serie física del protocolo) */
   var thetaRmin = Math.pow(10, FOT.H2C.THETA_R_A + FOT.H2C.THETA_R_B * c.SBe);
-  var sopFisico = thetaRmin * 60 / CFG.M;   // arcsec intrínsecos
 
   var dEsc = new Float32Array(n).fill(NaN);
   for (var i = 0; i < n; i++) {
     if (I.fx[i] === I.fx[i]) dEsc[i] = distEscena(escena, fSim.afin, I.fx[i], I.fy[i]);
   }
 
-  /* rectángulo envolvente de la elipse μ25 (como en Fase 1) */
   var bx0 = SIZE, bx1 = -1, by0 = SIZE, by1 = -1;
   for (i = 0; i < n; i++) {
     if (!(dEsc[i] <= 1)) continue;
@@ -376,55 +616,86 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
   }
   if (bx1 < 0) { bx0 = I.x0; bx1 = I.x1; by0 = I.y0; by1 = I.y1; }
 
-  /* clasificación del negro: misma regla y orden que la Fase 1 */
-  var clase = new Uint8Array(n), maskCond = new Uint8Array(n);
+  /* clasificación del negro (reglas de Fase 1) sobre el render de la VARIANTE */
+  var clase = new Uint8Array(n), claseProd = new Uint8Array(n);
   var cuenta = { negros: 0, a: 0, b: 0, c: 0, d: 0, e: 0 }, soloRampa = 0;
-  for (var y = by0; y <= by1; y++) for (var x = bx0; x <= bx1; x++) {
-    i = y * SIZE + x;
-    var fx = I.fx[i], fy = I.fy[i];
-    if (!(fx >= 0 && fx < W && fy >= 0 && fy < H)) continue;
-    if (grisA(E[i]) > fondoNivel + CFG.delta) continue;
-    cuenta.negros++;
-    var kP = Math.round(fy) * W + Math.round(fx);
-    var vRaw = limpio[kP];
-    var esNaNanc = !(anc[kP] === anc[kP]);
-    var condC = (vRaw === vRaw) && !esNaNanc && vRaw < cieloP;
-    var nivelFm = c.nivelFondo + R.valorDeFlujo(
-      FOT.GAMMA_PERCEPTUAL !== 1 && I.fmMap[i] > 0
-        ? R.realzarPerceptual(I.fmMap[i], c.Fcielo, c.rango, 0, PS1.realceMax) : I.fmMap[i],
-      c.Fcielo, c.rango);
-    var condD = I.wMap[i] < 0.5 && grisA(nivelFm) <= fondoNivel + CFG.delta;
-    var dentro = dEsc[i] <= 1;
-    var opBaja = I.opMap[i] === I.opMap[i] && I.opMap[i] < 1;
-    var condA = opBaja && !dentro, condB = opBaja && dentro;
-    var m = (condC ? 1 : 0) | (condD ? 2 : 0) | (condA ? 4 : 0) | (condB ? 8 : 0);
-    var cl;
-    if (condC) { cl = 1; cuenta.c++; }
-    else if (condD) { cl = 2; cuenta.d++; }
-    else if (condA) { cl = 3; cuenta.a++; }
-    else if (condB) { cl = 4; cuenta.b++; }
-    else { cl = 5; cuenta.e++; m |= 16; }
-    clase[i] = cl; maskCond[i] = m;
-    if ((m & 12) && !(m & 3)) soloRampa++;
+  /* y sobre el de producción (referencia interna de la corrida) */
+  var cuentaProd = { negros: 0, b: 0, soloRampa: 0 };
+  function clasifica(Emapa, opMapa, apunta) {
+    for (var y = by0; y <= by1; y++) for (var x = bx0; x <= bx1; x++) {
+      var i6 = y * SIZE + x;
+      var fx6 = I.fx[i6], fy6 = I.fy[i6];
+      if (!(fx6 >= 0 && fx6 < W && fy6 >= 0 && fy6 < H)) continue;
+      if (grisA(Emapa[i6]) > fondoNivel + CFG.delta) continue;
+      apunta.negros++;
+      var kP = Math.round(fy6) * W + Math.round(fx6);
+      var vRaw = limpio[kP];
+      var esNaNanc = !(anc[kP] === anc[kP]);
+      var condC = (vRaw === vRaw) && !esNaNanc && vRaw < cieloP;
+      var nivelFm = c.nivelFondo + R.valorDeFlujo(
+        FOT.GAMMA_PERCEPTUAL !== 1 && I.fmMap[i6] > 0
+          ? R.realzarPerceptual(I.fmMap[i6], c.Fcielo, c.rango, 0, PS1.realceMax) : I.fmMap[i6],
+        c.Fcielo, c.rango);
+      var condD = I.wMap[i6] < 0.5 && grisA(nivelFm) <= fondoNivel + CFG.delta;
+      var dentro = dEsc[i6] <= 1;
+      var opBaja = opMapa[i6] === opMapa[i6] && opMapa[i6] < 1;
+      var condA = opBaja && !dentro, condB = opBaja && dentro;
+      var m = (condC ? 1 : 0) | (condD ? 2 : 0) | (condA ? 4 : 0) | (condB ? 8 : 0);
+      var cl;
+      if (condC) { cl = 1; if (apunta.c != null) apunta.c++; }
+      else if (condD) { cl = 2; if (apunta.d != null) apunta.d++; }
+      else if (condA) { cl = 3; if (apunta.a != null) apunta.a++; }
+      else if (condB) { cl = 4; apunta.b++; }
+      else { cl = 5; if (apunta.e != null) apunta.e++; m |= 16; }
+      if ((m & 12) && !(m & 3)) apunta.soloRampa = (apunta.soloRampa || 0) + 1;
+      if (apunta === cuenta) clase[i6] = cl;
+      else claseProd[i6] = cl;
+    }
   }
+  clasifica(E, I.opMap, cuenta);
+  soloRampa = cuenta.soloRampa || 0;
+  if (VARIANTE) clasifica(Eprod, I.opProdMap, cuentaProd);
+  else cuentaProd = { negros: cuenta.negros, b: cuenta.b, soloRampa: soloRampa };
 
-  /* ── ROIs (solo M51) ── */
+  /* ── ROIs ── */
   var rois = ROIS_FICH && fs.existsSync(ROIS_FICH)
     ? JSON.parse(fs.readFileSync(ROIS_FICH, 'utf8')) : null;
   var resumenRois = [];
   if (rois) {
     rois.cajas.forEach(function (rr) {
+      if (rr.tipo === 'fuente') {  // círculo: anillo 1,5–3× radio en px de parche
+        var rIn = 1.5 * rr.radioPx, rOut = 3 * rr.radioPx;
+        var sF = 0, sFb = 0, sOp = 0, sOpB = 0, cnt = 0;
+        for (var i7 = 0; i7 < n; i7++) {
+          var dx7 = I.fx[i7] - rr.cx, dy7 = I.fy[i7] - rr.cy;
+          if (!(dx7 === dx7)) continue;
+          var d7 = Math.sqrt(dx7 * dx7 + dy7 * dy7);
+          if (d7 < rIn || d7 > rOut) continue;
+          cnt++;
+          sF += I.fPost[i7]; sFb += I.fPostProd[i7];
+          if (I.opMap[i7] === I.opMap[i7]) sOp += I.opMap[i7];
+          if (I.opProdMap[i7] === I.opProdMap[i7]) sOpB += I.opProdMap[i7];
+        }
+        resumenRois.push({ nombre: rr.nombre, tipo: rr.tipo, px: cnt,
+          deltaMagAnillo: (sF > 0 && sFb > 0) ? -2.5 * Math.log10(sF / sFb) : (sF === sFb ? 0 : null),
+          deltaOpMedio: cnt ? (sOp - sOpB) / cnt : 0,
+          fMedio: cnt ? sF / cnt : 0, fMedioProd: cnt ? sFb / cnt : 0 });
+        return;
+      }
       var idx = [], negros = 0, negrosB = 0, ops = [];
+      var negrosProd = 0, negrosBProd = 0;
       for (var i5 = 0; i5 < n; i5++) {
         var fx5 = I.fx[i5], fy5 = I.fy[i5];
         if (!(fx5 >= rr.x0 && fx5 <= rr.x1 && fy5 >= rr.y0 && fy5 <= rr.y1)) continue;
         idx.push(i5);
         if (clase[i5]) { negros++; if (clase[i5] === 4) negrosB++; }
+        if (VARIANTE && claseProd[i5]) { negrosProd++; if (claseProd[i5] === 4) negrosBProd++; }
         if (I.opMap[i5] === I.opMap[i5]) ops.push(I.opMap[i5]);
       }
       resumenRois.push({
         nombre: rr.nombre, tipo: rr.tipo, px: idx.length,
         negros: negros, negrosB: negrosB,
+        negrosProd: VARIANTE ? negrosProd : negros, negrosBProd: VARIANTE ? negrosBProd : negrosB,
         fracNegros: idx.length ? negros / idx.length : 0,
         fracNegrosB: idx.length ? negrosB / idx.length : 0,
         op: { mediana: mediana(ops), p10: percentil(ops, 0.10), p90: percentil(ops, 0.90) }
@@ -432,54 +703,68 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
     });
   }
 
-  /* ── cielo del campo (todos los objetos): dEsc > 1.5 dentro del parche ── */
-  var cieloCampo = { px: 0, opPos: 0, sumaE: 0 };
+  /* ── cielo del campo: dEsc > 1.5 dentro del parche ── */
+  var cieloCampo = { px: 0, opPos: 0, opPosProd: 0, sumaE: 0, sumaEProd: 0 };
   for (i = 0; i < n; i++) {
     if (!(dEsc[i] > 1.5)) continue;
     if (!(I.fx[i] >= 0 && I.fx[i] < W && I.fy[i] >= 0 && I.fy[i] < H)) continue;
     cieloCampo.px++;
-    cieloCampo.sumaE += E[i];
+    cieloCampo.sumaE += E[i]; cieloCampo.sumaEProd += Eprod[i];
     if (I.opMap[i] > 0) cieloCampo.opPos++;
+    if (I.opProdMap[i] > 0) cieloCampo.opPosProd++;
   }
   var cieloRes = { px: cieloCampo.px,
     fracOpPos: cieloCampo.px ? cieloCampo.opPos / cieloCampo.px : 0,
-    nivelMedio: cieloCampo.px ? cieloCampo.sumaE / cieloCampo.px : 0 };
+    fracOpPosProd: cieloCampo.px ? cieloCampo.opPosProd / cieloCampo.px : 0,
+    nivelMedio: cieloCampo.px ? cieloCampo.sumaE / cieloCampo.px : 0,
+    nivelMedioProd: cieloCampo.px ? cieloCampo.sumaEProd / cieloCampo.px : 0 };
 
-  /* ── perfil radial exterior: anillos elípticos dEsc 1,0–2,0 paso 0,1 ── */
+  /* ── anillos elípticos 1,0–2,0, Δmag interno variante vs producción ── */
   var anillos = [];
   for (var rA = 0; rA < 10; rA++) {
-    var lo = 1 + rA * 0.1, hi = lo + 0.1, suma = 0, cnt = 0, sumaE2 = 0;
+    var lo = 1 + rA * 0.1, hi = lo + 0.1, suma = 0, sumaB = 0, cnt2 = 0;
     for (i = 0; i < n; i++) {
       if (!(dEsc[i] >= lo && dEsc[i] < hi)) continue;
       if (!(I.fx[i] >= 0 && I.fx[i] < W && I.fy[i] >= 0 && I.fy[i] < H)) continue;
-      suma += I.fPost[i]; sumaE2 += E[i]; cnt++;
+      suma += I.fPost[i]; sumaB += I.fPostProd[i]; cnt2++;
     }
-    anillos.push({ dLo: +lo.toFixed(1), dHi: +hi.toFixed(1), px: cnt,
-      fMedio: cnt ? suma / cnt : 0, nivelMedio: cnt ? sumaE2 / cnt : 0 });
+    anillos.push({ dLo: +lo.toFixed(1), dHi: +hi.toFixed(1), px: cnt2,
+      fMedio: cnt2 ? suma / cnt2 : 0, fMedioProd: cnt2 ? sumaB / cnt2 : 0,
+      deltaMag: (suma > 0 && sumaB > 0) ? -2.5 * Math.log10(suma / sumaB) : (suma === sumaB ? 0 : null) });
   }
 
-  /* ── resultado y comparación con el baseline s25 ── */
+  /* RMS del nivel contra la producción interna */
+  var rms = 0;
+  for (i = 0; i < n; i++) { var dR = E[i] - Eprod[i]; rms += dR * dR; }
+  rms = Math.sqrt(rms / n);
+
   var res = {
-    obj: OBJ, etiqueta: ETIQ, escalas: ESCALAS, rads: rads, multi: !!MULTI,
-    cfg: CFG, fecha: '2026-08-15',
+    obj: OBJ, etiqueta: ETIQ, variante: VARIANTE, escalas: ESCALAS, rads: rads,
+    percentil: VARIANTE === 'E1' ? PCT : null,
+    decaimiento: VARIANTE === 'E2' ? DECAI : null,
+    alcance: VARIANTE === 'E2' ? ALCANCE : null,
+    calientes: posCalientes, cfg: CFG, fecha: '2026-08-15',
     flags: { opacidadInternaEscena: PS1.opacidadInternaEscena,
              confianzaLocalNaN: PS1.confianzaLocalNaN, mezclaCajaAs: PS1.mezclaCajaAs,
              deltaMin: PS1.deltaMin, deltaPlena: PS1.deltaPlena, deltaExp: PS1.deltaExp },
     parche: { ancho: W, alto: H, escalaAs: F.escalaAs, escParche: escParche,
               cielo: cieloP, sigma: sigmaP },
     ctx: { SBe: c.SBe, umbralSB: umbral, nivelFondo: c.nivelFondo, Cmin: c.Cmin },
-    thetaR: { aparenteArcmin: thetaRmin, intrinsecoArcsec: sopFisico },
+    thetaR: { aparenteArcmin: thetaRmin, intrinsecoArcsec: thetaRmin * 60 / CFG.M },
     shaFotometriaPre: shaPre,
-    msSoporte: +msSoporte.toFixed(1),
+    msSoporte: +msSoporte.toFixed(1), msComponente: +msComp.toFixed(1),
+    verifChamfer: verifChamfer,
+    borrados: I.borrados,
     clasificacion: cuenta, soloRampa: soloRampa,
-    rois: resumenRois, cieloCampo: cieloRes, anillos: anillos
+    clasificacionProd: cuentaProd,
+    rois: resumenRois, cieloCampo: cieloRes, anillos: anillos,
+    rmsNivelVsProd: +rms.toFixed(4)
   };
 
   var BASE_JSON = path.join(OUT, 'barrido_' + OBJ + '_s' + PS1.mezclaCajaAs + '.json');
   var E_BIN = path.join(OUT, 'E_s' + PS1.mezclaCajaAs + '.bin');
   if (ES_BASE) {
     fs.writeFileSync(E_BIN, Buffer.from(E.buffer, E.byteOffset, E.byteLength));
-    /* debe reproducir la Fase 1 (mismo pipeline, mismas reglas) */
     if (fs.existsSync(BASE_F1)) {
       var f1 = JSON.parse(fs.readFileSync(BASE_F1, 'utf8'));
       exige(f1.clasificacion.negros === cuenta.negros &&
@@ -487,41 +772,18 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
         'reproduce el baseline de Fase 1 (negros=' + cuenta.negros + ' vs ' +
         f1.clasificacion.negros + ', b=' + cuenta.b + ' vs ' + f1.clasificacion.b + ')');
     }
-  } else if (fs.existsSync(BASE_JSON)) {
+  } else if (fs.existsSync(BASE_JSON) && !CALIENTES) {
     var b0 = JSON.parse(fs.readFileSync(BASE_JSON, 'utf8'));
     exige(b0.shaFotometriaPre === shaPre,
       'fotometría pre-opacidad bit a bit idéntica al baseline');
-    exige(b0.cfg.D === CFG.D && b0.cfg.M === CFG.M && b0.cfg.sqm === CFG.sqm,
-      'misma configuración que el baseline');
-    /* deltas contra baseline */
-    var Eb = new Float32Array(fs.readFileSync(E_BIN).buffer.slice(0));
-    var rms = 0, nium = 0;
-    for (i = 0; i < n; i++) { var d2 = E[i] - Eb[i]; rms += d2 * d2; nium++; }
-    res.rmsNivelVsBase = Math.sqrt(rms / nium);
-    res.anillosDeltaMag = anillos.map(function (an, k2) {
-      var fb = b0.anillos[k2].fMedio;
-      return { dLo: an.dLo, dHi: an.dHi,
-        deltaMag: an.fMedio > 0 && fb > 0 ? -2.5 * Math.log10(an.fMedio / fb)
-                : (an.fMedio === fb ? 0 : null),
-        fMedio: an.fMedio, fMedioBase: fb };
-    });
-    res.cieloDeltaFracOpPos = cieloRes.fracOpPos - b0.cieloCampo.fracOpPos;
-    res.cieloDeltaNivel = cieloRes.nivelMedio - b0.cieloCampo.nivelMedio;
-    /* PNG de diferencia: rojo = más brillante que el baseline, azul = más oscuro */
-    var rgbD = new Uint8Array(n * 3);
-    for (i = 0; i < n; i++) {
-      var dd = E[i] - Eb[i], g0 = grisA(Eb[i] * 0.35);
-      rgbD[i * 3] = grisA(g0 + Math.max(0, dd) * 8);
-      rgbD[i * 3 + 1] = g0;
-      rgbD[i * 3 + 2] = grisA(g0 + Math.max(0, -dd) * 8);
-    }
-    png('diff_' + ETIQ, rgbD, SIZE, SIZE);
+    exige(b0.clasificacion.negros === cuentaProd.negros,
+      'producción interna = baseline s25 (negros ' + cuentaProd.negros + ' vs ' + b0.clasificacion.negros + ')');
   }
 
   fs.writeFileSync(path.join(OUT, 'barrido_' + OBJ + '_' + ETIQ + '.json'),
     JSON.stringify(res, null, 1));
 
-  /* PNGs de la escala */
+  /* PNGs */
   var rgbE = new Uint8Array(n * 3);
   for (i = 0; i < n; i++) { var g1 = grisA(E[i]); rgbE[i * 3] = rgbE[i * 3 + 1] = rgbE[i * 3 + 2] = g1; }
   png('render_E_' + ETIQ, rgbE, SIZE, SIZE);
@@ -533,21 +795,43 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
     rgbC[i * 3] = col[0]; rgbC[i * 3 + 1] = col[1]; rgbC[i * 3 + 2] = col[2];
   }
   png('clases_' + ETIQ, rgbC, SIZE, SIZE);
-
-  /* resumen en consola */
-  console.log('  θR(SBe=' + c.SBe.toFixed(2) + ') = ' + thetaRmin.toFixed(1) +
-    '′ aparentes → ' + sopFisico.toFixed(1) + '″ intrínsecos (α=1)');
-  console.log('  negros=' + cuenta.negros + '  b=' + cuenta.b + '  soloRampa=' + soloRampa);
-  if (resumenRois.length) {
-    resumenRois.forEach(function (r5) {
-      console.log('  ' + r5.nombre + ' (' + r5.tipo + '): negros=' + r5.negros +
-        ' (b=' + r5.negrosB + ', frac=' + r5.fracNegros.toFixed(3) + ')  op med=' +
-        r5.op.mediana.toFixed(3) + ' p90=' + r5.op.p90.toFixed(3));
-    });
+  if (VARIANTE) {
+    var rgbD = new Uint8Array(n * 3);
+    for (i = 0; i < n; i++) {
+      var dd = E[i] - Eprod[i], g0 = grisA(Eprod[i] * 0.35);
+      rgbD[i * 3] = grisA(g0 + Math.max(0, dd) * 8);
+      rgbD[i * 3 + 1] = g0;
+      rgbD[i * 3 + 2] = grisA(g0 + Math.max(0, -dd) * 8);
+    }
+    png('diff_' + ETIQ, rgbD, SIZE, SIZE);
+    var rgbK = new Uint8Array(n * 3);   // componente aislada (sin el max)
+    for (i = 0; i < n; i++) {
+      var vK = I.compMap[i];
+      rgbK[i * 3] = grisA(vK * 255); rgbK[i * 3 + 1] = grisA(vK * 255); rgbK[i * 3 + 2] = grisA(vK * 128);
+    }
+    png('comp_' + ETIQ, rgbK, SIZE, SIZE);
   }
+
+  console.log('  negros=' + cuenta.negros + ' (prod ' + cuentaProd.negros + ')  b=' + cuenta.b +
+    ' (prod ' + cuentaProd.b + ')  soloRampa=' + soloRampa + '  borrados=' + I.borrados);
+  resumenRois.forEach(function (r5) {
+    if (r5.tipo === 'fuente') {
+      console.log('  ' + r5.nombre + ' (fuente): Δmag anillo=' +
+        (r5.deltaMagAnillo == null ? 'null' : r5.deltaMagAnillo.toFixed(4)) +
+        '  Δop medio=' + r5.deltaOpMedio.toFixed(4) + '  px=' + r5.px);
+    } else {
+      console.log('  ' + r5.nombre + ' (' + r5.tipo + '): negros=' + r5.negros +
+        ' (b=' + r5.negrosB + ', frac=' + r5.fracNegros.toFixed(3) + '; prod b=' + r5.negrosBProd +
+        ')  op med=' + r5.op.mediana.toFixed(3));
+    }
+  });
   console.log('  cieloCampo: fracOp>0=' + cieloRes.fracOpPos.toFixed(4) +
-    '  nivel=' + cieloRes.nivelMedio.toFixed(3));
-  if (res.rmsNivelVsBase != null) console.log('  RMS nivel vs s25: ' + res.rmsNivelVsBase.toFixed(3));
+    ' (prod ' + cieloRes.fracOpPosProd.toFixed(4) + ')  nivel=' + cieloRes.nivelMedio.toFixed(3) +
+    ' (prod ' + cieloRes.nivelMedioProd.toFixed(3) + ')');
+  var dmMax = Math.max.apply(null, anillos.filter(function (an) { return an.dLo >= 1.2; })
+    .map(function (an) { return an.deltaMag == null ? 99 : Math.abs(an.deltaMag); }));
+  console.log('  anillos 1,2–2,0 |Δmag|max=' + (dmMax === 99 ? 'null' : dmMax.toFixed(4)) +
+    '  RMS vs prod=' + rms.toFixed(3));
   console.log('  JSON: barrido_' + OBJ + '_' + ETIQ + '.json');
   process.exit(fallos ? 1 : 0);
 }).catch(function (e) { console.error(e); process.exit(2); });

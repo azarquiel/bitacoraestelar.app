@@ -1,0 +1,7 @@
+{
+  "nota": "Fase 3 — ROIs de fuente compacta de M101, CONGELADAS. Colocación con una única iteración (15-ago-2026): buscador de máximos locales 9×9 sobre el parche anclado (pre-PSF), umbral p99,5 de los finitos positivos, fondo local = mediana del anillo 10–14 px, radio de media luz ≤1 px, aislamiento >60 px del candidato más brillante. Se eligieron las dos HII más brillantes EMBEBIDAS en el disco (fondo local > 0) y lejos del núcleo (>170 px). radioPx=4 cubre la fuente tras la PSF (seeing 2″ ≈ 1,7 px); el anillo de la métrica 8 es 1,5–3× radio (6–12 px). Coordenadas en px del parche 1024².",
+  "cajas": [
+    { "nombre": "HII-A", "tipo": "fuente", "cx": 361, "cy": 635, "radioPx": 4 },
+    { "nombre": "HII-B", "tipo": "fuente", "cx": 677, "cy": 573, "radioPx": 4 }
+  ]
+}
