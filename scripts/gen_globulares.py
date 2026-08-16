@@ -37,8 +37,15 @@ FUENTE = ('W. E. Harris (1996), revisión 2010 · McMaster University · '
 # las columnas, y el indicador de núcleo colapsado ('c' o 'c:') se cuela entre la
 # concentración y r_c.
 COLS_P3 = {'id': (0, 13), 'c': (48, 58), 'r_c': (58, 64), 'r_h': (64, 70), 'mu_V': (70, 78)}
-# Parte I: identificación y posición.
-COLS_P1 = {'id': (0, 12), 'nombre': (12, 24), 'ra': (24, 37), 'dec': (37, 51)}
+# Parte I: identificación, posición y distancia al Sol.
+COLS_P1 = {'id': (0, 12), 'nombre': (12, 24), 'ra': (24, 37), 'dec': (37, 51),
+           'd_kpc': (67, 74)}
+# Parte II: metalicidad, enrojecimiento, magnitud integrada y elipticidad. La
+# elipticidad viene de White & Shawl (1987), recogida por Harris; el ÁNGULO DE
+# POSICIÓN no está en este catálogo, así que el perfil se evalúa en radio
+# circular hasta que haya de dónde sacarlo (queda como campo nulo, no inventado).
+COLS_P2 = {'id': (0, 12), 'feh': (12, 19), 'ebv': (22, 29), 'V_t': (41, 47),
+           'ellip': (84, 91)}
 
 
 def bloque(lineas, arranque):
@@ -92,6 +99,19 @@ def main():
             'nombre': campo(linea, COLS_P1, 'nombre'),
             'ra': sex_a_grados(campo(linea, COLS_P1, 'ra'), True),
             'dec': sex_a_grados(campo(linea, COLS_P1, 'dec'), False),
+            'd_kpc': numero(campo(linea, COLS_P1, 'd_kpc')),
+        }
+
+    fotometria = {}
+    for linea in bloque(lineas, 'ID       [Fe/H]'):
+        ident = campo(linea, COLS_P2, 'id')
+        if not ident:
+            continue
+        fotometria[ident] = {
+            'feh': numero(campo(linea, COLS_P2, 'feh')),
+            'ebv': numero(campo(linea, COLS_P2, 'ebv')),
+            'V_t': numero(campo(linea, COLS_P2, 'V_t')),
+            'ellip': numero(campo(linea, COLS_P2, 'ellip')),
         }
 
     filas = []
@@ -109,6 +129,7 @@ def main():
         if c is None or r_c is None or mu_v is None or r_c <= 0:
             sin_estructura += 1
             continue
+        fot = fotometria.get(ident, {})
         filas.append({
             'id': ident,
             'nombre': pos['nombre'],
@@ -118,6 +139,14 @@ def main():
             'rh_arcmin': numero(campo(linea, COLS_P3, 'r_h')),
             'concentracion': c,
             'mu_v_central': mu_v,
+            # Los cinco de la población (Capa 1): sin V_t no hay flujo total que
+            # repartir, así que el módulo se abstiene y el cúmulo se queda solo
+            # con sus estrellas de Gaia.
+            'v_total': fot.get('V_t'),
+            'd_kpc': pos['d_kpc'],
+            'ebv': fot.get('ebv'),
+            'feh': fot.get('feh'),
+            'elipticidad': fot.get('ellip'),
         })
 
     filas.sort(key=lambda f: f['ra_grados'])
@@ -131,14 +160,26 @@ def main():
         fh.write('/* Cúmulos globulares — GENERADO, no editar a mano.\n')
         fh.write('   Regenerar con: python3 scripts/gen_globulares.py\n')
         fh.write('   Fuente: %s\n' % FUENTE)
-        fh.write('   Campos: [id, nombre, RA°, Dec°, r_c(\'), r_h(\'), c=log(r_t/r_c), mu_V(0)]\n')
-        fh.write('   mu_V(0) es el brillo superficial central en V, mag/arcsec². */\n')
+        fh.write('   Campos: [id, nombre, RA°, Dec°, r_c(\'), r_h(\'), c=log(r_t/r_c), mu_V(0),\n')
+        fh.write('            V_t, d(kpc), E(B-V), [Fe/H], elipticidad]\n')
+        fh.write('   mu_V(0) es el brillo superficial central en V, mag/arcsec².\n')
+        fh.write('   V_t, d, E(B-V) y [Fe/H] son la entrada de la población (Capa 1):\n')
+        fh.write('   V_t fija el flujo total, d y E(B-V) el módulo de distancia aparente y\n')
+        fh.write('   [Fe/H] cuál de las tres funciones de luminosidad se interpola.\n')
+        fh.write('   La elipticidad es de White & Shawl (1987); Harris no trae su ángulo de\n')
+        fh.write('   posición, así que el perfil se evalúa en radio circular. */\n')
         fh.write('window.BITACORA_GLOBULARES = [\n')
+
+        def num(v):
+            return 'null' if v is None else ('%g' % v)
+
         for f in filas:
-            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s],\n' % (
+            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s],\n' % (
                 f['id'], f['nombre'].replace('"', ''), f['ra_grados'], f['dec_grados'],
-                f['rc_arcmin'], f['rh_arcmin'] if f['rh_arcmin'] is not None else 'null',
-                f['concentracion'], f['mu_v_central']))
+                f['rc_arcmin'], num(f['rh_arcmin']),
+                f['concentracion'], f['mu_v_central'],
+                num(f['v_total']), num(f['d_kpc']), num(f['ebv']), num(f['feh']),
+                num(f['elipticidad'])))
         fh.write('];\n')
 
     print('globulares con perfil completo: %d  (descartados por falta de datos: %d)'

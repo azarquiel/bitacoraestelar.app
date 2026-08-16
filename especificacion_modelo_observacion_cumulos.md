@@ -485,6 +485,15 @@ preexistentes de `test_difuso.js` y no se vuelve a mencionar salvo que el númer
 
 **Fusión a `main` solo al terminar la Fase 2**: es la primera que devuelve un cúmulo con halo.
 
+**Estado y desviaciones registradas** (lección 9):
+
+- **Fase 0 — hecha.** La paridad píxel a píxel no se puede medir en node (`capaEstrellas` necesita un `<canvas>` real); en su lugar el test comprueba que el render no exporta el halo ni lee el flag `globular`, con lo que la paridad es exacta por construcción.
+- **Fase 1 — hecha.** Cuatro desviaciones:
+  1. Las LF viven en `resources/js/lf-globulares-datos.js` (fichero generado, cargado por `<script>`), no como literal dentro del módulo: mismo efecto —sin `fetch`— y la misma convención que el resto de catálogos del repo.
+  2. La LF llega hasta el final de la isócrona (`M_V ≈ +16`) en vez de cortar en `+9`: cortar tiraría el 1,6-1,9 % del flujo, que es justo lo que la conservación echaría de menos.
+  3. Harris trae la elipticidad (White & Shawl) pero **no** el ángulo de posición: `radioPropio` lo admite, y sin él evalúa en radio circular. No se inventa una orientación.
+  4. La puerta de conservación tiene dos mitades. La **interna** (`resuelto + campo = F(V_t)` para todo `m_lim`) cierra a 1e-16, muy por debajo del ±10 % pedido. La **externa** contrasta el `μ_V(0)` que predice el modelo con el medido por Harris: mediana **−0,137 mag** en los 113 cúmulos con `c < 2`, y −1,52 mag en los 30 con `c ≥ 2`, que son los de núcleo colapsado —King no los describe, y son la extensión opcional de la Fase 4—. El residuo se registra por cúmulo y no se corrige tocando el flujo (ADR 0003).
+
 **Tests:** de `scripts/test_globulares.js` sobreviven las secciones 1 y 2 (forma del perfil y
 `areaKing` cerrada vs numérica: el perfil sigue siendo la PDF radial); el resto se borra con la
 Fase 0. Lo nuevo va a `scripts/test_cumulos.js`.
