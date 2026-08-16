@@ -966,9 +966,21 @@
      Ojo: la ventana del simulador deja de crecer a partir de AFOV_REF (110°), así
      que por encima de ese campo aparente la compensación ya no es exacta. Es un
      límite de la página, no de esta ley. */
-  function escalaEstrellas(afov) {
+  /* El segundo factor es la RESOLUCIÓN del lienzo: los tamaños "artísticos"
+     (suelo de visibilidad, glow, aureola, spikes) están en píxeles calibrados
+     al lienzo de TAM_LIENZO_MIN, pero el lienzo se enseña siempre al mismo
+     diámetro en pantalla, así que a pantalla completa (1200/1440 px) esos
+     píxeles valen menos ángulo. Sin este factor las estrellas salían más
+     pequeñas Y más apagadas —el término físico de radioEstrella sí va en
+     píxeles de lienzo, así que factorDilucion hundía el alfa de pico—.
+
+     Solo AMPLÍA: tamLienzo nunca baja de TAM_LIENZO_MIN, así que por debajo de
+     esa cifra no hay caso real que compensar —y encogerlo cambiaría el dibujo
+     de los lienzos pequeños que usan los tests y los sprites—. */
+  function escalaLienzo(size) { return (size > 0) ? Math.max(1, size / TAM_LIENZO_MIN) : 1; }
+  function escalaEstrellas(afov, size) {
     var a = (afov > 0) ? afov : CFG.escalaMagAfov;
-    return CFG.escalaMagAfov / a;
+    return CFG.escalaMagAfov / a * escalaLienzo(size);
   }
 
   /* ── Par de una doble: completar lo que Gaia DR3 no trae ─────────────────────
@@ -1113,11 +1125,11 @@
     var factorApertura = Math.pow(D / CFG.aureolaAperturaRef, 2);
     var flujoRel = (o.g != null) ? factorApertura * Math.pow(10, -0.4 * o.g) : 0;
     var sueloBase = Math.min(CFG.radioSueloMax, CFG.radioSuelo + CFG.radioSueloMag * Math.pow(flujoRel, CFG.radioSueloExp));
-    var suelo = sueloBase * (1 + blur) * escalaEstrellas(o.afov);
+    var suelo = sueloBase * (1 + blur) * escalaEstrellas(o.afov, o.size);
     var sep = +o.sep, arcmin = +o.arcmin, size = +o.size;
     if (sep > 0 && arcmin > 0 && size > 0) {
       var sepPx = sep * size / (arcmin * 60);                           // ″ → px de lienzo
-      suelo = Math.min(suelo, Math.max(CFG.radioSueloMin, sepPx * CFG.margenSuelo));
+      suelo = Math.min(suelo, Math.max(CFG.radioSueloMin * escalaLienzo(size), sepPx * CFG.margenSuelo));
     }
     return suelo;
   }
@@ -3130,7 +3142,7 @@
     // una segunda pasada atenuada que rescate los núcleos recortados.
     ganActual = (o.ganancia > 0) ? o.ganancia : 1;
     // Tamaños APARENTES: van con el campo aparente del ocular, no con el real.
-    var escala = escalaEstrellas(o.afov);
+    var escala = escalaEstrellas(o.afov, SIZE);
     // El glow de las que no llegan a la magnitud límite se queda en el suelo
     // aparente: representa estrellas que NO se resuelven, así que darles el tamaño
     // físico de una resuelta sería contarlas dos veces.
