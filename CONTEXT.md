@@ -225,3 +225,22 @@ Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (1500 al) del Sol
 - **Tránsito con histéresis:** `fundidoVecindario(fov, cerca, dentro, cfg)` (mismo módulo puro) decide la opacidad de la capa. Para ENTRAR hacen falta Sol centrado y campo bajo `fovFinalAl`; una vez dentro, la escena se mantiene opaca hasta `fovSalidaAl` aunque el Sol se descentre, y el tope de zoom sigue elevado. Sin esa memoria, hacer zoom descentraba el Sol, la capa se apagaba de golpe y la galaxia (ya gigante) se mezclaba con la escena.
 - **El campo manda sobre la distancia:** `fovFinalAl` debe ser ≳ 0,84 × `distMaxAl`, o la escena se vuelve opaca con las estrellas más lejanas ya fuera de cuadro.
 - **Requisito de datos:** sin objetos a ≤ 1500 al, la escena avisa "aún no hay estrellas cercanas registradas" en vez de quedar muda con solo el Sol. Un botón del admin completa el `bp_rp` de los objetos cercanos ya registrados.
+
+## Cadena fotométrica
+
+Ley única con la que TODOS los motores del render deciden qué se ve: convierte el cielo de la sesión y la óptica en flujo de fondo, umbral de contraste y nivel de gris, y nada aguas abajo vuelve a aplicar la pupila de salida.
+
+- **Umbral de contraste:** el contraste mínimo que un objeto extenso necesita para ser detectado. Depende de la luminancia que llega al ojo (vía pupila de salida y transmisión) y del **tamaño aparente** del objeto, que es por donde entran los aumentos.
+- **H2c** es la ley vigente de ese umbral: área de Ricco con el seeing en cuadratura, **calibrada contra 12 observaciones visuales reales**. Es la capa de visión humana del proyecto entero, y está congelada: si un objeto no cuadra, el sospechoso es su modelo, no la ley. La ley histórica `C_MAG` sobrevive solo como regresión.
+- **Es de detección, no de estructura.** Dice qué partes superan el umbral; no dice qué detalle se separa. Esa es otra ley y no deben mezclarse.
+
+## Modelo de observación de cúmulos
+
+Cadena que responde «¿qué distribución de estrellas produciría esta imagen tras pasar por este telescopio, esta atmósfera y este ojo?» para un cúmulo globular. Cinco capas —población estelar, resolución, imagen óptica, sistema visual, display—, cada una sin leer parámetros de las posteriores. Sustituye al **halo de King continuo**, que pintaba el perfil como mapa de iluminación y producía un disco difuso con borde.
+
+- **Población estelar:** qué estrellas existen. Gaia es una **observación parcial** del cúmulo, no el cúmulo: la LF tabulada, la distancia y el enrojecimiento dicen qué hay además, y la **completitud** `f_compl(m, r)` cose las dos sin escalón. El perfil de King es la **PDF radial** por defecto, no un mapa de brillo.
+- **Campo estadístico (SBF):** la luz de las estrellas que el sistema NO separa, tratada como media más fluctuación en vez de como estrellas dibujadas. Su brillo sale de `S1(m_lim)` (primer momento de la LF en flujo) y su granulado de `S2(m_lim)` (segundo momento). El contraste del grano es consecuencia de la LF, nunca un parámetro. _Evitar_: paquete, halo, textura.
+- **Frontera de resolución `m_res(r)`:** magnitud a la que una estrella deja de distinguirse como punto, **función del radio**: la misma estrella de m=16 puede ser resuelta a 8′ del centro y no resuelta a 0,5′. Es el mínimo entre el límite por confusión (`m_crowd`, geometría y conteos) y el límite por detección sobre el fondo local (`m_lim,sky`, que incluye el propio velo del cúmulo). _Evitar_: `magMin`, magnitud límite del cúmulo.
+- **Banda de transición:** franja `m_res(r) ± Δ` donde la detección es probabilística. Esas estrellas se dibujan individualmente pero atenuadas, con la misma sigmoide de la [[cadena fotométrica]]; expresa «estrella parcialmente confundida» sin código especial.
+- **Realización:** una muestra concreta de la población sintética, fijada por `seed = hash(cúmulo, versión de LF, realización)`. Cambiar telescopio, ocular, cielo o campo **no** cambia la realización: las mismas estrellas se ven mejor o peor. Dos realizaciones del mismo cúmulo son estadísticamente equivalentes y visualmente distintas.
+- **Máscara difusa:** marca por píxel que dice «esta luz ya pasó su propio umbral de contraste, no se lo apliques otra vez», y de paso lleva el parámetro con que se realza. La escribe cada capa difusa que trae su propia ley (la de galaxias PS1 y la de cúmulos). Sin ella, dos umbrales sobre el mismo píxel lo dejan a nivel de cielo. _Evitar_: `galaxiaMask` (nombre antiguo, solo cubría una de las capas).
