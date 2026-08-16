@@ -74,7 +74,7 @@
       // Cúmulos globulares: catálogo de Harris (1996, rev. 2010), cargado desde
       // globulares-datos.js (window.BITACORA_GLOBULARES). r_h del catálogo es
       // radio de MEDIA LUZ, no de marea: r_tidal sale de r_c·10^c (ver
-      // BitacoraGaiaRender.haloGlobular).
+      // perfilKing en bitacora-gaia-render.js).
       var CATALOGO_GLOBULARES = (window.BITACORA_GLOBULARES || []).map(function (e) {
         var rc = e[4], c = e[6];
         return {
@@ -588,18 +588,7 @@
         // el cielo más brillante, el límite baja y las débiles DESAPARECEN,
         // igual que en el DSS. dibujarGaia solo pinta estrellas con Gmag <= mlim.
         var mlim = magLimiteTelescopio();
-        // Consulta aparte, a profundidad y radio FIJOS (el del cúmulo, no el
-        // campo actual), para la resta de P4: cuánta luz ya está en estrellas
-        // catalogadas es del cúmulo, no de con qué telescopio se mira esta
-        // noche -si dependiera de la consulta principal (que sí varía con el
-        // equipo), cambiar de telescopio podía apagar el halo de golpe-. Si
-        // falla, sigue sin halo en vez de tirar todo el render a DSS.
-        var haloQuery = objetoSel.globular
-          ? BitacoraGaiaRender.consultar(ra0, dec0, Math.max(objetoSel.rTidal * 2.2, 10),
-              BitacoraGaiaRender.config.globular.magResta).catch(function () { return []; })
-          : Promise.resolve([]);
-        Promise.all([consultarGaia(ra0, dec0, arcmin, true), haloQuery]).then(function (res) {
-          var estrellas = res[0], estrellasHalo = res[1];
+        consultarGaia(ra0, dec0, arcmin, true).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
           /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
@@ -626,16 +615,9 @@
                 pa: objetoSel.pa, spect1: objetoSel.spect1, spect2: objetoSel.spect2
               })
             : estrellas;
-          // Halo no resuelto del cúmulo globular (perfil de King): se suma al
-          // fondo difuso y amortigua la aureola/blur de las estrellas que caen
-          // dentro (ver perfilKing/haloGlobular en bitacora-gaia-render.js).
-          // Solo en canvas-2d: la superposición de Gaia sobre DSS no lo lleva.
-          var halo = objetoSel.globular
-            ? BitacoraGaiaRender.haloGlobular(
-                { rc: objetoSel.rCore, rt: objetoSel.rTidal, muV0: objetoSel.muV0 },
-                estrellasHalo, ra0, dec0, datosOcular().aumentos)
-            : null;
-          if (halo) BitacoraGaiaRender.pintarHaloGlobular(difuso, halo, { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
+          // Los cúmulos globulares no llevan capa difusa: el halo de King
+          // continuo se retiró (Fase 0 del modelo de observación de cúmulos) y
+          // lo sustituirá el campo estadístico de bitacora-cumulos.js.
           var opEst = {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
@@ -646,8 +628,7 @@
             // otro campo.
             sep: objetoSel.doble ? objetoSel.sep : null,
             conGlow: true, carbono: !!objetoSel.carbono,
-            carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana(),
-            globular: halo
+            carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana()
           };
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, opEst, PROC);
           var cieloGaia = cieloOptica(datosOcular().pupila);

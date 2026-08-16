@@ -304,15 +304,6 @@ ok(comprimeSiempre, 'el exceso de la estrella (' + excesos.map(function (x) { re
   ') decrece según crece el difuso local (halo del cúmulo), nunca se mantiene fijo ni crece');
 ok(excesos[0] === vEstrella, 'sin difuso de fondo, el exceso es exactamente el valor propio de la estrella');
 
-console.log('Fresuelto de haloGlobular resta en agregado, no por píxel (aproximación documentada, no bug):');
-var M13test = { rc: 0.62, rt: 0.62 * Math.pow(10, 1.87), muV0: 15.6 };
-var estrellaBrillante = [[250, 36, 8]];   // ra, dec = centro exacto del cúmulo; g=8, muy brillante
-var haloSinResta = R.haloGlobular(M13test, [], 250, 36);
-var haloConResta = R.haloGlobular(M13test, estrellaBrillante, 250, 36);
-ok(haloConResta.Fcentral < haloSinResta.Fcentral,
-  'una estrella resuelta muy brillante en el centro SÍ reduce el Fcentral del halo (resta agregada, ' +
-  haloSinResta.Fcentral.toExponential(2) + ' → ' + haloConResta.Fcentral.toExponential(2) + ')');
-
 /* ── 16. El cruce resuelta/glow en g=mlim es continuo ───────────────────────
    Bug real (el que seguía viéndose tras el fix de Fref): la rama resuelta
    tenía un SUELO alfaMin y la rama de glow (no resuelta) arrancaba en

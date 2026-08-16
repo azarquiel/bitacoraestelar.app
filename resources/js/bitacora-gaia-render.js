@@ -726,21 +726,6 @@
     spikes: {
       magMax: 10, rango: 5, brazos: 4, angulo: 0,
       longMag: 10, longMax: 180, grosor: 3, lobulos: 2, intensidad: 0.8
-    },
-    // Halo de cúmulo globular (perfil de King). rangoMag: magnitudes de margen
-    // en la comparación mu(r) vs. magnitud de la estrella (dm) que abarca toda
-    // la transición de "sin amortiguar" a "forzada a puntual" (ver dibujar/tPin).
-    // magResta: profundidad FIJA (independiente del equipo) para la consulta
-    // que alimenta la resta de P4 (ver haloGlobular). restaMaxFrac: tope a la
-    // fracción del flujo total que esa resta puede quitar, para que el halo
-    // nunca llegue a apagarse del todo.
-    globular: {
-      rangoMag: 3, magResta: 17, restaMaxFrac: 0.85,
-      // gamma(M) = 1 + gammaA·(M/gammaRef)^gammaExp, tope en gammaMax (ver
-      // gammaHalo). Valores iniciales: gamma≈1.33 a 100x, ≈1.67 a 200x,
-      // ≈2.0 a 300x -ajustar gammaA/gammaRef si el halo aún cierra poco o
-      // mucho a los aumentos reales que uses-.
-      gammaA: 0.5, gammaRef: 150, gammaExp: 1, gammaMax: 4
     }
   };
 
@@ -1184,19 +1169,11 @@
     var sat = 1 + (GColor.config.saturacion - 1) * f;
     return GColor.colorPorBpRp(v, sat);
   }
-  function dibujarEstrellaColor(ctx, x, y, Rtot, rgb, blur, puntual, esCarbono) {
+  function dibujarEstrellaColor(ctx, x, y, Rtot, rgb, blur, esCarbono) {
     var tn = esCarbono ? CFG.tinteNucleoCarbono : CFG.tinteNucleo, col = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
     var centro = Math.round(255 + tn * (rgb[0] - 255)) + ',' + Math.round(255 + tn * (rgb[1] - 255)) + ',' + Math.round(255 + tn * (rgb[2] - 255));
-    /* puntual: estrella resuelta dentro del radio de núcleo de un globular
-       (ver tPin en dibujar()). Ni con blurMin el degradado normal llega a
-       borde 100% duro -dCore=1/(1+blurMin)² sigue dejando ~1/4 del radio con
-       una cola de alfa suave-, y el pedido es CERO rastro de halo ahí: disco
-       plano de un color, sin gradiente ni caída. */
-    if (puntual) {
-      ctx.fillStyle = 'rgba(' + centro + ',1)';
-      ctx.beginPath(); ctx.arc(x, y, Rtot, 0, 7); ctx.fill();
-      return;
-    }
+    /* Aquí había una rama `puntual` (disco plano sin gradiente) que solo usaba
+       la amortiguación del halo de globular, eliminada en la Fase 0. */
     /* dCore al cuadrado, no lineal: con 1/(1+blur) el disco denso (alfa
        0,6-0,9) llegaba a ocupar HALF el radio en una estrella brillante
        (dCore≈0,5) -se veía como un disco "quemado" tipo foto de larga
@@ -1223,11 +1200,20 @@
      sprite blanco de spriteGlow(), pero con el rgb real-. Solo la dibujan las
      pocas estrellas con aAur apreciable (ver dibujar()), así que un gradiente
      por estrella (en vez de reusar un sprite bitmap) no cuesta nada extra. */
-  /* ═══════════ HALO DE CÚMULO GLOBULAR (perfil de King 1962) ══════════════════
+  /* ═══════════ PERFIL DE KING 1962 (geometría del cúmulo) ═════════════════════
      Σ(r) = I0·[1/√(1+(r/rc)²) − 1/√(1+(rt/rc)²)]², normalizado a 1 en r=0 y a 0
      en r=rt (radio de marea). rc, rt, r en las mismas unidades (aquí, arcsec).
      rt = rc·10^c, con c = concentración de Harris (log10(rt/rc)) — el catálogo
-     NO trae rt directo, su columna r_h es el radio de media luz, otra cosa. */
+     NO trae rt directo, su columna r_h es el radio de media luz, otra cosa.
+
+     ATENCIÓN: esto es la FORMA del cúmulo (su PDF radial y su área), NO un mapa
+     de iluminación. El halo continuo que pintaba este perfil con alpha-blending
+     -haloGlobular, pintarHaloGlobular, gammaHalo y la amortiguación puntual de
+     las estrellas de dentro- se eliminó en la Fase 0 del modelo de observación
+     de cúmulos: producía un disco difuso con borde visible que no se parece a
+     la vista al ocular. Lo sustituye un campo estadístico derivado de la función
+     de luminosidad (ver especificacion_modelo_observacion_cumulos.md y
+     docs/adr/0002). No volver a sumar este perfil a `difuso`. */
   function perfilKing(r, rc, rt) {
     if (!(rc > 0) || !(rt > rc) || r >= rt) return 0;
     var a = 1 / Math.sqrt(1 + (r / rc) * (r / rc));
@@ -1244,89 +1230,6 @@
     var b = 1 / Math.sqrt(1 + k * k);
     var f = Math.log(1 + k * k) - 4 + 4 / Math.sqrt(1 + k * k) + (k * k) / (1 + k * k);
     return Math.PI * f / ((1 - b) * (1 - b));
-  }
-
-  /* Calibra el halo de un cúmulo: brillo superficial central neto (tras restar
-     el flujo de las estrellas de Gaia que ya se van a dibujar dentro de r_tidal
-     -si no, se cuenta esa luz dos veces, núcleo+estrellas- ver notas de diseño).
-     cluster: {rc, rt, muV0} en arcmin/mag·arcsec⁻². estrellas: [ra,dec,g,...][],
-     de una consulta a PROFUNDIDAD FIJA (ver CFG.globular.magResta) -NO la del
-     equipo del visor-: cuánta luz del cúmulo ya está en estrellas catalogadas
-     es una propiedad del cúmulo, no del telescopio con el que se mire esta
-     noche. Si dependiera del equipo, cambiar de telescopio cambiaría la
-     consulta, y con ella Fresuelto, y el halo podía aparecer o desaparecer de
-     golpe sin que el cúmulo hubiera cambiado. Con margen, además, para que la
-     resta nunca llegue a apagar el halo del todo (ver restaMaxFrac). */
-  function haloGlobular(cluster, estrellas, ra0, dec0, aumentos) {
-    var rcAs = cluster.rc * 60, rtAs = cluster.rt * 60;
-    var k = rtAs / rcAs;
-    var areaAs2 = areaKing(k) * rcAs * rcAs;
-    var Ftotal = Math.pow(10, -0.4 * cluster.muV0) * areaAs2;
-    var cos0 = Math.cos(dec0 * Math.PI / 180);
-    var Fresuelto = 0;
-    for (var i = 0; i < estrellas.length; i++) {
-      var dra = (((estrellas[i][0] - ra0 + 540) % 360) - 180) * cos0 * 3600;
-      var ddec = (estrellas[i][1] - dec0) * 3600;
-      if (dra * dra + ddec * ddec <= rtAs * rtAs) Fresuelto += Math.pow(10, -0.4 * estrellas[i][2]);
-    }
-    Fresuelto = Math.min(Fresuelto, Ftotal * CFG.globular.restaMaxFrac);
-    var Fneto = (Ftotal - Fresuelto) / areaAs2;
-    // Nótese: Fneto/areaAs2 se calibran con el perfil SIN modificar (gamma no
-    // entra aquí), así que subir gamma para la cola externa no descuadra el
-    // descuento de estrellas resueltas hecho arriba (ver gammaHalo).
-    return { rcAs: rcAs, rtAs: rtAs, Fcentral: Fneto, gamma: gammaHalo(aumentos) };
-  }
-
-  /* Potencia extra sobre el perfil normalizado (exp>1 hunde solo la cola
-     externa: perfilKing vale 1 en r=0 por construcción, así que ^exp no
-     toca el centro -1^exp=1-, y para r>0 los valores <1 caen más rápido
-     cuanto mayor exp). Dinámica con los aumentos: a más M, más estrellas del
-     halo exterior se resuelven y dejan de aportar luz difusa, así que lo que
-     queda debe decaer más rápido con r. gamma(M)=1+A·(M/Mref)^B tiende a 1
-     sola cuando M→0 (sin necesidad de umbral duro que rompa continuidad),
-     acotada arriba en gammaMax para no vaciar el halo del todo. */
-  function gammaHalo(aumentos) {
-    var g = CFG.globular;
-    if (!(aumentos > 0)) return 1;
-    return Math.min(g.gammaMax, 1 + g.gammaA * Math.pow(aumentos / g.gammaRef, g.gammaExp));
-  }
-
-  function fobjGlobular(halo, rArcsec) {
-    var gamma = (halo.gamma != null) ? halo.gamma : 1;
-    return halo.Fcentral * Math.pow(perfilKing(rArcsec, halo.rcAs, halo.rtAs), gamma);
-  }
-
-  /* Brillo superficial LOCAL del halo (mag/arcsec²), para comparar directamente
-     con la magnitud propia de una estrella (ver amortiguación puntual en
-     dibujar): mu(r) YA está "por arcsec²" por definición, así que compararlo
-     con la magnitud total de una estrella equivale a preguntarse "¿cuánto pesa
-     esta estrella frente a un arcsec² de fondo aquí?" sin ningún factor de
-     conversión de área adicional. */
-  function muGlobular(halo, rArcsec) {
-    var f = fobjGlobular(halo, rArcsec);
-    return f > 0 ? -2.5 * Math.log10(f) : Infinity;
-  }
-
-  /* Suma el velo del cúmulo (en flujo) sobre el array 'difuso' de pintarFot,
-     limitado a su radio de marea en píxeles. o: {ra, dec, arcmin, size} =
-     mismo objeto que ya recibe dibujar(); el cúmulo está siempre centrado
-     (es el objeto que se está observando). */
-  function pintarHaloGlobular(difuso, halo, o) {
-    var SIZE = o.size;
-    var pxPorAs = (SIZE / (o.arcmin / 60)) / 3600;
-    var Rpx = halo.rtAs * pxPorAs;
-    if (Rpx < 0.5) return;
-    var cx = SIZE / 2, cy = SIZE / 2;
-    var x0 = Math.max(0, Math.floor(cx - Rpx)), x1 = Math.min(SIZE - 1, Math.ceil(cx + Rpx));
-    var y0 = Math.max(0, Math.floor(cy - Rpx)), y1 = Math.min(SIZE - 1, Math.ceil(cy + Rpx));
-    for (var y = y0; y <= y1; y++) {
-      for (var x = x0; x <= x1; x++) {
-        var dx = (x - cx) / pxPorAs, dy = (y - cy) / pxPorAs;
-        var rAs = Math.sqrt(dx * dx + dy * dy);
-        if (rAs >= halo.rtAs) continue;
-        difuso[y * SIZE + x] += fobjGlobular(halo, rAs);
-      }
-    }
   }
 
   /* ═══════════ CAPA DE GALAXIAS DESDE IMAGEN REAL (ps1cutouts, STScI) ═══════════
@@ -3156,30 +3059,12 @@
       // al límite: una estrella tenue sale pinpoint da igual lo profundo que
       // llegue el equipo.
       var blurG = blurEstrella(g, o.apertura);
-      // Dentro de un halo de globular, las estrellas resueltas se ven puntuales
-      // pase lo que pase (nunca "difuminadas" por el fondo): amortigua blur y
-      // aureola de forma continua según cuánto domina el King local sobre una
-      // estrella justo en mlim -sin umbral duro, para no repetir los anillos de
-      // implementaciones anteriores (ver perfilKing).
-      if (o.globular) {
-        var rAsPin = Math.sqrt(Math.pow(deltaRA(ra) * cos0 * 3600, 2) + Math.pow((dec - dec0) * 3600, 2));
-        var tPin;
-        if (rAsPin <= o.globular.rcAs) {
-          // Dentro del radio de núcleo: puntual sin excepción, pase lo que
-          // pase con su magnitud -el ojo nunca resuelve halo individual ahí,
-          // solo el brillo difuso del cúmulo (ver captura del usuario,
-          // 2026-08-01)-.
-          tPin = 0;
-        } else {
-          // Fuera del núcleo: la transición suave de siempre (dm > 0: el
-          // fondo es más tenue que la estrella, no amortigua; dm < 0: el
-          // fondo pesa más, la empuja a puntual). rangoMag ancha o estrecha
-          // la transición -es el "k" a ajustar tras ver M13/M92 en el ocular-.
-          var dm = muGlobular(o.globular, rAsPin) - g;
-          tPin = suave(0.5 + dm / (2 * CFG.globular.rangoMag));
-        }
-        blurG = CFG.blurMin + (blurG - CFG.blurMin) * tPin;
-      }
+      /* Aquí vivía la amortiguación puntual de las estrellas de dentro de un
+         globular (comparaba mu(r) del halo de King con la magnitud de la
+         estrella y forzaba blur y aureola a cero en el núcleo). Se eliminó con
+         el halo continuo en la Fase 0: sin halo no hay fondo contra el que
+         comparar. Su papel lo hace la banda de transición del nuevo modelo,
+         que atenúa por magnitud efectiva (docs/adr/0002). */
       // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
       // se aprieta con la apertura) en cuadratura con el suelo de visibilidad.
       var oRadio = { afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE, sep: o.sep, g: g, blur: blurG, mlim: mlim };
@@ -3195,13 +3080,12 @@
       // ('lighter') al disco de color y lo lavaba hacia blanco -justo las
       // estrellas donde más se nota el color real (p. ej. las B/A de M39)-.
       var aAur = alfaAureola(g, o.apertura);
-      if (o.globular) aAur *= tPin;
       if (aAur > 0.004) {
         var Ra = CFG.aureolaRadio * escala;
         dibujarAureola(ctx, x, y, Ra, colEstrella, aAur * ganActual);
       }
       ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual * dilucion;
-      dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG, !!(o.globular && tPin === 0), esCarbono);
+      dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG, esCarbono);
       if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }
     ctx.globalAlpha = 1;
@@ -3401,11 +3285,6 @@
     pintarFot: pintarFot,
     perfilKing: perfilKing,
     areaKing: areaKing,
-    haloGlobular: haloGlobular,
-    gammaHalo: gammaHalo,
-    fobjGlobular: fobjGlobular,
-    muGlobular: muGlobular,
-    pintarHaloGlobular: pintarHaloGlobular,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
     fusionarPlacas: fusionarPlacas,
