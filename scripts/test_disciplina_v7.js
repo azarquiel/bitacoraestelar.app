@@ -120,7 +120,8 @@ var adrs = [
   ['0004', /estétic/i],
   ['0005', /vacu/i],
   ['0006', /perceptual/i],
-  ['0007', /capa/i]
+  ['0007', /capa/i],
+  ['0008', /arn[ée]s/i]
 ];
 var dirAdr = path.join(__dirname, '..', 'docs', 'adr');
 var listado = fs.readdirSync(dirAdr);

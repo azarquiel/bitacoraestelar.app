@@ -19,7 +19,8 @@ var cp = require('child_process');
 var POR_DEFECTO = [
   'test_cumulos.js', 'test_cumulo_render.js', 'test_globulares.js',
   'test_halo_v7_e1.js', 'test_halo_v7_e2.js', 'test_halo_v7_e3.js',
-  'test_halo_v7_e4.js', 'test_halo_v7_e5.js', 'test_disciplina_v7.js'
+  'test_halo_v7_e4.js', 'test_halo_v7_e5.js', 'test_disciplina_v7.js',
+  'test_grano_sbf.js'
 ].map(function (n) { return path.join(__dirname, n); });
 
 function contarAsserts(salida) {
