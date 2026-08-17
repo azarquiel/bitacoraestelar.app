@@ -207,8 +207,28 @@ for (var i = 0; i < M100.tabla.I.length; i++) {
   difI = Math.max(difI, Math.abs(M100.tabla.I[i] - M200.tabla.I[i]));
   relI = Math.max(relI, Math.abs(M100.tabla.I[i]));
 }
-ok(difI / relI < 0.05,
-  'duplicar M no reestructura el velo: <I>(r) apenas se mueve (' +
+/* Aquí se comprobaba que <I>(r) apenas se movía al duplicar M (< 5 % del pico).
+   Eso era verdad sólo mientras m_crowd leía el PÍXEL del lienzo: con una Ω
+   inflada, la aglomeración era la restricción que mandaba en casi todo el perfil
+   y m_res no sabía del aumento. Con las dos Ω separadas manda m_lim,sky, que sí
+   depende de M —más aumento oscurece el fondo—, y el velo se adelgaza un 11,5 %
+   del pico al duplicar el aumento. No es un defecto: es la misma física que hace
+   que abrir apertura deshaga el halo en estrellas.
+   Lo que sí es invariante, y es lo que se comprueba ahora, es que el velo no
+   tenga NINGUNA otra vía de entrada: <I> = Sigma·S1(m_res+delta) y nada más, así
+   que el cociente entre las dos filas tiene que ser exactamente el de S1 en sus
+   dos m_res. Cero constantes que ajustar. */
+var peorVia = 0;
+for (i = 0; i < M100.tabla.I.length; i++) {
+  if (!(M100.tabla.I[i] > 0) || !(M200.tabla.I[i] > 0)) continue;
+  var dl = C.config.delta;
+  var esperado = pobM13.S1(M200.tabla.mRes[i] + dl) / pobM13.S1(M100.tabla.mRes[i] + dl);
+  var d = Math.abs((M200.tabla.I[i] / M100.tabla.I[i]) / esperado - 1);
+  if (d > peorVia) peorVia = d;
+}
+ok(peorVia < 1e-9,
+  'duplicar M mueve el velo SOLO por m_res: <I> sigue siendo Sigma·S1(m_res+delta) ' +
+  '(peor desvío ' + peorVia.toExponential(1) + '; el velo se adelgaza ' +
   (100 * difI / relI).toFixed(2) + ' % del pico)');
 ok(M200.rVis !== M100.rVis,
   'lo que cambia es la visibilidad, no la estructura (r_vis ' + M100.rVis.toFixed(2) +

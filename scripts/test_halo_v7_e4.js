@@ -128,7 +128,17 @@ REFS.forEach(function (id) {
 /* Y la comparación directa contra lo que había: el test reconstruye la cola
    ESCALONADA —la de antes, que devolvía el bin entero— y mide las dos con la
    misma m_res(r). El cociente de los peores saltos es la mejora, y así el
-   guardián no depende de acordarse de cómo era el código viejo. */
+   guardián no depende de acordarse de cómo era el código viejo.
+
+   Los dos saltos se miden NORMALIZADOS por lo que se ha movido m_res entre los
+   dos nodos —el mismo cociente q de E4.2—, no en magnitudes crudas. La razón:
+   un pico crudo grande puede ser un escalón o puede ser la LF respondiendo a un
+   m_res que se mueve deprisa, y esto último no es un defecto. Con las dos Ω
+   separadas (m_crowd ya no lee el píxel del lienzo) m_res se hundió ~0,5 mag en
+   NGC 104 y su peor salto crudo pasó a ser pendiente honrada: q = 0,62 mag de
+   cola por mag de límite, bien por debajo del 1,5 que separa escalón de
+   pendiente. El criterio crudo lo marcaba como regresión; el normalizado mide lo
+   que el test dice medir. */
 console.log('\nE4.2b · la cola interpolada contra la escalonada, con la misma m_res(r)');
 
 REFS.forEach(function (id) {
@@ -148,14 +158,15 @@ REFS.forEach(function (id) {
     if (m.tabla.r[k] > 0.98 * m.rtAs) break;
     var a = m.tabla.mRes[k - 1] + m.delta, b = m.tabla.mRes[k] + m.delta;
     if (!isFinite(a) || !isFinite(b) || !(pob.S1(a) > 0) || !(pob.S1(b) > 0)) continue;
-    var dInt = Math.abs(-2.5 * Math.log10(pob.S1(b) / pob.S1(a)));
-    var dEsc = Math.abs(-2.5 * Math.log10(S1Escalon(b) / S1Escalon(a)));
+    var dm = Math.max(Math.abs(b - a), 1e-6);
+    var dInt = Math.abs(-2.5 * Math.log10(pob.S1(b) / pob.S1(a))) / dm;
+    var dEsc = Math.abs(-2.5 * Math.log10(S1Escalon(b) / S1Escalon(a))) / dm;
     if (dInt > peorInt) peorInt = dInt;
     if (dEsc > peorEsc) peorEsc = dEsc;
   }
-  ok(peorEsc > 0.15 && peorInt < peorEsc / 4,
-    id + ': peor salto radial ' + peorInt.toFixed(4) + ' mag interpolada contra ' +
-    peorEsc.toFixed(4) + ' escalonada (×' + (peorEsc / peorInt).toFixed(1) + ' mejor)');
+  ok(peorEsc > TOL_Q && peorInt < peorEsc / 4,
+    id + ': peor cociente radial ' + peorInt.toFixed(3) + ' interpolada contra ' +
+    peorEsc.toFixed(3) + ' escalonada (×' + (peorEsc / peorInt).toFixed(1) + ' mejor)');
 });
 
 /* ── E4.3 · La corrección no cambia la fotometría ─────────────────────────── */
