@@ -70,7 +70,7 @@ casi(sbEnOcular(p3) - sbEnOcular(p2), -2.5 * Math.log10(Math.pow(p3 / p2, 2)), 1
    0-255, y un código sRGB no es luminancia. Con sqm 22 y pupila de salida
    7,5 mm (18" a 61x, dim=1) el fondo salía en el código 70 -6,4 % del blanco:
    un gris franco- para uno de los mejores cielos de la Tierra.
-   Ver docs/adr/0001-fondo-cielo-luminancia.md. */
+   Ver docs/adr/0009-fondo-cielo-luminancia.md. */
 console.log('El fondo de cielo pinta luminancia, no códigos:');
 function luminanciaFondo(sqm, pupila, T) {
   // Sin redondear: nivelFondo() sí redondea, y a 15 niveles el escalón es un 7 %.

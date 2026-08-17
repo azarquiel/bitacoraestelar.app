@@ -1,4 +1,4 @@
-# 1. El fondo de cielo se pinta como luminancia codificada en sRGB
+# 9. El fondo de cielo se pinta como luminancia codificada en sRGB
 
 - Estado: aceptado
 - Fecha: 2026-08-17

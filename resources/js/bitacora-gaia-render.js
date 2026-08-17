@@ -180,7 +180,7 @@
        es de los mejores cielos de la Tierra. El desfase NO era un punto cero
        mal puesto: las dos curvas coinciden exactamente en SB_CIELO_BLANCO y se
        separan más cuanto más oscuro es el cielo (SBe 18: 207 vs 135; SBe 20:
-       143 vs 60; SBe 22,3: 70 vs 15). Ver docs/adr/0001-fondo-cielo-luminancia.md.
+       143 vs 60; SBe 22,3: 70 vs 15). Ver docs/adr/0009-fondo-cielo-luminancia.md.
 
        ponytail: SB_CIELO_BLANCO sigue siendo la perilla artística —depende de
        la luz ambiente de quien mire la pantalla—, pero ahora es un anclaje, no

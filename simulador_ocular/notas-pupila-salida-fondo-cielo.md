@@ -69,7 +69,7 @@ La curva gris del fondo pinta la **luminancia** de pantalla proporcional al fluj
 cielo, anclada en `SB_CIELO_BLANCO=16.5` (blanco puro) y codificada en sRGB —
 `nivelCielo()`, `bitacora-gaia-render.js`. Antes era lineal en magnitudes sobre los
 códigos 0–255, entre `SB_CIELO_NEGRO` y `SB_CIELO_BLANCO`, y eso dejaba los cielos
-oscuros en un gris franco: ver `docs/adr/0001-fondo-cielo-luminancia.md`.
+oscuros en un gris franco: ver `docs/adr/0009-fondo-cielo-luminancia.md`.
 
 **Consecuencia del clamp** (lo que responde la duda 1):
 - `d_ep < d_eye` (más aumento): `dim<1` → `SBe>sqm` → fondo más **oscuro**. ✔
