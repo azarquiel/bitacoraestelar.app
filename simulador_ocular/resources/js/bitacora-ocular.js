@@ -889,6 +889,36 @@
             if (p && p.catch) p.catch(function () {});
           }
         });
+        /* El círculo cambia de tamaño al entrar y al salir, así que el lienzo se
+           vuelve a dibujar al tamaño nuevo. Solo si de verdad cambia: si ya
+           estaba en su techo, ampliar la ventana no obliga a repetir el render,
+           que no es gratis.
+
+           La medida NO puede hacerse dentro del propio fullscreenchange, aunque
+           la clase ya esté puesta: el evento llega ANTES del reflow y
+           `sim-vista` sigue midiendo el hueco del estado anterior (medido: 367
+           px en el evento y 749 dos fotogramas después). Con esa medida vieja se
+           entraba a pantalla completa sin re-renderizar y se SALÍA renderizando
+           al tamaño de la pantalla completa —1440 px de lienzo en un hueco de
+           367—, que el navegador reduce cuatro veces: las estrellas puntuales
+           mueren en el submuestreo y solo sobrevive el velo difuso del cúmulo.
+           Quien sabe el tamaño definitivo es el layout, así que se le pregunta a
+           él con un ResizeObserver, que además cubre redimensionar la ventana.
+           No se realimenta: tras el render tamRender ya coincide con el lienzo. */
+        var vista = $('sim-vista');
+        if (window.ResizeObserver && vista) {
+          /* Con espera: el hueco no salta de un valor al otro, pasa por varios
+             tamaños intermedios mientras el navegador acomoda la pantalla
+             completa (medido al salir: 749 → 737 → 715 → 367). Sin la espera se
+             renderizaría en cada escalón, y un render no es gratis. */
+          var pendiente = null;
+          new ResizeObserver(function () {
+            clearTimeout(pendiente);
+            pendiente = setTimeout(function () {
+              if (tamRender($('sim-origen').value) !== $('sim-lienzo').width) actualizar();
+            }, 200);
+          }).observe(vista);
+        }
         ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
           document.addEventListener(ev, function () {
             var dentro = (document.fullscreenElement || document.webkitFullscreenElement) === zona;
@@ -896,12 +926,14 @@
             var txt = dentro ? 'Salir de pantalla completa' : 'Ver a pantalla completa';
             btnFull.title = txt;
             btnFull.setAttribute('aria-label', txt);
-            /* El círculo cambia de tamaño, así que el lienzo de 720 se vería
-               ampliado: se vuelve a dibujar al tamaño nuevo. Solo si de verdad
-               cambia —si ya estaba en su techo, ampliar la ventana no obliga a
-               repetir el render, que no es gratis—. La clase ya está puesta
-               arriba, así que clientWidth mide el hueco DEFINITIVO. */
-            if (tamRender($('sim-origen').value) !== $('sim-lienzo').width) actualizar();
+            // Reserva para navegadores sin ResizeObserver: dos fotogramas para
+            // que el hueco ya esté medido cuando se decide.
+            if (window.ResizeObserver) return;
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                if (tamRender($('sim-origen').value) !== $('sim-lienzo').width) actualizar();
+              });
+            });
           });
         });
       }
