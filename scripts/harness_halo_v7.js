@@ -48,6 +48,7 @@ function cumulo(id) {
    una dispersión que no existe. */
 function anillos(campo, geom, opciones) {
   var n = opciones.n || 40, r0 = opciones.r0As || 0, r1 = opciones.r1As;
+  var valido = opciones.valido;                 // opcional: 1 = el píxel cuenta
   var SIZE = geom.size, asPorPx = geom.arcmin * 60 / SIZE, cen = SIZE / 2;
   var suma = new Float64Array(n), suma2 = new Float64Array(n), cuenta = new Int32Array(n);
   var sumaR = new Float64Array(n);
@@ -57,6 +58,7 @@ function anillos(campo, geom, opciones) {
       var rAs = geom.radioPropio((x - cen) * asPorPx, (y - cen) * asPorPx);
       var k = Math.floor((rAs - r0) / paso);
       if (k < 0 || k >= n) continue;
+      if (valido && !valido[y * SIZE + x]) continue;
       var v = campo[y * SIZE + x];
       suma[k] += v; suma2[k] += v * v; sumaR[k] += rAs; cuenta[k]++;
     }
@@ -117,8 +119,14 @@ function medir(cum, cfg) {
 
   /* El factor de cada componente, MEDIDO y con su procedencia. El del cielo se
      lee de la cadena; el del halo se deduce comparando lo pintado con lo que el
-     modelo dijo, que es la única forma de cazar un factor que no se aplica. */
-  var ctx = R.ctxFotometrico(cielo, res.thetaCumuloArcmin);
+     modelo dijo, que es la única forma de cazar un factor que no se aplica.
+
+     El contexto es EL MISMO objeto que usó pintarCumulo (`res.cHalo`), no una
+     segunda llamada: si el arnés recalculase la cadena por su cuenta, mediría su
+     propia copia de la ley y no la del render —justo la duplicación que E1.3
+     prohíbe—. Volver a llamar aquí, además, salía por la rama C_MAG por no
+     pasarle theta, y el Cmin del volcado no era el del halo. */
+  var ctx = res.cHalo;
   var esperado = 0, pintado = 0;
   for (var i = 0; i < fisico.length; i++) {
     if (!(fisico[i].n > 0)) continue;
@@ -129,6 +137,10 @@ function medir(cum, cfg) {
     id: cum.id, D: cfg.D, MAG: cfg.MAG, sqm: cfg.sqm, arcmin: ARCMIN, size: SIZE,
     fwhmAs: res.fwhmAs, rcAs: pob.rcAs, rhAs: cum.rh * 60, rtAs: pob.rtAs,
     dim: ctx.dim, T: ctx.T, SBe: ctx.SBe, Cmin: ctx.Cmin,
+    // Fcielo es el flujo del cielo SIN atenuar: el marco en el que trabaja todo
+    // el render (pintarFot pinta el objeto como incremento de contraste sobre
+    // él). El halo se mide contra este número, no contra SBe, que ya lleva dim.
+    Fcielo: ctx.Fcielo, ctxHalo: ctx, ctxGrano: res.cGrano,
     muCielo: ctx.SBe,
     fisico: fisico, perceptual: perceptual, modelo: modelo, tabla: res.tabla,
     /* Re-medir a otro rango sin volver a pintar. Es una función a propósito:
@@ -139,9 +151,59 @@ function medir(cum, cfg) {
        que todo codo que aparezca en <I> y no en Sigma lo ha metido la cadena
        fotométrica, no la forma del cúmulo. */
     sigmaEn: pob.sigma,
+    // Funciones, no la población entera: JSON.stringify las omite y el volcado
+    // archivado sigue siendo solo números.
+    S1: pob.S1, S2: pob.S2, mCrowd: pob.mCrowd, delta: C.config.delta,
+    /* La celda de ruido con la que el render dividió S2. Se recalcula aquí con
+       la misma regla (max(beam, píxel)) para que el test de la ley del grano
+       tenga el denominador sin abrir la tabla. */
+    areaPx: asPorPx * asPorPx,
+    omegaBeam: Math.max(Math.PI * (res.fwhmAs / 2) * (res.fwhmAs / 2), asPorPx * asPorPx),
     perfilEn: function (cual, r0As, r1As, n) {
       var campos = { crudo: crudo, difuso: difuso, modelo: modeloCampo };
       return anillos(campos[cual], geom, { r0As: r0As, r1As: r1As, n: n });
+    },
+    /* sigma del GRANO por anillos: dispersión del residuo píxel a píxel contra
+       <I>(r), no del campo. Medir la dispersión del campo a secas mezclaría el
+       grano con la pendiente del perfil dentro del anillo, que en el núcleo es
+       lo que domina, y la ley sigma² = Sigma·S2/Omega quedaría irreconocible.
+
+       Se mide EN LOGARITMO y se devuelve convertida. El campo es lognormal: en
+       lineal tiene cola pesada y la desviación muestral de un anillo se va un
+       ±35 % con unos cientos de píxeles —medido—, así que un test por anillo al
+       5 % estaría midiendo el estimador, no la ley. En log el campo es normal,
+       el error del estimador es 1/sqrt(2n) y la conversión
+       sigma = <I>·sqrt(e^{s²}−1) es exacta, no aproximada. */
+    granoEn: function (r0As, r1As, n) {
+      var lg = new Float32Array(crudo.length), val = new Float32Array(crudo.length);
+      var nrm = new Float32Array(crudo.length), valN = new Float32Array(crudo.length);
+      var cen2 = SIZE / 2;
+      for (var py2 = 0; py2 < SIZE; py2++) {
+        for (var px2 = 0; px2 < SIZE; px2++) {
+          var k = py2 * SIZE + px2;
+          if (!(crudo[k] > 0) || !(modeloCampo[k] > 0)) continue;
+          lg[k] = Math.log(crudo[k] / modeloCampo[k]); val[k] = 1;
+          /* Además de la anchura cruda, la anchura NORMALIZADA por la que la
+             tabla pidió en ESE píxel. Comparar anchuras promediadas por anillo
+             mezcla radios con lnS distinto y el residuo que sale es el del
+             promediado, no el del grano; dividiendo píxel a píxel el estimador
+             vale 1 en todas partes o la máquina de muestreo está mal. */
+          var sPix = enTabla(res.tabla, res.tabla.lnS,
+            pob.radioPropio((px2 - cen2) * asPorPx, (py2 - cen2) * asPorPx));
+          // Se le quita también la mediana de la lognormal (−s²/2): lo que queda
+          // es el propio g, que por construcción tiene media 0 y varianza 1.
+          if (sPix > 0) { nrm[k] = (lg[k] + sPix * sPix / 2) / sPix; valN[k] = 1; }
+        }
+      }
+      var rango1 = { r0As: r0As, r1As: r1As, n: n };
+      var aLog = anillos(lg, geom, { r0As: r0As, r1As: r1As, n: n, valido: val });
+      var aNrm = anillos(nrm, geom, { r0As: r0As, r1As: r1As, n: n, valido: valN });
+      var aMod = anillos(modeloCampo, geom, rango1);
+      return aLog.map(function (a, i) {
+        return { rAs: a.rAs, r0As: a.r0As, r1As: a.r1As, n: a.n,
+                 sLn: a.sigma, sNorm: aNrm[i].sigma, Imodelo: aMod[i].I,
+                 sigma: aMod[i].I * Math.sqrt(Math.max(0, Math.exp(a.sigma * a.sigma) - 1)) };
+      });
     },
     factores: {
       cielo: { valor: ctx.dim * ctx.T, mag: -2.5 * Math.log10(ctx.dim * ctx.T),
