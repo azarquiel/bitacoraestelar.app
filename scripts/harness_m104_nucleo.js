@@ -371,7 +371,7 @@ function parcheNuevo() {
 function etapaE(difuso, mask, c) {
   var n = difuso.length, niveles = new Float32Array(n);
   for (var i = 0; i < n; i++) {
-    var esGal = !!(mask && mask[i]);
+    var esGal = R.difusoMarcado(mask, i);
     var s = esGal ? 1 : (function (Fv) {
       if (!(Fv > 0)) return 0;
       var x = (Math.log10(Fv / (c.Fcielo * c.Cmin)) + FOT.UMBRAL_MARGEN) / FOT.UMBRAL_ANCHURA;
@@ -418,10 +418,7 @@ function pintarParcheBilineal(difuso, parche, o, datos) {
   var sMezcla = peso ? parche.escalaMezcla : 1;
   var haloPx = R.ps1RadioHaloAs(comps) * pxPorAs;
   var alcance = Math.max(ladoPx / 2, haloPx);
-  if (!(o.cielo.galaxiaMask && o.cielo.galaxiaMask.length === difuso.length)) {
-    o.cielo.galaxiaMask = new Uint8Array(difuso.length);
-  }
-  var mask = o.cielo.galaxiaMask;
+  var mask = R.difusoMaskDe(o.cielo, difuso.length);
   var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
   var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
   for (var y = y0; y <= y1; y++) {
@@ -450,7 +447,7 @@ function pintarParcheBilineal(difuso, parche, o, datos) {
       f = R.ps1FlujoConOpacidad(f, R.ps1Opacidad(-2.5 * Math.log10(f), umbral), c);
       if (!(f > 0)) continue;
       difuso[y * SIZE + x] += f;
-      mask[y * SIZE + x] = 1;
+      mask[y * SIZE + x] = 0;
     }
   }
   return difuso;
@@ -485,7 +482,7 @@ EQUIPOS.forEach(function (e) {
       if (v.id === 'psfSinMask') { parche.psfD = e.D; parche.psfDatos = porAper[e.D].B; }
       R.ps1PintarParche(difuso, parche, o);
     }
-    var mask = cielo.galaxiaMask;
+    var mask = cielo.difusoMask;
     var c = R.ctxFotometrico(cielo);
     var E = etapaE(difuso, mask, c);
     resultados.push({ D: e.D, variante: v, difuso: difuso, E: E, c: c });
@@ -570,7 +567,7 @@ if (fs.existsSync(CSV)) {
     var oF = { ra0: gal.ra, dec0: gal.dec, arcmin: ARCMIN, size: SIZE, cielo: cieloF, apertura: e.D };
     var difusoF = new Float32Array(SIZE * SIZE);
     R.ps1PintarParche(difusoF, parcheF, oF);
-    var EF = etapaE(difusoF, cieloF.galaxiaMask, R.ctxFotometrico(cieloF));
+    var EF = etapaE(difusoF, cieloF.difusoMask, R.ctxFotometrico(cieloF));
     resumen('F2 · D con Gaia · ' + e.D + ' mm', difusoF, SIZE, SIZE, escLienzoAs, cxL, cyL, 'flujo sumado');
     resumen('F3 · E con Gaia · ' + e.D + ' mm', EF, SIZE, SIZE, escLienzoAs, cxL, cyL, 'nivel 0–255');
     guardarPGM('F_E_' + e.D, recorte(EF, SIZE, SIZE, cxL, cyL), 255);

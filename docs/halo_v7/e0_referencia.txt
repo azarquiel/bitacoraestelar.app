@@ -1,0 +1,30 @@
+
+══ M13 (NGC 6205) r_c = 37.2"  r_h = 101.4"  r_t = 1261"
+  200 mm 146x  pupila 1.37 mm  dim 0.0383  SBe 25.16 mag/arcsec²  Cmin 4.91e-1
+  200 mm 514x  pupila 0.39 mm  dim 0.0031  SBe 27.89 mag/arcsec²  Cmin 9.19e-1
+  D2 · de 146x a 514x, en r_h:
+       Δμ cielo          2.733 mag   [ctxFotometrico(): dim = (pupilaEfectiva/pupilaOjo)^2, por T]
+       Δμ halo (físico)  0.024 mag   [pintarCumulo(): flujo del campo tal cual, medido contra <I>(r) del modelo]
+       Δμ halo (percep.) 0.163 mag
+       factor medido sobre el halo: 1.005660 (el del cielo es 0.034467)
+  D1 · 146x: el difuso pintado llega a 3.89 r_h con μ = 29.46, cielo a μ = 25.16
+  D1 · 514x: el difuso pintado llega a 3.27 r_h con μ = 36.68, cielo a μ = 27.89
+  D3 · 146x, dentro de 6 r_c: segunda diferencia de μ(r) máxima 0.0616 mag (modelo) / 0.4221 mag (con grano), en r = 84" (2.26 r_c)
+       forma pura King 0.0198 mag  vs  <I> = Σ·S1 0.0305 mag en r = 86"  →  sin codo atribuible a la fotometría
+  D3 · 514x, dentro de 6 r_c: segunda diferencia de μ(r) máxima 0.0603 mag (modelo) / 0.4221 mag (con grano), en r = 84" (2.26 r_c)
+       forma pura King 0.0198 mag  vs  <I> = Σ·S1 0.0290 mag en r = 82"  →  sin codo atribuible a la fotometría
+
+══ 47 Tuc (NGC 104) r_c = 21.6"  r_h = 190.2"  r_t = 2538"
+  200 mm 146x  pupila 1.37 mm  dim 0.0383  SBe 25.16 mag/arcsec²  Cmin 3.92e-1
+  200 mm 514x  pupila 0.39 mm  dim 0.0031  SBe 27.89 mag/arcsec²  Cmin 8.17e-1
+  D2 · de 146x a 514x, en r_h:
+       Δμ cielo          2.733 mag   [ctxFotometrico(): dim = (pupilaEfectiva/pupilaOjo)^2, por T]
+       Δμ halo (físico)  0.000 mag   [pintarCumulo(): flujo del campo tal cual, medido contra <I>(r) del modelo]
+       Δμ halo (percep.) 0.000 mag
+       factor medido sobre el halo: 0.987895 (el del cielo es 0.034467)
+  D1 · 146x: el difuso pintado llega a 4.50 r_h con μ = 33.02, cielo a μ = 25.16
+  D1 · 514x: el difuso pintado llega a 3.51 r_h con μ = 35.20, cielo a μ = 27.89
+  D3 · 146x, dentro de 6 r_c: segunda diferencia de μ(r) máxima 0.0955 mag (modelo) / 0.8113 mag (con grano), en r = 34" (1.57 r_c)
+       forma pura King 0.0194 mag  vs  <I> = Σ·S1 0.0315 mag en r = 4"  →  sin codo atribuible a la fotometría
+  D3 · 514x, dentro de 6 r_c: segunda diferencia de μ(r) máxima 0.0955 mag (modelo) / 0.8113 mag (con grano), en r = 34" (1.57 r_c)
+       forma pura King 0.0194 mag  vs  <I> = Σ·S1 0.0276 mag en r = 4"  →  sin codo atribuible a la fotometría
