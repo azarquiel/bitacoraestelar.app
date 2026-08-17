@@ -158,7 +158,16 @@ function medir(cum, cfg) {
        la misma regla (max(beam, píxel)) para que el test de la ley del grano
        tenga el denominador sin abrir la tabla. */
     areaPx: asPorPx * asPorPx,
-    omegaBeam: Math.max(Math.PI * (res.fwhmAs / 2) * (res.fwhmAs / 2), asPorPx * asPorPx),
+    omegaBeam: res.omegaBeam,
+    /* La escala a la que el render juzga el grano y la atenuación que le aplica
+       (ver pintarCumulo). Se leen del resultado, no se recalculan: el arnés que
+       reimplementa la ley mide su propia copia, que es como v7 archivó Cmin de
+       otra rama (lección 9). `razonBeam` es la misma razón evaluada como la
+       juzgaba v7 —el beam como elemento aislado—, y está aquí para que la mejora
+       de la ley se pueda medir en vez de creerse. */
+    thBeamAs: res.thBeamAs, thGranoAs: res.thGranoAs, atenGrano: res.atenGrano,
+    razonGrano: razonMax(res, res.cGrano, res.atenGrano),
+    razonBeam: razonMax(res, R.ctxFotometrico(cielo, res.thBeamAs / 60), 1),
     perfilEn: function (cual, r0As, r1As, n) {
       var campos = { crudo: crudo, difuso: difuso, modelo: modeloCampo };
       return anillos(campos[cual], geom, { r0As: r0As, r1As: r1As, n: n });
@@ -213,6 +222,19 @@ function medir(cum, cfg) {
               origen: 'pintarCumulo(): flujo del campo tal cual, medido contra <I>(r) del modelo' }
     }
   };
+}
+
+/* Lo más cerca que el grano llega del umbral en TODO el perfil: max_r de
+   σ(r)·aten / ((Fcielo + ⟨I⟩(r))·Cmin). Es la magnitud no vacua que sustituye a
+   `s_grano` mientras `s_grano` valga 0 — un criterio comprobado sobre el conjunto
+   vacío no verifica nada (lección 6 de v7). */
+function razonMax(res, ctx, aten) {
+  var t = res.tabla, peor = 0;
+  for (var i = 0; i < t.r.length; i++) {
+    var fondo = (ctx.Fcielo + t.I[i]) * ctx.Cmin;
+    if (fondo > 0) peor = Math.max(peor, t.sigma[i] * aten / fondo);
+  }
+  return peor;
 }
 
 function enTabla(tabla, v, rAs) {

@@ -73,17 +73,22 @@ function fila(D, MAG, sqm) {
     sGranoMax: maximo(t.sGrano),
     // Cuánto le falta al grano para verse: contraste que tiene entre el que
     // H2c le pide. 1 = justo en el umbral; 0,1 = necesita diez veces más.
-    granoSobreUmbral: maximo(razonGrano(t, res.cGrano)),
+    granoSobreUmbral: maximo(razonGrano(t, res.cGrano, res.atenGrano)),
     estrellas: res.estrellas.length,
     fwhm: res.fwhmAs
   };
 }
 
-function razonGrano(t, cGrano) {
+/* `aten` es la atenuación de v8 (θ_beam/θ_grano): σ de la tabla es la amplitud
+   POR BEAM y el umbral se pide en la escala de integración, así que hay que
+   promediar antes de dividir. Mezclar el umbral nuevo con la amplitud vieja daba
+   grano/umbral ≈ 1 con `s_grano` = 0 en la misma fila — dos leyes distintas en la
+   misma cuenta. Los dos números salen de `res`, nunca recalculados aquí. */
+function razonGrano(t, cGrano, aten) {
   var v = new Float64Array(t.sigma.length);
   for (var i = 0; i < v.length; i++) {
     var fondo = cGrano.Fcielo + t.I[i];
-    v[i] = fondo > 0 ? (t.sigma[i] / fondo) / cGrano.Cmin : 0;
+    v[i] = fondo > 0 ? (t.sigma[i] * aten / fondo) / cGrano.Cmin : 0;
   }
   return v;
 }
@@ -173,8 +178,12 @@ ok(F4.rVis < 0.5 * F2.rVis,
 ok(F4.sHalo0 > 0.5,
   'pero el núcleo persiste (s_halo(0) = ' + F4.sHalo0.toFixed(3) + ')');
 /* No es una meta, es el estado registrado: si alguien toca la ley del grano o la
-   LF y esto se mueve de orden de magnitud, que salte aquí y no en la pantalla. */
-ok([F1, F2, F3, F4].every(function (f) { return f.granoSobreUmbral < 0.1; }),
+   LF y esto se mueve de orden de magnitud, que salte aquí y no en la pantalla.
+   Y ha saltado una vez: v7 medía el 3,1 % con el beam como escala perceptual, y
+   v8 mide el 12,1 % al juzgar la textura en la escala de integración. El listón
+   sube del 10 % al 25 % —sigue a un orden de magnitud del techo de v7— porque lo
+   que vigila es que el grano no se encienda por sorpresa, no un número concreto. */
+ok([F1, F2, F3, F4].every(function (f) { return f.granoSobreUmbral < 0.25; }),
   'la textura SBF no llega al umbral con ningún equipo de la matriz (mejor caso, ' +
   (100 * Math.max(F1.granoSobreUmbral, F2.granoSobreUmbral,
     F3.granoSobreUmbral, F4.granoSobreUmbral)).toFixed(1) + ' % de lo que pide H2c)');
@@ -214,7 +223,8 @@ console.log('    por la FWHM, y la FWHM la fija el seeing (' + F2.fwhm.toFixed(2
 console.log('    frontera hacia dentro, no vacía el centro.');
 console.log('  · s_grano = 0 en las cuatro filas, y no por poco: el contraste de la textura se');
 console.log('    queda entre el ' + (100 * F1.granoSobreUmbral).toFixed(1) + ' % y el ' +
-  (100 * F4.granoSobreUmbral).toFixed(1) + ' % del umbral, dos órdenes de magnitud. El granulado que');
+  (100 * F4.granoSobreUmbral).toFixed(1) + ' % del umbral, ya juzgado en la escala de');
+console.log('    integración de v8 (con el beam de v7 era entre el 0,5 % y el 3,1 %). El granulado que');
 console.log('    reporta el observador son las estrellas resueltas (f_res sube del ' +
   (F1.fRes[0] * 100).toFixed(0) + ' % en el centro al ' + (maximo(F1.fRes) * 100).toFixed(0) +
   ' % en el borde con 100 mm), no la SBF.');

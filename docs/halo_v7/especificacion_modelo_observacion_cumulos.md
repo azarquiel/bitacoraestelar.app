@@ -314,13 +314,32 @@ El campo se parte en media y fluctuación **antes** del desvanecido:
 
 ```
 θ_cúmulo = 2·r_h circularizado (√(a·b))
-θ_grano  = FWHM_total (arcmin)
+θ_beam   = diámetro equivalente de Ω = max(beam, píxel)
+θ_grano  = max(θ_beam, θ_R(SBe)/M)          escala de INTEGRACIÓN (v8)
+aten     = θ_beam / θ_grano                 promediado de √n celdas
 
-s_halo(r)  = visibilidadDifusa( ⟨I⟩(r),  Fcielo · Cmin(θ_cúmulo) )
-s_grano(r) = visibilidadDifusa( σ(r),   (Fcielo + ⟨I⟩(r)) · Cmin(θ_grano) )
+s_halo(r)  = visibilidadDifusa( ⟨I⟩(r),        Fcielo · Cmin(θ_cúmulo) )
+s_grano(r) = visibilidadDifusa( σ(r)·aten,  (Fcielo + ⟨I⟩(r)) · Cmin(θ_grano) )
 
 I(r) = ⟨I⟩(r) · s_halo(r) + δI · s_grano(r)
 ```
+
+> **v8 · la escala del grano.** Hasta v7 `θ_grano` era la FWHM, y con ella `s_grano`
+> valía 0 en las 18 corridas de la matriz: la textura se juzgaba como si fuese UN
+> elemento aislado de 2,4″, y a ese tamaño H2c pide contrastes de 10²–10³. Pero una
+> textura no es un elemento: es un campo aleatorio que el ojo integra sobre un
+> parche. Promediar `n = (θ/θ_beam)²` celdas independientes divide la amplitud por
+> `√n` y a la vez baja el umbral, porque `Cmin` favorece al elemento grande. El
+> compromiso tiene un máximo exacto donde el término de Ricco vale 1, `θ* = θ_R/M`:
+> ni barrido de escalas ni parámetro de parche —`θ_R` y los aumentos ya estaban en
+> la ley—. `σ(r)` sale intacta a la tabla; `aten` solo entra en el desvanecido, así
+> que la fotometría no se entera (`test_grano_sbf.js`, G4).
+>
+> Consecuencias medidas: el grano deja de depender del seeing (mejor seeing sube σ
+> y encoge el beam en la misma proporción, y `θ*` no se mueve) y pasa a responder al
+> aumento. Lo que **no** cambia es que siga sin verse: con S2 real la textura llega
+> al 12 % de su umbral en la matriz de M13 y al 15 % en el mejor de los 143 cúmulos
+> del catálogo con el mejor equipo de una rejilla de 40. Sigue siendo `s_grano = 0`.
 
 Cuatro decisiones dentro, todas con consecuencia física comprobable:
 
@@ -332,9 +351,15 @@ Cuatro decisiones dentro, todas con consecuencia física comprobable:
   respeta el invariante 7, y el ruido conserva su forma gaussiana — solo cambia su amplitud.
 - **El umbral del grano se mide contra el fondo local `Fcielo + ⟨I⟩(r)`.** En el núcleo el grano
   compite contra el propio velo y se aplana solo: núcleo lechoso sin ninguna perilla.
-- **`Cmin(θ_grano) > Cmin(θ_cúmulo)`** (Ricco penaliza el elemento pequeño), así que **el grano
-  muere antes que la mancha** cuando el cielo empeora. Es lo que se ve: en cielo urbano el cúmulo
-  queda como mancha, no como mancha granulada.
+- **`Cmin(θ_grano) > Cmin(θ_cúmulo)`** (Ricco penaliza el elemento pequeño): el grano tiene
+  siempre el listón más alto de los dos. ~~Así que el grano muere antes que la mancha cuando el
+  cielo empeora.~~ **Corregido en v8:** eso no se sigue de lo anterior, y medido es falso. El
+  umbral no es lo único que se mueve: con el cielo sucio `m_lim,sky` se hunde, las estrellas del
+  halo dejan de resolverse y **caen al campo**, así que `S2` —y con él `σ`— sube más deprisa que
+  el umbral. De SQM 21,5 a 18,5 en M13/200 mm 146×, la mancha se aleja de su umbral (162 → 32,9)
+  y el grano se acerca al suyo (0,047 → 0,125). Con la ley de v7 el signo es el mismo, así que no
+  lo trae v8: lo que v7 no podía ver es que su criterio se cumplía sobre el conjunto vacío
+  (`s_grano ≡ 0`). Asertado en `test_grano_sbf.js`, G5.
 - **`Cmin` satura solo para θ grande.** `raz = 1 + θ_R/(θ_eff·M) → 1`: ω Cen con θ ≈ 10′ no queda
   artificialmente favorecido, simplemente deja de tener bonus de tamaño. Sin cota artificial.
 

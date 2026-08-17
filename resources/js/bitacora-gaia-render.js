@@ -239,6 +239,17 @@
      ARCO —la isofota μ=25 circularizada, ver ps1ThetaIntArcmin—. Solo lo usa la
      ley H2c y solo con FOT.H2C activa; sin ella se ignora y la cadena es la de
      siempre. */
+  /* θ_R de la ley H2c, en minutos de arco de CIELO: la escala en la que el
+     término de Ricco de Cmin vale 1 y, por tanto, la escala de integración del
+     sistema visual una vez dividida por los aumentos. Vive aparte de
+     ctxFotometrico porque hay quien necesita la escala sin necesitar un Cmin —el
+     grano del cúmulo, que la usa para decidir SOBRE QUÉ parche se juzga—, y
+     duplicarla habría dejado dos copias de la misma constante. Sin FOT.H2C no
+     hay ley de tamaño: devuelve 0 y quien la use cae en su propio suelo. */
+  function thetaRiccoArcmin(SBe) {
+    return FOT.H2C ? Math.pow(10, FOT.H2C.THETA_R_A + FOT.H2C.THETA_R_B * SBe) : 0;
+  }
+
   function ctxFotometrico(o, thetaIntArcmin) {
     var pOjo = o.pupilaOjo || 7, pEf = Math.min(o.pupilaSalida, pOjo);
     var sqm = (o.sqm != null) ? o.sqm : 21;
@@ -263,7 +274,7 @@
          la detección no depende de ella (invariancia F). */
       var thEff = Math.sqrt(thetaIntArcmin * thetaIntArcmin
         + Math.pow(FOT.H2C.SEEING_AS / 60, 2));
-      var thR = Math.pow(10, FOT.H2C.THETA_R_A + FOT.H2C.THETA_R_B * SBe);
+      var thR = thetaRiccoArcmin(SBe);
       var raz = 1 + thR / (thEff * o.aumentos);
       Cmin *= raz * raz;
     } else if (o.aumentos > 0) {
@@ -1362,15 +1373,9 @@
      proporcionalmente más y deforman el mismísimo S2/S1² que sale de la LF—. */
   var TRAMOS_R = 512;
 
-  function tablaCumulo(pob, o, fwhmAs, cHalo, cGrano, perceptual, areaPx) {
+  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano) {
     var C = window.BitacoraCumulos;
     var delta = C.config.delta;
-    /* La celda del grano es el beam... salvo cuando el píxel del lienzo es más
-       grande que él. Un píxel integra todo lo que cae dentro, así que muestrear
-       ahí un campo más fino no dibuja grano: dibuja aliasing, con la varianza del
-       beam en un píxel que ya la ha promediado. Con Ω = max(beam, píxel) el grano
-       se ve más suave al alejar el zoom, que es lo que hace la naturaleza. */
-    var omegaBeam = Math.max(Math.PI * (fwhmAs / 2) * (fwhmAs / 2), areaPx || 0);
     var n = TRAMOS_R + 1, paso = pob.rtAs / TRAMOS_R;
     var r = new Float64Array(n), mRes = new Float64Array(n), Im = new Float64Array(n);
     var sg = new Float64Array(n), sHalo = new Float64Array(n), sGrano = new Float64Array(n);
@@ -1395,9 +1400,14 @@
       Im[i] = s * pob.S1(m + delta);
       sg[i] = Math.sqrt(s * pob.S2(m + delta) / omegaBeam);
       sHalo[i] = visibilidadDifusa(Im[i], cHalo.Fcielo * cHalo.Cmin, perceptual);
-      // El grano compite contra el fondo LOCAL, que incluye el propio velo del
-      // cúmulo: en el núcleo se aplana solo y queda lechoso, sin ninguna perilla.
-      sGrano[i] = visibilidadDifusa(sg[i], (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
+      /* El grano compite contra el fondo LOCAL, que incluye el propio velo del
+         cúmulo: en el núcleo se aplana solo y queda lechoso, sin ninguna perilla.
+         Y se juzga con la AMPLITUD PROMEDIADA sobre el parche de integración
+         (`atenGrano`, ver pintarCumulo), no con la del beam. σ(r) sale intacta a
+         la tabla: lo que se pinta es la física, y la atenuación solo entra en el
+         desvanecido. */
+      sGrano[i] = visibilidadDifusa(sg[i] * atenGrano,
+        (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
       /* Anchura de la lognormal (ver campoLognormal). Se tabula ella y no mu,
          porque mu = ln(<I>) - s²/2 se va a -inf donde el perfil se acaba y ahí la
          interpolación daría NaN a un paso del borde; con <I> ya interpolado sale
@@ -1459,14 +1469,50 @@
 
     var perceptual = !!o.cielo.perceptual && FOT.GAMMA_PERCEPTUAL !== 1;
     /* Dos escalas angulares, una sola ley (H2c). La mancha se juzga con el tamaño
-       del cúmulo y el grano con el de la PSF: como Cmin penaliza el elemento
-       pequeño, el grano muere ANTES que la mancha cuando el cielo empeora, que es
-       justo lo que se ve —en cielo urbano queda mancha, no mancha granulada—. */
+       del cúmulo; el grano, con su escala de INTEGRACIÓN (más abajo), y como Cmin
+       penaliza al elemento pequeño el grano tiene siempre el listón más alto de
+       los dos.
+
+       Lo que no se sigue de ahí —y v7 daba por hecho— es que el grano muera antes
+       que la mancha al empeorar el cielo. Medido en v8: no. El umbral no es lo
+       único que se mueve; con el cielo sucio `m_lim,sky` se hunde, las estrellas
+       del halo dejan de resolverse y caen al campo, así que S2 sube más deprisa
+       que el umbral y el grano se ACERCA al suyo mientras la mancha se aleja del
+       suyo. Está medido en test_grano_sbf.js (G5), con la ley de v7 dando el
+       mismo signo: no lo trae este cambio. */
     var elip = cumulo.elip || 0;
     var thetaCumulo = 2 * cumulo.rh * Math.sqrt(1 - elip);     // arcmin, circularizado
     var cHalo = ctxFotometrico(o.cielo, thetaCumulo);
-    var cGrano = ctxFotometrico(o.cielo, fwhmAs / 60);
-    var tabla = tablaCumulo(pob, o, fwhmAs, cHalo, cGrano, perceptual, areaPx);
+
+    /* La celda del grano es el beam... salvo cuando el píxel del lienzo es más
+       grande que él. Un píxel integra todo lo que cae dentro, así que muestrear
+       ahí un campo más fino no dibuja grano: dibuja aliasing, con la varianza del
+       beam en un píxel que ya la ha promediado. Con Ω = max(beam, píxel) el grano
+       se ve más suave al alejar el zoom, que es lo que hace la naturaleza. */
+    var omegaBeam = Math.max(Math.PI * (fwhmAs / 2) * (fwhmAs / 2), areaPx);
+    var thBeamAs = 2 * Math.sqrt(omegaBeam / Math.PI);   // diámetro equivalente
+
+    /* ESCALA A LA QUE SE JUZGA EL GRANO. Hasta v7 era el beam, y ahí `s_grano`
+       salía 0 en todas las corridas: la textura se juzgaba como si fuese UN
+       elemento aislado de 2,4″, y a ese tamaño H2c pide contrastes de 10²-10³.
+       Pero una textura no es un elemento: es un campo aleatorio que el ojo
+       integra sobre un parche. Promediar n = (θ/θ_beam)² celdas independientes
+       divide la amplitud por √n —de ahí `atenGrano`— y a la vez baja el umbral,
+       porque Cmin favorece al elemento grande. El compromiso tiene un máximo, y
+       está donde el término de Ricco vale 1: θ* = θ_R/M. Ni barrido de escalas ni
+       parámetro de parche: θ_R y los aumentos ya estaban en la ley.
+
+       Dos consecuencias que se comprueban en test_grano_sbf.js: el grano deja de
+       depender del seeing (mejor seeing sube σ y encoge el beam en la misma
+       proporción, y θ* no se mueve) y empieza a responder al aumento. Lo que NO
+       cambia es que siga sin verse: con S2 real la textura se queda en el 15 %
+       de su umbral en el mejor cúmulo del catálogo con el mejor equipo. */
+    var thGranoAs = Math.max(thBeamAs,
+      (o.cielo.aumentos > 0) ? 60 * thetaRiccoArcmin(cHalo.SBe) / o.cielo.aumentos : 0);
+    var cGrano = ctxFotometrico(o.cielo, thGranoAs / 60);
+    var atenGrano = thBeamAs / thGranoAs;
+
+    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano);
 
     var mascara = difusoMaskDe(o.cielo, difuso.length);
     var semilla = hashCadena([cumulo.id, C.versionLF(), o.realization || 0, 'grano'].join('|'));
@@ -1509,6 +1555,7 @@
 
     return {
       tabla: tabla, poblacion: pob, fwhmAs: fwhmAs, cHalo: cHalo, cGrano: cGrano,
+      omegaBeam: omegaBeam, thBeamAs: thBeamAs, thGranoAs: thGranoAs, atenGrano: atenGrano,
       Fmedio: Fmedio, Fpintado: Fpintado,
       estrellas: estrellasCumulo(pob, cumulo, tabla, o, C)
     };
@@ -3590,6 +3637,7 @@
     difusoMarcado: difusoMarcado,
     difusoMaskDe: difusoMaskDe,
     ctxFotometrico: ctxFotometrico,
+    thetaRiccoArcmin: thetaRiccoArcmin,
     pintarFot: pintarFot,
     perfilKing: perfilKing,
     areaKing: areaKing,
