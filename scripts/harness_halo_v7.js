@@ -154,6 +154,8 @@ function medir(cum, cfg) {
     // Funciones, no la población entera: JSON.stringify las omite y el volcado
     // archivado sigue siendo solo números.
     S1: pob.S1, S2: pob.S2, mCrowd: pob.mCrowd, delta: C.config.delta,
+    // Los momentos que usa el render: cola dura MÁS el (1−a) de la banda.
+    S1campo: pob.S1campo, S2campo: pob.S2campo, Fdibujado: pob.Fdibujado,
     /* La celda de ruido con la que el render dividió S2. Se recalcula aquí con
        la misma regla (max(beam, píxel)) para que el test de la ley del grano
        tenga el denominador sin abrir la tabla. */

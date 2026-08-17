@@ -114,7 +114,8 @@ if (typeof R.thetaRiccoArcmin === 'function') {
 
 /* ── G4 · la fotometría no se entera ─────────────────────────────────────────
    La ley nueva toca la DETECTABILIDAD, no el campo. ⟨I⟩ y σ tienen que seguir
-   siendo Σ·S1 y √(Σ·S2/Ω) exactos, y el flujo pintado seguir conservándose.
+   siendo Σ·S1campo y √(Σ·S2campo/Ω) exactos —los momentos del campo con la banda
+   de transición dentro—, y el flujo pintado seguir conservándose.
    Este es el guardián de ADR 0003: nada de arreglar apariencia moviendo flujo. */
 console.log('\nG4 · ⟨I⟩ y σ siguen siendo las magnitudes físicas de la Capa 3:');
 var pob = C.poblacionCacheada(M13, 0);
@@ -123,13 +124,14 @@ var peorI = 0, peorS = 0;
 for (var i = 1; i < m.tabla.r.length; i += 17) {
   var rAs = m.tabla.r[i], s = pob.sigma(rAs);
   if (!(s > 0) || !isFinite(m.tabla.mRes[i])) continue;
-  var mr = m.tabla.mRes[i] + delta;
-  var Iesp = s * pob.S1(mr), sEsp = Math.sqrt(s * pob.S2(mr) / m.omegaBeam);
+  var mr = m.tabla.mRes[i];
+  var Iesp = s * pob.S1campo(mr, delta);
+  var sEsp = Math.sqrt(s * pob.S2campo(mr, delta) / m.omegaBeam);
   peorI = Math.max(peorI, Math.abs(m.tabla.I[i] - Iesp) / Iesp);
   peorS = Math.max(peorS, Math.abs(m.tabla.sigma[i] - sEsp) / sEsp);
 }
-ok(peorI < 1e-12, '⟨I⟩(r) = Σ·S1(m_res+Δ) exacto (peor ' + peorI.toExponential(1) + ')');
-ok(peorS < 1e-12, 'σ(r) = √(Σ·S2/Ω) exacto (peor ' + peorS.toExponential(1) + ')');
+ok(peorI < 1e-12, '⟨I⟩(r) = Σ·S1campo(m_res) exacto (peor ' + peorI.toExponential(1) + ')');
+ok(peorS < 1e-12, 'σ(r) = √(Σ·S2campo/Ω) exacto (peor ' + peorS.toExponential(1) + ')');
 
 /* ── G5 · qué hace el cielo ──────────────────────────────────────────────────
    Se comprueba sobre la RAZÓN σ/umbral y no sobre `s_grano`, que hoy es 0: un

@@ -215,6 +215,39 @@
       return tabla[j + 1] + (1 - (x - j)) * (tabla[j] - tabla[j + 1]);
     }
 
+    /* Momentos del campo CON la banda de transición. El corte duro en m_res+δ
+       manda al velo toda la banda a flujo cero y el render la dibuja con peso
+       a(m) < 1: el (1−a) de cada estrella de la banda no estaba ni en el velo
+       ni en lo dibujado. Su sitio es el velo —es luz que no se resuelve—, y
+       ponerla ahí cierra la partición sin ningún parámetro nuevo: a(m) es la
+       misma del render (invariante 8, la ley no se duplica) y el flujo total
+       no se toca (ADR 0003: nada se ancla ni se resta contra Gaia).
+
+         S1campo = S1(m_res+δ) + ∫banda (1−a(m))·dF
+         S2campo = S2(m_res+δ) + ∫banda (1−a(m))²·dF²
+
+       El cuadrado lleva (1−a)² porque lo que queda sin resolver de una estrella
+       de flujo f es (1−a)f, y el grano es la varianza de esos restos.
+
+       Regla del punto medio sobre PASOS rebanadas: a(m) es un smoothstep, la
+       cuadratura converge en O(h²) y con 40 rebanadas el error relativo es
+       ~1e-5, dos órdenes por debajo del ±1 % de conservación. */
+    var PASOS_BANDA = 40;
+    function momentosBanda(tabla, mRes, delta, exp) {
+      var d = delta == null ? CFG.delta : delta;
+      /* m_res = ∞ es el halo exterior: nada aglomera y no hay banda que integrar.
+         Sin este corte, (m_res+d − m)/2d da ∞−∞ y el velo entero sale NaN. */
+      if (!isFinite(mRes)) return cola(tabla, mRes);
+      var h = 2 * d / PASOS_BANDA, suma = 0, m1 = mRes - d, t1 = cola(tabla, m1);
+      for (var k = 0; k < PASOS_BANDA; k++) {
+        var m2 = m1 + h, t2 = cola(tabla, m2);
+        var w = 1 - atenuacionTransicion(m1 + h / 2, mRes, d);
+        suma += (exp === 2 ? w * w : w) * (t1 - t2);
+        m1 = m2; t1 = t2;
+      }
+      return cola(tabla, mRes + d) + suma;
+    }
+
     var rcAs = cumulo.rc * 60, rtAs = rcAs * Math.pow(10, cumulo.c);
     var kKing = rtAs / rcAs;
     // Normalización del perfil: perfilKing integra areaKing(k)·r_c² sobre el
@@ -333,6 +366,14 @@
       // el complemento exacto de S1: lo que no va al campo se dibuja, sin que se
       // pierda ni se duplique el bin que m_lim parte.
       Fresuelto: function (mlim) { return cola1[0] - cola(cola1, mlim); },
+      // Los dos anteriores con la banda de transición dentro: son los que usa
+      // el render. S1/S2/Fresuelto siguen siendo la partición IDEAL (corte
+      // duro), útil como referencia y en los tests que la miden.
+      S1campo: function (mRes, delta) { return momentosBanda(cola1, mRes, delta, 1); },
+      S2campo: function (mRes, delta) { return momentosBanda(cola2, mRes, delta, 2); },
+      // Complemento exacto de S1campo: lo que el render dibuja de verdad,
+      // resueltas enteras más la banda con su peso.
+      Fdibujado: function (mRes, delta) { return cola1[0] - momentosBanda(cola1, mRes, delta, 1); },
       sigma: sigma,
       mCrowd: mCrowd,
       completitud: completitud,

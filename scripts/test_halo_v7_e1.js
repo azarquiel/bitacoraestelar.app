@@ -120,13 +120,15 @@ var AFOV = 68;
   var rc = m.rcAs;
 
   /* (a) La LEY, en la tabla y sin ruido de estimador: sigma(r)² == Sigma(r)·
-     S2(m_res+delta)/Omega, con Omega recalculado aquí desde la apertura y la
+     S2campo(m_res)/Omega —la cola dura más el (1−a) de la banda de transición,
+     que es lo que de verdad queda sin resolver—, con Omega recalculado aquí
+     desde la apertura y la
      escala de píxel de ESTE aumento. Es la parte que depende de M. */
   var peorLey = 0, peorLeyEn = 0, nodos = 0;
   for (var k = 1; k < m.tabla.r.length; k++) {
     var rk = m.tabla.r[k];
     if (rk < 0.5 * rc || rk > 3 * rc) continue;
-    var teo = Math.sqrt(m.sigmaEn(rk) * m.S2(m.tabla.mRes[k] + m.delta) / m.omegaBeam);
+    var teo = Math.sqrt(m.sigmaEn(rk) * m.S2campo(m.tabla.mRes[k], m.delta) / m.omegaBeam);
     if (!(teo > 0) || !(m.tabla.sigma[k] > 0)) continue;
     nodos++;
     var relL = Math.abs(m.tabla.sigma[k] / teo - 1);
@@ -177,8 +179,8 @@ function sigmaEnR(m, r) {
 }
 var razonMedida = sigmaEnR(g514, rBase) / sigmaEnR(g146, rBase);
 // La ley completa, no solo Omega: S2 también cambia porque m_res cambia con M.
-var s2a = g146.S2(mResEn(g146, rBase) + g146.delta);
-var s2b = g514.S2(mResEn(g514, rBase) + g514.delta);
+var s2a = g146.S2campo(mResEn(g146, rBase), g146.delta);
+var s2b = g514.S2campo(mResEn(g514, rBase), g514.delta);
 var razonTeo = Math.sqrt((s2b / s2a) * (g146.omegaBeam / g514.omegaBeam));
 ok(Math.abs(razonMedida / razonTeo - 1) <= 0.05,
   'al pasar de 146× a 514× la amplitud del grano sube ×' + razonMedida.toFixed(3) +

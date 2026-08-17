@@ -147,7 +147,55 @@ Los dos medían algo que sólo era cierto mientras `m_crowd` leía el píxel:
   invariante y no tiene constante que ajustar: ⟨I⟩ = Σ·S1(m_res+δ) y ninguna otra
   vía de entrada (peor desvío medido 2,2e-16).
 
+## Arreglo de la hipótesis 3: el `(1−a)` va al velo
+
+Medido primero, con un test que se pone rojo: `scripts/test_banda_conservacion.js`
+rehace el balance sobre el perfil radial real contando lo que de verdad se pinta
+—`Fresuelto(m_res−δ)` más `∫banda a(m)·dF`— en vez de la partición ideal. La fuga
+iba del **6,6 % al 14,5 %** del flujo del cúmulo en 12 filas (cúmulo × equipo), y
+la partición ideal cerraba a 0,00 %: por eso `test_cumulo_render` no veía nada.
+
+El arreglo es de reparto, no de flujo (ADR 0003: nada se ancla ni se resta contra
+Gaia). La Capa 1 gana los momentos del campo **con la banda dentro**:
+
+```
+S1campo(m_res, δ) = S1(m_res+δ) + ∫banda (1−a(m))·dF
+S2campo(m_res, δ) = S2(m_res+δ) + ∫banda (1−a(m))²·dF²
+Fdibujado         = Ftotal − S1campo          (complemento exacto)
+```
+
+`a(m)` es la del render, no una copia (ADR 0008); cuadratura del punto medio con
+40 rebanadas (error ~1e-5, dos órdenes por debajo del ±1 %). `tablaCumulo` usa
+`S1campo`/`S2campo` en ⟨I⟩, en σ y en el arranque `I0`. Cero parámetros nuevos.
+
+Medido después: fuga **0,00 % en las 12 filas**, y sobre las estrellas que se
+entregan a dibujar en la captura (M13, 467 mm, 173×) el 10,3 % que pierden por
+atenuación reaparece en el velo, que engorda ≥ 11,2 % — comprobado radio a radio
+contra la cuadratura independiente del test (desvío 0,05 %).
+
+Efecto en el conteo: 1590 → **1575 de 1798**. Un velo con su flujo completo hunde
+un poco `m_lim,sky`; esas 15 estrellas no desaparecen, pasan al fondo que antes
+no existía.
+
+### Guardianes reescritos
+
+Todos medían el corte duro y pasan a medir la ley que el render usa:
+`test_grano_sbf` (G4), `test_halo_v7_e1`, `test_halo_v7_e2`, `test_cumulo_render`
+y `matriz_m13` (Nivel 3) cambian `S1`/`S2`/`Fresuelto` por
+`S1campo`/`S2campo`/`Fdibujado`. Los dos trazadores de S2 (`harness_grano_sbf`,
+`conPoblacionEscalada` en E2) envuelven también `S2campo` o dejarían de trazar
+nada.
+
+`test_halo_v7_e3` (E3.3, las alas a r > 4·r_h) exigía que el tap perceptual
+pintase **cero exacto**, con listón 1e-6 del cielo. Con su flujo completo el ala
+entra en el hombro de la sigmoide de `visibilidadDifusa` —que no tiene corte
+duro— y deja una cola de 2,96e-4 del cielo. Sigue siendo invisible y ahora se
+mide como tal: por debajo de un nivel de 8 bits (1/255 = 3,9e-3) y con el tap
+comiéndose el 99,84 % del flujo del ala, que ya está a 0,38·Cmin. El assert de
+contraste (ala < Cmin) no se toca.
+
 ## Lo que queda
 
-Hipótesis 3 (la banda pierde el `(1−a)` del flujo) y 4 (`k = 30` en el núcleo)
-siguen abiertas: piden decisión de modelo, no arreglo de código.
+Hipótesis 4 (`k = 30` en el núcleo): dentro de 0,25 r_h se pasa de 154 a 70
+estrellas. Es lo que el modelo quiere hacer y pide decisión de modelo, no arreglo
+de código.
