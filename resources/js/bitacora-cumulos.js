@@ -205,6 +205,26 @@
       return lo;
     }
 
+    /* Cola de la LF por debajo de mlim, INTERPOLANDO el bin que mlim parte.
+       Devolver el bin entero hace de S1 y S2 funciones escalón de mlim, y como
+       m_res(r) sí es continua en el radio (m_crowd interpola justo por esto,
+       invariante 7), cada borde de bin que m_res cruza mete en <I>(r) un salto
+       de 0,25 mag: son los anillos concéntricos de 47 Tuc (D3). Dentro del bin
+       se reparte linealmente, que es tratar phi como densidad constante en el
+       bin —la misma hipótesis con la que la LF está tabulada—.
+
+       Los bins son una rejilla uniforme de paso lf.paso y mAp[i] es el CENTRO
+       del bin i, así que x = (mlim − mAp[0])/paso + 1/2 es la posición de mlim
+       medida en bins desde el borde brillante del primero. */
+    function cola(tabla, mlim) {
+      var x = (mlim - mAp[0]) / lf.paso + 0.5;
+      if (!(x > 0)) return tabla[0];        // más brillante que todo: la cola es todo
+      var j = Math.floor(x);
+      if (j >= n) return 0;                 // más débil que todo: no queda cola
+      // Del bin j solo entra la fracción que queda por debajo de mlim.
+      return tabla[j + 1] + (1 - (x - j)) * (tabla[j] - tabla[j + 1]);
+    }
+
     var rcAs = cumulo.rc * 60, rtAs = rcAs * Math.pow(10, cumulo.c);
     var kKing = rtAs / rcAs;
     // Normalización del perfil: perfilKing integra areaKing(k)·r_c² sobre el
@@ -316,11 +336,13 @@
       magnitudes: mAp,          // magnitud aparente del centro de cada bin
       estrellasPorBin: num,
       // Flujo de las estrellas MÁS DÉBILES que m_lim: lo que se va al campo.
-      S1: function (mlim) { return cola1[primerDebil(mlim)]; },
+      S1: function (mlim) { return cola(cola1, mlim); },
       // Suma de flujos al cuadrado: la varianza del grano por unidad de perfil.
-      S2: function (mlim) { return cola2[primerDebil(mlim)]; },
-      // Flujo de las estrellas más brillantes que m_lim (las que se dibujan).
-      Fresuelto: function (mlim) { return cola1[0] - cola1[primerDebil(mlim)]; },
+      S2: function (mlim) { return cola(cola2, mlim); },
+      // Flujo de las estrellas más brillantes que m_lim (las que se dibujan). Es
+      // el complemento exacto de S1: lo que no va al campo se dibuja, sin que se
+      // pierda ni se duplique el bin que m_lim parte.
+      Fresuelto: function (mlim) { return cola1[0] - cola(cola1, mlim); },
       sigma: sigma,
       mCrowd: mCrowd,
       completitud: completitud,

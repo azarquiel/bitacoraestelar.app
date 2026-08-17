@@ -89,22 +89,47 @@ ok(pobM13.Ntot > 1e4 && pobM13.Ntot < 1e7,
   'M13: N_tot = ' + pobM13.Ntot.toExponential(3) + ' estrellas, del orden esperado para un globular');
 
 /* ── 3. S1 y S2, elemento a elemento contra la suma directa ─────────────── */
+/* Desde v7-E4 la cola se INTERPOLA dentro del bin que m_lim parte: devolver el
+   bin entero hacía de S1 y S2 funciones escalón de m_lim y, como m_res(r) es
+   continua, cada borde de bin dibujaba un anillo concéntrico (D3). Así que la
+   suma directa sigue siendo la referencia, pero solo donde no hay bin partido
+   —los bordes— y en medio la cola tiene que quedar ENTRE los dos bins enteros
+   que la rodean, que es lo que dice la interpolación y lo que garantiza que no
+   se pierde ni se duplica flujo. */
 console.log('S1 y S2 contra la suma directa sobre la LF (tolerancia 1e-9 relativa):');
-var peorS1 = 0, peorS2 = 0, peorReparto = 0;
-for (var mlim = 8; mlim <= 26; mlim += 0.1) {
-  var s1 = 0, s2 = 0;
-  for (i = 0; i < pobM13.magnitudes.length; i++) {
-    if (pobM13.magnitudes[i] <= mlim) continue;
-    var f = Math.pow(10, -0.4 * pobM13.magnitudes[i]);
-    s1 += pobM13.estrellasPorBin[i] * f;
-    s2 += pobM13.estrellasPorBin[i] * f * f;
+var pasoLF = pobM13.magnitudes[1] - pobM13.magnitudes[0];
+function colaDirecta(mlim, cuadrado) {
+  var s = 0;
+  for (var j = 0; j < pobM13.magnitudes.length; j++) {
+    if (pobM13.magnitudes[j] <= mlim) continue;
+    var fj = Math.pow(10, -0.4 * pobM13.magnitudes[j]);
+    s += pobM13.estrellasPorBin[j] * fj * (cuadrado ? fj : 1);
   }
-  if (s1 > 0) peorS1 = Math.max(peorS1, rel(pobM13.S1(mlim), s1));
-  if (s2 > 0) peorS2 = Math.max(peorS2, rel(pobM13.S2(mlim), s2));
+  return s;
+}
+var peorS1 = 0, peorS2 = 0, peorReparto = 0, fueraS1 = 0, fueraS2 = 0;
+for (var mlim = 8; mlim <= 26; mlim += 0.1) {
+  // Bordes del bin que contiene m_lim: la cola tiene que caer entre los dos.
+  var centro = pobM13.magnitudes[0] +
+    Math.round((mlim - pobM13.magnitudes[0]) / pasoLF) * pasoLF;
+  var alto1 = colaDirecta(centro - pasoLF / 2 - 1e-9, false);   // bin partido entero dentro
+  var bajo1 = colaDirecta(centro + pasoLF / 2 + 1e-9, false);   // bin partido entero fuera
+  var alto2 = colaDirecta(centro - pasoLF / 2 - 1e-9, true);
+  var bajo2 = colaDirecta(centro + pasoLF / 2 + 1e-9, true);
+  var v1 = pobM13.S1(mlim), v2 = pobM13.S2(mlim);
+  if (v1 > alto1 * (1 + 1e-9) || v1 < bajo1 * (1 - 1e-9)) fueraS1++;
+  if (v2 > alto2 * (1 + 1e-9) || v2 < bajo2 * (1 - 1e-9)) fueraS2++;
+  // En el borde del bin no hay nada que partir: ahí la coincidencia es exacta.
+  var borde = centro + pasoLF / 2;
+  var d1 = colaDirecta(borde, false), d2 = colaDirecta(borde, true);
+  if (d1 > 0) peorS1 = Math.max(peorS1, rel(pobM13.S1(borde), d1));
+  if (d2 > 0) peorS2 = Math.max(peorS2, rel(pobM13.S2(borde), d2));
   peorReparto = Math.max(peorReparto, rel(pobM13.S1(mlim) + pobM13.Fresuelto(mlim), pobM13.Ftotal));
 }
-ok(peorS1 < 1e-9, 'S1 coincide en toda la rejilla de m_lim (peor ' + peorS1.toExponential(2) + ')');
-ok(peorS2 < 1e-9, 'S2 coincide en toda la rejilla de m_lim (peor ' + peorS2.toExponential(2) + ')');
+ok(peorS1 < 1e-9, 'S1 coincide con la suma directa en los bordes de bin (peor ' + peorS1.toExponential(2) + ')');
+ok(peorS2 < 1e-9, 'S2 coincide con la suma directa en los bordes de bin (peor ' + peorS2.toExponential(2) + ')');
+ok(fueraS1 === 0 && fueraS2 === 0,
+  'y dentro del bin la cola interpolada queda entre los dos bins enteros que la rodean');
 ok(peorReparto < 1e-9,
   'resuelto + no resuelto = F(V_t) para todo m_lim (peor ' + peorReparto.toExponential(2) + ')');
 ok(rel(pobM13.S1(-99), pobM13.Ftotal) < 1e-12, 'sin nada resuelto, el campo se lleva todo el flujo');

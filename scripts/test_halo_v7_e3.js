@@ -128,19 +128,28 @@ ok(rAla < rBorde, '4·r_h = ' + rAla.toFixed(0) + '" cae dentro del lienzo (bord
    Cmin (E1.3). Compararlo contra Cmin es exactamente lo que hace el render. */
 var modelo = m.perfilEn('modelo', rAla, rBorde, 12);
 var difuso = m.perfilEn('difuso', rAla, rBorde, 12);
-var peorC = 0, visibles = 0, anillosVal = 0;
+/* El listón del tap perceptual no es «cero exacto»: visibilidadDifusa es una
+   sigmoide en log, así que por debajo del umbral deja una cola que tiende a
+   cero sin llegar. Lo que se exige es que lo pintado sea invisible frente al
+   cielo —1e-6 del fondo es cero a cualquier profundidad de bits— y no que el
+   float dé 0,0, que además haría el test rehén del último decimal. */
+var TOL_PINTA = 1e-6;
+var peorC = 0, visibles = 0, anillosVal = 0, peorPinta = 0;
 modelo.forEach(function (a, i) {
   if (!(a.n > 0)) return;
   anillosVal++;
   var c = a.I / m.Fcielo;
   if (c > peorC) peorC = c;
-  if (difuso[i].I > 0) visibles++;
+  var pinta = difuso[i].I / m.Fcielo;
+  if (pinta > peorPinta) peorPinta = pinta;
+  if (pinta > TOL_PINTA) visibles++;
 });
 ok(anillosVal >= 8 && peorC < m.Cmin,
   'el contraste máximo del ala es ' + peorC.toExponential(3) + ' < Cmin = ' +
   m.Cmin.toExponential(3) + ' (' + anillosVal + ' anillos medidos)');
 ok(visibles === 0, 'y el tap perceptual no pinta nada en ninguno de los ' +
-  anillosVal + ' anillos del ala');
+  anillosVal + ' anillos del ala (lo más que deja es ' + peorPinta.toExponential(2) +
+  ' del cielo)');
 
 /* El mismo criterio, pero radio a radio sobre la tabla del render: dónde deja de
    verse el halo. Si el corte cayese más allá de 4·r_h el test de arriba sería
