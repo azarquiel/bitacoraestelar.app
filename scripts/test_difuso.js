@@ -191,6 +191,44 @@ casi(mlimSqm(30), mlimSqm(27), 1e-9,
   'pasado el suelo de detección del ojo (27) el cielo ya no mejora el límite');
 ok(mlimSqm(27) > mlimSqm(24), 'y por debajo de 27 el cielo sí manda');
 
+/* ── 9c. El mismo suelo de 27, en el PINTADO ─────────────────────────────────
+   valorDeFlujo divide por Fcielo. Con un cielo irreal (SQM 30) el divisor
+   tiende a cero y el contraste de cualquier objeto explota: la escena entera
+   sale blanca aunque magLimite —que sí conocía el suelo de 27— no haya movido
+   ni una estrella. FOT.SB_SUELO_PINTADO pone el mismo tope en el Fcielo del
+   pintado, y SOLO ahí: Cmin, H2c y magLimite siguen con el Fcielo sin capar.
+   Con cualquier cielo real (SBe < 27) el pintado es idéntico al de siempre. */
+console.log('Suelo de 27 mag/arcsec² en el Fcielo del pintado:');
+function ctxSuelo(sqm, suelo) {
+  var antes = FOT.SB_SUELO_PINTADO;
+  FOT.SB_SUELO_PINTADO = suelo;
+  var c = R.ctxFotometrico({ pupilaSalida: 457 / 61, pupilaOjo: 7, sqm: sqm, transmision: 0.75, aumentos: 61 });
+  FOT.SB_SUELO_PINTADO = antes;
+  return c;
+}
+// Nivel pintado de una superficie mu, tal como la línea de salida de pintarFot.
+function nivelPintado(sqm, mu, suelo) {
+  var c = ctxSuelo(sqm, suelo);
+  return c.nivelFondo + R.valorDeFlujo(Math.pow(10, -0.4 * mu) * c.dim * c.T, c.FcieloPintado, c.rango);
+}
+[16, 18, 20, 21.5, 24, 26].forEach(function (sqm) {
+  casi(nivelPintado(sqm, 22, 27), nivelPintado(sqm, 22, null), 1e-12,
+    'sqm ' + sqm + ' (SBe ' + ctxSuelo(sqm, null).SBe.toFixed(1) + ' < 27): el suelo no toca nada');
+});
+// Pasado el suelo, el nivel deja de crecer con el cielo en vez de dispararse.
+ok(nivelPintado(35, 22, null) >= 255 && nivelPintado(35, 22, 27) < 120,
+  'sqm 35: un objeto de mu=22 pasa de blanco puro (' + nivelPintado(35, 22, null).toFixed(0) +
+  ') a gris estable (' + nivelPintado(35, 22, 27).toFixed(0) + ')');
+/* Tolerancia de 0,05 niveles y no exacta a propósito: nivelFondo SÍ sigue el
+   cielo sin capar (el suelo es solo del Fcielo del pintado), y entre SBe 30 y
+   35 eso deja 0,01 niveles de 255. Ruido, no dependencia. */
+casi(nivelPintado(40, 22, 27), nivelPintado(30, 22, 27), 0.05,
+  'por encima del suelo el pintado ya no depende del cielo');
+// Y el umbral NO se toca: Cmin y Fcielo siguen viendo el cielo de verdad.
+ok(ctxSuelo(35, 27).Fcielo === ctxSuelo(35, null).Fcielo &&
+   ctxSuelo(35, 27).Cmin === ctxSuelo(35, null).Cmin,
+  'el suelo no toca Fcielo ni Cmin (umbral de contraste intacto)');
+
 /* ── 10. Curva de tono de las estrellas ─────────────────────────────────────
    Las estrellas se dibujaban con 'lighter' en 8 bits y saltándose la curva de
    tono: en el núcleo de un cúmulo cientos de sprites sumaban por encima de 255,

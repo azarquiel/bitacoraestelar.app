@@ -186,6 +186,13 @@
        la luz ambiente de quien mire la pantalla—, pero ahora es un anclaje, no
        una forma: subirlo o bajarlo desplaza toda la curva sin deformarla. */
     SB_CIELO_BLANCO: 16.5,
+    /* Suelo de detección del ojo (mag/arcsec²) aplicado SOLO al Fcielo con el
+       que se pinta. valorDeFlujo divide por Fcielo, así que con un cielo
+       irreal (SQM 30) el divisor tiende a cero y el contraste de cualquier
+       objeto explota: la escena sale blanca. magLimite ya usa este mismo 27
+       como suelo; el pintado no lo conocía. null = comportamiento histórico
+       (para el A/B). No toca Cmin, ni H2c, ni magLimite. */
+    SB_SUELO_PINTADO: 27,
     // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el lado
     // brillante). 1 = simétrico → las siluetas oscuras recortan contra el fondo.
     REALCE_OSCURO: 1.0,
@@ -294,8 +301,18 @@
       Cmin *= Math.max(FOT.C_MAG_MIN, Math.min(FOT.C_MAG_MAX,
         Math.pow(FOT.C_MAG_REF / o.aumentos, FOT.C_MAG_EXP)));
     }
+    /* Fcielo del PINTADO: el mismo cielo, pero sin dejar que baje del suelo de
+       detección del ojo (FOT.SB_SUELO_PINTADO). Fcielo va en unidades "antes de
+       la pupila", así que el tope se pone sobre SBe y se devuelve a esas
+       unidades dividiendo por dim*T. Con cielos reales SBe < 27 y esto es
+       exactamente Fcielo. Solo lo consume la línea que escribe el píxel; el
+       umbral (Cmin, visibilidadDifusa, sbUmbralContraste) sigue con Fcielo. */
+    var FcieloPintado = Fcielo;
+    if (FOT.SB_SUELO_PINTADO != null && SBe > FOT.SB_SUELO_PINTADO) {
+      FcieloPintado = Math.pow(10, -0.4 * FOT.SB_SUELO_PINTADO) / (dim * T);
+    }
     return {
-      Fcielo: Fcielo, Fref: Fref, Cmin: Cmin, dim: dim, T: T,
+      Fcielo: Fcielo, FcieloPintado: FcieloPintado, Fref: Fref, Cmin: Cmin, dim: dim, T: T,
       SBe: SBe, nivelFondo: nivelCielo(SBe),
       rango: FOT.SB_NEGRO - FOT.SB_BLANCO
     };
@@ -580,7 +597,7 @@
              más oscuro-, en vez de cancelarse siempre. */
           if (v > 0) F += flujoDeValor(v, c.Fref, c.rango);
         }
-        salida[ch][i] = c.nivelFondo + valorDeFlujo(F, c.Fcielo, c.rango);
+        salida[ch][i] = c.nivelFondo + valorDeFlujo(F, c.FcieloPintado, c.rango);
       }
     }
     var im = ctx.createImageData(SIZE, SIZE), k, j;
