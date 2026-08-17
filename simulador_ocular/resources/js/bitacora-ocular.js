@@ -74,7 +74,7 @@
       // Cúmulos globulares: catálogo de Harris (1996, rev. 2010), cargado desde
       // globulares-datos.js (window.BITACORA_GLOBULARES). r_h del catálogo es
       // radio de MEDIA LUZ, no de marea: r_tidal sale de r_c·10^c (ver
-      // BitacoraGaiaRender.haloGlobular).
+      // perfilKing en bitacora-gaia-render.js).
       var CATALOGO_GLOBULARES = (window.BITACORA_GLOBULARES || []).map(function (e) {
         var rc = e[4], c = e[6];
         return {
@@ -82,7 +82,14 @@
           nombre: e[1] ? (e[1] + ' · Cúmulo globular (' + e[0] + ')') : (e[0] + ' · Cúmulo globular'),
           constelacion: '', ra: degAHms(e[2]), dec: degADms(e[3]),
           tipo: 'cúmulo globular', carbono: false, doble: false, globular: true,
-          rCore: rc, rTidal: rc * Math.pow(10, c), muV0: e[7]
+          rCore: rc, rTidal: rc * Math.pow(10, c), muV0: e[7],
+          /* Ficha física para bitacora-cumulos.js: es la MISMA fila del catálogo,
+             sin recortar. Harris no publica ángulo de posición, así que el perfil
+             se evalúa en radio circular (pa nulo). */
+          cumulo: {
+            id: e[0], ra: e[2], dec: e[3], rc: rc, rh: e[5], c: c, muV0: e[7],
+            Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null
+          }
         };
       });
       // Códigos de catálogo -> nombre largo (fuente: mapa/datos/catalogos_dobles.csv).
@@ -588,18 +595,7 @@
         // el cielo más brillante, el límite baja y las débiles DESAPARECEN,
         // igual que en el DSS. dibujarGaia solo pinta estrellas con Gmag <= mlim.
         var mlim = magLimiteTelescopio();
-        // Consulta aparte, a profundidad y radio FIJOS (el del cúmulo, no el
-        // campo actual), para la resta de P4: cuánta luz ya está en estrellas
-        // catalogadas es del cúmulo, no de con qué telescopio se mira esta
-        // noche -si dependiera de la consulta principal (que sí varía con el
-        // equipo), cambiar de telescopio podía apagar el halo de golpe-. Si
-        // falla, sigue sin halo en vez de tirar todo el render a DSS.
-        var haloQuery = objetoSel.globular
-          ? BitacoraGaiaRender.consultar(ra0, dec0, Math.max(objetoSel.rTidal * 2.2, 10),
-              BitacoraGaiaRender.config.globular.magResta).catch(function () { return []; })
-          : Promise.resolve([]);
-        Promise.all([consultarGaia(ra0, dec0, arcmin, true), haloQuery]).then(function (res) {
-          var estrellas = res[0], estrellasHalo = res[1];
+        consultarGaia(ra0, dec0, arcmin, true).then(function (estrellas) {
           if (peticion !== contadorPeticion) return;
           cargando.style.display = 'none';
           /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
@@ -611,8 +607,10 @@
             $('sim-aviso').textContent = 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
               ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
           }
-          // Fondo plano de cielo: sin capas difusas, las estrellas se dibujan
-          // sobre el nivel de cielo tal cual (sin componente difusa que sumar).
+          // Componente difusa del campo: la llenan las capas que la tengan (el
+          // campo no resuelto de un cúmulo, la imagen de una galaxia). En un
+          // campo sin ninguna queda a cero y las estrellas se dibujan sobre el
+          // nivel de cielo tal cual.
           var difuso = new Float32Array(PROC * PROC);
           /* Si el objeto es una doble, se completan del catálogo las componentes
              que Gaia no trae (satura con las primarias muy brillantes: la de
@@ -626,16 +624,20 @@
                 pa: objetoSel.pa, spect1: objetoSel.spect1, spect2: objetoSel.spect2
               })
             : estrellas;
-          // Halo no resuelto del cúmulo globular (perfil de King): se suma al
-          // fondo difuso y amortigua la aureola/blur de las estrellas que caen
-          // dentro (ver perfilKing/haloGlobular en bitacora-gaia-render.js).
-          // Solo en canvas-2d: la superposición de Gaia sobre DSS no lo lleva.
-          var halo = objetoSel.globular
-            ? BitacoraGaiaRender.haloGlobular(
-                { rc: objetoSel.rCore, rt: objetoSel.rTidal, muV0: objetoSel.muV0 },
-                estrellasHalo, ra0, dec0, datosOcular().aumentos)
+          var cieloGaia = cieloOptica(datosOcular().pupila);
+          cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
+          /* Cúmulo globular: lo que este equipo NO resuelve se pinta como campo
+             estadístico (media + grano de la función de luminosidad) y lo que sí,
+             como estrellas —las de Gaia más las sintéticas que el catálogo no
+             trae en el núcleo aglomerado—. Toda la ley vive en el módulo
+             compartido; aquí solo se le pasa el equipo. */
+          var cum = objetoSel.globular && objetoSel.cumulo
+            ? BitacoraGaiaRender.pintarCumulo(difuso, objetoSel.cumulo, {
+                ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
+                cielo: cieloGaia, apertura: teleApertura(), estrellas: estrellasDibujo
+              })
             : null;
-          if (halo) BitacoraGaiaRender.pintarHaloGlobular(difuso, halo, { ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC });
+          if (cum) estrellasDibujo = cum.estrellas;
           var opEst = {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
@@ -646,12 +648,9 @@
             // otro campo.
             sep: objetoSel.doble ? objetoSel.sep : null,
             conGlow: true, carbono: !!objetoSel.carbono,
-            carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana(),
-            globular: halo
+            carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana()
           };
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, opEst, PROC);
-          var cieloGaia = cieloOptica(datosOcular().pupila);
-          cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
           BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
           /* Galaxias del campo con su imagen real de PanSTARRS (ps1cutouts).
              Toda la capa vive en el módulo compartido, que es lo que hace que el
@@ -890,6 +889,36 @@
             if (p && p.catch) p.catch(function () {});
           }
         });
+        /* El círculo cambia de tamaño al entrar y al salir, así que el lienzo se
+           vuelve a dibujar al tamaño nuevo. Solo si de verdad cambia: si ya
+           estaba en su techo, ampliar la ventana no obliga a repetir el render,
+           que no es gratis.
+
+           La medida NO puede hacerse dentro del propio fullscreenchange, aunque
+           la clase ya esté puesta: el evento llega ANTES del reflow y
+           `sim-vista` sigue midiendo el hueco del estado anterior (medido: 367
+           px en el evento y 749 dos fotogramas después). Con esa medida vieja se
+           entraba a pantalla completa sin re-renderizar y se SALÍA renderizando
+           al tamaño de la pantalla completa —1440 px de lienzo en un hueco de
+           367—, que el navegador reduce cuatro veces: las estrellas puntuales
+           mueren en el submuestreo y solo sobrevive el velo difuso del cúmulo.
+           Quien sabe el tamaño definitivo es el layout, así que se le pregunta a
+           él con un ResizeObserver, que además cubre redimensionar la ventana.
+           No se realimenta: tras el render tamRender ya coincide con el lienzo. */
+        var vista = $('sim-vista');
+        if (window.ResizeObserver && vista) {
+          /* Con espera: el hueco no salta de un valor al otro, pasa por varios
+             tamaños intermedios mientras el navegador acomoda la pantalla
+             completa (medido al salir: 749 → 737 → 715 → 367). Sin la espera se
+             renderizaría en cada escalón, y un render no es gratis. */
+          var pendiente = null;
+          new ResizeObserver(function () {
+            clearTimeout(pendiente);
+            pendiente = setTimeout(function () {
+              if (tamRender($('sim-origen').value) !== $('sim-lienzo').width) actualizar();
+            }, 200);
+          }).observe(vista);
+        }
         ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
           document.addEventListener(ev, function () {
             var dentro = (document.fullscreenElement || document.webkitFullscreenElement) === zona;
@@ -897,12 +926,14 @@
             var txt = dentro ? 'Salir de pantalla completa' : 'Ver a pantalla completa';
             btnFull.title = txt;
             btnFull.setAttribute('aria-label', txt);
-            /* El círculo cambia de tamaño, así que el lienzo de 720 se vería
-               ampliado: se vuelve a dibujar al tamaño nuevo. Solo si de verdad
-               cambia —si ya estaba en su techo, ampliar la ventana no obliga a
-               repetir el render, que no es gratis—. La clase ya está puesta
-               arriba, así que clientWidth mide el hueco DEFINITIVO. */
-            if (tamRender($('sim-origen').value) !== $('sim-lienzo').width) actualizar();
+            // Reserva para navegadores sin ResizeObserver: dos fotogramas para
+            // que el hueco ya esté medido cuando se decide.
+            if (window.ResizeObserver) return;
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                if (tamRender($('sim-origen').value) !== $('sim-lienzo').width) actualizar();
+              });
+            });
           });
         });
       }

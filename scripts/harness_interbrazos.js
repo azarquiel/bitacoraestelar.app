@@ -295,7 +295,7 @@ function pintarInstr(parche, o) {
 }
 
 /* nivel de pantalla de un píxel de galaxia (réplica de pintarFot con
-   galaxiaMask: rampa ya aplicada, s=1, gamma completa, techo realceMax). */
+   difusoMask: rampa ya aplicada, s=1, gamma completa, techo realceMax). */
 function nivelPantalla(fPost, c) {
   var out = new Float32Array(fPost.length);
   for (var i = 0; i < fPost.length; i++) {

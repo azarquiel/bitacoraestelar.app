@@ -93,7 +93,7 @@ function render(gal, caso, campoFijo) {
   var sobre = 0, flujo = 0, marcados = 0;
   for (var i = 0; i < lienzo.length; i++) {
     if (lienzo[i] > 0) { sobre++; flujo += lienzo[i]; }
-    if (cielo.galaxiaMask && cielo.galaxiaMask[i]) marcados++;
+    if (R.difusoMarcado(cielo.difusoMask, i)) marcados++;
   }
   var umbral = R.sbUmbralContraste(c);
   return {

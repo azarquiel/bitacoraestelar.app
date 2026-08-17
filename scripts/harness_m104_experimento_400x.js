@@ -328,10 +328,7 @@ function pintarVariante(parche, datos, o, modo) {
   var sMezcla = peso ? parche.escalaMezcla : 1;
   var ladoPx = (parche.ladoArcmin / 60) * escv;
   var alcance = Math.max(ladoPx / 2, R.ps1RadioHaloAs(comps) * pxPorAs);
-  if (!(o.cielo.galaxiaMask && o.cielo.galaxiaMask.length === difuso.length)) {
-    o.cielo.galaxiaMask = new Uint8Array(difuso.length);
-  }
-  var mask = o.cielo.galaxiaMask;
+  var mask = R.difusoMaskDe(o.cielo, difuso.length);
   var SUB = (modo === 'super4') ? 4 : 1;
   var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
   var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
@@ -376,7 +373,7 @@ function pintarVariante(parche, datos, o, modo) {
       }
       if (!pintado || !nsub) continue;
       difuso[y * SIZE + x] += acc / nsub;
-      mask[y * SIZE + x] = 1;
+      mask[y * SIZE + x] = 0;
     }
   }
   return difuso;
@@ -387,7 +384,7 @@ function pintarVariante(parche, datos, o, modo) {
 function etapaE(difuso, mask, c) {
   var n = difuso.length, niveles = new Float32Array(n);
   for (var i = 0; i < n; i++) {
-    var esGal = !!(mask && mask[i]);
+    var esGal = R.difusoMarcado(mask, i);
     var s = esGal ? 1 : (function (Fv) {
       if (!(Fv > 0)) return 0;
       var x = (Math.log10(Fv / (c.Fcielo * c.Cmin)) + FOT.UMBRAL_MARGEN) / FOT.UMBRAL_ANCHURA;
@@ -586,7 +583,7 @@ EQUIPOS.forEach(function (e) {
     var o = { ra0: gal.ra, dec0: gal.dec, arcmin: ARCMIN, size: SIZE, cielo: cielo, apertura: e.D };
     var datosPsf = psfP[e.D];
     var difuso = pintarVariante(parche, datosPsf, o, m.modo);
-    cadenas[m.id][e.D] = { difuso: difuso, E: etapaE(difuso, cielo.galaxiaMask, R.ctxFotometrico(cielo)) };
+    cadenas[m.id][e.D] = { difuso: difuso, E: etapaE(difuso, cielo.difusoMask, R.ctxFotometrico(cielo)) };
   });
 });
 // D: sin PSF de telescopio (techo de PS1), pintado como producción
@@ -595,7 +592,7 @@ EQUIPOS.forEach(function (e) {
   var cielo = cieloFijo();
   var o = { ra0: gal.ra, dec0: gal.dec, arcmin: ARCMIN, size: SIZE, cielo: cielo, apertura: 350 };
   var difuso = pintarVariante(parche, Ap, o, 'prox');   // datos SIN convolucionar
-  cadenas.D[0] = { difuso: difuso, E: etapaE(difuso, cielo.galaxiaMask, R.ctxFotometrico(cielo)) };
+  cadenas.D[0] = { difuso: difuso, E: etapaE(difuso, cielo.difusoMask, R.ctxFotometrico(cielo)) };
 })();
 
 var cxL = SIZE / 2, cyL = SIZE / 2;
