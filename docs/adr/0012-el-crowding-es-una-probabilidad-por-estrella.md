@@ -106,9 +106,17 @@ actual de `tablaCumulo`).
 
 ## Orden de trabajo
 
-1. Test rojo primero, como en el ADR 0011: conservación
-   `Ftotal = Fdibujado + Sigma·S1campo` con `a = P_solo`, sobre las 12 filas de
-   cúmulo × equipo. Debe ir rojo con la ley de hoy.
+1. ~~Test rojo primero~~ **hecho**: `scripts/test_crowding_psolo.js`, sobre las
+   12 filas de cúmulo × equipo. Tres asserts: A1 (la ley es una atenuación
+   válida: `0 ≤ a ≤ 1`, monótona en `m`, continua en `r`) y A2 (complemento
+   exacto, residuo 2,4e-15) están **verdes**; A3 —el velo del render es el
+   complemento de `P_solo`— está **rojo**, con una fuga del 16,4 % al 46,7 %
+   según cúmulo y equipo. La ley vive en la Capa 1 (`pob.aCrowd`, con
+   `CFG.thetaSepFwhm` y `CFG.dmagCrowd`) y todavía no la llama nadie: el test
+   mide producción, no se reimplementa la ley (ADR 0008).
+
+   NO entra en `suite_halo_v7` hasta que A3 esté verde; hasta entonces se corre
+   suelto y su exit code 1 es el resultado esperado.
 2. Barrido de `θ_sep` contra las dos verdades, por anillo. Calibración.
 3. (A) y (B), medidas.
 4. Implementación y reescritura de guardianes.

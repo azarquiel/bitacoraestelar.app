@@ -41,6 +41,13 @@
     // Banda de transición alrededor de m_res, en magnitudes (§2.4 de la
     // especificación). Fija: solo k es semi-libre.
     delta: 1.0,
+    // ADR 0012: la ley que va a sustituir a crowdingCriterion y delta. Todavía
+    // NO la usa el render; existe para que el test rojo de conservación pueda
+    // medirla sin reimplementarla (ADR 0008). Separación mínima resoluble en
+    // FWHM (convención: 1 FWHM; Rayleigh, Dawes y Sparrow difieren) y salto de
+    // magnitud a partir del cual una vecina deja de fundir a la débil.
+    thetaSepFwhm: 1.0,
+    dmagCrowd: 0.75,
     // Completitud de Gaia: sigmoide de dos constantes. El codo está donde el
     // catálogo empieza a perder estrellas en campo abierto; en el núcleo lo
     // adelanta la propia aglomeración (m_crowd con el beam de Gaia), así que el
@@ -278,6 +285,33 @@
       return mAp[lo] + (t - 0.5) * lf.paso;          // mAp es el centro del bin
     }
 
+    /* ADR 0012: el crowding como probabilidad POR ESTRELLA, no como umbral.
+       Una estrella de magnitud m a radio r se resuelve si no hay ninguna vecina
+       capaz de fundirla dentro de su disco de separación. Las vecinas son un
+       proceso de Poisson de densidad n(≥ m+Δmag, r) = Sigma(r)·N(≥ m+Δmag), así
+       que la probabilidad de estar sola es
+
+         a(m, r) = exp( − Sigma(r) · N(≥ m+Δmag) · π·θ_sep² )
+
+       Continua en m y en r por construcción, y sin listón: es lo que le falta a
+       m_crowd, que no puede dar la forma radial (ningún k global la reproduce,
+       ver docs/halo_v7/diagnostico_estrellas_perdidas.md).
+
+       Todavía NO la llama el render. Vive aquí y no en el arnés porque el arnés
+       no reimplementa la ley que mide (ADR 0008).
+
+       El conteo se interpola dentro del bin con la MISMA `cola` que S1 y S2: un
+       escalón en r dibuja anillos (invariante 7). N(≥m) = Ntot − cola(colaN, m). */
+    var colaN = new Float64Array(n + 1);
+    for (i = n - 1; i >= 0; i--) colaN[i] = colaN[i + 1] + num[i];
+    function aCrowd(m, rAs, fwhmAs) {
+      var s = sigma(rAs);
+      if (!(s > 0) || !(fwhmAs > 0)) return 1;
+      var thSep = CFG.thetaSepFwhm * fwhmAs;
+      var masBrillantes = colaN[0] - cola(colaN, m + CFG.dmagCrowd);
+      return Math.exp(-s * masBrillantes * Math.PI * thSep * thSep);
+    }
+
     /* Completitud de Gaia. El codo es el del catálogo en campo abierto, salvo
        que la aglomeración lo adelante: en el núcleo Gaia pierde estrellas mucho
        antes que en el halo, y eso ya lo dice m_crowd con el beam de Gaia. */
@@ -376,6 +410,7 @@
       Fdibujado: function (mRes, delta) { return cola1[0] - momentosBanda(cola1, mRes, delta, 1); },
       sigma: sigma,
       mCrowd: mCrowd,
+      aCrowd: aCrowd,                    // ADR 0012, todavía sin usar en el render
       completitud: completitud,
       sinteticas: sinteticas,
       radioPropio: function (dxAs, dyAs) { return radioPropio(dxAs, dyAs, cumulo.elip, cumulo.pa); }
