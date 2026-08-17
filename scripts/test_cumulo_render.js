@@ -83,7 +83,7 @@ ok(!!A.res, 'pintarCumulo devuelve resultado con el módulo de población cargad
 
 /* El reparto resuelto/campo se rehace aquí sobre la MISMA rejilla de píxeles,
    con la m_res(r) que el render tabuló. La identidad que se pone a prueba no es
-   S1 + Fresuelto = Ftotal (eso ya lo cierra la Capa 1, exacto), sino que el
+   S1campo + Fdibujado = Ftotal (eso ya lo cierra la Capa 1, exacto), sino que el
    bucle de pintado —área del píxel, radio propio, interpolación de la tabla—
    no pierda ni invente luz al llevarlo al lienzo. */
 function repartoEnLienzo(P) {
@@ -98,8 +98,8 @@ function repartoEnLienzo(P) {
       var s = pob.sigma(rAs);
       var u = rAs / tabla.paso, i = Math.floor(u), t = u - i;
       var mRes = tabla.mRes[i] * (1 - t) + tabla.mRes[i + 1] * t;
-      campo += s * pob.S1(mRes + delta) * areaPx;
-      resuelto += s * pob.Fresuelto(mRes + delta) * areaPx;
+      campo += s * pob.S1campo(mRes, delta) * areaPx;
+      resuelto += s * pob.Fdibujado(mRes, delta) * areaPx;
       total += s * pob.Ftotal * areaPx;
     }
   }

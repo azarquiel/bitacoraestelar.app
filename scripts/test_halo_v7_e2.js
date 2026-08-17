@@ -117,6 +117,7 @@ function conPoblacionEscalada(K, fn) {
     var falsa = Object.create(pob);
     falsa.sigma = function (rAs) { return K * pob.sigma(rAs); };
     falsa.S2 = function (m) { return K * pob.S2(m); };
+    falsa.S2campo = function (m, d) { return K * pob.S2campo(m, d); };
     falsa.mCrowd = function (rAs) { return mResRef(rAs) - 0.5; };
     return falsa;
   };
@@ -187,7 +188,7 @@ console.log('\nE2.2 · campo + resueltas = F(V_t) en rejilla (D, M, seeing):');
 
 /* El reparto se rehace sobre la MISMA rejilla de píxeles con la m_res(r) que el
    render tabuló (igual que en test_cumulo_render.js). Lo que se pone a prueba no
-   es S1 + Fresuelto = Ftotal —eso lo cierra la Capa 1, exacto—, sino que el
+   es S1campo + Fdibujado = Ftotal —eso lo cierra la Capa 1, exacto—, sino que el
    bucle de pintado no pierda ni invente luz al llevarlo al lienzo. */
 function repartoEnLienzo(P) {
   var pob = P.res.poblacion, tabla = P.res.tabla, delta = C.config.delta;
@@ -201,8 +202,8 @@ function repartoEnLienzo(P) {
       var s = pob.sigma(rAs);
       var u = rAs / tabla.paso, i = Math.floor(u), t = u - i;
       var mRes = tabla.mRes[i] * (1 - t) + tabla.mRes[i + 1] * t;
-      campo += s * pob.S1(mRes + delta) * areaPx;
-      resuelto += s * pob.Fresuelto(mRes + delta) * areaPx;
+      campo += s * pob.S1campo(mRes, delta) * areaPx;
+      resuelto += s * pob.Fdibujado(mRes, delta) * areaPx;
       total += s * pob.Ftotal * areaPx;
     }
   }

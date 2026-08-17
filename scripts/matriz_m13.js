@@ -215,19 +215,20 @@ for (var i = 0; i < M100.tabla.I.length; i++) {
    del pico al duplicar el aumento. No es un defecto: es la misma física que hace
    que abrir apertura deshaga el halo en estrellas.
    Lo que sí es invariante, y es lo que se comprueba ahora, es que el velo no
-   tenga NINGUNA otra vía de entrada: <I> = Sigma·S1(m_res+delta) y nada más, así
-   que el cociente entre las dos filas tiene que ser exactamente el de S1 en sus
+   tenga NINGUNA otra vía de entrada: <I> = Sigma·S1campo(m_res) y nada más, así
+   que el cociente entre las dos filas tiene que ser exactamente el de S1campo en sus
    dos m_res. Cero constantes que ajustar. */
 var peorVia = 0;
 for (i = 0; i < M100.tabla.I.length; i++) {
   if (!(M100.tabla.I[i] > 0) || !(M200.tabla.I[i] > 0)) continue;
   var dl = C.config.delta;
-  var esperado = pobM13.S1(M200.tabla.mRes[i] + dl) / pobM13.S1(M100.tabla.mRes[i] + dl);
+  var esperado = pobM13.S1campo(M200.tabla.mRes[i], dl) /
+                 pobM13.S1campo(M100.tabla.mRes[i], dl);
   var d = Math.abs((M200.tabla.I[i] / M100.tabla.I[i]) / esperado - 1);
   if (d > peorVia) peorVia = d;
 }
 ok(peorVia < 1e-9,
-  'duplicar M mueve el velo SOLO por m_res: <I> sigue siendo Sigma·S1(m_res+delta) ' +
+  'duplicar M mueve el velo SOLO por m_res: <I> sigue siendo Sigma·S1campo(m_res) ' +
   '(peor desvío ' + peorVia.toExponential(1) + '; el velo se adelgaza ' +
   (100 * difI / relI).toFixed(2) + ' % del pico)');
 ok(M200.rVis !== M100.rVis,

@@ -21,7 +21,7 @@ arquitectónica automática.
 | `bitacora-cumulos.js` | `bitacora-gaia-render.js` |
 |---|---|
 | LF tabulada (×3, por metalicidad), `N_tot` | `m_lim,sky(r)` contra el fondo local `Fcielo + ⟨I⟩(r)` |
-| `S1(m_lim)`, `S2(m_lim)` | `m_res(r) = min(m_crowd, m_lim,sky)` |
+| `S1(m_lim)`, `S2(m_lim)`, `S1campo`/`S2campo`/`Fdibujado` (ADR 0011) | `m_res(r) = min(m_crowd, m_lim,sky)` |
 | Perfil radial (PDF), población sintética, seed | Iteración única que rompe la circularidad |
 | `mCrowd(r, fwhm)` | Campo definitivo, PSF, `s_halo` / `s_grano` |
 | `campo(r, m_lim) → {I, sigma}` | Percepción (H2c) y display |

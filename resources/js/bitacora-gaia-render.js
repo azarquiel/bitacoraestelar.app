@@ -1348,8 +1348,12 @@
        m_crowd(r)  ← población (aglomeración, geometría pura)
        m_lim,sky(r) ← magLimite contra el fondo LOCAL (cielo + velo del cúmulo)
        m_res(r)    = min de los dos
-       <I>(r)      = Sigma(r) · S1(m_res+Δ)          flujo por arcsec²
-       sigma(r)²   = Sigma(r) · S2(m_res+Δ) / Ω_beam
+       <I>(r)      = Sigma(r) · S1campo(m_res)       flujo por arcsec²
+       sigma(r)²   = Sigma(r) · S2campo(m_res) / Ω_beam
+
+     S1campo/S2campo son la cola dura MÁS el (1−a) de la banda de transición: lo
+     que de cada estrella de la banda no llega a dibujarse sigue siendo luz, y su
+     sitio es el velo. Con el corte duro se perdía (hasta el 14 % del cúmulo).
 
      Todo lo que se ve emerge de ahí: más apertura hunde m_res, S1 y S2 caen, y el
      halo se deshace en estrellas; el núcleo aglomera, m_res sube y queda lechoso. */
@@ -1459,15 +1463,15 @@
          criterio de parada acabaría dentro de la imagen). Se arranca por la cota
          superior —el crowding, que no depende del cielo— y se cierra con el fondo
          local que ese arranque produce. */
-      var I0 = s * pob.S1(mc + delta);
+      var I0 = s * pob.S1campo(mc, delta);
       var mSky = magLimite({
         apertura: o.apertura, aumentos: o.cielo.aumentos, transmision: o.cielo.transmision,
         sqm: -2.5 * Math.log10(cHalo.Fcielo + I0), pupilaOjo: o.cielo.pupilaOjo
       });
       var m = (mSky == null) ? mc : Math.min(mc, mSky);
       mRes[i] = m;
-      Im[i] = s * pob.S1(m + delta);
-      sg[i] = Math.sqrt(s * pob.S2(m + delta) / omegaBeam);
+      Im[i] = s * pob.S1campo(m, delta);
+      sg[i] = Math.sqrt(s * pob.S2campo(m, delta) / omegaBeam);
       sHalo[i] = visibilidadDifusa(Im[i], cHalo.Fcielo * cHalo.Cmin, perceptual);
       /* El grano compite contra el fondo LOCAL, que incluye el propio velo del
          cúmulo: en el núcleo se aplana solo y queda lechoso, sin ninguna perilla.

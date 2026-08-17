@@ -131,10 +131,19 @@ var difuso = m.perfilEn('difuso', rAla, rBorde, 12);
 /* El listón del tap perceptual no es «cero exacto»: visibilidadDifusa es una
    sigmoide en log, así que por debajo del umbral deja una cola que tiende a
    cero sin llegar. Lo que se exige es que lo pintado sea invisible frente al
-   cielo —1e-6 del fondo es cero a cualquier profundidad de bits— y no que el
-   float dé 0,0, que además haría el test rehén del último decimal. */
-var TOL_PINTA = 1e-6;
-var peorC = 0, visibles = 0, anillosVal = 0, peorPinta = 0;
+   cielo, y no que el float dé 0,0, que haría el test rehén del último decimal.
+
+   El listón es un nivel de una pantalla de 8 bits, 1/255 del cielo. Antes era
+   1e-6 y el ala lo cumplía con margen infinito porque caía FUERA del hombro de
+   la sigmoide (tap exactamente 0). Con el (1−a) de la banda dentro del velo el
+   ala tiene el flujo que le tocaba, entra en el hombro y el tap deja una cola:
+   sigue siendo invisible —la sigmoide se come el 99,8 % de un ala que ya está
+   a 0,38·Cmin—, pero ya no es un cero exacto, y fingir que lo es exigiendo 1e-6
+   sería pedirle a la ley perceptual un corte duro que no tiene. Se mide lo que
+   importa: qué fracción del ala sobrevive al tap, y contra qué la ve el ojo. */
+var TOL_PINTA = 1 / 255;
+var TOL_TAP = 0.01;
+var peorC = 0, visibles = 0, anillosVal = 0, peorPinta = 0, peorTap = 0;
 modelo.forEach(function (a, i) {
   if (!(a.n > 0)) return;
   anillosVal++;
@@ -142,14 +151,17 @@ modelo.forEach(function (a, i) {
   if (c > peorC) peorC = c;
   var pinta = difuso[i].I / m.Fcielo;
   if (pinta > peorPinta) peorPinta = pinta;
+  if (a.I > 0 && difuso[i].I / a.I > peorTap) peorTap = difuso[i].I / a.I;
   if (pinta > TOL_PINTA) visibles++;
 });
 ok(anillosVal >= 8 && peorC < m.Cmin,
   'el contraste máximo del ala es ' + peorC.toExponential(3) + ' < Cmin = ' +
   m.Cmin.toExponential(3) + ' (' + anillosVal + ' anillos medidos)');
-ok(visibles === 0, 'y el tap perceptual no pinta nada en ninguno de los ' +
-  anillosVal + ' anillos del ala (lo más que deja es ' + peorPinta.toExponential(2) +
-  ' del cielo)');
+ok(visibles === 0, 'y lo que el tap deja en el ala no llega a un nivel de 8 bits ' +
+  'en ninguno de los ' + anillosVal + ' anillos (lo más, ' + peorPinta.toExponential(2) +
+  ' del cielo, contra 1/255 = ' + TOL_PINTA.toExponential(2) + ')');
+ok(peorTap <= TOL_TAP, 'y el tap se come el ' + (100 * (1 - peorTap)).toFixed(2) +
+  ' % del flujo del ala (deja ' + peorTap.toExponential(2) + ')');
 
 /* El mismo criterio, pero radio a radio sobre la tabla del render: dónde deja de
    verse el halo. Si el corte cayese más allá de 4·r_h el test de arriba sería
