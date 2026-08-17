@@ -204,7 +204,11 @@
       // Specs de una óptica auxiliar: el factor (Barlow >1, reductor <1) y, si lo
       // trae, la extensión focal fija en mm.
       function specsAux(p) { var s = []; if (num(p.factor) != null) s.push('×' + num(p.factor)); if (num(p.extension_mm) != null) s.push('+' + num(p.extension_mm) + ' mm'); return s.join(' · '); }
-      function pupilaOptica(p) { return { focal: num(p.focal_mm), afov: num(p.campo_aparente) || 60 }; }
+      /* `p` puede ser null: la precarga de Gaia del arranque sale ANTES de que
+         cargarCatalogo() (asíncrono) haya elegido ocular. Sin focal, datosOcular()
+         da aumentos infinitos, que es justo lo que magConsultaGaia interpreta como
+         "sin aumento conocido" → profundidad del techo del tubo, como antes. */
+      function pupilaOptica(p) { return { focal: p ? num(p.focal_mm) : null, afov: (p && num(p.campo_aparente)) || 60 }; }
 
       // URL del catálogo GLOBAL de equipo, por orden de preferencia:
       //   1) con sesión: derivada de BITACORA_WP (y se manda el nonce);
@@ -775,7 +779,12 @@
            parche quiere TODAS las estrellas que PanSTARRS registra
            (ps1MagConsulta, en el módulo compartido)—. El realce sobre las placas
            no pinta capa, así que no paga esa profundidad. */
-        var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva());
+        /* El AUMENTO entra en la profundidad: sin él se pedía la de 400x estando
+           a 66x, y como campo ancho = pocos aumentos, esa profundidad de más caía
+           siempre sobre el radio mayor. Hacia el bulbo (M6, M7) eso son millones
+           de estrellas que el TAP ordena para nada, porque el TOP recorta antes.
+           Ver magConsultaGaia. */
+        var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva(), datosOcular().aumentos);
         if (paraCapa) mag = BitacoraGaiaRender.ps1MagConsulta(mag);
         return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }

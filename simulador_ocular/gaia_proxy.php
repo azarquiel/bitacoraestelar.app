@@ -36,7 +36,15 @@ const GAIA_CACHE_DIR       = __DIR__ . '/cache_gaia';
 const GAIA_CACHE_MAX_BYTES = 500 * 1024 * 1024;   // objetivo de tamaño de la caché (500 MB, best-effort: se aplica en la limpieza incremental)
 const GAIA_CACHE_LOWWATER  = 0.90;                // tras evict, bajar hasta el 90% del tope
 const GAIA_CONNECT_TIMEOUT = 8;                   // s: timeout de CONEXIÓN a los TAP
-const GAIA_REQUEST_TIMEOUT = 25;                  // s: timeout TOTAL de la petición
+/* Timeout TOTAL de la petición al TAP. Era 25 s, y en campos hacia el bulbo
+   (M6, M7) una consulta legítima tarda ~23 s: se abortaba a un pelo del final,
+   se TIRABA el trabajo ya hecho, se probaba el segundo proveedor -que tarda lo
+   mismo y responde "Query timed out"- y el usuario recibía un 502. Cortar ahí
+   es el peor negocio posible: la respuesta es INMUTABLE y queda cacheada para
+   siempre, así que pagar el minuto una vez vale infinitamente más que fallar en
+   25 s y volver a empezar. El cliente reintenta una vez, así que con 25 s el
+   observador ya esperaba ~56 s para acabar SIN datos. */
+const GAIA_REQUEST_TIMEOUT = 55;                  // s: timeout TOTAL de la petición
 const GAIA_QUANT_RADEC     = 0.001;               // ° : cuantización del centro (~3,6")
 const GAIA_QUANT_RAD       = 0.01;                // ° : cuantización del radio (se redondea ↑)
 const GAIA_QUANT_MAG       = 0.5;                 // mag: cuantización del límite (se redondea ↑)
@@ -186,6 +194,17 @@ function gaia_servir(string $ruta_gz, string $clave): void {
 if (PHP_SAPI === 'cli') {
     return;
 }
+
+/* Una consulta a un campo denso (hacia el bulbo) tarda más que el
+   max_execution_time por defecto (30 s) y el proceso moría a mitad. Con margen
+   sobre GAIA_REQUEST_TIMEOUT manda el timeout de curl, no el de PHP. */
+@set_time_limit(GAIA_REQUEST_TIMEOUT * 2 + 30);
+/* Si el navegador se cansa y corta, el trabajo NO se tira: PHP termina la
+   consulta y la ESCRIBE en la caché, así el reintento del cliente -o el
+   siguiente observador que mire el mismo objeto- la encuentra ya hecha en
+   disco. Sin esto un campo lento no se cacheaba NUNCA: cada intento moría antes
+   del rename() y el objeto quedaba roto para siempre, por caro que fuera. */
+@ignore_user_abort(true);
 
 if (!is_dir(GAIA_CACHE_DIR)) {
     @mkdir(GAIA_CACHE_DIR, 0775, true);
