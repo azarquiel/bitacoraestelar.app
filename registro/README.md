@@ -35,6 +35,8 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `importar-oal-wordpress.html` | Fragmento de "Importar observaciones" | Editor de WordPress |
 | `bitacora-importar-oal.js` | Lógica de "Importar observaciones" | Servidor, por FTP |
 | `bitacora-oal.php` | Leer el XML e importarlo (mitad pura + mitad WordPress) | Junto al plugin, en el servidor |
+| `bitacora-viaje.php` | La identidad de un viaje y la salud de una base (puro, sin WordPress) | Junto al plugin, en el servidor |
+| `bitacora-distancia.php` | De qué fuente sale la distancia al Sol y con qué nombre se pregunta (puro, sin WordPress) | Junto al plugin, en el servidor |
 | `resources/datos/{telescopios,oculares,auxiliares,filtros}.csv` | Catálogo de equipo (semilla) | Bundled en el plugin (`…/bitacora-registro/datos/`) |
 | `…/bitacora-registro/ficha/plantilla_ficha.docx` | Plantilla Word de la ficha | Junto al plugin, en el servidor |
 
@@ -590,15 +592,16 @@ de observaciones exigen sesión.
 ### 1. Instalar el plugin
 
 Crea una carpeta llamada `bitacora-registro` y mete dentro `bitacora-registro.php`,
-los dos archivos que requiere (`bitacora-viaje.php` y `bitacora-oal.php`, sin los
-cuales el plugin no arranca) y la carpeta `datos/` con los CSV del catálogo de
-equipo:
+los tres archivos que requiere (`bitacora-viaje.php`, `bitacora-oal.php` y
+`bitacora-distancia.php`, sin los cuales el plugin no arranca) y la carpeta
+`datos/` con los CSV del catálogo de equipo:
 
 ```
 bitacora-registro/
 ├── bitacora-registro.php
 ├── bitacora-viaje.php
 ├── bitacora-oal.php
+├── bitacora-distancia.php
 └── datos/
     ├── telescopios.csv
     ├── oculares.csv
