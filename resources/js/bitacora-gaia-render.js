@@ -33,7 +33,7 @@
  *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
  *   BitacoraGaiaRender.magLimite({ apertura, aumentos, transmision, sqm }) → number|null
- *   BitacoraGaiaRender.magConsultaGaia(apertura, transmision) → number (profundidad de consulta)
+ *   BitacoraGaiaRender.magConsultaGaia(apertura, transmision, aumentos) → number (profundidad de consulta)
  *   BitacoraGaiaRender.nivelFondo({ pupilaSalida, pupilaOjo, sqm }) → 0..255
  *   BitacoraGaiaRender.transmisionOptica(optica) → number|null
  *   BitacoraGaiaRender.opticaTieneArana(optica) → bool
@@ -66,10 +66,13 @@
   var GAIA_RADIO_MAX      = (360 / 60) * 0.72;
   var GAIA_RADIO_MIN      = 0.12;
   var GAIA_ARCMIN_DEFECTO = 60;
-  // Por encima de GAIA_REQUEST_TIMEOUT del proxy (25s, gaia_proxy.php): si el
+  // Por encima de GAIA_REQUEST_TIMEOUT del proxy (55s, gaia_proxy.php): si el
   // cliente aborta antes que el propio servidor, una consulta profunda que el
   // servidor SÍ habría terminado se ve como "error de conexión" sin serlo.
-  var GAIA_FETCH_TIMEOUT  = 28000;
+  // Sube con él: hacia el bulbo (M6, M7) una consulta legítima tarda ~23 s y
+  // con 28 s se abortaba a un pelo del final. Aun si el cliente se cansa, el
+  // proxy termina y cachea (ignore_user_abort), así que el reintento acierta.
+  var GAIA_FETCH_TIMEOUT  = 60000;
   var PROXY_URL           = '/wp-content/uploads/bitacora/gaia_proxy.php';
 
   /* ── Transmisión y araña por tipo óptico (fuente única) ──
@@ -813,15 +816,28 @@
     return -2.5 * Math.log10(CFG.glowCorte / CFG.alfaMin);
   }
 
-  /* Profundidad de consulta a Gaia para un equipo dado: el mlim TECHO que ese
-     equipo puede alcanzar (cielo más oscuro que admite la UI, aumentos altos
-     -Deff y SB0T ya saturan ahí, ver magLimite-) más la cola de glow, más un
-     margen de seguridad. Cubre TODO el rango de sqm/aumentos que el usuario
-     puede tocar después sin apertura nueva, así no hace falta re-consultar
-     cada vez que mueve esos sliders -solo al cambiar de equipo (apertura o
-     transmisión, que llegan juntas en teleSel). */
-  function magConsultaGaia(apertura, transmision) {
-    var techo = magLimite({ apertura: apertura, aumentos: 1e6, transmision: transmision, sqm: GAIA_SQM_MAS_OSCURO });
+  /* Profundidad de consulta a Gaia para un equipo dado: el mlim que ese equipo
+     alcanza bajo el cielo más oscuro que admite la UI, más la cola de glow, más
+     un margen de seguridad. El sqm sigue fijado al extremo oscuro para cubrir
+     todo el rango del slider sin re-consultar.
+
+     El AUMENTO, en cambio, entra de verdad. Antes se pasaba `1e6` (el techo del
+     tubo, donde Deff y SB0T ya saturan) con la idea de no re-consultar al mover
+     el slider; el precio era pedir la profundidad de 400x cuando se está a 66x.
+     Y como campo ancho implica pocos aumentos, esa profundidad de más caía
+     justo sobre el radio más grande: en M7 (rad 0,89°, hacia el bulbo) la
+     consulta pedía Gmag<=19,6 -2,76 millones de estrellas que el TAP tiene que
+     ORDENAR- para devolver, tras el TOP, exactamente las mismas 40000 filas
+     hasta G=15,18 que devuelve pidiendo Gmag<=15,5. 28 s contra 4,7 s por el
+     mismo dato, y con los DOS proveedores agotando su timeout ("Query timed
+     out" en GAVO) el proxy devolvía 502.
+
+     Re-consultar al cambiar de ocular no cuesta: más aumento es campo más
+     pequeño, o sea radio menor, o sea consulta más barata aunque sea más
+     profunda. `aumentos` ausente conserva el comportamiento del techo. */
+  function magConsultaGaia(apertura, transmision, aumentos) {
+    var mag = (aumentos > 0) ? aumentos : 1e6;
+    var techo = magLimite({ apertura: apertura, aumentos: mag, transmision: transmision, sqm: GAIA_SQM_MAS_OSCURO });
     if (techo == null) return GAIA_MAG_DEFECTO;
     return Math.max(GAIA_MAG_MIN, Math.min(GAIA_MAG_TOPE, techo + colaGlowMag() + 0.3));
   }
@@ -3593,7 +3609,7 @@
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t,
       aumentos: o.aumentos, perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
-    return consultar(o.ra, o.dec, o.arcmin, ps1MagConsulta(magConsultaGaia(o.apertura, t))).then(function (estrellas) {
+    return consultar(o.ra, o.dec, o.arcmin, ps1MagConsulta(magConsultaGaia(o.apertura, t, o.aumentos))).then(function (estrellas) {
       /* Estrellas y fondo se mapean en una sola curva de tono: el fondo pasa
          por la curva logarítmica y las estrellas se dibujan encima en 8
          bits, saltándosela; por eso el fondo va plano (sin capas difusas). */
@@ -3668,7 +3684,7 @@
       // sí manda en la vista de Gaia): aquí el campo débil ya lo trae la placa.
       if (o.conGaia === false || !(o.apertura > 0)) return r;
       var mlim = 7.7 + 5 * Math.log10(o.apertura / 100);
-      return consultar(o.ra, o.dec, arcmin, magConsultaGaia(o.apertura, t)).then(function (estrellas) {
+      return consultar(o.ra, o.dec, arcmin, magConsultaGaia(o.apertura, t, o.aumentos)).then(function (estrellas) {
         dibujar(ctx, estrellas, {
           ra: o.ra, dec: o.dec, arcmin: arcmin, mlim: mlim, afov: o.afov,
           apertura: o.apertura, conGlow: false,

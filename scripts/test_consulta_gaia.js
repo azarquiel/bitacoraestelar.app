@@ -43,6 +43,29 @@ var esperado = Math.max(12, Math.min(20, techo + colaEsperada + 0.3));
 ok(Math.abs(m8 - esperado) < 1e-6,
   'magConsultaGaia(200) coincide con techo+cola(alfaMin,glowCorte)+margen = ' + esperado.toFixed(3));
 
+/* REGRESIÓN (M6/M7 hacia el bulbo con 18" f/4.5 + ocular de 31 mm): la
+   profundidad se pedía con el techo del tubo (aumentos=1e6) en vez de con el
+   aumento REAL, y como campo ancho = pocos aumentos, la profundidad de más caía
+   justo sobre el radio mayor. En M7 (rad 0,89°) eso pedía Gmag<=19,6 -2,76
+   millones de estrellas a ordenar- para devolver, tras el TOP 40000, las MISMAS
+   filas hasta G=15,18 que devuelve Gmag<=15,5: 28 s medidos contra 4,7 s por el
+   mismo dato, y con VizieR y GAVO agotando su timeout el proxy daba 502.
+   Medido contra tapvizier.cds.unistra.fr, catálogo I/355/gaiadr3. */
+console.log('La profundidad la fija el aumento REAL, no el techo del tubo:');
+var D18 = 457.2, F18 = D18 * 4.5;
+var aum31 = F18 / 31;                                    // ocular de 31 mm → 66x
+var mAncho = R.magConsultaGaia(D18, 0.7, aum31);
+var mEstrecho = R.magConsultaGaia(D18, 0.7, F18 / 5);    // ocular de 5 mm → 411x
+ok(mAncho < mEstrecho,
+  'a campo ancho se pide menos profundidad que a campo estrecho (' +
+  mAncho.toFixed(2) + ' vs ' + mEstrecho.toFixed(2) + ')');
+ok(mAncho < 18.5,
+  'el 18" a 66x no pide el catálogo del bulbo entero: ' + mAncho.toFixed(2) + ' < 18,5');
+ok(mAncho >= R.magLimite({ apertura: D18, aumentos: aum31, transmision: 0.7, sqm: 22 }),
+  'pero nunca por debajo del mlim que ese equipo alcanza a ese aumento (no se pierden estrellas visibles)');
+ok(Math.abs(R.magConsultaGaia(D18, 0.7) - R.magConsultaGaia(D18, 0.7, 1e6)) < 1e-9,
+  'sin aumentos conserva el comportamiento anterior (techo del tubo)');
+
 /* La estrella JUSTO en mlim se dibuja igual en cualquier equipo: es lo que hace
    que mlim signifique lo mismo en un 18" y en un 8". El alpha del render se
    calibra contra mlim (no contra una magnitud absoluta), así que a g=mlim cae

@@ -775,7 +775,12 @@
            parche quiere TODAS las estrellas que PanSTARRS registra
            (ps1MagConsulta, en el módulo compartido)—. El realce sobre las placas
            no pinta capa, así que no paga esa profundidad. */
-        var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva());
+        /* El AUMENTO entra en la profundidad: sin él se pedía la de 400x estando
+           a 66x, y como campo ancho = pocos aumentos, esa profundidad de más caía
+           siempre sobre el radio mayor. Hacia el bulbo (M6, M7) eso son millones
+           de estrellas que el TAP ordena para nada, porque el TOP recorta antes.
+           Ver magConsultaGaia. */
+        var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva(), datosOcular().aumentos);
         if (paraCapa) mag = BitacoraGaiaRender.ps1MagConsulta(mag);
         return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }
