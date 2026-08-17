@@ -66,6 +66,18 @@ ok(mAncho >= R.magLimite({ apertura: D18, aumentos: aum31, transmision: 0.7, sqm
 ok(Math.abs(R.magConsultaGaia(D18, 0.7) - R.magConsultaGaia(D18, 0.7, 1e6)) < 1e-9,
   'sin aumentos conserva el comportamiento anterior (techo del tubo)');
 
+/* La precarga de Gaia del arranque sale ANTES de que el catálogo (asíncrono)
+   haya elegido ocular, así que `aumentos` llega sin focal: Infinity con
+   telescopio ya elegido, NaN sin nada. Ninguno de los dos puede reventar ni
+   propagar NaN a la URL de la consulta -al arrancar el simulador daba
+   "Cannot read properties of null (reading 'focal_mm')". */
+ok(Math.abs(R.magConsultaGaia(D18, 0.7, Infinity) - R.magConsultaGaia(D18, 0.7)) < 1e-9,
+  'aumentos infinitos (telescopio elegido, ocular aún no) = techo del tubo');
+ok(R.magConsultaGaia(D18, 0.7, NaN) > 0 && isFinite(R.magConsultaGaia(D18, 0.7, NaN)),
+  'aumentos NaN (nada elegido aún) devuelve un número finito, no NaN');
+ok(R.magConsultaGaia(0, 0.7, NaN) > 0,
+  'sin apertura ni aumentos cae al valor por defecto en vez de romper');
+
 /* La estrella JUSTO en mlim se dibuja igual en cualquier equipo: es lo que hace
    que mlim signifique lo mismo en un 18" y en un 8". El alpha del render se
    calibra contra mlim (no contra una magnitud absoluta), así que a g=mlim cae

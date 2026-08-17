@@ -204,7 +204,11 @@
       // Specs de una óptica auxiliar: el factor (Barlow >1, reductor <1) y, si lo
       // trae, la extensión focal fija en mm.
       function specsAux(p) { var s = []; if (num(p.factor) != null) s.push('×' + num(p.factor)); if (num(p.extension_mm) != null) s.push('+' + num(p.extension_mm) + ' mm'); return s.join(' · '); }
-      function pupilaOptica(p) { return { focal: num(p.focal_mm), afov: num(p.campo_aparente) || 60 }; }
+      /* `p` puede ser null: la precarga de Gaia del arranque sale ANTES de que
+         cargarCatalogo() (asíncrono) haya elegido ocular. Sin focal, datosOcular()
+         da aumentos infinitos, que es justo lo que magConsultaGaia interpreta como
+         "sin aumento conocido" → profundidad del techo del tubo, como antes. */
+      function pupilaOptica(p) { return { focal: p ? num(p.focal_mm) : null, afov: (p && num(p.campo_aparente)) || 60 }; }
 
       // URL del catálogo GLOBAL de equipo, por orden de preferencia:
       //   1) con sesión: derivada de BITACORA_WP (y se manda el nonce);
