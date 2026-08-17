@@ -972,7 +972,7 @@ R.ps1PintarParche(lienzoU, {
 var nU = 0, marcadosU = 0;
 for (iU = 0; iU < lienzoU.length; iU++) {
   if (lienzoU[iU] > 0) nU++;
-  if (cieloU.galaxiaMask && cieloU.galaxiaMask[iU]) marcadosU++;
+  if (R.difusoMarcado(cieloU.difusoMask, iU)) marcadosU++;
 }
 ok(nU > 0 && marcadosU === nU,
   'una galaxia SIN halo pasa por la misma rampa y queda marcada igual (' + nU + ' px)');
@@ -1030,7 +1030,7 @@ ok(umbralCon(203 / (2 * MAG_SAT), 2 * MAG_SAT) < umbralCon(203 / MAG_SAT, MAG_SA
   'pero la mejora NO crece sin fin: pasado ' + Math.round(MAG_SAT) +
   'x (clamp C_MAG_MIN) vaciar la pupila vuelve a empeorar');
 
-/* La exención del techo: ps1PintarParche marca en `cielo.galaxiaMask` los píxeles
+/* La exención del techo: ps1PintarParche marca en `cielo.difusoMask` los píxeles
    que salen del perfil, y pintarFot los trata aparte —la rampa de opacidad es su
    único desvanecido—. Sin la marca, el halo se apaga DOS veces: la rampa y
    visibilidadDifusa miden las dos contra el mismo umbral (Fcielo·Cmin), así que
@@ -1053,7 +1053,7 @@ function halo(equipo) {
   // El mismo píxel por los dos caminos de pintarFot: exento y con el trato viejo.
   var F = lienzo[i], sVieja = R.visibilidadDifusa(F, c.Fcielo * c.Cmin, true);
   return {
-    marcado: !!(cielo.galaxiaMask && cielo.galaxiaMask[i]),
+    marcado: R.difusoMarcado(cielo.difusoMask, i),
     dn: F > 0 ? R.valorDeFlujo(R.realzarPerceptual(F, c.Fcielo, c.rango, 0, 0),
       c.Fcielo, c.rango) : 0,
     dnVieja: (F > 0 && sVieja > 0) ? R.valorDeFlujo(R.realzarPerceptual(F * sVieja,
@@ -1080,7 +1080,7 @@ R.ps1PintarParche(lienzoD, {
 }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloD });
 var pxAsD = (SH / (CAMPO_H / 60)) / 3600;
 var iD = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.5 * galH.reArcsec * pxAsD);
-ok(lienzoD[iD] > 0 && !!cieloD.galaxiaMask[iD], 'a 0,5 r_e se pinta y se exime igual');
+ok(lienzoD[iD] > 0 && R.difusoMarcado(cieloD.difusoMask, iD), 'a 0,5 r_e se pinta y se exime igual');
 /* ── Mezcla de imagen y perfil ───────────────────────────────────────────────
    La regla vieja era `max(imagen, perfil)` y se descartó: medido sobre M51, el
    perfil ganaba en el 70-95 % de los píxeles desde 0,3 r_e y metía el 154,6 %

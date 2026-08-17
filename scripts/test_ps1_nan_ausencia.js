@@ -120,7 +120,7 @@ function cadena(gal, F, csv) {
 }
 function pintar(parche, o) {
   var difuso = new Float32Array(SIZE * SIZE);
-  o.cielo.galaxiaMask = null;                    // máscara limpia por pintado
+  o.cielo.difusoMask = null;                     // máscara limpia por pintado
   R.ps1PintarParche(difuso, parche, o);
   return difuso;
 }

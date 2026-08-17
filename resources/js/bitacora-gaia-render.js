@@ -444,6 +444,30 @@
     return suave((Math.log10(F / Fumbral) + FOT.UMBRAL_MARGEN) / FOT.UMBRAL_ANCHURA);
   }
 
+  /* Máscara difusa (`cielo.difusoMask`, Float32Array, centinela -1):
+
+       mask[i] <  0  → flujo no evaluado por ningún modelo difuso propio
+       mask[i] >= 0  → ya evaluado; el valor ES la t de realzarPerceptual
+
+     Un solo array para todas las capas difusas con desvanecido propio, y el
+     valor lleva información en vez de un simple sí/no: PS1 escribe 0 (gamma
+     completa, exactamente lo que hacía con el flag) y el cúmulo escribe su
+     s_halo. La convención vive aquí y no copiada a mano en cada harness. */
+  function difusoMarcado(mask, i) {
+    return !!(mask && mask[i] >= 0);
+  }
+
+  /* La máscara vive en el objeto `cielo` porque es el mismo que luego recibe
+     pintarFot, y dura lo que el render: cada capa que llega marca sobre la
+     misma. Se rellena con el centinela solo al crearla; reutilizarla sin
+     limpiar es lo que se hacía y lo que se sigue haciendo. */
+  function difusoMaskDe(cielo, n) {
+    if (!(cielo.difusoMask && cielo.difusoMask.length === n)) {
+      cielo.difusoMask = new Float32Array(n).fill(-1);
+    }
+    return cielo.difusoMask;
+  }
+
   /* Realce perceptual de un flujo difuso: expande su nivel en pantalla con
      FOT.GAMMA_PERCEPTUAL y lo devuelve a flujo, para que la suma con la capa de
      estrellas siga siendo aditiva y los núcleos sigan comprimiendo. Devuelve el
@@ -480,17 +504,21 @@
       // El desvanecido por umbral de contraste es para objetos EXTENSOS. A una
       // fuente puntual no se le aplica: su visibilidad la fija la magnitud
       // límite, que dibujar() ya ha aplicado.
-      /* Píxel de la capa de galaxias (ps1PintarParche lo marca en o.galaxiaMask):
-         su desvanecido YA está aplicado, y es la rampa de ps1Opacidad, que mide
-         contra ESTE MISMO umbral (Fcielo·Cmin). Las dos funciones son la misma
-         ley con otra forma —las dos dependen solo de log10(F/Fumbral)—, así que
-         pasarlo otra vez por visibilidadDifusa es contar dos veces el mismo
-         umbral, y entre las dos lo dejaban en 0 DN sobre el cielo en cualquier
-         pupila. Aquí la rampa manda sola: sin s y con el realce a gamma completa
-         (t=0). Si otra capa difusa cae en el mismo píxel, su luz entra en este
-         trato; son unos pocos píxeles y ninguno decide nada. */
-      var esGalaxia = !!(o.galaxiaMask && o.galaxiaMask[i]);
-      var s = esGalaxia ? 1 : visibilidadDifusa(Fobj[i], c.Fcielo * c.Cmin, perceptual);
+      /* Píxel que ya trae su desvanecido hecho por un modelo difuso propio
+         (o.difusoMask, ver difusoMarcado). En la galaxia de PS1 ese desvanecido
+         es la rampa de ps1Opacidad, que mide contra ESTE MISMO umbral
+         (Fcielo·Cmin). Las dos funciones son la misma ley con otra forma —las
+         dos dependen solo de log10(F/Fumbral)—, así que pasarlo otra vez por
+         visibilidadDifusa es contar dos veces el mismo umbral, y entre las dos
+         lo dejaban en 0 DN sobre el cielo en cualquier pupila. Aquí manda el
+         modelo: sin s, y con el realce a la t que ese modelo haya escrito (0 en
+         PS1 = gamma completa; s_halo en el cúmulo, para que el realce decaiga
+         donde el velo ya se ve bien). Si otra capa difusa cae en el mismo
+         píxel, su luz entra en este trato; son unos pocos píxeles y ninguno
+         decide nada. */
+      var t = o.difusoMask ? o.difusoMask[i] : -1;
+      var marcado = (t >= 0);
+      var s = marcado ? 1 : visibilidadDifusa(Fobj[i], c.Fcielo * c.Cmin, perceptual);
       var difuso = Fobj[i] * s;
       /* Realce perceptual del difuso: se expande su nivel en pantalla y se
          devuelve a flujo, para que la suma con las estrellas siga siendo aditiva
@@ -499,10 +527,9 @@
          entran por aquí con su heurístico y no deben tocarse. */
       /* El techo se queda puesto también en la galaxia —sigue habiendo imagen
          bajo la misma máscara, y sin él el brazo externo se iguala con el
-         disco—; lo que cambia es la gamma, que va completa (t=0) porque el
-         desvanecido ya lo hizo la rampa. */
+         disco—; lo que cambia es la gamma, que la fija la t del modelo. */
       if (perceptual && difuso > 0) {
-        difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, esGalaxia ? 0 : s, o.realceMax);
+        difuso = realzarPerceptual(difuso, c.Fcielo, c.rango, marcado ? t : s, o.realceMax);
       }
       for (var ch = 0; ch < canales; ch++) {
         var F = difuso;
@@ -1230,6 +1257,291 @@
     var b = 1 / Math.sqrt(1 + k * k);
     var f = Math.log(1 + k * k) - 4 + 4 / Math.sqrt(1 + k * k) + (k * k) / (1 + k * k);
     return Math.PI * f / ((1 - b) * (1 - b));
+  }
+
+  /* ═══════════════ CÚMULOS GLOBULARES · CAPAS 2-4 (pintarCumulo) ═══════════════
+     La población la da bitacora-cumulos.js (Capa 1: qué estrellas hay y dónde).
+     Aquí se decide qué se resuelve con ESTE instrumento y ESTE cielo, se pinta la
+     parte no resuelta como campo estadístico y se le aplica la ley visual. La
+     frontera es la de ADR 0002: el módulo no sabe de Cmin ni de canvas, y el
+     render no reimplementa nada de la población.
+
+     Cadena, sin ningún parámetro de "contraste de grano" que tocar:
+
+       m_crowd(r)  ← población (aglomeración, geometría pura)
+       m_lim,sky(r) ← magLimite contra el fondo LOCAL (cielo + velo del cúmulo)
+       m_res(r)    = min de los dos
+       <I>(r)      = Sigma(r) · S1(m_res+Δ)          flujo por arcsec²
+       sigma(r)²   = Sigma(r) · S2(m_res+Δ) / Ω_beam
+
+     Todo lo que se ve emerge de ahí: más apertura hunde m_res, S1 y S2 caen, y el
+     halo se deshace en estrellas; el núcleo aglomera, m_res sube y queda lechoso. */
+
+  /* Ruido del grano. Anclado al CIELO (offsets en ″ desde el centro del cúmulo),
+     no al lienzo: hacer zoom agranda el grano, nunca lo redibuja. Cada nodo de la
+     malla saca su gaussiana de un hash de (cúmulo, realización, i, j), así que no
+     hay array que guardar y el campo es el mismo en cualquier orden de pintado. */
+  /* La gaussiana sale de una tabla, no de un Box-Muller por nodo: el logaritmo,
+     la raíz y el coseno se pagaban medio millón de veces por pintado (60 % del
+     coste medido) para devolver siempre uno de unos pocos miles de valores. La
+     tabla se normaliza a media 0 y varianza 1 EXACTAS, así que el grano conserva
+     su estadística; las colisiones (1 de 4096) son ruido sobre ruido. */
+  var GRANO_TABLA = null;
+  function granoTabla() {
+    if (GRANO_TABLA) return GRANO_TABLA;
+    var n = 4096, v = new Float64Array(n), suma = 0, suma2 = 0, k;
+    for (k = 0; k < n; k++) {
+      var u1 = (k + 0.5) / n, u2 = ((Math.imul(k, 2654435761) >>> 0) % n + 0.5) / n;
+      v[k] = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);   // Box-Muller
+      suma += v[k];
+    }
+    var media = suma / n;
+    for (k = 0; k < n; k++) { v[k] -= media; suma2 += v[k] * v[k]; }
+    var esc = 1 / Math.sqrt(suma2 / n);
+    for (k = 0; k < n; k++) v[k] *= esc;
+    GRANO_TABLA = v;
+    return v;
+  }
+
+  function granoNodo(semilla, i, j) {
+    var h = semilla ^ Math.imul(i | 0, 374761393) ^ Math.imul(j | 0, 668265263);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    h = (h ^ (h >>> 16)) >>> 0;
+    return GRANO_TABLA[h & 4095];
+  }
+
+
+  /* El campo estadístico, con la media y la varianza que pide la SBF y SIN poder
+     salir negativo.
+
+     La fluctuación relativa vale sigma/<I> = 1/√N_eff, con N_eff el número de
+     estrellas del campo por beam. En el halo de un globular N_eff baja de 1 —hay
+     menos de una estrella no resuelta por beam— y ahí sigma llega a 10·<I>: una
+     gaussiana recortada a cero deja de tener la media que se le pidió, y medido
+     sobre M13 se inventaba el 65 % del flujo. Una lognormal con esa misma media y
+     esa misma varianza es positiva por construcción, no necesita recorte y con
+     sigma << <I> es la gaussiana de siempre; con sigma >> <I> queda muy sesgada,
+     que es justo lo que hace un campo de puntos casi vacío.
+     La anchura s se tabula en el radio y no se calcula por píxel: el logaritmo y
+     la raíz eran lo caro del bucle. */
+  function campoLognormal(mu, s, g) {
+    return Math.exp(mu + s * g);
+  }
+
+  /* Interpolar ruido blanco le quita varianza, y no la misma en todas partes: el
+     peso cuadrático vale 1 justo sobre un nodo y 1/4 en el centro de la celda. Con
+     un factor constante quedaría una REJILLA de ruido —nodos ásperos, centros
+     lisos— y la varianza medida saldría un 30-50 % por encima de la pedida. Por
+     eso se normaliza con el peso exacto de cada punto: g tiene varianza 1 en todo
+     el campo, sin constante que calibrar. */
+  function granoEn(semilla, xAs, yAs, pasoAs) {
+    if (!GRANO_TABLA) granoTabla();
+    var u = xAs / pasoAs, v = yAs / pasoAs;
+    var i0 = Math.floor(u), j0 = Math.floor(v);
+    var tx = u - i0, ty = v - j0;
+    var w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty);
+    var w01 = (1 - tx) * ty, w11 = tx * ty;
+    var g = granoNodo(semilla, i0, j0) * w00
+          + granoNodo(semilla, i0 + 1, j0) * w10
+          + granoNodo(semilla, i0, j0 + 1) * w01
+          + granoNodo(semilla, i0 + 1, j0 + 1) * w11;
+    return g / Math.sqrt(w00 * w00 + w10 * w10 + w01 * w01 + w11 * w11);
+  }
+
+  function hashCadena(texto) {
+    var h = 2166136261;
+    for (var i = 0; i < texto.length; i++) { h ^= texto.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+
+  /* Tabla radial del cúmulo: m_res, <I>, sigma y los dos desvanecidos, tabulados
+     en el radio PROPIO y interpolados por píxel. Por anillos y no por píxel por
+     dos razones que van juntas: cuesta 512 evaluaciones en vez de 500.000, y el
+     desvanecido del grano tiene que juzgar la textura (amplitud sigma), no la
+     excursión de cada píxel —si no, las fluctuaciones grandes sobreviven
+     proporcionalmente más y deforman el mismísimo S2/S1² que sale de la LF—. */
+  var TRAMOS_R = 512;
+
+  function tablaCumulo(pob, o, fwhmAs, cHalo, cGrano, perceptual, areaPx) {
+    var C = window.BitacoraCumulos;
+    var delta = C.config.delta;
+    /* La celda del grano es el beam... salvo cuando el píxel del lienzo es más
+       grande que él. Un píxel integra todo lo que cae dentro, así que muestrear
+       ahí un campo más fino no dibuja grano: dibuja aliasing, con la varianza del
+       beam en un píxel que ya la ha promediado. Con Ω = max(beam, píxel) el grano
+       se ve más suave al alejar el zoom, que es lo que hace la naturaleza. */
+    var omegaBeam = Math.max(Math.PI * (fwhmAs / 2) * (fwhmAs / 2), areaPx || 0);
+    var n = TRAMOS_R + 1, paso = pob.rtAs / TRAMOS_R;
+    var r = new Float64Array(n), mRes = new Float64Array(n), Im = new Float64Array(n);
+    var sg = new Float64Array(n), sHalo = new Float64Array(n), sGrano = new Float64Array(n);
+    var lnS = new Float64Array(n);
+    for (var i = 0; i < n; i++) {
+      var rAs = i * paso;
+      var s = pob.sigma(rAs);
+      r[i] = rAs;
+      if (!(s > 0)) { mRes[i] = -Infinity; continue; }
+      var mc = pob.mCrowd(rAs, omegaBeam);
+      /* Circularidad m_lim,sky ↔ <I>: UNA sola iteración, no un punto fijo (su
+         criterio de parada acabaría dentro de la imagen). Se arranca por la cota
+         superior —el crowding, que no depende del cielo— y se cierra con el fondo
+         local que ese arranque produce. */
+      var I0 = s * pob.S1(mc + delta);
+      var mSky = magLimite({
+        apertura: o.apertura, aumentos: o.cielo.aumentos, transmision: o.cielo.transmision,
+        sqm: -2.5 * Math.log10(cHalo.Fcielo + I0), pupilaOjo: o.cielo.pupilaOjo
+      });
+      var m = (mSky == null) ? mc : Math.min(mc, mSky);
+      mRes[i] = m;
+      Im[i] = s * pob.S1(m + delta);
+      sg[i] = Math.sqrt(s * pob.S2(m + delta) / omegaBeam);
+      sHalo[i] = visibilidadDifusa(Im[i], cHalo.Fcielo * cHalo.Cmin, perceptual);
+      // El grano compite contra el fondo LOCAL, que incluye el propio velo del
+      // cúmulo: en el núcleo se aplana solo y queda lechoso, sin ninguna perilla.
+      sGrano[i] = visibilidadDifusa(sg[i], (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
+      /* Anchura de la lognormal (ver campoLognormal). Se tabula ella y no mu,
+         porque mu = ln(<I>) - s²/2 se va a -inf donde el perfil se acaba y ahí la
+         interpolación daría NaN a un paso del borde; con <I> ya interpolado sale
+         el mismo número y el borde queda limpio. */
+      var s2 = (Im[i] > 0 && sg[i] > 0) ? Math.log(1 + (sg[i] * sg[i]) / (Im[i] * Im[i])) : 0;
+      lnS[i] = Math.sqrt(s2);
+    }
+    return { paso: paso, r: r, mRes: mRes, I: Im, sigma: sg, sHalo: sHalo, sGrano: sGrano,
+             lnS: lnS };
+  }
+
+  function interpTabla(tabla, v, rAs) {
+    if (!(rAs >= 0) || rAs >= tabla.r[tabla.r.length - 1]) return 0;
+    var u = rAs / tabla.paso, i = Math.floor(u), t = u - i;
+    return v[i] * (1 - t) + v[i + 1] * t;
+  }
+
+  /* m_res(r) por interpolación aparte: es una MAGNITUD, no un flujo, y fuera de
+     r_t no vale 0 sino "no hay aglomeración" (todo se resuelve). */
+  function mResEn(tabla, rAs) {
+    var ult = tabla.r.length - 1;
+    if (!(rAs >= 0) || rAs >= tabla.r[ult]) return Infinity;
+    var u = rAs / tabla.paso, i = Math.floor(u), t = u - i;
+    var a = tabla.mRes[i], b = tabla.mRes[i + 1];
+    if (!isFinite(a)) return b;
+    if (!isFinite(b)) return a;
+    return a * (1 - t) + b * t;
+  }
+
+  /* Pinta el campo no resuelto del cúmulo sobre `difuso` (flujo por arcsec², las
+     mismas unidades que la capa de galaxias) y devuelve la lista de estrellas a
+     dibujar: las de Gaia que ESTE equipo resuelve, con la banda de transición
+     atenuada vía m_eff, más las sintéticas que Gaia no trae.
+
+       o = { ra0, dec0, arcmin, size, cielo, apertura, estrellas, realization }
+
+     `o.campoCrudo` (opcional, Float32Array del tamaño del lienzo) recibe el campo
+     ANTES de la ley visual. Es una salida de medida —el Nivel 2 compara su media
+     y su varianza con Sigma·S1 y Sigma·S2/Ω_beam—, no una variante de dibujo: lo
+     que se pinta no depende de que se pase o no.
+
+     `cumulo` es la ficha de Harris que espera bitacora-cumulos.js, más ra/dec.
+     Devuelve null si falta el módulo de población: es una protección de
+     integración, no un camino alternativo que dibuje un cúmulo distinto. */
+  function pintarCumulo(difuso, cumulo, o) {
+    var C = window.BitacoraCumulos;
+    if (!C || !o.cielo) return null;
+    var pob = C.poblacionCacheada(cumulo, o.realization);
+    if (!pob) return null;
+    var fwhmAs = 2 * radioImagenEstelar(o.apertura);
+    if (!(fwhmAs > 0)) return null;
+
+    var SIZE = o.size, escv = SIZE / (o.arcmin / 60);   // px por grado
+    var pxPorAs = escv / 3600, asPorPx = 1 / pxPorAs;
+    var areaPx = asPorPx * asPorPx;                     // arcsec² por píxel
+    var cos0 = Math.cos(o.dec0 * Math.PI / 180);
+    var cx = SIZE / 2 - (((cumulo.ra - o.ra0 + 540) % 360) - 180) * cos0 * escv;
+    var cy = SIZE / 2 - (cumulo.dec - o.dec0) * escv;
+
+    var perceptual = !!o.cielo.perceptual && FOT.GAMMA_PERCEPTUAL !== 1;
+    /* Dos escalas angulares, una sola ley (H2c). La mancha se juzga con el tamaño
+       del cúmulo y el grano con el de la PSF: como Cmin penaliza el elemento
+       pequeño, el grano muere ANTES que la mancha cuando el cielo empeora, que es
+       justo lo que se ve —en cielo urbano queda mancha, no mancha granulada—. */
+    var elip = cumulo.elip || 0;
+    var thetaCumulo = 2 * cumulo.rh * Math.sqrt(1 - elip);     // arcmin, circularizado
+    var cHalo = ctxFotometrico(o.cielo, thetaCumulo);
+    var cGrano = ctxFotometrico(o.cielo, fwhmAs / 60);
+    var tabla = tablaCumulo(pob, o, fwhmAs, cHalo, cGrano, perceptual, areaPx);
+
+    var mascara = difusoMaskDe(o.cielo, difuso.length);
+    var semilla = hashCadena([cumulo.id, C.versionLF(), o.realization || 0, 'grano'].join('|'));
+    /* El PASO de la malla no depende del zoom: es la escala de la PSF, y con eso
+       el patrón queda clavado al cielo. Lo que sí cambia con el zoom es la
+       AMPLITUD, porque un píxel grande promedia el grano y lo aplana; de eso se
+       encarga la Ω de tablaCumulo. Mover el paso también rompería el anclaje. */
+    var pasoGrano = fwhmAs / 2;
+    var alcance = pob.rtAs * pxPorAs;
+    var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
+    var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
+    var Fmedio = 0, Fpintado = 0;
+    for (var y = y0; y <= y1; y++) {
+      var norte = -(y - cy) * asPorPx;
+      for (var x = x0; x <= x1; x++) {
+        var este = -(x - cx) * asPorPx;
+        var rAs = pob.radioPropio(este, norte);
+        if (rAs >= pob.rtAs) continue;
+        var Im = interpTabla(tabla, tabla.I, rAs);
+        if (!(Im > 0)) continue;
+        var sig = interpTabla(tabla, tabla.sigma, rAs);
+        var sH = interpTabla(tabla, tabla.sHalo, rAs);
+        var sG = interpTabla(tabla, tabla.sGrano, rAs);
+        var sLn = interpTabla(tabla, tabla.lnS, rAs);
+        var crudo = campoLognormal(Math.log(Im) - sLn * sLn / 2, sLn,
+          granoEn(semilla, este, norte, pasoGrano));
+        var dI = crudo - Im;
+        var I = Im * sH + dI * sG;
+        if (!(I > 0)) I = 0;                      // el campo no puede quitar luz
+        Fmedio += Im * areaPx;
+        Fpintado += crudo * areaPx;
+        var idx = y * SIZE + x;
+        if (o.campoCrudo) o.campoCrudo[idx] = crudo;
+        difuso[idx] += I;
+        // La t del realce es s_halo: donde el velo ya se ve bien, el realce se
+        // retira y el núcleo no se quema a blanco (ver difusoMarcado).
+        if (sH > mascara[idx]) mascara[idx] = sH;
+      }
+    }
+
+    return {
+      tabla: tabla, poblacion: pob, fwhmAs: fwhmAs, cHalo: cHalo, cGrano: cGrano,
+      Fmedio: Fmedio, Fpintado: Fpintado,
+      estrellas: estrellasCumulo(pob, cumulo, tabla, o, C)
+    };
+  }
+
+  /* Las estrellas del cúmulo que este equipo dibuja. La clasificación se evalúa
+     por estrella CON SU RADIO: la misma m=16 puede ser resuelta a 8′ del centro y
+     campo a 0,5′. En la banda de transición la atenuación se aplica como magnitud
+     efectiva, así que la estrella se apaga Y encoge por el camino que ya existe
+     (radioEstrella va con la magnitud) — que es lo que se ve en el ocular.
+
+     Invariante: la atenuación se calcula SIEMPRE sobre m, nunca sobre la m_eff que
+     ella misma produce, y m_eff no vuelve nunca a S1/S2, a m_res ni a la
+     conservación: es un número de dibujo. */
+  function estrellasCumulo(pob, cumulo, tabla, o, C) {
+    var cos0 = Math.cos(o.dec0 * Math.PI / 180);
+    var delta = C.config.delta;
+    var lista = (o.estrellas || []).concat(pob.sinteticas({
+      ra: cumulo.ra, dec: cumulo.dec, realization: o.realization
+    }));
+    var fuera = [];
+    for (var i = 0; i < lista.length; i++) {
+      var e = lista[i], m = e[2];
+      var dxAs = (((e[0] - cumulo.ra + 540) % 360) - 180) * cos0 * 3600;
+      var dyAs = (e[1] - cumulo.dec) * 3600;
+      var mRes = mResEn(tabla, pob.radioPropio(dxAs, dyAs));
+      if (!isFinite(mRes) || m < mRes - delta) { fuera.push(e); continue; }
+      if (m > mRes + delta) continue;                       // ya está en el campo
+      var a = C.atenuacionTransicion(m, mRes, delta);
+      if (!(a > 0)) continue;
+      fuera.push([e[0], e[1], m + 2.5 * Math.log10(1 / a), e[3]]);
+    }
+    return fuera;
   }
 
   /* ═══════════ CAPA DE GALAXIAS DESDE IMAGEN REAL (ps1cutouts, STScI) ═══════════
@@ -2491,11 +2803,11 @@
        alimenta la DECISIÓN de opacidad; el flujo que se pinta sigue siendo el de
        la mezcla, píxel a píxel. */
     var soporte = c ? ps1SoporteLocal(datos, parche.ancho, parche.alto, escParche) : null;
-    /* Máscara de los píxeles de la capa de galaxias: pintarFot ya no les aplica
-       visibilidadDifusa —la rampa de opacidad es su desvanecido y mide contra el
-       MISMO umbral, así que pasar por las dos es contarlo dos veces— y el realce
-       va a gamma completa. No es una ley distinta: es la marca de que la ley ya
-       se aplicó.
+    /* Máscara difusa: pintarFot ya no le aplica visibilidadDifusa —la rampa de
+       opacidad es su desvanecido y mide contra el MISMO umbral, así que pasar
+       por las dos es contarlo dos veces— y el realce va a gamma completa. No es
+       una ley distinta: es la marca de que la ley ya se aplicó. PS1 escribe 0,
+       que ES la t de realzarPerceptual (ver difusoMarcado).
        Se marca TODO el parche de la galaxia, imagen incluida, y no solo el trozo
        extrapolado. Partir el objeto en dos leyes por un radio dejaba un ESCALÓN
        en la costura: el anillo de dentro se quedaba a nivel de cielo y el halo de
@@ -2504,13 +2816,7 @@
        pintarse con una sola ley, o la costura se ve.
        Vive en el objeto `cielo` porque es el mismo que luego recibe pintarFot, y
        dura lo que el render: cada galaxia que llega marca sobre la misma. */
-    var mascara = null;
-    if (c) {
-      if (!(o.cielo.galaxiaMask && o.cielo.galaxiaMask.length === difuso.length)) {
-        o.cielo.galaxiaMask = new Uint8Array(difuso.length);
-      }
-      mascara = o.cielo.galaxiaMask;
-    }
+    var mascara = c ? difusoMaskDe(o.cielo, difuso.length) : null;
     var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
     var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
     for (var y = y0; y <= y1; y++) {
@@ -2600,7 +2906,7 @@
         }
         if (!(f > 0)) continue;
         difuso[y * SIZE + x] += f;
-        if (mascara) mascara[y * SIZE + x] = 1;
+        if (mascara) mascara[y * SIZE + x] = 0;
       }
     }
     return difuso;
@@ -3281,10 +3587,14 @@
     flujoDeValor: flujoDeValor,
     realzarPerceptual: realzarPerceptual,
     visibilidadDifusa: visibilidadDifusa,
+    difusoMarcado: difusoMarcado,
+    difusoMaskDe: difusoMaskDe,
     ctxFotometrico: ctxFotometrico,
     pintarFot: pintarFot,
     perfilKing: perfilKing,
     areaKing: areaKing,
+    pintarCumulo: pintarCumulo,
+    granoEn: granoEn,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
     fusionarPlacas: fusionarPlacas,

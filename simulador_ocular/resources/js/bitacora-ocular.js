@@ -82,7 +82,14 @@
           nombre: e[1] ? (e[1] + ' · Cúmulo globular (' + e[0] + ')') : (e[0] + ' · Cúmulo globular'),
           constelacion: '', ra: degAHms(e[2]), dec: degADms(e[3]),
           tipo: 'cúmulo globular', carbono: false, doble: false, globular: true,
-          rCore: rc, rTidal: rc * Math.pow(10, c), muV0: e[7]
+          rCore: rc, rTidal: rc * Math.pow(10, c), muV0: e[7],
+          /* Ficha física para bitacora-cumulos.js: es la MISMA fila del catálogo,
+             sin recortar. Harris no publica ángulo de posición, así que el perfil
+             se evalúa en radio circular (pa nulo). */
+          cumulo: {
+            id: e[0], ra: e[2], dec: e[3], rc: rc, rh: e[5], c: c, muV0: e[7],
+            Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null
+          }
         };
       });
       // Códigos de catálogo -> nombre largo (fuente: mapa/datos/catalogos_dobles.csv).
@@ -600,8 +607,10 @@
             $('sim-aviso').textContent = 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
               ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
           }
-          // Fondo plano de cielo: sin capas difusas, las estrellas se dibujan
-          // sobre el nivel de cielo tal cual (sin componente difusa que sumar).
+          // Componente difusa del campo: la llenan las capas que la tengan (el
+          // campo no resuelto de un cúmulo, la imagen de una galaxia). En un
+          // campo sin ninguna queda a cero y las estrellas se dibujan sobre el
+          // nivel de cielo tal cual.
           var difuso = new Float32Array(PROC * PROC);
           /* Si el objeto es una doble, se completan del catálogo las componentes
              que Gaia no trae (satura con las primarias muy brillantes: la de
@@ -615,9 +624,20 @@
                 pa: objetoSel.pa, spect1: objetoSel.spect1, spect2: objetoSel.spect2
               })
             : estrellas;
-          // Los cúmulos globulares no llevan capa difusa: el halo de King
-          // continuo se retiró (Fase 0 del modelo de observación de cúmulos) y
-          // lo sustituirá el campo estadístico de bitacora-cumulos.js.
+          var cieloGaia = cieloOptica(datosOcular().pupila);
+          cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
+          /* Cúmulo globular: lo que este equipo NO resuelve se pinta como campo
+             estadístico (media + grano de la función de luminosidad) y lo que sí,
+             como estrellas —las de Gaia más las sintéticas que el catálogo no
+             trae en el núcleo aglomerado—. Toda la ley vive en el módulo
+             compartido; aquí solo se le pasa el equipo. */
+          var cum = objetoSel.globular && objetoSel.cumulo
+            ? BitacoraGaiaRender.pintarCumulo(difuso, objetoSel.cumulo, {
+                ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
+                cielo: cieloGaia, apertura: teleApertura(), estrellas: estrellasDibujo
+              })
+            : null;
+          if (cum) estrellasDibujo = cum.estrellas;
           var opEst = {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
@@ -631,8 +651,6 @@
             carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana()
           };
           var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, opEst, PROC);
-          var cieloGaia = cieloOptica(datosOcular().pupila);
-          cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
           BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
           /* Galaxias del campo con su imagen real de PanSTARRS (ps1cutouts).
              Toda la capa vive en el módulo compartido, que es lo que hace que el
