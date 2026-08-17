@@ -17,8 +17,8 @@
      · Se fija m_res (vía m_crowd) al valor de la medida de referencia. Si no, al
        bajar el flujo el fondo local se oscurece, m_lim,sky se hace más profunda
        y el reparto resuelto/campo cambia: se estaría midiendo eso.
-     · El cielo es muy oscuro a propósito, para que s_halo y s_grano estén
-       saturados a 1 en toda la región medida. Con la atenuación a medio camino,
+     · El cielo es muy oscuro a propósito, para que s_halo esté saturado a 1 en
+       toda la región medida. Con la atenuación a medio camino,
        la salida NO debe bajar ×0,5 —la ley de visibilidad no es lineal— y el
        guardián estaría midiendo la ley perceptual en vez del anclaje.
 
@@ -84,8 +84,11 @@ var ANCHO = Math.ceil(2.4 * pobM13.rtAs / 60);
 /* ── 1. Guardián del re-anclaje ──────────────────────────────────────────── */
 console.log('E2.1 · atenuar ×0,5 baja el flujo pintado ×0,5 (guardián permanente):');
 
-// Cielo de 25 mag/arcsec²: irreal a propósito. Es el que satura s_halo y
-// s_grano a 1 y deja ver el anclaje sin la ley de visibilidad por medio.
+// Cielo de 25 mag/arcsec²: irreal a propósito. Es el que satura s_halo a 1 y
+// deja ver el anclaje sin la ley de visibilidad por medio. (s_grano NO se
+// satura: E5 midió que vale 0 en toda la matriz y también con este cielo, así
+// que el término de grano no entra en lo pintado. No cambia este guardián
+// —mide el nivel medio— pero conviene no creerse lo contrario.)
 var SQM_SATURADO = 25;
 var ref = pintar(M13, 200, 100, SQM_SATURADO, ANCHO, SIZE);
 
