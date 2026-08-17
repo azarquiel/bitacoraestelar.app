@@ -1423,7 +1423,10 @@
      proporcionalmente más y deforman el mismísimo S2/S1² que sale de la LF—. */
   var TRAMOS_R = 512;
 
-  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano) {
+  /* `omegaRes` es la Ω ÓPTICA (telescopio + atmósfera) y manda en m_crowd;
+     `omegaBeam` puede ser mayor —el píxel del lienzo— y solo entra en σ del
+     grano. Ver pintarCumulo. */
+  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, omegaRes) {
     var C = window.BitacoraCumulos;
     var delta = C.config.delta;
     var n = TRAMOS_R + 1, paso = pob.rtAs / TRAMOS_R;
@@ -1435,7 +1438,7 @@
       var s = pob.sigma(rAs);
       r[i] = rAs;
       if (!(s > 0)) { mRes[i] = -Infinity; continue; }
-      var mc = pob.mCrowd(rAs, omegaBeam);
+      var mc = pob.mCrowd(rAs, omegaRes);
       /* Circularidad m_lim,sky ↔ <I>: UNA sola iteración, no un punto fijo (su
          criterio de parada acabaría dentro de la imagen). Se arranca por la cota
          superior —el crowding, que no depende del cielo— y se cierra con el fondo
@@ -1538,8 +1541,16 @@
        grande que él. Un píxel integra todo lo que cae dentro, así que muestrear
        ahí un campo más fino no dibuja grano: dibuja aliasing, con la varianza del
        beam en un píxel que ya la ha promediado. Con Ω = max(beam, píxel) el grano
-       se ve más suave al alejar el zoom, que es lo que hace la naturaleza. */
-    var omegaBeam = Math.max(Math.PI * (fwhmAs / 2) * (fwhmAs / 2), areaPx);
+       se ve más suave al alejar el zoom, que es lo que hace la naturaleza.
+
+       Pero SOLO para el grano. La aglomeración (m_crowd, y con ella qué
+       estrellas se resuelven) es física del telescopio y de la atmósfera: si
+       lee el píxel del lienzo, el tamaño de la ventana decide cuántas estrellas
+       tiene el cúmulo —medido en M13 a 173×, el píxel de 2,35″ ganaba a la Ω
+       óptica y hundía m_res 0,54 mag en el núcleo, 86 estrellas de 1071
+       (harness_halo_estrellas.js). De ahí las dos Ω. */
+    var omegaRes = Math.PI * (fwhmAs / 2) * (fwhmAs / 2);
+    var omegaBeam = Math.max(omegaRes, areaPx);
     var thBeamAs = 2 * Math.sqrt(omegaBeam / Math.PI);   // diámetro equivalente
 
     /* ESCALA A LA QUE SE JUZGA EL GRANO. Hasta v7 era el beam, y ahí `s_grano`
@@ -1562,7 +1573,7 @@
     var cGrano = ctxFotometrico(o.cielo, thGranoAs / 60);
     var atenGrano = thBeamAs / thGranoAs;
 
-    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano);
+    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, omegaRes);
 
     var mascara = difusoMaskDe(o.cielo, difuso.length);
     var semilla = hashCadena([cumulo.id, C.versionLF(), o.realization || 0, 'grano'].join('|'));
@@ -1605,7 +1616,7 @@
 
     return {
       tabla: tabla, poblacion: pob, fwhmAs: fwhmAs, cHalo: cHalo, cGrano: cGrano,
-      omegaBeam: omegaBeam, thBeamAs: thBeamAs, thGranoAs: thGranoAs, atenGrano: atenGrano,
+      omegaBeam: omegaBeam, omegaRes: omegaRes, thBeamAs: thBeamAs, thGranoAs: thGranoAs, atenGrano: atenGrano,
       Fmedio: Fmedio, Fpintado: Fpintado,
       estrellas: estrellasCumulo(pob, cumulo, tabla, o, C)
     };
@@ -1636,7 +1647,14 @@
       if (m > mRes + delta) continue;                       // ya está en el campo
       var a = C.atenuacionTransicion(m, mRes, delta);
       if (!(a > 0)) continue;
-      fuera.push([e[0], e[1], m + 2.5 * Math.log10(1 / a), e[3]]);
+      /* La m original viaja en la 5ª casilla: es la que DETECTA (el umbral del
+         cielo ya lo aplica capaEstrellas con mlim, y m_res lo ha aplicado ya
+         una vez aquí). Sin ella, capaEstrellas comparaba mlim contra la m_eff
+         atenuada y degradaba a glow toda la banda de transición —que en el halo
+         se monta justo encima de mlim, porque allí m_res ES m_lim,sky—: 482
+         estrellas de 1467 en M13 a 173× (harness_halo_estrellas.js). El mismo
+         umbral cobrado dos veces, y encima sobre un número de dibujo. */
+      fuera.push([e[0], e[1], m + 2.5 * Math.log10(1 / a), e[3], m]);
     }
     return fuera;
   }
@@ -3445,11 +3463,17 @@
     ctx.globalCompositeOperation = 'lighter';
     for (var i = 0; i < estrellas.length; i++) {
       var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2], bprp = estrellas[i][3];
-      if (g > mlim && !conGlow) continue;
+      /* Magnitud con la que se DECIDE si la estrella se ve, separada de la que
+         se DIBUJA. Solo difieren en la banda de transición de un globular, que
+         entrega su m original en la 5ª casilla (ver estrellasCumulo): esa
+         estrella ya pasó el umbral del cielo una vez y no puede volver a
+         juzgarse con la magnitud atenuada que la propia atenuación produce. */
+      var gDet = (estrellas[i][4] != null) ? estrellas[i][4] : g;
+      if (gDet > mlim && !conGlow) continue;
       var x = SIZE / 2 - deltaRA(ra) * cos0 * escv;
       var y = SIZE / 2 - (dec - dec0) * escv;
       if (x < -3 || y < -3 || x > SIZE + 3 || y > SIZE + 3) continue;
-      if (g > mlim) {
+      if (gDet > mlim) {
         // Ancla en alfaMin (el suelo de la rama resuelta) para que el cruce en
         // g=mlim sea continuo: nada de "aparecer" más brillante al cruzar.
         var aGlow = CFG.alfaMin * Math.pow(10, -0.4 * (g - mlim));

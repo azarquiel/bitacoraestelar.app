@@ -71,19 +71,23 @@ function radio(s) {
 }
 
 var ANILLOS = [0.25, 0.5, 1, 2, 4, 8];
-function porAnillo(lista, filtroMlim) {
+/* `col` es la casilla con la que se juzga el corte mlim: la 4 es la magnitud de
+   detección que hoy usa capaEstrellas (la m original de la banda), la 2 es la
+   m_eff atenuada con la que la juzgaba antes del arreglo. */
+function porAnillo(lista, col) {
   var n = ANILLOS.map(function () { return 0; });
   for (var i = 0; i < lista.length; i++) {
-    if (filtroMlim && !(lista[i][2] <= mlim)) continue;
+    var g = lista[i][col] != null ? lista[i][col] : lista[i][2];
+    if (!(g <= mlim)) continue;
     var r = radio(lista[i]) / rhAs;
     for (var k = 0; k < ANILLOS.length; k++) if (r <= ANILLOS[k]) { n[k]++; break; }
   }
   return n;
 }
 
-var sinHalo = porAnillo(gaia, true);
-var conHalo = porAnillo(res.estrellas, true);              // como el simulador: corta por mlim
-var conHaloSinCorte = porAnillo(res.estrellas, false);     // sin el corte de capaEstrellas
+var sinHalo = porAnillo(gaia, 2);
+var conHalo = porAnillo(res.estrellas, 4);        // camino real del simulador
+var conHaloPre = porAnillo(res.estrellas, 2);     // el bug: mlim contra la m_eff atenuada
 
 console.log('M13 · D=' + D + 'mm  M=' + MAG + 'x  SQM=' + SQM.toFixed(1) +
             '  SBe=' + res.cHalo.SBe.toFixed(2) + '  mlim puntual=' + mlim.toFixed(2));
@@ -93,14 +97,30 @@ console.log('beam: fwhm=' + res.fwhmAs.toFixed(2) + '"  Ω usada=' + res.omegaBe
 console.log('Gaia en el fixture: ' + gaia.length + ' · con G<=mlim: ' +
             gaia.filter(function (s) { return s[2] <= mlim; }).length);
 console.log('');
-console.log(' r/r_h    m_res   sin halo   con halo   con halo(sin corte mlim)');
+console.log(' r/r_h    m_res   sin halo   con halo   pre-arreglo');
 var tot = [0, 0, 0];
 for (var k = 0; k < ANILLOS.length; k++) {
   var m = mRes(ANILLOS[k] * rhAs);
-  tot[0] += sinHalo[k]; tot[1] += conHalo[k]; tot[2] += conHaloSinCorte[k];
+  tot[0] += sinHalo[k]; tot[1] += conHalo[k]; tot[2] += conHaloPre[k];
   console.log(' <=' + ANILLOS[k].toFixed(2) + '   ' + (isFinite(m) ? m.toFixed(2) : '  inf') +
     String(sinHalo[k]).padStart(11) + String(conHalo[k]).padStart(11) +
-    String(conHaloSinCorte[k]).padStart(11));
+    String(conHaloPre[k]).padStart(11));
 }
 console.log(' total          ' + String(tot[0]).padStart(11) + String(tot[1]).padStart(11) +
             String(tot[2]).padStart(11));
+
+/* Invariante: donde el velo del cúmulo es despreciable, el render CON halo tiene
+   que reducirse al de cielo pelado. Allí no hay aglomeración (m_res = m_lim,sky),
+   así que ninguna estrella puede desaparecer: si desaparece, el umbral del cielo
+   se está cobrando dos veces. Es lo que fallaba antes del arreglo. */
+var fallos = 0;
+for (var k2 = 3; k2 < ANILLOS.length; k2++) {           // r > r_h
+  if (conHalo[k2] !== sinHalo[k2]) {
+    fallos++;
+    console.error('FALLA r<=' + ANILLOS[k2] + ' r_h: con halo ' + conHalo[k2] +
+                  ', cielo pelado ' + sinHalo[k2]);
+  }
+}
+console.log(fallos ? '\nFALLA el invariante del halo despreciable' :
+            '\nok  fuera de r_h el halo no quita ninguna estrella');
+process.exit(fallos ? 1 : 0);

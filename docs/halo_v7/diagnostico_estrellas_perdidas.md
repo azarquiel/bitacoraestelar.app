@@ -93,8 +93,61 @@ el régimen es de seeing y no de difracción. Se mide, no se toca, hasta que 1 y
 estén arreglados: con esos dos fuera el conteo global sube a ~1590/1798 (88 %),
 que es lo que el observador describe.
 
-## Siguiente paso
+## Arreglo aplicado (1 y 2)
 
-Arreglar 1 (diff mínimo: `capaEstrellas` decide detección con `m`, dibujo con
-`m_eff`) y 2 (separar las dos Ω), volver a correr el arnés y comparar contra la
-imagen real. 3 pide una decisión de modelo aparte.
+**1 · La detección se juzga con `m`, el dibujo con `m_eff`.** `estrellasCumulo`
+entrega la magnitud original en la 5ª casilla y `capaEstrellas` compara *esa* con
+`mlim`; `m_eff` sigue gobernando alfa, tamaño y blur, que es lo único que tenía
+que hacer. La estrella de la banda se apaga y encoge, pero ya no vuelve a
+juzgarse contra el umbral que acaba de pasar.
+
+**2 · Dos Ω.** `omegaRes = π(fwhm/2)²` (telescopio + atmósfera) manda en
+`m_crowd` y en `m_res`; `omegaBeam = max(omegaRes, areaPx)` se queda para σ del
+grano, donde el promediado del píxel sí es real. `pintarCumulo` devuelve las dos.
+
+Medida después (mismo comando, misma captura):
+
+```
+ r/r_h    m_res   sin halo   con halo   pre-arreglo
+ <=0.25   14.32        154         74         44
+ <=0.50   14.80        282        190         99
+ <=1.00   15.52        441        405        230
+ <=2.00   16.05        438        438        307
+ <=4.00   16.17        280        280        229
+ <=8.00   16.18        203        203        162
+ total                1798       1590       1071
+```
+
+De 985 a **1590 de 1798 (88 %)**, y la pérdida queda donde debe: dentro de r_h,
+por aglomeración. `--size 1440` da ahora exactamente las mismas cuentas que
+`--size 720` (el lienzo ya no toca la física). Igual con `--D 200` (682/727) y
+`--sqm 22` (1861/2284).
+
+El arnés lleva el invariante como guardián y devuelve código de salida: **fuera
+de r_h, donde no hay aglomeración, el render con halo tiene que dar exactamente
+el conteo de cielo pelado.**
+
+### Dos guardianes que hubo que reescribir (no relajar)
+
+Los dos medían algo que sólo era cierto mientras `m_crowd` leía el píxel:
+
+- `test_halo_v7_e4.js` (E4.2b) comparaba los picos CRUDOS de la cola interpolada
+  contra la escalonada y exigía ×4. Con `m_res` 0,5 mag más profunda, el peor
+  pico de NGC 104 pasó a ser pendiente honrada (q = 0,62 mag de cola por mag de
+  límite, contra el 1,5 que separa escalón de pendiente en E4.2) y el test la
+  contaba como escalón. Ahora los dos saltos se normalizan por Δm_res, el mismo
+  cociente que usa E4.2: la mejora medida sube a ×29 / ×12 / ×17. Más dientes,
+  no menos.
+- `matriz_m13.js` (Nivel 3) exigía que duplicar el aumento no moviese ⟨I⟩(r) más
+  del 5 % del pico. Con la Ω inflada, `m_crowd` mandaba en casi todo el perfil y
+  `m_res` no sabía del aumento; ahora manda `m_lim,sky`, que sí depende de M
+  —más aumento oscurece el fondo—, `m_res` se hunde 0,63 mag en r_h y el velo se
+  adelgaza un 11,5 % del pico. Es la misma física que deshace el halo en
+  estrellas al abrir apertura. El guardián pasa a comprobar lo que sí es
+  invariante y no tiene constante que ajustar: ⟨I⟩ = Σ·S1(m_res+δ) y ninguna otra
+  vía de entrada (peor desvío medido 2,2e-16).
+
+## Lo que queda
+
+Hipótesis 3 (la banda pierde el `(1−a)` del flujo) y 4 (`k = 30` en el núcleo)
+siguen abiertas: piden decisión de modelo, no arreglo de código.
