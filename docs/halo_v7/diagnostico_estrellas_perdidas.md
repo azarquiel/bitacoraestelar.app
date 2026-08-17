@@ -194,8 +194,84 @@ mide como tal: por debajo de un nivel de 8 bits (1/255 = 3,9e-3) y con el tap
 comiéndose el 99,84 % del flujo del ala, que ya está a 0,38·Cmin. El assert de
 contraste (ala < Cmin) no se toca.
 
+## Hipótesis 4: `k = 30` en el núcleo — medida y veredicto
+
+Banco: `scripts/harness_crowding_k.js` (M13, D=467 mm, 173×, SQM 21, mlim 16,18,
+fwhm 2,09″, Ω óptica 3,42 as²). Dos verdades independientes y sin parámetros del
+modelo, más un barrido de k que entra por el render real (`crowdingCriterion`):
+
+- **Geometría**: sobre las posiciones reales de Gaia, una estrella es separable
+  si no tiene vecina a menos de θ_sep = 1 FWHM y dentro de Δmag = 0,75. Es cota
+  SUPERIOR: Gaia tampoco lista los pares muy cerrados.
+- **Poisson**: `P_solo = exp(−n(≥m+Δmag, r)·π θ_sep²)`, con la n del propio
+  modelo, obtenida invirtiendo `mCrowd` en k. Incluye las que Gaia no ve.
+
+Las dos concuerdan al 0,4 % en el total, y en todo el rango de θ_sep probado.
+
+### Cuentas por anillo (estrellas dibujadas)
+
+| r/r_h | Gaia (G≤mlim) | separables | Poisson | k=30 | k=10 | k=5 |
+|-------|---------------|------------|---------|------|------|-----|
+| ≤0,25 | 154 | 89 | 77 | **70** | 78 | 91 |
+| ≤0,50 | 282 | 193 | 181 | 181 | 199 | 219 |
+| ≤1,00 | 441 | 352 | 366 | 403 | 431 | 436 |
+| ≤2,00 | 438 | 413 | 414 | 438 | 438 | 438 |
+| ≤4,00 | 280 | 276 | 276 | 280 | 280 | 280 |
+| ≤8,00 | 203 | 200 | 203 | 203 | 203 | 203 |
+| total | 1798 | 1523 | 1517 | 1575 | 1629 | 1667 |
+
+### Veredicto: k = 30 no es el culpable principal
+
+1. **La mayor parte del 154 → 70 es mezcla real.** A 2,09″ de FWHM, la verdad
+   independiente dice 77–89 separables en el núcleo. El render pinta 70. El
+   exceso de pérdida atribuible a k son 7–19 estrellas (9–21 %), no 84.
+2. **En total, k = 30 acierta**: 1575 dibujadas contra 1517–1523 de verdad, 4 %.
+3. **Ningún k reproduce la FORMA radial.** El k que cada anillo pediría para
+   dar la cuenta de Poisson crece dos órdenes de magnitud hacia fuera: 18,8 /
+   31,6 / 45,0 / 82,0 / 249,6 / 1576,4. Un umbral duro en densidad no puede
+   representar una probabilidad por estrella. Fuera de r_h la mezcla es un
+   efecto de pares, no de densidad, y `m_crowd` allí ni siquiera muerde.
+4. **La medida depende mucho de θ_sep**, que es del banco, no del modelo: en el
+   núcleo la verdad de Poisson da 128 a 0,5 FWHM, 77 a 1,0 y 41 a 1,5.
+
+### El hallazgo estructural: k pega dos veces
+
+En el borde de cada anillo `m_res` la pone el cielo, no el crowding — y sin
+embargo k mueve el núcleo con fuerza. La causa está en `bitacora-gaia-render.js`
+(`tablaCumulo`): el velo se arranca en el listón del crowding,
+`I0 = Sigma·S1campo(m_crowd)`, y ese velo es el fondo local contra el que se
+calcula `m_lim,sky`. Subir k mete más estrellas en el velo, sube el fondo y hunde
+también el límite del cielo. Medido a 0,1 r_h:
+
+| k | m_crowd | m_res |
+|---|---------|-------|
+| 1 | 17,96 | 14,45 |
+| 5 | 15,49 | 14,20 |
+| 10 | 14,83 | 14,09 |
+| 30 | 13,92 | 13,92 |
+| 100 | 12,94 | 12,93 |
+
+A k ≤ 5 manda el cielo con holgura (14,45 contra 17,96) y aun así `m_res` cae
+medio magnitud al subir k. No es un bug: la circularidad está documentada y
+resuelta con una sola iteración a propósito. Pero significa que k no es el
+parámetro «solo del crowding» que parece.
+
+### Además
+
+`k = 30` es un listón de confusión de survey: la probabilidad de mezcla en su
+propio umbral es `1 − e^(−1/k)` = 3,3 %. O sea, se declara velo todo lo más
+débil que un punto en el que solo el 3 % de las estrellas está de verdad
+mezclada. Es conservador por diseño, apropiado para fotometría automática, no
+para lo que ve un ojo.
+
+Y la comparación de partida no es limpia: la imagen real de M13 del observador
+tiene mejor resolución que el beam de 2,09″ del ocular a 173×, así que enseña
+pares que el simulador, correctamente, no debe separar.
+
 ## Lo que queda
 
-Hipótesis 4 (`k = 30` en el núcleo): dentro de 0,25 r_h se pasa de 154 a 70
-estrellas. Es lo que el modelo quiere hacer y pide decisión de modelo, no arreglo
-de código.
+Alternativa sin parámetros libres, para decidir (ADR 0007, ADR 0004): sustituir
+el umbral duro `m_crowd` por la atenuación por estrella
+`a(m,r) = exp(−n(≥m+Δmag, r)·π θ_sep²)`, con el `(1−a)` al velo — exactamente la
+maquinaria que ya existe desde el ADR 0011. Cambia k (semi-libre) por θ_sep y
+Δmag, que son física del beam. No se toca producción sin decisión explícita.
