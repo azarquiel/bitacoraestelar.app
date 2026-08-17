@@ -129,10 +129,10 @@
    error. La muestra y la quita bitacora-ocular.js con el estado REAL de la
    capa: nada de temporizadores. */
 #mw-obs-form .vista .procesando {
-  position:absolute;left:50%;bottom:14%;transform:translateX(-50%);
-  font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--tinta-tenue);
-  background:rgba(0,0,0,.55);border-radius:12px;padding:3px 12px;
-  pointer-events:none;white-space:nowrap;
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--tinta-tenue);
+  background:rgba(0,0,0,.55);border-radius:50%;text-align:center;padding:0 24px;
+  pointer-events:none;
 }
 #mw-obs-form .vista .procesando[hidden] {display:none;}
 
