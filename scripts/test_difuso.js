@@ -39,7 +39,9 @@ function ok(cond, etiqueta) {
 /* Invierte la curva del fondo: del gris 0–255 al brillo superficial en el ocular
    (mag/arcsec²). Así se comprueba la FÍSICA, no el tono en pantalla. */
 function sbDelFondo(nivel) {
-  return FOT.SB_CIELO_NEGRO - (nivel / 255) * (FOT.SB_CIELO_NEGRO - FOT.SB_CIELO_BLANCO);
+  var v = nivel / 255;
+  var L = (v <= 12.92 * 0.0031308) ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  return FOT.SB_CIELO_BLANCO - 2.5 * Math.log10(L);
 }
 function sbEnOcular(pupilaSalida, transmision) {
   // sqm 19: deja el gris en mitad de la curva, lejos de los recortes a 0 y 255.
@@ -62,6 +64,34 @@ casi(sbEnOcular(p2) - sbEnOcular(p1), esperadoDelta, 1e-9,
 var p3 = 1.75;
 casi(sbEnOcular(p3) - sbEnOcular(p2), -2.5 * Math.log10(Math.pow(p3 / p2, 2)), 1e-9,
   'Δ entre ' + p2 + ' y ' + p3 + ' mm (misma razón, mismo salto)');
+
+/* ── 1b. La curva del fondo pinta LUMINANCIA, no códigos ──────────────────────
+   Bug (2026-08-17): la rampa repartía magnitudes linealmente sobre los códigos
+   0-255, y un código sRGB no es luminancia. Con sqm 22 y pupila de salida
+   7,5 mm (18" a 61x, dim=1) el fondo salía en el código 70 -6,4 % del blanco:
+   un gris franco- para uno de los mejores cielos de la Tierra.
+   Ver docs/adr/0001-fondo-cielo-luminancia.md. */
+console.log('El fondo de cielo pinta luminancia, no códigos:');
+function luminanciaFondo(sqm, pupila, T) {
+  // Sin redondear: nivelFondo() sí redondea, y a 15 niveles el escalón es un 7 %.
+  var v = R.ctxFotometrico({ pupilaSalida: pupila, pupilaOjo: 7, sqm: sqm, transmision: T }).nivelFondo / 255;
+  return (v <= 12.92 * 0.0031308) ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+}
+// Un cielo 1 mag más oscuro emite 10^-0,4 veces la luz: la pantalla también.
+casi(luminanciaFondo(22, 7.5, 0.75) / luminanciaFondo(21, 7.5, 0.75),
+  Math.pow(10, -0.4), 1e-6, 'una magnitud de cielo = un factor 10^(-0,4) de luminancia');
+// Criterio de aceptación del reporte: sqm 22 casi negro con pupila de salida grande.
+ok(luminanciaFondo(22, 7.5, 0.75) < 0.01,
+  'sqm 22 a 61x queda por debajo del 1 % de luminancia (' +
+  (luminanciaFondo(22, 7.5, 0.75) * 100).toFixed(2) + ' %)');
+// Y monótona en todo el rango de cielos, sin escalones ni suelos duros.
+var previo = -1, mono = true;
+for (var sqmM = 24.5; sqmM >= 14; sqmM -= 0.25) {
+  var nM = R.nivelFondo({ pupilaSalida: 7.5, pupilaOjo: 7, sqm: sqmM, transmision: 0.75 });
+  if (nM < previo) mono = false;
+  previo = nM;
+}
+ok(mono, 'el gris del fondo crece de forma monótona de sqm 24,5 a 14');
 
 /* ── 2. Tope al brillo de ojo desnudo ────────────────────────────────────────
    Con d_ep > d_eye el ojo recorta el haz: el fondo NO sigue aclarándose. */

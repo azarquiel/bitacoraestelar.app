@@ -164,29 +164,28 @@
        solo para regresión. */
     H2C: null, // el literal no puede autorreferirse: se fija a H2C_DEFECTO justo tras el objeto
     H2C_DEFECTO: { THETA_R_A: 0.094, THETA_R_B: 0.081, SEEING_AS: 2.0 },
-    // Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo se
-    // pinta en función de su brillo superficial en el ocular (SBe, mag/arcsec²,
-    // atenuado por la pupila de salida). Por encima de SB_CIELO_NEGRO el fondo es
-    // negro total; por debajo se aclara linealmente en magnitudes hasta blanco.
-    // SB_CIELO_NEGRO era 22,5, y ese suelo se comía diferencias de cielo que el
-    // ojo SÍ ve: en un 18" a 158x la pupila de salida (2,9 mm) y la transmisión
-    // ya restan 2,3 mag, así que sqm 21 llega al ojo a SBe 23,3 y sqm 22 a 24,3
-    // -los dos por debajo de 22,5, los dos aplastados al mismo negro por el
-    // clamp de nivelCielo()-. El observador los distingue de sobra (reporte del
-    // usuario: separa 21,2 / 21,4 / 21,6 / 21,8 con ese equipo), porque el ojo
-    // adaptado no tiene un suelo absoluto en 22,5: ese número no era el umbral
-    // del ojo, era un redondeo.
-    // 24,5 abre el rango donde de verdad se observa y deja sqm 22 en ~6 niveles
-    // (0,03 % de luminancia en pantalla: negro a efectos prácticos), que casa
-    // con el otro extremo del mismo reporte -21,8 vs 22 ya no se separan-. La
-    // saturación hacia el negro NO se modela aquí: la aporta la gamma del
-    // monitor, que comprime los códigos bajos; la rampa se queda lineal en
-    // magnitudes, que es lo que mide el SQM.
-    // ponytail: perilla artística, no calibración. Depende de la luz ambiente de
-    // quien mire la pantalla. Subirla a 24,8 aclara el extremo oscuro sin llegar
-    // al gris franco; 25 ya pinta sqm 22 como gris visible y invierte el orden
-    // de discriminación (separa mejor los cielos excelentes que los normales).
-    SB_CIELO_NEGRO: 24.5, SB_CIELO_BLANCO: 16.5,
+    /* Curva del FONDO DE CIELO (independiente del tono del objeto): el fondo se
+       pinta en función de su brillo superficial en el ocular (SBe, mag/arcsec²,
+       atenuado por la pupila de salida y la transmisión). Un cielo de
+       SB_CIELO_BLANCO llega a blanco puro; a partir de ahí la LUMINANCIA de
+       pantalla baja con el flujo del cielo, y esa luminancia se codifica en
+       sRGB (ver nivelCielo). Único parámetro: el anclaje.
+
+       Antes había también SB_CIELO_NEGRO (24,5) y la rampa era lineal en
+       magnitudes sobre los CÓDIGOS 0-255. Ese era el bug: un código sRGB no es
+       luminancia (vale ~L^(1/2,2)), así que repartir magnitudes sobre códigos
+       deja el extremo oscuro muy por encima de su luminancia. Con sqm 22 y
+       pupila de salida 7,5 mm (18" a 61x, dim=1) el fondo salía en el código 70
+       —6,4 % de la luminancia del blanco: un gris franco— cuando 22 mag/arcsec²
+       es de los mejores cielos de la Tierra. El desfase NO era un punto cero
+       mal puesto: las dos curvas coinciden exactamente en SB_CIELO_BLANCO y se
+       separan más cuanto más oscuro es el cielo (SBe 18: 207 vs 135; SBe 20:
+       143 vs 60; SBe 22,3: 70 vs 15). Ver docs/adr/0001-fondo-cielo-luminancia.md.
+
+       ponytail: SB_CIELO_BLANCO sigue siendo la perilla artística —depende de
+       la luz ambiente de quien mire la pantalla—, pero ahora es un anclaje, no
+       una forma: subirlo o bajarlo desplaza toda la curva sin deformarla. */
+    SB_CIELO_BLANCO: 16.5,
     // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el lado
     // brillante). 1 = simétrico → las siluetas oscuras recortan contra el fondo.
     REALCE_OSCURO: 1.0,
@@ -214,9 +213,23 @@
   };
   FOT.H2C = FOT.H2C_DEFECTO; // H2c activa por defecto (validada en campo)
 
+  /* Codificación sRGB (IEC 61966-2-1) de una luminancia relativa 0-1 al código
+     0-255 que hay que escribir en el canvas. Se usa el tramo lineal de la norma
+     y no el 1/2,2 a secas justo porque el problema vive en el extremo oscuro,
+     que es donde las dos expresiones se separan. */
+  function codigoSRGB(L) {
+    if (!(L > 0)) return 0;
+    if (L >= 1) return 255;
+    return 255 * (L <= 0.0031308 ? 12.92 * L : 1.055 * Math.pow(L, 1 / 2.4) - 0.055);
+  }
+
+  /* Nivel de gris (0-255) del fondo de cielo. La luminancia de pantalla es
+     proporcional al FLUJO del cielo —que es lo que mide una mag/arcsec²—, con
+     SB_CIELO_BLANCO anclado al blanco, y se codifica en sRGB para escribirla en
+     el canvas. Monótona y sin suelo duro: dos cielos distintos nunca colapsan
+     en el mismo negro, solo se acercan. */
   function nivelCielo(SBe) {
-    var t = (FOT.SB_CIELO_NEGRO - SBe) / (FOT.SB_CIELO_NEGRO - FOT.SB_CIELO_BLANCO);
-    return Math.max(0, Math.min(255, 255 * t));
+    return codigoSRGB(Math.pow(10, -0.4 * (SBe - FOT.SB_CIELO_BLANCO)));
   }
 
   // Escalón suave (smoothstep) usado como desvanecido de visibilidad.
