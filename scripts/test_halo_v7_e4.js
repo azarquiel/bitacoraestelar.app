@@ -101,7 +101,9 @@ console.log('\nE4.2 · la parte fotométrica de μ(r), −2,5·log10(S1(m_res+δ
 var TOL_Q = 1.5;
 
 REFS.forEach(function (id) {
-  [146, 514].forEach(function (MAG) {
+  // 300× es la intermedia: entre los dos extremos, m_res(r) barre los bordes de
+  // bin de la LF a un paso distinto, que es justo donde nacían los anillos.
+  [146, 300, 514].forEach(function (MAG) {
     var m = H.medir(H.cumulo(id), { D: 200, MAG: MAG, sqm: 21.5, realization: 0 });
     var t = m.tabla, peor = 0, peorR = 0, peorD = 0, nodos = 0;
     for (var i = 1; i < t.r.length; i++) {

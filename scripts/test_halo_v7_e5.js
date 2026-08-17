@@ -89,7 +89,7 @@ ok(filas.every(function (f) { return f.rGranoAs <= f.rVisibleAs; }),
    porque el umbral de contraste se evalúa a un tamaño angular del orden del
    beam y ahí Cmin vale 10²-10³. No es un fallo de v7 —D1/D2/D3 no van de
    esto— pero sí lo primero que hay que mirar en v8: hoy S1 pone el velo y S2
-   no pinta nada. Ver informe_autocritica_v7.md. */
+   no pinta nada. Ver docs/halo_v7/informe_autocritica_v7.md. */
 var sinGrano = filas.filter(function (f) { return f.rGranoAs === 0; }).length;
 ok(sinGrano === filas.length,
   'HALLAZGO, no regresión: el grano no se pinta en NINGUNA de las ' + filas.length +

@@ -195,16 +195,6 @@
     var acum = new Float64Array(n + 1);   // acum[i] = estrellas más brillantes que el bin i
     for (i = 0; i < n; i++) acum[i + 1] = acum[i] + num[i];
 
-    // Primer bin con m > mlim (los bins están ordenados de brillante a débil).
-    function primerDebil(mlim) {
-      var lo = 0, hi = n;
-      while (lo < hi) {
-        var mid = (lo + hi) >> 1;
-        if (mAp[mid] > mlim) hi = mid; else lo = mid + 1;
-      }
-      return lo;
-    }
-
     /* Cola de la LF por debajo de mlim, INTERPOLANDO el bin que mlim parte.
        Devolver el bin entero hace de S1 y S2 funciones escalón de mlim, y como
        m_res(r) sí es continua en el radio (m_crowd interpola justo por esto,
