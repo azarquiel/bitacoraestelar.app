@@ -503,6 +503,20 @@ preexistentes de `test_difuso.js` y no se vuelve a mencionar salvo que el númer
   6. **Las sintéticas no se dibujan.** M13 genera 735, todas entre mag 16,4 y 17,9 dentro de 77″, y quedan bajo `m_res` a 100/50×, 200/100× y 400/200×: su luz ya está contada en el campo, así que dibujarlas sería duplicarla.
   7. **La gaussiana de cada nodo sale de una tabla de 4.096 valores** indexada por el hash, no de un Box-Muller: el log, la raíz y el coseno costaban el 60 % del pintado. La tabla se normaliza a media 0 y varianza 1 exactas. Coste medido: **145 → 57 ms** por pintado (720², campo 20′), aún por encima del ~10¹ ms de §8, con el resto repartido entre `radioPropio`, cuatro interpolaciones y la exponencial.
 
+- **Fase 3 — hecha** (`scripts/matriz_m13.js`, 12 comprobaciones + informe). No añade modelo: interroga al que hay. Las frases de la matriz se traducen a cuatro magnitudes medibles —`f_res(r)` (fracción del **flujo** del anillo que va en estrellas dibujadas), `r_50` (radio donde `f_res` cruza 0,5 **hacia arriba**: el centro está aglomerado y es hacia fuera donde el cúmulo se deshace en puntos), `r_vis` (último radio con `s_halo ≥ 0,5`) y el contraste del grano medido en unidades de su propio umbral—. Resultado:
+
+| Equipo | FWHM | `f_res` núcleo | `r_50`/r_h | `r_vis`/r_h | grano/umbral |
+|---|---|---|---|---|---|
+| 100 mm 50× 21.5 | 3,41″ | 3,1 % | no alcanzado | 2,26 | 0,5 % |
+| 200 mm 100× 21.5 | 2,43″ | 21,9 % | 1,86 | 2,33 | 0,7 % |
+| 400 mm 200× 21.5 | 2,12″ | 23,0 % | 0,99 | 2,45 | 1,8 % |
+| 200 mm 200× 18.5 | 2,43″ | 23,0 % | no alcanzado | 0,97 | 3,1 % |
+
+Tres filas salen como las escribió el observador: el núcleo continuo a 100 mm, la frontera entrando hacia el centro al abrir apertura y el halo exterior perdido en cielo urbano con el núcleo intacto. **Tres desviaciones, todas hacia la misma conclusión —el régimen no es de difracción sino de aglomeración y seeing—:**
+  1. **El núcleo no llega a «mayormente resuelto» ni con 400 mm:** `f_res` satura en el 23 %. Dentro manda `m_crowd`, que solo mejora por la FWHM, y la FWHM la fija el seeing (2,43″ a 200 mm, 2,12″ a 400 mm). Abrir apertura mueve la **frontera** hacia dentro (1,86 → 0,99 r_h), no vacía el centro. Es lo que se ve en el ocular con seeing mediano; la fila de §9.4 estaba escrita a priori.
+  2. **`m_res` gana 0,69 mag por duplicación de D**, no las ~1,5 de §9.3, por la misma razón: el corte lo pone la aglomeración y el cielo, no la difracción.
+  3. **La textura SBF no se ve con ningún equipo, y no por poco:** su contraste se queda entre el 0,5 % y el 3,1 % de lo que pide H2c. El «halo granular» que reportan los observadores son las **estrellas resueltas** —`f_res` sube del 0 % en el centro al 28 % en el borde ya con 100 mm—, no la fluctuación del campo. Las constantes de H2c no se tocan (§9.4); si algún día se toca la ley del grano, el harness salta.
+
 **Tests:** de `scripts/test_globulares.js` sobreviven las secciones 1 y 2 (forma del perfil y
 `areaKing` cerrada vs numérica: el perfil sigue siendo la PDF radial); el resto se borra con la
 Fase 0. Lo nuevo va a `scripts/test_cumulos.js`.
