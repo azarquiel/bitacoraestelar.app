@@ -165,6 +165,32 @@ var SB0T = Math.max(21, Math.min(27, 21 + 5 * Math.log10(7.5 * 100 / (200 * Math
 casi(mlim(100), -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(200 * 200 * 0.8),
   1e-9, 'a 100x (pupila 2 mm) usa la apertura completa');
 
+/* ── 9b. El techo de 27 mag/arcsec² del método del umbral ────────────────────
+   El clamp era `max(sqm, min(27, SB0T))`: con sqm > 27 el max() DESHACE el
+   min() y SB0T se va con el sqm, fuera del dominio donde el ajuste de Torres
+   Lapasió vale. La parábola de la Ec. 6 tiene su vértice en 1,792/(2·0,02949)
+   = 30,4, así que pasado ahí el límite EMPIEZA A BAJAR: con sqm 40 se veían
+   menos estrellas (14,5) que con sqm 21 (14,8). Un cielo más oscuro no puede
+   enseñar menos estrellas: esa es la exigencia, y no depende de ninguna
+   calibración. Los dos topes se contradicen cuando sqm > 27 y gana el del OJO
+   (27 = su suelo de detección): oscurecer un cielo que el ojo ya no distingue
+   del negro no aporta nada. Reportado con sqm 30 en la UI (2026-08-17). */
+console.log('Techo de 27 mag/arcsec² en la magnitud límite:');
+function mlimSqm(sqm) {
+  return R.magLimite({ apertura: 457, aumentos: 61, transmision: 0.75, sqm: sqm, pupilaOjo: 7 });
+}
+var monoM = true, cae = null, previoM = -Infinity;
+for (var sM = 16; sM <= 40; sM += 0.25) {
+  var vM = mlimSqm(sM);
+  if (vM < previoM - 1e-9 && cae == null) { monoM = false; cae = sM; }
+  previoM = vM;
+}
+ok(monoM, 'la magnitud límite nunca decrece al oscurecer el cielo' +
+  (cae == null ? '' : ' — cae a partir de sqm ' + cae.toFixed(2)));
+casi(mlimSqm(30), mlimSqm(27), 1e-9,
+  'pasado el suelo de detección del ojo (27) el cielo ya no mejora el límite');
+ok(mlimSqm(27) > mlimSqm(24), 'y por debajo de 27 el cielo sí manda');
+
 /* ── 10. Curva de tono de las estrellas ─────────────────────────────────────
    Las estrellas se dibujaban con 'lighter' en 8 bits y saltándose la curva de
    tono: en el núcleo de un cúmulo cientos de sprites sumaban por encima de 255,

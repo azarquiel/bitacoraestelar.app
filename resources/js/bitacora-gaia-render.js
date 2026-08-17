@@ -615,7 +615,15 @@
     if (!(D > 0) || !(MAG > 0)) return null;
     var sqm = (o.sqm != null) ? o.sqm : 21;
     var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
-    SB0T = Math.max(sqm, Math.min(27, SB0T));
+    /* Suelo = SB0 (el ocular no oscurece el fondo por debajo del de ojo
+       desnudo) y techo = 27 (suelo de detección del ojo). Con sqm > 27 los dos
+       se contradicen y gana el TECHO: un cielo que el ojo ya no distingue del
+       negro no puede seguir mejorando nada. El orden importa —`max(sqm, min(27,
+       …))` deja que el max deshaga el min— y con él SB0T se salía del dominio
+       del ajuste de Torres Lapasió: la parábola de la Ec. 6 tiene el vértice en
+       30,4, así que con sqm 40 el límite caía a 14,5, por debajo del de un
+       cielo de sqm 21. Ver test_difuso.js §9b. */
+    SB0T = Math.min(27, Math.max(sqm, SB0T));
     // Apertura efectiva: si la pupila de salida (d_ep = D/MAG) supera la del ojo,
     // el ojo recorta el haz y se desperdicia apertura → D_eff = D·min(1, d_eye/d_ep).
     // Solo en la captación de luz (D²); el término de cielo SB0T conserva su propio
