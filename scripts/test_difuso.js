@@ -80,7 +80,9 @@ function ok(cond, etiqueta) {
 /* Invierte la curva del fondo: del gris 0–255 al brillo superficial en el ocular
    (mag/arcsec²). Así se comprueba la FÍSICA, no el tono en pantalla. */
 function sbDelFondo(nivel) {
-  return FOT.SB_CIELO_NEGRO - (nivel / 255) * (FOT.SB_CIELO_NEGRO - FOT.SB_CIELO_BLANCO);
+  var v = nivel / 255;
+  var L = (v <= 12.92 * 0.0031308) ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  return FOT.SB_CIELO_BLANCO - 2.5 * Math.log10(L);
 }
 function sbEnOcular(pupilaSalida, transmision) {
   // sqm 19: deja el gris en mitad de la curva, lejos de los recortes a 0 y 255.
@@ -103,6 +105,34 @@ casi(sbEnOcular(p2) - sbEnOcular(p1), esperadoDelta, 1e-9,
 var p3 = 1.75;
 casi(sbEnOcular(p3) - sbEnOcular(p2), -2.5 * Math.log10(Math.pow(p3 / p2, 2)), 1e-9,
   'Δ entre ' + p2 + ' y ' + p3 + ' mm (misma razón, mismo salto)');
+
+/* ── 1b. La curva del fondo pinta LUMINANCIA, no códigos ──────────────────────
+   Bug (2026-08-17): la rampa repartía magnitudes linealmente sobre los códigos
+   0-255, y un código sRGB no es luminancia. Con sqm 22 y pupila de salida
+   7,5 mm (18" a 61x, dim=1) el fondo salía en el código 70 -6,4 % del blanco:
+   un gris franco- para uno de los mejores cielos de la Tierra.
+   Ver docs/adr/0009-fondo-cielo-luminancia.md. */
+console.log('El fondo de cielo pinta luminancia, no códigos:');
+function luminanciaFondo(sqm, pupila, T) {
+  // Sin redondear: nivelFondo() sí redondea, y a 15 niveles el escalón es un 7 %.
+  var v = R.ctxFotometrico({ pupilaSalida: pupila, pupilaOjo: 7, sqm: sqm, transmision: T }).nivelFondo / 255;
+  return (v <= 12.92 * 0.0031308) ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+}
+// Un cielo 1 mag más oscuro emite 10^-0,4 veces la luz: la pantalla también.
+casi(luminanciaFondo(22, 7.5, 0.75) / luminanciaFondo(21, 7.5, 0.75),
+  Math.pow(10, -0.4), 1e-6, 'una magnitud de cielo = un factor 10^(-0,4) de luminancia');
+// Criterio de aceptación del reporte: sqm 22 casi negro con pupila de salida grande.
+ok(luminanciaFondo(22, 7.5, 0.75) < 0.01,
+  'sqm 22 a 61x queda por debajo del 1 % de luminancia (' +
+  (luminanciaFondo(22, 7.5, 0.75) * 100).toFixed(2) + ' %)');
+// Y monótona en todo el rango de cielos, sin escalones ni suelos duros.
+var previo = -1, mono = true;
+for (var sqmM = 24.5; sqmM >= 14; sqmM -= 0.25) {
+  var nM = R.nivelFondo({ pupilaSalida: 7.5, pupilaOjo: 7, sqm: sqmM, transmision: 0.75 });
+  if (nM < previo) mono = false;
+  previo = nM;
+}
+ok(mono, 'el gris del fondo crece de forma monótona de sqm 24,5 a 14');
 
 /* ── 2. Tope al brillo de ojo desnudo ────────────────────────────────────────
    Con d_ep > d_eye el ojo recorta el haz: el fondo NO sigue aclarándose. */
@@ -134,6 +164,70 @@ casi(mlim(10), mlim(10), 0, 'determinista');
 var SB0T = Math.max(21, Math.min(27, 21 + 5 * Math.log10(7.5 * 100 / (200 * Math.sqrt(0.8)))));
 casi(mlim(100), -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(200 * 200 * 0.8),
   1e-9, 'a 100x (pupila 2 mm) usa la apertura completa');
+
+/* ── 9b. El techo de 27 mag/arcsec² del método del umbral ────────────────────
+   El clamp era `max(sqm, min(27, SB0T))`: con sqm > 27 el max() DESHACE el
+   min() y SB0T se va con el sqm, fuera del dominio donde el ajuste de Torres
+   Lapasió vale. La parábola de la Ec. 6 tiene su vértice en 1,792/(2·0,02949)
+   = 30,4, así que pasado ahí el límite EMPIEZA A BAJAR: con sqm 40 se veían
+   menos estrellas (14,5) que con sqm 21 (14,8). Un cielo más oscuro no puede
+   enseñar menos estrellas: esa es la exigencia, y no depende de ninguna
+   calibración. Los dos topes se contradicen cuando sqm > 27 y gana el del OJO
+   (27 = su suelo de detección): oscurecer un cielo que el ojo ya no distingue
+   del negro no aporta nada. Reportado con sqm 30 en la UI (2026-08-17). */
+console.log('Techo de 27 mag/arcsec² en la magnitud límite:');
+function mlimSqm(sqm) {
+  return R.magLimite({ apertura: 457, aumentos: 61, transmision: 0.75, sqm: sqm, pupilaOjo: 7 });
+}
+var monoM = true, cae = null, previoM = -Infinity;
+for (var sM = 16; sM <= 40; sM += 0.25) {
+  var vM = mlimSqm(sM);
+  if (vM < previoM - 1e-9 && cae == null) { monoM = false; cae = sM; }
+  previoM = vM;
+}
+ok(monoM, 'la magnitud límite nunca decrece al oscurecer el cielo' +
+  (cae == null ? '' : ' — cae a partir de sqm ' + cae.toFixed(2)));
+casi(mlimSqm(30), mlimSqm(27), 1e-9,
+  'pasado el suelo de detección del ojo (27) el cielo ya no mejora el límite');
+ok(mlimSqm(27) > mlimSqm(24), 'y por debajo de 27 el cielo sí manda');
+
+/* ── 9c. El mismo suelo de 27, en el PINTADO ─────────────────────────────────
+   valorDeFlujo divide por Fcielo. Con un cielo irreal (SQM 30) el divisor
+   tiende a cero y el contraste de cualquier objeto explota: la escena entera
+   sale blanca aunque magLimite —que sí conocía el suelo de 27— no haya movido
+   ni una estrella. FOT.SB_SUELO_PINTADO pone el mismo tope en el Fcielo del
+   pintado, y SOLO ahí: Cmin, H2c y magLimite siguen con el Fcielo sin capar.
+   Con cualquier cielo real (SBe < 27) el pintado es idéntico al de siempre. */
+console.log('Suelo de 27 mag/arcsec² en el Fcielo del pintado:');
+function ctxSuelo(sqm, suelo) {
+  var antes = FOT.SB_SUELO_PINTADO;
+  FOT.SB_SUELO_PINTADO = suelo;
+  var c = R.ctxFotometrico({ pupilaSalida: 457 / 61, pupilaOjo: 7, sqm: sqm, transmision: 0.75, aumentos: 61 });
+  FOT.SB_SUELO_PINTADO = antes;
+  return c;
+}
+// Nivel pintado de una superficie mu, tal como la línea de salida de pintarFot.
+function nivelPintado(sqm, mu, suelo) {
+  var c = ctxSuelo(sqm, suelo);
+  return c.nivelFondo + R.valorDeFlujo(Math.pow(10, -0.4 * mu) * c.dim * c.T, c.FcieloPintado, c.rango);
+}
+[16, 18, 20, 21.5, 24, 26].forEach(function (sqm) {
+  casi(nivelPintado(sqm, 22, 27), nivelPintado(sqm, 22, null), 1e-12,
+    'sqm ' + sqm + ' (SBe ' + ctxSuelo(sqm, null).SBe.toFixed(1) + ' < 27): el suelo no toca nada');
+});
+// Pasado el suelo, el nivel deja de crecer con el cielo en vez de dispararse.
+ok(nivelPintado(35, 22, null) >= 255 && nivelPintado(35, 22, 27) < 120,
+  'sqm 35: un objeto de mu=22 pasa de blanco puro (' + nivelPintado(35, 22, null).toFixed(0) +
+  ') a gris estable (' + nivelPintado(35, 22, 27).toFixed(0) + ')');
+/* Tolerancia de 0,05 niveles y no exacta a propósito: nivelFondo SÍ sigue el
+   cielo sin capar (el suelo es solo del Fcielo del pintado), y entre SBe 30 y
+   35 eso deja 0,01 niveles de 255. Ruido, no dependencia. */
+casi(nivelPintado(40, 22, 27), nivelPintado(30, 22, 27), 0.05,
+  'por encima del suelo el pintado ya no depende del cielo');
+// Y el umbral NO se toca: Cmin y Fcielo siguen viendo el cielo de verdad.
+ok(ctxSuelo(35, 27).Fcielo === ctxSuelo(35, null).Fcielo &&
+   ctxSuelo(35, 27).Cmin === ctxSuelo(35, null).Cmin,
+  'el suelo no toca Fcielo ni Cmin (umbral de contraste intacto)');
 
 /* ── 10. Curva de tono de las estrellas ─────────────────────────────────────
    Las estrellas se dibujaban con 'lighter' en 8 bits y saltándose la curva de

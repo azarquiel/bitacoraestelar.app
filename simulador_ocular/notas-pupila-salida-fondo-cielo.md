@@ -65,9 +65,11 @@ mediante `pEf = min(pupila, pOjo)`. Aparece idéntico en cuatro sitios:
   var nivelFondo = nivelCielo(sqm - 2.5 * Math.log10(dim));
   ```
 
-La curva gris del fondo es lineal en magnitudes entre `SB_CIELO_NEGRO=22.5` (negro) y
-`SB_CIELO_BLANCO=16.5` (blanco) — `FOT`, `bitacora-ocular.js:165`; `nivelCielo()`,
-`bitacora-ocular.js:169-172`.
+La curva gris del fondo pinta la **luminancia** de pantalla proporcional al flujo del
+cielo, anclada en `SB_CIELO_BLANCO=16.5` (blanco puro) y codificada en sRGB —
+`nivelCielo()`, `bitacora-gaia-render.js`. Antes era lineal en magnitudes sobre los
+códigos 0–255, entre `SB_CIELO_NEGRO` y `SB_CIELO_BLANCO`, y eso dejaba los cielos
+oscuros en un gris franco: ver `docs/adr/0009-fondo-cielo-luminancia.md`.
 
 **Consecuencia del clamp** (lo que responde la duda 1):
 - `d_ep < d_eye` (más aumento): `dim<1` → `SBe>sqm` → fondo más **oscuro**. ✔
@@ -306,7 +308,8 @@ contraste es intrínsecamente bajo.
 - *Bien establecido:* `SB ∝ (d_ep/d_eye)²` con tope en ojo desnudo; invariancia del
   contraste objeto↔cielo con el aumento (Clark); visibilidad de nebulosa oscura por
   contraste contra fondo brillante.
-- *Aproximado / empírico:* la curva gris del fondo (`SB_CIELO_NEGRO/BLANCO`) y las
+- *Aproximado / empírico:* el anclaje de la curva gris del fondo (`SB_CIELO_BLANCO`;
+  la FORMA sí es física, ver ADR-0001) y las
   constantes fotométricas (`FOT`) son de calibración visual, no físicas exactas; el
   método de Torres Lapasió es "optimista" (de ahí `MARGEN_MAGLIM`); el recorte de
   apertura efectiva y el factor `T` en el fondo son correcciones de segundo orden.

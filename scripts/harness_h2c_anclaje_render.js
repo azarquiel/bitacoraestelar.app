@@ -101,8 +101,9 @@ console.log('\n═══ 1. Qué calibró la ley actual (auditoría del repo) �
 'La rama difusas-desde-imagen (05cfa0c) corrigió EXP 0.5→1.0 por signo del',
   '  neto MAG^(2·C_EXP−C_MAG_EXP); MIN=0.45 heredado.',
 'El único reporte real cuantificado del repo es la serie SQM (18" a 158x:',
-  '  separa 21.2/21.4/21.6/21.8; 21.8 vs 22 ya no) y calibra SB_CIELO_NEGRO',
-  '  (fondo en pantalla), NO el umbral de contraste.',
+  '  separa 21.2/21.4/21.6/21.8; 21.8 vs 22 ya no) y calibra la curva del',
+  '  fondo en pantalla (entonces SB_CIELO_NEGRO; hoy ADR-0001), NO el umbral',
+  '  de contraste.',
 'Criterio del simulador: Cmin es donde EMPIEZA el desvanecido de la capa',
   '  (suave con UMBRAL_MARGEN=0.4/UMBRAL_ANCHURA=1.4 dex): «se empieza a',
   '  pintar», no 50 % de detección forzada en laboratorio (Blackwell).'
