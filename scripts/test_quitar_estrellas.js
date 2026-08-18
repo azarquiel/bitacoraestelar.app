@@ -152,5 +152,18 @@ for (i = 0; i < GAL.length; i++) {
 ok(cambiadosFuera === 0, 'fuera de las máscaras eliminadas no cambia ni un píxel (' +
   cambiadosFuera + ')');
 
+console.log('G) hueco de saturación en una fuente conservada por escena: se rellena, no queda NaN');
+// Estrella dentro de la escena (caso B) con su núcleo saturado a NaN, como el
+// stack real de PS1. Sin el relleno local, ese NaN llega intacto hasta aquí
+// y ps1PintarParche lo pinta como agujero negro (ver la captura de M104).
+var CON_HUECO = Float32Array.from(GAL);
+var jHueco = Math.round(DENTRO.y) * N + Math.round(DENTRO.x);
+CON_HUECO[jHueco] = NaN;
+var outHueco = R.ps1QuitarEstrellas(CON_HUECO, N, N, [DENTRO], geo);
+ok(outHueco[jHueco] === outHueco[jHueco], 'el hueco saturado ya no es NaN (' + outHueco[jHueco] + ')');
+ok(outHueco[jHueco] > 0, 'el relleno es luz de la propia estrella, no cero (' + outHueco[jHueco] + ')');
+var jVecino = Math.round(DENTRO.y) * N + Math.round(DENTRO.x) + 1;
+ok(outHueco[jVecino] === GAL[jVecino], 'el vecino inmediato, que ya tenía dato, no se toca');
+
 console.log(fallos ? '\n' + fallos + ' FALLOS' : '\ntodo ok');
 process.exit(fallos ? 1 : 0);
