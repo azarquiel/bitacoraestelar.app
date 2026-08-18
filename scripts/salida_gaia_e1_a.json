@@ -1,0 +1,303 @@
+{
+ "fecha": "2026-08-18T19:48:09.462Z",
+ "tap": "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync",
+ "radio": 0.89,
+ "reps": 3,
+ "campos": {
+  "m7": {
+   "id": "m7",
+   "nombre": "M7 (bulbo, satura fuerte)",
+   "ra": 268.447,
+   "dec": -34.841,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "ttfb": 33000.77479200001,
+      "total": 33012.65204199997,
+      "bytes": 381,
+      "filas": 30
+     },
+     "eleccion": {
+      "gmax": 15.5,
+      "acumulado": 55509,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 3717.056833999988,
+      "total": 4437.262749999994,
+      "bytes": 2901266,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 56617.57712500001,
+      "total": 57225.13891599997,
+      "bytes": 2901266,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "ttfb": 15137.86325000017,
+      "total": 15147.376292000059,
+      "bytes": 381,
+      "filas": 30
+     },
+     "eleccion": {
+      "gmax": 15.5,
+      "acumulado": 55509,
+      "satura": true
+     },
+     "control": {
+      "ttfb": 11695.996041999897,
+      "total": 12167.300583999837,
+      "bytes": 2901266,
+      "filas": 40000
+     },
+     "rec": {
+      "ttfb": 3565.7425829998683,
+      "total": 4047.3922500000335,
+      "bytes": 2901266,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "ttfb": 9550.287874999922,
+      "total": 9558.880124999909,
+      "bytes": 381,
+      "filas": 30
+     },
+     "eleccion": {
+      "gmax": 15.5,
+      "acumulado": 55509,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 10451.392125000246,
+      "total": 11307.554041000083,
+      "bytes": 2901266,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 10469.550125000067,
+      "total": 11428.273874999955,
+      "bytes": 2901266,
+      "filas": 40000
+     },
+     "equivalencia": true
+    }
+   ],
+   "veredicto": {
+    "satura": true,
+    "hist": 15.14737629200006,
+    "rec": 4.437262749999994,
+    "control": 12.167300583999836,
+    "speedup": 0.6212675432979167,
+    "equivalencia": true,
+    "ok": false
+   }
+  },
+  "m6": {
+   "id": "m6",
+   "nombre": "M6 (plano, satura moderado)",
+   "ra": 265.069,
+   "dec": -32.242,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "ttfb": 7314.790540999966,
+      "total": 7329.402999999933,
+      "bytes": 350,
+      "filas": 28
+     },
+     "eleccion": {
+      "gmax": 17.5,
+      "acumulado": 42167,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 1931.7448749998584,
+      "total": 2375.7697499999776,
+      "bytes": 2898348,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 2681.2857089999598,
+      "total": 3197.7668339998927,
+      "bytes": 2898348,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "ttfb": 10399.885332999984,
+      "total": 10425.914374999935,
+      "bytes": 350,
+      "filas": 28
+     },
+     "eleccion": {
+      "gmax": 17.5,
+      "acumulado": 42167,
+      "satura": true
+     },
+     "control": {
+      "ttfb": 2351.9600420000497,
+      "total": 3342.9587920000777,
+      "bytes": 2898348,
+      "filas": 40000
+     },
+     "rec": {
+      "ttfb": 1802.1010000000242,
+      "total": 2809.3493339999113,
+      "bytes": 2898348,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "ttfb": 18203.324208999984,
+      "total": 18207.685083999764,
+      "bytes": 350,
+      "filas": 28
+     },
+     "eleccion": {
+      "gmax": 17.5,
+      "acumulado": 42167,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 13781.625041999854,
+      "total": 14471.384000000078,
+      "bytes": 2898348,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 2626.6739580002613,
+      "total": 3581.0310000004247,
+      "bytes": 2898348,
+      "filas": 40000
+     },
+     "equivalencia": true
+    }
+   ],
+   "veredicto": {
+    "satura": true,
+    "hist": 10.425914374999936,
+    "rec": 2.8093493339999114,
+    "control": 3.342958792000078,
+    "speedup": 0.2525796890413977,
+    "equivalencia": true,
+    "ok": false
+   }
+  },
+  "cygnus": {
+   "id": "cygnus",
+   "nombre": "Cygnus sin cúmulo (plano)",
+   "ra": 305.5,
+   "dec": 40.2,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "ttfb": 4202.694957999978,
+      "total": 4212.572500000009,
+      "bytes": 358,
+      "filas": 30
+     },
+     "eleccion": {
+      "gmax": 19,
+      "acumulado": 41422,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 1338.3900000001304,
+      "total": 1917.2754170000553,
+      "bytes": 2857092,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 1321.0970840000082,
+      "total": 1837.7179169999436,
+      "bytes": 2857092,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "ttfb": 2532.192916000029,
+      "total": 2535.953582999995,
+      "bytes": 358,
+      "filas": 30
+     },
+     "eleccion": {
+      "gmax": 19,
+      "acumulado": 41422,
+      "satura": true
+     },
+     "control": {
+      "ttfb": 1518.9555420000106,
+      "total": 2332.5596249999944,
+      "bytes": 2857092,
+      "filas": 40000
+     },
+     "rec": {
+      "ttfb": 1747.4624999999069,
+      "total": 2336.973958000075,
+      "bytes": 2857092,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "ttfb": 3532.579208999872,
+      "total": 3539.8069169996306,
+      "bytes": 358,
+      "filas": 30
+     },
+     "eleccion": {
+      "gmax": 19,
+      "acumulado": 41422,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 3926.763375000097,
+      "total": 4863.046916999854,
+      "bytes": 2857092,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 1473.9933329997584,
+      "total": 2262.695916999597,
+      "bytes": 2857092,
+      "filas": 40000
+     },
+     "equivalencia": true
+    }
+   ],
+   "veredicto": {
+    "satura": true,
+    "hist": 3.5398069169996305,
+    "rec": 2.3369739580000752,
+    "control": 2.262695916999597,
+    "speedup": 0.3850230194263812,
+    "equivalencia": true,
+    "ok": false
+   }
+  }
+ },
+ "veredicto": false
+}
