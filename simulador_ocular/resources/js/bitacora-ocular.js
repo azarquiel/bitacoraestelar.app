@@ -668,13 +668,16 @@
              que resuelve también cuando el parche falla (nunca rechaza), y
              cualquier render posterior lo mata al entrar en actualizar(). */
           var procesando = $('sim-procesando');
+          // Galaxias + nebulosas cuya clase ya trata el pipeline (v1: planetarias).
+          var catDifuso = BitacoraGaiaRender.ps1CatalogoDifuso(
+            window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
           var hayDifuso = BitacoraGaiaRender.galaxiasImagen && BitacoraGaiaRender
-            .ps1GalaxiasDelCampo(window.BITACORA_GALAXIAS, ra0, dec0, arcmin).length > 0;
+            .ps1GalaxiasDelCampo(catDifuso, ra0, dec0, arcmin).length > 0;
           if (procesando && hayDifuso && peticion === contadorPeticion) procesando.hidden = false;
           BitacoraGaiaRender.ps1CapaGalaxias(difuso, ctx, cieloGaia, capaEst, {
             ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
             estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
-            catalogo: window.BITACORA_GALAXIAS,
+            catalogo: catDifuso,
             vivo: function () { return peticion === contadorPeticion; }
           }).then(function (capa) {
             // Solo esta petición apaga SU indicador: si otra más nueva ya está
