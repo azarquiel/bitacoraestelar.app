@@ -179,6 +179,16 @@ Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de obj
 - **No es fotometría calibrada:** mapeo heurístico con parámetros puestos a ojo, y están para tocarlos. Lo que el test fija son los **invariantes**: más luma nunca es menos flujo, un píxel apagado no inventa luz (flujo 0), la escala es logarítmica en magnitudes, la fusión nunca oscurece lo que la placa profunda ya registró, y una fusión que no cuadra (pocos píxeles en común o pendiente no positiva) devuelve **la placa profunda tal cual** en vez de una recta inventada.
 - **La regla se prueba aparte del desenfoque:** `rellenarNucleo` recibe el entorno ya calculado, porque lo que se comprueba es el umbral, no el kernel (filtro nativo del canvas, necesita DOM). Test: `scripts/test_placa.js`.
 
+## Adquisición de Gaia por celdas
+
+Vocabulario del estudio de la capa de adquisición y caché de Gaia DR3 para campo arbitrario (ver `especificacion_optimizacion_gaia.md` y ADR 0012). Nada de esto está implementado aún.
+
+- **Celda:** unidad de caché espacial del cielo, independiente del telescopio, ocular, aumento y objeto observado. Identificada por `(catálogo, nivel, ipix)` HEALPix nested. La semántica «las N más brillantes» pertenece al **campo**, no a la celda: la celda solo contiene «todas las estrellas hasta su Gmax». _Evitar_: tesela, tile, región.
+- **Profundidad monotónica:** el Gmax de una celda es **estado**, no parte de la clave: registra la profundidad más honda jamás pedida y solo crece (una re-consulta más honda reemplaza la entrada por su superconjunto). Evita la explosión `celda × magnitud`.
+- **Histograma de profundidad:** cuenta acumulada de estrellas por escalón de magnitud (0,5 mag) de una región, obtenida sin ordenar. Sirve para elegir el Gmax mínimo que garantiza superconjunto de las 40 000 más brillantes: la corrección es estructural, no estadística.
+- **Los tres regímenes de acceso:** **frío absoluto** (ninguna celda del campo en caché), **parcialmente caliente** (algunas) y **completamente caliente** (todas: coste ≈ reconstrucción local, sin red). Un coste de adquisición se juzga siempre diciendo en cuál de los tres se midió.
+- **Reutilización:** fracción de filas de un campo servidas desde caché. No es propiedad del teselado: es propiedad del teselado **dado un patrón de acceso**, así que solo tiene sentido citada junto a su carga (observador de objetos, explorador libre o multiusuario).
+
 ## Caché LRU de los proxies
 
 Política con la que los tres proxies del simulador (`gaia_proxy.php`, `dss-proxy.php` y `ps1-proxy.php`) acotan su caché en disco. Las respuestas que guardan son **inmutables** —Gaia DR3 es catálogo fijo y el DSS archivo fijo—, así que no caducan: lo único que acota el disco es la **expulsión por tamaño**, y la limpieza es **incremental** (como mucho una pasada cada 5 min y un número máximo de borrados por pasada, para no escanear el directorio en cada petición).
