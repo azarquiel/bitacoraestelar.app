@@ -41,7 +41,7 @@ module.exports = function (R) {
       ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
       ancho: f.ancho, alto: f.alto, afin: f.afin,
       comps: comps, pa: gal.pa, halo: R.ps1MedidasHalo(gal, comps),
-      thetaIntArcmin: R.ps1ThetaIntArcmin(comps, gal.ba),
+      thetaIntArcmin: R.ps1ThetaIntDeGal(gal, comps),
       peso: peso, escalaMezcla: R.ps1EscalaMezcla(datos, peso, perfil),
       perfil: PS1.confianzaLocalNaN ? perfil : null,
       enEscena: R.ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena),
