@@ -2073,10 +2073,10 @@
     if (!estrellas || !estrellas.length) return datos;
     var a = geo && geo.afin, esc = a ? 1 / Math.hypot(a.xn, a.yn) : 0;
     var escena = (geo && geo.escena && geo.escena.length) ? geo.escena : null;
-    var mascara = new Uint8Array(datos.length), quitar = [], i, e, x, y, cielo = null;
+    var mascara = new Uint8Array(datos.length), quitar = [], huecos = [], i, e, x, y, cielo = null;
     for (i = 0; i < estrellas.length; i++) {
       e = estrellas[i];
-      if (a && escena && ps1FuenteEnEscena(escena, a, e.x, e.y)) continue;   // dentro de la escena: se conserva entera
+      if (a && escena && ps1FuenteEnEscena(escena, a, e.x, e.y)) { huecos.push(e); continue; }   // dentro de la escena: se conserva entera
       quitar.push(e);
       var r = Math.max(1, e.rPx), r2 = r * r;
       for (y = Math.max(0, Math.floor(e.y - r)); y <= Math.min(alto - 1, Math.ceil(e.y + r)); y++) {
@@ -2147,7 +2147,49 @@
         }
       }
     }
+    if (huecos.length) ps1RellenoHuecosLocal(out, ancho, alto, huecos);
     return out;
+  }
+
+  /* Una fuente conservada por escena ([[ps1FuenteEnEscena]]) mantiene sus
+     píxeles reales, pero si su núcleo estaba saturado en el stack de PS1 esos
+     píxeles son NaN (ver huecos-ps1-son-estrellas-saturadas): sin este relleno
+     llegan así hasta ps1PintarParche, que los trata como ausencia y los cubre
+     con el perfil de la galaxia —casi 0 lejos del centro—, y sale un agujero
+     negro con la forma exacta de la máscara de saturación.
+     Dilatación local (máximo de los 8 vecinos, expandiendo desde el borde del
+     hueco): a diferencia del relleno por isofotas de arriba, aquí NO hay que
+     estimar el fondo de la galaxia sino la propia estrella, así que se usa su
+     entorno inmediato, no un anillo lejano (ese error ya se midió una vez,
+     ver [[huecos-ps1-son-estrellas-saturadas]]). Acotado al recuadro de cada
+     fuente: no toca nada fuera de su hueco. */
+  function ps1RellenoHuecosLocal(out, ancho, alto, huecos) {
+    for (var i = 0; i < huecos.length; i++) {
+      var e = huecos[i], r = Math.max(1, e.rPx);
+      var x0 = Math.max(0, Math.floor(e.x - r - 1)), x1 = Math.min(ancho - 1, Math.ceil(e.x + r + 1));
+      var y0 = Math.max(0, Math.floor(e.y - r - 1)), y1 = Math.min(alto - 1, Math.ceil(e.y + r + 1));
+      for (var pasada = 0; pasada < r + 2; pasada++) {
+        var cambio = false;
+        for (var y = y0; y <= y1; y++) {
+          for (var x = x0; x <= x1; x++) {
+            var j = y * ancho + x;
+            if (out[j] === out[j]) continue;             // ya tiene valor
+            var mejor = -Infinity, hay = false;
+            for (var dy = -1; dy <= 1; dy++) {
+              for (var dx = -1; dx <= 1; dx++) {
+                if (!dx && !dy) continue;
+                var yy = y + dy, xx = x + dx;
+                if (yy < y0 || yy > y1 || xx < x0 || xx > x1) continue;
+                var v = out[yy * ancho + xx];
+                if (v === v && v > mejor) { mejor = v; hay = true; }
+              }
+            }
+            if (hay) { out[j] = mejor; cambio = true; }
+          }
+        }
+        if (!cambio) break;
+      }
+    }
   }
 
   /* Mediana del anillo [r, 1,6r] alrededor de (x,y), saltándose lo enmascarado y
