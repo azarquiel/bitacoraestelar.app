@@ -1,0 +1,4 @@
+modelo,rms_global,rms_f21,rms_f23,max_res,rms_banda_18_360
+"producción (θ^-0.5 acotada)",1.0680,1.1790,1.2103,2.473,0.1776
+"Ricco puro (1/θ²)",0.7157,0.5492,0.4997,1.830,0.6530
+"H2 conjunta (=H2b=H2c en laboratorio)",0.0855,0.0629,0.0883,0.200,0.0666

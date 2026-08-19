@@ -1,3 +1,40 @@
+# Comandos del Proyecto
+
+## Tests (Scripts Propios)
+- Tests Backend (PHP): `php scripts/test_backend.php` (reemplazar por archivo específico si varía)
+- Tests Frontend (Node): `node scripts/test_frontend.js` (reemplazar por archivo específico si varía)
+
+## Scripts de Datos (Python)
+- Generar Catálogos: `python scripts/gen_catalogs.py` (ejecutar scripts individuales `gen_*.py`)
+
+# Guía de Arquitectura y Estilo
+
+## Backend (WordPress & PHP)
+- Ubicación: Todo el código personalizado vive en `resources/plugins/bitacora-registro`.
+- Base de Datos: Tablas personalizadas `{prefix}bitacora` y `{prefix}bitacora_objetos`. Usa `$wpdb`.
+- API: Endpoints REST bajo el namespace `/wp-json/bitacora/v1/*`.
+- Producción: El dominio base es `bitacoraestelar.app`.
+
+## Frontend (Vanilla Web)
+- Sin Bundlers: No uses `npm`, `webpack`, `vite` ni dependencias externas. Es JS/HTML nativo.
+- Estado Global: Módulos expuestos en el objeto `window` (ej: `window.BitacoraGaiaColor`).
+- Enrutamiento/Páginas:
+  - `mapa/` -> Lógica del mapa celeste.
+  - `simulador_ocular/` -> Simulador de óptica.
+  - `registro/*-wordpress.html` -> Formularios de registro integrados.
+
+## Integraciones y Datos Externos
+- Formato de entrada/salida para observaciones: Open Astronomy Log (OAL) en XML.
+- APIs Astronómicas consultadas: SIMBAD, VizieR, Gaia, NED, Open Astronomy Catalog y Pan-STARRS (PS1 para imágenes).
+
+# Headroom & Performance Constraints
+- **Zero-Boilerplate:** Sin explicaciones ni saludos. Solo código directo.
+- **Output Limit:** Genera solo funciones atómicas o bloques diff. No reescribas archivos enteros.
+- **DOM & Events:** Cachea selectores. Usa delegación de eventos en `registro/`.
+- **Render Loop:** Usa `requestAnimationFrame` en `mapa/` y `simulador_ocular/`. Prohibido `setInterval`.
+- **Network:** Implementa caché en variables de `window` para respuestas de APIs astronómicas.
+- **Headroom Shaper Policy:** Operar estrictamente bajo HEADROOM_OUTPUT_SHAPER=1 en nivel L3 (conclusiones directas, omitir ratios y justificaciones excepto si se solicitan).
+
 ## Estilo de sesión
 
 En este proyecto, usar en cada sesión:
