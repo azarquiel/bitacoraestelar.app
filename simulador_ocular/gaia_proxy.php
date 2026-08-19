@@ -129,6 +129,66 @@ function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $s
     ];
 }
 
+/**
+ * Momentos de la BANDA TRUNCADA (corte, mag] de un campo denso: número de
+ * fuentes, flujo G total (en unidades de una estrella G=0) y segundo momento
+ * (para SBF). Sin ORDER BY: agrega el servidor, no viaja una fila por estrella.
+ */
+function gaia_fondo_consultas(float $ra, float $dec, float $rad, float $mag, float $corte): array {
+    $cds = 'SELECT COUNT(*) AS n, SUM(POWER(10,-0.4*Gmag)) AS flujo, SUM(POWER(10,-0.8*Gmag)) AS m2'
+        . ' FROM "I/355/gaiadr3" WHERE Gmag>' . $corte . ' AND Gmag<=' . $mag
+        . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))';
+    $gavo = 'SELECT COUNT(*) AS n, SUM(POWER(10,-0.4*phot_g_mean_mag)) AS flujo, SUM(POWER(10,-0.8*phot_g_mean_mag)) AS m2'
+        . ' FROM gaia.dr3lite WHERE phot_g_mean_mag>' . $corte . ' AND phot_g_mean_mag<=' . $mag
+        . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))';
+    return [$cds, $gavo];
+}
+
+/** URLs de proveedores del agregado (failover), en orden de preferencia. */
+function gaia_fondo_urls(float $ra, float $dec, float $rad, float $mag, float $corte): array {
+    [$cds, $gavo] = gaia_fondo_consultas($ra, $dec, $rad, $mag, $corte);
+    return [
+        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
+        'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' . rawurlencode($gavo),
+    ];
+}
+
+/** Gmag de la estrella más débil servida (máximo de la columna 2), o null. */
+function gaia_corte(string $json): ?float {
+    $j = json_decode($json, true);
+    if (!is_array($j) || empty($j['data']) || !is_array($j['data'])) {
+        return null;
+    }
+    $max = null;
+    foreach ($j['data'] as $f) {
+        if (isset($f[2]) && ($max === null || $f[2] > $max)) {
+            $max = $f[2];
+        }
+    }
+    return $max;
+}
+
+/**
+ * Inyecta los momentos de la banda truncada como clave `fondo` hermana de
+ * `data` (el cliente actual solo lee `data`: no se rompe). Pura. Devuelve la
+ * respuesta INTACTA si no hay banda (corte ≥ mag) o los momentos no valen:
+ * servir sin fondo es la degradación correcta, nunca bloquea los datos.
+ */
+function gaia_mezclar_fondo(string $json, ?array $fila, float $corte, float $rad, float $mag): string {
+    if ($corte >= $mag || !is_array($fila) || !isset($fila[1]) || !($fila[1] > 0)) {
+        return $json;
+    }
+    $j = json_decode($json, true);
+    if (!is_array($j)) {
+        return $json;
+    }
+    $j['fondo'] = [
+        'corte' => $corte, 'n' => (int) $fila[0],
+        'flujo' => (float) $fila[1], 'm2' => (float) ($fila[2] ?? 0), 'rad' => $rad,
+    ];
+    return json_encode($j);
+}
+
 /** ¿La sonda pudo quedar truncada? Tocar el techo = no hay garantía de conjunto completo. */
 function gaia_truncada(int $filas): bool {
     return $filas >= GAIA_TECHO_FILAS;
@@ -168,7 +228,21 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag): ?string {
         }
         unset($json);   // libera el cuerpo de la sonda (~14 MB) antes de la 2ª pasada
     }
-    return gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, true));
+    $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, true));
+    if ($json === null) {
+        return null;
+    }
+    /* Campo denso: el TOP recortó una banda cuya luz es físicamente relevante
+       (en M7, SB ~21 mag/arcsec², más brillante que un cielo oscuro). Se piden
+       sus momentos agregados (medidos: ~39 s en M7, una vez por región, caché
+       inmutable). Si el agregado falla se sirve sin fondo: degradación, no error. */
+    $corte = gaia_corte($json);
+    if ($corte === null || $corte >= $mag) {
+        return $json;
+    }
+    $agg = gaia_fetch_urls(gaia_fondo_urls($ra, $dec, $rad, $mag, $corte));
+    $fila = ($agg !== null) ? (json_decode($agg, true)['data'][0] ?? null) : null;
+    return gaia_mezclar_fondo($json, is_array($fila) ? $fila : null, $corte, $rad, $mag);
 }
 
 /**

@@ -426,11 +426,13 @@
         };
       }
       // Delegada en el módulo compartido (incluye el recorte de apertura efectiva).
-      function magLimiteTelescopio() {
+      // veloSB (opcional): fondo agregado de un campo denso, que empeora el límite
+      // igual que cualquier cielo más brillante (ADR 0014).
+      function magLimiteTelescopio(veloSB) {
         return BitacoraGaiaRender.magLimite({
           apertura: teleApertura(), aumentos: datosOcular().aumentos,
           transmision: transmisionEfectiva(), sqm: parseFloat($('sim-sqm').value) || 21,
-          pupilaOjo: pupilaOjo()
+          pupilaOjo: pupilaOjo(), veloSB: veloSB
         });
       }
 
@@ -605,11 +607,18 @@
           /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
              del equipo, faltan estrellas que SÍ se verían. Pasa en campos ricos y
              muy anchos. Se avisa en vez de mostrar un campo pobre sin explicación. */
+          /* Campo denso: el proxy manda los momentos de la banda truncada y su
+             luz entra como velo (cielo extra) en toda la cadena, incluida la
+             magnitud límite (ADR 0014). */
+          var velo = BitacoraGaiaRender.veloSB(estrellas.fondo);
+          if (velo != null) mlim = magLimiteTelescopio(velo);
           var mcorte = -Infinity;
           for (var e = 0; e < estrellas.length; e++) if (estrellas[e][2] > mcorte) mcorte = estrellas[e][2];
           if (mlim != null && isFinite(mcorte) && mcorte < mlim - 0.1) {
-            $('sim-aviso').textContent = 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
-              ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
+            $('sim-aviso').textContent = velo != null
+              ? 'Campo muy rico: por debajo de magnitud ' + mcorte.toFixed(1) + ' las estrellas no se dibujan una a una; su luz entra como resplandor de fondo.'
+              : 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
+                ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
           }
           // Componente difusa del campo: la llenan las capas que la tengan (el
           // campo no resuelto de un cúmulo, la imagen de una galaxia). En un
@@ -630,6 +639,7 @@
             : estrellas;
           var cieloGaia = cieloOptica(datosOcular().pupila);
           cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
+          if (velo != null) cieloGaia.veloSB = velo;   // fondo agregado del campo denso
           /* Cúmulo globular: lo que este equipo NO resuelve se pinta como campo
              estadístico (media + grano de la función de luminosidad) y lo que sí,
              como estrellas —las de Gaia más las sintéticas que el catálogo no
