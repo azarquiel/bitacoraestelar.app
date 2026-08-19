@@ -28,7 +28,11 @@ var OBJS = [
   { cat: 'NGC 5457', csv: 'gaia_ngc5457.csv', fuente: global.window.BITACORA_GALAXIAS },
   { cat: 'NGC 4594', csv: 'gaia_ngc4594.csv', fuente: global.window.BITACORA_GALAXIAS },
   { cat: 'NGC 3031', csv: 'gaia_ngc3031.csv', fuente: global.window.BITACORA_GALAXIAS },
-  { cat: 'NGC6720',  csv: 'gaia_ngc6720.csv', fuente: global.window.BITACORA_NEBULOSAS }
+  { cat: 'NGC6720',  csv: 'gaia_ngc6720.csv', fuente: global.window.BITACORA_NEBULOSAS },
+  // Validación de emisión/reflexión (rama nebulosas-emision-reflexion):
+  { cat: 'NGC2068',  csv: 'gaia_ngc2068.csv', fuente: global.window.BITACORA_NEBULOSAS },
+  { cat: 'NGC7635',  csv: 'gaia_ngc7635.csv', fuente: global.window.BITACORA_NEBULOSAS },
+  { cat: 'NGC6888',  csv: 'gaia_ngc6888.csv', fuente: global.window.BITACORA_NEBULOSAS }
 ];
 
 function fila(fuente, nombre) {

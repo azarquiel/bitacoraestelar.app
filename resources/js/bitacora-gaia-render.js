@@ -3104,6 +3104,16 @@
      estaban — y el aviso de la ficha 12 lo dice, así que la ley vive aquí y no
      repetida en los dos sitios. */
   function ps1CabeEnParche(g) {
+    /* Las clases de nebulosa EXTENSAS (emisión/reflexión) exigen además lado
+       sin recorte: NGC 7000 (semieje ~1,4°) pasaba el corte de fracción (0,41)
+       y salía un cuadrado de campo estelar anclado a mag 4,3 sin nebulosa —
+       el fenómeno de M31, pero la fracción no lo cazaba porque el ala μ25 del
+       modelo n=1 subestima cuánta luz real queda fuera cuando el stack ya
+       restó la emisión extendida. Las compactas (PN, SNR) caben por
+       construcción: su borde es real y 6·r_e nunca toca el tope. */
+    var clase = g[12] || '';
+    if (clase && clase !== 'PN' && clase !== 'SNR' &&
+        PS1.ladoFactor * g[4] / 60 > PS1.ladoMax) return false;
     var lado = ps1LadoArcmin(g[4]);
     return ps1FraccionLuz(g[8], (lado * 60 / 2) / (g[4] > 0 ? g[4] : 1e9)) >= PS1.fracMin;
   }
@@ -3113,10 +3123,12 @@
      OpenNGC) decide qué filas entran, no qué código corre: cada fila de
      nebulosa ES un modelo Sérsic n=1 construido por gen_nebulosas.py con el
      mismo esquema que las galaxias, y de ahí salen escena, anclaje y θint por
-     las mismas funciones. En v1 solo planetarias ('PN'): compactas, con borde
-     real y r_e calibrado aparte (RE_SOBRE_SEMIEJE_COMPACTA); el resto de
-     clases exigirá su propia validación antes de abrir la puerta. */
-  var PS1_CLASES_DIFUSAS = ['PN'];
+     las mismas funciones. Abiertas: 'PN' (compactas, borde real, validada con
+     M57), y 'HII'/'EmN'/'RfN' (validadas con M78, NGC 7635 y NGC 6888: sin
+     borde real, siguen la isofota como las galaxias). Quedan fuera 'Neb' y
+     'Cl+N' —cajón de sastre y mezcla cúmulo+nebulosa— y 'SNR' hasta validar
+     un resto de supernova; cada apertura exige su validación, no más código. */
+  var PS1_CLASES_DIFUSAS = ['PN', 'HII', 'EmN', 'RfN'];
 
   /* Borde REAL de un objeto compacto (″, semieje mayor), 0 si no lo tiene.
      Una galaxia se acaba donde su perfil cae bajo el ruido —su «borde» es una
@@ -3873,6 +3885,7 @@
     ps1DatosConPsf: ps1DatosConPsf,
     ps1CabeEnParche: ps1CabeEnParche,
     ps1CatalogoDifuso: ps1CatalogoDifuso,
+    ps1RadioBordeAs: ps1RadioBordeAs,
     ps1ThetaIntDeGal: ps1ThetaIntDeGal,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
