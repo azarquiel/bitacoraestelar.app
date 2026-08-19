@@ -194,6 +194,7 @@ def main():
                 'sersic_n': SERSIC_N,
                 'frac_bulbo': 0,
                 'polvo': 0,
+                'clase': c['Type'],
             })
 
     filas.sort(key=lambda f: f['ra_grados'])
@@ -207,16 +208,20 @@ def main():
         fh.write('/* Nebulosas — GENERADO, no editar a mano.\n')
         fh.write('   Regenerar con: python3 scripts/gen_nebulosas.py\n')
         fh.write('   Fuente: %s\n' % FUENTE)
-        fh.write('   Campos: [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n, B/T, polvo]\n')
+        fh.write('   Campos: [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n, B/T, polvo,\n')
+        fh.write('            0, clase]\n')
         fh.write('   Mismo esquema que las galaxias: las pinta la misma capa. n = 1 es un\n')
         fh.write('   exponencial; sin bulbo y sin banda de polvo. b/a = 1 significa que el\n')
-        fh.write('   catálogo no trae ángulo de posición, no que el objeto sea redondo. */\n')
+        fh.write('   catálogo no trae ángulo de posición, no que el objeto sea redondo.\n')
+        fh.write('   El 0 ocupa la columna del n de S4G de las galaxias (aquí no hay medida)\n')
+        fh.write('   y la clase es el Type del OpenNGC (PN, HII, SNR, RfN, EmN, Neb, Cl+N):\n')
+        fh.write('   decide qué filas entran en la capa difusa (ps1CatalogoDifuso). */\n')
         fh.write('window.BITACORA_NEBULOSAS = [\n')
         for f in filas:
-            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s],\n' % (
+            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s,0,"%s"],\n' % (
                 f['nombre'], f['alt'], f['ra_grados'], f['dec_grados'],
                 f['re_arcsec'], f['razon_ejes'], f['pa_grados'], f['mag_v'],
-                f['sersic_n'], f['frac_bulbo'], f['polvo']))
+                f['sersic_n'], f['frac_bulbo'], f['polvo'], f['clase']))
         fh.write('];\n')
 
     print('nebulosas: %d  (redondas por falta de PA %d; recortadas por brillo %d; descartadas %d)'

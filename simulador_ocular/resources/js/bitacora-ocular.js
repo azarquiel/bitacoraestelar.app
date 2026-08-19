@@ -668,13 +668,16 @@
              que resuelve también cuando el parche falla (nunca rechaza), y
              cualquier render posterior lo mata al entrar en actualizar(). */
           var procesando = $('sim-procesando');
+          // Galaxias + nebulosas cuya clase ya trata el pipeline (v1: planetarias).
+          var catDifuso = BitacoraGaiaRender.ps1CatalogoDifuso(
+            window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
           var hayDifuso = BitacoraGaiaRender.galaxiasImagen && BitacoraGaiaRender
-            .ps1GalaxiasDelCampo(window.BITACORA_GALAXIAS, ra0, dec0, arcmin).length > 0;
+            .ps1GalaxiasDelCampo(catDifuso, ra0, dec0, arcmin).length > 0;
           if (procesando && hayDifuso && peticion === contadorPeticion) procesando.hidden = false;
           BitacoraGaiaRender.ps1CapaGalaxias(difuso, ctx, cieloGaia, capaEst, {
             ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
             estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
-            catalogo: window.BITACORA_GALAXIAS,
+            catalogo: catDifuso,
             vivo: function () { return peticion === contadorPeticion; }
           }).then(function (capa) {
             // Solo esta petición apaga SU indicador: si otra más nueva ya está
@@ -1087,6 +1090,9 @@
           return (arr || []).map(function (f) {
             return {
               id: f[0] || f[1], nombre: f[0] || f[1], constelacion: '',
+              // alias («M57») y nombre común («Ring Nebula»): no se pintan como
+              // nombre, pero el buscador filtra también por ellos (buscarPor).
+              alias: BitacoraBase.aliasMessier(f[0]), alt: f[1] || '',
               ra: degAHms(f[2]), dec: degADms(f[3]), mag: f[7],
               tipo: tipo, carbono: false, doble: false
             };
@@ -1107,7 +1113,8 @@
             input: nom, suggest: $('sim-libre-sugg'),
             fuente: catalogoLibre,
             texto: function (o) { return o.nombre; },
-            specs: function (o) { return [o.constelacion, (o.mag != null ? 'mag ' + Number(o.mag).toFixed(1) : '')].filter(Boolean).join('  ·  '); },
+            buscarPor: function (o) { return [o.nombre, o.alias, o.alt].filter(Boolean).join(' '); },
+            specs: function (o) { return [o.alias, o.constelacion, (o.mag != null ? 'mag ' + Number(o.mag).toFixed(1) : '')].filter(Boolean).join('  ·  '); },
             max: 12,
             sinResultados: 'Sin coincidencias en el catálogo local · sigue escribiendo para buscar en SIMBAD',
             onElegir: function (o) {

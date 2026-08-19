@@ -3104,8 +3104,64 @@
      estaban — y el aviso de la ficha 12 lo dice, así que la ley vive aquí y no
      repetida en los dos sitios. */
   function ps1CabeEnParche(g) {
+    /* Toda clase de nebulosa salvo las planetarias exige además lado sin
+       recorte: NGC 7000 (semieje ~1,4°) pasaba el corte de fracción (0,41)
+       y salía un cuadrado de campo estelar anclado a mag 4,3 sin nebulosa —
+       el fenómeno de M31, pero la fracción no lo cazaba porque el ala μ25 del
+       modelo n=1 subestima cuánta luz real queda fuera cuando el stack ya
+       restó la emisión extendida. Ser compacta no exime: los segmentos del
+       Velo (SNR, 6·r_e de 22′ a 330′) llegan igual de recortados. Solo las
+       planetarias caben por construcción (su mayor 6·r_e es 11,6′). */
+    var clase = g[12] || '';
+    if (clase && clase !== 'PN' &&
+        PS1.ladoFactor * g[4] / 60 > PS1.ladoMax) return false;
     var lado = ps1LadoArcmin(g[4]);
     return ps1FraccionLuz(g[8], (lado * 60 / 2) / (g[4] > 0 ? g[4] : 1e9)) >= PS1.fracMin;
+  }
+
+  /* Catálogo de la capa difusa: galaxias + las nebulosas cuya CLASE ya sabe
+     tratar el pipeline. La clase (columna 13 de nebulosas-datos.js, Type del
+     OpenNGC) decide qué filas entran, no qué código corre: cada fila de
+     nebulosa ES un modelo Sérsic n=1 construido por gen_nebulosas.py con el
+     mismo esquema que las galaxias, y de ahí salen escena, anclaje y θint por
+     las mismas funciones. Abiertas: 'PN' y 'SNR' (compactas, borde real,
+     validadas con M57 y M1), y 'HII'/'EmN'/'RfN' (validadas con M78, NGC 7635
+     y NGC 6888: sin borde real, siguen la isofota como las galaxias). Quedan
+     fuera 'Neb' y 'Cl+N' —cajón de sastre y mezcla cúmulo+nebulosa—; cada
+     apertura exige su validación, no más código. */
+  var PS1_CLASES_DIFUSAS = ['PN', 'HII', 'EmN', 'RfN', 'SNR'];
+
+  /* Borde REAL de un objeto compacto (″, semieje mayor), 0 si no lo tiene.
+     Una galaxia se acaba donde su perfil cae bajo el ruido —su «borde» es una
+     isofota— pero una planetaria o un resto de supernova tienen borde físico:
+     la cáscara. Para ellos gen_nebulosas.py resolvió r_e = 0,60·semieje de
+     catálogo (espejo: RE_SOBRE_SEMIEJE_COMPACTA), así que el borde se
+     recupera exacto. Es lo único que la clase cambia en el montaje: escena y
+     θint usan el borde en vez de la isofota μ25 del ala exponencial, que en
+     M57 queda 2,8 veces más lejos que la nebulosa y no es el objeto. */
+  var PS1_RE_SOBRE_BORDE = 0.60;   // = RE_SOBRE_SEMIEJE_COMPACTA del generador
+  var PS1_CLASES_COMPACTAS = ['PN', 'SNR'];   // = COMPACTAS del generador
+
+  function ps1RadioBordeAs(gal) {
+    if (!gal || PS1_CLASES_COMPACTAS.indexOf(gal.clase) < 0 || !(gal.reArcsec > 0)) return 0;
+    return gal.reArcsec / PS1_RE_SOBRE_BORDE;
+  }
+
+  /* θ intrínseco (arcmin, circularizado) del objeto montado: el borde real si
+     la clase lo define; si no, la isofota μ25 del modelo, como siempre. */
+  function ps1ThetaIntDeGal(gal, comps) {
+    var rb = ps1RadioBordeAs(gal);
+    if (!(rb > 0)) return ps1ThetaIntArcmin(comps, gal.ba);
+    var q = (gal.ba > 0 && gal.ba <= 1) ? gal.ba : 1;
+    return (2 * rb / 60) * Math.sqrt(q);
+  }
+
+  function ps1CatalogoDifuso(galaxias, nebulosas) {
+    var out = (galaxias || []).slice();
+    for (var i = 0; i < (nebulosas || []).length; i++) {
+      if (PS1_CLASES_DIFUSAS.indexOf(nebulosas[i][12]) >= 0) out.push(nebulosas[i]);
+    }
+    return out;
   }
 
   function ps1GalaxiasDelCampo(catalogo, ra0, dec0, arcmin) {
@@ -3122,7 +3178,7 @@
       out.push({
         nombre: g[0] || g[1], ra: g[2], dec: g[3], reArcsec: g[4],
         ba: g[5], pa: g[6], magV: g[7], n: g[8], bt: g[9],
-        nMedido: g[11] || 0, ladoArcmin: lado
+        nMedido: g[11] || 0, clase: g[12] || '', ladoArcmin: lado
       });
     }
     return out;
@@ -3265,10 +3321,13 @@
     var cos0 = Math.cos(gal.dec * Math.PI / 180);
     var out = [];
     for (var i = 0; i < (campo || []).length; i++) {
-      var g = campo[i], comps = ps1ComponentesSersic(g), r25 = 0;
-      for (var j = 0; j < comps.length; j++) {
-        var r = ps1RadioIsofota(comps[j], PS1.muEscena);
-        if (r > r25) r25 = r;
+      var g = campo[i], r25 = ps1RadioBordeAs(g);
+      if (!(r25 > 0)) {
+        var comps = ps1ComponentesSersic(g);
+        for (var j = 0; j < comps.length; j++) {
+          var r = ps1RadioIsofota(comps[j], PS1.muEscena);
+          if (r > r25) r25 = r;
+        }
       }
       if (!(r25 > 0)) continue;
       var p = ps1ProyectarEnParche(f, gal, a, cos0, g.ra, g.dec);
@@ -3330,7 +3389,7 @@
         // único que falta al pintar es el cielo de la escena.
         comps: comps, pa: gal.pa, halo: ps1MedidasHalo(gal, comps),
         // Tamaño intrínseco (arcmin) para la ley H2c; inerte con FOT.H2C nula.
-        thetaIntArcmin: ps1ThetaIntArcmin(comps, gal.ba),
+        thetaIntArcmin: ps1ThetaIntDeGal(gal, comps),
         peso: peso, escalaMezcla: ps1EscalaMezcla(datos, peso, perfil),
         // El perfil en la rejilla del parche solo lo necesita ps1ReponerNaN, y
         // son 4 MB por galaxia: sin bandera no se guarda.
@@ -3827,6 +3886,9 @@
     ps1ThetaAdd: ps1ThetaAdd,
     ps1DatosConPsf: ps1DatosConPsf,
     ps1CabeEnParche: ps1CabeEnParche,
+    ps1CatalogoDifuso: ps1CatalogoDifuso,
+    ps1RadioBordeAs: ps1RadioBordeAs,
+    ps1ThetaIntDeGal: ps1ThetaIntDeGal,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
     ps1EscenaEnParche: ps1EscenaEnParche,
