@@ -274,6 +274,7 @@ function bitacora_crear_tabla() {
         bp_rp double DEFAULT NULL,
         tipo varchar(16) NOT NULL DEFAULT '',
         morph varchar(32) NOT NULL DEFAULT '',
+        sp_type varchar(32) DEFAULT NULL,
         creado_en datetime NOT NULL,
         actualizado_en datetime DEFAULT NULL,
         PRIMARY KEY  (id),
@@ -546,6 +547,10 @@ function bitacora_crear_tabla() {
     // Índice BP–RP (color de Gaia) del objeto, para pintar las estrellas del
     // vecindario solar en su color real. Nulo si no se pudo resolver.
     bitacora_asegurar_columna( $tabla_objetos, 'bp_rp', "double DEFAULT NULL" );
+    // Tipo espectral de SIMBAD en texto (p.ej. "A0mA1Va"), respaldo del color
+    // cuando la estrella no tiene bp_rp (primarias muy brillantes, saturadas y
+    // fuera de Gaia): el frontend lo convierte con BitacoraGaiaColor.bpRpPorTipo.
+    bitacora_asegurar_columna( $tabla_objetos, 'sp_type', "varchar(32) DEFAULT NULL" );
 
     // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
     // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
@@ -2512,6 +2517,11 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
         if ( isset( $o->bp_rp ) && null !== $o->bp_rp && '' !== $o->bp_rp ) {
             $obj['bp_rp'] = floatval( $o->bp_rp );
         }
+        // Tipo espectral de SIMBAD: respaldo del color en el vecindario solar
+        // cuando no hay bp_rp (ver BitacoraGaiaColor.bpRpPorTipo en el frontend).
+        if ( isset( $o->sp_type ) && null !== $o->sp_type && '' !== $o->sp_type ) {
+            $obj['sp_type'] = $o->sp_type;
+        }
         if ( '' !== $o->tipo ) {
             $obj['tipo'] = $o->tipo;
         }
@@ -2885,10 +2895,11 @@ function bitacora_coords_texto( $l, $b, $d ) {
 
 /**
  * Consulta SIMBAD (servicio TAP) por identificador y devuelve
- * array( 'ra', 'dec', 'dist_al', 'morph', 'otype' ) o null si no se encuentra o
- * falla la red. La distancia es la mediana de las medidas disponibles y, si no
- * hay ninguna, la que da la paralaje (ver bitacora_distancia_al). Se cachea 30
- * días por identificador para no repetir peticiones.
+ * array( 'ra', 'dec', 'dist_al', 'morph', 'otype', 'sp_type', 'gaia_dr3_id' ) o
+ * null si no se encuentra o falla la red. La distancia es la mediana de las
+ * medidas disponibles y, si no hay ninguna, la que da la paralaje (ver
+ * bitacora_distancia_al). Se cachea 30 días por identificador para no repetir
+ * peticiones.
  */
 function bitacora_simbad( $identificador ) {
     $id = trim( (string) $identificador );
@@ -2901,10 +2912,11 @@ function bitacora_simbad( $identificador ) {
         return is_array( $cache ) ? $cache : null;
     }
 
-    // `plx_value` (paralaje, en mas) viaja en la misma consulta: es gratis y es
-    // la única distancia que SIMBAD tiene de muchos objetos cuyo `mesDistance`
-    // está vacío, como las nebulosas planetarias con estrella central en Gaia.
-    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, d.dist, d.unit, b.plx_value "
+    // `plx_value` (paralaje, en mas) y `sp_type` (tipo espectral en texto) viajan
+    // en la misma consulta: son gratis. `sp_type` alimenta el color de respaldo
+    // (BitacoraGaiaColor.bpRpPorTipo) cuando la estrella no tiene fotometría de
+    // Gaia (primarias muy brillantes, saturadas y fuera de catálogo).
+    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, b.sp_type, d.dist, d.unit, b.plx_value "
         . "FROM basic AS b JOIN ident AS i ON i.oidref = b.oid "
         . "LEFT JOIN mesDistance AS d ON d.oidref = b.oid "
         . "WHERE i.id = '" . str_replace( "'", "''", $id ) . "'";
@@ -2935,7 +2947,7 @@ function bitacora_simbad( $identificador ) {
     }
     array_shift( $lineas ); // cabecera
 
-    $ra = null; $dec = null; $morph = ''; $otype = ''; $plx = null;
+    $ra = null; $dec = null; $morph = ''; $otype = ''; $sp_type = ''; $plx = null;
     $distancias_al = array();
     // Factores a años luz por unidad de SIMBAD.
     $a_al = array( 'pc' => 3.2616, 'kpc' => 3261.6, 'mpc' => 3261600.0, 'ly' => 1.0, 'al' => 1.0 );
@@ -2945,7 +2957,7 @@ function bitacora_simbad( $identificador ) {
             continue;
         }
         $c = str_getcsv( $linea );
-        if ( count( $c ) < 7 ) {
+        if ( count( $c ) < 8 ) {
             continue;
         }
         if ( null === $ra && is_numeric( $c[0] ) ) {
@@ -2958,14 +2970,17 @@ function bitacora_simbad( $identificador ) {
         if ( '' === $otype && '' !== trim( $c[3] ) ) {
             $otype = trim( $c[3] );
         }
-        $dist = trim( $c[4] );
-        $unidad = strtolower( trim( $c[5] ) );
+        if ( '' === $sp_type && '' !== trim( $c[4] ) ) {
+            $sp_type = trim( $c[4] );
+        }
+        $dist = trim( $c[5] );
+        $unidad = strtolower( trim( $c[6] ) );
         if ( is_numeric( $dist ) && isset( $a_al[ $unidad ] ) ) {
             $distancias_al[] = floatval( $dist ) * $a_al[ $unidad ];
         }
         // La paralaje es del objeto, así que viene repetida en todas las filas.
-        if ( null === $plx && is_numeric( $c[6] ) ) {
-            $plx = floatval( $c[6] );
+        if ( null === $plx && is_numeric( $c[7] ) ) {
+            $plx = floatval( $c[7] );
         }
     }
 
@@ -2976,51 +2991,109 @@ function bitacora_simbad( $identificador ) {
         return null;
     }
 
+    // Identificador propio de Gaia DR3, si SIMBAD ya lo tiene vinculado a este
+    // objeto: es identidad, no posición, así que en sistemas múltiples (Gamma
+    // Andromedae) no puede engancharse a la estrella vecina como sí le pasa a
+    // una búsqueda por radio. Si SIMBAD no lo vinculó, ninguna búsqueda posicional
+    // del plugin va a acertar mejor: bitacora_gaia_bprp() no la intenta.
+    $gaia_dr3_id = bitacora_simbad_gaia_dr3_id( $id );
+
     $resultado = array(
-        'ra'      => $ra,
-        'dec'     => $dec,
-        'dist_al' => $dist_al,
-        'morph'   => $morph,
-        'otype'   => $otype,
+        'ra'          => $ra,
+        'dec'         => $dec,
+        'dist_al'     => $dist_al,
+        'morph'       => $morph,
+        'otype'       => $otype,
+        'sp_type'     => $sp_type,
+        'gaia_dr3_id' => $gaia_dr3_id,
     );
     set_transient( $cache_key, $resultado, 30 * DAY_IN_SECONDS );
     return $resultado;
 }
 
 /**
- * Índice BP–RP (color de Gaia DR3) de la estrella más cercana a unas coordenadas
- * ecuatoriales (ra, dec en grados), o null si no hay coincidencia o falla la red.
- * Alimenta el color de las estrellas del vecindario solar. Consulta Gaia DR3 por
- * TAP con el mismo failover que el proxy del simulador: CDS (VizieR I/355/gaiadr3)
- * y, si falla, GAVO (gaia.dr3lite). Se cachea 30 días por coordenadas.
+ * Identificador `Gaia DR3 <source_id>` que SIMBAD ya tiene vinculado a un
+ * objeto, o null si no lo tiene. Consulta aparte porque va contra la tabla
+ * `ident` (alias del mismo oid), no contra `basic`; solo se llama cuando
+ * bitacora_simbad() ya resolvió el objeto, y su resultado viaja dentro de la
+ * misma caché de 30 días, así que no repite petición.
  */
-function bitacora_gaia_bprp( $ra, $dec ) {
-    if ( ! is_numeric( $ra ) || ! is_numeric( $dec ) ) {
+function bitacora_simbad_gaia_dr3_id( $identificador ) {
+    $id = trim( (string) $identificador );
+    if ( '' === $id ) {
         return null;
     }
-    $ra  = floatval( $ra );
-    $dec = floatval( $dec );
-    $cache_key = 'bitacora_bprp_' . md5( round( $ra, 5 ) . '_' . round( $dec, 5 ) );
+    $adql = "SELECT i.id FROM ident AS i JOIN basic AS b ON i.oidref = b.oid "
+        . "JOIN ident AS i2 ON i2.oidref = b.oid "
+        . "WHERE i2.id = '" . str_replace( "'", "''", $id ) . "' AND i.id LIKE 'Gaia DR3%'";
+
+    $respuesta = wp_remote_post(
+        'https://simbad.cds.unistra.fr/simbad/sim-tap/sync',
+        array(
+            'timeout' => 20,
+            'body'    => array(
+                'request' => 'doQuery',
+                'lang'    => 'ADQL',
+                'format'  => 'csv',
+                'query'   => $adql,
+            ),
+        )
+    );
+    if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
+        return null;
+    }
+    $csv = trim( wp_remote_retrieve_body( $respuesta ) );
+    $lineas = preg_split( '/\r?\n/', $csv );
+    if ( count( $lineas ) < 2 ) {
+        return null;
+    }
+    $linea = trim( $lineas[1], " \"\r\n" );
+    if ( ! preg_match( '/^Gaia DR3 (\d+)$/', $linea, $m ) ) {
+        return null;
+    }
+    return $m[1];
+}
+
+/**
+ * Índice BP–RP (color de Gaia DR3) de una estrella, o null si no hay coincidencia
+ * o falla la red. Alimenta el color de las estrellas del vecindario solar.
+ *
+ * Solo consulta cuando $gaia_dr3_id viene informado (identificador que SIMBAD ya
+ * tiene vinculado al objeto, ver bitacora_simbad_gaia_dr3_id): busca por ese
+ * `source_id` exacto, identidad y no posición. Sin id no se intenta ninguna
+ * búsqueda por radio — un radio de ~10″ engancha a la estrella vecina en sistemas
+ * múltiples (Gamma Andromedae: la primaria K está saturada y fuera de Gaia, y una
+ * búsqueda posicional coge la compañera B, con un color completamente distinto).
+ * Si SIMBAD, que ya hace su propio crossmatch, no vinculó el objeto a Gaia,
+ * tampoco lo va a acertar mejor una búsqueda por posición del plugin: mejor
+ * $bp_rp = null y que el llamador caiga al tipo espectral (sp_type).
+ *
+ * Consulta Gaia DR3 por TAP con el mismo failover que el proxy del simulador:
+ * CDS (VizieR I/355/gaiadr3) y, si falla, GAVO (gaia.dr3lite). Se cachea 30 días
+ * por source_id.
+ */
+function bitacora_gaia_bprp( $gaia_dr3_id ) {
+    $gaia_dr3_id = trim( (string) $gaia_dr3_id );
+    if ( '' === $gaia_dr3_id || ! ctype_digit( $gaia_dr3_id ) ) {
+        return null;
+    }
+    $cache_key = 'bitacora_bprp_' . $gaia_dr3_id;
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
         return ( 'nulo' === $cache ) ? null : floatval( $cache );
     }
 
-    $rad = 0.0028; // grados (~10 arcsec): margen para casar la estrella por sus coordenadas.
-    // Mismas tablas/columnas que el proxy de Gaia (gaia_proxy.php): la estrella más
-    // brillante dentro del radio. CSV: cabecera + una fila con el BP–RP.
     $proveedores = array(
         array(
             'url'   => 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync',
             'query' => 'SELECT TOP 1 "BP-RP" AS bprp FROM "I/355/gaiadr3"'
-                . ' WHERE 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS),CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
-                . ' AND "BP-RP" IS NOT NULL ORDER BY Gmag',
+                . ' WHERE Source=' . $gaia_dr3_id . ' AND "BP-RP" IS NOT NULL',
         ),
         array(
             'url'   => 'https://dc.zah.uni-heidelberg.de/tap/sync',
             'query' => 'SELECT TOP 1 phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM gaia.dr3lite'
-                . ' WHERE 1=CONTAINS(POINT(\'ICRS\',ra,dec),CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
-                . ' AND phot_bp_mean_mag IS NOT NULL AND phot_rp_mean_mag IS NOT NULL ORDER BY phot_g_mean_mag',
+                . ' WHERE source_id=' . $gaia_dr3_id
+                . ' AND phot_bp_mean_mag IS NOT NULL AND phot_rp_mean_mag IS NOT NULL',
         ),
     );
 
@@ -3246,8 +3319,9 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
 
     list( $l, $b ) = bitacora_radec_a_galactica( $ra, $dec );
     list( $top_x, $top_y, $edge_x, $edge_y ) = bitacora_posiciones_mapa( $l, $b, $dist_al );
-    $morph = $sim ? $sim['morph'] : '';
-    $otype = $sim ? (string) $sim['otype'] : '';
+    $morph   = $sim ? $sim['morph'] : '';
+    $otype   = $sim ? (string) $sim['otype'] : '';
+    $sp_type = $sim ? (string) $sim['sp_type'] : '';
 
     // Un solo sitio decide categoría Y color (otype SIMBAD + morfología + tipo del
     // registro). Cierra el hueco donde los objetos MW caían en el default azul.
@@ -3256,8 +3330,10 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
     $color = $clasificacion['color'];
 
     // Color BP–RP de Gaia, solo para objetos suficientemente cercanos (los que
-    // pueden entrar en el vecindario solar); en objetos lejanos no tiene sentido.
-    $bp_rp = ( $dist_al <= BITACORA_BPRP_DIST_MAX_AL ) ? bitacora_gaia_bprp( $ra, $dec ) : null;
+    // pueden entrar en el vecindario solar) y solo si SIMBAD vinculó el objeto a
+    // Gaia (ver bitacora_gaia_bprp). Sin bp_rp, el frontend cae a sp_type.
+    $bp_rp = ( $dist_al <= BITACORA_BPRP_DIST_MAX_AL && $sim )
+        ? bitacora_gaia_bprp( $sim['gaia_dr3_id'] ) : null;
 
     return array(
         'coords_texto' => bitacora_coords_texto( $l, $b, $dist_al ),
@@ -3272,6 +3348,7 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
         'tipo'         => $tipo,
         'morph'        => $morph,
         'color'        => $color,
+        'sp_type'      => $sp_type,
     );
 }
 
@@ -3376,7 +3453,7 @@ function bitacora_guardar_objeto_fila( $slug, $fila ) {
         'color' => '%s', 'ficha' => '%s', 'coords_texto' => '%s',
         'top_x' => '%f', 'top_y' => '%f', 'edge_x' => '%f', 'edge_y' => '%f',
         'gal_l' => '%f', 'gal_b' => '%f', 'dist_al' => '%f', 'bp_rp' => '%f',
-        'tipo' => '%s', 'morph' => '%s', 'creado_en' => '%s', 'actualizado_en' => '%s',
+        'tipo' => '%s', 'morph' => '%s', 'sp_type' => '%s', 'creado_en' => '%s', 'actualizado_en' => '%s',
     );
 
     $existe = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE slug = %s", $slug ) );
@@ -3407,12 +3484,12 @@ function bitacora_guardar_objeto_fila( $slug, $fila ) {
 }
 
 /**
- * Completa el color BP–RP (Gaia) de los objetos cercanos que aún no lo tienen,
- * re-resolviendo sus coordenadas por SIMBAD (por su etiqueta) y consultando Gaia.
- * Solo toca objetos con distancia dentro del margen del vecindario y bp_rp nulo,
- * así que es idempotente y barato de repetir. Devuelve el número de objetos
- * completados. Backfill para el equipo ya registrado; los objetos nuevos ya
- * obtienen su BP–RP al registrarse.
+ * Completa el color de los objetos cercanos que aún no lo tienen (bp_rp de Gaia
+ * o, en su defecto, sp_type de SIMBAD), re-resolviendo por SIMBAD por su
+ * etiqueta. Solo toca objetos con distancia dentro del margen del vecindario y
+ * bp_rp nulo, así que es idempotente y barato de repetir. Devuelve el número de
+ * objetos completados. Backfill para el equipo ya registrado; los objetos
+ * nuevos ya obtienen su color al registrarse.
  */
 function bitacora_backfill_bprp() {
     global $wpdb;
@@ -3429,12 +3506,14 @@ function bitacora_backfill_bprp() {
         if ( ! $sim || null === $sim['ra'] ) {
             continue;
         }
-        $bp_rp = bitacora_gaia_bprp( $sim['ra'], $sim['dec'] );
-        if ( null === $bp_rp ) {
-            continue;
+        $bp_rp = bitacora_gaia_bprp( $sim['gaia_dr3_id'] );
+        if ( null !== $bp_rp ) {
+            $wpdb->update( $tabla, array( 'bp_rp' => $bp_rp ), array( 'id' => intval( $o->id ) ), array( '%f' ), array( '%d' ) );
+            $completados++;
+        } elseif ( '' !== $sim['sp_type'] ) {
+            $wpdb->update( $tabla, array( 'sp_type' => $sim['sp_type'] ), array( 'id' => intval( $o->id ) ), array( '%s' ), array( '%d' ) );
+            $completados++;
         }
-        $wpdb->update( $tabla, array( 'bp_rp' => $bp_rp ), array( 'id' => intval( $o->id ) ), array( '%f' ), array( '%d' ) );
-        $completados++;
     }
     return $completados;
 }

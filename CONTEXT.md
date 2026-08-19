@@ -26,6 +26,7 @@ Mapeo canónico **índice BP–RP → color RGB** de una estrella, anclado a có
 - **Consumidores:** **simulador de oculares** (`bitacora-ocular.js`) y **vecindario solar** del mapa (`vecindario-solar.js`), ambos desde la misma URL canónica `/wp-content/uploads/bitacora/bitacora-gaia-color.js`.
 - **Invariante:** color de una estrella EXACTAMENTE igual en simulador y mapa. Garantizado estructuralmente (fuente única), no por copiar y pegar. Test dorado `scripts/test_gaia_color.js` fija el contrato.
 - Realce de **estrella de carbono** NO pertenece al modelo: capa del simulador que ajusta el BP–RP efectivo antes de pedir el color canónico.
+- **`bpRpPorTipo` entra en el vecindario solar cuando no hay `bp_rp`**, con el `sp_type` de SIMBAD guardado en el [[objeto del mapa]] (columna `sp_type`, resuelto en `bpRpDe()` de `via-lactea-vecindario-catalogo.js`). Caso real: primarias muy brillantes y saturadas fuera de Gaia (Sirius, la K de Gamma Andromedae) — sin este respaldo se quedan sin color (blancas) o, peor, heredan el `bp_rp` de una estrella vecina (ver ADR 0015).
 
 ## Objeto del mapa
 
