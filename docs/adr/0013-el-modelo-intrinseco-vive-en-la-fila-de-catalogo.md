@@ -41,9 +41,28 @@ fixtures Gaia pineados) y `scripts/test_nebulosa_planetaria.js` (la PN recorre
 el mismo pipeline: estrella central conservada por escena, luz integrada = mag
 V, θ del borde real, sin NaN al lienzo).
 
-Lo que esto NO es: una puerta para «un sistema de nebulosas». Emisión,
-reflexión y restos de supernova tienen filas generadas pero clase cerrada; si
-alguna necesita algo que una fila Sérsic no puede decir (filamentos, cáscara
+**Ampliación (19-ago-2026, rama `worktree-nebulosas-emision-reflexion`):**
+HII/EmN/RfN abiertas por la misma puerta, validadas con M78 (reflexión),
+NGC 7635 (emisión compacta) y NGC 6888 (filamentosa): sin borde real —su
+extensión sí es isofotal, como las galaxias—, mismo pipeline, fotometría
+anclada con su fracción de luz. La validación añadió una regla al punto 3:
+**las clases extensas exigen lado de parche sin recorte** (`ps1CabeEnParche`).
+NGC 7000 pasaba el corte de fracción (0,41) y salía un cuadrado de campo
+estelar anclado a mag 4,3 sin nebulosa: el fenómeno que ya excluyó a M31,
+pero que el corte de fracción no caza cuando el stack de PS1 ya restó la
+emisión extendida. Guardián: `scripts/test_nebulosas_emision_reflexion.js`.
+
+`SNR` abierta en la misma rama, validada con M1 (el Cangrejo): compacta como
+la planetaria —borde real, escena y θint del semieje de catálogo—, pero ser
+compacta **no exime de la puerta de tamaño**: los segmentos del Velo
+(NGC 6960/6992/6995, 6·r_e de 22′ a 330′) llegan recortados y anclarían su
+mag 6,7 a un recorte que no los contiene. La exención queda solo para las
+planetarias, cuyo mayor 6·r_e es 11,6′. Guardián:
+`scripts/test_resto_supernova.js`.
+
+Lo que esto NO es: una puerta para «un sistema de nebulosas». `Neb` y `Cl+N`
+(cajón de sastre y mezcla cúmulo+nebulosa) siguen cerradas; si alguna
+clase necesita algo que una fila Sérsic no puede decir (filamentos, cáscara
 incompleta), la conversación es sobre el esquema del catálogo, no sobre añadir
 ramas al render. Los cúmulos siguen su propia vía (ADR 0002): su modelo
 intrínseco es una población, no una fila fotométrica.

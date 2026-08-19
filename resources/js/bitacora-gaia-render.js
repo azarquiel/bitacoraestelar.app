@@ -3104,6 +3104,17 @@
      estaban — y el aviso de la ficha 12 lo dice, así que la ley vive aquí y no
      repetida en los dos sitios. */
   function ps1CabeEnParche(g) {
+    /* Toda clase de nebulosa salvo las planetarias exige además lado sin
+       recorte: NGC 7000 (semieje ~1,4°) pasaba el corte de fracción (0,41)
+       y salía un cuadrado de campo estelar anclado a mag 4,3 sin nebulosa —
+       el fenómeno de M31, pero la fracción no lo cazaba porque el ala μ25 del
+       modelo n=1 subestima cuánta luz real queda fuera cuando el stack ya
+       restó la emisión extendida. Ser compacta no exime: los segmentos del
+       Velo (SNR, 6·r_e de 22′ a 330′) llegan igual de recortados. Solo las
+       planetarias caben por construcción (su mayor 6·r_e es 11,6′). */
+    var clase = g[12] || '';
+    if (clase && clase !== 'PN' &&
+        PS1.ladoFactor * g[4] / 60 > PS1.ladoMax) return false;
     var lado = ps1LadoArcmin(g[4]);
     return ps1FraccionLuz(g[8], (lado * 60 / 2) / (g[4] > 0 ? g[4] : 1e9)) >= PS1.fracMin;
   }
@@ -3113,23 +3124,26 @@
      OpenNGC) decide qué filas entran, no qué código corre: cada fila de
      nebulosa ES un modelo Sérsic n=1 construido por gen_nebulosas.py con el
      mismo esquema que las galaxias, y de ahí salen escena, anclaje y θint por
-     las mismas funciones. En v1 solo planetarias ('PN'): compactas, con borde
-     real y r_e calibrado aparte (RE_SOBRE_SEMIEJE_COMPACTA); el resto de
-     clases exigirá su propia validación antes de abrir la puerta. */
-  var PS1_CLASES_DIFUSAS = ['PN'];
+     las mismas funciones. Abiertas: 'PN' y 'SNR' (compactas, borde real,
+     validadas con M57 y M1), y 'HII'/'EmN'/'RfN' (validadas con M78, NGC 7635
+     y NGC 6888: sin borde real, siguen la isofota como las galaxias). Quedan
+     fuera 'Neb' y 'Cl+N' —cajón de sastre y mezcla cúmulo+nebulosa—; cada
+     apertura exige su validación, no más código. */
+  var PS1_CLASES_DIFUSAS = ['PN', 'HII', 'EmN', 'RfN', 'SNR'];
 
   /* Borde REAL de un objeto compacto (″, semieje mayor), 0 si no lo tiene.
      Una galaxia se acaba donde su perfil cae bajo el ruido —su «borde» es una
-     isofota— pero una planetaria tiene borde físico: la cáscara. Para ellas
-     gen_nebulosas.py resolvió r_e = 0,60·semieje de catálogo (espejo:
-     RE_SOBRE_SEMIEJE_COMPACTA), así que el borde se recupera exacto. Es lo
-     único que la clase cambia en el montaje: escena y θint usan el borde en
-     vez de la isofota μ25 del ala exponencial, que en M57 queda 2,8 veces más
-     lejos que la nebulosa y no es el objeto. */
+     isofota— pero una planetaria o un resto de supernova tienen borde físico:
+     la cáscara. Para ellos gen_nebulosas.py resolvió r_e = 0,60·semieje de
+     catálogo (espejo: RE_SOBRE_SEMIEJE_COMPACTA), así que el borde se
+     recupera exacto. Es lo único que la clase cambia en el montaje: escena y
+     θint usan el borde en vez de la isofota μ25 del ala exponencial, que en
+     M57 queda 2,8 veces más lejos que la nebulosa y no es el objeto. */
   var PS1_RE_SOBRE_BORDE = 0.60;   // = RE_SOBRE_SEMIEJE_COMPACTA del generador
+  var PS1_CLASES_COMPACTAS = ['PN', 'SNR'];   // = COMPACTAS del generador
 
   function ps1RadioBordeAs(gal) {
-    if (!gal || gal.clase !== 'PN' || !(gal.reArcsec > 0)) return 0;
+    if (!gal || PS1_CLASES_COMPACTAS.indexOf(gal.clase) < 0 || !(gal.reArcsec > 0)) return 0;
     return gal.reArcsec / PS1_RE_SOBRE_BORDE;
   }
 
@@ -3873,6 +3887,7 @@
     ps1DatosConPsf: ps1DatosConPsf,
     ps1CabeEnParche: ps1CabeEnParche,
     ps1CatalogoDifuso: ps1CatalogoDifuso,
+    ps1RadioBordeAs: ps1RadioBordeAs,
     ps1ThetaIntDeGal: ps1ThetaIntDeGal,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,

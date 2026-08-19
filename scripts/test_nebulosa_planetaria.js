@@ -42,10 +42,14 @@ ok(conClase.length === NEB.length, 'todas las filas llevan clase (' + conClase.l
 console.log('ps1CatalogoDifuso: la clase decide qué filas entran, no qué código corre:');
 ok(typeof R.ps1CatalogoDifuso === 'function', 'existe R.ps1CatalogoDifuso');
 var cat = R.ps1CatalogoDifuso ? R.ps1CatalogoDifuso(GAL, NEB) : [];
-ok(cat.length === GAL.length + NEB.filter(function (f) { return f[12] === 'PN'; }).length,
-  'catálogo difuso = galaxias + solo las PN (' + cat.length + ' filas)');
+// Clases abiertas hoy: PN (esta prueba), HII/EmN/RfN (validadas en
+// test_nebulosas_emision_reflexion.js) y SNR (test_resto_supernova.js).
+// Neb y Cl+N siguen cerradas.
+var abiertas = ['PN', 'HII', 'EmN', 'RfN', 'SNR'];
+ok(cat.length === GAL.length + NEB.filter(function (f) { return abiertas.indexOf(f[12]) >= 0; }).length,
+  'catálogo difuso = galaxias + clases abiertas (' + cat.length + ' filas)');
 ok(!!fila(cat, 'NGC6720'), 'M57 entra');
-ok(!fila(cat, 'NGC1499'), 'la nebulosa California (no PN) NO entra en v1');
+ok(!fila(cat, 'NGC1333'), 'una clase cerrada (Cl+N, NGC 1333) NO entra');
 ok(!!fila(cat, 'NGC 5194'), 'M51 sigue entrando');
 ok(R.ps1CatalogoDifuso && R.ps1CatalogoDifuso(GAL, null).length === GAL.length,
   'sin catálogo de nebulosas cargado, solo galaxias (robustez)');
