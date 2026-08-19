@@ -36,6 +36,37 @@ echo "gaia_clave (determinista y sensible):\n";
 eq(gaia_clave(56.75, 24.115, 0.36, 16.5), gaia_clave(56.75, 24.115, 0.36, 16.5), 'misma entrada → misma clave');
 ok(gaia_clave(56.75, 24.115, 0.36, 16.5) !== gaia_clave(56.76, 24.115, 0.36, 16.5), 'entradas distintas → claves distintas');
 
+echo "estrategia por régimen de densidad (sonda sin ORDER BY + repliegue seguro):\n";
+// La SONDA no ordena (el coste medido del TAP es el ORDER BY) y usa el techo
+// computacional, no el TOP físico-histórico de 40000.
+[$cds_sonda, $gavo_sonda] = gaia_consultas(56.75, 24.115, 0.36, 16.5, false);
+ok(stripos($cds_sonda, 'ORDER BY') === false, 'sonda CDS sin ORDER BY');
+ok(stripos($gavo_sonda, 'ORDER BY') === false, 'sonda GAVO sin ORDER BY');
+ok(strpos($cds_sonda, 'TOP ' . GAIA_TECHO_FILAS) !== false, 'sonda CDS con TOP = techo computacional');
+// La consulta SEGURA es la histórica: ORDER BY + TOP 40000 (campos densos).
+[$cds_segura, $gavo_segura] = gaia_consultas(56.75, 24.115, 0.36, 16.5, true);
+ok(stripos($cds_segura, 'ORDER BY Gmag') !== false, 'segura CDS conserva ORDER BY Gmag');
+ok(strpos($cds_segura, 'TOP ' . GAIA_MAX_ROWS) !== false, 'segura CDS conserva TOP 40000');
+ok(stripos($gavo_segura, 'ORDER BY phot_g_mean_mag') !== false, 'segura GAVO conserva ORDER BY');
+// Equivalencia del conjunto cuando no hay truncamiento: mismo WHERE exacto.
+$where = static fn(string $q): string => preg_replace('/\s*ORDER BY.*$/i', '', substr($q, stripos($q, 'WHERE')));
+eq($where($cds_sonda), $where($cds_segura), 'sonda y segura CDS comparten WHERE (mismo conjunto físico)');
+eq($where($gavo_sonda), $where($gavo_segura), 'sonda y segura GAVO comparten WHERE');
+// La URL de la sonda fija MAXREC: si el servidor recorta, que sea detectable.
+[$url_sonda] = gaia_proveedores(56.75, 24.115, 0.36, 16.5, false);
+ok(stripos($url_sonda, 'MAXREC=' . GAIA_TECHO_FILAS) !== false, 'URL de sonda lleva MAXREC = techo');
+
+echo "gaia_truncada (tocar el techo = truncamiento posible):\n";
+ok(gaia_truncada(GAIA_TECHO_FILAS), 'filas == techo → truncada');
+ok(gaia_truncada(GAIA_TECHO_FILAS + 1), 'filas > techo → truncada');
+ok(!gaia_truncada(GAIA_TECHO_FILAS - 1), 'filas < techo → completa');
+
+echo "gaia_num_filas (conteo del JSON del TAP):\n";
+eq(gaia_num_filas('{"metadata":[],"data":[[1,2],[3,4],[5,6]]}'), 3, 'cuenta filas de data');
+eq(gaia_num_filas('{"metadata":[],"data":[]}'), 0, 'campo vacío → 0');
+eq(gaia_num_filas('esto no es json'), null, 'JSON inválido → null');
+eq(gaia_num_filas('{"otro":1}'), null, 'sin data → null');
+
 // La expulsión LRU y la limpieza ya no son de este proxy: son la política
 // compartida con el del DSS. Su test es scripts/test_cache_lru.php.
 

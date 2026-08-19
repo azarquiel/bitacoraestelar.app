@@ -1,0 +1,299 @@
+{
+ "fecha": "2026-08-18T20:30:01.180Z",
+ "tap": "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync",
+ "radio": 0.89,
+ "reps": 3,
+ "campos": {
+  "m13": {
+   "id": "m13",
+   "nombre": "M13 (densidad media, no satura)",
+   "ra": 250.423,
+   "dec": 36.46,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "ttfb": 2802.1750409999804,
+      "total": 2812.8944159999955,
+      "bytes": 318,
+      "filas": 26
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 42685,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 1228.1501669999852,
+      "total": 1822.1087499999849,
+      "bytes": 2817873,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 1297.5660830000124,
+      "total": 1989.2369999999937,
+      "bytes": 2817873,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "ttfb": 1271.7535839999327,
+      "total": 1375.5237499999348,
+      "bytes": 318,
+      "filas": 26
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 42685,
+      "satura": true
+     },
+     "control": {
+      "ttfb": 2679.1453340000007,
+      "total": 3171.1107499999925,
+      "bytes": 2817873,
+      "filas": 40000
+     },
+     "rec": {
+      "ttfb": 1238.0670000000391,
+      "total": 1671.7456250000978,
+      "bytes": 2817873,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "ttfb": 1153.6738749999786,
+      "total": 1156.7151669999585,
+      "bytes": 318,
+      "filas": 26
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 42685,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 984.8931670000311,
+      "total": 1423.5543749999488,
+      "bytes": 2817873,
+      "filas": 40000
+     },
+     "control": {
+      "error": "Expected ',' or ']' after array element in JSON at position 344763 (line 1 column 344764)"
+     }
+    }
+   ],
+   "veredicto": {
+    "satura": true,
+    "hist": 1.3755237499999349,
+    "rec": 1.6717456250000977,
+    "control": 2.580173874999993,
+    "speedup": 0.8467167018997017,
+    "equivalencia": true,
+    "ok": false
+   }
+  },
+  "virgo": {
+   "id": "virgo",
+   "nombre": "Virgo (alta latitud)",
+   "ra": 187.7,
+   "dec": 12.4,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "ttfb": 1384.117499999993,
+      "total": 1401.3740000000107,
+      "bytes": 298,
+      "filas": 25
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 4435,
+      "satura": false
+     },
+     "rec": {
+      "ttfb": 1127.3262499999837,
+      "total": 1260.1664159999928,
+      "bytes": 317477,
+      "filas": 4435
+     },
+     "control": {
+      "ttfb": 1056.0945409999695,
+      "total": 1204.4110409999848,
+      "bytes": 317477,
+      "filas": 4435
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "ttfb": 1106.1657500000438,
+      "total": 1119.7913329999428,
+      "bytes": 298,
+      "filas": 25
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 4435,
+      "satura": false
+     },
+     "control": {
+      "ttfb": 1072.801416000002,
+      "total": 1239.6445409998996,
+      "bytes": 317477,
+      "filas": 4435
+     },
+     "rec": {
+      "ttfb": 1077.7789169999305,
+      "total": 1227.4499589999905,
+      "bytes": 317477,
+      "filas": 4435
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "ttfb": 750.4754170000087,
+      "total": 751.782125000027,
+      "bytes": 298,
+      "filas": 25
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 4435,
+      "satura": false
+     },
+     "rec": {
+      "ttfb": 2667.222999999998,
+      "total": 2818.2290419999044,
+      "bytes": 317477,
+      "filas": 4435
+     },
+     "control": {
+      "ttfb": 1084.8301249999786,
+      "total": 1220.937874999945,
+      "bytes": 317477,
+      "filas": 4435
+     },
+     "equivalencia": true
+    }
+   ],
+   "veredicto": {
+    "satura": false,
+    "hist": 1.119791332999943,
+    "rec": 1.2601664159999928,
+    "control": 1.220937874999945,
+    "speedup": 0.5130082143319503,
+    "equivalencia": true,
+    "ok": false
+   }
+  },
+  "polo": {
+   "id": "polo",
+   "nombre": "Polo galáctico norte (casi vacío)",
+   "ra": 192.86,
+   "dec": 27.13,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "ttfb": 1987.9936670000316,
+      "total": 1988.5953330000048,
+      "bytes": 309,
+      "filas": 27
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 3871,
+      "satura": false
+     },
+     "rec": {
+      "ttfb": 1093.8194590000203,
+      "total": 1240.2912089999882,
+      "bytes": 277300,
+      "filas": 3871
+     },
+     "control": {
+      "ttfb": 1298.109625000041,
+      "total": 1459.3438750000205,
+      "bytes": 277300,
+      "filas": 3871
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "ttfb": 1109.3524999999208,
+      "total": 1113.5645830000285,
+      "bytes": 309,
+      "filas": 27
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 3871,
+      "satura": false
+     },
+     "control": {
+      "ttfb": 1044.096332999994,
+      "total": 1187.9603750000242,
+      "bytes": 277300,
+      "filas": 3871
+     },
+     "rec": {
+      "ttfb": 1064.4145000000717,
+      "total": 1208.3215830000117,
+      "bytes": 277300,
+      "filas": 3871
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "ttfb": 1151.626874999958,
+      "total": 1154.9383330000564,
+      "bytes": 309,
+      "filas": 27
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 3871,
+      "satura": false
+     },
+     "rec": {
+      "ttfb": 1211.1546659999294,
+      "total": 1338.346082999953,
+      "bytes": 277300,
+      "filas": 3871
+     },
+     "control": {
+      "ttfb": 1140.6196670000209,
+      "total": 1303.8194170000497,
+      "bytes": 277300,
+      "filas": 3871
+     },
+     "equivalencia": true
+    }
+   ],
+   "veredicto": {
+    "satura": false,
+    "hist": 1.1549383330000564,
+    "rec": 1.2402912089999882,
+    "control": 1.3038194170000497,
+    "speedup": 0.5443400701843988,
+    "equivalencia": true,
+    "ok": false
+   }
+  }
+ },
+ "veredicto": false
+}

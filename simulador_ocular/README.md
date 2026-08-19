@@ -149,9 +149,14 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   (`GAIA_RADIO_MAX ≈ 1,44°`) y hasta `magConsultaGaia(apertura, transmision)` —
   la profundidad depende del EQUIPO, no es una magnitud fija: un 8" y un 20" ya
   no piden ni "ven" el mismo catálogo. `GAIA_MAG_TOPE` (20,0, = `GAIA_MAX_MAG`
-  en `gaia_proxy.php`) acota el máximo por seguridad. `TOP 40000` sigue siendo
-  el límite de filas; el `ORDER BY Gmag` va **antes** del `TOP` (verificado en
-  TAPVizieR): si hay truncamiento, se quedan fuera las **menos brillantes**.
+  en `gaia_proxy.php`) acota el máximo por seguridad. La adquisición en el
+  proxy es **por régimen de densidad** (ADR 0014): primero una **sonda** sin
+  `ORDER BY` (el coste dominante medido del TAP es la ordenación) con techo
+  computacional de 200 000 filas; si no lo toca, el campo recibe **todas** sus
+  estrellas hasta la profundidad física, sin truncamiento. Solo si lo toca
+  (campo denso) se repliega a la consulta histórica `ORDER BY Gmag + TOP 40000`,
+  donde el `ORDER BY` va **antes** del `TOP` (verificado en TAPVizieR): si hay
+  truncamiento, se quedan fuera las **menos brillantes**.
 - **Tamaño** = imagen estelar física (disco de Airy + seeing, ver más abajo), en
   cuadratura con un **suelo de visibilidad** en píxeles (`radioSuelo`, con un
   término extra `radioSueloMag · flujoRelativo^radioSueloExp` y `radioSueloMax`

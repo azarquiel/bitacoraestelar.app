@@ -181,13 +181,23 @@ Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de obj
 
 ## Adquisición de Gaia por celdas
 
-Vocabulario del estudio de la capa de adquisición y caché de Gaia DR3 para campo arbitrario (ver `especificacion_optimizacion_gaia.md` y ADR 0012). Nada de esto está implementado aún.
+Vocabulario del estudio de la capa de adquisición y caché de Gaia DR3 para campo arbitrario (ver `especificacion_optimizacion_gaia.md` y ADR 0012). El estudio se cerró con veredicto NO PASA en sus dos ejes (informes `informe_gaia_e*.md`): nada de esto llegó a producción; el vocabulario se conserva porque nombra los conceptos con los que se midió.
 
 - **Celda:** unidad de caché espacial del cielo, independiente del telescopio, ocular, aumento y objeto observado. Identificada por `(catálogo, nivel, ipix)` HEALPix nested. La semántica «las N más brillantes» pertenece al **campo**, no a la celda: la celda solo contiene «todas las estrellas hasta su Gmax». _Evitar_: tesela, tile, región.
 - **Profundidad monotónica:** el Gmax de una celda es **estado**, no parte de la clave: registra la profundidad más honda jamás pedida y solo crece (una re-consulta más honda reemplaza la entrada por su superconjunto). Evita la explosión `celda × magnitud`.
 - **Histograma de profundidad:** cuenta acumulada de estrellas por escalón de magnitud (0,5 mag) de una región, obtenida sin ordenar. Sirve para elegir el Gmax mínimo que garantiza superconjunto de las 40 000 más brillantes: la corrección es estructural, no estadística.
 - **Los tres regímenes de acceso:** **frío absoluto** (ninguna celda del campo en caché), **parcialmente caliente** (algunas) y **completamente caliente** (todas: coste ≈ reconstrucción local, sin red). Un coste de adquisición se juzga siempre diciendo en cuál de los tres se midió.
 - **Reutilización:** fracción de filas de un campo servidas desde caché. No es propiedad del teselado: es propiedad del teselado **dado un patrón de acceso**, así que solo tiene sentido citada junto a su carga (observador de objetos, explorador libre o multiusuario).
+
+## Adquisición de Gaia por régimen de densidad
+
+Estrategia de producción del proxy (`gaia_proxy.php`, ADR 0014): qué consulta se lanza depende del volumen real del campo, no de su posición.
+
+- **Límite físico vs computacional:** el límite **físico** de adquisición es el `mag` que manda el cliente (`magConsultaGaia`: equipo, aumentos, cielo, cola de glow y margen). El `TOP 40000` y el techo de la sonda son límites **computacionales**: protegen transferencia y servidor, no forman parte del modelo de observación y no deben usarse como constantes físicas.
+- **Sonda:** consulta sin `ORDER BY` con `TOP` y `MAXREC` en el techo computacional (200 000, referencia medida). Si no toca el techo, la respuesta es el conjunto **completo** hasta el `mag` físico: campo **no denso**, se sirve sin truncamiento y sin pagar la ordenación (el coste dominante medido del TAP).
+- **Campo denso:** la sonda toca techo; se repliega a la consulta segura `ORDER BY + TOP 40000` (si hay que truncar, cae lo más débil). Un truncamiento sin `ORDER BY` sería arbitrario y podría perder estrellas brillantes.
+- **Tres poblaciones** de un campo: **individual** (filas Gaia, pipeline de estrellas actual), **mezclada/truncada** (contribuye al campo pero no llega como fila; solo existe en campos densos y su luz es físicamente relevante —en M7 el corte tiene SB media ~21,1 mag/arcsec², más brillante que el cielo oscuro—) y **descartada** (por debajo del `mag` físico, la elimina el `WHERE`). El límite computacional no debe decidir estas poblaciones.
+- **Representación agregada (objetivo, no implementada):** la población truncada de un campo denso debe conservar su contribución fotométrica como fondo/velo agregado (momentos: flujo total y, si procede, segundo momento para SBF), con el mismo principio de flujo agregado ya usado en cúmulos — no transportando una fila por estrella. Interfaz propuesta en el ADR 0014.
 
 ## Caché LRU de los proxies
 

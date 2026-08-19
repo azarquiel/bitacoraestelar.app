@@ -1,0 +1,325 @@
+{
+ "fecha": "2026-08-18T19:45:03.213Z",
+ "tap": "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync",
+ "radio": 0.89,
+ "reps": 3,
+ "campos": {
+  "m7": {
+   "id": "m7",
+   "nombre": "M7 (bulbo, satura fuerte)",
+   "ra": 268.447,
+   "dec": -34.841,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "ttfb": 39677.971916999995,
+      "total": 39687.893542,
+      "bytes": 381,
+      "filas": 30
+     },
+     "eleccion": {
+      "gmax": 15.5,
+      "acumulado": 55509,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 5168.106375000003,
+      "total": 5799.706209000004,
+      "bytes": 2901266,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 9854.442083000002,
+      "total": 10412.790207999999,
+      "bytes": 2901266,
+      "filas": 40000
+     },
+     "equivalencia": true
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    }
+   ],
+   "veredicto": {
+    "satura": true,
+    "hist": 39.687893542,
+    "rec": 5.7997062090000036,
+    "control": 10.412790207999999,
+    "speedup": 0.2289149189009711,
+    "equivalencia": true,
+    "ok": false
+   }
+  },
+  "m6": {
+   "id": "m6",
+   "nombre": "M6 (plano, satura moderado)",
+   "ra": 265.069,
+   "dec": -32.242,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "ttfb": 2349.869292000003,
+      "total": 2358.0319999999992,
+      "bytes": 350,
+      "filas": 28
+     },
+     "eleccion": {
+      "gmax": 17.5,
+      "acumulado": 42167,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 9689.071916000008,
+      "total": 10224.897333000008,
+      "bytes": 2898348,
+      "filas": 40000
+     },
+     "control": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "ttfb": 2255.4136670000007,
+      "total": 2882.408958,
+      "bytes": 2898348,
+      "filas": 40000
+     }
+    }
+   ],
+   "veredicto": {
+    "satura": false,
+    "hist": 2.3580319999999992,
+    "rec": 10.224897333000008,
+    "control": null,
+    "speedup": null,
+    "equivalencia": false,
+    "ok": false
+   }
+  },
+  "cygnus": {
+   "id": "cygnus",
+   "nombre": "Cygnus sin cúmulo (plano)",
+   "ra": 305.5,
+   "dec": 40.2,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "ttfb": 3596.778667000006,
+      "total": 3611.9812079999974,
+      "bytes": 358,
+      "filas": 30
+     },
+     "eleccion": {
+      "gmax": 19,
+      "acumulado": 41422,
+      "satura": true
+     },
+     "rec": {
+      "ttfb": 1266.8838340000075,
+      "total": 1819.470834000007,
+      "bytes": 2857092,
+      "filas": 40000
+     },
+     "control": {
+      "ttfb": 1364.5945840000059,
+      "total": 1935.8027090000105,
+      "bytes": 2857092,
+      "filas": 40000
+     },
+     "equivalencia": true
+    }
+   ],
+   "veredicto": {
+    "satura": true,
+    "hist": 3.6119812079999973,
+    "rec": 1.819470834000007,
+    "control": 1.9358027090000105,
+    "speedup": 0.35640611277259787,
+    "equivalencia": true,
+    "ok": false
+   }
+  },
+  "m13": {
+   "id": "m13",
+   "nombre": "M13 (densidad media, no satura)",
+   "ra": 250.423,
+   "dec": 36.46,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "ttfb": 3152.2010420000006,
+      "total": 3158.890625,
+      "bytes": 318,
+      "filas": 26
+     },
+     "eleccion": {
+      "gmax": 20,
+      "acumulado": 42685,
+      "satura": true
+     },
+     "rec": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "ttfb": 1158.3477080000011,
+      "total": 1598.1154999999999,
+      "bytes": 2817873,
+      "filas": 40000
+     }
+    }
+   ],
+   "veredicto": {
+    "satura": true,
+    "hist": 3.158890625,
+    "rec": null,
+    "control": 1.5981154999999998,
+    "speedup": null,
+    "equivalencia": false,
+    "ok": false
+   }
+  },
+  "virgo": {
+   "id": "virgo",
+   "nombre": "Virgo (alta latitud)",
+   "ra": 187.7,
+   "dec": 12.4,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    }
+   ]
+  },
+  "polo": {
+   "id": "polo",
+   "nombre": "Polo galáctico norte (casi vacío)",
+   "ra": 192.86,
+   "dec": 27.13,
+   "medidas": [
+    {
+     "rep": 1,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    },
+    {
+     "rep": 2,
+     "hist": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "ttfb": 1141.0139160000108,
+      "total": 1310.4309579999972,
+      "bytes": 277300,
+      "filas": 3871
+     }
+    },
+    {
+     "rep": 3,
+     "hist": {
+      "error": "HTTP 503: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     },
+     "control": {
+      "error": "HTTP 400: <?xml version=\"1.0\" encoding=\"utf-8\"?>\n<VOTABLE version=\"1.3\" xmlns=\"http://www.ivoa.net/xml/VOTable/v1.3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.ivoa.net"
+     }
+    }
+   ]
+  }
+ },
+ "veredicto": false
+}
