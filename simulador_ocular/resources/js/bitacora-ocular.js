@@ -594,6 +594,20 @@
         var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
         ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
         cargando.style.display = 'flex'; cargando.textContent = 'consultando estrellas de Gaia DR3…';
+        /* La primera consulta de un campo muy rico tarda hasta un minuto en el
+           servidor (luego queda cacheada). Un contador de segundos dice que el
+           proceso sigue vivo; a partir de 8 s se explica el porqué. Muere solo:
+           al ocultarse el indicador o al llegar otra petición. */
+        var tGaia0 = Date.now();
+        (function tic() {
+          if (peticion !== contadorPeticion || cargando.style.display === 'none') return;
+          var s = Math.round((Date.now() - tGaia0) / 1000);
+          if (s > 0) {
+            cargando.textContent = 'consultando estrellas de Gaia DR3… (' + s + ' s)' +
+              (s >= 8 ? ' — campo muy rico: la primera vez tarda hasta un minuto y queda guardado para siempre' : '');
+          }
+          setTimeout(tic, 1000);
+        })();
 
         var ra0 = sexToDeg(objetoSel.ra, true), dec0 = sexToDeg(objetoSel.dec, false);
         // Magnitud límite del telescopio + ocular (Método del umbral): con más
