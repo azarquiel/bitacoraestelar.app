@@ -43,24 +43,33 @@ cielo: `ORDER BY Gmag + TOP 40000`. El estudio preregistrado (ADR 0012, informes
    (descartada por el `WHERE`). En campos no densos la población truncada es
    **vacía** por construcción: la sonda trae todo.
 
-## Fondo agregado (fase 2, interfaz objetivo — no implementada)
+## Fondo agregado (fase 2 — implementada 2026-08-19)
 
-Para campos densos, la solución objetivo no es transportar millones de filas
-sino los **momentos** de la banda truncada, con el mismo principio de flujo
-agregado/velo/SBF ya usado en cúmulos:
+Para campos densos, la solución no es transportar millones de filas sino los
+**momentos** de la banda truncada, con el mismo principio de flujo
+agregado/velo ya usado en cúmulos:
 
-- El proxy calcularía en la sonda (que ya tiene las filas hasta el techo, y el
-  TAP puede agregar el resto: `SUM(POWER(10,-0.4*Gmag))`, y si procede el
-  segundo momento para SBF) la contribución de la banda `[corte, mag]`.
-- Contrato propuesto: la respuesta JSON ganaría una clave hermana de `data`
-  (p. ej. `fondo: {flujoG, n, m2}`), ausente cuando la población truncada es
-  vacía — así el cliente actual, que solo lee `data`, no se rompe.
-- El render la incorporaría como velo/fondo de campo, sin tocar el pipeline de
-  estrellas individuales.
+- El proxy, tras la consulta segura, pide al TAP los momentos de la banda
+  `(corte, mag]` — `COUNT`, `SUM(POWER(10,-0.4*Gmag))` y el segundo momento
+  `SUM(POWER(10,-0.8*Gmag))` para SBF — sin `ORDER BY` (medido en M7: 39 s,
+  una vez por región, caché inmutable). Si el agregado falla, se sirve sin
+  fondo: degradación, nunca bloqueo.
+- Contrato: clave `fondo: {corte, n, flujo, m2, rad}` hermana de `data`,
+  ausente cuando la población truncada es vacía — el cliente que solo lee
+  `data` no se rompe.
+- El cliente convierte el flujo en la SB media del velo (`veloSB`, en M7:
+  21,0 mag/arcsec², que clava la estimación previa de 21,1) y la incorpora
+  como **cielo extra** (`veloSB` en el objeto cielo): `ctxFotometrico` y
+  `magLimite` suman su flujo al del sqm y TODO lo derivado (SBe, Cmin, nivel
+  de fondo, magnitud límite) lo hereda sin ley nueva. El pipeline de
+  estrellas individuales no se toca.
+- Aproximaciones asumidas: velo uniforme sobre el campo (estadístico, sin
+  estructura espacial) y G ≈ V frente a la escala del sqm.
+- La placa del DSS NO lleva velo: la foto ya contiene ese resplandor y sería
+  doble conteo.
 
-Queda fuera de este ADR implementarla; lo que este ADR fija es que ninguna
-solución puede simplemente ignorar la población truncada (su pérdida es
-físicamente relevante, ver Contexto).
+Lo que este ADR fija es que ninguna solución puede simplemente ignorar la
+población truncada (su pérdida es físicamente relevante, ver Contexto).
 
 ## Consecuencias
 

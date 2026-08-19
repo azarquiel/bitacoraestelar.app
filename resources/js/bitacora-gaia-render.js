@@ -275,7 +275,9 @@
 
   function ctxFotometrico(o, thetaIntArcmin) {
     var pOjo = o.pupilaOjo || 7, pEf = Math.min(o.pupilaSalida, pOjo);
-    var sqm = (o.sqm != null) ? o.sqm : 21;
+    // veloSB (fondo agregado de un campo denso) entra aquí y TODO lo derivado
+    // (SBe, Cmin, nivel de fondo, suelo de pintado) lo hereda sin ley nueva.
+    var sqm = sumaSB((o.sqm != null) ? o.sqm : 21, o.veloSB);
     var T = (o.transmision > 0) ? o.transmision : TRANSMISION_DEFECTO;
     var dim = Math.pow(pEf / pOjo, 2);
     var Fcielo = Math.pow(10, -0.4 * sqm);
@@ -628,12 +630,37 @@
     ctx.putImageData(im, 0, 0); return true;
   }
 
+  /* ── Fondo agregado de campos densos (ADR 0014 fase 2) ──
+     En un campo denso el proxy trunca a las 40 000 más brillantes y manda en la
+     clave `fondo` los momentos de la banda truncada, agregados por el TAP
+     ({corte, n, flujo, m2, rad}; flujo en unidades de una estrella G=0, rad =
+     radio del círculo agregado en grados). Esa luz es físicamente relevante
+     (en M7, SB ~21 mag/arcsec², más brillante que un cielo oscuro) y NO debe
+     desaparecer por el límite computacional: entra como VELO uniforme, es
+     decir, como cielo extra (`veloSB` en el objeto cielo). Aproximaciones
+     asumidas: uniforme sobre el campo (velo estadístico, sin estructura) y
+     G ≈ V frente a la escala del sqm. */
+
+  // SB media del velo (mag/arcsec²) a partir del fondo del proxy, o null.
+  function veloSB(fondo) {
+    if (!fondo || !(fondo.flujo > 0) || !(fondo.rad > 0)) return null;
+    return -2.5 * Math.log10(fondo.flujo / (Math.PI * Math.pow(fondo.rad * 3600, 2)));
+  }
+
+  // Suma fotométrica de dos brillos superficiales: los FLUJOS se suman.
+  function sumaSB(sb, velo) {
+    if (velo == null) return sb;
+    return -2.5 * Math.log10(Math.pow(10, -0.4 * sb) + Math.pow(10, -0.4 * velo));
+  }
+
   /* ── Magnitud límite (método del umbral, Torres Lapasió) ── */
   function magLimite(o) {
     var D = o.apertura, MAG = o.aumentos;
     var t = (o.transmision > 0) ? o.transmision : TRANSMISION_DEFECTO;
     if (!(D > 0) || !(MAG > 0)) return null;
-    var sqm = (o.sqm != null) ? o.sqm : 21;
+    // El velo de un campo denso es cielo extra: empeora el límite igual que
+    // cualquier fondo más brillante (ver Fondo agregado más arriba).
+    var sqm = sumaSB((o.sqm != null) ? o.sqm : 21, o.veloSB);
     var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
     /* Suelo = SB0 (el ocular no oscurece el fondo por debajo del de ojo
        desnudo) y techo = 27 (suelo de detección del ojo). Con sqm > 27 los dos
@@ -879,7 +906,12 @@
       rad: rad,
       mag: prof,
       promise: fetchGaia(ra0.toFixed(5), dec0.toFixed(5), rad.toFixed(5), prof.toFixed(2)).then(function (jj) {
-        return (jj.data || []).filter(function (f) { return f[2] != null; });
+        var arr = (jj.data || []).filter(function (f) { return f[2] != null; });
+        // Campo denso: el proxy manda los momentos de la banda truncada
+        // (ADR 0014). Cuelgan del array para que viajen con las estrellas
+        // sin cambiar la firma de nadie.
+        arr.fondo = jj.fondo || null;
+        return arr;
       })
     };
     cacheGaia[clave] = nueva;
@@ -3715,6 +3747,18 @@
       aumentos: o.aumentos, perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
     return consultar(o.ra, o.dec, o.arcmin, ps1MagConsulta(magConsultaGaia(o.apertura, t, o.aumentos))).then(function (estrellas) {
+      /* Campo denso: la banda truncada llega como momentos y entra como velo
+         (cielo extra). mlim se recalcula con él: un fondo más brillante
+         también quita estrellas del límite. */
+      var velo = veloSB(estrellas.fondo);
+      if (velo != null) {
+        cielo.veloSB = velo;
+        mlim = magLimite({
+          apertura: o.apertura, aumentos: o.aumentos, transmision: t,
+          sqm: o.sqm, pupilaOjo: o.pupilaOjo, veloSB: velo
+        });
+        fondo = nivelFondo({ pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t, veloSB: velo });
+      }
       /* Estrellas y fondo se mapean en una sola curva de tono: el fondo pasa
          por la curva logarítmica y las estrellas se dibujan encima en 8
          bits, saltándosela; por eso el fondo va plano (sin capas difusas). */
@@ -3807,6 +3851,8 @@
     dibujar: dibujar,
     render: render,
     magLimite: magLimite,
+    veloSB: veloSB,
+    sumaSB: sumaSB,
     magConsultaGaia: magConsultaGaia,
     nivelFondo: nivelFondo,
     tamLienzo: tamLienzo,

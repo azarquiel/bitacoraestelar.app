@@ -67,6 +67,36 @@ eq(gaia_num_filas('{"metadata":[],"data":[]}'), 0, 'campo vacío → 0');
 eq(gaia_num_filas('esto no es json'), null, 'JSON inválido → null');
 eq(gaia_num_filas('{"otro":1}'), null, 'sin data → null');
 
+echo "fondo agregado de la banda truncada (campos densos, ADR 0014 fase 2):\n";
+// Consulta de momentos: sin ORDER BY, sobre la banda (corte, mag] exacta.
+[$agg_cds, $agg_gavo] = gaia_fondo_consultas(268.447, -34.841, 0.89, 19.5, 15.175478);
+ok(stripos($agg_cds, 'ORDER BY') === false, 'agregado CDS sin ORDER BY');
+ok(strpos($agg_cds, 'Gmag>15.175478') !== false && strpos($agg_cds, 'Gmag<=19.5') !== false,
+    'agregado CDS acota la banda (corte, mag] — sin solape con las filas servidas');
+ok(stripos($agg_cds, 'SUM(POWER(10,-0.4*Gmag))') !== false, 'agregado CDS suma el flujo G');
+ok(stripos($agg_gavo, 'phot_g_mean_mag>15.175478') !== false, 'agregado GAVO acota la banda');
+
+echo "gaia_corte (magnitud de la última estrella servida):\n";
+eq(gaia_corte('{"data":[[1,2,10.5],[1,2,15.2],[1,2,12.0]]}'), 15.2, 'corte = Gmag máxima de data');
+eq(gaia_corte('{"data":[]}'), null, 'sin filas → null');
+eq(gaia_corte('no json'), null, 'JSON inválido → null');
+
+echo "gaia_mezclar_fondo (inyección pura de los momentos):\n";
+$json_seguro = '{"metadata":[],"data":[[1,2,15.2]]}';
+$fila = [1702342, 0.1300, 3.23e-8];
+$con = gaia_mezclar_fondo($json_seguro, $fila, 15.2, 0.89, 19.5);
+$dec = json_decode($con, true);
+ok(isset($dec['fondo']), 'añade la clave fondo');
+eq($dec['fondo']['n'], 1702342, 'n de la banda');
+eq($dec['fondo']['corte'], 15.2, 'corte de la banda');
+eq($dec['fondo']['rad'], 0.89, 'radio del círculo agregado');
+ok(abs($dec['fondo']['flujo'] - 0.1300) < 1e-9, 'flujo G de la banda');
+eq($dec['data'], [[1, 2, 15.2]], 'data intacta (no duplica ni pierde filas)');
+// Guardas: sin banda (corte ≥ mag) o momentos inválidos → respuesta intacta.
+eq(gaia_mezclar_fondo($json_seguro, $fila, 19.5, 0.89, 19.5), $json_seguro, 'corte ≥ mag → sin fondo');
+eq(gaia_mezclar_fondo($json_seguro, null, 15.2, 0.89, 19.5), $json_seguro, 'agregado fallido → respuesta intacta');
+eq(gaia_mezclar_fondo($json_seguro, [0, 0.0, 0.0], 15.2, 0.89, 19.5), $json_seguro, 'banda vacía → sin fondo');
+
 // La expulsión LRU y la limpieza ya no son de este proxy: son la política
 // compartida con el del DSS. Su test es scripts/test_cache_lru.php.
 
