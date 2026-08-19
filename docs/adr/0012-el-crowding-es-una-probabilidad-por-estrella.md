@@ -86,17 +86,57 @@ precisamente el error que el ADR 0004 prohíbe.
 funde dos en un blob más brillante. En el núcleo con `a ≈ 0,5` las dos lecturas
 pintan cosas distintas y ambas conservan el flujo:
 
-- **Atenuación** — 154 estrellas al 50 % de brillo. Continua, no parpadea al
-  mover el zoom. El corte contra `mlim` lo acaba decidiendo la magnitud, no la
-  vecindad.
+- **Atenuación** — cada estrella al `a` que le toque. Continua. El corte contra
+  `mlim` lo acaba decidiendo la magnitud, no la vecindad.
 - **Bernoulli** — sorteo por estrella con semilla del `source_id` de Gaia
-  (determinista y reproducible, sin RNG global): ~77 a brillo íntegro, ~77 al
-  velo con su flujo entero. Cuenta y varianza correctas; se lleva por igual a
-  brillantes y débiles, que es lo que hace la física.
+  (determinista y reproducible, sin RNG global): se dibuja entera o va entera al
+  velo. Se lleva por igual a brillantes y débiles, que es lo que hace la física.
 
 **Criterio:** gana la que reproduzca las dos verdades del banco por anillo, no la
 que quede mejor. Si empatan en cuenta, gana la atenuación por estabilidad
 temporal. Se mide antes de tocar producción.
+
+### RESUELTO (2026-08-19): gana BERNOULLI
+
+`scripts/harness_atenuacion_bernoulli.js`, informe en
+`docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md`. **El criterio de arriba, tal
+como estaba escrito, no selecciona nada**, y eso es parte del resultado:
+
+- **La cuenta empata por álgebra, no por suerte.** `E[Bernoulli] = Σa`
+  exactamente; medido, 0,39 estrellas de diferencia sobre 1713. Un criterio
+  basado en la cuenta no podía discriminar (ADR 0005).
+- **El desempate tampoco desempata.** «Gana la atenuación por estabilidad
+  temporal» asumía que el sorteo parpadea al mover el ocular. La premisa es
+  falsa: `aCrowd(m, r, radioImagenAs)` no lleva aumentos dentro, así que `a` no
+  se mueve y la decisión sembrada por estrella tampoco. MEDIDO a 61×/120×/173×/
+  250×: **0 parpadeos de 1971 comparaciones, máx |Δa| = 0**.
+- El flujo empata (los dos conservan; el sorteo con −0,012 % sobre 200 semillas).
+- La varianza NO es el argumento a favor de Bernoulli: el hueco de 29 estrellas
+  contra la geometría está a 2,8-3,1σ del sorteo, o sea es SESGO de la ley (el
+  del paso 2), y ninguna realización lo cierra.
+
+**Lo único que las separa contra la verdad del banco es QUÉ estrellas se
+pierden**, y la geometría lo dice estrella a estrella. Atenuar resta
+`2,5·log10(a)` magnitudes, así que la estrella atenuada puede cruzar `mlim` y
+desaparecer. Cuartil más débil de las visibles, G ≥ 15,73 (referencia: 25 %):
+
+```
+conjunto que se pierde        n   G medio   % del cuartil débil
+verdad geométrica            56     15,41          50,0 %
+ATENUACIÓN (borradas mlim)   80     16,08         100,0 %
+BERNOULLI (no dibujadas)     81     15,39          38,3 %
+```
+
+Pierden el mismo número; la atenuación pierde **exclusivamente** el cuartil
+débil. Convierte un efecto de vecindad en un corte por magnitud, que es justo lo
+que esta ley venía a quitar. Bernoulli reproduce el reparto de la verdad.
+
+**Decidido: Bernoulli.** No por la cuenta ni por la varianza —ahí empata o no
+aplica— sino por el reparto de magnitudes de lo perdido.
+
+**Límite que NO arregla ninguno de los dos:** el blending funde dos estrellas en
+un blob más brillante, y los dos esquemas mandan la luz perdida al velo. Esa luz
+reaparece como fondo, no como punto. Elegir entre (A) no lo toca.
 
 ### (B) Cómo se rompe el punto fijo
 
@@ -144,7 +184,10 @@ actual de `tablaCumulo`).
    banco —Poisson invirtiendo `mCrowd`— resulta ser la MISMA fórmula que
    `aCrowd`: se degrada a comprobación de identidad para no dar un criterio vacuo
    (ADR 0005).
-3. (A) y (B), medidas.
+3. (A) ~~atenuación contra Bernoulli~~ **hecho**: gana Bernoulli.
+   `scripts/harness_atenuacion_bernoulli.js`,
+   `docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md`. (B), el esquema del punto
+   fijo, pendiente.
 4. Implementación y reescritura de guardianes.
 
 Blast radius conocido: `S1campo`/`S2campo` (ADR 0011), `CFG.delta`,
