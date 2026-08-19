@@ -159,6 +159,53 @@ iteraciones y se elige el mínimo N que estabilice por debajo de 0,01 mag. El
 criterio de parada no puede vivir dentro de la imagen (misma razón que la nota
 actual de `tablaCumulo`).
 
+### RESUELTO (2026-08-19): iterar N = 5
+
+`scripts/harness_punto_fijo.js`, informe en
+`docs/halo_v7/punto_fijo_adr0012.md`.
+
+Primero, una corrección al diagnóstico de arriba. El acoplamiento existe, pero
+no por donde este ADR decía: **`a` NO depende del cielo** —se alimenta de
+`sigma(r)`, de la LF por `Ntot` y de la imagen estelar, y en (A) se midieron 0
+cambios entre 61× y 250×—. Quien depende de `m_res` es el SEGUNDO término del
+velo: la estrella que sobrevive a la mezcla pero sigue siendo demasiado débil
+para el cielo.
+
+```
+fracción (1−a)              -> velo    (se mezcla)
+fracción a  y  m <= m_res   -> se dibuja
+fracción a  y  m >  m_res   -> velo    (la mezcla la salva, el cielo no)
+```
+
+MEDIDO sobre 512 tramos radiales, M13 a 173×:
+
+| pregunta | respuesta |
+|---|---|
+| ¿existe el punto fijo? | sí, y contrae (factor 4e-4 a 0,34) |
+| ¿es único? | sí: 2,0e-13 mag entre arranques opuestos a 30 pasadas |
+| ¿basta UNA pasada, como hoy? | **no**: deja 0,281 mag, 28 veces el listón |
+| N mínimo para <0,01 mag | **5** (peor radio 0,44 r_h, no el núcleo) |
+| coste | 4,6 ms la tabla radial entera; precalcular `a` no compra nada (1,1×) |
+| cuánto se mueve `m_res` | entre −0,064 y +0,030 mag respecto a producción |
+
+**Decidido: N = 5 fijo desde la semilla `m_res = +∞`** (todo resuelto salvo lo
+que la mezcla se lleva; es la que no depende del cielo). N fijo y no tolerancia,
+porque el criterio de parada no puede vivir dentro de la imagen; con la
+contracción medida, 5 vale para todos los radios.
+
+Nota sobre la magnitud del cambio: `m_res` se mueve menos de 0,07 mag. El velo lo
+domina el mismo flujo débil de la LF por los dos caminos. Lo que el ADR 0012
+cambia no es dónde queda el listón del cielo, es que deja de haber listón de
+crowding.
+
+**Lo que (B) NO resuelve, y el paso 4 hereda:** el velo usa la esperanza `(1−a)`
+sobre la LF —continuo, y `Fdibujado = Ftotal − velo` exacto—, pero (A) eligió
+Bernoulli para las estrellas catalogadas que se dibujan encima, y ahí el flujo
+dibujado solo es el complemento del velo EN MEDIA. `test_banda_conservacion` mide
+la partición exacta. El paso 4 tiene que fijar con qué tolerancia se mide la
+conservación cuando la mitad catalogada es un sorteo; el número sale de (A)
+(sesgo 0,012 % sobre 200 semillas, sd por anillo de 0,3 a 5,2 estrellas).
+
 ## Orden de trabajo
 
 1. ~~Test rojo primero~~ **hecho**: `scripts/test_crowding_psolo.js`, sobre las
@@ -186,8 +233,9 @@ actual de `tablaCumulo`).
    (ADR 0005).
 3. (A) ~~atenuación contra Bernoulli~~ **hecho**: gana Bernoulli.
    `scripts/harness_atenuacion_bernoulli.js`,
-   `docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md`. (B), el esquema del punto
-   fijo, pendiente.
+   `docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md`. (B) ~~el esquema del punto
+   fijo~~ **hecho**: iterar N=5, `scripts/harness_punto_fijo.js`,
+   `docs/halo_v7/punto_fijo_adr0012.md`.
 4. Implementación y reescritura de guardianes.
 
 Blast radius conocido: `S1campo`/`S2campo` (ADR 0011), `CFG.delta`,
