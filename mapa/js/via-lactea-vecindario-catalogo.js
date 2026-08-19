@@ -63,10 +63,17 @@
     return esEstrella(o);
   }
 
-  // Índice BP–RP de un objeto: bp_rp, o bprp como reserva, o null.
+  // Índice BP–RP de un objeto: bp_rp, o bprp como reserva; sin fotometría de
+  // Gaia (primarias muy brillantes, saturadas y fuera de catálogo, como Sirius
+  // o la componente K de Gamma Andromedae), se estima con el tipo espectral de
+  // SIMBAD vía BitacoraGaiaColor.bpRpPorTipo. Null si tampoco hay sp_type o no
+  // se entiende.
   function bpRpDe(o) {
     if (typeof o.bp_rp === 'number') return o.bp_rp;
     if (typeof o.bprp === 'number') return o.bprp;
+    if (o.sp_type && typeof BitacoraGaiaColor !== 'undefined') {
+      return BitacoraGaiaColor.bpRpPorTipo(o.sp_type);
+    }
     return null;
   }
 
