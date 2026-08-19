@@ -567,8 +567,41 @@ window.BitacoraBase = (function () {
     };
   }
 
+  /* ── Alias Messier ──────────────────────────────────────────────────────────
+     NGC/IC → «M n», para que el buscador local encuentre «M57» sin pasar por
+     SIMBAD. Catálogo cerrado (1966): tabla embebida, no dato descargable.
+     M40 y M45 no tienen NGC/IC y quedan fuera; M24 y M25 son los dos de IC.
+     Tolera los formatos que conviven en los catálogos del simulador:
+     «NGC 5194», «NGC6720» y «NGC0650». */
+  var MESSIER_NGC = {
+    1952: 1, 7089: 2, 5272: 3, 6121: 4, 5904: 5, 6405: 6, 6475: 7, 6523: 8,
+    6333: 9, 6254: 10, 6705: 11, 6218: 12, 6205: 13, 6402: 14, 7078: 15,
+    6611: 16, 6618: 17, 6613: 18, 6273: 19, 6514: 20, 6531: 21, 6656: 22,
+    6494: 23, 6694: 26, 6853: 27, 6626: 28, 6913: 29, 7099: 30, 224: 31,
+    221: 32, 598: 33, 1039: 34, 2168: 35, 1960: 36, 2099: 37, 1912: 38,
+    7092: 39, 2287: 41, 1976: 42, 1982: 43, 2632: 44, 2437: 46, 2422: 47,
+    2548: 48, 4472: 49, 2323: 50, 5194: 51, 7654: 52, 5024: 53, 6715: 54,
+    6809: 55, 6779: 56, 6720: 57, 4579: 58, 4621: 59, 4649: 60, 4303: 61,
+    6266: 62, 5055: 63, 4826: 64, 3623: 65, 3627: 66, 2682: 67, 4590: 68,
+    6637: 69, 6681: 70, 6838: 71, 6981: 72, 6994: 73, 628: 74, 6864: 75,
+    650: 76, 1068: 77, 2068: 78, 1904: 79, 6093: 80, 3031: 81, 3034: 82,
+    5236: 83, 4374: 84, 4382: 85, 4406: 86, 4486: 87, 4501: 88, 4552: 89,
+    4569: 90, 4548: 91, 6341: 92, 2447: 93, 4736: 94, 3351: 95, 3368: 96,
+    3587: 97, 4192: 98, 4254: 99, 4321: 100, 5457: 101, 5866: 102, 581: 103,
+    4594: 104, 3379: 105, 4258: 106, 6171: 107, 3556: 108, 3992: 109, 205: 110
+  };
+  var MESSIER_IC = { 4715: 24, 4725: 25 };
+
+  function aliasMessier(nombre) {
+    var m = /^(NGC|IC)\s*0*(\d+)$/i.exec((nombre || '').trim());
+    if (!m) return '';
+    var n = (m[1].toUpperCase() === 'NGC' ? MESSIER_NGC : MESSIER_IC)[parseInt(m[2], 10)];
+    return n ? 'M' + n : '';
+  }
+
   return {
     esc: esc,
+    aliasMessier: aliasMessier,
     leerSesame: leerSesame,
     resolutorNombre: resolutorNombre,
     montarBuscadorCatalogo: montarBuscadorCatalogo,
