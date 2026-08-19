@@ -74,20 +74,20 @@ var EQUIPOS = [
    contra 800 pasos queda en ~1e-6, tres órdenes por debajo del 1 % del ADR
    0003. Se comprueba en A2, que es exactamente esa cuenta. */
 var PASOS = 200;
-function reparto(pob, rAs, fwhmAs, m0, m1) {
+function reparto(pob, rAs, radioImagenAs, m0, m1) {
   var h = (m1 - m0) / PASOS, dib = 0, velo = 0;
   var F1 = pob.Fresuelto(m0);
   for (var i = 0; i < PASOS; i++) {
     var ma = m0 + i * h, mb = ma + h;
     var F2 = pob.Fresuelto(mb), dF = F2 - F1;
-    var a = pob.aCrowd(ma + h / 2, rAs, fwhmAs);
+    var a = pob.aCrowd(ma + h / 2, rAs, radioImagenAs);
     dib += a * dF; velo += (1 - a) * dF;
     F1 = F2;
   }
   /* Lo más brillante que m0 y lo más débil que m1 quedan fuera del recorrido: se
      asignan con la a del extremo, que allí ya está saturada (1 arriba, ~0 abajo)
      y no con una a inventada. */
-  var aArr = pob.aCrowd(m0, rAs, fwhmAs), aAba = pob.aCrowd(m1, rAs, fwhmAs);
+  var aArr = pob.aCrowd(m0, rAs, radioImagenAs), aAba = pob.aCrowd(m1, rAs, radioImagenAs);
   var Farr = pob.Fresuelto(m0), Faba = pob.Ftotal - pob.Fresuelto(m1);
   dib += aArr * Farr + aAba * Faba;
   velo += (1 - aArr) * Farr + (1 - aAba) * Faba;
@@ -126,7 +126,7 @@ function balance(cum, eq) {
     var s = pob.sigma(t.r[i]);
     if (!(s > 0)) continue;
     var peso = s * t.r[i] * t.paso;            // 2·pi·r·Sigma(r)·dr, sin el 2·pi
-    var rp = reparto(pob, t.r[i], res.fwhmAs, lim[0], lim[1]);
+    var rp = reparto(pob, t.r[i], res.radioImagenAs, lim[0], lim[1]);
     var comp = Math.abs((rp.dibujado + rp.velo) / pob.Ftotal - 1);
     if (comp > peorComp) peorComp = comp;
     dib += peso * rp.dibujado;
@@ -141,20 +141,20 @@ function balance(cum, eq) {
 }
 
 console.log('ADR 0012 · el crowding como P_solo por estrella');
-console.log('θ_sep = ' + C.config.thetaSepFwhm + ' FWHM, Δmag = ' +
+console.log('θ_sep = ' + C.config.thetaSepRadios + ' radios de imagen estelar, Δmag = ' +
             C.config.dmagCrowd + '\n');
 
 /* ── A1: la ley es una atenuación válida ─────────────────────────────────── */
 
 console.log('A1 · a(m,r) es una atenuación válida');
 var pobA = C.poblacionCacheada(delCatalogo('NGC 6205'), 0);
-var fwhmA = 2.09;                                     // el de la captura, 467 mm 173x
+var radioImagenA = 1.045;                             // el de la captura, 467 mm 173x
 var rango = [0, 1e-9, 1, 10, 60, 300, pobA.rtAs * 0.999];
 var malRango = 0, malMono = 0, peorSalto = 0;
 rango.forEach(function (rAs) {
   var previo = Infinity;
   for (var m = -2; m <= 30; m += 0.1) {
-    var a = pobA.aCrowd(m, rAs, fwhmA);
+    var a = pobA.aCrowd(m, rAs, radioImagenA);
     if (!(a >= 0 && a <= 1)) malRango++;
     if (a > previo + 1e-12) malMono++;                 // más débil no puede resolverse mejor
     previo = a;
@@ -172,7 +172,7 @@ function peorSaltoEn(pasoR) {
   var peor = 0;
   for (var m3 = 10; m3 <= 24; m3 += 0.5) {
     for (var r3 = pasoR; r3 < pobA.rtAs; r3 += pasoR) {
-      var salto = Math.abs(pobA.aCrowd(m3, r3, fwhmA) - pobA.aCrowd(m3, r3 - pasoR, fwhmA));
+      var salto = Math.abs(pobA.aCrowd(m3, r3, radioImagenA) - pobA.aCrowd(m3, r3 - pasoR, radioImagenA));
       if (salto > peor) peor = salto;
     }
   }

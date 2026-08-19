@@ -135,7 +135,7 @@ function medir(cum, cfg) {
   }
   return {
     id: cum.id, D: cfg.D, MAG: cfg.MAG, sqm: cfg.sqm, arcmin: ARCMIN, size: SIZE,
-    fwhmAs: res.fwhmAs, rcAs: pob.rcAs, rhAs: cum.rh * 60, rtAs: pob.rtAs,
+    radioImagenAs: res.radioImagenAs, rcAs: pob.rcAs, rhAs: cum.rh * 60, rtAs: pob.rtAs,
     dim: ctx.dim, T: ctx.T, SBe: ctx.SBe, Cmin: ctx.Cmin,
     // Fcielo es el flujo del cielo SIN atenuar: el marco en el que trabaja todo
     // el render (pintarFot pinta el objeto como incremento de contraste sobre

@@ -4,7 +4,7 @@
 
    La ley que se calibra es `pob.aCrowd` de producción, no una copia (ADR 0008):
 
-     a(m, r) = exp(−n(>= m+Δmag, r) · π θ_sep²),   θ_sep = thetaSepFwhm · FWHM
+     a(m, r) = exp(−n(>= m+Δmag, r) · π θ_sep²),   θ_sep = thetaSepRadios · radioImagenAs
 
    La predicción del modelo en un anillo es Σ a(m_i, r_i) sobre las estrellas
    reales de Gaia visibles en él: cuántas espera ver solas en su beam. Enfrente,
@@ -50,7 +50,8 @@ var C = global.window.BitacoraCumulos;
 function arg(n, def) { var i = process.argv.indexOf('--' + n); return i > 0 ? +process.argv[i + 1] : def; }
 var SQM = arg('sqm', 21), D = arg('D', 467), MAG = arg('mag', 173), PROC = 720;
 var ARCMIN = 0.47 * 60;
-var THETAS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];   // en unidades de FWHM
+var THETAS = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0];     // en radios de imagen estelar
+// (la mitad de estos números eran el θ/FWHM del informe del paso 2: misma rejilla)
 var DMAGS = [0.5, 0.75, 1.0];                    // «comparable»: cuánto más débil mezcla
 var ANILLOS = [0.25, 0.5, 1, 2, 4, 8];
 
@@ -74,7 +75,7 @@ var base = R.pintarCumulo(new Float32Array(PROC * PROC), M13, {
   ra0: M13.ra, dec0: M13.dec, arcmin: ARCMIN, size: PROC,
   cielo: cielo, apertura: D, estrellas: visibles
 });
-var pob = base.poblacion, fwhm = base.fwhmAs, omegaRes = Math.PI * fwhm * fwhm / 4;
+var pob = base.poblacion, rImg = base.radioImagenAs, omegaRes = Math.PI * rImg * rImg;
 
 var cos0 = Math.cos(M13.dec * Math.PI / 180);
 function dx(a, b) { return (((a - b + 540) % 360) - 180) * cos0 * 3600; }
@@ -92,7 +93,7 @@ var rI = visibles.map(radio), aI = visibles.map(function (s, i) { return anillo(
    comparable MÁS CERCANO. Con eso, separable(θ) es una comparación, y el barrido
    de θ sale gratis. El vecino puede ser cualquier estrella del fixture, no solo
    las visibles: una un poco más débil que mlim mezcla igual de bien. */
-var RMAX = Math.max.apply(null, THETAS) * fwhm;
+var RMAX = Math.max.apply(null, THETAS) * rImg;
 function distanciasMinimas(dmag) {
   var d = new Float64Array(visibles.length);
   for (var i = 0; i < visibles.length; i++) {
@@ -130,23 +131,23 @@ function densidadPorOmega(rAs, m) {           // n(>=m, r)·Ω_res, adimensional
 /* Predicción del modelo con la CFG puesta: se toca la config y se llama a la ley
    de producción, mismo camino que usaría el render. */
 function modelo(theta, dmag) {
-  var gT = C.config.thetaSepFwhm, gD = C.config.dmagCrowd;
-  C.config.thetaSepFwhm = theta; C.config.dmagCrowd = dmag;
+  var gT = C.config.thetaSepRadios, gD = C.config.dmagCrowd;
+  C.config.thetaSepRadios = theta; C.config.dmagCrowd = dmag;
   try {
     var n = ANILLOS.map(function () { return 0; });
     for (var i = 0; i < visibles.length; i++) {
       if (aI[i] < 0) continue;
-      n[aI[i]] += pob.aCrowd(visibles[i][2], rI[i], fwhm);
+      n[aI[i]] += pob.aCrowd(visibles[i][2], rI[i], rImg);
     }
     return n;
-  } finally { C.config.thetaSepFwhm = gT; C.config.dmagCrowd = gD; }
+  } finally { C.config.thetaSepRadios = gT; C.config.dmagCrowd = gD; }
 }
 
 var nGaia = ANILLOS.map(function () { return 0; });
 for (var i = 0; i < visibles.length; i++) if (aI[i] >= 0) nGaia[aI[i]]++;
 
 console.log('M13 · D=' + D + 'mm  M=' + MAG + 'x  SQM=' + SQM.toFixed(1) +
-            '  mlim=' + mlim.toFixed(2) + '  fwhm=' + fwhm.toFixed(2) +
+            '  mlim=' + mlim.toFixed(2) + '  r_img=' + rImg.toFixed(2) +
             '"  Ω_res=' + omegaRes.toFixed(2) + ' as²');
 console.log('Gaia con G<=mlim: ' + visibles.length + ' (fixture ' + gaia.length + ')');
 console.log('Referencia: el render con k=' + C.config.crowdingCriterion +
@@ -165,10 +166,10 @@ var resumen = [], maxIdentidad = 0;
 DMAGS.forEach(function (dmag) {
   var dmin = distanciasMinimas(dmag);
   console.log('── Δmag = ' + dmag.toFixed(2) + ' ' + '─'.repeat(56));
-  console.log(' θ/fwhm   θ("]      fuente' +
+  console.log(' θ/r_img  θ("]      fuente' +
               ANILLOS.map(function (a) { return ('<=' + a).padStart(9); }).join('') + '     total');
   THETAS.forEach(function (theta) {
-    var th = theta * fwhm;
+    var th = theta * rImg;
     var geo = ANILLOS.map(function () { return 0; });
     var poi = ANILLOS.map(function () { return 0; });
     for (var i = 0; i < visibles.length; i++) {
@@ -219,7 +220,7 @@ DMAGS.forEach(function (dmag) {
 });
 
 console.log('── Resumen: peor razón de déficit fuera del núcleo (1,00 = clavado) ──');
-console.log(' Δmag  θ/fwhm   peor razón   en r/r_h   anillos usados   núcleo   total modelo');
+console.log(' Δmag θ/r_img   peor razón   en r/r_h   anillos usados   núcleo   total modelo');
 resumen.sort(function (a, b) { return a.peor - b.peor; });
 resumen.forEach(function (r) {
   console.log(' ' + r.dmag.toFixed(2).padStart(4) + r.theta.toFixed(2).padStart(8) +

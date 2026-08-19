@@ -242,7 +242,7 @@ var GRID = 1024, omegas = {};
     var rep = repartoEnLienzo(P);
     var razon2 = (rep.campo + rep.resuelto) / rep.total;
     var razonPintado = P.res.Fmedio / rep.campo;
-    var omega = Math.max(Math.PI * Math.pow(P.res.fwhmAs / 2, 2),
+    var omega = Math.max(Math.PI * Math.pow(P.res.radioImagenAs, 2),
                          Math.pow(arcmin * 60 / GRID, 2));
     omegas[caso[0] + caso[2]] = (omegas[caso[0] + caso[2]] || []).concat(omega.toFixed(3));
     ok(Math.abs(razon2 - 1) <= 0.01 && Math.abs(razonPintado - 1) <= 0.01,

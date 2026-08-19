@@ -43,10 +43,20 @@
     delta: 1.0,
     // ADR 0012: la ley que va a sustituir a crowdingCriterion y delta. Todavía
     // NO la usa el render; existe para que el test rojo de conservación pueda
-    // medirla sin reimplementarla (ADR 0008). Separación mínima resoluble en
-    // FWHM (convención: 1 FWHM; Rayleigh, Dawes y Sparrow difieren) y salto de
-    // magnitud a partir del cual una vecina deja de fundir a la débil.
-    thetaSepFwhm: 1.0,
+    // medirla sin reimplementarla (ADR 0008).
+    //
+    // Separación mínima resoluble, en RADIOS de imagen estelar
+    // (`radioImagenEstelar` = Airy ⊕ seeing, bitacora-gaia-render.js). El 1,0 es
+    // el criterio de Rayleigh literal —el centro de una estrella cae en el
+    // primer anillo oscuro de la otra— aplicado a la imagen que el render dibuja
+    // de verdad, y es el mismo eje óptico con el que `resolucionDoble` juzga una
+    // doble. No es un ajuste: ver docs/halo_v7/ancla_thetasep_criterio_dobles.md.
+    // Antes esto era `thetaSepFwhm: 1.0` medido en un "FWHM" que valía el doble
+    // de este radio, así que equivalía a 2× Rayleigh.
+    thetaSepRadios: 1.0,
+    // Salto de magnitud a partir del cual una vecina deja de fundir a la débil.
+    // SIN ANCLA PROPIA: el barrido del paso 2 no lo distingue y la literatura de
+    // dobles solo ofrece penalizaciones heurísticas por Δm. Declarado, no medido.
     dmagCrowd: 0.75,
     // Completitud de Gaia: sigmoide de dos constantes. El codo está donde el
     // catálogo empieza a perder estrellas en campo abierto; en el núcleo lo
@@ -304,10 +314,10 @@
        escalón en r dibuja anillos (invariante 7). N(≥m) = Ntot − cola(colaN, m). */
     var colaN = new Float64Array(n + 1);
     for (i = n - 1; i >= 0; i--) colaN[i] = colaN[i + 1] + num[i];
-    function aCrowd(m, rAs, fwhmAs) {
+    function aCrowd(m, rAs, radioImagenAs) {
       var s = sigma(rAs);
-      if (!(s > 0) || !(fwhmAs > 0)) return 1;
-      var thSep = CFG.thetaSepFwhm * fwhmAs;
+      if (!(s > 0) || !(radioImagenAs > 0)) return 1;
+      var thSep = CFG.thetaSepRadios * radioImagenAs;
       var masBrillantes = colaN[0] - cola(colaN, m + CFG.dmagCrowd);
       return Math.exp(-s * masBrillantes * Math.PI * thSep * thSep);
     }

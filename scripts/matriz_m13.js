@@ -75,7 +75,7 @@ function fila(D, MAG, sqm) {
     // H2c le pide. 1 = justo en el umbral; 0,1 = necesita diez veces más.
     granoSobreUmbral: maximo(razonGrano(t, res.cGrano, res.atenGrano)),
     estrellas: res.estrellas.length,
-    fwhm: res.fwhmAs
+    radioImagen: res.radioImagenAs
   };
 }
 
@@ -119,10 +119,10 @@ function maximo(v) { var m = 0; for (var i = 0; i < v.length; i++) if (v[i] > m)
 
 function informe(titulo, filas) {
   console.log('\n' + titulo);
-  console.log('  equipo          FWHM   f_res(nucleo)  r_50/r_h  r_vis/r_h  s_halo(0)  s_grano_max  grano/umbral');
+  console.log('  equipo         r_img   f_res(nucleo)  r_50/r_h  r_vis/r_h  s_halo(0)  s_grano_max  grano/umbral');
   filas.forEach(function (f) {
     console.log('  ' + (f.D + ' mm ' + f.MAG + 'x ' + f.sqm.toFixed(1)).padEnd(16) +
-      f.fwhm.toFixed(2).padStart(5) + '"' +
+      f.radioImagen.toFixed(2).padStart(5) + '"' +
       (f.fResNucleo * 100).toFixed(1).padStart(12) + ' %' +
       f.r50.toFixed(2).padStart(10) +
       f.rVis.toFixed(2).padStart(11) +
@@ -239,8 +239,8 @@ ok(M200.rVis !== M100.rVis,
 console.log('\nHallazgos (§10, Fase 3):');
 console.log('  · El núcleo satura en ' + (F3.fResNucleo * 100).toFixed(0) +
   ' % de flujo resuelto y no pasa de ahí: dentro manda m_crowd, que solo mejora');
-console.log('    por la FWHM, y la FWHM la fija el seeing (' + F2.fwhm.toFixed(2) +
-  '" a 200 mm, ' + F3.fwhm.toFixed(2) + '" a 400 mm). Abrir apertura mueve la');
+console.log('    por el radio de la imagen estelar, que lo fija el seeing (' + F2.radioImagen.toFixed(2) +
+  '" a 200 mm, ' + F3.radioImagen.toFixed(2) + '" a 400 mm). Abrir apertura mueve la');
 console.log('    frontera hacia dentro, no vacía el centro.');
 console.log('  · s_grano = 0 en las cuatro filas, y no por poco: el contraste de la textura se');
 console.log('    queda entre el ' + (100 * F1.granoSobreUmbral).toFixed(1) + ' % y el ' +

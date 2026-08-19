@@ -1,6 +1,14 @@
 # ADR 0012 · paso 2: calibración de θ_sep
 
-Arnés: `scripts/harness_thetasep.js`. Barre `θ_sep ∈ [0,5 … 2,0]·FWHM` y
+> **Nota de unidades (2026-08-19).** Este informe se escribió cuando `θ_sep` se
+> medía en el antiguo `fwhmAs`, que no era una FWHM: valía DOS radios de imagen
+> estelar. Hoy la constante es `CFG.thetaSepRadios` y el arnés barre radios. La
+> rejilla física es la misma; para leer las tablas de abajo, **radios = 2 ×
+> (θ/FWHM)**. El ancla del ADR 0012 —`θ_sep = 1 radio`— es el `0,50` de aquí.
+> Ver `ancla_thetasep_criterio_dobles.md`.
+
+Arnés: `scripts/harness_thetasep.js`. Barre `θ_sep ∈ [1,0 … 4,0]` radios de
+imagen estelar (= `[0,5 … 2,0]·FWHM` en la nomenclatura vieja de las tablas) y
 `Δmag ∈ {0,50 · 0,75 · 1,00}` llamando a `pob.aCrowd` de producción (ADR 0008),
 y lo enfrenta a la verdad geométrica —estrellas del fixture de Gaia sin vecino
 comparable dentro de θ_sep, solo distancias, sin ley dentro—.
@@ -27,7 +35,7 @@ dentro de las dos cotas» para las 18 combinaciones del barrido, porque una de
 las cotas *era* la predicción.
 
 Se conserva en el arnés como comprobación de identidad: valida la bisección y
-que lo implementado en `bitacora-cumulos.js:307-313` es la ley que el ADR
+que lo implementado en `bitacora-cumulos.js` (`aCrowd`) es la ley que el ADR
 escribió. No como evidencia.
 
 ## 2. Lo que discrimina es el déficit, no la cuenta
@@ -35,9 +43,9 @@ escribió. No como evidencia.
 Fuera de r_h la mezcla apenas muerde: modelo y geometría coinciden con cualquier
 θ_sep. La señal vive en el DÉFICIT por anillo —Gaia menos resueltas, las
 estrellas que la mezcla se lleva—. MEDIDO, M13, D=467 mm, M=173×, SQM 21,
-FWHM 2,09″, Δmag = 0,75 (Gaia visible: 154 · 282 · 441 · 438 · 280 · 203):
+beam: radio de imagen 1,04″ (el «FWHM 2,09″» de antes), Δmag = 0,75 (Gaia visible: 154 · 282 · 441 · 438 · 280 · 203):
 
-| θ/FWHM | déficit | ≤0,25 | ≤0,5 | ≤1 | ≤2 | razón peor |
+| θ/FWHM (= radios/2) | déficit | ≤0,25 | ≤0,5 | ≤1 | ≤2 | razón peor |
 |---|---|---|---|---|---|---|
 | 0,75 | modelo / geom. | 52/42 | 64/50 | 44/39 | 14/12 | 1,28 |
 | 1,00 | modelo / geom. | 77/65 | 101/89 | 75/89 | 24/25 | 1,19 |
@@ -52,8 +60,8 @@ que cubren dos órdenes de magnitud en densidad. La comparación es con lo que e
 ADR 0012 documentó para el umbral duro: el `k` que cada anillo necesitaba iba de
 18,8 a 1576,4. Eso era el fallo de forma, y ya no está.
 
-MEDIDO además: `FWHM` no depende del aumento (2,09″ tanto a 61× como a 173×;
-2,43″ con D=200 mm). `θ_sep` en unidades de FWHM es por tanto independiente del
+MEDIDO además: el radio de imagen estelar no depende del aumento (1,04″ tanto a
+61× como a 173×; 1,21″ con D=200 mm). `θ_sep` en radios es por tanto independiente del
 ocular por construcción, y el eje de equipo que importa es apertura + seeing. A
 D=200 mm el patrón de razones se repite (0,92-1,47), con menos estadística
 porque `mlim` baja a 14,60 y el déficit total cae a ~75 estrellas.
@@ -67,7 +75,7 @@ peor razón 1,11-1,38 en todo el barrido de 18 combinaciones —salvo Δmag=1,00
 forma radial, no el valor.
 
 Y el valor importa: el ADR ya midió que en el núcleo de M13 salen 128 / 77 / 41
-estrellas para θ_sep = 0,5 / 1,0 / 1,5 FWHM. Un factor 3 en la cuenta dentro de
+estrellas para θ_sep = 1 / 2 / 3 radios de imagen estelar. Un factor 3 en la cuenta dentro de
 un rango que la verdad no distingue.
 
 Consecuencia para el paso 4: `θ_sep` entra como constante anclada en la
@@ -79,6 +87,11 @@ elegirlo por nada.
 **Sin fuente primaria todavía** para el ancla: falta el criterio cuantitativo de
 separación visual con el que el simulador ya juzga las dobles. Es lo que hay que
 leer antes de fijar el número, y no está resuelto en este documento.
+
+**RESUELTO** en `ancla_thetasep_criterio_dobles.md`: el criterio existe
+(`resolucionDoble`, eje óptico Dawes) y comparte función con el render. Ancla:
+`θ_sep = 1 radio de imagen estelar` = Rayleigh literal sobre la imagen que se
+dibuja.
 
 ## 5. El residuo que no se va
 
@@ -97,6 +110,6 @@ anillo. No bloquea el paso 3.
 
 Pasos 3 y 4 del ADR 0012, en ese orden: (A) atenuación contra Bernoulli, (B)
 esquema del punto fijo, y solo después llamar a `aCrowd` desde el render. Nada de
-esto se ha tocado: `bitacora-cumulos.js:413` sigue exponiendo la ley sin llamador,
+esto se ha tocado: `bitacora-cumulos.js` sigue exponiendo `aCrowd` sin llamador,
 y `scripts/test_crowding_psolo.js` sigue con A3 en rojo, que es su resultado
 esperado.

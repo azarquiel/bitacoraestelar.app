@@ -53,10 +53,25 @@ tiempo, y elegirlo por cómo queda la imagen violaría el ADR 0004.
 4. Cambio honesto de parámetros: se va `k` (semi-libre, rango 10–50 en la
    literatura) y `δ`; entran `θ_sep` y `Δmag`. **No es una ley sin parámetros
    libres.** Lo que se gana es que la forma radial sale sola, y que `θ_sep` se
-   puede anclar contra las dos verdades independientes y contra la resolución
-   real del instrumento, cosa que `k` no permite. La sensibilidad es fuerte y hay
-   que calibrarla, no elegirla: en el núcleo de M13, 128 / 77 / 41 estrellas para
-   `θ_sep` = 0,5 / 1,0 / 1,5 FWHM.
+   puede anclar contra la resolución real del instrumento, cosa que `k` no
+   permite. La sensibilidad es fuerte y hay que anclarla, no elegirla: en el
+   núcleo de M13, 128 / 77 / 41 estrellas para `θ_sep` = 1 / 2 / 3 radios de
+   imagen estelar.
+
+   **ANCLADO (2026-08-19).** `θ_sep = 1 radio de imagen estelar`
+   (`radioImagenEstelar` = Airy ⊕ seeing): el criterio de Rayleigh literal sobre
+   la imagen que el render dibuja de verdad, que es el mismo eje óptico con el
+   que `resolucionDoble` juzga una doble. No sale de ajustar nada; el barrido no
+   lo podía fijar (ver el paso 2 del orden de trabajo). De paso se corrige una
+   unidad falsa: el antiguo `fwhmAs` valía DOS radios y no era una FWHM
+   —`radioAiry` es el radio del primer anillo oscuro—, así que el `thetaSepFwhm:
+   1,0` de antes equivalía a 2× Rayleigh. Hoy la constante es
+   `CFG.thetaSepRadios = 1,0` y el render expone `radioImagenAs`. Informe:
+   `docs/halo_v7/ancla_thetasep_criterio_dobles.md`.
+
+   `Δmag = 0,75` se queda **SIN ANCLA PROPIA**, y así se declara: el barrido no
+   lo distingue y la literatura de dobles solo ofrece penalizaciones heurísticas
+   por Δm. Es el parámetro débil de la ley.
 
 ## Las dos sub-decisiones que se cierran MIDIENDO, no aquí
 
@@ -110,14 +125,25 @@ actual de `tablaCumulo`).
    12 filas de cúmulo × equipo. Tres asserts: A1 (la ley es una atenuación
    válida: `0 ≤ a ≤ 1`, monótona en `m`, continua en `r`) y A2 (complemento
    exacto, residuo 2,4e-15) están **verdes**; A3 —el velo del render es el
-   complemento de `P_solo`— está **rojo**, con una fuga del 16,4 % al 46,7 %
-   según cúmulo y equipo. La ley vive en la Capa 1 (`pob.aCrowd`, con
-   `CFG.thetaSepFwhm` y `CFG.dmagCrowd`) y todavía no la llama nadie: el test
+   complemento de `P_solo`— está **rojo**, con una fuga del 30,5 % al 60,1 %
+   según cúmulo y equipo (medido con `θ_sep = 1 radio`; la fuga crece al bajar
+   la apertura, porque el velo del render se dispara y el de la ley no). La ley vive en la Capa 1 (`pob.aCrowd`, con
+   `CFG.thetaSepRadios` y `CFG.dmagCrowd`) y todavía no la llama nadie: el test
    mide producción, no se reimplementa la ley (ADR 0008).
 
    NO entra en `suite_halo_v7` hasta que A3 esté verde; hasta entonces se corre
    suelto y su exit code 1 es el resultado esperado.
-2. Barrido de `θ_sep` contra las dos verdades, por anillo. Calibración.
+2. ~~Barrido de `θ_sep` contra las dos verdades, por anillo~~ **hecho**:
+   `scripts/harness_thetasep.js`, informe en
+   `docs/halo_v7/calibracion_thetasep_adr0012.md`. Tres resultados. La FORMA
+   pasa: un solo `θ_sep` reproduce el déficit por anillo dentro de un factor 1,2
+   sobre dos órdenes de magnitud en densidad, frente al `k` que necesitaba
+   18,8-1576,4. El VALOR no se puede fijar así: la verdad geométrica se construye
+   con el mismo `θ_sep` y se mueve con él —peor razón 1,11-1,38 en todo el
+   barrido, sin mínimo—, de ahí el ancla del punto 4. Y la segunda verdad del
+   banco —Poisson invirtiendo `mCrowd`— resulta ser la MISMA fórmula que
+   `aCrowd`: se degrada a comprobación de identidad para no dar un criterio vacuo
+   (ADR 0005).
 3. (A) y (B), medidas.
 4. Implementación y reescritura de guardianes.
 
@@ -136,9 +162,28 @@ atenuación dos veces.
 
 ## Lo que esta decisión NO arregla
 
-No va a hacer que el render se parezca más a una foto de M13. Dirección medida
-del cambio: el núcleo GANA estrellas (70 → 77–89) y la corona PIERDE más
-(403 → 366 dentro de 1 r_h); el cúmulo entero baja de 1575 a ~1517. La foto
-resuelve mejor que el beam de 2,09″ a 173× y enseña pares que el simulador no
-debe separar. Se hace porque la ley actual es incorrecta en la forma, no para
-subir la cuenta.
+No va a hacer que el render se parezca más a una foto de M13. Se hace porque la
+ley actual es incorrecta en la FORMA, no para mover la cuenta.
+
+**Previsión corregida (2026-08-19), con el ancla `θ_sep = 1 radio de imagen
+estelar`.** La primera redacción de este ADR daba «el núcleo gana estrellas
+(70 → 77–89), la corona pierde más (403 → 366), el cúmulo entero baja de 1575 a
+~1517». Esos números eran los de `θ_sep = 2 radios`, o sea la unidad falsa que el
+punto 4 corrige. Con el ancla, medido en `harness_thetasep.js` (M13, D=467 mm,
+173×, SQM 21, Δmag 0,75) contra el render de hoy con `k = 30`
+(`harness_halo_estrellas.js`):
+
+```
+                      hoy (k=30)   con el ancla
+núcleo ≤0,25 r_h            70          128
+corona 0,5–1 r_h           403          420
+cúmulo entero (≤8 r_h)    1575         1713
+```
+
+**La dirección se invierte: el cúmulo GANA estrellas, no las pierde.** Eso no es
+un argumento a favor ni en contra —elegir el parámetro por la cuenta o por cómo
+queda la imagen sigue prohibido (ADR 0004)—, pero la frase «el núcleo gana y la
+corona pierde más» ya no describe el resultado esperado y no debe citarse.
+
+Sigue en pie lo demás: la foto resuelve mejor que el beam de 2,09″ a 173× y
+enseña pares que el simulador no debe separar.

@@ -5,6 +5,12 @@ Pregunta: antes de meter `aCrowd` en el render hay que fijar el VALOR de
 (`calibracion_thetasep_adr0012.md`). ¿Hay ya un criterio de separación visual en
 el simulador que sirva de ancla, en vez de inventar uno para cúmulos?
 
+> **Estado (2026-08-19): APLICADO.** El apartado 7 está implementado. Hoy la
+> constante es `CFG.thetaSepRadios = 1,0` (radios de imagen estelar) y el render
+> expone `radioImagenAs`; el `fwhmAs` que aparece más abajo ya no existe. Las
+> equivalencias: `thetaSepFwhm 0,50` = `thetaSepRadios 1,0`, y `fwhmAs` =
+> 2 × `radioImagenAs`.
+
 **Sí, y en su mitad óptica ya es el MISMO código.** Lo que hay que corregir no es
 la falta de criterio: es que `thetaSepFwhm` está expresado en una unidad que no
 es la que su nombre dice, y por eso `1,0` no significa lo que parece.
@@ -34,8 +40,9 @@ La imagen estelar del render:
   anillo oscuro, o sea **el criterio de Rayleigh**.
 - `bitacora-gaia-render.js:1206-1211` — `radioImagenEstelar(D) = √(radioAiry² +
   (seeing/2)²)`, con `seeingArcsec = 2,0` (`:800`).
-- `bitacora-gaia-render.js:1564` — **el cúmulo lo llama a él**:
-  `var fwhmAs = 2 * radioImagenEstelar(o.apertura);`
+- **el cúmulo lo llama a él**, en `pintarCumulo`: entonces
+  `var fwhmAs = 2 * radioImagenEstelar(o.apertura);`, hoy
+  `var radioImagenAs = radioImagenEstelar(o.apertura);`
 
 Es decir: el beam con el que se mide el crowding y el disco con el que se dibujan
 las estrellas salen de la misma función, y `test_estrella_fisica.js:57-62` valida
@@ -67,7 +74,7 @@ a la imagen que el render dibuja de verdad —Airy ⊕ seeing— eso es exactame
 `radioImagenEstelar`, y en las unidades actuales:
 
 ```
-θ_sep = radioImagenEstelar = fwhmAs / 2   →   thetaSepFwhm = 0,50
+θ_sep = radioImagenEstelar = fwhmAs / 2   ->   thetaSepRadios = 1,0
 ```
 
 Cero constantes nuevas, misma función que las dobles, y el seeing entra donde ya
@@ -110,10 +117,10 @@ en `θ_sep`, por tres razones:
 Pasar de `thetaSepFwhm` 1,0 a 0,5 no es cosmético. Del barrido del paso 2, M13,
 D=467 mm, 173×, Δmag 0,75:
 
-| thetaSepFwhm | núcleo (≤0,25 r_h) | cúmulo entero |
-|---|---|---|
-| 1,00 | 77 | 1517 |
-| 0,50 | 128 | 1713 |
+| thetaSepFwhm (viejo) | thetaSepRadios (hoy) | núcleo (≤0,25 r_h) | cúmulo entero |
+|---|---|---|---|
+| 1,00 | 2,0 | 77 | 1517 |
+| 0,50 | **1,0** (ancla) | **128** | **1713** |
 
 Referencias: el render de hoy con `k = 30` entrega 1575 estrellas, y el ADR 0012
 anunciaba «el cúmulo entero baja de 1575 a ~1517» — ese número correspondía a
@@ -128,14 +135,17 @@ pierde más» deja de describir el resultado esperado.
 
 ## 7. Recomendación
 
-1. Anclar `θ_sep = radioImagenEstelar`, o sea `thetaSepFwhm = 0,50` con la
-   definición actual de `fwhmAs`. Es Rayleigh sobre la imagen real, y es el mismo
-   eje óptico que ya juzga las dobles.
-2. Arreglar el nombre en el mismo cambio: `fwhmAs` no es una FWHM y el comentario
-   de `bitacora-cumulos.js:47` dice lo contrario. O se renombra a algo como
-   `beamAs`/`diamImagenAs`, o `thetaSepFwhm` pasa a expresarse en radios de
-   imagen estelar. Sin eso, el 0,50 parecerá un ajuste y no un ancla.
-3. Corregir en el ADR 0012 la previsión de estrellas antes de tocar el render.
+1. ~~Anclar `θ_sep = radioImagenEstelar`~~ **hecho**: `CFG.thetaSepRadios = 1,0`.
+   Es Rayleigh sobre la imagen real, y es el mismo eje óptico que ya juzga las
+   dobles.
+2. ~~Arreglar el nombre en el mismo cambio~~ **hecho**: se elimina el concepto de
+   FWHM donde no era una FWHM. `fwhmAs` pasa a `radioImagenAs` en el render (y en
+   los 9 arneses/tests que lo consumían), y `thetaSepFwhm` pasa a
+   `thetaSepRadios`, expresado en radios de imagen estelar. Cambio numéricamente
+   neutro comprobado: `suite_halo_v7` sigue en 10 superados · 0 fallidos ·
+   0 vacuos · 247 asserts.
+3. ~~Corregir en el ADR 0012 la previsión de estrellas~~ **hecho**: sección «Lo
+   que esta decisión NO arregla».
 4. `Δmag = 0,75` se queda sin ancla propia: el barrido del paso 2 no lo
    distingue y `notas-resolucion-dobles.md` §4 solo ofrece una penalización
    heurística por Δm (estilo Lord Contrast Index), marcada allí como no física.

@@ -1562,8 +1562,15 @@
     if (!C || !o.cielo) return null;
     var pob = C.poblacionCacheada(cumulo, o.realization);
     if (!pob) return null;
-    var fwhmAs = 2 * radioImagenEstelar(o.apertura);
-    if (!(fwhmAs > 0)) return null;
+    /* La escala del beam es el RADIO de la imagen estelar, Airy ⊕ seeing, el
+       mismo `radioImagenEstelar` con el que se dibujan las estrellas. Hasta aquí
+       se llamaba `fwhmAs` y valía el doble, pero no era una FWHM: `radioAiry` es
+       el radio del primer anillo oscuro (Rayleigh), así que el doble era el
+       DIÁMETRO de ese anillo. Todos los usos de abajo lo dividían por 2 o lo
+       elevaban al cuadrado entre 4 para deshacerlo. Ver
+       docs/halo_v7/ancla_thetasep_criterio_dobles.md. */
+    var radioImagenAs = radioImagenEstelar(o.apertura);
+    if (!(radioImagenAs > 0)) return null;
 
     var SIZE = o.size, escv = SIZE / (o.arcmin / 60);   // px por grado
     var pxPorAs = escv / 3600, asPorPx = 1 / pxPorAs;
@@ -1601,7 +1608,7 @@
        tiene el cúmulo —medido en M13 a 173×, el píxel de 2,35″ ganaba a la Ω
        óptica y hundía m_res 0,54 mag en el núcleo, 86 estrellas de 1071
        (harness_halo_estrellas.js). De ahí las dos Ω. */
-    var omegaRes = Math.PI * (fwhmAs / 2) * (fwhmAs / 2);
+    var omegaRes = Math.PI * radioImagenAs * radioImagenAs;
     var omegaBeam = Math.max(omegaRes, areaPx);
     var thBeamAs = 2 * Math.sqrt(omegaBeam / Math.PI);   // diámetro equivalente
 
@@ -1633,7 +1640,7 @@
        el patrón queda clavado al cielo. Lo que sí cambia con el zoom es la
        AMPLITUD, porque un píxel grande promedia el grano y lo aplana; de eso se
        encarga la Ω de tablaCumulo. Mover el paso también rompería el anclaje. */
-    var pasoGrano = fwhmAs / 2;
+    var pasoGrano = radioImagenAs;
     var alcance = pob.rtAs * pxPorAs;
     var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
     var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
@@ -1667,7 +1674,7 @@
     }
 
     return {
-      tabla: tabla, poblacion: pob, fwhmAs: fwhmAs, cHalo: cHalo, cGrano: cGrano,
+      tabla: tabla, poblacion: pob, radioImagenAs: radioImagenAs, cHalo: cHalo, cGrano: cGrano,
       omegaBeam: omegaBeam, omegaRes: omegaRes, thBeamAs: thBeamAs, thGranoAs: thGranoAs, atenGrano: atenGrano,
       Fmedio: Fmedio, Fpintado: Fpintado,
       estrellas: estrellasCumulo(pob, cumulo, tabla, o, C)

@@ -143,11 +143,11 @@ var AFOV = 68;
      píxel a píxel, dividida por la que la tabla pidió en ese mismo píxel, tiene
      que valer 1. Normalizado así no hay promediado radial de por medio. */
   /* El error del estimador va con las CELDAS de grano independientes, no con los
-     píxeles: la celda mide fwhm/2 de lado y a 514× cabe en ella media docena de
+     píxeles: la celda mide un radio de imagen estelar de lado y a 514× cabe en ella media docena de
      píxeles, que no aportan medidas nuevas. Con eso, el 5 % por anillo del
      documento se cumple en el conjunto de la corona (abajo) y por anillo se
      exige lo que el estimador puede dar, 3 sigma. */
-  var celda = Math.max(m.areaPx, (m.fwhmAs / 2) * (m.fwhmAs / 2));
+  var celda = Math.max(m.areaPx, m.radioImagenAs * m.radioImagenAs);
   var peor = 0, peorEn = 0, vistos = 0, fuera = 0;
   m.granoEn(0.5 * rc, 3 * rc, 8).forEach(function (a) {
     // El mínimo de píxeles es solo para no medir sobre un puñado; la exigencia
