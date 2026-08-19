@@ -48,7 +48,11 @@ const GAIA_REQUEST_TIMEOUT = 55;                  // s: timeout TOTAL de la peti
 const GAIA_QUANT_RADEC     = 0.001;               // ° : cuantización del centro (~3,6")
 const GAIA_QUANT_RAD       = 0.01;                // ° : cuantización del radio (se redondea ↑)
 const GAIA_QUANT_MAG       = 0.5;                 // mag: cuantización del límite (se redondea ↑)
-const GAIA_MAX_ROWS        = 40000;              // TOP N de la consulta
+const GAIA_MAX_ROWS        = 40000;              // TOP N de la consulta SEGURA (campos densos)
+/* Techo COMPUTACIONAL de la sonda sin ORDER BY. No es un parámetro físico: el
+   límite físico es el `mag` que manda el cliente (magConsultaGaia). Referencia
+   medida (2026-08): ~199 000 filas sin ORDER BY llegan en ~2 s del TAP de CDS. */
+const GAIA_TECHO_FILAS     = 200000;
 const GAIA_MAX_RAD         = 4.5;                // ° : radio máximo aceptado (6° de lado + margen)
 const GAIA_MAX_MAG         = 20.0;               // mag: límite máximo aceptado (= GAIA_MAG_TOPE en bitacora-gaia-render.js)
 const GAIA_CLEANUP_EVERY   = 300;                // s: limpieza como mucho cada 5 min
@@ -92,18 +96,48 @@ function gaia_ruta(string $clave): string {
     return GAIA_CACHE_DIR . '/' . $clave . '.json.gz';
 }
 
-/** URLs de proveedores TAP (failover), en orden de preferencia. */
-function gaia_proveedores(float $ra, float $dec, float $rad, float $mag): array {
-    $cds = 'SELECT TOP ' . GAIA_MAX_ROWS . ' RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3"'
+/**
+ * Pareja de consultas ADQL [CDS, GAVO] para una región. Dos modos con el MISMO
+ * WHERE (mismo conjunto físico, acotado por el `mag` del cliente):
+ *   · sonda  ($segura=false): sin ORDER BY —el coste medido del TAP es la
+ *     ordenación— y TOP en el techo computacional. Si la respuesta no lo toca,
+ *     es el conjunto COMPLETO y no hay truncamiento.
+ *   · segura ($segura=true): la histórica ORDER BY + TOP 40000. Si hay que
+ *     truncar, que caiga lo más débil.
+ */
+function gaia_consultas(float $ra, float $dec, float $rad, float $mag, bool $segura): array {
+    $top   = $segura ? GAIA_MAX_ROWS : GAIA_TECHO_FILAS;
+    $orden = $segura ? ' ORDER BY ' : '';
+    $cds = 'SELECT TOP ' . $top . ' RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3"'
         . ' WHERE Gmag<=' . $mag . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS),'
-        . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . ')) ORDER BY Gmag';
-    $gavo = 'SELECT TOP ' . GAIA_MAX_ROWS . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
+        . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . ($orden ? $orden . 'Gmag' : '');
+    $gavo = 'SELECT TOP ' . $top . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
         . ' FROM gaia.dr3lite WHERE phot_g_mean_mag<=' . $mag . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec),'
-        . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . ')) ORDER BY phot_g_mean_mag';
+        . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . ($orden ? $orden . 'phot_g_mean_mag' : '');
+    return [$cds, $gavo];
+}
+
+/** URLs de proveedores TAP (failover), en orden de preferencia. */
+function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $segura): array {
+    [$cds, $gavo] = gaia_consultas($ra, $dec, $rad, $mag, $segura);
+    // MAXREC en la sonda: si el servidor recorta por su cuenta, que recorte
+    // exactamente en el techo y el recorte sea detectable (filas == techo).
+    $maxrec = $segura ? '' : '&MAXREC=' . GAIA_TECHO_FILAS;
     return [
-        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
-        'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' . rawurlencode($gavo),
+        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json' . $maxrec . '&query=' . rawurlencode($cds),
+        'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json' . $maxrec . '&QUERY=' . rawurlencode($gavo),
     ];
+}
+
+/** ¿La sonda pudo quedar truncada? Tocar el techo = no hay garantía de conjunto completo. */
+function gaia_truncada(int $filas): bool {
+    return $filas >= GAIA_TECHO_FILAS;
+}
+
+/** Nº de filas del JSON del TAP, o null si no es un JSON con `data`. */
+function gaia_num_filas(string $json): ?int {
+    $j = json_decode($json, true);
+    return (is_array($j) && isset($j['data']) && is_array($j['data'])) ? count($j['data']) : null;
 }
 
 // ───────────────────────── EFECTOS (disco / red) ─────────────────────────────
@@ -115,12 +149,34 @@ function gaia_json_headers(): void {
 }
 
 /**
- * Consulta los proveedores TAP en orden (failover) con timeouts de conexión y de
- * petición separados. Devuelve el primer cuerpo de una respuesta 2xx no vacía, o
- * null si todos fallan.
+ * Adquisición por régimen de densidad:
+ *   1ª pasada, SONDA (sin ORDER BY): si la respuesta no toca el techo, es el
+ *      conjunto completo hasta el `mag` físico — sin truncamiento y sin pagar
+ *      la ordenación (que es el coste dominante medido del TAP).
+ *   2ª pasada, SEGURA (ORDER BY + TOP 40000): solo si la sonda tocó techo
+ *      (campo denso) o devolvió algo ilegible. En denso, la sonda barata
+ *      (~2 s medidos por 200k filas) es un sobrecoste pequeño frente a la
+ *      consulta ordenada que igualmente había que pagar.
+ * Devuelve null si todos los proveedores fallan.
  */
 function gaia_fetch(float $ra, float $dec, float $rad, float $mag): ?string {
-    foreach (gaia_proveedores($ra, $dec, $rad, $mag) as $url) {
+    $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, false));
+    if ($json !== null) {
+        $filas = gaia_num_filas($json);
+        if ($filas !== null && !gaia_truncada($filas)) {
+            return $json;
+        }
+        unset($json);   // libera el cuerpo de la sonda (~14 MB) antes de la 2ª pasada
+    }
+    return gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, true));
+}
+
+/**
+ * Recorre URLs de TAP en orden (failover) con timeouts de conexión y de petición
+ * separados. Devuelve el primer cuerpo de una respuesta 2xx no vacía, o null.
+ */
+function gaia_fetch_urls(array $urls): ?string {
+    foreach ($urls as $url) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -197,8 +253,9 @@ if (PHP_SAPI === 'cli') {
 
 /* Una consulta a un campo denso (hacia el bulbo) tarda más que el
    max_execution_time por defecto (30 s) y el proceso moría a mitad. Con margen
-   sobre GAIA_REQUEST_TIMEOUT manda el timeout de curl, no el de PHP. */
-@set_time_limit(GAIA_REQUEST_TIMEOUT * 2 + 30);
+   sobre GAIA_REQUEST_TIMEOUT manda el timeout de curl, no el de PHP. Ahora hay
+   hasta dos pasadas (sonda + segura) × dos proveedores. */
+@set_time_limit(GAIA_REQUEST_TIMEOUT * 4 + 60);
 /* Si el navegador se cansa y corta, el trabajo NO se tira: PHP termina la
    consulta y la ESCRIBE en la caché, así el reintento del cliente -o el
    siguiente observador que mire el mismo objeto- la encuentra ya hecha en
