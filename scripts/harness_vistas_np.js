@@ -50,7 +50,9 @@ var VISTAS = [
   { obj: 'NGC2068', csv: 'gaia_ngc2068.csv', D: 457.2, M: 100, sqm: 21.2 },
   { obj: 'NGC2068', csv: 'gaia_ngc2068.csv', D: 457.2, M: 190, sqm: 21.2 },
   { obj: 'NGC7635', csv: 'gaia_ngc7635.csv', D: 457.2, M: 190, sqm: 21.2 },
-  { obj: 'NGC6888', csv: 'gaia_ngc6888.csv', D: 457.2, M: 100, sqm: 21.2 }
+  { obj: 'NGC6888', csv: 'gaia_ngc6888.csv', D: 457.2, M: 100, sqm: 21.2 },
+  // resto de supernova
+  { obj: 'NGC1952', csv: 'gaia_ngc1952.csv', D: 457.2, M: 190, sqm: 21.2 }
 ];
 
 var parches = {};   // un montaje por objeto, como producción

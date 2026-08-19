@@ -32,7 +32,9 @@ var OBJS = [
   // Validación de emisión/reflexión (rama nebulosas-emision-reflexion):
   { cat: 'NGC2068',  csv: 'gaia_ngc2068.csv', fuente: global.window.BITACORA_NEBULOSAS },
   { cat: 'NGC7635',  csv: 'gaia_ngc7635.csv', fuente: global.window.BITACORA_NEBULOSAS },
-  { cat: 'NGC6888',  csv: 'gaia_ngc6888.csv', fuente: global.window.BITACORA_NEBULOSAS }
+  { cat: 'NGC6888',  csv: 'gaia_ngc6888.csv', fuente: global.window.BITACORA_NEBULOSAS },
+  // Resto de supernova (M1):
+  { cat: 'NGC1952',  csv: 'gaia_ngc1952.csv', fuente: global.window.BITACORA_NEBULOSAS }
 ];
 
 function fila(fuente, nombre) {

@@ -40,9 +40,9 @@ function leerGaia(f) {
 
 console.log('Las clases de emisión y reflexión entran por la puerta del catálogo:');
 var cat = R.ps1CatalogoDifuso(GAL, NEB);
-var abiertas = ['PN', 'HII', 'EmN', 'RfN'];
+var abiertas = ['PN', 'HII', 'EmN', 'RfN', 'SNR'];
 var esperadas = GAL.length + NEB.filter(function (f) { return abiertas.indexOf(f[12]) >= 0; }).length;
-ok(cat.length === esperadas, 'catálogo difuso = galaxias + PN + HII + EmN + RfN (' +
+ok(cat.length === esperadas, 'catálogo difuso = galaxias + clases abiertas (' +
   cat.length + '/' + esperadas + ' filas)');
 ok(!!fila(cat, 'NGC2068'), 'M78 (reflexión) entra');
 ok(!!fila(cat, 'NGC7635'), 'la Burbuja (HII) entra');

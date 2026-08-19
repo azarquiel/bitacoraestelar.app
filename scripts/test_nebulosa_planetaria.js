@@ -42,9 +42,10 @@ ok(conClase.length === NEB.length, 'todas las filas llevan clase (' + conClase.l
 console.log('ps1CatalogoDifuso: la clase decide qué filas entran, no qué código corre:');
 ok(typeof R.ps1CatalogoDifuso === 'function', 'existe R.ps1CatalogoDifuso');
 var cat = R.ps1CatalogoDifuso ? R.ps1CatalogoDifuso(GAL, NEB) : [];
-// Clases abiertas hoy: PN (esta prueba) + HII/EmN/RfN (validadas en
-// test_nebulosas_emision_reflexion.js). Neb y Cl+N siguen cerradas.
-var abiertas = ['PN', 'HII', 'EmN', 'RfN'];
+// Clases abiertas hoy: PN (esta prueba), HII/EmN/RfN (validadas en
+// test_nebulosas_emision_reflexion.js) y SNR (test_resto_supernova.js).
+// Neb y Cl+N siguen cerradas.
+var abiertas = ['PN', 'HII', 'EmN', 'RfN', 'SNR'];
 ok(cat.length === GAL.length + NEB.filter(function (f) { return abiertas.indexOf(f[12]) >= 0; }).length,
   'catálogo difuso = galaxias + clases abiertas (' + cat.length + ' filas)');
 ok(!!fila(cat, 'NGC6720'), 'M57 entra');
