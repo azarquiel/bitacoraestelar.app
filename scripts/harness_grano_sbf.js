@@ -45,9 +45,9 @@ function conS2(factor, fn) {
     if (factor === 1) return p;
     var q = Object.create(p);
     q.S2 = function (mlim) { return p.S2(mlim) * factor; };
-    // El render usa el segundo momento CON la banda; el trazador tiene que
-    // entrar por ahí o no toca nada (y volvería a medir un conjunto vacío).
-    q.S2campo = function (mRes, delta) { return p.S2campo(mRes, delta) * factor; };
+    // El render usa el segundo momento DEL CAMPO; el trazador tiene que entrar
+    // por ahí o no toca nada (y volvería a medir un conjunto vacío).
+    q.S2campo = function (mRes, rAs, ri) { return p.S2campo(mRes, rAs, ri) * factor; };
     return q;
   };
   try { return fn(); } finally { C.poblacionCacheada = orig; }

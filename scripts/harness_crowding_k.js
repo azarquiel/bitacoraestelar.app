@@ -72,18 +72,22 @@ var visibles = gaia.filter(function (s) { return s[2] <= mlim; });
    que basta cambiar la config: el barrido entra por el MISMO camino que el
    modelo real (ADR 0008, nada se reimplementa aquí). */
 function corrida(k) {
-  var guardado = C.config.crowdingCriterion;
-  C.config.crowdingCriterion = k;
+  var guardado = C.config.gaiaCrowdingK;
+  C.config.gaiaCrowdingK = k;
   try {
     var difuso = new Float32Array(PROC * PROC);
     return R.pintarCumulo(difuso, M13, {
       ra0: M13.ra, dec0: M13.dec, arcmin: ARCMIN, size: PROC,
       cielo: cielo, apertura: D, estrellas: visibles
     });
-  } finally { C.config.crowdingCriterion = guardado; }
+  } finally { C.config.gaiaCrowdingK = guardado; }
 }
 
-var base = corrida(C.config.crowdingCriterion);
+/* El k = 30 del modelo VIEJO. Ya no está en CFG —el ADR 0012 se llevó el listón
+   de crowding por delante— y este arnés mide justamente aquel modelo, así que la
+   constante vive aquí, donde no puede confundirse con la ley de producción. */
+var K_VIEJO = 30;
+var base = corrida(K_VIEJO);
 var pob = base.poblacion, rImg = base.radioImagenAs, omegaRes = Math.PI * rImg * rImg;
 var thSep = SEP * rImg;
 

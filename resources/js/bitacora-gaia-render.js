@@ -1377,15 +1377,16 @@
 
      Cadena, sin ningún parámetro de "contraste de grano" que tocar:
 
-       m_crowd(r)  ← población (aglomeración, geometría pura)
+       a(m,r)      ← población (P_solo: geometría pura, sin cielo dentro)
+       <I>(r)      = Sigma(r) · S1campo(m_res, r)    flujo por arcsec²
+       sigma(r)²   = Sigma(r) · S2campo(m_res, r) / Ω_beam
        m_lim,sky(r) ← magLimite contra el fondo LOCAL (cielo + velo del cúmulo)
-       m_res(r)    = min de los dos
-       <I>(r)      = Sigma(r) · S1campo(m_res)       flujo por arcsec²
-       sigma(r)²   = Sigma(r) · S2campo(m_res) / Ω_beam
+       m_res(r)    = m_lim,sky, iterado hasta el punto fijo
 
-     S1campo/S2campo son la cola dura MÁS el (1−a) de la banda de transición: lo
-     que de cada estrella de la banda no llega a dibujarse sigue siendo luz, y su
-     sitio es el velo. Con el corte duro se perdía (hasta el 14 % del cúmulo).
+     Ya NO hay listón de crowding ni banda de transición (ADR 0012). Cada estrella
+     de la LF se dibuja con probabilidad a(m,r) y se va al velo con 1−a, y la que
+     sobrevive a la mezcla todavía tiene que llegar al cielo. Ese segundo término
+     es el que acopla el velo con m_res y obliga al punto fijo.
 
      Todo lo que se ve emerge de ahí: más apertura hunde m_res, S1 y S2 caen, y el
      halo se deshace en estrellas; el núcleo aglomera, m_res sube y queda lechoso. */
@@ -1475,12 +1476,12 @@
      proporcionalmente más y deforman el mismísimo S2/S1² que sale de la LF—. */
   var TRAMOS_R = 512;
 
-  /* `omegaRes` es la Ω ÓPTICA (telescopio + atmósfera) y manda en m_crowd;
-     `omegaBeam` puede ser mayor —el píxel del lienzo— y solo entra en σ del
-     grano. Ver pintarCumulo. */
-  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, omegaRes) {
+  /* `radioImagenAs` es el tamaño de la imagen estelar (Airy ⊕ seeing) y manda en
+     a(m,r); `omegaBeam` puede ser mayor —el píxel del lienzo— y solo entra en σ
+     del grano. Ver pintarCumulo. */
+  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, radioImagenAs) {
     var C = window.BitacoraCumulos;
-    var delta = C.config.delta;
+    var pasadas = C.config.pasadasPuntoFijo;
     var n = TRAMOS_R + 1, paso = pob.rtAs / TRAMOS_R;
     var r = new Float64Array(n), mRes = new Float64Array(n), Im = new Float64Array(n);
     var sg = new Float64Array(n), sHalo = new Float64Array(n), sGrano = new Float64Array(n);
@@ -1490,20 +1491,25 @@
       var s = pob.sigma(rAs);
       r[i] = rAs;
       if (!(s > 0)) { mRes[i] = -Infinity; continue; }
-      var mc = pob.mCrowd(rAs, omegaRes);
-      /* Circularidad m_lim,sky ↔ <I>: UNA sola iteración, no un punto fijo (su
-         criterio de parada acabaría dentro de la imagen). Se arranca por la cota
-         superior —el crowding, que no depende del cielo— y se cierra con el fondo
-         local que ese arranque produce. */
-      var I0 = s * pob.S1campo(mc, delta);
-      var mSky = magLimite({
-        apertura: o.apertura, aumentos: o.cielo.aumentos, transmision: o.cielo.transmision,
-        sqm: -2.5 * Math.log10(cHalo.Fcielo + I0), pupilaOjo: o.cielo.pupilaOjo
-      });
-      var m = (mSky == null) ? mc : Math.min(mc, mSky);
+      /* Circularidad velo ↔ m_lim,sky: punto fijo con N FIJO de pasadas. Se
+         arranca en m_res = +∞ —todo resuelto salvo lo que la mezcla se lleva, la
+         única cota que no depende del cielo— y se itera. MEDIDO: contrae, el
+         punto fijo es único (2e-13 mag entre arranques opuestos a 30 pasadas) y
+         una sola pasada deja 0,281 mag, 28 veces el listón de 0,01. N y no
+         tolerancia: el criterio de parada no puede vivir dentro de la imagen.
+         docs/halo_v7/punto_fijo_adr0012.md */
+      var m = Infinity;
+      for (var it = 0; it < pasadas; it++) {
+        var mSky = magLimite({
+          apertura: o.apertura, aumentos: o.cielo.aumentos, transmision: o.cielo.transmision,
+          sqm: -2.5 * Math.log10(cHalo.Fcielo + s * pob.S1campo(m, rAs, radioImagenAs)),
+          pupilaOjo: o.cielo.pupilaOjo
+        });
+        m = (mSky == null) ? -Infinity : mSky;
+      }
       mRes[i] = m;
-      Im[i] = s * pob.S1campo(m, delta);
-      sg[i] = Math.sqrt(s * pob.S2campo(m, delta) / omegaBeam);
+      Im[i] = s * pob.S1campo(m, rAs, radioImagenAs);
+      sg[i] = Math.sqrt(s * pob.S2campo(m, rAs, radioImagenAs) / omegaBeam);
       sHalo[i] = visibilidadDifusa(Im[i], cHalo.Fcielo * cHalo.Cmin, perceptual);
       /* El grano compite contra el fondo LOCAL, que incluye el propio velo del
          cúmulo: en el núcleo se aplana solo y queda lechoso, sin ninguna perilla.
@@ -1632,7 +1638,7 @@
     var cGrano = ctxFotometrico(o.cielo, thGranoAs / 60);
     var atenGrano = thBeamAs / thGranoAs;
 
-    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, omegaRes);
+    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, radioImagenAs);
 
     var mascara = difusoMaskDe(o.cielo, difuso.length);
     var semilla = hashCadena([cumulo.id, C.versionLF(), o.realization || 0, 'grano'].join('|'));
@@ -1677,22 +1683,31 @@
       tabla: tabla, poblacion: pob, radioImagenAs: radioImagenAs, cHalo: cHalo, cGrano: cGrano,
       omegaBeam: omegaBeam, omegaRes: omegaRes, thBeamAs: thBeamAs, thGranoAs: thGranoAs, atenGrano: atenGrano,
       Fmedio: Fmedio, Fpintado: Fpintado,
-      estrellas: estrellasCumulo(pob, cumulo, tabla, o, C)
+      estrellas: estrellasCumulo(pob, cumulo, tabla, o, C, radioImagenAs)
     };
   }
 
-  /* Las estrellas del cúmulo que este equipo dibuja. La clasificación se evalúa
-     por estrella CON SU RADIO: la misma m=16 puede ser resuelta a 8′ del centro y
-     campo a 0,5′. En la banda de transición la atenuación se aplica como magnitud
-     efectiva, así que la estrella se apaga Y encoge por el camino que ya existe
-     (radioEstrella va con la magnitud) — que es lo que se ve en el ocular.
+  /* Las estrellas del cúmulo que este equipo dibuja. Se juzga por estrella y CON
+     SU RADIO: la misma m=16 puede resolverse a 8′ del centro y fundirse a 0,5′.
 
-     Invariante: la atenuación se calcula SIEMPRE sobre m, nunca sobre la m_eff que
-     ella misma produce, y m_eff no vuelve nunca a S1/S2, a m_res ni a la
-     conservación: es un número de dibujo. */
-  function estrellasCumulo(pob, cumulo, tabla, o, C) {
+     Dos filtros distintos, y conviene no confundirlos (ADR 0012):
+
+       la mezcla   se dibuja con probabilidad a(m,r) = P_solo   ← SORTEO
+       el cielo    hace falta m <= m_res(r)                     ← umbral
+
+     El sorteo es Bernoulli, no una atenuación. Atenuar restaba 2,5·log10(a) mag
+     y la estrella cruzaba la magnitud límite, así que un efecto de VECINDAD se
+     convertía en un corte por MAGNITUD: MEDIDO, se llevaba el 100 % del cuartil
+     débil contra el 50 % de la verdad geométrica
+     (docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md). Y como ya no hay magnitud
+     efectiva, tampoco hace falta la 5ª casilla que la llevaba: la estrella entra
+     entera y capaEstrellas cobra mlim una sola vez.
+
+     `C.sorteo` es determinista en las coordenadas: la misma estrella sale o no
+     sale siempre igual. Cambiar de ocular NO la hace parpadear —a(m,r) no lleva
+     aumentos dentro, MEDIDO a 61/120/173/250×: 0 parpadeos de 1971—. */
+  function estrellasCumulo(pob, cumulo, tabla, o, C, radioImagenAs) {
     var cos0 = Math.cos(o.dec0 * Math.PI / 180);
-    var delta = C.config.delta;
     var lista = (o.estrellas || []).concat(pob.sinteticas({
       ra: cumulo.ra, dec: cumulo.dec, realization: o.realization
     }));
@@ -1701,19 +1716,12 @@
       var e = lista[i], m = e[2];
       var dxAs = (((e[0] - cumulo.ra + 540) % 360) - 180) * cos0 * 3600;
       var dyAs = (e[1] - cumulo.dec) * 3600;
-      var mRes = mResEn(tabla, pob.radioPropio(dxAs, dyAs));
-      if (!isFinite(mRes) || m < mRes - delta) { fuera.push(e); continue; }
-      if (m > mRes + delta) continue;                       // ya está en el campo
-      var a = C.atenuacionTransicion(m, mRes, delta);
-      if (!(a > 0)) continue;
-      /* La m original viaja en la 5ª casilla: es la que DETECTA (el umbral del
-         cielo ya lo aplica capaEstrellas con mlim, y m_res lo ha aplicado ya
-         una vez aquí). Sin ella, capaEstrellas comparaba mlim contra la m_eff
-         atenuada y degradaba a glow toda la banda de transición —que en el halo
-         se monta justo encima de mlim, porque allí m_res ES m_lim,sky—: 482
-         estrellas de 1467 en M13 a 173× (harness_halo_estrellas.js). El mismo
-         umbral cobrado dos veces, y encima sobre un número de dibujo. */
-      fuera.push([e[0], e[1], m + 2.5 * Math.log10(1 / a), e[3], m]);
+      var rAs = pob.radioPropio(dxAs, dyAs);
+      var mRes = mResEn(tabla, rAs);
+      if (!isFinite(mRes)) { fuera.push(e); continue; }    // fuera del cúmulo: ni velo ni mezcla
+      if (m > mRes) continue;                              // el cielo local no la levanta
+      if (!(C.sorteo(e[0], e[1], o.realization) < pob.aCrowd(m, rAs, radioImagenAs))) continue;
+      fuera.push(e);                                       // entera: sin m_eff, sin banda
     }
     return fuera;
   }

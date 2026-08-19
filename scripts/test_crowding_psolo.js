@@ -8,12 +8,17 @@
 
    La partición que exige el ADR 0012, por radio:
 
-     dibujado(r) = Sigma(r) · ∫ a(m,r)·dF(m)          sobre TODA la LF
-     velo(r)     = Sigma(r) · ∫ (1−a(m,r))·dF(m)
+     dibujado(r) = Sigma(r) · ∫[m<=m_res] a(m,r)·dF(m)
+     velo(r)     = Sigma(r) · Ftotal − dibujado(r)
      a(m,r)      = P_solo = exp(−Sigma(r)·N(≥m+Δmag)·π θ_sep²)
 
-   y las dos mitades tienen que sumar Sigma(r)·Ftotal. No hay corte: toda la LF
-   participa con su peso, que es justo lo que un umbral no puede hacer.
+   y las dos mitades tienen que sumar Sigma(r)·Ftotal. No hay listón de crowding:
+   toda la LF participa con su peso, que es justo lo que un umbral no puede hacer.
+
+   Al velo se va por DOS caminos, y confundirlos es fácil: la fracción (1−a) que
+   la mezcla se lleva, y la fracción a que sobrevive a la mezcla pero sigue
+   siendo demasiado débil para el cielo (m > m_res). El segundo es el que acopla
+   el velo con m_res y obliga al punto fijo (paso 3B del ADR).
 
    Nada de la ley se reimplementa (ADR 0008): a(m,r) es `pob.aCrowd`, que vive en
    la Capa 1, y las rebanadas de flujo salen de `pob.Fresuelto`. La cuadratura
@@ -24,12 +29,17 @@
      A1  la ley es una atenuación válida: 0 ≤ a ≤ 1, monótona en m, y continua
          en r (invariante 7, los escalones en r dibujan anillos). VERDE hoy: mide
          la función nueva, no el render.
-     A2  complemento exacto: ∫a·dF + ∫(1−a)·dF = Ftotal. VERDE hoy por
-         construcción de la cuadratura; está para que la implementación no lo
-         rompa introduciendo un corte por algún lado.
+     A2  complemento exacto: dibujado + velo = Ftotal. VERDE por construcción de
+         la cuadratura; está para que la implementación no lo rompa introduciendo
+         un corte por algún lado.
      A3  el velo que el render construye ES el complemento de lo dibujado bajo
-         a = P_solo. ROJO hoy: el render pone Sigma·S1campo(m_res, δ), que es el
-         complemento de OTRA a. Esta es la medida del ADR 0012.
+         a = P_solo. Nació ROJO —el render repartía con m_crowd + banda δ, que es
+         el complemento de OTRA a— y es la medida del ADR 0012.
+     A4  el punto fijo del velo está convergido: una pasada más no mueve m_res.
+         Las pasadas son N fijo (CFG.pasadasPuntoFijo), así que el test comprueba
+         que ese N basta en cúmulos y equipos que el barrido de (B) no midió.
+     A5  el sorteo por estrella es estable: no depende de los aumentos. Es la
+         premisa que el ADR daba por falsa al preferir atenuar.
 
    node scripts/test_crowding_psolo.js */
 'use strict';
@@ -74,24 +84,24 @@ var EQUIPOS = [
    contra 800 pasos queda en ~1e-6, tres órdenes por debajo del 1 % del ADR
    0003. Se comprueba en A2, que es exactamente esa cuenta. */
 var PASOS = 200;
-function reparto(pob, rAs, radioImagenAs, m0, m1) {
-  var h = (m1 - m0) / PASOS, dib = 0, velo = 0;
+function reparto(pob, rAs, radioImagenAs, mRes, m0, m1) {
+  var h = (m1 - m0) / PASOS, dib = 0;
   var F1 = pob.Fresuelto(m0);
   for (var i = 0; i < PASOS; i++) {
-    var ma = m0 + i * h, mb = ma + h;
+    var ma = m0 + i * h, mb = ma + h, mc = ma + h / 2;
     var F2 = pob.Fresuelto(mb), dF = F2 - F1;
-    var a = pob.aCrowd(ma + h / 2, rAs, radioImagenAs);
-    dib += a * dF; velo += (1 - a) * dF;
+    /* La rebanada que m_res parte entra con la fracción que queda por encima,
+       igual que interpola `cola` en la Capa 1: devolverla entera hace escalones
+       en r, que es lo que dibuja anillos (invariante 7). */
+    var w = mRes >= mb ? 1 : (mRes <= ma ? 0 : (mRes - ma) / h);
+    if (w > 0) dib += w * pob.aCrowd(mc, rAs, radioImagenAs) * dF;
     F1 = F2;
   }
-  /* Lo más brillante que m0 y lo más débil que m1 quedan fuera del recorrido: se
-     asignan con la a del extremo, que allí ya está saturada (1 arriba, ~0 abajo)
-     y no con una a inventada. */
-  var aArr = pob.aCrowd(m0, rAs, radioImagenAs), aAba = pob.aCrowd(m1, rAs, radioImagenAs);
-  var Farr = pob.Fresuelto(m0), Faba = pob.Ftotal - pob.Fresuelto(m1);
-  dib += aArr * Farr + aAba * Faba;
-  velo += (1 - aArr) * Farr + (1 - aAba) * Faba;
-  return { dibujado: dib, velo: velo };
+  /* Lo más brillante que m0 queda fuera del recorrido: allí a ya está saturada a
+     1 y m_res queda muy por debajo, así que se dibuja entero. Lo más débil que
+     m1 nunca llega al cielo y es velo por definición. */
+  if (mRes > m0) dib += pob.aCrowd(m0, rAs, radioImagenAs) * pob.Fresuelto(m0);
+  return { dibujado: dib, velo: pob.Ftotal - dib };
 }
 
 /* Rango de magnitudes de la LF, tomado de la propia población: se busca dónde
@@ -109,7 +119,7 @@ function rangoLF(pob) {
 /* Balance sobre el perfil entero, pesado por Sigma(r). Se recorre la tabla
    radial del render, que es la del cúmulo real. */
 function balance(cum, eq) {
-  var SIZE = 512, delta = C.config.delta;
+  var SIZE = 512;
   var pob = C.poblacionCacheada(cum, 0);
   var arcmin = Math.ceil(2.4 * pob.rtAs / 60);
   var difuso = new Float32Array(SIZE * SIZE);
@@ -126,12 +136,12 @@ function balance(cum, eq) {
     var s = pob.sigma(t.r[i]);
     if (!(s > 0)) continue;
     var peso = s * t.r[i] * t.paso;            // 2·pi·r·Sigma(r)·dr, sin el 2·pi
-    var rp = reparto(pob, t.r[i], res.radioImagenAs, lim[0], lim[1]);
+    var rp = reparto(pob, t.r[i], res.radioImagenAs, t.mRes[i], lim[0], lim[1]);
     var comp = Math.abs((rp.dibujado + rp.velo) / pob.Ftotal - 1);
     if (comp > peorComp) peorComp = comp;
     dib += peso * rp.dibujado;
     veloLey += peso * rp.velo;
-    veloRender += peso * pob.S1campo(t.mRes[i], delta);
+    veloRender += peso * pob.S1campo(t.mRes[i], t.r[i], res.radioImagenAs);
     total += peso * pob.Ftotal;
   }
   return { dibujado: dib, veloLey: veloLey, veloRender: veloRender, total: total,
@@ -212,15 +222,79 @@ REFS.forEach(function (id) {
 
 console.log('');
 ok(peorComp < 1e-4,
-  'A2 · ∫a·dF + ∫(1−a)·dF = Ftotal (peor residuo ' + peorComp.toExponential(2) + ')');
+  'A2 · dibujado + velo = Ftotal (peor residuo ' + peorComp.toExponential(2) + ')');
 ok(peorFuga <= 0.01,
   'A3 · el velo del render es el complemento de P_solo al 1 % (peor fuga ' +
   (100 * peorFuga).toFixed(2) + ' %)');
 
+/* ── A4: el punto fijo está convergido ───────────────────────────────────── */
+
+console.log('\nA4 · una pasada más del punto fijo no mueve m_res (N = ' +
+            C.config.pasadasPuntoFijo + ')');
+var peorPaso = 0;
+REFS.forEach(function (id) {
+  var cum = delCatalogo(id);
+  EQUIPOS.forEach(function (eq) {
+    var b = balance(cum, eq), t = b.res.tabla;
+    /* La pasada N+1 se rehace con la MISMA magLimite del render (ADR 0008: el
+       test no reimplementa la ley, solo la vuelve a aplicar una vez). */
+    for (var i = 0; i < t.r.length; i++) {
+      if (!isFinite(t.mRes[i])) continue;
+      var s = b.pob.sigma(t.r[i]);
+      if (!(s > 0)) continue;
+      var m2 = R.magLimite({ apertura: eq.D, aumentos: eq.MAG, transmision: 0.9,
+        sqm: -2.5 * Math.log10(b.res.cHalo.Fcielo +
+                               s * b.pob.S1campo(t.mRes[i], t.r[i], b.res.radioImagenAs)),
+        pupilaOjo: 7 });
+      if (m2 == null) continue;
+      var d = Math.abs(m2 - t.mRes[i]);
+      if (d > peorPaso) peorPaso = d;
+    }
+  });
+});
+ok(peorPaso < 0.01, 'A4 · |Δm_res| de la pasada N+1 < 0,01 mag (peor ' +
+   peorPaso.toFixed(4) + ')');
+
+/* ── A5: el sorteo no parpadea con el ocular ─────────────────────────────── */
+
+console.log('\nA5 · a(m,r) no lleva aumentos dentro: el sorteo es estable');
+var cumA5 = delCatalogo('NGC 6205');
+var pobA5 = C.poblacionCacheada(cumA5, 0);
+/* Con las de Gaia de verdad: las sintéticas del núcleo nacen por debajo de la
+   magnitud límite de cualquier equipo y el sorteo no llegaría a verse. Sin ellas
+   este assert sería vacuo (ADR 0005), y por eso el tamaño de la muestra se
+   comprueba abajo. Es el mismo fixture del arnés de estrellas. */
+var gaiaA5 = require('fs').readFileSync(__dirname + '/../docs/halo_v7/m13_gaia_dr3.csv', 'utf8')
+  .trim().split('\n').slice(1).map(function (l) {
+    var c = l.split(',');
+    return [+c[0], +c[1], +c[2], c[3] === '' ? null : +c[3]];
+  });
+var difA5 = new Float32Array(256 * 256);
+function estrellasA5(MAG) {
+  var res = R.pintarCumulo(difA5, cumA5, {
+    ra0: cumA5.ra, dec0: cumA5.dec, arcmin: Math.ceil(2.4 * pobA5.rtAs / 60), size: 256,
+    cielo: { pupilaSalida: 467 / MAG, pupilaOjo: 7, sqm: 21, transmision: 0.9,
+             aumentos: MAG, perceptual: true },
+    apertura: 467, estrellas: gaiaA5
+  });
+  var d = {};
+  res.estrellas.forEach(function (e) { d[e[0].toFixed(6) + ',' + e[1].toFixed(6)] = 1; });
+  return d;
+}
+/* Mismo telescopio, distinto ocular: cambia m_res (el cielo), no el sorteo. A
+   250× m_res es más profunda, así que lo que 61× dibujaba tiene que seguir
+   dibujado. Perder una estrella al subir aumentos sería el parpadeo que el ADR
+   temía —y que dio por seguro al preferir atenuar—. */
+var d61 = estrellasA5(61), d250 = estrellasA5(250);
+var parpadeos = 0;
+Object.keys(d61).forEach(function (k) { if (!d250[k]) parpadeos++; });
+console.log('  ' + Object.keys(d61).length + ' estrellas a 61×, ' +
+            Object.keys(d250).length + ' a 250×, ' + parpadeos + ' que 250× pierde');
+ok(Object.keys(d61).length > 100, 'A5 · la muestra no está vacía (ADR 0005)');
+ok(parpadeos === 0, 'A5 · más aumentos nunca quita una estrella que 61× dibujaba');
+
 if (fallos) {
   console.error('\n' + fallos + ' FALLOS');
-  console.error('A3 en rojo es lo ESPERADO hasta que entre el ADR 0012: el render');
-  console.error('todavía reparte con m_crowd + banda δ. A1 y A2 deben estar verdes.');
 } else {
   console.log('\nTodo correcto');
 }

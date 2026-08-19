@@ -236,7 +236,34 @@ conservación cuando la mitad catalogada es un sorteo; el número sale de (A)
    `docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md`. (B) ~~el esquema del punto
    fijo~~ **hecho**: iterar N=5, `scripts/harness_punto_fijo.js`,
    `docs/halo_v7/punto_fijo_adr0012.md`.
-4. Implementación y reescritura de guardianes.
+4. ~~Implementación y reescritura de guardianes~~ **hecho** (2026-08-19).
+   Capa 1: `momentosBanda` sustituida por `momentosCampo(mRes, rAs,
+   radioImagenAs, exp)`, que pesa cada tramo de la LF por `q = 1 − w·aCrowd`;
+   `sorteo(ra, dec, realization)` para el Bernoulli por estrella; fuera
+   `clasificar` y `atenuacionTransicion`, fuera `CFG.delta` y
+   `CFG.crowdingCriterion`, dentro `CFG.pasadasPuntoFijo = 5` y
+   `CFG.gaiaCrowdingK = 30` (que es el criterio de haz del catálogo de Gaia, no
+   el del render). Render: `tablaCumulo` itera las cinco pasadas desde `m_res =
+   +∞`, y `estrellasCumulo` dibuja la estrella entera si el sorteo cae bajo
+   `aCrowd` —sin `m_eff` y sin banda—. Guardianes: `test_crowding_psolo` verde y
+   en la suite, `test_banda_conservacion` sustituido por
+   `test_conservacion_sorteo`, y reescritos `test_cumulo_render` §6,
+   `test_cumulos` §7, `test_halo_v7_e2`/`e4` y `matriz_m13`. Suite: 12/0/0, 259
+   asserts.
+
+   **Consecuencia descubierta al implementar (A), no calibración nueva:**
+   `S2campo` deja de ser cuadrática en la atenuación. Con la estrella atenuada,
+   el flujo no dibujado de un tramo era `num·(1−a)` con amplitud `f·(1−a)`, y el
+   segundo momento salía `Σ num·f²·(1−a)²`. Con Bernoulli el tramo es un Poisson
+   ADELGAZADO: sobrevive un número aleatorio de estrellas de amplitud `f`
+   íntegra, y la varianza de un Poisson adelgazado es lineal en la probabilidad,
+   `Σ num·f²·q`. El grano SBF sube en consecuencia; el cambio lo dicta (A), no
+   hay ningún parámetro nuevo que ajustar (ADR 0004).
+
+   La tolerancia de conservación es la Poisson-binomial del paso 3A —`E = Σp`,
+   `σ² = Σp(1−p)`—, no una igualdad exacta: medido sobre M13 a 61×, `Σa = 1083,5`
+   con `σ = 3,6`, media de 200 semillas 1083,5 (0,04σ) y peor realización a
+   3,46σ. Unas pocas estrellas de más o de menos son la realización, no un fallo.
 
 Blast radius conocido: `S1campo`/`S2campo` (ADR 0011), `CFG.delta`,
 `CFG.crowdingCriterion`, `completitud`, `tablaCumulo`, y los guardianes

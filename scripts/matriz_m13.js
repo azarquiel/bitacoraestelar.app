@@ -57,12 +57,12 @@ function fila(D, MAG, sqm) {
              aumentos: MAG, perceptual: true },
     apertura: D, estrellas: []
   });
-  var pob = res.poblacion, t = res.tabla, delta = C.config.delta;
+  var pob = res.poblacion, t = res.tabla, rImg = res.radioImagenAs;
   var Ftot = pob.S1(-Infinity);              // primer momento entero de la LF
   var n = t.mRes.length;
   var fRes = new Float64Array(n);
   for (var i = 0; i < n; i++) {
-    fRes[i] = (t.mRes[i] === -Infinity) ? 0 : pob.Fresuelto(t.mRes[i] + delta) / Ftot;
+    fRes[i] = (t.mRes[i] === -Infinity) ? 0 : pob.Fdibujado(t.mRes[i], t.r[i], rImg) / Ftot;
   }
   return {
     D: D, MAG: MAG, sqm: sqm, res: res, tabla: t, fRes: fRes,
@@ -166,12 +166,19 @@ ok(F1.fResNucleo < F2.fResNucleo && F2.fResNucleo <= F3.fResNucleo,
   }).join(' → ') + ')');
 ok(F1.r50 === Infinity,
   '100 mm/50x: ningún radio llega a ser mayoría de puntos, el cúmulo es velo con estrellas encima');
-ok(F2.r50 > rcAs / rhAs && F2.r50 < F2.rVis,
-  '200 mm/100x: la frontera cae dentro del halo visible y fuera del núcleo (' +
-  F2.r50.toFixed(2) + ' r_h, con el halo hasta ' + F2.rVis.toFixed(2) + ')');
-ok(F3.r50 < F2.r50,
-  '400 mm/200x: y con el doble de apertura entra hasta ' + F3.r50.toFixed(2) +
-  ' r_h (desde ' + F2.r50.toFixed(2) + ')');
+/* Con el ADR 0012, 200 mm/100× ya NO llega a mayoría de puntos en ningún radio:
+   f_res se queda en el 31 % en el borde. No lo hace la ley del crowding —a ≈ 1
+   donde está el flujo, y f_res con `a` y sin `a` difieren en 0,1 puntos— sino el
+   estimador: antes lo dibujado se contaba como Fresuelto(m_res+δ), es decir la
+   banda de transición ENTERA a flujo íntegro, cuando la banda se dibujaba
+   atenuada. Ese +δ era el que cruzaba el 50 %. Sin banda, lo dibujado es lo
+   dibujado. Queda registrado, que es para lo que está esta matriz. */
+ok(F2.r50 === Infinity,
+  '200 mm/100x: todavía no hay mayoría de puntos en ningún radio (f_res llega a ' +
+  (100 * F2.fRes[F2.fRes.length - 1]).toFixed(0) + ' % en el borde)');
+ok(F3.r50 < F2.r50 && isFinite(F3.r50),
+  '400 mm/200x: con el doble de apertura la frontera aparece, a ' + F3.r50.toFixed(2) +
+  ' r_h, dentro del halo visible (' + F3.rVis.toFixed(2) + ')');
 ok(F4.rVis < 0.5 * F2.rVis,
   'con el cielo de ciudad el halo exterior se pierde (' + F2.rVis.toFixed(2) +
   ' r_h → ' + F4.rVis.toFixed(2) + ' r_h)');
@@ -196,7 +203,7 @@ var salto = (D4.tabla.mRes[i1rh] - D1.tabla.mRes[i1rh]) / 2;   // por duplicaci�
 informe('  duplicar la apertura con el aumento fijo:', [D1, D2, D4]);
 ok(salto > 0.5,
   'duplicar D hunde m_res en r_h ' + salto.toFixed(2) + ' mag por duplicación');
-ok(D4.r50 < D2.r50 && D2.r50 < D1.r50,
+ok(D4.r50 < D2.r50 && D2.r50 <= D1.r50 && isFinite(D4.r50),
   'y la frontera se mueve hacia el núcleo (' + D1.r50.toFixed(2) + ' → ' +
   D2.r50.toFixed(2) + ' → ' + D4.r50.toFixed(2) + ' r_h)');
 
@@ -221,9 +228,9 @@ for (var i = 0; i < M100.tabla.I.length; i++) {
 var peorVia = 0;
 for (i = 0; i < M100.tabla.I.length; i++) {
   if (!(M100.tabla.I[i] > 0) || !(M200.tabla.I[i] > 0)) continue;
-  var dl = C.config.delta;
-  var esperado = pobM13.S1campo(M200.tabla.mRes[i], dl) /
-                 pobM13.S1campo(M100.tabla.mRes[i], dl);
+  var rAs = M100.tabla.r[i], rImg = M100.res.radioImagenAs;
+  var esperado = pobM13.S1campo(M200.tabla.mRes[i], rAs, rImg) /
+                 pobM13.S1campo(M100.tabla.mRes[i], rAs, rImg);
   var d = Math.abs((M200.tabla.I[i] / M100.tabla.I[i]) / esperado - 1);
   if (d > peorVia) peorVia = d;
 }

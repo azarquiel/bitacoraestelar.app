@@ -192,22 +192,34 @@ ok(pobM13.completitud(15, 600) > pobM13.completitud(15, 2),
 ok(pobM13.completitud(21, 600) < pobM13.completitud(15, 600),
   'y menos completa en las débiles que en las brillantes');
 
-/* ── 7. Clasificación y banda de transición ─────────────────────────────── */
-console.log('Clasificación por m_res y banda de transición:');
-ok(C.clasificar(12, 16) === 'resuelta', 'una estrella muy por encima de m_res es resuelta');
-ok(C.clasificar(16, 16) === 'transicion', 'justo en m_res, está en la banda');
-ok(C.clasificar(18, 16) === 'campo', 'muy por debajo, se va al campo estadístico');
-casi(C.atenuacionTransicion(15, 16), 1, 0, 'en el borde brillante la atenuación no toca nada');
-casi(C.atenuacionTransicion(17, 16), 0, 0, 'en el débil apaga del todo');
-var prevA = 2, monoA = true, saltoA = 0, antA = null;
-for (var mm = 14.5; mm <= 17.5; mm += 0.01) {
-  var a = C.atenuacionTransicion(mm, 16);
-  if (a > prevA + 1e-12) monoA = false;
-  if (antA !== null) saltoA = Math.max(saltoA, Math.abs(a - antA));
-  prevA = a; antA = a;
+/* ── 7. El sorteo por estrella (ADR 0012) ───────────────────────────────── */
+console.log('Sorteo por estrella:');
+
+/* No es azar: es una función de las coordenadas. La misma estrella sale o no
+   sale siempre igual, y por eso cambiar de ocular no la hace parpadear. */
+var u1 = C.sorteo(250.4235, 36.4613, 0);
+ok(u1 === C.sorteo(250.4235, 36.4613, 0), 'el sorteo es determinista en las coordenadas');
+ok(u1 !== C.sorteo(250.4235, 36.4613, 1), 'y otra realización del cúmulo da otro sorteo');
+ok(C.sorteo(250.4235, 36.4613, 0) !== C.sorteo(250.4236, 36.4613, 0),
+  'dos estrellas vecinas sortean por separado');
+
+/* Uniforme en [0,1): si no lo fuera, comparar contra a(m,r) no daría la
+   probabilidad que la ley pide, daría otra. Se mide sobre una rejilla de
+   coordenadas de verdad, no sobre enteros consecutivos. */
+var nU = 0, suma = 0, malRango = 0, cuartos = [0, 0, 0, 0];
+for (var iu = 0; iu < 200; iu++) {
+  for (var ju = 0; ju < 200; ju++) {
+    var u = C.sorteo(250 + iu * 0.0017, 36 + ju * 0.0013, 0);
+    if (!(u >= 0 && u < 1)) malRango++;
+    cuartos[Math.min(3, Math.floor(u * 4))]++;
+    suma += u; nU++;
+  }
 }
-ok(monoA, 'decrece monótonamente con la magnitud');
-ok(saltoA < 0.02, 'y es continua (salto máximo ' + saltoA.toFixed(4) + ')');
+ok(malRango === 0, 'siempre cae en [0,1) (' + nU + ' muestras)');
+casi(suma / nU, 0.5, 2, 'con media 1/2');
+var peorCuarto = Math.max.apply(null, cuartos.map(function (c) { return Math.abs(c / nU - 0.25); }));
+ok(peorCuarto < 0.01, 'y reparto plano por cuartos (peor desvío ' +
+  (100 * peorCuarto).toFixed(2) + ' %)');
 
 /* ── 8. Conservación de la Fase 1, en sus dos sentidos ───────────────────
    (a) INTERNA: resuelto + campo = F(V_t) para todo m_lim. Es la de §3.4 de la

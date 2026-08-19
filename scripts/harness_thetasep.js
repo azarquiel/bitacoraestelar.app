@@ -150,7 +150,7 @@ console.log('M13 · D=' + D + 'mm  M=' + MAG + 'x  SQM=' + SQM.toFixed(1) +
             '  mlim=' + mlim.toFixed(2) + '  r_img=' + rImg.toFixed(2) +
             '"  Ω_res=' + omegaRes.toFixed(2) + ' as²');
 console.log('Gaia con G<=mlim: ' + visibles.length + ' (fixture ' + gaia.length + ')');
-console.log('Referencia: el render con k=' + C.config.crowdingCriterion +
+console.log('Referencia: el render viejo con k=' + 30 +
             ' entrega ' + base.estrellas.filter(function (s) {
               return (s[4] != null ? s[4] : s[2]) <= mlim && anillo(radio(s)) >= 0;
             }).length + ' estrellas dentro de 8 r_h\n');

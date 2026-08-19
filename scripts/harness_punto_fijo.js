@@ -208,7 +208,7 @@ console.log('  peor dif. entre semillas opuestas tras ' + ITER + ' pasadas  ' +
             peorDifTodo.toExponential(1) + ' mag');
 
 /* ── 4 · Contra producción ───────────────────────────────────────────────── */
-console.log('\nContra el m_res de producción (m_crowd + banda δ, k=' + C.config.crowdingCriterion + '):');
+console.log('\nContra el m_res del modelo viejo (m_crowd + banda δ, k=30):');
 console.log('  r/r_h    producción    punto fijo     Δ');
 RADIOS_RH.forEach(function (rr) {
   var rAs = rr * rhAs;
