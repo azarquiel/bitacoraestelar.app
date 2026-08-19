@@ -160,7 +160,11 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   pierde: el proxy agrega los momentos de la banda truncada (clave `fondo`) y
   el render los pinta como **velo de fondo** (cielo extra), que en M7 vale
   21,0 mag/arcsec², más brillante que un cielo oscuro. La placa del DSS no
-  lleva velo: la foto ya lo contiene.
+  lleva velo: la foto ya lo contiene. La **primera** carga de un campo denso
+  paga sonda + consulta ordenada + agregado (~1 min en M7, medido); el
+  indicador cuenta los segundos y lo explica a partir de los 8. Después queda
+  en la caché del proxy (inmutable: Gaia DR3 es un catálogo fijo) y esa
+  región es instantánea para todos, para siempre.
 - **Tamaño** = imagen estelar física (disco de Airy + seeing, ver más abajo), en
   cuadratura con un **suelo de visibilidad** en píxeles (`radioSuelo`, con un
   término extra `radioSueloMag · flujoRelativo^radioSueloExp` y `radioSueloMax`
