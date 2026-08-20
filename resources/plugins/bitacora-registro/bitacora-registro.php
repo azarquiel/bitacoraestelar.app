@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.29.0
+ * Version:     1.29.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.29.0' );
+define( 'BITACORA_VERSION', '1.29.1' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -2906,7 +2906,10 @@ function bitacora_simbad( $identificador ) {
     if ( '' === $id ) {
         return null;
     }
-    $cache_key = 'bitacora_simbad_' . md5( strtolower( $id ) );
+    // Versionada: si cambia la forma del array devuelto (nuevas claves como
+    // sp_type o gaia_dr3_id), subir esta versión invalida de golpe la caché
+    // vieja en vez de dejar arrays a medias 30 días sirviendo null.
+    $cache_key = 'bitacora_simbad_v2_' . md5( strtolower( $id ) );
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
         return is_array( $cache ) ? $cache : null;
