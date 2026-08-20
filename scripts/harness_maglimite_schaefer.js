@@ -69,6 +69,11 @@ function nuestra(D, MG, sqm) {
   return R.magLimite({ apertura: D, aumentos: MG, transmision: 0.9, sqm: sqm, pupilaOjo: 7 });
 }
 
+/* Fuente única de la ley de Schaefer para otros arneses: se exporta y solo se
+   imprime cuando este fichero se ejecuta directamente (ADR 0008, no copiarla). */
+module.exports = { schaefer: schaefer, nelmDeSqm: nelmDeSqm, nuestra: nuestra };
+if (require.main !== module) return;
+
 console.log('magLimite (Torres Lapasió) contra Schaefer 1990 (314 observaciones)');
 console.log('D = 200 mm · transmisión 0,9 · pupila del ojo 7 mm · seeing 2" · cénit\n');
 console.log('  SQM   NELM   aum   Schaefer newt   Schaefer refr   magLimite   dif(newt)');
