@@ -89,26 +89,13 @@ grano no es un artefacto del generador: es lo que Σ·S2/Ω predice.
 cero, en las 16 filas. `s_grano` sale 0,00 en todas. **El grano está en el modelo y
 la ley visual lo borra entero.**
 
-**5. Y no lo borra por poco margen a bajo aumento.** Contraste crudo dividido por
-C_min, antes y después de la atenuación por parche:
-
-| aum | crudo / C_min | con atenuación |
-|---:|---:|---:|
-| 61 | **2,63** | 0,076 |
-| 120 | **1,31** | 0,056 |
-| 173 | 0,88 | 0,046 |
-| 250 | 0,61 | 0,040 |
-
-A 61× y 120× el grano del núcleo **supera el umbral de contraste en crudo**, 2,6× y
-1,3×. Quien lo apaga es la atenuación por el parche de integración de Ricco
-(θ* = θ_R/M, 0,029 a 61×): se promedian ~1200 celdas independientes y la amplitud
-se divide por 34. A 173× y 250× ya no pasaría ni sin atenuar.
-
-Conviene ver el signo de eso: el observador reporta M13 «granular, la pelusa
-empieza a romperse en puntos» precisamente a ~50×, que es donde el contraste crudo
-va 2,6 veces por encima del umbral. La atenuación de Ricco es lo único que
-separa al modelo de ese reporte, y va justo en la dirección contraria al aumento
-—cuanto menos aumento, más borra—.
+**5. RETIRADO — este punto estaba mal.** Decía que a 61× el grano superaba el
+umbral «en crudo» 2,63×. Comparaba la amplitud medida en el beam con el C_min
+evaluado en θ_R/M: dos escalas distintas, y su cociente no significa nada.
+Medidas ambas a la MISMA escala, la razón en el beam es 0,0059 y el máximo sobre
+todo el barrido de escalas es 0,042 — al grano le faltan ×24. Ver
+`escala_grano.md`, que sustituye a este punto y descarta la escala de integración
+como la variable que falta.
 
 ## Lo que esto NO decide
 
@@ -118,4 +105,5 @@ detectar una mancha uniforme**. La pregunta que queda abierta —y que esta medi
 no responde— es si detectar TEXTURA es la misma tarea que detectar una mancha, o
 si el ojo la resuelve a una escala intermedia entre el beam y θ_R. Son dos leyes
 distintas del modelo visual —detección contra estructura— y esta medida vuelve a
-tropezar con la misma frontera. Sin propuesta: aquí solo se mide.
+tropezar con la misma frontera. Sin propuesta: aquí solo se mide. El barrido de
+escalas que responde a medias esa pregunta está en `escala_grano.md`.
