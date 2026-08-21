@@ -71,9 +71,17 @@ ok(kMin !== null, 'existe un factor de S2 que enciende el grano' +
 ok(subida, 's_grano crece monótonamente con S2');
 ok(cAlto.sGranoMax > 0.5, 'y llega a encenderse del todo: s_grano = ' +
   cAlto.sGranoMax.toFixed(3) + ' con k = 1e4');
-ok(Math.abs(cAlto.firma - c1.firma) / c1.firma > 0.01,
+/* Un k mayor para esta comprobación en concreto: el trazador de #96 sigue
+   siendo una intervención sin física (no real), pero un generador sin malla
+   reparte el exceso de S2 entre muchos más impulsos independientes que el
+   bilineal (4 nodos por celda), así que cancela más antes de asomar en la
+   suma de flujo del lienzo. El delta crece monótono con k (verificado: -1,0 %
+   a k=1e4, -29,4 % a k=1e6) — es el mismo término, solo hace falta más S2
+   para que se note en esta métrica agregada. */
+var cFirma = A.corrida(M13, EQ, 1e5);
+ok(Math.abs(cFirma.firma - c1.firma) / c1.firma > 0.01,
   'y el lienzo cambia cuando el grano se pinta (' +
-  (100 * (cAlto.firma - c1.firma) / c1.firma).toFixed(1) + ' % de flujo pintado)');
+  (100 * (cFirma.firma - c1.firma) / c1.firma).toFixed(1) + ' % de flujo pintado, k = 1e5)');
 ok(c1.sGranoMax === 0,
   'HALLAZGO, no regresión: con S2 real el grano sigue sin pintarse en M13/200 mm 146×');
 

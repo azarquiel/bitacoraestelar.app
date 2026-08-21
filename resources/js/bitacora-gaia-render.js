@@ -1391,18 +1391,26 @@
      halo se deshace en estrellas; el núcleo aglomera, m_res sube y queda lechoso. */
 
   /* Ruido del grano. Anclado al CIELO (offsets en ″ desde el centro del cúmulo),
-     no al lienzo: hacer zoom agranda el grano, nunca lo redibuja. Cada nodo de la
-     malla saca su gaussiana de un hash de (cúmulo, realización, i, j), así que no
-     hay array que guardar y el campo es el mismo en cualquier orden de pintado. */
-  /* La gaussiana sale de una tabla, no de un Box-Muller por nodo: el logaritmo,
-     la raíz y el coseno se pagaban medio millón de veces por pintado (60 % del
-     coste medido) para devolver siempre uno de unos pocos miles de valores. La
-     tabla se normaliza a media 0 y varianza 1 EXACTAS, así que el grano conserva
-     su estadística; las colisiones (1 de 4096) son ruido sobre ruido. */
+     no al lienzo: hacer zoom agranda el grano, nunca lo redibuja. Cada impulso
+     sale de un hash de (cúmulo, realización, celda, índice), así que no hay
+     array que guardar y el campo es el mismo en cualquier orden de pintado.
+
+     Convolución dispersa (ruido de Gabor), no la malla cuadrada bilineal de
+     antes: esa interpolaba ALTURAS en los nodos de una rejilla cuadrada y a ×6
+     se veían las cadenas curvas y los anillos de nudos brillantes de la propia
+     rejilla (issue #96, medido en exp_sgrano — bloqueante de ADR 0015). Aquí los
+     impulsos caen en posiciones CON JITTER dentro de cada celda de una rejilla
+     de búsqueda —la rejilla es solo para encontrar vecinos rápido, no una malla
+     de valores— y se combinan con un núcleo gaussiano suave: sin nodos fijos no
+     hay eje que seguir con el ojo. */
   var GRANO_TABLA = null;
   function granoTabla() {
     if (GRANO_TABLA) return GRANO_TABLA;
-    var n = 4096, v = new Float64Array(n), suma = 0, suma2 = 0, k;
+    // Tabla grande a propósito: cada punto suma ~150 impulsos, y con una tabla
+    // de pocos miles el índice de dos impulsos distintos coincide a menudo (el
+    // cumpleaños), lo que les da el MISMO peso y rompe la independencia que
+    // hace exacta la suma. Con 2^18 la colisión es despreciable.
+    var n = 1 << 18, v = new Float64Array(n), suma = 0, suma2 = 0, k;
     for (k = 0; k < n; k++) {
       var u1 = (k + 0.5) / n, u2 = ((Math.imul(k, 2654435761) >>> 0) % n + 0.5) / n;
       v[k] = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);   // Box-Muller
@@ -1416,49 +1424,121 @@
     return v;
   }
 
-  function granoNodo(semilla, i, j) {
-    var h = semilla ^ Math.imul(i | 0, 374761393) ^ Math.imul(j | 0, 668265263);
+  var GRANO_LAMBDA = 3, GRANO_RADIO = 2;   // impulsos/celda ESPERADOS, radio de búsqueda en celdas
+
+  function granoHash(semilla, i, j, k, sal) {
+    var h = semilla ^ Math.imul(i | 0, 374761393) ^ Math.imul(j | 0, 668265263)
+      ^ Math.imul(k | 0, 2246822519) ^ sal;
     h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h = (h ^ (h >>> 16)) >>> 0;
-    return GRANO_TABLA[h & 4095];
+    return (h ^ (h >>> 16)) >>> 0;
   }
 
+  /* Número de impulsos de la celda (i,j): Poisson(λ), no un conteo fijo. Con un
+     conteo fijo por celda la DENSIDAD de impulsos queda modulada a la frecuencia
+     de la propia rejilla de búsqueda —una regularidad tan visible como la malla
+     que este ticket quita—; con conteo Poisson no hay periodo que detectar.
+     Algoritmo de Knuth: multiplicar uniformes hasta bajar de e^-λ. */
+  function granoCeldaN(semilla, i, j) {
+    var s = granoHash(semilla, i, j, 0, 0x27D4EB2F);
+    var limite = Math.exp(-GRANO_LAMBDA), p = 1, n = 0;
+    do {
+      n++;
+      s = Math.imul(s ^ (s >>> 15), 2246822519);
+      s = (s ^ (s >>> 13)) >>> 0;
+      p *= ((s >>> 8) + 0.5) / 16777216;   // uniforme (0,1) de 24 bits
+    } while (p > limite && n < 24);
+    return n - 1;
+  }
 
-  /* El campo estadístico, con la media y la varianza que pide la SBF y SIN poder
-     salir negativo.
+  // Posición del impulso k dentro de la celda (i,j): jitter uniforme en [0,1)².
+  function granoImpPos(semilla, i, j, k) {
+    var h = granoHash(semilla, i, j, k, 0x9E3779B9);
+    return [(h & 0xFFFF) / 0x10000, ((h >>> 16) & 0xFFFF) / 0x10000];
+  }
 
-     La fluctuación relativa vale sigma/<I> = 1/√N_eff, con N_eff el número de
-     estrellas del campo por beam. En el halo de un globular N_eff baja de 1 —hay
-     menos de una estrella no resuelta por beam— y ahí sigma llega a 10·<I>: una
-     gaussiana recortada a cero deja de tener la media que se le pidió, y medido
-     sobre M13 se inventaba el 65 % del flujo. Una lognormal con esa misma media y
-     esa misma varianza es positiva por construcción, no necesita recorte y con
-     sigma << <I> es la gaussiana de siempre; con sigma >> <I> queda muy sesgada,
-     que es justo lo que hace un campo de puntos casi vacío.
-     La anchura s se tabula en el radio y no se calcula por píxel: el logaritmo y
-     la raíz eran lo caro del bucle. */
+  function granoImpPeso(semilla, i, j, k) {
+    var tabla = granoTabla();
+    return tabla[granoHash(semilla, i, j, k, 0x85EBCA6B) % tabla.length];
+  }
+
+  /* Caché de impulsos por celda: `pintarCumulo` llama a granoEn una vez por
+     píxel, y cada celda de búsqueda cae en el vecindario de ~(2·GRANO_RADIO+1)²
+     píxeles distintos — sin caché se rehacía el sorteo de Poisson y el hash de
+     cada impulso esa misma cantidad de veces por celda. FIFO con tope: una
+     sesión que hace zoom/pan sobre muchos cúmulos no debe crecer sin límite. */
+  // Dos niveles: la clave exterior (semilla+paso) se arma una vez por llamada a
+  // granoEn, no una vez por celda vecina; la interior es un entero (i,j
+  // empaquetados), sin concatenar strings en el camino caliente. Tope sobre el
+  // número total de celdas cacheadas: un barrido de coordenadas disperso (p.
+  // ej. la autocorrelación de test_grano_malla.js) casi no repite celda, así
+  // que llenaría la caché sin límite si solo se topara la tabla exterior. Se
+  // vacía TODA la caché al llegar al tope en vez de desalojar la más vieja: un
+  // FIFO con .shift() es O(n) por desalojo, y con un tope alto y muchos fallos
+  // de caché (ese mismo barrido disperso) eso es O(n²) — se midió: colgaba el
+  // proceso. Vaciar entero es O(1) amortizado y aquí el patrón real de uso
+  // (píxeles contiguos de un cúmulo) reconstruye rápido lo que hace falta.
+  var GRANO_CACHE = new Map(), GRANO_CACHE_N = 0, GRANO_CACHE_TOPE = 20000;
+  function granoTablaCelda(semilla, cell) {
+    var clave = semilla + '_' + cell;
+    var tabla = GRANO_CACHE.get(clave);
+    if (tabla) return tabla;
+    tabla = new Map();
+    GRANO_CACHE.set(clave, tabla);
+    return tabla;
+  }
+  function granoCelda(tabla, semilla, i, j, cell) {
+    var claveInterna = (i + 32768) * 65536 + (j + 32768);
+    var impulsos = tabla.get(claveInterna);
+    if (impulsos) return impulsos;
+    var n = granoCeldaN(semilla, i, j);
+    impulsos = new Array(n);
+    for (var k = 0; k < n; k++) {
+      var pos = granoImpPos(semilla, i, j, k);
+      impulsos[k] = { x: (i + pos[0]) * cell, y: (j + pos[1]) * cell, w: granoImpPeso(semilla, i, j, k) };
+    }
+    if (GRANO_CACHE_N >= GRANO_CACHE_TOPE) { GRANO_CACHE.clear(); GRANO_CACHE_N = 0; tabla.clear(); GRANO_CACHE.set(semilla + '_' + cell, tabla); }
+    tabla.set(claveInterna, impulsos);
+    GRANO_CACHE_N++;
+    return impulsos;
+  }
+
+  /* `campoLognormal` (más abajo) da por hecho que g es N(0,1) EXACTA: mu =
+     ln(<I>) − s²/2 solo deja la media pintada exacta si E[e^{s·g}] = e^{s²/2},
+     la identidad de la MGF normal. El campo es una combinación LINEAL de pesos
+     gaussianos independientes (`granoImpPeso`) con coeficientes fijos por punto
+     (el núcleo `c`, que solo depende de la distancia): eso lo hace exactamente
+     N(0,1) en cada punto, igual que la malla bilineal de antes, sin heredar su
+     rejilla de valores. */
   function campoLognormal(mu, s, g) {
     return Math.exp(mu + s * g);
   }
 
-  /* Interpolar ruido blanco le quita varianza, y no la misma en todas partes: el
-     peso cuadrático vale 1 justo sobre un nodo y 1/4 en el centro de la celda. Con
-     un factor constante quedaría una REJILLA de ruido —nodos ásperos, centros
-     lisos— y la varianza medida saldría un 30-50 % por encima de la pedida. Por
-     eso se normaliza con el peso exacto de cada punto: g tiene varianza 1 en todo
-     el campo, sin constante que calibrar. */
+  /* Cada punto suma los impulsos de las celdas vecinas pesados por un núcleo
+     gaussiano de ancho `bw`, y se normaliza por la norma EXACTA de esos pesos
+     en ESE punto (raíz de Σc²) — la misma idea que la malla bilineal de antes
+     (normalizar con el peso real, no una constante), pero con vecinos en
+     posiciones libres en vez de las 4 esquinas de una celda. */
   function granoEn(semilla, xAs, yAs, pasoAs) {
-    if (!GRANO_TABLA) granoTabla();
-    var u = xAs / pasoAs, v = yAs / pasoAs;
-    var i0 = Math.floor(u), j0 = Math.floor(v);
-    var tx = u - i0, ty = v - j0;
-    var w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty);
-    var w01 = (1 - tx) * ty, w11 = tx * ty;
-    var g = granoNodo(semilla, i0, j0) * w00
-          + granoNodo(semilla, i0 + 1, j0) * w10
-          + granoNodo(semilla, i0, j0 + 1) * w01
-          + granoNodo(semilla, i0 + 1, j0 + 1) * w11;
-    return g / Math.sqrt(w00 * w00 + w10 * w10 + w01 * w01 + w11 * w11);
+    var bw = pasoAs / 2, cell = bw;
+    var i0 = Math.floor(xAs / cell), j0 = Math.floor(yAs / cell);
+    var suma = 0, sumaC2 = 0;
+    var tabla = granoTablaCelda(semilla, cell);
+    for (var di = -GRANO_RADIO; di <= GRANO_RADIO; di++) {
+      var i = i0 + di;
+      for (var dj = -GRANO_RADIO; dj <= GRANO_RADIO; dj++) {
+        var j = j0 + dj;
+        var impulsos = granoCelda(tabla, semilla, i, j, cell);
+        for (var k = 0; k < impulsos.length; k++) {
+          var imp = impulsos[k];
+          var dx = (xAs - imp.x) / bw, dy = (yAs - imp.y) / bw, d2 = dx * dx + dy * dy;
+          if (d2 > GRANO_RADIO * GRANO_RADIO) continue;
+          var c = Math.exp(-0.5 * d2);
+          suma += imp.w * c;
+          sumaC2 += c * c;
+        }
+      }
+    }
+    return sumaC2 > 0 ? suma / Math.sqrt(sumaC2) : 0;
   }
 
   function hashCadena(texto) {
