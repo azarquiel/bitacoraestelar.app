@@ -1468,6 +1468,76 @@
     return h >>> 0;
   }
 
+  /* ═══════ LEY DE UMBRAL DE TEXTURA (ADR 0015, docs/halo_v7/prerregistro_umbral_textura.md) ═══════
+     El grano SBF de un globular no es una mancha uniforme (eso lo juzga Cmin,
+     ver H2c): es RUIDO ESPACIAL, y la literatura dice que ahí el detector no es
+     un umbral de contraste sino la CSF evaluada a la frecuencia retiniana del
+     grano, en régimen de filtro adaptado (Rovamo/Van Nes & Bouman, bibliografía
+     completa en el documento citado). d′ = amplitud de la señal (RMS relativo
+     del grano en el anillo) por la ganancia del observador a esa frecuencia y
+     esa iluminancia; P(ver) es la salida psicométrica de Quick 1974.
+
+     TEXTURA.ACTIVO en false dejar sGrano tal como salía antes (visibilidadDifusa
+     · Cmin, ver tablaCumulo): con el canal a cero el render es bit a bit el de
+     hoy. La calibración de K contra el ancla de M13 —y el interruptor de
+     producción— es el ticket #99; aquí K es SOLO provisional. */
+  var TEXTURA = {
+    ACTIVO: false,     // producción apagada (#99 decide el veredicto)
+    K: 1,              // provisional, sin calibrar
+    BETA: 3.5,         // Quick 1974, fijo (prohibido tocarlo, ver §5 del prerregistro)
+    // CSF paso-bajo: ganancia y frecuencia de corte crecen con √iluminancia
+    // (De Vries–Rose / Van Nes & Bouman 1967); a iluminancia de referencia I0
+    // el corte cae en FC0 c/deg — "corte escotópico a pocos c/deg" (bibliografía
+    // §2). Todas provisionales: el nivel absoluto es K, no estas dos.
+    // I0 ancla la escala al mismo cielo de referencia que usa Cmin (Fref, sqm
+    // 21) con pupila de salida 7 mm: sin esto, FC0/S0/K viven en unidades
+    // arbitrarias y ni el orden de magnitud de K (#99) tendría sentido.
+    FC0: 3, I0: Math.pow(10, -0.4 * 21) * 49, S0: 1
+  };
+
+  /* Frecuencia retiniana única del grano: medio ciclo por elemento de grano
+     (θ_grano) proyectado a M aumentos. f = 1 / (2 · θ_grano_deg · M); con
+     θ_grano = 1″ da f = 1800/M, el número de la bibliografía §1.3 (61× → 30
+     c/deg, 250× → 7 c/deg). */
+  function frecuenciaGranoCdeg(thetaGranoAs, aumentos) {
+    return (thetaGranoAs > 0 && aumentos > 0) ? 1800 / (thetaGranoAs * aumentos) : 0;
+  }
+
+  /* CSF escotópica/mesópica a una frecuencia y una iluminancia retiniana
+     (proxy relativo, no trolands calibrados: K absorbe la escala real). */
+  function csfTextura(fCdeg, iluminancia) {
+    if (!(iluminancia > 0)) return 0;
+    var raiz = Math.sqrt(iluminancia / TEXTURA.I0);
+    var fc = Math.max(TEXTURA.FC0 * raiz, 1e-6);
+    return TEXTURA.S0 * raiz * Math.exp(-fCdeg / fc);
+  }
+
+  /* d′ de energía filtrada (Rovamo 1993: SNR constante en régimen limitado por
+     ruido externo, no contraste por píxel): la amplitud RMS relativa del grano
+     multiplicada por la ganancia del observador a su frecuencia retiniana.
+
+       rmsRelativo     sigma(r)/<I>(r) del anillo (adimensional)
+       thetaGranoAs    escala angular del grano en el CIELO, en ″ (thGranoAs)
+       aumentos        los del cielo
+       fondoLocalFlujo fondo local tal como llega al ojo, ANTES de pupila —
+                        mismas unidades que Fcielo (cGrano.Fcielo + <I>(r))
+       pupilaSalidaMm  pupila de salida del equipo, en mm
+
+     La iluminancia retiniana es proxy: fondo × pupila², la misma dependencia
+     de área que un troland real sin calibrar la constante (la calibra K). */
+  function dPrimeTextura(rmsRelativo, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm) {
+    if (!(rmsRelativo > 0)) return 0;
+    var f = frecuenciaGranoCdeg(thetaGranoAs, aumentos);
+    var iluminancia = Math.max(0, fondoLocalFlujo) * pupilaSalidaMm * pupilaSalidaMm;
+    return rmsRelativo * csfTextura(f, iluminancia);
+  }
+
+  /* Salida psicométrica de Quick 1974: P(ver) = 1 − exp(−(d′/K)^β). */
+  function pVerTextura(rmsRelativo, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm) {
+    var d = dPrimeTextura(rmsRelativo, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm);
+    return 1 - Math.exp(-Math.pow(d / TEXTURA.K, TEXTURA.BETA));
+  }
+
   /* Tabla radial del cúmulo: m_res, <I>, sigma y los dos desvanecidos, tabulados
      en el radio PROPIO y interpolados por píxel. Por anillos y no por píxel por
      dos razones que van juntas: cuesta 512 evaluaciones en vez de 500.000, y el
@@ -1479,7 +1549,7 @@
   /* `radioImagenAs` es el tamaño de la imagen estelar (Airy ⊕ seeing) y manda en
      a(m,r); `omegaBeam` puede ser mayor —el píxel del lienzo— y solo entra en σ
      del grano. Ver pintarCumulo. */
-  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, radioImagenAs) {
+  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, radioImagenAs, thGranoAs) {
     var C = window.BitacoraCumulos;
     var pasadas = C.config.pasadasPuntoFijo;
     var n = TRAMOS_R + 1, paso = pob.rtAs / TRAMOS_R;
@@ -1517,8 +1587,16 @@
          (`atenGrano`, ver pintarCumulo), no con la del beam. σ(r) sale intacta a
          la tabla: lo que se pinta es la física, y la atenuación solo entra en el
          desvanecido. */
-      sGrano[i] = visibilidadDifusa(sg[i] * atenGrano,
-        (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
+      /* TEXTURA.ACTIVO en false (producción, #99): sGrano sigue saliendo de
+         visibilidadDifusa·Cmin como hasta hoy —render bit a bit idéntico. En
+         true (ley de umbral, #97): P(ver) de dPrimeTextura, con la MISMA
+         amplitud (sg·atenGrano) y el MISMO fondo local que antes, la señal
+         física no se toca. */
+      sGrano[i] = TEXTURA.ACTIVO
+        ? pVerTextura(Im[i] > 0 ? (sg[i] * atenGrano) / Im[i] : 0, thGranoAs,
+            o.cielo.aumentos, cGrano.Fcielo + Im[i], o.cielo.pupilaSalida)
+        : visibilidadDifusa(sg[i] * atenGrano,
+            (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
       /* Anchura de la lognormal (ver campoLognormal). Se tabula ella y no mu,
          porque mu = ln(<I>) - s²/2 se va a -inf donde el perfil se acaba y ahí la
          interpolación daría NaN a un paso del borde; con <I> ya interpolado sale
@@ -1638,7 +1716,7 @@
     var cGrano = ctxFotometrico(o.cielo, thGranoAs / 60);
     var atenGrano = thBeamAs / thGranoAs;
 
-    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, radioImagenAs);
+    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, radioImagenAs, thGranoAs);
 
     var mascara = difusoMaskDe(o.cielo, difuso.length);
     var semilla = hashCadena([cumulo.id, C.versionLF(), o.realization || 0, 'grano'].join('|'));
@@ -3894,6 +3972,11 @@
     difusoMaskDe: difusoMaskDe,
     ctxFotometrico: ctxFotometrico,
     thetaRiccoArcmin: thetaRiccoArcmin,
+    textura: TEXTURA,
+    frecuenciaGranoCdeg: frecuenciaGranoCdeg,
+    csfTextura: csfTextura,
+    dPrimeTextura: dPrimeTextura,
+    pVerTextura: pVerTextura,
     pintarFot: pintarFot,
     perfilKing: perfilKing,
     areaKing: areaKing,
