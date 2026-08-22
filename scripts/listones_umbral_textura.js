@@ -87,17 +87,22 @@ function evaluarListones() {
 }
 
 // Evalúa los listones a un K dado, con la ley activada solo durante la
-// evaluación: restaura K y ACTIVO al salir, pase lo que pase.
-function evaluar(K) {
-  var Kprev = R.textura.K, activoPrev = R.textura.ACTIVO;
+// evaluación: restaura K, ACTIVO y ESTADISTICO al salir, pase lo que pase.
+// `estadistico` ('energia' por defecto, o 'minkowski' — vía de escape única
+// del §5 del prerregistro) no añade ni retira listones: son los mismos P1/P2/
+// P3/BANCO18, evaluados con el estadístico de entrada que toque.
+function evaluar(K, estadistico) {
+  var Kprev = R.textura.K, activoPrev = R.textura.ACTIVO, estPrev = R.textura.ESTADISTICO;
   R.textura.K = K;
   R.textura.ACTIVO = true;
+  R.textura.ESTADISTICO = estadistico || 'energia';
   try {
     var listones = evaluarListones();
     return { K: K, pasa: listones.every(function (l) { return l.pasa; }), listones: listones };
   } finally {
     R.textura.K = Kprev;
     R.textura.ACTIVO = activoPrev;
+    R.textura.ESTADISTICO = estPrev;
   }
 }
 

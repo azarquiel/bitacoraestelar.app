@@ -1588,6 +1588,9 @@
     ACTIVO: false,     // producción apagada (#99 decide el veredicto)
     K: 1,              // provisional, sin calibrar
     BETA: 3.5,         // Quick 1974, fijo (prohibido tocarlo, ver §5 del prerregistro)
+    // 'energia' (default, listones §2/§3) o 'minkowski' (vía de escape única,
+    // §5): cuál d′ usa tablaCumulo. Nunca los dos "activos" en producción.
+    ESTADISTICO: 'energia',
     // CSF paso-bajo: ganancia y frecuencia de corte crecen con √iluminancia
     // (De Vries–Rose / Van Nes & Bouman 1967); a iluminancia de referencia I0
     // el corte cae en FC0 c/deg — "corte escotópico a pocos c/deg" (bibliografía
@@ -1641,6 +1644,39 @@
     return 1 - Math.exp(-Math.pow(d / TEXTURA.K, TEXTURA.BETA));
   }
 
+  /* Vía de escape única del prerregistro (§5, docs/halo_v7/prerregistro_umbral_
+     textura.md): d′ de SUMA MINKOWSKI sobre la distribución de δI en vez de la
+     energía filtrada (RMS de anillo). Quick 1974 ES un modelo de suma de
+     probabilidad con exponente β: P = 1 − exp(−Σ(d_i/K)^β); tratar el anillo
+     como UN d′ (energía) colapsa esa suma a un solo término. Aquí se integra
+     sobre la distribución real del grano —lognormal, sigma sLn ya tabulada— con
+     cuadratura de Gauss-Hermite (determinista, sin muestreo), y se pondera por
+     N_ef = área del anillo / Ω_beam elementos independientes. Ni K ni β
+     cambian de papel: K sigue siendo el ancla, β sigue fijo en 3,5. */
+  var GH_X = [-3.889724897869782, -3.020637625111485, -2.279507080501060,
+    -1.597682635152605, -0.9477883912401637, -0.3142403762543591,
+    0.3142403762543591, 0.9477883912401637, 1.597682635152605,
+    2.279507080501060, 3.020637625111485, 3.889724897869782];
+  var GH_W = [2.658551684356232e-7, 8.573687043587876e-5, 0.003905390584629068,
+    0.05160798561588414, 0.2604923102641612, 0.5701352362624796,
+    0.5701352362624796, 0.2604923102641612, 0.05160798561588414,
+    0.003905390584629068, 8.573687043587876e-5, 2.658551684356232e-7];
+
+  function pVerTexturaMinkowski(sLn, nEf, atenGrano, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm) {
+    if (!(sLn > 0) || !(nEf > 0)) return 0;
+    var suma = 0;
+    for (var i = 0; i < GH_X.length; i++) {
+      var g = -sLn * sLn / 2 + Math.SQRT2 * sLn * GH_X[i];
+      // Misma atenuación de patch de integración que la rama de energía (ver
+      // tablaCumulo): el elemento que se juzga es el parche, no el píxel crudo.
+      var contraste = atenGrano * Math.abs(Math.exp(g) - 1);
+      var d = dPrimeTextura(contraste, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm);
+      suma += GH_W[i] * Math.pow(d / TEXTURA.K, TEXTURA.BETA);
+    }
+    suma /= Math.sqrt(Math.PI);   // normalización de la cuadratura Gauss-Hermite
+    return 1 - Math.exp(-nEf * suma);
+  }
+
   /* Tabla radial del cúmulo: m_res, <I>, sigma y los dos desvanecidos, tabulados
      en el radio PROPIO y interpolados por píxel. Por anillos y no por píxel por
      dos razones que van juntas: cuesta 512 evaluaciones en vez de 500.000, y el
@@ -1691,24 +1727,30 @@
          (`atenGrano`, ver pintarCumulo), no con la del beam. σ(r) sale intacta a
          la tabla: lo que se pinta es la física, y la atenuación solo entra en el
          desvanecido. */
-      /* TEXTURA.ACTIVO en false (producción, hasta que #99 calibre K): sGrano
-         sigue saliendo de visibilidadGrano (== visibilidadDifusa·Cmin salvo
-         que un arnés fuerce FOT.GRANO_FORZAR) —render bit a bit idéntico. En
-         true (ley de umbral, #97): P(ver) de dPrimeTextura, con la MISMA
-         amplitud (sg·atenGrano) y el MISMO fondo local que antes, la señal
-         física no se toca. */
-      sGrano[i] = TEXTURA.ACTIVO
-        ? pVerTextura(Im[i] > 0 ? (sg[i] * atenGrano) / Im[i] : 0, thGranoAs,
-            o.cielo.aumentos, cGrano.Fcielo + Im[i], o.cielo.pupilaSalida)
-        : visibilidadGrano(sg[i] * atenGrano,
-            (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
-      if (sGrano[i] > 0) granoActivo = true;
       /* Anchura de la lognormal (ver campoLognormal). Se tabula ella y no mu,
          porque mu = ln(<I>) - s²/2 se va a -inf donde el perfil se acaba y ahí la
          interpolación daría NaN a un paso del borde; con <I> ya interpolado sale
-         el mismo número y el borde queda limpio. */
+         el mismo número y el borde queda limpio. Se calcula ANTES de sGrano
+         porque la vía de escape Minkowski (ver abajo) la necesita. */
       var s2 = (Im[i] > 0 && sg[i] > 0) ? Math.log(1 + (sg[i] * sg[i]) / (Im[i] * Im[i])) : 0;
       lnS[i] = Math.sqrt(s2);
+      /* TEXTURA.ACTIVO en false (producción, hasta que #99 calibre K): sGrano
+         sigue saliendo de visibilidadGrano (== visibilidadDifusa·Cmin salvo
+         que un arnés fuerce FOT.GRANO_FORZAR) —render bit a bit idéntico. En
+         true (ley de umbral, #97), ESTADISTICO decide la forma: 'energia'
+         (§2/§3 del prerregistro) usa un solo d′ de RMS de anillo; 'minkowski'
+         (vía de escape única, §5) integra sobre la distribución real del
+         grano. Ambas comparten la MISMA amplitud (sg·atenGrano) y el MISMO
+         fondo local: la señal física no se toca. */
+      sGrano[i] = TEXTURA.ACTIVO
+        ? (TEXTURA.ESTADISTICO === 'minkowski'
+            ? pVerTexturaMinkowski(lnS[i], (2 * Math.PI * rAs * paso) / omegaBeam, atenGrano,
+                thGranoAs, o.cielo.aumentos, cGrano.Fcielo + Im[i], o.cielo.pupilaSalida)
+            : pVerTextura(Im[i] > 0 ? (sg[i] * atenGrano) / Im[i] : 0, thGranoAs,
+                o.cielo.aumentos, cGrano.Fcielo + Im[i], o.cielo.pupilaSalida))
+        : visibilidadGrano(sg[i] * atenGrano,
+            (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
+      if (sGrano[i] > 0) granoActivo = true;
     }
     return { paso: paso, r: r, mRes: mRes, I: Im, sigma: sg, sHalo: sHalo, sGrano: sGrano,
              lnS: lnS, granoActivo: granoActivo };
@@ -4126,6 +4168,7 @@
     csfTextura: csfTextura,
     dPrimeTextura: dPrimeTextura,
     pVerTextura: pVerTextura,
+    pVerTexturaMinkowski: pVerTexturaMinkowski,
     pintarFot: pintarFot,
     perfilKing: perfilKing,
     areaKing: areaKing,
