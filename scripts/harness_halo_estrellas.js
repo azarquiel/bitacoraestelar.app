@@ -91,8 +91,8 @@ var conHaloPre = porAnillo(res.estrellas, 2);     // el bug: mlim contra la m_ef
 
 console.log('M13 · D=' + D + 'mm  M=' + MAG + 'x  SQM=' + SQM.toFixed(1) +
             '  SBe=' + res.cHalo.SBe.toFixed(2) + '  mlim puntual=' + mlim.toFixed(2));
-console.log('beam: fwhm=' + res.fwhmAs.toFixed(2) + '"  Ω usada=' + res.omegaBeam.toFixed(2) +
-            ' as²  (Ω óptica=' + (Math.PI * res.fwhmAs * res.fwhmAs / 4).toFixed(2) +
+console.log('beam: radio imagen=' + res.radioImagenAs.toFixed(2) + '"  Ω usada=' + res.omegaBeam.toFixed(2) +
+            ' as²  (Ω óptica=' + (Math.PI * res.radioImagenAs * res.radioImagenAs).toFixed(2) +
             ', Ω píxel=' + Math.pow(ARCMIN * 60 / PROC, 2).toFixed(2) + ')');
 console.log('Gaia en el fixture: ' + gaia.length + ' · con G<=mlim: ' +
             gaia.filter(function (s) { return s[2] <= mlim; }).length);

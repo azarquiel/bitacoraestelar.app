@@ -14,9 +14,12 @@
        se mueve: cada píxel vale la mitad EXACTA que su gemelo, con el mismo
        grano. Escalando solo Sigma, s cambia, el campo se resortea y la igualdad
        solo valdría en promedio (~1 %), que es demasiado flojo para un guardián.
-     · Se fija m_res (vía m_crowd) al valor de la medida de referencia. Si no, al
-       bajar el flujo el fondo local se oscurece, m_lim,sky se hace más profunda
-       y el reparto resuelto/campo cambia: se estaría midiendo eso.
+     · Se congela el REPARTO al de la medida de referencia: los momentos del
+       campo se evalúan siempre en la m_res de referencia, ignorando la que el
+       punto fijo produzca. Si no, al bajar el flujo el fondo local se oscurece,
+       m_lim,sky se hace más profunda y el reparto resuelto/campo cambia: se
+       estaría midiendo eso. Antes esto se hacía fijando m_crowd, y el ADR 0012
+       se llevó por delante el listón de crowding.
      · El cielo es muy oscuro a propósito, para que s_halo esté saturado a 1 en
        toda la región medida. Con la atenuación a medio camino,
        la salida NO debe bajar ×0,5 —la ley de visibilidad no es lineal— y el
@@ -102,13 +105,12 @@ function mResRef(rAs) {
   return a * (1 - f) + b * f;
 }
 
-/* El pin de m_res va 0,5 mag POR DEBAJO de la m_res de referencia, no encima:
-   a 200 mm/100× el corte lo pone m_lim,sky en todos los radios (m_crowd va
-   1,5 mag por encima), así que fijar m_crowd en el propio valor de referencia
-   no fija nada —sigue mandando el cielo, que se mueve al bajar el flujo—. Medio
-   magnitud por debajo, m_crowd pasa a ser el mínimo en las dos medidas y el
-   reparto queda idéntico por construcción. El valor absoluto da igual: lo que
-   el guardián compara son dos medidas con el MISMO reparto. */
+/* El reparto se congela evaluando los momentos del campo en mResRef(r), la
+   m_res de la medida de referencia, sea cual sea la que el punto fijo devuelva
+   en cada corrida. Así <I> y sigma dependen SOLO del factor inyectado, que es lo
+   que el guardián quiere comparar. m_res sigue moviéndose en la tabla —el fondo
+   local es más oscuro— pero ya no entra en nada: por eso la comprobación de la
+   inyección mira <I>, no m_res. */
 function conPoblacionEscalada(K, fn) {
   var mod = global.window.BitacoraCumulos, pobCache = mod.poblacionCacheada;
   var falso = Object.create(mod);
@@ -117,8 +119,8 @@ function conPoblacionEscalada(K, fn) {
     var falsa = Object.create(pob);
     falsa.sigma = function (rAs) { return K * pob.sigma(rAs); };
     falsa.S2 = function (m) { return K * pob.S2(m); };
-    falsa.S2campo = function (m, d) { return K * pob.S2campo(m, d); };
-    falsa.mCrowd = function (rAs) { return mResRef(rAs) - 0.5; };
+    falsa.S1campo = function (m, rAs, ri) { return pob.S1campo(mResRef(rAs), rAs, ri); };
+    falsa.S2campo = function (m, rAs, ri) { return K * pob.S2campo(mResRef(rAs), rAs, ri); };
     return falsa;
   };
   global.window.BitacoraCumulos = falso;
@@ -134,14 +136,16 @@ var atenuado = conPoblacionEscalada(K, function () {
 });
 
 // Que la inyección hizo lo que dice: mismo reparto, solo cambia el nivel.
-var peorMRes = 0;
-for (var k = 0; k < uno.res.tabla.mRes.length; k++) {
-  var a1 = uno.res.tabla.mRes[k], b1 = atenuado.res.tabla.mRes[k];
-  if (!isFinite(a1) || !isFinite(b1)) continue;
-  peorMRes = Math.max(peorMRes, Math.abs(a1 - b1));
+var peorNivel = 0, nodosNivel = 0;
+for (var k = 0; k < uno.res.tabla.I.length; k++) {
+  var a1 = uno.res.tabla.I[k], b1 = atenuado.res.tabla.I[k];
+  if (!(a1 > 0) || !(b1 > 0)) continue;
+  nodosNivel++;
+  peorNivel = Math.max(peorNivel, Math.abs(b1 / a1 / K - 1));
 }
-ok(peorMRes < 1e-9, 'la inyección no mueve m_res (máx ' + peorMRes.toExponential(1) +
-  ' mag): lo único que cambia es el nivel');
+ok(nodosNivel > 100 && peorNivel < 1e-12,
+  'la inyección solo cambia el nivel: <I> baja ×' + K + ' en los ' + nodosNivel +
+  ' nodos con perfil (peor desvío ' + peorNivel.toExponential(1) + ')');
 
 /* Hasta dónde llega la saturación. Más allá el velo cruza el umbral y ahí el
    ×0,5 exacto no es exigible: la ley de visibilidad no es lineal, y exigirlo
@@ -191,7 +195,7 @@ console.log('\nE2.2 · campo + resueltas = F(V_t) en rejilla (D, M, seeing):');
    es S1campo + Fdibujado = Ftotal —eso lo cierra la Capa 1, exacto—, sino que el
    bucle de pintado no pierda ni invente luz al llevarlo al lienzo. */
 function repartoEnLienzo(P) {
-  var pob = P.res.poblacion, tabla = P.res.tabla, delta = C.config.delta;
+  var pob = P.res.poblacion, tabla = P.res.tabla, rImg = P.res.radioImagenAs;
   var escv = P.SIZE / (P.arcmin / 60), asPorPx = 3600 / escv;
   var areaPx = asPorPx * asPorPx, cen = P.SIZE / 2;
   var campo = 0, resuelto = 0, total = 0;
@@ -202,8 +206,8 @@ function repartoEnLienzo(P) {
       var s = pob.sigma(rAs);
       var u = rAs / tabla.paso, i = Math.floor(u), t = u - i;
       var mRes = tabla.mRes[i] * (1 - t) + tabla.mRes[i + 1] * t;
-      campo += s * pob.S1campo(mRes, delta) * areaPx;
-      resuelto += s * pob.Fdibujado(mRes, delta) * areaPx;
+      campo += s * pob.S1campo(mRes, rAs, rImg) * areaPx;
+      resuelto += s * pob.Fdibujado(mRes, rAs, rImg) * areaPx;
       total += s * pob.Ftotal * areaPx;
     }
   }
@@ -242,7 +246,7 @@ var GRID = 1024, omegas = {};
     var rep = repartoEnLienzo(P);
     var razon2 = (rep.campo + rep.resuelto) / rep.total;
     var razonPintado = P.res.Fmedio / rep.campo;
-    var omega = Math.max(Math.PI * Math.pow(P.res.fwhmAs / 2, 2),
+    var omega = Math.max(Math.PI * Math.pow(P.res.radioImagenAs, 2),
                          Math.pow(arcmin * 60 / GRID, 2));
     omegas[caso[0] + caso[2]] = (omegas[caso[0] + caso[2]] || []).concat(omega.toFixed(3));
     ok(Math.abs(razon2 - 1) <= 0.01 && Math.abs(razonPintado - 1) <= 0.01,
