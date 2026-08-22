@@ -74,14 +74,21 @@ ok(cAlto.sGranoMax > 0.5, 'y llega a encenderse del todo: s_grano = ' +
 /* Un k mayor para esta comprobación en concreto: el trazador de #96 sigue
    siendo una intervención sin física (no real), pero un generador sin malla
    reparte el exceso de S2 entre muchos más impulsos independientes que el
-   bilineal (4 nodos por celda), así que cancela más antes de asomar en la
-   suma de flujo del lienzo. El delta crece monótono con k (verificado: -1,0 %
-   a k=1e4, -29,4 % a k=1e6) — es el mismo término, solo hace falta más S2
-   para que se note en esta métrica agregada. */
+   bilineal (4 nodos por celda), así que cancela más antes de asomar en el
+   lienzo. El delta crece monótono con k — es el mismo término, solo hace
+   falta más S2 para que se note en la métrica agregada.
+
+   La métrica ya NO es la suma de flujo: issue #98 hizo la renormalización
+   por anillo la ley por defecto, y su objetivo explícito es que el flujo
+   pintado NO cambie cuando el grano se enciende (conservación). Usar la
+   suma aquí mediría #98, no si #96 sigue vivo. La textura sí se mueve: la
+   renormalización reescala cada anillo por un factor único, así que borra
+   el sumando de flujo pero no la dispersión píxel a píxel dentro del
+   anillo (σ por anillo, ADR 0006 fotométrico vs perceptual). */
 var cFirma = A.corrida(M13, EQ, 1e5);
-ok(Math.abs(cFirma.firma - c1.firma) / c1.firma > 0.01,
-  'y el lienzo cambia cuando el grano se pinta (' +
-  (100 * (cFirma.firma - c1.firma) / c1.firma).toFixed(1) + ' % de flujo pintado, k = 1e5)');
+ok(Math.abs(cFirma.textura - c1.textura) / (c1.textura || 1) > 0.01,
+  'y la textura del lienzo cambia cuando el grano se pinta (' +
+  (100 * (cFirma.textura - c1.textura) / (c1.textura || 1)).toFixed(1) + ' %, k = 1e5)');
 ok(c1.sGranoMax === 0,
   'HALLAZGO, no regresión: con S2 real el grano sigue sin pintarse en M13/200 mm 146×');
 

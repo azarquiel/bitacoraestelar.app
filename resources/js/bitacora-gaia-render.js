@@ -219,7 +219,22 @@
        flujo bajo el umbral, la zona se iba a negro puro y la banda salía como una
        cuña negra en vez de una línea. Aquí barre ~5 magnitudes y no deja borde.
        Las placas conservan el desvanecido original. */
-    UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4
+    UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4,
+    /* El recorte a cero de `pintarCumulo` (el campo no puede quitar luz) manda a
+       negro el 50-70 % del campo cuando el grano se enciende y regala al cúmulo
+       un 2-7 % de flujo que crece con el aumento (issue #98, medido en
+       exp_sgrano con s_grano constante 0,25/0,50 a 61-250×). Se descuenta por
+       ANILLO radial —la misma malla de `tablaCumulo`— reescalando lo pintado en
+       cada anillo para que su flujo vuelva a ser el de sin grano (Im·sHalo).
+       true en producción: hoy es inerte porque S2 real deja sGrano en 0 (ver
+       test_grano_sbf.js G2), y solo actúa cuando algo enciende el grano. */
+    RENORM_ANILLO_GRANO: true,
+    /* Hook de arnés (issue #98): sustituye la P(ver) del grano sin tocar
+       `sHalo`, que sigue leyendo `visibilidadDifusa` directo. null = ley real.
+       La ley de umbral del grano no está decidida (ADR 0015); la conservación
+       de flujo se comprueba forzando P(ver) = 1 con este hook, que entra por
+       el mismo punto que producción, no por una copia (ADR 0008). */
+    GRANO_FORZAR: null
   };
   FOT.H2C = FOT.H2C_DEFECTO; // H2c activa por defecto (validada en campo)
 
@@ -488,6 +503,14 @@
     if (!perceptual) return suave((F / Fumbral - 1) / 1.5);
     if (!(F > 0)) return 0;
     return suave((Math.log10(F / Fumbral) + FOT.UMBRAL_MARGEN) / FOT.UMBRAL_ANCHURA);
+  }
+
+  /* Mismo cálculo que `visibilidadDifusa`, salvo que un arnés puede forzar su
+     salida vía `FOT.GRANO_FORZAR` (ver comentario junto al hook) sin tocar
+     `sHalo`, que sigue llamando a la función de base directamente. */
+  function visibilidadGrano(sgAten, Fumbral, perceptual) {
+    if (typeof FOT.GRANO_FORZAR === 'function') return FOT.GRANO_FORZAR(sgAten, Fumbral, perceptual);
+    return visibilidadDifusa(sgAten, Fumbral, perceptual);
   }
 
   /* Máscara difusa (`cielo.difusoMask`, Float32Array, centinela -1):
@@ -1565,6 +1588,7 @@
     var r = new Float64Array(n), mRes = new Float64Array(n), Im = new Float64Array(n);
     var sg = new Float64Array(n), sHalo = new Float64Array(n), sGrano = new Float64Array(n);
     var lnS = new Float64Array(n);
+    var granoActivo = false;   // ver uso más abajo: evita la pasada de renormalización si es inútil
     for (var i = 0; i < n; i++) {
       var rAs = i * paso;
       var s = pob.sigma(rAs);
@@ -1591,8 +1615,9 @@
          (`atenGrano`, ver pintarCumulo), no con la del beam. σ(r) sale intacta a
          la tabla: lo que se pinta es la física, y la atenuación solo entra en el
          desvanecido. */
-      sGrano[i] = visibilidadDifusa(sg[i] * atenGrano,
+      sGrano[i] = visibilidadGrano(sg[i] * atenGrano,
         (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
+      if (sGrano[i] > 0) granoActivo = true;
       /* Anchura de la lognormal (ver campoLognormal). Se tabula ella y no mu,
          porque mu = ln(<I>) - s²/2 se va a -inf donde el perfil se acaba y ahí la
          interpolación daría NaN a un paso del borde; con <I> ya interpolado sale
@@ -1601,7 +1626,7 @@
       lnS[i] = Math.sqrt(s2);
     }
     return { paso: paso, r: r, mRes: mRes, I: Im, sigma: sg, sHalo: sHalo, sGrano: sGrano,
-             lnS: lnS };
+             lnS: lnS, granoActivo: granoActivo };
   }
 
   function interpTabla(tabla, v, rAs) {
@@ -1717,7 +1742,46 @@
     var alcance = pob.rtAs * pxPorAs;
     var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
     var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
-    var Fmedio = 0, Fpintado = 0;
+    var Fmedio = 0, Fpintado = 0, Fsingrano = 0, FpintadoGrano = 0;
+    var renormGrano = FOT.RENORM_ANILLO_GRANO && tabla.granoActivo;
+    /* Renormalización por anillo (issue #98). El recorte `if (!(I > 0)) I = 0`
+       de más abajo descarta SOLO la cola negativa del campo; como el campo es
+       simétrico en dI, eso regala flujo. Se descuenta con un factor POR
+       ANILLO (la misma malla radial de `tablaCumulo`, `tabla.paso`) que no
+       depende del píxel: escalar todo el anillo por igual no toca la FORMA de
+       la textura ahí dentro (ADR 0006), solo su amplitud media. Primera pasada
+       para medir el objetivo (Im·sHalo, sin grano) y lo realmente pintado
+       (recortado) por anillo; la segunda pinta con el factor ya calculado.
+       `campoLognormal`/`granoEn` son deterministas en (semilla, r), así que
+       repetir el cálculo en dos pasadas da el mismo campo, sin guardarlo. */
+    var nAnillos = tabla.r.length, factorAnillo = null;
+    function kAnillo(rAs) { return Math.min(nAnillos - 1, Math.floor(rAs / tabla.paso)); }
+    if (renormGrano) {
+      var sumObjetivo = new Float64Array(nAnillos), sumRecorte = new Float64Array(nAnillos);
+      for (var y1p = y0; y1p <= y1; y1p++) {
+        var norte1p = -(y1p - cy) * asPorPx;
+        for (var x1p = x0; x1p <= x1; x1p++) {
+          var este1p = -(x1p - cx) * asPorPx;
+          var rAs1p = pob.radioPropio(este1p, norte1p);
+          if (rAs1p >= pob.rtAs) continue;
+          var Im1p = interpTabla(tabla, tabla.I, rAs1p);
+          if (!(Im1p > 0)) continue;
+          var sH1p = interpTabla(tabla, tabla.sHalo, rAs1p);
+          var sG1p = interpTabla(tabla, tabla.sGrano, rAs1p);
+          var sLn1p = interpTabla(tabla, tabla.lnS, rAs1p);
+          var crudo1p = campoLognormal(Math.log(Im1p) - sLn1p * sLn1p / 2, sLn1p,
+            granoEn(semilla, este1p, norte1p, pasoGrano));
+          var I1p = Im1p * sH1p + (crudo1p - Im1p) * sG1p;
+          var k1p = kAnillo(rAs1p);
+          sumObjetivo[k1p] += Im1p * sH1p * areaPx;
+          sumRecorte[k1p] += (I1p > 0 ? I1p : 0) * areaPx;
+        }
+      }
+      factorAnillo = new Float64Array(nAnillos);
+      for (var k2 = 0; k2 < nAnillos; k2++) {
+        factorAnillo[k2] = sumRecorte[k2] > 0 ? sumObjetivo[k2] / sumRecorte[k2] : 1;
+      }
+    }
     for (var y = y0; y <= y1; y++) {
       var norte = -(y - cy) * asPorPx;
       for (var x = x0; x <= x1; x++) {
@@ -1735,10 +1799,14 @@
         var dI = crudo - Im;
         var I = Im * sH + dI * sG;
         if (!(I > 0)) I = 0;                      // el campo no puede quitar luz
+        if (renormGrano) I *= factorAnillo[kAnillo(rAs)];
         Fmedio += Im * areaPx;
         Fpintado += crudo * areaPx;
+        Fsingrano += Im * sH * areaPx;
+        FpintadoGrano += I * areaPx;
         var idx = y * SIZE + x;
         if (o.campoCrudo) o.campoCrudo[idx] = crudo;
+        if (o.campoGranoI) o.campoGranoI[idx] = I;
         difuso[idx] += I;
         // La t del realce es s_halo: donde el velo ya se ve bien, el realce se
         // retira y el núcleo no se quema a blanco (ver difusoMarcado).
@@ -1749,7 +1817,7 @@
     return {
       tabla: tabla, poblacion: pob, fwhmAs: fwhmAs, cHalo: cHalo, cGrano: cGrano,
       omegaBeam: omegaBeam, omegaRes: omegaRes, thBeamAs: thBeamAs, thGranoAs: thGranoAs, atenGrano: atenGrano,
-      Fmedio: Fmedio, Fpintado: Fpintado,
+      Fmedio: Fmedio, Fpintado: Fpintado, Fsingrano: Fsingrano, FpintadoGrano: FpintadoGrano,
       estrellas: estrellasCumulo(pob, cumulo, tabla, o, C)
     };
   }
@@ -3964,6 +4032,7 @@
     areaKing: areaKing,
     pintarCumulo: pintarCumulo,
     granoEn: granoEn,
+    visibilidadGrano: visibilidadGrano,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
     fusionarPlacas: fusionarPlacas,
