@@ -166,6 +166,29 @@
     stroke-linejoin: round;
   }
   #mw-content .mw-object-anchor, #mw-sun-anchor, #sun-edge-anchor { z-index: 2; }
+
+  /* Atenuación de marcadores (spec #102). Estado base: punto + etiqueta algo más
+     pequeños y translúcidos (valores desde CONFIG.marcadores vía las variables
+     --mw-aten-*, que fija via-lactea-app.js con la ley de VLMarcadorEstilo).
+     Recuperan el estilo completo con hover, con la búsqueda (.mw-realzado) o
+     recorriendo un viaje (.mw-viaje en #mw-content). El transform va en el
+     wrapper .mw-aten porque el de .mw-marker-content lo pisa el JS del abanico;
+     el área de clic no cambia: cada marcador lleva un pad transparente SIN
+     escalar (ver createMarker en via-lactea-app.js). */
+  .mw-aten {
+    opacity: var(--mw-aten-op, 1);
+    transform: scale(var(--mw-aten-esc, 1));
+    transform-origin: 0 0;
+    transition: opacity .15s ease, transform .15s ease;
+  }
+  #mw-content .mw-object-anchor:hover,
+  #mw-content .mw-object-anchor.mw-realzado { z-index: 3; }
+  #mw-content .mw-object-anchor:hover .mw-aten,
+  #mw-content .mw-object-anchor.mw-realzado .mw-aten,
+  #mw-content.mw-viaje .mw-aten {
+    opacity: 1;
+    transform: scale(1);
+  }
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 7; }
   .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 1.2; }
   .mw-ruta-flujo {
@@ -947,7 +970,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260721_1900"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260823_1200"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
@@ -957,6 +980,9 @@
 <!-- VIAJES INTERESTELARES: lo consultan las tres capas y la app, así que va
      ANTES que todas ellas (necesita VIAJES/OBSERVACIONES/OBJECTS de los datos). -->
 <script src="/bitacora-mapa/js/via-lactea-viaje.js?v=20260811_1200"></script>
+<!-- LEY DE ATENUACIÓN DE MARCADORES (spec #102): la consultan las tres capas
+     al dibujar, así que va ANTES que todas ellas. Pura, sin DOM. -->
+<script src="/bitacora-mapa/js/via-lactea-marcador-estilo.js?v=20260823_1200"></script>
 <!-- OBSERVADORES: regla única de "visitado / no visitado". Lo consultan las tres
      capas del mapa al dibujar, así que va ANTES que todas ellas. -->
 <script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20260810_1200"></script>
@@ -964,14 +990,14 @@
      cambio de vista. Pura, sin DOM. -->
 <script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260810_1500"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260810_1500"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260823_1200"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260731_2200"></script>
 <!-- Selección pura de estrellas del vecindario: ANTES de vecindario-solar.js y
      DESPUÉS de bitacora-gaia-color.js (necesita claseEspectral). -->
 <script src="/bitacora-mapa/js/via-lactea-vecindario-catalogo.js?v=20260810_1600"></script>
-<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260810_1500"></script>
+<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260823_1200"></script>
 <!-- EQUIPO (fuente única con el simulador y Mi flota). El mapa solo usa
      rotuloNave(): el telescopio con el que se hizo cada viaje, en la ficha. -->
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260810_1700"></script>
@@ -980,5 +1006,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260722_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260811_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260823_1200"></script>
 </li>
