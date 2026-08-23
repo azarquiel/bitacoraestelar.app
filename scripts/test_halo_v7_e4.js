@@ -90,22 +90,29 @@ REFS.forEach(function (id) {
 
 /* ── E4.2 · Sin escalones radiales en ⟨I⟩(r) ──────────────────────────────── */
 
-console.log('\nE4.2 · la parte fotométrica de μ(r), −2,5·log10(S1(m_res+δ)), sin escalones radiales');
+console.log('\nE4.2 · la parte fotométrica de μ(r), −2,5·log10(S1campo(m_res)), sin escalones radiales');
 
 /* Mismo listón que en E4.1, ahora radio a radio sobre la tabla que usa el
    render: lo que se mide es cuánto salta S1 por cada magnitud que se mueve
    m_res entre dos nodos vecinos. Un anillo es un salto sin causa; una pendiente
    es la LF haciendo su trabajo. La LF no da más de ~1 mag de cola por mag de
    límite (medido: 0,84 en el peor nodo de los tres cúmulos); con la cola
-   escalonada el mismo cociente se iba a 4,3. 1,5 separa los dos casos. */
-var TOL_Q = 1.5;
+   escalonada el mismo cociente se iba a 4,3. 1,5 separa los dos casos.
+
+   El cociente sólo se juzga donde hay salto que juzgar. Un anillo es una
+   discontinuidad VISIBLE; por debajo de 1e-3 mag no hay nada que ver, y ahí el
+   cociente es 0/0 y se dispara sin significar nada (a 514× el punto fijo del ADR
+   0012 deja m_res casi plana y los saltos caen a 1e-4 mag, cuatro órdenes por
+   debajo del anillo que este test persigue). Se cuenta cuántos nodos pasan el
+   listón para que el guardián no se quede vacuo sin decirlo (ADR 0005). */
+var TOL_Q = 1.5, SALTO_VISIBLE = 1e-3;
 
 REFS.forEach(function (id) {
   // 300× es la intermedia: entre los dos extremos, m_res(r) barre los bordes de
   // bin de la LF a un paso distinto, que es justo donde nacían los anillos.
   [146, 300, 514].forEach(function (MAG) {
     var m = H.medir(H.cumulo(id), { D: 200, MAG: MAG, sqm: 21.5, realization: 0 });
-    var t = m.tabla, peor = 0, peorR = 0, peorD = 0, nodos = 0;
+    var t = m.tabla, peor = 0, peorR = 0, peorD = 0, nodos = 0, juzgados = 0;
     for (var i = 1; i < t.r.length; i++) {
       // Los últimos nodos rozan r_t, donde el truncamiento de King lleva Σ a
       // cero: ahí el cociente I/Σ es 0/0 numérico y no dice nada de S1.
@@ -114,6 +121,8 @@ REFS.forEach(function (id) {
       if (!(t.I[i] > 0) || !(t.I[i - 1] > 0) || !(s0 > 0) || !(s1 > 0)) continue;
       nodos++;
       var d = Math.abs(-2.5 * Math.log10((t.I[i] / s1) / (t.I[i - 1] / s0)));
+      if (d < SALTO_VISIBLE) continue;         // no hay escalón que medir
+      juzgados++;
       var dm = Math.abs(t.mRes[i] - t.mRes[i - 1]);
       var q = d / Math.max(dm, 1e-6);
       if (q > peor) { peor = q; peorR = t.r[i]; peorD = d; }
@@ -121,7 +130,8 @@ REFS.forEach(function (id) {
     ok(nodos > 100 && peor < TOL_Q,
       id + ' ' + MAG + 'x: mayor cociente entre nodos ' + peor.toFixed(3) +
       ' (salto de ' + peorD.toFixed(4) + ' mag en r = ' + peorR.toFixed(1) +
-      '", ' + nodos + ' nodos de ' + t.paso.toFixed(2) + '")');
+      '", ' + juzgados + ' de ' + nodos + ' nodos con salto visible, paso ' +
+      t.paso.toFixed(2) + '")');
   });
 });
 
@@ -156,7 +166,7 @@ REFS.forEach(function (id) {
   var peorInt = 0, peorEsc = 0;
   for (var k = 1; k < m.tabla.r.length; k++) {
     if (m.tabla.r[k] > 0.98 * m.rtAs) break;
-    var a = m.tabla.mRes[k - 1] + m.delta, b = m.tabla.mRes[k] + m.delta;
+    var a = m.tabla.mRes[k - 1], b = m.tabla.mRes[k];
     if (!isFinite(a) || !isFinite(b) || !(pob.S1(a) > 0) || !(pob.S1(b) > 0)) continue;
     var dm = Math.max(Math.abs(b - a), 1e-6);
     var dInt = Math.abs(-2.5 * Math.log10(pob.S1(b) / pob.S1(a))) / dm;

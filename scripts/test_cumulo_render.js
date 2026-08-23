@@ -87,7 +87,7 @@ ok(!!A.res, 'pintarCumulo devuelve resultado con el módulo de población cargad
    bucle de pintado —área del píxel, radio propio, interpolación de la tabla—
    no pierda ni invente luz al llevarlo al lienzo. */
 function repartoEnLienzo(P) {
-  var pob = P.res.poblacion, tabla = P.res.tabla, delta = C.config.delta;
+  var pob = P.res.poblacion, tabla = P.res.tabla, rImg = P.res.radioImagenAs;
   var escv = P.SIZE / (P.arcmin / 60), asPorPx = 3600 / escv;
   var areaPx = asPorPx * asPorPx, cen = P.SIZE / 2;
   var campo = 0, resuelto = 0, total = 0;
@@ -98,8 +98,8 @@ function repartoEnLienzo(P) {
       var s = pob.sigma(rAs);
       var u = rAs / tabla.paso, i = Math.floor(u), t = u - i;
       var mRes = tabla.mRes[i] * (1 - t) + tabla.mRes[i + 1] * t;
-      campo += s * pob.S1campo(mRes, delta) * areaPx;
-      resuelto += s * pob.Fdibujado(mRes, delta) * areaPx;
+      campo += s * pob.S1campo(mRes, rAs, rImg) * areaPx;
+      resuelto += s * pob.Fdibujado(mRes, rAs, rImg) * areaPx;
       total += s * pob.Ftotal * areaPx;
     }
   }
@@ -289,45 +289,83 @@ ok(nucleo100 < halo100,
   'el núcleo aglomera: m_res es más brillante dentro que fuera (' +
   nucleo100.toFixed(2) + ' vs ' + halo100.toFixed(2) + ')');
 
-/* ── 6. Banda de transición: m_eff ───────────────────────────────────────── */
-console.log('\nBanda de transición:');
-var delta = C.config.delta;
-ok(C.atenuacionTransicion(15 - delta, 15, delta) === 1, 'a = 1 en el borde brillante');
-ok(C.atenuacionTransicion(15 + delta, 15, delta) === 0, 'a = 0 en el débil');
-var aMedia = C.atenuacionTransicion(15, 15, delta);
-var mEff = 15 + 2.5 * Math.log10(1 / aMedia);
-ok(mEff > 15, 'en mitad de la banda m_eff es más débil que m (' + mEff.toFixed(3) + ')');
+/* ── 6. El sorteo por estrella (ADR 0012) ────────────────────────────────── */
+console.log('\nSorteo por estrella:');
 
-/* Una estrella dentro de la banda sale de pintarCumulo con m_eff, y una más
-   débil que m_res + delta no sale: está contada en el campo. */
+/* No hay banda ni magnitud efectiva: una estrella sale ENTERA o no sale. Se
+   comprueba con tres estrellas puestas al mismo radio y m_res conocida. */
 var rTest = 200, mResTest = mResA(P100, rTest);
 var pxAs = rTest / 3600;
-function estrellaA(mag) { return [M13.ra + pxAs / Math.cos(M13.dec * Math.PI / 180), M13.dec, mag, 0.8]; }
-var salida = R.pintarCumulo(new Float32Array(SIZE * SIZE), M13, {
-  ra0: M13.ra, dec0: M13.dec, arcmin: 20, size: SIZE,
-  cielo: equipo(100, 100, 21.5), apertura: 100,
-  estrellas: [estrellaA(mResTest - 2 * delta), estrellaA(mResTest), estrellaA(mResTest + 2 * delta)]
-}).estrellas;
-var brillante = salida.filter(function (e) { return Math.abs(e[2] - (mResTest - 2 * delta)) < 1e-9; });
-var enBanda = salida.filter(function (e) { return e[2] > mResTest && e[2] < mResTest + 5; });
-var debil = salida.filter(function (e) { return Math.abs(e[2] - (mResTest + 2 * delta)) < 1e-9; });
-ok(brillante.length === 1, 'la resuelta sale con su magnitud intacta');
-ok(enBanda.length >= 1, 'la de la banda sale atenuada como m_eff');
-ok(debil.length === 0, 'la del campo no se dibuja (ya está en el velo)');
+function estrellaA(mag, dx) {
+  return [M13.ra + (pxAs + (dx || 0) / 3600) / Math.cos(M13.dec * Math.PI / 180),
+          M13.dec, mag, 0.8];
+}
+function pintaCon(estrellas) {
+  return R.pintarCumulo(new Float32Array(SIZE * SIZE), M13, {
+    ra0: M13.ra, dec0: M13.dec, arcmin: 20, size: SIZE,
+    cielo: equipo(100, 100, 21.5), apertura: 100, estrellas: estrellas
+  });
+}
+var brillante = estrellaA(mResTest - 2), debil = estrellaA(mResTest + 2, 1);
+var salida = pintaCon([brillante, debil]).estrellas;
+ok(salida.filter(function (e) { return e === brillante; }).length === 1,
+  'la resuelta sale con su magnitud intacta');
+ok(salida.filter(function (e) { return e === debil; }).length === 0,
+  'la más débil que m_res no se dibuja (ya está en el velo)');
+ok(salida.every(function (e) { return e[4] === undefined; }),
+  'ninguna sale con magnitud efectiva: el sorteo no atenúa');
 
-/* Invariante 3: m_eff es un número de DIBUJO. La conservación y el reparto se
-   miden sobre m, así que atenuar no puede mover el flujo del campo. */
+/* Determinista: repintar no re-sortea. Es lo que hace que el cuadro no
+   parpadee al mover el ocular ni al redibujar.
+
+   A 100 mm el sorteo no tiene nada que decidir (a ≈ 1: m_res es tan brillante
+   que no hay vecina capaz de fundir a nadie), así que la muestra se planta en el
+   NÚCLEO con 467 mm, donde a ≈ 0,93 y el sorteo sí decide. Y lo que se exige no
+   es un número redondo de supervivientes sino que la cuenta case con Σa dentro
+   de lo que la Poisson-binomial permite: sortear dispersa, y confundir esa
+   dispersión con un fallo del modelo es el error que el ADR 0012 anota. */
+var Pnuc = R.pintarCumulo(new Float32Array(SIZE * SIZE), M13, {
+  ra0: M13.ra, dec0: M13.dec, arcmin: 20, size: SIZE,
+  cielo: equipo(467, 173, 21.0), apertura: 467, estrellas: []
+});
+var rNuc = 5, mResNuc = mResA({ res: Pnuc }, rNuc);
+var muestras = [], E = 0, V = 0;
+for (var jm = 0; jm < 200; jm++) {
+  var eNuc = [M13.ra + (rNuc + jm * 0.02) / 3600 / Math.cos(M13.dec * Math.PI / 180),
+              M13.dec, mResNuc - 0.1, 0.8];
+  muestras.push(eNuc);
+  var pNuc = Pnuc.poblacion.aCrowd(eNuc[2], rNuc + jm * 0.02, Pnuc.radioImagenAs);
+  E += pNuc; V += pNuc * (1 - pNuc);
+}
+function sorteaNucleo() {
+  return R.pintarCumulo(new Float32Array(SIZE * SIZE), M13, {
+    ra0: M13.ra, dec0: M13.dec, arcmin: 20, size: SIZE,
+    cielo: equipo(467, 173, 21.0), apertura: 467, estrellas: muestras
+  }).estrellas.filter(function (e) { return muestras.indexOf(e) >= 0; });
+}
+var s1 = sorteaNucleo(), s2 = sorteaNucleo();
+ok(s1.length === s2.length && s1.every(function (e, i) { return e === s2[i]; }),
+  'el sorteo es determinista: dos pintados dan la misma lista (' + s1.length + '/200)');
+ok(E < 195, 'y en el núcleo a 467 mm el sorteo tiene algo que decidir (Σa = ' +
+  E.toFixed(1) + ' de 200)');
+ok(Math.abs(s1.length - E) < 4 * Math.sqrt(V),
+  'la cuenta dibujada casa con Σa dentro de 4σ: ' + s1.length + ' contra ' +
+  E.toFixed(1) + ' ± ' + Math.sqrt(V).toFixed(1));
+
+/* Invariante: las estrellas catalogadas NO tocan el campo. El velo sale de la
+   LF entera por el perfil, así que dar o no dar la lista de Gaia no puede mover
+   ni un fotón del difuso. */
 var conEstrellas = R.pintarCumulo(new Float32Array(SIZE * SIZE), M13, {
   ra0: M13.ra, dec0: M13.dec, arcmin: 20, size: SIZE,
   cielo: equipo(100, 100, 21.5), apertura: 100,
-  estrellas: [estrellaA(mResTest), estrellaA(mResTest - 0.5)]
+  estrellas: [estrellaA(mResTest - 0.5), estrellaA(mResTest - 1)]
 });
 var sinEstrellas = R.pintarCumulo(new Float32Array(SIZE * SIZE), M13, {
   ra0: M13.ra, dec0: M13.dec, arcmin: 20, size: SIZE,
   cielo: equipo(100, 100, 21.5), apertura: 100, estrellas: []
 });
 ok(conEstrellas.Fmedio === sinEstrellas.Fmedio,
-  'm_eff no toca el flujo del campo (invariante 3)');
+  'las catalogadas no tocan el flujo del campo (invariante 3)');
 
 /* ── 7. Frontera y determinismo ──────────────────────────────────────────── */
 console.log('\nFrontera e integración:');

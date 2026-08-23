@@ -76,7 +76,7 @@ function resumen(m) {
 
   return {
     id: m.id, D: m.D, MAG: m.MAG, sqm: m.sqm,
-    dim: m.dim, SBe: m.SBe, Cmin: m.Cmin, fwhmAs: m.fwhmAs,
+    dim: m.dim, SBe: m.SBe, Cmin: m.Cmin, radioImagenAs: m.radioImagenAs,
     rcAs: m.rcAs, rhAs: m.rhAs, rtAs: m.rtAs,
     rVisibleAs: rVisible, rVisibleEnRh: rVisible / m.rhAs,
     rGranoAs: rGrano, rGranoEnRh: rGrano / m.rhAs,

@@ -135,7 +135,7 @@ function medir(cum, cfg) {
   }
   return {
     id: cum.id, D: cfg.D, MAG: cfg.MAG, sqm: cfg.sqm, arcmin: ARCMIN, size: SIZE,
-    fwhmAs: res.fwhmAs, rcAs: pob.rcAs, rhAs: cum.rh * 60, rtAs: pob.rtAs,
+    radioImagenAs: res.radioImagenAs, rcAs: pob.rcAs, rhAs: cum.rh * 60, rtAs: pob.rtAs,
     dim: ctx.dim, T: ctx.T, SBe: ctx.SBe, Cmin: ctx.Cmin,
     // Fcielo es el flujo del cielo SIN atenuar: el marco en el que trabaja todo
     // el render (pintarFot pinta el objeto como incremento de contraste sobre
@@ -153,8 +153,8 @@ function medir(cum, cfg) {
     sigmaEn: pob.sigma,
     // Funciones, no la población entera: JSON.stringify las omite y el volcado
     // archivado sigue siendo solo números.
-    S1: pob.S1, S2: pob.S2, mCrowd: pob.mCrowd, delta: C.config.delta,
-    // Los momentos que usa el render: cola dura MÁS el (1−a) de la banda.
+    S1: pob.S1, S2: pob.S2, mCrowd: pob.mCrowd, radioImagenAs: res.radioImagenAs,
+    // Los momentos que usa el render (ADR 0012): llevan radio e imagen estelar.
     S1campo: pob.S1campo, S2campo: pob.S2campo, Fdibujado: pob.Fdibujado,
     /* La celda de ruido con la que el render dividió S2. Se recalcula aquí con
        la misma regla (max(beam, píxel)) para que el test de la ley del grano

@@ -48,7 +48,7 @@ var C = global.window.BitacoraCumulos;
 
 function arg(n, def) { var i = process.argv.indexOf('--' + n); return i > 0 ? +process.argv[i + 1] : def; }
 var SQM = arg('sqm', 21), D = arg('D', 467), MAG = arg('mag', 173), PROC = 720;
-var SEP = arg('sep', 1.0);        // θ_sep en unidades de FWHM
+var SEP = arg('sep', 2.0);        // θ_sep en radios de imagen estelar (Airy ⊕ seeing)
 var DMAG = 0.75;                  // «comparable»: hasta 0,75 mag más débil (factor 2 en flujo)
 var ARCMIN = 0.47 * 60;
 
@@ -72,20 +72,24 @@ var visibles = gaia.filter(function (s) { return s[2] <= mlim; });
    que basta cambiar la config: el barrido entra por el MISMO camino que el
    modelo real (ADR 0008, nada se reimplementa aquí). */
 function corrida(k) {
-  var guardado = C.config.crowdingCriterion;
-  C.config.crowdingCriterion = k;
+  var guardado = C.config.gaiaCrowdingK;
+  C.config.gaiaCrowdingK = k;
   try {
     var difuso = new Float32Array(PROC * PROC);
     return R.pintarCumulo(difuso, M13, {
       ra0: M13.ra, dec0: M13.dec, arcmin: ARCMIN, size: PROC,
       cielo: cielo, apertura: D, estrellas: visibles
     });
-  } finally { C.config.crowdingCriterion = guardado; }
+  } finally { C.config.gaiaCrowdingK = guardado; }
 }
 
-var base = corrida(C.config.crowdingCriterion);
-var pob = base.poblacion, fwhm = base.fwhmAs, omegaRes = Math.PI * fwhm * fwhm / 4;
-var thSep = SEP * fwhm;
+/* El k = 30 del modelo VIEJO. Ya no está en CFG —el ADR 0012 se llevó el listón
+   de crowding por delante— y este arnés mide justamente aquel modelo, así que la
+   constante vive aquí, donde no puede confundirse con la ley de producción. */
+var K_VIEJO = 30;
+var base = corrida(K_VIEJO);
+var pob = base.poblacion, rImg = base.radioImagenAs, omegaRes = Math.PI * rImg * rImg;
+var thSep = SEP * rImg;
 
 var cos0 = Math.cos(M13.dec * Math.PI / 180);
 function radio(s) {
@@ -176,9 +180,9 @@ KS.forEach(function (k) {
 });
 
 console.log('M13 · D=' + D + 'mm  M=' + MAG + 'x  SQM=' + SQM.toFixed(1) +
-            '  mlim=' + mlim.toFixed(2) + '  fwhm=' + fwhm.toFixed(2) +
+            '  mlim=' + mlim.toFixed(2) + '  r_img=' + rImg.toFixed(2) +
             '"  Ω=' + omegaRes.toFixed(2) + ' as²');
-console.log('θ_sep = ' + SEP.toFixed(1) + '·fwhm = ' + thSep.toFixed(2) +
+console.log('θ_sep = ' + SEP.toFixed(1) + '·r_img = ' + thSep.toFixed(2) +
             '", vecino comparable hasta Δm = ' + DMAG.toFixed(2));
 console.log('Gaia con G<=mlim: ' + visibles.length + ' (fixture ' + gaia.length + ')\n');
 

@@ -1,0 +1,134 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>M13 · experimento sGrano</title>
+<style>
+  body { background:#111; color:#ccc; font:13px/1.4 system-ui, sans-serif; margin:16px; }
+  h2 { font-size:14px; font-weight:600; margin:18px 0 6px; color:#eee; }
+  table { border-collapse:collapse; }
+  td, th { padding:3px; text-align:center; font-weight:400; color:#999; }
+  canvas { display:block; border:1px solid #333; }
+</style>
+<div id="salida">cargando…</div>
+
+<script src="resources/js/bitacora-gaia-color.js"></script>
+<script src="resources/js/bitacora-gaia-render.js"></script>
+<script src="resources/js/lf-globulares-datos.js"></script>
+<script src="simulador_ocular/resources/js/globulares-datos.js"></script>
+<script src="resources/js/bitacora-cumulos.js"></script>
+<script>
+/* Experimento: sGrano como factor de DETECTABILIDAD de la componente granular.
+   Producción NO se toca. La variante se construye desde `campoCrudo`, que el
+   render ya expone: producción pinta I = Im·sHalo + dI·sGrano con sGrano = 0,
+   así que basta con volver a sumar s·dI, con dI = crudo − Im, y volver a pasar
+   por pintarFot. Ni una línea del render cambia.
+
+   Campo FIJO en todas las imágenes: si cambiase con el aumento no se podría
+   comparar nada. El aumento entra por donde tiene que entrar —pupila de salida,
+   Cmin, m_res—, no por el encuadre. */
+var R = window.BitacoraGaiaRender, C = window.BitacoraCumulos;
+var D = 200, SQM = 21.0, SIZE = 640, ARCMIN = 16, AFOV = 68;
+var AUMENTOS = [61, 120, 173, 250], VARIANTES = [0, 0.25, 0.50];
+var e = window.BITACORA_GLOBULARES.filter(function (f) { return f[0] === 'NGC 6205'; })[0];
+var M13 = { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
+            Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+
+function cieloDe(MAG) {
+  return { pupilaSalida: D / MAG, pupilaOjo: 7, sqm: SQM, transmision: 0.9,
+           aumentos: MAG, perceptual: true };
+}
+function interp(t, v, rAs) {
+  if (!(rAs >= 0) || rAs >= t.r[t.r.length - 1]) return 0;
+  var u = rAs / t.paso, i = Math.floor(u), f = u - i;
+  return v[i] * (1 - f) + v[i + 1] * f;
+}
+
+/* Una imagen. `s` = sGrano experimental; `conGaia` decide si se dibujan las
+   estrellas catalogadas (el canal que NO debe mezclarse con el grano). */
+function pintar(MAG, s, conGaia, gaia, etiqueta) {
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = SIZE;
+  var ctx = cv.getContext('2d');
+  var cielo = cieloDe(MAG);                       // fresco: la máscara vive en él
+  var difuso = new Float32Array(SIZE * SIZE), crudo = new Float32Array(SIZE * SIZE);
+  var res = R.pintarCumulo(difuso, M13, {
+    ra0: M13.ra, dec0: M13.dec, arcmin: ARCMIN, size: SIZE, cielo: cielo,
+    apertura: D, estrellas: gaia, realization: 0, campoCrudo: crudo
+  });
+  if (s > 0) {
+    var pob = res.poblacion, t = res.tabla, asPorPx = (ARCMIN * 60) / SIZE;
+    var cx = SIZE / 2, cy = SIZE / 2;
+    for (var y = 0; y < SIZE; y++) {
+      for (var x = 0; x < SIZE; x++) {
+        var i = y * SIZE + x;
+        if (!(crudo[i] > 0)) continue;
+        var rAs = pob.radioPropio(-(x - cx) * asPorPx, -(y - cy) * asPorPx);
+        var Im = interp(t, t.I, rAs);
+        if (!(Im > 0)) continue;
+        var v = difuso[i] + s * (crudo[i] - Im);
+        difuso[i] = v > 0 ? v : 0;                // el campo no puede quitar luz
+      }
+    }
+  }
+  var estrellas = conGaia ? res.estrellas : [];
+  var mlim = R.magLimite({ apertura: D, aumentos: MAG, transmision: 0.9,
+                           sqm: SQM, pupilaOjo: 7 });
+  var capaEst = R.capaEstrellas(estrellas, {
+    ra: M13.ra, dec: M13.dec, arcmin: ARCMIN, mlim: mlim, afov: AFOV,
+    apertura: D, conGlow: true
+  }, SIZE);
+  R.pintarFot(difuso, ctx, cielo, capaEst);
+  return { cv: cv, n: estrellas.length, etiqueta: etiqueta };
+}
+
+function tabla(titulo, columnas, filas, hacer) {
+  var h = '<h2>' + titulo + '</h2><table><tr><th></th>';
+  columnas.forEach(function (c) { h += '<th>' + c + '</th>'; });
+  h += '</tr>';
+  var cont = document.createElement('div');
+  cont.innerHTML = h + '</table>';
+  var tb = cont.querySelector('table');
+  filas.forEach(function (f) {
+    var tr = document.createElement('tr');
+    var th = document.createElement('th'); th.textContent = f.etiq; tr.appendChild(th);
+    columnas.forEach(function (c, k) {
+      var td = document.createElement('td');
+      var q = hacer(f, k);
+      td.appendChild(q.cv);
+      var pie = document.createElement('div');
+      pie.textContent = q.etiqueta;
+      td.appendChild(pie);
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  return cont;
+}
+
+fetch('docs/halo_v7/m13_gaia_dr3.csv').then(function (r) { return r.text(); }).then(function (txt) {
+  var gaia = txt.trim().split('\n').slice(1).map(function (l) {
+    var c = l.split(','); return [+c[0], +c[1], +c[2], +c[3]];
+  });
+  var out = document.getElementById('salida');
+  out.textContent = '';
+
+  out.appendChild(tabla('M13 · 200 mm · SQM 21 · campo ' + ARCMIN + "' fijo · A/B/C",
+    ['A — producción (sGrano 0)', 'B — sGrano 0,25', 'C — sGrano 0,50'],
+    AUMENTOS.map(function (m) { return { etiq: m + '×', mag: m }; }),
+    function (f, k) {
+      var q = pintar(f.mag, VARIANTES[k], true, gaia);
+      q.etiqueta = q.n + ' estrellas';
+      return q;
+    }));
+
+  out.appendChild(tabla('Diagnóstico por canales (sGrano 0,50 donde hay grano)',
+    ['halo medio', 'halo + grano', 'halo + Gaia', 'halo + grano + Gaia'],
+    [61, 250].map(function (m) { return { etiq: m + '×', mag: m }; }),
+    function (f, k) {
+      var conGrano = (k === 1 || k === 3), conGaia = (k >= 2);
+      var q = pintar(f.mag, conGrano ? 0.50 : 0, conGaia, gaia);
+      q.etiqueta = conGaia ? q.n + ' estrellas' : 'sin Gaia';
+      return q;
+    }));
+  document.title = 'listo';
+});
+</script>

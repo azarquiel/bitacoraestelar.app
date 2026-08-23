@@ -120,15 +120,15 @@ var AFOV = 68;
   var rc = m.rcAs;
 
   /* (a) La LEY, en la tabla y sin ruido de estimador: sigma(r)² == Sigma(r)·
-     S2campo(m_res)/Omega —la cola dura más el (1−a) de la banda de transición,
-     que es lo que de verdad queda sin resolver—, con Omega recalculado aquí
+     S2campo(m_res, r)/Omega —el flujo que la mezcla y el cielo dejan sin
+     resolver, ADR 0012—, con Omega recalculado aquí
      desde la apertura y la
      escala de píxel de ESTE aumento. Es la parte que depende de M. */
   var peorLey = 0, peorLeyEn = 0, nodos = 0;
   for (var k = 1; k < m.tabla.r.length; k++) {
     var rk = m.tabla.r[k];
     if (rk < 0.5 * rc || rk > 3 * rc) continue;
-    var teo = Math.sqrt(m.sigmaEn(rk) * m.S2campo(m.tabla.mRes[k], m.delta) / m.omegaBeam);
+    var teo = Math.sqrt(m.sigmaEn(rk) * m.S2campo(m.tabla.mRes[k], rk, m.radioImagenAs) / m.omegaBeam);
     if (!(teo > 0) || !(m.tabla.sigma[k] > 0)) continue;
     nodos++;
     var relL = Math.abs(m.tabla.sigma[k] / teo - 1);
@@ -143,11 +143,11 @@ var AFOV = 68;
      píxel a píxel, dividida por la que la tabla pidió en ese mismo píxel, tiene
      que valer 1. Normalizado así no hay promediado radial de por medio. */
   /* El error del estimador va con las CELDAS de grano independientes, no con los
-     píxeles: la celda mide fwhm/2 de lado y a 514× cabe en ella media docena de
+     píxeles: la celda mide un radio de imagen estelar de lado y a 514× cabe en ella media docena de
      píxeles, que no aportan medidas nuevas. Con eso, el 5 % por anillo del
      documento se cumple en el conjunto de la corona (abajo) y por anillo se
      exige lo que el estimador puede dar, 3 sigma. */
-  var celda = Math.max(m.areaPx, (m.fwhmAs / 2) * (m.fwhmAs / 2));
+  var celda = Math.max(m.areaPx, m.radioImagenAs * m.radioImagenAs);
   var peor = 0, peorEn = 0, vistos = 0, fuera = 0;
   m.granoEn(0.5 * rc, 3 * rc, 8).forEach(function (a) {
     // El mínimo de píxeles es solo para no medir sobre un puñado; la exigencia
@@ -179,8 +179,8 @@ function sigmaEnR(m, r) {
 }
 var razonMedida = sigmaEnR(g514, rBase) / sigmaEnR(g146, rBase);
 // La ley completa, no solo Omega: S2 también cambia porque m_res cambia con M.
-var s2a = g146.S2campo(mResEn(g146, rBase), g146.delta);
-var s2b = g514.S2campo(mResEn(g514, rBase), g514.delta);
+var s2a = g146.S2campo(mResEn(g146, rBase), rBase, g146.radioImagenAs);
+var s2b = g514.S2campo(mResEn(g514, rBase), rBase, g514.radioImagenAs);
 var razonTeo = Math.sqrt((s2b / s2a) * (g146.omegaBeam / g514.omegaBeam));
 ok(Math.abs(razonMedida / razonTeo - 1) <= 0.05,
   'al pasar de 146× a 514× la amplitud del grano sube ×' + razonMedida.toFixed(3) +

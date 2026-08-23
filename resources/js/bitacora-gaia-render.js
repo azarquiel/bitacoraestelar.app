@@ -219,7 +219,22 @@
        flujo bajo el umbral, la zona se iba a negro puro y la banda salía como una
        cuña negra en vez de una línea. Aquí barre ~5 magnitudes y no deja borde.
        Las placas conservan el desvanecido original. */
-    UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4
+    UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4,
+    /* El recorte a cero de `pintarCumulo` (el campo no puede quitar luz) manda a
+       negro el 50-70 % del campo cuando el grano se enciende y regala al cúmulo
+       un 2-7 % de flujo que crece con el aumento (issue #98, medido en
+       exp_sgrano con s_grano constante 0,25/0,50 a 61-250×). Se descuenta por
+       ANILLO radial —la misma malla de `tablaCumulo`— reescalando lo pintado en
+       cada anillo para que su flujo vuelva a ser el de sin grano (Im·sHalo).
+       true en producción: hoy es inerte porque S2 real deja sGrano en 0 (ver
+       test_grano_sbf.js G2), y solo actúa cuando algo enciende el grano. */
+    RENORM_ANILLO_GRANO: true,
+    /* Hook de arnés (issue #98): sustituye la P(ver) del grano sin tocar
+       `sHalo`, que sigue leyendo `visibilidadDifusa` directo. null = ley real.
+       La ley de umbral del grano no está decidida (ADR 0015); la conservación
+       de flujo se comprueba forzando P(ver) = 1 con este hook, que entra por
+       el mismo punto que producción, no por una copia (ADR 0008). */
+    GRANO_FORZAR: null
   };
   FOT.H2C = FOT.H2C_DEFECTO; // H2c activa por defecto (validada en campo)
 
@@ -488,6 +503,14 @@
     if (!perceptual) return suave((F / Fumbral - 1) / 1.5);
     if (!(F > 0)) return 0;
     return suave((Math.log10(F / Fumbral) + FOT.UMBRAL_MARGEN) / FOT.UMBRAL_ANCHURA);
+  }
+
+  /* Mismo cálculo que `visibilidadDifusa`, salvo que un arnés puede forzar su
+     salida vía `FOT.GRANO_FORZAR` (ver comentario junto al hook) sin tocar
+     `sHalo`, que sigue llamando a la función de base directamente. */
+  function visibilidadGrano(sgAten, Fumbral, perceptual) {
+    if (typeof FOT.GRANO_FORZAR === 'function') return FOT.GRANO_FORZAR(sgAten, Fumbral, perceptual);
+    return visibilidadDifusa(sgAten, Fumbral, perceptual);
   }
 
   /* Máscara difusa (`cielo.difusoMask`, Float32Array, centinela -1):
@@ -1377,32 +1400,41 @@
 
      Cadena, sin ningún parámetro de "contraste de grano" que tocar:
 
-       m_crowd(r)  ← población (aglomeración, geometría pura)
+       a(m,r)      ← población (P_solo: geometría pura, sin cielo dentro)
+       <I>(r)      = Sigma(r) · S1campo(m_res, r)    flujo por arcsec²
+       sigma(r)²   = Sigma(r) · S2campo(m_res, r) / Ω_beam
        m_lim,sky(r) ← magLimite contra el fondo LOCAL (cielo + velo del cúmulo)
-       m_res(r)    = min de los dos
-       <I>(r)      = Sigma(r) · S1campo(m_res)       flujo por arcsec²
-       sigma(r)²   = Sigma(r) · S2campo(m_res) / Ω_beam
+       m_res(r)    = m_lim,sky, iterado hasta el punto fijo
 
-     S1campo/S2campo son la cola dura MÁS el (1−a) de la banda de transición: lo
-     que de cada estrella de la banda no llega a dibujarse sigue siendo luz, y su
-     sitio es el velo. Con el corte duro se perdía (hasta el 14 % del cúmulo).
+     Ya NO hay listón de crowding ni banda de transición (ADR 0012). Cada estrella
+     de la LF se dibuja con probabilidad a(m,r) y se va al velo con 1−a, y la que
+     sobrevive a la mezcla todavía tiene que llegar al cielo. Ese segundo término
+     es el que acopla el velo con m_res y obliga al punto fijo.
 
      Todo lo que se ve emerge de ahí: más apertura hunde m_res, S1 y S2 caen, y el
      halo se deshace en estrellas; el núcleo aglomera, m_res sube y queda lechoso. */
 
   /* Ruido del grano. Anclado al CIELO (offsets en ″ desde el centro del cúmulo),
-     no al lienzo: hacer zoom agranda el grano, nunca lo redibuja. Cada nodo de la
-     malla saca su gaussiana de un hash de (cúmulo, realización, i, j), así que no
-     hay array que guardar y el campo es el mismo en cualquier orden de pintado. */
-  /* La gaussiana sale de una tabla, no de un Box-Muller por nodo: el logaritmo,
-     la raíz y el coseno se pagaban medio millón de veces por pintado (60 % del
-     coste medido) para devolver siempre uno de unos pocos miles de valores. La
-     tabla se normaliza a media 0 y varianza 1 EXACTAS, así que el grano conserva
-     su estadística; las colisiones (1 de 4096) son ruido sobre ruido. */
+     no al lienzo: hacer zoom agranda el grano, nunca lo redibuja. Cada impulso
+     sale de un hash de (cúmulo, realización, celda, índice), así que no hay
+     array que guardar y el campo es el mismo en cualquier orden de pintado.
+
+     Convolución dispersa (ruido de Gabor), no la malla cuadrada bilineal de
+     antes: esa interpolaba ALTURAS en los nodos de una rejilla cuadrada y a ×6
+     se veían las cadenas curvas y los anillos de nudos brillantes de la propia
+     rejilla (issue #96, medido en exp_sgrano — bloqueante de ADR 0015). Aquí los
+     impulsos caen en posiciones CON JITTER dentro de cada celda de una rejilla
+     de búsqueda —la rejilla es solo para encontrar vecinos rápido, no una malla
+     de valores— y se combinan con un núcleo gaussiano suave: sin nodos fijos no
+     hay eje que seguir con el ojo. */
   var GRANO_TABLA = null;
   function granoTabla() {
     if (GRANO_TABLA) return GRANO_TABLA;
-    var n = 4096, v = new Float64Array(n), suma = 0, suma2 = 0, k;
+    // Tabla grande a propósito: cada punto suma ~150 impulsos, y con una tabla
+    // de pocos miles el índice de dos impulsos distintos coincide a menudo (el
+    // cumpleaños), lo que les da el MISMO peso y rompe la independencia que
+    // hace exacta la suma. Con 2^18 la colisión es despreciable.
+    var n = 1 << 18, v = new Float64Array(n), suma = 0, suma2 = 0, k;
     for (k = 0; k < n; k++) {
       var u1 = (k + 0.5) / n, u2 = ((Math.imul(k, 2654435761) >>> 0) % n + 0.5) / n;
       v[k] = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);   // Box-Muller
@@ -1416,55 +1448,233 @@
     return v;
   }
 
-  function granoNodo(semilla, i, j) {
-    var h = semilla ^ Math.imul(i | 0, 374761393) ^ Math.imul(j | 0, 668265263);
+  var GRANO_LAMBDA = 3, GRANO_RADIO = 2;   // impulsos/celda ESPERADOS, radio de búsqueda en celdas
+
+  function granoHash(semilla, i, j, k, sal) {
+    var h = semilla ^ Math.imul(i | 0, 374761393) ^ Math.imul(j | 0, 668265263)
+      ^ Math.imul(k | 0, 2246822519) ^ sal;
     h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h = (h ^ (h >>> 16)) >>> 0;
-    return GRANO_TABLA[h & 4095];
+    return (h ^ (h >>> 16)) >>> 0;
   }
 
+  /* Número de impulsos de la celda (i,j): Poisson(λ), no un conteo fijo. Con un
+     conteo fijo por celda la DENSIDAD de impulsos queda modulada a la frecuencia
+     de la propia rejilla de búsqueda —una regularidad tan visible como la malla
+     que este ticket quita—; con conteo Poisson no hay periodo que detectar.
+     Algoritmo de Knuth: multiplicar uniformes hasta bajar de e^-λ. */
+  function granoCeldaN(semilla, i, j) {
+    var s = granoHash(semilla, i, j, 0, 0x27D4EB2F);
+    var limite = Math.exp(-GRANO_LAMBDA), p = 1, n = 0;
+    do {
+      n++;
+      s = Math.imul(s ^ (s >>> 15), 2246822519);
+      s = (s ^ (s >>> 13)) >>> 0;
+      p *= ((s >>> 8) + 0.5) / 16777216;   // uniforme (0,1) de 24 bits
+    } while (p > limite && n < 24);
+    return n - 1;
+  }
 
-  /* El campo estadístico, con la media y la varianza que pide la SBF y SIN poder
-     salir negativo.
+  // Posición del impulso k dentro de la celda (i,j): jitter uniforme en [0,1)².
+  function granoImpPos(semilla, i, j, k) {
+    var h = granoHash(semilla, i, j, k, 0x9E3779B9);
+    return [(h & 0xFFFF) / 0x10000, ((h >>> 16) & 0xFFFF) / 0x10000];
+  }
 
-     La fluctuación relativa vale sigma/<I> = 1/√N_eff, con N_eff el número de
-     estrellas del campo por beam. En el halo de un globular N_eff baja de 1 —hay
-     menos de una estrella no resuelta por beam— y ahí sigma llega a 10·<I>: una
-     gaussiana recortada a cero deja de tener la media que se le pidió, y medido
-     sobre M13 se inventaba el 65 % del flujo. Una lognormal con esa misma media y
-     esa misma varianza es positiva por construcción, no necesita recorte y con
-     sigma << <I> es la gaussiana de siempre; con sigma >> <I> queda muy sesgada,
-     que es justo lo que hace un campo de puntos casi vacío.
-     La anchura s se tabula en el radio y no se calcula por píxel: el logaritmo y
-     la raíz eran lo caro del bucle. */
+  function granoImpPeso(semilla, i, j, k) {
+    var tabla = granoTabla();
+    return tabla[granoHash(semilla, i, j, k, 0x85EBCA6B) % tabla.length];
+  }
+
+  /* Caché de impulsos por celda: `pintarCumulo` llama a granoEn una vez por
+     píxel, y cada celda de búsqueda cae en el vecindario de ~(2·GRANO_RADIO+1)²
+     píxeles distintos — sin caché se rehacía el sorteo de Poisson y el hash de
+     cada impulso esa misma cantidad de veces por celda. FIFO con tope: una
+     sesión que hace zoom/pan sobre muchos cúmulos no debe crecer sin límite. */
+  // Dos niveles: la clave exterior (semilla+paso) se arma una vez por llamada a
+  // granoEn, no una vez por celda vecina; la interior es un entero (i,j
+  // empaquetados), sin concatenar strings en el camino caliente. Tope sobre el
+  // número total de celdas cacheadas: un barrido de coordenadas disperso (p.
+  // ej. la autocorrelación de test_grano_malla.js) casi no repite celda, así
+  // que llenaría la caché sin límite si solo se topara la tabla exterior. Se
+  // vacía TODA la caché al llegar al tope en vez de desalojar la más vieja: un
+  // FIFO con .shift() es O(n) por desalojo, y con un tope alto y muchos fallos
+  // de caché (ese mismo barrido disperso) eso es O(n²) — se midió: colgaba el
+  // proceso. Vaciar entero es O(1) amortizado y aquí el patrón real de uso
+  // (píxeles contiguos de un cúmulo) reconstruye rápido lo que hace falta.
+  var GRANO_CACHE = new Map(), GRANO_CACHE_N = 0, GRANO_CACHE_TOPE = 20000;
+  function granoTablaCelda(semilla, cell) {
+    var clave = semilla + '_' + cell;
+    var tabla = GRANO_CACHE.get(clave);
+    if (tabla) return tabla;
+    tabla = new Map();
+    GRANO_CACHE.set(clave, tabla);
+    return tabla;
+  }
+  function granoCelda(tabla, semilla, i, j, cell) {
+    var claveInterna = (i + 32768) * 65536 + (j + 32768);
+    var impulsos = tabla.get(claveInterna);
+    if (impulsos) return impulsos;
+    var n = granoCeldaN(semilla, i, j);
+    impulsos = new Array(n);
+    for (var k = 0; k < n; k++) {
+      var pos = granoImpPos(semilla, i, j, k);
+      impulsos[k] = { x: (i + pos[0]) * cell, y: (j + pos[1]) * cell, w: granoImpPeso(semilla, i, j, k) };
+    }
+    if (GRANO_CACHE_N >= GRANO_CACHE_TOPE) { GRANO_CACHE.clear(); GRANO_CACHE_N = 0; tabla.clear(); GRANO_CACHE.set(semilla + '_' + cell, tabla); }
+    tabla.set(claveInterna, impulsos);
+    GRANO_CACHE_N++;
+    return impulsos;
+  }
+
+  /* `campoLognormal` (más abajo) da por hecho que g es N(0,1) EXACTA: mu =
+     ln(<I>) − s²/2 solo deja la media pintada exacta si E[e^{s·g}] = e^{s²/2},
+     la identidad de la MGF normal. El campo es una combinación LINEAL de pesos
+     gaussianos independientes (`granoImpPeso`) con coeficientes fijos por punto
+     (el núcleo `c`, que solo depende de la distancia): eso lo hace exactamente
+     N(0,1) en cada punto, igual que la malla bilineal de antes, sin heredar su
+     rejilla de valores. */
   function campoLognormal(mu, s, g) {
     return Math.exp(mu + s * g);
   }
 
-  /* Interpolar ruido blanco le quita varianza, y no la misma en todas partes: el
-     peso cuadrático vale 1 justo sobre un nodo y 1/4 en el centro de la celda. Con
-     un factor constante quedaría una REJILLA de ruido —nodos ásperos, centros
-     lisos— y la varianza medida saldría un 30-50 % por encima de la pedida. Por
-     eso se normaliza con el peso exacto de cada punto: g tiene varianza 1 en todo
-     el campo, sin constante que calibrar. */
+  /* Cada punto suma los impulsos de las celdas vecinas pesados por un núcleo
+     gaussiano de ancho `bw`, y se normaliza por la norma EXACTA de esos pesos
+     en ESE punto (raíz de Σc²) — la misma idea que la malla bilineal de antes
+     (normalizar con el peso real, no una constante), pero con vecinos en
+     posiciones libres en vez de las 4 esquinas de una celda. */
   function granoEn(semilla, xAs, yAs, pasoAs) {
-    if (!GRANO_TABLA) granoTabla();
-    var u = xAs / pasoAs, v = yAs / pasoAs;
-    var i0 = Math.floor(u), j0 = Math.floor(v);
-    var tx = u - i0, ty = v - j0;
-    var w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty);
-    var w01 = (1 - tx) * ty, w11 = tx * ty;
-    var g = granoNodo(semilla, i0, j0) * w00
-          + granoNodo(semilla, i0 + 1, j0) * w10
-          + granoNodo(semilla, i0, j0 + 1) * w01
-          + granoNodo(semilla, i0 + 1, j0 + 1) * w11;
-    return g / Math.sqrt(w00 * w00 + w10 * w10 + w01 * w01 + w11 * w11);
+    var bw = pasoAs / 2, cell = bw;
+    var i0 = Math.floor(xAs / cell), j0 = Math.floor(yAs / cell);
+    var suma = 0, sumaC2 = 0;
+    var tabla = granoTablaCelda(semilla, cell);
+    for (var di = -GRANO_RADIO; di <= GRANO_RADIO; di++) {
+      var i = i0 + di;
+      for (var dj = -GRANO_RADIO; dj <= GRANO_RADIO; dj++) {
+        var j = j0 + dj;
+        var impulsos = granoCelda(tabla, semilla, i, j, cell);
+        for (var k = 0; k < impulsos.length; k++) {
+          var imp = impulsos[k];
+          var dx = (xAs - imp.x) / bw, dy = (yAs - imp.y) / bw, d2 = dx * dx + dy * dy;
+          if (d2 > GRANO_RADIO * GRANO_RADIO) continue;
+          var c = Math.exp(-0.5 * d2);
+          suma += imp.w * c;
+          sumaC2 += c * c;
+        }
+      }
+    }
+    return sumaC2 > 0 ? suma / Math.sqrt(sumaC2) : 0;
   }
 
   function hashCadena(texto) {
     var h = 2166136261;
     for (var i = 0; i < texto.length; i++) { h ^= texto.charCodeAt(i); h = Math.imul(h, 16777619); }
     return h >>> 0;
+  }
+
+  /* ═══════ LEY DE UMBRAL DE TEXTURA (ADR 0015, docs/halo_v7/prerregistro_umbral_textura.md) ═══════
+     El grano SBF de un globular no es una mancha uniforme (eso lo juzga Cmin,
+     ver H2c): es RUIDO ESPACIAL, y la literatura dice que ahí el detector no es
+     un umbral de contraste sino la CSF evaluada a la frecuencia retiniana del
+     grano, en régimen de filtro adaptado (Rovamo/Van Nes & Bouman, bibliografía
+     completa en el documento citado). d′ = amplitud de la señal (RMS relativo
+     del grano en el anillo) por la ganancia del observador a esa frecuencia y
+     esa iluminancia; P(ver) es la salida psicométrica de Quick 1974.
+
+     TEXTURA.ACTIVO en false dejar sGrano tal como salía antes (visibilidadDifusa
+     · Cmin, ver tablaCumulo): con el canal a cero el render es bit a bit el de
+     hoy. La calibración de K contra el ancla de M13 —y el interruptor de
+     producción— es el ticket #99; aquí K es SOLO provisional. */
+  var TEXTURA = {
+    ACTIVO: false,     // producción apagada (#99 decide el veredicto)
+    K: 1,              // provisional, sin calibrar
+    BETA: 3.5,         // Quick 1974, fijo (prohibido tocarlo, ver §5 del prerregistro)
+    // 'energia' (default, listones §2/§3) o 'minkowski' (vía de escape única,
+    // §5): cuál d′ usa tablaCumulo. Nunca los dos "activos" en producción.
+    ESTADISTICO: 'energia',
+    // CSF paso-bajo: ganancia y frecuencia de corte crecen con √iluminancia
+    // (De Vries–Rose / Van Nes & Bouman 1967); a iluminancia de referencia I0
+    // el corte cae en FC0 c/deg — "corte escotópico a pocos c/deg" (bibliografía
+    // §2). Todas provisionales: el nivel absoluto es K, no estas dos.
+    // I0 ancla la escala al mismo cielo de referencia que usa Cmin (Fref, sqm
+    // 21) con pupila de salida 7 mm: sin esto, FC0/S0/K viven en unidades
+    // arbitrarias y ni el orden de magnitud de K (#99) tendría sentido.
+    FC0: 3, I0: Math.pow(10, -0.4 * 21) * 49, S0: 1
+  };
+
+  /* Frecuencia retiniana única del grano: medio ciclo por elemento de grano
+     (θ_grano) proyectado a M aumentos. f = 1 / (2 · θ_grano_deg · M); con
+     θ_grano = 1″ da f = 1800/M, el número de la bibliografía §1.3 (61× → 30
+     c/deg, 250× → 7 c/deg). */
+  function frecuenciaGranoCdeg(thetaGranoAs, aumentos) {
+    return (thetaGranoAs > 0 && aumentos > 0) ? 1800 / (thetaGranoAs * aumentos) : 0;
+  }
+
+  /* CSF escotópica/mesópica a una frecuencia y una iluminancia retiniana
+     (proxy relativo, no trolands calibrados: K absorbe la escala real). */
+  function csfTextura(fCdeg, iluminancia) {
+    if (!(iluminancia > 0)) return 0;
+    var raiz = Math.sqrt(iluminancia / TEXTURA.I0);
+    var fc = Math.max(TEXTURA.FC0 * raiz, 1e-6);
+    return TEXTURA.S0 * raiz * Math.exp(-fCdeg / fc);
+  }
+
+  /* d′ de energía filtrada (Rovamo 1993: SNR constante en régimen limitado por
+     ruido externo, no contraste por píxel): la amplitud RMS relativa del grano
+     multiplicada por la ganancia del observador a su frecuencia retiniana.
+
+       rmsRelativo     sigma(r)/<I>(r) del anillo (adimensional)
+       thetaGranoAs    escala angular del grano en el CIELO, en ″ (thGranoAs)
+       aumentos        los del cielo
+       fondoLocalFlujo fondo local tal como llega al ojo, ANTES de pupila —
+                        mismas unidades que Fcielo (cGrano.Fcielo + <I>(r))
+       pupilaSalidaMm  pupila de salida del equipo, en mm
+
+     La iluminancia retiniana es proxy: fondo × pupila², la misma dependencia
+     de área que un troland real sin calibrar la constante (la calibra K). */
+  function dPrimeTextura(rmsRelativo, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm) {
+    if (!(rmsRelativo > 0)) return 0;
+    var f = frecuenciaGranoCdeg(thetaGranoAs, aumentos);
+    var iluminancia = Math.max(0, fondoLocalFlujo) * pupilaSalidaMm * pupilaSalidaMm;
+    return rmsRelativo * csfTextura(f, iluminancia);
+  }
+
+  /* Salida psicométrica de Quick 1974: P(ver) = 1 − exp(−(d′/K)^β). */
+  function pVerTextura(rmsRelativo, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm) {
+    var d = dPrimeTextura(rmsRelativo, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm);
+    return 1 - Math.exp(-Math.pow(d / TEXTURA.K, TEXTURA.BETA));
+  }
+
+  /* Vía de escape única del prerregistro (§5, docs/halo_v7/prerregistro_umbral_
+     textura.md): d′ de SUMA MINKOWSKI sobre la distribución de δI en vez de la
+     energía filtrada (RMS de anillo). Quick 1974 ES un modelo de suma de
+     probabilidad con exponente β: P = 1 − exp(−Σ(d_i/K)^β); tratar el anillo
+     como UN d′ (energía) colapsa esa suma a un solo término. Aquí se integra
+     sobre la distribución real del grano —lognormal, sigma sLn ya tabulada— con
+     cuadratura de Gauss-Hermite (determinista, sin muestreo), y se pondera por
+     N_ef = área del anillo / Ω_beam elementos independientes. Ni K ni β
+     cambian de papel: K sigue siendo el ancla, β sigue fijo en 3,5. */
+  var GH_X = [-3.889724897869782, -3.020637625111485, -2.279507080501060,
+    -1.597682635152605, -0.9477883912401637, -0.3142403762543591,
+    0.3142403762543591, 0.9477883912401637, 1.597682635152605,
+    2.279507080501060, 3.020637625111485, 3.889724897869782];
+  var GH_W = [2.658551684356232e-7, 8.573687043587876e-5, 0.003905390584629068,
+    0.05160798561588414, 0.2604923102641612, 0.5701352362624796,
+    0.5701352362624796, 0.2604923102641612, 0.05160798561588414,
+    0.003905390584629068, 8.573687043587876e-5, 2.658551684356232e-7];
+
+  function pVerTexturaMinkowski(sLn, nEf, atenGrano, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm) {
+    if (!(sLn > 0) || !(nEf > 0)) return 0;
+    var suma = 0;
+    for (var i = 0; i < GH_X.length; i++) {
+      var g = -sLn * sLn / 2 + Math.SQRT2 * sLn * GH_X[i];
+      // Misma atenuación de patch de integración que la rama de energía (ver
+      // tablaCumulo): el elemento que se juzga es el parche, no el píxel crudo.
+      var contraste = atenGrano * Math.abs(Math.exp(g) - 1);
+      var d = dPrimeTextura(contraste, thetaGranoAs, aumentos, fondoLocalFlujo, pupilaSalidaMm);
+      suma += GH_W[i] * Math.pow(d / TEXTURA.K, TEXTURA.BETA);
+    }
+    suma /= Math.sqrt(Math.PI);   // normalización de la cuadratura Gauss-Hermite
+    return 1 - Math.exp(-nEf * suma);
   }
 
   /* Tabla radial del cúmulo: m_res, <I>, sigma y los dos desvanecidos, tabulados
@@ -1475,35 +1685,41 @@
      proporcionalmente más y deforman el mismísimo S2/S1² que sale de la LF—. */
   var TRAMOS_R = 512;
 
-  /* `omegaRes` es la Ω ÓPTICA (telescopio + atmósfera) y manda en m_crowd;
-     `omegaBeam` puede ser mayor —el píxel del lienzo— y solo entra en σ del
-     grano. Ver pintarCumulo. */
-  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, omegaRes) {
+  /* `radioImagenAs` es el tamaño de la imagen estelar (Airy ⊕ seeing) y manda en
+     a(m,r); `omegaBeam` puede ser mayor —el píxel del lienzo— y solo entra en σ
+     del grano. Ver pintarCumulo. */
+  function tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, radioImagenAs, thGranoAs) {
     var C = window.BitacoraCumulos;
-    var delta = C.config.delta;
+    var pasadas = C.config.pasadasPuntoFijo;
     var n = TRAMOS_R + 1, paso = pob.rtAs / TRAMOS_R;
     var r = new Float64Array(n), mRes = new Float64Array(n), Im = new Float64Array(n);
     var sg = new Float64Array(n), sHalo = new Float64Array(n), sGrano = new Float64Array(n);
     var lnS = new Float64Array(n);
+    var granoActivo = false;   // ver uso más abajo: evita la pasada de renormalización si es inútil
     for (var i = 0; i < n; i++) {
       var rAs = i * paso;
       var s = pob.sigma(rAs);
       r[i] = rAs;
       if (!(s > 0)) { mRes[i] = -Infinity; continue; }
-      var mc = pob.mCrowd(rAs, omegaRes);
-      /* Circularidad m_lim,sky ↔ <I>: UNA sola iteración, no un punto fijo (su
-         criterio de parada acabaría dentro de la imagen). Se arranca por la cota
-         superior —el crowding, que no depende del cielo— y se cierra con el fondo
-         local que ese arranque produce. */
-      var I0 = s * pob.S1campo(mc, delta);
-      var mSky = magLimite({
-        apertura: o.apertura, aumentos: o.cielo.aumentos, transmision: o.cielo.transmision,
-        sqm: -2.5 * Math.log10(cHalo.Fcielo + I0), pupilaOjo: o.cielo.pupilaOjo
-      });
-      var m = (mSky == null) ? mc : Math.min(mc, mSky);
+      /* Circularidad velo ↔ m_lim,sky: punto fijo con N FIJO de pasadas. Se
+         arranca en m_res = +∞ —todo resuelto salvo lo que la mezcla se lleva, la
+         única cota que no depende del cielo— y se itera. MEDIDO: contrae, el
+         punto fijo es único (2e-13 mag entre arranques opuestos a 30 pasadas) y
+         una sola pasada deja 0,281 mag, 28 veces el listón de 0,01. N y no
+         tolerancia: el criterio de parada no puede vivir dentro de la imagen.
+         docs/halo_v7/punto_fijo_adr0012.md */
+      var m = Infinity;
+      for (var it = 0; it < pasadas; it++) {
+        var mSky = magLimite({
+          apertura: o.apertura, aumentos: o.cielo.aumentos, transmision: o.cielo.transmision,
+          sqm: -2.5 * Math.log10(cHalo.Fcielo + s * pob.S1campo(m, rAs, radioImagenAs)),
+          pupilaOjo: o.cielo.pupilaOjo
+        });
+        m = (mSky == null) ? -Infinity : mSky;
+      }
       mRes[i] = m;
-      Im[i] = s * pob.S1campo(m, delta);
-      sg[i] = Math.sqrt(s * pob.S2campo(m, delta) / omegaBeam);
+      Im[i] = s * pob.S1campo(m, rAs, radioImagenAs);
+      sg[i] = Math.sqrt(s * pob.S2campo(m, rAs, radioImagenAs) / omegaBeam);
       sHalo[i] = visibilidadDifusa(Im[i], cHalo.Fcielo * cHalo.Cmin, perceptual);
       /* El grano compite contra el fondo LOCAL, que incluye el propio velo del
          cúmulo: en el núcleo se aplana solo y queda lechoso, sin ninguna perilla.
@@ -1511,17 +1727,33 @@
          (`atenGrano`, ver pintarCumulo), no con la del beam. σ(r) sale intacta a
          la tabla: lo que se pinta es la física, y la atenuación solo entra en el
          desvanecido. */
-      sGrano[i] = visibilidadDifusa(sg[i] * atenGrano,
-        (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
       /* Anchura de la lognormal (ver campoLognormal). Se tabula ella y no mu,
          porque mu = ln(<I>) - s²/2 se va a -inf donde el perfil se acaba y ahí la
          interpolación daría NaN a un paso del borde; con <I> ya interpolado sale
-         el mismo número y el borde queda limpio. */
+         el mismo número y el borde queda limpio. Se calcula ANTES de sGrano
+         porque la vía de escape Minkowski (ver abajo) la necesita. */
       var s2 = (Im[i] > 0 && sg[i] > 0) ? Math.log(1 + (sg[i] * sg[i]) / (Im[i] * Im[i])) : 0;
       lnS[i] = Math.sqrt(s2);
+      /* TEXTURA.ACTIVO en false (producción, hasta que #99 calibre K): sGrano
+         sigue saliendo de visibilidadGrano (== visibilidadDifusa·Cmin salvo
+         que un arnés fuerce FOT.GRANO_FORZAR) —render bit a bit idéntico. En
+         true (ley de umbral, #97), ESTADISTICO decide la forma: 'energia'
+         (§2/§3 del prerregistro) usa un solo d′ de RMS de anillo; 'minkowski'
+         (vía de escape única, §5) integra sobre la distribución real del
+         grano. Ambas comparten la MISMA amplitud (sg·atenGrano) y el MISMO
+         fondo local: la señal física no se toca. */
+      sGrano[i] = TEXTURA.ACTIVO
+        ? (TEXTURA.ESTADISTICO === 'minkowski'
+            ? pVerTexturaMinkowski(lnS[i], (2 * Math.PI * rAs * paso) / omegaBeam, atenGrano,
+                thGranoAs, o.cielo.aumentos, cGrano.Fcielo + Im[i], o.cielo.pupilaSalida)
+            : pVerTextura(Im[i] > 0 ? (sg[i] * atenGrano) / Im[i] : 0, thGranoAs,
+                o.cielo.aumentos, cGrano.Fcielo + Im[i], o.cielo.pupilaSalida))
+        : visibilidadGrano(sg[i] * atenGrano,
+            (cGrano.Fcielo + Im[i]) * cGrano.Cmin, perceptual);
+      if (sGrano[i] > 0) granoActivo = true;
     }
     return { paso: paso, r: r, mRes: mRes, I: Im, sigma: sg, sHalo: sHalo, sGrano: sGrano,
-             lnS: lnS };
+             lnS: lnS, granoActivo: granoActivo };
   }
 
   function interpTabla(tabla, v, rAs) {
@@ -1562,8 +1794,15 @@
     if (!C || !o.cielo) return null;
     var pob = C.poblacionCacheada(cumulo, o.realization);
     if (!pob) return null;
-    var fwhmAs = 2 * radioImagenEstelar(o.apertura);
-    if (!(fwhmAs > 0)) return null;
+    /* La escala del beam es el RADIO de la imagen estelar, Airy ⊕ seeing, el
+       mismo `radioImagenEstelar` con el que se dibujan las estrellas. Hasta aquí
+       se llamaba `fwhmAs` y valía el doble, pero no era una FWHM: `radioAiry` es
+       el radio del primer anillo oscuro (Rayleigh), así que el doble era el
+       DIÁMETRO de ese anillo. Todos los usos de abajo lo dividían por 2 o lo
+       elevaban al cuadrado entre 4 para deshacerlo. Ver
+       docs/halo_v7/ancla_thetasep_criterio_dobles.md. */
+    var radioImagenAs = radioImagenEstelar(o.apertura);
+    if (!(radioImagenAs > 0)) return null;
 
     var SIZE = o.size, escv = SIZE / (o.arcmin / 60);   // px por grado
     var pxPorAs = escv / 3600, asPorPx = 1 / pxPorAs;
@@ -1601,7 +1840,7 @@
        tiene el cúmulo —medido en M13 a 173×, el píxel de 2,35″ ganaba a la Ω
        óptica y hundía m_res 0,54 mag en el núcleo, 86 estrellas de 1071
        (harness_halo_estrellas.js). De ahí las dos Ω. */
-    var omegaRes = Math.PI * (fwhmAs / 2) * (fwhmAs / 2);
+    var omegaRes = Math.PI * radioImagenAs * radioImagenAs;
     var omegaBeam = Math.max(omegaRes, areaPx);
     var thBeamAs = 2 * Math.sqrt(omegaBeam / Math.PI);   // diámetro equivalente
 
@@ -1625,7 +1864,7 @@
     var cGrano = ctxFotometrico(o.cielo, thGranoAs / 60);
     var atenGrano = thBeamAs / thGranoAs;
 
-    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, omegaRes);
+    var tabla = tablaCumulo(pob, o, cHalo, cGrano, perceptual, omegaBeam, atenGrano, radioImagenAs, thGranoAs);
 
     var mascara = difusoMaskDe(o.cielo, difuso.length);
     var semilla = hashCadena([cumulo.id, C.versionLF(), o.realization || 0, 'grano'].join('|'));
@@ -1633,11 +1872,50 @@
        el patrón queda clavado al cielo. Lo que sí cambia con el zoom es la
        AMPLITUD, porque un píxel grande promedia el grano y lo aplana; de eso se
        encarga la Ω de tablaCumulo. Mover el paso también rompería el anclaje. */
-    var pasoGrano = fwhmAs / 2;
+    var pasoGrano = radioImagenAs;
     var alcance = pob.rtAs * pxPorAs;
     var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
     var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
-    var Fmedio = 0, Fpintado = 0;
+    var Fmedio = 0, Fpintado = 0, Fsingrano = 0, FpintadoGrano = 0;
+    var renormGrano = FOT.RENORM_ANILLO_GRANO && tabla.granoActivo;
+    /* Renormalización por anillo (issue #98). El recorte `if (!(I > 0)) I = 0`
+       de más abajo descarta SOLO la cola negativa del campo; como el campo es
+       simétrico en dI, eso regala flujo. Se descuenta con un factor POR
+       ANILLO (la misma malla radial de `tablaCumulo`, `tabla.paso`) que no
+       depende del píxel: escalar todo el anillo por igual no toca la FORMA de
+       la textura ahí dentro (ADR 0006), solo su amplitud media. Primera pasada
+       para medir el objetivo (Im·sHalo, sin grano) y lo realmente pintado
+       (recortado) por anillo; la segunda pinta con el factor ya calculado.
+       `campoLognormal`/`granoEn` son deterministas en (semilla, r), así que
+       repetir el cálculo en dos pasadas da el mismo campo, sin guardarlo. */
+    var nAnillos = tabla.r.length, factorAnillo = null;
+    function kAnillo(rAs) { return Math.min(nAnillos - 1, Math.floor(rAs / tabla.paso)); }
+    if (renormGrano) {
+      var sumObjetivo = new Float64Array(nAnillos), sumRecorte = new Float64Array(nAnillos);
+      for (var y1p = y0; y1p <= y1; y1p++) {
+        var norte1p = -(y1p - cy) * asPorPx;
+        for (var x1p = x0; x1p <= x1; x1p++) {
+          var este1p = -(x1p - cx) * asPorPx;
+          var rAs1p = pob.radioPropio(este1p, norte1p);
+          if (rAs1p >= pob.rtAs) continue;
+          var Im1p = interpTabla(tabla, tabla.I, rAs1p);
+          if (!(Im1p > 0)) continue;
+          var sH1p = interpTabla(tabla, tabla.sHalo, rAs1p);
+          var sG1p = interpTabla(tabla, tabla.sGrano, rAs1p);
+          var sLn1p = interpTabla(tabla, tabla.lnS, rAs1p);
+          var crudo1p = campoLognormal(Math.log(Im1p) - sLn1p * sLn1p / 2, sLn1p,
+            granoEn(semilla, este1p, norte1p, pasoGrano));
+          var I1p = Im1p * sH1p + (crudo1p - Im1p) * sG1p;
+          var k1p = kAnillo(rAs1p);
+          sumObjetivo[k1p] += Im1p * sH1p * areaPx;
+          sumRecorte[k1p] += (I1p > 0 ? I1p : 0) * areaPx;
+        }
+      }
+      factorAnillo = new Float64Array(nAnillos);
+      for (var k2 = 0; k2 < nAnillos; k2++) {
+        factorAnillo[k2] = sumRecorte[k2] > 0 ? sumObjetivo[k2] / sumRecorte[k2] : 1;
+      }
+    }
     for (var y = y0; y <= y1; y++) {
       var norte = -(y - cy) * asPorPx;
       for (var x = x0; x <= x1; x++) {
@@ -1655,10 +1933,14 @@
         var dI = crudo - Im;
         var I = Im * sH + dI * sG;
         if (!(I > 0)) I = 0;                      // el campo no puede quitar luz
+        if (renormGrano) I *= factorAnillo[kAnillo(rAs)];
         Fmedio += Im * areaPx;
         Fpintado += crudo * areaPx;
+        Fsingrano += Im * sH * areaPx;
+        FpintadoGrano += I * areaPx;
         var idx = y * SIZE + x;
         if (o.campoCrudo) o.campoCrudo[idx] = crudo;
+        if (o.campoGranoI) o.campoGranoI[idx] = I;
         difuso[idx] += I;
         // La t del realce es s_halo: donde el velo ya se ve bien, el realce se
         // retira y el núcleo no se quema a blanco (ver difusoMarcado).
@@ -1667,25 +1949,34 @@
     }
 
     return {
-      tabla: tabla, poblacion: pob, fwhmAs: fwhmAs, cHalo: cHalo, cGrano: cGrano,
+      tabla: tabla, poblacion: pob, radioImagenAs: radioImagenAs, cHalo: cHalo, cGrano: cGrano,
       omegaBeam: omegaBeam, omegaRes: omegaRes, thBeamAs: thBeamAs, thGranoAs: thGranoAs, atenGrano: atenGrano,
-      Fmedio: Fmedio, Fpintado: Fpintado,
-      estrellas: estrellasCumulo(pob, cumulo, tabla, o, C)
+      Fmedio: Fmedio, Fpintado: Fpintado, Fsingrano: Fsingrano, FpintadoGrano: FpintadoGrano,
+      estrellas: estrellasCumulo(pob, cumulo, tabla, o, C, radioImagenAs)
     };
   }
 
-  /* Las estrellas del cúmulo que este equipo dibuja. La clasificación se evalúa
-     por estrella CON SU RADIO: la misma m=16 puede ser resuelta a 8′ del centro y
-     campo a 0,5′. En la banda de transición la atenuación se aplica como magnitud
-     efectiva, así que la estrella se apaga Y encoge por el camino que ya existe
-     (radioEstrella va con la magnitud) — que es lo que se ve en el ocular.
+  /* Las estrellas del cúmulo que este equipo dibuja. Se juzga por estrella y CON
+     SU RADIO: la misma m=16 puede resolverse a 8′ del centro y fundirse a 0,5′.
 
-     Invariante: la atenuación se calcula SIEMPRE sobre m, nunca sobre la m_eff que
-     ella misma produce, y m_eff no vuelve nunca a S1/S2, a m_res ni a la
-     conservación: es un número de dibujo. */
-  function estrellasCumulo(pob, cumulo, tabla, o, C) {
+     Dos filtros distintos, y conviene no confundirlos (ADR 0012):
+
+       la mezcla   se dibuja con probabilidad a(m,r) = P_solo   ← SORTEO
+       el cielo    hace falta m <= m_res(r)                     ← umbral
+
+     El sorteo es Bernoulli, no una atenuación. Atenuar restaba 2,5·log10(a) mag
+     y la estrella cruzaba la magnitud límite, así que un efecto de VECINDAD se
+     convertía en un corte por MAGNITUD: MEDIDO, se llevaba el 100 % del cuartil
+     débil contra el 50 % de la verdad geométrica
+     (docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md). Y como ya no hay magnitud
+     efectiva, tampoco hace falta la 5ª casilla que la llevaba: la estrella entra
+     entera y capaEstrellas cobra mlim una sola vez.
+
+     `C.sorteo` es determinista en las coordenadas: la misma estrella sale o no
+     sale siempre igual. Cambiar de ocular NO la hace parpadear —a(m,r) no lleva
+     aumentos dentro, MEDIDO a 61/120/173/250×: 0 parpadeos de 1971—. */
+  function estrellasCumulo(pob, cumulo, tabla, o, C, radioImagenAs) {
     var cos0 = Math.cos(o.dec0 * Math.PI / 180);
-    var delta = C.config.delta;
     var lista = (o.estrellas || []).concat(pob.sinteticas({
       ra: cumulo.ra, dec: cumulo.dec, realization: o.realization
     }));
@@ -1694,19 +1985,12 @@
       var e = lista[i], m = e[2];
       var dxAs = (((e[0] - cumulo.ra + 540) % 360) - 180) * cos0 * 3600;
       var dyAs = (e[1] - cumulo.dec) * 3600;
-      var mRes = mResEn(tabla, pob.radioPropio(dxAs, dyAs));
-      if (!isFinite(mRes) || m < mRes - delta) { fuera.push(e); continue; }
-      if (m > mRes + delta) continue;                       // ya está en el campo
-      var a = C.atenuacionTransicion(m, mRes, delta);
-      if (!(a > 0)) continue;
-      /* La m original viaja en la 5ª casilla: es la que DETECTA (el umbral del
-         cielo ya lo aplica capaEstrellas con mlim, y m_res lo ha aplicado ya
-         una vez aquí). Sin ella, capaEstrellas comparaba mlim contra la m_eff
-         atenuada y degradaba a glow toda la banda de transición —que en el halo
-         se monta justo encima de mlim, porque allí m_res ES m_lim,sky—: 482
-         estrellas de 1467 en M13 a 173× (harness_halo_estrellas.js). El mismo
-         umbral cobrado dos veces, y encima sobre un número de dibujo. */
-      fuera.push([e[0], e[1], m + 2.5 * Math.log10(1 / a), e[3], m]);
+      var rAs = pob.radioPropio(dxAs, dyAs);
+      var mRes = mResEn(tabla, rAs);
+      if (!isFinite(mRes)) { fuera.push(e); continue; }    // fuera del cúmulo: ni velo ni mezcla
+      if (m > mRes) continue;                              // el cielo local no la levanta
+      if (!(C.sorteo(e[0], e[1], o.realization) < pob.aCrowd(m, rAs, radioImagenAs))) continue;
+      fuera.push(e);                                       // entera: sin m_eff, sin banda
     }
     return fuera;
   }
@@ -3879,11 +4163,18 @@
     difusoMaskDe: difusoMaskDe,
     ctxFotometrico: ctxFotometrico,
     thetaRiccoArcmin: thetaRiccoArcmin,
+    textura: TEXTURA,
+    frecuenciaGranoCdeg: frecuenciaGranoCdeg,
+    csfTextura: csfTextura,
+    dPrimeTextura: dPrimeTextura,
+    pVerTextura: pVerTextura,
+    pVerTexturaMinkowski: pVerTexturaMinkowski,
     pintarFot: pintarFot,
     perfilKing: perfilKing,
     areaKing: areaKing,
     pintarCumulo: pintarCumulo,
     granoEn: granoEn,
+    visibilidadGrano: visibilidadGrano,
     desenfocar: desenfocar,
     adaptacionLocal: adaptacionLocal,
     fusionarPlacas: fusionarPlacas,

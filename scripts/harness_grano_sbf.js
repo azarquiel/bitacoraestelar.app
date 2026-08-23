@@ -45,9 +45,9 @@ function conS2(factor, fn) {
     if (factor === 1) return p;
     var q = Object.create(p);
     q.S2 = function (mlim) { return p.S2(mlim) * factor; };
-    // El render usa el segundo momento CON la banda; el trazador tiene que
-    // entrar por ahí o no toca nada (y volvería a medir un conjunto vacío).
-    q.S2campo = function (mRes, delta) { return p.S2campo(mRes, delta) * factor; };
+    // El render usa el segundo momento DEL CAMPO; el trazador tiene que entrar
+    // por ahí o no toca nada (y volvería a medir un conjunto vacío).
+    q.S2campo = function (mRes, rAs, ri) { return p.S2campo(mRes, rAs, ri) * factor; };
     return q;
   };
   try { return fn(); } finally { C.poblacionCacheada = orig; }
@@ -66,8 +66,8 @@ function corrida(cum, cfg, factor) {
       var fondo = (m.ctxGrano.Fcielo + t.I[i]) * m.ctxGrano.Cmin;
       if (fondo > 0 && t.sigma[i] / fondo > granoMax) granoMax = t.sigma[i] / fondo;
     }
-    var firma = 0, per = m.perceptual;
-    for (var k = 0; k < per.length; k++) firma += per[k].I * per[k].n;
+    var firma = 0, textura = 0, per = m.perceptual;
+    for (var k = 0; k < per.length; k++) { firma += per[k].I * per[k].n; textura += per[k].sigma * per[k].n; }
     /* Varianza LOGARÍTMICA del campo crudo, ponderada por píxeles: es el tap
        físico, antes de cualquier ley perceptual. Si S2 estuviese desconectado,
        este número no se movería con el trazador aunque σ de la tabla sí. En log
@@ -77,7 +77,7 @@ function corrida(cum, cfg, factor) {
     var sw = 0, wn = 0;
     for (var q = 0; q < g.length; q++) { sw += g[q].sLn * g[q].sLn * g[q].n; wn += g[q].n; }
     return { medida: m, sigmaMax: sMax, sGranoMax: sgMax, razonMax: granoMax,
-             firma: firma, varCrudo: wn ? sw / wn : 0 };
+             firma: firma, textura: textura, varCrudo: wn ? sw / wn : 0 };
   });
 }
 

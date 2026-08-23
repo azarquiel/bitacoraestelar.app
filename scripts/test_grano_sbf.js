@@ -71,9 +71,24 @@ ok(kMin !== null, 'existe un factor de S2 que enciende el grano' +
 ok(subida, 's_grano crece monótonamente con S2');
 ok(cAlto.sGranoMax > 0.5, 'y llega a encenderse del todo: s_grano = ' +
   cAlto.sGranoMax.toFixed(3) + ' con k = 1e4');
-ok(Math.abs(cAlto.firma - c1.firma) / c1.firma > 0.01,
-  'y el lienzo cambia cuando el grano se pinta (' +
-  (100 * (cAlto.firma - c1.firma) / c1.firma).toFixed(1) + ' % de flujo pintado)');
+/* Un k mayor para esta comprobación en concreto: el trazador de #96 sigue
+   siendo una intervención sin física (no real), pero un generador sin malla
+   reparte el exceso de S2 entre muchos más impulsos independientes que el
+   bilineal (4 nodos por celda), así que cancela más antes de asomar en el
+   lienzo. El delta crece monótono con k — es el mismo término, solo hace
+   falta más S2 para que se note en la métrica agregada.
+
+   La métrica ya NO es la suma de flujo: issue #98 hizo la renormalización
+   por anillo la ley por defecto, y su objetivo explícito es que el flujo
+   pintado NO cambie cuando el grano se enciende (conservación). Usar la
+   suma aquí mediría #98, no si #96 sigue vivo. La textura sí se mueve: la
+   renormalización reescala cada anillo por un factor único, así que borra
+   el sumando de flujo pero no la dispersión píxel a píxel dentro del
+   anillo (σ por anillo, ADR 0006 fotométrico vs perceptual). */
+var cFirma = A.corrida(M13, EQ, 1e5);
+ok(Math.abs(cFirma.textura - c1.textura) / (c1.textura || 1) > 0.01,
+  'y la textura del lienzo cambia cuando el grano se pinta (' +
+  (100 * (cFirma.textura - c1.textura) / (c1.textura || 1)).toFixed(1) + ' %, k = 1e5)');
 ok(c1.sGranoMax === 0,
   'HALLAZGO, no regresión: con S2 real el grano sigue sin pintarse en M13/200 mm 146×');
 
@@ -114,19 +129,18 @@ if (typeof R.thetaRiccoArcmin === 'function') {
 
 /* ── G4 · la fotometría no se entera ─────────────────────────────────────────
    La ley nueva toca la DETECTABILIDAD, no el campo. ⟨I⟩ y σ tienen que seguir
-   siendo Σ·S1campo y √(Σ·S2campo/Ω) exactos —los momentos del campo con la banda
-   de transición dentro—, y el flujo pintado seguir conservándose.
+   siendo Σ·S1campo y √(Σ·S2campo/Ω) exactos —los momentos del campo bajo la ley
+   por estrella del ADR 0012—, y el flujo pintado seguir conservándose.
    Este es el guardián de ADR 0003: nada de arreglar apariencia moviendo flujo. */
 console.log('\nG4 · ⟨I⟩ y σ siguen siendo las magnitudes físicas de la Capa 3:');
 var pob = C.poblacionCacheada(M13, 0);
-var delta = C.config.delta;
 var peorI = 0, peorS = 0;
 for (var i = 1; i < m.tabla.r.length; i += 17) {
   var rAs = m.tabla.r[i], s = pob.sigma(rAs);
   if (!(s > 0) || !isFinite(m.tabla.mRes[i])) continue;
   var mr = m.tabla.mRes[i];
-  var Iesp = s * pob.S1campo(mr, delta);
-  var sEsp = Math.sqrt(s * pob.S2campo(mr, delta) / m.omegaBeam);
+  var Iesp = s * pob.S1campo(mr, rAs, m.radioImagenAs);
+  var sEsp = Math.sqrt(s * pob.S2campo(mr, rAs, m.radioImagenAs) / m.omegaBeam);
   peorI = Math.max(peorI, Math.abs(m.tabla.I[i] - Iesp) / Iesp);
   peorS = Math.max(peorS, Math.abs(m.tabla.sigma[i] - sEsp) / sEsp);
 }
