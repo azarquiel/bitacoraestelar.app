@@ -323,11 +323,26 @@ var GrupoLocal = (function () {
       ctx.fillText('Vía Láctea', mw.sx + 12, mw.sy - 8);
     }
 
+    // Atenuación de marcadores (spec #102): el hovered del fotograma anterior
+    // (o la galaxia buscada, anillo sobre marcador propio) marca el realzado de
+    // este fotograma; se mueve al final del pintado para quedar por encima.
+    var hovPrev = hovered && hovered.o;
+    var realzadoDe = function (o) {
+      return !!(o === hovPrev ||
+                (target && target.soloAnillo && target.name && target.name === o.name));
+    };
+    for (var ri = 0; ri < projected.length; ri++) {
+      if (realzadoDe(projected[ri].o)) { projected.push(projected.splice(ri, 1)[0]); break; }
+    }
     hovered = null;
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
-      var r = Math.max(2.4, 4 * p.persp);
+      var est = VLMarcadorEstilo.de({ realzado: realzadoDe(o), viajeActivo: !!rutaIds },
+                                    CONFIG.marcadores);
+      var r = Math.max(2.4, 4 * p.persp) * est.escala;
+      ctx.save();
+      ctx.globalAlpha = est.opacidad;
 
       // Galaxia observada solo por otros: se atenúa (gris + menor opacidad),
       // pero sigue siendo pulsable para descubrir esas observaciones.
@@ -357,10 +372,12 @@ var GrupoLocal = (function () {
 
       if (onView) {
         ctx.fillStyle = colorRgba(col, 0.95 * am, aten);
-        ctx.font = '500 12px Inter, sans-serif';
+        ctx.font = '500 ' + (12 * est.escala).toFixed(1) + 'px Inter, sans-serif';
         ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
       }
+      ctx.restore();
 
+      // El radio de detección no se atenúa: el área pulsable no cambia.
       if (atlasInteractive && mouse.x != null) {
         var dx = mouse.x - p.sx, dy = mouse.y - p.sy;
         if (dx * dx + dy * dy < 160) hovered = { o: o, p: p };

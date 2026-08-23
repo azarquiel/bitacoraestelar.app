@@ -83,10 +83,17 @@
     // TAMAÑO DE LOS MARCADORES DE OBJETOS EN EL MAPA
     //   puntoDiametro : diámetro del punto de color en píxeles
     //   textoTamano   : tamaño de la etiqueta junto al punto (CSS font-size)
+    //   atenuacionEscala / atenuacionOpacidad : estado base ATENUADO de los
+    //     marcadores en las tres vistas (más pequeños y translúcidos para que
+    //     las zonas densas no se saturen). El hover, la búsqueda o un viaje
+    //     interestelar activo devuelven el marcador al estilo completo. La ley
+    //     vive en via-lactea-marcador-estilo.js (VLMarcadorEstilo).
     // -------------------------------------------------------------------------
     marcadores: {
       puntoDiametro: 5,        // px — prueba valores entre 4 y 10
-      textoTamano:   '11px'    // CSS — p.ej. '10px', '12px', '0.8rem'
+      textoTamano:   '11px',   // CSS — p.ej. '10px', '12px', '0.8rem'
+      atenuacionEscala: 0.82,  // factor de tamaño del estado base (1 = sin atenuar)
+      atenuacionOpacidad: 0.55 // opacidad del estado base (1 = opaco)
     },
 
     // -------------------------------------------------------------------------

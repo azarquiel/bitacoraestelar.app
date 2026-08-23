@@ -273,11 +273,24 @@ var VecindarioSolar = (function () {
       ctx.textAlign = 'left';
     }
 
+    // Atenuación de marcadores (spec #102): el hovered del fotograma anterior
+    // marca el realzado de este; se mueve al final del pintado para quedar por
+    // encima de las estrellas atenuadas.
+    var hovPrev = hovered && hovered.o;
+    if (hovPrev) {
+      for (var ri = 0; ri < projected.length; ri++) {
+        if (projected[ri].o === hovPrev) { projected.push(projected.splice(ri, 1)[0]); break; }
+      }
+    }
     hovered = null;
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
-      var r = Math.max(2.4, 4 * p.persp);
+      var est = VLMarcadorEstilo.de({ realzado: o === hovPrev, viajeActivo: !!rutaIds },
+                                    CONFIG.marcadores);
+      var r = Math.max(2.4, 4 * p.persp) * est.escala;
+      ctx.save();
+      ctx.globalAlpha = est.opacidad;
       // Estrella observada solo por otros: se atenúa (gris + menos opacidad),
       // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable.
       var aten = window.VLObservadores.atenuadoPorObservador(o.id);
@@ -307,10 +320,12 @@ var VecindarioSolar = (function () {
 
       if (onView) {
         ctx.fillStyle = col;
-        ctx.font = '500 12px Inter, sans-serif';
+        ctx.font = '500 ' + (12 * est.escala).toFixed(1) + 'px Inter, sans-serif';
         ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
       }
+      ctx.restore();
 
+      // El radio de detección no se atenúa: el área pulsable no cambia.
       if (interactive && mouse.x != null) {
         var dx = mouse.x - p.sx, dy = mouse.y - p.sy;
         if (dx * dx + dy * dy < 160) hovered = { o: o, p: p };

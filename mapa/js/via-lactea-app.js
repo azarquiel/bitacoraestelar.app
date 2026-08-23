@@ -228,8 +228,29 @@
     if (obj.ficha) label.setAttribute('data-ficha', obj.ficha);
     label.className = 'mw-pdf-dot'; // reutiliza la clase para el listener global
 
-    content.appendChild(dot);
-    content.appendChild(label);
+    // Wrapper de atenuación (spec #102): la escala/opacidad del estado base van
+    // por CSS sobre este div (variables --mw-aten-* en #mw-content). No pueden ir
+    // en .mw-marker-content: su transform lo pisa el JS del abanico.
+    var aten = document.createElement('div');
+    aten.className = 'mw-aten';
+    aten.appendChild(dot);
+    aten.appendChild(label);
+    content.appendChild(aten);
+
+    // Pad de click transparente y SIN escalar (spec #102): la escala visual del
+    // estado atenuado no debe reducir el área pulsable. Comparte clase y
+    // atributos con el punto para disparar el mismo manejador; al posarse el
+    // cursor también activa el :hover del ancla, que devuelve el estilo completo.
+    var pad = document.createElement('div');
+    pad.className = 'mw-pdf-dot';
+    pad.title = dot.title;
+    pad.setAttribute('data-pdf', obj.pdf);
+    pad.setAttribute('data-title', obj.name);
+    pad.setAttribute('data-coords', obj.coords);
+    if (obj.ficha) pad.setAttribute('data-ficha', obj.ficha);
+    pad.style.cssText = 'position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;' +
+      'border-radius:50%;background:transparent;pointer-events:auto;cursor:pointer;';
+    content.appendChild(pad);
     scaleEl.appendChild(connector);
     scaleEl.appendChild(content);
     anchor.appendChild(scaleEl);
@@ -299,6 +320,15 @@
     topAnchors.push(createMarker(obj, 'top'));
     edgeAnchors.push(createMarker(obj, 'edge'));
   });
+
+  // Estado base atenuado de los marcadores (spec #102): la ley vive en
+  // VLMarcadorEstilo; aquí solo se publica como variables CSS. El realce por
+  // hover/búsqueda y el modo viaje los resuelven las reglas de mapa.html.
+  if (typeof VLMarcadorEstilo !== 'undefined') {
+    var estiloBase = VLMarcadorEstilo.de({}, CONFIG.marcadores);
+    img.style.setProperty('--mw-aten-esc', estiloBase.escala);
+    img.style.setProperty('--mw-aten-op', estiloBase.opacidad);
+  }
 
   // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los
   // tres filtros (vista + tipo + observador) sobre los marcadores de la vista
@@ -2089,6 +2119,9 @@
   function aplicarViaje(id) {
     viajeActivo = id || '';
     if (viajeSelect && viajeSelect.value !== viajeActivo) viajeSelect.value = viajeActivo;
+    // Con viaje activo la atenuación base se desactiva (spec #102): los pocos
+    // objetos de la ruta se ven a tamaño y opacidad completos.
+    img.classList.toggle('mw-viaje', !!viajeActivo);
 
     // Sin viaje va null: cada capa vuelve a enseñar su catálogo entero. Con
     // viaje va la lista, aunque venga vacía, y esa capa se queda sin objetos
@@ -2180,8 +2213,12 @@
 
     // Cancela un parpadeo anterior si lo hubiera.
     if (blinkTimer) { clearInterval(blinkTimer.iv); clearTimeout(blinkTimer.to);
-      if (blinkTimer.content) blinkTimer.content.style.visibility = 'visible'; }
+      if (blinkTimer.content) blinkTimer.content.style.visibility = 'visible';
+      if (blinkTimer.anchor) blinkTimer.anchor.classList.remove('mw-realzado'); }
 
+    // Mientras parpadea, el marcador buscado se realza (spec #102): tamaño y
+    // opacidad completos por encima de los marcadores atenuados.
+    anchor.classList.add('mw-realzado');
     var visible = true;
     var iv = setInterval(function () {
       visible = !visible;
@@ -2190,10 +2227,11 @@
     var to = setTimeout(function () {
       clearInterval(iv);
       if (content) content.style.visibility = 'visible';
+      anchor.classList.remove('mw-realzado');
       blinkTimer = null;
     }, CONFIG.busqueda.parpadeoSegundos * 1000);
 
-    blinkTimer = { iv: iv, to: to, content: content };
+    blinkTimer = { iv: iv, to: to, content: content, anchor: anchor };
   }
 
   // ¿Es un objeto extragaláctico? (tiene distancia y coordenadas galácticas y
