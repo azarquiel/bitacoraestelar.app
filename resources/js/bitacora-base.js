@@ -475,8 +475,8 @@ window.BitacoraBase = (function () {
   }
   function parseDec(txt) {
     txt = String(txt == null ? '' : txt).trim(); if (txt === '') return null;
-    var dms = txt.match(/(-?\+?\d+(?:\.\d+)?)\s*[°d: ]\s*(\d+(?:\.\d+)?)?\s*['′m: ]?\s*(\d+(?:\.\d+)?)?/i);
-    if (dms && /[°d'′"]/i.test(txt)) {
+    var dms = txt.match(/(-?\+?\d+(?:\.\d+)?)\s*[°ºd: ]\s*(\d+(?:\.\d+)?)?\s*['′m: ]?\s*(\d+(?:\.\d+)?)?/i);
+    if (dms && /[°ºd'′"]/i.test(txt)) {
       var sign = /^\s*-/.test(txt) ? -1 : 1, dg = Math.abs(parseFloat(dms[1])), mi = parseFloat(dms[2] || 0), s = parseFloat(dms[3] || 0);
       var v = sign * (dg + mi / 60 + s / 3600); return (v < -90 || v > 90) ? null : v;
     }
