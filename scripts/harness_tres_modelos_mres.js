@@ -122,7 +122,11 @@ function medir(MAG) {
 }
 
 var NOMBRE = { mcrowd: 'm_crowd  ', psolo: 'P_solo   ', sky: 'm_lim,sky', viejo: 'min(ambos)' };
-[61, 250].forEach(function (MAG) {
+/* Exportado para la precondición de validez del ADR 0016
+   (scripts/test_veredicto_rotura_nucleo.js): las filas se leen del objeto,
+   no del texto impreso. El volcado CLI no cambia. */
+module.exports = { medir: medir, M13: M13 };
+if (require.main === module) [61, 250].forEach(function (MAG) {
   var q = medir(MAG);
   console.log('\n== M13 · D = 200 mm · SQM 21 · ' + MAG + 'x · r_c = ' + q.rcAs.toFixed(1) +
     '" · imagen estelar ' + q.res.radioImagenAs.toFixed(2) + '"');
