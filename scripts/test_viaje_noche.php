@@ -185,5 +185,14 @@ eq($ids(bitacora_viajes_candidatos(array($v('2026-08-04', '22:00', '', 1)), '202
 eq($ids(bitacora_viajes_candidatos(array($v('2026-08-05', '22:00', '', 1)), '2026-08-06', '01:30')),
    array(1), 'sin fin, la salida de esa noche sigue saliendo por su noche');
 
+// Salida entera de madrugada (comienzo y fin antes de las 12:00): la Noche
+// tiene que ser la fecha del día ANTERIOR a esas horas de reloj. Si se pone
+// la fecha del reloj (el error típico al dar de alta la salida), la ventana
+// se calcula un día tarde y el registro de observaciones no encuentra viaje.
+eq($ids(bitacora_viajes_candidatos(array($v('2011-10-18', '00:10', '03:30', 1)), '2011-10-19', '00:30')),
+   array(1), 'salida de madrugada con la Noche correcta (día anterior) se encuentra');
+eq($ids(bitacora_viajes_candidatos(array($v('2011-10-19', '00:10', '03:30', 1)), '2011-10-19', '00:30')),
+   array(), 'salida de madrugada con la Noche del reloj (error de alta) NO se encuentra');
+
 echo $fallos ? "\n$fallos FALLO(S)\n" : "\nok · el reparto en viajes respeta el convenio de mediodía\n";
 exit($fallos ? 1 : 0);
