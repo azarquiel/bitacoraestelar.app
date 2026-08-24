@@ -99,7 +99,7 @@ todos eran deuda alrededor. Corregidos:
   («146×, 514× y una configuración intermedia»): faltaba. **Añadido 300×**,
   verde.
 - **Los documentos de trabajo estaban en la raíz**, donde CLAUDE.md reserva
-  `CONTEXT.md` y `docs/adr/`. **Movidos** a `docs/halo_v7/`, junto a los datos.
+  `CONTEXT.md` y `simulador_ocular/docs/adr/`. **Movidos** a `docs/halo_v7/`, junto a los datos.
 
 Quedan sin tocar, por juicio: renombrar `cola(tabla, mlim)` (el nombre choca con
 `cola1`/`cola2`, pero el módulo entero usa esa nomenclatura), el preámbulo
