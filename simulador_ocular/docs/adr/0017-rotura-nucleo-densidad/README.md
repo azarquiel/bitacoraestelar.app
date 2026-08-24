@@ -7,4 +7,4 @@ mismo canal de estrellas resueltas, mismos listones, render intacto.
 Orden cronológico de ejecución:
 
 1. `prerregistro.md` (2026-08-24)
-2. `veredicto.md`
+2. `veredicto.md` (2026-08-24)
