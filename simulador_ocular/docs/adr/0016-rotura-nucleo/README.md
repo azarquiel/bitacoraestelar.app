@@ -7,4 +7,4 @@ un instrumento de veredicto sobre el canal existente, no un modelo nuevo.
 Orden cronológico de ejecución:
 
 1. `prerregistro.md` (2026-08-24, #108)
-2. `veredicto.md` (#109)
+2. `veredicto.md` (2026-08-24, #109)
