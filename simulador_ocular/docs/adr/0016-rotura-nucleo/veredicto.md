@@ -19,8 +19,12 @@ su propio prerregistro; no se retoca ningún listón a posteriori.
 
 `node scripts/harness_tres_modelos_mres.js` reproduce hoy la fila P_solo de
 `tres_modelos_mres.md` exactamente (núcleo de M13: 1 estrella y 0,7 % a 61×;
-36 estrellas y 22,5 % a 250×; tolerancia ±5 %). La cadena fotométrica del
-render no ha cambiado: la calibración de Φ es válida y el veredicto se emite.
+36 estrellas y 22,5 % a 250×; tolerancia ±5 %). Nota de lectura: el
+prerregistro dice «en el ancla», y `tres_modelos_mres.md` no tiene fila a
+120× — las filas medibles del documento comprometido son 61× y 250×, que
+encierran el ancla y comprueban la misma cadena (velo + punto fijo + sorteo);
+es la única lectura ejecutable del listón. La cadena fotométrica del render no
+ha cambiado: la calibración de Φ es válida y el veredicto se emite.
 
 ## 2. Anclaje de U
 
@@ -103,7 +107,11 @@ que crucen anillos/cúmulos con un umbral único.
 
 No se ha usado σ/RMS del campo SBF en ninguna parte de la métrica (solo el
 censo de estrellas dibujadas y las funciones de producción `Fdibujado`, `S1`,
-`sigma`, y la tabla `mRes` del render — ADR 0008). El exponente 1/4 no se ha
+`sigma`, `aCrowd` — N(≥ m+Δ) se lee invirtiendo `aCrowd`, no se recalcula — y
+la tabla `mRes` del render — ADR 0008). N_res es el censo ESPERADO del
+catálogo dibujado (LF × Σ(r) de producción), no el recuento de una realización
+concreta: es la única lectura que da el mismo censo a M13 (con fixture de
+Gaia) y al banco del 18″ (sin él), y la esperanza del recuento por realización. El exponente 1/4 no se ha
 tocado, Δ = 0,75 no se ha tocado, ningún listón se ha retocado tras ver la
 salida, y U se ha leído en el ancla, no elegido. Cero cambios en
 `resources/js/*`.

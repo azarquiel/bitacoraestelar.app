@@ -7,10 +7,12 @@
 
      N_res  nº esperado de estrellas de la franja con m < m_res(r) + Δ,
             Δ = dmagCrowd = 0,75 (banda de transición incluida; ADR 0012).
-            El conteo sale de la LF de producción (pob.estrellasPorBin,
-            interpolando dentro del bin con la misma hipótesis que `cola`) y
-            del perfil Σ(r) de producción: es el mismo censo para M13 y para
-            el banco del 18″, sin depender de qué fixture de Gaia exista.
+            El conteo N(≥ m+Δ) se LEE de producción invirtiendo pob.aCrowd
+            (ADR 0008: a = exp(−Σ·N·π·θ_sep²), así que N = −ln a/(Σ·π·θ_sep²);
+            dentro va la misma `cola` interpolada del render, no una copia), y
+            el perfil Σ(r) es el de producción: es el mismo censo esperado
+            para M13 y para el banco del 18″, sin depender de qué fixture de
+            Gaia exista.
      f_res  F_dibujado/F_total de la franja: la fracción del flujo que el
             render dibuja EN MEDIA, con las funciones de producción
             (pob.Fdibujado, ADR 0008 — nada se reimplementa).
@@ -49,19 +51,18 @@ var BANCO18 = [
   { id: 'NGC 6266', nombre: 'M62', mag: 270, rompe: false }
 ];
 
-/* Estrellas de la LF más brillantes que m, interpolando dentro del bin con la
-   misma hipótesis con la que la LF está tabulada (phi constante en el bin) —
-   idéntica a la de `cola` en bitacora-cumulos.js. No es una ley del render:
-   es el censo de la propia LF, parte de la métrica Φ. */
-function nBrillantes(pob, m) {
-  var mAp = pob.magnitudes, num = pob.estrellasPorBin, n = num.length;
-  var paso = mAp[1] - mAp[0];
-  var x = (m - mAp[0]) / paso + 0.5;
-  if (!(x > 0)) return 0;
-  var total = 0, j = Math.floor(Math.min(x, n));
-  for (var i = 0; i < j; i++) total += num[i];
-  if (j < n && x > j) total += (x - j) * num[j];
-  return total;
+/* N(≥ m + Δ) LEÍDO de producción, no recalculado (ADR 0008): aCrowd es
+   exactamente exp(−Σ(r)·N(≥ m+Δ)·π·θ_sep²) con la `cola` interpolada del
+   render dentro (bitacora-cumulos.js), así que el conteo sale de invertirla.
+   El suelo Number.MIN_VALUE solo protege el logaritmo si a subdesbordase a 0
+   (no ocurre en ninguna configuración medida). */
+function nBrillantes(pob, m, rAs, radioImagenAs) {
+  var s = pob.sigma(rAs);
+  if (!(s > 0) || !(radioImagenAs > 0)) return 0;
+  var thSep = C.config.thetaSepRadios * radioImagenAs;
+  var a = pob.aCrowd(m, rAs, radioImagenAs);
+  if (a >= 1) return 0;
+  return -Math.log(Math.max(a, Number.MIN_VALUE)) / (s * Math.PI * thSep * thSep);
 }
 
 /* Φ de las cuatro franjas para una medida (cúmulo + equipo) ya hecha. */
@@ -78,7 +79,8 @@ function phiFranjas(m, pob) {
       var s = pob.sigma(rAs), w = s * rAs * t.paso;
       if (!(w > 0)) continue;
       var mRes = t.mRes[i];
-      Nres += 2 * Math.PI * w * nBrillantes(pob, mRes + DELTA);
+      // aCrowd ya suma Δ = dmagCrowd por dentro: pasarle mRes cuenta ≥ mRes+Δ.
+      Nres += 2 * Math.PI * w * nBrillantes(pob, mRes, rAs, rImg);
       fNum += w * pob.Fdibujado(mRes, rAs, rImg);
       fDen += w * Ftot;
     }
