@@ -18,9 +18,6 @@
      node scripts/test_veredicto_rotura_nucleo.js */
 'use strict';
 
-var path = require('path');
-var execFileSync = require('child_process').execFileSync;
-
 var fallos = 0;
 function ok(cond, etiqueta) {
   if (cond) console.log('  ok   ' + etiqueta);
@@ -32,23 +29,21 @@ function cerca(x, ref, tol) { return Math.abs(x - ref) <= tol * Math.abs(ref); }
 
 console.log('\nPrecondición: la fila P_solo del núcleo de M13 reproduce tres_modelos_mres.md ±5 %:');
 
-var salida = execFileSync(process.execPath,
-  [path.join(__dirname, 'harness_tres_modelos_mres.js')], { encoding: 'utf8' });
-var psolo = [];
-salida.split('\n').forEach(function (l) {
-  var m = /^\s*P_solo\s+(\S+)\s+(\d+)\s+(\d+)\s+(\S+)\s+([\d.]+) %\s+([\d.]+) %/.exec(l);
-  if (m) psolo.push({ nNuc: +m[2], nTot: +m[3], fNuc: +m[5], fTot: +m[6] });
+// Las filas P_solo se leen del harness exportado, no de su texto impreso. El
+// flujo se redondea a un decimal en %, la misma precisión con la que el
+// documento compromete la cifra.
+var T = require('./harness_tres_modelos_mres.js');
+var psolo = [61, 250].map(function (MAG) {
+  var fila = T.medir(MAG).filas.filter(function (f) { return f.modelo === 'psolo'; })[0];
+  return { nNuc: fila.nNuc, fNuc: +(100 * fila.fNuc).toFixed(1) };
 });
 
 // Referencia documentada (tres_modelos_mres.md): 61× → 1 estrella, 0,7 % del
 // flujo del núcleo en puntos; 250× → 36 estrellas, 22,5 %.
 var REF = [{ nNuc: 1, fNuc: 0.7 }, { nNuc: 36, fNuc: 22.5 }];
-var precondicion = psolo.length === 2 &&
-  psolo.every(function (p, i) {
-    return cerca(p.nNuc, REF[i].nNuc, 0.05) && cerca(p.fNuc, REF[i].fNuc, 0.05);
-  });
-
-ok(psolo.length === 2, 'el harness imprime las dos filas P_solo (61× y 250×)');
+var precondicion = psolo.every(function (p, i) {
+  return cerca(p.nNuc, REF[i].nNuc, 0.05) && cerca(p.fNuc, REF[i].fNuc, 0.05);
+});
 psolo.forEach(function (p, i) {
   ok(cerca(p.nNuc, REF[i].nNuc, 0.05),
     'N_res núcleo (' + (i ? '250×' : '61×') + ') = ' + p.nNuc + ' ≈ ' + REF[i].nNuc + ' ±5 %');
