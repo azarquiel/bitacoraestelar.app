@@ -1,7 +1,7 @@
 # Veredicto: calibración de K y canal de producción (ADR 0015, #99)
 
 Fecha: 2026-08-22. Prerregistro: `docs/halo_v7/prerregistro_umbral_textura.md`.
-Ley: `docs/adr/0015-umbral-de-textura-para-el-grano-sbf.md`, implementada en
+Ley: `simulador_ocular/docs/adr/0015-umbral-de-textura-para-el-grano-sbf.md`, implementada en
 `resources/js/bitacora-gaia-render.js` (`TEXTURA`, `#97`).
 
 ## Veredicto

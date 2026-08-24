@@ -50,4 +50,4 @@ Issues live in GitHub Issues (`azarquiel/bitacoraestelar.app`), via the `gh` CLI
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Multi-context: `CONTEXT-MAP.md` at the repo root points to one `CONTEXT.md` per context (`registro/`, `mapa/`, `simulador_ocular/`); root `docs/adr/` for system-wide decisions, `<context>/docs/adr/` for context-scoped ones. See `docs/agents/domain.md`.

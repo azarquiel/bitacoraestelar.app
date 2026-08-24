@@ -1,0 +1,63 @@
+# Contexto — Registro
+
+Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: observación, viaje, base, cielo, astrometría.
+
+## Observación
+
+**Acto de mirar UN objeto**: qué, quién, cuándo, con qué tubo (`{prefix}bitacora`). Unidad que se registra y se borra; todo lo demás cuelga de ella o la describe.
+
+- **Un objeto, no una noche.** M42 y luego M43 son DOS observaciones. Lo común a la salida (lugar, cielo, crónica) no se repite: vive en el [[viaje interestelar]], apuntado por `viaje_id`.
+- **Jerarquía observación → entrada → imagen.** Observación guarda identidad de lo mirado; cada **entrada** es lo visto A UN AUMENTO (ocular, campo real, pupila de salida, título, descripción), y cada entrada lleva sus **imágenes** (una principal, resto anexos). Cambiar de ocular añade entrada, no observación. `default_index` dice qué entrada abre la ficha del mapa.
+- **Tres nociones de persona, distintas.** `observador` (texto: quién miró, puede ser invitado sin cuenta), `observador_id` (ficha en catálogo de observadores, la que usa el mapa para rotular) y `usuario_id` (cuenta de WordPress DUEÑA del registro, única que puede editar o borrar). Quien mira y quien escribe no tienen por qué coincidir.
+- **Identidad asimétrica según por dónde entre — deuda, no diseño.** Al importar OAL, «mismo usuario + misma noche + mismo objeto» es LA MISMA observación: clave `oal_id` lo impone, reimportar no duplica. Por formulario no hay regla: tabla no tiene más clave única que `id`, así que registrar M42 dos veces la misma noche crea dos filas. Molestia del lado OAL: clave cuelga de la NOCHE, no del viaje, así que objeto visto en dos salidas de una misma noche se importa una sola vez.
+- **Borrar no borra:** `borrada_en` marca la fila (papelera restaurable) y todas las consultas del mapa y del registro la filtran. Observación borrada no desaparece del histórico, deja de contar.
+- **De dónde vino:** `origen` distingue `formulario` (normal), `oal` (importada) y `legacy` (migrada). No cambia el significado, solo las garantías.
+- **Apunta a otras entradas del glosario:** objeto mirado tiene o debería tener su [[objeto del mapa]]; el sitio, su [[base]] (vía el viaje); alturas y azimuts calculados, su [[astrometría de la sesión]]. Campo `tipo` de aquí es TIPO DE LA OBSERVACIÓN (cómo se identificó el objeto: `messier`, `carbono`, `otro`), homónimo peligroso del tipo del objeto del mapa: ver aviso en [[clasificación de objeto del mapa]].
+
+## Base
+
+**Sitio desde el que se observa**: nombre, latitud, longitud, altitud y huso horario IANA (`{prefix}bitacora_bases`). Convierte una dirección del cielo en algo visto a una altura y hora concretas, así que sin base no hay [[astrometría de la sesión]] —ni altura, ni azimut, ni crepúsculo—.
+
+- **Es del observador, no del sistema:** cada usuario da de alta las suyas. `visibilidad` decide quién más la ve: `privada`, `seleccionada` (compartida con usuarios concretos, y compartir es SOLO LECTURA: elegirla y ver su salud) o `publica`.
+- **Base es del [[viaje interestelar]], no de la observación:** se indica una vez por salida. Viaje sin base es legítimo y usa el sentinela `base_id = 0`, no `NULL`, porque con `NULL` la clave única de MySQL admitiría duplicados.
+- **No confundir con el lugar de la crónica:** base es geometría (dónde está el observador en la Tierra); lo que se cuenta de la noche vive en el viaje.
+
+## Viaje interestelar
+
+**Sesión de observación**: salida de UN observador, UNA noche, desde UNA [[base]]. Todo objeto observado bajo esa terna cuelga del mismo viaje, y ahí viven los datos de la salida y no del objeto (lugar, crónica, meteo, cielo, comienzo y fin, tripulación). Se gestionan en **Mis viajes** (`registro/mis-viajes-wordpress.html` + `bitacora-viajes.js`).
+
+- **Fuente única de la identidad:** `bitacora-viaje.php` (puro, sin WordPress), `bitacora_viaje_noche(fecha, hora)` y `bitacora_viaje_clave(usuario, base, fecha, hora)`.
+- **Convenio de mediodía:** la noche de una observación es la del día anterior si la hora es menor que las 12:00, igual que la fecha juliana cuenta desde el mediodía. Así el objeto de las 22:40 y el de las 02:15 caen en la misma salida. Cuenta va sobre el reloj de PARED de la base, así que el horario de verano no la mueve.
+- **Telescopio NO entra en la identidad:** cambiar de tubo a media noche no parte la salida en dos. Convención de Open Astronomy Log, donde `scope` cuelga de la observación y la `session` se define por tiempo y sitio.
+- **Lugar es del viaje, no de la observación:** se indica una vez para toda la noche, en la ficha del viaje. Viaje SIN lugar es legítimo (`base_id = 0`, el sentinela: con `NULL` la clave única de MySQL admitiría duplicados), y entonces el registro pregunta la base, único modo de seguir calculando alt/az. Regla en `BitacoraBase.lugarDeObservacion`, test `scripts/test_lugar_observacion.js`.
+- **Lugar SUBE al viaje, y no vuelve a bajar:** la base contestada al registrar un objeto se escribe en el viaje, así que se pregunta una vez por salida y no una vez por objeto. En cuanto el viaje tiene lugar manda él: cambiarlo se hace en su ficha, no registrando un objeto —si no, el último objeto de la noche mudaría de sitio la salida entera—. Regla en `bitacora_viaje_base_efectiva` (`bitacora-viaje.php`), test `scripts/test_viaje_noche.php`.
+- **Sesión obligatoria, lugar no:** sin viaje no se guarda observación; sin lugar sí, a cambio de quedarse sin altura ni azimut.
+- **Cielo NO sube al viaje:** `cielo_sqm`/`cielo_ir`/`cielo_bortle` siguen siendo de cada observación, porque las condiciones cambian mientras se observa y el registro puede rellenarse antes de salir. El viaje las copia como **resumen** de la noche (primer valor no nulo), no como hogar único.
+- **Selector de viaje al registrar:** el formulario pregunta al servidor qué viajes tiene esa noche (`avisoViaje` en `bitacora-base.js` + `/viajes/de-la-noche`, que responde una LISTA: una noche puede tener dos salidas desde sitios distintos). Si no tiene ninguno, ofrece darlo de alta sin lugar. Test: `scripts/test_aviso_viaje.js`.
+- **La salida no se elige, se deduce:** manda la **ventana** de la salida (`comienzo`–`fin` de su ficha). Si fecha y hora de la observación caen dentro, es esa y **solo** esa —`bitacora_viajes_candidatos`, test `scripts/test_viaje_noche.php`—: nadie observa desde dos sitios a la vez, así que ofrecer además las otras de la noche sería preguntar algo ya sabido. La noche sola no llega: dice a qué salida pertenece un objeto, no cuál de las dos de esa noche estaba abierta a esa hora, y una salida que se alarga pasado el mediodía cae ya en la noche siguiente (por eso la consulta trae también las noches vecinas). Salida ajena que no contenga el instante NO se ofrece.
+- **La ventana cruza el día, que es lo normal:** se lee con el convenio de mediodía invertido (`comienzo` < 12:00 = madrugada del día siguiente) y el fin va detrás del comienzo, así que un `fin` que no sea mayor significa que se pasó la medianoche: 22:00–03:00 son **dos días**. Ficha sin las dos horas no tiene ventana y vale solo por su noche, como siempre.
+- **Dos ventanas que se pisan son ERROR, no elección:** el observador no pudo estar en las dos, así que salen las dos y el formulario lo canta en rojo pidiendo corregir sus horas en *Mis viajes*. La observación se queda sin viaje hasta entonces: colgarla de una sería inventarse cuál.
+- **NUNCA hay selector:** el formulario no ofrece elegir la salida en ningún caso. Por eso el aviso va pegado a la fecha y la hora, lo único que la decide. En modo edición manda el `viaje_id` guardado, que es un hecho, no una deducción.
+- **Se anuncia como lo que resuelve SIMBAD:** misma línea `.status` con su ✓ y su clase (`ok`/`info`/`err`), porque es la misma idea —«esto te lo hemos rellenado nosotros»—. El texto lo decide `BitacoraBase.mensajeViaje(estado,
+  etiquetas)`, en texto plano (se pinta con `textContent`, así que el nombre de una salida no inyecta nada). Test: `scripts/test_aviso_viaje.js`.
+- **Invariante:** la misma observación da siempre la misma clave, lo que hace relanzable el reparto histórico (backfill) sin duplicar viajes. Test: `scripts/test_viaje_noche.php`.
+- **La ruta en el mapa** (recorrido visual de un viaje) es concepto de `mapa/`: ver [[la ruta en el mapa]].
+
+## Astrometría de la sesión
+
+Altura y azimut que se registran de una observación: los del **objeto**, los del **Sol** y los de la **Luna**, calculados para una [[base]] (lat/lon/huso) y un instante de hora local con los algoritmos de Meeus.
+
+- **Fuente única:** `resources/js/bitacora-astro.js`, global `window.BitacoraAstro` (+ `module.exports` para node), URL canónica en `/wp-content/uploads/bitacora/`.
+- **Interfaz:** `posiciones({fechaHoraLocal, tz, lat, lon, ra, dec})` → `{utc, objeto:{alt,az}, sol:{alt,az}, luna:{alt,az}}`, o `null` si falta cualquier dato imprescindible (sin base, sin fecha, sin coordenadas): el llamador no valida nada más. `fechaHoraLocal` es hora de PARED en la base; el huso IANA la convierte a UTC sin librerías.
+- **Consumidores:** formulario de registro (`bitacora-formulario.js`, que siembra la ficha al registrar) y formulario de datos de ficha (`bitacora-ficha.js`, que la recalcula al editarla).
+- **Convención de refracción:** solo el **objeto** lleva refracción (Bennett), porque su altura describe lo que el observador vio. Sol y Luna salen **geométricos**, porque los umbrales de crepúsculo (−6°, −12°, −18°) se definen sobre la altura geométrica del centro del Sol.
+- **Invariante:** la altura que guarda el registro y la que recalcula la ficha son el mismo número. Garantizado estructuralmente (fuente única), no por copiar y pegar: antes había dos copias byte a byte que YA habían divergido —el formulario refractaba Sol y Luna y la ficha no—, así que abrir la ficha cambiaba el dato guardado. Test `scripts/test_astro.js` fija el contrato contra invariantes físicos (polo celeste a la altura de la latitud, declinación solar en solsticio y equinoccio, convenio de azimut y husos con y sin horario de verano).
+
+## Cielo de la sesión (SQM e IR)
+
+Las dos medidas del cielo de una observación, con **escalas opuestas**, cada una con su tabla de bandas en `resources/js/bitacora-base.js`:
+
+- **SQM** (mag/arcsec²): positivo y **sube** con la oscuridad. `claseBortlePorSqm`; el `sqm` de cada clase Bortle es el **mínimo** de su rango.
+- **IR** (ºC): negativo y **baja** cuanto más transparente está el cielo. `transparenciaPorIr`; el `ir` de cada banda es su extremo **menos negativo**: `ir > −5` Pobre · `−15 < ir ≤ −5` Algo transparente · `−20 < ir ≤ −15` Mayoritariamente transparente · `−30 < ir ≤ −20` Transparente · `ir ≤ −30` Extremadamente transparente.
+- **Invariante:** el valor que ofrece cada opción del desplegable tiene que volver a caer en su propia banda, o el `<select>` y el `<input>` se desincronizan solos.
+- La comparación es distinta en las dos (`>=` en el SQM, `<=` en el IR) **a propósito**: usar la del SQM en el IR fue el fallo —un cielo de −3 salía «Algo transparente» cuando es Pobre—. Test: `scripts/test_cielo.js`.

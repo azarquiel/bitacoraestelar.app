@@ -8,7 +8,7 @@ la ley: si un listón falla, la ley se declara falsada en ese punto y se aplica
 la vía de escape única (§5) o se descarta con medida, nunca se ajusta el
 listón a posteriori.
 
-Fuente: `docs/adr/0015-umbral-de-textura-para-el-grano-sbf.md`,
+Fuente: `simulador_ocular/docs/adr/0015-umbral-de-textura-para-el-grano-sbf.md`,
 `docs/halo_v7/velo_granularidad.md`, `docs/halo_v7/escala_grano.md`,
 `docs/halo_v7/bibliografia_textura_deteccion.md`.
 

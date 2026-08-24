@@ -183,7 +183,7 @@
        es de los mejores cielos de la Tierra. El desfase NO era un punto cero
        mal puesto: las dos curvas coinciden exactamente en SB_CIELO_BLANCO y se
        separan más cuanto más oscuro es el cielo (SBe 18: 207 vs 135; SBe 20:
-       143 vs 60; SBe 22,3: 70 vs 15). Ver docs/adr/0009-fondo-cielo-luminancia.md.
+       143 vs 60; SBe 22,3: 70 vs 15). Ver simulador_ocular/docs/adr/0009-fondo-cielo-luminancia.md.
 
        ponytail: SB_CIELO_BLANCO sigue siendo la perilla artística —depende de
        la luz ambiente de quien mire la pantalla—, pero ahora es un anclaje, no
@@ -1372,7 +1372,7 @@
      de cúmulos: producía un disco difuso con borde visible que no se parece a
      la vista al ocular. Lo sustituye un campo estadístico derivado de la función
      de luminosidad (ver especificacion_modelo_observacion_cumulos.md y
-     docs/adr/0002). No volver a sumar este perfil a `difuso`. */
+     simulador_ocular/docs/adr/0002). No volver a sumar este perfil a `difuso`. */
   function perfilKing(r, rc, rt) {
     if (!(rc > 0) || !(rt > rc) || r >= rt) return 0;
     var a = 1 / Math.sqrt(1 + (r / rc) * (r / rc));
@@ -3928,7 +3928,7 @@
          estrella y forzaba blur y aureola a cero en el núcleo). Se eliminó con
          el halo continuo en la Fase 0: sin halo no hay fondo contra el que
          comparar. Su papel lo hace la banda de transición del nuevo modelo,
-         que atenúa por magnitud efectiva (docs/adr/0002). */
+         que atenúa por magnitud efectiva (simulador_ocular/docs/adr/0002). */
       // Tamaño = imagen estelar física (Airy + seeing, que crece con el aumento y
       // se aprieta con la apertura) en cuadratura con el suelo de visibilidad.
       var oRadio = { afov: o.afov, apertura: o.apertura, arcmin: arcmin, size: SIZE, sep: o.sep, g: g, blur: blurG, mlim: mlim };
