@@ -101,7 +101,7 @@
         // recorrido entero se ve en el mapa con el botón de al lado.
         var ruta = (v.objetos && v.objetos.length)
           ? '<div class="vi-ruta">' + v.objetos.map(function (o) {
-              return '<span class="vi-obj">' + esc(o) + '</span>';
+              return '<span class="vi-obj">' + esc(o.replace(' (coordenadas manuales)', '')) + '</span>';
             }).join('<span class="vi-flecha">→</span>') + '</div>'
           : '';
         return '<div class="viaje-item" data-id="' + v.id + '">'
