@@ -1,0 +1,74 @@
+# Contexto — Mapa
+
+Mapa celeste (`mapa/`): objetos pintados, su clasificación y distancia, y las escenas 3D (vecindario solar, ruta de un viaje).
+
+## Objeto del mapa
+
+Entrada en tabla `{prefix}bitacora_objetos` que se pinta en el mapa de la Vía Láctea (slug, etiqueta, color, tipo, morfología, coordenadas galácticas, distancia). Objetos cercanos van al mapa MW; lejanos, a vista extragaláctica (grupo local).
+
+Toda observación debería tener el suyo: lo asegura `bitacora_asegurar_objeto_mapa()` al registrar, editar e importar OAL. Como no bloquea el guardado (observación sin distancia se guarda igual, solo avisa), quedan objetos huérfanos: observación sí, marcador no. Se rescatan con `bitacora_objetos_backfill()`, botón «Colocar en el mapa los objetos observados que falten» del panel de administración. Síntoma del hueco: buscador del mapa SÍ encuentra el objeto —resuelve en SIMBAD al vuelo y dibuja punto de mira— pero no hay marcador. `scripts/test_oal_objeto_mapa.php` fija las dos vías.
+
+## Distancia al Sol de un objeto
+
+Lo que separa una dirección del cielo de un sitio en el mapa: sin distancia no se pinta y la observación queda guardada sin representación. **Escalera de fuentes**, de más directa a más indirecta:
+
+1. Medidas publicadas de SIMBAD (`mesDistance`), por su **mediana**: distancias de un mismo objeto se separan a veces por factor 2 y una medida vieja y disparatada no debe arrastrar al resto.
+2. **Paralaje** de SIMBAD (`basic.plx_value`), viaja gratis en la misma consulta y está cuando las medidas no: coloca a NGC 2022.
+3. **VizieR** (`B/ocl`, cúmulos abiertos de Dias), por nombre de catálogo. Cubre la familia con más huecos en SIMBAD (M11, NGC 869, NGC 457 están allí y en `mesDistance` no).
+4. **Open Astronomy Catalog** (`api.astrocats.space`), catálogo abierto de transitorios: distancia de luminosidad en Mpc de supernovas y sus restos. Coloca a **M1**, que responde como SN 1054.
+5. **NED**, por **corrimiento al rojo**: ESTIMACIÓN por ley de Hubble, no medida, y solo válida lejos (ver invariante).
+6. La que escriba **a mano** el observador, único recurso para lo que ninguna base de datos sabe: nebulosas difusas galácticas (NGC 2024 no tiene ni medida, ni paralaje, ni entrada en `B/ocl`, ni z).
+
+- **Fuente única de la regla:** `bitacora-distancia.php`, puro y sin WordPress; consultas de red viven en `bitacora-registro.php`, una por fuente y todas con caché de 30 días. Test `scripts/test_distancia_objeto.php`, que fija el parseo con respuestas reales de cada servicio.
+- **Paralaje ≤ 0 no es distancia:** ruido de medida daría valor negativo, que colocaría el objeto al lado contrario del mapa.
+- **Ley de Hubble no vale de cerca** (`BITACORA_Z_MIN_HUBBLE`, z = 0,01): velocidad propia de una galaxia dentro de su grupo es del orden de la de expansión y se come la señal. M104 tiene z = 0,00363, que por Hubble da ~51 millones de años luz cuando está a ~29. Por debajo del corte, NED se calla.
+- **De NED sale el z, no su distancia:** sus distancias independientes del corrimiento al rojo (NED-D) no las publica ninguna API —solo la web—, y su TAP (`NEDTAP.objdir`) expone cuántas hay (`n_dist`) pero no cuáles. Raspar HTML dentro del plugin no compensa.
+- **El aviso tiene que llevar a algún sitio:** cuando no se puede situar, la observación se guarda igual y el formulario **pide la distancia** (contra `POST /objetos`, que resuelve solo coordenadas, tipo y color). Antes el aviso decía «indícala a mano» y no había dónde escribirla.
+
+## Clasificación de objeto del mapa
+
+Seam que decide **`tipo` + `color`** de un objeto a partir de su `otype` de SIMBAD, su morfología y el tipo declarado en la observación. Función única `bitacora_clasificar_objeto($otype, $morph, $tipo_obs)` en `bitacora-registro.php` (antes repartida entre `clase_hubble` + `color_por_clase` + un `if` de carbono incrustado, y el hueco entre «decidir tipo» y «decidir color» era el bug: cúmulos y estrellas de carbono caían en el default `#7ec8ff`, que en la leyenda es «Resto de supernova»).
+
+Prioridad: tipo del registro → tabla de categorías MW por código otype (`C*` carbono, `GlC` globular, `OpC`/`Cl*` abierto, `PN` planetaria, `HII`/`EmO` emisión, `DNe`/`glb`/`CGb` oscura, `SNR` resto de supernova) → galaxia por clase de Hubble (para grupo local) → **`estrella`** si el otype es estelar → **`desconocido`** si no se pudo clasificar.
+
+- **Nebulosa oscura no emite: TAPA.** Silueta de polvo sobre fondo rico en estrellas (Barnard 33, los Barnard, las LDN), por eso lleva el pardo del polvo y no uno de los brillantes del resto de la leyenda. Misma familia que en el simulador solo sabe contar la placa fotográfica y no el catálogo de puntos (ver [[cadena de la placa (luma → flujo)]]). Fuera a propósito `MoC` (nube molecular) y `Cld` (nube a secas): categorías de radio, no lo que se ve recortado en el ocular, y `Cld` es tan ancho que se tragaría objetos que no son esto. Un `MoC` cae en `desconocido`, que es la verdad.
+- **«Es una estrella» y «no sé qué es» son hechos DISTINTOS.** Antes compartían cajón `otro` y color `#dfe7f5`, rotulado en leyenda «Estrella / otro»: término borroso impreso hasta el usuario. Sirio y Barnard 33 eran los dos `otro`, y los separaba un regex de prefijos de catálogo (`M`, `NGC`, `Abell`…) en la capa del vecindario, a 300 km del clasificador. Catálogo fuera de esa lista (`Gum`, `RCW`, `Ced`, `PGC`) colaba una nebulosa como estrella. `desconocido` NO es tipo de objeto: es ausencia de clasificación.
+- **Estelar = el otype lleva `*`:** códigos estelares de SIMBAD lo llevan (`*`, `**`, `V*`, `PM*`, `WD*`, `RG*`, `EB*`, `Be*`, `WR*`…) y los de espacio profundo no (`PN`, `HII`, `SNR`, `GlC`, `G`, `DNe`, `GNe`, `Cld`). `C*` y `Cl*` ya los capturó la tabla antes de llegar aquí; única excepción a descontar es `As*` (asterismo), varias estrellas y no una. Una regla en vez de tabla de treinta códigos que siempre se queda corta.
+- **Sin otype no se adivina:** objeto que SIMBAD no resolvió cae en `desconocido`, no en `estrella`. Abell 12 es el caso real —es planetaria y estaba en `otro` porque la consulta no devolvió `PN`, no por tener nada de estelar.
+- **CUIDADO: `tipo` es homónimo, y aquí se cruzan dos sentidos.** La palabra nombra cosas distintas según la tabla: **tipo del objeto del mapa** (esta categoría: `globular`, `oscura`, `estrella`, `desconocido`, clases de Hubble), **tipo de la observación** (`bitacora.tipo`: cómo se identificó el objeto — `messier`, `carbono`, `otro`), **tipo de la imagen** de una entrada y **tipo de una doble** (`doble`/`triple`/`múltiple`). El `$tipo_obs` que recibe el clasificador es el de la OBSERVACIÓN, y se compara contra los nombres de las categorías del MAPA: funciona solo porque `carbono` es la única palabra que existe en ambos vocabularios. Acoplamiento por coincidencia de nombres, no por diseño: dar de alta un tipo de observación llamado como una categoría activaría un override silencioso. Antes de tocar un `tipo`, mira de qué tabla es.
+- **Invariante:** colores del clasificador coinciden con la leyenda `#mw-legend` (`data-color`) de `mapa/mapa.html`; los de galaxia, con `HUBBLE_COLORS` de `grupo-local.js` y la leyenda `#mw-legend-hubble`. `estrella` y `desconocido` tienen **entrada propia y color propio** en la leyenda: si comparten color, el cajón sigue existiendo a ojos del observador aunque el modelo esté partido. Test `scripts/test_clasificacion_objeto.py` verifica mapeos y sincronía.
+- **Default neutro:** otype desconocido NO reutiliza color de la leyenda, para no disfrazarse de otra categoría (raíz del bug).
+
+## La ruta en el mapa
+
+Un [[viaje interestelar]] se puede **recorrer** en el mapa interestelar: quedan solo sus objetos, unidos por línea dorada que va de uno a otro en el orden en que se observaron. Módulo puro `mapa/js/via-lactea-viaje.js` (`window.VLViaje`), test `scripts/test_viaje_mapa.js`.
+
+- **El orden lo decide el SERVIDOR:** hora ascendente y, sin hora, al final por `id` —mismo criterio con que se listan las observaciones de una salida—. Así la ruta dibuja siempre la misma forma, y *Mis viajes* y el mapa cuentan el mismo recorrido. Nunca aleatorio.
+- **Los viajes viajan con los datos:** `bitacora_datos_js` emite `var VIAJES` con `{nombre, noche, observador, objetos}` y un `viaje` en cada observación. Payload **público**: crónica, meteo, cielo y base se quedan fuera.
+- **Un viaje es de alguien:** el combo de viajes del mapa solo tiene contenido con observador seleccionado; sin él dice «Seleccione un observador para ver sus viajes». Cambiar de observador termina el viaje en curso.
+- **Tres tramos, uno por escala:** vecindario solar (`Sol → estrella…`), Vía Láctea (`Sol → M13 →…`) y Grupo Local (`Vía Láctea → M31 →…`). Cada capa dibuja el suyo con su proyección y su origen, porque el salto entre escalas ya lo hace el fundido del zoom; no hay proyección común que inventar. Viaje que cruza escalas se avisa, no se fuerza, y cada objeto cuenta en **una sola** escala: la estrella cercana está en el tramo de la galaxia y en el del vecindario, pero no cruza nada (`VLViaje.escalasDe`).
+- **Capa sin tramo se queda vacía, no llena:** «no hay viaje» y «hay viaje y no pasa por aquí» son cosas distintas (`null` frente a lista vacía). Si no se distinguen, el atlas del Grupo Local sigue enseñando todas las galaxias mientras el mapa solo enseña la ruta.
+- **El viaje encuadra, no señala:** al arrancar, el mapa lleva la vista a la primera escala, pero sin anillo ni parpadeo del buscador. En un viaje ninguna escala está más marcada que las demás: lo que lo cuenta es la ruta.
+- **El Sol siempre se ve:** de él parte la travesía. Los objetos de la ruta van siempre a todo color, aunque sean de otro observador: son escalas del viaje, no observaciones ajenas.
+- **Objeto sin marcador no se dibuja ni se cuenta:** lo visitado que no está en `OBJECTS` desaparece en silencio de la ruta y del recuento del combo, o el rótulo prometería un objeto que el mapa no enseña. El viaje sigue siendo seleccionable.
+- **El buscador se apaga durante el viaje:** navegar a otro objeto rompería el recorrido.
+- **Enlace compartible:** `mapa.html?viaje=<id>` selecciona al dueño y recorre la ruta, por delante del arranque con las observaciones propias. El combo reescribe la URL (`replaceState`); un viaje que ya no existe avisa y arranca normal.
+- **Una observación se identifica por su ÍNDICE en `OBSERVACIONES[objeto]`**, no por su observador: el mismo observador puede haber visitado el objeto en dos salidas y las dos tienen que poder abrirse. Es lo que lista «← Descubrir», botón único que desde cualquier ficha lleva a las demás observaciones del objeto y solo aparece si las hay. Esa lista va por **fecha**, de más reciente a más antigua («12 ago 2026 · Nave Excalibur · 18" f/4.5»: cuándo y con qué, no el nombre del viaje). Objeto con **más de una** observación no abre ninguna al pulsarlo: enseña esa lista para que el usuario elija (`VLViaje.hayQueElegir`).
+
+## Nombre del observador (mapa)
+
+Resolución **clave → nombre legible** de un observador, sobre el catálogo `OBSERVADORES`. Vive en `VLObservadores` (`mapa/js/via-lactea-observadores.js`) como `nombreObservador(clave)` (clave desconocida → la propia clave; vacía → `''` para no pintar etiqueta). La ficha del mapa la usa para mostrar «Observación de {nombre}» de forma discreta, igual en el flujo normal y en el de descubrimiento. Test: `scripts/test_observadores.js`.
+
+## Vecindario solar (estrellas cercanas)
+
+Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (1500 al) del Sol, que aparece al hacer zoom máximo sobre el Sol en la vista cenital. Se puebla desde los **objetos del mapa** que tengan coordenadas galácticas y esa distancia.
+
+- **Selección pura:** `mapa/js/via-lactea-vecindario-catalogo.js` (`VLVecindarioCatalogo.estrellasVecindario(objects, distMaxAl)`): filtra por distancia, coordenadas y **que sea una estrella**, resuelve el `bp_rp` (color) y proyecta a XYZ con el Sol en el origen (`galToXYZ`). La capa `vecindario-solar.js` solo dibuja. Test: `scripts/test_vecindario_catalogo.js`.
+- **Reparto de escalas:** una vista no repite lo que enseña la de al lado. `enVecindario(o, distMaxAl)` = `esEstrella(o)` + dentro del radio, y es la MISMA función que usa la vista de la galaxia para NO marcar esas estrellas (`EN_VECINDARIO` en `via-lactea-app.js`, que además desvía la búsqueda al vecindario). Por arriba, el atlas del Grupo Local ya se queda solo con lo extragaláctico. Así el espacio profundo cercano (Barnard 33, a 1.500 al) no se cuela entre las estrellas y la leyenda de clases espectrales dice la verdad.
+- **`esEstrella(o)` = `estrella` o `carbono`, y nada más.** Lo decide entero el [[clasificación de objeto del mapa]]: la capa del vecindario ya no adivina por el nombre. Un `desconocido` NO entra en la escena, aunque esté a tiro: pintarlo sería dar clase espectral y color de estrella a algo que nadie ha clasificado, justo lo que colaba nebulosas de catálogos raros entre las estrellas. Se queda en la vista de la galaxia, con su color propio, hasta que se sepa qué es.
+- **Objeto viejo no se reclasifica solo:** los guardados como `otro` siguen fuera del vecindario hasta pasar por el backfill del panel de administración, que vuelve a preguntar el otype y reescribe `tipo` y `color`.
+- **Color:** cada estrella usa su índice **BP–RP** con el [[modelo de color Gaia]] compartido; por eso su color coincide con el del simulador de oculares. El objeto del mapa guarda `bp_rp` (columna nueva); lo resuelve el plugin al registrar (Gaia por ra/dec, mismo failover CDS→GAVO que el proxy) y lo emite `datos.js`. Sin `bp_rp`, la estrella sale con color neutro.
+- **Son DOS radios, y a propósito:** el vecindario enseña hasta `distMaxAl` (1500 al, cliente), pero el plugin resuelve el `bp_rp` hasta `BITACORA_BPRP_DIST_MAX_AL` (2000 al, servidor). La holgura evita que subir el radio de la escena deje sin color a las estrellas del borde, que ya lo tendrían guardado.
+- **Tránsito con histéresis:** `fundidoVecindario(fov, cerca, dentro, cfg)` (mismo módulo puro) decide la opacidad de la capa. Para ENTRAR hacen falta Sol centrado y campo bajo `fovFinalAl`; una vez dentro, la escena se mantiene opaca hasta `fovSalidaAl` aunque el Sol se descentre, y el tope de zoom sigue elevado. Sin esa memoria, hacer zoom descentraba el Sol, la capa se apagaba de golpe y la galaxia (ya gigante) se mezclaba con la escena.
+- **El campo manda sobre la distancia:** `fovFinalAl` debe ser ≳ 0,84 × `distMaxAl`, o la escena se vuelve opaca con las estrellas más lejanas ya fuera de cuadro.
+- **Requisito de datos:** sin objetos a ≤ 1500 al, la escena avisa "aún no hay estrellas cercanas registradas" en vez de quedar muda con solo el Sol. Un botón del admin completa el `bp_rp` de los objetos cercanos ya registrados.
