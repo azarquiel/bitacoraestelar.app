@@ -13,7 +13,7 @@
    Reproduce las lecturas de la captura: 173x, pupila de salida 2,7 mm, campo
    real 0,47°, lienzo 720 px (PROC del simulador).
 
-   Fixture: docs/halo_v7/m13_gaia_dr3.csv (cono de 0,24° a G<18,5, TAP de ESA).
+   Fixture: simulador_ocular/docs/validacion/m13_gaia_dr3.csv (cono de 0,24° a G<18,5, TAP de ESA).
 
    node scripts/harness_halo_estrellas.js [--sqm N] [--D mm] [--mag N] [--size px] */
 'use strict';
@@ -38,7 +38,7 @@ var M13 = { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[
             Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
 var rhAs = M13.rh * 60;
 
-var gaia = fs.readFileSync(path.join(__dirname, '../docs/halo_v7/m13_gaia_dr3.csv'), 'utf8')
+var gaia = fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/validacion/m13_gaia_dr3.csv'), 'utf8')
   .trim().split('\n').slice(1).map(function (l) {
     var c = l.split(',');
     return [+c[0], +c[1], +c[2], c[3] === '' ? null : +c[3]];

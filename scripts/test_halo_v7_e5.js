@@ -9,7 +9,7 @@
      3. El grano nunca sobrevive a la mancha.
      4. Ningún cúmulo de la matriz muestra estructura anular.
 
-   Lee docs/halo_v7/matriz_v7.json, que produce scripts/matriz_halo_v7.js con
+   Lee simulador_ocular/docs/validacion/matriz_v7.json, que produce scripts/matriz_halo_v7.js con
    semillas fijas. Si el JSON no está o se ha quedado viejo, se regenera con:
 
      node scripts/matriz_halo_v7.js
@@ -27,7 +27,7 @@ function ok(cond, etiqueta) {
 }
 
 var M = JSON.parse(fs.readFileSync(
-  path.join(__dirname, '..', 'docs', 'halo_v7', 'matriz_v7.json'), 'utf8'));
+  path.join(__dirname, '..', 'simulador_ocular', 'docs', 'validacion', 'matriz_v7.json'), 'utf8'));
 var filas = M.filas;
 
 console.log('\nE5 · matriz ' + M.version + ' (' + M.generado + '): ' + filas.length +
@@ -89,7 +89,7 @@ ok(filas.every(function (f) { return f.rGranoAs <= f.rVisibleAs; }),
    porque el umbral de contraste se evalúa a un tamaño angular del orden del
    beam y ahí Cmin vale 10²-10³. No es un fallo de v7 —D1/D2/D3 no van de
    esto— pero sí lo primero que hay que mirar en v8: hoy S1 pone el velo y S2
-   no pinta nada. Ver docs/halo_v7/informe_autocritica_v7.md. */
+   no pinta nada. Ver simulador_ocular/docs/iteraciones/v7_autocritica.md. */
 var sinGrano = filas.filter(function (f) { return f.rGranoAs === 0; }).length;
 ok(sinGrano === filas.length,
   'HALLAZGO, no regresión: el grano no se pinta en NINGUNA de las ' + filas.length +

@@ -6,7 +6,7 @@
    probabilidad por estrella, y con ella desaparece la magnitud efectiva que se
    perdía por el camino.
 
-   Pero aparece una tensión nueva, anotada en docs/halo_v7/punto_fijo_adr0012.md
+   Pero aparece una tensión nueva, anotada en simulador_ocular/docs/adr/0012-crowding/punto_fijo.md
    §7: el velo usa la ESPERANZA (1−a) sobre la LF, que es un continuo, así que
    `Fdibujado = Ftotal − S1campo` es exacto; las estrellas catalogadas, en
    cambio, se sortean, y en una realización concreta el flujo dibujado ya no es
@@ -113,7 +113,7 @@ ok(peorB1 < 1e-12, 'B1 · la partición cierra al bit (peor ' + peorB1.toExponen
 /* M13 con las de Gaia de verdad: las sintéticas del núcleo nacen por debajo de
    la magnitud límite y el sorteo no se vería. Fixture del arnés de estrellas. */
 var M13 = delCatalogo('NGC 6205');
-var gaia = require('fs').readFileSync(__dirname + '/../docs/halo_v7/m13_gaia_dr3.csv', 'utf8')
+var gaia = require('fs').readFileSync(__dirname + '/../simulador_ocular/docs/validacion/m13_gaia_dr3.csv', 'utf8')
   .trim().split('\n').slice(1).map(function (l) {
     var c = l.split(',');
     return [+c[0], +c[1], +c[2], c[3] === '' ? null : +c[3]];

@@ -315,7 +315,7 @@ en el *plateau* (factor ≈ 1: no se le regala nada); uno pequeño paga la
 pendiente de Ricco; el seeing pone el suelo de θeff. El nivel absoluto
 (K = 2.0 = conservar `C_MIN`) quedó **validado en campo** con 12 observaciones
 reales (10/12 acordes, y los márgenes ordenan visto / lateral / no visto):
-`scripts/campo_h2c.js` + `docs/ricco/campo/observaciones.csv`.
+`scripts/campo_h2c.js` + `simulador_ocular/docs/experimentos/ricco/campo/observaciones.csv`.
 
 La ley vive tras `FOT.H2C`, **activa por defecto**; `FOT.H2C = null` recupera
 la vía histórica C_MAG bit a bit, que queda solo como regresión
@@ -583,7 +583,7 @@ Los de la resolución y la PSF van aparte, porque necesitan parches de verdad:
 | `test_bilineal_parche.js` | El paso al lienzo por bilineal: conserva flujo, no inventa resolución, no crece frente al vecino | no |
 | `test_ps1_nan_ausencia.js` | La semántica de ausencia: sobresustraído y NaN del stack se rellenan con el perfil exacto, el píxel válido ancla bit a bit igual, el peso no cambia, y M51/NGC 205 de verdad (foso fuera, sin halo artificial, sin puntos nuevos) | sí, la primera vez |
 | `test_h2c_invariancias.js` | La ley H2c: activa por defecto, invariancias A–F (plateau, mismo θapp mismo factor, pendiente de Ricco, suelo de seeing, sin PSF) y la vía C_MAG intacta con `FOT.H2C = null` | no |
-| `campo_h2c.js` | No es test: contrasta el umbral contra observaciones reales (`docs/ricco/campo/observaciones.csv`); con él se validó K = 2.0 | no |
+| `campo_h2c.js` | No es test: contrasta el umbral contra observaciones reales (`simulador_ocular/docs/experimentos/ricco/campo/observaciones.csv`); con él se validó K = 2.0 | no |
 
 > **Si mides estructura, no normalices por la σ de cada imagen.** Convolucionar
 > baja el ruido de fondo, así que el denominador encoge justo cuando la
@@ -674,7 +674,7 @@ observación (ver *Pipeline de dobles* más abajo).
      para empezar a partirlo. El veredicto propone el aumento cómodo (`≈ 480 / sep`).
 
   Se apoya en las fórmulas de Dawes/Rayleigh documentadas en
-  [`notas-resolucion-dobles.md`](notas-resolucion-dobles.md). **Pendiente para v2**: un
+  [`docs/notas/resolucion-dobles.md`](docs/notas/resolucion-dobles.md). **Pendiente para v2**: un
   penalti por diferencia de magnitud (pares desiguales tipo Sirio/Antares son más difíciles;
   no hay fórmula limpia aceptada) y un filtro «resoluble con mi equipo ahora» en el buscador.
 
@@ -957,7 +957,7 @@ desplegado con el permiso público.
   **RASC Double Star Program**—. Las fuentes (`mapa/datos/{AL_DoubleStarClub,
   cambridge_double_star_atlas,RASC_Double_Star_Program}.csv`) se fusionan en
   `mapa/datos/estrellas_dobles.csv` con `python3 scripts/gen_dobles.py` (no editar el
-  `.js` a mano). Física de resolución: ver [`notas-resolucion-dobles.md`](notas-resolucion-dobles.md).
+  `.js` a mano). Física de resolución: ver [`docs/notas/resolucion-dobles.md`](docs/notas/resolucion-dobles.md).
 - **Gaia DR3** vía [VizieR TAP](https://tapvizier.cds.unistra.fr/) (CDS).
 - **Colores estelares**: J.-V. Harre &amp; R. Heller (2021), *«Digital color codes of
   stars»*, Astron. Nachr. ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254);

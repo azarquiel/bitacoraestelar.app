@@ -3,17 +3,17 @@
 El velo de un cúmulo globular no es una mancha tenue: en el núcleo de M13 con
 200 mm hay 0,41 estrellas efectivas por elemento de resolución (N_ef = ⟨I⟩²/σ²,
 régimen SBF de Tonry & Schneider 1988) y el contraste RMS de la granulación vale
-entre el 88 % y el 340 % del fondo local (`docs/halo_v7/velo_granularidad.md`).
+entre el 88 % y el 340 % del fondo local (`simulador_ocular/docs/experimentos/velo_granularidad.md`).
 La tarea visual «¿esto está moteado o es liso?» no es la que modela `Cmin`, que
 es una ley de detección de mancha uniforme: aplicada a la textura la deja 24–34
 veces bajo umbral y ninguna escala de integración entre 0,6″ y 100″ pasa de
-0,042 (`docs/halo_v7/escala_grano.md`). El experimento visual
-(`docs/halo_v7/exp_sgrano.md`) confirmó que la señal granular existe y que el
+0,042 (`simulador_ocular/docs/experimentos/escala_grano.md`). El experimento visual
+(`simulador_ocular/docs/experimentos/experimento_sgrano.md`) confirmó que la señal granular existe y que el
 detector actual la suprime entera, pero también que encenderla con una perilla
 (`sGrano`) no reproduce la observación: la textura salía invariante con el
 aumento y relativamente más fuerte fuera que dentro.
 
-La búsqueda bibliográfica (`docs/halo_v7/bibliografia_textura_deteccion.md`)
+La búsqueda bibliográfica (`simulador_ocular/docs/referencias/deteccion_textura_bibliografia.md`)
 cerró la pregunta de fondo: **no existe en literatura primaria una ley cerrada o
 tabulada de detección de textura a luminancias escotópicas**. Lo más cercano y
 utilizable es el marco de Rovamo–Mustonen–Näsänen (Vision Research 1992–94):

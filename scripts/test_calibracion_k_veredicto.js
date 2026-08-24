@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Veredicto de la calibración de K (ADR 0015, #99): canal apagado, con
-   medida. docs/halo_v7/veredicto_calibracion_k_textura.md.
+   medida. simulador_ocular/docs/adr/0015-textura/veredicto.md.
 
    Este test NO vuelve a decidir el veredicto: fija que, con el ancla
    prerregistrada y sin tocar ningún listón, tanto el estadístico de energía

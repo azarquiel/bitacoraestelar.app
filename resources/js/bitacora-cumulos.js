@@ -37,14 +37,14 @@
     // ADR 0012: el crowding es una probabilidad POR ESTRELLA. Lo que había aquí
     // antes —el criterio duro `crowdingCriterion` k=30 y la banda `delta`— ya no
     // existe: ningún k global reproduce la forma radial medida
-    // (docs/halo_v7/diagnostico_estrellas_perdidas.md).
+    // (simulador_ocular/docs/experimentos/diagnostico_estrellas_perdidas.md).
     //
     // Separación mínima resoluble, en RADIOS de imagen estelar
     // (`radioImagenEstelar` = Airy ⊕ seeing, bitacora-gaia-render.js). El 1,0 es
     // el criterio de Rayleigh literal —el centro de una estrella cae en el
     // primer anillo oscuro de la otra— aplicado a la imagen que el render dibuja
     // de verdad, y es el mismo eje óptico con el que `resolucionDoble` juzga una
-    // doble. No es un ajuste: ver docs/halo_v7/ancla_thetasep_criterio_dobles.md.
+    // doble. No es un ajuste: ver simulador_ocular/docs/adr/0012-crowding/ancla_thetasep.md.
     // Antes esto era `thetaSepFwhm: 1.0` medido en un "FWHM" que valía el doble
     // de este radio, así que equivalía a 2× Rayleigh.
     thetaSepRadios: 1.0,
@@ -58,7 +58,7 @@
     // a 173x: contrae con factor 4e-4 a 0,34, y hacen falta 5 pasadas desde
     // m_res = +inf para bajar de 0,01 mag (una sola deja 0,281 mag). N FIJO y no
     // tolerancia: el criterio de parada no puede vivir dentro de la imagen.
-    // docs/halo_v7/punto_fijo_adr0012.md
+    // simulador_ocular/docs/adr/0012-crowding/punto_fijo.md
     pasadasPuntoFijo: 5,
     // Completitud de Gaia: sigmoide de dos constantes. El codo está donde el
     // catálogo empieza a perder estrellas en campo abierto; en el núcleo lo
@@ -323,7 +323,7 @@
 
        Continua en m y en r por construcción, y sin listón: es lo que le falta a
        m_crowd, que no puede dar la forma radial (ningún k global la reproduce,
-       ver docs/halo_v7/diagnostico_estrellas_perdidas.md).
+       ver simulador_ocular/docs/experimentos/diagnostico_estrellas_perdidas.md).
 
        El conteo se interpola dentro del bin con la MISMA `cola` que S1 y S2: un
        escalón en r dibuja anillos (invariante 7). N(≥m) = Ntot − cola(colaN, m). */
@@ -462,7 +462,7 @@
      dibuja. No se atenúa: atenuar resta 2,5·log10(a) mag y la estrella cruza la
      magnitud límite, así que convierte un efecto de vecindad en un corte por
      magnitud (MEDIDO: se lleva el 100 % del cuartil débil contra el 50 % de la
-     verdad geométrica, docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md).
+     verdad geométrica, simulador_ocular/docs/adr/0012-crowding/atenuacion_vs_bernoulli.md).
 
      El sorteo tiene que ser ESTABLE: la misma estrella sale o no sale siempre
      igual, aunque se cambie de ocular o se repinte el cuadro. Así que no hay

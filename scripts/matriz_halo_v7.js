@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Matriz de regresión de v7: M13, 47 Tuc y ω Cen × 3 aumentos × 2 cielos.
 
-   Escribe docs/halo_v7/matriz_v7.json, que es la referencia archivada de la
+   Escribe simulador_ocular/docs/validacion/matriz_v7.json, que es la referencia archivada de la
    iteración y la entrada del test fenomenológico (test_halo_v7_e5.js). Todo con
    realization 0: las semillas son fijas y la matriz se reproduce corriendo esto
    otra vez.
@@ -111,6 +111,6 @@ var salida = {
   apertura: D, aumentos: AUMENTOS, cielos: CIELOS, realization: 0,
   filas: filas
 };
-var destino = path.join(__dirname, '..', 'docs', 'halo_v7', 'matriz_v7.json');
+var destino = path.join(__dirname, '..', 'simulador_ocular', 'docs', 'validacion', 'matriz_v7.json');
 fs.writeFileSync(destino, JSON.stringify(salida, null, 1) + '\n');
-console.log('\narchivada en docs/halo_v7/matriz_v7.json (' + filas.length + ' corridas)');
+console.log('\narchivada en simulador_ocular/docs/validacion/matriz_v7.json (' + filas.length + ' corridas)');

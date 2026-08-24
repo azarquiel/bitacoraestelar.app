@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const RAIZ = path.join(__dirname, '..');
-const DIR = path.join(RAIZ, 'docs', 'ricco', 'seeing');
+const DIR = path.join(RAIZ, 'simulador_ocular', 'docs', 'experimentos', 'ricco', 'seeing');
 
 function leeCSV(f) {
   const [cab, ...ls] = fs.readFileSync(path.join(DIR, f), 'utf8').trim().split('\n');

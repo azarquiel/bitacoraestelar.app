@@ -123,7 +123,7 @@ var adrs = [
   ['0007', /capa/i],
   ['0008', /arn[ée]s/i]
 ];
-var dirAdr = path.join(__dirname, '..', 'docs', 'adr');
+var dirAdr = path.join(__dirname, '..', 'simulador_ocular', 'docs', 'adr');
 var listado = fs.readdirSync(dirAdr);
 adrs.forEach(function (par) {
   var f = listado.filter(function (n) { return n.indexOf(par[0] + '-') === 0; })[0];

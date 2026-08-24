@@ -2,7 +2,7 @@
 /* Calibración de K y veredicto — ley de umbral de textura (ADR 0015, #99).
 
    K es el único parámetro libre y se ancla con el único punto prerregistrado
-   (docs/halo_v7/prerregistro_umbral_textura.md §1): M13, 200 mm, SQM 21, 120×,
+   (simulador_ocular/docs/adr/0015-textura/prerregistro.md §1): M13, 200 mm, SQM 21, 120×,
    "primera rotura del núcleo". Quick 1974 define K como el propio criterio en
    el umbral: P(ver) = 1 − exp(−(exponente)), y el ancla fija ese exponente a 1
    en el punto declarado — la única forma de usar el dato sin introducir una
