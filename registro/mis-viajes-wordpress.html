@@ -81,6 +81,7 @@
         <label class="field"><span class="lab">Nombre del viaje (opcional)</span>
           <input type="text" id="vNombre" placeholder="Perseidas desde la sierra" /></label>
       </div>
+      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">Si la observación empezó pasada la medianoche (00:00 en adelante), pon aquí la fecha del día ANTERIOR: esa madrugada sigue siendo la misma noche que empezó la tarde de antes. Ej.: si saliste el 19 por la noche y observaste ya el 20 a las 00:10, la Noche es 19, no 20.</p>
 
       <label class="field"><span class="lab">Lugar de observación (base)</span>
         <select id="vBase"><option value="">— Sin lugar —</option></select></label>
@@ -92,7 +93,6 @@
         <label class="field"><span class="lab">Fin (hora local)</span>
           <input type="time" id="vFin" /></label>
       </div>
-      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">Si la salida empezó pasada la medianoche (p. ej. Comienzo 00:10), la Noche es la fecha del día ANTERIOR a esa hora de reloj, no la que marca el reloj: una salida que arranca a las 00:10 del 20 y acaba a las 03:30 lleva Noche = 19, no 20. Si la Noche no cuadra con el Comienzo, el registro de observaciones no encontrará la salida.</p>
 
       <label class="field" style="margin-top:14px"><span class="lab">Meteorología</span>
         <input type="text" id="vMeteo" placeholder="Despejado, 12 °C, sin viento" /></label>
