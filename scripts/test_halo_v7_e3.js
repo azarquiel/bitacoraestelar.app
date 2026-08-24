@@ -10,7 +10,7 @@
         pinta, este test es el único sitio donde se nota.
      2. ¿El brillo superficial que sale del perfil es el del cúmulo real?
         mu_V(r) = V_t − 2,5·log10(Sigma(r)) contra los perfiles observados de
-        Trager, King & Djorgovski 1995 (docs/halo_v7/trager1995.tsv), en la
+        Trager, King & Djorgovski 1995 (simulador_ocular/docs/validacion/trager1995.tsv), en la
         región donde King de un solo parámetro tiene sentido: 0,5·r_c a 3·r_c.
         Residuo medio exigido < 0,5 mag.
      3. ¿Las alas se apagan? A r > 4·r_h el contraste del cúmulo sobre el cielo
@@ -71,7 +71,7 @@ REFS.forEach(function (id) {
 
 console.log('\nE3.2 · mu_V(r) del perfil implementado contra Trager+1995 (0,5·r_c a 3·r_c)');
 
-var TSV = path.join(__dirname, '..', 'docs', 'halo_v7', 'trager1995.tsv');
+var TSV = path.join(__dirname, '..', 'simulador_ocular', 'docs', 'validacion', 'trager1995.tsv');
 var lineas = fs.readFileSync(TSV, 'utf8').split('\n');
 var trager = {};
 lineas.forEach(function (l) {

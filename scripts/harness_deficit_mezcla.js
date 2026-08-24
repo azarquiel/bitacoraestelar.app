@@ -71,7 +71,7 @@ var OBJS = {
   NGC205: { cat: 'NGC 205', csv: 'gaia_ngc205.csv' }
 };
 /* SHA-1 de la fotometría pre-mapeo (fPre) del baseline de Fase 3, rama de
-   partida fase3-pertenencia-estructura (docs/ricco/pertenencia/datos/*_s25). */
+   partida fase3-pertenencia-estructura (simulador_ocular/docs/experimentos/ricco/pertenencia/datos/*_s25). */
 var SHA_FASE3 = {
   M51: '7bdeab598616e1f7d70986ec3cb5b34bc5aa9183',
   M81: '86b664ffc38eae265b9f6e5316e9b61415f0c60a',

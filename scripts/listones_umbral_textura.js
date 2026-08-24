@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Listones prerregistrados de la ley de umbral de textura
-   (docs/halo_v7/prerregistro_umbral_textura.md, ADR 0015).
+   (simulador_ocular/docs/adr/0015-textura/prerregistro.md, ADR 0015).
 
    Este módulo NO decide el veredicto: evalúa los listones para un K dado y
    devuelve pasa/falla por listón, importando la ley de producción (ADR 0008).
@@ -18,7 +18,7 @@ var R = global.window.BitacoraGaiaRender;
 var M13 = H.cumulo('NGC 6205');
 
 // Centros de las 4 franjas de r/r_h del prerregistro (§2, mismas que
-// docs/halo_v7/velo_granularidad.md): [0,0.25) [0.25,0.50) [0.50,1.00) [1.00,2.00).
+// simulador_ocular/docs/experimentos/velo_granularidad.md): [0,0.25) [0.25,0.50) [0.50,1.00) [1.00,2.00).
 var ANILLOS_RH = [0.125, 0.375, 0.75, 1.5];
 var NUCLEO_RH = ANILLOS_RH[0];
 var HALO_RH = ANILLOS_RH[3];

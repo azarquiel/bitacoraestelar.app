@@ -264,7 +264,7 @@ var pobA5 = C.poblacionCacheada(cumA5, 0);
    magnitud límite de cualquier equipo y el sorteo no llegaría a verse. Sin ellas
    este assert sería vacuo (ADR 0005), y por eso el tamaño de la muestra se
    comprueba abajo. Es el mismo fixture del arnés de estrellas. */
-var gaiaA5 = require('fs').readFileSync(__dirname + '/../docs/halo_v7/m13_gaia_dr3.csv', 'utf8')
+var gaiaA5 = require('fs').readFileSync(__dirname + '/../simulador_ocular/docs/validacion/m13_gaia_dr3.csv', 'utf8')
   .trim().split('\n').slice(1).map(function (l) {
     var c = l.split(',');
     return [+c[0], +c[1], +c[2], c[3] === '' ? null : +c[3]];

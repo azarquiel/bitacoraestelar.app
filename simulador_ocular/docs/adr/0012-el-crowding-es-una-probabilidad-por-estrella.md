@@ -8,7 +8,7 @@ la frontera.
 `scripts/harness_crowding_k.js` midió esa ley contra dos verdades independientes
 y sin parámetros del modelo —geometría sobre las posiciones reales de Gaia, y
 `P_solo` de Poisson invirtiendo el propio `mCrowd`—, que concuerdan al 0,4 %.
-Veredicto completo en `docs/halo_v7/diagnostico_estrellas_perdidas.md`.
+Veredicto completo en `simulador_ocular/docs/experimentos/diagnostico_estrellas_perdidas.md`.
 
 El valor de `k` no es el problema. La forma funcional sí. El `k` que cada anillo
 de M13 necesitaría para dar la cuenta correcta:
@@ -67,7 +67,7 @@ tiempo, y elegirlo por cómo queda la imagen violaría el ADR 0004.
    —`radioAiry` es el radio del primer anillo oscuro—, así que el `thetaSepFwhm:
    1,0` de antes equivalía a 2× Rayleigh. Hoy la constante es
    `CFG.thetaSepRadios = 1,0` y el render expone `radioImagenAs`. Informe:
-   `docs/halo_v7/ancla_thetasep_criterio_dobles.md`.
+   `simulador_ocular/docs/adr/0012-crowding/ancla_thetasep.md`.
 
    `Δmag = 0,75` se queda **SIN ANCLA PROPIA**, y así se declara: el barrido no
    lo distingue y la literatura de dobles solo ofrece penalizaciones heurísticas
@@ -99,7 +99,7 @@ temporal. Se mide antes de tocar producción.
 ### RESUELTO (2026-08-19): gana BERNOULLI
 
 `scripts/harness_atenuacion_bernoulli.js`, informe en
-`docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md`. **El criterio de arriba, tal
+`simulador_ocular/docs/adr/0012-crowding/atenuacion_vs_bernoulli.md`. **El criterio de arriba, tal
 como estaba escrito, no selecciona nada**, y eso es parte del resultado:
 
 - **La cuenta empata por álgebra, no por suerte.** `E[Bernoulli] = Σa`
@@ -162,7 +162,7 @@ actual de `tablaCumulo`).
 ### RESUELTO (2026-08-19): iterar N = 5
 
 `scripts/harness_punto_fijo.js`, informe en
-`docs/halo_v7/punto_fijo_adr0012.md`.
+`simulador_ocular/docs/adr/0012-crowding/punto_fijo.md`.
 
 Primero, una corrección al diagnóstico de arriba. El acoplamiento existe, pero
 no por donde este ADR decía: **`a` NO depende del cielo** —se alimenta de
@@ -222,7 +222,7 @@ conservación cuando la mitad catalogada es un sorteo; el número sale de (A)
    suelto y su exit code 1 es el resultado esperado.
 2. ~~Barrido de `θ_sep` contra las dos verdades, por anillo~~ **hecho**:
    `scripts/harness_thetasep.js`, informe en
-   `docs/halo_v7/calibracion_thetasep_adr0012.md`. Tres resultados. La FORMA
+   `simulador_ocular/docs/adr/0012-crowding/calibracion_thetasep.md`. Tres resultados. La FORMA
    pasa: un solo `θ_sep` reproduce el déficit por anillo dentro de un factor 1,2
    sobre dos órdenes de magnitud en densidad, frente al `k` que necesitaba
    18,8-1576,4. El VALOR no se puede fijar así: la verdad geométrica se construye
@@ -233,9 +233,9 @@ conservación cuando la mitad catalogada es un sorteo; el número sale de (A)
    (ADR 0005).
 3. (A) ~~atenuación contra Bernoulli~~ **hecho**: gana Bernoulli.
    `scripts/harness_atenuacion_bernoulli.js`,
-   `docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md`. (B) ~~el esquema del punto
+   `simulador_ocular/docs/adr/0012-crowding/atenuacion_vs_bernoulli.md`. (B) ~~el esquema del punto
    fijo~~ **hecho**: iterar N=5, `scripts/harness_punto_fijo.js`,
-   `docs/halo_v7/punto_fijo_adr0012.md`.
+   `simulador_ocular/docs/adr/0012-crowding/punto_fijo.md`.
 4. ~~Implementación y reescritura de guardianes~~ **hecho** (2026-08-19).
    Capa 1: `momentosBanda` sustituida por `momentosCampo(mRes, rAs,
    radioImagenAs, exp)`, que pesa cada tramo de la LF por `q = 1 − w·aCrowd`;

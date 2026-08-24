@@ -3,7 +3,7 @@
    que está ajustado a magnitudes límite REALMENTE OBSERVADAS: Schaefer 1990
    (PASP 102, 212), 314 observaciones visuales. Motivo: en M13 con 200 mm el
    render dibuja 137 estrellas a 61x y 548 a 250x, y el umbral del equipo es
-   quien quita el 97 % de las candidatas (ver docs/halo_v7/maglimite_vs_schaefer.md).
+   quien quita el 97 % de las candidatas (ver simulador_ocular/docs/experimentos/maglimite_vs_schaefer.md).
 
    El algoritmo de Schaefer está transcrito literal del BASIC del autor
    (Sky & Telescope, nov 1989, p. 522) tal como lo porta Larry Bogan. No se

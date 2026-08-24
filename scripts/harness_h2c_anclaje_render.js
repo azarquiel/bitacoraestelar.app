@@ -11,7 +11,7 @@
    La variante B se obtiene parcheando el FUENTE EN MEMORIA de
    bitacora-gaia-render.js (gancho o.cminExperimental); el fichero no se
    modifica y sin gancho el módulo B reproduce producción bit a bit (se
-   comprueba). Salidas en docs/ricco/anclaje/.  exit 0 = todas las exigencias.
+   comprueba). Salidas en simulador_ocular/docs/experimentos/ricco/anclaje/.  exit 0 = todas las exigencias.
 
    Uso:  node scripts/harness_h2c_anclaje_render.js            (red la 1.ª vez)
          node scripts/harness_h2c_anclaje_render.js --sin-red  (solo cacheados) */
@@ -22,7 +22,7 @@ var cp = require('child_process');
 var RAIZ = path.join(__dirname, '..');
 var RUTA_RAMA = path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js');
 var RUTA_MAIN = path.resolve(RAIZ, '..', '..', '..', 'resources', 'js', 'bitacora-gaia-render.js');
-var OUT = path.join(RAIZ, 'docs', 'ricco', 'anclaje');
+var OUT = path.join(RAIZ, 'simulador_ocular', 'docs', 'experimentos', 'ricco', 'anclaje');
 fs.mkdirSync(OUT, { recursive: true });
 var SIN_RED = process.argv.indexOf('--sin-red') >= 0;
 
@@ -498,5 +498,5 @@ cola.then(function () {
 
   console.log('\n════════════════ RESULTADO ════════════════');
   if (fallos) { console.error(fallos + ' exigencias fallidas'); process.exit(1); }
-  console.log('todas las exigencias pasan · salidas en docs/ricco/anclaje/');
+  console.log('todas las exigencias pasan · salidas en simulador_ocular/docs/experimentos/ricco/anclaje/');
 }).catch(function (e) { console.error('ABORTO: ' + (e.stack || e)); process.exit(1); });

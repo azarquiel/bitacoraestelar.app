@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /* Informe HTML autocontenido del experimento H2c (anclaje + A/B de render).
-   Lee docs/ricco/anclaje/*.csv|json|pgm; convierte las láminas PGM a PNG
+   Lee simulador_ocular/docs/experimentos/ricco/anclaje/*.csv|json|pgm; convierte las láminas PGM a PNG
    (zlib de node) y las incrusta en base64.  Uso: node scripts/gen_informe_h2c.js */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const DIR = path.join(__dirname, '..', 'docs', 'ricco', 'anclaje');
+const DIR = path.join(__dirname, '..', 'simulador_ocular', 'docs', 'experimentos', 'ricco', 'anclaje');
 
 function leeCSV(f) {
   const [cab, ...ls] = fs.readFileSync(path.join(DIR, f), 'utf8').trim().split('\n');
@@ -216,7 +216,7 @@ y pasa a ser la ley de producción: <code>FOT.H2C</code> viene ACTIVA por defect
 estados (visto ≈ 0, lateral ≈ −0.15 dex, no_visto ≈ −0.3 dex): K = 2.0 marca el umbral
 de visión directa. Los 2 desacuerdos (−0.01 y −0.11 dex) caen dentro del rms del ajuste
 (0.086 dex) y no dependen de tamaño ni fondo
-(<code>scripts/campo_h2c.js</code> + <code>docs/ricco/campo/observaciones.csv</code>).
+(<code>scripts/campo_h2c.js</code> + <code>simulador_ocular/docs/experimentos/ricco/campo/observaciones.csv</code>).
 θint llega a <code>ctxFotometrico</code> (2º argumento, arcmin): lo fabrica
 <code>ps1ThetaIntArcmin</code> (los ejes μ=25 de <code>ps1EjesArcmin</code>, circularizados)
 y viaja en el parche (<code>ps1ParcheDeGalaxia</code> → <code>ps1PintarParche</code>).

@@ -4,7 +4,7 @@
    soporte local c99b72c, opacidadInternaEscena apagada), verificada bit a bit.
 
    FASE 2 (--escala S | --multi A+B): el soporte de media de caja recalculado a
-   otra escala. Veredicto: H-D descartada (docs/ricco/soporte/).
+   otra escala. Veredicto: H-D descartada (simulador_ocular/docs/experimentos/ricco/soporte/).
 
    FASE 3 (--variante E1|E2): patrón NO DESTRUCTIVO
        op_final(x) = max( op_produccion_25(x), componente_variante(x) )
@@ -85,7 +85,7 @@ fs.mkdirSync(OUT, { recursive: true });
 var IN_GAIA = path.join(RAIZ, '.scratch', 'quitar-general');
 var ROIS_FICH = OBJ === 'M51' ? path.join(RAIZ, 'scripts', 'rois_M51.json')
               : OBJ === 'M101' ? path.join(RAIZ, 'scripts', 'rois_M101.json') : null;
-var BASE_F1 = path.join(RAIZ, 'docs', 'ricco', 'interbrazos', 'baseline_interbrazos_' + OBJ + '.json');
+var BASE_F1 = path.join(RAIZ, 'simulador_ocular', 'docs', 'experimentos', 'ricco', 'interbrazos', 'baseline_interbrazos_' + OBJ + '.json');
 
 var fallos = 0;
 function exige(c, t) { if (c) console.log('  ok   ' + t); else { fallos++; console.error('  FALLA: ' + t); } }

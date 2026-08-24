@@ -16,12 +16,12 @@
    batería sintética de la parte 3.
 
    Aborta (exit 1) si el baseline no reproduce el experimento anterior
-   (docs/ricco) o si falla una invariancia.  Salidas: docs/ricco/seeing/. */
+   (simulador_ocular/docs/experimentos/ricco) o si falla una invariancia.  Salidas: simulador_ocular/docs/experimentos/ricco/seeing/. */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const RAIZ = path.join(__dirname, '..');
-const SALIDA = path.join(RAIZ, 'docs', 'ricco', 'seeing');
+const SALIDA = path.join(RAIZ, 'simulador_ocular', 'docs', 'experimentos', 'ricco', 'seeing');
 fs.mkdirSync(SALIDA, { recursive: true });
 
 global.window = {};
@@ -102,8 +102,8 @@ function ajusteH2(logT, logC) {
 }
 
 /* ════ PARTE 1 · BASELINE: reproducir el experimento anterior ═══════════════ */
-console.log('PARTE 1 · baseline (debe reproducir docs/ricco):');
-const ESPERADO = { // del experimento anterior (docs/ricco/ajustes.csv)
+console.log('PARTE 1 · baseline (debe reproducir simulador_ocular/docs/experimentos/ricco):');
+const ESPERADO = { // del experimento anterior (simulador_ocular/docs/experimentos/ricco/ajustes.csv)
   thetaR: { 13: 14.0, 17: 26.1, 19: 46.0, 21: 67.0, 23: 81.4 },
   Cinf:   { 13: 3.56e-3, 17: 1.32e-2, 19: 2.56e-2, 21: 3.93e-2, 23: 6.92e-2 },
   rmsH2:  { 13: 0.088, 17: 0.046, 19: 0.042, 21: 0.046, 23: 0.033 }
@@ -371,7 +371,7 @@ fs.writeFileSync(path.join(SALIDA, 'parametros_conjuntos.json'), JSON.stringify(
   rmsGlobal: conj.rms, rmsPorFondo: conj.resPorFondo, maxRes: conj.maxRes,
   resSistematicoPorTheta: conj.resPorTheta
 }, null, 2));
-console.log('\nCSV/JSON escritos en docs/ricco/seeing/');
+console.log('\nCSV/JSON escritos en simulador_ocular/docs/experimentos/ricco/seeing/');
 
 if (fallos) { console.error('\n' + fallos + ' comprobaciones fallidas.'); process.exit(1); }
 console.log('\nTodo consistente: exit 0.');

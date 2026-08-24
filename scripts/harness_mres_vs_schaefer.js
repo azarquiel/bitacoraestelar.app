@@ -46,7 +46,7 @@ var D = 200, SQM = 21.0, SEEING = 2, SIZE = 720;
 var AUMENTOS = [61, 120, 173, 250];
 var pob0 = C.poblacionCacheada(M13, 0);
 var ARCMIN = Math.ceil(2.4 * pob0.rtAs / 60);
-var gaia = fs.readFileSync(W + 'docs/halo_v7/m13_gaia_dr3.csv', 'utf8').trim().split('\n').slice(1)
+var gaia = fs.readFileSync(W + 'simulador_ocular/docs/validacion/m13_gaia_dr3.csv', 'utf8').trim().split('\n').slice(1)
   .map(function (l) { var c = l.split(','); return [+c[0], +c[1], +c[2]]; });
 
 function escena(MAG) {

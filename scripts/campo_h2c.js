@@ -4,7 +4,7 @@
    experimento de anclaje): decide si K = 2.0 (conservar C_MIN) se mantiene o
    necesita una corrección de NIVEL. La forma H2c no se toca aquí.
 
-   Datos: docs/ricco/campo/observaciones.csv, UNA observación real por fila:
+   Datos: simulador_ocular/docs/experimentos/ricco/campo/observaciones.csv, UNA observación real por fila:
      objeto,apertura_mm,aumentos,sqm,seeing_as,transmision,resultado
    - objeto: nombre EXACTO del catálogo (col. 0 de BITACORA_GALAXIAS)
    - seeing_as: ″ (vacío = 2.0); transmision: 0–1 (vacío = la del render)
@@ -33,7 +33,7 @@ require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 var R = global.window.BitacoraGaiaRender;
 var CAT = global.window.BITACORA_GALAXIAS;
-var DIR = path.join(RAIZ, 'docs', 'ricco', 'campo');
+var DIR = path.join(RAIZ, 'simulador_ocular', 'docs', 'experimentos', 'ricco', 'campo');
 var CSV = path.join(DIR, 'observaciones.csv');
 
 var ALIAS = { 'M101': 'NGC 5457', 'M51': 'NGC 5194', 'M81': 'NGC 3031',

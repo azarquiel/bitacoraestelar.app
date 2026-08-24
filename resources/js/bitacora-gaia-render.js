@@ -161,7 +161,7 @@
        grandes) y la ley de flujo (pendiente −2 en pequeños) acotan solos.
        El nivel absoluto (K≈2 = conservar C_MIN) quedó validado en campo:
        12 observaciones reales, 10/12 acordes, y los márgenes ordenan
-       visto/lateral/no_visto (scripts/campo_h2c.js, docs/ricco/campo/).
+       visto/lateral/no_visto (scripts/campo_h2c.js, simulador_ocular/docs/experimentos/ricco/campo/).
        SEEING_AS = 2″ fijo: sin modelo por noche, a propósito.
        H2C = null la apaga y recupera la vía C_MAG histórica, bit a bit:
        solo para regresión. */
@@ -1571,7 +1571,7 @@
     return h >>> 0;
   }
 
-  /* ═══════ LEY DE UMBRAL DE TEXTURA (ADR 0015, docs/halo_v7/prerregistro_umbral_textura.md) ═══════
+  /* ═══════ LEY DE UMBRAL DE TEXTURA (ADR 0015, simulador_ocular/docs/adr/0015-textura/prerregistro.md) ═══════
      El grano SBF de un globular no es una mancha uniforme (eso lo juzga Cmin,
      ver H2c): es RUIDO ESPACIAL, y la literatura dice que ahí el detector no es
      un umbral de contraste sino la CSF evaluada a la frecuencia retiniana del
@@ -1644,7 +1644,7 @@
     return 1 - Math.exp(-Math.pow(d / TEXTURA.K, TEXTURA.BETA));
   }
 
-  /* Vía de escape única del prerregistro (§5, docs/halo_v7/prerregistro_umbral_
+  /* Vía de escape única del prerregistro (§5, simulador_ocular/docs/prerregistro_umbral_
      textura.md): d′ de SUMA MINKOWSKI sobre la distribución de δI en vez de la
      energía filtrada (RMS de anillo). Quick 1974 ES un modelo de suma de
      probabilidad con exponente β: P = 1 − exp(−Σ(d_i/K)^β); tratar el anillo
@@ -1707,7 +1707,7 @@
          punto fijo es único (2e-13 mag entre arranques opuestos a 30 pasadas) y
          una sola pasada deja 0,281 mag, 28 veces el listón de 0,01. N y no
          tolerancia: el criterio de parada no puede vivir dentro de la imagen.
-         docs/halo_v7/punto_fijo_adr0012.md */
+         simulador_ocular/docs/adr/0012-crowding/punto_fijo.md */
       var m = Infinity;
       for (var it = 0; it < pasadas; it++) {
         var mSky = magLimite({
@@ -1800,7 +1800,7 @@
        el radio del primer anillo oscuro (Rayleigh), así que el doble era el
        DIÁMETRO de ese anillo. Todos los usos de abajo lo dividían por 2 o lo
        elevaban al cuadrado entre 4 para deshacerlo. Ver
-       docs/halo_v7/ancla_thetasep_criterio_dobles.md. */
+       simulador_ocular/docs/adr/0012-crowding/ancla_thetasep.md. */
     var radioImagenAs = radioImagenEstelar(o.apertura);
     if (!(radioImagenAs > 0)) return null;
 
@@ -1968,7 +1968,7 @@
      y la estrella cruzaba la magnitud límite, así que un efecto de VECINDAD se
      convertía en un corte por MAGNITUD: MEDIDO, se llevaba el 100 % del cuartil
      débil contra el 50 % de la verdad geométrica
-     (docs/halo_v7/atenuacion_vs_bernoulli_adr0012.md). Y como ya no hay magnitud
+     (simulador_ocular/docs/adr/0012-crowding/atenuacion_vs_bernoulli.md). Y como ya no hay magnitud
      efectiva, tampoco hace falta la 5ª casilla que la llevaba: la estrella entra
      entera y capaEstrellas cobra mlim una sola vez.
 
