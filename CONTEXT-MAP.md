@@ -24,4 +24,4 @@ Un término lo define el CONTEXT.md del contexto que lo POSEE; los demás lo enl
 
 ## ADRs
 
-`docs/adr/` en raíz es para decisiones de sistema (cruzan contexto). Decisiones de un solo contexto viven en `<contexto>/docs/adr/` — hoy solo `simulador_ocular/docs/adr/`, con las 15 ADRs de fotometría y modelo de cúmulos, todas anteriores a este mapa. Antes de decidir algo en un contexto, revisa sus ADRs; si tu cambio contradice uno, dilo explícito en vez de pisarlo en silencio.
+`docs/adr/` en raíz es para decisiones de sistema (cruzan contexto). Decisiones de un solo contexto viven en `<contexto>/docs/adr/`: `simulador_ocular/docs/adr/`, con las 15 ADRs de fotometría y modelo de cúmulos, todas anteriores a este mapa; y `registro/docs/adr/`, con las del puente OAL (dónde vive el cielo, identidad de una observación, quién escribe el dialecto, qué papel tiene un LLM). Antes de decidir algo en un contexto, revisa sus ADRs; si tu cambio contradice uno, dilo explícito en vez de pisarlo en silencio.
