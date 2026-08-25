@@ -47,15 +47,15 @@ function nocheSimple() {
     cronica: 'Primera salida del verano al Culebrín. El cielo aguantó toda la noche.'
   }];
   e.observaciones = [
-    { id: 'ob1', nocheId: 'no1', objeto: 'M13', ra: 250.4235, dec: 36.4613, otype: 'GlC',
+    { id: 'obs1', nocheId: 'no1', objeto: 'M13', ra: 250.4235, dec: 36.4613, otype: 'GlC',
       hora: '23:10', telescopioId: 'te1', ocularId: 'oc1', auxiliarId: '', aumentos: '',
       texto: 'Enorme y granulado ya a pocos aumentos.' },
-    { id: 'ob2', nocheId: 'no1', objeto: 'M57', ra: 283.396, dec: 33.0292, otype: 'PN',
+    { id: 'obs2', nocheId: 'no1', objeto: 'M57', ra: 283.396, dec: 33.0292, otype: 'PN',
       hora: '23:45', telescopioId: 'te1', ocularId: 'oc2', auxiliarId: '', aumentos: '',
       texto: 'El anillo, con el centro claramente más oscuro.' },
     // El tercero mide SU cielo: el SQM es direccional y este se midió hacia el
     // este bajo, sobre las luces del pueblo. Hereda el resto de la noche.
-    { id: 'ob3', nocheId: 'no1', objeto: 'NGC 7000', ra: 314.75, dec: 44.53, otype: 'GNe',
+    { id: 'obs3', nocheId: 'no1', objeto: 'NGC 7000', ra: 314.75, dec: 44.53, otype: 'GNe',
       hora: '01:20', telescopioId: 'te1', ocularId: 'oc1', auxiliarId: '', aumentos: '',
       sqm: 20.85, bortle: 5,
       texto: 'De madrugada, con el filtro puesto, el Muro se recorta solo.' }
@@ -82,13 +82,16 @@ function dosOculares() {
       meteo: 'Viento del norte', cronica: '' }
   ];
   e.observaciones = [
-    { id: 'ob1', nocheId: 'no1', objeto: 'Almaak', ra: 30.9748, dec: 42.3297, otype: '**',
+    { id: 'obs1', nocheId: 'no1', objeto: 'Almaak', ra: 30.9748, dec: 42.3297, otype: '**',
       hora: '23:30', telescopioId: 'te1', ocularId: 'oc1', auxiliarId: '', aumentos: '',
       texto: 'A 68x ya se intuye la compañera azul.' },
-    { id: 'ob2', nocheId: 'no1', objeto: 'Almaak', ra: 30.9748, dec: 42.3297, otype: '**',
+    // La segunda mirada la firma otro: en una salida con tripulación cada
+    // observación es de quien la hizo, y el importador tiene que respetarlo.
+    { id: 'obs2', nocheId: 'no1', objeto: 'Almaak', ra: 30.9748, dec: 42.3297, otype: '**',
       hora: '00:20', telescopioId: 'te1', ocularId: 'oc2', auxiliarId: 'au1', aumentos: '',
+      observador: 'Víctor',
       texto: 'A 427x el contraste de color es descarado: naranja y azul.' },
-    { id: 'ob3', nocheId: 'no2', objeto: 'M27', ra: 299.9016, dec: 22.7211, otype: 'PN',
+    { id: 'obs3', nocheId: 'no2', objeto: 'M27', ra: 299.9016, dec: 22.7211, otype: 'PN',
       hora: '01:05', telescopioId: 'te1', ocularId: 'oc1', auxiliarId: '', aumentos: '',
       texto: 'La manzana mordida, de madrugada y ya alta.' }
   ];

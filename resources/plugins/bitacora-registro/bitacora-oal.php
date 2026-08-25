@@ -171,9 +171,14 @@ function bitacora_oal_leer( $xml ) {
         }
         $inst   = bitacora_oal_instante( bitacora_oal_texto( $n, 'begin' ) );
         $result = bitacora_oal_hijo( $n, 'result' );
+        // Quién firma ESTA observación: en una salida con tripulación no tiene
+        // por qué ser el dueño del fichero, y perderlo atribuiría al dueño lo
+        // que vio otro.
+        $quien = trim( bitacora_oal_texto( $n, 'observer' ) );
         $out['observaciones'][] = array(
             'id'          => $n->getAttribute( 'id' ),
             'noche'       => bitacora_oal_texto( $n, 'session' ),
+            'observador'  => isset( $out['personas'][ $quien ] ) ? $out['personas'][ $quien ] : '',
             'target'      => bitacora_oal_texto( $n, 'target' ),
             'fecha'       => $inst ? $inst['fecha'] : '',
             'hora'        => $inst ? $inst['hora'] : '',
@@ -422,6 +427,28 @@ function bitacora_oal_base_casada( $sitio, $bases ) {
 }
 
 /**
+ * Una pieza de equipo escrita para que se reconozca fuera de casa: el nombre
+ * propio que el observador le dio en Mi flota Y el modelo real. Solo el nombre
+ * («Endeavour») no le dice nada a nadie más, y solo el modelo pierde el nombre
+ * con el que él lo llama.
+ */
+function bitacora_oal_equipo_nombrado( $nombre, $modelo ) {
+    $nombre = trim( (string) $nombre );
+    $modelo = trim( (string) $modelo );
+    if ( '' === $nombre || '' === $modelo ) {
+        return '' === $nombre ? $modelo : $nombre;
+    }
+    // Si uno ya contiene al otro, repetirlo sobra: se queda el que más dice.
+    if ( false !== strpos( bitacora_oal_clave( $nombre ), bitacora_oal_clave( $modelo ) ) ) {
+        return $nombre;
+    }
+    if ( false !== strpos( bitacora_oal_clave( $modelo ), bitacora_oal_clave( $nombre ) ) ) {
+        return $modelo;
+    }
+    return $nombre . ' · ' . $modelo;
+}
+
+/**
  * ¿Qué fila del catálogo (global o personal) es este modelo del XML?
  * Solo por modelo normalizado: un telescopio no tiene coordenadas con las que
  * desempatar. Devuelve 0 si hay que crearlo.
@@ -433,9 +460,17 @@ function bitacora_oal_equipo_casado( $modelo, $filas ) {
     }
     foreach ( $filas as $f ) {
         $f = (array) $f;
-        $suyo = trim( ( isset( $f['vendor'] ) ? $f['vendor'] . ' ' : '' ) . $f['modelo'] );
-        if ( bitacora_oal_clave( $f['modelo'] ) === $clave || bitacora_oal_clave( $suyo ) === $clave ) {
-            return intval( $f['id'] );
+        // Todas las formas con las que esa pieza puede aparecer escrita: el
+        // modelo a secas y con la marca delante (así lo escriben otros
+        // programas), el nombre propio de Mi flota, y el compuesto que exporta
+        // esta bitácora. Cualquiera de ellas es la misma pieza.
+        $nombre = isset( $f['propio'] ) ? trim( (string) $f['propio'] ) : '';
+        $marca  = trim( ( isset( $f['vendor'] ) ? $f['vendor'] . ' ' : '' ) . $f['modelo'] );
+        $formas = array( $f['modelo'], $marca, $nombre, bitacora_oal_equipo_nombrado( $nombre, $marca ) );
+        foreach ( $formas as $forma ) {
+            if ( '' !== bitacora_oal_clave( $forma ) && bitacora_oal_clave( $forma ) === $clave ) {
+                return intval( $f['id'] );
+            }
         }
     }
     return 0;
@@ -493,6 +528,7 @@ function bitacora_oal_agrupar( $datos ) {
                 'fecha'    => $o['fecha'],
                 'hora'     => $o['hora'],
                 'desfase'  => $o['desfase'],
+                'observador' => $o['observador'],
                 'sqm'      => null,
                 'ir'       => null,
                 'seeing'   => null,
@@ -827,6 +863,10 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
         if ( ! $viaje ) {
             continue;
         }
+        // Cada observación la firma quien la hizo (el <observer> de su bloque);
+        // el dueño del fichero solo cubre las que no lo dicen.
+        $quien    = '' !== trim( $g['observador'] ) ? trim( $g['observador'] ) : $firma;
+        $quien_id = ( $quien === $firma ) ? $observador_id : bitacora_observador_id_desde_nombre( $quien, $usuario_id );
         $tel_id = 0;
         foreach ( $g['entradas'] as $e ) {
             if ( ! $tel_id && ! empty( $equipo['telescopios'][ $e['telescopio'] ] ) ) {
@@ -840,8 +880,8 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
             'num'               => $g['num'],
             'ra'                => $g['ra'],
             'decl'              => $g['dec'],
-            'observador'        => sanitize_text_field( $firma ),
-            'observador_id'     => $observador_id ? $observador_id : null,
+            'observador'        => sanitize_text_field( $quien ),
+            'observador_id'     => $quien_id ? $quien_id : null,
             'telescopio'        => bitacora_oal_modelo( $datos, 'telescopios', $g['entradas'][0]['telescopio'] ),
             'telescopio_id'     => $tel_id ? $tel_id : null,
             'fecha_observacion' => $g['fecha'],
@@ -978,23 +1018,34 @@ function bitacora_oal_equipo_visible( $clase, $usuario_id ) {
     $cat = bitacora_oal_catalogo( $clase );
     $t   = $cat['tabla'];
     $col = $cat['modelo'];
+    // El nombre propio viaja también: es una de las formas con las que la pieza
+    // puede venir escrita en el XML, y sin él el emparejamiento por nombre no
+    // tendría con qué comparar.
+    $prop = $cat['propio'] ? $cat['propio'] . ' AS propio' : "'' AS propio";
     return $wpdb->get_results( $wpdb->prepare(
-        "SELECT id, vendor, $col AS modelo FROM $t WHERE usuario_id IS NULL OR usuario_id = %d",
+        "SELECT id, vendor, $col AS modelo, $prop FROM $t WHERE usuario_id IS NULL OR usuario_id = %d",
         $usuario_id
     ), ARRAY_A );
 }
 
 /**
- * Dónde vive cada clase de equipo: su tabla y cómo llama a la columna del
- * modelo (las auxiliares la llaman 'nombre'). Un solo sitio que consultar.
+ * Dónde vive cada clase de equipo: su tabla, cómo llama a la columna del modelo
+ * y si tiene nombre propio. Las tres asimetrías del esquema, en un solo sitio:
+ * las auxiliares llaman 'nombre' AL MODELO (una Barlow no se bautiza), y solo
+ * los telescopios tienen además nombre propio —el que el observador le pone a
+ * su tubo en Mi flota—.
  */
 function bitacora_oal_catalogo( $clase ) {
     $mapa = array(
-        'telescopios' => array( bitacora_nombre_tabla_telescopios(), 'modelo' ),
-        'oculares'    => array( bitacora_nombre_tabla_oculares(),    'modelo' ),
-        'auxiliares'  => array( bitacora_nombre_tabla_auxiliares(),  'nombre' ),
+        'telescopios' => array( bitacora_nombre_tabla_telescopios(), 'modelo', 'nombre' ),
+        'oculares'    => array( bitacora_nombre_tabla_oculares(),    'modelo', '' ),
+        'auxiliares'  => array( bitacora_nombre_tabla_auxiliares(),  'nombre', '' ),
     );
-    return array( 'tabla' => $mapa[ $clase ][0], 'modelo' => $mapa[ $clase ][1] );
+    return array(
+        'tabla'  => $mapa[ $clase ][0],
+        'modelo' => $mapa[ $clase ][1],
+        'propio' => $mapa[ $clase ][2],
+    );
 }
 
 /** Crea una base privada del usuario con lo que dice el XML. */
@@ -1302,4 +1353,323 @@ function bitacora_oal_panel_resumen( $r ) {
         echo '</ul>';
     }
     echo '</div>';
+}
+
+/* ===========================================================================
+ * 4. EXPORTAR · el ESTADO de una salida, en JSON
+ *
+ * El servidor NO compone XML: devuelve el `estado` —la misma forma que maneja
+ * registro/plantilla-oal.html— y el motor del navegador lo convierte en fichero
+ * OAL y en correo (ADR 0003). El dialecto tiene un solo escritor, y el correo y
+ * el adjunto salen del mismo estado, porque dos consultas distintas acaban
+ * dando dos números distintos.
+ * =========================================================================== */
+
+/**
+ * El desfase local en MINUTOS de una zona IANA esa noche, que es lo que el
+ * motor escribe en <timezone> y en cada instante. Con la zona vacía o rota se
+ * usa la del sitio: es mejor la hora de pared de WordPress que un falso UTC.
+ */
+function bitacora_oal_tz_minutos( $tz, $fecha ) {
+    $zona = null;
+    if ( '' !== trim( (string) $tz ) ) {
+        $zona = @timezone_open( $tz );
+    }
+    if ( ! $zona ) {
+        $zona = wp_timezone();
+    }
+    try {
+        // A las 22:00 de esa noche: el horario de verano cambia de madrugada y
+        // el anochecer es cuando empieza la salida.
+        $d = new DateTime( ( $fecha ? $fecha : '2000-01-01' ) . ' 22:00:00', $zona );
+    } catch ( Exception $e ) {
+        return 0;
+    }
+    return intval( round( $d->getOffset() / 60 ) );
+}
+
+/**
+ * Del tipo del catálogo del mapa al código de otype de Sesame, que es lo que el
+ * motor traduce a xsi:type. Lo que no esté aquí sale sin tipo, y el motor lo
+ * emite como «zona del cielo»: no saber qué es no autoriza a inventarlo.
+ */
+function bitacora_oal_otype( $tipo ) {
+    $tabla = array(
+        'globular' => 'GlC', 'abierto' => 'OpC', 'planetaria' => 'PN',
+        'emision' => 'HII', 'oscura' => 'DNe', 'snr' => 'SNR', 'carbono' => 'C*',
+        // Clases de Hubble: todas son galaxias para OAL.
+        'E' => 'G', 'S0' => 'G', 'S' => 'G', 'SB' => 'G', 'Irr' => 'G',
+    );
+    $t = trim( (string) $tipo );
+    return isset( $tabla[ $t ] ) ? $tabla[ $t ] : '';
+}
+
+/** La descripción, que se guarda en HTML, como el texto plano que OAL espera. */
+function bitacora_oal_texto_plano( $html ) {
+    $con_saltos = preg_replace( '#<(br|/p|/div|/li)\s*/?>#i', "\n", (string) $html );
+    $plano      = wp_strip_all_tags( $con_saltos );
+    // Las entidades se deshacen DESPUÉS de quitar las etiquetas: un &lt;script&gt;
+    // guardado como texto tiene que seguir siendo texto. Lo que sale de aquí se
+    // escapa siempre al pintarlo, en el XML y en el correo.
+    // En bucle, porque hay descripciones guardadas con el & ya escapado
+    // («&amp;nbsp;»): una sola pasada las deja en «&nbsp;», que es justo lo que
+    // se veía. Tope de tres vueltas: es una limpieza, no un intérprete.
+    for ( $i = 0; $i < 3; $i++ ) {
+        $antes = $plano;
+        $plano = html_entity_decode( $plano, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+        if ( $plano === $antes ) {
+            break;
+        }
+    }
+    // El espacio duro del editor no es un espacio para nadie más: en el correo
+    // se veía «&nbsp;» tal cual, porque volvía a escaparse el & de la entidad.
+    $plano = str_replace( array( "\xC2\xA0", "\xE2\x80\x8B" ), array( ' ', '' ), $plano );
+    return trim( $plano );
+}
+
+/** Un número de la base de datos como lo quiere el motor: '' si no lo hay. */
+function bitacora_oal_num( $v ) {
+    return ( null === $v || '' === $v ) ? '' : floatval( $v );
+}
+
+/** El slug del catálogo del mapa, la misma receta que bitacora_asegurar_objeto_mapa(). */
+function bitacora_oal_slug( $objeto ) {
+    return strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $objeto ) );
+}
+
+/**
+ * El `estado` de un viaje: la salida entera con lo que cuelga de ella.
+ *
+ * Una observación de la bitácora tiene una entrada por ocular, y en OAL una
+ * observación es un objeto con UN tubo y UN ocular: por eso cada entrada sale
+ * como una observación propia, con id distinto y la misma noche y el mismo
+ * objeto. Al reimportar se funden otra vez en una (bitacora_oal_agrupar).
+ *
+ * @param object $viaje      Fila de la tabla de viajes.
+ * @param int    $usuario_id Quién exporta: el ÚNICO que lleva <contact>.
+ * @return array El estado, en la forma que maneja el motor.
+ */
+function bitacora_oal_estado_viaje( $viaje, $usuario_id ) {
+    global $wpdb;
+    $t_obs = bitacora_nombre_tabla();
+    $t_ent = bitacora_nombre_tabla_entradas();
+    $t_bas = bitacora_nombre_tabla_bases();
+    $t_tel = bitacora_nombre_tabla_telescopios();
+    $t_ocu = bitacora_nombre_tabla_oculares();
+    $t_aux = bitacora_nombre_tabla_auxiliares();
+    $t_obr = bitacora_nombre_tabla_observadores();
+    $t_tri = bitacora_nombre_tabla_viaje_tripulacion();
+    $t_obj = bitacora_nombre_tabla_objetos();
+
+    $u = get_userdata( $usuario_id );
+    $estado = array(
+        'observador'    => array(
+            'nombre'    => $u ? ( $u->first_name ? $u->first_name : $u->display_name ) : '',
+            'apellidos' => $u ? $u->last_name : '',
+            'correo'    => $u ? $u->user_email : '',
+        ),
+        'lugares'       => array(),
+        'telescopios'   => array(),
+        'oculares'      => array(),
+        'auxiliares'    => array(),
+        'noches'        => array(),
+        'observaciones' => array(),
+    );
+    $firma_dueno = trim( $estado['observador']['nombre'] . ' ' . $estado['observador']['apellidos'] );
+
+    // El lugar de la salida.
+    $base = $viaje->base_id
+        ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t_bas WHERE id = %d", $viaje->base_id ) )
+        : null;
+    if ( $base ) {
+        $estado['lugares'][] = array(
+            'id'      => 'lu' . intval( $base->id ),
+            'nombre'  => $base->nombre,
+            'lat'     => bitacora_oal_num( $base->lat ),
+            'lon'     => bitacora_oal_num( $base->lon ),
+            'altitud' => bitacora_oal_num( $base->altitud_m ),
+            'tz'      => bitacora_oal_tz_minutos( $base->tz, $viaje->noche ),
+        );
+    }
+
+    $tripulacion = $wpdb->get_col( $wpdb->prepare(
+        "SELECT ob.nombre FROM $t_tri tr JOIN $t_obr ob ON ob.id = tr.observador_id
+         WHERE tr.viaje_id = %d ORDER BY ob.nombre ASC",
+        $viaje->id
+    ) );
+    $noche_id = 'n' . intval( $viaje->id );
+    $estado['noches'][] = array(
+        'id'          => $noche_id,
+        'fecha'       => $viaje->noche,
+        'lugarId'     => $base ? 'lu' . intval( $base->id ) : '',
+        // El huso de la noche, para las salidas sin lugar: sin él las horas
+        // saldrían en UTC, o sea corridas. Con lugar manda el del lugar.
+        'tz'          => bitacora_oal_tz_minutos( $base ? $base->tz : '', $viaje->noche ),
+        'comienzo'    => $viaje->comienzo,
+        'fin'         => $viaje->fin,
+        'tripulacion' => implode( ', ', array_map( 'trim', (array) $tripulacion ) ),
+        'meteo'       => $viaje->meteo,
+        'cronica'     => bitacora_oal_texto_plano( $viaje->cronica ),
+        // El cielo NO viaja en la noche: cuelga de la observación (ADR 0001), y
+        // ponerlo aquí volvería a inventar un SQM único para toda la salida.
+    );
+
+    // Las observaciones borradas no se exportan.
+    $obs = $wpdb->get_results( $wpdb->prepare(
+        "SELECT * FROM $t_obs WHERE viaje_id = %d AND borrada_en IS NULL
+         ORDER BY ( hora_observacion = '' ) ASC, hora_observacion ASC, id ASC",
+        $viaje->id
+    ) );
+
+    // De qué tipo es cada objeto lo sabe el catálogo del mapa, por su slug.
+    $tipos = array();
+    $slugs = array();
+    foreach ( (array) $obs as $o ) {
+        $slugs[] = bitacora_oal_slug( $o->objeto );
+    }
+    $slugs = array_values( array_unique( array_filter( $slugs ) ) );
+    if ( $slugs ) {
+        $huecos = implode( ', ', array_fill( 0, count( $slugs ), '%s' ) );
+        $filas  = $wpdb->get_results( $wpdb->prepare( "SELECT slug, tipo FROM $t_obj WHERE slug IN ( $huecos )", $slugs ) );
+        foreach ( (array) $filas as $f ) {
+            $tipos[ $f->slug ] = $f->tipo;
+        }
+    }
+
+    $equipo = array( 'telescopios' => array(), 'oculares' => array(), 'auxiliares' => array() );
+    foreach ( (array) $obs as $o ) {
+        $entradas = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM $t_ent WHERE observacion_id = %d ORDER BY orden ASC, id ASC",
+            $o->id
+        ) );
+        // Sin entradas la observación existe igual: sale con su noche, su objeto
+        // y su hora, y sin descripción. Perderla al exportar sería peor.
+        if ( ! $entradas ) {
+            $entradas = array( (object) array(
+                'aumento' => null, 'descripcion' => '', 'ocular_id' => null, 'auxiliar_id' => null,
+            ) );
+        }
+        // Quién firma: el observador del catálogo si lo hay, si no el texto de la
+        // observación, y si no el dueño de la bitácora.
+        $firma = '';
+        if ( $o->observador_id ) {
+            $firma = (string) $wpdb->get_var( $wpdb->prepare( "SELECT nombre FROM $t_obr WHERE id = %d", $o->observador_id ) );
+        }
+        if ( '' === trim( $firma ) ) {
+            $firma = trim( (string) $o->observador );
+        }
+        if ( '' === $firma ) {
+            $firma = $firma_dueno;
+        }
+        $slug = bitacora_oal_slug( $o->objeto );
+        foreach ( $entradas as $i => $e ) {
+            if ( $o->telescopio_id ) {
+                $equipo['telescopios'][ intval( $o->telescopio_id ) ] = 1;
+            }
+            if ( ! empty( $e->ocular_id ) ) {
+                $equipo['oculares'][ intval( $e->ocular_id ) ] = 1;
+            }
+            // OAL tiene UNA <lens> por observación; de las dos ópticas auxiliares
+            // que admite la entrada sale la primera, la montada más cerca del tubo.
+            if ( ! empty( $e->auxiliar_id ) ) {
+                $equipo['auxiliares'][ intval( $e->auxiliar_id ) ] = 1;
+            }
+            $estado['observaciones'][] = array(
+                // Único dentro del fichero y estable: la misma entrada da siempre
+                // el mismo id.
+                'id'           => 'obs' . intval( $o->id ) . '-' . ( $i + 1 ),
+                'nocheId'      => $noche_id,
+                // La DESIGNACIÓN de catálogo, nunca la etiqueta amable: es la
+                // cadena con la que AstroPlanner busca el objeto en los suyos.
+                'objeto'       => $o->objeto,
+                'ra'           => bitacora_oal_num( $o->ra ),
+                'dec'          => bitacora_oal_num( $o->decl ),
+                'otype'        => bitacora_oal_otype( isset( $tipos[ $slug ] ) ? $tipos[ $slug ] : '' ),
+                'hora'         => $o->hora_observacion,
+                'telescopioId' => $o->telescopio_id ? 'te' . intval( $o->telescopio_id ) : '',
+                'ocularId'     => ! empty( $e->ocular_id ) ? 'oc' . intval( $e->ocular_id ) : '',
+                'auxiliarId'   => ! empty( $e->auxiliar_id ) ? 'au' . intval( $e->auxiliar_id ) : '',
+                'aumentos'     => bitacora_oal_num( $e->aumento ),
+                'sqm'          => bitacora_oal_num( $o->cielo_sqm ),
+                'ir'           => bitacora_oal_num( $o->cielo_ir ),
+                'seeing'       => bitacora_oal_num( $o->seeing ),
+                'bortle'       => bitacora_oal_num( $o->cielo_bortle ),
+                'texto'        => bitacora_oal_texto_plano( $e->descripcion ),
+                'observador'   => $firma,
+            );
+        }
+    }
+
+    $estado['telescopios'] = bitacora_oal_equipo_estado( 'telescopios', array_keys( $equipo['telescopios'] ), 'te' );
+    $estado['oculares']    = bitacora_oal_equipo_estado( 'oculares', array_keys( $equipo['oculares'] ), 'oc' );
+    $estado['auxiliares']  = bitacora_oal_equipo_estado( 'auxiliares', array_keys( $equipo['auxiliares'] ), 'au' );
+    return $estado;
+}
+
+/**
+ * Las piezas de equipo que se usaron, en la forma del estado. Solo esas: cada
+ * recurso del fichero es una fila que hay que emparejar a mano al importarlo en
+ * otro programa, y volcar el catálogo entero lo llena de ruido.
+ */
+function bitacora_oal_equipo_estado( $clase, $ids, $prefijo ) {
+    global $wpdb;
+    $ids = array_values( array_filter( array_map( 'intval', (array) $ids ) ) );
+    if ( ! $ids ) {
+        return array();
+    }
+    $cat    = bitacora_oal_catalogo( $clase );
+    $tabla  = $cat['tabla'];
+    $huecos = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
+    $filas  = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $tabla WHERE id IN ( $huecos ) ORDER BY id ASC", $ids ), ARRAY_A );
+    $out    = array();
+    foreach ( (array) $filas as $f ) {
+        // El nombre propio que el observador le da a su tubo en Mi flota Y el
+        // modelo: el nombre es como lo llama él, el modelo es lo que permite
+        // reconocerlo en otra bitácora —y lo único por lo que casa al volver—.
+        // Cuál es cada columna lo dice el catálogo: en las auxiliares 'nombre'
+        // ES el modelo, y componer «Barlow 2x · TeleVue» las dejaba sin casar.
+        $propio = $cat['propio'] ? trim( (string) $f[ $cat['propio'] ] ) : '';
+        $modelo = bitacora_oal_equipo_nombrado(
+            $propio,
+            trim( $f['vendor'] . ' ' . $f[ $cat['modelo'] ] )
+        );
+        $fila = array( 'id' => $prefijo . intval( $f['id'] ), 'modelo' => $modelo );
+        if ( 'te' === $prefijo ) {
+            $fila['apertura'] = bitacora_oal_num( $f['apertura_mm'] );
+            $fila['focal']    = bitacora_oal_num( $f['focal_mm'] );
+        } elseif ( 'oc' === $prefijo ) {
+            $fila['focal'] = bitacora_oal_num( $f['focal_mm'] );
+            $fila['campo'] = bitacora_oal_num( $f['campo_aparente'] );
+        } else {
+            $fila['factor'] = bitacora_oal_num( $f['factor'] );
+        }
+        $out[] = $fila;
+    }
+    return $out;
+}
+
+/**
+ * GET /bitacora/v1/estado-oal?viaje=<id>
+ *
+ * El usuario sale de la SESIÓN, nunca de un parámetro: un endpoint de
+ * exportación que acepte un usuario_id cualquiera es una fuga de datos con
+ * forma de descarga. La ruta ya exige sesión iniciada (permission_callback) y
+ * aquí se comprueba además que el viaje sea suyo.
+ */
+function bitacora_oal_rest_estado( $req ) {
+    $usuario_id = get_current_user_id();
+    $viaje      = bitacora_viaje_obtener( $req->get_param( 'viaje' ) );
+    if ( ! $viaje ) {
+        return new WP_Error( 'no_encontrado', 'Ese viaje no existe.', array( 'status' => 404 ) );
+    }
+    if ( intval( $viaje->usuario_id ) !== $usuario_id ) {
+        return new WP_Error( 'no_es_tuyo', 'Solo puedes exportar tus propias salidas.', array( 'status' => 403 ) );
+    }
+    $res = new WP_REST_Response( bitacora_oal_estado_viaje( $viaje, $usuario_id ), 200 );
+    // Qué código está respondiendo de verdad. El hash es del fichero en DISCO,
+    // así que si no coincide con el que se acaba de subir —o si la cabecera ni
+    // aparece— lo que corre es un compilado viejo (OPcache) o otra copia del
+    // plugin, y no hay que buscar el fallo en la lógica.
+    $res->header( 'X-Bitacora-Codigo', substr( md5_file( __FILE__ ), 0, 8 ) );
+    return $res;
 }

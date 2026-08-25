@@ -16,6 +16,11 @@ declare(strict_types=1);
 
    Sin framework:  php scripts/test_oal_import.php  */
 
+// Lo único de WordPress que pisa la mitad pura del fichero: quitar etiquetas.
+if (!function_exists('wp_strip_all_tags')) {
+    function wp_strip_all_tags(string $texto): string { return strip_tags($texto); }
+}
+
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-viaje.php';
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-oal.php';
 
@@ -152,6 +157,24 @@ eq($g2[0]['entradas'][1]['auxiliar'], 'au1', 'el segundo lleva la Barlow');
 eq($d2['auxiliares']['au1']['factor'], 2.0, 'que multiplica por 2');
 eq($g2[0]['hora'], '23:30', 'la observación se fecha en su entrada más temprana');
 eq($d2['noches']['no1']['tripulacion'], array('Isra', 'Víctor'), 'los dos compañeros de esa noche');
+
+echo "cada observación se queda con quien la firmó:\n";
+// En una salida con tripulación el <observer> de la observación no tiene por
+// qué ser el dueño del fichero. Atribuírselo todo al dueño sería escribir en
+// la bitácora que vio lo que vio otro.
+eq($d2['observaciones'][0]['observador'], 'Ángel L. Huelmo', 'la primera la firma el dueño del fichero');
+eq($d2['observaciones'][1]['observador'], 'Víctor', 'la segunda, el compañero que miró por el ocular');
+eq($g2[0]['observador'], 'Ángel L. Huelmo', 'y la ficha fusionada se queda con la de su entrada más temprana');
+
+echo "los identificadores del fichero no chocan entre sí:\n";
+// El id es un xs:ID: único en TODO el documento, no por elemento. Con la
+// observación llamada «ob1» chocaba con el <observer id="ob1">.
+$ids = array();
+foreach (array('noche-simple', 'dos-oculares') as $cual) {
+    preg_match_all('/\sid="([^"]+)"/', ejemplo($cual), $m);
+    $ids[$cual] = count($m[1]) - count(array_unique($m[1]));
+}
+eq($ids, array('noche-simple' => 0, 'dos-oculares' => 0), 'ningún id repetido en los ejemplos');
 
 echo "la clave de fusión no depende del orden de las hermanas:\n";
 // Es también el identificador con el que se reconoce la observación en una
@@ -323,11 +346,48 @@ eq(bitacora_oal_equipo_casado('TeleVue Nagler Type 6 7mm', $oculares), 4, 'aunqu
 eq(bitacora_oal_equipo_casado('Ethos 13mm', $oculares), 0, 'y el que no está, se crea');
 eq(bitacora_oal_equipo_casado('', $oculares), 0, 'sin modelo no se casa con el primero que pase');
 
+echo "y también por el nombre propio con el que sale exportado:\n";
+// Lo que esta bitácora escribe en <model> es «nombre · marca modelo»: el nombre
+// propio para quien lo conoce, el modelo para que otra bitácora lo reconozca.
+// Si el emparejador no supiera leerlo, reimportar duplicaría el tubo.
+$tubos = array(
+    // 'propio' es como lo devuelve bitacora_oal_equipo_visible(): el nombre propio
+    // solo existe en los telescopios, y sale aliasado con ese nombre para que el
+    // emparejador no tenga que saber de qué tabla viene la fila.
+    array('id' => 7, 'propio' => 'Endeavour', 'vendor' => 'Skywatcher', 'modelo' => 'Dobson 305/1524'),
+);
+eq(bitacora_oal_equipo_nombrado('Endeavour', 'Skywatcher Dobson 305/1524'), 'Endeavour · Skywatcher Dobson 305/1524',
+   'el nombre propio y el modelo salen juntos');
+eq(bitacora_oal_equipo_nombrado('', 'Skywatcher Dobson 305/1524'), 'Skywatcher Dobson 305/1524', 'sin nombre propio, el modelo solo');
+eq(bitacora_oal_equipo_nombrado('Endeavour', ''), 'Endeavour', 'y sin modelo, el nombre solo');
+eq(bitacora_oal_equipo_nombrado('Dobson 305 de casa', 'Dobson 305'), 'Dobson 305 de casa', 'si el nombre ya dice el modelo, no se repite');
+eq(bitacora_oal_equipo_casado('Endeavour · Skywatcher Dobson 305/1524', $tubos), 7, 'el compuesto vuelve a su tubo');
+eq(bitacora_oal_equipo_casado('Endeavour', $tubos), 7, 'el nombre propio a secas, también');
+eq(bitacora_oal_equipo_casado('Skywatcher Dobson 305/1524', $tubos), 7, 'y el modelo con su marca, como lo escribe otro programa');
+
+// Una Barlow no se bautiza: en la tabla de auxiliares 'nombre' ES el modelo, y
+// no hay nombre propio. Si se compusieran igual que un tubo saldría «Barlow 2x ·
+// TeleVue», que no casa con nada y duplica la lente en cada ida y vuelta.
+$lentes = array( array('id' => 5, 'propio' => '', 'vendor' => 'TeleVue', 'modelo' => 'Barlow 2x') );
+eq(bitacora_oal_equipo_nombrado('', 'TeleVue Barlow 2x'), 'TeleVue Barlow 2x', 'la lente sale con su marca delante');
+eq(bitacora_oal_equipo_casado('TeleVue Barlow 2x', $lentes), 5, 'y vuelve a su lente, sin duplicarla');
+
 echo "los Messier se reconocen y el resto entra tal cual:\n";
 eq(bitacora_oal_objeto('M13'), array('objeto' => 'M13', 'tipo' => 'messier', 'num' => 13), 'M13');
 eq(bitacora_oal_objeto('m 27'), array('objeto' => 'M27', 'tipo' => 'messier', 'num' => 27), 'con espacio y en minúscula');
 eq(bitacora_oal_objeto('M111'), array('objeto' => 'M111', 'tipo' => 'otro', 'num' => null), 'M111 no existe: no es Messier');
 eq(bitacora_oal_objeto('  NGC   7000 '), array('objeto' => 'NGC 7000', 'tipo' => 'otro', 'num' => null), 'y los espacios de más se van');
+
+echo "el texto que va al XML y al correo sale ya en limpio:\n";
+// El editor guarda espacios duros y entidades; si sobreviven, el correo las
+// vuelve a escapar y se lee «&nbsp;» en mitad de la frase.
+eq(bitacora_oal_texto_plano('&nbsp;Impresionante.'), 'Impresionante.', 'el espacio duro del principio no se ve');
+eq(bitacora_oal_texto_plano('Una l&iacute;nea'), 'Una línea', 'las entidades vuelven a ser letras');
+eq(bitacora_oal_texto_plano('Sol &amp; Luna'), 'Sol & Luna', 'y el ampersand, un ampersand');
+eq(bitacora_oal_texto_plano('&amp;nbsp;Impresionante.'), 'Impresionante.', 'ni con el & ya escapado en la base');
+eq(bitacora_oal_texto_plano('<p>Dos</p><p>párrafos</p>'), "Dos\npárrafos", 'los párrafos se vuelven saltos de línea');
+eq(bitacora_oal_texto_plano('&lt;script&gt;alert(1)&lt;/script&gt;'), '<script>alert(1)</script>',
+   'una etiqueta escrita como texto sigue siendo texto: se escapa al pintarla');
 
 echo $fallos ? "\n$fallos fallo(s)\n" : "\nok · el importador entiende lo que escribe la plantilla\n";
 exit($fallos ? 1 : 0);

@@ -39,6 +39,8 @@
     var API_VIAJES = WP.endpoint.replace(/observaciones\/?$/, 'viajes');
     var API_NOCHE  = API_VIAJES + '/de-la-noche';
     var API_BASES  = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+    // El estado de una salida, lo que el motor OAL convierte en XML y en correo.
+    var API_ESTADO = WP.endpoint.replace(/observaciones\/?$/, 'estado-oal');
     // El mapa interestelar, donde se ve la ruta de un viaje (?viaje=<id>).
     var MAPA_URL   = 'https://bitacoraestelar.app/mapa.html';
 
@@ -116,6 +118,12 @@
           + (v.num_objetos
               ? '<a class="vi-btn mapa" target="_blank" rel="noopener"'
                 + ' href="' + MAPA_URL + '?viaje=' + v.id + '">Ver en el mapa</a>'
+              : '')
+          + (v.num_objetos
+              ? '<button type="button" class="vi-btn" data-accion="exportar"'
+                + ' title="Bajar esta salida en XML (OAL)">Exportar</button>'
+                + '<button type="button" class="vi-btn" data-accion="correo"'
+                + ' title="Abrir el correo de esta salida, ya compuesto">Correo</button>'
               : '')
           + '<button type="button" class="vi-btn" data-accion="editar">Editar</button>'
           + '<button type="button" class="vi-btn danger" data-accion="borrar"' + (v.num_objetos ? ' disabled title="Tiene observaciones dentro"' : '') + '>Borrar</button>'
@@ -225,6 +233,66 @@
     }
     if ($('viajeCancelar')) $('viajeCancelar').addEventListener('click', limpiar);
 
+    // ── Exportar (OAL) ─────────────────────────────────────────────────────
+    // El servidor devuelve el ESTADO de la salida y el motor de la plantilla lo
+    // convierte, aquí mismo: el dialecto OAL tiene un solo escritor (ADR 0003),
+    // y el correo y el fichero salen del mismo estado para que no puedan contar
+    // cosas distintas.
+
+    /* Un fallo que no sea el aviso ya enseñado ('sin motor') tiene que verse:
+       callarlo deja el botón como si no hiciera nada. El detalle, a la consola. */
+    function fallo(msg) {
+      if (msg === 'sin motor') { return; }
+      if (typeof msg === 'string') { flash(msg, true); return; }
+      console.error('[bitacora] exportar OAL', msg);
+      flash('No se pudo exportar la salida.', true);
+    }
+
+    function estadoDe(v) {
+      var OAL = window.PlantillaOAL;
+      if (!OAL) {
+        flash('Falta el motor OAL (bitacora-oal-motor.js).', true);
+        return Promise.reject('sin motor');
+      }
+      return api(API_ESTADO + '?viaje=' + encodeURIComponent(v.id)).then(function (r) {
+        if (!r.ok) { throw errorDe(r, 'No se pudo preparar la exportación'); }
+        return r.data;
+      });
+    }
+
+    function bajar(nombre, contenido, tipo) {
+      var url = URL.createObjectURL(new Blob([contenido], { type: tipo + ';charset=utf-8' }));
+      var a = document.createElement('a');
+      a.href = url; a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function exportar(v) {
+      estadoDe(v).then(function (estado) {
+        bajar('bitacora-' + (v.noche || 'salida') + '.xml',
+              window.PlantillaOAL.xmlDe(estado), 'application/xml');
+        flash('Salida exportada. Ábrela en la plantilla para corregirla y vuelve a subirla.');
+      }).catch(fallo);
+    }
+
+    // El correo se abre en una pestaña ya compuesto: se selecciona todo y se
+    // pega en el mensaje, con su formato. Nada de lo que sale de aquí lo ha
+    // redactado una máquina (ADR 0004).
+    function correo(v) {
+      estadoDe(v).then(function (estado) {
+        var cuerpo = window.PlantillaOAL.textoDe(estado);
+        var doc = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
+          + '<title>Correo de la salida del ' + esc(v.noche || '') + '</title></head>'
+          + '<body style="font:15px/1.5 system-ui,sans-serif;max-width:800px;margin:24px auto;padding:0 16px">'
+          + cuerpo + '</body></html>';
+        var w = window.open(URL.createObjectURL(new Blob([doc], { type: 'text/html;charset=utf-8' })), '_blank');
+        if (!w) { flash('El navegador ha bloqueado la ventana del correo.', true); }
+      }).catch(fallo);
+    }
+
     // ── Acciones de la lista ───────────────────────────────────────────────
     if ($('viajesMios')) {
       $('viajesMios').addEventListener('click', function (e) {
@@ -235,7 +303,10 @@
         var v = null;
         viajes.forEach(function (x) { if (String(x.id) === String(id)) v = x; });
         if (!v) return;
-        if (btn.getAttribute('data-accion') === 'editar') { editar(v); return; }
+        var accion = btn.getAttribute('data-accion');
+        if (accion === 'editar') { editar(v); return; }
+        if (accion === 'exportar') { exportar(v); return; }
+        if (accion === 'correo') { correo(v); return; }
         if (!window.confirm('¿Borrar la salida del ' + v.noche + '? No se puede deshacer.')) return;
         api(API_VIAJES + '/' + v.id, { method: 'DELETE' }).then(function (r) {
           if (!r.ok) { flash(errorDe(r, 'No se pudo borrar'), true); return; }
