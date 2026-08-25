@@ -1145,7 +1145,6 @@
   var fichaOverlay = document.getElementById('ficha-overlay');
   var fichaTitle = document.getElementById('ficha-title');
   var fichaCoords = document.getElementById('ficha-coords');
-  var fichaPdfLink = document.getElementById('ficha-pdf-link');
   var fichaCloseBtn = document.getElementById('ficha-close');
   var fichaImgTitle = document.getElementById('ficha-img-title');
   var fichaButtons = document.getElementById('ficha-buttons');
@@ -1513,7 +1512,6 @@
 
     // Restaura el modo normal (por si venimos de la pantalla de descubrimiento).
     fichaLeftCol.style.display = '';
-    fichaPdfLink.style.display = '';
 
     var coords = (info && info.coords) || '';
     if (opts.observadorNombre) {
@@ -1521,7 +1519,6 @@
     }
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = coords;
-    fichaPdfLink.href = f.pdf || (info && info.pdf) || '#';
     fichaBackBtn.style.display = fichaDescubrir ? '' : 'none';
 
     buildFichaButtons(f);
@@ -1565,7 +1562,6 @@
     ctx = ctx || {};
     fichaDescubrir = null;
     fichaBackBtn.style.display = 'none';
-    fichaPdfLink.style.display = 'none';
     fichaLeftCol.style.display = 'none';         // solo se usa la columna de texto
     fichaAnexos.style.display = 'none';
     fichaAnexosRight.style.display = 'none';
