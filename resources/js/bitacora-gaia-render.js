@@ -3774,7 +3774,13 @@
     var cieloParche = {};
     for (var k in cielo) if (Object.prototype.hasOwnProperty.call(cielo, k)) cieloParche[k] = cielo[k];
     cieloParche.realceMax = PS1.realceMax;
-    var catalogo = o.catalogo || (typeof window !== 'undefined' ? window.BITACORA_GALAXIAS : null);
+    /* Sin catálogo explícito, la capa incluye TAMBIÉN las nebulosas cuya clase
+       trata el pipeline: si el defecto fuese solo BITACORA_GALAXIAS, quien no
+       lo pasa (el generador de imagen del formulario) nunca vería una
+       planetaria como NGC 6905, que sí ve el simulador de oculares. */
+    var catalogo = o.catalogo || (typeof window !== 'undefined'
+      ? ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS)
+      : null);
     var campo = ps1GalaxiasDelCampo(catalogo, o.ra0, o.dec0, o.arcmin);
     var apuntada = ps1FilaApuntada(catalogo, o.ra0, o.dec0);
     var vivo = o.vivo || function () { return true; };
