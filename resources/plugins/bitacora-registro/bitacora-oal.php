@@ -422,6 +422,25 @@ function bitacora_oal_base_casada( $sitio, $bases ) {
 }
 
 /**
+ * Una pieza de equipo escrita para que se reconozca fuera de casa: el nombre
+ * propio que el observador le dio en Mi flota Y el modelo real. Solo el nombre
+ * («Endeavour») no le dice nada a nadie más, y solo el modelo pierde el nombre
+ * con el que él lo llama.
+ */
+function bitacora_oal_equipo_nombrado( $nombre, $modelo ) {
+    $nombre = trim( (string) $nombre );
+    $modelo = trim( (string) $modelo );
+    if ( '' === $nombre || '' === $modelo ) {
+        return '' === $nombre ? $modelo : $nombre;
+    }
+    // Si el nombre propio ya contiene el modelo (o al revés), repetirlo sobra.
+    if ( false !== strpos( bitacora_oal_clave( $nombre ), bitacora_oal_clave( $modelo ) ) ) {
+        return $nombre;
+    }
+    return $nombre . ' · ' . $modelo;
+}
+
+/**
  * ¿Qué fila del catálogo (global o personal) es este modelo del XML?
  * Solo por modelo normalizado: un telescopio no tiene coordenadas con las que
  * desempatar. Devuelve 0 si hay que crearlo.
@@ -433,9 +452,17 @@ function bitacora_oal_equipo_casado( $modelo, $filas ) {
     }
     foreach ( $filas as $f ) {
         $f = (array) $f;
-        $suyo = trim( ( isset( $f['vendor'] ) ? $f['vendor'] . ' ' : '' ) . $f['modelo'] );
-        if ( bitacora_oal_clave( $f['modelo'] ) === $clave || bitacora_oal_clave( $suyo ) === $clave ) {
-            return intval( $f['id'] );
+        // Todas las formas con las que esa pieza puede aparecer escrita: el
+        // modelo a secas y con la marca delante (así lo escriben otros
+        // programas), el nombre propio de Mi flota, y el compuesto que exporta
+        // esta bitácora. Cualquiera de ellas es la misma pieza.
+        $nombre = isset( $f['nombre'] ) ? trim( (string) $f['nombre'] ) : '';
+        $marca  = trim( ( isset( $f['vendor'] ) ? $f['vendor'] . ' ' : '' ) . $f['modelo'] );
+        $formas = array( $f['modelo'], $marca, $nombre, bitacora_oal_equipo_nombrado( $nombre, $marca ) );
+        foreach ( $formas as $forma ) {
+            if ( '' !== bitacora_oal_clave( $forma ) && bitacora_oal_clave( $forma ) === $clave ) {
+                return intval( $f['id'] );
+            }
         }
     }
     return 0;
@@ -1567,12 +1594,13 @@ function bitacora_oal_equipo_estado( $tabla, $ids, $prefijo ) {
     $filas  = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $tabla WHERE id IN ( $huecos ) ORDER BY id ASC", $ids ) );
     $out    = array();
     foreach ( (array) $filas as $f ) {
-        // El nombre propio que el observador le da a su tubo en Mi flota manda:
-        // es como lo llama él, y es lo que espera reconocer en el fichero.
-        $modelo = trim( (string) ( isset( $f->nombre ) ? $f->nombre : '' ) );
-        if ( '' === $modelo ) {
-            $modelo = trim( $f->vendor . ' ' . ( isset( $f->modelo ) ? $f->modelo : '' ) );
-        }
+        // El nombre propio que el observador le da a su tubo en Mi flota Y el
+        // modelo: el nombre es como lo llama él, el modelo es lo que permite
+        // reconocerlo en otra bitácora —y lo único por lo que casa al volver—.
+        $modelo = bitacora_oal_equipo_nombrado(
+            isset( $f->nombre ) ? $f->nombre : '',
+            trim( $f->vendor . ' ' . ( isset( $f->modelo ) ? $f->modelo : '' ) )
+        );
         $fila = array( 'id' => $prefijo . intval( $f->id ), 'modelo' => $modelo );
         if ( 'te' === $prefijo ) {
             $fila['apertura'] = bitacora_oal_num( $f->apertura_mm );

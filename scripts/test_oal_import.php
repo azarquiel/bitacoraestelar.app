@@ -328,6 +328,22 @@ eq(bitacora_oal_equipo_casado('TeleVue Nagler Type 6 7mm', $oculares), 4, 'aunqu
 eq(bitacora_oal_equipo_casado('Ethos 13mm', $oculares), 0, 'y el que no está, se crea');
 eq(bitacora_oal_equipo_casado('', $oculares), 0, 'sin modelo no se casa con el primero que pase');
 
+echo "y también por el nombre propio con el que sale exportado:\n";
+// Lo que esta bitácora escribe en <model> es «nombre · marca modelo»: el nombre
+// propio para quien lo conoce, el modelo para que otra bitácora lo reconozca.
+// Si el emparejador no supiera leerlo, reimportar duplicaría el tubo.
+$tubos = array(
+    array('id' => 7, 'nombre' => 'Endeavour', 'vendor' => 'Skywatcher', 'modelo' => 'Dobson 305/1524'),
+);
+eq(bitacora_oal_equipo_nombrado('Endeavour', 'Skywatcher Dobson 305/1524'), 'Endeavour · Skywatcher Dobson 305/1524',
+   'el nombre propio y el modelo salen juntos');
+eq(bitacora_oal_equipo_nombrado('', 'Skywatcher Dobson 305/1524'), 'Skywatcher Dobson 305/1524', 'sin nombre propio, el modelo solo');
+eq(bitacora_oal_equipo_nombrado('Endeavour', ''), 'Endeavour', 'y sin modelo, el nombre solo');
+eq(bitacora_oal_equipo_nombrado('Dobson 305 de casa', 'Dobson 305'), 'Dobson 305 de casa', 'si el nombre ya dice el modelo, no se repite');
+eq(bitacora_oal_equipo_casado('Endeavour · Skywatcher Dobson 305/1524', $tubos), 7, 'el compuesto vuelve a su tubo');
+eq(bitacora_oal_equipo_casado('Endeavour', $tubos), 7, 'el nombre propio a secas, también');
+eq(bitacora_oal_equipo_casado('Skywatcher Dobson 305/1524', $tubos), 7, 'y el modelo con su marca, como lo escribe otro programa');
+
 echo "los Messier se reconocen y el resto entra tal cual:\n";
 eq(bitacora_oal_objeto('M13'), array('objeto' => 'M13', 'tipo' => 'messier', 'num' => 13), 'M13');
 eq(bitacora_oal_objeto('m 27'), array('objeto' => 'M27', 'tipo' => 'messier', 'num' => 27), 'con espacio y en minúscula');
