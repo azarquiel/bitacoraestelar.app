@@ -67,7 +67,7 @@
           ra: e.ra, dec: e.dec, tipo: e.tipo,
           mag1: e.mag1, mag2: e.mag2, sep: e.sep, pa: e.pa,
           spect1: e.spect1, spect2: e.spect2,
-          catalogos: e.catalogos, aliases: e.aliases,
+          catalogos: e.catalogos, aliases: e.aliases, alias: e.aliases,
           doble: true
         };
       });
@@ -101,9 +101,10 @@
       };
 
       // Categorías del selector de objeto. La clave coincide con data-cat del HTML.
-      // Los cúmulos abiertos no tienen pestaña propia: viven en el buscador de
-      // "Cualquier objeto" (ver catalogoLibre), junto a galaxias y nebulosas.
-      var CATALOGOS_OBJ = { carbono: CATALOGO_CARBONO, dobles: CATALOGO_DOBLES, globulares: CATALOGO_GLOBULARES };
+      // Los cúmulos abiertos y las estrellas dobles no tienen pestaña propia: viven
+      // en el buscador de "Cualquier objeto" (ver catalogoLibre), junto a galaxias
+      // y nebulosas.
+      var CATALOGOS_OBJ = { carbono: CATALOGO_CARBONO, globulares: CATALOGO_GLOBULARES };
       var objetoSel = CATALOGO_CARBONO[0];   // primera estrella de carbono por defecto
 
       var TELE_EJEMPLO = [{ id: '_t200', vendor: '', modelo: 'Newton 200/1200 (ejemplo)', optica: 'Newtonian', apertura_mm: 200, focal_mm: 1200 }];
@@ -669,12 +670,6 @@
           var opEst = {
             ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
             apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
-            // Solo si el objeto es una doble: el suelo de visibilidad de SUS dos
-            // componentes se recorta con el aumento para no comerse el hueco ya
-            // resuelto (ver radioEstrella en bitacora-gaia-render.js). Sin esto,
-            // sep queda undefined y el suelo se comporta igual que en cualquier
-            // otro campo.
-            sep: objetoSel.doble ? objetoSel.sep : null,
             conGlow: true, carbono: !!objetoSel.carbono,
             carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana()
           };
@@ -1103,7 +1098,7 @@
           else { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); }
         }
       });
-      // Catálogo combinado (cúmulos abiertos + galaxias + nebulosas) para sugerir
+      // Catálogo combinado (cúmulos abiertos + dobles + galaxias + nebulosas) para sugerir
       // en modo libre antes de tirar de SIMBAD. Los cúmulos ya vienen como
       // objetos completos (CATALOGO_CUMULOS); galaxias/nebulosas son filas
       // crudas [nombre, alt, RA°, Dec°, ...] en grados (ver galaxias-datos.js /
@@ -1123,6 +1118,7 @@
           }).filter(function (o) { return o.id; });
         }
         return CATALOGO_CUMULOS
+          .concat(CATALOGO_DOBLES)
           .concat(filas(window.BITACORA_GALAXIAS, 'galaxia'))
           .concat(filas(window.BITACORA_NEBULOSAS, 'nebulosa'));
       }
@@ -1138,7 +1134,10 @@
             fuente: catalogoLibre,
             texto: function (o) { return o.nombre; },
             buscarPor: function (o) { return [o.nombre, o.alias, o.alt].filter(Boolean).join(' '); },
-            specs: function (o) { return [o.alias, o.constelacion, (o.mag != null ? 'mag ' + Number(o.mag).toFixed(1) : '')].filter(Boolean).join('  ·  '); },
+            specs: function (o) {
+              if (o.doble) return [o.constelacion, (o.sep != null ? o.sep + '″' : '')].filter(Boolean).join('  ·  ');
+              return [o.alias, o.constelacion, (o.mag != null ? 'mag ' + Number(o.mag).toFixed(1) : '')].filter(Boolean).join('  ·  ');
+            },
             max: 12,
             sinResultados: 'Sin coincidencias en el catálogo local · sigue escribiendo para buscar en SIMBAD',
             onElegir: function (o) {
@@ -1152,7 +1151,7 @@
         }
       }
 
-      // Selector de objeto: pestañas (cúmulos / carbono / dobles [+ libre]) sobre
+      // Selector de objeto: pestañas (carbono / globulares [+ libre]) sobre
       // el buscador de catálogo común. Al cambiar de pestaña se limpia el input y
       // se listan los objetos de esa categoría; al elegir uno, se activa.
       function montarSelectorObjeto() {
@@ -1165,7 +1164,6 @@
           texto: function (o) { return o.nombre; },
           specs: function (o) {
             if (o.carbono) return (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '') || o.abrev || '';
-            if (o.doble) return [o.constelacion, (o.sep != null ? o.sep + '″' : '')].filter(Boolean).join('  ·  ');
             if (o.globular) return 'μV₀ ' + o.muV0.toFixed(1) + '  ·  r_t ' + o.rTidal.toFixed(0) + '′';
             return [o.constelacion, (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '')].filter(Boolean).join('  ·  ');
           },
