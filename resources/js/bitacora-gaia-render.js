@@ -1146,7 +1146,18 @@
   var PAR = {
     angulo: 55,        // ° de PA asumido (desde el Norte hacia el Este)
     margenMag: 1.0,    // una componente puede venir hasta 1 mag más débil que mag2
-    radioMinBusca: 3   // ″ : suelo del círculo donde se buscan las componentes
+    radioMinBusca: 3,  // ″ : suelo del círculo donde se buscan las componentes
+    /* ″ : suelo ADICIONAL, para que el par no se dé por ausente cuando el
+       catálogo y Gaia no hablan de la misma posición. Dos desajustes reales,
+       ambos del orden de 20″: el catálogo es J2000 y Gaia DR3 es época 2016.0
+       (η Cas se ha movido 19,4″), y su AR viene redondeada a segundos enteros
+       de tiempo (±7,5″·cos δ). Con 1,5·sep a secas, Achird pintaba TRES
+       estrellas: Gaia traía el par, pero la primaria caía a 21,2″ del centro y
+       quedaba fuera del círculo, así que se sintetizaba una tercera. Medido
+       sobre las 226 dobles del catálogo contra Gaia DR3: 1,5·sep duplica 28,
+       25″ duplica 6, y 60″ solo baja a 3; ninguna deja de completarse por
+       subirlo. 25″ está en mitad de la meseta, no en su borde. */
+    radioEpoca: 25
   };
   /* null / '' → null, y NO 0: el catálogo deja en null lo que no sabe, y `+null`
      es 0, que como magnitud sería una estrella falsa deslumbrante. */
@@ -1165,7 +1176,7 @@
     if (ra0 == null || dec0 == null) return estrellas;
 
     var cos0 = Math.cos(dec0 * Math.PI / 180);
-    var radio = Math.max(PAR.radioMinBusca, sep * 1.5) / 3600;   // grados
+    var radio = Math.max(PAR.radioMinBusca, sep * 1.5, PAR.radioEpoca) / 3600;   // grados
     var limite = Math.max(m1, m2) + PAR.margenMag;
     var halladas = [];
     for (var i = 0; i < estrellas.length; i++) {

@@ -77,6 +77,16 @@ var achird = { ra: 12.2761, dec: 57.815, mag1: 3.4, mag2: 7.4, sep: 11.6 };
 var achirdGaia = [estrella(0.4, 30, 3.32, achird), estrella(11.5, 210, 6.76, achird)];
 ok(R.parDoble(achirdGaia, achird) === achirdGaia, 'la secundaria más débil que mag2 también cuenta (G 6,76 < V 7,4)');
 
+/* REGRESIÓN: Achird con las posiciones que Gaia DR3 devuelve DE VERDAD. η Cas
+   se mueve 1,08″/año en AR, así que su primaria, que el catálogo sitúa en el
+   centro (J2000), aparece a 21,2″ en época 2016.0. Con el radio antiguo
+   (1,5·sep = 17,4″) quedaba fuera, el par se daba por incompleto y se pintaba
+   una TERCERA estrella sintética encima. Medido contra el catálogo entero: el
+   radio de época (25″) baja los duplicados de 28 a 6 sobre 226 sin dejar de
+   completar ninguna. */
+var achirdReal = [estrella(21.2, 30, 3.32, achird), estrella(12.2, 210, 6.76, achird)];
+ok(R.parDoble(achirdReal, achird) === achirdReal, 'primaria desplazada por movimiento propio (21,2″): NO se sintetiza una tercera');
+
 /* ── 3. Un campo sin ninguna de las dos: se sintetizan las dos ─────────────── */
 console.log('\nNi una componente en el catálogo:');
 var vacio = [estrella(28, 95, 18.2)];
