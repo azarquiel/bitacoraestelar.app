@@ -161,6 +161,11 @@ eq($g2[0]['oal_id'], bitacora_oal_id($d2['noches']['no1']['noche'], 'Almaak'), '
 eq(bitacora_oal_id('2026-08-05', 'M 13'), bitacora_oal_id('2026-08-05', 'm13'), 'y no la parte cómo se escriba el nombre');
 ok($g2[0]['oal_id'] !== $g2[1]['oal_id'], 'dos objetos distintos, dos claves');
 ok(strlen(bitacora_oal_id('2026-08-05', str_repeat('x', 200))) <= 64, 'y cabe en la columna');
+// La noche del grupo es la que se usó para la clave, no la fecha de la entrada
+// más temprana: quien busque candidatas a adopción por fecha tiene que preguntar
+// por la misma noche que nombra el oal_id, o no encontrará nada y duplicará.
+eq($g2[0]['noche'], $d2['noches']['no1']['noche'], 'el grupo se lleva la FECHA de su noche');
+eq($g2[0]['oal_id'], bitacora_oal_id($g2[0]['noche'], $g2[0]['objeto']), 'que es con la que se construyó la clave');
 
 // Reimportar el MISMO fichero tiene que dar las mismas claves: es lo único que
 // separa «corregir una errata y volver a subirlo» de «duplicar la noche entera».
@@ -175,6 +180,46 @@ $con_otro_id = bitacora_oal_agrupar(array(
     'observaciones' => array_map(function ($o) { $o['noche'] = 'no1-9zq4k'; return $o; }, $d2['observaciones']),
 ));
 eq($con_otro_id[0]['oal_id'], $g2[0]['oal_id'], 'y no dependen del id de sesión, que la plantilla sortea');
+
+echo "una observación del formulario se adopta en vez de duplicarse (ADR 0002):\n";
+/* El importador desduplica con oal_id, y lo nacido en el formulario no tiene
+   ninguno: sin esto, exportar la bitácora, corregir una descripción y volver a
+   subir el fichero entra TODO otra vez como filas nuevas. La regla no es nueva
+   —«mismo usuario + misma noche + mismo objeto = la misma observación» es lo
+   que oal_id ya impone—: adoptar solo la aplica también hacia atrás. */
+$suelta = function (int $id, string $fecha, string $hora, string $objeto): array {
+    return array('id' => $id, 'fecha' => $fecha, 'hora' => $hora, 'objeto' => $objeto);
+};
+$grupos_m13 = array(array('oal_id' => bitacora_oal_id('2026-08-05', 'M13'), 'objeto' => 'M13'));
+
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array($suelta(5, '2026-08-05', '23:10', 'M 13')));
+eq($ad['adoptadas'], array(bitacora_oal_id('2026-08-05', 'M13') => 5), 'la del formulario de esa noche se adopta');
+eq($ad['ambiguas'], array(), 'sin ambigüedad ninguna');
+
+// La madrugada pertenece a la noche que la engendró, aquí igual que en el resto
+// del proyecto: si se mirara la fecha de reloj, la 01:20 no casaría con su noche.
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array($suelta(5, '2026-08-06', '01:20', 'M13')));
+eq($ad['adoptadas'], array(bitacora_oal_id('2026-08-05', 'M13') => 5), 'la de madrugada cae en su noche y se adopta');
+
+// Reimportar: la primera vez la adoptó y le puso la clave, así que la segunda ya
+// casa por oal_id y no hay nada que adoptar. Ni fila nueva ni doble aviso.
+$ad = bitacora_oal_adopciones($grupos_m13, array(bitacora_oal_id('2026-08-05', 'M13') => 5), array());
+eq($ad['adoptadas'], array(), 'reimportar el mismo fichero no adopta nada');
+
+// Dos salidas de la misma noche desde dos bases, el mismo objeto en las dos:
+// oal_id cuelga de la noche y no del viaje, así que no las distingue. Elegir una
+// sería inventarse cuál.
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array(
+    $suelta(5, '2026-08-05', '23:10', 'M13'),
+    $suelta(8, '2026-08-06', '02:40', 'M 13'),
+));
+eq($ad['adoptadas'], array(), 'con dos candidatas no se adopta ninguna');
+eq($ad['ambiguas'], array(bitacora_oal_id('2026-08-05', 'M13') => 2), 'y se cuentan para avisar');
+
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array($suelta(5, '2026-08-04', '23:10', 'M13')));
+eq($ad['adoptadas'], array(), 'la misma M13 de otra noche no es la misma observación');
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array($suelta(5, '2026-08-05', '23:10', 'M92')));
+eq($ad['adoptadas'], array(), 'ni otro objeto de la misma noche');
 
 echo "dos noches distintas del mismo objeto NO se fusionan:\n";
 // Cada noche es una observación propia: fusionarlas perdería una de las dos.

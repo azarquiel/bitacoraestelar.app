@@ -480,6 +480,11 @@ function bitacora_oal_agrupar( $datos ) {
             $grupos[ $clave ] = array(
                 'oal_id'   => $clave,
                 'noche_id' => $o['noche'],
+                // La FECHA de la noche, la misma con la que se construye la
+                // clave. 'fecha' de aquí abajo es la de la entrada más temprana,
+                // que en una madrugada es del día siguiente: quien tenga que
+                // razonar sobre la noche mira esta.
+                'noche'    => $noche['noche'],
                 'objeto'   => $obj['objeto'],
                 'tipo'     => $obj['tipo'],
                 'num'      => $obj['num'],
@@ -559,6 +564,56 @@ function bitacora_oal_agrupar( $datos ) {
 function bitacora_oal_id( $noche, $objeto ) {
     $obj = bitacora_oal_objeto( $objeto );
     return substr( $noche . '#' . bitacora_oal_clave( $obj['objeto'] ), 0, 64 );
+}
+
+/**
+ * Qué observaciones ya guardadas SIN oal_id son en realidad las que trae el XML
+ * (ADR 0002 · la identidad se adopta al importar, no se sella al exportar).
+ *
+ * Lo nacido en el formulario tiene el oal_id VACÍO —la columna es NOT NULL con
+ * defecto ''—, así que no casa con nada y una reimportación lo duplicaría
+ * entero. La regla que se aplica aquí no es nueva:
+ * «mismo usuario + misma noche + mismo objeto = la misma observación» es
+ * literalmente lo que oal_id ya impone, y la clave se calcula con la MISMA
+ * función, para que las dos formas de reconocer una observación no puedan
+ * divergir.
+ *
+ * Con más de una candidata no se adopta ninguna: pasa cuando el objeto se vio
+ * en dos salidas de la misma noche desde dos bases, y la clave cuelga de la
+ * noche, no del viaje. Elegir una sería inventarse cuál.
+ *
+ * @param array $grupos  Los de bitacora_oal_agrupar().
+ * @param array $ya      oal_id => id de las que ya casaron por clave.
+ * @param array $sueltas Filas sin oal_id: array('id','fecha','hora','objeto').
+ * @return array array('adoptadas' => oal_id => id, 'ambiguas' => oal_id => cuántas)
+ */
+function bitacora_oal_adopciones( $grupos, $ya, $sueltas ) {
+    $por_clave = array();
+    foreach ( $sueltas as $s ) {
+        // La madrugada pertenece a la noche que la engendró, aquí igual que en
+        // el resto del proyecto.
+        $noche = bitacora_viaje_noche( $s['fecha'], isset( $s['hora'] ) ? $s['hora'] : '' );
+        if ( ! $noche ) {
+            continue;
+        }
+        $por_clave[ bitacora_oal_id( $noche, $s['objeto'] ) ][] = intval( $s['id'] );
+    }
+
+    $adoptadas = array();
+    $ambiguas  = array();
+    foreach ( $grupos as $g ) {
+        $clave = $g['oal_id'];
+        if ( isset( $ya[ $clave ] ) || ! isset( $por_clave[ $clave ] ) ) {
+            continue;
+        }
+        $candidatas = array_unique( $por_clave[ $clave ] );
+        if ( 1 === count( $candidatas ) ) {
+            $adoptadas[ $clave ] = intval( reset( $candidatas ) );
+        } else {
+            $ambiguas[ $clave ] = count( $candidatas );
+        }
+    }
+    return array( 'adoptadas' => $adoptadas, 'ambiguas' => $ambiguas );
 }
 
 /**
@@ -676,14 +731,31 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
         }
     }
 
+    // Y qué observaciones tuyas del formulario son estas mismas (ADR 0002).
+    $adopcion = bitacora_oal_adopciones( $grupos, $ya, bitacora_oal_sueltas( $usuario_id, $grupos ) );
+    foreach ( $grupos as $g ) {
+        if ( isset( $adopcion['ambiguas'][ $g['oal_id'] ] ) ) {
+            $problemas[] = array(
+                'donde' => $g['objeto'],
+                'que'   => 'tienes ' . $adopcion['ambiguas'][ $g['oal_id'] ] . ' observaciones de ese objeto esa '
+                         . 'noche sin importar de un XML, así que no se sabe cuál es esta: entra como nueva.',
+            );
+        }
+    }
+
     $resumen = array(
         'plantilla'     => $datos['plantilla'],
         'observador'    => trim( $datos['observador']['nombre'] . ' ' . $datos['observador']['apellidos'] ),
         'noches'        => count( $datos['noches'] ),
         'observaciones' => count( $grupos ),
         'entradas'      => array_sum( array_map( function ( $g ) { return count( $g['entradas'] ); }, $grupos ) ),
-        'nuevas'        => count( $grupos ) - count( $ya ),
+        'nuevas'        => count( $grupos ) - count( $ya ) - count( $adopcion['adoptadas'] ),
         'actualizadas'  => count( $ya ),
+        // Aparte de las que ya venían de un XML, y a propósito: adoptar es
+        // sobrescribir con lo que traiga el fichero, así que pisa lo que se
+        // hubiera editado en el sitio después. Eso hay que decirlo con otras
+        // palabras que «se actualizan».
+        'adoptadas'     => count( $adopcion['adoptadas'] ),
         'bases_nuevas'  => array_values( $bases_nuevas ),
         'equipo_nuevo'  => array_values( array_unique( $equipo_nuevo ) ),
         // Lo que NO se crea porque ya lo tienes: enseñarlo es lo que da
@@ -749,6 +821,7 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
 
     $creadas = 0;
     $actualizadas = 0;
+    $adoptadas = 0;
     foreach ( $grupos as $g ) {
         $viaje = isset( $mapa_viaje[ $g['noche_id'] ] ) ? $mapa_viaje[ $g['noche_id'] ] : null;
         if ( ! $viaje ) {
@@ -787,9 +860,22 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
             'actualizado_en'    => $ahora,
         );
         $obs_id = isset( $ya[ $g['oal_id'] ] ) ? $ya[ $g['oal_id'] ] : 0;
+        // Adoptar: la fila ya existía, nacida en el formulario. Se le pone la
+        // clave —lo hace $fila, que ya la lleva— y se actualiza, en vez de
+        // crear otra. Exportar sigue siendo solo lectura: la identidad se
+        // adopta al importar, no se sella al descargar (ADR 0002).
+        $adoptada = false;
+        if ( ! $obs_id && isset( $adopcion['adoptadas'][ $g['oal_id'] ] ) ) {
+            $obs_id   = $adopcion['adoptadas'][ $g['oal_id'] ];
+            $adoptada = true;
+        }
         if ( $obs_id ) {
             $wpdb->update( $t_ob, $fila, array( 'id' => $obs_id ) );
-            $actualizadas++;
+            if ( $adoptada ) {
+                $adoptadas++;
+            } else {
+                $actualizadas++;
+            }
         } else {
             $fila['creado_en'] = $ahora;
             $wpdb->insert( $t_ob, $fila );
@@ -822,7 +908,51 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
     $resumen['aplicado']     = true;
     $resumen['creadas']      = $creadas;
     $resumen['actualizadas'] = $actualizadas;
+    $resumen['adoptadas']    = $adoptadas;
     return $resumen;
+}
+
+/**
+ * Las observaciones del usuario que aún no llevan oal_id y podrían ser las que
+ * trae el XML: las candidatas a adopción (ADR 0002). Quién es cuál lo decide
+ * bitacora_oal_adopciones(), que es pura y está probada aparte.
+ *
+ * Se piden solo las de las fechas en juego —la noche de cada grupo y su
+ * madrugada—, no la bitácora entera: quince años de observaciones no caben en
+ * una previa.
+ *
+ * @return array Filas array('id','fecha','hora','objeto').
+ */
+function bitacora_oal_sueltas( $usuario_id, $grupos ) {
+    global $wpdb;
+    $fechas = array();
+    foreach ( $grupos as $g ) {
+        // La noche del grupo, la MISMA con la que se construyó su oal_id: si se
+        // dedujera otra vez de la fecha de la entrada más temprana, un fichero
+        // donde las dos no coincidan preguntaría por la noche equivocada y la
+        // adopción fallaría en silencio, que es duplicar.
+        if ( empty( $g['noche'] ) ) {
+            continue;
+        }
+        $fechas[ $g['noche'] ] = true;
+        // Y su madrugada, que se guarda con la fecha de reloj del día siguiente.
+        $manana = new DateTimeImmutable( $g['noche'] . ' 00:00:00', new DateTimeZone( 'UTC' ) );
+        $fechas[ $manana->modify( '+1 day' )->format( 'Y-m-d' ) ] = true;
+    }
+    if ( ! $fechas ) {
+        return array();
+    }
+    $fechas = array_keys( $fechas );
+    $huecos = implode( ', ', array_fill( 0, count( $fechas ), '%s' ) );
+    $t_ob   = bitacora_nombre_tabla();
+    $filas  = $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, fecha_observacion AS fecha, hora_observacion AS hora, objeto
+           FROM $t_ob
+          WHERE usuario_id = %d AND ( oal_id IS NULL OR oal_id = '' ) AND borrada_en IS NULL
+            AND fecha_observacion IN ( $huecos )",
+        array_merge( array( $usuario_id ), $fechas )
+    ), ARRAY_A );
+    return $filas ? $filas : array();
 }
 
 /** Las bases que ese usuario puede elegir: suyas, públicas y compartidas con él. */
@@ -956,12 +1086,19 @@ function bitacora_oal_entradas_guardar( $obs_id, $grupo, $datos, $equipo, $ahora
     global $wpdb;
     $t_ent = bitacora_nombre_tabla_entradas();
     $t_img = bitacora_nombre_tabla_imagenes();
-    $previas = $wpdb->get_col( $wpdb->prepare( "SELECT id FROM $t_ent WHERE observacion_id = %d", $obs_id ) );
+    // Las entradas se rehacen enteras con lo que trae el XML, pero los bocetos y
+    // las fotos NO se borran: no viajan en OAL, así que el fichero no puede
+    // reponerlos y borrarlos sería perderlos para siempre. Se quedan enganchados
+    // a la entrada del mismo orden, y si el XML trae menos entradas que antes, a
+    // la última que quede. Le pasa a una observación adoptada con bocetos
+    // (ADR 0002) y también a una ya importada a la que se le añadió uno aquí.
+    $previas = $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, orden FROM $t_ent WHERE observacion_id = %d", $obs_id
+    ), ARRAY_A );
     if ( $previas ) {
-        $ids = implode( ',', array_map( 'intval', $previas ) );
-        $wpdb->query( "DELETE FROM $t_img WHERE entrada_id IN ($ids)" );
         $wpdb->query( $wpdb->prepare( "DELETE FROM $t_ent WHERE observacion_id = %d", $obs_id ) );
     }
+    $nuevas = array();
     foreach ( $grupo['entradas'] as $orden => $e ) {
         $ocular = bitacora_oal_modelo( $datos, 'oculares', $e['ocular'] );
         $wpdb->insert( $t_ent, array(
@@ -975,6 +1112,21 @@ function bitacora_oal_entradas_guardar( $obs_id, $grupo, $datos, $equipo, $ahora
             'descripcion'    => wp_kses_post( $e['descripcion'] ),
             'creado_en'      => $ahora,
         ) );
+        $nuevas[ $orden ] = intval( $wpdb->insert_id );
+    }
+    if ( $previas ) {
+        $ultima = $nuevas ? end( $nuevas ) : 0;
+        foreach ( $previas as $p ) {
+            $destino = isset( $nuevas[ intval( $p['orden'] ) ] ) ? $nuevas[ intval( $p['orden'] ) ] : $ultima;
+            if ( $destino ) {
+                $wpdb->update( $t_img, array( 'entrada_id' => $destino ), array( 'entrada_id' => intval( $p['id'] ) ) );
+            } else {
+                // Sin ninguna entrada nueva no hay dónde colgarlos, y dejarlos
+                // apuntando a una entrada que ya no existe los esconde para
+                // siempre igual que borrarlos, pero ocupando sitio.
+                $wpdb->delete( $t_img, array( 'entrada_id' => intval( $p['id'] ) ) );
+            }
+        }
     }
 }
 
@@ -1124,6 +1276,14 @@ function bitacora_oal_panel_resumen( $r ) {
              intval( $r['nuevas'] ) . ' entrarían nuevas y ' . intval( $r['actualizadas'] ) . ' se actualizarían.';
     }
     echo '</p>';
+    // Adoptar es sobrescribir (ADR 0002): se dice aparte de «se actualizan».
+    if ( ! empty( $r['adoptadas'] ) ) {
+        echo '<p>' . intval( $r['adoptadas'] ) . ' observación(es) suyas del formulario son estas mismas: ' .
+             ( $r['aplicado']
+                 ? 'se han quedado con lo que traía el fichero, sin duplicarse.'
+                 : 'quedarían <strong>adoptadas y sobrescritas</strong> con lo que trae el fichero, sin duplicarse.' ) .
+             '</p>';
+    }
     if ( ! empty( $r['bases_nuevas'] ) ) {
         echo '<p>Bases que se crearían: <strong>' . esc_html( implode( ', ', $r['bases_nuevas'] ) ) . '</strong></p>';
     }
