@@ -41,7 +41,7 @@ function hay_problema(array $problemas, string $trozo): bool {
 echo "una noche sencilla se lee entera:\n";
 $d = bitacora_oal_leer(ejemplo('noche-simple'));
 ok(!isset($d['error']), 'el XML de la plantilla se lee sin error');
-eq($d['plantilla'], '1.0', 'la versión de la plantilla viene en la raíz');
+eq($d['plantilla'], '1.1', 'la versión de la plantilla viene en la raíz');
 eq($d['observador']['nombre'] . ' ' . $d['observador']['apellidos'], 'Ángel L. Huelmo', 'el primer observer es el autor');
 eq(count($d['lugares']), 1, 'un lugar');
 eq(count($d['observaciones']), 3, 'tres observaciones');
@@ -49,9 +49,21 @@ eq($d['lugares']['lu1']['nombre'], 'El Culebrín II', 'el nombre del sitio, con 
 eq($d['lugares']['lu1']['lat'], 38.06416667, 'la latitud, en grados decimales');
 eq($d['telescopios']['te1']['modelo'], 'Skywatcher 12"', 'las comillas escapadas vuelven a ser comillas');
 
-echo "la extensión bit: trae lo que OAL no sabe guardar:\n";
+echo "el cielo llega en cada observación, no en la noche (ADR 0001):\n";
+// El SQM es direccional: se mide hacia donde está el objeto. Las dos primeras
+// miraban alto, la tercera al este bajo sobre las luces del pueblo, y esa
+// diferencia es un dato, no una anomalía que haya que promediar.
+eq($d['observaciones'][0]['sqm'], 21.42, 'el SQM de la primera, del elemento estándar sky-quality');
+eq($d['observaciones'][0]['seeing'], 3.0, 'su seeing, del elemento estándar');
+eq($d['observaciones'][0]['ir'], -18.0, 'y el IR, de bit:, que OAL no lo tiene');
+eq($d['observaciones'][0]['bortle'], 4.0, 'igual que el Bortle');
+eq($d['observaciones'][2]['sqm'], 20.85, 'la tercera trae SU cielo, distinto');
+eq($d['observaciones'][2]['bortle'], 5.0, 'y su Bortle');
+eq($d['observaciones'][2]['ir'], -18.0, 'lo que no midió lo hereda de la noche');
+
+echo "y la noche se queda con un resumen, que es lo que guarda el viaje:\n";
 $n = $d['noches']['no1'];
-eq($n['sqm'], 21.42, 'el SQM');
+eq($n['sqm'], 21.42, 'el SQM del primer objeto registrado');
 eq($n['ir'], -18.0, 'el IR');
 eq($n['seeing'], 3.0, 'el seeing');
 eq($n['bortle'], 4.0, 'el Bortle');
@@ -85,8 +97,35 @@ eq(bitacora_oal_utc('2026-08-06', '02:15', '+02:00'), '2026-08-06 00:15:00', 'la
 eq(bitacora_oal_utc('2026-08-06', '02:15', '-04:00'), '2026-08-06 06:15:00', 'también hacia el otro lado');
 eq(bitacora_oal_utc('2026-08-06', '02:15', ''), null, 'sin desfase no se inventa una hora UTC');
 
+echo "en la forma nueva el cielo de una observación no se cuela en las otras:\n";
+// El SQM es direccional (ADR 0001): copiar el de la vecina inventaría una
+// medida que nadie hizo, y acabaría escrita en cielo_sqm de esa ficha.
+$sin = str_replace('<sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>', '', ejemplo('noche-simple'));
+$dsin = bitacora_oal_leer($sin);
+eq($dsin['observaciones'][0]['sqm'], null, 'la que se quedó sin SQM no hereda el de al lado');
+eq($dsin['noches']['no1']['sqm'], 20.85, 'pero el resumen de la noche sí sale del primero que quede');
+
+echo "una sesión con id numérico también resume su cielo:\n";
+// PHP convierte a int las claves de array que son números, así que el id "1"
+// de <session> no casa con el "1" de <session> de la observación si se comparan
+// en estricto. Sin esto el viaje se quedaría sin cielo ninguno.
+$dnum = bitacora_oal_leer(str_replace('no1', '1', ejemplo('noche-simple')));
+eq($dnum['noches']['1']['sqm'], 21.42, 'el resumen llega aunque el id sea un número');
+eq($dnum['noches']['1']['bortle'], 4.0, 'y el Bortle también');
+
+echo "un SQM en mag/arcmin² se convierte al entrar:\n";
+// OAL admite las dos unidades; la bitácora guarda solo mag/arcsec².
+$darcmin = bitacora_oal_leer(str_replace(
+    '<sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>',
+    '<sky-quality unit="mags-per-squarearcmin">12.53</sky-quality>',
+    ejemplo('noche-simple')));
+eq(round($darcmin['observaciones'][0]['sqm'], 2), 21.42, '12,53 mag/arcmin² son 21,42 mag/arcsec²');
+
 echo "cada objeto de la noche sencilla es una observación:\n";
 $g = bitacora_oal_agrupar($d);
+eq($g[0]['sqm'], 21.42, 'que se lleva su cielo a la bitácora');
+eq($g[2]['sqm'], 20.85, 'cada una el suyo, no el de la noche');
+eq($g[2]['bortle'], 5.0, 'con su Bortle');
 eq(count($g), 3, 'tres objetos, tres observaciones');
 eq($g[0]['objeto'], 'M13', 'M13');
 eq($g[0]['tipo'], 'messier', 'reconocida como Messier');
@@ -183,6 +222,19 @@ eq(count($g3), 2, 'las dos observaciones sanas entran');
 eq($g3[0]['objeto'], 'M51', 'M51');
 eq($g3[1]['objeto'], 'M101', 'y M101, la de la descripción vacía');
 eq($g3[1]['entradas'][0]['descripcion'], '', 'que entra vacía, no se pierde');
+
+echo "los XML de la forma vieja siguen entrando enteros:\n";
+// Los compañeros ya rellenaron ficheros con el cielo en la sesión —bit:sqm y
+// compañía, un valor por noche—. Se leen igual y se reparten a las
+// observaciones de esa noche: lee viejo, escribe nuevo, sin migración.
+eq($d3['noches']['no1']['sqm'], 20.9, 'el bit:sqm de la sesión se sigue leyendo');
+foreach ($d3['observaciones'] as $o) {
+    if ('no1' === $o['noche']) { eq($o['sqm'], 20.9, 'y baja a la observación ' . $o['id']); }
+}
+eq($g3[0]['sqm'], 20.9, 'la observación de la bitácora se lo lleva puesto');
+// La forma nueva no vuelve a subir un cielo inventado a la noche: si nadie lo
+// midió, no hay resumen que dar.
+eq($d3['noches']['no2']['sqm'], null, 'la noche sin cielo ni observaciones se queda sin él');
 
 echo "un XML que no lo es se rechaza en vez de romperse:\n";
 ok(isset(bitacora_oal_leer('')['error']), 'el fichero vacío');

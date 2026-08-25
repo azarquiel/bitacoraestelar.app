@@ -295,9 +295,13 @@ no hay red, se escriben a mano o se dejan en blanco.
 **El formato es [Open Astronomy Log](https://github.com/openastronomylog/openastronomylog) 2.1**,
 el estándar de los cuadernos de observación: el mismo XML lo leen otros
 programas de bitácora, así que el trabajo del compañero no queda preso aquí.
-Lo que OAL no sabe guardar —**SQM**, transparencia **IR**, **seeing** y clase
-**Bortle**— va en un espacio de nombres propio (`bit:`) dentro de la sesión,
-que un lector estándar simplemente ignora.
+El cielo va en **cada observación**, que es de donde cuelga: el **SQM** y el
+**seeing** en sus elementos estándar (`<sky-quality>`, `<seeing>`), y solo la
+transparencia **IR** y la clase **Bortle** en un espacio de nombres propio
+(`bit:`), que un lector estándar simplemente ignora. El compañero lo teclea una
+vez por noche y de ahí baja a sus observaciones, donde puede corregirlo objeto a
+objeto: el SQM se mide **hacia donde está el objeto**, y uno bajo cae sobre un
+horizonte contaminado.
 
 **La importación** (`POST /importar-oal`, y el panel del escritorio) va en dos
 pasos: primero se ve **qué entraría** —cuántas noches y objetos, qué bases y
@@ -305,9 +309,10 @@ qué equipo se crearían, **qué se reutiliza de lo que ya tienes** y qué filas
 están mal— y solo el segundo botón escribe. Las reglas que deciden todo eso:
 
 - **Una noche es un viaje.** La noche la calcula el mismo convenio de mediodía
-  de siempre, así que la madrugada no se separa de su tarde. El cielo de la
-  noche (SQM, IR, seeing, Bortle) va al viaje y también a cada observación, que
-  es de donde lo lee la ficha.
+  de siempre, así que la madrugada no se separa de su tarde. El cielo (SQM, IR,
+  seeing, Bortle) es de cada observación, que es de donde lo lee la ficha; al
+  viaje sube un **resumen**: el primer valor no nulo de la noche. Los ficheros
+  viejos, con el cielo en la sesión, se siguen leyendo y se reparten.
 - **Las coordenadas que falten las resuelve SIMBAD** al importar, igual que el
   formulario; la vista previa no toca la red.
 - **Un objeto por noche es una observación**, y cada ocular del XML es una

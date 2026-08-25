@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<oal:observations version="2.1" xmlns:oal="http://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.0">
+<oal:observations version="2.1" xmlns:oal="http://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.1">
   <sites>
     <site id="lu1">
       <name>El Culebrín II</name>
@@ -80,20 +80,19 @@
       <coObserver>co1</coObserver>
       <coObserver>co2</coObserver>
       <comments>Noche de dobles.</comments>
-      <bit:sqm>21.3</bit:sqm>
-      <bit:ir>-15</bit:ir>
-      <bit:seeing>2</bit:seeing>
-      <bit:bortle>4</bit:bortle>
     </session>
     <session id="no2">
       <begin>2026-07-12T22:45:00+02:00</begin>
       <site>lu2</site>
       <weather>Viento del norte</weather>
-      <bit:seeing>4</bit:seeing>
     </session>
   </sessions>
   <observation id="ob1">
     <begin>2026-07-11T23:30:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">21.3</sky-quality>
+    <seeing>2</seeing>
+    <bit:ir>-15</bit:ir>
+    <bit:bortle>4</bit:bortle>
     <session>no1</session>
     <site>lu1</site>
     <observer>ob1</observer>
@@ -105,6 +104,10 @@
   </observation>
   <observation id="ob2">
     <begin>2026-07-12T00:20:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">21.3</sky-quality>
+    <seeing>2</seeing>
+    <bit:ir>-15</bit:ir>
+    <bit:bortle>4</bit:bortle>
     <session>no1</session>
     <site>lu1</site>
     <observer>ob1</observer>
@@ -117,6 +120,7 @@
   </observation>
   <observation id="ob3">
     <begin>2026-07-13T01:05:00+02:00</begin>
+    <seeing>4</seeing>
     <session>no2</session>
     <site>lu2</site>
     <observer>ob1</observer>
