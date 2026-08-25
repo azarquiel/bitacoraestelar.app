@@ -16,6 +16,11 @@ declare(strict_types=1);
 
    Sin framework:  php scripts/test_oal_import.php  */
 
+// Lo único de WordPress que pisa la mitad pura del fichero: quitar etiquetas.
+if (!function_exists('wp_strip_all_tags')) {
+    function wp_strip_all_tags(string $texto): string { return strip_tags($texto); }
+}
+
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-viaje.php';
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-oal.php';
 
@@ -328,6 +333,16 @@ eq(bitacora_oal_objeto('M13'), array('objeto' => 'M13', 'tipo' => 'messier', 'nu
 eq(bitacora_oal_objeto('m 27'), array('objeto' => 'M27', 'tipo' => 'messier', 'num' => 27), 'con espacio y en minúscula');
 eq(bitacora_oal_objeto('M111'), array('objeto' => 'M111', 'tipo' => 'otro', 'num' => null), 'M111 no existe: no es Messier');
 eq(bitacora_oal_objeto('  NGC   7000 '), array('objeto' => 'NGC 7000', 'tipo' => 'otro', 'num' => null), 'y los espacios de más se van');
+
+echo "el texto que va al XML y al correo sale ya en limpio:\n";
+// El editor guarda espacios duros y entidades; si sobreviven, el correo las
+// vuelve a escapar y se lee «&nbsp;» en mitad de la frase.
+eq(bitacora_oal_texto_plano('&nbsp;Impresionante.'), 'Impresionante.', 'el espacio duro del principio no se ve');
+eq(bitacora_oal_texto_plano('Una l&iacute;nea'), 'Una línea', 'las entidades vuelven a ser letras');
+eq(bitacora_oal_texto_plano('Sol &amp; Luna'), 'Sol & Luna', 'y el ampersand, un ampersand');
+eq(bitacora_oal_texto_plano('<p>Dos</p><p>párrafos</p>'), "Dos\npárrafos", 'los párrafos se vuelven saltos de línea');
+eq(bitacora_oal_texto_plano('&lt;script&gt;alert(1)&lt;/script&gt;'), '<script>alert(1)</script>',
+   'una etiqueta escrita como texto sigue siendo texto: se escapa al pintarla');
 
 echo $fallos ? "\n$fallos fallo(s)\n" : "\nok · el importador entiende lo que escribe la plantilla\n";
 exit($fallos ? 1 : 0);
