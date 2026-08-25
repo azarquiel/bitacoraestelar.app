@@ -656,8 +656,13 @@ bitacora-astro.js
 bitacora-equipo.js
 bitacora-ficha.js
 bitacora-importar-oal.js
+bitacora-oal-motor.js
 plantilla-oal.html
 ```
+
+> `bitacora-oal-motor.js` es la copia literal del motor de `plantilla-oal.html`
+> (ADR 0003): lo cargan la página de importar y la de *Mis viajes*, que es
+> quien escribe el XML de «Exportar esta salida» y su correo.
 
 > `plantilla-oal.html` no es código de la web: es el archivo que se descargan
 > los compañeros desde la página de importar. Va aquí porque es lo que ya se
