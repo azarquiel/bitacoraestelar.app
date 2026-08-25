@@ -1360,7 +1360,16 @@ function bitacora_oal_texto_plano( $html ) {
     // Las entidades se deshacen DESPUÉS de quitar las etiquetas: un &lt;script&gt;
     // guardado como texto tiene que seguir siendo texto. Lo que sale de aquí se
     // escapa siempre al pintarlo, en el XML y en el correo.
-    $plano = html_entity_decode( $plano, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+    // En bucle, porque hay descripciones guardadas con el & ya escapado
+    // («&amp;nbsp;»): una sola pasada las deja en «&nbsp;», que es justo lo que
+    // se veía. Tope de tres vueltas: es una limpieza, no un intérprete.
+    for ( $i = 0; $i < 3; $i++ ) {
+        $antes = $plano;
+        $plano = html_entity_decode( $plano, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+        if ( $plano === $antes ) {
+            break;
+        }
+    }
     // El espacio duro del editor no es un espacio para nadie más: en el correo
     // se veía «&nbsp;» tal cual, porque volvía a escaparse el & de la entidad.
     $plano = str_replace( array( "\xC2\xA0", "\xE2\x80\x8B" ), array( ' ', '' ), $plano );

@@ -340,6 +340,7 @@ echo "el texto que va al XML y al correo sale ya en limpio:\n";
 eq(bitacora_oal_texto_plano('&nbsp;Impresionante.'), 'Impresionante.', 'el espacio duro del principio no se ve');
 eq(bitacora_oal_texto_plano('Una l&iacute;nea'), 'Una línea', 'las entidades vuelven a ser letras');
 eq(bitacora_oal_texto_plano('Sol &amp; Luna'), 'Sol & Luna', 'y el ampersand, un ampersand');
+eq(bitacora_oal_texto_plano('&amp;nbsp;Impresionante.'), 'Impresionante.', 'ni con el & ya escapado en la base');
 eq(bitacora_oal_texto_plano('<p>Dos</p><p>párrafos</p>'), "Dos\npárrafos", 'los párrafos se vuelven saltos de línea');
 eq(bitacora_oal_texto_plano('&lt;script&gt;alert(1)&lt;/script&gt;'), '<script>alert(1)</script>',
    'una etiqueta escrita como texto sigue siendo texto: se escapa al pintarla');
