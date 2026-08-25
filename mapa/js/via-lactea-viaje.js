@@ -259,7 +259,7 @@
   // ruta se queda quieta sin perder ninguna información.
   // ---------------------------------------------------------------------------
   var ORO = '244, 199, 107';          // #f4c76b, el ámbar del mapa
-  var PATRON = [14, 10];              // guion, hueco (px de pantalla)
+  var PATRON = [8, 24];               // guion, hueco (px de pantalla)
   var PX_POR_SEGUNDO = 26;
 
   function movimientoReducido() {
@@ -302,13 +302,13 @@
     // 1. Estela: ancha, muy tenue. Es el "agujero de gusano".
     camino();
     ctx.setLineDash([]);
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 4;
     ctx.strokeStyle = 'rgba(' + ORO + ',' + (0.10 * a) + ')';
     ctx.stroke();
 
     // 2. Línea base continua: por dónde se pasó.
     camino();
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 0.8;
     ctx.strokeStyle = 'rgba(' + ORO + ',' + (0.38 * a) + ')';
     ctx.stroke();
 
@@ -316,7 +316,7 @@
     camino();
     ctx.setLineDash(PATRON);
     ctx.lineDashOffset = faseActual || 0;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.2;
     ctx.strokeStyle = 'rgba(' + ORO + ',' + (0.9 * a) + ')';
     ctx.shadowColor = 'rgba(' + ORO + ',0.85)';
     ctx.shadowBlur = 8;

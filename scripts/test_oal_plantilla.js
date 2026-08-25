@@ -14,21 +14,19 @@
        actualizarlo.
 
    El motor vive dentro del HTML (la plantilla es un fichero único), así que el
-   test extrae el bloque <script id="motor"> y lo ejecuta tal cual.
+   test extrae el bloque <script id="motor"> y lo ejecuta tal cual. El sitio usa
+   ese mismo motor extraído a un .js (ADR 0003), y dos copias que divergen es el
+   fallo que este repositorio ya sufrió con la astrometría: aquí se afirma que
+   son idénticas.
 
    Sin dependencias:  node scripts/test_oal_plantilla.js */
 'use strict';
 
-var fs = require('fs');
+var motor = require('./lib_motor_oal.js');
 var path = require('path');
 
-var html = fs.readFileSync(path.join(__dirname, '..', 'registro', 'plantilla-oal.html'), 'utf8');
-// Al principio de línea: el comentario de cabecera del HTML también nombra el bloque.
-var m = /^<script id="motor">([\s\S]*?)^<\/script>/m.exec(html);
-if (!m) { console.log('No se encontró el bloque <script id="motor"> en la plantilla.'); process.exit(1); }
-var modulo = { exports: {} };
-new Function('module', m[1])(modulo);
-var OAL = modulo.exports;
+var incrustado = motor.fuenteIncrustada();
+var OAL = motor.cargar(incrustado);
 
 var fallos = 0;
 function eq(a, b, et) {
@@ -38,6 +36,20 @@ function eq(a, b, et) {
 }
 function ok(c, et) {
   if (c) { console.log('  ok   ' + et); } else { fallos++; console.log('  FALLA ' + et); }
+}
+
+/* ── El motor extraído es el mismo motor ──────────────────────────────────── */
+
+console.log('el .js servible y el bloque de la plantilla no se separan:');
+var extraido = motor.fuenteExtraida();
+var relativa = path.relative(path.join(__dirname, '..'), motor.RUTA_EXTRAIDO);
+if (extraido === null) {
+  fallos++;
+  console.log('  FALLA falta ' + relativa + ' · relanza node scripts/generar_motor_oal.js');
+} else {
+  ok(extraido === incrustado,
+     relativa + ' es copia literal del bloque' +
+     (extraido === incrustado ? '' : ' · relanza node scripts/generar_motor_oal.js'));
 }
 
 /* ── Un estado de ejemplo: una noche, el mismo objeto a dos aumentos ──────── */

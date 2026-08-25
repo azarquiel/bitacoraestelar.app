@@ -346,6 +346,13 @@ tercero, `con-erratas.xml`, está a mano a propósito, porque es justo lo que la
 plantilla se niega a descargar. Pruebas: `php scripts/test_oal_import.php` (el
 importador) y `node scripts/test_oal_plantilla.js` (el motor de la plantilla).
 
+El motor —el bloque `<script id="motor">` de la plantilla, que escribe y lee el
+XML— también lo necesita el sitio como fichero servible, así que
+`node scripts/generar_motor_oal.js` lo extrae, literal, a
+`resources/js/bitacora-oal-motor.js` (ADR 0003). **Al tocar el bloque hay que
+relanzarlo**: `test_oal_plantilla.js` falla si las dos copias se separan, que es
+lo que ya pasó una vez con la astrometría.
+
 ---
 
 ## La salud de una base

@@ -148,7 +148,7 @@
      punteado constantes en pantalla pese al zoom. Los tres trazos se superponen:
      la estela ancha da el resplandor, la base marca el camino recorrido y el
      flujo es el punteado que corre hacia el destino, como una nave entrando en
-     el hiperespacio. El ciclo del punteado (14+10 px) a 26 px/s = 0,923 s.
+     el hiperespacio. El ciclo del punteado (8+24 px) a 26 px/s = 1,231 s.
      Los tres colores son el mismo oro #f4c76b (244,199,107) de "Registrar".
 
      La ruta va por encima de la imagen de la galaxia y por debajo de los
@@ -189,16 +189,16 @@
     opacity: 1;
     transform: scale(1);
   }
-  .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 7; }
-  .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 1.2; }
+  .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
+  .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 0.8; }
   .mw-ruta-flujo {
     stroke: rgba(244,199,107,0.9);
-    stroke-width: 2;
-    stroke-dasharray: 14 10;
+    stroke-width: 1.2;
+    stroke-dasharray: 8 24;
     filter: drop-shadow(0 0 4px rgba(244,199,107,0.75));
-    animation: mw-ruta-flujo 0.923s linear infinite;
+    animation: mw-ruta-flujo 1.231s linear infinite;
   }
-  @keyframes mw-ruta-flujo { to { stroke-dashoffset: -24; } }
+  @keyframes mw-ruta-flujo { to { stroke-dashoffset: -32; } }
   @media (prefers-reduced-motion: reduce) {
     .mw-ruta-flujo { animation: none; }
   }

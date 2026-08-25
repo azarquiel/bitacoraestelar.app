@@ -18,14 +18,10 @@
 
 var fs = require('fs');
 var path = require('path');
+var motor = require('./lib_motor_oal.js');
 
 var raiz = path.join(__dirname, '..');
-var html = fs.readFileSync(path.join(raiz, 'registro', 'plantilla-oal.html'), 'utf8');
-var m = /^<script id="motor">([\s\S]*?)^<\/script>/m.exec(html);
-if (!m) { console.log('No se encontró el bloque <script id="motor"> en la plantilla.'); process.exit(1); }
-var modulo = { exports: {} };
-new Function('module', m[1])(modulo);
-var OAL = modulo.exports;
+var OAL = motor.cargar();
 
 /* El equipo y el sitio son los mismos en los dos ejemplos: es el material real
    con el que observa el grupo, y así el test puede casarlos contra bases y

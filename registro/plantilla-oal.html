@@ -20,7 +20,10 @@
       cada observación (ADR 0001), que es de donde cuelga el cielo.
 
   El bloque <script id="motor"> es lógica PURA, sin DOM: lo carga tal cual
-  scripts/test_oal_plantilla.js.
+  scripts/test_oal_plantilla.js. Esta plantilla es la fuente de ese motor: el
+  sitio usa una copia literal en registro/resources/js/bitacora-oal-motor.js,
+  que extrae scripts/generar_motor_oal.js. Al tocar el bloque hay que
+  relanzarlo, o el test dirá que las dos copias se han separado.
 -->
 <style>
   :root { --fondo:#0d1117; --panel:#161b22; --borde:#30363d; --texto:#e6edf3;
@@ -121,6 +124,11 @@
    MOTOR · lógica pura de la plantilla: el estado a XML, el XML al estado y qué
    falta por rellenar. Sin DOM, para que scripts/test_oal_plantilla.js lo cargue
    tal cual.
+
+   Este bloque es la fuente; scripts/generar_motor_oal.js lo extrae, literal, a
+   registro/resources/js/bitacora-oal-motor.js, que es lo que sirve el sitio.
+   Esa copia está GENERADA: se toca aquí, nunca allí, o el siguiente extraído se
+   lleva el arreglo por delante.
    ========================================================================== */
 (function (raiz) {
   'use strict';
