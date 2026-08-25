@@ -1605,5 +1605,11 @@ function bitacora_oal_rest_estado( $req ) {
     if ( intval( $viaje->usuario_id ) !== $usuario_id ) {
         return new WP_Error( 'no_es_tuyo', 'Solo puedes exportar tus propias salidas.', array( 'status' => 403 ) );
     }
-    return new WP_REST_Response( bitacora_oal_estado_viaje( $viaje, $usuario_id ), 200 );
+    $res = new WP_REST_Response( bitacora_oal_estado_viaje( $viaje, $usuario_id ), 200 );
+    // Qué código está respondiendo de verdad. El hash es del fichero en DISCO,
+    // así que si no coincide con el que se acaba de subir —o si la cabecera ni
+    // aparece— lo que corre es un compilado viejo (OPcache) o otra copia del
+    // plugin, y no hay que buscar el fallo en la lógica.
+    $res->header( 'X-Bitacora-Codigo', substr( md5_file( __FILE__ ), 0, 8 ) );
+    return $res;
 }
