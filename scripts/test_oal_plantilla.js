@@ -54,11 +54,15 @@ function estado() {
                sqm: 21.42, ir: -18, seeing: 3, bortle: 4, tripulacion: 'Isra, Víctor',
                meteo: 'Despejado', cronica: 'Noche de las buenas & sin luna' }],
     observaciones: [
+      // La primera heredó el cielo de la noche; la segunda midió el suyo, ya de
+      // madrugada y con el objeto en otra parte del cielo.
       { id: 'ob1', nocheId: 'no1', objeto: 'M13', ra: 250.42, dec: 36.46, otype: 'GlC',
         hora: '23:40', telescopioId: 'te1', ocularId: 'oc1', auxiliarId: '', aumentos: '',
+        sqm: 21.42, ir: -18, seeing: 3, bortle: 4,
         texto: 'Un puño de estrellas' },
       { id: 'ob2', nocheId: 'no1', objeto: 'M13', ra: 250.42, dec: 36.46, otype: 'GlC',
         hora: '02:15', telescopioId: 'te1', ocularId: 'oc2', auxiliarId: '', aumentos: '',
+        sqm: 20.9, ir: -18, seeing: 4, bortle: 4,
         texto: 'A más aumentos se resuelve entera' }
     ]
   };
@@ -93,11 +97,20 @@ var xml = OAL.xmlDe(estado());
 ok(xml.indexOf('xmlns:bit="https://bitacoraestelar.es/oal-ext/1"') > -1, 'espacio de nombres propio');
 ok(xml.indexOf('bit:plantilla="' + OAL.VERSION_PLANTILLA + '"') > -1, 'versión sellada');
 
-console.log('la noche lleva sus medidas de cielo, que OAL no sabe guardar:');
-ok(xml.indexOf('<bit:sqm>21.42</bit:sqm>') > -1, 'SQM');
-ok(xml.indexOf('<bit:ir>-18</bit:ir>') > -1, 'IR');
-ok(xml.indexOf('<bit:seeing>3</bit:seeing>') > -1, 'seeing');
-ok(xml.indexOf('<bit:bortle>4</bit:bortle>') > -1, 'Bortle');
+console.log('el cielo cuelga de CADA observación, no de la noche (ADR 0001):');
+// El SQM es direccional: se mide hacia donde está el objeto. Dos objetos de la
+// misma noche tienen legítimamente cielos distintos, así que el XML no puede
+// escribir un solo valor por noche y que cada lector se lo reparta.
+ok(xml.indexOf('<bit:sqm>') === -1, 'la sesión ya no lleva el cielo');
+ok(xml.indexOf('<bit:seeing>') === -1, 'ni el seeing, que además reinventaba un elemento estándar');
+eq((xml.match(/<sky-quality unit="mags-per-squarearcsec">21\.42<\/sky-quality>/g) || []).length, 1,
+   'el SQM va en el elemento estándar, en la observación que lo midió');
+ok(xml.indexOf('<sky-quality unit="mags-per-squarearcsec">20.9</sky-quality>') > -1,
+   'y la que midió otro cielo escribe el suyo');
+eq((xml.match(/<seeing>3<\/seeing>/g) || []).length, 1, 'el seeing, en el elemento estándar (Antoniadi 1-5)');
+ok(xml.indexOf('<seeing>4</seeing>') > -1, 'también el propio de la otra observación');
+eq((xml.match(/<bit:ir>-18<\/bit:ir>/g) || []).length, 2, 'el IR sigue en bit:, que el estándar no lo tiene');
+eq((xml.match(/<bit:bortle>4<\/bit:bortle>/g) || []).length, 2, 'y el Bortle igual');
 
 console.log('cada observación dice a qué noche pertenece:');
 eq((xml.match(/<session>no1<\/session>/g) || []).length, 2, 'las dos la referencian');
@@ -130,7 +143,11 @@ eq(vuelta.observaciones.map(function (o) { return o.id; }), ['ob1', 'ob2'], 'y l
 eq(vuelta.noches[0].fecha, '2026-08-05', 'la fecha vuelve a ser la del anochecer');
 eq(vuelta.noches[0].comienzo, '22:30', 'la hora de comienzo, en local');
 eq(vuelta.observaciones[1].hora, '02:15', 'la hora de la madrugada, en local');
-eq(vuelta.noches[0].sqm, 21.42, 'el SQM sobrevive al viaje');
+eq(vuelta.observaciones[0].sqm, 21.42, 'el SQM de la primera observación sobrevive al viaje');
+eq(vuelta.observaciones[1].sqm, 20.9, 'y el suyo, distinto, la segunda');
+eq(vuelta.observaciones[1].seeing, 4, 'con su seeing');
+eq(vuelta.observaciones[1].bortle, 4, 'y su Bortle de bit:');
+eq(vuelta.noches[0].sqm, 21.42, 'la casilla de la noche se rellena con el primero, para volver a sembrar');
 eq(vuelta.noches[0].tripulacion, 'Isra, Víctor', 'la tripulación vuelve por su nombre');
 eq(vuelta.noches[0].cronica, 'Noche de las buenas & sin luna', 'la crónica se desescapa');
 eq(vuelta.observaciones[0].objeto, 'M13', 'el objeto vuelve del catálogo de targets');
@@ -138,6 +155,54 @@ eq(vuelta.observaciones[0].ra, 250.42, 'con sus coordenadas');
 eq(vuelta.observaciones[0].texto, 'Un puño de estrellas', 'y su descripción');
 eq(vuelta.observador.correo, 'angel@ejemplo.es', 'el observador sigue siendo el mismo');
 eq(OAL.xmlDe(vuelta), xml, 'el XML generado dos veces es idéntico');
+
+/* ── La siembra del cielo ──────────────────────────────────────────────────
+   El compañero teclea el cielo UNA vez por noche y de ahí baja a sus
+   observaciones. Es un gesto de la interfaz, no una regla del formato: si
+   pisara lo tecleado a mano, corregir el SQM de la noche borraría en silencio
+   las medidas de cada objeto, que son las que valen. */
+
+console.log('el cielo de la noche siembra las observaciones que no tienen el suyo:');
+var sembrado = estado();
+sembrado.observaciones[0].sqm = ''; sembrado.observaciones[0].seeing = '';
+sembrado.noches[0].sqm = 21.42; sembrado.noches[0].seeing = 3;
+OAL.sembrarCielo(sembrado, 'no1');
+eq(sembrado.observaciones[0].sqm, 21.42, 'la que estaba vacía recibe el de la noche');
+eq(sembrado.observaciones[0].seeing, 3, 'y también su seeing');
+eq(sembrado.observaciones[1].sqm, 20.9, 'la que tenía el suyo no se toca');
+eq(sembrado.observaciones[1].seeing, 4, 'ni su seeing');
+
+console.log('cambiar el cielo de la noche no pisa lo ya tecleado:');
+var cambiada = estado();
+cambiada.observaciones[0].sqm = '';
+cambiada.noches[0].sqm = 20.5;                 // el compañero corrige la noche
+OAL.sembrarCielo(cambiada, 'no1');
+eq(cambiada.observaciones[0].sqm, 20.5, 'la que heredaba sigue heredando');
+eq(cambiada.observaciones[1].sqm, 20.9, 'la tecleada a mano se queda como estaba');
+
+var otraNoche = estado();
+otraNoche.noches.push({ id: 'no2', fecha: '2026-08-06', lugarId: 'lu1', sqm: 19, ir: '', seeing: '', bortle: '' });
+OAL.sembrarCielo(otraNoche, 'no2');
+eq(otraNoche.observaciones[0].sqm, 21.42, 'y sembrar una noche no toca las observaciones de otra');
+
+console.log('un XML viejo trae el cielo en la sesión y se reparte al abrirlo:');
+// Lo que ya rellenaron los compañeros: <bit:sqm> y compañía dentro de <session>.
+// Lee viejo, escribe nuevo: sin migración y sin avisar a nadie.
+var viejo = OAL.xmlDe(estado())
+  .replace(/^.*<sky-quality[\s\S]*?<\/sky-quality>\n/gm, '')
+  .replace(/^.*<seeing>[\s\S]*?<\/seeing>\n/gm, '')
+  .replace(/^.*<bit:ir>[\s\S]*?<\/bit:ir>\n/gm, '')
+  .replace(/^.*<bit:bortle>[\s\S]*?<\/bit:bortle>\n/gm, '')
+  .replace('    </session>', '      <bit:sqm>21.42</bit:sqm>\n      <bit:ir>-18</bit:ir>\n' +
+                             '      <bit:seeing>3</bit:seeing>\n      <bit:bortle>4</bit:bortle>\n    </session>');
+var deVuelta = OAL.leer(viejo);
+eq(deVuelta.noches[0].sqm, 21.42, 'el cielo viejo de la noche se lee igual');
+eq(deVuelta.observaciones.map(function (o) { return o.sqm; }), [21.42, 21.42],
+   'y baja a todas las observaciones de esa noche');
+eq(deVuelta.observaciones[1].seeing, 3, 'el seeing viejo también');
+ok(OAL.xmlDe(deVuelta).indexOf('<bit:sqm>') === -1, 'al volver a descargar sale ya en la forma nueva');
+ok(OAL.xmlDe(deVuelta).indexOf('<sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>') > -1,
+   'con el SQM en cada observación');
 
 /* ── Qué falta ────────────────────────────────────────────────────────────── */
 

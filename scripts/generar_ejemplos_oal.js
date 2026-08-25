@@ -57,8 +57,11 @@ function nocheSimple() {
     { id: 'ob2', nocheId: 'no1', objeto: 'M57', ra: 283.396, dec: 33.0292, otype: 'PN',
       hora: '23:45', telescopioId: 'te1', ocularId: 'oc2', auxiliarId: '', aumentos: '',
       texto: 'El anillo, con el centro claramente más oscuro.' },
+    // El tercero mide SU cielo: el SQM es direccional y este se midió hacia el
+    // este bajo, sobre las luces del pueblo. Hereda el resto de la noche.
     { id: 'ob3', nocheId: 'no1', objeto: 'NGC 7000', ra: 314.75, dec: 44.53, otype: 'GNe',
       hora: '01:20', telescopioId: 'te1', ocularId: 'oc1', auxiliarId: '', aumentos: '',
+      sqm: 20.85, bortle: 5,
       texto: 'De madrugada, con el filtro puesto, el Muro se recorta solo.' }
   ];
   return e;
@@ -97,6 +100,9 @@ function dosOculares() {
 }
 
 [['noche-simple', nocheSimple()], ['dos-oculares', dosOculares()]].forEach(function (par) {
+  // Lo mismo que hace la plantilla al teclear el cielo de la noche: sembrar las
+  // observaciones que no traen el suyo, sin pisar las que sí.
+  OAL.repartirCielo(par[1]);
   var faltas = OAL.problemas(par[1]).filter(function (p) { return p.nivel === 'falta'; });
   if (faltas.length) {
     console.log('El ejemplo ' + par[0] + ' no lo descargaría ni la plantilla: ' +

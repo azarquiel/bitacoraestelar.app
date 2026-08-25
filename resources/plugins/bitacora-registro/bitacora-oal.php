@@ -153,6 +153,9 @@ function bitacora_oal_leer( $xml ) {
             'comienzo'    => $ini ? $ini['hora'] : '',
             'fin'         => $fin ? $fin['hora'] : '',
             'tripulacion' => $tripulacion,
+            // Forma vieja del cielo: bit:sqm/ir/seeing/bortle en la sesión, un
+            // valor por noche. Ya no se escribe (ADR 0001), pero los XML que
+            // los compañeros rellenaron lo traen así y se reparte más abajo.
             'sqm'         => bitacora_oal_numero( $n, 'sqm' ),
             'ir'          => bitacora_oal_numero( $n, 'ir' ),
             'seeing'      => bitacora_oal_numero( $n, 'seeing' ),
@@ -179,11 +182,56 @@ function bitacora_oal_leer( $xml ) {
             'ocular'      => bitacora_oal_texto( $n, 'eyepiece' ),
             'auxiliar'    => bitacora_oal_texto( $n, 'lens' ),
             'aumento'     => bitacora_oal_numero( $n, 'magnification' ),
+            // El cielo de ESTA observación: el SQM y el seeing en su elemento
+            // estándar, IR y Bortle en bit:, que el estándar no los tiene.
+            'sqm'         => bitacora_oal_numero( $n, 'sky-quality' ),
+            'ir'          => bitacora_oal_numero( $n, 'ir' ),
+            'seeing'      => bitacora_oal_numero( $n, 'seeing' ),
+            'bortle'      => bitacora_oal_numero( $n, 'bortle' ),
             'descripcion' => $result ? bitacora_oal_texto( $result, 'description' ) : '',
         );
     }
 
-    return $out;
+    return bitacora_oal_repartir_cielo( $out );
+}
+
+/**
+ * Reparte el cielo entre la noche y sus observaciones, en los dos sentidos.
+ *
+ * - De la noche a las observaciones que no traigan el suyo: es lo que hace que
+ *   los XML de la forma vieja —un `bit:sqm` por sesión— sigan entrando enteros.
+ * - Y de las observaciones a la noche, si la noche no traía ninguno, el primer
+ *   valor no nulo. El viaje solo guarda un RESUMEN del cielo, y con un SQM
+ *   direccional ese resumen es arbitrario por naturaleza (ADR 0001): resumir
+ *   con el primero es tan defendible como cualquier otra cosa, y es lo que ya
+ *   hacía la forma vieja.
+ */
+function bitacora_oal_repartir_cielo( $datos ) {
+    $campos = array( 'sqm', 'ir', 'seeing', 'bortle' );
+    foreach ( $datos['noches'] as $id => $noche ) {
+        foreach ( $campos as $c ) {
+            if ( null !== $noche[ $c ] ) {
+                continue;
+            }
+            foreach ( $datos['observaciones'] as $o ) {
+                if ( $o['noche'] === $id && null !== $o[ $c ] ) {
+                    $datos['noches'][ $id ][ $c ] = $o[ $c ];
+                    break;
+                }
+            }
+        }
+    }
+    foreach ( $datos['observaciones'] as $i => $o ) {
+        if ( ! isset( $datos['noches'][ $o['noche'] ] ) ) {
+            continue;
+        }
+        foreach ( $campos as $c ) {
+            if ( null === $o[ $c ] ) {
+                $datos['observaciones'][ $i ][ $c ] = $datos['noches'][ $o['noche'] ][ $c ];
+            }
+        }
+    }
+    return $datos;
 }
 
 /** Los <hijo> dentro de <padre>, o lista vacía si el padre no está. */
@@ -419,8 +467,19 @@ function bitacora_oal_agrupar( $datos ) {
                 'fecha'    => $o['fecha'],
                 'hora'     => $o['hora'],
                 'desfase'  => $o['desfase'],
+                'sqm'      => null,
+                'ir'       => null,
+                'seeing'   => null,
+                'bortle'   => null,
                 'entradas' => array(),
             );
+        }
+        // El cielo de la observación es el de la primera hermana que lo midió:
+        // son el mismo objeto la misma noche, así que miran al mismo sitio.
+        foreach ( array( 'sqm', 'ir', 'seeing', 'bortle' ) as $c ) {
+            if ( null === $grupos[ $clave ][ $c ] && isset( $o[ $c ] ) ) {
+                $grupos[ $clave ][ $c ] = $o[ $c ];
+            }
         }
         $grupos[ $clave ]['entradas'][] = array(
             'fecha'       => $o['fecha'],
@@ -674,7 +733,6 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
         if ( ! $viaje ) {
             continue;
         }
-        $noche = $datos['noches'][ $g['noche_id'] ];
         $tel_id = 0;
         foreach ( $g['entradas'] as $e ) {
             if ( ! $tel_id && ! empty( $equipo['telescopios'][ $e['telescopio'] ] ) ) {
@@ -694,12 +752,12 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
             'telescopio_id'     => $tel_id ? $tel_id : null,
             'fecha_observacion' => $g['fecha'],
             'hora_observacion'  => $g['hora'],
-            // El cielo se mide una vez por noche, pero también vive en cada
-            // observación: es de ahí de donde lo lee la ficha .docx.
-            'cielo_sqm'         => $noche['sqm'],
-            'cielo_ir'          => $noche['ir'],
-            'cielo_bortle'      => ( null === $noche['bortle'] ) ? null : intval( $noche['bortle'] ),
-            'seeing'            => ( null === $noche['seeing'] ) ? null : intval( $noche['seeing'] ),
+            // El cielo es de la OBSERVACIÓN (ADR 0001): el SQM se mide hacia
+            // donde está el objeto. El viaje solo guarda un resumen.
+            'cielo_sqm'         => $g['sqm'],
+            'cielo_ir'          => $g['ir'],
+            'cielo_bortle'      => ( null === $g['bortle'] ) ? null : intval( $g['bortle'] ),
+            'seeing'            => ( null === $g['seeing'] ) ? null : intval( $g['seeing'] ),
             'origen'            => 'oal',
             'oal_id'            => $g['oal_id'],
             'usuario_id'        => $usuario_id,
@@ -721,7 +779,7 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
             continue;
         }
         bitacora_oal_entradas_guardar( $obs_id, $g, $datos, $equipo, $ahora );
-        bitacora_oal_ficha_guardar( $obs_id, $g, $noche, $viaje['base_id'], $ahora );
+        bitacora_oal_ficha_guardar( $obs_id, $g, $viaje['base_id'], $ahora );
 
         // Lo importado también se pinta: si el objeto aún no está en el catálogo
         // del mapa, se calcula su sitio, igual que al registrar desde el
@@ -904,7 +962,7 @@ function bitacora_oal_entradas_guardar( $obs_id, $grupo, $datos, $equipo, $ahora
  * azimut y el Sol y la Luna los sigue calculando la página de la ficha con
  * bitacora-astro.js: no se duplica la astronomía en PHP.
  */
-function bitacora_oal_ficha_guardar( $obs_id, $grupo, $noche, $base_id, $ahora ) {
+function bitacora_oal_ficha_guardar( $obs_id, $grupo, $base_id, $ahora ) {
     global $wpdb;
     $t_fi = bitacora_nombre_tabla_fichas();
     $base = null;
@@ -922,8 +980,8 @@ function bitacora_oal_ficha_guardar( $obs_id, $grupo, $noche, $base_id, $ahora )
         'fecha_hora_utc'   => bitacora_oal_utc( $grupo['fecha'], $grupo['hora'], $grupo['desfase'] ),
         'lat'              => $base ? $base['lat'] : null,
         'lon'              => $base ? $base['lon'] : null,
-        'sqm'              => $noche['sqm'],
-        'ir'               => $noche['ir'],
+        'sqm'              => $grupo['sqm'],
+        'ir'               => $grupo['ir'],
         'lugar'            => $base ? $base['nombre'] : '',
         'fecha'            => $grupo['fecha'],
         'actualizado_en'   => $ahora,

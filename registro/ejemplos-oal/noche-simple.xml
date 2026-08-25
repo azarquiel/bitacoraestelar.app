@@ -74,14 +74,14 @@
       <coObserver>co1</coObserver>
       <weather>Despejado, algo de humedad al final</weather>
       <comments>Primera salida del verano al Culebrín. El cielo aguantó toda la noche.</comments>
-      <bit:sqm>21.42</bit:sqm>
-      <bit:ir>-18</bit:ir>
-      <bit:seeing>3</bit:seeing>
-      <bit:bortle>4</bit:bortle>
     </session>
   </sessions>
   <observation id="ob1">
     <begin>2026-08-05T23:10:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>
+    <seeing>3</seeing>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>4</bit:bortle>
     <session>no1</session>
     <site>lu1</site>
     <observer>ob1</observer>
@@ -93,6 +93,10 @@
   </observation>
   <observation id="ob2">
     <begin>2026-08-05T23:45:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>
+    <seeing>3</seeing>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>4</bit:bortle>
     <session>no1</session>
     <site>lu1</site>
     <observer>ob1</observer>
@@ -104,6 +108,10 @@
   </observation>
   <observation id="ob3">
     <begin>2026-08-06T01:20:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">20.85</sky-quality>
+    <seeing>3</seeing>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>5</bit:bortle>
     <session>no1</session>
     <site>lu1</site>
     <observer>ob1</observer>

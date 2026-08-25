@@ -57,8 +57,8 @@ repartan la última versión.
 | Observador | nombre, apellidos, correo |
 | Lugares | nombre, latitud, longitud, altitud, desfase horario |
 | Equipo | telescopios (modelo, apertura, focal), oculares (modelo, focal, campo aparente), barlows/reductores (modelo, factor) |
-| Noche | fecha, lugar, comienzo, fin, tripulación, SQM, IR, seeing, Bortle, meteo, crónica |
-| Observación | noche a la que pertenece, objeto, hora, telescopio, ocular, barlow, aumentos, descripción |
+| Noche | fecha, lugar, comienzo, fin, tripulación, SQM, IR, seeing, Bortle (por defecto de sus observaciones), meteo, crónica |
+| Observación | noche a la que pertenece, objeto, hora, telescopio, ocular, barlow, aumentos, SQM, IR, seeing, Bortle, descripción |
 
 Las observaciones **cuelgan siempre de una noche**. Lugar y equipo se heredan de
 la noche y se pueden pisar en una observación concreta.
@@ -149,14 +149,14 @@ sesión**, así que una observación de las 02:30 sigue perteneciendo al día 5.
       <coObserver>ob2</coObserver>
       <weather>Despejado, algo de humedad al final</weather>
       <comments>Crónica de la noche…</comments>
-      <bit:sqm>21.42</bit:sqm>
-      <bit:ir>-18</bit:ir>
-      <bit:seeing>3</bit:seeing>
-      <bit:bortle>4</bit:bortle>
     </session>
   </sessions>
   <observation id="obs1">
     <begin>2026-08-05T23:40:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>
+    <seeing>3</seeing>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>4</bit:bortle>
     <session>n1</session>
     <site>s1</site>
     <observer>ob1</observer>
@@ -171,14 +171,21 @@ sesión**, así que una observación de las 02:30 sigue perteneciendo al día 5.
 
 Dos desviaciones deliberadas del estándar, ambas asumidas:
 
-- **`bit:` dentro de `<session>`.** OAL no tiene dónde guardar SQM, IR ni Bortle
-  de una noche: `sessionType` solo admite `weather` y `comments` como texto
-  libre. Un validador estricto rechazará estos elementos porque la secuencia del
-  esquema está cerrada. Se acepta: el único consumidor de estos ficheros somos
-  nosotros, y parsear cuatro elementos es infinitamente más sólido que parsear
-  una cadena de meteo.
+- **`bit:ir` y `bit:bortle` dentro de `<observation>`.** OAL no tiene dónde
+  guardar el IR ni el Bortle; el SQM y el seeing sí —`<sky-quality>` y
+  `<seeing>`, en `observationType`— y ahí van. Un validador estricto rechazará
+  los dos elementos `bit:` porque la secuencia del esquema está cerrada. Se
+  acepta: parsear dos elementos es infinitamente más sólido que parsear una
+  cadena de meteo.
 - **`<session>` obligatoria en cada observación.** El estándar la deja en 0..1.
   Aquí es 1, porque la noche es la unidad del modelo.
+
+El cielo cuelga de la **observación**, no de la noche: el SQM es direccional y
+dos objetos de la misma noche tienen legítimamente cielos distintos
+(`registro/docs/adr/0001-el-cielo-cuelga-de-la-observacion-en-el-xml.md`). El
+importador **sigue leyendo la forma vieja** —`bit:sqm/ir/seeing/bortle` en
+`<session>`, que es lo que traen los ficheros ya rellenados— y la reparte a las
+observaciones de esa noche. Lee viejo, escribe nuevo: sin migración.
 
 ---
 
@@ -222,7 +229,8 @@ no puede tumbar una temporada.
 | `<observer>` | usuario WP (el que importa) | El bloque `<observer>` describe a quién firma; el dueño de los datos es `usuario_id`. |
 | `<coObserver>` | `bitacora_viaje_tripulacion` | Casa con el catálogo de observadores por nombre normalizado; si no, lo crea. |
 | `<session>` | `bitacora_viajes` | Clave `usuario_id + noche + base_id`. La noche es la del `begin`. |
-| `bit:sqm/ir/seeing/bortle` | `cielo_sqm`, `cielo_ir`, `seeing`, `cielo_bortle` del viaje | Directo. |
+| `<sky-quality>`, `<seeing>`, `bit:ir`, `bit:bortle` de la observación | `cielo_sqm`, `cielo_ir`, `seeing`, `cielo_bortle` de la **observación** | Lo que no traiga lo hereda de su noche (forma vieja). |
+| — | los mismos campos del **viaje** | Resumen: el primer valor no nulo de la noche. Con un SQM direccional, el resumen es arbitrario por naturaleza. |
 | `<observation>` | `bitacora_observaciones` | Las hermanas de la misma noche y mismo `<target>` se **fusionan en una**. |
 | cada `<observation>` fusionada | `bitacora_entradas` | Una entrada por cada una, ordenadas por hora, con su aumento, ocular y descripción. |
 | `<target>` | `objeto`, `objeto_etiqueta`, `tipo`, `num`, `ra`, `decl` | `M31` → `tipo='messier'`, `num=31`. Lo demás, `tipo='otro'`. |

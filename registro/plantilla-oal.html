@@ -15,8 +15,9 @@
   registro/spec-importar-oal.md. Dos desviaciones deliberadas de OAL 2.1:
     - <session> es OBLIGATORIA en cada observación (el estándar la deja en 0..1),
       porque la noche es la unidad del modelo.
-    - SQM, IR, seeing y Bortle de la noche van en el espacio de nombres bit:,
-      porque OAL no tiene dónde guardarlos.
+    - IR y Bortle van en el espacio de nombres bit:, porque OAL no tiene dónde
+      guardarlos. El SQM y el seeing sí lo tienen: <sky-quality> y <seeing>, en
+      cada observación (ADR 0001), que es de donde cuelga el cielo.
 
   El bloque <script id="motor"> es lógica PURA, sin DOM: lo carga tal cual
   scripts/test_oal_plantilla.js.
@@ -285,6 +286,53 @@
     return Math.round(ft * factor / fo * 10) / 10;
   }
 
+  /* ── El cielo ──────────────────────────────────────────────────────────────
+     El cielo cuelga de la OBSERVACIÓN, no de la noche (ADR 0001): el SQM se mide
+     hacia donde está el objeto, y en España uno bajo cae sobre un horizonte
+     contaminado. Que dos objetos de la misma noche discrepen es lo normal.
+
+     Preguntarlo seis veces sería hostil, así que la noche guarda un valor por
+     DEFECTO y siembra a sus observaciones. Sembrar nunca pisa: lo tecleado a
+     mano en una observación manda sobre lo que diga su noche.                */
+
+  var CIELO = ['sqm', 'ir', 'seeing', 'bortle'];
+
+  function vacio(v) { return v === '' || v == null; }
+
+  /** Vuelca el cielo de una noche en las observaciones suyas que no tengan el suyo. */
+  function sembrarCielo(e, nocheId) {
+    var n = indice((e || {}).noches)[nocheId];
+    if (!n) { return e; }
+    ((e || {}).observaciones || []).forEach(function (o) {
+      if (o.nocheId !== nocheId) { return; }
+      CIELO.forEach(function (c) {
+        if (vacio(o[c]) && !vacio(n[c])) { o[c] = n[c]; }
+      });
+    });
+    return e;
+  }
+
+  /**
+   * Reparte el cielo en los dos sentidos al abrir un XML:
+   *   - de la noche a sus observaciones sin valor propio (los ficheros viejos,
+   *     que lo traían solo en <session> con bit:sqm);
+   *   - y de vuelta a la noche, si no traía ninguno, el primero de sus
+   *     observaciones, para que el campo por defecto no salga en blanco.
+   */
+  function repartirCielo(e) {
+    (((e || {}).noches) || []).forEach(function (n) {
+      var mias = ((e || {}).observaciones || []).filter(function (o) { return o.nocheId === n.id; });
+      CIELO.forEach(function (c) {
+        if (!vacio(n[c])) { return; }
+        for (var i = 0; i < mias.length; i++) {
+          if (!vacio(mias[i][c])) { n[c] = mias[i][c]; break; }
+        }
+      });
+      sembrarCielo(e, n.id);
+    });
+    return e;
+  }
+
   /* ── Qué falta ─────────────────────────────────────────────────────────────
      'falta' impide descargar; 'flojo' solo avisa. Recuperar una libreta de hace
      años no puede exigir la hora exacta ni el ocular.                        */
@@ -300,7 +348,8 @@
       if (!n.fecha) { out.push({ nivel: 'falta', que: et + ': sin fecha.' }); }
       if (!lugares[n.lugarId]) { out.push({ nivel: 'falta', que: et + ': sin lugar.' }); }
       if (!n.comienzo) { out.push({ nivel: 'flojo', que: et + ': sin hora de comienzo.' }); }
-      if (n.sqm === '' && n.ir === '' && n.seeing === '' && n.bortle === '') {
+      var conCielo = [n].concat((e.observaciones || []).filter(function (o) { return o.nocheId === n.id; }));
+      if (!conCielo.some(function (x) { return CIELO.some(function (c) { return !vacio(x[c]); }); })) {
         out.push({ nivel: 'flojo', que: et + ': sin ninguna medida de cielo.' });
       }
     });
@@ -473,10 +522,6 @@
       });
       s.push('      ' + etiqueta('weather', n.meteo));
       s.push('      ' + etiqueta('comments', n.cronica));
-      s.push('      ' + etiqueta('bit:sqm', n.sqm));
-      s.push('      ' + etiqueta('bit:ir', n.ir));
-      s.push('      ' + etiqueta('bit:seeing', n.seeing));
-      s.push('      ' + etiqueta('bit:bortle', n.bortle));
       s.push('    </session>');
     });
     s.push('  </sessions>');
@@ -489,6 +534,12 @@
         : aumentos(tel[o.telescopioId], ocu[o.ocularId], aux[o.auxiliarId]);
       s.push('  <observation id="' + escapar(o.id || ('obs' + (i + 1))) + '">');
       s.push('    ' + etiqueta('begin', instante(n.fecha, o.hora || n.comienzo || '21:00', l.tz)));
+      // El cielo, en la observación y con los elementos estándar donde existen.
+      // Solo IR y Bortle siguen en bit:, que es lo que OAL no tiene dónde poner.
+      s.push('    ' + etiqueta('sky-quality', o.sqm, { unit: 'mags-per-squarearcsec' }));
+      s.push('    ' + etiqueta('seeing', o.seeing));
+      s.push('    ' + etiqueta('bit:ir', o.ir));
+      s.push('    ' + etiqueta('bit:bortle', o.bortle));
       s.push('    ' + etiqueta('session', o.nocheId));
       s.push('    ' + etiqueta('site', n.lugarId));
       s.push('    <observer>ob1</observer>');
@@ -555,6 +606,8 @@
         lugarId: texto(n, 'site'), comienzo: b.hora, fin: f.hora,
         tripulacion: hijos(n, 'coObserver').map(function (c) { return porId[c.texto.trim()] || ''; })
                        .filter(Boolean).join(', '),
+        // Forma vieja: el cielo de la noche entera. Ya no se escribe, pero los
+        // XML que los compañeros rellenaron lo traen, y de aquí se reparte.
         sqm: numero(n, 'bit:sqm'), ir: numero(n, 'bit:ir'),
         seeing: numero(n, 'bit:seeing'), bortle: numero(n, 'bit:bortle'),
         meteo: texto(n, 'weather'), cronica: texto(n, 'comments')
@@ -569,10 +622,12 @@
         ra: t.ra === undefined ? '' : t.ra, dec: t.dec === undefined ? '' : t.dec, otype: t.otype || '',
         hora: b.hora, telescopioId: texto(n, 'scope'), ocularId: texto(n, 'eyepiece'),
         auxiliarId: texto(n, 'lens'), aumentos: numero(n, 'magnification'),
+        sqm: numero(n, 'sky-quality'), ir: numero(n, 'bit:ir'),
+        seeing: numero(n, 'seeing'), bortle: numero(n, 'bit:bortle'),
         texto: texto(hijo(n, 'result'), 'description')
       });
     });
-    return e;
+    return repartirCielo(e);
   }
 
   /** Del xsi:type de OAL a un código de Sesame cualquiera que vuelva a él. */
@@ -596,6 +651,7 @@
   var API = { VERSION_PLANTILLA: VERSION_PLANTILLA, escapar: escapar, desescapar: desescapar,
               nocheDe: nocheDe, fechaDeReloj: fechaDeReloj, instante: instante, desfase: desfase,
               tipoOal: tipoOal, aumentos: aumentos, problemas: problemas, clave: clave,
+              CIELO: CIELO, sembrarCielo: sembrarCielo, repartirCielo: repartirCielo,
               xmlDe: xmlDe, leer: leer, arbol: arbol, estadoVacio: estadoVacio };
 
   raiz.PlantillaOAL = API;
@@ -702,6 +758,10 @@
         selectFila('observaciones', o.id, 'ocularId', 'Ocular', o.ocularId, estado.oculares, 'modelo') +
         selectFila('observaciones', o.id, 'auxiliarId', 'Barlow / reductor', o.auxiliarId, estado.auxiliares, 'modelo') +
         campoFila('observaciones', o.id, 'aumentos', 'Aumentos (vacío = calculado)', o.aumentos, 'number') +
+        campoFila('observaciones', o.id, 'sqm', 'SQM', o.sqm, 'number') +
+        campoFila('observaciones', o.id, 'ir', 'IR °C', o.ir, 'number') +
+        campoFila('observaciones', o.id, 'seeing', 'Seeing 1-5', o.seeing, 'number') +
+        campoFila('observaciones', o.id, 'bortle', 'Bortle 1-9', o.bortle, 'number') +
         '</div>' +
         '<label class="campo">Qué viste<textarea data-lista="observaciones" data-id="' + esc(o.id) +
         '" data-clave="texto">' + esc(o.texto || '') + '</textarea></label>' +
@@ -740,6 +800,18 @@
     return h + '</select></label>';
   }
 
+  /** Pone al día en pantalla las casillas de cielo de las observaciones de una noche. */
+  function refrescarCielo(nocheId) {
+    (estado.observaciones || []).forEach(function (o) {
+      if (o.nocheId !== nocheId) { return; }
+      OAL.CIELO.forEach(function (c) {
+        var el = document.querySelector('input[data-lista="observaciones"][data-id="' +
+                                        o.id + '"][data-clave="' + c + '"]');
+        if (el) { el.value = (o[c] == null ? '' : o[c]); }
+      });
+    });
+  }
+
   function pintarAvisos() {
     var lista = OAL.problemas(estado);
     var faltan = lista.filter(function (p) { return p.nivel === 'falta'; });
@@ -765,6 +837,18 @@
     if (!destino) { return; }
     destino[el.dataset.clave] = el.type === 'number' && el.value !== '' ? parseFloat(el.value) : el.value;
     if (el.dataset.resolver) { resolver(destino, el); }
+    // El cielo de la noche es un valor por defecto: siembra las observaciones
+    // que no tengan el suyo y no toca las tecleadas a mano (ADR 0001). Se
+    // refrescan a mano en vez de repintar, que repintar quitaría el cursor de
+    // la casilla que se está escribiendo.
+    if (el.dataset.lista === 'noches' && OAL.CIELO.indexOf(el.dataset.clave) > -1) {
+      OAL.sembrarCielo(estado, el.dataset.id);
+      refrescarCielo(el.dataset.id);
+    }
+    if (el.dataset.lista === 'observaciones' && el.dataset.clave === 'nocheId') {
+      OAL.sembrarCielo(estado, destino.nocheId);
+      refrescarCielo(destino.nocheId);
+    }
     guardar();
     if (el.dataset.clave === 'nombre' || el.dataset.clave === 'modelo' ||
         el.dataset.clave === 'fecha' || el.dataset.clave === 'lugarId') { pintar(); }
@@ -802,6 +886,10 @@
       base.objeto = ''; base.ra = ''; base.dec = ''; base.otype = ''; base.hora = '';
       base.telescopioId = ultima.telescopioId || ''; base.ocularId = ultima.ocularId || '';
       base.auxiliarId = ultima.auxiliarId || ''; base.aumentos = ''; base.texto = '';
+      // Nace con el cielo de su noche, que es el valor por defecto; teclear
+      // encima de estas casillas es lo que hace que deje de heredarlo.
+      var suNoche = estado.noches.filter(function (n) { return n.id === base.nocheId; })[0] || {};
+      OAL.CIELO.forEach(function (c) { base[c] = (suNoche[c] == null ? '' : suNoche[c]); });
     } else {
       (COLUMNAS[lista] || []).forEach(function (c) { base[c[0]] = ''; });
     }
