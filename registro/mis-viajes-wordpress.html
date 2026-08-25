@@ -24,9 +24,12 @@
 /* Estilos propios de "Mis viajes", encapsulados bajo #mw-obs-form. */
 #mw-obs-form .viajes-list {display:flex;flex-direction:column;gap:10px;margin:6px 0 22px;}
 #mw-obs-form .viajes-empty {color:var(--tinta-tenue);font-size:14px;font-style:italic;margin:2px 0 18px;}
-#mw-obs-form .viaje-item {display:flex;align-items:flex-start;gap:12px;background:var(--noche-2);
-    border:1px solid var(--linea);border-radius:10px;padding:12px 14px;}
-#mw-obs-form .viaje-item .vi-main {flex:1 1 auto;min-width:0;}
+/* La ficha envuelve: con la salida a un lado y sus botones al otro, en cuanto
+   los botones no caben se van a su propia línea. Sin esto la columna de texto
+   se estrecha hasta partir cada palabra en un renglón. */
+#mw-obs-form .viaje-item {display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:10px;padding:12px 14px;}
+#mw-obs-form .viaje-item .vi-main {flex:1 1 300px;min-width:0;}
 #mw-obs-form .viaje-item .vi-nom {font-size:16px;font-weight:600;}
 #mw-obs-form .viaje-item .vi-specs {font-size:13px;color:var(--azul);
     font-family:ui-monospace,Menlo,monospace;margin-top:3px;}
@@ -37,7 +40,8 @@
 #mw-obs-form .viaje-item .vi-obj {border:1px solid var(--linea);border-radius:12px;padding:2px 9px;
     font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--tinta);}
 #mw-obs-form .viaje-item .vi-flecha {color:var(--ambar);font-size:11px;opacity:.7;}
-#mw-obs-form .viaje-item .vi-acts {display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
+#mw-obs-form .viaje-item .vi-acts {display:flex;gap:8px;flex:0 1 auto;flex-wrap:wrap;
+    justify-content:flex-end;margin-left:auto;}
 #mw-obs-form .vi-btn {background:none;border:1px solid var(--linea);border-radius:14px;color:var(--tinta-tenue);
     font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:5px 11px;cursor:pointer;transition:.15s;
     text-decoration:none;display:inline-block;line-height:1.5;}
@@ -136,5 +140,5 @@
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260807_1200" defer></script>
 <!-- El motor OAL, copia literal del bloque de plantilla-oal.html (ADR 0003):
      es quien escribe el XML de "Exportar esta salida" y el correo. -->
-<script src="/wp-content/uploads/bitacora/bitacora-oal-motor.js?v=20260825_1200" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20260825_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-oal-motor.js?v=20260825_1800" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20260825_1800" defer></script>

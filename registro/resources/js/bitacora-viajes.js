@@ -120,8 +120,10 @@
                 + ' href="' + MAPA_URL + '?viaje=' + v.id + '">Ver en el mapa</a>'
               : '')
           + (v.num_objetos
-              ? '<button type="button" class="vi-btn" data-accion="exportar">Exportar esta salida</button>'
-                + '<button type="button" class="vi-btn" data-accion="correo">Correo de la salida</button>'
+              ? '<button type="button" class="vi-btn" data-accion="exportar"'
+                + ' title="Bajar esta salida en XML (OAL)">Exportar</button>'
+                + '<button type="button" class="vi-btn" data-accion="correo"'
+                + ' title="Abrir el correo de esta salida, ya compuesto">Correo</button>'
               : '')
           + '<button type="button" class="vi-btn" data-accion="editar">Editar</button>'
           + '<button type="button" class="vi-btn danger" data-accion="borrar"' + (v.num_objetos ? ' disabled title="Tiene observaciones dentro"' : '') + '>Borrar</button>'
