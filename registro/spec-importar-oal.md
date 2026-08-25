@@ -100,7 +100,7 @@ sesión**, así que una observación de las 02:30 sigue perteneciendo al día 5.
     xmlns:oal="https://groups.google.com/group/openastronomylog"
     xmlns:bit="https://bitacoraestelar.es/oal-ext/1"
     xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance"
-    bit:plantilla="1.0">
+    bit:plantilla="1.1">
   <sites>
     <site id="s1">
       <name>El Culebrín II</name>
@@ -185,7 +185,12 @@ dos objetos de la misma noche tienen legítimamente cielos distintos
 (`registro/docs/adr/0001-el-cielo-cuelga-de-la-observacion-en-el-xml.md`). El
 importador **sigue leyendo la forma vieja** —`bit:sqm/ir/seeing/bortle` en
 `<session>`, que es lo que traen los ficheros ya rellenados— y la reparte a las
-observaciones de esa noche. Lee viejo, escribe nuevo: sin migración.
+observaciones de esa noche. Lee viejo, escribe nuevo: sin migración. Lo que
+**no** hace es repartir entre observaciones: en un fichero de la forma nueva, la
+que llegue sin SQM se queda sin él, que el de la vecina es otra medida.
+
+`<sky-quality>` se lee con su unidad: OAL admite `mags-per-squarearcmin`, y ese
+se convierte a `mags-per-squarearcsec` (+8,89 mag) antes de guardarlo.
 
 ---
 
@@ -229,7 +234,7 @@ no puede tumbar una temporada.
 | `<observer>` | usuario WP (el que importa) | El bloque `<observer>` describe a quién firma; el dueño de los datos es `usuario_id`. |
 | `<coObserver>` | `bitacora_viaje_tripulacion` | Casa con el catálogo de observadores por nombre normalizado; si no, lo crea. |
 | `<session>` | `bitacora_viajes` | Clave `usuario_id + noche + base_id`. La noche es la del `begin`. |
-| `<sky-quality>`, `<seeing>`, `bit:ir`, `bit:bortle` de la observación | `cielo_sqm`, `cielo_ir`, `seeing`, `cielo_bortle` de la **observación** | Lo que no traiga lo hereda de su noche (forma vieja). |
+| `<sky-quality>`, `<seeing>`, `bit:ir`, `bit:bortle` de la observación | `cielo_sqm`, `cielo_ir`, `seeing`, `cielo_bortle` de la **observación** | Solo lo hereda de su noche si el fichero es de la forma vieja. |
 | — | los mismos campos del **viaje** | Resumen: el primer valor no nulo de la noche. Con un SQM direccional, el resumen es arbitrario por naturaleza. |
 | `<observation>` | `bitacora_observaciones` | Las hermanas de la misma noche y mismo `<target>` se **fusionan en una**. |
 | cada `<observation>` fusionada | `bitacora_entradas` | Una entrada por cada una, ordenadas por hora, con su aumento, ocular y descripción. |

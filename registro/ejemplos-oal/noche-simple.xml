@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<oal:observations version="2.1" xmlns:oal="http://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.0">
+<oal:observations version="2.1" xmlns:oal="http://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.1">
   <sites>
     <site id="lu1">
       <name>El Culebrín II</name>

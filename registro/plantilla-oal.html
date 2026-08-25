@@ -125,7 +125,7 @@
 (function (raiz) {
   'use strict';
 
-  var VERSION_PLANTILLA = '1.0';
+  var VERSION_PLANTILLA = '1.1';
   var NS_BIT = 'https://bitacoraestelar.es/oal-ext/1';
 
   /* ── Texto ─────────────────────────────────────────────────────────────── */
@@ -237,6 +237,17 @@
 
   function hijo(nodo, nombre) { return hijos(nodo, nombre)[0] || null; }
 
+  /**
+   * El <sky-quality> de una observación, siempre en mag/arcsec². OAL admite
+   * también mag/arcmin², y hay 8,89 mag de diferencia (2,5·log10 3600).
+   */
+  function sqmDe(nodo) {
+    var e = hijo(nodo, 'sky-quality');
+    var v = numero(nodo, 'sky-quality');
+    if (!e || v === '') { return ''; }
+    return e.attrs.unit === 'mags-per-squarearcmin' ? v + 8.89 : v;
+  }
+
   function texto(nodo, nombre) {
     var h = hijo(nodo, nombre);
     return h ? h.texto.trim() : '';
@@ -299,28 +310,46 @@
 
   function vacio(v) { return v === '' || v == null; }
 
-  /** Vuelca el cielo de una noche en las observaciones suyas que no tengan el suyo. */
-  function sembrarCielo(e, nocheId) {
+  /**
+   * Vuelca el cielo de una noche en las observaciones suyas que lo heredan.
+   *
+   * Hereda la que no tiene valor propio y, si se pasa 'previo' —el cielo que
+   * la noche tenía antes del cambio—, también la que sigue mostrando ese
+   * valor: esa casilla venía de la noche y no de la mano de nadie. Lo tecleado
+   * a mano difiere del anterior y no se toca (ADR 0001).
+   */
+  function sembrarCielo(e, nocheId, previo) {
     var n = indice((e || {}).noches)[nocheId];
     if (!n) { return e; }
     ((e || {}).observaciones || []).forEach(function (o) {
       if (o.nocheId !== nocheId) { return; }
       CIELO.forEach(function (c) {
-        if (vacio(o[c]) && !vacio(n[c])) { o[c] = n[c]; }
+        var heredada = vacio(o[c]) ||
+          (previo && !vacio(previo[c]) && String(o[c]) === String(previo[c]));
+        if (heredada && !vacio(n[c])) { o[c] = n[c]; }
       });
     });
     return e;
   }
 
+  /** El seeing del estándar es la escala Antoniadi: entero de 1 a 5. */
+  function antoniadi(v) {
+    return vacio(v) ? '' : Math.min(5, Math.max(1, Math.round(v)));
+  }
+
   /**
-   * Reparte el cielo en los dos sentidos al abrir un XML:
-   *   - de la noche a sus observaciones sin valor propio (los ficheros viejos,
-   *     que lo traían solo en <session> con bit:sqm);
-   *   - y de vuelta a la noche, si no traía ninguno, el primero de sus
-   *     observaciones, para que el campo por defecto no salga en blanco.
+   * Reparte el cielo al abrir un XML, y en este orden:
+   *   1. de la noche a sus observaciones sin valor propio. Como va ANTES del
+   *      paso 2, solo baja lo que la noche traía escrito, o sea la forma vieja
+   *      (bit:sqm en <session>). En un fichero nuevo la noche llega vacía y no
+   *      baja nada: el SQM es direccional y el de una observación no vale como
+   *      medida de la de al lado (ADR 0001);
+   *   2. y de vuelta a la noche, el primero de sus observaciones, para que la
+   *      casilla del valor por defecto no salga en blanco.
    */
   function repartirCielo(e) {
     (((e || {}).noches) || []).forEach(function (n) {
+      sembrarCielo(e, n.id);
       var mias = ((e || {}).observaciones || []).filter(function (o) { return o.nocheId === n.id; });
       CIELO.forEach(function (c) {
         if (!vacio(n[c])) { return; }
@@ -328,7 +357,6 @@
           if (!vacio(mias[i][c])) { n[c] = mias[i][c]; break; }
         }
       });
-      sembrarCielo(e, n.id);
     });
     return e;
   }
@@ -537,7 +565,7 @@
       // El cielo, en la observación y con los elementos estándar donde existen.
       // Solo IR y Bortle siguen en bit:, que es lo que OAL no tiene dónde poner.
       s.push('    ' + etiqueta('sky-quality', o.sqm, { unit: 'mags-per-squarearcsec' }));
-      s.push('    ' + etiqueta('seeing', o.seeing));
+      s.push('    ' + etiqueta('seeing', antoniadi(o.seeing)));
       s.push('    ' + etiqueta('bit:ir', o.ir));
       s.push('    ' + etiqueta('bit:bortle', o.bortle));
       s.push('    ' + etiqueta('session', o.nocheId));
@@ -622,7 +650,7 @@
         ra: t.ra === undefined ? '' : t.ra, dec: t.dec === undefined ? '' : t.dec, otype: t.otype || '',
         hora: b.hora, telescopioId: texto(n, 'scope'), ocularId: texto(n, 'eyepiece'),
         auxiliarId: texto(n, 'lens'), aumentos: numero(n, 'magnification'),
-        sqm: numero(n, 'sky-quality'), ir: numero(n, 'bit:ir'),
+        sqm: sqmDe(n), ir: numero(n, 'bit:ir'),
         seeing: numero(n, 'seeing'), bortle: numero(n, 'bit:bortle'),
         texto: texto(hijo(n, 'result'), 'description')
       });
@@ -652,6 +680,7 @@
               nocheDe: nocheDe, fechaDeReloj: fechaDeReloj, instante: instante, desfase: desfase,
               tipoOal: tipoOal, aumentos: aumentos, problemas: problemas, clave: clave,
               CIELO: CIELO, sembrarCielo: sembrarCielo, repartirCielo: repartirCielo,
+              antoniadi: antoniadi,
               xmlDe: xmlDe, leer: leer, arbol: arbol, estadoVacio: estadoVacio };
 
   raiz.PlantillaOAL = API;
@@ -835,6 +864,7 @@
       ? estado.observador
       : (estado[el.dataset.lista] || []).filter(function (x) { return x.id === el.dataset.id; })[0];
     if (!destino) { return; }
+    var antes = destino[el.dataset.clave];
     destino[el.dataset.clave] = el.type === 'number' && el.value !== '' ? parseFloat(el.value) : el.value;
     if (el.dataset.resolver) { resolver(destino, el); }
     // El cielo de la noche es un valor por defecto: siembra las observaciones
@@ -842,11 +872,15 @@
     // refrescan a mano en vez de repintar, que repintar quitaría el cursor de
     // la casilla que se está escribiendo.
     if (el.dataset.lista === 'noches' && OAL.CIELO.indexOf(el.dataset.clave) > -1) {
-      OAL.sembrarCielo(estado, el.dataset.id);
+      var previo = {};
+      previo[el.dataset.clave] = antes;
+      OAL.sembrarCielo(estado, el.dataset.id, previo);
       refrescarCielo(el.dataset.id);
     }
+    // Al mudar de noche, lo heredado de la vieja se cambia por lo de la nueva.
     if (el.dataset.lista === 'observaciones' && el.dataset.clave === 'nocheId') {
-      OAL.sembrarCielo(estado, destino.nocheId);
+      var vieja = estado.noches.filter(function (n) { return n.id === antes; })[0];
+      OAL.sembrarCielo(estado, destino.nocheId, vieja);
       refrescarCielo(destino.nocheId);
     }
     guardar();
@@ -887,7 +921,7 @@
       base.telescopioId = ultima.telescopioId || ''; base.ocularId = ultima.ocularId || '';
       base.auxiliarId = ultima.auxiliarId || ''; base.aumentos = ''; base.texto = '';
       // Nace con el cielo de su noche, que es el valor por defecto; teclear
-      // encima de estas casillas es lo que hace que deje de heredarlo.
+      // OTRO número encima es lo que hace que deje de seguirlo.
       var suNoche = estado.noches.filter(function (n) { return n.id === base.nocheId; })[0] || {};
       OAL.CIELO.forEach(function (c) { base[c] = (suNoche[c] == null ? '' : suNoche[c]); });
     } else {

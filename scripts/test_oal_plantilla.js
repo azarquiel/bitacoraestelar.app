@@ -234,6 +234,50 @@ ok(avisos.some(function (p) { return p.nivel === 'flojo' && /sin hora/.test(p.qu
 ok(OAL.problemas(OAL.estadoVacio()).some(function (p) { return /ninguna observación/.test(p.que); }),
    'una plantilla vacía no se descarga');
 
+console.log('en la forma nueva, el cielo de una observación no baja a las demás:');
+// El SQM es direccional: se mide hacia la zona del objeto (ADR 0001). Copiar el
+// de la vecina sería inventar una medida que nadie hizo.
+var soloUna = estado();
+soloUna.observaciones[1].sqm = ''; soloUna.observaciones[1].seeing = '';
+var releida = OAL.leer(OAL.xmlDe(soloUna));
+eq(releida.observaciones[1].sqm, '', 'la que no traía SQM sigue sin traerlo');
+eq(releida.observaciones[1].seeing, '', 'ni seeing');
+eq(releida.noches[0].sqm, 21.42, 'pero la noche resume con el primero que hay');
+
+console.log('corregir la noche arrastra lo heredado, no lo tecleado:');
+var corregida = estado();
+corregida.noches[0].sqm = 21.42;          // la primera lo hereda: mismo número
+OAL.sembrarCielo(corregida, 'no1', { sqm: 21.42 });
+eq(corregida.observaciones[0].sqm, 21.42, 'sin cambio, nada se mueve');
+corregida.noches[0].sqm = 20.5;
+OAL.sembrarCielo(corregida, 'no1', { sqm: 21.42 });
+eq(corregida.observaciones[0].sqm, 20.5, 'la que mostraba el de la noche se pone al día');
+eq(corregida.observaciones[1].sqm, 20.9, 'la tecleada a mano no se mueve');
+
+console.log('mudar de noche cambia el cielo heredado por el de la nueva:');
+var mudanza = estado();
+mudanza.noches.push({ id: 'no2', fecha: '2026-08-06', lugarId: 'lu1', sqm: 19.8,
+                      ir: -14, seeing: 2, bortle: 6 });
+mudanza.observaciones[0].sqm = 21.42;     // heredado de no1
+mudanza.observaciones[0].nocheId = 'no2';
+OAL.sembrarCielo(mudanza, 'no2', mudanza.noches[0]);
+eq(mudanza.observaciones[0].sqm, 19.8, 'toma el cielo de la noche a la que se muda');
+
+console.log('el seeing sale como la escala Antoniadi que OAL espera:');
+var seeingRaro = estado();
+seeingRaro.observaciones[0].seeing = 3.4;
+seeingRaro.observaciones[1].seeing = 9;
+var xmlSeeing = OAL.xmlDe(seeingRaro);
+ok(xmlSeeing.indexOf('<seeing>3</seeing>') > -1, '3,4 se redondea a 3');
+ok(xmlSeeing.indexOf('<seeing>5</seeing>') > -1, 'y 9 se recorta al 5 de la escala');
+ok(!/<seeing>(3\.4|9)<\/seeing>/.test(xmlSeeing), 'nunca sale un seeing fuera de escala');
+
+console.log('un SQM en mag/arcmin² se convierte al entrar:');
+var enArcmin = OAL.xmlDe(estado())
+  .replace('<sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>',
+           '<sky-quality unit="mags-per-squarearcmin">12.53</sky-quality>');
+eq(OAL.leer(enArcmin).observaciones[0].sqm, 21.42, '12,53 mag/arcmin² son 21,42 mag/arcsec²');
+
 /* ── Sin coordenadas ──────────────────────────────────────────────────────── */
 
 console.log('sin Sesame el objeto viaja solo con su nombre:');

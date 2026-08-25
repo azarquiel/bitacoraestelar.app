@@ -184,7 +184,7 @@ function bitacora_oal_leer( $xml ) {
             'aumento'     => bitacora_oal_numero( $n, 'magnification' ),
             // El cielo de ESTA observación: el SQM y el seeing en su elemento
             // estándar, IR y Bortle en bit:, que el estándar no los tiene.
-            'sqm'         => bitacora_oal_numero( $n, 'sky-quality' ),
+            'sqm'         => bitacora_oal_sqm( $n ),
             'ir'          => bitacora_oal_numero( $n, 'ir' ),
             'seeing'      => bitacora_oal_numero( $n, 'seeing' ),
             'bortle'      => bitacora_oal_numero( $n, 'bortle' ),
@@ -196,31 +196,21 @@ function bitacora_oal_leer( $xml ) {
 }
 
 /**
- * Reparte el cielo entre la noche y sus observaciones, en los dos sentidos.
+ * Reparte el cielo entre la noche y sus observaciones, en este orden:
  *
- * - De la noche a las observaciones que no traigan el suyo: es lo que hace que
- *   los XML de la forma vieja —un `bit:sqm` por sesión— sigan entrando enteros.
- * - Y de las observaciones a la noche, si la noche no traía ninguno, el primer
- *   valor no nulo. El viaje solo guarda un RESUMEN del cielo, y con un SQM
- *   direccional ese resumen es arbitrario por naturaleza (ADR 0001): resumir
- *   con el primero es tan defendible como cualquier otra cosa, y es lo que ya
- *   hacía la forma vieja.
+ * 1. De la noche a sus observaciones sin valor propio. Como esto va ANTES del
+ *    paso 2, lo único que baja es lo que la noche traía escrito en el XML, o
+ *    sea la forma vieja —un `bit:sqm` por <session>—, que así sigue entrando
+ *    entera. En un fichero de la forma nueva la noche llega vacía y no baja
+ *    nada: en el XML no hay herencia, y el SQM es direccional, así que el de
+ *    una observación no vale como medida de la de al lado (ADR 0001).
+ * 2. De las observaciones a la noche, el primer valor no nulo. El viaje solo
+ *    guarda un RESUMEN del cielo, y con un SQM direccional ese resumen es
+ *    arbitrario por naturaleza: el primero es tan defendible como otro, y es
+ *    lo que ya hacía la forma vieja.
  */
 function bitacora_oal_repartir_cielo( $datos ) {
     $campos = array( 'sqm', 'ir', 'seeing', 'bortle' );
-    foreach ( $datos['noches'] as $id => $noche ) {
-        foreach ( $campos as $c ) {
-            if ( null !== $noche[ $c ] ) {
-                continue;
-            }
-            foreach ( $datos['observaciones'] as $o ) {
-                if ( $o['noche'] === $id && null !== $o[ $c ] ) {
-                    $datos['noches'][ $id ][ $c ] = $o[ $c ];
-                    break;
-                }
-            }
-        }
-    }
     foreach ( $datos['observaciones'] as $i => $o ) {
         if ( ! isset( $datos['noches'][ $o['noche'] ] ) ) {
             continue;
@@ -231,7 +221,38 @@ function bitacora_oal_repartir_cielo( $datos ) {
             }
         }
     }
+    foreach ( $datos['noches'] as $id => $noche ) {
+        foreach ( $campos as $c ) {
+            if ( null !== $noche[ $c ] ) {
+                continue;
+            }
+            foreach ( $datos['observaciones'] as $o ) {
+                // La clave de $noches viene de un atributo id: si es numérica,
+                // PHP la guarda como int y (string) es lo que las hace iguales.
+                if ( (string) $o['noche'] === (string) $id && null !== $o[ $c ] ) {
+                    $datos['noches'][ $id ][ $c ] = $o[ $c ];
+                    break;
+                }
+            }
+        }
+    }
     return $datos;
+}
+
+/**
+ * El <sky-quality> de una observación, siempre en mag/arcsec².
+ *
+ * OAL lo tipa como surfaceBrightnessType, que admite las dos unidades. La
+ * bitácora guarda solo mag/arcsec², así que el de arcmin² se convierte: hay
+ * 3600 arcsec² en un arcmin², y 2,5·log10(3600) = 8,89 mag.
+ */
+function bitacora_oal_sqm( $n ) {
+    $e = bitacora_oal_hijo( $n, 'sky-quality' );
+    $v = bitacora_oal_numero( $n, 'sky-quality' );
+    if ( ! $e || null === $v ) {
+        return null;
+    }
+    return 'mags-per-squarearcmin' === $e->getAttribute( 'unit' ) ? $v + 8.89 : $v;
 }
 
 /** Los <hijo> dentro de <padre>, o lista vacía si el padre no está. */

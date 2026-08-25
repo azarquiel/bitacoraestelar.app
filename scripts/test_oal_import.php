@@ -41,7 +41,7 @@ function hay_problema(array $problemas, string $trozo): bool {
 echo "una noche sencilla se lee entera:\n";
 $d = bitacora_oal_leer(ejemplo('noche-simple'));
 ok(!isset($d['error']), 'el XML de la plantilla se lee sin error');
-eq($d['plantilla'], '1.0', 'la versión de la plantilla viene en la raíz');
+eq($d['plantilla'], '1.1', 'la versión de la plantilla viene en la raíz');
 eq($d['observador']['nombre'] . ' ' . $d['observador']['apellidos'], 'Ángel L. Huelmo', 'el primer observer es el autor');
 eq(count($d['lugares']), 1, 'un lugar');
 eq(count($d['observaciones']), 3, 'tres observaciones');
@@ -96,6 +96,30 @@ eq(bitacora_oal_instante('mañana por la noche'), null, 'y lo que no es un insta
 eq(bitacora_oal_utc('2026-08-06', '02:15', '+02:00'), '2026-08-06 00:15:00', 'la hora UTC sale del desfase');
 eq(bitacora_oal_utc('2026-08-06', '02:15', '-04:00'), '2026-08-06 06:15:00', 'también hacia el otro lado');
 eq(bitacora_oal_utc('2026-08-06', '02:15', ''), null, 'sin desfase no se inventa una hora UTC');
+
+echo "en la forma nueva el cielo de una observación no se cuela en las otras:\n";
+// El SQM es direccional (ADR 0001): copiar el de la vecina inventaría una
+// medida que nadie hizo, y acabaría escrita en cielo_sqm de esa ficha.
+$sin = str_replace('<sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>', '', ejemplo('noche-simple'));
+$dsin = bitacora_oal_leer($sin);
+eq($dsin['observaciones'][0]['sqm'], null, 'la que se quedó sin SQM no hereda el de al lado');
+eq($dsin['noches']['no1']['sqm'], 20.85, 'pero el resumen de la noche sí sale del primero que quede');
+
+echo "una sesión con id numérico también resume su cielo:\n";
+// PHP convierte a int las claves de array que son números, así que el id "1"
+// de <session> no casa con el "1" de <session> de la observación si se comparan
+// en estricto. Sin esto el viaje se quedaría sin cielo ninguno.
+$dnum = bitacora_oal_leer(str_replace('no1', '1', ejemplo('noche-simple')));
+eq($dnum['noches']['1']['sqm'], 21.42, 'el resumen llega aunque el id sea un número');
+eq($dnum['noches']['1']['bortle'], 4.0, 'y el Bortle también');
+
+echo "un SQM en mag/arcmin² se convierte al entrar:\n";
+// OAL admite las dos unidades; la bitácora guarda solo mag/arcsec².
+$darcmin = bitacora_oal_leer(str_replace(
+    '<sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>',
+    '<sky-quality unit="mags-per-squarearcmin">12.53</sky-quality>',
+    ejemplo('noche-simple')));
+eq(round($darcmin['observaciones'][0]['sqm'], 2), 21.42, '12,53 mag/arcmin² son 21,42 mag/arcsec²');
 
 echo "cada objeto de la noche sencilla es una observación:\n";
 $g = bitacora_oal_agrupar($d);
