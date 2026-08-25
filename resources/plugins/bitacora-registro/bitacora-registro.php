@@ -1829,6 +1829,22 @@ function bitacora_registrar_rutas() {
     register_rest_route( 'bitacora/v1', '/importar-oal', array(
         'methods' => 'POST', 'callback' => 'bitacora_oal_rest_importar', 'permission_callback' => $solo_logueados,
     ) );
+
+    // El `estado` de una salida, para exportarla. El servidor no compone XML:
+    // eso lo hace el motor en el navegador (ADR 0003). Lo que sale es SIEMPRE
+    // del usuario de la sesión —nunca de un parámetro—, y encima se comprueba
+    // que el viaje sea suyo: una exportación que acepte un usuario_id cualquiera
+    // es una fuga de datos con forma de descarga.
+    register_rest_route( 'bitacora/v1', '/estado-oal', array(
+        'methods'             => 'GET',
+        'callback'            => 'bitacora_oal_rest_estado',
+        'permission_callback' => $solo_logueados,
+        'args'                => array(
+            'viaje' => array( 'required' => true, 'validate_callback' => function ( $v ) {
+                return is_numeric( $v ) && intval( $v ) > 0;
+            } ),
+        ),
+    ) );
 }
 add_action( 'rest_api_init', 'bitacora_registrar_rutas' );
 

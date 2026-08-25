@@ -88,46 +88,46 @@
     </session>
   </sessions>
   <observation id="ob1">
+    <observer>ob1</observer>
+    <site>lu1</site>
+    <session>no1</session>
+    <target>tg1</target>
     <begin>2026-07-11T23:30:00+02:00</begin>
     <sky-quality unit="mags-per-squarearcsec">21.3</sky-quality>
     <seeing>2</seeing>
-    <bit:ir>-15</bit:ir>
-    <bit:bortle>4</bit:bortle>
-    <session>no1</session>
-    <site>lu1</site>
-    <observer>ob1</observer>
-    <target>tg1</target>
     <scope>te1</scope>
     <eyepiece>oc1</eyepiece>
-    <result><description>A 68x ya se intuye la compañera azul.</description></result>
     <magnification>67.9</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>A 68x ya se intuye la compañera azul.</description><rating>99</rating></result>
+    <bit:ir>-15</bit:ir>
+    <bit:bortle>4</bit:bortle>
   </observation>
   <observation id="ob2">
+    <observer>ob1</observer>
+    <site>lu1</site>
+    <session>no1</session>
+    <target>tg1</target>
     <begin>2026-07-12T00:20:00+02:00</begin>
     <sky-quality unit="mags-per-squarearcsec">21.3</sky-quality>
     <seeing>2</seeing>
-    <bit:ir>-15</bit:ir>
-    <bit:bortle>4</bit:bortle>
-    <session>no1</session>
-    <site>lu1</site>
-    <observer>ob1</observer>
-    <target>tg1</target>
     <scope>te1</scope>
     <eyepiece>oc2</eyepiece>
     <lens>au1</lens>
-    <result><description>A 427x el contraste de color es descarado: naranja y azul.</description></result>
     <magnification>427</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>A 427x el contraste de color es descarado: naranja y azul.</description><rating>99</rating></result>
+    <bit:ir>-15</bit:ir>
+    <bit:bortle>4</bit:bortle>
   </observation>
   <observation id="ob3">
+    <observer>ob1</observer>
+    <site>lu2</site>
+    <session>no2</session>
+    <target>tg2</target>
     <begin>2026-07-13T01:05:00+02:00</begin>
     <seeing>4</seeing>
-    <session>no2</session>
-    <site>lu2</site>
-    <observer>ob1</observer>
-    <target>tg2</target>
     <scope>te1</scope>
     <eyepiece>oc1</eyepiece>
-    <result><description>La manzana mordida, de madrugada y ya alta.</description></result>
     <magnification>67.9</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>La manzana mordida, de madrugada y ya alta.</description><rating>99</rating></result>
   </observation>
 </oal:observations>

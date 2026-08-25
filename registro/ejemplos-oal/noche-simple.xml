@@ -77,48 +77,48 @@
     </session>
   </sessions>
   <observation id="ob1">
+    <observer>ob1</observer>
+    <site>lu1</site>
+    <session>no1</session>
+    <target>tg1</target>
     <begin>2026-08-05T23:10:00+02:00</begin>
     <sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>
     <seeing>3</seeing>
-    <bit:ir>-18</bit:ir>
-    <bit:bortle>4</bit:bortle>
-    <session>no1</session>
-    <site>lu1</site>
-    <observer>ob1</observer>
-    <target>tg1</target>
     <scope>te1</scope>
     <eyepiece>oc1</eyepiece>
-    <result><description>Enorme y granulado ya a pocos aumentos.</description></result>
     <magnification>67.9</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>Enorme y granulado ya a pocos aumentos.</description><rating>99</rating></result>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>4</bit:bortle>
   </observation>
   <observation id="ob2">
+    <observer>ob1</observer>
+    <site>lu1</site>
+    <session>no1</session>
+    <target>tg2</target>
     <begin>2026-08-05T23:45:00+02:00</begin>
     <sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>
     <seeing>3</seeing>
-    <bit:ir>-18</bit:ir>
-    <bit:bortle>4</bit:bortle>
-    <session>no1</session>
-    <site>lu1</site>
-    <observer>ob1</observer>
-    <target>tg2</target>
     <scope>te1</scope>
     <eyepiece>oc2</eyepiece>
-    <result><description>El anillo, con el centro claramente más oscuro.</description></result>
     <magnification>213.5</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>El anillo, con el centro claramente más oscuro.</description><rating>99</rating></result>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>4</bit:bortle>
   </observation>
   <observation id="ob3">
+    <observer>ob1</observer>
+    <site>lu1</site>
+    <session>no1</session>
+    <target>tg3</target>
     <begin>2026-08-06T01:20:00+02:00</begin>
     <sky-quality unit="mags-per-squarearcsec">20.85</sky-quality>
     <seeing>3</seeing>
-    <bit:ir>-18</bit:ir>
-    <bit:bortle>5</bit:bortle>
-    <session>no1</session>
-    <site>lu1</site>
-    <observer>ob1</observer>
-    <target>tg3</target>
     <scope>te1</scope>
     <eyepiece>oc1</eyepiece>
-    <result><description>De madrugada, con el filtro puesto, el Muro se recorta solo.</description></result>
     <magnification>67.9</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>De madrugada, con el filtro puesto, el Muro se recorta solo.</description><rating>99</rating></result>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>5</bit:bortle>
   </observation>
 </oal:observations>
