@@ -171,9 +171,14 @@ function bitacora_oal_leer( $xml ) {
         }
         $inst   = bitacora_oal_instante( bitacora_oal_texto( $n, 'begin' ) );
         $result = bitacora_oal_hijo( $n, 'result' );
+        // Quién firma ESTA observación: en una salida con tripulación no tiene
+        // por qué ser el dueño del fichero, y perderlo atribuiría al dueño lo
+        // que vio otro.
+        $quien = trim( bitacora_oal_texto( $n, 'observer' ) );
         $out['observaciones'][] = array(
             'id'          => $n->getAttribute( 'id' ),
             'noche'       => bitacora_oal_texto( $n, 'session' ),
+            'observador'  => isset( $out['personas'][ $quien ] ) ? $out['personas'][ $quien ] : '',
             'target'      => bitacora_oal_texto( $n, 'target' ),
             'fecha'       => $inst ? $inst['fecha'] : '',
             'hora'        => $inst ? $inst['hora'] : '',
@@ -433,9 +438,12 @@ function bitacora_oal_equipo_nombrado( $nombre, $modelo ) {
     if ( '' === $nombre || '' === $modelo ) {
         return '' === $nombre ? $modelo : $nombre;
     }
-    // Si el nombre propio ya contiene el modelo (o al revés), repetirlo sobra.
+    // Si uno ya contiene al otro, repetirlo sobra: se queda el que más dice.
     if ( false !== strpos( bitacora_oal_clave( $nombre ), bitacora_oal_clave( $modelo ) ) ) {
         return $nombre;
+    }
+    if ( false !== strpos( bitacora_oal_clave( $modelo ), bitacora_oal_clave( $nombre ) ) ) {
+        return $modelo;
     }
     return $nombre . ' · ' . $modelo;
 }
@@ -456,7 +464,7 @@ function bitacora_oal_equipo_casado( $modelo, $filas ) {
         // modelo a secas y con la marca delante (así lo escriben otros
         // programas), el nombre propio de Mi flota, y el compuesto que exporta
         // esta bitácora. Cualquiera de ellas es la misma pieza.
-        $nombre = isset( $f['nombre'] ) ? trim( (string) $f['nombre'] ) : '';
+        $nombre = isset( $f['propio'] ) ? trim( (string) $f['propio'] ) : '';
         $marca  = trim( ( isset( $f['vendor'] ) ? $f['vendor'] . ' ' : '' ) . $f['modelo'] );
         $formas = array( $f['modelo'], $marca, $nombre, bitacora_oal_equipo_nombrado( $nombre, $marca ) );
         foreach ( $formas as $forma ) {
@@ -520,6 +528,7 @@ function bitacora_oal_agrupar( $datos ) {
                 'fecha'    => $o['fecha'],
                 'hora'     => $o['hora'],
                 'desfase'  => $o['desfase'],
+                'observador' => $o['observador'],
                 'sqm'      => null,
                 'ir'       => null,
                 'seeing'   => null,
@@ -854,6 +863,10 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
         if ( ! $viaje ) {
             continue;
         }
+        // Cada observación la firma quien la hizo (el <observer> de su bloque);
+        // el dueño del fichero solo cubre las que no lo dicen.
+        $quien    = '' !== trim( $g['observador'] ) ? trim( $g['observador'] ) : $firma;
+        $quien_id = ( $quien === $firma ) ? $observador_id : bitacora_observador_id_desde_nombre( $quien, $usuario_id );
         $tel_id = 0;
         foreach ( $g['entradas'] as $e ) {
             if ( ! $tel_id && ! empty( $equipo['telescopios'][ $e['telescopio'] ] ) ) {
@@ -867,8 +880,8 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
             'num'               => $g['num'],
             'ra'                => $g['ra'],
             'decl'              => $g['dec'],
-            'observador'        => sanitize_text_field( $firma ),
-            'observador_id'     => $observador_id ? $observador_id : null,
+            'observador'        => sanitize_text_field( $quien ),
+            'observador_id'     => $quien_id ? $quien_id : null,
             'telescopio'        => bitacora_oal_modelo( $datos, 'telescopios', $g['entradas'][0]['telescopio'] ),
             'telescopio_id'     => $tel_id ? $tel_id : null,
             'fecha_observacion' => $g['fecha'],
@@ -1005,23 +1018,34 @@ function bitacora_oal_equipo_visible( $clase, $usuario_id ) {
     $cat = bitacora_oal_catalogo( $clase );
     $t   = $cat['tabla'];
     $col = $cat['modelo'];
+    // El nombre propio viaja también: es una de las formas con las que la pieza
+    // puede venir escrita en el XML, y sin él el emparejamiento por nombre no
+    // tendría con qué comparar.
+    $prop = $cat['propio'] ? $cat['propio'] . ' AS propio' : "'' AS propio";
     return $wpdb->get_results( $wpdb->prepare(
-        "SELECT id, vendor, $col AS modelo FROM $t WHERE usuario_id IS NULL OR usuario_id = %d",
+        "SELECT id, vendor, $col AS modelo, $prop FROM $t WHERE usuario_id IS NULL OR usuario_id = %d",
         $usuario_id
     ), ARRAY_A );
 }
 
 /**
- * Dónde vive cada clase de equipo: su tabla y cómo llama a la columna del
- * modelo (las auxiliares la llaman 'nombre'). Un solo sitio que consultar.
+ * Dónde vive cada clase de equipo: su tabla, cómo llama a la columna del modelo
+ * y si tiene nombre propio. Las tres asimetrías del esquema, en un solo sitio:
+ * las auxiliares llaman 'nombre' AL MODELO (una Barlow no se bautiza), y solo
+ * los telescopios tienen además nombre propio —el que el observador le pone a
+ * su tubo en Mi flota—.
  */
 function bitacora_oal_catalogo( $clase ) {
     $mapa = array(
-        'telescopios' => array( bitacora_nombre_tabla_telescopios(), 'modelo' ),
-        'oculares'    => array( bitacora_nombre_tabla_oculares(),    'modelo' ),
-        'auxiliares'  => array( bitacora_nombre_tabla_auxiliares(),  'nombre' ),
+        'telescopios' => array( bitacora_nombre_tabla_telescopios(), 'modelo', 'nombre' ),
+        'oculares'    => array( bitacora_nombre_tabla_oculares(),    'modelo', '' ),
+        'auxiliares'  => array( bitacora_nombre_tabla_auxiliares(),  'nombre', '' ),
     );
-    return array( 'tabla' => $mapa[ $clase ][0], 'modelo' => $mapa[ $clase ][1] );
+    return array(
+        'tabla'  => $mapa[ $clase ][0],
+        'modelo' => $mapa[ $clase ][1],
+        'propio' => $mapa[ $clase ][2],
+    );
 }
 
 /** Crea una base privada del usuario con lo que dice el XML. */
@@ -1478,6 +1502,9 @@ function bitacora_oal_estado_viaje( $viaje, $usuario_id ) {
         'id'          => $noche_id,
         'fecha'       => $viaje->noche,
         'lugarId'     => $base ? 'lu' . intval( $base->id ) : '',
+        // El huso de la noche, para las salidas sin lugar: sin él las horas
+        // saldrían en UTC, o sea corridas. Con lugar manda el del lugar.
+        'tz'          => bitacora_oal_tz_minutos( $base ? $base->tz : '', $viaje->noche ),
         'comienzo'    => $viaje->comienzo,
         'fin'         => $viaje->fin,
         'tripulacion' => implode( ', ', array_map( 'trim', (array) $tripulacion ) ),
@@ -1573,9 +1600,9 @@ function bitacora_oal_estado_viaje( $viaje, $usuario_id ) {
         }
     }
 
-    $estado['telescopios'] = bitacora_oal_equipo_estado( $t_tel, array_keys( $equipo['telescopios'] ), 'te' );
-    $estado['oculares']    = bitacora_oal_equipo_estado( $t_ocu, array_keys( $equipo['oculares'] ), 'oc' );
-    $estado['auxiliares']  = bitacora_oal_equipo_estado( $t_aux, array_keys( $equipo['auxiliares'] ), 'au' );
+    $estado['telescopios'] = bitacora_oal_equipo_estado( 'telescopios', array_keys( $equipo['telescopios'] ), 'te' );
+    $estado['oculares']    = bitacora_oal_equipo_estado( 'oculares', array_keys( $equipo['oculares'] ), 'oc' );
+    $estado['auxiliares']  = bitacora_oal_equipo_estado( 'auxiliares', array_keys( $equipo['auxiliares'] ), 'au' );
     return $estado;
 }
 
@@ -1584,32 +1611,37 @@ function bitacora_oal_estado_viaje( $viaje, $usuario_id ) {
  * recurso del fichero es una fila que hay que emparejar a mano al importarlo en
  * otro programa, y volcar el catálogo entero lo llena de ruido.
  */
-function bitacora_oal_equipo_estado( $tabla, $ids, $prefijo ) {
+function bitacora_oal_equipo_estado( $clase, $ids, $prefijo ) {
     global $wpdb;
     $ids = array_values( array_filter( array_map( 'intval', (array) $ids ) ) );
     if ( ! $ids ) {
         return array();
     }
+    $cat    = bitacora_oal_catalogo( $clase );
+    $tabla  = $cat['tabla'];
     $huecos = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
-    $filas  = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $tabla WHERE id IN ( $huecos ) ORDER BY id ASC", $ids ) );
+    $filas  = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $tabla WHERE id IN ( $huecos ) ORDER BY id ASC", $ids ), ARRAY_A );
     $out    = array();
     foreach ( (array) $filas as $f ) {
         // El nombre propio que el observador le da a su tubo en Mi flota Y el
         // modelo: el nombre es como lo llama él, el modelo es lo que permite
         // reconocerlo en otra bitácora —y lo único por lo que casa al volver—.
+        // Cuál es cada columna lo dice el catálogo: en las auxiliares 'nombre'
+        // ES el modelo, y componer «Barlow 2x · TeleVue» las dejaba sin casar.
+        $propio = $cat['propio'] ? trim( (string) $f[ $cat['propio'] ] ) : '';
         $modelo = bitacora_oal_equipo_nombrado(
-            isset( $f->nombre ) ? $f->nombre : '',
-            trim( $f->vendor . ' ' . ( isset( $f->modelo ) ? $f->modelo : '' ) )
+            $propio,
+            trim( $f['vendor'] . ' ' . $f[ $cat['modelo'] ] )
         );
-        $fila = array( 'id' => $prefijo . intval( $f->id ), 'modelo' => $modelo );
+        $fila = array( 'id' => $prefijo . intval( $f['id'] ), 'modelo' => $modelo );
         if ( 'te' === $prefijo ) {
-            $fila['apertura'] = bitacora_oal_num( $f->apertura_mm );
-            $fila['focal']    = bitacora_oal_num( $f->focal_mm );
+            $fila['apertura'] = bitacora_oal_num( $f['apertura_mm'] );
+            $fila['focal']    = bitacora_oal_num( $f['focal_mm'] );
         } elseif ( 'oc' === $prefijo ) {
-            $fila['focal'] = bitacora_oal_num( $f->focal_mm );
-            $fila['campo'] = bitacora_oal_num( $f->campo_aparente );
+            $fila['focal'] = bitacora_oal_num( $f['focal_mm'] );
+            $fila['campo'] = bitacora_oal_num( $f['campo_aparente'] );
         } else {
-            $fila['factor'] = bitacora_oal_num( $f->factor );
+            $fila['factor'] = bitacora_oal_num( $f['factor'] );
         }
         $out[] = $fila;
     }

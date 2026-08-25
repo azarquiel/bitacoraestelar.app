@@ -356,6 +356,20 @@
     return (lista || []).filter(function (x) { return marcados[x.id]; });
   }
 
+  /* Una referencia solo vale si el recurso está EN el fichero: un id que no
+     tiene <site>/<scope>/<eyepiece>/<lens> arriba es un IDREF colgando, y eso
+     no valida —y el que lo lea no sabe a qué apunta—. Mejor sin el dato. */
+  function ref(mapa, id) {
+    return (id && mapa[id]) ? id : '';
+  }
+
+  /* El huso con el que se fecha la noche: el del lugar, y si la salida no
+     tiene lugar, el que traiga la propia noche (el del sitio, que lo pone el
+     servidor). Sin esto todo salía en +00:00, o sea con la hora mal. */
+  function husoDe(noche, lugar) {
+    return (lugar && lugar.tz != null && lugar.tz !== '') ? lugar.tz : noche.tz;
+  }
+
   /** Un target por objeto distinto (OAL los cataloga aparte de la observación). */
   function targets(e) {
     var vistos = {}, out = [];
@@ -461,10 +475,11 @@
     s.push('  <sessions>');
     (e.noches || []).forEach(function (n) {
       var l = lugares[n.lugarId] || {};
+      var tzn = husoDe(n, l);
       s.push('    <session id="' + escapar(n.id) + '">');
-      s.push('      ' + etiqueta('begin', instante(n.fecha, n.comienzo || '21:00', l.tz)));
-      if (n.fin) { s.push('      ' + etiqueta('end', instante(n.fecha, n.fin, l.tz))); }
-      s.push('      ' + etiqueta('site', n.lugarId));
+      s.push('      ' + etiqueta('begin', instante(n.fecha, n.comienzo || '21:00', tzn)));
+      if (n.fin) { s.push('      ' + etiqueta('end', instante(n.fecha, n.fin, tzn))); }
+      s.push('      ' + etiqueta('site', ref(lugares, n.lugarId)));
       String(n.tripulacion || '').split(',').forEach(function (raw) {
         var id = ob.porNombre[clave(raw)];
         if (id) { s.push('      ' + etiqueta('coObserver', id)); }
@@ -486,17 +501,17 @@
       // uno válido. Lo de bit: va al final: es lo que el esquema no conoce.
       s.push('  <observation id="' + escapar(o.id || ('obs' + (i + 1))) + '">');
       s.push('    ' + etiqueta('observer', ob.porNombre[clave(o.observador)] || 'ob1'));
-      s.push('    ' + etiqueta('site', n.lugarId));
-      s.push('    ' + etiqueta('session', o.nocheId));
+      s.push('    ' + etiqueta('site', ref(lugares, n.lugarId)));
+      s.push('    ' + etiqueta('session', ref(noches, o.nocheId)));
       s.push('    ' + etiqueta('target', tg.porNombre[clave(o.objeto)]));
-      s.push('    ' + etiqueta('begin', instante(n.fecha, o.hora || n.comienzo || '21:00', l.tz)));
+      s.push('    ' + etiqueta('begin', instante(n.fecha, o.hora || n.comienzo || '21:00', husoDe(n, l))));
       // El cielo, en la observación y con los elementos estándar donde existen.
       // Solo IR y Bortle siguen en bit:, que es lo que OAL no tiene dónde poner.
       s.push('    ' + etiqueta('sky-quality', o.sqm, { unit: 'mags-per-squarearcsec' }));
       s.push('    ' + etiqueta('seeing', antoniadi(o.seeing)));
-      s.push('    ' + etiqueta('scope', o.telescopioId));
-      s.push('    ' + etiqueta('eyepiece', o.ocularId));
-      s.push('    ' + etiqueta('lens', o.auxiliarId));
+      s.push('    ' + etiqueta('scope', ref(tel, o.telescopioId)));
+      s.push('    ' + etiqueta('eyepiece', ref(ocu, o.ocularId)));
+      s.push('    ' + etiqueta('lens', ref(aux, o.auxiliarId)));
       s.push('    ' + etiqueta('magnification', aum));
       // resultType es ABSTRACTO: sin xsi:type el elemento no se puede instanciar.
       // Se emite siempre el de cielo profundo —también para una variable, que es
@@ -630,6 +645,9 @@
         id: n.attrs.id,
         fecha: b.fecha && b.hora ? nocheDe(b.fecha, b.hora) : b.fecha,
         lugarId: texto(n, 'site'), comienzo: b.hora, fin: f.hora,
+        // El huso con el que venía fechada, por si la noche no trae lugar: sin
+        // esto, volver a escribirla la mandaría a UTC y le movería la hora.
+        tz: b.tz,
         tripulacion: hijos(n, 'coObserver').map(function (c) { return porId[c.texto.trim()] || ''; })
                        .filter(Boolean).join(', '),
         // Forma vieja: el cielo de la noche entera. Ya no se escribe, pero los
@@ -667,8 +685,17 @@
   }
 
   function partirInstante(iso) {
-    var m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(String(iso || ''));
-    return m ? { fecha: m[1], hora: m[2] } : { fecha: '', hora: '' };
+    var m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?(Z|[+-]\d{2}:\d{2})?/.exec(String(iso || ''));
+    return m ? { fecha: m[1], hora: m[2], tz: minutosDeDesfase(m[3]) } : { fecha: '', hora: '', tz: '' };
+  }
+
+  /** '+02:00' -> 120. Inversa de desfase(). Sin desfase escrito, ''. */
+  function minutosDeDesfase(txt) {
+    if (!txt) { return ''; }
+    if (txt === 'Z') { return 0; }
+    var m = /^([+-])(\d{2}):(\d{2})$/.exec(txt);
+    if (!m) { return ''; }
+    return (m[1] === '-' ? -1 : 1) * (parseInt(m[2], 10) * 60 + parseInt(m[3], 10));
   }
 
   function estadoVacio() {

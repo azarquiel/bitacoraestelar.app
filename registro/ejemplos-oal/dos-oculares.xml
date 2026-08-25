@@ -87,7 +87,7 @@
       <weather>Viento del norte</weather>
     </session>
   </sessions>
-  <observation id="ob1">
+  <observation id="obs1">
     <observer>ob1</observer>
     <site>lu1</site>
     <session>no1</session>
@@ -102,8 +102,8 @@
     <bit:ir>-15</bit:ir>
     <bit:bortle>4</bit:bortle>
   </observation>
-  <observation id="ob2">
-    <observer>ob1</observer>
+  <observation id="obs2">
+    <observer>co2</observer>
     <site>lu1</site>
     <session>no1</session>
     <target>tg1</target>
@@ -118,7 +118,7 @@
     <bit:ir>-15</bit:ir>
     <bit:bortle>4</bit:bortle>
   </observation>
-  <observation id="ob3">
+  <observation id="obs3">
     <observer>ob1</observer>
     <site>lu2</site>
     <session>no2</session>

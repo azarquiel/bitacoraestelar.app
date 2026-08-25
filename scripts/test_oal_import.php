@@ -158,6 +158,24 @@ eq($d2['auxiliares']['au1']['factor'], 2.0, 'que multiplica por 2');
 eq($g2[0]['hora'], '23:30', 'la observación se fecha en su entrada más temprana');
 eq($d2['noches']['no1']['tripulacion'], array('Isra', 'Víctor'), 'los dos compañeros de esa noche');
 
+echo "cada observación se queda con quien la firmó:\n";
+// En una salida con tripulación el <observer> de la observación no tiene por
+// qué ser el dueño del fichero. Atribuírselo todo al dueño sería escribir en
+// la bitácora que vio lo que vio otro.
+eq($d2['observaciones'][0]['observador'], 'Ángel L. Huelmo', 'la primera la firma el dueño del fichero');
+eq($d2['observaciones'][1]['observador'], 'Víctor', 'la segunda, el compañero que miró por el ocular');
+eq($g2[0]['observador'], 'Ángel L. Huelmo', 'y la ficha fusionada se queda con la de su entrada más temprana');
+
+echo "los identificadores del fichero no chocan entre sí:\n";
+// El id es un xs:ID: único en TODO el documento, no por elemento. Con la
+// observación llamada «ob1» chocaba con el <observer id="ob1">.
+$ids = array();
+foreach (array('noche-simple', 'dos-oculares') as $cual) {
+    preg_match_all('/\sid="([^"]+)"/', ejemplo($cual), $m);
+    $ids[$cual] = count($m[1]) - count(array_unique($m[1]));
+}
+eq($ids, array('noche-simple' => 0, 'dos-oculares' => 0), 'ningún id repetido en los ejemplos');
+
 echo "la clave de fusión no depende del orden de las hermanas:\n";
 // Es también el identificador con el que se reconoce la observación en una
 // segunda importación: si dependiera del id de la primera hermana, reordenar
@@ -333,7 +351,10 @@ echo "y también por el nombre propio con el que sale exportado:\n";
 // propio para quien lo conoce, el modelo para que otra bitácora lo reconozca.
 // Si el emparejador no supiera leerlo, reimportar duplicaría el tubo.
 $tubos = array(
-    array('id' => 7, 'nombre' => 'Endeavour', 'vendor' => 'Skywatcher', 'modelo' => 'Dobson 305/1524'),
+    // 'propio' es como lo devuelve bitacora_oal_equipo_visible(): el nombre propio
+    // solo existe en los telescopios, y sale aliasado con ese nombre para que el
+    // emparejador no tenga que saber de qué tabla viene la fila.
+    array('id' => 7, 'propio' => 'Endeavour', 'vendor' => 'Skywatcher', 'modelo' => 'Dobson 305/1524'),
 );
 eq(bitacora_oal_equipo_nombrado('Endeavour', 'Skywatcher Dobson 305/1524'), 'Endeavour · Skywatcher Dobson 305/1524',
    'el nombre propio y el modelo salen juntos');
@@ -343,6 +364,13 @@ eq(bitacora_oal_equipo_nombrado('Dobson 305 de casa', 'Dobson 305'), 'Dobson 305
 eq(bitacora_oal_equipo_casado('Endeavour · Skywatcher Dobson 305/1524', $tubos), 7, 'el compuesto vuelve a su tubo');
 eq(bitacora_oal_equipo_casado('Endeavour', $tubos), 7, 'el nombre propio a secas, también');
 eq(bitacora_oal_equipo_casado('Skywatcher Dobson 305/1524', $tubos), 7, 'y el modelo con su marca, como lo escribe otro programa');
+
+// Una Barlow no se bautiza: en la tabla de auxiliares 'nombre' ES el modelo, y
+// no hay nombre propio. Si se compusieran igual que un tubo saldría «Barlow 2x ·
+// TeleVue», que no casa con nada y duplica la lente en cada ida y vuelta.
+$lentes = array( array('id' => 5, 'propio' => '', 'vendor' => 'TeleVue', 'modelo' => 'Barlow 2x') );
+eq(bitacora_oal_equipo_nombrado('', 'TeleVue Barlow 2x'), 'TeleVue Barlow 2x', 'la lente sale con su marca delante');
+eq(bitacora_oal_equipo_casado('TeleVue Barlow 2x', $lentes), 5, 'y vuelve a su lente, sin duplicarla');
 
 echo "los Messier se reconocen y el resto entra tal cual:\n";
 eq(bitacora_oal_objeto('M13'), array('objeto' => 'M13', 'tipo' => 'messier', 'num' => 13), 'M13');

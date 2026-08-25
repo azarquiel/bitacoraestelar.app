@@ -191,5 +191,35 @@ mudo.observaciones.forEach(function (o) { o.texto = ''; });
 mudo.noches[0].cronica = '';
 ok(OAL.textoDe(mudo).indexOf('Enorme') === -1, 'sin descripciones no aparece ninguna frase');
 
+/* ── Lo que no está en el fichero, no se referencia ───────────────────────── */
+
+console.log('una referencia a lo que no viaja en el fichero no se escribe:');
+// Un id sin su <scope>/<eyepiece>/<lens>/<site> arriba es un IDREF colgando:
+// no valida, y quien lo lea no sabe a qué apunta. Pasa en cuanto el catálogo
+// del estado se queda corto (equipo borrado, salida a medio construir).
+var cojo = estado();
+cojo.telescopios = [];
+cojo.oculares = [];
+cojo.auxiliares = [];
+cojo.lugares = [];
+var xmlCojo = OAL.xmlDe(cojo);
+eq(xmlCojo.indexOf('<scope>'), -1, 'sin telescopios en el fichero, ninguna observación los cita');
+eq(xmlCojo.indexOf('<eyepiece>'), -1, 'ni oculares');
+eq(xmlCojo.indexOf('<lens>'), -1, 'ni lentes');
+eq(xmlCojo.indexOf('<site>'), -1, 'ni el sitio');
+ok(xmlCojo.indexOf('<observation id=') > -1, 'pero las observaciones siguen saliendo');
+
+console.log('y una salida sin lugar conserva su hora local:');
+// Sin lugar no hay huso del lugar. Si nadie lo pone, todo salía en +00:00, o
+// sea con la hora movida: la noche trae el suyo (lo pone el servidor).
+var sinLugar = estado();
+sinLugar.lugares = [];
+sinLugar.noches[0].lugarId = '';
+sinLugar.noches[0].tz = 120;
+var xmlSin = OAL.xmlDe(sinLugar);
+ok(xmlSin.indexOf('<begin>2026-08-05T22:30:00+02:00</begin>') > -1, 'la sesión, con el huso de la noche');
+ok(xmlSin.indexOf('+00:00') === -1, 'y nada se va a UTC por el camino');
+eq(OAL.xmlDe(OAL.leer(xmlSin)), xmlSin, 'y leerlo y volver a escribirlo no mueve la hora');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nok · la salida se exporta, se lee de vuelta igual y se cuenta en el correo');

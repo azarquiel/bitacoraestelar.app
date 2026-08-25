@@ -76,7 +76,7 @@
       <comments>Primera salida del verano al Culebrín. El cielo aguantó toda la noche.</comments>
     </session>
   </sessions>
-  <observation id="ob1">
+  <observation id="obs1">
     <observer>ob1</observer>
     <site>lu1</site>
     <session>no1</session>
@@ -91,7 +91,7 @@
     <bit:ir>-18</bit:ir>
     <bit:bortle>4</bit:bortle>
   </observation>
-  <observation id="ob2">
+  <observation id="obs2">
     <observer>ob1</observer>
     <site>lu1</site>
     <session>no1</session>
@@ -106,7 +106,7 @@
     <bit:ir>-18</bit:ir>
     <bit:bortle>4</bit:bortle>
   </observation>
-  <observation id="ob3">
+  <observation id="obs3">
     <observer>ob1</observer>
     <site>lu1</site>
     <session>no1</session>

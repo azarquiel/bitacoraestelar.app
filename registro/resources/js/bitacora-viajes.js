@@ -239,6 +239,15 @@
     // y el correo y el fichero salen del mismo estado para que no puedan contar
     // cosas distintas.
 
+    /* Un fallo que no sea el aviso ya enseñado ('sin motor') tiene que verse:
+       callarlo deja el botón como si no hiciera nada. El detalle, a la consola. */
+    function fallo(msg) {
+      if (msg === 'sin motor') { return; }
+      if (typeof msg === 'string') { flash(msg, true); return; }
+      console.error('[bitacora] exportar OAL', msg);
+      flash('No se pudo exportar la salida.', true);
+    }
+
     function estadoDe(v) {
       var OAL = window.PlantillaOAL;
       if (!OAL) {
@@ -266,9 +275,7 @@
         bajar('bitacora-' + (v.noche || 'salida') + '.xml',
               window.PlantillaOAL.xmlDe(estado), 'application/xml');
         flash('Salida exportada. Ábrela en la plantilla para corregirla y vuelve a subirla.');
-      }).catch(function (msg) {
-        if (typeof msg === 'string' && msg !== 'sin motor') { flash(msg, true); }
-      });
+      }).catch(fallo);
     }
 
     // El correo se abre en una pestaña ya compuesto: se selecciona todo y se
@@ -283,9 +290,7 @@
           + cuerpo + '</body></html>';
         var w = window.open(URL.createObjectURL(new Blob([doc], { type: 'text/html;charset=utf-8' })), '_blank');
         if (!w) { flash('El navegador ha bloqueado la ventana del correo.', true); }
-      }).catch(function (msg) {
-        if (typeof msg === 'string' && msg !== 'sin motor') { flash(msg, true); }
-      });
+      }).catch(fallo);
     }
 
     // ── Acciones de la lista ───────────────────────────────────────────────
