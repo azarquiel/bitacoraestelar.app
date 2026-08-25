@@ -106,7 +106,13 @@ Reglas que lo gobiernan:
   el objeto en sus catálogos instalados por esa cadena.
 - **Instantes con desfase local** (`+02:00`), no en `Z`. La hora de pared de la
   base es la que decide la noche, y el desfase la conserva a la vista.
-- **Espacios de nombres**: pendiente del experimento (ver *Riesgo 1*).
+- **Espacios de nombres con `http://`**, los del esquema —`http://groups.google.
+  com/group/openastronomylog` y `http://www.w3.org/2001/XMLSchema-instance`—, no
+  los `https://` que emite AstroPlanner. Un URI de espacio de nombres se compara
+  literal y nunca se resuelve. **Ya aplicado** en la plantilla y en los ejemplos
+  regenerados. `ejemplos-oal/con-erratas.xml` se queda con los `https://`
+  antiguos a propósito: ahora modela también el dialecto viejo, y que el
+  importador lo siga leyendo demuestra que es ciego al espacio de nombres.
 
 **Quién firma cada observación:** `observador_id` del catálogo si lo hay, si no
 el texto `observador`, si no el dueño (`usuario_id`). Cada persona distinta se
@@ -231,16 +237,20 @@ reparta. Hoy la usa solo el administrador.
 
 ## Further Notes
 
-**Riesgo 1 · El espacio de nombres.** El esquema declara
+**Riesgo 1 · El espacio de nombres — RESUELTO.** El esquema declara
 `targetNamespace="http://groups.google.com/group/openastronomylog"`; la plantilla
-y AstroPlanner emiten los dos `https://…`, y también `https://www.w3.org/2001/
+y AstroPlanner emitían los dos `https://…`, y también `https://www.w3.org/2001/
 XMLSchema-instance`, que no es el XSI de nadie. Un URI de espacio de nombres se
-compara literal, así que es el **único** punto donde acercarse al esquema puede
-romper al consumidor. Experimento pendiente: cambiar las dos `https://` de
-`ejemplos-oal/noche-simple.xml` por `http://` e importarlo en AstroPlanner. Si lo
-traga, se emite `http://` y el fichero vale además para Observation Manager o
-DeepSkyLog. Si lo rechaza, se emite `https://` y queda escrito por qué emitimos
-algo que el esquema no bendice.
+compara literal, así que era el **único** punto donde acercarse al esquema podía
+romper al consumidor.
+
+Medido, no razonado: `ejemplos-oal/noche-simple.xml` con `http://` **entra en
+AstroPlanner**. Luego se emite `http://`, que es correcto y además abre el
+fichero a Observation Manager y DeepSkyLog sin tocar nada. Cambio ya aplicado en
+`plantilla-oal.html` con su porqué al lado, ejemplos regenerados,
+`test_oal_plantilla.js` y `test_oal_import.php` en verde: el importador lee por
+`localName` y es ciego al espacio de nombres, así que los ficheros que los
+compañeros ya tienen rellenados siguen entrando igual.
 
 **Riesgo 2 · La adopción pisa trabajo.** Es la regla «el XML manda» aplicada a
 filas que nunca pasaron por un XML. Mal contada en la previa, un compañero

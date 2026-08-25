@@ -379,9 +379,15 @@
 
     s.push('<?xml version="1.0" encoding="UTF-8"?>');
     s.push('<oal:observations version="2.1"' +
-      ' xmlns:oal="https://groups.google.com/group/openastronomylog"' +
+      // Los dos con http:// y no https://. No es un descuido: un URI de espacio
+      // de nombres se compara LITERAL, nunca se resuelve, y el targetNamespace
+      // de oal21.xsd es http://. Con https:// el fichero es de otro dialecto
+      // para cualquier lector que no sea el nuestro —que compara por localName
+      // y es ciego a esto—. AstroPlanner emite https:// pero lee http://,
+      // comprobado importando este mismo fichero.
+      ' xmlns:oal="http://groups.google.com/group/openastronomylog"' +
       ' xmlns:bit="' + NS_BIT + '"' +
-      ' xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance"' +
+      ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' +
       ' bit:plantilla="' + VERSION_PLANTILLA + '">');
 
     s.push('  <sites>');
