@@ -40,8 +40,11 @@ Sin fotometria para derivar (V o V-I ausentes, o V-I fuera de rango): la
 magnitud cae a Hp tal cual -mejor que reabrir el agujero- y el color se
 omite. El generador NO inventa color.
 
-Expansión de sistemas (issue #132, ADR 0017): Hipparcos publica una fila por
-sistema cerrado; el render dibuja estrellas, no sistemas. El generador abre
+Expansión de sistemas (issue #132; ADR «Las estrellas que Gaia DR3 no trae
+son un catálogo aparte», hoy en la rama worktree-adr-estrellas-que-gaia-no-trae
+sin fusionar — su número 0017 colisiona con el 0017 de la máscara que ya está
+en main): Hipparcos publica una fila por sistema cerrado; el render dibuja
+estrellas, no sistemas. El generador abre
 esos sistemas en componentes, con estas reglas:
 
   - La componente B solo se sintetiza cuando el par, mirando Gaia MÁS las
@@ -51,7 +54,7 @@ esos sistemas en componentes, con estas reglas:
     ninguna doble gana una componente de más.
   - El ancla de un par del catálogo de dobles es la fila de Hipparcos más
     cercana dentro de 40″ (posición ya propagada a 2016.0). Es el radio que
-    reproduce el prerregistro del ADR 0017: 68 pares comparables, 45 en
+    reproduce el prerregistro de ese ADR: 68 pares comparables, 45 en
     banda y 23 fuera (con 25″ salen 67 y con 60″, 71).
   - En la separación manda la del catálogo de dobles. La rho de Hipparcos
     solo se acepta si |rho − sep| ≤ máx(0,3″, 15 %·sep); fuera de esa banda
@@ -102,7 +105,8 @@ EPOCA_GAIA = 2016.0
 RADIO_CRUCE_ARCSEC = 2.0
 
 # Ancla de un par del catálogo de dobles a su fila de Hipparcos. 40″ es el
-# radio que reproduce el prerregistro del ADR 0017 (68 comparables, 45/23).
+# radio que reproduce el prerregistro del ADR de las estrellas que Gaia no
+# trae (68 comparables, 45/23).
 RADIO_ANCLA_ARCSEC = 40.0
 
 # Constantes heredadas de parDoble (bitacora-gaia-render.js): definen «el par
@@ -319,6 +323,9 @@ def construir():
         if dd >= _cuerda(RADIO_ANCLA_ARCSEC):
             continue                  # sin ancla de Hipparcos no hay dónde colgar la B
         i = int(i)
+        if i in hip_ancladas:
+            continue                  # dos entradas del catálogo sobre el mismo
+                                      # sistema son la misma doble: una B basta
         ncomp, theta, rho, dhp = anexo(i)
         sep_cat, pa_cat = d['sep'], d['pa']
         # La banda de aceptación: fuera de ella, rho/theta/dhp hablan de OTRO par.
@@ -335,7 +342,10 @@ def construir():
         # si no, la mag2 del catálogo convertida a G con el V-I del sistema.
         v_i = _num(hip_rows[i][7])
         if en_banda and dhp is not None:
-            base = fila_por_hip[i]['mag'] if bool(falta[i]) else gaia_g[int(idx_gaia[i])]
+            # El ancla puede faltar de Gaia y aun así no estar en el fichero
+            # (artefacto de fotocentro suprimido): entonces la fuente Gaia más
+            # cercana es una componente real del par y sirve de base.
+            base = fila_por_hip[i]['mag'] if i in fila_por_hip else gaia_g[int(idx_gaia[i])]
             mag_b = base + dhp
         elif d['mag2'] is not None:
             g2 = g_desde_v(d['mag2'], v_i)
@@ -378,6 +388,9 @@ def construir():
         i = int(i)
         if i in hip_ancladas:
             continue
+        if i not in fila_por_hip:
+            continue                  # artefacto de fotocentro suprimido: su par
+                                      # ya está resuelto en Gaia, nada que abrir
         ncomp, theta, rho, dhp = anexo(i)
         if not (ncomp and ncomp > 1 and rho is not None and dhp is not None):
             continue
@@ -418,12 +431,16 @@ def escribir_js(filas):
         fh.write('   Gaia dentro de 2″. Los sistemas cerrados de Hipparcos vienen\n')
         fh.write('   abiertos en componentes (separación y ángulo medidos; el pa del\n')
         fh.write('   WDS por encima del theta de Hipparcos). Ver issues #130, #131 y\n')
-        fh.write('   #132 (azarquiel/bitacoraestelar.app) y el ADR 0017.\n')
+        fh.write('   #132 (azarquiel/bitacoraestelar.app) y el ADR de las estrellas\n')
+        fh.write('   que Gaia DR3 no trae (rama worktree-adr-estrellas-que-gaia-no-trae).\n')
         fh.write('   Magnitud en banda G y color BP−RP, derivados de V y V−I de\n')
         fh.write('   Hipparcos con las relaciones publicadas de Gaia EDR3 (tablas\n')
         fh.write('   5.7/5.8, pivote V−I; Riello et al. 2021). Residuo conocido:\n')
         fh.write('   G mediana +0,007 σ 0,023; color con sesgo −0,037 sin corregir.\n')
-        fh.write('   Campos: [RA°, Dec°, G, BP−RP|null, origen]. El origen declara la\n')
+        fh.write('   Campos: [RA°, Dec°, G, BP−RP|null, null, origen]. La 5ª casilla\n')
+        fh.write('   va a null A PROPÓSITO: dibujar() la reserva para la magnitud de\n')
+        fh.write('   detección (gDet) de las estrellas sintéticas de un cúmulo, y un\n')
+        fh.write('   texto ahí anularía el recorte por mlim. El origen (6ª) declara la\n')
         fh.write('   procedencia: "medida" (astrometría propia de Hipparcos),\n')
         fh.write('   "derivada" (compañera a ángulo medido) o "asumida" (compañera a\n')
         fh.write('   55°). Sin fotometría no hay color: null, nunca inventado. Se\n')
@@ -432,7 +449,7 @@ def escribir_js(filas):
         fh.write('window.BITACORA_ESTRELLAS_BRILLANTES = [\n')
         for f in filas:
             bprp = js_num(f['bp_rp']) if f['bp_rp'] is not None else 'null'
-            fh.write('  [%s, %s, %s, %s, "%s"],\n' % (
+            fh.write('  [%s, %s, %s, %s, null, "%s"],\n' % (
                 js_num(f['ra']), js_num(f['dec']), js_num(f['mag']), bprp, f['origen']))
         fh.write('];\n')
     print('->', OUT_JS)

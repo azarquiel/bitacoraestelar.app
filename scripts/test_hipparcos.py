@@ -18,11 +18,12 @@ medidas = [f for f in filas if f['origen'] == 'medida']
 companeras = [f for f in filas if f['origen'] != 'medida']
 
 # 1) Del orden de 140 filas (un valor muy distinto significa que la
-#    regeneración salió mal: ver ADR 0017).
+#    regeneración salió mal: ver el ADR de las estrellas que Gaia no trae,
+#    rama worktree-adr-estrellas-que-gaia-no-trae, sin fusionar).
 assert 50 <= len(filas) <= 250, "orden de magnitud roto: %d filas" % len(filas)
 
 # 1.bis) El censo por origen, fijado al medido en esta regeneración. El
-#    prerregistro del ADR 0017 esperaba 89/40/11; la regla implementada
+#    prerregistro del ADR esperaba 89/40/11; la regla implementada
 #    descarta además las compañeras que SÍ están en Gaia (13 pares) y los
 #    pares sin ancla de Hipparcos, así que el reparto real es este. Si una
 #    regeneración lo mueve, hay que mirar por qué antes de publicar.
@@ -185,8 +186,8 @@ assert len(ganan) >= 17, 'solo %d pares ganan su segunda componente: %s' % (len(
 #    la comprobacion 2: independiente de construir(), para que un error en la
 #    del generador no se auto-valide.
 hip_rows = G._consulta(
-    'SELECT ra, de, pmra, pmde, hpmag, vmag, v_i FROM public.hipparcos '
-    'WHERE hpmag < 9', maxrec=200000)
+    'SELECT ra, de, pmra, pmde, hpmag, vmag, v_i, ncomp, theta, rho, dhp '
+    'FROM public.hipparcos WHERE hpmag < 9', maxrec=200000)
 hip_rows = [r for r in hip_rows if r[0] != '' and r[1] != '']
 dt = 2016.0 - 1991.25
 h_ra = np.array([G._f(r[0]) for r in hip_rows])
@@ -216,6 +217,25 @@ sesgo = np.median(c_pred[okc] - gaia_bprp[idx2[okc]])
 # proposito (issue #131): corregirlo seria ajustar a ojo justo lo que se
 # decidio tomar publicado. Este assert lo documenta como esperado.
 assert -0.055 <= sesgo <= -0.020, 'sesgo del color: %+.4f (esperado -0.037)' % sesgo
+
+# 8) Valores ausentes (criterio 8 del ticket, herencia de test_par_doble.js),
+#    comprobados contra el GENERADOR y no solo contra los helpers: una
+#    compañera solo existe si su separación y su magnitud salieron de un dato
+#    real — la sep del catálogo o la rho del ancla; la mag2 o el dhp. Sin
+#    datos no se inventa nada.
+arbol_hip_t = cKDTree(G._unit(h_ra, h_de))
+for f in companeras:
+    if f['doble'] is None:
+        continue
+    d = dobles[f['doble']]
+    dd_a, ia = arbol_hip_t.query(G._unit(np.array([d['ra']]), np.array([d['dec']]))[0], k=1)
+    assert dd_a < G._cuerda(G.RADIO_ANCLA_ARCSEC), 'compañera sin ancla de Hipparcos: %s' % f
+    rho_a = G._num(hip_rows[int(ia)][9])
+    dhp_a = G._num(hip_rows[int(ia)][10])
+    if d['sep'] is None:
+        assert rho_a is not None, 'compañera sin separación por ningún lado: %s' % f
+    if d['mag2'] is None:
+        assert dhp_a is not None, 'compañera sin magnitud de la B por ningún lado: %s' % f
 
 print("OK · %d estrellas (%d medidas + %d compañeras) · todas las comprobaciones pasan"
       % (len(filas), len(medidas), len(companeras)))
