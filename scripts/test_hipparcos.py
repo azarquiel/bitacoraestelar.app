@@ -70,6 +70,9 @@ assert G._num('') is None and G._num('1.5') == 1.5
 # 7) La conversion fotometrica, fijada contra su residuo conocido sobre los
 #    pares de calibracion Hipparcos x Gaia (estrellas Hp<9 CON contrapartida
 #    Gaia): un cambio de formula no puede pasar inadvertido (issue #131).
+#    La propagacion de epoca se re-implementa aqui A PROPOSITO, igual que en
+#    la comprobacion 2: independiente de construir(), para que un error en la
+#    del generador no se auto-valide.
 hip_rows = G._consulta(
     'SELECT ra, de, pmra, pmde, hpmag, vmag, v_i FROM public.hipparcos '
     'WHERE hpmag < 9', maxrec=200000)
@@ -90,7 +93,10 @@ ok = par & ~np.isnan(g_pred)
 res = g_pred[ok] - gaia_g[idx2[ok]]
 assert ok.sum() > 20000, 'pocos pares de calibracion: %d' % ok.sum()
 med = np.median(res)
-sigma = 1.4826 * np.median(np.abs(res - med))  # sigma robusta (MAD)
+# Sigma ROBUSTA (MAD): la std plana sobre todos los pares sale ~0.12 por
+# los outliers (variables, dobles no resueltas); el 0.023 del ticket solo
+# es reproducible con un estimador robusto.
+sigma = 1.4826 * np.median(np.abs(res - med))
 assert abs(med - 0.007) <= 0.005, 'mediana del residuo G: %+.4f (esperada +0.007)' % med
 assert abs(sigma - 0.023) <= 0.008, 'sigma del residuo G: %.4f (esperada 0.023)' % sigma
 okc = ok & ~np.isnan(c_pred) & ~np.isnan(gaia_bprp[idx2])
@@ -101,5 +107,5 @@ sesgo = np.median(c_pred[okc] - gaia_bprp[idx2[okc]])
 assert -0.055 <= sesgo <= -0.020, 'sesgo del color: %+.4f (esperado -0.037)' % sesgo
 
 print("OK · %d estrellas · todas las comprobaciones pasan" % len(filas))
-print("   Hp<3: %d · Hp[3,4): %d · Hp[4,9): %d" % (
+print("   mag<3: %d · mag[3,4): %d · mag[4,9): %d" % (
     bajo_3, entre_3_4, len(filas) - bajo_3 - entre_3_4))

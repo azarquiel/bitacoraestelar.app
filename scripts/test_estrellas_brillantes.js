@@ -43,7 +43,8 @@ function ok(cond, etiqueta) {
   else { fallos++; console.error('  FALLA ' + etiqueta); }
 }
 
-function nucleos(g) { return g.filter(function (x) { return x.stops.length === 5; }).length; }
+function nucleoStops(g) { return g.filter(function (x) { return x.stops.length === 5; }); }
+function nucleos(g) { return nucleoStops(g).length; }
 
 // Vega: HIP 91262, RA 279.23588°, Dec 38.78497° -no está en DR3-. Fila del
 // catálogo (issue #131): G 0.0143 y BP−RP −0.0456 derivados de V/V−I con las
@@ -84,8 +85,6 @@ ok(nucleos(gradientes) === 1, 'el campo mantiene su única estrella de Gaia (' +
 gradientes = [];
 R.dibujar(fakeCtx(lienzo()), [], Object.assign({ ra: VEGA_RA, dec: VEGA_DEC }, base));
 ok(nucleos(gradientes) === 0, 'sin catálogo, el campo de Vega no revienta -queda vacío, no en blanco de error- (' + nucleos(gradientes) + ')');
-
-function nucleoStops(g) { return g.filter(function (x) { return x.stops.length === 5; }); }
 
 console.log('\n4. El color de la fila llega al modelo de color del campo (issue #131)');
 // Dos estrellas del catálogo, una roja (BP−RP 3) y una azul (BP−RP 0): sus

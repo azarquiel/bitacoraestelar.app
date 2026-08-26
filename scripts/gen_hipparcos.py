@@ -172,7 +172,10 @@ def construir():
             # Sin V/V-I no hay conversion: Hp tal cual antes que reabrir el
             # agujero. El censo del __main__ delata cuantas caen ahi.
             'mag': g if g is not None else hip_mag[i],
-            'bp_rp': bprp_desde_vi(v_i),
+            # Color solo si la magnitud tambien salio en G: una fila de 4
+            # casillas promete [RA, Dec, G, BP-RP], y mezclar Hp con color
+            # romperia ese contrato (revision issue #131).
+            'bp_rp': bprp_desde_vi(v_i) if g is not None else None,
         })
     filas.sort(key=lambda f: f['mag'])
     return filas
