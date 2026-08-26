@@ -3866,6 +3866,12 @@
 
   /* ── Dibujo de las estrellas (tamaño = ctx.canvas.width, cuadrado) ── */
   function dibujar(ctx, estrellas, o) {
+    // Estrellas que Gaia DR3 no trae (satura por arriba: Vega, Arturo, Rigel...)
+    // se concatenan aquí, no en consultar() -esa alimenta también la capa
+    // difusa, y meterle otro catálogo rompería su función de luminosidad-.
+    // Sin solapamiento que arbitrar: el fichero solo trae lo que Gaia no trae.
+    // Issue #130 (azarquiel/bitacoraestelar.app).
+    estrellas = estrellas.concat(window.BITACORA_ESTRELLAS_BRILLANTES || []);
     var SIZE = ctx.canvas.width;
     var ra0 = o.ra, dec0 = o.dec, arcmin = o.arcmin, mlim = o.mlim;
     var conGlow = (o.conGlow !== false), objetoCarbono = !!o.carbono, arana = !!o.arana;
