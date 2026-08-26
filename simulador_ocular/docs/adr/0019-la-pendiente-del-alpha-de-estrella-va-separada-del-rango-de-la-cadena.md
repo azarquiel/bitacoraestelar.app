@@ -72,11 +72,17 @@ brillos del cúmulo entero. Igual en NGC 1245.
 
 ## Estado
 
-`magBlanco` **nace valiendo `rangoBrillo` (11,5): producción no se mueve ni un
-bit** y los golden siguen idénticos. El valor definitivo es una calibración
-perceptual contra notas de observación reales, no una constante física, y esa
-comparación la hace el observador delante de la pantalla: el barrido de arriba
-es la entrada para esa decisión, no su sustituto.
+`magBlanco = 9,5`, elegido por el observador en el A/B contra sus notas (el
+valor es una calibración perceptual, no una constante física; el barrido de
+arriba fue la entrada de esa decisión, no su sustituto). Queda justo por encima
+del margen `mlim − g` de la más brillante con el 18", que es donde empieza a
+quemarse el pico.
+
+El estirado que introduce es `rangoBrillo/magBlanco = 1,211` magnitudes
+codificadas por magnitud real. `test_difuso.js` §17 lo mide explícitamente: lo
+que ese bloque defiende sigue en pie —el salto entre dos magnitudes no depende
+del EQUIPO, el `mlim` se cancela al restar—, y lo que cambia es el factor, que
+es función de las dos constantes y de nada más.
 
 Guardianes: `scripts/test_alfa_magblanco.js` (T2 fija la trampa de la
 cancelación; T4, el suelo por saturación) y `scripts/test_alfa_apertura.js`

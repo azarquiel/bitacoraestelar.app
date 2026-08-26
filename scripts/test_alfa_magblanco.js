@@ -56,12 +56,16 @@ function nivelDe(g, magBlanco, rangoLectura) {
 console.log('D=' + D + 'mm ' + M + 'x sqm=' + SQM + '  mlim=' + mlim.toFixed(2)
   + '  fondo=' + c.nivelFondo.toFixed(1) + '  c.rango=' + c.rango);
 
-/* T1 — el defecto NO mueve producción: magBlanco nace valiendo el rango de la
-   cadena, así que la rama A pinta exactamente lo de siempre. */
-ok(cerca(CFG.magBlanco, CFG.rangoBrillo),
-  'T1a: magBlanco arranca en el rango de la cadena (' + CFG.magBlanco + ')');
-ok(cerca(R.alfaEstrella(7.46, 14.17, 5, 1), 0.5834783, 1e-6),
-  'T1b: con el defecto, el alpha historico no se mueve');
+/* T1 — el valor de producción, elegido en el A/B contra las notas (ADR 0019).
+   Va POR ENCIMA del margen (mlim − g) de la más brillante de estos cúmulos con
+   el 18": ahí es donde empieza a quemarse el pico. Si alguien lo baja de ese
+   margen, T4 y el guardián de apertura lo cazan. */
+ok(cerca(CFG.magBlanco, 9.5),
+  'T1a: magBlanco de produccion = 9,5 (' + CFG.magBlanco + ')');
+ok(CFG.magBlanco < CFG.rangoBrillo,
+  'T1b: y va por debajo del rango de la cadena, que es lo que aclara la estrella');
+ok(cerca(R.alfaEstrella(7.46, 14.17, 5, 1), (14.17 - 7.46) / CFG.magBlanco, 1e-9),
+  'T1c: la rampa es (mlim-g)/magBlanco, sin mas');
 
 /* T2 — LA TRAMPA. Si pintarFot leyera la capa con la misma pendiente con la que
    se pintó, las dos conversiones serían inversas y el flujo codificado saldría
@@ -99,7 +103,7 @@ ok(alfaDe(G, margen * 1.2) < 1,
 /* T5 — el suelo alfaMin y la dilución siguen intactos con la pendiente nueva. */
 ok(cerca(R.alfaEstrella(20, 14.17, 5, 1), CFG.alfaMin),
   'T5a: por debajo del limite se queda en alfaMin');
-ok(cerca(R.alfaEstrella(7.46, 14.17, 5, 0.5), 0.5834783 / 2, 1e-6),
+ok(cerca(R.alfaEstrella(7.46, 14.17, 5, 0.5), (14.17 - 7.46) / CFG.magBlanco / 2, 1e-9),
   'T5b: la dilucion sigue multiplicando al final');
 
 console.log(fallos ? '\n' + fallos + ' FALLOS' : '\nTodo OK');

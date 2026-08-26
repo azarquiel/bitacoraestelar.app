@@ -804,8 +804,11 @@
        de responder a la apertura -ahí falla el guardián test_alfa_apertura.js-.
        El valor es una calibración contra notas de observación, no una
        constante física: `node scripts/harness_alfa_estrellas.js <objeto> ... --blanco`
-       imprime el barrido. */
-    magBlanco: FOT.SB_NEGRO - FOT.SB_BLANCO,
+       imprime el barrido. 9,5 es el elegido tras ese A/B contra las notas de
+       NGC 1245 / NGC 1664 / NGC 2266; queda justo por encima del margen
+       (mlim − g) de la más brillante con el 18", que es donde empieza a quemar
+       el pico y a perderse el orden de brillos del cúmulo. */
+    magBlanco: 9.5,
     /* El glow de las estrellas por debajo de la magnitud límite es lo que da
        textura al halo de un globular, así que va calibrado en las mismas unidades
        aparentes: ~1,4 px de radio en pantalla. Su intensidad en g=mlim ANCLA a
