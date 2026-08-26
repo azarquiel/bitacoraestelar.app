@@ -545,7 +545,8 @@ window.BitacoraBase = (function () {
       if (q === ultima || !puedeEscribir()) return;
       ultima = q;
       onEstado('buscando', q);
-      fetch(SESAME_URL + encodeURIComponent(q))
+      // La consulta viaja canonicalizada (aliasAbell); q sigue siendo lo escrito.
+      fetch(SESAME_URL + encodeURIComponent(aliasAbell(q) || q))
         .then(function (r) { return r.text(); })
         .then(function (txt) {
           if (!puedeEscribir()) return;    // el observador escribió mientras tanto
@@ -592,6 +593,21 @@ window.BitacoraBase = (function () {
   };
   var MESSIER_IC = { 4715: 24, 4725: 25 };
 
+  /* «Abell N» es ambiguo: Sesame/SIMBAD lo resuelve como cúmulo de galaxias
+     (ACO N, catálogo de 1958/89), pero en observación visual «Abell 12» nombra
+     la planetaria del catálogo de 1966 (PN A66 N, 86 objetos): buscarla tal
+     cual traía las coordenadas del cúmulo. Se canonicaliza a la forma
+     inequívoca ANTES de consultar, solo con N ≤ 86 —por encima no hay
+     planetaria y el nombre solo puede ser el cúmulo—. Quien quiera el cúmulo
+     1-86 escribe «ACO N», que pasa tal cual. Acepta «Abell 12», «abell12» y
+     «A 12». */
+  function aliasAbell(nombre) {
+    var m = /^A(?:bell)?\s*0*(\d{1,2})$/i.exec((nombre || '').trim());
+    if (!m) return '';
+    var n = parseInt(m[1], 10);
+    return (n >= 1 && n <= 86) ? 'PN A66 ' + n : '';
+  }
+
   function aliasMessier(nombre) {
     var m = /^(NGC|IC)\s*0*(\d+)$/i.exec((nombre || '').trim());
     if (!m) return '';
@@ -602,6 +618,7 @@ window.BitacoraBase = (function () {
   return {
     esc: esc,
     aliasMessier: aliasMessier,
+    aliasAbell: aliasAbell,
     leerSesame: leerSesame,
     resolutorNombre: resolutorNombre,
     montarBuscadorCatalogo: montarBuscadorCatalogo,
