@@ -2445,12 +2445,16 @@
       });
     }
     /* Componentes de escena con borde REAL (compacta, ver ps1EscenaEnParche):
-       si un disco ANCHO los pisa, sus píxeles se dejan en NaN —AUSENCIA— y no
-       al cielo. La regla es la del anclaje (ps1AnclarACatalogo): un 0 donde no
-       hay medida es una medida falsa que bloquea el relleno, porque la caja de
-       ps1PesoImagen a caballo del borde mantiene w alto y la mezcla hace
-       w·0 + (1−w)·perfil: el anillo oscuro que partía Abell 12 en dos. Solo
-       compactas: el resto del disco ancho sigue al cielo, que es la
+       si un disco ANCHO los pisa, la elipse ENTERA del componente pasa a NaN
+       —AUSENCIA— al final (ver el pase tras los rellenos). Dos reglas juntas:
+       la del anclaje (ps1AnclarACatalogo) —un 0 donde no hay medida es una
+       medida falsa que bloquea el relleno: la caja de ps1PesoImagen a caballo
+       del borde mantiene w alto y w·0 + (1−w)·perfil deja un anillo oscuro— y
+       la de ADR 0013 —la fila de catálogo ES el modelo—: con la mayor parte
+       del objeto bajo una máscara de saturación, lo que queda de imagen es un
+       remiendo (creciente contaminado por el ala de la estrella + muescas de
+       cielo), y coserlo pinta un objeto partido; el perfil entero pinta UNO.
+       Solo compactas: el resto del disco ancho sigue al cielo, que es la
        arquitectura medida de las galaxias (M81/NGC 5055). */
     var compactas = null;
     if (a && escena) {
@@ -2462,6 +2466,14 @@
     for (i = 0; i < quitar.length; i++) {
       e = quitar[i];
       var rE = Math.max(1, e.rPx), fondo = null, ancha = e.rAs > PS1.rellenoPlanoMaxAs;
+      if (ancha && compactas) {
+        // Mismo criterio que ps1MascaraMuerdeEscena: radios elípticos sumados.
+        for (var ci = 0; ci < compactas.length; ci++) {
+          var cq = compactas[ci], dxq = e.x - cq.cx, dyq = e.y - cq.cy;
+          var esteQ = a.ex * dxq + a.ey * dyq, norteQ = a.nx * dxq + a.ny * dyq;
+          if (ps1RadioEje(cq.cos, cq.sin, norteQ, esteQ, cq.ba) <= cq.r25As + e.rAs) cq.pisada = true;
+        }
+      }
       if (ancha) {                                         // disco ancho: ausencia, que la rellene el perfil
         if (cielo == null) cielo = ps1Cielo(datos, ancho, alto);
         fondo = cielo;
@@ -2476,10 +2488,6 @@
           if (ex * ex + ey * ey > rE2) continue;
           var j = y * ancho + x;
           if (!mascara[j]) continue;
-          if (ancha && compactas && ps1FuenteEnEscena(compactas, a, x, y)) {
-            out[j] = NaN;                                  // compacta pisada: ausencia, no cielo
-            continue;
-          }
           var v = fondo;
           if (v == null) {                                 // disco estrecho con isofotas
             var b = banda(x, y);
@@ -2493,6 +2501,28 @@
       }
     }
     if (huecos.length) ps1RellenoHuecosLocal(out, ancho, alto, huecos);
+    /* Compacta pisada por un disco ancho: su elipse entera a NaN, DESPUÉS de
+       todos los rellenos (incluido el de huecos de fuentes conservadas: aquí
+       también su fuente queda dentro del modelo). El pintado la cubre con
+       (1−w)·perfil, vecino a vecino con wv=0: el objeto completo, de una
+       pieza. Ver el comentario de `compactas` arriba. */
+    if (compactas) {
+      for (i = 0; i < compactas.length; i++) {
+        var cp = compactas[i];
+        if (!cp.pisada) continue;
+        delete cp.pisada;
+        var rPxE = cp.r25As / esc;
+        var yA = Math.max(0, Math.floor(cp.cy - rPxE)), yB = Math.min(alto - 1, Math.ceil(cp.cy + rPxE));
+        var xA = Math.max(0, Math.floor(cp.cx - rPxE)), xB = Math.min(ancho - 1, Math.ceil(cp.cx + rPxE));
+        for (y = yA; y <= yB; y++) {
+          for (x = xA; x <= xB; x++) {
+            var dxp = x - cp.cx, dyp = y - cp.cy;
+            var esteP = a.ex * dxp + a.ey * dyp, norteP = a.nx * dxp + a.ny * dyp;
+            if (ps1RadioEje(cp.cos, cp.sin, norteP, esteP, cp.ba) <= cp.r25As) out[y * ancho + x] = NaN;
+          }
+        }
+      }
+    }
     return out;
   }
 

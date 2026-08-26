@@ -90,6 +90,8 @@ function quitar(escena) {
 var q = quitar(ESC);
 ok(q.out[50 * q.W + 50] !== q.out[50 * q.W + 50],
   'píxel de la compacta bajo el disco ancho: NaN (ausencia)');
+ok(q.out[50 * q.W + 35] !== q.out[50 * q.W + 35],
+  'píxel de la compacta FUERA de la máscara: también NaN — la elipse entera es modelo, sin remiendos');
 ok(isFinite(q.out[110 * q.W + 97]),
   'píxel del disco ancho FUERA de la compacta: al cielo, como siempre');
 ok(isFinite(q.out[10 * q.W + 10]) && q.out[10 * q.W + 10] === 100,
