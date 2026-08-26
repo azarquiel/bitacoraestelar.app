@@ -42,6 +42,18 @@ No hay pestaña «Estrellas dobles». El catálogo vive dentro del buscador de *
 
 **Derogado:** el render ya no recibe `sep` en las opciones de `capaEstrellas`, así que el recorte del suelo de visibilidad por `margenSuelo` **no actúa nunca en el simulador**: las dos componentes de una doble se dibujan con el mismo suelo que cualquier otra estrella del campo. Era lo que hacía que Achird A cayera de 10,08 px a 0,76 px a 133×, y esa era la diferencia de aspecto entre la pestaña de dobles y «Cualquier objeto». `radioEstrella` sigue aceptando `sep` (lo ejercitan `scripts/test_estrella_fisica.js` y `scripts/test_lienzo_invariante.js`); lo que no hay es quien se lo pase.
 
+## Vista de Gaia (`vistaGaia`)
+
+El pipeline completo del modo Canvas-2D — fondo → consulta de Gaia → velo del campo denso → magnitud límite → cúmulo → capa de estrellas → pintado fotométrico → capa de galaxias — detrás de una sola entrada: `BitacoraGaiaRender.vistaGaia(ctx, opts)`. El ORDEN de la cadena es del módulo; los dos llamadores (el simulador de oculares y `render()`, el envoltorio que usa el generador de imagen del formulario) pasan datos y reciben resultado, sin conocer la secuencia.
+
+- **Interfaz:** campos planos (el idioma de `magLimite`/`nivelFondo`): equipo (`apertura`, `aumentos`, `transmision|optica`, `arana`, `pupilaSalida`, `pupilaOjo`, `afov`), cielo (`sqm`), campo (`ra`, `dec`, `arcmin`, `size`) y objeto (`carbono`/`carbonoMag`, `cumulo` —la ficha física del catálogo, como DATO—, `catalogo` difuso, `conGlow`, `vivo`). Devuelve `{estrellas, estrellasDibujo, mlim, fondo, avisoCampo, galaxias}`.
+- **Dos ritmos, un dato:** `galaxias` es LA PROMESA de la capa PS1 (`{aviso}`, nunca rechaza). El formulario la espera (la imagen que sube debe llevar la galaxia); el simulador pinta estrellas ya y engancha el aviso cuando llegue.
+- **Cancelar no es un error:** con `vivo()` falso resuelve `{cancelada: true}` sin volver a tocar el ctx. El RECHAZO de la promesa significa «Gaia no responde» y en el simulador dispara el respaldo DSS.
+- **Los avisos los redacta el módulo** (`avisoCampo`: catálogo agotado / resplandor de fondo): fuente única de texto; cada pantalla decide dónde pintarlos y con qué prioridad.
+- **Dependencias implícitas documentadas:** los catálogos cargados por `<script defer>` en ambas páginas — `BITACORA_ESTRELLAS_BRILLANTES` (lo concatena `dibujar()`) y `BITACORA_GALAXIAS`/`BITACORA_NEBULOSAS` (catálogo difuso por defecto).
+- **Test de contrato:** `scripts/test_vista_gaia.js` — entra por la interfaz (fetch de mentira, ctx falso), y debe sobrevivir a cualquier refactor interno del pipeline.
+- _Evitar_: «escena» (ocupado por la escena difusa de PS1), «pipeline del render» sin nombre.
+
 ## Cadena de la placa (luma → flujo)
 
 Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de objeto por píxel** que come `pintarFot`. Es el otro motor que produce un `Fobj`, en paralelo a las capas difusas sintéticas del Canvas-2D.

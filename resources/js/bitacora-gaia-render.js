@@ -4152,57 +4152,127 @@
     return out;
   }
 
-  /* ── Entrada de alto nivel: fondo + consulta + dibujo ── */
-  function render(canvas, o) {
-    var SIZE = canvas.width;
-    var ctx = canvas.getContext('2d');
+  /* ── La vista de Gaia: el pipeline completo del Canvas-2D ──
+     Módulo hondo dueño del ORDEN de la cadena: fondo → consulta → velo →
+     magnitud límite → cúmulo → capa de estrellas → pintado fotométrico → capa
+     de galaxias. Los dos llamadores (render() del formulario y el simulador de
+     oculares) no conocen la secuencia: pasan DATOS y reciben resultado.
+
+     Interfaz (campos planos, el idioma de magLimite/nivelFondo):
+       ctx  contexto 2D ya dimensionado (size × size)
+       o    { ra, dec, arcmin, size, apertura, aumentos, transmision|optica,
+              arana, sqm, pupilaSalida, pupilaOjo, afov, conGlow,
+              carbono, carbonoMag, cumulo, catalogo, vivo }
+     Devuelve una promesa de:
+       { estrellas, estrellasDibujo, mlim, fondo, avisoCampo, galaxias }
+     `galaxias` es LA PROMESA de la capa PS1 ({aviso}): el formulario la espera
+     (la imagen que sube debe llevar la galaxia) y el simulador pinta estrellas
+     ya y engancha el aviso cuando llegue. Nunca rechaza.
+     Con `vivo()` falso resuelve { cancelada: true } sin volver a tocar el ctx:
+     cancelar NO es un error — el rechazo de esta promesa significa «Gaia no
+     responde» y en el simulador dispara el respaldo DSS.
+     El cúmulo entra como DATO ya preparado (la ficha física del catálogo):
+     aquí no se lee nada de bitacora-cumulos.js (ADR 0002 del simulador).
+     Dependencias implícitas, documentadas: los catálogos de datos cargados por
+     <script defer> — BITACORA_ESTRELLAS_BRILLANTES (lo concatena dibujar()) y
+     BITACORA_GALAXIAS/BITACORA_NEBULOSAS (catálogo difuso por defecto de
+     ps1CapaGalaxias). Las dos páginas los cargan igual. */
+  function vistaGaia(ctx, o) {
+    var SIZE = o.size || ctx.canvas.width;
+    var vivo = o.vivo || function () { return true; };
     var t = (o.transmision > 0) ? o.transmision : (transmisionOptica(o.optica) || TRANSMISION_DEFECTO);
     var arana = (typeof o.arana === 'boolean') ? o.arana : opticaTieneArana(o.optica);
-    var fondo = nivelFondo({ pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t });
-    var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
-    ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE);
-    var mlim = magLimite({
-      apertura: o.apertura, aumentos: o.aumentos, transmision: t,
-      sqm: o.sqm, pupilaOjo: o.pupilaOjo
-    });
+    function limite(veloSB) {
+      return magLimite({
+        apertura: o.apertura, aumentos: o.aumentos, transmision: t,
+        sqm: o.sqm, pupilaOjo: o.pupilaOjo, veloSB: veloSB
+      });
+    }
     var cielo = {
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t,
       aumentos: o.aumentos, perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
+    var fondo = nivelFondo(cielo);
+    ctx.fillStyle = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    var mlim = limite();
     return consultar(o.ra, o.dec, o.arcmin, ps1MagConsulta(magConsultaGaia(o.apertura, t, o.aumentos))).then(function (estrellas) {
+      if (!vivo()) return { cancelada: true };
       /* Campo denso: la banda truncada llega como momentos y entra como velo
-         (cielo extra). mlim se recalcula con él: un fondo más brillante
-         también quita estrellas del límite. */
+         (cielo extra) en toda la cadena, incluida la magnitud límite (ADR
+         0014): un fondo más brillante también quita estrellas del límite. */
       var velo = veloSB(estrellas.fondo);
       if (velo != null) {
         cielo.veloSB = velo;
-        mlim = magLimite({
-          apertura: o.apertura, aumentos: o.aumentos, transmision: t,
-          sqm: o.sqm, pupilaOjo: o.pupilaOjo, veloSB: velo
-        });
-        fondo = nivelFondo({ pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t, veloSB: velo });
+        mlim = limite(velo);
+        fondo = nivelFondo(cielo);
       }
-      /* Estrellas y fondo se mapean en una sola curva de tono: el fondo pasa
-         por la curva logarítmica y las estrellas se dibujan encima en 8
-         bits, saltándosela; por eso el fondo va plano (sin capas difusas). */
+      /* Aviso del catálogo agotado: si el TOP de la consulta se quedó antes de
+         la magnitud límite del equipo, faltan estrellas que SÍ se verían.
+         Texto redactado aquí (fuente única con el formulario); cada pantalla
+         decide dónde pintarlo y con qué prioridad. */
+      var avisoCampo = '';
+      var mcorte = -Infinity;
+      for (var e = 0; e < estrellas.length; e++) if (estrellas[e][2] > mcorte) mcorte = estrellas[e][2];
+      if (mlim != null && isFinite(mcorte) && mcorte < mlim - 0.1) {
+        avisoCampo = velo != null
+          ? 'Campo muy rico: por debajo de magnitud ' + mcorte.toFixed(1) + ' las estrellas no se dibujan una a una; su luz entra como resplandor de fondo.'
+          : 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
+            ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
+      }
+      /* Componente difusa del campo: la llenan las capas que la tengan (el
+         campo no resuelto de un cúmulo, la imagen de una galaxia). Sin ninguna
+         queda a cero y las estrellas van sobre el nivel de cielo tal cual. */
       var difuso = new Float32Array(SIZE * SIZE);
+      var estrellasDibujo = estrellas;
+      /* Cúmulo globular: lo que el equipo NO resuelve se pinta como campo
+         estadístico (media + grano de la función de luminosidad) y lo que sí,
+         como estrellas — las de Gaia más las sintéticas que el catálogo no
+         trae en el núcleo aglomerado. */
+      var cum = o.cumulo
+        ? pintarCumulo(difuso, o.cumulo, {
+            ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE,
+            cielo: cielo, apertura: o.apertura, estrellas: estrellasDibujo
+          })
+        : null;
+      if (cum) estrellasDibujo = cum.estrellas;
       var opEst = {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
         apertura: o.apertura,   // el disco de Airy va como 1/D
-        conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
+        conGlow: (o.conGlow !== false), carbono: !!o.carbono,
+        carbonoMag: (o.carbono && o.carbonoMag != null) ? o.carbonoMag : null,
+        arana: arana
       };
-      var capaEst = capaEstrellas(estrellas, opEst, SIZE);
+      var capaEst = capaEstrellas(estrellasDibujo, opEst, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst);
-      /* La capa de galaxias se espera: la imagen que el formulario sube es la
-         que se ve, y si se resolviera antes de que llegue el parche subiría el
-         campo sin la galaxia. Si el parche no llega, esto resuelve igual y la
-         imagen sale como salía antes de esta capa. */
-      return ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
-        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, estrellas: estrellas,
-        estrellasDibujo: estrellas, opEstrellas: opEst,
-        apertura: o.apertura   // la PSF del parche va como 1/D, igual que el disco de Airy
-      }).then(function (capa) {
-        return { estrellas: estrellas, mlim: mlim, fondo: fondo, aviso: capa.aviso };
+      var galaxias = ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
+        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE,
+        estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
+        catalogo: o.catalogo || null,
+        apertura: o.apertura,   // la PSF del parche va como 1/D, igual que el disco de Airy
+        vivo: vivo
+      });
+      return { estrellas: estrellas, estrellasDibujo: estrellasDibujo, mlim: mlim,
+               fondo: fondo, avisoCampo: avisoCampo, galaxias: galaxias };
+    });
+  }
+
+  /* ── Entrada de alto nivel del formulario: envoltorio de vistaGaia que
+     ESPERA la capa de galaxias — la imagen que el formulario sube es la que se
+     ve, y si resolviera antes de llegar el parche subiría el campo sin la
+     galaxia. Si el parche no llega, resuelve igual (la capa nunca rechaza). ── */
+  function render(canvas, o) {
+    return vistaGaia(canvas.getContext('2d'), {
+      ra: o.ra, dec: o.dec, arcmin: o.arcmin, size: canvas.width,
+      apertura: o.apertura, aumentos: o.aumentos, transmision: o.transmision,
+      optica: o.optica, arana: o.arana, sqm: o.sqm,
+      pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, afov: o.afov,
+      conGlow: o.conGlow, carbono: o.carbono, carbonoMag: o.carbonoMag
+    }).then(function (r) {
+      if (r.cancelada) return r;
+      return r.galaxias.then(function (capa) {
+        return { estrellas: r.estrellas, mlim: r.mlim, fondo: r.fondo,
+                 aviso: capa.aviso, avisoCampo: r.avisoCampo };
       });
     });
   }
@@ -4272,6 +4342,7 @@
     fot: FOT,
     consultar: consultar,
     dibujar: dibujar,
+    vistaGaia: vistaGaia,
     render: render,
     magLimite: magLimite,
     veloSB: veloSB,
