@@ -90,12 +90,20 @@ function quitar(escena) {
 var q = quitar(ESC);
 ok(q.out[50 * q.W + 50] !== q.out[50 * q.W + 50],
   'píxel de la compacta bajo el disco ancho: NaN (ausencia)');
-ok(q.out[50 * q.W + 35] !== q.out[50 * q.W + 35],
-  'píxel de la compacta FUERA de la máscara: también NaN — la elipse entera es modelo, sin remiendos');
-ok(isFinite(q.out[110 * q.W + 97]),
-  'píxel del disco ancho FUERA de la compacta: al cielo, como siempre');
-ok(isFinite(q.out[10 * q.W + 10]) && q.out[10 * q.W + 10] === 100,
-  'píxel sin enmascarar: intacto');
+ok(q.out[110 * q.W + 97] !== q.out[110 * q.W + 97] && q.out[10 * q.W + 10] !== q.out[10 * q.W + 10],
+  'toda la escena pisada: la imagen ENTERA es ausencia — el anclaje no puede dar la luz del objeto al ala de la estrella');
+/* Con un componente NO pisado (galaxia vecina), la imagen se conserva y solo
+   cae la elipse de la compacta pisada. */
+var MIXTA = ESC.concat([{ cx: 20, cy: 100, cos: 1, sin: 0, ba: 1, r25As: 15, compacta: false }]);
+var qm = quitar(MIXTA);
+ok(qm.out[50 * qm.W + 50] !== qm.out[50 * qm.W + 50],
+  'mixta: la elipse de la compacta pisada es NaN');
+ok(qm.out[50 * qm.W + 35] !== qm.out[50 * qm.W + 35],
+  'mixta: también fuera de la máscara, dentro de la elipse — sin remiendos');
+ok(isFinite(qm.out[110 * qm.W + 97]),
+  'mixta: el disco ancho fuera de la compacta, al cielo como siempre');
+ok(isFinite(qm.out[10 * qm.W + 10]) && qm.out[10 * qm.W + 10] === 100,
+  'mixta: píxel sin enmascarar, intacto');
 var qg = quitar(GALAXIA);
 ok(isFinite(qg.out[50 * qg.W + 50]),
   'sobre una isofota de GALAXIA el disco ancho sigue al cielo: sin NaN nuevos');

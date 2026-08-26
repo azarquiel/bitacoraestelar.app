@@ -2505,8 +2505,24 @@
        todos los rellenos (incluido el de huecos de fuentes conservadas: aquí
        también su fuente queda dentro del modelo). El pintado la cubre con
        (1−w)·perfil, vecino a vecino con wv=0: el objeto completo, de una
-       pieza. Ver el comentario de `compactas` arriba. */
+       pieza. Ver el comentario de `compactas` arriba.
+       Y si TODA la escena del parche son compactas pisadas, la imagen ENTERA
+       pasa a ausencia. No es cosmética: el anclaje reparte la luz del catálogo
+       entre lo que queda encendido, y con el objeto en NaN ese presupuesto se
+       lo lleva el ala de la estrella más allá del tope de su máscara
+       (mascaraMaxAs es extrapolación cortada, no el fin del ala: la ley sin
+       tope da 226″ para g=4,7) — motitas brillantes con la luz de la nebulosa.
+       La estrella la pinta la capa de estrellas (glow y spikes); aquí no queda
+       nada legítimo que conservar. Con componentes no pisados (una galaxia
+       vecina) no se toca: solo caen sus elipses pisadas. */
     if (compactas) {
+      var pisadas = 0;
+      for (i = 0; i < compactas.length; i++) if (compactas[i].pisada) pisadas++;
+      if (pisadas && escena && pisadas === escena.length) {
+        for (i = 0; i < out.length; i++) out[i] = NaN;
+        for (i = 0; i < compactas.length; i++) delete compactas[i].pisada;
+        return out;
+      }
       for (i = 0; i < compactas.length; i++) {
         var cp = compactas[i];
         if (!cp.pisada) continue;
