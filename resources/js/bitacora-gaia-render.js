@@ -1226,12 +1226,18 @@
      el suyo). Sólo ese último escalón se le confiesa al observador: si el
      aviso saliera también con un ángulo medido, dejaría de significar algo.
 
-     El vínculo entre la fila y la doble es POSICIONAL, que es como se hizo el
-     ancla en el generador (gen_hipparcos.py, RADIO_ANCLA_ARCSEC). El radio
-     tiene que cubrir dos cosas a la vez: la separación del par (la fila
-     'asumida' es la compañera, no la primaria) y el desajuste de época entre
-     el catálogo de dobles, que es J2000 con AR redondeada a segundos enteros
-     de tiempo, y estas filas, ya propagadas a 2016.0. */
+     El vínculo entre la fila y la doble es POSICIONAL, con el mismo ancla de
+     40″ del generador (gen_hipparcos.py, RADIO_ANCLA_ARCSEC): cubre el
+     desajuste de época entre el catálogo de dobles —J2000, con AR redondeada
+     a segundos enteros de tiempo— y estas filas, ya propagadas a 2016.0.
+
+     Pero la fila 'asumida' es la COMPAÑERA, no la primaria, así que cae a la
+     separación del par de la posición del catálogo, y el ángulo al que cae es
+     justo lo que no se sabe. La zona buscada es por eso un ANILLO de radio
+     `sep` y no un disco de radio `sep`: con el disco, un par de 3705″ —los
+     hay— barría un grado entero de cielo y cualquier fila asumida ajena caía
+     dentro. El centro se acepta también, por si el catálogo diera la posición
+     de la compañera en vez de la de la primaria. */
   var RADIO_ASUMIDA = 40;   // ″ el mismo ancla que usa el generador
   function orientacionAsumida(o) {
     var filas = (typeof window !== 'undefined') && window.BITACORA_ESTRELLAS_BRILLANTES;
@@ -1240,12 +1246,12 @@
     if (ra0 == null || dec0 == null) return false;
     var sep = numONulo(o.sep) || 0;
     var cos0 = Math.cos(dec0 * Math.PI / 180);
-    var radio = (RADIO_ASUMIDA + sep) / 3600;                   // grados
     for (var i = 0; i < filas.length; i++) {
       var f = filas[i];
       if (f[5] !== 'asumida') continue;
       var dra = (((f[0] - ra0 + 540) % 360) - 180) * cos0, ddec = f[1] - dec0;
-      if (dra * dra + ddec * ddec <= radio * radio) return true;
+      var d = Math.sqrt(dra * dra + ddec * ddec) * 3600;         // ″
+      if (d <= RADIO_ASUMIDA || Math.abs(d - sep) <= RADIO_ASUMIDA) return true;
     }
     return false;
   }

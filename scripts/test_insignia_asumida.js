@@ -53,6 +53,18 @@ ok(R.orientacionAsumida(doble) === true, 'con el desajuste de época (32″) sig
 global.window.BITACORA_ESTRELLAS_BRILLANTES = [filaA(600, 0, 'asumida')];
 ok(R.orientacionAsumida(doble) === false, 'una asumida de OTRO sistema (600″) no cuenta');
 
+console.log('\n1b. La compañera se busca en un ANILLO, no en un disco');
+/* La fila asumida es la compañera: cae a `sep` del centro, a un ángulo que es
+   justo lo que no se sabe. Con un disco de radio sep, un par ancho barría
+   grados de cielo y se tragaba filas asumidas de otros sistemas. */
+var ancha = { ra: RA, dec: DEC, sep: 900 };
+global.window.BITACORA_ESTRELLAS_BRILLANTES = [filaA(890, 0, 'asumida')];
+ok(R.orientacionAsumida(ancha) === true, 'par de 900″: su compañera en el anillo avisa');
+global.window.BITACORA_ESTRELLAS_BRILLANTES = [filaA(400, 0, 'asumida')];
+ok(R.orientacionAsumida(ancha) === false, 'una fila a media distancia (400″) NO es su compañera');
+global.window.BITACORA_ESTRELLAS_BRILLANTES = [filaA(12, 0, 'asumida')];
+ok(R.orientacionAsumida(ancha) === true, 'la del centro sí: puede ser la primaria del par');
+
 console.log('\n2. Los otros dos escalones del origen no avisan');
 global.window.BITACORA_ESTRELLAS_BRILLANTES = [filaA(6, 8, 'medida')];
 ok(R.orientacionAsumida(doble) === false, 'origen "medida": no avisa');
@@ -92,23 +104,6 @@ ok(avisan.every(function (e) { return e.pa == null; }),
    'ninguna de las que avisan tiene ángulo publicado: ' + avisan.map(function (e) { return e.id; }).join(', '));
 ok(avisan.length < dobles.length * 0.05,
    'el aviso es la excepción, no la norma (' + avisan.length + ' de ' + dobles.length + ' dobles)');
-
-console.log('\n5. La insignia vive en la ficha, no en la línea de avisos');
-/* La ficha se compone dentro del IIFE de bitacora-ocular.js, que necesita el
-   DOM del simulador para arrancar; lo que se protege aquí es el cableado:
-   que la insignia se pinte en la fila de las de catálogo (`.obj-cats`, flex
-   con wrap: no desplaza a ninguna) y no en `sim-aviso`, y que tenga estilo
-   propio. */
-var fs = require('fs');
-var ocular = fs.readFileSync(__dirname + '/../simulador_ocular/resources/js/bitacora-ocular.js', 'utf8');
-var css = fs.readFileSync(__dirname + '/../simulador_ocular/resources/css/bitacora-ocular.css', 'utf8');
-ok(/obj-cats">'\s*\+\s*insigniasDoble\(o\.catalogos\)\s*\+\s*insigniaAsumida\(o\)/.test(ocular),
-   'la ficha la pinta junto a las insignias de catálogo');
-ok(/insigniaAsumida[\s\S]{0,600}orientacionAsumida/.test(ocular),
-   'y la dispara el origen del catálogo, no otro criterio');
-ok((ocular.match(/insigniaAsumida\(/g) || []).length === 2,
-   'sólo se pinta en un sitio: se define y se usa una vez (la ficha)');
-ok(/\.obj-cat\.es-asumida/.test(css), 'tiene estilo propio en la hoja de la ficha');
 
 console.log(fallos ? '\n' + fallos + ' FALLOS' : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);

@@ -1000,8 +1000,9 @@
         if (!window.BitacoraGaiaRender.orientacionAsumida({
               ra: sexToDeg(o.ra, true), dec: sexToDeg(o.dec, false), sep: o.sep
             })) return '';
-        return '<span class="obj-cat es-asumida" title="' +
-               BitacoraBase.esc(INSIGNIA_ASUMIDA.titulo) + '">' +
+        var t = INSIGNIA_ASUMIDA.titulo;
+        return '<span class="obj-cat es-asumida"' +
+               (t ? ' title="' + BitacoraBase.esc(t) + '"' : '') + '>' +
                BitacoraBase.esc(INSIGNIA_ASUMIDA.texto) + '</span>';
       }
 
