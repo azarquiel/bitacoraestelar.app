@@ -91,7 +91,7 @@ function pintadaEnLimite(D, F, t) {
   var mlim = R.magLimite({ apertura: D, aumentos: aum, transmision: t, sqm: 21 });
   var o = { afov: 82, apertura: D, arcmin: arcmin, size: 720, g: mlim, blur: R.blurEstrella(mlim, D), mlim: mlim };
   var Rtot = R.radioEstrella(o);
-  var alfa = Math.max(R.config.alfaMin, Math.min(1, (mlim - o.g) / R.config.rangoBrillo));
+  var alfa = Math.max(R.config.alfaMin, Math.min(1, (mlim - o.g) / R.config.magBlanco));
   return { mlim: mlim, radio: Rtot, alfa: alfa * R.factorDilucion(R.sueloEstrella(o), Rtot) };
 }
 var e18 = pintadaEnLimite(457.2, 457.2 * 4.5, 0.7);   // 18" f/4.5, 13 mm → 158x

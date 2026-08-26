@@ -451,7 +451,7 @@ ok(excesos[0] === vEstrella, 'sin difuso de fondo, el exceso es exactamente el v
 console.log('Cruce resuelta/glow en mlim, sin salto:');
 var CFG = R.config;
 function alphaResuelta(mlim, g) {
-  return Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo));
+  return Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.magBlanco));
 }
 function alphaGlow(mlim, g) { return CFG.alfaMin * Math.pow(10, -0.4 * (g - mlim)); }
 casi(alphaResuelta(14, 14), alphaGlow(14, 14 + 1e-9), 1e-6,
@@ -470,11 +470,26 @@ ok(alphaGlow(14, 14.5) < alphaResuelta(14, 14) && alphaGlow(14, 15) < alphaGlow(
    Con rangoBrillo=12 contra un rango de 11,5 no se conservaba: cada magnitud
    se pintaba como 0,958 y un salto de 2 mag salía 5,84x en vez de 6,31x. De
    ahí que rangoBrillo se derive ahora de SB_NEGRO-SB_BLANCO; este test es lo
-   que impide que vuelvan a separarse. */
+   que impide que vuelvan a separarse.
+
+   La pendiente del pintado tiene desde la rama C su propio nombre
+   (`CFG.magBlanco`, ADR 0019) y ya NO vale ese rango: con magBlanco 9,5 contra
+   un rango de 11,5, cada magnitud real se codifica como 11,5/9,5 magnitudes.
+   Ese estirado es DELIBERADO —es lo único que aclara una estrella— y por eso
+   aquí no se comprueba el 6,31x pelado, sino que:
+     · el factor por magnitud es exactamente 10^(0,4·rangoTono/magBlanco), o sea
+       una función de las dos constantes y de nada más;
+     · y sigue sin depender del EQUIPO, que es la propiedad que este bloque
+       nació defendiendo: el mlim se cancela al restar, valga lo que valga la
+       pendiente.
+   Si magBlanco vuelve a valer rangoTono, el factor vuelve a ser 6,31x solo. */
 console.log('El salto de brillo entre dos magnitudes no depende del equipo:');
 var rangoTono = FOT.SB_NEGRO - FOT.SB_BLANCO;
 casi(CFG.rangoBrillo, rangoTono, 1e-9,
   'rangoBrillo es el rango de tono, no un número suelto');
+// Estirado por magnitud que mete la pendiente del pintado (1 si van emparejadas).
+var estira = rangoTono / CFG.magBlanco;
+var porMag = Math.pow(10, 0.4 * estira);
 // Flujo que pintarFot() reconstruye del valor de pantalla de una estrella, sin
 // el término -1 (que resta el cielo y es lo único que rompe la igualdad exacta
 // entre equipos; ver más abajo). Fref, no Fcielo: ver el comentario de pintarFot.
@@ -483,19 +498,20 @@ function flujoPintado(mlim, g) {
   return Fref * Math.pow(10, 255 * alphaResuelta(mlim, g) * rangoTono / (255 * 2.5));
 }
 [[15.91, '18" f/4.5 a 158x'], [14.72, '8" f/10 a 156x']].forEach(function (eq) {
-  casi(flujoPintado(eq[0], 8) / flujoPintado(eq[0], 10), Math.pow(10, 0.4 * 2), 1e-6,
-    'mag 8 vs mag 10 en un ' + eq[1] + ' = 6,31x');
+  casi(flujoPintado(eq[0], 8) / flujoPintado(eq[0], 10), Math.pow(porMag, 2), 1e-6,
+    'mag 8 vs mag 10 en un ' + eq[1] + ' = ' + Math.pow(porMag, 2).toFixed(2) + 'x');
 });
 // Y no es cosa de esas dos magnitudes ni de esos dos equipos: la ley vale en
 // todo el tramo donde la rampa no está ni saturada (alfa=1) ni en su suelo.
 var ratios = [];
 [15.91, 14.72, 12.0, 18.0].forEach(function (mlim) {
-  for (var g = mlim - CFG.rangoBrillo + 0.5; g < mlim - CFG.alfaMin * CFG.rangoBrillo - 1; g += 0.7) {
+  for (var g = mlim - CFG.magBlanco + 0.5; g < mlim - CFG.alfaMin * CFG.magBlanco - 1; g += 0.7) {
     ratios.push(flujoPintado(mlim, g) / flujoPintado(mlim, g + 1));
   }
 });
-ok(ratios.every(function (r) { return Math.abs(r - Math.pow(10, 0.4)) < 1e-6; }),
-  'una magnitud de diferencia son 2,512x en ' + ratios.length + ' puntos de 4 equipos distintos');
+ok(ratios.every(function (r) { return Math.abs(r - porMag) < 1e-6; }),
+  'una magnitud de diferencia son ' + porMag.toFixed(3) + 'x en ' + ratios.length
+  + ' puntos de 4 equipos distintos (estirado ' + estira.toFixed(3) + ' por magBlanco)');
 // El -1 de flujoDeValor resta el cielo, así que el flujo reconstruido de verdad
 // no es exactamente proporcional: deja un residuo que SÍ depende del equipo.
 // Es correcto (el valor de pantalla es un incremento sobre el fondo, no un flujo

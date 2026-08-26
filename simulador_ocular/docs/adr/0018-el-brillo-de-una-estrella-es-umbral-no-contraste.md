@@ -47,6 +47,9 @@ Con la ley de flujo el 18" pinta la estrella **más apagada** que el 8".
    cadena. El anclaje a mlim nunca fue el error. Lo que sí queda por revisar es
    la PENDIENTE (`rangoBrillo` = 11,5 mag, compartido con `flujoDeValor`) y la
    falta de saturación: por eso ninguna estrella de cúmulo llega al blanco.
+   Continuado y cerrado en el **ADR 0019**: la pendiente se separa
+   (`CFG.magBlanco`) y —lo que no era obvio— solo aclara si `pintarFot` NO la
+   sigue; emparejar las dos la cancela sin mover un píxel.
 
 ## Estado
 

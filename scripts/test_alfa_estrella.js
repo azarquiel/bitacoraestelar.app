@@ -28,8 +28,9 @@ function conFlujo(v, fn) {
 
 /* — Rama A: la rampa, tal como estaba — */
 conFlujo(false, function () {
-  // g=7,46 con mlim=14,17 (8" a 100x, sqm 20): (14,17-7,46)/11,5.
-  cerca('A: rampa lineal en el margen', R.alfaEstrella(7.46, 14.17, 5, 1), 0.5834783);
+  // g=7,46 con mlim=14,17 (8" a 100x, sqm 20): (14,17-7,46)/magBlanco.
+  cerca('A: rampa lineal en el margen', R.alfaEstrella(7.46, 14.17, 5, 1),
+    (14.17 - 7.46) / CFG.magBlanco);
   // Suelo: una estrella en el propio límite no baja de alfaMin.
   cerca('A: suelo alfaMin en g=mlim', R.alfaEstrella(14.17, 14.17, 5, 1), 0.05);
   // La dilución multiplica DESPUÉS del recorte.

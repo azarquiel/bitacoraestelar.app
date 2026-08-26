@@ -785,6 +785,30 @@
     // Son la misma cantidad física: cuántas magnitudes caben en los 0-255 de la
     // pantalla. Si se toca SB_NEGRO/SB_BLANCO, esto acompaña solo.
     rangoBrillo: FOT.SB_NEGRO - FOT.SB_BLANCO,
+    /* Rama C (ADR 0019). Cuántas magnitudes por debajo de mlim pintan BLANCO en
+       el disco de una estrella. Nace valiendo `rangoBrillo` -producción no se
+       mueve ni un bit-, pero es un número DISTINTO y por eso tiene nombre
+       propio: `rangoBrillo` es el rango de la CADENA (lo que `flujoDeValor`
+       espera al releer la capa en pintarFot), y esto es la PENDIENTE DEL
+       PINTADO.
+       Separarlos es lo único que mueve el nivel en pantalla de una estrella.
+       Con la lectura emparejada a la pendiente las dos conversiones son
+       inversas exactas y la pendiente se cancela: el nivel final no cambia
+       (medido, test_alfa_magblanco.js T2). Como pintarFot lee con `c.rango`
+       FIJO, el flujo codificado queda Fref·(10^(0,4·Δmag·rango/magBlanco) − 1)
+       y el nivel sobre el fondo va ~como 255·Δmag/magBlanco: bajar esto aclara
+       TODO el campo de estrellas.
+       El precio, medido: (a) el disco deja de estar en la misma escala de flujo
+       que la aureola (que usa 10^(-0,4g) directo), y (b) por debajo del margen
+       (mlim − g) de la estrella más brillante, esa estrella satura a 1 y deja
+       de responder a la apertura -ahí falla el guardián test_alfa_apertura.js-.
+       El valor es una calibración contra notas de observación, no una
+       constante física: `node scripts/harness_alfa_estrellas.js <objeto> ... --blanco`
+       imprime el barrido. 9,5 es el elegido tras ese A/B contra las notas de
+       NGC 1245 / NGC 1664 / NGC 2266; queda justo por encima del margen
+       (mlim − g) de la más brillante con el 18", que es donde empieza a quemar
+       el pico y a perderse el orden de brillos del cúmulo. */
+    magBlanco: 9.5,
     /* El glow de las estrellas por debajo de la magnitud límite es lo que da
        textura al halo de un globular, así que va calibrado en las mismas unidades
        aparentes: ~1,4 px de radio en pantalla. Su intensidad en g=mlim ANCLA a
@@ -1268,7 +1292,7 @@
   function alfaEstrella(g, mlim, radioArcsec, dilucion) {
     var d = (dilucion > 0) ? dilucion : 1;
     if (!CFG.alfaPorFlujo) {
-      return Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * d;
+      return Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.magBlanco))) * d;
     }
     var area = Math.PI * radioArcsec * radioArcsec;
     if (!(area > 0)) return CFG.alfaMin;
