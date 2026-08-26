@@ -451,7 +451,7 @@ ok(excesos[0] === vEstrella, 'sin difuso de fondo, el exceso es exactamente el v
 console.log('Cruce resuelta/glow en mlim, sin salto:');
 var CFG = R.config;
 function alphaResuelta(mlim, g) {
-  return Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo));
+  return Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.magBlanco));
 }
 function alphaGlow(mlim, g) { return CFG.alfaMin * Math.pow(10, -0.4 * (g - mlim)); }
 casi(alphaResuelta(14, 14), alphaGlow(14, 14 + 1e-9), 1e-6,
@@ -470,11 +470,19 @@ ok(alphaGlow(14, 14.5) < alphaResuelta(14, 14) && alphaGlow(14, 15) < alphaGlow(
    Con rangoBrillo=12 contra un rango de 11,5 no se conservaba: cada magnitud
    se pintaba como 0,958 y un salto de 2 mag salía 5,84x en vez de 6,31x. De
    ahí que rangoBrillo se derive ahora de SB_NEGRO-SB_BLANCO; este test es lo
-   que impide que vuelvan a separarse. */
+   que impide que vuelvan a separarse.
+
+   La pendiente del pintado tiene desde la rama C su propio nombre
+   (`CFG.magBlanco`, ADR 0019) y nace valiendo justo ese rango. Bajarla estira
+   el contraste de las estrellas A PROPÓSITO, así que este bloque dejará de
+   conservarse: no es una regresión, es el precio anunciado, y el fallo aquí es
+   el aviso de que se ha cobrado. */
 console.log('El salto de brillo entre dos magnitudes no depende del equipo:');
 var rangoTono = FOT.SB_NEGRO - FOT.SB_BLANCO;
 casi(CFG.rangoBrillo, rangoTono, 1e-9,
   'rangoBrillo es el rango de tono, no un número suelto');
+casi(CFG.magBlanco, rangoTono, 1e-9,
+  'y la pendiente del pintado (magBlanco) sigue emparejada con él');
 // Flujo que pintarFot() reconstruye del valor de pantalla de una estrella, sin
 // el término -1 (que resta el cielo y es lo único que rompe la igualdad exacta
 // entre equipos; ver más abajo). Fref, no Fcielo: ver el comentario de pintarFot.
@@ -490,7 +498,7 @@ function flujoPintado(mlim, g) {
 // todo el tramo donde la rampa no está ni saturada (alfa=1) ni en su suelo.
 var ratios = [];
 [15.91, 14.72, 12.0, 18.0].forEach(function (mlim) {
-  for (var g = mlim - CFG.rangoBrillo + 0.5; g < mlim - CFG.alfaMin * CFG.rangoBrillo - 1; g += 0.7) {
+  for (var g = mlim - CFG.magBlanco + 0.5; g < mlim - CFG.alfaMin * CFG.magBlanco - 1; g += 0.7) {
     ratios.push(flujoPintado(mlim, g) / flujoPintado(mlim, g + 1));
   }
 });

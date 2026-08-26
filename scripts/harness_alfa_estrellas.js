@@ -119,3 +119,37 @@ if (process.argv.indexOf('--saturacion') >= 0) {
     CFG.alfaPorFlujo = antes;
   });
 }
+
+/* --blanco: barrido de CFG.magBlanco (rama C, ADR 0019). Imprime el NIVEL EN
+   PANTALLA de cada estrella, no el alpha: el alpha es solo la codificación con
+   la que pintarFot vuelve a leer la capa (flujoDeValor contra Fref, y de ahí
+   valorDeFlujo contra el cielo de la escena). Es ese nivel el que hay que
+   comparar contra las notas de observación.
+   La columna `sat` cuenta las estrellas recortadas a blanco: en cuanto la más
+   brillante entra ahí, deja de responder a la apertura y el guardián
+   test_alfa_apertura.js falla. Ese es el suelo útil del barrido. */
+if (process.argv.indexOf('--blanco') >= 0) {
+  var c = R.ctxFotometrico({
+    pupilaSalida: D / MAG, pupilaOjo: POJO, sqm: SQM, transmision: T, aumentos: MAG
+  });
+  var muestra = [0, 1, 4, 9, 49, 99].map(function (k) { return gs[k]; })
+    .filter(function (g) { return g != null && g <= mlim; });
+  var resueltas = gs.filter(function (g) { return g <= mlim; });
+  var nivelDe = function (g) {
+    var F = R.flujoDeValor(255 * desglose(g, mlim).A, c.Fref, c.rango);
+    return c.nivelFondo + R.valorDeFlujo(F, c.FcieloPintado, c.rango);
+  };
+  console.log('\nBarrido de magBlanco (nivel 0-255 en pantalla, fondo='
+    + c.nivelFondo.toFixed(1) + '):');
+  console.log('magBlanco   sat' + muestra.map(function (g) {
+    return ('        g' + g.toFixed(1)).slice(-8);
+  }).join(''));
+  var mbAntes = CFG.magBlanco;
+  [11.5, 10, 9, 8, 7, 6, 5].forEach(function (mb) {
+    CFG.magBlanco = mb;
+    var sat = resueltas.filter(function (g) { return desglose(g, mlim).A >= 1 - 1e-9; }).length;
+    console.log(f(mb, 1) + ('      ' + sat).slice(-6)
+      + muestra.map(function (g) { return f(Math.min(255, nivelDe(g)), 1); }).join(''));
+  });
+  CFG.magBlanco = mbAntes;
+}
