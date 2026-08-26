@@ -281,8 +281,14 @@ var GrupoLocal = (function () {
 
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
+
+  // Rectángulos de las etiquetas dibujadas y visibles este fotograma, para que
+  // hitTest() las trate como área pulsable igual que en la vista de la galaxia
+  // (allí lo resuelve el DOM: la etiqueta comparte el listener del punto).
+  var labelHitRects = [];
   function render() {
     ctx.clearRect(0, 0, W, H);
+    labelHitRects = [];
 
     // Fondo del atlas: degradado oscuro para tapar el negro del visor. Solo se
     // ve según la opacidad de la capa (canvas.style.opacity).
@@ -378,16 +384,25 @@ var GrupoLocal = (function () {
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
       ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#f4faff'; ctx.fill();
 
+      var labelRect = null;
       if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
         ctx.fillStyle = colorRgba(col, 0.95 * am, aten);
         ctx.font = '500 12px Inter, sans-serif';
-        ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
+        var lx = p.sx + r + 6, ly = p.sy + 4;
+        ctx.fillText(o.name, lx, ly);
+        // Área pulsable de la etiqueta (clic abre la ficha, igual que el punto).
+        var lw = ctx.measureText(o.name).width;
+        labelRect = { o: o, x0: lx - 2, y0: ly - 11, x1: lx + lw + 2, y1: ly + 4 };
+        labelHitRects.push(labelRect);
       }
 
-      // El radio de detección no se atenúa: el área pulsable no cambia.
+      // El radio de detección no se atenúa: el área pulsable no cambia. La
+      // etiqueta pulsable también cuenta como hover, igual que en la galaxia.
       if (atlasInteractive && mouse.x != null) {
         var dx = mouse.x - p.sx, dy = mouse.y - p.sy;
-        if (dx * dx + dy * dy < 160) hovered = { o: o, p: p };
+        var enEtiqueta = labelRect && mouse.x >= labelRect.x0 && mouse.x <= labelRect.x1 &&
+          mouse.y >= labelRect.y0 && mouse.y <= labelRect.y1;
+        if (dx * dx + dy * dy < 160 || enEtiqueta) hovered = { o: o, p: p };
       }
     }
 
@@ -448,6 +463,13 @@ var GrupoLocal = (function () {
   // domina la vista. Se usa para el clic (abrir ficha) y el cursor.
   function hitTest(clientX, clientY) {
     if (layerAlpha <= 0.5) return null;
+    // La etiqueta es pulsable igual que el punto (spec: paridad con la galaxia).
+    // Se mira primero: es más grande y, si se solapa con otro punto, gana el
+    // objeto al que pertenece el texto que se está pulsando.
+    for (var li = labelHitRects.length - 1; li >= 0; li--) {
+      var lr = labelHitRects[li];
+      if (clientX >= lr.x0 && clientX <= lr.x1 && clientY >= lr.y0 && clientY <= lr.y1) return lr.o;
+    }
     var best = null, bestD = Infinity;
     for (var i = 0; i < objects.length; i++) {
       var p = project(objects[i]);
