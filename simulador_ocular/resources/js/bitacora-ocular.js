@@ -984,6 +984,28 @@
         }).join('');
       }
 
+      /* Insignia de fidelidad (issue #133): esta doble se dibuja con la
+         compañera colocada a un ángulo ASUMIDO, no medido. La dispara un solo
+         escalón, `origen: 'asumida'` del catálogo de estrellas que Gaia DR3 no
+         trae (ver BitacoraGaiaRender.orientacionAsumida). Va en la misma fila
+         que las insignias de catálogo -que es flex con wrap, así que no
+         desplaza a ninguna- y NO en la línea de avisos del simulador, que es
+         una sola ranura ya disputada.
+
+         EL TEXTO LO ESCRIBE EL USUARIO. Mientras `texto` esté vacío la
+         insignia no se pinta: el cableado está, la redacción no se genera. */
+      var INSIGNIA_ASUMIDA = { texto: '', titulo: '' };
+      function insigniaAsumida(o) {
+        if (!INSIGNIA_ASUMIDA.texto) return '';
+        if (!window.BitacoraGaiaRender.orientacionAsumida({
+              ra: sexToDeg(o.ra, true), dec: sexToDeg(o.dec, false), sep: o.sep
+            })) return '';
+        var t = INSIGNIA_ASUMIDA.titulo;
+        return '<span class="obj-cat es-asumida"' +
+               (t ? ' title="' + BitacoraBase.esc(t) + '"' : '') + '>' +
+               BitacoraBase.esc(INSIGNIA_ASUMIDA.texto) + '</span>';
+      }
+
       // Veredicto "¿se resuelve con tu equipo?" para una doble. Dos condiciones
       // independientes: la APERTURA (límite de Dawes 116/D mm) y el AUMENTO (para
       // percibir el hueco hace falta que aumentos·sep alcance ~480" de campo aparente
@@ -1028,7 +1050,7 @@
             var r = resolucionDoble(o);
             meta.innerHTML =
               '<span class="obj-tags">' + BitacoraBase.esc(datos) + '</span>' +
-              '<span class="obj-cats">' + insigniasDoble(o.catalogos) + '</span>' +
+              '<span class="obj-cats">' + insigniasDoble(o.catalogos) + insigniaAsumida(o) + '</span>' +
               '<span class="obj-resol ' + r.clase + '">' + BitacoraBase.esc(r.texto) + '</span>';
             meta.hidden = false;
           } else {

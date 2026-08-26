@@ -1218,6 +1218,44 @@
     return estrellas.concat(nuevas);
   }
 
+  /* ── ¿La orientación de esta doble es una suposición? (issue #133) ───────────
+     El catálogo de estrellas que Gaia DR3 no trae declara en cada fila su
+     `origen`: 'medida' (astrometría propia de Hipparcos), 'derivada'
+     (compañera colocada a un ángulo medido, WDS o Hipparcos) o 'asumida'
+     (compañera colocada al ángulo por defecto de 55°, porque nadie publica
+     el suyo). Sólo ese último escalón se le confiesa al observador: si el
+     aviso saliera también con un ángulo medido, dejaría de significar algo.
+
+     El vínculo entre la fila y la doble es POSICIONAL, con el mismo ancla de
+     40″ del generador (gen_hipparcos.py, RADIO_ANCLA_ARCSEC): cubre el
+     desajuste de época entre el catálogo de dobles —J2000, con AR redondeada
+     a segundos enteros de tiempo— y estas filas, ya propagadas a 2016.0.
+
+     Pero la fila 'asumida' es la COMPAÑERA, no la primaria, así que cae a la
+     separación del par de la posición del catálogo, y el ángulo al que cae es
+     justo lo que no se sabe. La zona buscada es por eso un ANILLO de radio
+     `sep` y no un disco de radio `sep`: con el disco, un par de 3705″ —los
+     hay— barría un grado entero de cielo y cualquier fila asumida ajena caía
+     dentro. El centro se acepta también, por si el catálogo diera la posición
+     de la compañera en vez de la de la primaria. */
+  var RADIO_ASUMIDA = 40;   // ″ el mismo ancla que usa el generador
+  function orientacionAsumida(o) {
+    var filas = (typeof window !== 'undefined') && window.BITACORA_ESTRELLAS_BRILLANTES;
+    if (!o || !filas || !filas.length) return false;
+    var ra0 = numONulo(o.ra), dec0 = numONulo(o.dec);
+    if (ra0 == null || dec0 == null) return false;
+    var sep = numONulo(o.sep) || 0;
+    var cos0 = Math.cos(dec0 * Math.PI / 180);
+    for (var i = 0; i < filas.length; i++) {
+      var f = filas[i];
+      if (f[5] !== 'asumida') continue;
+      var dra = (((f[0] - ra0 + 540) % 360) - 180) * cos0, ddec = f[1] - dec0;
+      var d = Math.sqrt(dra * dra + ddec * ddec) * 3600;         // ″
+      if (d <= RADIO_ASUMIDA || Math.abs(d - sep) <= RADIO_ASUMIDA) return true;
+    }
+    return false;
+  }
+
   /* ── La imagen estelar de VERDAD: disco de Airy + seeing ─────────────────────
      Una estrella es una fuente puntual: lo que se ve en el ocular es su patrón de
      difracción. El radio del primer anillo oscuro (criterio de Rayleigh) es
@@ -4286,6 +4324,7 @@
     colorEstrella: colorEstrella,
     fraccionFlujo: fraccionFlujo,
     parDoble: parDoble,
+    orientacionAsumida: orientacionAsumida,
     par: PAR,
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
