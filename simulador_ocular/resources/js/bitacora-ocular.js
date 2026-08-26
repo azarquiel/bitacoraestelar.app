@@ -992,9 +992,13 @@
          desplaza a ninguna- y NO en la línea de avisos del simulador, que es
          una sola ranura ya disputada.
 
-         EL TEXTO LO ESCRIBE EL USUARIO. Mientras `texto` esté vacío la
-         insignia no se pinta: el cableado está, la redacción no se genera. */
-      var INSIGNIA_ASUMIDA = { texto: '', titulo: '' };
+         EL TEXTO LO ESCRIBE EL USUARIO, y es suyo: no se reescribe ni se
+         "mejora" desde aquí. Mientras `texto` esté vacío la insignia no se
+         pinta. `titulo` vacío no emite atributo `title`. */
+      var INSIGNIA_ASUMIDA = {
+        texto: 'PA 55°',
+        titulo: 'El ángulo de posición de la doble se dibuja por defecto a 55°, pues no se ha encontrado este dato en la literatura consultada. La separación y las magnitudes sí son oficiales.'
+      };
       function insigniaAsumida(o) {
         if (!INSIGNIA_ASUMIDA.texto) return '';
         if (!window.BitacoraGaiaRender.orientacionAsumida({
