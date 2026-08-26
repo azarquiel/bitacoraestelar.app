@@ -762,6 +762,9 @@
        suelo por densidad local (o quitarlo y fiar la visibilidad solo al
        tamaño, que ya tiene su propio suelo en radioSuelo). */
     alfaMin: 0.05,
+    /* A/B del alpha del disco (ver alfaEstrella): false = rampa histórica
+       anclada a mlim; true = flujo absoluto por la cadena fotométrica común. */
+    alfaPorFlujo: false,
     // Rango de magnitudes (por debajo del límite) que recorre el alpha de 0 a 1.
     // FIJO, no escala con apertura: la detectabilidad es contraste relativo a mlim
     // (Weber-Fechner), y mlim ya integra la apertura. Probado y confirmado: 12 da
@@ -1234,6 +1237,36 @@
      fisico > suelo, por la cuadratura suelo²+fisico²=Rtot²). */
   function factorDilucion(suelo, Rtot) {
     return (Rtot > suelo * Math.SQRT2) ? (suelo * suelo) / (Rtot * Rtot) : 1;
+  }
+  /* Alpha del DISCO de una estrella resuelta. radioArcsec es el radio DIBUJADO
+     (Rtot) en segundos de arco; dilucion, el factor de reparto de radioEstrella.
+
+     Rama A (por defecto): rampa lineal en el margen de detección (mlim - g).
+     Es un margen, no un brillo: la misma estrella cambia de alpha cuando cambia
+     el cielo, y el blanco puro cae en g = mlim - 11,5, una magnitud que no
+     existe en un cúmulo abierto. De ahí el campo "apagado" que solo se anima
+     falseando el SQM (que en realidad añade estrellas, no brillo).
+
+     Rama B (CFG.alfaPorFlujo): la misma cadena que todo lo demás. El flujo de
+     la estrella repartido en el disco que se dibuja, medido contra el cielo de
+     REFERENCIA (Fref, sqm 21) -el mismo con el que pintarFot vuelve a leer esta
+     capa: flujoDeValor(v, c.Fref, c.rango)-. Lo que se pinta y lo que se lee
+     pasan a ser la misma magnitud, y el alpha deja de depender del cielo de la
+     escena. La dilución NO se aplica aparte: el área del disco ya la lleva.
+
+     ponytail: el sprite tiene perfil radial, no es un disco plano, así que esto
+     es el techo de brillo, no el flujo integrado exacto; si hiciera falta
+     conservar flujo al píxel, el factor perfil/plano entra aquí. */
+  function alfaEstrella(g, mlim, radioArcsec, dilucion) {
+    var d = (dilucion > 0) ? dilucion : 1;
+    if (!CFG.alfaPorFlujo) {
+      return Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * d;
+    }
+    var area = Math.PI * radioArcsec * radioArcsec;
+    if (!(area > 0)) return CFG.alfaMin;
+    var Fref = Math.pow(10, -0.4 * 21);
+    var a = CFG.brillo * valorDeFlujo(Math.pow(10, -0.4 * g) / area, Fref, CFG.rangoBrillo) / 255;
+    return Math.min(1, Math.max(CFG.alfaMin, a));
   }
   /* Opacidad de la aureola de dispersión (glare) de una estrella RESUELTA,
      proporcional a su flujo absoluto (mag Gaia g), no al margen sobre el
@@ -4022,7 +4055,7 @@
         var Ra = CFG.aureolaRadio * escala;
         dibujarAureola(ctx, x, y, Ra, colEstrella, aAur * ganActual);
       }
-      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual * dilucion;
+      ctx.globalAlpha = alfaEstrella(g, mlim, Rtot * arcmin * 60 / SIZE, dilucion) * ganActual;
       dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG, esCarbono);
       if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }
@@ -4223,6 +4256,7 @@
     radioEstrella: radioEstrella,
     sueloEstrella: sueloEstrella,
     factorDilucion: factorDilucion,
+    alfaEstrella: alfaEstrella,
     alfaAureola: alfaAureola,
     blurEstrella: blurEstrella,
     colorEstrella: colorEstrella,
