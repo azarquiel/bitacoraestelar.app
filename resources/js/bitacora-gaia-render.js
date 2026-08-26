@@ -1247,7 +1247,15 @@
      existe en un cúmulo abierto. De ahí el campo "apagado" que solo se anima
      falseando el SQM (que en realidad añade estrellas, no brillo).
 
-     Rama B (CFG.alfaPorFlujo): la misma cadena que todo lo demás. El flujo de
+     Rama B (CFG.alfaPorFlujo): INCORRECTA, banco de comparación, no candidata
+     -ver ADR 0018 y scripts/test_alfa_apertura.js-. Es puro contraste, y el
+     contraste estrella/cielo no depende de la apertura a igualdad de aumentos:
+     pinta un 18" más apagado que un 8". Además reparte el flujo sobre el disco
+     DIBUJADO, cuyo tamaño ya lleva (D/Dref)² por sueloEstrella, así que cancela
+     el D² una segunda vez. La ganancia del tubo grande es de umbral (mlim), que
+     es justo lo que esta rama deja de mirar.
+
+     La misma cadena que todo lo demás. El flujo de
      la estrella repartido en el disco que se dibuja, medido contra el cielo de
      REFERENCIA (Fref, sqm 21) -el mismo con el que pintarFot vuelve a leer esta
      capa: flujoDeValor(v, c.Fref, c.rango)-. Lo que se pinta y lo que se lee

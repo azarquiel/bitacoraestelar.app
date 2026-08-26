@@ -94,6 +94,7 @@ Ley única con la que TODOS los motores del render deciden qué se ve: convierte
 - **Umbral de contraste:** el contraste mínimo que un objeto extenso necesita para ser detectado. Depende de la luminancia que llega al ojo (vía pupila de salida y transmisión) y del **tamaño aparente** del objeto, que es por donde entran los aumentos.
 - **H2c** es la ley vigente de ese umbral: área de Ricco con el seeing en cuadratura, **calibrada contra 12 observaciones visuales reales**. Es la capa de visión humana del proyecto entero, y está congelada: si un objeto no cuadra, el sospechoso es su modelo, no la ley. La ley histórica `C_MAG` sobrevive solo como regresión.
 - **Es de detección, no de estructura.** Dice qué partes superan el umbral; no dice qué detalle se separa. Esa es otra ley y no deben mezclarse.
+- **El brillo de una ESTRELLA es umbral, no contraste (ADR 0018).** A igualdad de aumentos el contraste estrella/cielo no depende de la apertura: la pupila de salida sube estrella y fondo a la vez. Lo que el tubo grande da es iluminancia retinal absoluta, y eso vive en `mlim`. Una ley del alpha del disco que solo mire contraste pinta el 18" más apagado que el 8". La apertura entra además por el TAMAÑO (`sueloEstrella` lleva `(D/Dref)²`): repartir el flujo sobre el disco dibujado cancela ese mismo D². Guardián: `scripts/test_alfa_apertura.js`.
 
 ## Modelo de observación de cúmulos
 
