@@ -37,10 +37,12 @@ module.exports = function (R) {
     });
     var peso = R.ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
     var perfil = R.ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.afin);
+    var halo = R.ps1MedidasHalo(gal, comps);
+    halo.mordida = R.ps1MascaraMuerdeEscena(enPx, f.afin, escena);
     return {
       ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
       ancho: f.ancho, alto: f.alto, afin: f.afin,
-      comps: comps, pa: gal.pa, halo: R.ps1MedidasHalo(gal, comps),
+      comps: comps, pa: gal.pa, halo: halo,
       thetaIntArcmin: R.ps1ThetaIntDeGal(gal, comps),
       peso: peso, escalaMezcla: R.ps1EscalaMezcla(datos, peso, perfil),
       perfil: PS1.confianzaLocalNaN ? perfil : null,

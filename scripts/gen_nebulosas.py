@@ -40,15 +40,17 @@ import os
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(RAIZ, 'mapa', 'datos', 'ongc_nebulosas.csv')
+SRC_ABELL = os.path.join(RAIZ, 'mapa', 'datos', 'abell_pn.csv')
 OUT_CSV = os.path.join(RAIZ, 'mapa', 'datos', 'nebulosas.csv')
 OUT_JS = os.path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js')
 
 FUENTE = ('Verga, OpenNGC (NGC + IC) · '
-          'https://github.com/mattiaverga/OpenNGC')
+          'https://github.com/mattiaverga/OpenNGC · '
+          '+ suplemento Abell (gen_abell_pn.py: SIMBAD + Acker V/84)')
 
 TIPOS = ('Neb', 'HII', 'Cl+N', 'RfN', 'EmN', 'PN', 'SNR')
 
-MAG_MAX = 13.0      # más débil no se ve por un ocular
+MAG_MAX = 14.0      # más débil no se ve por un ocular (14: alcance de un dobson grande)
 SERSIC_N = 1.0      # exponencial: núcleo marcado y alas que se desvanecen
 
 # Del semieje de catálogo al radio efectivo. Es el mando de calibración de esta
@@ -143,59 +145,62 @@ def main():
     redondas = 0
     recortadas = 0
 
-    with open(SRC, encoding='utf-8') as fh:
-        for c in csv.DictReader(fh, delimiter=';'):
-            if c['Type'] not in TIPOS:
-                continue
-            ra = sexagesimal(c['RA'], True)
-            dec = sexagesimal(c['Dec'], False)
-            maj = numero(c['MajAx'])          # arcmin, eje mayor completo
-            mag_v = numero(c['V-Mag'])
-            mag_b = numero(c['B-Mag'])
-            if mag_v is None and mag_b is not None:
-                mag_v = mag_b - BV_NEBULAR
-            if ra is None or dec is None or not maj or maj <= 0 or mag_v is None:
-                sin_datos += 1
-                continue
-            if mag_v > MAG_MAX:
-                sin_datos += 1
-                continue
+    registros = []
+    for src in (SRC, SRC_ABELL):
+        with open(src, encoding='utf-8') as fh:
+            registros.extend(csv.DictReader(fh, delimiter=';'))
+    for c in registros:
+        if c['Type'] not in TIPOS:
+            continue
+        ra = sexagesimal(c['RA'], True)
+        dec = sexagesimal(c['Dec'], False)
+        maj = numero(c['MajAx'])          # arcmin, eje mayor completo
+        mag_v = numero(c['V-Mag'])
+        mag_b = numero(c['B-Mag'])
+        if mag_v is None and mag_b is not None:
+            mag_v = mag_b - BV_NEBULAR
+        if ra is None or dec is None or not maj or maj <= 0 or mag_v is None:
+            sin_datos += 1
+            continue
+        if mag_v > MAG_MAX:
+            sin_datos += 1
+            continue
 
-            minor = numero(c['MinAx'])
-            pa = numero(c['PosAng'])
-            if pa is not None and minor and minor > 0:
-                semieje = maj / 2.0
-                q = max(0.05, min(1.0, minor / maj))
-            else:
-                # Sin orientación conocida: redonda de igual área.
-                medio = math.sqrt(maj * minor) if (minor and minor > 0) else maj
-                semieje = medio / 2.0
-                q, pa = 1.0, 0.0
-                redondas += 1
+        minor = numero(c['MinAx'])
+        pa = numero(c['PosAng'])
+        if pa is not None and minor and minor > 0:
+            semieje = maj / 2.0
+            q = max(0.05, min(1.0, minor / maj))
+        else:
+            # Sin orientación conocida: redonda de igual área.
+            medio = math.sqrt(maj * minor) if (minor and minor > 0) else maj
+            semieje = medio / 2.0
+            q, pa = 1.0, 0.0
+            redondas += 1
 
-            compacta = c['Type'] in COMPACTAS
-            escala = RE_SOBRE_SEMIEJE_COMPACTA if compacta else RE_SOBRE_SEMIEJE
-            re_arcsec = escala * semieje * 60.0
-            suelo = MU_MIN_COMPACTA if compacta else MU_MIN
-            mu = mu_efectivo(mag_v, re_arcsec, q, SERSIC_N)
-            if mu < suelo:
-                mag_v += suelo - mu
-                recortadas += 1
+        compacta = c['Type'] in COMPACTAS
+        escala = RE_SOBRE_SEMIEJE_COMPACTA if compacta else RE_SOBRE_SEMIEJE
+        re_arcsec = escala * semieje * 60.0
+        suelo = MU_MIN_COMPACTA if compacta else MU_MIN
+        mu = mu_efectivo(mag_v, re_arcsec, q, SERSIC_N)
+        if mu < suelo:
+            mag_v += suelo - mu
+            recortadas += 1
 
-            filas.append({
-                'nombre': limpia_nombre(c['Name']),
-                'alt': limpia_nombre((c['Common names'] or '').split(',')[0]),
-                'ra_grados': round(ra, 5),
-                'dec_grados': round(dec, 5),
-                're_arcsec': round(re_arcsec, 2),
-                'razon_ejes': round(q, 3),
-                'pa_grados': int(pa),
-                'mag_v': round(mag_v, 2),
-                'sersic_n': SERSIC_N,
-                'frac_bulbo': 0,
-                'polvo': 0,
-                'clase': c['Type'],
-            })
+        filas.append({
+            'nombre': limpia_nombre(c['Name']),
+            'alt': limpia_nombre((c['Common names'] or '').split(',')[0]),
+            'ra_grados': round(ra, 5),
+            'dec_grados': round(dec, 5),
+            're_arcsec': round(re_arcsec, 2),
+            'razon_ejes': round(q, 3),
+            'pa_grados': int(pa),
+            'mag_v': round(mag_v, 2),
+            'sersic_n': SERSIC_N,
+            'frac_bulbo': 0,
+            'polvo': 0,
+            'clase': c['Type'],
+        })
 
     filas.sort(key=lambda f: f['ra_grados'])
 
