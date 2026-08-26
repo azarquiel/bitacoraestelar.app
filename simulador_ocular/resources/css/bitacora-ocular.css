@@ -87,6 +87,11 @@
   color:var(--azul);border:1px solid rgba(126,200,255,0.4);border-radius:999px;
   padding:2px 8px;cursor:help;
 }
+/* Insignia de fidelidad (#133): comparte fila y forma con las de catálogo,
+   pero en ámbar -es una advertencia sobre el dato, no un catálogo más-. */
+#mw-obs-form .objeto-fijo .obj-cat.es-asumida {
+  color:var(--ambar);border-color:rgba(255,170,90,0.45);
+}
 #mw-obs-form .objeto-fijo .obj-resol {
   font-size:12px;line-height:1.5;color:var(--tinta-tenue);
   border-left:2px solid var(--linea);padding-left:9px;

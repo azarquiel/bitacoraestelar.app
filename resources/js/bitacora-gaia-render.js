@@ -1218,6 +1218,38 @@
     return estrellas.concat(nuevas);
   }
 
+  /* ── ¿La orientación de esta doble es una suposición? (issue #133) ───────────
+     El catálogo de estrellas que Gaia DR3 no trae declara en cada fila su
+     `origen`: 'medida' (astrometría propia de Hipparcos), 'derivada'
+     (compañera colocada a un ángulo medido, WDS o Hipparcos) o 'asumida'
+     (compañera colocada al ángulo por defecto de 55°, porque nadie publica
+     el suyo). Sólo ese último escalón se le confiesa al observador: si el
+     aviso saliera también con un ángulo medido, dejaría de significar algo.
+
+     El vínculo entre la fila y la doble es POSICIONAL, que es como se hizo el
+     ancla en el generador (gen_hipparcos.py, RADIO_ANCLA_ARCSEC). El radio
+     tiene que cubrir dos cosas a la vez: la separación del par (la fila
+     'asumida' es la compañera, no la primaria) y el desajuste de época entre
+     el catálogo de dobles, que es J2000 con AR redondeada a segundos enteros
+     de tiempo, y estas filas, ya propagadas a 2016.0. */
+  var RADIO_ASUMIDA = 40;   // ″ el mismo ancla que usa el generador
+  function orientacionAsumida(o) {
+    var filas = (typeof window !== 'undefined') && window.BITACORA_ESTRELLAS_BRILLANTES;
+    if (!o || !filas || !filas.length) return false;
+    var ra0 = numONulo(o.ra), dec0 = numONulo(o.dec);
+    if (ra0 == null || dec0 == null) return false;
+    var sep = numONulo(o.sep) || 0;
+    var cos0 = Math.cos(dec0 * Math.PI / 180);
+    var radio = (RADIO_ASUMIDA + sep) / 3600;                   // grados
+    for (var i = 0; i < filas.length; i++) {
+      var f = filas[i];
+      if (f[5] !== 'asumida') continue;
+      var dra = (((f[0] - ra0 + 540) % 360) - 180) * cos0, ddec = f[1] - dec0;
+      if (dra * dra + ddec * ddec <= radio * radio) return true;
+    }
+    return false;
+  }
+
   /* ── La imagen estelar de VERDAD: disco de Airy + seeing ─────────────────────
      Una estrella es una fuente puntual: lo que se ve en el ocular es su patrón de
      difracción. El radio del primer anillo oscuro (criterio de Rayleigh) es
@@ -4286,6 +4318,7 @@
     colorEstrella: colorEstrella,
     fraccionFlujo: fraccionFlujo,
     parDoble: parDoble,
+    orientacionAsumida: orientacionAsumida,
     par: PAR,
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
