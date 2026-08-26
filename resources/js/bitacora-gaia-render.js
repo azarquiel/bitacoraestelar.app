@@ -2444,11 +2444,25 @@
         return m[m.length >> 1];
       });
     }
+    /* Componentes de escena con borde REAL (compacta, ver ps1EscenaEnParche):
+       si un disco ANCHO los pisa, sus píxeles se dejan en NaN —AUSENCIA— y no
+       al cielo. La regla es la del anclaje (ps1AnclarACatalogo): un 0 donde no
+       hay medida es una medida falsa que bloquea el relleno, porque la caja de
+       ps1PesoImagen a caballo del borde mantiene w alto y la mezcla hace
+       w·0 + (1−w)·perfil: el anillo oscuro que partía Abell 12 en dos. Solo
+       compactas: el resto del disco ancho sigue al cielo, que es la
+       arquitectura medida de las galaxias (M81/NGC 5055). */
+    var compactas = null;
+    if (a && escena) {
+      for (i = 0; i < escena.length; i++) {
+        if (escena[i].compacta) (compactas || (compactas = [])).push(escena[i]);
+      }
+    }
     var out = Float32Array.from ? Float32Array.from(datos) : new Float32Array(datos);
     for (i = 0; i < quitar.length; i++) {
       e = quitar[i];
-      var rE = Math.max(1, e.rPx), fondo = null;
-      if (e.rAs > PS1.rellenoPlanoMaxAs) {                 // disco ancho: ausencia, que la rellene el perfil
+      var rE = Math.max(1, e.rPx), fondo = null, ancha = e.rAs > PS1.rellenoPlanoMaxAs;
+      if (ancha) {                                         // disco ancho: ausencia, que la rellene el perfil
         if (cielo == null) cielo = ps1Cielo(datos, ancho, alto);
         fondo = cielo;
       } else if (!isofotas) {
@@ -2462,6 +2476,10 @@
           if (ex * ex + ey * ey > rE2) continue;
           var j = y * ancho + x;
           if (!mascara[j]) continue;
+          if (ancha && compactas && ps1FuenteEnEscena(compactas, a, x, y)) {
+            out[j] = NaN;                                  // compacta pisada: ausencia, no cielo
+            continue;
+          }
           var v = fondo;
           if (v == null) {                                 // disco estrecho con isofotas
             var b = banda(x, y);

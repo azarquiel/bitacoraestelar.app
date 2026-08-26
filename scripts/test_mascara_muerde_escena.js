@@ -78,5 +78,25 @@ function pintar(mordida) {
 ok(pintar(true) > 0, 'con mordida, (1−w)·perfil rellena lo borrado: hay flujo');
 ok(pintar(false) === 0, 'sin mordida (estado antiguo), el mismo parche pinta 0: el disco negro');
 
+/* Disco ANCHO que pisa una compacta: sus píxeles quedan en NaN (ausencia), no
+   al cielo — el cielo es un 0 falso que mantiene w alto en el borde y deja el
+   anillo oscuro (w·0 + (1−w)·perfil). Fuera de la compacta, cielo como siempre;
+   sobre una isofota de galaxia, también cielo (arquitectura medida, cerrada). */
+function quitar(escena) {
+  var W = 120, datos = new Float32Array(W * W).fill(100);
+  var e = [{ x: 97, y: 50, rPx: 60, rAs: ancha }];
+  return { W: W, out: R.ps1QuitarEstrellas(datos, W, W, e, { afin: A, ba: 1, pa: 0, escena: escena }) };
+}
+var q = quitar(ESC);
+ok(q.out[50 * q.W + 50] !== q.out[50 * q.W + 50],
+  'píxel de la compacta bajo el disco ancho: NaN (ausencia)');
+ok(isFinite(q.out[110 * q.W + 97]),
+  'píxel del disco ancho FUERA de la compacta: al cielo, como siempre');
+ok(isFinite(q.out[10 * q.W + 10]) && q.out[10 * q.W + 10] === 100,
+  'píxel sin enmascarar: intacto');
+var qg = quitar(GALAXIA);
+ok(isFinite(qg.out[50 * qg.W + 50]),
+  'sobre una isofota de GALAXIA el disco ancho sigue al cielo: sin NaN nuevos');
+
 if (fallos) { console.error(fallos + ' fallo(s).'); process.exit(1); }
 console.log('todo en orden.');
