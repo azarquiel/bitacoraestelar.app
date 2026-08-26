@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Self-check del catálogo de estrellas que Gaia DR3 no trae (scripts/gen_hipparcos.py).
    Cubre el cruce (#130), la conversión fotométrica (#131) y la expansión de
-   sistemas en componentes (#132). Hereda los invariantes de test_par_doble.js,
-   que se borrará con parDoble (ticket 5): no se inventa nada sin datos y
-   ninguna doble gana una componente de más.
+   sistemas en componentes (#132). Hereda los invariantes del borrado
+   test_par_doble.js (#134): no se inventa nada sin datos y ninguna doble gana
+   una componente de más.
    Sin framework. Requiere red (baja Hipparcos/Gaia del TAP).
    Ejecutar:  python3 scripts/test_hipparcos.py"""
 import math
@@ -40,7 +40,7 @@ assert sum(1 for f in filas if f['fuente'] == 'wds') == 1, \
 #    es la definición del fichero. Se re-verifica aquí, independiente de
 #    construir(). Una compañera sintetizada tampoco puede caer encima de una
 #    fuente Gaia lo bastante brillante para SER la componente (las de campo,
-#    más débiles que mag+1, no cuentan: herencia de parDoble).
+#    más débiles que mag+1, no cuentan: herencia del recuento del par).
 gaia_rows = G._consulta(
     'SELECT ra, dec, phot_g_mean_mag, bp_rp FROM gaiadr3.gaia_source '
     'WHERE phot_g_mean_mag < 10.5',
@@ -146,7 +146,7 @@ en_almaak = [f for f in filas if separacion_as(almaak, (f['ra'], f['dec'])) < 25
 assert len(en_almaak) == 1 and en_almaak[0]['origen'] == 'medida', en_almaak
 
 # 6.ter) Invariante global: ninguna doble del catálogo gana una componente de
-#    más. Con las constantes de parDoble (círculo y límite de magnitud), las
+#    más. Con las constantes del recuento (círculo y límite de magnitud), las
 #    filas del fichero solo completan hasta 2; si Gaia ya trae 2, cero filas.
 arbol_filas = cKDTree(G._unit(np.array([f['ra'] for f in filas]),
                               np.array([f['dec'] for f in filas])))
@@ -154,9 +154,9 @@ ganan = []
 con_companera = {f['doble'] for f in companeras if f['doble'] is not None}
 for d in dobles.values():
     if d['sep'] is None or d['mag1'] is None or d['mag2'] is None:
-        # A estos pares parDoble hoy NI SIQUIERA les puede inventar la B
-        # (test_par_doble.js, «sin datos no se inventa nada»); si el fichero
-        # les da compañera con el anexo de Hipparcos, ganan.
+        # A estos pares no se les puede colocar la B por ningún lado («sin
+        # datos no se inventa nada», invariante del borrado test_par_doble.js);
+        # si el fichero les da compañera con el anexo de Hipparcos, ganan.
         if d['id'] in con_companera:
             ganan.append(d['nombre'])
         continue

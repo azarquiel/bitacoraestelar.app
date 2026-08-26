@@ -58,9 +58,9 @@
       // Estrellas dobles: catálogo unificado (AL + Cambridge + RASC + WDS), cargado
       // desde estrellas-dobles-datos.js (window.BITACORA_DOBLES). Se marca `doble:true`
       // para que la ficha muestre Mag1/Mag2/Sep, las insignias de catálogo y el veredicto
-      // de resolución (Dawes + aumento). Las posiciones las sigue mandando Gaia; el
-      // ángulo de posición y los tipos espectrales solo se usan para completar las
-      // componentes que Gaia no trae (ver BitacoraGaiaRender.parDoble).
+      // de resolución (Dawes + aumento). Las posiciones las sigue mandando Gaia, y
+      // las componentes que no trae salen del catálogo de estrellas que Gaia DR3
+      // no trae, generado con esos mismos ángulos y tipos (scripts/gen_hipparcos.py).
       var CATALOGO_DOBLES = (window.BITACORA_DOBLES || []).map(function (e) {
         return {
           id: e.id, nombre: e.nombre, constelacion: e.constelacion, abrev: e.abrev,
@@ -640,18 +640,12 @@
           // campo sin ninguna queda a cero y las estrellas se dibujan sobre el
           // nivel de cielo tal cual.
           var difuso = new Float32Array(PROC * PROC);
-          /* Si el objeto es una doble, se completan del catálogo las componentes
-             que Gaia no trae (satura con las primarias muy brillantes: la de
-             Almaak no está en DR3). Solo para el dibujo de estrellas: las capas
-             difusas siguen con la muestra tal cual, que es de donde sale su
-             función de luminosidad. */
-          var estrellasDibujo = objetoSel.doble
-            ? BitacoraGaiaRender.parDoble(estrellas, {
-                ra: ra0, dec: dec0, sep: objetoSel.sep,
-                mag1: objetoSel.mag1, mag2: objetoSel.mag2,
-                pa: objetoSel.pa, spect1: objetoSel.spect1, spect2: objetoSel.spect2
-              })
-            : estrellas;
+          /* Las componentes que Gaia no trae (satura con las primarias muy
+             brillantes: la de Almaak no está en DR3) las pone el catálogo de
+             estrellas que Gaia DR3 no trae, y las concatena dibujar(). Aquí no
+             se completa nada: las capas difusas siguen con la muestra tal cual,
+             que es de donde sale su función de luminosidad. */
+          var estrellasDibujo = estrellas;
           var cieloGaia = cieloOptica(datosOcular().pupila);
           cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
           if (velo != null) cieloGaia.veloSB = velo;   // fondo agregado del campo denso

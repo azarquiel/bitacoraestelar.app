@@ -49,9 +49,11 @@ esos sistemas en componentes, con estas reglas:
 
   - La componente B solo se sintetiza cuando el par, mirando Gaia MÁS las
     filas de ausencia de este fichero, no reúne sus dos componentes. El
-    recuento usa las constantes de parDoble —círculo máx(3″, 1,5·sep, 25″)
-    y límite máx(mag1, mag2)+1— porque ese es el invariante que se hereda:
-    ninguna doble gana una componente de más.
+    recuento usa un círculo de máx(3″, 1,5·sep, 25″) y un límite de
+    máx(mag1, mag2)+1: el suelo de 25″ cubre que las posiciones del catálogo
+    de dobles son J2000 y con la AR redondeada a segundos enteros de tiempo
+    (±7,5″·cos δ), mientras que Gaia y este fichero están en 2016.0. Es lo
+    que sostiene el invariante: ninguna doble gana una componente de más.
   - El ancla de un par del catálogo de dobles es la fila de Hipparcos más
     cercana dentro de 40″ (posición ya propagada a 2016.0). Es el radio que
     reproduce el prerregistro de ese ADR: 68 pares comparables, 45 en
@@ -61,7 +63,8 @@ esos sistemas en componentes, con estas reglas:
     está describiendo OTRO par (ζ UMa: 715,5″ contra 14,43″) y se descarta
     junto con su theta y su dhp.
   - El ángulo de posición: el pa del WDS por encima del theta de Hipparcos
-    (época J1991.25); sin ninguno, se asume el de parDoble (55°).
+    (época J1991.25); sin ninguno, se asume uno oblicuo (55°), que no deja
+    el par alineado con los ejes.
   - El campo `origen` lo decide el ángulo: 'medida' para las filas con
     astrometría propia de Hipparcos, 'derivada' para las compañeras
     colocadas con un ángulo medido (WDS o Hipparcos), 'asumida' para las
@@ -109,9 +112,10 @@ RADIO_CRUCE_ARCSEC = 2.0
 # trae (68 comparables, 45/23).
 RADIO_ANCLA_ARCSEC = 40.0
 
-# Constantes heredadas de parDoble (bitacora-gaia-render.js): definen «el par
-# ya está completo» y con ello el invariante de no añadir una tercera
-# estrella donde hay dos.
+# Recuento de «el par ya está completo», y con ello el invariante de no añadir
+# una tercera estrella donde hay dos. El suelo de época es por el catálogo de
+# dobles (J2000, AR redondeada a segundos enteros de tiempo), que este
+# generador no propaga; las filas de Hipparcos sí van ya en 2016.0.
 PAR_ANGULO_ASUMIDO = 55.0   # ° de PA, desde el Norte hacia el Este
 PAR_MARGEN_MAG = 1.0        # la componente puede venir hasta 1 mag más débil
 PAR_RADIO_MIN = 3.0         # ″ suelo del círculo de búsqueda
@@ -185,8 +189,8 @@ def _cuerda(arcsec):
 
 
 def _desplazar(ra0, dec0, sep_arcsec, pa_grados):
-    """Posición a sep″ y pa° (N→E) de (ra0, dec0). Cielo plano local, igual
-    que parDoble: la miga de cos δ es irrelevante para dibujar."""
+    """Posición a sep″ y pa° (N→E) de (ra0, dec0). Cielo plano local: la miga
+    de cos δ es irrelevante para dibujar."""
     pa = math.radians(pa_grados)
     return (ra0 + sep_arcsec * math.sin(pa) / (3600.0 * math.cos(math.radians(dec0))),
             dec0 + sep_arcsec * math.cos(pa) / 3600.0)
@@ -258,7 +262,7 @@ def construir():
             # Artefacto de fotocentro (70 Oph): Hipparcos publica el fotocentro
             # del sistema cerrado y la órbita lo ha movido a >2″ de las DOS
             # componentes, que Gaia SÍ trae. Si el par ya está resuelto en
-            # Gaia dentro del círculo de parDoble, la fila no es una ausencia
+            # Gaia dentro del círculo del par, la fila no es una ausencia
             # y escribirla pintaría una tercera estrella donde hay dos.
             radio = max(PAR_RADIO_MIN, 1.5 * rho, PAR_RADIO_EPOCA)
             u = _unit(np.array([hip_ra_2016[i]]), np.array([hip_de_2016[i]]))[0]
@@ -291,7 +295,7 @@ def construir():
         """¿Ya hay una estrella a <2″ que pueda SER la componente? El fichero
         solo contiene ausencias: si la B existe, no se escribe. Una fuente
         Gaia más débil que `limite` es estrella de campo, no componente —el
-        mismo criterio de parDoble—; una fila de Hipparcos (≠ ancla) siempre
+        mismo criterio del recuento—; una fila de Hipparcos (≠ ancla) siempre
         cuenta, porque a Hp<9 nunca es una estrella de campo del par."""
         u = _unit(np.array([ra_b]), np.array([dec_b]))[0]
         if any(gaia_g[k] <= limite
@@ -301,7 +305,7 @@ def construir():
         return any(jj[k] != ancla and dd[k] < _cuerda(RADIO_CRUCE_ARCSEC) for k in range(2))
 
     def par_completo(d, sep_ref):
-        """Recuento de componentes con las constantes de parDoble, mirando
+        """Recuento de componentes con las constantes de arriba, mirando
         Gaia y las filas de ausencia de este mismo fichero."""
         radio = max(PAR_RADIO_MIN, 1.5 * (sep_ref or 0.0), PAR_RADIO_EPOCA)
         u = _unit(np.array([d['ra']]), np.array([d['dec']]))[0]
