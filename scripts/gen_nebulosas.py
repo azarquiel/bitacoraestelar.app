@@ -50,7 +50,7 @@ FUENTE = ('Verga, OpenNGC (NGC + IC) · '
 
 TIPOS = ('Neb', 'HII', 'Cl+N', 'RfN', 'EmN', 'PN', 'SNR')
 
-MAG_MAX = 13.0      # más débil no se ve por un ocular
+MAG_MAX = 14.0      # más débil no se ve por un ocular (14: alcance de un dobson grande)
 SERSIC_N = 1.0      # exponencial: núcleo marcado y alas que se desvanecen
 
 # Del semieje de catálogo al radio efectivo. Es el mando de calibración de esta
