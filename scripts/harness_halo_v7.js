@@ -260,7 +260,39 @@ function escalones(perfil) {
   return { peor: peor, rAs: peorEn, lista: lista };
 }
 
-module.exports = { cumulo: cumulo, anillos: anillos, medir: medir, escalones: escalones };
+/* Una medida ya hecha no se vuelve a hacer — pero solo si quien llama lo pide.
+
+   `medir` pinta el cúmulo dos veces y recorre el campo entero: ~12 s por
+   llamada, y un test puede pedir la MISMA medida muchas veces. Medido en
+   test_umbral_textura: 39 llamadas de las que solo 11 eran distintas, 842 s de
+   1904 repitiendo trabajo idéntico.
+
+   Es OPT-IN y no un `medir` memoizado a secas, y la razón es concreta: el
+   resultado no depende solo de los argumentos. `harness_grano_sbf.conS2`
+   SUSTITUYE `C.poblacionCacheada` mientras mide, para colar un factor en S2;
+   los argumentos y el estado global salen idénticos y la medida no lo es.
+   Ninguna clave por valor puede ver eso, así que una memoria puesta por debajo
+   le devolvería a ese test la corrida de otro factor -y el test lo cazó: σ_max
+   dejaba de ir con √k-. Quien memoiza es quien sabe que su medida es función
+   de sus argumentos.
+
+   La clave lleva además el estado global del que sí depende el render:
+   `R.textura` -que T5/T6 encienden y T7 apaga- y `R.config`, volcados enteros y
+   no flag a flag, para que un interruptor nuevo entre en la clave solo.
+
+   El objeto devuelto es COMPARTIDO entre llamadas con la misma clave: se lee,
+   no se muta. */
+var memoria = {};
+function medirMemo(cum, cfg) {
+  var clave = JSON.stringify([cum.id, cfg, R.textura, R.config]);
+  if (!(clave in memoria)) memoria[clave] = medir(cum, cfg);
+  return memoria[clave];
+}
+
+module.exports = {
+  cumulo: cumulo, anillos: anillos, medir: medir, medirMemo: medirMemo,
+  escalones: escalones
+};
 
 /* ── Volcado de la matriz de v7 ──────────────────────────────────────────── */
 if (require.main === module) {
