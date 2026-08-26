@@ -44,9 +44,14 @@
   }
 
   /** Fecha de reloj de una hora dentro de una noche: 'Y-m-d'. */
+  /* La hora se lee ESTRICTA (HH:mm de dos dígitos), el mismo criterio que
+     bitacora_viaje_noche en el servidor: una hora ilegible («9:30», «ayer»,
+     «25:00») no desplaza la fecha. Son dos relojes del MISMO convenio de
+     mediodía y no pueden divergir: la paridad con la tabla de casos de
+     scripts/test_viaje_noche.php la fija scripts/test_noche_paridad.js. */
   function fechaDeReloj(noche, hora) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(noche || ''))) { return null; }
-    var h = /^(\d{1,2}):(\d{2})/.exec(String(hora || ''));
+    var h = /^([01]\d|2[0-3]):([0-5]\d)/.exec(String(hora || ''));
     if (!h) { return noche; }
     return (parseInt(h[1], 10) < 12) ? diaSiguiente(noche) : noche;
   }
@@ -54,7 +59,7 @@
   /** La noche a la que pertenece una fecha+hora de reloj (inversa de la anterior). */
   function nocheDe(fecha, hora) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ''))) { return null; }
-    var h = /^(\d{1,2}):(\d{2})/.exec(String(hora || ''));
+    var h = /^([01]\d|2[0-3]):([0-5]\d)/.exec(String(hora || ''));
     if (!h || parseInt(h[1], 10) >= 12) { return fecha; }
     var d = new Date(fecha + 'T12:00:00Z');
     d.setUTCDate(d.getUTCDate() - 1);

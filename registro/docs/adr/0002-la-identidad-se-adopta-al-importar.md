@@ -6,8 +6,11 @@ Estado: aceptado
 ## Contexto
 
 El importador desduplica con `oal_id` = `noche#objeto_normalizado`
-(`bitacora-oal.php:479`) y lo busca por `usuario_id + oal_id`
-(`bitacora-oal.php:591`). Una observación nacida en el formulario tiene
+(la clave la construye `bitacora_oal_id()`, llamada desde
+`bitacora_oal_agrupar()`) y lo busca por `usuario_id + oal_id`
+(`bitacora_oal_importar()`). Se citan funciones y no líneas: los números
+de línea de la primera versión de este ADR ya habían envejecido.
+Una observación nacida en el formulario tiene
 `oal_id` **NULL**, así que no casa con nada.
 
 Consecuencia, en cuanto exista exportación: exportas tus observaciones, corriges
