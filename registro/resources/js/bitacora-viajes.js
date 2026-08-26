@@ -36,30 +36,17 @@
       if (n) n.textContent = 'Inicia sesión para gestionar tus viajes.';
       return;
     }
-    var API_VIAJES = WP.endpoint.replace(/observaciones\/?$/, 'viajes');
+    var API_VIAJES = BitacoraBase.ruta('viajes');
     var API_NOCHE  = API_VIAJES + '/de-la-noche';
-    var API_BASES  = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+    var API_BASES  = BitacoraBase.ruta('bases');
     // El estado de una salida, lo que el motor OAL convierte en XML y en correo.
-    var API_ESTADO = WP.endpoint.replace(/observaciones\/?$/, 'estado-oal');
+    var API_ESTADO = BitacoraBase.ruta('estado-oal');
     // El mapa interestelar, donde se ve la ruta de un viaje (?viaje=<id>).
     var MAPA_URL   = 'https://bitacoraestelar.app/mapa.html';
 
-    function api(url, opts) {
-      opts = opts || {}; opts.credentials = 'same-origin';
-      opts.headers = opts.headers || {}; opts.headers['X-WP-Nonce'] = WP.nonce;
-      if (opts.body) opts.headers['Content-Type'] = 'application/json';
-      return fetch(url, opts).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, data: d }; });
-      });
-    }
-    function flash(txt, err) {
-      var f = $('flash'); if (!f) return;
-      f.textContent = txt; f.className = 'flash show' + (err ? ' err' : '');
-      clearTimeout(flash._t); flash._t = setTimeout(function () { f.className = 'flash'; }, 4000);
-    }
-    function errorDe(res, porDefecto) {
-      return (res.data && res.data.message) ? res.data.message : (porDefecto + ' (' + res.status + ')');
-    }
+    // Acceso a la API, aviso efímero y mensajes de error: fuente única en
+    // bitacora-base.js (había cinco copias de api() y ya habían divergido).
+    var api = BitacoraBase.api, flash = BitacoraBase.flash, errorDe = BitacoraBase.errorDe;
 
     var viajes = [], bases = [], editId = null;
 
