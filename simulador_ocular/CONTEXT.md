@@ -116,5 +116,13 @@ Cadena que responde «¿qué distribución de estrellas produciría esta imagen 
 Etiqueta explícita de catálogo (Type del OpenNGC: `PN`, `HII`, `SNR`, `RfN`…) que dice **qué filas entran** en la capa difusa de imagen real, no qué código corre. El modelo intrínseco del objeto no es código: **es la fila de catálogo** (r_e, b/a, PA, mag V, n, B/T), y el generador de cada catálogo responde de que esa fila sea fotometría honesta. Una galaxia y una nebulosa planetaria recorren el mismo pipeline de observación; abrir una clase nueva exige validarla, no ramificar el render (ADR 0013).
 
 - **Borde real vs isofotal:** una galaxia se acaba donde su perfil cae bajo el ruido —su borde ES una isofota—, pero una planetaria tiene borde físico: la cáscara que trae el catálogo. La escena de protección y el tamaño intrínseco de la [[cadena fotométrica]] usan el borde real en las clases compactas y la isofota en el resto. Única divergencia por clase demostrada (M57: la isofota del ala exponencial cae 2,8 veces más lejos que la nebulosa).
+- **La ausencia manda cuando la máscara pisa un borde real (ADR 0017):** si la
+  máscara ancha de una estrella brillante pisa un componente compacto, su
+  elipse entera —y la imagen entera del parche, si toda la escena está pisada—
+  pasa a NaN y el objeto se pinta como su modelo de catálogo, forzando el
+  perfil por encima del interruptor del halo. Rellenar «al cielo» es un 0
+  medido que bloquea la mezcla (anillo oscuro), coser trozos pinta un remiendo,
+  y el ala superviviente se lleva el presupuesto del anclaje (motitas). Solo
+  compactas: las reglas de fusión de las galaxias están cerradas.
 - **v1 solo admite `PN`.** Las demás clases tienen fila generada pero puerta cerrada; si una clase necesita lo que una fila Sérsic no puede decir (filamentos, cáscara incompleta), la conversación es sobre el esquema del catálogo.
 - _Evitar_: «tipo» a secas (colisiona con el tipo de la [[observación]] y con la [[clasificación de objeto del mapa]]); «sistema de nebulosas».
