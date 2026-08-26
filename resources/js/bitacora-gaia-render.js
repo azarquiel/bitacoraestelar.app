@@ -2955,6 +2955,13 @@
      entra ningún dato del cielo ni del ocular. Sin medidas o sin ejes, false:
      antes que un halo inventado, ninguno. */
   function ps1HaloActivo(gal) {
+    // Una máscara ancha borró parte de la escena: el relleno (1−w)·perfil es
+    // OBLIGATORIO o el objeto que se está reproduciendo sale negro (ver
+    // ps1MascaraMuerdeEscena). Va por encima del interruptor maestro porque no
+    // es el halo voluntario que ese interruptor gobierna —extender el objeto
+    // más allá de la imagen—, sino la única regla de fusión permitida: el
+    // perfil rellena lo que la imagen no cubre, y aquí la imagen no cubre.
+    if (gal && gal.mordida) return true;
     if (!PS1.haloExtrapolado) return false;
     if (!gal || !(gal.bArcmin > PS1.haloMenorMin) || !isFinite(gal.muProm)) return false;
     return gal.muProm > PS1.haloMuFijo;
@@ -3601,6 +3608,35 @@
     return out;
   }
 
+  /* ¿Alguna máscara ANCHA (rAs > rellenoPlanoMaxAs) de una fuente que NO se
+     conserva muerde la escena difusa? El disco ancho se deja al nivel del cielo
+     (ver ps1QuitarEstrellas) confiando en que (1−w)·perfil rellene lo borrado;
+     si el disco muerde la escena, ese relleno deja de ser opcional: sin él, el
+     objeto que se está reproduciendo sale NEGRO (Abell 12 bajo la máscara de
+     μ Orionis: 60″ de disco a 47″ del centro de una cáscara de 19″). El
+     veredicto viaja en las medidas del halo y lo consume ps1HaloActivo.
+     La comparación suma radios elípticos, así que con b/a < 1 sobreestima el
+     contacto: activar el perfil de más es inocuo; no pintarlo, no. */
+  function ps1MascaraMuerdeEscena(enPx, a, escena) {
+    if (!a || !escena || !escena.length) return false;
+    for (var i = 0; i < enPx.length; i++) {
+      var e = enPx[i];
+      if (!(e.rAs > PS1.rellenoPlanoMaxAs)) continue;
+      if (ps1FuenteEnEscena(escena, a, e.x, e.y)) continue;   // conservada: no borra nada
+      for (var j = 0; j < escena.length; j++) {
+        var c = escena[j];
+        // Solo componentes COMPACTOS (borde real: PN, SNR). El borde de una
+        // galaxia es una isofota, y sus reglas de fusión imagen/modelo están
+        // medidas y cerradas (M81/M104): la mordida no las reabre.
+        if (!c.compacta) continue;
+        var dx = e.x - c.cx, dy = e.y - c.cy;
+        var este = a.ex * dx + a.ey * dy, norte = a.nx * dx + a.ny * dy;
+        if (ps1RadioEje(c.cos, c.sin, norte, este, c.ba) <= c.r25As + e.rAs) return true;
+      }
+    }
+    return false;
+  }
+
   /* Compañeras demasiado débiles para el RC3 (BT_MAX de gen_galaxias.py corta
      en 13,0, "no se ve por un ocular") pero SÍ visibles con equipo real —caso
      NGC 7335, B=14,44, junto a NGC 7331— y catalogadas en SIMBAD/NED. Sin
@@ -3648,8 +3684,8 @@
     var cos0 = Math.cos(gal.dec * Math.PI / 180);
     var out = [];
     for (var i = 0; i < (campo || []).length; i++) {
-      var g = campo[i], r25 = ps1RadioBordeAs(g);
-      if (!(r25 > 0)) {
+      var g = campo[i], r25 = ps1RadioBordeAs(g), borde = r25 > 0;
+      if (!borde) {
         var comps = ps1ComponentesSersic(g);
         for (var j = 0; j < comps.length; j++) {
           var r = ps1RadioIsofota(comps[j], PS1.muEscena);
@@ -3663,7 +3699,12 @@
       var paR = (g.pa || 0) * Math.PI / 180;
       out.push({
         cx: p[0], cy: p[1], cos: Math.cos(paR), sin: Math.sin(paR),
-        ba: (g.ba > 0 && g.ba <= 1) ? g.ba : 1, r25As: r25
+        ba: (g.ba > 0 && g.ba <= 1) ? g.ba : 1, r25As: r25,
+        // Borde REAL (clases compactas, ver ps1RadioBordeAs): el único caso en
+        // que una máscara ancha que muerda la elipse fuerza el perfil
+        // (ps1MascaraMuerdeEscena). En una isofota de galaxia no: sus reglas
+        // de fusión están medidas aparte y no se cambian desde aquí.
+        compacta: borde
       });
     }
     for (var k = 0; k < PS1_PROTECCION_SIN_MODELO.length; k++) {
@@ -3708,13 +3749,17 @@
          por píxel. Dependen solo del parche y del catálogo, no de la escena. */
       var peso = ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
       var perfil = ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.afin);
+      var halo = ps1MedidasHalo(gal, comps);
+      // Máscara ancha sobre la escena: el perfil pasa a ser obligatorio
+      // (ps1HaloActivo), o lo borrado al cielo queda negro.
+      halo.mordida = ps1MascaraMuerdeEscena(enPx, f.afin, escena);
       return {
         ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
         ancho: f.ancho, alto: f.alto, afin: f.afin,
         // Modelo del catálogo para lo de más allá de la imagen (ver
         // ps1PintarParche). Se calcula una vez por galaxia, no por píxel; lo
         // único que falta al pintar es el cielo de la escena.
-        comps: comps, pa: gal.pa, halo: ps1MedidasHalo(gal, comps),
+        comps: comps, pa: gal.pa, halo: halo,
         // Tamaño intrínseco (arcmin) para la ley H2c; inerte con FOT.H2C nula.
         thetaIntArcmin: ps1ThetaIntDeGal(gal, comps),
         peso: peso, escalaMezcla: ps1EscalaMezcla(datos, peso, perfil),
@@ -4219,6 +4264,7 @@
     ps1Cielo: ps1Cielo,
     ps1SigmaCielo: ps1SigmaCielo,
     ps1RadioMascaraAs: ps1RadioMascaraAs,
+    ps1MascaraMuerdeEscena: ps1MascaraMuerdeEscena,
     ps1QuitarEstrellas: ps1QuitarEstrellas,
     ps1FraccionLuz: ps1FraccionLuz,
     ps1ComponentesSersic: ps1ComponentesSersic,
