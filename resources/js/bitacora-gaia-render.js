@@ -952,6 +952,13 @@
     // sin el segundo chequeo, cambiar a un equipo más grande sobre el mismo
     // objeto se quedaba con el catálogo más somero que trajo el equipo chico.
     if (ent && ent.rad >= rad - 1e-6 && ent.mag >= prof - 1e-6) return ent.promise;
+    // Superconjunto monotónico (ADR 0014): funde con lo ya cacheado ANTES de
+    // fetchear, para que una escritura tardía (precalentado somero llegando
+    // después de la vista honda) nunca pise profundidad ya conseguida.
+    if (ent) {
+      rad = Math.max(rad, ent.rad);
+      prof = Math.max(prof, ent.mag);
+    }
     var nueva = {
       rad: rad,
       mag: prof,
@@ -4341,6 +4348,7 @@
     config: CFG,
     fot: FOT,
     consultar: consultar,
+    cacheGaia: cacheGaia,
     dibujar: dibujar,
     vistaGaia: vistaGaia,
     render: render,
