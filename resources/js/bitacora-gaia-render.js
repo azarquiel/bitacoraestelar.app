@@ -1115,50 +1115,6 @@
     return CFG.escalaMagAfov / a * escalaLienzo(size);
   }
 
-  /* ── Par de una doble: completar lo que Gaia DR3 no trae ─────────────────────
-     Gaia satura por arriba. Almaak es el caso que lo destapó: γ And A es una
-     gigante K3 muy roja (V 2,3, G ≈ 1,5) y NO está en DR3, así que en un círculo
-     de 36″ el catálogo solo devuelve su compañera (G 4,86) y dos estrellas de
-     campo. El simulador dibujaba una estrella y el veredicto decía «se resuelve»:
-     los dos tenían razón, pero no hablaban del mismo par.
-
-     No es general —Mizar (G 2,28 + 3,91), Achird (3,32 + 6,76) y 65 Psc (6,21 +
-     6,24) vienen completas— así que aquí NO se sustituye a Gaia: se completa. Se
-     buscan las componentes que el catálogo sí tiene y solo se sintetiza lo que
-     falta, para conservar la posición y el COLOR reales de las que están (el
-     BP–RP de la compañera de Almaak es −0,04: azul, y ese contraste es media
-     gracia del par).
-
-     El ángulo de posición sale del catálogo cuando lo hay (lo trae el WDS, para
-     132 de las 289 dobles): la B se coloca a ese ángulo de la A, medido desde el
-     Norte hacia el Este. Si el par se completa al revés —la que falta es la
-     primaria—, el desplazamiento va a PA+180°. Sin PA se asume uno oblicuo, para
-     que el par no salga alineado con los ejes; para el desdoble lo que importa es
-     la separación, y la orientación en el ocular depende del montaje, que tampoco
-     se modela.
-
-     El COLOR de la componente sintética sale de su tipo espectral con
-     BitacoraGaiaColor.bpRpPorTipo, así que el modelo de color sigue siendo la
-     única fuente: una K3 del catálogo se pinta igual que una estrella de Gaia con
-     ese mismo BP–RP. Sin tipo espectral sale blanca.
-
-     PURA: recibe y devuelve la lista de estrellas, sin tocar la original. */
-  var PAR = {
-    angulo: 55,        // ° de PA asumido (desde el Norte hacia el Este)
-    margenMag: 1.0,    // una componente puede venir hasta 1 mag más débil que mag2
-    radioMinBusca: 3,  // ″ : suelo del círculo donde se buscan las componentes
-    /* ″ : suelo ADICIONAL, para que el par no se dé por ausente cuando el
-       catálogo y Gaia no hablan de la misma posición. Dos desajustes reales,
-       ambos del orden de 20″: el catálogo es J2000 y Gaia DR3 es época 2016.0
-       (η Cas se ha movido 19,4″), y su AR viene redondeada a segundos enteros
-       de tiempo (±7,5″·cos δ). Con 1,5·sep a secas, Achird pintaba TRES
-       estrellas: Gaia traía el par, pero la primaria caía a 21,2″ del centro y
-       quedaba fuera del círculo, así que se sintetizaba una tercera. Medido
-       sobre las 226 dobles del catálogo contra Gaia DR3: 1,5·sep duplica 28,
-       25″ duplica 6, y 60″ solo baja a 3; ninguna deja de completarse por
-       subirlo. 25″ está en mitad de la meseta, no en su borde. */
-    radioEpoca: 25
-  };
   /* null / '' → null, y NO 0: el catálogo deja en null lo que no sabe, y `+null`
      es 0, que como magnitud sería una estrella falsa deslumbrante. */
   function numONulo(v) {
@@ -1166,58 +1122,6 @@
     var n = +v;
     return isFinite(n) ? n : null;
   }
-  function parDoble(estrellas, o) {
-    var sep = numONulo(o.sep), m1 = numONulo(o.mag1), m2 = numONulo(o.mag2);
-    // Sin separación o sin las dos magnitudes no hay par que completar (el
-    // catálogo deja ambas en null en muchas múltiples).
-    if (sep == null || !(sep > 0) || m1 == null || m2 == null) return estrellas;
-
-    var ra0 = numONulo(o.ra), dec0 = numONulo(o.dec);
-    if (ra0 == null || dec0 == null) return estrellas;
-
-    var cos0 = Math.cos(dec0 * Math.PI / 180);
-    var radio = Math.max(PAR.radioMinBusca, sep * 1.5, PAR.radioEpoca) / 3600;   // grados
-    var limite = Math.max(m1, m2) + PAR.margenMag;
-    var halladas = [];
-    for (var i = 0; i < estrellas.length; i++) {
-      var e = estrellas[i];
-      if (!(e[2] <= limite)) continue;                            // demasiado débil para ser componente
-      var dra = (((e[0] - ra0 + 540) % 360) - 180) * cos0, ddec = e[1] - dec0;
-      if (dra * dra + ddec * ddec <= radio * radio) halladas.push(e);
-    }
-    if (halladas.length >= 2) return estrellas;                  // Gaia trae el par: no se toca
-
-    // Desplazamiento de la B respecto de la A: PA del catálogo, o el asumido.
-    var paCat = numONulo(o.pa);
-    var pa = (paCat != null ? paCat : PAR.angulo) * Math.PI / 180;
-    function desplazar(estrella, signo) {
-      return [estrella[0] + signo * sep * Math.sin(pa) / (3600 * (cos0 || 1)),
-              estrella[1] + signo * sep * Math.cos(pa) / 3600];
-    }
-    // Color desde el tipo espectral. Guardado por si un caché sirviera una versión
-    // vieja del módulo de color: sin color se dibuja blanca, no se cae.
-    function bprpDe(tipo) {
-      var f = GColor && GColor.bpRpPorTipo;
-      return f ? f(tipo) : null;
-    }
-
-    var nuevas;
-    if (halladas.length === 1) {
-      // Falta una: la que peor encaja con la magnitud de la que sí está. Si la que
-      // falta es la primaria, va en sentido contrario al PA (que apunta de A a B).
-      var hallada = halladas[0], g0 = hallada[2];
-      var faltaLaB = Math.abs(g0 - m1) <= Math.abs(g0 - m2);
-      var xy = desplazar(hallada, faltaLaB ? 1 : -1);
-      nuevas = [[xy[0], xy[1], faltaLaB ? m2 : m1, bprpDe(faltaLaB ? o.spect2 : o.spect1)]];
-    } else {
-      // No hay ninguna: las dos, con la primaria en las coordenadas del catálogo.
-      var a = [ra0, dec0, m1, bprpDe(o.spect1)];
-      var xyB = desplazar(a, 1);
-      nuevas = [a, [xyB[0], xyB[1], m2, bprpDe(o.spect2)]];
-    }
-    return estrellas.concat(nuevas);
-  }
-
   /* ── ¿La orientación de esta doble es una suposición? (issue #133) ───────────
      El catálogo de estrellas que Gaia DR3 no trae declara en cada fila su
      `origen`: 'medida' (astrometría propia de Hipparcos), 'derivada'
@@ -4323,9 +4227,7 @@
     blurEstrella: blurEstrella,
     colorEstrella: colorEstrella,
     fraccionFlujo: fraccionFlujo,
-    parDoble: parDoble,
     orientacionAsumida: orientacionAsumida,
-    par: PAR,
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
     realzarPerceptual: realzarPerceptual,

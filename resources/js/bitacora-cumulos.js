@@ -382,7 +382,7 @@
        generan en offsets de cielo (arcsec desde el centro), NO en píxeles: el
        zoom cambia la escala del grano, nunca el grano.
        Devuelve [ra, dec, mag, bprp] para inyectar en el array de dibujo, como
-       ya hace parDoble con las componentes que Gaia satura. */
+       las filas del catálogo de estrellas que Gaia DR3 no trae. */
     function sinteticas(opciones) {
       var o = opciones || {};
       var mCut = o.mCut == null ? CFG.mCutGeneracion : o.mCut;
