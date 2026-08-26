@@ -273,9 +273,9 @@ var VecindarioSolar = (function () {
       ctx.textAlign = 'left';
     }
 
-    // Atenuación de marcadores (spec #102): el hovered del fotograma anterior
+    // Realce de marcadores (spec #102): el hovered del fotograma anterior
     // marca el realzado de este; se mueve al final del pintado para quedar por
-    // encima de las estrellas atenuadas.
+    // encima de las demás estrellas.
     var hovPrev = hovered && hovered.o;
     if (hovPrev) {
       for (var ri = 0; ri < projected.length; ri++) {
@@ -283,16 +283,23 @@ var VecindarioSolar = (function () {
       }
     }
     hovered = null;
+
+    // Etiquetas: por debajo de este zoom (fracción de FOV_MAX) se amontonan, así
+    // que solo se leen solas al pasar el cursor o recorriendo un viaje — igual
+    // que en la vista de la galaxia (etiquetaZoomMin) y el Grupo Local.
+    var fraccEtiqueta = (window.CONFIG && CONFIG.marcadores && CONFIG.marcadores.etiquetaFovFraccion != null)
+      ? CONFIG.marcadores.etiquetaFovFraccion : 0.15;
+    var etiquetaZoomOk = fov <= FOV_MAX * fraccEtiqueta;
+
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
-      var est = VLMarcadorEstilo.de({ realzado: o === hovPrev, viajeActivo: !!rutaIds },
-                                    CONFIG.marcadores);
-      var r = Math.max(2.4, 4 * p.persp) * est.escala;
-      ctx.save();
-      ctx.globalAlpha = est.opacidad;
+      var realzado = o === hovPrev;
+      var r = Math.max(2.4, 4 * p.persp);
+
       // Estrella observada solo por otros: se atenúa (gris + menos opacidad),
-      // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable.
+      // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable. La
+      // estrella en sí va SIEMPRE a color intenso (spec #102 ya no la atenúa).
       var aten = window.VLObservadores.atenuadoPorObservador(o.id);
       var col = rgbaDe(o.bprp, 1, aten);   // COLOR EXACTO de Gaia (por BP–RP)
 
@@ -318,12 +325,11 @@ var VecindarioSolar = (function () {
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
       ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#fff9ef'; ctx.fill();
 
-      if (onView) {
+      if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
         ctx.fillStyle = col;
-        ctx.font = '500 ' + (12 * est.escala).toFixed(1) + 'px Inter, sans-serif';
+        ctx.font = '500 12px Inter, sans-serif';
         ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
       }
-      ctx.restore();
 
       // El radio de detección no se atenúa: el área pulsable no cambia.
       if (interactive && mouse.x != null) {

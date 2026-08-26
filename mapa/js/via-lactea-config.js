@@ -94,9 +94,14 @@
       textoTamano:   '11px',   // CSS — p.ej. '10px', '12px', '0.8rem'
       atenuacionEscala: 0.82,  // factor de tamaño del estado base (1 = sin atenuar)
       atenuacionOpacidad: 0.55, // opacidad del estado base (1 = opaco)
-      etiquetaZoomMin: 3       // scale mínimo para que las etiquetas se lean solas
-                                // (por debajo, se amontonan: solo aparecen al pasar
-                                // el cursor o durante un viaje). minScale=1, maxScale=25.
+      etiquetaZoomMin: 3,      // scale mínimo (vista de la galaxia) para que las
+                                // etiquetas se lean solas (por debajo, se
+                                // amontonan: solo aparecen al pasar el cursor o
+                                // durante un viaje). minScale=1, maxScale=25.
+      etiquetaFovFraccion: 0.15 // misma idea para el Grupo Local y el vecindario
+                                // solar, que hacen zoom por FOV (campo de visión
+                                // en años luz) en vez de por escala: la etiqueta
+                                // se lee sola cuando fov <= FOV_MAX · esta fracción.
     },
 
     // -------------------------------------------------------------------------
