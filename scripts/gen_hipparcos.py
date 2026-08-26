@@ -40,10 +40,10 @@ Sin fotometria para derivar (V o V-I ausentes, o V-I fuera de rango): la
 magnitud cae a Hp tal cual -mejor que reabrir el agujero- y el color se
 omite. El generador NO inventa color.
 
-Expansión de sistemas (issue #132; ADR «Las estrellas que Gaia DR3 no trae
-son un catálogo aparte», hoy en la rama worktree-adr-estrellas-que-gaia-no-trae
-sin fusionar — su número 0017 colisiona con el 0017 de la máscara que ya está
-en main): Hipparcos publica una fila por sistema cerrado; el render dibuja
+Expansión de sistemas (issue #132; ADR 0018 «Las estrellas que Gaia DR3 no trae
+son un catálogo aparte», simulador_ocular/docs/adr/ — se escribió como 0017 en
+una rama sin fusionar y se renumeró al traerlo, porque el 0017 ya lo ocupaba el
+de la máscara): Hipparcos publica una fila por sistema cerrado; el render dibuja
 estrellas, no sistemas. El generador abre
 esos sistemas en componentes, con estas reglas:
 
@@ -435,8 +435,8 @@ def escribir_js(filas):
         fh.write('   Gaia dentro de 2″. Los sistemas cerrados de Hipparcos vienen\n')
         fh.write('   abiertos en componentes (separación y ángulo medidos; el pa del\n')
         fh.write('   WDS por encima del theta de Hipparcos). Ver issues #130, #131 y\n')
-        fh.write('   #132 (azarquiel/bitacoraestelar.app) y el ADR de las estrellas\n')
-        fh.write('   que Gaia DR3 no trae (rama worktree-adr-estrellas-que-gaia-no-trae).\n')
+        fh.write('   #132 (azarquiel/bitacoraestelar.app) y el ADR 0018 de\n')
+        fh.write('   simulador_ocular/docs/adr/.\n')
         fh.write('   Magnitud en banda G y color BP−RP, derivados de V y V−I de\n')
         fh.write('   Hipparcos con las relaciones publicadas de Gaia EDR3 (tablas\n')
         fh.write('   5.7/5.8, pivote V−I; Riello et al. 2021). Residuo conocido:\n')

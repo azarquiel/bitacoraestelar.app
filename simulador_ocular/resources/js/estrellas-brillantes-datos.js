@@ -6,8 +6,8 @@
    Gaia dentro de 2″. Los sistemas cerrados de Hipparcos vienen
    abiertos en componentes (separación y ángulo medidos; el pa del
    WDS por encima del theta de Hipparcos). Ver issues #130, #131 y
-   #132 (azarquiel/bitacoraestelar.app) y el ADR de las estrellas
-   que Gaia DR3 no trae (rama worktree-adr-estrellas-que-gaia-no-trae).
+   #132 (azarquiel/bitacoraestelar.app) y el ADR 0018 de
+   simulador_ocular/docs/adr/.
    Magnitud en banda G y color BP−RP, derivados de V y V−I de
    Hipparcos con las relaciones publicadas de Gaia EDR3 (tablas
    5.7/5.8, pivote V−I; Riello et al. 2021). Residuo conocido:

@@ -17,9 +17,9 @@ filas = G.construir()
 medidas = [f for f in filas if f['origen'] == 'medida']
 companeras = [f for f in filas if f['origen'] != 'medida']
 
-# 1) Del orden de 140 filas (un valor muy distinto significa que la
-#    regeneración salió mal: ver el ADR de las estrellas que Gaia no trae,
-#    rama worktree-adr-estrellas-que-gaia-no-trae, sin fusionar).
+# 1) Del orden de 108 filas (un valor muy distinto significa que la
+#    regeneración salió mal: ver el ADR 0018, las estrellas que Gaia DR3 no
+#    trae son un catálogo aparte, en simulador_ocular/docs/adr/).
 assert 50 <= len(filas) <= 250, "orden de magnitud roto: %d filas" % len(filas)
 
 # 1.bis) El censo por origen, fijado al medido en esta regeneración. El

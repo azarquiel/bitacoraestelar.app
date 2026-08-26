@@ -67,6 +67,7 @@ un bloque HTML.
 | ~~`resources/js/bitacora-ocular_main.js`~~ | **Código muerto**: copia antigua y duplicada del render de Gaia (su propio `spriteGaia()`, `magColor` fijo…), previa a la extracción a `bitacora-gaia-render.js`. Verificado (grep) que ningún `.html`/`.php` desplegado lo referencia. No se ha borrado a la espera de confirmación. | No desplegar |
 | `resources/js/globulares-datos.js` | Catálogo de cúmulos globulares (`window.BITACORA_GLOBULARES`), generado del catálogo de Harris | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
+| `resources/js/estrellas-brillantes-datos.js` | **Las estrellas que Gaia DR3 no trae** (`window.BITACORA_ESTRELLAS_BRILLANTES`): catálogo hermano de Gaia con las 108 estrellas que su detector satura, generado por `scripts/gen_hipparcos.py`. Lo cargan **el simulador y el formulario de registro**: si se sube a uno, hay que subirlo al otro | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/galaxias-datos.js` | Catálogo de galaxias (`window.BITACORA_GALAXIAS`), con r_e, b/a, PA, n y mag V: es el presupuesto de luz al que se ancla el parche de PS1. Generado por `scripts/gen_galaxias.py` desde `mapa/datos/galaxias.csv`; no editar a mano | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
@@ -958,6 +959,7 @@ desplegado con el permiso público.
   cambridge_double_star_atlas,RASC_Double_Star_Program}.csv`) se fusionan en
   `mapa/datos/estrellas_dobles.csv` con `python3 scripts/gen_dobles.py` (no editar el
   `.js` a mano). Física de resolución: ver [`docs/notas/resolucion-dobles.md`](docs/notas/resolucion-dobles.md).
+- **Hipparcos** (`public.hipparcos`, Hp<9) vía el [TAP de Gaia](https://gea.esac.esa.int/tap-server/tap), cruzado en local contra `gaiadr3.gaia_source` para quedarse **solo con lo que Gaia no trae**: `resources/js/estrellas-brillantes-datos.js` se **regenera** con `python3 scripts/gen_hipparcos.py` (no editar el `.js` a mano). Comprobación: `python3 scripts/test_hipparcos.py`. Por qué es un catálogo aparte y no un parche del dibujo: [`docs/adr/0018-las-estrellas-que-gaia-dr3-no-trae-son-un-catalogo-aparte.md`](docs/adr/0018-las-estrellas-que-gaia-dr3-no-trae-son-un-catalogo-aparte.md).
 - **Gaia DR3** vía [VizieR TAP](https://tapvizier.cds.unistra.fr/) (CDS).
 - **Colores estelares**: J.-V. Harre &amp; R. Heller (2021), *«Digital color codes of
   stars»*, Astron. Nachr. ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254);
