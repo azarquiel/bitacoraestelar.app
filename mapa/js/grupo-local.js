@@ -323,7 +323,7 @@ var GrupoLocal = (function () {
       ctx.fillText('Vía Láctea', mw.sx + 12, mw.sy - 8);
     }
 
-    // Atenuación de marcadores (spec #102): el hovered del fotograma anterior
+    // Realce de marcadores (spec #102): el hovered del fotograma anterior
     // (o la galaxia buscada, anillo sobre marcador propio) marca el realzado de
     // este fotograma; se mueve al final del pintado para quedar por encima.
     var hovPrev = hovered && hovered.o;
@@ -335,17 +335,25 @@ var GrupoLocal = (function () {
       if (realzadoDe(projected[ri].o)) { projected.push(projected.splice(ri, 1)[0]); break; }
     }
     hovered = null;
+
+    // Etiquetas: por debajo de este zoom (fracción de FOV_MAX) se amontonan, así
+    // que solo se leen solas al pasar el cursor o recorriendo un viaje — igual
+    // que en la vista de la galaxia (etiquetaZoomMin), con la escala propia de
+    // este atlas (fov, logarítmico y de rango variable según los datos).
+    var fraccEtiqueta = (window.CONFIG && CONFIG.marcadores && CONFIG.marcadores.etiquetaFovFraccion != null)
+      ? CONFIG.marcadores.etiquetaFovFraccion : 0.15;
+    var etiquetaZoomOk = fov <= FOV_MAX * fraccEtiqueta;
+
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
-      var est = VLMarcadorEstilo.de({ realzado: realzadoDe(o), viajeActivo: !!rutaIds },
-                                    CONFIG.marcadores);
-      var r = Math.max(2.4, 4 * p.persp) * est.escala;
-      ctx.save();
-      ctx.globalAlpha = est.opacidad;
+      var realzado = realzadoDe(o);
+      var r = Math.max(2.4, 4 * p.persp);
 
       // Galaxia observada solo por otros: se atenúa (gris + menor opacidad),
-      // pero sigue siendo pulsable para descubrir esas observaciones.
+      // pero sigue siendo pulsable para descubrir esas observaciones. El punto
+      // en sí va SIEMPRE a color intenso (spec #102 ya no lo atenúa): marca
+      // dónde está el objeto ya observado.
       var aten = atenuadaPorObservador(o);
       var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // multiplicador de opacidad
 
@@ -370,12 +378,11 @@ var GrupoLocal = (function () {
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
       ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#f4faff'; ctx.fill();
 
-      if (onView) {
+      if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
         ctx.fillStyle = colorRgba(col, 0.95 * am, aten);
-        ctx.font = '500 ' + (12 * est.escala).toFixed(1) + 'px Inter, sans-serif';
+        ctx.font = '500 12px Inter, sans-serif';
         ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
       }
-      ctx.restore();
 
       // El radio de detección no se atenúa: el área pulsable no cambia.
       if (atlasInteractive && mouse.x != null) {

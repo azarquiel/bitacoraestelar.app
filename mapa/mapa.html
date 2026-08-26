@@ -167,27 +167,41 @@
   }
   #mw-content .mw-object-anchor, #mw-sun-anchor, #sun-edge-anchor { z-index: 2; }
 
-  /* Atenuación de marcadores (spec #102). Estado base: punto + etiqueta algo más
-     pequeños y translúcidos (valores desde CONFIG.marcadores vía las variables
-     --mw-aten-*, que fija via-lactea-app.js con la ley de VLMarcadorEstilo).
-     Recuperan el estilo completo con hover, con la búsqueda (.mw-realzado) o
-     recorriendo un viaje (.mw-viaje en #mw-content). El transform va en el
+  /* Atenuación de marcadores (spec #102), ahora solo de la ETIQUETA: el punto
+     va siempre a color intenso (marca dónde está el objeto ya observado, y
+     amontonarlo con la etiqueta lo apagaba sin motivo). El transform va en el
      wrapper .mw-aten porque el de .mw-marker-content lo pisa el JS del abanico;
      el área de clic no cambia: cada marcador lleva un pad transparente SIN
-     escalar (ver createMarker en via-lactea-app.js). */
+     escalar (ver createMarker en via-lactea-app.js).
+
+     La etiqueta, además, solo se lee sola a partir de CONFIG.marcadores.
+     etiquetaZoomMin (clase .mw-etiquetas-visibles en #mw-content, que fija
+     via-lactea-app.js según el zoom actual): por debajo se amontonan y solo
+     aparecen al pasar el cursor (.mw-realzado incluida) o recorriendo un viaje
+     (.mw-viaje), igual que antes atenuaba el punto. */
   .mw-aten {
-    opacity: var(--mw-aten-op, 1);
     transform: scale(var(--mw-aten-esc, 1));
     transform-origin: 0 0;
-    transition: opacity .15s ease, transform .15s ease;
+    transition: transform .15s ease;
   }
   #mw-content .mw-object-anchor:hover,
   #mw-content .mw-object-anchor.mw-realzado { z-index: 3; }
   #mw-content .mw-object-anchor:hover .mw-aten,
   #mw-content .mw-object-anchor.mw-realzado .mw-aten,
   #mw-content.mw-viaje .mw-aten {
-    opacity: 1;
     transform: scale(1);
+  }
+  .mw-label {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s ease;
+  }
+  #mw-content.mw-etiquetas-visibles .mw-label,
+  #mw-content .mw-object-anchor:hover .mw-label,
+  #mw-content .mw-object-anchor.mw-realzado .mw-label,
+  #mw-content.mw-viaje .mw-label {
+    opacity: 1;
+    pointer-events: auto;
   }
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
   .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 0.8; }

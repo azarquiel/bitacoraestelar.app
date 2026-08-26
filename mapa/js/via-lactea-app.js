@@ -226,14 +226,17 @@
     label.setAttribute('data-title',  obj.name);
     label.setAttribute('data-coords', obj.coords);
     if (obj.ficha) label.setAttribute('data-ficha', obj.ficha);
-    label.className = 'mw-pdf-dot'; // reutiliza la clase para el listener global
+    label.className = 'mw-pdf-dot mw-label'; // reutiliza la clase para el listener global
 
-    // Wrapper de atenuación (spec #102): la escala/opacidad del estado base van
-    // por CSS sobre este div (variables --mw-aten-* en #mw-content). No pueden ir
-    // en .mw-marker-content: su transform lo pisa el JS del abanico.
+    // El punto va a color intenso SIEMPRE, fuera de la atenuación: es lo que
+    // marca dónde está el objeto ya observado y no debe apagarse con el resto.
+    content.appendChild(dot);
+
+    // Wrapper de atenuación (spec #102), ahora solo para la etiqueta: su
+    // visibilidad la decide el zoom (ver .mw-label en mapa.html), no ya la
+    // escala/opacidad de --mw-aten-*.
     var aten = document.createElement('div');
     aten.className = 'mw-aten';
-    aten.appendChild(dot);
     aten.appendChild(label);
     content.appendChild(aten);
 
@@ -321,13 +324,12 @@
     edgeAnchors.push(createMarker(obj, 'edge'));
   });
 
-  // Estado base atenuado de los marcadores (spec #102): la ley vive en
-  // VLMarcadorEstilo; aquí solo se publica como variables CSS. El realce por
+  // Tamaño base atenuado de la etiqueta (spec #102): la ley vive en
+  // VLMarcadorEstilo; aquí solo se publica como variable CSS. El realce por
   // hover/búsqueda y el modo viaje los resuelven las reglas de mapa.html.
   if (typeof VLMarcadorEstilo !== 'undefined') {
     var estiloBase = VLMarcadorEstilo.de({}, CONFIG.marcadores);
     img.style.setProperty('--mw-aten-esc', estiloBase.escala);
-    img.style.setProperty('--mw-aten-op', estiloBase.opacidad);
   }
 
   // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los
@@ -424,6 +426,12 @@
     for (var i = 0; i < scales.length; i++) {
       scales[i].style.transform = 'scale(' + counter + ')' + counterRot;
     }
+
+    // Etiquetas: por debajo del umbral de zoom se amontonan, así que solo se
+    // enseñan al pasar el cursor o durante un viaje (ver .mw-label en mapa.html).
+    var zoomMin = (CONFIG.marcadores && CONFIG.marcadores.etiquetaZoomMin != null)
+      ? CONFIG.marcadores.etiquetaZoomMin : 3;
+    img.classList.toggle('mw-etiquetas-visibles', scale >= zoomMin);
 
     // Posiciona el contenido abanicado y su línea-guía en cada marcador.
     var anchors = img.querySelectorAll('.mw-object-anchor');
