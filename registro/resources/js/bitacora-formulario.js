@@ -490,7 +490,7 @@
   // rezagadas, alta) es de BitacoraBase.
   var viajeBox = $('viajeAviso'), viajeBtn = $('viajeAvisoBtn');
   var listaViajes = [], viajePendiente = null;   // pendiente: id a recuperar en modo edición
-  var VIAJES_API = WP ? WP.endpoint.replace(/observaciones\/?$/, 'viajes/de-la-noche') : '';
+  var VIAJES_API = WP ? BitacoraBase.ruta('viajes/de-la-noche') : '';
   function pedirViaje(datos, metodo){
     var q = '?fecha='+encodeURIComponent(datos.fecha)+'&hora='+encodeURIComponent(datos.hora);
     return fetch(VIAJES_API+q, { method:metodo, credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
@@ -563,7 +563,7 @@
   }
   function cargarBases(){
     if(!WP) return;
-    var API = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+    var API = BitacoraBase.ruta('bases');
     fetch(API, { credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
@@ -775,7 +775,7 @@
 
   function cargarFlota() {
     if (!WP) return;
-    var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
+    var API = BitacoraBase.ruta('equipo');
     fetch(API, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {

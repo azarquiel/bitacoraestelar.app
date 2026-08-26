@@ -89,26 +89,12 @@
         cards.innerHTML = '<div class="msg' + (esError ? ' error' : '') + '">' + esc(texto) + '</div>';
       }
 
-      // Llamada al servidor con la cookie de sesión y el nonce.
-      function api(url, opciones) {
-        opciones = opciones || {};
-        opciones.credentials = 'same-origin';
-        opciones.headers = opciones.headers || {};
-        opciones.headers['X-WP-Nonce'] = WP.nonce;
-        return fetch(url, opciones).then(function (r) {
-          return r.json()
-            .catch(function () { return {}; })
-            .then(function (data) {
-              return { ok: r.ok, status: r.status, data: data };
-            });
-        });
-      }
-
+      // Llamada al servidor: fuente única en bitacora-base.js (había cinco
+      // copias de api() y ya habían divergido). El 403 del listado conserva su
+      // mensaje propio por parámetro.
+      var api = window.BitacoraBase.api;
       function mensajeError(res, porDefecto) {
-        if (res.status === 401) return 'Debes iniciar sesión.';
-        if (res.status === 403) return 'Solo puedes modificar tus propias observaciones.';
-        if (res.data && res.data.message) return res.data.message;
-        return porDefecto + ' (error ' + res.status + ')';
+        return window.BitacoraBase.errorDe(res, porDefecto, { m403: 'Solo puedes modificar tus propias observaciones.' });
       }
 
       // ═══════════════════════════════════════════════════════════════════
@@ -399,8 +385,8 @@
         // pintarse: ver las observaciones importa más que agruparlas.
         var viajes = porViajes
           // BITACORA_WP solo expone el endpoint de observaciones; el de viajes
-          // es hermano suyo en la misma raíz de la API.
-          ? api(WP.endpoint.replace(/\/observaciones$/, '/viajes') + '?mios=1').then(function (r) {
+          // es hermano suyo en la misma raíz de la API (BitacoraBase.ruta).
+          ? api(window.BitacoraBase.ruta('viajes') + '?mios=1').then(function (r) {
               return (r.ok && Array.isArray(r.data)) ? r.data : [];
             }).catch(function () { return []; })
           : Promise.resolve([]);

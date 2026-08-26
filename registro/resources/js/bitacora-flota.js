@@ -116,8 +116,8 @@
         return;
       }
 
-      // Base de la API de equipo, derivada de WP.endpoint (…/observaciones).
-      var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
+      // Base de la API de equipo, hermana de …/observaciones (fuente única).
+      var API = window.BitacoraBase.ruta('equipo');
 
       var estado = { personal: null, catalogo: null };
       // El catálogo global es grande; se carga EN DIFERIDO (solo al ir a buscar en
@@ -148,28 +148,12 @@
         mostrarFlash._t = setTimeout(function () { flash.className = 'flash'; }, 4000);
       }
 
-      // Llamada a la API con cookie de sesión, nonce y JSON.
-      function api(url, opciones) {
-        opciones = opciones || {};
-        opciones.credentials = 'same-origin';
-        opciones.headers = opciones.headers || {};
-        opciones.headers['X-WP-Nonce'] = WP.nonce;
-        if (opciones.body && typeof opciones.body !== 'string') {
-          opciones.headers['Content-Type'] = 'application/json';
-          opciones.body = JSON.stringify(opciones.body);
-        }
-        return fetch(url, opciones).then(function (r) {
-          return r.json().catch(function () { return {}; }).then(function (data) {
-            return { ok: r.ok, status: r.status, data: data };
-          });
-        });
-      }
-
+      // Llamada a la API: fuente única en bitacora-base.js (su variante era la
+      // más completa de las cinco copias y es la que quedó). El 403 del equipo
+      // conserva su mensaje propio por parámetro.
+      var api = window.BitacoraBase.api;
       function errorDe(res, porDefecto) {
-        if (res.status === 401) return 'Debes iniciar sesión.';
-        if (res.status === 403) return 'Solo puedes tocar tu propio equipo.';
-        if (res.data && res.data.message) return res.data.message;
-        return porDefecto + ' (error ' + res.status + ')';
+        return window.BitacoraBase.errorDe(res, porDefecto, { m403: 'Solo puedes tocar tu propio equipo.' });
       }
 
       var plural = { telescopio: 'telescopios', ocular: 'oculares', auxiliar: 'auxiliares', filtro: 'filtros' };
