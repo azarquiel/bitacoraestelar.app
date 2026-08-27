@@ -177,6 +177,8 @@
       (view === 'edge' ? 'display:none;' : '');
     anchor.className = 'mw-object-anchor';
     anchor.setAttribute('data-color', obj.color);
+    // El CSS pinta el anillo de "por visitar" con el color del propio objeto.
+    anchor.style.setProperty('--mw-color', obj.color);
     anchor.setAttribute('data-view', view);
     anchor.setAttribute('data-id', obj.id);
     anchor.setAttribute('data-x', pos.x);
@@ -201,7 +203,7 @@
     content.style.cssText = 'position:absolute;top:0;left:0;';
 
     var dot = document.createElement('div');
-    dot.className = 'mw-pdf-dot';
+    dot.className = 'mw-pdf-dot mw-punto';
     dot.title = 'Ver ficha de ' + obj.label + ' (PDF)';
     dot.setAttribute('data-pdf', obj.pdf);
     dot.setAttribute('data-title', obj.name);
@@ -285,6 +287,66 @@
   });
   img.appendChild(rutaSvg);
 
+  // --------------------------------------------------------------------------
+  // ANILLOS DE DISTANCIA DESDE EL SOL
+  // Circunferencias finas centradas en el Sol y rotuladas en años luz, para leer
+  // de un vistazo a qué distancia queda cada objeto. Viven dentro de #mw-content
+  // como la ruta, así que acompañan al desplazamiento, al zoom y al giro sin
+  // geometría propia. Solo en la vista cenital: de canto el disco se ve de
+  // perfil y una circunferencia del plano se proyectaría como un segmento, que
+  // mentiría sobre la distancia. Un anillo se enseña únicamente cuando su radio
+  // en pantalla es legible (ANILLO_RADIO_MIN_PX).
+  // --------------------------------------------------------------------------
+  var ANILLOS_AL = [1000, 5000, 25000];
+  var ANILLO_RADIO_MIN_PX = 26;
+  var ANILLO_ROTULO_MIN_PX = 70;   // por debajo, el anillo va sin rótulo
+  var anillosSvg = document.createElementNS(SVG_NS, 'svg');
+  anillosSvg.setAttribute('id', 'mw-anillos');
+  anillosSvg.style.display = 'none';
+  var anillos = ANILLOS_AL.map(function (al) {
+    var c = document.createElementNS(SVG_NS, 'circle');
+    c.setAttribute('vector-effect', 'non-scaling-stroke');
+    var t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('y', '12');   // el rótulo cuelga bajo el anillo, lejos del núcleo
+    t.textContent = String(al).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' al';
+    anillosSvg.appendChild(c);
+    anillosSvg.appendChild(t);
+    return { al: al, c: c, t: t };
+  });
+  img.insertBefore(anillosSvg, rutaSvg);   // la ruta pasa por encima
+
+  function dibujarAnillos() {
+    var sol = document.getElementById('mw-sun-anchor');
+    var activeImg = document.getElementById('mw-image');
+    if (isEdgeView || !sol || !sol.style.left || !activeImg || !activeImg.naturalWidth) {
+      anillosSvg.style.display = 'none';
+      return;
+    }
+    var r = getImgRect(activeImg);
+    var pxPorAl = r.width / CONFIG.fisica.anchoImagenAl;
+    var cx = parseFloat(sol.style.left);
+    var cy = parseFloat(sol.style.top);
+    // El rótulo va contraescalado y contragirado, como los marcadores, para que
+    // se lea siempre horizontal y del mismo tamaño en pantalla.
+    var rot = currentPlaneRotation();
+    var contra = ' scale(' + (1 / scale) + ')' + (rot ? ' rotate(' + (-rot) + ')' : '');
+    anillosSvg.style.width  = img.clientWidth + 'px';
+    anillosSvg.style.height = img.clientHeight + 'px';
+    anillosSvg.style.display = '';
+    anillos.forEach(function (a) {
+      var rad = a.al * pxPorAl;
+      var visible = rad * scale >= ANILLO_RADIO_MIN_PX;
+      a.c.style.display = visible ? '' : 'none';
+      a.t.style.display = (rad * scale >= ANILLO_ROTULO_MIN_PX) ? '' : 'none';
+      if (!visible) return;
+      a.c.setAttribute('cx', cx);
+      a.c.setAttribute('cy', cy);
+      a.c.setAttribute('r', rad);
+      a.t.setAttribute('transform',
+        'translate(' + cx + ',' + (cy + rad) + ')' + contra);
+    });
+  }
+
   // Viaje que se está recorriendo ('' = ninguno). Lo fija aplicarViaje().
   var viajeActivo = '';
 
@@ -307,6 +369,7 @@
   }
 
   function dibujarRuta() {
+    dibujarAnillos();
     var pts = viajeActivo ? puntosRuta() : [];
     if (pts.length < 2) {           // el Sol solo no es un viaje
       rutaSvg.style.display = 'none';
@@ -421,6 +484,8 @@
     // Contra-rotación: cada marcador (punto + etiqueta) se gira en sentido
     // opuesto al mapa para que los nombres y el Sol se lean siempre horizontales.
     var counterRot = rot ? (' rotate(' + (-rot) + 'deg)') : '';
+
+    dibujarAnillos();
 
     var scales = img.querySelectorAll('.mw-counter-scale');
     for (var i = 0; i < scales.length; i++) {
@@ -1018,6 +1083,19 @@
       var fija = consola.classList.toggle('mw-consola-fija');
       consolaTirador.setAttribute('aria-expanded', fija ? 'true' : 'false');
     });
+
+    // Barrido de arranque: la consola se despliega sola una vez al cargar y se
+    // repliega, que es como se descubre que el tirador existe. Si en ese rato
+    // el usuario la fija con un clic (aria-expanded='true') se queda abierta, y
+    // si está encima con el ratón la mantiene abierta el :hover del CSS.
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      consola.classList.add('mw-consola-fija');
+      setTimeout(function () {
+        if (consolaTirador.getAttribute('aria-expanded') !== 'true') {
+          consola.classList.remove('mw-consola-fija');
+        }
+      }, 2200);
+    }
   }
 
   // El zoom se hace con la rueda y con el pellizco, que es lo que ya usa todo
@@ -1788,13 +1866,14 @@
       var enRuta = !viajeActivo || VLViaje.enViaje(viajeActivo, id);
       a.style.display = (inView && !typeHidden && enRuta && !EN_VECINDARIO[id]
         && VLO.visiblePorObservador(id)) ? '' : 'none';
-      // Objeto observado solo por otros: se muestra atenuado (gris con algo de
-      // su color), como "deshabilitado". El filtro no afecta a los clics, así
-      // que sigue pudiéndose pulsar para descubrir las observaciones ajenas.
-      // Durante un viaje los objetos de la ruta van siempre a todo color: son
-      // las escalas de la travesía, no observaciones ajenas.
-      a.style.filter = (VLO.atenuadoPorObservador(id) && !viajeActivo)
-        ? 'grayscale(' + VLO.MEZCLA_NO_VISITADO + ') opacity(' + VLO.OPACIDAD_NO_VISITADO + ')' : '';
+      // Objeto observado solo por otros: es un destino POR VISITAR y se dibuja
+      // como anillo hueco de su color, no como punto lleno apagado (la
+      // distinción es de símbolo, no de brillo: ver .mw-no-visitado en
+      // mapa.html). Sigue pudiéndose pulsar para descubrir las observaciones
+      // ajenas. Durante un viaje los objetos de la ruta van todos como
+      // visitados: son las escalas de la travesía, no observaciones ajenas.
+      a.classList.toggle('mw-no-visitado',
+        VLO.atenuadoPorObservador(id) && !viajeActivo);
     }
   }
 

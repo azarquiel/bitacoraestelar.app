@@ -375,6 +375,48 @@
     opacity: 1;
     pointer-events: auto;
   }
+  /* VISITADO / POR VISITAR: la diferencia es de SÍMBOLO, no de brillo.
+     El objeto que el observador activo aún no ha observado (pero sí otros) se
+     dibuja como anillo hueco de su propio color, sin halo; el visitado sigue
+     siendo el punto lleno con halo. Así se lee de un vistazo lo que queda por
+     visitar sin apagarlo. El color lo pone --mw-color, que fija createMarker.
+     La regla de quién está atenuado sigue viviendo en via-lactea-observadores.js,
+     y las capas de canvas (Grupo Local, vecindario solar) dibujan lo mismo. */
+  #mw-content .mw-object-anchor.mw-no-visitado .mw-punto {
+    box-sizing: border-box;
+    /* !important: el punto lleva su color en estilo en línea (createMarker). */
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 1px solid var(--mw-color, #9aa4b2);
+    transform: scale(1.6);
+  }
+  #mw-content .mw-object-anchor.mw-no-visitado .mw-label {
+    filter: grayscale(0.35) opacity(0.8);
+  }
+
+  /* Anillos de distancia desde el Sol (ver dibujarAnillos en via-lactea-app.js):
+     rejilla de fondo, nunca protagonista, y sin capturar el ratón. */
+  #mw-anillos {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: visible;
+    fill: none;
+  }
+  #mw-anillos circle {
+    stroke: rgba(126,200,255,0.3);
+    stroke-width: 1;
+    stroke-dasharray: 2 6;
+  }
+  #mw-anillos text {
+    fill: rgba(126,200,255,0.5);
+    font: 500 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.12em;
+    text-anchor: middle;
+    dominant-baseline: auto;
+  }
+
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
   .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 0.8; }
   .mw-ruta-flujo {

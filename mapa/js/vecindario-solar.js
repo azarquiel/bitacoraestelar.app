@@ -322,14 +322,26 @@ var VecindarioSolar = (function () {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
-      halo.addColorStop(0, rgbaDe(o.bprp, 0.55, aten));
-      halo.addColorStop(1, rgbaDe(o.bprp, 0, aten));
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
+      if (!aten) {
+        var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
+        halo.addColorStop(0, rgbaDe(o.bprp, 0.55, false));
+        halo.addColorStop(1, rgbaDe(o.bprp, 0, false));
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
+      }
 
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#fff9ef'; ctx.fill();
+      // Visitado o por visitar: la diferencia es de SÍMBOLO, no de brillo. El
+      // objeto que el observador activo aún no ha observado se dibuja como
+      // anillo hueco de su propio color (sin halo); el visitado, como punto
+      // lleno con halo. Misma ley en las tres vistas del mapa.
+      ctx.beginPath(); ctx.arc(p.sx, p.sy, aten ? r + 1 : r, 0, Math.PI * 2);
+      if (aten) {
+        ctx.strokeStyle = rgbaDe(o.bprp, 0.95, false);
+        ctx.lineWidth = 1.3;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#fff9ef'; ctx.fill();
+      }
 
       var labelRect = null;
       if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
