@@ -52,6 +52,69 @@
   #mw-observador:hover { background: rgba(30,38,56,0.35) !important; }
   #mw-observador option { background: #0c101c; color: #eaf1fb; }
 
+  /* Columna izquierda a un solo ancho: cada control nace con su propio ancho
+     inline (186 px el buscador, el texto del enlace en "Registrar"…) y la
+     columna quedaba dentada. 244 px es el ancho del control más largo, el del
+     giro. El selector de observador solo fija aquí el mínimo: sigue creciendo
+     hasta 320 px si el nombre del compañero lo pide (ver arriba). */
+  #mw-nuevo, #mw-search, #mw-toggle-view, #mw-viaje,
+  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control {
+    width: min(244px, calc(100vw - 24px)) !important;
+    box-sizing: border-box;
+  }
+  #mw-nuevo { display: inline-block; text-align: center; }
+  #mw-observador { min-width: min(244px, calc(100vw - 24px)) !important; box-sizing: border-box; }
+  /* El deslizador cede su ancho fijo y se queda con lo que sobre en la píldora. */
+  #mw-rotate, #mw-rotate-edge, #mw-rotate-plane { width: auto !important; flex: 1; min-width: 0; }
+
+  /* Deslizadores de giro: sin esto el sistema los pinta con su azul de acento,
+     el único color ajeno a la paleta (oro sobre negro) en toda la pantalla. */
+  input[type=range].mw-ui-control {
+    -webkit-appearance: none; appearance: none;
+    background: transparent; height: 14px; margin: 0;
+  }
+  input[type=range].mw-ui-control::-webkit-slider-runnable-track {
+    height: 3px; border-radius: 2px; background: rgba(244,199,107,0.25);
+  }
+  input[type=range].mw-ui-control::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4.5px;
+    border: none; border-radius: 50%; background: #f4c76b;
+    box-shadow: 0 0 6px rgba(244,199,107,0.55);
+  }
+  input[type=range].mw-ui-control::-moz-range-track {
+    height: 3px; border-radius: 2px; background: rgba(244,199,107,0.25);
+  }
+  input[type=range].mw-ui-control::-moz-range-thumb {
+    width: 12px; height: 12px; border: none; border-radius: 50%;
+    background: #f4c76b; box-shadow: 0 0 6px rgba(244,199,107,0.55);
+  }
+
+  /* La leyenda y la pista de abajo llevaban su propio cristal (negro plano,
+     borde más claro, esquina de 8 px) y no casaban con las píldoras de arriba.
+     Mismo tinte, mismo borde, mismo desenfoque: una sola familia. */
+  #mw-legend, #mw-hint {
+    background: rgba(12,16,28,0.32) !important;
+    border: 1px solid rgba(255,255,255,0.14) !important;
+    color: #eaf1fb !important;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.28);
+  }
+  #mw-legend { border-radius: 14px !important; padding: 10px 14px !important; z-index: 20; }
+  #mw-hint { border-radius: 20px !important; z-index: 20; }
+
+  /* Viñeta: la imagen de la galaxia acaba en un corte recto contra el negro de
+     la página. Oscurecer solo las esquinas disimula ese canto sin tocar el
+     centro. No intercepta el ratón, así que el arrastre del mapa sigue igual. */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%);
+  }
+
   /* CAPA DEL GRUPO LOCAL (atlas extragaláctico), detrás del mapa de la galaxia.
      Su opacidad y su zoom los controla el visor principal (grupo-local.js). */
   #gl-sky {
