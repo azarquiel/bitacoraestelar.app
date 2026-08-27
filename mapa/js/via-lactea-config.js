@@ -90,7 +90,10 @@
     // -------------------------------------------------------------------------
     inclinacion: {
       activa: true,
-      grados: 75,
+      // Abatimiento de partida: 0 = cenital de plano (mirando el disco desde
+      // arriba). El deslizador de la consola lo lleva hasta 90°, que es donde
+      // el mapa da la vuelta a la vista de canto.
+      gradosInicial: 0,
       perspectiva: 1400,
       bulboRadio: 0.020,
       bulboAlto: 0,

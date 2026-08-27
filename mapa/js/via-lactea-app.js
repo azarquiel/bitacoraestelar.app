@@ -59,10 +59,14 @@
   var plano = document.getElementById('mw-plano');
   var INCL = (window.CONFIG && CONFIG.inclinacion) || {};
 
-  // Grados de abatimiento vigentes. Solo se abate la vista cenital: la de canto
-  // ya se mira de perfil.
+  // Abatimiento vigente, en grados. Lo mueve el usuario (setTilt): 0 es la
+  // cenital de plano y 90 es el canto, donde el mapa cambia de vista. Solo se
+  // abate la cenital: la de canto ya se mira de perfil.
+  var tiltGrados = (INCL.gradosInicial != null) ? INCL.gradosInicial : 0;
+  var TILT_MAX = 90;
+
   function tiltActual() {
-    return (INCL.activa && !isEdgeView) ? (INCL.grados || 0) : 0;
+    return (INCL.activa && !isEdgeView) ? tiltGrados : 0;
   }
 
   // Parámetros de la proyección para VLGeometria: coordenadas del contenido
@@ -744,6 +748,7 @@
       ['mw-vista-control', v.vista, 'flex'],
       // Con el disco abatido no hay giro cenital que ofrecer (ver
       // currentPlaneRotation): el control se retira en vez de quedarse inerte.
+      ['mw-tilt-control', !isEdgeView && INCL.activa, 'flex'],
       ['mw-rotate-control', v.giroCenital && !(tiltActual() && !INCL.giroEnPlano), 'flex'],
       ['mw-rotate-edge-control', v.giroCanto, 'flex'],
       ['mw-rotate-plane-control', v.giroPlano, 'flex'],
@@ -2726,6 +2731,47 @@
   var rotateInput = document.getElementById('mw-rotate');
   var rotateValue = document.getElementById('mw-rotate-value');
   var rotateReset = document.getElementById('mw-rotate-reset');
+
+  // ===========================================================================
+  // CONTROL DE ABATIMIENTO DE LA VISTA CENITAL
+  // Del cenital de plano (0°) al canto (90°). Al llegar al tope no se deja el
+  // disco convertido en una raya: el mapa da la voltereta a la vista de canto,
+  // que tiene su propia foto y sus propios marcadores.
+  // ===========================================================================
+  var tiltInput = document.getElementById('mw-tilt');
+  var tiltValue = document.getElementById('mw-tilt-value');
+  var tiltReset = document.getElementById('mw-tilt-reset');
+
+  function pintarTilt() {
+    if (tiltInput) tiltInput.value = tiltGrados;
+    if (tiltValue) tiltValue.textContent = Math.round(tiltGrados) + '°';
+  }
+
+  function setTilt(deg) {
+    if (isEdgeView || isFlipping) return;
+    tiltGrados = Math.max(0, Math.min(TILT_MAX, deg || 0));
+    if (tiltGrados >= TILT_MAX) {
+      // El tope ES la vista de canto. Se deja el abatimiento a 0 para que al
+      // volver a la cenital se aterrice de plano, como al arrancar.
+      tiltGrados = 0;
+      pintarTilt();
+      if (toggleBtn) toggleBtn.click();
+      return;
+    }
+    pintarTilt();
+    repositionAnchors();   // el bulbo y las plomadas dependen del abatimiento
+    applyTransform();
+  }
+
+  pintarTilt();
+  if (tiltInput) {
+    tiltInput.addEventListener('input', function () {
+      setTilt(parseFloat(tiltInput.value) || 0);
+    });
+  }
+  if (tiltReset) {
+    tiltReset.addEventListener('click', function () { setTilt(0); });
+  }
 
   function setRotation(deg) {
     rotation = ((deg % 360) + 360) % 360; // normaliza a 0-360
