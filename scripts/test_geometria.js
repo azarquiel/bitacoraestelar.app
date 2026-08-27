@@ -71,5 +71,45 @@ cerca(G.xCantoObjeto({ l: 0, b: 0, d: R0 }, 0, ANCHO, R0), 50, 'objeto en el nú
 // Objeto situado en el Sol (d=0) -> cae donde el Sol.
 cerca(G.xCantoObjeto({ l: 0, b: 0, d: 0 }, 0, ANCHO, R0), G.xCantoSol(0, ANCHO, R0), 'objeto en el Sol -> x del Sol');
 
+console.log('proyectarInclinado / planoDesdePantalla (vista cenital inclinada):');
+var VISTA = { ancho: 800, alto: 600, escala: 2, grados: 75, perspectiva: 1400 };
+var PLANA = { ancho: 800, alto: 600, escala: 2, grados: 0, perspectiva: 1400 };
+// Sin inclinar, la proyección es la escala de siempre alrededor del centro.
+cerca(G.proyectarInclinado(500, 400, 0, PLANA).x, 400 + 2 * 100, 'sin inclinar -> escala pura en x');
+cerca(G.proyectarInclinado(500, 400, 0, PLANA).y, 300 + 2 * 100, 'sin inclinar -> escala pura en y');
+// El centro no se mueve nunca: es a la vez origen de transform y de perspectiva.
+cerca(G.proyectarInclinado(400, 300, 0, VISTA).x, 400, 'el centro se queda en el centro (x)');
+cerca(G.proyectarInclinado(400, 300, 0, VISTA).y, 300, 'el centro se queda en el centro (y)');
+// Ida y vuelta sobre el plano: la inversa devuelve el punto de partida.
+(function () {
+  var p = G.proyectarInclinado(520, 460, 0, VISTA);
+  var q = G.planoDesdePantalla(p.x, p.y, VISTA);
+  cerca(q.x, 520, 'ida y vuelta en x', 1e-9);
+  cerca(q.y, 460, 'ida y vuelta en y', 1e-9);
+})();
+// Inclinado, el borde de abajo queda más cerca del observador y se agranda; el
+// de arriba se aleja y se encoge. Ambos por debajo del alto sin inclinar.
+(function () {
+  var abajo = G.proyectarInclinado(400, 600, 0, VISTA).y - 300;
+  var arriba = 300 - G.proyectarInclinado(400, 0, 0, VISTA).y;
+  if (abajo > arriba && abajo < 2 * 300) { console.log('  ok   el borde cercano se agranda y el lejano se encoge'); }
+  else { fallos++; console.log('  FALLA el borde cercano se agranda y el lejano se encoge: ' + abajo + ' / ' + arriba); }
+})();
+// La altura sobre el plano acerca el punto al observador y lo sube en pantalla.
+(function () {
+  var suelo = G.proyectarInclinado(400, 400, 0, VISTA).y;
+  var alto = G.proyectarInclinado(400, 400, 50, VISTA).y;
+  if (alto < suelo) { console.log('  ok   un objeto sobre el plano se pinta más arriba'); }
+  else { fallos++; console.log('  FALLA un objeto sobre el plano se pinta más arriba: ' + alto + ' >= ' + suelo); }
+})();
+
+console.log('huellaInclinada (caja envolvente de la imagen abatida):');
+eqRect_wh(G.huellaInclinada({ left: 200, top: 150, width: 400, height: 300 }, PLANA), 800, 600, 'sin inclinar -> rectángulo por la escala');
+(function () {
+  var h = G.huellaInclinada({ left: 200, top: 150, width: 400, height: 300 }, VISTA);
+  if (h.h < 600 && h.w > 800) { console.log('  ok   inclinada: se achata en alto y se ensancha en ancho'); }
+  else { fallos++; console.log('  FALLA inclinada: se achata en alto y se ensancha: ' + JSON.stringify(h)); }
+})();
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

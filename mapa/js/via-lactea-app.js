@@ -39,12 +39,64 @@
     if (isEdgeView) {
       return (CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? edgePlaneRotation : 0;
     }
-    return rotation;
+    // Con el disco abatido, el giro en plano queda desactivado: abatir y girar
+    // a la vez desorienta y no deja un horizonte al que volver.
+    return (tiltActual() && !INCL.giroEnPlano) ? 0 : rotation;
   }
 
   // Punto del núcleo (centro de giro) de la vista activa, en % de la imagen.
   function currentNucleo() {
     return isEdgeView ? CONFIG.nucleo.canto : CONFIG.nucleo.cenital;
+  }
+
+  // --------------------------------------------------------------------------
+  // INCLINACIÓN DE LA VISTA CENITAL (ver CONFIG.inclinacion)
+  // El disco se abate con rotateX y se proyecta en perspectiva, así que la
+  // relación pantalla <-> mapa deja de ser una simple escala. La matemática
+  // (proyección del plano, su inversa y la huella) vive en VLGeometria; aquí
+  // solo se lee el estado del mapa y se escribe el DOM.
+  // --------------------------------------------------------------------------
+  var plano = document.getElementById('mw-plano');
+  var INCL = (window.CONFIG && CONFIG.inclinacion) || {};
+
+  // Grados de abatimiento vigentes. Solo se abate la vista cenital: la de canto
+  // ya se mira de perfil.
+  function tiltActual() {
+    return (INCL.activa && !isEdgeView) ? (INCL.grados || 0) : 0;
+  }
+
+  // Parámetros de la proyección para VLGeometria: coordenadas del contenido
+  // (que ocupa el visor entero) y SIN el desplazamiento, que va por fuera.
+  function vistaProyeccion(esc) {
+    return {
+      ancho: img.clientWidth,
+      alto: img.clientHeight,
+      escala: (esc == null) ? scale : esc,
+      grados: tiltActual(),
+      perspectiva: INCL.perspectiva || 1400
+    };
+  }
+
+  // Altura de un objeto sobre el plano galáctico, en px del contenido: es lo
+  // que lo despega del disco al abatirlo. z = d·sen(b), de sus coordenadas.
+  function alturaObjetoPx(id, r) {
+    var g = GAL[id];
+    if (!g || !r || !tiltActual()) return 0;
+    return g.d * Math.sin(g.b * Math.PI / 180) *
+      (r.width / CONFIG.fisica.anchoImagenAl) * (INCL.alturaObjetos || 1);
+  }
+
+  // Recoloca el desplazamiento para que el punto del mapa que hay bajo
+  // (clientX, clientY) siga cayendo ahí después de cambiar la escala. Sirve
+  // igual con el disco plano: grados = 0 reduce la proyección a la escala.
+  function anclarZoom(clientX, clientY, nuevaEscala) {
+    var rect = viewer.getBoundingClientRect();
+    var sx = clientX - rect.left, sy = clientY - rect.top;
+    var p = VLGeometria.planoDesdePantalla(sx - posX, sy - posY, vistaProyeccion());
+    var q = VLGeometria.proyectarInclinado(p.x, p.y, 0, vistaProyeccion(nuevaEscala));
+    posX = sx - q.x;
+    posY = sy - q.y;
+    scale = nuevaEscala;
   }
 
   // --------------------------------------------------------------------------
@@ -151,7 +203,55 @@
       a.style.top  = (r.top  + r.height * yPct) + 'px';
     }
 
+    pintarBulbo();
     dibujarRuta(); // la ruta se apoya en las posiciones que acaban de fijarse
+  }
+
+  // --------------------------------------------------------------------------
+  // BULBO DE CARA (solo con la vista cenital inclinada)
+  // Abatido el disco, el núcleo se aplasta hasta casi desaparecer. Este recorte
+  // de la PROPIA foto, puesto de cara a la cámara sobre el núcleo, le devuelve
+  // el volumen sin inventar ni color ni forma: solo altura. Radio y altura
+  // salen de CONFIG.inclinacion (bulboRadio, bulboAlto).
+  // --------------------------------------------------------------------------
+  var bulbo = document.createElement('img');
+  bulbo.className = 'mw-bulbo';
+  bulbo.alt = '';
+  bulbo.draggable = false;
+  bulbo.style.cssText = 'position:absolute;pointer-events:none;display:none;';
+
+  function pintarBulbo() {
+    var activeImg = document.getElementById('mw-image');
+    var tilt = tiltActual();
+    if (!tilt || !INCL.bulboRadio || !activeImg || !activeImg.naturalWidth) {
+      bulbo.style.display = 'none';
+      return;
+    }
+    // Justo detrás de los marcadores y delante del disco.
+    if (bulbo.parentNode !== img) img.insertBefore(bulbo, activeImg.nextSibling);
+
+    var r = getImgRect(activeImg);
+    var nuc = CONFIG.nucleo.cenital;
+    var cx = r.left + r.width  * (nuc.x / 100);
+    var cy = r.top  + r.height * (nuc.y / 100);
+    var radio = r.width * INCL.bulboRadio;
+    var mask = 'radial-gradient(circle ' + (radio * 2.2).toFixed(0) + 'px at ' +
+      (cx - r.left).toFixed(0) + 'px ' + (cy - r.top).toFixed(0) + 'px,' +
+      ' #000 45%, rgba(0,0,0,0.55) 72%, transparent 100%)';
+
+    bulbo.src = activeImg.currentSrc || activeImg.src;
+    bulbo.style.display = '';
+    bulbo.style.left = r.left + 'px';
+    bulbo.style.top = r.top + 'px';
+    bulbo.style.width = r.width + 'px';
+    bulbo.style.height = r.height + 'px';
+    bulbo.style.webkitMaskImage = mask;
+    bulbo.style.maskImage = mask;
+    // Gira sobre el propio núcleo: es el punto que no se debe mover.
+    bulbo.style.transformOrigin = (cx - r.left) + 'px ' + (cy - r.top) + 'px';
+    bulbo.style.transform =
+      'translateZ(' + (r.width * (INCL.bulboAlto || 0)).toFixed(1) + 'px)' +
+      ' rotateX(' + (-tilt) + 'deg)';
   }
 
   // --------------------------------------------------------------------------
@@ -468,9 +568,21 @@
       img.style.transformOrigin = 'center center';
     }
 
+    // El desplazamiento va en el envoltorio #mw-plano, DELANTE de la
+    // perspectiva (ver mapa.html): si entrase en ella, arrastraría dividido por
+    // la profundidad y dejaría de seguir al ratón. Aquí quedan la escala, el
+    // giro en plano y el abatimiento.
+    var tilt = tiltActual();
+    if (plano) {
+      plano.style.transform = 'translate(' + posX + 'px, ' + posY + 'px)';
+      plano.style.perspective = tilt ? ((INCL.perspectiva || 1400) + 'px') : '';
+    }
+    img.style.transformStyle = tilt ? 'preserve-3d' : '';
+    img.classList.toggle('mw-inclinado', !!tilt);
     img.style.transform =
-      'translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ')' +
-      (rot ? ' rotate(' + rot + 'deg)' : '');
+      'scale(' + scale + ')' +
+      (rot ? ' rotate(' + rot + 'deg)' : '') +
+      (tilt ? ' rotateX(' + tilt + 'deg)' : '');
 
     // Contraescala de los marcadores: al ampliar se encogen un poco en pantalla
     // (no del todo) para no tapar el mapa, manteniéndose legibles y pulsables.
@@ -484,12 +596,24 @@
     // Contra-rotación: cada marcador (punto + etiqueta) se gira en sentido
     // opuesto al mapa para que los nombres y el Sol se lean siempre horizontales.
     var counterRot = rot ? (' rotate(' + (-rot) + 'deg)') : '';
+    // Y en sentido opuesto al abatimiento, para que el punto y la etiqueta se
+    // vean de frente y no aplastados sobre el disco.
+    var counterTilt = tilt ? (' rotateX(' + (-tilt) + 'deg)') : '';
+    // El Sol no es un .mw-object-anchor (no lleva altura), pero su marcador
+    // también se pone de cara: sin preserve-3d en su ancla, el contragiro se
+    // aplana y la etiqueta sale estirada sobre el disco.
+    var solAncla = document.getElementById('mw-sun-anchor');
+    if (solAncla) solAncla.style.transformStyle = tilt ? 'preserve-3d' : '';
 
     dibujarAnillos();
 
     var scales = img.querySelectorAll('.mw-counter-scale');
     for (var i = 0; i < scales.length; i++) {
-      scales[i].style.transform = 'scale(' + counter + ')' + counterRot;
+      // scale3d y no scale: scale() no toca z, así que encajada entre el
+      // abatimiento y su contragiro deja de ser uniforme y estira el marcador
+      // (se ve al ampliar, cuando counter se aleja de 1). En 3D sí conmuta.
+      scales[i].style.transform =
+        'scale3d(' + counter + ',' + counter + ',' + counter + ')' + counterRot + counterTilt;
     }
 
     // Etiquetas: por debajo del umbral de zoom se amontonan, así que solo se
@@ -500,8 +624,21 @@
 
     // Posiciona el contenido abanicado y su línea-guía en cada marcador.
     var anchors = img.querySelectorAll('.mw-object-anchor');
+    var rectAlturas = null;
+    if (tilt) {
+      var imgAlturas = document.getElementById('mw-image');
+      if (imgAlturas && imgAlturas.naturalWidth) rectAlturas = getImgRect(imgAlturas);
+    }
     for (var k = 0; k < anchors.length; k++) {
       var a = anchors[k];
+      // Cada objeto se despega del disco según su altura real sobre el plano.
+      if (tilt && a.getAttribute('data-view') === 'top') {
+        a.style.transformStyle = 'preserve-3d';
+        a.style.transform = 'translateZ(' +
+          alturaObjetoPx(a.getAttribute('data-id'), rectAlturas).toFixed(1) + 'px)';
+      } else if (a.style.transform) {
+        a.style.transform = '';
+      }
       var content = a.querySelector('.mw-marker-content');
       var connector = a.querySelector('.mw-connector');
       if (!content) continue;
@@ -569,7 +706,9 @@
     capaEnPantalla = capa;
     var mandos = [
       ['mw-vista-control', v.vista, 'flex'],
-      ['mw-rotate-control', v.giroCenital, 'flex'],
+      // Con el disco abatido no hay giro cenital que ofrecer (ver
+      // currentPlaneRotation): el control se retira en vez de quedarse inerte.
+      ['mw-rotate-control', v.giroCenital && !(tiltActual() && !INCL.giroEnPlano), 'flex'],
       ['mw-rotate-edge-control', v.giroCanto, 'flex'],
       ['mw-rotate-plane-control', v.giroPlano, 'flex'],
       ['mw-legend', v.leyendaObjetos, ''],
@@ -755,8 +894,19 @@
       effW = huella.w;
       effH = huella.h;
     }
+    // Abatida, la huella en pantalla ya no es el rectángulo por la escala: se
+    // ensancha en el borde cercano y se achata en alto. Se toma la mayor de las
+    // dos huellas: si el clamp se quedara con la achatada, el mapa quedaría
+    // clavado en vertical (el disco cabe de sobra a lo alto hasta zooms muy
+    // grandes) y no se podría llevar al centro un objeto alto sobre el plano.
+    var anchoPant = effW * scale, altoPant = effH * scale;
+    if (tiltActual()) {
+      var h3 = VLGeometria.huellaInclinada(r, vistaProyeccion());
+      anchoPant = Math.max(anchoPant, h3.w);
+      altoPant = Math.max(altoPant, h3.h);
+    }
     var pos = VLGeometria.clampDesplazamiento(
-      posX, posY, effW * scale, effH * scale, viewerRect.width, viewerRect.height);
+      posX, posY, anchoPant, altoPant, viewerRect.width, viewerRect.height);
     posX = pos.x;
     posY = pos.y;
   }
@@ -766,15 +916,7 @@
   }
 
   function zoomAt(clientX, clientY, newScale) {
-    var rect = viewer.getBoundingClientRect();
-    var cx = clientX - rect.left - rect.width / 2;
-    var cy = clientY - rect.top - rect.height / 2;
-
-    var pos = VLGeometria.zoomAlrededor(posX, posY, cx, cy, scale, newScale);
-    posX = pos.x;
-    posY = pos.y;
-    scale = newScale;
-
+    anclarZoom(clientX, clientY, newScale);
     clampPosition();
     applyTransform();
   }
@@ -823,7 +965,7 @@
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
     // Ctrl/Shift + arrastre: modo rotación en lugar de desplazamiento.
-    if (e.ctrlKey || e.shiftKey) {
+    if ((e.ctrlKey || e.shiftKey) && !(tiltActual() && !INCL.giroEnPlano)) {
       if (!isEdgeView) {
         var np = nucleusScreenPoint();
         if (np) {
@@ -970,9 +1112,9 @@
       // movimiento una transformación coherente (sin acumular errores):
       //   - pinchStartDist / pinchStartScale: para la relación de zoom.
       //   - pinchStartPosX/Y: desplazamiento del mapa al empezar.
-      //   - pinchAnchorX/Y: punto del MAPA (en coords del contenido, relativas
-      //     al centro del visor y SIN escala) que está bajo el punto medio de
-      //     los dedos. Ese punto debe permanecer bajo los dedos todo el gesto.
+      //   - pinchAnchorX/Y: punto del MAPA (en coordenadas del contenido) que
+      //     está bajo el punto medio de los dedos. Ese punto debe permanecer
+      //     bajo los dedos todo el gesto.
       isPinching = true;
       isDragging = false;
       pinchStartDist = touchDistance(e.touches[0], e.touches[1]);
@@ -983,12 +1125,11 @@
 
       var rect = viewer.getBoundingClientRect();
       var mid = touchMidpoint(e.touches[0], e.touches[1]);
-      // Posición del punto medio respecto al centro del visor (en píxeles).
-      var midCX = mid.x - rect.left - rect.width / 2;
-      var midCY = mid.y - rect.top - rect.height / 2;
-      // Punto del mapa (sin escala) que cae bajo el punto medio.
-      pinchAnchorX = (midCX - posX) / scale;
-      pinchAnchorY = (midCY - posY) / scale;
+      // Punto del mapa que cae bajo el punto medio de los dedos.
+      var anc = VLGeometria.planoDesdePantalla(
+        mid.x - rect.left - posX, mid.y - rect.top - posY, vistaProyeccion());
+      pinchAnchorX = anc.x;
+      pinchAnchorY = anc.y;
 
       hideHint();
       e.preventDefault();
@@ -1007,17 +1148,16 @@
 
         var rect = viewer.getBoundingClientRect();
         var mid = touchMidpoint(e.touches[0], e.touches[1]);
-        // Punto medio actual respecto al centro del visor.
-        var midCX = mid.x - rect.left - rect.width / 2;
-        var midCY = mid.y - rect.top - rect.height / 2;
 
         // Imponemos que el punto de mapa anclado (pinchAnchor) quede justo bajo
-        // el punto medio actual de los dedos, a la nueva escala. De ahí se
-        // despeja posX/posY directamente (un solo paso, sin acumular):
-        //   midC = pos + anchor * scale  =>  pos = midC - anchor * scale
+        // el punto medio actual de los dedos, a la nueva escala: se proyecta a
+        // esa escala y el desplazamiento es lo que falta hasta los dedos (un
+        // solo paso, sin acumular).
         scale = targetScale;
-        posX = midCX - pinchAnchorX * targetScale;
-        posY = midCY - pinchAnchorY * targetScale;
+        var proj = VLGeometria.proyectarInclinado(
+          pinchAnchorX, pinchAnchorY, 0, vistaProyeccion(targetScale));
+        posX = (mid.x - rect.left) - proj.x;
+        posY = (mid.y - rect.top) - proj.y;
 
         clampPosition();
         applyTransform();
@@ -1925,11 +2065,10 @@
     if (isFlipping) return;
     isFlipping = true;
 
-    viewer.style.perspective = '1200px';
+    if (plano) plano.style.perspective = '1200px';
     img.style.transformOrigin = 'center center';
     img.style.transition = 'transform ' + (FLIP_MS / 1000) + 's ease-in';
-    img.style.transform =
-      'translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ') rotateX(90deg)';
+    img.style.transform = 'scale(' + scale + ') rotateX(90deg)';
 
     setTimeout(function () {
       // Mitad de la voltereta: cambiamos de vista con el mapa "de perfil".
@@ -1941,10 +2080,10 @@
       var destRot = currentPlaneRotation();
       var rotSuffix = destRot ? ' rotate(' + destRot + 'deg)' : '';
       img.style.transition = 'none';
-      img.style.transform = 'translate(0px, 0px) scale(1) rotateX(-90deg)' + rotSuffix;
+      img.style.transform = 'scale(1) rotateX(-90deg)' + rotSuffix;
       void img.offsetWidth; // forzar reflow para que la transición aplique
       img.style.transition = 'transform ' + (FLIP_MS / 1000) + 's ease-out';
-      img.style.transform = 'translate(0px, 0px) scale(1) rotateX(0deg)' + rotSuffix;
+      img.style.transform = 'scale(1) rotateX(' + tiltActual() + 'deg)' + rotSuffix;
 
       setTimeout(function () {
         img.style.transition = 'none';
@@ -2252,7 +2391,7 @@
   // el zoom pedido. Reutiliza la misma geometría que repositionAnchors().
   // topeMax eleva el tope de zoom por encima del normal: solo lo usa la entrada
   // al vecindario solar, que vive mucho más cerca que el resto del mapa.
-  function centerOnAnchor(xPct, yPct, targetScale, topeMax) {
+  function centerOnAnchor(xPct, yPct, targetScale, topeMax, zPx) {
     var activeImg = isEdgeView
       ? document.getElementById('mw-image-edge')
       : document.getElementById('mw-image');
@@ -2278,10 +2417,13 @@
     }
 
     scale = Math.min(topeMax || maxScale, Math.max(minScale, targetScale));
-    // Para que (ax,ay) quede en el centro del visor:
-    //   posición_en_pantalla = (ax - W/2) * scale + posX = 0  →  posX = -(ax-W/2)*scale
-    posX = -(ax - W / 2) * scale;
-    posY = -(ay - H / 2) * scale;
+    // Para que (ax,ay) quede en el centro del visor, se proyecta a la escala de
+    // destino y el desplazamiento es lo que falta hasta el centro. Con el disco
+    // abatido cuenta además la altura del objeto sobre el plano, o el encuadre
+    // se queda corto justo con los que más se despegan.
+    var proj = VLGeometria.proyectarInclinado(ax, ay, zPx || 0, vistaProyeccion(scale));
+    posX = W / 2 - proj.x;
+    posY = H / 2 - proj.y;
 
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     clampPosition();
@@ -2365,7 +2507,12 @@
     } else {
       pos = obj.top;
     }
-    centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom);
+    // Con el disco abatido, el objeto no está sobre el plano sino a su altura:
+    // se la pasamos al centrado o los que más se despegan quedan descuadrados.
+    var imgCen = document.getElementById('mw-image');
+    var zObj = (!isEdgeView && imgCen && imgCen.naturalWidth)
+      ? alturaObjetoPx(obj.id, getImgRect(imgCen)) : 0;
+    centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom, null, zObj);
     // El parpadeo se lanza tras un instante para que el centrado ya esté hecho.
     setTimeout(function () { blinkObject(obj.id); }, 60);
   }

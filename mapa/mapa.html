@@ -396,6 +396,16 @@
 
   /* Anillos de distancia desde el Sol (ver dibujarAnillos en via-lactea-app.js):
      rejilla de fondo, nunca protagonista, y sin capturar el ratón. */
+  /* Vista cenital inclinada: abatida, la foto enseña su borde recto y la
+     galaxia parece una carta de baraja. Difuminar el canto es parte de la
+     técnica, no maquillaje. El bulbo de cara lo pone via-lactea-app.js. */
+  #mw-content.mw-inclinado #mw-image {
+    -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%,
+      #000 38%, rgba(0,0,0,0.55) 72%, transparent 100%);
+    mask-image: radial-gradient(ellipse 50% 50% at 50% 50%,
+      #000 38%, rgba(0,0,0,0.55) 72%, transparent 100%);
+  }
+
   #mw-anillos {
     position: absolute;
     inset: 0;
@@ -457,11 +467,21 @@
   <div id="vs-scale"></div>
   <div id="vs-tip"></div>
 
+  <!-- ENVOLTORIO DEL DESPLAZAMIENTO. Con la vista cenital inclinada, la
+       perspectiva vive aquí y el pan (translate) va DELANTE de ella: si el
+       desplazamiento entrase en la perspectiva, arrastraría dividido por la
+       profundidad y dejaría de seguir al ratón. Dentro, #mw-content se queda
+       con la escala y el abatimiento. Ver via-lactea-app.js (applyTransform). -->
+  <div id="mw-plano" style="
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+  ">
   <div id="mw-content" style="
     position: absolute;
     inset: 0;
     transform-origin: center center;
-    transform: translate(0px, 0px) scale(1);
+    transform: scale(1);
   ">
     <img id="mw-image" src="/bitacora-mapa/images/The_best_Milky_Way_map_by_Gaia.webp" alt="Mapa cenital de la Vía Láctea (Gaia)"
       decoding="async" fetchpriority="high"
@@ -606,6 +626,7 @@
     <!-- Los marcadores de los objetos Messier se generan automáticamente
          desde la tabla OBJECTS del script (ver más abajo). -->
   </div>
+  </div><!-- /#mw-plano -->
 
   <div id="mw-hint" style="
     position: absolute;
@@ -1187,7 +1208,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260823_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260828_1400"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
@@ -1222,6 +1243,6 @@
      via-lactea-app.js. zoom-imagen necesita CONFIG. -->
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
-<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260722_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260823_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260828_1400"></script>
 </li>

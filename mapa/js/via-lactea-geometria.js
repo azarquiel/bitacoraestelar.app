@@ -103,11 +103,82 @@
     return 50 - S * R0 * Math.cos(phiDeg * RAD);
   }
 
+  // ---------------------------------------------------------------------------
+  // VISTA CENITAL INCLINADA (rotateX + perspective)
+  // El plano del mapa es z=0 en las coordenadas de #mw-content; rotateX lo abate
+  // y la perspective del envoltorio lo proyecta. Como el desplazamiento (pan)
+  // vive FUERA de la perspectiva, aquí no entra: estas funciones trabajan en
+  // coordenadas del visor SIN desplazar, y quien llama suma o resta el pan.
+  //
+  // Cadena real de CSS: transform: scale(esc) rotateX(grados), con
+  // transform-origin y perspective-origin en el centro de la caja. Se aplica de
+  // derecha a izquierda, así que primero se abate y luego se escala; y scale()
+  // es 2D, o sea que NO escala z: la deformación de perspectiva es un efecto de
+  // pantalla, del mismo tamaño a cualquier zoom (y nunca se acerca al punto de
+  // fuga, así que no hay singularidad).
+  //
+  //   vista: { ancho, alto, escala, grados, perspectiva }
+  //   z:     altura del punto sobre el plano galáctico, en px del contenido.
+  // ---------------------------------------------------------------------------
+  function proyectarInclinado(x, y, z, vista) {
+    var a = (vista.grados || 0) * RAD;
+    var cos = Math.cos(a), sen = Math.sin(a);
+    var dx = x - vista.ancho / 2;
+    var dy = y - vista.alto / 2;
+    var ey = dy * cos - (z || 0) * sen;   // altura en pantalla tras abatir
+    var ez = dy * sen + (z || 0) * cos;   // profundidad hacia el observador
+    var k = 1 - ez / (vista.perspectiva || Infinity);   // división de perspectiva
+    if (!(k > 0)) k = 1e-6;               // detrás del observador: no se proyecta
+    return {
+      x: vista.ancho / 2 + vista.escala * dx / k,
+      y: vista.alto / 2 + vista.escala * ey / k
+    };
+  }
+
+  // Inversa de proyectarInclinado sobre el propio plano (z=0): qué punto del
+  // mapa hay bajo un punto de pantalla. Es la que ancla el zoom y el pellizco.
+  //   ey·esc/k = v  y  k = 1 - dy·sen/p  =>  dy = v / (esc·cos + v·sen/p)
+  function planoDesdePantalla(sx, sy, vista) {
+    var a = (vista.grados || 0) * RAD;
+    var cos = Math.cos(a), sen = Math.sin(a);
+    var p = vista.perspectiva || Infinity;
+    var u = sx - vista.ancho / 2;
+    var v = sy - vista.alto / 2;
+    var den = vista.escala * cos + v * sen / p;
+    var dy = den ? v / den : 0;
+    var k = 1 - dy * sen / p;
+    return {
+      x: vista.ancho / 2 + u * k / vista.escala,
+      y: vista.alto / 2 + dy
+    };
+  }
+
+  // Caja envolvente en pantalla del rectángulo de la imagen ya inclinado, para
+  // que el clamp del desplazamiento no impida ver zonas que sí están dentro.
+  function huellaInclinada(rect, vista) {
+    var xs = [rect.left, rect.left + rect.width];
+    var ys = [rect.top, rect.top + rect.height];
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (var i = 0; i < 2; i++) {
+      for (var j = 0; j < 2; j++) {
+        var p = proyectarInclinado(xs[i], ys[j], 0, vista);
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+    }
+    return { w: maxX - minX, h: maxY - minY };
+  }
+
   var API = {
     rectContain: rectContain,
     huellaRotada: huellaRotada,
     clampDesplazamiento: clampDesplazamiento,
     zoomAlrededor: zoomAlrededor,
+    proyectarInclinado: proyectarInclinado,
+    planoDesdePantalla: planoDesdePantalla,
+    huellaInclinada: huellaInclinada,
     xCantoObjeto: xCantoObjeto,
     xCantoSol: xCantoSol
   };
