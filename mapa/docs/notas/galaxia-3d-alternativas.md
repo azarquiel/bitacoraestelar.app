@@ -514,3 +514,49 @@ Secundarias, marcadas como tales y usadas solo como pista, nunca como respaldo:
 - web.dev, «WebGPU is now supported in major browsers» — **blog de
   fabricante**; usado solo para situar el soporte de WebGPU, que en cualquier
   caso queda descartado.
+
+---
+
+## Prototipo (2026-08-28)
+
+La parte visual de esta nota no se decide leyendo: se decide mirando. Vive en
+la rama **`prototipo-inclinacion-galaxia`** (commit `60f914c`), fuera de
+cualquier rama de entrega, y es **código desechable**.
+
+Son cinco variantes montadas sobre la propia `mapa.html`, con los marcadores,
+los anillos, la consola y los datos reales, conmutadas con `?variant=` y con
+una barra flotante (flechas, y `←`/`→` del teclado):
+
+| Clave | Qué enseña |
+| --- | --- |
+| `0` | Referencia: el mapa de hoy, sin inclinar |
+| `A` | Disco inclinado, sin bulbo — la línea base del problema |
+| `B` | Bulbo ficticio de gradiente, siempre de cara a la cámara |
+| `C` | Bulbo recortado de la propia foto, de cara |
+| `D` | Pila de capas de la foto: grosor de disco y halo |
+
+La inclinación es **fija y sin animar**, a propósito. Los mandos de la barra
+(θ, radio del bulbo, altura y exageración de la altura de los marcadores) están
+para tantear, no para quedarse.
+
+Lo que el prototipo **sí** resuelve, y que conviene no volver a descubrir:
+
+1. El desplazamiento tiene que salir de la perspectiva. El `translate` del pan
+   es el último de la lista de `#mw-content`, o sea que vive en el espacio del
+   padre; si se le añade `rotateX` en la misma cadena, el pan pasa por la
+   división de perspectiva y arrastrar deja de ser 1:1 con el ratón. La salida
+   es un envoltorio propio que lleve el pan y la `perspective`, con la escala y
+   la inclinación dentro.
+2. Al inclinar se ve el borde recto de la foto y la galaxia parece una carta de
+   baraja. Difuminar el canto con una máscara elíptica es parte de la técnica,
+   no maquillaje.
+3. Las alturas reales son pequeñas: con la imagen a tamaño de pantalla, la
+   mayoría de los objetos quedan a pocos píxeles del plano. Por eso el mando de
+   exageración; si la altura no se exagera, apenas se nota que se han despegado.
+
+Lo que **no** resuelve, porque no es la pregunta: el abanico de solapados y el
+anclaje del pellizco siguen suponiendo escala uniforme local→pantalla, así que
+al ampliar mucho el zoom se descentra.
+
+**Veredicto: pendiente.** Cuando lo haya, se escribe aquí junto a la variante
+que gane, y la rama del prototipo se queda como fuente primaria.
