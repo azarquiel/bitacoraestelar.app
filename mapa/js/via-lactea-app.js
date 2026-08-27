@@ -746,7 +746,8 @@
   // enfocar el buscador o desplegar un combo. Todo control nuevo que se añada
   // al mapa tiene que entrar en esta lista.
   var CONTROLES_UI = '#mw-search, #mw-observador, #mw-viaje, #mw-nuevo,' +
-                     ' #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control';
+                     ' #mw-toggle-view, #mw-legend, #mw-reset, #mw-consola-panel,' +
+                     ' .mw-ui-control';
 
   viewer.addEventListener('mousedown', function (e) {
     if (overlayOpen()) return;
@@ -1006,6 +1007,18 @@
     zoomAt(e.clientX, e.clientY, newScale);
     hideHint();
   }, { passive: false });
+
+  // Tirador de la consola. El ratón la abre al posarse (eso lo hace el :hover
+  // del CSS) y el tabulador al entrar el foco; en una pantalla táctil no hay
+  // ninguna de las dos cosas, así que el tirador la deja fijada al pulsarlo.
+  var consola = document.getElementById('mw-consola');
+  var consolaTirador = document.getElementById('mw-consola-tirador');
+  if (consola && consolaTirador) {
+    consolaTirador.addEventListener('click', function () {
+      var fija = consola.classList.toggle('mw-consola-fija');
+      consolaTirador.setAttribute('aria-expanded', fija ? 'true' : 'false');
+    });
+  }
 
   document.getElementById('mw-zoom-in').addEventListener('click', function () {
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }

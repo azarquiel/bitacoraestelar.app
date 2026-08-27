@@ -103,6 +103,127 @@
   #mw-legend { border-radius: 14px !important; padding: 10px 14px !important; z-index: 20; }
   #mw-hint { border-radius: 20px !important; z-index: 20; }
 
+  /* ═══ CONSOLA DE NAVEGACIÓN ═══════════════════════════════════════════════
+     Plegada contra el borde derecho: en reposo solo se ve el tirador, una
+     franja con el rótulo en vertical. El <aside> ocupa todo el alto para que
+     el ratón la encuentre en cualquier punto del borde, pero no intercepta
+     nada: el puntero solo existe en el tirador y en el panel, así que el mapa
+     se sigue arrastrando por debajo. */
+  #mw-consola {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;     /* panel y tirador a la misma altura, como un mando */
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px;
+    pointer-events: none;
+    font-family: sans-serif;
+  }
+  #mw-consola-tirador {
+    pointer-events: auto;
+    order: 2;                /* el tirador, pegado al borde; el panel a su izquierda */
+    width: 26px;
+    padding: 16px 0;
+    border-radius: 13px;
+    background: rgba(12,16,28,0.32);
+    cursor: pointer;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #f4c76b !important;
+    border-color: rgba(244,199,107,0.30) !important;
+    transition: background .2s ease, box-shadow .2s ease;
+  }
+  #mw-consola-tirador span {
+    display: block;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+  #mw-consola:hover #mw-consola-tirador,
+  #mw-consola-tirador:focus-visible {
+    background: rgba(244,199,107,0.14);
+    box-shadow: 0 0 14px rgba(244,199,107,0.25);
+  }
+
+  /* El panel: mismos mandos de siempre, ahora en una columna con rótulos. Sale
+     de la derecha con un barrido corto; oculto no recibe el puntero, así que
+     el mapa que hay debajo se arrastra con normalidad. */
+  #mw-consola-panel {
+    order: 1;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(6,9,18,0.55);
+    border: 1px solid rgba(244,199,107,0.16);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.55);
+    opacity: 0;
+    transform: translateX(14px);
+    transition: opacity .22s ease, transform .22s ease;
+  }
+  #mw-consola:hover #mw-consola-panel,
+  #mw-consola:focus-within #mw-consola-panel,
+  #mw-consola.mw-consola-fija #mw-consola-panel {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  /* Rótulo de sección: el mismo tipo técnico del tirador, en versalitas y con
+     una línea de instrumento que llega hasta el borde del panel. Nombra el
+     trabajo de las filas que tiene debajo. */
+  #mw-consola .mw-consola-rotulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    align-self: stretch;
+    margin-top: 6px;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(244,199,107,0.62);
+    user-select: none;
+  }
+  #mw-consola .mw-consola-rotulo::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, rgba(244,199,107,0.28), rgba(244,199,107,0));
+  }
+  #mw-consola .mw-consola-rotulo:first-child { margin-top: 0; }
+
+  /* Botones de escala: redondos como antes, ya sin la esquina para ellos solos. */
+  #mw-escala-control button {
+    width: 34px; height: 34px;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 50%;
+    background: rgba(12,16,28,0.32);
+    color: #eaf1fb;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #mw-escala-control button:hover { background: rgba(30,38,56,0.5); }
+
+  /* Foco visible: el mapa se recorre también con el tabulador. */
+  #mw-consola :focus-visible, #mw-consola-tirador:focus-visible {
+    outline: 2px solid rgba(244,199,107,0.8);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #mw-consola-panel { transition: none; }
+  }
+
   /* Viñeta: la imagen de la galaxia acaba en un corte recto contra el negro de
      la página. Oscurecer solo las esquinas disimula ese canto sin tocar el
      centro. No intercepta el ratón, así que el arrastre del mapa sigue igual. */
@@ -472,30 +593,24 @@
     white-space: nowrap;
   ">Arrastra para explorar · rueda o pellizca para zoom · pulsa un objeto para ver su ficha</div>
 
-  <div style="
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  ">
-    <button id="mw-zoom-in" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:18px;cursor:pointer;">+</button>
-    <button id="mw-zoom-out" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:18px;cursor:pointer;">−</button>
-    <button id="mw-reset" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:14px;cursor:pointer;">⟲</button>
-  </div>
+  <!-- CONSOLA DE NAVEGACIÓN
+       Todos los mandos viven aquí, plegados contra el borde derecho: el mapa se
+       ve entero y sin nada encima hasta que hacen falta. Se abre al posar el
+       ratón en el tirador (o al pulsarlo, que es lo único que sirve en una
+       pantalla táctil) y al entrar el foco con el tabulador. Las filas y sus
+       rótulos son los cuatro trabajos de la consola, no adornos: qué se anota,
+       hacia dónde se mira, cómo se ve y quién observa.
 
-  <div style="
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-    max-width: calc(100vw - 90px);
-    z-index: 20;
-  ">
+       Los ids de los mandos no cambian: via-lactea-app.js los busca por id y
+       VLCapas.controlesVisibles enciende y apaga las filas. Mover el bloque en
+       el DOM no le afecta. -->
+  <aside id="mw-consola" aria-label="Consola de navegación">
+    <button id="mw-consola-tirador" class="mw-ui-control" type="button"
+      aria-expanded="false" aria-controls="mw-consola-panel"
+      title="Mostrar u ocultar la consola"><span>CONSOLA</span></button>
+
+    <div id="mw-consola-panel">
+    <div class="mw-consola-rotulo">Bitácora</div>
     <!-- Fila 1: registrar observación -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <a id="mw-nuevo" href="https://bitacoraestelar.app/registro-de-observacion/" style="
@@ -505,6 +620,7 @@
       ">✦ Registrar observación</a>
     </div>
 
+    <div class="mw-consola-rotulo">Rumbo</div>
     <!-- Fila 2: buscar objeto (debajo de registrar observación) -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div style="position:relative;display:flex;align-items:center;">
@@ -561,6 +677,7 @@
       </div>
     </div>
     
+    <div class="mw-consola-rotulo">Vista</div>
 	<!-- Fila 4: vista de canto. La fila entera lleva id porque se esconde cuando
 	     manda otra escala (el atlas o el vecindario): el botón es de la vista de
 	     la Vía Láctea. Ver VLCapas.controlesVisibles. -->
@@ -571,6 +688,17 @@
       ">🔄 Vista de canto</button>
     </div>
 
+    <!-- Fila 4b: escala. Los tres botones estaban sueltos en la esquina
+         superior derecha, tapando el mapa a todas horas para un gesto que ya
+         hacen la rueda y el pellizco. Aquí acompañan a la vista y el teclado
+         los alcanza; los ids siguen siendo los que escucha via-lactea-app.js. -->
+    <div id="mw-escala-control" style="display:flex;gap:6px;align-items:center;">
+      <button id="mw-zoom-in" class="mw-ui-control" title="Acercar">+</button>
+      <button id="mw-zoom-out" class="mw-ui-control" title="Alejar">−</button>
+      <button id="mw-reset" class="mw-ui-control" title="Volver a la vista inicial">⟲</button>
+    </div>
+
+    <div class="mw-consola-rotulo">Tripulación</div>
     <!-- Fila 5: quién observa -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <select id="mw-observador" title="Filtrar por observador" style="
@@ -596,7 +724,8 @@
         <option value="">Seleccione un observador para ver sus viajes</option>
       </select>
     </div>
-  </div>
+    </div><!-- /#mw-consola-panel -->
+  </aside>
   <div id="mw-search-toast" style="
     position:absolute;
     top:16px;left:50%;
