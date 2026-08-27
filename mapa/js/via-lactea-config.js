@@ -95,7 +95,8 @@
       bulboRadio: 0.020,
       bulboAlto: 0,
       alturaObjetos: 1.5,
-      giroEnPlano: false
+      tallos: true,
+      giroEnPlano: true
     },
 
     // -------------------------------------------------------------------------

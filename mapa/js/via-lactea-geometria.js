@@ -125,6 +125,15 @@
     var cos = Math.cos(a), sen = Math.sin(a);
     var dx = x - vista.ancho / 2;
     var dy = y - vista.alto / 2;
+    // El giro es DENTRO del disco y ocurre antes de abatirlo: gira el mapa
+    // sobre su eje polar, no la imagen ya abatida sobre la pantalla.
+    if (vista.giro) {
+      var g = vista.giro * RAD;
+      var cg = Math.cos(g), sg = Math.sin(g);
+      var rx = dx * cg - dy * sg;
+      dy = dx * sg + dy * cg;
+      dx = rx;
+    }
     var ey = dy * cos - (z || 0) * sen;   // altura en pantalla tras abatir
     var ez = dy * sen + (z || 0) * cos;   // profundidad hacia el observador
     var k = 1 - ez / (vista.perspectiva || Infinity);   // división de perspectiva
@@ -147,8 +156,16 @@
     var den = vista.escala * cos + v * sen / p;
     var dy = den ? v / den : 0;
     var k = 1 - dy * sen / p;
+    var dx = u * k / vista.escala;
+    if (vista.giro) {   // deshace el giro en el plano
+      var g = vista.giro * RAD;
+      var cg = Math.cos(g), sg = Math.sin(g);
+      var ux = dx * cg + dy * sg;
+      dy = -dx * sg + dy * cg;
+      dx = ux;
+    }
     return {
-      x: vista.ancho / 2 + u * k / vista.escala,
+      x: vista.ancho / 2 + dx,
       y: vista.alto / 2 + dy
     };
   }

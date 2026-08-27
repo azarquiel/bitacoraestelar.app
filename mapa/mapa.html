@@ -406,6 +406,19 @@
       #000 38%, rgba(0,0,0,0.55) 72%, transparent 100%);
   }
 
+  /* Plomada del marcador al disco: sin ella un objeto de halo flota en el aire
+     y no se sabe sobre qué punto del mapa está. Muy tenue: son decenas y no
+     deben competir con la galaxia. La pinta pintarTallo en via-lactea-app.js. */
+  .mw-tallo {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+    background: linear-gradient(to bottom,
+      rgba(150, 200, 255, 0.55), rgba(150, 200, 255, 0));
+    pointer-events: none;
+  }
+
   #mw-anillos {
     position: absolute;
     inset: 0;
@@ -1208,7 +1221,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260828_1400"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260828_1900"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
@@ -1243,6 +1256,6 @@
      via-lactea-app.js. zoom-imagen necesita CONFIG. -->
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
-<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260828_1400"></script>
+<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1900"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260828_1900"></script>
 </li>

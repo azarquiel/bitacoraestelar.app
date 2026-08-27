@@ -39,8 +39,8 @@
     if (isEdgeView) {
       return (CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? edgePlaneRotation : 0;
     }
-    // Con el disco abatido, el giro en plano queda desactivado: abatir y girar
-    // a la vez desorienta y no deja un horizonte al que volver.
+    // Con el disco abatido el giro es AZIMUTAL: gira el mapa sobre su eje
+    // polar antes de abatirlo, no la imagen ya abatida sobre la pantalla.
     return (tiltActual() && !INCL.giroEnPlano) ? 0 : rotation;
   }
 
@@ -73,6 +73,9 @@
       alto: img.clientHeight,
       escala: (esc == null) ? scale : esc,
       grados: tiltActual(),
+      // El giro solo entra en la proyección con el disco abatido: en plano lo
+      // resuelve el CSS alrededor del núcleo y la escala basta para el anclaje.
+      giro: tiltActual() ? currentPlaneRotation() : 0,
       perspectiva: INCL.perspectiva || 1400
     };
   }
@@ -84,6 +87,30 @@
     if (!g || !r || !tiltActual()) return 0;
     return g.d * Math.sin(g.b * Math.PI / 180) *
       (r.width / CONFIG.fisica.anchoImagenAl) * (INCL.alturaObjetos || 1);
+  }
+
+  // Un objeto de halo se pinta muy por encima del disco y, suelto en el aire,
+  // no se sabe sobre qué punto del mapa está. El tallo lo baja hasta su sitio:
+  // es una vertical del marcador al plano, la misma plomada de una gráfica 3D.
+  function pintarTallo(ancla, tilt, rect, counter) {
+    var tallo = ancla.querySelector('.mw-tallo');
+    var z = (tilt && INCL.tallos !== false && ancla.getAttribute('data-view') === 'top')
+      ? alturaObjetoPx(ancla.getAttribute('data-id'), rect) : 0;
+    if (!z) {
+      if (tallo) tallo.style.display = 'none';
+      return;
+    }
+    if (!tallo) {
+      tallo = document.createElement('div');
+      tallo.className = 'mw-tallo';
+      ancla.appendChild(tallo);
+    }
+    tallo.style.display = '';
+    // Vertical hacia el plano: el div se tiende sobre el eje y local y se
+    // levanta 90°, así que su largo pasa a medirse en z (hacia abajo del disco).
+    tallo.style.height = Math.abs(z).toFixed(1) + 'px';
+    tallo.style.width = (counter || 1).toFixed(3) + 'px';
+    tallo.style.transform = 'rotateX(' + (z > 0 ? -90 : 90) + 'deg)';
   }
 
   // Recoloca el desplazamiento para que el punto del mapa que hay bajo
@@ -249,9 +276,12 @@
     bulbo.style.maskImage = mask;
     // Gira sobre el propio núcleo: es el punto que no se debe mover.
     bulbo.style.transformOrigin = (cx - r.left) + 'px ' + (cy - r.top) + 'px';
+    var rot = currentPlaneRotation();
     bulbo.style.transform =
       'translateZ(' + (r.width * (INCL.bulboAlto || 0)).toFixed(1) + 'px)' +
-      ' rotateX(' + (-tilt) + 'deg)';
+      (rot ? ' rotate(' + (-rot) + 'deg)' : '') +
+      ' rotateX(' + (-tilt) + 'deg)' +
+      (rot ? ' rotate(' + rot + 'deg)' : '');
   }
 
   // --------------------------------------------------------------------------
@@ -579,10 +609,13 @@
     }
     img.style.transformStyle = tilt ? 'preserve-3d' : '';
     img.classList.toggle('mw-inclinado', !!tilt);
+    // La lista se aplica de derecha a izquierda: primero el giro DENTRO del
+    // plano, luego el abatimiento. Al revés giraría el disco ya abatido sobre
+    // la pantalla, que es otra cosa (y no cuadra con VLGeometria).
     img.style.transform =
       'scale(' + scale + ')' +
-      (rot ? ' rotate(' + rot + 'deg)' : '') +
-      (tilt ? ' rotateX(' + tilt + 'deg)' : '');
+      (tilt ? ' rotateX(' + tilt + 'deg)' : '') +
+      (rot ? ' rotate(' + rot + 'deg)' : '');
 
     // Contraescala de los marcadores: al ampliar se encogen un poco en pantalla
     // (no del todo) para no tapar el mapa, manteniéndose legibles y pulsables.
@@ -595,6 +628,7 @@
 
     // Contra-rotación: cada marcador (punto + etiqueta) se gira en sentido
     // opuesto al mapa para que los nombres y el Sol se lean siempre horizontales.
+    // (el orden importa: es la inversa de rotateX·rotate, o sea rotate⁻¹·rotateX⁻¹)
     var counterRot = rot ? (' rotate(' + (-rot) + 'deg)') : '';
     // Y en sentido opuesto al abatimiento, para que el punto y la etiqueta se
     // vean de frente y no aplastados sobre el disco.
@@ -639,6 +673,8 @@
       } else if (a.style.transform) {
         a.style.transform = '';
       }
+      pintarTallo(a, tilt, rectAlturas, counter);
+
       var content = a.querySelector('.mw-marker-content');
       var connector = a.querySelector('.mw-connector');
       if (!content) continue;
@@ -2405,7 +2441,9 @@
 
     // Si la vista está girada, el objeto aparece rotado alrededor del núcleo:
     // aplicamos la misma rotación al punto antes de calcular el desplazamiento.
-    var rot = currentPlaneRotation();
+    // Con el disco abatido no: ahí el giro ya va dentro de la proyección
+    // (vistaProyeccion), y hacerlo dos veces manda el encuadre a otro sitio.
+    var rot = tiltActual() ? 0 : currentPlaneRotation();
     if (rot) {
       var nuc = currentNucleo();
       var nx = r.left + r.width  * (nuc.x / 100);
@@ -2691,6 +2729,7 @@
 
   function setRotation(deg) {
     rotation = ((deg % 360) + 360) % 360; // normaliza a 0-360
+    pintarBulbo(); // el bulbo acompaña al giro (ver pintarBulbo)
     if (rotateInput) rotateInput.value = rotation;
     if (rotateValue) rotateValue.textContent = Math.round(rotation) + '°';
     applyTransform();

@@ -103,6 +103,43 @@ cerca(G.proyectarInclinado(400, 300, 0, VISTA).y, 300, 'el centro se queda en el
   else { fallos++; console.log('  FALLA un objeto sobre el plano se pinta más arriba: ' + alto + ' >= ' + suelo); }
 })();
 
+console.log('giro en el plano (girar el disco antes de abatirlo):');
+var GIRADA = { ancho: 800, alto: 600, escala: 2, grados: 75, perspectiva: 1400, giro: 30 };
+// El centro es el eje del giro: no se mueve.
+cerca(G.proyectarInclinado(400, 300, 0, GIRADA).x, 400, 'el eje del giro se queda quieto (x)');
+cerca(G.proyectarInclinado(400, 300, 0, GIRADA).y, 300, 'el eje del giro se queda quieto (y)');
+// Ida y vuelta con giro: la inversa tiene que deshacerlo también.
+(function () {
+  var p = G.proyectarInclinado(520, 460, 0, GIRADA);
+  var q = G.planoDesdePantalla(p.x, p.y, GIRADA);
+  cerca(q.x, 520, 'ida y vuelta con giro en x', 1e-9);
+  cerca(q.y, 460, 'ida y vuelta con giro en y', 1e-9);
+})();
+// giro 0 y sin giro son la misma vista.
+(function () {
+  var sinGiro = G.proyectarInclinado(520, 460, 0, VISTA);
+  var conGiro = G.proyectarInclinado(520, 460, 0,
+    { ancho: 800, alto: 600, escala: 2, grados: 75, perspectiva: 1400, giro: 0 });
+  cerca(conGiro.x, sinGiro.x, 'giro 0 no cambia nada (x)');
+  cerca(conGiro.y, sinGiro.y, 'giro 0 no cambia nada (y)');
+})();
+// Un cuarto de vuelta lleva el eje X del mapa al eje Y del mapa: lo que estaba
+// a la derecha del núcleo pasa a estar delante, y se proyecta más abajo.
+(function () {
+  var v = { ancho: 800, alto: 600, escala: 2, grados: 75, perspectiva: 1400, giro: 90 };
+  var p = G.proyectarInclinado(500, 300, 0, v);     // 100 px a la derecha del eje
+  var q = G.proyectarInclinado(400, 400, 0, VISTA); // 100 px por delante, sin giro
+  cerca(p.x, q.x, 'un cuarto de vuelta lleva la derecha al frente (x)');
+  cerca(p.y, q.y, 'un cuarto de vuelta lleva la derecha al frente (y)');
+})();
+// El giro NO cambia la altura de un objeto sobre el plano.
+(function () {
+  var alto = G.proyectarInclinado(400, 300, 60, GIRADA).y;
+  var suelo = G.proyectarInclinado(400, 300, 0, GIRADA).y;
+  if (alto < suelo) { console.log('  ok   la altura sigue levantando con el disco girado'); }
+  else { console.log('  FALLA la altura sigue levantando con el disco girado'); fallos++; }
+})();
+
 console.log('huellaInclinada (caja envolvente de la imagen abatida):');
 eqRect_wh(G.huellaInclinada({ left: 200, top: 150, width: 400, height: 300 }, PLANA), 800, 600, 'sin inclinar -> rectángulo por la escala');
 (function () {
