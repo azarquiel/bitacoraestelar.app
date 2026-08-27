@@ -746,7 +746,7 @@
   // enfocar el buscador o desplegar un combo. Todo control nuevo que se añada
   // al mapa tiene que entrar en esta lista.
   var CONTROLES_UI = '#mw-search, #mw-observador, #mw-viaje, #mw-nuevo,' +
-                     ' #mw-toggle-view, #mw-legend, #mw-reset, #mw-consola-panel,' +
+                     ' #mw-toggle-view, #mw-legend, #mw-consola-panel,' +
                      ' .mw-ui-control';
 
   viewer.addEventListener('mousedown', function (e) {
@@ -1020,22 +1020,12 @@
     });
   }
 
-  document.getElementById('mw-zoom-in').addEventListener('click', function () {
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    var rect = viewer.getBoundingClientRect();
-    var newScale = Math.min(effMaxScale(), scale * 1.3);
-    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, newScale);
-    hideHint();
-  });
-
-  document.getElementById('mw-zoom-out').addEventListener('click', function () {
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    var rect = viewer.getBoundingClientRect();
-    var newScale = Math.max(minScale, scale / 1.3);
-    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, newScale);
-  });
-
-  document.getElementById('mw-reset').addEventListener('click', function () {
+  // El zoom se hace con la rueda y con el pellizco, que es lo que ya usa todo
+  // el mundo: los botones + y − no añadían un gesto que no existiera. Volver a
+  // la vista inicial es doble clic sobre el mapa.
+  viewer.addEventListener('dblclick', function (e) {
+    if (overlayOpen()) return;
+    if (e.target.closest && e.target.closest(CONTROLES_UI + ', .mw-pdf-dot')) return;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     scale = 1;
     posX = 0;

@@ -28,7 +28,7 @@
 
   /* Controles del mapa: oscuros y muy translúcidos, con desenfoque y texto
      claro (el fondo del mapa es negro). La leyenda queda intacta. */
-  #mw-zoom-in, #mw-zoom-out, #mw-reset, #mw-toggle-view, #mw-search,
+  #mw-toggle-view, #mw-search,
   #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo,
   #mw-observador, #mw-viaje {
     -webkit-backdrop-filter: blur(10px);
@@ -38,7 +38,7 @@
     box-shadow: 0 1px 6px rgba(0,0,0,0.28);
   }
   #mw-search::placeholder { color: rgba(234,241,251,0.55); }
-  #mw-zoom-in:hover, #mw-zoom-out:hover, #mw-reset:hover, #mw-toggle-view:hover {
+  #mw-toggle-view:hover {
     background: rgba(30,38,56,0.5) !important;
   }
   #mw-nuevo { color: #f4c76b !important; border-color: rgba(244,199,107,0.35) !important; }
@@ -201,18 +201,6 @@
     background: linear-gradient(to right, rgba(244,199,107,0.28), rgba(244,199,107,0));
   }
   #mw-consola .mw-consola-rotulo:first-child { margin-top: 0; }
-
-  /* Botones de escala: redondos como antes, ya sin la esquina para ellos solos. */
-  #mw-escala-control button {
-    width: 34px; height: 34px;
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 50%;
-    background: rgba(12,16,28,0.32);
-    color: #eaf1fb;
-    font-size: 16px;
-    cursor: pointer;
-  }
-  #mw-escala-control button:hover { background: rgba(30,38,56,0.5); }
 
   /* Foco visible: el mapa se recorre también con el tabulador. */
   #mw-consola :focus-visible, #mw-consola-tirador:focus-visible {
@@ -686,16 +674,6 @@
         border:none;border-radius:20px;background:rgba(12,16,28,0.32);
         font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
       ">🔄 Vista de canto</button>
-    </div>
-
-    <!-- Fila 4b: escala. Los tres botones estaban sueltos en la esquina
-         superior derecha, tapando el mapa a todas horas para un gesto que ya
-         hacen la rueda y el pellizco. Aquí acompañan a la vista y el teclado
-         los alcanza; los ids siguen siendo los que escucha via-lactea-app.js. -->
-    <div id="mw-escala-control" style="display:flex;gap:6px;align-items:center;">
-      <button id="mw-zoom-in" class="mw-ui-control" title="Acercar">+</button>
-      <button id="mw-zoom-out" class="mw-ui-control" title="Alejar">−</button>
-      <button id="mw-reset" class="mw-ui-control" title="Volver a la vista inicial">⟲</button>
     </div>
 
     <div class="mw-consola-rotulo">Tripulación</div>
