@@ -64,6 +64,26 @@ Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de obj
 - **No es fotometría calibrada:** mapeo heurístico con parámetros puestos a ojo, y están para tocarlos. Lo que el test fija son los **invariantes**: más luma nunca es menos flujo, un píxel apagado no inventa luz (flujo 0), la escala es logarítmica en magnitudes, la fusión nunca oscurece lo que la placa profunda ya registró, y una fusión que no cuadra (pocos píxeles en común o pendiente no positiva) devuelve **la placa profunda tal cual** en vez de una recta inventada.
 - **La regla se prueba aparte del desenfoque:** `rellenarNucleo` recibe el entorno ya calculado, porque lo que se comprueba es el umbral, no el kernel (filtro nativo del canvas, necesita DOM). Test: `scripts/test_placa.js`.
 
+## PS1 (la capa difusa desde imagen)
+
+En este repo **«PS1» nombra la ley, no el sondeo**: la capa que convierte una imagen real del
+cielo en luz difusa visible —parche, PSF, quitar estrellas, perfil, fusión imagen/modelo,
+anclaje al catálogo, opacidad—. Que su único proveedor de imagen hoy sea Pan-STARRS 1 es un
+detalle de adquisición, no la definición.
+
+- **Fuente única:** `resources/js/bitacora-ps1.js`, global `window.BitacoraPS1`; las funciones
+  conservan el prefijo `ps1*` y la calibración vive en `BitacoraPS1.cfg`.
+- **Frontera:** es la otra ley del render, con dueño propio frente a la
+  [[cadena fotométrica]]. PS1 usa la fotometría; `vistaGaia` usa PS1 (`ps1MagConsulta`,
+  `ps1CapaGalaxias`). El ciclo es de llamada, no de carga, con la forma de
+  `bitacora-cumulos.js:92-93`. Decidido en ADR 0020.
+- **No confundir con la [[cadena de la placa]]:** aquella convierte una placa (DSS o PanSTARRS)
+  en `Fobj` para pintar el campo entero; ésta reconstruye un objeto extenso concreto y le
+  escribe su máscara difusa. Las dos son imagen de sondeo y viven a distinto lado del muro.
+- _Evitar_: «PS1» como sinónimo de Pan-STARRS 1 a secas cuando se habla de código; para el
+  sondeo, decir «Pan-STARRS 1» o «PanSTARRS».
+
+
 ## Adquisición de Gaia por celdas
 
 Vocabulario del estudio de la capa de adquisición y caché de Gaia DR3 para campo arbitrario (ver `especificacion_optimizacion_gaia.md` y ADR 0012). El estudio se cerró con veredicto NO PASA en sus dos ejes (informes `informe_gaia_e*.md`): nada de esto llegó a producción; el vocabulario se conserva porque nombra los conceptos con los que se midió.
