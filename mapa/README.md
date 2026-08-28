@@ -263,12 +263,15 @@ Cuando hay un observador seleccionado en el filtro, esta opción cambia lo que
 ocurre con los objetos que **ese** observador aún no ha observado (pero **sí**
 otros):
 
-- `true` (por defecto): esos objetos **no se ocultan**, se muestran **atenuados
-  en gris** (con algo de su color, como "deshabilitados") en las **tres vistas**:
-  Vía Láctea, atlas del Grupo Local y vecindario solar. La regla y el gris son
-  únicos (`VLObservadores.atenuadoPorObservador` / `grisNoVisitado`, en
-  `via-lactea-observadores.js`); cada vista solo los aplica con su técnica
-  (filtro CSS en los marcadores, mezcla de color en los dos lienzos). Al pulsar
+- `true` (por defecto): esos objetos **no se ocultan**, se marcan como **por
+  visitar** en las **tres vistas**: Vía Láctea, atlas del Grupo Local y
+  vecindario solar. El cambio es de **símbolo**, no de brillo: en vez del punto
+  lleno con halo se dibuja un **anillo hueco** del color del objeto, algo mayor
+  (`ANILLO_NO_VISITADO`). Lo único que se apaga —y poco— es el rótulo
+  (`grisNoVisitado` / `OPACIDAD_NO_VISITADO`). La regla y las constantes son
+  únicas (`VLObservadores.atenuadoPorObservador`, en
+  `via-lactea-observadores.js`); cada vista solo las aplica con su técnica
+  (CSS en los marcadores de la galaxia, dibujo en los dos lienzos). Al pulsar
   uno, su ficha muestra la
   información básica con el rótulo **NO VISITADO** y la lista de las
   observaciones que sí hay de él.

@@ -67,7 +67,7 @@ VLO.setActivo('');
 
 console.log('grisNoVisitado (mismo gris clarito en las 3 vistas):');
 var gris = VLO.grisNoVisitado(255, 0, 0);
-eq(gris.join(','), '169,123,123', 'rojo mezclado al 82% con el gris 150');
+eq(gris.join(','), '218,53,53', 'rojo mezclado al 35% con el gris 150');
 eq(VLO.grisNoVisitado(150, 150, 150).join(','), '150,150,150', 'el propio gris no cambia');
 
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }

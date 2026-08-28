@@ -356,12 +356,11 @@ var GrupoLocal = (function () {
       var realzado = realzadoDe(o);
       var r = Math.max(2.4, 4 * p.persp);
 
-      // Galaxia observada solo por otros: se atenúa (gris + menor opacidad),
-      // pero sigue siendo pulsable para descubrir esas observaciones. El punto
-      // en sí va SIEMPRE a color intenso (spec #102 ya no lo atenúa): marca
-      // dónde está el objeto ya observado.
+      // Galaxia observada solo por otros: es un destino POR VISITAR. Sigue
+      // siendo pulsable para descubrir esas observaciones. Solo se apaga el
+      // rótulo, y poco: el símbolo va a color entero (spec #102).
       var aten = atenuadaPorObservador(o);
-      var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // multiplicador de opacidad
+      var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // opacidad del rótulo
 
       // línea guía hasta el plano galáctico
       var foot = project({ x: o.x, y: o.y, z: 0 });
@@ -387,10 +386,12 @@ var GrupoLocal = (function () {
       // objeto que el observador activo aún no ha observado se dibuja como
       // anillo hueco de su propio color (sin halo); el visitado, como punto
       // lleno con halo. Misma ley en las tres vistas del mapa.
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, aten ? r + 1 : r, 0, Math.PI * 2);
+      var anillo = VLObservadores.ANILLO_NO_VISITADO;
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, aten ? r * anillo.escala : r, 0, Math.PI * 2);
       if (aten) {
         ctx.strokeStyle = colorRgba(col, 0.95, false);
-        ctx.lineWidth = 1.3;
+        ctx.lineWidth = anillo.grosor;
         ctx.stroke();
       } else {
         ctx.fillStyle = '#f4faff'; ctx.fill();
