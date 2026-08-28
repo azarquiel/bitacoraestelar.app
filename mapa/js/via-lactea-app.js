@@ -456,20 +456,28 @@
   // mentiría sobre la distancia. Un anillo se enseña únicamente cuando su radio
   // en pantalla es legible (ANILLO_RADIO_MIN_PX).
   // --------------------------------------------------------------------------
-  var ANILLOS_AL = [1000, 5000, 25000];
+  var ANILLOS_AL = [1000, 5000, 12000, 25000];
   var ANILLO_RADIO_MIN_PX = 26;
   var ANILLO_ROTULO_MIN_PX = 70;   // por debajo, el anillo va sin rótulo
+  var ANILLO_TRAZO_PX = 1;         // grosor del anillo EN PANTALLA (no del mapa)
+  var ANILLO_RAYA_PX = 2;          // raya y hueco del discontinuo, en pantalla
+  var ANILLO_HUECO_PX = 6;
+  var ANILLO_ROTULO_SEP_PX = 4;    // hueco entre el anillo y su rótulo
   var anillosSvg = document.createElementNS(SVG_NS, 'svg');
   anillosSvg.setAttribute('id', 'mw-anillos');
   anillosSvg.style.display = 'none';
+  // El rótulo es HTML y no <text> del SVG: dentro del SVG habría que encogerlo
+  // con un scale() de hasta 1/25, y un texto de 9 px acaba pedido a 0,36 px,
+  // que es donde el navegador deja de dibujarlo del tamaño que se le pide. En
+  // HTML el texto conserva sus 9 px y solo se contraescala la caja, que es lo
+  // mismo que ya hacen los marcadores (.mw-counter-scale) y aguanta el zoom 25.
   var anillos = ANILLOS_AL.map(function (al) {
     var c = document.createElementNS(SVG_NS, 'circle');
-    c.setAttribute('vector-effect', 'non-scaling-stroke');
-    var t = document.createElementNS(SVG_NS, 'text');
-    t.setAttribute('y', '12');   // el rótulo cuelga bajo el anillo, lejos del núcleo
+    var t = document.createElement('div');
+    t.className = 'mw-anillo-rotulo';
     t.textContent = String(al).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' al';
     anillosSvg.appendChild(c);
-    anillosSvg.appendChild(t);
+    img.appendChild(t);
     return { al: al, c: c, t: t };
   });
   img.insertBefore(anillosSvg, rutaSvg);   // la ruta pasa por encima
@@ -479,16 +487,21 @@
     var activeImg = document.getElementById('mw-image');
     if (isEdgeView || !sol || !sol.style.left || !activeImg || !activeImg.naturalWidth) {
       anillosSvg.style.display = 'none';
+      anillos.forEach(function (a) { a.t.style.display = 'none'; });
       return;
     }
     var r = getImgRect(activeImg);
     var pxPorAl = r.width / CONFIG.fisica.anchoImagenAl;
     var cx = parseFloat(sol.style.left);
     var cy = parseFloat(sol.style.top);
-    // El rótulo va contraescalado y contragirado, como los marcadores, para que
-    // se lea siempre horizontal y del mismo tamaño en pantalla.
+    // Todo lo que debe medir lo mismo en pantalla (el trazo, sus rayas y el
+    // rótulo) se divide por el zoom: el anillo vive dentro de #mw-content, que
+    // va escalado, y lo que se dibuja en unidades del mapa se agranda con él.
+    // vector-effect="non-scaling-stroke" no servía: solo deshace las
+    // transformaciones de dentro del SVG, no el scale() CSS del contenedor.
+    var inv = 1 / (scale || 1);
     var rot = currentPlaneRotation();
-    var contra = ' scale(' + (1 / scale) + ')' + (rot ? ' rotate(' + (-rot) + ')' : '');
+    var contraRot = rot ? (' rotate(' + (-rot) + 'deg)') : '';
     anillosSvg.style.width  = img.clientWidth + 'px';
     anillosSvg.style.height = img.clientHeight + 'px';
     anillosSvg.style.display = '';
@@ -496,13 +509,21 @@
       var rad = a.al * pxPorAl;
       var visible = rad * scale >= ANILLO_RADIO_MIN_PX;
       a.c.style.display = visible ? '' : 'none';
-      a.t.style.display = (rad * scale >= ANILLO_ROTULO_MIN_PX) ? '' : 'none';
+      a.t.style.display = (visible && rad * scale >= ANILLO_ROTULO_MIN_PX) ? 'block' : 'none';
       if (!visible) return;
       a.c.setAttribute('cx', cx);
       a.c.setAttribute('cy', cy);
       a.c.setAttribute('r', rad);
-      a.t.setAttribute('transform',
-        'translate(' + cx + ',' + (cy + rad) + ')' + contra);
+      a.c.setAttribute('stroke-width', (ANILLO_TRAZO_PX * inv).toFixed(5));
+      a.c.setAttribute('stroke-dasharray',
+        (ANILLO_RAYA_PX * inv).toFixed(5) + ' ' + (ANILLO_HUECO_PX * inv).toFixed(5));
+      // El rótulo cuelga bajo el anillo: la caja se ancla en ese punto y el
+      // centrado y el hueco van DESPUÉS de la contraescala, para que midan lo
+      // mismo en pantalla que el texto que acompañan.
+      a.t.style.left = cx + 'px';
+      a.t.style.top  = (cy + rad) + 'px';
+      a.t.style.transform = contraRot + ' scale(' + inv.toFixed(6) + ')' +
+        ' translate(-50%, ' + ANILLO_ROTULO_SEP_PX + 'px)';
     });
   }
 
@@ -720,7 +741,14 @@
     var tilt = tiltActual();
     if (plano) {
       plano.style.transform = 'translate(' + posX + 'px, ' + posY + 'px)';
-      plano.style.perspective = tilt ? ((INCL.perspectiva || 1400) + 'px') : '';
+      // La perspectiva se aleja conforme la foto de canto se monta encima, y a
+      // 90° ya no hay: si no, la foto montada (que se contragira para mirarse
+      // de frente) sale aumentada y desplazada según el encuadre, y al cambiar
+      // de vista, que conserva el zoom, la imagen pegaba un salto.
+      var mez = mezclaCanto(tilt);
+      plano.style.perspective = !tilt ? ''
+        : (mez >= 0.999 ? 'none'
+                        : ((INCL.perspectiva || 1400) / (1 - mez)).toFixed(1) + 'px');
     }
     img.style.transformStyle = tilt ? 'preserve-3d' : '';
     img.classList.toggle('mw-inclinado', !!tilt);

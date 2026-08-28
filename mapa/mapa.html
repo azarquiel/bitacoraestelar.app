@@ -571,17 +571,24 @@
     overflow: visible;
     fill: none;
   }
+  /* El grosor y las rayas los pone dibujarAnillos() en cada fotograma,
+     divididos por el zoom, para que midan lo mismo en pantalla. */
   #mw-anillos circle {
     stroke: rgba(126,200,255,0.3);
-    stroke-width: 1;
-    stroke-dasharray: 2 6;
   }
-  #mw-anillos text {
-    fill: rgba(126,200,255,0.5);
+  /* Rótulo del anillo: HTML, no <text> del SVG (ver dibujarAnillos). El texto
+     conserva sus 9 px reales y lo que se contraescala es la caja. */
+  .mw-anillo-rotulo {
+    position: absolute;
+    z-index: 1;
+    display: none;
+    pointer-events: none;
+    transform-origin: top left;
+    white-space: nowrap;
+    color: rgba(126,200,255,0.5);
     font: 500 9px ui-monospace, SFMono-Regular, Menlo, monospace;
     letter-spacing: 0.12em;
-    text-anchor: middle;
-    dominant-baseline: auto;
+    user-select: none;
   }
 
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
