@@ -592,6 +592,43 @@
   // --------------------------------------------------------------------------
   // NAVEGACIÓN: arrastre, zoom y reseteo
   // --------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // ANTESALA DE LA VISTA DE CANTO (de TILT_PREVIA a 90°)
+  // Casi de canto, el disco abatido ya no cuenta nada y el cambio de foto
+  // llegaba de golpe en el último grado. En esos grados finales la foto de
+  // perfil se va montando encima, con su propio contragiro para que no se abata
+  // con el disco: al llegar a 90° ya está entera y el cambio no se nota.
+  // --------------------------------------------------------------------------
+  var TILT_PREVIA = 88;
+
+  function mezclaCanto(tilt) {
+    if (isEdgeView || !(tilt > TILT_PREVIA)) return 0;
+    return Math.min(1, (tilt - TILT_PREVIA) / (TILT_MAX - TILT_PREVIA));
+  }
+
+  function pintarPreviaCanto(tilt, rot) {
+    if (!imgEdge || isEdgeView) return;   // en canto la foto ya es la de verdad
+    var mezcla = mezclaCanto(tilt);
+    if (!mezcla) {
+      if (imgEdge.style.display !== 'none') {
+        imgEdge.style.display = 'none';
+        imgEdge.style.opacity = '';
+        imgEdge.style.transform = '';
+      }
+      return;
+    }
+    ensureEdgeImage();
+    imgEdge.style.display = 'block';
+    imgEdge.style.position = 'absolute';
+    imgEdge.style.transition = 'none';
+    imgEdge.style.opacity = mezcla.toFixed(3);
+    imgEdge.style.transformOrigin = 'center center';
+    // Deshace lo que el contenedor le hace al disco (el mismo contragiro que
+    // los marcadores): la galaxia de perfil se mira de frente, no abatida.
+    imgEdge.style.transform =
+      (rot ? 'rotate(' + (-rot) + 'deg) ' : '') + 'rotateX(' + (-tilt) + 'deg)';
+  }
+
   function applyTransform() {
     // El giro en plano rota el contenedor alrededor del núcleo galáctico de la
     // vista activa (cenital siempre disponible; canto solo si el interruptor
@@ -652,6 +689,8 @@
     // aplana y la etiqueta sale estirada sobre el disco.
     var solAncla = document.getElementById('mw-sun-anchor');
     if (solAncla) solAncla.style.transformStyle = tilt ? 'preserve-3d' : '';
+
+    pintarPreviaCanto(tilt, rot);
 
     dibujarAnillos();
 
@@ -2142,6 +2181,8 @@
       imgTop.style.display = 'none';
       imgEdge.style.display = 'block';
       imgEdge.style.position = 'absolute';
+      imgEdge.style.opacity = '';      // la antesala la deja a medio fundir
+      imgEdge.style.transform = '';    // y contragirada: aquí ya es la vista
     } else {
       imgTop.style.display = 'block';
       imgTop.style.position = 'absolute';
@@ -2152,7 +2193,7 @@
 
     // El mando de abatimiento marca la vista: 90° de canto, y al volver el
     // abatimiento con el que se vuelve. Se pinta aquí y no al pedir el cambio,
-    // porque la voltereta tarda y hasta la mitad la vista sigue siendo la otra.
+    // porque el fundido tarda y hasta su mitad la vista sigue siendo la otra.
     pintarTilt();
     aplicarControlesDeCapa();
 
@@ -2164,50 +2205,41 @@
     hideHint();
   }
 
-  // Voltereta 3D entre vistas: la vista actual se abate sobre su eje horizontal
-  // (como inclinar el disco galáctico) hasta desaparecer de perfil; en ese
-  // instante se intercambian las imágenes y la nueva vista se levanta desde el
-  // otro lado. Desactivable con CONFIG.giros.transicion3D = false.
-  var isFlipping = false;
-  var FLIP_MS = 350; // duración de cada mitad de la voltereta
+  // Fundido entre vistas. Antes era una voltereta 3D de dos mitades (0,7 s con
+  // el disco girando); ahora el punto de vista es un mando continuo de 0° a 90°
+  // y la voltereta lo cortaba en seco justo al llegar al tope. Se funde la
+  // vista actual, se cambian foto y marcadores, y se funde la nueva.
+  var cambiandoVista = false;
+  var FUNDIDO_MS = 140;
 
-  // Cambia de vista con la voltereta. Ya no hay botón: lo llama el mando de
-  // abatimiento al llegar al tope (90° = de canto) y al bajar de él.
+  // Cambia de vista. Ya no hay botón: lo llama el mando de abatimiento al
+  // llegar al tope (90° = de canto) y al bajar de él. El fundido va en las DOS
+  // FOTOS y no en #mw-content: la opacidad del contenedor es de los fundidos
+  // con el atlas y el vecindario (updateGrupoLocal/updateVecindario la reponen
+  // en cada fotograma), así que un fundido puesto ahí se borraba solo.
   function cambiarVista() {
     ensureEdgeImage(); // asegura que la imagen de canto esté (o empiece a) cargarse
-    if (!(CONFIG.giros && CONFIG.giros.transicion3D)) {
-      performViewSwap();
-      return;
-    }
-    if (isFlipping) return;
-    isFlipping = true;
-
-    if (plano) plano.style.perspective = '1200px';
-    img.style.transformOrigin = 'center center';
-    img.style.transition = 'transform ' + (FLIP_MS / 1000) + 's ease-in';
-    img.style.transform = 'scale(' + scale + ') rotateX(90deg)';
-
+    if (cambiandoVista) return;
+    cambiandoVista = true;
+    var saliente = isEdgeView ? imgEdge : imgTop;
+    var entrante = isEdgeView ? imgTop : imgEdge;
+    var trans = 'opacity ' + (FUNDIDO_MS / 1000) + 's linear';
+    saliente.style.transition = trans;
+    saliente.style.opacity = '0';
     setTimeout(function () {
-      // Mitad de la voltereta: cambiamos de vista con el mapa "de perfil".
-      performViewSwap(); // deja transform = base (translate 0, scale 1)
-
-      // La nueva vista entra levantándose desde el otro lado. Si la vista de
-      // destino tiene un giro en plano activo, lo incluimos en la animación
-      // para que no haya un salto al terminar.
-      var destRot = currentPlaneRotation();
-      var rotSuffix = destRot ? ' rotate(' + destRot + 'deg)' : '';
-      img.style.transition = 'none';
-      img.style.transform = 'scale(1) rotateX(-90deg)' + rotSuffix;
-      void img.offsetWidth; // forzar reflow para que la transición aplique
-      img.style.transition = 'transform ' + (FLIP_MS / 1000) + 's ease-out';
-      img.style.transform = 'scale(1) rotateX(' + tiltActual() + 'deg)' + rotSuffix;
-
+      performViewSwap();          // cambia foto y marcadores, ya invisible
+      saliente.style.transition = 'none';
+      saliente.style.opacity = '1';   // preparada para la próxima vez
+      entrante.style.transition = 'none';
+      entrante.style.opacity = '0';
+      void entrante.offsetWidth;      // reflujo para que la transición aplique
+      entrante.style.transition = trans;
+      entrante.style.opacity = '1';
       setTimeout(function () {
-        img.style.transition = 'none';
-        applyTransform(); // transform definitivo sin restos de la animación
-        isFlipping = false;
-      }, FLIP_MS + 30);
-    }, FLIP_MS + 30);
+        entrante.style.transition = 'none';
+        cambiandoVista = false;
+      }, FUNDIDO_MS + 20);
+    }, FUNDIDO_MS + 20);
   }
 
   // Reposicionar cuando carga cada imagen (la cenital es remota y puede tardar)
@@ -2800,10 +2832,11 @@
   }
 
   // ===========================================================================
-  // CONTROL DE ABATIMIENTO DE LA VISTA CENITAL
-  // Del cenital de plano (0°) al canto (90°). Al llegar al tope no se deja el
-  // disco convertido en una raya: el mapa da la voltereta a la vista de canto,
-  // que tiene su propia foto y sus propios marcadores.
+  // MANDO DEL PUNTO DE VISTA (ABATIMIENTO)
+  // Único mando de la vista de la galaxia: del cenital de plano (0°) al canto
+  // (90°). Al llegar al tope no se deja el disco convertido en una raya: el
+  // mapa funde a la vista de canto, que tiene su propia foto y sus propios
+  // marcadores. Al bajar del tope se vuelve a la cenital con ese abatimiento.
   // ===========================================================================
   var tiltInput = document.getElementById('mw-tilt');
   var tiltValue = document.getElementById('mw-tilt-value');
@@ -2818,20 +2851,31 @@
   }
 
   function setTilt(deg) {
-    if (isFlipping) return;
+    if (cambiandoVista) return;
     deg = Math.max(0, Math.min(TILT_MAX, deg || 0));
+    // De dónde se viene: si el mando ya estaba en la antesala, la foto de canto
+    // está montada y el cambio de vista va directo; si se salta al tope de un
+    // tirón (extremo del deslizador), se funde como cualquier otro cambio.
+    var desdeAntesala = !isEdgeView && tiltGrados > TILT_PREVIA;
     if (isEdgeView) {
       // Bajar del tope devuelve a la cenital con el abatimiento que se pida:
       // el mando es el mismo de punta a punta y no hay botón de vista.
       if (deg >= TILT_MAX) { pintarTilt(); return; }
       tiltGrados = deg;
-      cambiarVista();
+      // Dentro de la antesala el cambio no se funde: la foto de canto sigue en
+      // pantalla, ahora como capa sobre el disco, y fundirla sería un parpadeo.
+      if (deg > TILT_PREVIA) { performViewSwap(); } else { cambiarVista(); }
       return;
     }
     tiltGrados = deg;
     if (tiltGrados >= TILT_MAX) {
-      // El tope ES la vista de canto, con su propia foto y sus marcadores.
-      cambiarVista();
+      // El tope ES la vista de canto, con su propia foto y sus marcadores. El
+      // abatimiento guardado vuelve a 0: quien devuelve a la cenital sin tocar
+      // el mando (el vecindario solar, que solo existe ahí) aterriza de plano y
+      // no con el disco hecho una raya. Desde el mando se vuelve con el ángulo
+      // que se pida, que lo fija la rama de arriba.
+      tiltGrados = 0;
+      if (desdeAntesala) { performViewSwap(); } else { cambiarVista(); }
       return;
     }
     pintarTilt();

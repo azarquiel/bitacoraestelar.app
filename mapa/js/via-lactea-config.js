@@ -57,13 +57,10 @@
     //   giroPlanoCanto    : true/false. Control 🌀 de la vista de canto para
     //                       girar la imagen en el plano de la pantalla (giro
     //                       "de foto", alrededor del núcleo).
-    //   transicion3D      : true/false. Voltereta 3D al cambiar entre la vista
-    //                       cenital y la de canto (el disco se abate sobre sí).
     // -------------------------------------------------------------------------
     giros: {
       giroAzimutalCanto: false,
-      giroPlanoCanto: false,
-      transicion3D: true
+      giroPlanoCanto: false
     },
 
     // -------------------------------------------------------------------------

@@ -204,8 +204,7 @@ fisica: {
 },
 giros: {
   giroAzimutalCanto: false,  // 🛰️ girar el punto de vista alrededor de la galaxia
-  giroPlanoCanto: true,      // 🌀 girar la imagen de canto "como una foto"
-  transicion3D: true         // voltereta al cambiar de vista
+  giroPlanoCanto: false,     // 🌀 girar la imagen de canto "como una foto"
 },
 busqueda: {
   parpadeoSegundos: 3,       // cuánto parpadea el objeto encontrado
@@ -452,6 +451,13 @@ pudiéndose seleccionar.
 ---
 
 ## Controles
+
+El punto de vista tiene un solo mando, el **abatimiento**: 0° mira el disco
+desde arriba y 90° lo mira de canto, con su propia foto y sus marcadores. No
+hay botón de cambio de vista. En los dos últimos grados la foto de perfil se
+va montando encima del disco casi de canto, así que al llegar al tope el
+cambio ya está hecho y no se nota.
+
 
 | Acción | Ratón | Táctil |
 |---|---|---|
