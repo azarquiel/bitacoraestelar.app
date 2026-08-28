@@ -62,7 +62,7 @@
     // -------------------------------------------------------------------------
     giros: {
       giroAzimutalCanto: false,
-      giroPlanoCanto: true,
+      giroPlanoCanto: false,
       transicion3D: true
     },
 

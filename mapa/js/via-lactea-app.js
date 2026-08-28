@@ -61,6 +61,8 @@
   // abate la cenital: la de canto ya se mira de perfil.
   var tiltGrados = (INCL.gradosInicial != null) ? INCL.gradosInicial : 0;
   var TILT_MAX = 90;
+  // Tope del adelanto de los objetos hundidos (ver repositionAnchors).
+  var K_MIN_EMPUJE = 0.25;
 
   function tiltActual() {
     return (INCL.activa && !isEdgeView) ? tiltGrados : 0;
@@ -718,7 +720,15 @@
         // deja la proyección del ancla clavada y solo cambia la escala, que se
         // deshace con un scale3d(f) al final. Todo lo de dentro del marcador
         // (punto, etiqueta y plomada) queda igual que sin adelantar.
-        var kEmpuje = kAncla - empuje / (INCL.perspectiva || 1400);
+        // El adelanto crece como 1/cos(abatimiento): cerca del canto se
+        // dispara y el marcador acaba pasando por delante del ojo (k <= 0), que
+        // es donde los objetos más despegados del plano desaparecían de golpe
+        // pasados los ~78°. Se le pone tope: nunca más cerca de la cámara que
+        // K_MIN de la distancia del ancla. Con el disco casi de canto ya no hay
+        // foto que esquivar, así que lo que se pierde no se ve.
+        var dPersp = INCL.perspectiva || 1400;
+        var kEmpuje = Math.max(kAncla * K_MIN_EMPUJE, kAncla - empuje / dPersp);
+        empuje = (kAncla - kEmpuje) * dPersp;
         var f = kAncla ? (kEmpuje / kAncla) : 1;
         var cx = vistaAlturas.ancho / 2, cy = vistaAlturas.alto / 2;
         var mLocal = (counter * scale) || 1;
@@ -824,7 +834,6 @@
     var v = VLCapas.controlesVisibles(capa, isEdgeView, (window.CONFIG && CONFIG.giros) || {});
     capaEnPantalla = capa;
     var mandos = [
-      ['mw-vista-control', v.vista, 'flex'],
       ['mw-tilt-control', v.abatimiento && INCL.activa, 'flex'],
       ['mw-rotate-edge-control', v.giroCanto, 'flex'],
       ['mw-rotate-plane-control', v.giroPlano, 'flex'],
@@ -1070,7 +1079,7 @@
   // enfocar el buscador o desplegar un combo. Todo control nuevo que se añada
   // al mapa tiene que entrar en esta lista.
   var CONTROLES_UI = '#mw-search, #mw-observador, #mw-viaje, #mw-nuevo,' +
-                     ' #mw-toggle-view, #mw-legend, #mw-consola-panel,' +
+                     ' #mw-legend, #mw-consola-panel,' +
                      ' .mw-ui-control';
 
   viewer.addEventListener('mousedown', function (e) {
@@ -2057,7 +2066,6 @@
   // --------------------------------------------------------------------------
   var imgTop = document.getElementById('mw-image');
   var imgEdge = document.getElementById('mw-image-edge');
-  var toggleBtn = document.getElementById('mw-toggle-view');
   var isEdgeView = false;
 
   // Carga diferida de la imagen de canto (~6 MB): su URL está en data-src para
@@ -2134,16 +2142,18 @@
       imgTop.style.display = 'none';
       imgEdge.style.display = 'block';
       imgEdge.style.position = 'absolute';
-      toggleBtn.textContent = '🔄 Vista cenital';
     } else {
       imgTop.style.display = 'block';
       imgTop.style.position = 'absolute';
       imgEdge.style.display = 'none';
-      toggleBtn.textContent = '🔄 Vista de canto';
     }
     refreshAnchors();
     repositionAnchors();
 
+    // El mando de abatimiento marca la vista: 90° de canto, y al volver el
+    // abatimiento con el que se vuelve. Se pinta aquí y no al pedir el cambio,
+    // porque la voltereta tarda y hasta la mitad la vista sigue siendo la otra.
+    pintarTilt();
     aplicarControlesDeCapa();
 
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
@@ -2161,7 +2171,9 @@
   var isFlipping = false;
   var FLIP_MS = 350; // duración de cada mitad de la voltereta
 
-  toggleBtn.addEventListener('click', function () {
+  // Cambia de vista con la voltereta. Ya no hay botón: lo llama el mando de
+  // abatimiento al llegar al tope (90° = de canto) y al bajar de él.
+  function cambiarVista() {
     ensureEdgeImage(); // asegura que la imagen de canto esté (o empiece a) cargarse
     if (!(CONFIG.giros && CONFIG.giros.transicion3D)) {
       performViewSwap();
@@ -2196,7 +2208,7 @@
         isFlipping = false;
       }, FLIP_MS + 30);
     }, FLIP_MS + 30);
-  });
+  }
 
   // Reposicionar cuando carga cada imagen (la cenital es remota y puede tardar)
   [imgTop, imgEdge].forEach(function (el) {
@@ -2797,20 +2809,29 @@
   var tiltValue = document.getElementById('mw-tilt-value');
   var tiltReset = document.getElementById('mw-tilt-reset');
 
+  // De canto el mando marca el tope: la vista de canto ES el abatimiento a 90°,
+  // aunque por dentro esa foto no se abata (tiene su propio punto de vista).
   function pintarTilt() {
-    if (tiltInput) tiltInput.value = tiltGrados;
-    if (tiltValue) tiltValue.textContent = Math.round(tiltGrados) + '°';
+    var deg = isEdgeView ? TILT_MAX : tiltGrados;
+    if (tiltInput) tiltInput.value = deg;
+    if (tiltValue) tiltValue.textContent = Math.round(deg) + '°';
   }
 
   function setTilt(deg) {
-    if (isEdgeView || isFlipping) return;
-    tiltGrados = Math.max(0, Math.min(TILT_MAX, deg || 0));
+    if (isFlipping) return;
+    deg = Math.max(0, Math.min(TILT_MAX, deg || 0));
+    if (isEdgeView) {
+      // Bajar del tope devuelve a la cenital con el abatimiento que se pida:
+      // el mando es el mismo de punta a punta y no hay botón de vista.
+      if (deg >= TILT_MAX) { pintarTilt(); return; }
+      tiltGrados = deg;
+      cambiarVista();
+      return;
+    }
+    tiltGrados = deg;
     if (tiltGrados >= TILT_MAX) {
-      // El tope ES la vista de canto. Se deja el abatimiento a 0 para que al
-      // volver a la cenital se aterrice de plano, como al arrancar.
-      tiltGrados = 0;
-      pintarTilt();
-      if (toggleBtn) toggleBtn.click();
+      // El tope ES la vista de canto, con su propia foto y sus marcadores.
+      cambiarVista();
       return;
     }
     pintarTilt();

@@ -177,8 +177,8 @@ El mapa prioriza aparecer cuanto antes:
   `fetchpriority="high"` y `decoding="async"`.
 - La **imagen de canto** pesa ~6 MB y solo hace falta en la vista de perfil.
   No se carga en el arranque: su URL está en `data-src` y `via-lactea-app.js`
-  la carga **en segundo plano** cuando el navegador está ocioso (o al pulsar
-  «Vista de canto»). Así deja de competir con el primer pintado.
+  la carga **en segundo plano** cuando el navegador está ocioso (o al llevar el
+  abatimiento a 90°). Así deja de competir con el primer pintado.
 
 Si quieres afinar más, una versión de la cenital a menor resolución reduciría
 aún más el tiempo de carga sin pérdida visible al zoom inicial.

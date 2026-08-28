@@ -28,7 +28,7 @@
 
   /* Controles del mapa: oscuros y muy translúcidos, con desenfoque y texto
      claro (el fondo del mapa es negro). La leyenda queda intacta. */
-  #mw-toggle-view, #mw-search,
+  #mw-search,
   #mw-tilt-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo,
   #mw-observador, #mw-viaje {
     -webkit-backdrop-filter: blur(10px);
@@ -38,9 +38,6 @@
     box-shadow: 0 1px 6px rgba(0,0,0,0.28);
   }
   #mw-search::placeholder { color: rgba(234,241,251,0.55); }
-  #mw-toggle-view:hover {
-    background: rgba(30,38,56,0.5) !important;
-  }
   #mw-nuevo { color: #f4c76b !important; border-color: rgba(244,199,107,0.35) !important; }
   #mw-nuevo:hover { background: rgba(244,199,107,0.16) !important; }
 
@@ -57,7 +54,7 @@
      columna quedaba dentada. 244 px es el ancho del control más largo, el del
      giro. El selector de observador solo fija aquí el mínimo: sigue creciendo
      hasta 320 px si el nombre del compañero lo pide (ver arriba). */
-  #mw-nuevo, #mw-search, #mw-toggle-view, #mw-viaje, #mw-tilt-control,
+  #mw-nuevo, #mw-search, #mw-viaje, #mw-tilt-control,
   #mw-rotate-edge-control, #mw-rotate-plane-control {
     width: min(244px, calc(100vw - 24px)) !important;
     box-sizing: border-box;
@@ -756,8 +753,10 @@
 
     <!-- Fila 3: mandos de orientación (solo se ve el de la vista activa) -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <!-- Abatimiento: de mirar el disco desde arriba (0°) a mirarlo de canto
-           (90°, donde el mapa cambia a la vista de canto). -->
+      <!-- Abatimiento: mando único del punto de vista. 0° es el disco desde
+           arriba y 90° la vista de canto, que tiene su propia foto y sus
+           marcadores; el mando no cambia entre una y otra, y por eso ya no hay
+           botón de cambio de vista. -->
       <div id="mw-tilt-control" class="mw-ui-control" style="
         display:none;align-items:center;gap:8px;
         background:rgba(12,16,28,0.32);border-radius:20px;
@@ -799,17 +798,6 @@
       </div>
     </div>
     
-    <div class="mw-consola-rotulo">Vista</div>
-	<!-- Fila 4: vista de canto. La fila entera lleva id porque se esconde cuando
-	     manda otra escala (el atlas o el vecindario): el botón es de la vista de
-	     la Vía Láctea. Ver VLCapas.controlesVisibles. -->
-    <div id="mw-vista-control" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <button id="mw-toggle-view" style="
-        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-        font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
-      ">🔄 Vista de canto</button>
-    </div>
-
     <div class="mw-consola-rotulo">Tripulación</div>
     <!-- Fila 5: quién observa -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1279,7 +1267,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260829_2000"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260828_2000"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
@@ -1297,7 +1285,7 @@
 <script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20260829_2000"></script>
 <!-- QUÉ ESCALA MANDA y qué controles son suyos: lo consultan la app y el
      cambio de vista. Pura, sin DOM. -->
-<script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260829_2000"></script>
+<script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260828_2000"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
 <script src="/bitacora-mapa/js/grupo-local.js?v=20260829_2000"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
@@ -1315,5 +1303,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260828_1800"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260828_2000"></script>
 </li>
