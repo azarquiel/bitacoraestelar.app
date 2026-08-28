@@ -153,6 +153,9 @@
     order: 2;                /* el tirador, pegado al borde; el panel a su izquierda */
     width: 26px;
     padding: 16px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 13px;
     background: rgba(12,16,28,0.32);
     cursor: pointer;
@@ -270,6 +273,15 @@
     opacity: 1;
     transform: none;
     pointer-events: auto;
+  }
+
+  /* Cerrada a propósito con el tirador. Con el puntero encima el :hover volvía
+     a abrirla en el acto, así que el segundo clic parecía no hacer nada: esta
+     clase gana al :hover y caduca cuando el ratón se va de la consola. */
+  #mw-consola.mw-consola-cerrada #mw-consola-panel {
+    opacity: 0;
+    transform: translateX(14px);
+    pointer-events: none;
   }
 
   /* ═══ PANTALLAS ESTRECHAS Y BAJAS ════════════════════════════════════════
