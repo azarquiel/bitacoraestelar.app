@@ -400,11 +400,16 @@
   /* Vista cenital inclinada: abatida, la foto enseña su borde recto y la
      galaxia parece una carta de baraja. Difuminar el canto es parte de la
      técnica, no maquillaje. El bulbo de cara lo pone via-lactea-app.js. */
+  /* La máscara se mide sobre la CAJA, no sobre la foto: la foto es cuadrada y
+     va con object-fit:contain, así que a los lados sobran bandas y un
+     "ellipse 50% 50%" llegaba al borde recto de la foto todavía opaco. Con
+     "circle closest-side" el radio es el lado corto de la caja, que es justo
+     el lado de la foto: el círculo inscrito. Vale en apaisado y en vertical. */
   #mw-content.mw-inclinado #mw-image {
-    -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%,
-      #000 38%, rgba(0,0,0,0.55) 72%, transparent 100%);
-    mask-image: radial-gradient(ellipse 50% 50% at 50% 50%,
-      #000 38%, rgba(0,0,0,0.55) 72%, transparent 100%);
+    -webkit-mask-image: radial-gradient(circle closest-side at 50% 50%,
+      #000 62%, rgba(0,0,0,0.72) 82%, rgba(0,0,0,0.26) 93%, transparent 100%);
+    mask-image: radial-gradient(circle closest-side at 50% 50%,
+      #000 62%, rgba(0,0,0,0.72) 82%, rgba(0,0,0,0.26) 93%, transparent 100%);
   }
 
   /* Plomada del marcador al disco: sin ella un objeto de halo flota en el aire
@@ -1237,7 +1242,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260829_1100"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260829_1500"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
@@ -1272,6 +1277,6 @@
      via-lactea-app.js. zoom-imagen necesita CONFIG. -->
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
-<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260829_1100"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260829_1100"></script>
+<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260829_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260829_1500"></script>
 </li>
