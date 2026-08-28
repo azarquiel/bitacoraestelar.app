@@ -15,6 +15,19 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 - **De dónde vino:** `origen` distingue `formulario` (normal), `oal` (importada) y `legacy` (migrada). No cambia el significado, solo las garantías.
 - **Apunta a otras entradas del glosario:** objeto mirado tiene o debería tener su [[objeto del mapa]]; el sitio, su [[base]] (vía el viaje); alturas y azimuts calculados, su [[astrometría de la sesión]]. Campo `tipo` de aquí es TIPO DE LA OBSERVACIÓN (cómo se identificó el objeto: `messier`, `carbono`, `otro`), homónimo peligroso del tipo del objeto del mapa: ver aviso en [[clasificación de objeto del mapa]].
 
+## Tramo de audio
+
+**El trozo de un reportaje sonoro ajeno en que se habla del objeto de esta observación**: dónde está el audio, dónde empieza y dónde acaba. Cuelga de la [[observación]], no de la entrada: es de lo mirado, no de un ocular.
+
+- **Episodio y tramo son cosas distintas.** El **episodio** es la obra entera de otro autor —su crónica, su podcast—: vive fuera, en sus canales, y el sitio ni la rehospeda ni la transcribe. El **tramo** es el recorte que corresponde a esta observación, y es lo único que se guarda aquí: el episodio se enlaza, el tramo se apunta.
+- **Se guardan URLs, no identificadores de nadie.** La URL del MP3 y la URL de la página del episodio. Un identificador de un proveedor concreto metería ese proveedor dentro del modelo, y el segundo autor sonoro puede no tener ninguno; derivarlo del catálogo del autor al registrar es cosa de la captura, no del dato guardado.
+- **Como mucho un tramo por observación**, así que vive en columnas de `{prefix}bitacora` y no en tabla hija. Lo rompería un objeto del que hablan dos episodios, pero solo si además es la misma noche y el mismo observador —si no, ya son dos observaciones con un tramo cada una—.
+- **Inicio y fin en segundos enteros** desde el comienzo del MP3, que es lo que quiere el media fragment nativo (`#t=inicio,fin`). **Fin ausente = hasta el final del episodio**, que el estándar ya escribe `#t=inicio` sin más. **Fin menor o igual que el inicio es dato inválido** y se rechaza al guardar, en vez de guardarse y sonar al revés. Inicio 0 es legítimo: hay episodios que abren con el objeto.
+- **Sin URL del MP3 no hay tramo**, aunque queden números sueltos en las otras columnas.
+- **El borrado y la adopción salen gratis:** al ser columnas de la fila, `borrada_en` se las lleva y restaurar las devuelve; y la importación OAL solo escribe las columnas que construye del XML, así que reimportar una observación con tramo no lo pierde.
+- **El tramo NO viaja en el XML.** Open Astronomy Log no tiene campo para esto e inventarlo sería ampliar el dialecto: es dato del sitio, no de la observación portable. Ver ADR 0003.
+- **Función genérica, no un hueco para un invitado.** Cualquier observación puede llevar tramo; nada del modelo nombra a un autor concreto. Quién miró sigue siendo `observador`/`observador_id` de la [[observación]], y el mapa filtra por ahí.
+
 ## Base
 
 **Sitio desde el que se observa**: nombre, latitud, longitud, altitud y huso horario IANA (`{prefix}bitacora_bases`). Convierte una dirección del cielo en algo visto a una altura y hora concretas, así que sin base no hay [[astrometría de la sesión]] —ni altura, ni azimut, ni crepúsculo—.
