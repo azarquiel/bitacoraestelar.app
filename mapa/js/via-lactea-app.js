@@ -661,7 +661,7 @@
   // perfil se va montando encima, con su propio contragiro para que no se abata
   // con el disco: al llegar a 90° ya está entera y el cambio no se nota.
   // --------------------------------------------------------------------------
-  var TILT_PREVIA = 88;
+  var TILT_PREVIA = 87;
 
   function mezclaCanto(tilt) {
     if (isEdgeView || !(tilt > TILT_PREVIA)) return 0;
@@ -2266,9 +2266,10 @@
     aplicarControlesDeCapa();
 
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    scale = 1;
-    posX = 0;
-    posY = 0;
+    // El encuadre NO se reinicia: en la antesala la foto de canto ya se ve con
+    // este zoom y este desplazamiento (misma caja, mismo object-fit), así que
+    // reiniciarlo al llegar a 90° devolvía la vista global de golpe. Quien
+    // necesite otro encuadre (irAlVecindario) lo fija después.
     applyTransform();
     hideHint();
   }
