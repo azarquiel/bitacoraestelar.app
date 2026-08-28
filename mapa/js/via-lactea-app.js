@@ -1487,9 +1487,24 @@
       });
     }
 
+    // El tirador cierra tanto la consola fijada como la abierta por el ratón:
+    // con el puntero encima, quitar la clase fija no bastaba porque el :hover
+    // la dejaba abierta igual. 'mw-consola-cerrada' gana al :hover y al foco,
+    // y se quita al volver a entrar el puntero.
     consolaTirador.addEventListener('click', function () {
-      var fija = consola.classList.toggle('mw-consola-fija');
-      consolaTirador.setAttribute('aria-expanded', fija ? 'true' : 'false');
+      // Abierta o no se decide mirando el panel, no las clases: la abre
+      // también el :hover del CSS, que no deja rastro en el DOM.
+      var abierta = consolaPanel &&
+                    parseFloat(getComputedStyle(consolaPanel).opacity) > 0.5;
+      consola.classList.toggle('mw-consola-fija', !abierta);
+      consola.classList.toggle('mw-consola-cerrada', abierta);
+      consolaTirador.setAttribute('aria-expanded', abierta ? 'false' : 'true');
+    });
+
+    // Volver a entrar con el ratón la despierta: el cierre a mano solo vale
+    // para la visita en curso, no deja la consola muerta para siempre.
+    consola.addEventListener('pointerenter', function () {
+      consola.classList.remove('mw-consola-cerrada');
     });
 
     // Barrido de arranque: la consola se despliega sola una vez al cargar y se
