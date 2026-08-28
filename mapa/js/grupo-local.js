@@ -634,6 +634,7 @@ var GrupoLocal = (function () {
         var tipo = this.getAttribute('data-tipo');
         var nowHidden = !hiddenTipos[tipo];
         hiddenTipos[tipo] = nowHidden;
+        this.setAttribute('aria-pressed', nowHidden ? 'true' : 'false');
         this.style.opacity = nowHidden ? '0.4' : '1';
         var textEl = this.querySelector('.gl-legend-text');
         if (textEl) textEl.style.textDecoration = nowHidden ? 'line-through' : 'none';

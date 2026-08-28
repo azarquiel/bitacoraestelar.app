@@ -1440,6 +1440,21 @@
   var consola = document.getElementById('mw-consola');
   var consolaTirador = document.getElementById('mw-consola-tirador');
   if (consola && consolaTirador) {
+    // Un arrastre que empieza dentro del panel lo mantiene abierto aunque el
+    // puntero se salga: sin esto, mover un deslizador hasta el borde perdía el
+    // :hover y el panel se desvanecía con el arrastre en curso.
+    var consolaPanel = document.getElementById('mw-consola-panel');
+    if (consolaPanel) {
+      consolaPanel.addEventListener('pointerdown', function () {
+        consola.classList.add('mw-consola-arrastre');
+      });
+      ['pointerup', 'pointercancel'].forEach(function (ev) {
+        window.addEventListener(ev, function () {
+          consola.classList.remove('mw-consola-arrastre');
+        });
+      });
+    }
+
     consolaTirador.addEventListener('click', function () {
       var fija = consola.classList.toggle('mw-consola-fija');
       consolaTirador.setAttribute('aria-expanded', fija ? 'true' : 'false');
@@ -2343,6 +2358,7 @@
 
       // Estilo de la fila en la leyenda
       var textEl = this.querySelector('.mw-legend-text');
+      this.setAttribute('aria-pressed', nowHidden ? 'true' : 'false');
       this.style.opacity = nowHidden ? '0.4' : '1';
       if (textEl) textEl.style.textDecoration = nowHidden ? 'line-through' : 'none';
 
@@ -2414,6 +2430,7 @@
     var fila = legendByColor[color];
     var nombreTipo = 'este tipo de objeto';
     if (fila) {
+      fila.setAttribute('aria-pressed', 'false');
       fila.style.opacity = '1';
       var textEl = fila.querySelector('.mw-legend-text');
       if (textEl) {
@@ -2915,7 +2932,10 @@
   // aunque por dentro esa foto no se abata (tiene su propio punto de vista).
   function pintarTilt() {
     var deg = isEdgeView ? TILT_MAX : tiltGrados;
-    if (tiltInput) tiltInput.value = deg;
+    if (tiltInput) {
+      tiltInput.value = deg;
+      tiltInput.setAttribute('aria-valuetext', Math.round(deg) + ' grados');
+    }
     if (tiltValue) tiltValue.textContent = Math.round(deg) + '°';
   }
 
@@ -2974,7 +2994,10 @@
 
   function setEdgeRotation(deg) {
     edgeRotation = ((deg % 360) + 360) % 360;
-    if (rotateEdgeInput) rotateEdgeInput.value = edgeRotation;
+    if (rotateEdgeInput) {
+      rotateEdgeInput.value = edgeRotation;
+      rotateEdgeInput.setAttribute('aria-valuetext', Math.round(edgeRotation) + ' grados');
+    }
     if (rotateEdgeValue) rotateEdgeValue.textContent = Math.round(edgeRotation) + '°';
     repositionAnchors();
   }
@@ -2999,7 +3022,10 @@
 
   function setEdgePlaneRotation(deg) {
     edgePlaneRotation = ((deg % 360) + 360) % 360;
-    if (rotatePlaneInput) rotatePlaneInput.value = edgePlaneRotation;
+    if (rotatePlaneInput) {
+      rotatePlaneInput.value = edgePlaneRotation;
+      rotatePlaneInput.setAttribute('aria-valuetext', Math.round(edgePlaneRotation) + ' grados');
+    }
     if (rotatePlaneValue) rotatePlaneValue.textContent = Math.round(edgePlaneRotation) + '°';
     clampPosition();
     applyTransform();

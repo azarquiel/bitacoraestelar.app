@@ -209,6 +209,40 @@
     #mw-consola-panel { transition: none; }
   }
 
+  /* Las filas de la leyenda son interruptores: <button> con aria-pressed, no
+     divs clicables. Se alcanzan con el tabulador y anuncian si su tipo está
+     oculto. Aquí se les quita la piel de botón del navegador; el reparto en
+     línea (flex, hueco, cursor) sigue en el propio elemento. */
+  #mw-legend .mw-legend-item,
+  #mw-legend-hubble .gl-legend-item {
+    -webkit-appearance: none;
+    appearance: none;
+    background: none;
+    border: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 24px;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+  }
+  #mw-legend .mw-legend-item:focus-visible,
+  #mw-legend-hubble .gl-legend-item:focus-visible {
+    outline: 2px solid rgba(244,199,107,0.8);
+    outline-offset: 2px;
+  }
+
+  /* La consola se abre al posar el ratón, pero un arrastre del deslizador que
+     salga del panel dejaba de estar "encima" y la cerraba a media maniobra.
+     Mientras dura el arrastre se marca la consola y sigue abierta. */
+  #mw-consola.mw-consola-arrastre #mw-consola-panel {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+
   /* Viñeta: la imagen de la galaxia acaba en un corte recto contra el negro de
      la página. Oscurecer solo las esquinas disimula ese canto sin tocar el
      centro. No intercepta el ratón, así que el arrastre del mapa sigue igual. */
@@ -742,7 +776,7 @@
       <div style="position:relative;display:flex;align-items:center;">
         <span style="position:absolute;left:10px;font-size:12px;pointer-events:none;opacity:0.6;">🔍</span>
         <input id="mw-search" type="text" autocomplete="off" spellcheck="false"
-          placeholder="Buscar objeto…"
+          placeholder="Buscar objeto…" aria-label="Buscar objeto en el mapa"
           style="
             border:none;border-radius:20px;background:rgba(12,16,28,0.32);
             font-size:13px;padding:8px 12px 8px 30px;width:186px;
@@ -765,10 +799,12 @@
         <span title="Abatir el disco: de verlo desde arriba a verlo de canto"
           style="pointer-events:none;">🛸</span>
         <input id="mw-tilt" class="mw-ui-control" type="range" min="0" max="90" step="0.5" value="0"
+          aria-label="Punto de vista: 0 grados desde arriba, 90 grados de canto"
+          aria-valuetext="0 grados"
           style="width:130px;cursor:pointer;" />
         <span id="mw-tilt-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
-        <button id="mw-tilt-reset" class="mw-ui-control" title="Volver a mirar desde arriba"
-          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
+        <button id="mw-tilt-reset" class="mw-ui-control" type="button" title="Volver a mirar desde arriba" aria-label="Volver a mirar desde arriba"
+          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0;min-width:24px;min-height:24px;color:#eaf1fb;">⟲</button>
       </div>
       <!-- Giro azimutal (solo vista de canto) -->
       <div id="mw-rotate-edge-control" class="mw-ui-control" style="
@@ -778,10 +814,12 @@
       ">
         <span title="Girar el punto de vista alrededor de la galaxia" style="pointer-events:none;">🛰️</span>
         <input id="mw-rotate-edge" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
+          aria-label="Girar el punto de vista alrededor de la galaxia"
+          aria-valuetext="0 grados"
           style="width:130px;cursor:pointer;" />
         <span id="mw-rotate-edge-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
-        <button id="mw-rotate-edge-reset" class="mw-ui-control" title="Volver al punto de vista original"
-          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
+        <button id="mw-rotate-edge-reset" class="mw-ui-control" type="button" title="Volver al punto de vista original" aria-label="Volver al punto de vista original"
+          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0;min-width:24px;min-height:24px;color:#eaf1fb;">⟲</button>
       </div>
       <!-- Giro en plano (vista de canto, experimental) -->
       <div id="mw-rotate-plane-control" class="mw-ui-control" style="
@@ -791,10 +829,12 @@
       ">
         <span title="Girar la imagen en el plano de la pantalla" style="pointer-events:none;">🌀</span>
         <input id="mw-rotate-plane" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
+          aria-label="Girar la imagen en el plano de la pantalla"
+          aria-valuetext="0 grados"
           style="width:130px;cursor:pointer;" />
         <span id="mw-rotate-plane-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
-        <button id="mw-rotate-plane-reset" class="mw-ui-control" title="Volver a la orientación original"
-          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
+        <button id="mw-rotate-plane-reset" class="mw-ui-control" type="button" title="Volver a la orientación original" aria-label="Volver a la orientación original"
+          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0;min-width:24px;min-height:24px;color:#eaf1fb;">⟲</button>
       </div>
     </div>
     
@@ -826,7 +866,7 @@
     </div>
     </div><!-- /#mw-consola-panel -->
   </aside>
-  <div id="mw-search-toast" style="
+  <div id="mw-search-toast" role="status" aria-atomic="true" style="
     position:absolute;
     top:16px;left:50%;
     transform:translate(-50%, -14px);
@@ -862,46 +902,46 @@
       <span style="width:9px;height:9px;border-radius:50%;background:#ffe27a;box-shadow:0 0 4px 1px rgba(255,226,122,0.9);flex:none;"></span>
       Sol
     </div>
-    <div class="mw-legend-item" data-color="#7ec8ff" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#7ec8ff" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#7ec8ff;box-shadow:0 0 4px 1px rgba(126,200,255,0.9);flex:none;"></span>
       <span class="mw-legend-text">Resto de supernova</span>
-    </div>
-    <div class="mw-legend-item" data-color="#d7a4ff" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#d7a4ff" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#d7a4ff;box-shadow:0 0 4px 1px rgba(215,164,255,0.9);flex:none;"></span>
       <span class="mw-legend-text">Cúmulo globular</span>
-    </div>
-    <div class="mw-legend-item" data-color="#ff8a80" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#ff8a80" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#ff8a80;box-shadow:0 0 4px 1px rgba(255,138,128,0.9);flex:none;"></span>
       <span class="mw-legend-text">Nebulosa de emisión</span>
-    </div>
-    <div class="mw-legend-item" data-color="#8aff9e" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#8aff9e" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#8aff9e;box-shadow:0 0 4px 1px rgba(138,255,158,0.9);flex:none;"></span>
       <span class="mw-legend-text">Cúmulo abierto</span>
-    </div>
-    <div class="mw-legend-item" data-color="#5fe0c8" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#5fe0c8" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#5fe0c8;box-shadow:0 0 4px 1px rgba(95,224,200,0.9);flex:none;"></span>
       <span class="mw-legend-text">Nebulosa planetaria</span>
-    </div>
-    <div class="mw-legend-item" data-color="#b08968" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#b08968" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#b08968;box-shadow:0 0 4px 1px rgba(176,137,104,0.9);flex:none;"></span>
       <span class="mw-legend-text">Nebulosa oscura</span>
-    </div>
-    <div class="mw-legend-item" data-color="#ff9d5a" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#ff9d5a" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#ff9d5a;box-shadow:0 0 4px 1px rgba(255,157,90,0.9);flex:none;"></span>
       <span class="mw-legend-text">Estrella de carbono</span>
-    </div>
-    <div class="mw-legend-item" data-color="#dfe7f5" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#dfe7f5" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#dfe7f5;box-shadow:0 0 4px 1px rgba(223,231,245,0.9);flex:none;"></span>
       <span class="mw-legend-text">Estrella</span>
-    </div>
+    </button>
     <!-- "Sin clasificar" es la AUSENCIA de clasificación, no una categoría más: color
          propio y apagado para que no se confunda con una estrella. Si compartieran
          color, el cajón "Estrella / otro" seguiría existiendo a ojos del observador
          aunque el modelo ya esté partido. -->
-    <div class="mw-legend-item" data-color="#8e97a3" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#8e97a3" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#8e97a3;box-shadow:0 0 4px 1px rgba(142,151,163,0.9);flex:none;"></span>
       <span class="mw-legend-text">Sin clasificar</span>
-    </div>
+    </button>
   </div>
 
   <!-- LEYENDA DEL GRUPO LOCAL: clasificación de galaxias (secuencia de Hubble).
@@ -923,26 +963,26 @@
     user-select: none;
   ">
     <div style="display:flex;align-items:center;gap:7px;color:#9aa;font-size:10px;margin-bottom:2px;pointer-events:none;">Tipo de galaxia · pulsa para mostrar/ocultar</div>
-    <div class="gl-legend-item" data-tipo="E" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    <button type="button" class="gl-legend-item" aria-pressed="false" data-tipo="E" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#f4c76b;box-shadow:0 0 4px 1px rgba(244,199,107,0.9);flex:none;"></span>
       <span class="gl-legend-text">Elíptica (E)</span>
-    </div>
-    <div class="gl-legend-item" data-tipo="S0" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="gl-legend-item" aria-pressed="false" data-tipo="S0" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#c8b6ff;box-shadow:0 0 4px 1px rgba(200,182,255,0.9);flex:none;"></span>
       <span class="gl-legend-text">Lenticular (S0)</span>
-    </div>
-    <div class="gl-legend-item" data-tipo="S" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="gl-legend-item" aria-pressed="false" data-tipo="S" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#7ec8ff;box-shadow:0 0 4px 1px rgba(126,200,255,0.9);flex:none;"></span>
       <span class="gl-legend-text">Espiral (S)</span>
-    </div>
-    <div class="gl-legend-item" data-tipo="SB" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="gl-legend-item" aria-pressed="false" data-tipo="SB" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#5fe0c8;box-shadow:0 0 4px 1px rgba(95,224,200,0.9);flex:none;"></span>
       <span class="gl-legend-text">Espiral barrada (SB)</span>
-    </div>
-    <div class="gl-legend-item" data-tipo="Irr" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+    </button>
+    <button type="button" class="gl-legend-item" aria-pressed="false" data-tipo="Irr" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#ff8a80;box-shadow:0 0 4px 1px rgba(255,138,128,0.9);flex:none;"></span>
       <span class="gl-legend-text">Irregular (Irr)</span>
-    </div>
+    </button>
   </div>
 
   <!-- LEYENDA DEL VECINDARIO SOLAR: clasificación espectral (O·B·A·F·G·K·M).
