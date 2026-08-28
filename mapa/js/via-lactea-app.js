@@ -459,9 +459,13 @@
   var ANILLOS_AL = [1000, 5000, 12000, 25000];
   var ANILLO_RADIO_MIN_PX = 26;
   var ANILLO_ROTULO_MIN_PX = 70;   // por debajo, el anillo va sin rótulo
-  var ANILLO_TRAZO_PX = 1;         // grosor del anillo EN PANTALLA (no del mapa)
-  var ANILLO_RAYA_PX = 2;          // raya y hueco del discontinuo, en pantalla
-  var ANILLO_HUECO_PX = 6;
+  // Los anillos son rejilla de fondo, nunca protagonistas: trazo por debajo del
+  // píxel, raya corta y hueco largo. Al fijar el grosor en pantalla dejaron de
+  // adelgazar con el zoom, y con ello se comían la galaxia; estos valores les
+  // devuelven el peso que tenían.
+  var ANILLO_TRAZO_PX = 0.7;       // grosor del anillo EN PANTALLA (no del mapa)
+  var ANILLO_RAYA_PX = 1.5;        // raya y hueco del discontinuo, en pantalla
+  var ANILLO_HUECO_PX = 9;
   var ANILLO_ROTULO_SEP_PX = 4;    // hueco entre el anillo y su rótulo
   var anillosSvg = document.createElementNS(SVG_NS, 'svg');
   anillosSvg.setAttribute('id', 'mw-anillos');
