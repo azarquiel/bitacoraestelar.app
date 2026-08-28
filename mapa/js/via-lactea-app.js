@@ -691,7 +691,7 @@
       // contragirado: sale exactamente donde lo pondría el 3D, se mueve con el
       // abatimiento como el resto, pero se pinta encima y sigue siendo pulsable.
       var bajo = alturaPx < 0;
-      var hundidoX = 0, hundidoY = 0, empuje = 0, compEmpuje = 1;
+      var hundidoX = 0, hundidoY = 0;
       if (bajo) {
         var ax = a.offsetLeft, ay = a.offsetTop;
         var pz = VLGeometria.proyectarInclinado(ax, ay, alturaPx, vistaAlturas);
@@ -704,21 +704,32 @@
         // vista, el objeto hundido está |z|/cos(abatimiento) por detrás del
         // punto del disco que lo tapa. El margen es para no rozar el empate.
         var cosT = Math.cos(tilt * Math.PI / 180);
-        empuje = (cosT ? -alturaPx / cosT : 0) + 4;
-        // Adelantarlo lo agranda y lo separa del centro de la pantalla; las dos
-        // cosas son la misma división de perspectiva, así que se deshacen con
-        // la k que le toca ya adelantado (kEmpuje) frente a la del ancla.
+        var empuje = (cosT ? -alturaPx / cosT : 0) + 4;
+        // El marcador cuelga a la profundidad del ancla, así que la perspectiva
+        // le agranda por su cuenta lo que se le traslade: se le devuelve
+        // multiplicando por la k del ancla, que es la que va a aplicar.
         var kAncla = p0.k;
+        hundidoX = (pz.x - p0.x) * kAncla;
+        hundidoY = (pz.y - p0.y) * kAncla;
+        // El adelanto NO va en línea recta hacia la cámara: así el marcador se
+        // agranda y se separa del centro de la pantalla, y arrastra con él el
+        // origen del conector, que se va del disco (líneas largas y gordas).
+        // Se adelanta por el RAYO DEL OJO: acercarse al ojo por su propio rayo
+        // deja la proyección del ancla clavada y solo cambia la escala, que se
+        // deshace con un scale3d(f) al final. Todo lo de dentro del marcador
+        // (punto, etiqueta y plomada) queda igual que sin adelantar.
         var kEmpuje = kAncla - empuje / (INCL.perspectiva || 1400);
+        var f = kAncla ? (kEmpuje / kAncla) : 1;
         var cx = vistaAlturas.ancho / 2, cy = vistaAlturas.alto / 2;
-        hundidoX = (pz.x - cx) * kEmpuje - (p0.x - cx) * kAncla;
-        hundidoY = (pz.y - cy) * kEmpuje - (p0.y - cy) * kAncla;
-        compEmpuje = kAncla ? (kEmpuje / kAncla) : 1;
-        // El empuje va en el contragiro (ahí el eje z ya es el de la vista) y
-        // dividido por counter, que lo escala como al resto del marcador.
+        var mLocal = (counter * scale) || 1;
+        var tx = (f - 1) * (p0.x - cx) * kAncla / mLocal;
+        var ty = (f - 1) * (p0.y - cy) * kAncla / mLocal;
         var esc = a.querySelector('.mw-counter-scale');
         if (esc) esc.style.transform = 'scale3d(' + counter + ',' + counter + ',' + counter + ')' +
-          counterRot + counterTilt + ' translateZ(' + (empuje / (counter || 1)).toFixed(2) + 'px)';
+          counterRot + counterTilt +
+          ' translate3d(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px,' +
+          (empuje / (counter || 1)).toFixed(2) + 'px)' +
+          ' scale3d(' + f.toFixed(4) + ',' + f.toFixed(4) + ',' + f.toFixed(4) + ')';
       }
       // preserve-3d también en el hundido: sin él el ancla APLANA a sus hijos
       // sobre el disco abatido, el contragiro del marcador deja de deshacer el
@@ -732,6 +743,10 @@
       // Aspecto de "está debajo de la imagen" solo mientras la foto lo tape: en
       // cuanto el abatimiento lo saca por detrás del borde del disco, se ve de
       // verdad y vuelve a su aspecto normal.
+      // El conector le hace de plomada al hundido, tape la foto o no: sin esta
+      // clase se queda con su color liso en línea y pinta un trazo largo y
+      // opaco cruzando la galaxia.
+      a.classList.toggle('mw-hundido', bajo);
       a.classList.toggle('mw-bajo-plano', bajo &&
         VLGeometria.tapadoPorDisco(a.offsetLeft, a.offsetTop, alturaPx,
                                    radioTapa, vistaAlturas));
@@ -765,8 +780,7 @@
       var screenPy = (oyPct || 0) + hundidoY;
       var oxPx = screenPx / (counter * scale);
       var oyPx = screenPy / (counter * scale);
-      content.style.transform = 'translate(' + oxPx + 'px, ' + oyPx + 'px)' +
-        (compEmpuje !== 1 ? ' scale(' + compEmpuje.toFixed(4) + ')' : '');
+      content.style.transform = 'translate(' + oxPx + 'px, ' + oyPx + 'px)';
 
       if (connector) {
         var len = Math.sqrt(oxPx * oxPx + oyPx * oyPx);
