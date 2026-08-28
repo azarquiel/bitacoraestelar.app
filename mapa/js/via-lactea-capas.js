@@ -17,7 +17,7 @@
 
    Interfaz (window.VLCapas):
      capaActiva(alphaAtlas, alphaVecindario) -> 'galaxia' | 'grupoLocal' | 'vecindario'
-     controlesVisibles(capa, canto, giros)   -> { vista, giroCenital, giroCanto,
+     controlesVisibles(capa, canto, giros)   -> { vista, abatimiento, giroCanto,
                                                   giroPlano, leyendaObjetos,
                                                   leyendaHubble, leyendaEspectral }
    ============================================================================ */
@@ -45,7 +45,7 @@
     var enGalaxia = c === 'galaxia';
     return {
       vista:       enGalaxia,
-      giroCenital: enGalaxia && !canto,
+      abatimiento: enGalaxia && !canto,
       giroCanto:   enGalaxia && !!canto && !!g.giroAzimutalCanto,
       giroPlano:   enGalaxia && !!canto && !!g.giroPlanoCanto,
       leyendaObjetos:   enGalaxia,

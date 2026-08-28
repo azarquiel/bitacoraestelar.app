@@ -84,9 +84,6 @@
     //                   el volumen sin inventar ni color ni forma.
     //   bulboAlto     : altura del recorte sobre el plano, misma fracción.
     //   alturaObjetos : exageración de la altura de los marcadores (1 = real).
-    //   giroEnPlano   : true/false. Control de giro de la vista cenital. Con la
-    //                   inclinación activa está desactivado: giro y abatimiento
-    //                   juntos desorientan y no hay un horizonte al que volver.
     // -------------------------------------------------------------------------
     inclinacion: {
       activa: true,
@@ -98,8 +95,7 @@
       bulboRadio: 0.020,
       bulboAlto: 0,
       alturaObjetos: 1.5,
-      tallos: true,
-      giroEnPlano: true
+      tallos: true
     },
 
     // -------------------------------------------------------------------------

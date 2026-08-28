@@ -29,19 +29,15 @@
   var MAXSCALE_VECINDARIO = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.zoomMaximo) || 6500;
   var posX = 0;
   var posY = 0;
-  var rotation = 0; // grados de giro de la vista cenital (0 = orientación base)
   var edgePlaneRotation = 0; // giro en el plano de pantalla de la vista de canto
                              // (opción experimental: CONFIG.giros.giroPlanoCanto)
 
-  // Giro en plano vigente según la vista activa. La vista de canto solo gira
+  // Giro en plano vigente según la vista activa. La cenital no gira: se mira
+  // el disco desde arriba y se abate con el deslizador. La de canto solo gira
   // en plano si el interruptor CONFIG.giros.giroPlanoCanto está activado.
   function currentPlaneRotation() {
-    if (isEdgeView) {
-      return (CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? edgePlaneRotation : 0;
-    }
-    // Con el disco abatido el giro es AZIMUTAL: gira el mapa sobre su eje
-    // polar antes de abatirlo, no la imagen ya abatida sobre la pantalla.
-    return (tiltActual() && !INCL.giroEnPlano) ? 0 : rotation;
+    if (!isEdgeView) return 0;
+    return (CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? edgePlaneRotation : 0;
   }
 
   // Punto del núcleo (centro de giro) de la vista activa, en % de la imagen.
@@ -77,9 +73,6 @@
       alto: img.clientHeight,
       escala: (esc == null) ? scale : esc,
       grados: tiltActual(),
-      // El giro solo entra en la proyección con el disco abatido: en plano lo
-      // resuelve el CSS alrededor del núcleo y la escala basta para el anclaje.
-      giro: tiltActual() ? currentPlaneRotation() : 0,
       perspectiva: INCL.perspectiva || 1400
     };
   }
@@ -746,10 +739,7 @@
     capaEnPantalla = capa;
     var mandos = [
       ['mw-vista-control', v.vista, 'flex'],
-      // Con el disco abatido no hay giro cenital que ofrecer (ver
-      // currentPlaneRotation): el control se retira en vez de quedarse inerte.
-      ['mw-tilt-control', !isEdgeView && INCL.activa, 'flex'],
-      ['mw-rotate-control', v.giroCenital && !(tiltActual() && !INCL.giroEnPlano), 'flex'],
+      ['mw-tilt-control', v.abatimiento && INCL.activa, 'flex'],
       ['mw-rotate-edge-control', v.giroCanto, 'flex'],
       ['mw-rotate-plane-control', v.giroPlano, 'flex'],
       ['mw-legend', v.leyendaObjetos, ''],
@@ -973,7 +963,7 @@
   var rotDragStartAngle = 0;   // ángulo cursor-núcleo al iniciar (grados)
   var rotDragStartValue = 0;   // valor de rotación/azimut al iniciar
   var rotDragStartX = 0;       // para el azimut (horizontal)
-  var rotDragMode = '';        // 'cenital' | 'plano-canto' | 'azimut'
+  var rotDragMode = '';        // 'plano-canto' | 'azimut'
 
   function nucleusScreenPoint() {
     // Posición en pantalla del núcleo de la vista activa. Con transform-origin
@@ -1006,16 +996,8 @@
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
     // Ctrl/Shift + arrastre: modo rotación en lugar de desplazamiento.
-    if ((e.ctrlKey || e.shiftKey) && !(tiltActual() && !INCL.giroEnPlano)) {
-      if (!isEdgeView) {
-        var np = nucleusScreenPoint();
-        if (np) {
-          isRotateDragging = true;
-          rotDragMode = 'cenital';
-          rotDragStartAngle = Math.atan2(e.clientY - np.y, e.clientX - np.x) * 180 / Math.PI;
-          rotDragStartValue = rotation;
-        }
-      } else if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
+    if ((e.ctrlKey || e.shiftKey) && isEdgeView) {
+      if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
         var np2 = nucleusScreenPoint();
         if (np2) {
           isRotateDragging = true;
@@ -1056,9 +1038,7 @@
         var np = nucleusScreenPoint();
         if (np) {
           var ang = Math.atan2(e.clientY - np.y, e.clientX - np.x) * 180 / Math.PI;
-          var val = rotDragStartValue + (ang - rotDragStartAngle);
-          if (rotDragMode === 'cenital') setRotation(val);
-          else setEdgePlaneRotation(val);
+          setEdgePlaneRotation(rotDragStartValue + (ang - rotDragStartAngle));
         }
       }
       return;
@@ -1204,15 +1184,13 @@
         applyTransform();
 
         // Giro de dos dedos (twist): acumulamos el incremento angular entre
-        // pasos. En cenital gira el mapa; en canto mueve el azimut (o el giro
-        // en plano si esa opción está activada).
+        // pasos. Solo la vista de canto gira: mueve el azimut (o el giro en
+        // plano si esa opción está activada).
         var angNow = touchAngle(e.touches[0], e.touches[1]);
         var dAng = angleDelta(angNow, pinchPrevAngle);
         pinchPrevAngle = angNow;
-        if (dAng) {
-          if (!isEdgeView) {
-            setRotation(rotation + dAng);
-          } else if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
+        if (dAng && isEdgeView) {
+          if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
             setEdgePlaneRotation(edgePlaneRotation + dAng);
           } else if (CONFIG.giros && CONFIG.giros.giroAzimutalCanto) {
             setEdgeRotation(edgeRotation + dAng);
@@ -2448,7 +2426,7 @@
     // aplicamos la misma rotación al punto antes de calcular el desplazamiento.
     // Con el disco abatido no: ahí el giro ya va dentro de la proyección
     // (vistaProyeccion), y hacerlo dos veces manda el encuadre a otro sitio.
-    var rot = tiltActual() ? 0 : currentPlaneRotation();
+    var rot = currentPlaneRotation();
     if (rot) {
       var nuc = currentNucleo();
       var nx = r.left + r.width  * (nuc.x / 100);
@@ -2724,15 +2702,6 @@
   }
 
   // ===========================================================================
-  // CONTROL DE GIRO DE LA VISTA CENITAL
-  // El deslizador fija el ángulo (0-360°); el mapa rota alrededor del núcleo
-  // galáctico y las etiquetas se mantienen horizontales (ver applyTransform).
-  // ===========================================================================
-  var rotateInput = document.getElementById('mw-rotate');
-  var rotateValue = document.getElementById('mw-rotate-value');
-  var rotateReset = document.getElementById('mw-rotate-reset');
-
-  // ===========================================================================
   // CONTROL DE ABATIMIENTO DE LA VISTA CENITAL
   // Del cenital de plano (0°) al canto (90°). Al llegar al tope no se deja el
   // disco convertido en una raya: el mapa da la voltereta a la vista de canto,
@@ -2771,23 +2740,6 @@
   }
   if (tiltReset) {
     tiltReset.addEventListener('click', function () { setTilt(0); });
-  }
-
-  function setRotation(deg) {
-    rotation = ((deg % 360) + 360) % 360; // normaliza a 0-360
-    pintarBulbo(); // el bulbo acompaña al giro (ver pintarBulbo)
-    if (rotateInput) rotateInput.value = rotation;
-    if (rotateValue) rotateValue.textContent = Math.round(rotation) + '°';
-    applyTransform();
-  }
-
-  if (rotateInput) {
-    rotateInput.addEventListener('input', function () {
-      setRotation(parseFloat(rotateInput.value) || 0);
-    });
-  }
-  if (rotateReset) {
-    rotateReset.addEventListener('click', function () { setRotation(0); });
   }
 
   // ===========================================================================

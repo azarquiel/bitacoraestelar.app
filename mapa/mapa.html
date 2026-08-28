@@ -29,8 +29,7 @@
   /* Controles del mapa: oscuros y muy translúcidos, con desenfoque y texto
      claro (el fondo del mapa es negro). La leyenda queda intacta. */
   #mw-toggle-view, #mw-search,
-  #mw-tilt-control,
-  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo,
+  #mw-tilt-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo,
   #mw-observador, #mw-viaje {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
@@ -59,14 +58,14 @@
      giro. El selector de observador solo fija aquí el mínimo: sigue creciendo
      hasta 320 px si el nombre del compañero lo pide (ver arriba). */
   #mw-nuevo, #mw-search, #mw-toggle-view, #mw-viaje, #mw-tilt-control,
-  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control {
+  #mw-rotate-edge-control, #mw-rotate-plane-control {
     width: min(244px, calc(100vw - 24px)) !important;
     box-sizing: border-box;
   }
   #mw-nuevo { display: inline-block; text-align: center; }
   #mw-observador { min-width: min(244px, calc(100vw - 24px)) !important; box-sizing: border-box; }
   /* El deslizador cede su ancho fijo y se queda con lo que sobre en la píldora. */
-  #mw-tilt, #mw-rotate, #mw-rotate-edge, #mw-rotate-plane { width: auto !important; flex: 1; min-width: 0; }
+  #mw-tilt, #mw-rotate-edge, #mw-rotate-plane { width: auto !important; flex: 1; min-width: 0; }
 
   /* Deslizadores de giro: sin esto el sistema los pinta con su azul de acento,
      el único color ajeno a la paleta (oro sobre negro) en toda la pantalla. */
@@ -614,7 +613,10 @@
         "></div>
         <div style="
           position: absolute;
-          transform: translate(8px, -8px);
+          /* Entera por encima del plano del disco: contragirada al abatir, la
+             etiqueta queda de pie y la foto le comería la mitad de abajo si
+             cruzara z=0. Su caja mide ~20px, así que -24 la deja limpia. */
+          transform: translate(8px, -24px);
           color: #ffe27a;
           font-family: sans-serif;
           font-size: 12px;
@@ -626,7 +628,7 @@
         <div id="mw-sun-coords" style="
           position: absolute;
           display: none;
-          transform: translate(8px, 8px);
+          transform: translate(8px, -54px);   /* sobre el plano, como la etiqueta */
           color: #ffe27a;
           font-family: sans-serif;
           font-size: 12px;
@@ -705,7 +707,7 @@
       </div>
     </div>
 
-    <!-- Fila 3: Giro de la galaxia (solo se ve el control de la vista activa) -->
+    <!-- Fila 3: mandos de orientación (solo se ve el de la vista activa) -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <!-- Abatimiento: de mirar el disco desde arriba (0°) a mirarlo de canto
            (90°, donde el mapa cambia a la vista de canto). -->
@@ -720,18 +722,6 @@
           style="width:130px;cursor:pointer;" />
         <span id="mw-tilt-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
         <button id="mw-tilt-reset" class="mw-ui-control" title="Volver a mirar desde arriba"
-          style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
-      </div>
-      <div id="mw-rotate-control" class="mw-ui-control" style="
-        display:flex;align-items:center;gap:8px;
-        background:rgba(12,16,28,0.32);border-radius:20px;
-        padding:6px 12px;font-family:sans-serif;font-size:12px;color:#eaf1fb;
-      ">
-        <span title="Girar la vista de la galaxia" style="pointer-events:none;">🧭</span>
-        <input id="mw-rotate" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
-          style="width:130px;cursor:pointer;" />
-        <span id="mw-rotate-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
-        <button id="mw-rotate-reset" class="mw-ui-control" title="Volver a la orientación original"
           style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
       </div>
       <!-- Giro azimutal (solo vista de canto) -->
@@ -1242,7 +1232,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260829_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260829_1800"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
@@ -1260,7 +1250,7 @@
 <script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20260810_1200"></script>
 <!-- QUÉ ESCALA MANDA y qué controles son suyos: lo consultan la app y el
      cambio de vista. Pura, sin DOM. -->
-<script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260810_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260829_1800"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
 <script src="/bitacora-mapa/js/grupo-local.js?v=20260823_1200"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
@@ -1277,6 +1267,6 @@
      via-lactea-app.js. zoom-imagen necesita CONFIG. -->
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
-<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260829_1500"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260829_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260829_1800"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260829_1800"></script>
 </li>
