@@ -424,6 +424,37 @@
     pointer-events: none;
   }
 
+  /* BAJO EL PLANO GALÁCTICO. Al abatir el disco, los objetos con b negativa
+     quedan al otro lado de la foto. Antes se los comía la imagen (y con ella el
+     clic); ahora se pintan siempre por delante y lo que dice "está debajo" es
+     el ASPECTO: se ven como a través de la galaxia, desenfocados y sin brillo,
+     colgando de una plomada de puntos que sube hasta su sitio en el disco.
+     La clase la pone/quita via-lactea-app.js según el abatimiento: en cuanto el
+     objeto asoma por detrás del borde del disco ya se ve de verdad y recupera
+     su aspecto normal. Al pasar el cursor también, para poder leerlo. */
+  #mw-content .mw-object-anchor.mw-bajo-plano .mw-punto {
+    opacity: 0.75;
+    filter: blur(0.5px);
+    /* Sin resplandor y con un reborde oscuro: lo que está detrás del disco no
+       ilumina, y el reborde lo despega del brillo de la foto para que no se
+       pierda sobre el bulbo. !important: el halo va en estilo en línea. */
+    box-shadow: 0 0 0 2px rgba(3,7,15,0.8) !important;
+  }
+  #mw-content .mw-object-anchor.mw-bajo-plano .mw-aten { opacity: 0.6; }
+  #mw-content .mw-object-anchor.mw-bajo-plano .mw-connector {
+    /* Plomada de puntos hacia el plano: !important porque el color liso del
+       conector va en estilo en línea (createMarker). */
+    background: repeating-linear-gradient(to right,
+      rgba(150,200,255,0.4) 0 2px, transparent 2px 6px) !important;
+  }
+  #mw-content .mw-object-anchor.mw-bajo-plano:hover .mw-punto,
+  #mw-content .mw-object-anchor.mw-bajo-plano.mw-realzado .mw-punto {
+    opacity: 1;
+    filter: none;
+  }
+  #mw-content .mw-object-anchor.mw-bajo-plano:hover .mw-aten,
+  #mw-content .mw-object-anchor.mw-bajo-plano.mw-realzado .mw-aten { opacity: 1; }
+
   #mw-anillos {
     position: absolute;
     inset: 0;
@@ -1267,6 +1298,6 @@
      via-lactea-app.js. zoom-imagen necesita CONFIG. -->
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
-<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260829_2000"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260829_2000"></script>
+<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260828_1600"></script>
 </li>

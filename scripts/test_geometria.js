@@ -148,5 +148,26 @@ eqRect_wh(G.huellaInclinada({ left: 200, top: 150, width: 400, height: 300 }, PL
   else { fallos++; console.log('  FALLA inclinada: se achata en alto y se ensancha: ' + JSON.stringify(h)); }
 })();
 
+console.log('tapadoPorDisco (objeto por debajo del plano: ¿lo come la foto?):');
+(function () {
+  // Visor de 800x600, disco de radio 200 px centrado en (400, 300).
+  var V = { ancho: 800, alto: 600, escala: 1, grados: 45, perspectiva: 1400 };
+  var R = 200;
+  function bool(a, b, et) { eq(a, b, et); }
+  bool(G.tapadoPorDisco(400, 300, -10, R, V), true, 'justo bajo el núcleo: tapado');
+  // A 45° el punto de cruce sube |z|·tan(45) = |z| px hacia el fondo. Un objeto
+  // en el borde de arriba que se hunde 400 px cruza el plano fuera del disco.
+  bool(G.tapadoPorDisco(400, 150, -400, R, V), false, 'muy hundido: asoma por detrás del borde');
+  bool(G.tapadoPorDisco(400, 150, -20, R, V), true, 'poco hundido: sigue detrás de la foto');
+  bool(G.tapadoPorDisco(400, 300, 400, R, V), false, 'por encima del plano: nunca tapado');
+  bool(G.tapadoPorDisco(400, 300, -400, R, { ancho: 800, alto: 600, escala: 1, grados: 0 }),
+    false, 'sin abatir no hay nada detrás de la foto');
+  bool(G.tapadoPorDisco(700, 300, -10, R, V), false, 'fuera del disco: no hay foto que lo tape');
+  // El disco es un círculo: girarlo en su plano no cambia a quién tapa.
+  var VG = { ancho: 800, alto: 600, escala: 1, grados: 45, perspectiva: 1400, giro: 90 };
+  bool(G.tapadoPorDisco(400, 300, -10, R, VG), true, 'con giro en plano, el núcleo sigue tapado');
+  bool(G.tapadoPorDisco(250, 300, -400, R, VG), false, 'con giro 90° el hundimiento sale por el lado');
+})();
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

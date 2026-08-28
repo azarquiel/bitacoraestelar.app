@@ -140,8 +140,34 @@
     if (!(k > 0)) k = 1e-6;               // detrás del observador: no se proyecta
     return {
       x: vista.ancho / 2 + vista.escala * dx / k,
-      y: vista.alto / 2 + vista.escala * ey / k
+      y: vista.alto / 2 + vista.escala * ey / k,
+      k: k   // división de perspectiva del punto, que quien llama puede deshacer
     };
+  }
+
+  // ¿La foto del disco tapa a un objeto que está POR DEBAJO del plano?
+  // Mirando el disco abatido, el rayo que va del ojo a un objeto hundido cruza
+  // el plano galáctico en un punto desplazado hacia el fondo. Igualando la
+  // altura en pantalla (ey de proyectarInclinado) ese punto es
+  //   dy0 = dy - z·tan(grados)
+  // y con z negativo se aleja del observador. Si dy0 cae dentro del disco, la
+  // foto se come al objeto; si se sale por detrás del borde, el abatimiento lo
+  // ha sacado a la vista y el objeto se ve tal cual.
+  // El disco es un círculo, así que el giro en plano no cambia el radio: basta
+  // girar el punto como hace la proyección. 'radio' va en px de contenido.
+  function tapadoPorDisco(x, y, z, radio, vista) {
+    if (!(z < 0) || !vista.grados) return false;
+    var dx = x - vista.ancho / 2;
+    var dy = y - vista.alto / 2;
+    if (vista.giro) {
+      var g = vista.giro * RAD;
+      var cg = Math.cos(g), sg = Math.sin(g);
+      var rx = dx * cg - dy * sg;
+      dy = dx * sg + dy * cg;
+      dx = rx;
+    }
+    var dy0 = dy - z * Math.tan(vista.grados * RAD);
+    return dx * dx + dy0 * dy0 <= radio * radio;
   }
 
   // Inversa de proyectarInclinado sobre el propio plano (z=0): qué punto del
@@ -195,6 +221,7 @@
     zoomAlrededor: zoomAlrededor,
     proyectarInclinado: proyectarInclinado,
     planoDesdePantalla: planoDesdePantalla,
+    tapadoPorDisco: tapadoPorDisco,
     huellaInclinada: huellaInclinada,
     xCantoObjeto: xCantoObjeto,
     xCantoSol: xCantoSol

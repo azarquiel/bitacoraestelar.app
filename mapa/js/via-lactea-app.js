@@ -90,6 +90,17 @@
       (r.width / CONFIG.fisica.anchoImagenAl) * (INCL.alturaObjetos || 1);
   }
 
+  // Radio del disco que TAPA, en px de contenido. La foto es cuadrada y va
+  // centrada, así que su disco es el círculo inscrito (el mismo que recorta la
+  // máscara de #mw-image, "circle closest-side"). Se toma algo menos que el
+  // radio entero porque la máscara ya viene desvaneciéndose antes del borde:
+  // ahí la foto deja ver lo que hay detrás y no cuenta como tapadera.
+  var TAPA_RADIO = 0.80;
+
+  function radioDisco(r) {
+    return r ? Math.min(r.width, r.height) / 2 * TAPA_RADIO : 0;
+  }
+
   // Un objeto de halo se pinta muy por encima del disco y, suelto en el aire,
   // no se sabe sobre qué punto del mapa está. El tallo lo baja hasta su sitio:
   // es una vertical del marcador al plano, la misma plomada de una gráfica 3D.
@@ -664,17 +675,69 @@
       var imgAlturas = document.getElementById('mw-image');
       if (imgAlturas && imgAlturas.naturalWidth) rectAlturas = getImgRect(imgAlturas);
     }
+    var vistaAlturas = tilt ? vistaProyeccion() : null;
+    var radioTapa = tilt ? radioDisco(rectAlturas) : 0;
     for (var k = 0; k < anchors.length; k++) {
       var a = anchors[k];
+      var enTop = a.getAttribute('data-view') === 'top';
       // Cada objeto se despega del disco según su altura real sobre el plano.
-      if (tilt && a.getAttribute('data-view') === 'top') {
+      var alturaPx = (tilt && enTop)
+        ? alturaObjetoPx(a.getAttribute('data-id'), rectAlturas) : 0;
+      // BAJO EL PLANO: la altura NO se aplica en 3D. Con translateZ negativo el
+      // objeto se mete detrás de la foto, que se lo come y además le quita el
+      // clic (en 3D el orden de pintado manda sobre el z-index). Así que el
+      // ancla se queda en el plano y el desplazamiento que le toca por su
+      // hundimiento se hace en píxeles de PANTALLA, dentro del marcador ya
+      // contragirado: sale exactamente donde lo pondría el 3D, se mueve con el
+      // abatimiento como el resto, pero se pinta encima y sigue siendo pulsable.
+      var bajo = alturaPx < 0;
+      var hundidoX = 0, hundidoY = 0, empuje = 0, compEmpuje = 1;
+      if (bajo) {
+        var ax = a.offsetLeft, ay = a.offsetTop;
+        var pz = VLGeometria.proyectarInclinado(ax, ay, alturaPx, vistaAlturas);
+        var p0 = VLGeometria.proyectarInclinado(ax, ay, 0, vistaAlturas);
+        // No basta con no hundir el ancla: el marcador se contragira hasta
+        // quedar de cara, pero sigue estando a la profundidad del ancla, y ahí
+        // la foto del disco le pasa por delante (más abajo en pantalla, el
+        // disco está MÁS cerca del ojo). Así que además se adelanta hacia la
+        // cámara lo justo para pasar por delante de la foto: en profundidad de
+        // vista, el objeto hundido está |z|/cos(abatimiento) por detrás del
+        // punto del disco que lo tapa. El margen es para no rozar el empate.
+        var cosT = Math.cos(tilt * Math.PI / 180);
+        empuje = (cosT ? -alturaPx / cosT : 0) + 4;
+        // Adelantarlo lo agranda y lo separa del centro de la pantalla; las dos
+        // cosas son la misma división de perspectiva, así que se deshacen con
+        // la k que le toca ya adelantado (kEmpuje) frente a la del ancla.
+        var kAncla = p0.k;
+        var kEmpuje = kAncla - empuje / (INCL.perspectiva || 1400);
+        var cx = vistaAlturas.ancho / 2, cy = vistaAlturas.alto / 2;
+        hundidoX = (pz.x - cx) * kEmpuje - (p0.x - cx) * kAncla;
+        hundidoY = (pz.y - cy) * kEmpuje - (p0.y - cy) * kAncla;
+        compEmpuje = kAncla ? (kEmpuje / kAncla) : 1;
+        // El empuje va en el contragiro (ahí el eje z ya es el de la vista) y
+        // dividido por counter, que lo escala como al resto del marcador.
+        var esc = a.querySelector('.mw-counter-scale');
+        if (esc) esc.style.transform = 'scale3d(' + counter + ',' + counter + ',' + counter + ')' +
+          counterRot + counterTilt + ' translateZ(' + (empuje / (counter || 1)).toFixed(2) + 'px)';
+      }
+      // preserve-3d también en el hundido: sin él el ancla APLANA a sus hijos
+      // sobre el disco abatido, el contragiro del marcador deja de deshacer el
+      // abatimiento y el desplazamiento en pantalla sale encogido (y torcido).
+      if (tilt && enTop) {
         a.style.transformStyle = 'preserve-3d';
-        a.style.transform = 'translateZ(' +
-          alturaObjetoPx(a.getAttribute('data-id'), rectAlturas).toFixed(1) + 'px)';
+        a.style.transform = bajo ? '' : ('translateZ(' + alturaPx.toFixed(1) + 'px)');
       } else if (a.style.transform) {
         a.style.transform = '';
       }
-      pintarTallo(a, tilt, rectAlturas, counter);
+      // Aspecto de "está debajo de la imagen" solo mientras la foto lo tape: en
+      // cuanto el abatimiento lo saca por detrás del borde del disco, se ve de
+      // verdad y vuelve a su aspecto normal.
+      a.classList.toggle('mw-bajo-plano', bajo &&
+        VLGeometria.tapadoPorDisco(a.offsetLeft, a.offsetTop, alturaPx,
+                                   radioTapa, vistaAlturas));
+      // El tallo en 3D solo vale para lo que está por encima: al hundido le
+      // hace de plomada el conector, que ya va en píxeles de pantalla.
+      pintarTallo(a, bajo ? 0 : tilt, rectAlturas, counter);
 
       var content = a.querySelector('.mw-marker-content');
       var connector = a.querySelector('.mw-connector');
@@ -682,9 +745,10 @@
 
       var oxPct = parseFloat(a.getAttribute('data-ox'));
       var oyPct = parseFloat(a.getAttribute('data-oy'));
-      if (!oxPct && !oyPct) {
-        // Sin abanico: contenido en el punto, sin línea.
+      if (!oxPct && !oyPct && !hundidoX && !hundidoY) {
+        // Sin abanico ni hundimiento: contenido en el punto, sin línea.
         content.style.transform = 'translate(0px, 0px)';
+        content.style.transformOrigin = '';
         if (connector) connector.style.display = 'none';
         continue;
       }
@@ -694,11 +758,15 @@
       // dentro de img (scale=scale del mapa). Para que en pantalla el marcador
       // se desplace 'screenPx' px, el translate local debe ser
       //   screenPx / (counter * scale).
-      var screenPx = oxPct;  // en data-ox guardamos ya el desplazamiento en px
-      var screenPy = oyPct;
+      // en data-ox guardamos ya el desplazamiento en px; el hundimiento del
+      // objeto bajo el plano se suma aquí, y así el conector le hace de plomada
+      // hasta su sitio en el disco sin geometría aparte.
+      var screenPx = (oxPct || 0) + hundidoX;
+      var screenPy = (oyPct || 0) + hundidoY;
       var oxPx = screenPx / (counter * scale);
       var oyPx = screenPy / (counter * scale);
-      content.style.transform = 'translate(' + oxPx + 'px, ' + oyPx + 'px)';
+      content.style.transform = 'translate(' + oxPx + 'px, ' + oyPx + 'px)' +
+        (compEmpuje !== 1 ? ' scale(' + compEmpuje.toFixed(4) + ')' : '');
 
       if (connector) {
         var len = Math.sqrt(oxPx * oxPx + oyPx * oyPx);
