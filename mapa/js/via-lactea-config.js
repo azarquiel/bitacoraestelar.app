@@ -57,13 +57,47 @@
     //   giroPlanoCanto    : true/false. Control 🌀 de la vista de canto para
     //                       girar la imagen en el plano de la pantalla (giro
     //                       "de foto", alrededor del núcleo).
-    //   transicion3D      : true/false. Voltereta 3D al cambiar entre la vista
-    //                       cenital y la de canto (el disco se abate sobre sí).
     // -------------------------------------------------------------------------
     giros: {
       giroAzimutalCanto: false,
-      giroPlanoCanto: true,
-      transicion3D: true
+      giroPlanoCanto: false
+    },
+
+    // -------------------------------------------------------------------------
+    // INCLINACIÓN DE LA VISTA CENITAL
+    // El disco deja de verse desde arriba en plano: se abate con rotateX y se
+    // proyecta con perspectiva, así que la galaxia se ve "desde la nave" y no
+    // como una lámina. Los objetos se despegan del plano según su altura real
+    // sobre el plano galáctico (b y d de sus coordenadas), y sus puntos y
+    // etiquetas se contragiran para que no salgan aplastados.
+    //   activa        : true/false. En false, la vista cenital vuelve a ser plana.
+    //   grados        : abatimiento del disco (0 = de frente, 90 = de canto).
+    //   perspectiva   : distancia del observador en px (CSS perspective). Cuanto
+    //                   menor, más se agranda el borde cercano.
+    //   bulboRadio    : radio del bulbo ficticio, en fracción del ancho de la
+    //                   imagen. El bulbo es un recorte de la propia foto puesto
+    //                   de cara a la cámara: al abatir el disco, el núcleo se
+    //                   aplastaría hasta desaparecer, y este recorte le devuelve
+    //                   el volumen sin inventar ni color ni forma.
+    //   bulboAlto     : altura del recorte sobre el plano, misma fracción.
+    //   alturaObjetos : exageración de la altura de los marcadores (1 = real).
+    // -------------------------------------------------------------------------
+    inclinacion: {
+      activa: true,
+      // Abatimiento de partida: 0 = cenital de plano (mirando el disco desde
+      // arriba). El deslizador de la consola lo lleva hasta 90°, que es donde
+      // el mapa da la vuelta a la vista de canto.
+      gradosInicial: 0,
+      perspectiva: 1400,
+      bulboRadio: 0.020,
+      bulboAlto: 0,
+      alturaObjetos: 1.5,
+      tallos: true,
+      // Azimut de partida de la vista cenital, en grados: gira el disco sobre
+      // su eje polar antes de abatirlo. No es un adorno, es lo que hace que al
+      // llegar a 90° el disco esté visto desde donde lo está la foto de canto,
+      // y la voltereta no cambie de sitio los objetos.
+      azimutBase: 90
     },
 
     // -------------------------------------------------------------------------

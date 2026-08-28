@@ -28,8 +28,8 @@
 
   /* Controles del mapa: oscuros y muy translúcidos, con desenfoque y texto
      claro (el fondo del mapa es negro). La leyenda queda intacta. */
-  #mw-zoom-in, #mw-zoom-out, #mw-reset, #mw-toggle-view, #mw-search,
-  #mw-rotate-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo,
+  #mw-search,
+  #mw-tilt-control, #mw-rotate-edge-control, #mw-rotate-plane-control, #mw-nuevo,
   #mw-observador, #mw-viaje {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
@@ -38,9 +38,6 @@
     box-shadow: 0 1px 6px rgba(0,0,0,0.28);
   }
   #mw-search::placeholder { color: rgba(234,241,251,0.55); }
-  #mw-zoom-in:hover, #mw-zoom-out:hover, #mw-reset:hover, #mw-toggle-view:hover {
-    background: rgba(30,38,56,0.5) !important;
-  }
   #mw-nuevo { color: #f4c76b !important; border-color: rgba(244,199,107,0.35) !important; }
   #mw-nuevo:hover { background: rgba(244,199,107,0.16) !important; }
 
@@ -51,6 +48,178 @@
   #mw-observador { background: transparent !important; }
   #mw-observador:hover { background: rgba(30,38,56,0.35) !important; }
   #mw-observador option { background: #0c101c; color: #eaf1fb; }
+
+  /* Columna izquierda a un solo ancho: cada control nace con su propio ancho
+     inline (186 px el buscador, el texto del enlace en "Registrar"…) y la
+     columna quedaba dentada. 244 px es el ancho del control más largo, el del
+     giro. El selector de observador solo fija aquí el mínimo: sigue creciendo
+     hasta 320 px si el nombre del compañero lo pide (ver arriba). */
+  #mw-nuevo, #mw-search, #mw-viaje, #mw-tilt-control,
+  #mw-rotate-edge-control, #mw-rotate-plane-control {
+    width: min(244px, calc(100vw - 24px)) !important;
+    box-sizing: border-box;
+  }
+  #mw-nuevo { display: inline-block; text-align: center; }
+  #mw-observador { min-width: min(244px, calc(100vw - 24px)) !important; box-sizing: border-box; }
+  /* El deslizador cede su ancho fijo y se queda con lo que sobre en la píldora. */
+  #mw-tilt, #mw-rotate-edge, #mw-rotate-plane { width: auto !important; flex: 1; min-width: 0; }
+
+  /* Deslizadores de giro: sin esto el sistema los pinta con su azul de acento,
+     el único color ajeno a la paleta (oro sobre negro) en toda la pantalla. */
+  input[type=range].mw-ui-control {
+    -webkit-appearance: none; appearance: none;
+    background: transparent; height: 14px; margin: 0;
+  }
+  input[type=range].mw-ui-control::-webkit-slider-runnable-track {
+    height: 3px; border-radius: 2px; background: rgba(244,199,107,0.25);
+  }
+  input[type=range].mw-ui-control::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4.5px;
+    border: none; border-radius: 50%; background: #f4c76b;
+    box-shadow: 0 0 6px rgba(244,199,107,0.55);
+  }
+  input[type=range].mw-ui-control::-moz-range-track {
+    height: 3px; border-radius: 2px; background: rgba(244,199,107,0.25);
+  }
+  input[type=range].mw-ui-control::-moz-range-thumb {
+    width: 12px; height: 12px; border: none; border-radius: 50%;
+    background: #f4c76b; box-shadow: 0 0 6px rgba(244,199,107,0.55);
+  }
+
+  /* La leyenda y la pista de abajo llevaban su propio cristal (negro plano,
+     borde más claro, esquina de 8 px) y no casaban con las píldoras de arriba.
+     Mismo tinte, mismo borde, mismo desenfoque: una sola familia. */
+  #mw-legend, #mw-hint {
+    background: rgba(12,16,28,0.32) !important;
+    border: 1px solid rgba(255,255,255,0.14) !important;
+    color: #eaf1fb !important;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.28);
+  }
+  #mw-legend { border-radius: 14px !important; padding: 10px 14px !important; z-index: 20; }
+  #mw-hint { border-radius: 20px !important; z-index: 20; }
+
+  /* ═══ CONSOLA DE NAVEGACIÓN ═══════════════════════════════════════════════
+     Plegada contra el borde derecho: en reposo solo se ve el tirador, una
+     franja con el rótulo en vertical. El <aside> ocupa todo el alto para que
+     el ratón la encuentre en cualquier punto del borde, pero no intercepta
+     nada: el puntero solo existe en el tirador y en el panel, así que el mapa
+     se sigue arrastrando por debajo. */
+  #mw-consola {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;     /* panel y tirador a la misma altura, como un mando */
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px;
+    pointer-events: none;
+    font-family: sans-serif;
+  }
+  #mw-consola-tirador {
+    pointer-events: auto;
+    order: 2;                /* el tirador, pegado al borde; el panel a su izquierda */
+    width: 26px;
+    padding: 16px 0;
+    border-radius: 13px;
+    background: rgba(12,16,28,0.32);
+    cursor: pointer;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: #f4c76b !important;
+    border-color: rgba(244,199,107,0.30) !important;
+    transition: background .2s ease, box-shadow .2s ease;
+  }
+  #mw-consola-tirador span {
+    display: block;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+  #mw-consola:hover #mw-consola-tirador,
+  #mw-consola-tirador:focus-visible {
+    background: rgba(244,199,107,0.14);
+    box-shadow: 0 0 14px rgba(244,199,107,0.25);
+  }
+
+  /* El panel: mismos mandos de siempre, ahora en una columna con rótulos. Sale
+     de la derecha con un barrido corto; oculto no recibe el puntero, así que
+     el mapa que hay debajo se arrastra con normalidad. */
+  #mw-consola-panel {
+    order: 1;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(6,9,18,0.55);
+    border: 1px solid rgba(244,199,107,0.16);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.55);
+    opacity: 0;
+    transform: translateX(14px);
+    transition: opacity .22s ease, transform .22s ease;
+  }
+  #mw-consola:hover #mw-consola-panel,
+  #mw-consola:focus-within #mw-consola-panel,
+  #mw-consola.mw-consola-fija #mw-consola-panel {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  /* Rótulo de sección: el mismo tipo técnico del tirador, en versalitas y con
+     una línea de instrumento que llega hasta el borde del panel. Nombra el
+     trabajo de las filas que tiene debajo. */
+  #mw-consola .mw-consola-rotulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    align-self: stretch;
+    margin-top: 6px;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(244,199,107,0.62);
+    user-select: none;
+  }
+  #mw-consola .mw-consola-rotulo::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, rgba(244,199,107,0.28), rgba(244,199,107,0));
+  }
+  #mw-consola .mw-consola-rotulo:first-child { margin-top: 0; }
+
+  /* Foco visible: el mapa se recorre también con el tabulador. */
+  #mw-consola :focus-visible, #mw-consola-tirador:focus-visible {
+    outline: 2px solid rgba(244,199,107,0.8);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #mw-consola-panel { transition: none; }
+  }
+
+  /* Viñeta: la imagen de la galaxia acaba en un corte recto contra el negro de
+     la página. Oscurecer solo las esquinas disimula ese canto sin tocar el
+     centro. No intercepta el ratón, así que el arrastre del mapa sigue igual. */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%);
+  }
 
   /* CAPA DEL GRUPO LOCAL (atlas extragaláctico), detrás del mapa de la galaxia.
      Su opacidad y su zoom los controla el visor principal (grupo-local.js). */
@@ -203,6 +372,123 @@
     opacity: 1;
     pointer-events: auto;
   }
+  /* VISITADO / POR VISITAR: la diferencia es de SÍMBOLO, no de brillo.
+     El objeto que el observador activo aún no ha observado (pero sí otros) se
+     dibuja como anillo hueco de su propio color, sin halo; el visitado sigue
+     siendo el punto lleno con halo. Así se lee de un vistazo lo que queda por
+     visitar sin apagarlo. El color lo pone --mw-color, que fija createMarker.
+     La regla de quién está atenuado sigue viviendo en via-lactea-observadores.js,
+     y las capas de canvas (Grupo Local, vecindario solar) dibujan lo mismo. */
+  #mw-content .mw-object-anchor.mw-no-visitado .mw-punto {
+    box-sizing: border-box;
+    /* !important: el punto lleva su color en estilo en línea (createMarker). */
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 1px solid var(--mw-color, #9aa4b2);
+    transform: scale(1.6);
+  }
+  #mw-content .mw-object-anchor.mw-no-visitado .mw-label {
+    filter: grayscale(0.35) opacity(0.8);
+  }
+
+  /* Anillos de distancia desde el Sol (ver dibujarAnillos en via-lactea-app.js):
+     rejilla de fondo, nunca protagonista, y sin capturar el ratón. */
+  /* Vista cenital inclinada: abatida, la foto enseña su borde recto y la
+     galaxia parece una carta de baraja. Difuminar el canto es parte de la
+     técnica, no maquillaje. El bulbo de cara lo pone via-lactea-app.js. */
+  /* La máscara se mide sobre la CAJA, no sobre la foto: la foto es cuadrada y
+     va con object-fit:contain, así que a los lados sobran bandas y un
+     "ellipse 50% 50%" llegaba al borde recto de la foto todavía opaco. Con
+     "circle closest-side" el radio es el lado corto de la caja, que es justo
+     el lado de la foto: el círculo inscrito. Vale en apaisado y en vertical. */
+  #mw-content.mw-inclinado #mw-image {
+    -webkit-mask-image: radial-gradient(circle closest-side at 50% 50%,
+      #000 62%, rgba(0,0,0,0.72) 82%, rgba(0,0,0,0.26) 93%, transparent 100%);
+    mask-image: radial-gradient(circle closest-side at 50% 50%,
+      #000 62%, rgba(0,0,0,0.72) 82%, rgba(0,0,0,0.26) 93%, transparent 100%);
+  }
+
+  /* Plomada del marcador al disco: sin ella un objeto de halo flota en el aire
+     y no se sabe sobre qué punto del mapa está. Muy tenue: son decenas y no
+     deben competir con la galaxia. La pinta pintarTallo en via-lactea-app.js. */
+  .mw-tallo {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+    background: linear-gradient(to bottom,
+      rgba(150, 200, 255, 0.55), rgba(150, 200, 255, 0));
+    pointer-events: none;
+  }
+
+  /* BAJO EL PLANO GALÁCTICO. Al abatir el disco, los objetos con b negativa
+     quedan al otro lado de la foto. Antes se los comía la imagen (y con ella el
+     clic); ahora se pintan siempre por delante y lo que dice "está debajo" es
+     el ASPECTO: un cristal esmerilado (desenfoque de fondo) bajo el punto, como
+     mirarlo a través del disco. El punto conserva su color, así que se sigue
+     leyendo qué es y si está por visitar; lo que cambia es el material que hay
+     entre él y el ojo. Cuelga de una plomada que sube a su sitio en el plano.
+     mw-hundido la lleva siempre que el objeto esté por debajo; mw-bajo-plano
+     solo mientras la foto lo tape: en cuanto el abatimiento lo saca por detrás
+     del borde del disco ya se ve de verdad y el cristal desaparece. Al pasar el
+     cursor también, para poder leerlo. */
+  #mw-content .mw-object-anchor.mw-bajo-plano .mw-punto::before {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+    -webkit-backdrop-filter: blur(3px) saturate(0.6) brightness(0.8);
+    backdrop-filter: blur(3px) saturate(0.6) brightness(0.8);
+    background: rgba(150, 200, 255, 0.10);
+    border: 1px solid rgba(190, 215, 255, 0.28);
+    pointer-events: none;
+  }
+  #mw-content .mw-object-anchor.mw-bajo-plano .mw-punto {
+    /* Sin resplandor: lo que está detrás del cristal no ilumina hacia fuera.
+       !important porque el halo va en estilo en línea (createMarker). */
+    box-shadow: none !important;
+    opacity: 0.85;
+  }
+  #mw-content .mw-object-anchor.mw-bajo-plano .mw-label { opacity: 0.75; }
+  #mw-content .mw-object-anchor.mw-hundido .mw-connector {
+    /* Plomada hasta el plano, no línea-guía de abanico: !important porque el
+       color liso del conector va en estilo en línea (createMarker). */
+    background: linear-gradient(to right,
+      rgba(150, 200, 255, 0.10), rgba(150, 200, 255, 0.5)) !important;
+  }
+  #mw-content .mw-object-anchor.mw-bajo-plano:hover .mw-punto,
+  #mw-content .mw-object-anchor.mw-bajo-plano.mw-realzado .mw-punto { opacity: 1; }
+  #mw-content .mw-object-anchor.mw-bajo-plano:hover .mw-punto::before,
+  #mw-content .mw-object-anchor.mw-bajo-plano.mw-realzado .mw-punto::before {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: transparent;
+    border-color: transparent;
+  }
+  #mw-content .mw-object-anchor.mw-bajo-plano:hover .mw-label,
+  #mw-content .mw-object-anchor.mw-bajo-plano.mw-realzado .mw-label { opacity: 1; }
+
+  #mw-anillos {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: visible;
+    fill: none;
+  }
+  #mw-anillos circle {
+    stroke: rgba(126,200,255,0.3);
+    stroke-width: 1;
+    stroke-dasharray: 2 6;
+  }
+  #mw-anillos text {
+    fill: rgba(126,200,255,0.5);
+    font: 500 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.12em;
+    text-anchor: middle;
+    dominant-baseline: auto;
+  }
+
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
   .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 0.8; }
   .mw-ruta-flujo {
@@ -243,11 +529,21 @@
   <div id="vs-scale"></div>
   <div id="vs-tip"></div>
 
+  <!-- ENVOLTORIO DEL DESPLAZAMIENTO. Con la vista cenital inclinada, la
+       perspectiva vive aquí y el pan (translate) va DELANTE de ella: si el
+       desplazamiento entrase en la perspectiva, arrastraría dividido por la
+       profundidad y dejaría de seguir al ratón. Dentro, #mw-content se queda
+       con la escala y el abatimiento. Ver via-lactea-app.js (applyTransform). -->
+  <div id="mw-plano" style="
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+  ">
   <div id="mw-content" style="
     position: absolute;
     inset: 0;
     transform-origin: center center;
-    transform: translate(0px, 0px) scale(1);
+    transform: scale(1);
   ">
     <img id="mw-image" src="/bitacora-mapa/images/The_best_Milky_Way_map_by_Gaia.webp" alt="Mapa cenital de la Vía Láctea (Gaia)"
       decoding="async" fetchpriority="high"
@@ -361,7 +657,10 @@
         "></div>
         <div style="
           position: absolute;
-          transform: translate(8px, -8px);
+          /* Entera por encima del plano del disco: contragirada al abatir, la
+             etiqueta queda de pie y la foto le comería la mitad de abajo si
+             cruzara z=0. Su caja mide ~20px, así que -24 la deja limpia. */
+          transform: translate(8px, -24px);
           color: #ffe27a;
           font-family: sans-serif;
           font-size: 12px;
@@ -373,7 +672,7 @@
         <div id="mw-sun-coords" style="
           position: absolute;
           display: none;
-          transform: translate(8px, 8px);
+          transform: translate(8px, -54px);   /* sobre el plano, como la etiqueta */
           color: #ffe27a;
           font-family: sans-serif;
           font-size: 12px;
@@ -392,6 +691,7 @@
     <!-- Los marcadores de los objetos Messier se generan automáticamente
          desde la tabla OBJECTS del script (ver más abajo). -->
   </div>
+  </div><!-- /#mw-plano -->
 
   <div id="mw-hint" style="
     position: absolute;
@@ -409,30 +709,24 @@
     white-space: nowrap;
   ">Arrastra para explorar · rueda o pellizca para zoom · pulsa un objeto para ver su ficha</div>
 
-  <div style="
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  ">
-    <button id="mw-zoom-in" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:18px;cursor:pointer;">+</button>
-    <button id="mw-zoom-out" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:18px;cursor:pointer;">−</button>
-    <button id="mw-reset" style="width:34px;height:34px;border:none;border-radius:50%;background:rgba(12,16,28,0.32);font-size:14px;cursor:pointer;">⟲</button>
-  </div>
+  <!-- CONSOLA DE NAVEGACIÓN
+       Todos los mandos viven aquí, plegados contra el borde derecho: el mapa se
+       ve entero y sin nada encima hasta que hacen falta. Se abre al posar el
+       ratón en el tirador (o al pulsarlo, que es lo único que sirve en una
+       pantalla táctil) y al entrar el foco con el tabulador. Las filas y sus
+       rótulos son los cuatro trabajos de la consola, no adornos: qué se anota,
+       hacia dónde se mira, cómo se ve y quién observa.
 
-  <div style="
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-    max-width: calc(100vw - 90px);
-    z-index: 20;
-  ">
+       Los ids de los mandos no cambian: via-lactea-app.js los busca por id y
+       VLCapas.controlesVisibles enciende y apaga las filas. Mover el bloque en
+       el DOM no le afecta. -->
+  <aside id="mw-consola" aria-label="Consola de navegación">
+    <button id="mw-consola-tirador" class="mw-ui-control" type="button"
+      aria-expanded="false" aria-controls="mw-consola-panel"
+      title="Mostrar u ocultar la consola"><span>CONSOLA</span></button>
+
+    <div id="mw-consola-panel">
+    <div class="mw-consola-rotulo">Bitácora</div>
     <!-- Fila 1: registrar observación -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <a id="mw-nuevo" href="https://bitacoraestelar.app/registro-de-observacion/" style="
@@ -442,6 +736,7 @@
       ">✦ Registrar observación</a>
     </div>
 
+    <div class="mw-consola-rotulo">Rumbo</div>
     <!-- Fila 2: buscar objeto (debajo de registrar observación) -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div style="position:relative;display:flex;align-items:center;">
@@ -456,18 +751,23 @@
       </div>
     </div>
 
-    <!-- Fila 3: Giro de la galaxia (solo se ve el control de la vista activa) -->
+    <!-- Fila 3: mandos de orientación (solo se ve el de la vista activa) -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <div id="mw-rotate-control" class="mw-ui-control" style="
-        display:flex;align-items:center;gap:8px;
+      <!-- Abatimiento: mando único del punto de vista. 0° es el disco desde
+           arriba y 90° la vista de canto, que tiene su propia foto y sus
+           marcadores; el mando no cambia entre una y otra, y por eso ya no hay
+           botón de cambio de vista. -->
+      <div id="mw-tilt-control" class="mw-ui-control" style="
+        display:none;align-items:center;gap:8px;
         background:rgba(12,16,28,0.32);border-radius:20px;
         padding:6px 12px;font-family:sans-serif;font-size:12px;color:#eaf1fb;
       ">
-        <span title="Girar la vista de la galaxia" style="pointer-events:none;">🧭</span>
-        <input id="mw-rotate" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
+        <span title="Abatir el disco: de verlo desde arriba a verlo de canto"
+          style="pointer-events:none;">🛸</span>
+        <input id="mw-tilt" class="mw-ui-control" type="range" min="0" max="90" step="0.5" value="0"
           style="width:130px;cursor:pointer;" />
-        <span id="mw-rotate-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
-        <button id="mw-rotate-reset" class="mw-ui-control" title="Volver a la orientación original"
+        <span id="mw-tilt-value" style="min-width:34px;text-align:right;pointer-events:none;">0°</span>
+        <button id="mw-tilt-reset" class="mw-ui-control" title="Volver a mirar desde arriba"
           style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:0 2px;color:#eaf1fb;">⟲</button>
       </div>
       <!-- Giro azimutal (solo vista de canto) -->
@@ -498,16 +798,7 @@
       </div>
     </div>
     
-	<!-- Fila 4: vista de canto. La fila entera lleva id porque se esconde cuando
-	     manda otra escala (el atlas o el vecindario): el botón es de la vista de
-	     la Vía Láctea. Ver VLCapas.controlesVisibles. -->
-    <div id="mw-vista-control" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <button id="mw-toggle-view" style="
-        border:none;border-radius:20px;background:rgba(12,16,28,0.32);
-        font-size:13px;padding:8px 16px;cursor:pointer;font-family:sans-serif;
-      ">🔄 Vista de canto</button>
-    </div>
-
+    <div class="mw-consola-rotulo">Tripulación</div>
     <!-- Fila 5: quién observa -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <select id="mw-observador" title="Filtrar por observador" style="
@@ -533,7 +824,8 @@
         <option value="">Seleccione un observador para ver sus viajes</option>
       </select>
     </div>
-  </div>
+    </div><!-- /#mw-consola-panel -->
+  </aside>
   <div id="mw-search-toast" style="
     position:absolute;
     top:16px;left:50%;
@@ -975,7 +1267,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260823_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260828_2200"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
@@ -990,19 +1282,19 @@
 <script src="/bitacora-mapa/js/via-lactea-marcador-estilo.js?v=20260823_1200"></script>
 <!-- OBSERVADORES: regla única de "visitado / no visitado". Lo consultan las tres
      capas del mapa al dibujar, así que va ANTES que todas ellas. -->
-<script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20260810_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20260829_2000"></script>
 <!-- QUÉ ESCALA MANDA y qué controles son suyos: lo consultan la app y el
      cambio de vista. Pura, sin DOM. -->
-<script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260810_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260828_2000"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260823_1200"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20260829_2000"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260731_2200"></script>
 <!-- Selección pura de estrellas del vecindario: ANTES de vecindario-solar.js y
      DESPUÉS de bitacora-gaia-color.js (necesita claseEspectral). -->
 <script src="/bitacora-mapa/js/via-lactea-vecindario-catalogo.js?v=20260810_1600"></script>
-<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260823_1200"></script>
+<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260829_2000"></script>
 <!-- EQUIPO (fuente única con el simulador y Mi flota). El mapa solo usa
      rotuloNave(): el telescopio con el que se hizo cada viaje, en la ficha. -->
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260810_1700"></script>
@@ -1010,6 +1302,6 @@
      via-lactea-app.js. zoom-imagen necesita CONFIG. -->
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
-<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260722_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260823_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260829_0100"></script>
 </li>

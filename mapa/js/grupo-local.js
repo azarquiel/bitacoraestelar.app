@@ -356,12 +356,11 @@ var GrupoLocal = (function () {
       var realzado = realzadoDe(o);
       var r = Math.max(2.4, 4 * p.persp);
 
-      // Galaxia observada solo por otros: se atenúa (gris + menor opacidad),
-      // pero sigue siendo pulsable para descubrir esas observaciones. El punto
-      // en sí va SIEMPRE a color intenso (spec #102 ya no lo atenúa): marca
-      // dónde está el objeto ya observado.
+      // Galaxia observada solo por otros: es un destino POR VISITAR. Sigue
+      // siendo pulsable para descubrir esas observaciones. Solo se apaga el
+      // rótulo, y poco: el símbolo va a color entero (spec #102).
       var aten = atenuadaPorObservador(o);
-      var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // multiplicador de opacidad
+      var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // opacidad del rótulo
 
       // línea guía hasta el plano galáctico
       var foot = project({ x: o.x, y: o.y, z: 0 });
@@ -375,14 +374,28 @@ var GrupoLocal = (function () {
       ctx.setLineDash([]);
 
       var col = o.color || '#7ec8ff';
-      var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
-      halo.addColorStop(0, colorRgba(col, 0.55 * am, aten));
-      halo.addColorStop(1, colorRgba(col, 0, aten));
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
+      if (!aten) {
+        var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
+        halo.addColorStop(0, colorRgba(col, 0.55, false));
+        halo.addColorStop(1, colorRgba(col, 0, false));
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
+      }
 
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#f4faff'; ctx.fill();
+      // Visitado o por visitar: la diferencia es de SÍMBOLO, no de brillo. El
+      // objeto que el observador activo aún no ha observado se dibuja como
+      // anillo hueco de su propio color (sin halo); el visitado, como punto
+      // lleno con halo. Misma ley en las tres vistas del mapa.
+      var anillo = VLObservadores.ANILLO_NO_VISITADO;
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, aten ? r * anillo.escala : r, 0, Math.PI * 2);
+      if (aten) {
+        ctx.strokeStyle = colorRgba(col, 0.95, false);
+        ctx.lineWidth = anillo.grosor;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#f4faff'; ctx.fill();
+      }
 
       var labelRect = null;
       if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {

@@ -38,8 +38,10 @@ var VecindarioSolar = (function () {
     var c = BitacoraGaiaColor.colorPorBpRp(bprp);
     return '#' + [c[0], c[1], c[2]].map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
   }
-  // 'aten' = estrella NO VISITADA por el observador activo: se mezcla con el
-  // gris clarito común a las tres vistas y pierde opacidad (VLObservadores).
+  // 'aten' = estrella POR VISITAR para el observador activo: solo se usa en el
+  // rótulo y en la línea guía, que pierden algo de color y de opacidad según
+  // las constantes comunes a las tres vistas (VLObservadores). El símbolo de la
+  // estrella no se apaga: cambia de forma (anillo hueco), más abajo.
   function rgbaDe(bprp, a, aten) {
     var c = BitacoraGaiaColor.colorPorBpRp(bprp);
     if (aten) {
@@ -303,7 +305,7 @@ var VecindarioSolar = (function () {
       var realzado = o === hovPrev;
       var r = Math.max(2.4, 4 * p.persp);
 
-      // Estrella observada solo por otros: se atenúa (gris + menos opacidad),
+      // Estrella observada solo por otros: es un destino POR VISITAR,
       // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable. La
       // estrella en sí va SIEMPRE a color intenso (spec #102 ya no la atenúa).
       var aten = window.VLObservadores.atenuadoPorObservador(o.id);
@@ -322,14 +324,28 @@ var VecindarioSolar = (function () {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
-      halo.addColorStop(0, rgbaDe(o.bprp, 0.55, aten));
-      halo.addColorStop(1, rgbaDe(o.bprp, 0, aten));
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
+      if (!aten) {
+        var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
+        halo.addColorStop(0, rgbaDe(o.bprp, 0.55, false));
+        halo.addColorStop(1, rgbaDe(o.bprp, 0, false));
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
+      }
 
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#fff9ef'; ctx.fill();
+      // Visitado o por visitar: la diferencia es de SÍMBOLO, no de brillo. El
+      // objeto que el observador activo aún no ha observado se dibuja como
+      // anillo hueco de su propio color (sin halo); el visitado, como punto
+      // lleno con halo. Misma ley en las tres vistas del mapa.
+      var anillo = window.VLObservadores.ANILLO_NO_VISITADO;
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, aten ? r * anillo.escala : r, 0, Math.PI * 2);
+      if (aten) {
+        ctx.strokeStyle = rgbaDe(o.bprp, 0.95, false);
+        ctx.lineWidth = anillo.grosor;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#fff9ef'; ctx.fill();
+      }
 
       var labelRect = null;
       if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
