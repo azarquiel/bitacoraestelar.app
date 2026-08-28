@@ -2436,9 +2436,16 @@
     observadorSelect.innerHTML = opts;
 
     // Si el usuario está logado y tiene observaciones registradas, el mapa
-    // arranca mostrando LAS SUYAS (el plugin inyecta su clave en BITACORA_WP).
-    // Un visitante anónimo (o sin observaciones) arranca con "Todas".
-    var claveInicial = (window.BITACORA_WP && BITACORA_WP.observadorClave) ? BITACORA_WP.observadorClave : '';
+    // arranca mostrando LAS SUYAS. Un visitante anónimo (o sin observaciones)
+    // arranca con "Todas".
+    //
+    // Quién mira llega por dos caminos, y el mapa acepta los dos: BITACORA_WP si
+    // la página la pinta WordPress, y OBSERVADOR_ACTIVO (que emite datos.js) si
+    // el mapa se sirve como fichero estático, donde no hay cabecera que inyectar
+    // y BITACORA_WP no existe. Este es el caso de /mapa.html en producción.
+    var claveInicial = (window.BITACORA_WP && BITACORA_WP.observadorClave)
+      ? BITACORA_WP.observadorClave
+      : (window.OBSERVADOR_ACTIVO || '');
     if (claveInicial && conObs[claveInicial]) {
       observadorSelect.value = claveInicial;
       VLO.setActivo(claveInicial);
