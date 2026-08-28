@@ -95,7 +95,12 @@
       bulboRadio: 0.020,
       bulboAlto: 0,
       alturaObjetos: 1.5,
-      tallos: true
+      tallos: true,
+      // Azimut de partida de la vista cenital, en grados: gira el disco sobre
+      // su eje polar antes de abatirlo. No es un adorno, es lo que hace que al
+      // llegar a 90° el disco esté visto desde donde lo está la foto de canto,
+      // y la voltereta no cambie de sitio los objetos.
+      azimutBase: 90
     },
 
     // -------------------------------------------------------------------------

@@ -32,11 +32,12 @@
   var edgePlaneRotation = 0; // giro en el plano de pantalla de la vista de canto
                              // (opción experimental: CONFIG.giros.giroPlanoCanto)
 
-  // Giro en plano vigente según la vista activa. La cenital no gira: se mira
-  // el disco desde arriba y se abate con el deslizador. La de canto solo gira
-  // en plano si el interruptor CONFIG.giros.giroPlanoCanto está activado.
+  // Giro en plano vigente según la vista activa. La cenital ya no se gira a
+  // mano: lleva un azimut fijo de partida (INCL.azimutBase) para casar con la
+  // foto de canto. La de canto solo gira en plano si el interruptor
+  // CONFIG.giros.giroPlanoCanto está activado.
   function currentPlaneRotation() {
-    if (!isEdgeView) return 0;
+    if (!isEdgeView) return INCL.azimutBase || 0;
     return (CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? edgePlaneRotation : 0;
   }
 
@@ -73,6 +74,9 @@
       alto: img.clientHeight,
       escala: (esc == null) ? scale : esc,
       grados: tiltActual(),
+      // El giro solo entra en la proyección con el disco abatido: en plano lo
+      // resuelve el CSS alrededor del núcleo y la escala basta para el anclaje.
+      giro: tiltActual() ? currentPlaneRotation() : 0,
       perspectiva: INCL.perspectiva || 1400
     };
   }
@@ -2426,7 +2430,7 @@
     // aplicamos la misma rotación al punto antes de calcular el desplazamiento.
     // Con el disco abatido no: ahí el giro ya va dentro de la proyección
     // (vistaProyeccion), y hacerlo dos veces manda el encuadre a otro sitio.
-    var rot = currentPlaneRotation();
+    var rot = tiltActual() ? 0 : currentPlaneRotation();
     if (rot) {
       var nuc = currentNucleo();
       var nx = r.left + r.width  * (nuc.x / 100);
