@@ -2676,6 +2676,23 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
     echo 'var OBJECTS = ' . wp_json_encode( $objetos ) . ";\n";
     echo 'var OBSERVACIONES = ' . wp_json_encode( (object) $observaciones ) . ";\n";
     echo 'var VIAJES = ' . wp_json_encode( (object) $viajes ) . ";\n";
+
+    // OBSERVADOR_ACTIVO: quién está mirando el mapa, para que arranque con SUS
+    // observaciones. El mapa se sirve como fichero estático (/mapa.html), así que
+    // no pasa por wp_head y no tiene la inyección de BITACORA_WP: este endpoint,
+    // que ya carga con la cookie de sesión, es el único sitio donde el mapa puede
+    // enterarse. La respuesta ya sale con nocache_headers() (private, no-store),
+    // así que no hay caché que sirva la clave de uno a otro.
+    //
+    // La cookie se valida a mano porque un <script src> no puede mandar el nonce
+    // del REST y, sin él, WordPress atiende la petición como anónima aunque la
+    // sesión viaje: get_current_user_id() devuelve 0 aquí. Es lectura pura, y la
+    // clave que se emite ya viaja en OBSERVADORES, que es público.
+    $uid = get_current_user_id();
+    if ( ! $uid ) {
+        $uid = (int) wp_validate_auth_cookie( '', 'logged_in' );
+    }
+    echo 'var OBSERVADOR_ACTIVO = ' . wp_json_encode( bitacora_observador_clave_de_usuario( $uid ) ) . ";\n";
     exit;
 }
 
@@ -5291,6 +5308,66 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
  * uso que demuestra que la petición procede de esta página y no de un sitio
  * ajeno que intente aprovechar la sesión del usuario (ataque CSRF).
  * =========================================================================== */
+/**
+ * Clave del observador de un usuario de WordPress, para que el mapa arranque
+ * con SUS observaciones. Se busca primero por usuario_id y, si no, por la clave
+ * derivada de su nombre (misma regla que al crear observadores). Devuelve ''
+ * si el usuario aún no tiene observaciones registradas (o no hay sesión).
+ *
+ * La consultan los dos caminos por los que el mapa puede enterarse de quién
+ * mira: la inyección en la cabecera (páginas de WordPress) y datos.js (el mapa
+ * servido como fichero estático, donde no hay cabecera que inyectar).
+ */
+function bitacora_observador_clave_de_usuario( $uid, $nombre_apellidos = '' ) {
+    global $wpdb;
+    $uid = (int) $uid;
+    if ( ! $uid ) {
+        return '';
+    }
+    $t_obs = bitacora_nombre_tabla_observadores();
+    $t_ob  = bitacora_nombre_tabla();
+
+    // 1) Vía principal: el observador vinculado directamente a este usuario.
+    $clave_obs = $wpdb->get_var(
+        $wpdb->prepare( "SELECT clave FROM $t_obs WHERE usuario_id = %d ORDER BY id ASC LIMIT 1", $uid )
+    );
+
+    // 2) Respaldo por sus propias observaciones: el campo usuario_id SIEMPRE se
+    //    guarda al registrar, así que aunque el observador no tenga usuario_id,
+    //    llegamos a su clave a través de las observaciones de este usuario.
+    if ( ! $clave_obs ) {
+        $clave_obs = $wpdb->get_var( $wpdb->prepare(
+            "SELECT o.clave FROM $t_obs o
+             INNER JOIN $t_ob ob ON ob.observador_id = o.id
+             WHERE ob.usuario_id = %d AND ob.borrada_en IS NULL
+             ORDER BY ob.id DESC LIMIT 1",
+            $uid
+        ) );
+    }
+
+    // 3) Último respaldo: por el nombre del usuario de WordPress (solo acierta si
+    //    la clave del observador coincide con su nombre y apellidos).
+    if ( ! $clave_obs ) {
+        if ( '' === $nombre_apellidos ) {
+            $u = get_userdata( $uid );
+            if ( $u ) {
+                $nombre_apellidos = trim( $u->first_name . ' ' . $u->last_name );
+                if ( '' === $nombre_apellidos ) {
+                    $nombre_apellidos = $u->display_name;
+                }
+            }
+        }
+        $clave = sanitize_title( $nombre_apellidos );
+        if ( '' !== $clave ) {
+            $clave_obs = $wpdb->get_var(
+                $wpdb->prepare( "SELECT clave FROM $t_obs WHERE clave = %s", $clave )
+            );
+        }
+    }
+
+    return $clave_obs ? $clave_obs : '';
+}
+
 function bitacora_inyectar_datos() {
     // Solo tiene sentido para usuarios con sesión: son los únicos que pueden guardar.
     if ( ! is_user_logged_in() ) {
@@ -5303,43 +5380,8 @@ function bitacora_inyectar_datos() {
         $nombre_apellidos = $u->display_name;
     }
 
-    // Clave del observador de este usuario, para que el mapa arranque con SUS
-    // observaciones. Se busca primero por usuario_id y, si no, por la clave
-    // derivada de su nombre (misma regla que al crear observadores). Puede ser
-    // '' si el usuario aún no tiene observaciones registradas.
-    global $wpdb;
-    $t_obs = bitacora_nombre_tabla_observadores();
-    $t_ob  = bitacora_nombre_tabla();
     $uid = get_current_user_id();
-
-    // 1) Vía principal: el observador vinculado directamente a este usuario.
-    $observador_clave = $wpdb->get_var(
-        $wpdb->prepare( "SELECT clave FROM $t_obs WHERE usuario_id = %d ORDER BY id ASC LIMIT 1", $uid )
-    );
-
-    // 2) Respaldo por sus propias observaciones: el campo usuario_id SIEMPRE se
-    //    guarda al registrar, así que aunque el observador no tenga usuario_id,
-    //    llegamos a su clave a través de las observaciones de este usuario.
-    if ( ! $observador_clave ) {
-        $observador_clave = $wpdb->get_var( $wpdb->prepare(
-            "SELECT o.clave FROM $t_obs o
-             INNER JOIN $t_ob ob ON ob.observador_id = o.id
-             WHERE ob.usuario_id = %d AND ob.borrada_en IS NULL
-             ORDER BY ob.id DESC LIMIT 1",
-            $uid
-        ) );
-    }
-
-    // 3) Último respaldo: por el nombre del usuario de WordPress (solo acierta si
-    //    la clave del observador coincide con su nombre y apellidos).
-    if ( ! $observador_clave ) {
-        $clave = sanitize_title( $nombre_apellidos );
-        if ( '' !== $clave ) {
-            $observador_clave = $wpdb->get_var(
-                $wpdb->prepare( "SELECT clave FROM $t_obs WHERE clave = %s", $clave )
-            );
-        }
-    }
+    $observador_clave = bitacora_observador_clave_de_usuario( $uid, $nombre_apellidos );
 
     $datos = array(
         'endpoint'        => esc_url_raw( rest_url( 'bitacora/v1/observaciones' ) ),
