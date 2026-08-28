@@ -174,6 +174,20 @@
     return VLGeometria.xCantoObjeto(g, phiDeg,
       CONFIG.fisica.anchoImagenAl, CONFIG.fisica.distanciaSolNucleoAl);
   }
+  // Altura del marcador en la vista de canto, en % de la imagen. Se calcula
+  // con la misma física y la misma exageración (INCL.alturaObjetos) que usa el
+  // abatimiento, así que al llegar a 90° cada objeto se queda a la altura sobre
+  // el plano en la que estaba un grado antes. Las 'y' tabuladas en OBJECTS iban
+  // por su cuenta (medían ~0,6 veces la altura real) y hacían saltar a todo el
+  // halo hacia el plano; solo se usan si al objeto le faltan las galácticas.
+  function edgeYAt(g) {
+    return 50 - g.d * Math.sin(g.b * Math.PI / 180) /
+      CONFIG.fisica.anchoImagenAl * 100 * (INCL.alturaObjetos || 1);
+  }
+  function edgeYDe(obj) {
+    var g = GAL[obj.id];
+    return g ? edgeYAt(g) : obj.edge.y;
+  }
   function sunEdgeXAt(phiDeg) {
     return VLGeometria.xCantoSol(phiDeg,
       CONFIG.fisica.anchoImagenAl, CONFIG.fisica.distanciaSolNucleoAl);
@@ -312,7 +326,8 @@
   }
 
   function createMarker(obj, view) {
-    var pos = (view === 'edge') ? obj.edge : obj.top;
+    var pos = (view === 'edge')
+      ? { x: obj.edge.x, y: edgeYDe(obj) } : obj.top;
     var anchor = document.createElement('div');
     anchor.id = obj.id + (view === 'edge' ? '-edge' : '') + '-anchor';
     // Posición inicial en % del contenedor; repositionAnchors() la corrige a px.
@@ -501,15 +516,61 @@
   function puntosRuta() {
     var sufijo = isEdgeView ? '-edge' : '';
     var sol = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
+    // La caja de #mw-plano es la de #mw-content SIN transformar, así que restarla
+    // deja cada vértice en el sistema de la ruta ya encarada (ver encararRuta).
+    var caja = plano.getBoundingClientRect();
+    // Se lee la posición REAL en pantalla del punto del marcador, la que ya
+    // incluye su altura sobre el plano y el adelanto de los que están hundidos:
+    // así la línea llega hasta donde se ve el objeto y no hasta su vertical en
+    // el plano, sin una segunda manera de calcular la misma posición.
+    function punto(a) {
+      var el = a.querySelector('.mw-punto') || a;
+      var r = el.getBoundingClientRect();
+      return (r.left + r.width / 2 - caja.left).toFixed(1) + ',' +
+             (r.top + r.height / 2 - caja.top).toFixed(1);
+    }
     var pts = [];
-    if (sol) pts.push(parseFloat(sol.style.left) + ',' + parseFloat(sol.style.top));
+    if (sol) pts.push(punto(sol));
     var tramo = VLViaje.rutaDe(viajeActivo).galaxia;
     for (var i = 0; i < tramo.length; i++) {
       var a = document.getElementById(tramo[i].id + sufijo + '-anchor');
       if (!a || a.style.display === 'none' || !a.style.left) continue;
-      pts.push(parseFloat(a.style.left) + ',' + parseFloat(a.style.top));
+      pts.push(punto(a));
     }
     return pts;
+  }
+
+  // La ruta vive DENTRO de #mw-content, así que el contenedor se la llevaba
+  // consigo: abatida se quedaba pegada al plano mientras los marcadores subían
+  // a su altura, y encima media galaxia le pasaba por delante. Se le deshace la
+  // transformación del contenedor (el mismo contragiro que llevan los
+  // marcadores, más la escala) para dejarla como un cristal plano delante de la
+  // escena, con sus vértices en píxeles de pantalla; y se adelanta hacia la
+  // cámara lo justo para pasar por delante del disco abatido, lo que la agranda
+  // y deshace la misma división de perspectiva.
+  function encararRuta() {
+    var tilt = tiltActual();
+    var rot = currentPlaneRotation();
+    var o = origenTransformacion();
+    var ox = o.x - img.clientWidth / 2, oy = o.y - img.clientHeight / 2;
+    var dz = 0;
+    if (tilt) {
+      var activeImg = document.getElementById(isEdgeView ? 'mw-image-edge' : 'mw-image');
+      if (activeImg && activeImg.naturalWidth) {
+        dz = getImgRect(activeImg).height / 2 * Math.sin(tilt * Math.PI / 180) + 4;
+      }
+    }
+    var kz = 1 - dz / (INCL.perspectiva || 1400);
+    // El contenedor gira alrededor del núcleo y aquí el origen es el centro (el
+    // mismo de la perspectiva, para que el adelanto no desplace nada), así que
+    // el contragiro va envuelto en el salto de un origen al otro.
+    rutaSvg.style.transformOrigin = 'center center';
+    rutaSvg.style.transform =
+      'translate(' + ox.toFixed(1) + 'px,' + oy.toFixed(1) + 'px)' +
+      ' rotate(' + (-rot) + 'deg) rotateX(' + (-tilt) + 'deg)' +
+      ' scale(' + (1 / (scale || 1)).toFixed(6) + ')' +
+      ' translate(' + (-ox).toFixed(1) + 'px,' + (-oy).toFixed(1) + 'px)' +
+      ' translate3d(0px,0px,' + dz.toFixed(1) + 'px) scale(' + kz.toFixed(6) + ')';
   }
 
   function dibujarRuta() {
@@ -521,6 +582,7 @@
     }
     rutaSvg.style.width  = img.clientWidth + 'px';
     rutaSvg.style.height = img.clientHeight + 'px';
+    encararRuta();
     var puntos = pts.join(' ');
     rutaTrazos.forEach(function (pl) { pl.setAttribute('points', puntos); });
     rutaSvg.style.display = '';
@@ -629,6 +691,18 @@
       (rot ? 'rotate(' + (-rot) + 'deg) ' : '') + 'rotateX(' + (-tilt) + 'deg)';
   }
 
+  // Punto sobre el que giran imagen y marcadores: el núcleo galáctico de la
+  // vista activa mientras haya giro en plano, y el centro de la caja si no.
+  function origenTransformacion() {
+    var cx = img.clientWidth / 2, cy = img.clientHeight / 2;
+    if (!currentPlaneRotation()) return { x: cx, y: cy };
+    var activeImg = document.getElementById(isEdgeView ? 'mw-image-edge' : 'mw-image');
+    if (!activeImg || !activeImg.naturalWidth) return { x: cx, y: cy };
+    var r = getImgRect(activeImg);
+    var nuc = currentNucleo();
+    return { x: r.left + r.width * (nuc.x / 100), y: r.top + r.height * (nuc.y / 100) };
+  }
+
   function applyTransform() {
     // El giro en plano rota el contenedor alrededor del núcleo galáctico de la
     // vista activa (cenital siempre disponible; canto solo si el interruptor
@@ -636,18 +710,8 @@
     // punto del núcleo y añadimos rotate() al final para que gire imagen +
     // marcadores juntos manteniendo el pan/zoom.
     var rot = currentPlaneRotation();
-    if (rot) {
-      var activeImg = document.getElementById(isEdgeView ? 'mw-image-edge' : 'mw-image');
-      if (activeImg && activeImg.naturalWidth) {
-        var r = getImgRect(activeImg);
-        var nuc = currentNucleo();
-        var nx = r.left + r.width  * (nuc.x / 100);
-        var ny = r.top  + r.height * (nuc.y / 100);
-        img.style.transformOrigin = nx + 'px ' + ny + 'px';
-      }
-    } else {
-      img.style.transformOrigin = 'center center';
-    }
+    var origen = origenTransformacion();
+    img.style.transformOrigin = origen.x + 'px ' + origen.y + 'px';
 
     // El desplazamiento va en el envoltorio #mw-plano, DELANTE de la
     // perspectiva (ver mapa.html): si entrase en ella, arrastraría dividido por
@@ -839,6 +903,10 @@
         connector.style.transform = 'rotate(' + angDeg + 'deg)';
       }
     }
+
+    // La ruta se lee de la pantalla, así que se redibuja DESPUÉS de mover a los
+    // marcadores: el zoom y el abatimiento no pasan por repositionAnchors.
+    dibujarRuta();
 
     // Tránsito a la vista del Grupo Local (zoom out) y al Vecindario Solar
     // (zoom máximo sobre el Sol). Se recalculan en cada cambio de zoom.
@@ -2468,7 +2536,7 @@
         { x: (edgeRotation !== 0) ? sunEdgeXAt(edgeRotation) : CONFIG.sol.canto.x,
           y: CONFIG.sol.canto.y },
         { x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : inicio.objeto.edge.x,
-          y: inicio.objeto.edge.y });
+          y: edgeYDe(inicio.objeto) });
     } else {
       encuadrarDosPuntos(CONFIG.sol.cenital, inicio.objeto.top);
     }
@@ -2653,7 +2721,7 @@
       var g = GAL[obj.id];
       pos = {
         x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : obj.edge.x,
-        y: obj.edge.y
+        y: edgeYDe(obj)
       };
     } else {
       pos = obj.top;
