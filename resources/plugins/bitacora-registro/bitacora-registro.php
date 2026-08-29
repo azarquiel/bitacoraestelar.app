@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.29.1
+ * Version:     1.30.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.29.1' );
+define( 'BITACORA_VERSION', '1.30.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -5266,17 +5266,21 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
     $solo_mias    = '1' === (string) $peticion->get_param( 'mias' );
     $usuario      = get_current_user_id();
 
-    $where  = $ver_borradas ? 'borrada_en IS NOT NULL' : 'borrada_en IS NULL';
+    // Todas las columnas van con el prefijo "o.": la consulta cruza la tabla de
+    // telescopios, que comparte nombres (usuario_id, nombre, notas, id,
+    // creado_en). Sin prefijo, el motor las da por ambiguas y rechaza la
+    // consulta entera: el listado se quedaba vacío.
+    $where  = $ver_borradas ? 'o.borrada_en IS NOT NULL' : 'o.borrada_en IS NULL';
     $params = array();
 
     if ( $solo_mias ) {
-        $where   .= ' AND usuario_id = %d';
+        $where   .= ' AND o.usuario_id = %d';
         $params[] = $usuario;
     }
 
     $filtro_observador = intval( $peticion->get_param( 'observador' ) );
     if ( $filtro_observador ) {
-        $where   .= ' AND observador_id = %d';
+        $where   .= ' AND o.observador_id = %d';
         $params[] = $filtro_observador;
     }
 
@@ -5284,11 +5288,20 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
     // desde una observación al resto de su noche.
     $filtro_viaje = intval( $peticion->get_param( 'viaje' ) );
     if ( $filtro_viaje ) {
-        $where   .= ' AND viaje_id = %d';
+        $where   .= ' AND o.viaje_id = %d';
         $params[] = $filtro_viaje;
     }
 
-    $sql = "SELECT * FROM $tabla WHERE $where ORDER BY creado_en DESC, id DESC LIMIT 200";
+    // El telescopio se acompaña de su ficha en la flota: el texto guardado en la
+    // observación es "vendor modelo" y se pierde el NOMBRE PROPIO, que es como el
+    // observador reconoce su equipo. Lo compone el navegador
+    // (BitacoraEquipo.rotuloFlota), que es la fuente única de ese rótulo; aquí
+    // solo viajan los datos. LEFT JOIN: observación sin telescopio de flota (las
+    // viejas, escritas a mano) sigue listándose con su texto libre.
+    $t_tel = bitacora_nombre_tabla_telescopios();
+    $sql = "SELECT o.*, t.nombre AS tel_nombre, t.vendor AS tel_vendor, t.modelo AS tel_modelo
+            FROM $tabla o LEFT JOIN $t_tel t ON t.id = o.telescopio_id
+            WHERE $where ORDER BY o.creado_en DESC, o.id DESC LIMIT 200";
     if ( $params ) {
         $sql = $wpdb->prepare( $sql, $params );
     }

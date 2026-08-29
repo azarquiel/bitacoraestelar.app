@@ -125,6 +125,27 @@ eq(E.rotuloNave({ vendor: 'Celestron', modelo: 'C8' }), 'Celestron C8',
    'sin medidas, el rótulo de siempre');
 eq(E.rotuloNave(null), '', 'sin telescopio, sin rótulo');
 
+// El listado de observaciones pinta el telescopio con jerarquía: el nombre
+// propio manda (es como el observador reconoce su equipo) y el modelo va de
+// detalle. Sin nombre propio, el modelo sube y no hay detalle que pintar.
+console.log('rotuloFlota (el telescopio en el listado de observaciones):');
+var r1 = E.rotuloFlota({ nombre: 'Excalibur', vendor: 'Obsession', modelo: 'UC18' });
+eq(r1.principal, 'Excalibur', 'el nombre propio va delante');
+eq(r1.detalle, 'Obsession UC18', 'y el modelo queda de detalle');
+var r2 = E.rotuloFlota({ vendor: 'Celestron', modelo: 'C8' });
+eq(r2.principal, 'Celestron C8', 'sin nombre propio, manda el modelo');
+eq(r2.detalle, '', 'y entonces no hay detalle que repetir');
+var r3 = E.rotuloFlota({ nombre: 'Excalibur' });
+eq(r3.principal, 'Excalibur', 'nombre propio a secas: sigue siendo el rótulo');
+eq(r3.detalle, '', 'sin datos de catálogo, sin detalle');
+eq(E.rotuloFlota(null).principal, '', 'sin telescopio, sin rótulo');
+
+var listado = require('fs').readFileSync(__dirname + '/../registro/resources/js/bitacora-listado.js', 'utf8');
+var listadoHtml = require('fs').readFileSync(__dirname + '/../registro/listado-observaciones-wordpress.html', 'utf8');
+eq(/BitacoraEquipo\.rotuloFlota/.test(listado), true, 'el listado compone el rótulo con BitacoraEquipo');
+eq(/obs\.telescopio \|\| ''/.test(listado), true, 'y cae al texto guardado si no hay tubo de flota');
+eq(/bitacora-equipo\.js/.test(listadoHtml), true, 'la página del listado carga bitacora-equipo.js');
+
 // La ficha del mapa enseña la nave junto a la fecha estelar. El rótulo sale de
 // aquí (fuente única); si la observación no trae telescopio de la flota, cae al
 // texto libre que se escribió a mano. Sin el <script>, rotuloNave no existiría

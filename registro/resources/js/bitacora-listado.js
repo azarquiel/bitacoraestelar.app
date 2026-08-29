@@ -184,6 +184,20 @@
         return h;
       }
 
+      /* El telescopio de una tarjeta. Si la observación se hizo con un tubo de la
+         flota, manda su NOMBRE PROPIO —es como el observador identifica su
+         equipo— y el "vendor modelo" queda detrás, más discreto. Sin nombre
+         propio (o sin tubo de flota: las observaciones antiguas, escritas a
+         mano) se pinta el texto guardado en la observación, como siempre. */
+      function telescopioDe(obs) {
+        var r = (window.BitacoraEquipo && obs.tel_nombre)
+          ? BitacoraEquipo.rotuloFlota({ nombre: obs.tel_nombre, vendor: obs.tel_vendor, modelo: obs.tel_modelo })
+          : { principal: obs.telescopio || '', detalle: '' };
+        if (!r.principal) return '';
+        return ' <span style="color:var(--tinta-tenue)">· ' + esc(r.principal) + '</span>' +
+          (r.detalle ? ' <span style="color:var(--tinta-tenue);opacity:0.65;font-size:0.92em">' + esc(r.detalle) + '</span>' : '');
+      }
+
       function crearTarjeta(obs) {
         var card = document.createElement('div');
         card.className = 'card' + (viendoPapelera ? ' deleted' : '');
@@ -195,9 +209,7 @@
           '<div class="obj">' + esc(obs.objeto) +
             '<span class="num">nº ' + esc(obs.id) + '</span></div>' +
           '<div class="meta">' +
-            '<div class="who">' + esc(obs.observador) +
-              (obs.telescopio ? ' <span style="color:var(--tinta-tenue)">· ' + esc(obs.telescopio) + '</span>' : '') +
-            '</div>' +
+            '<div class="who">' + esc(obs.observador) + telescopioDe(obs) + '</div>' +
             '<div class="when">' + fmtFecha(obs.fecha_observacion) + '</div>' +
           '</div>' +
           '<div class="acts">' + acciones + '</div>';
