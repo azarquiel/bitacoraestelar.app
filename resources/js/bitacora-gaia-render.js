@@ -2065,6 +2065,7 @@
     mascaraMagRef: 22,     // mag G a la que el radio de máscara es el seeing (≈ el fondo del stack; ver ps1RadioMascaraAs)
     mascaraProf: 20,       // mag G hasta la que se piden estrellas para la máscara (tope del proxy)
     rellenoPlanoMaxAs: 40, // ″: hasta este radio la máscara se rellena con el fondo local; por encima se deja al cielo (ver ps1QuitarEstrellas)
+    mordidaCobMin: 0.6,    // fracción de la elipse de una compacta tapada por discos anchos a partir de la cual la mordida manda (ver ps1CoberturaMordida)
     muEscena: 25,          // mag/arcsec²: isofota que delimita la escena difusa protegida (ver ps1EscenaEnParche)
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
     kRuido: 1.5,           // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
@@ -2415,15 +2416,37 @@
     var a = geo && geo.afin, esc = a ? 1 / Math.hypot(a.xn, a.yn) : 0;
     var escena = (geo && geo.escena && geo.escena.length) ? geo.escena : null;
     var mascara = new Uint8Array(datos.length), quitar = [], huecos = [], i, e, x, y, cielo = null;
+    /* Veredicto de mordida, ANTES de marcar: cuánto tapan los discos anchos a
+       cada componente de borde real (ps1CoberturaMordida). Por encima del umbral
+       el componente queda `pisada` y su elipse entera pasa a NaN al final; por
+       debajo queda PROTEGIDO y el disco ancho se recorta en su borde. Una máscara
+       que nace FUERA de la escena no borra píxeles que están DENTRO de ella: es
+       el mismo principio que conserva entera a la fuente de dentro (abajo), y ahí
+       la imagen manda porque el objeto es mucho más brillante que el ala de la
+       estrella a esa distancia (el radio de máscara está anclado al fondo del
+       stack, no al brillo local). Las máscaras ESTRECHAS sí siguen entrando: su
+       relleno por isofotas no borra el objeto, lo cose. */
+    var compactas = null, protegidas = null;
+    if (a && escena) {
+      var cob = ps1CoberturaMordida(estrellas, a, escena);
+      for (i = 0; i < escena.length; i++) {
+        if (!escena[i].compacta) continue;
+        (compactas || (compactas = [])).push(escena[i]);
+        if (cob[i] >= PS1.mordidaCobMin) escena[i].pisada = true;
+        else if (cob[i] > 0) (protegidas || (protegidas = [])).push(escena[i]);
+      }
+    }
     for (i = 0; i < estrellas.length; i++) {
       e = estrellas[i];
       if (a && escena && ps1FuenteEnEscena(escena, a, e.x, e.y)) { huecos.push(e); continue; }   // dentro de la escena: se conserva entera
       quitar.push(e);
       var r = Math.max(1, e.rPx), r2 = r * r;
+      var recorta = protegidas && e.rAs > PS1.rellenoPlanoMaxAs;
       for (y = Math.max(0, Math.floor(e.y - r)); y <= Math.min(alto - 1, Math.ceil(e.y + r)); y++) {
         for (x = Math.max(0, Math.floor(e.x - r)); x <= Math.min(ancho - 1, Math.ceil(e.x + r)); x++) {
           var dx = x - e.x, dy = y - e.y;
           if (dx * dx + dy * dy > r2) continue;
+          if (recorta && ps1PuntoEnCompacta(protegidas, a, x, y)) continue;
           mascara[y * ancho + x] = 1;
         }
       }
@@ -2458,36 +2481,10 @@
         return m[m.length >> 1];
       });
     }
-    /* Componentes de escena con borde REAL (compacta, ver ps1EscenaEnParche):
-       si un disco ANCHO los pisa, la elipse ENTERA del componente pasa a NaN
-       —AUSENCIA— al final (ver el pase tras los rellenos). Dos reglas juntas:
-       la del anclaje (ps1AnclarACatalogo) —un 0 donde no hay medida es una
-       medida falsa que bloquea el relleno: la caja de ps1PesoImagen a caballo
-       del borde mantiene w alto y w·0 + (1−w)·perfil deja un anillo oscuro— y
-       la de ADR 0013 —la fila de catálogo ES el modelo—: con la mayor parte
-       del objeto bajo una máscara de saturación, lo que queda de imagen es un
-       remiendo (creciente contaminado por el ala de la estrella + muescas de
-       cielo), y coserlo pinta un objeto partido; el perfil entero pinta UNO.
-       Solo compactas: el resto del disco ancho sigue al cielo, que es la
-       arquitectura medida de las galaxias (M81/NGC 5055). */
-    var compactas = null;
-    if (a && escena) {
-      for (i = 0; i < escena.length; i++) {
-        if (escena[i].compacta) (compactas || (compactas = [])).push(escena[i]);
-      }
-    }
     var out = Float32Array.from ? Float32Array.from(datos) : new Float32Array(datos);
     for (i = 0; i < quitar.length; i++) {
       e = quitar[i];
       var rE = Math.max(1, e.rPx), fondo = null, ancha = e.rAs > PS1.rellenoPlanoMaxAs;
-      if (ancha && compactas) {
-        // Mismo criterio que ps1MascaraMuerdeEscena: radios elípticos sumados.
-        for (var ci = 0; ci < compactas.length; ci++) {
-          var cq = compactas[ci], dxq = e.x - cq.cx, dyq = e.y - cq.cy;
-          var esteQ = a.ex * dxq + a.ey * dyq, norteQ = a.nx * dxq + a.ny * dyq;
-          if (ps1RadioEje(cq.cos, cq.sin, norteQ, esteQ, cq.ba) <= cq.r25As + e.rAs) cq.pisada = true;
-        }
-      }
       if (ancha) {                                         // disco ancho: ausencia, que la rellene el perfil
         if (cielo == null) cielo = ps1Cielo(datos, ancho, alto);
         fondo = cielo;
@@ -2519,7 +2516,18 @@
        todos los rellenos (incluido el de huecos de fuentes conservadas: aquí
        también su fuente queda dentro del modelo). El pintado la cubre con
        (1−w)·perfil, vecino a vecino con wv=0: el objeto completo, de una
-       pieza. Ver el comentario de `compactas` arriba.
+       pieza. Dos reglas juntas: la del anclaje (ps1AnclarACatalogo) —un 0 donde
+       no hay medida es una medida falsa que bloquea el relleno: la caja de
+       ps1PesoImagen a caballo del borde mantiene w alto y w·0 + (1−w)·perfil
+       deja un anillo oscuro— y la de ADR 0013 —la fila de catálogo ES el
+       modelo—: con la mayor parte del objeto bajo una máscara de saturación, lo
+       que queda de imagen es un remiendo (creciente contaminado por el ala de la
+       estrella + muescas de cielo), y coserlo pinta un objeto partido; el perfil
+       entero pinta UNO. Eso vale cuando la máscara tapa DE VERDAD el objeto: por
+       debajo de mordidaCobMin el remiendo no existe porque la máscara ni siquiera
+       entra (se recorta en el borde, ver el marcado arriba). Solo compactas: el
+       resto del disco ancho sigue al cielo, que es la arquitectura medida de las
+       galaxias (M81/NGC 5055).
        Y si TODA la escena del parche son compactas pisadas, la imagen ENTERA
        pasa a ausencia. No es cosmética: el anclaje reparte la luz del catálogo
        entre lo que queda encendido, y con el objeto en NaN ese presupuesto se
@@ -3686,32 +3694,87 @@
     return out;
   }
 
-  /* ¿Alguna máscara ANCHA (rAs > rellenoPlanoMaxAs) de una fuente que NO se
-     conserva muerde la escena difusa? El disco ancho se deja al nivel del cielo
-     (ver ps1QuitarEstrellas) confiando en que (1−w)·perfil rellene lo borrado;
-     si el disco muerde la escena, ese relleno deja de ser opcional: sin él, el
-     objeto que se está reproduciendo sale NEGRO (Abell 12 bajo la máscara de
-     μ Orionis: 60″ de disco a 47″ del centro de una cáscara de 19″). El
-     veredicto viaja en las medidas del halo y lo consume ps1HaloActivo.
-     La comparación suma radios elípticos, así que con b/a < 1 sobreestima el
-     contacto: activar el perfil de más es inocuo; no pintarlo, no. */
-  function ps1MascaraMuerdeEscena(enPx, a, escena) {
-    if (!a || !escena || !escena.length) return false;
-    for (var i = 0; i < enPx.length; i++) {
+  /* ¿Está el punto (px, py) dentro de la elipse de alguno de estos componentes?
+     Misma cuenta que ps1FuenteEnEscena, sobre una lista ya filtrada. */
+  function ps1PuntoEnCompacta(lista, a, px, py) {
+    for (var i = 0; i < lista.length; i++) {
+      var c = lista[i], dx = px - c.cx, dy = py - c.cy;
+      var este = a.ex * dx + a.ey * dy, norte = a.nx * dx + a.ny * dy;
+      if (ps1RadioEje(c.cos, c.sin, norte, este, c.ba) <= c.r25As) return true;
+    }
+    return false;
+  }
+
+  var MORDIDA_MUESTRAS = 64;   // lado de la rejilla con que se mide la elipse
+
+  /* CUÁNTO muerde cada componente COMPACTO de la escena (borde real: PN, SNR):
+     array paralelo a `escena` con la fracción de su elipse tapada por los discos
+     ANCHOS (rAs > rellenoPlanoMaxAs) de las fuentes que NO se conservan. 0 para
+     los no compactos —el borde de una galaxia es una isofota, y sus reglas de
+     fusión imagen/modelo están medidas y cerradas (M81/M104): la mordida no las
+     reabre—.
+
+     Antes esto era un test binario de CONTACTO (radios elípticos sumados), y por
+     eso disparaba de más: el radio de máscara está anclado al fondo del stack
+     (mascaraMagRef = 22), no al brillo del objeto, así que sobre una nebulosa
+     brillante el ala deja de mandar mucho antes del borde del disco. Medido
+     sobre el catálogo, el contacto marcaba OCHO planetarias y la cobertura las
+     separa: NGC 7026 y IC 5117 al 100 %, Abell 12 al 79,8 % —el caso que motivó
+     la regla, con μ Orionis saturando de verdad la cáscara— contra NGC 7008 al
+     43,6 %, NGC 7048 al 33,9 % y NGC 6578, Abell 33 y Abell 72 por debajo del
+     9 %, que la perdían por un roce. Ver docs/notas/ngc7008-render-planetarias.md.
+
+     Se muestrea en rejilla en vez de resolver la lente circular-elipse porque el
+     veredicto se compara contra un umbral lejos de los extremos y hay varios
+     discos que pueden solaparse entre sí: 64×64 da el 1 % de resolución, de
+     sobra, y cuesta una vez por parche. */
+  function ps1CoberturaMordida(enPx, a, escena) {
+    var cob = [], i, j;
+    for (i = 0; i < (escena || []).length; i++) cob.push(0);
+    if (!a || !escena || !escena.length || !enPx || !enPx.length) return cob;
+    var anchas = [];
+    for (i = 0; i < enPx.length; i++) {
       var e = enPx[i];
       if (!(e.rAs > PS1.rellenoPlanoMaxAs)) continue;
       if (ps1FuenteEnEscena(escena, a, e.x, e.y)) continue;   // conservada: no borra nada
-      for (var j = 0; j < escena.length; j++) {
-        var c = escena[j];
-        // Solo componentes COMPACTOS (borde real: PN, SNR). El borde de una
-        // galaxia es una isofota, y sus reglas de fusión imagen/modelo están
-        // medidas y cerradas (M81/M104): la mordida no las reabre.
-        if (!c.compacta) continue;
-        var dx = e.x - c.cx, dy = e.y - c.cy;
-        var este = a.ex * dx + a.ey * dy, norte = a.nx * dx + a.ny * dy;
-        if (ps1RadioEje(c.cos, c.sin, norte, este, c.ba) <= c.r25As + e.rAs) return true;
-      }
+      anchas.push(e);
     }
+    if (!anchas.length) return cob;
+    var esc = 1 / Math.hypot(a.xn, a.yn);
+    for (j = 0; j < escena.length; j++) {
+      var c = escena[j];
+      if (!c.compacta) continue;
+      var rPx = c.r25As / esc, paso = 2 * rPx / MORDIDA_MUESTRAS, dentro = 0, tapados = 0;
+      for (var sy = 0; sy < MORDIDA_MUESTRAS; sy++) {
+        for (var sx = 0; sx < MORDIDA_MUESTRAS; sx++) {
+          var px = c.cx - rPx + (sx + 0.5) * paso, py = c.cy - rPx + (sy + 0.5) * paso;
+          if (!ps1PuntoEnCompacta([c], a, px, py)) continue;
+          dentro++;
+          for (i = 0; i < anchas.length; i++) {
+            var ea = anchas[i], ex = px - ea.x, ey = py - ea.y, rM = Math.max(1, ea.rPx);
+            if (ex * ex + ey * ey <= rM * rM) { tapados++; break; }
+          }
+        }
+      }
+      if (dentro) cob[j] = tapados / dentro;
+    }
+    return cob;
+  }
+
+  /* ¿Alguna máscara ANCHA muerde la escena difusa lo bastante como para que el
+     perfil tenga que tomar el relevo? El disco ancho se deja al nivel del cielo
+     (ver ps1QuitarEstrellas) confiando en que (1−w)·perfil rellene lo borrado;
+     con la mayor parte del objeto tapada, ese relleno deja de ser opcional: sin
+     él sale NEGRO (Abell 12 bajo la máscara de μ Orionis: 60″ de disco a 47″ del
+     centro de una cáscara de 19″). El veredicto viaja en las medidas del halo y
+     lo consume ps1HaloActivo.
+     Por debajo del umbral la respuesta ya no es el perfil sino conservar la
+     imagen: la máscara se recorta en el borde del objeto (ver ps1QuitarEstrellas),
+     así que aquí tampoco hay ausencia que rellenar. */
+  function ps1MascaraMuerdeEscena(enPx, a, escena) {
+    if (!a || !escena || !escena.length) return false;
+    var cob = ps1CoberturaMordida(enPx, a, escena);
+    for (var i = 0; i < cob.length; i++) if (cob[i] >= PS1.mordidaCobMin) return true;
     return false;
   }
 
@@ -4415,6 +4478,7 @@
     ps1SigmaCielo: ps1SigmaCielo,
     ps1RadioMascaraAs: ps1RadioMascaraAs,
     ps1MascaraMuerdeEscena: ps1MascaraMuerdeEscena,
+    ps1CoberturaMordida: ps1CoberturaMordida,
     ps1QuitarEstrellas: ps1QuitarEstrellas,
     ps1FraccionLuz: ps1FraccionLuz,
     ps1ComponentesSersic: ps1ComponentesSersic,

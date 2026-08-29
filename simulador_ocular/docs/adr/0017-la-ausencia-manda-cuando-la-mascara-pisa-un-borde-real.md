@@ -1,5 +1,9 @@
 # La ausencia manda cuando la máscara pisa un borde real
 
+> Enmendado por el ADR 0021: lo de aquí sigue en pie, pero «pisar» pasó de ser
+> un contacto de radios a ser una fracción de la elipse cubierta. Por debajo del
+> umbral la máscara ancha se recorta en el borde y la imagen se conserva.
+
 Al abrir el catálogo de planetarias a los objetos Abell (PR #138), el primer
 caso real —PN A66 12, una cáscara de 37″ a 47″ de μ Orionis (G 4,7)— salió
 **negro**: la máscara de la estrella, topada en `mascaraMaxAs` (60″ = 683 px de
