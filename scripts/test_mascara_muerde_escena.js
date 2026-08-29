@@ -108,5 +108,54 @@ var qg = quitar(GALAXIA);
 ok(isFinite(qg.out[50 * qg.W + 50]),
   'sobre una isofota de GALAXIA el disco ancho sigue al cielo: sin NaN nuevos');
 
+/* La mordida se mide, no se toca: ps1CoberturaMordida contra el área de la lente
+   circular exacta. El veredicto es un umbral lejos de los extremos, así que basta
+   con que la rejilla acierte al 1 %. */
+function lenteCircular(d, R, r) {
+  if (d + r <= R) return 1;
+  if (d >= R + r) return 0;
+  var ca = Math.max(-1, Math.min(1, (d * d + r * r - R * R) / (2 * d * r)));
+  var cb = Math.max(-1, Math.min(1, (d * d + R * R - r * r) / (2 * d * R)));
+  var al = Math.acos(ca), be = Math.acos(cb);
+  var area = r * r * (al - Math.sin(al) * Math.cos(al)) + R * R * (be - Math.sin(be) * Math.cos(be));
+  return area / (Math.PI * r * r);
+}
+[47, 55, 62, 70, 79].forEach(function (d) {
+  var medida = R.ps1CoberturaMordida([{ x: 50 + d, y: 50, rAs: 60, rPx: 60 }], A, ESC)[0];
+  ok(Math.abs(medida - lenteCircular(d, 60, 19)) < 0.01,
+    'cobertura medida a ' + d + '″ (' + medida.toFixed(3) + ') = lente exacta (' + lenteCircular(d, 60, 19).toFixed(3) + ')');
+});
+ok(R.ps1CoberturaMordida([{ x: 97, y: 50, rAs: estrecha, rPx: estrecha }], A, ESC)[0] === 0,
+  'una máscara estrecha no cubre nada: su relleno por isofotas no borra el objeto');
+ok(R.ps1CoberturaMordida([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, GALAXIA)[0] === 0,
+  'una isofota de GALAXIA no se mide: sus reglas de fusión están cerradas');
+
+/* Roce, no mordida (caso NGC 7008: 43,6 % de la elipse bajo el disco). El radio
+   de máscara está anclado al fondo del stack, no al brillo del objeto, así que
+   ahí la imagen sigue mandando: el disco ancho se recorta en el borde real y NO
+   se pierde el parche. Nada de NaN, y ni un píxel del objeto tocado. */
+var ROCE = [{ x: 112, y: 50, rPx: 60, rAs: ancha }];       // 62″ del centro → 0,40
+ok(R.ps1CoberturaMordida(ROCE, A, ESC)[0] < PS1.mordidaCobMin,
+  'a 62″ el disco tapa el 40 % de la elipse: por debajo del umbral');
+ok(R.ps1MascaraMuerdeEscena(ROCE, A, ESC) === false,
+  'un roce no fuerza el perfil: no hay ausencia que rellenar');
+var W2 = 120, datos2 = new Float32Array(W2 * W2).fill(100);
+var qr = R.ps1QuitarEstrellas(datos2, W2, W2, ROCE, { afin: A, ba: 1, pa: 0, escena: ESC });
+ok(qr[50 * W2 + 50] === 100 && qr[50 * W2 + 66] === 100,
+  'el objeto conserva sus píxeles reales, también los que caían bajo el disco');
+var hayNaN = false;
+for (var iN = 0; iN < qr.length; iN++) if (qr[iN] !== qr[iN]) { hayNaN = true; break; }
+ok(!hayNaN, 'roce: ni un NaN en el parche — la imagen entera se conserva');
+ok(qr[50 * W2 + 112] === 100,
+  'fuera del objeto el disco ancho sigue yendo al cielo (aquí el cielo es 100)');
+/* Y el recorte es solo para discos ANCHOS: uno estrecho sobre el objeto se sigue
+   quitando y rellenando por isofotas, que es como se cosen las estrellas de campo. */
+var ESTRECHA = [{ x: 75, y: 50, rPx: 30, rAs: estrecha }];   // fuera de la elipse (25″), su disco sí entra en ella
+var datos3 = new Float32Array(W2 * W2).fill(100);
+datos3[50 * W2 + 66] = 9999;
+var qe = R.ps1QuitarEstrellas(datos3, W2, W2, ESTRECHA, { afin: A, ba: 1, pa: 0, escena: ESC });
+ok(qe[50 * W2 + 66] === 100,
+  'una máscara estrecha dentro del objeto se sigue quitando: el recorte es solo para discos anchos');
+
 if (fallos) { console.error(fallos + ' fallo(s).'); process.exit(1); }
 console.log('todo en orden.');

@@ -1,6 +1,7 @@
 # NGC 7008 en el simulador: por qué sale una mancha
 
-Fecha: 2026-08-29. Estado: **investigación, sin código tocado**.
+Fecha: 2026-08-29. Estado: **cerrada — implementada**, ver el apartado 6 y el
+ADR 0021.
 
 Pregunta de partida del usuario: «la nebulosa NGC 7008 no se está generando como
 es, sino que se está simulando una mancha que no se parece a la realidad».
@@ -349,6 +350,35 @@ La alternativa (1) queda pendiente de fuente. Si aparece un catálogo primario c
 nunca a mano.
 
 ---
+
+## 6. Lo que se implementó
+
+Se hizo (3), con A y B a la vez: la cobertura de A decide, y donde no llega el
+umbral actúa B en vez del NaN. Ver el ADR 0021.
+
+- `ps1CoberturaMordida` mide la fracción de la elipse de cada componente compacto
+  tapada por los discos anchos; `PS1.mordidaCobMin = 0,6`.
+- Por encima del umbral, el ADR 0017 sigue igual (elipse a NaN, halo obligatorio).
+- Por debajo, la máscara ancha se recorta en el borde real: la imagen se conserva.
+
+Medido sobre los ocho parches reales de PS1 con las estrellas reales de Gaia DR3,
+NaN dentro del borde real, antes → después:
+
+    NGC 7026   cob 100,0 %   100 % → 100 %   (sin cambio, mordida de verdad)
+    IC 5117    cob 100,0 %   100 % → 100 %   (sin cambio)
+    Abell 12   cob  79,8 %   100 % → 100 %   (sin cambio: el caso que motivó la regla)
+    NGC 7008   cob  43,6 %   100 % →   0 %
+    NGC 7048   cob  34,0 %   100 % →   0 %
+    Abell 33   cob   8,9 %   100 % →   0,1 % (ese 0,1 % es sobresustracción del stack, no máscara)
+    Abell 72   cob   3,9 %   100 % →   0 %
+    NGC 6578   cob   2,0 %   100 % →   0 %
+
+`test_golden_difusas.js` sigue bit a bit en M51, M101, M104 y M81: las galaxias
+no se enteran, como pedía el ADR 0017 punto 4.
+
+Lo que **no** se tocó, y sigue abierto: el `b/a = 1` / `PA = 0` de la fila (falta
+la fuente) y el perfil exponencial para una cáscara (cambio de esquema por el
+ADR 0013). Ambos solo mandan donde no hay imagen.
 
 ## Reproducir las medidas
 
