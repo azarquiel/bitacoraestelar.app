@@ -382,7 +382,19 @@
         return { aumentos: aumentos, campoReal: campoReal, pupila: pupila, afov: oc.afov };
       }
 
-      function ventanaBase() { return Math.min(560, window.innerWidth - 80, window.innerHeight - 240); }
+      /* Lado del círculo. Manda el hueco REAL de la columna de observación, no
+         un tope fijo: si la página es ancha, el ocular se ve grande sin tener
+         que ir a pantalla completa. Se mide la COLUMNA (.observacion) y no la
+         .vista-zona, porque esta última se ciñe al contenido (align-items:
+         center) y medirla realimentaría el tamaño del propio círculo. Los dos
+         guardas de ventana siguen mandando: el círculo no desborda ni a lo
+         ancho ni a lo alto. */
+      function ventanaBase() {
+        var zona = $('sim-zona');
+        var col = zona && zona.parentElement;
+        var hueco = col ? col.clientWidth : 0;
+        return Math.min(hueco || 560, window.innerWidth - 80, window.innerHeight - 240);
+      }
 
       /* Magnitud estelar límite del conjunto telescopio + ocular (TLM), según el
          "Método del umbral" de J. R. Torres Lapasió ("On the Prediction of
