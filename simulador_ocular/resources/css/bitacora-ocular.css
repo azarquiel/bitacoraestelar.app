@@ -8,7 +8,7 @@
  * =========================================================================== */
 
 /* El simulador aprovecha todo el ancho: anula el wrap estrecho del formulario. */
-#mw-obs-form.sim .wrap {max-width:1180px;}
+#mw-obs-form.sim .wrap {max-width:1400px;}
 
 /* ── Disposición general: panel de control + zona de observación ── */
 #mw-obs-form .marco {
