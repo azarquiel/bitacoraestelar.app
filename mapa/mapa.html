@@ -1279,6 +1279,19 @@
       ">✕</button>
     </div>
 
+    <!-- Banda de audio (ADR 0005): a todo lo ancho, bajo la cabecera y antes
+         de boceto+texto; visible sea cual sea la pestaña de ocular activa.
+         Oculta por defecto, JS la rellena y muestra solo si hay tramo. -->
+    <div id="ficha-audio" style="
+        display: none;
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(126, 200, 255, 0.3);
+        font-family: sans-serif;
+        font-size: 12px;
+        color: #cfd8e3;
+        flex: none;
+      "></div>
+
     <div style="display: flex; flex-wrap: wrap; min-height: 0; background: transparent;">
       <!-- COLUMNA IZQUIERDA: boceto + título + botonera -->
       <div style="

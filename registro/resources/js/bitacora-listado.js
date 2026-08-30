@@ -207,6 +207,7 @@
 
         card.innerHTML =
           '<div class="obj">' + esc(obs.objeto) +
+            (obs.audio_url ? ' <span title="Tiene tramo de audio">🎧</span>' : '') +
             '<span class="num">nº ' + esc(obs.id) + '</span></div>' +
           '<div class="meta">' +
             '<div class="who">' + esc(obs.observador) + telescopioDe(obs) + '</div>' +

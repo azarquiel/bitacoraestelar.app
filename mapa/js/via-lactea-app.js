@@ -1664,6 +1664,7 @@
   var fichaAnexos = document.getElementById('ficha-anexos');
   var fichaAnexosRight = document.getElementById('ficha-anexos-right');
   var fichaBackBtn = document.getElementById('ficha-back');
+ var fichaAudio = document.getElementById('ficha-audio');
   var fichaCurrent = -1;
   // A dónde lleva "← Descubrir" desde la ficha que se está viendo: la pantalla
   // de descubrimiento de este objeto, con la observación actual excluida. null
@@ -1993,6 +1994,25 @@
     fichaAnexosRight.style.display = rightAnexos.length ? 'flex' : 'none';
   }
 
+  // Banda de audio (ADR 0005): <audio> nativo con media fragment #t=inicio,fin,
+  // crédito del observador y el enlace al episodio. Sin audio_url no hay tramo.
+  function renderFichaAudio(f) {
+    if (!fichaAudio) return;
+    var a = f.audio;
+    if (!a || !a.url) { fichaAudio.style.display = 'none'; fichaAudio.innerHTML = ''; return; }
+    var frag = '#t=' + (a.inicio || 0) + (a.fin ? ',' + a.fin : '');
+    var credito = VLO.nombreObservador(f.observador);
+    var html = '<audio controls preload="none" style="height:32px;vertical-align:middle;" src="' +
+      escHtml(a.url + frag) + '"></audio>';
+    html += '<span style="margin-left:10px;">🎧 Tramo de un reportaje sonoro' +
+      (credito ? ' de ' + escHtml(credito) : '') + '</span>';
+    if (a.episodio) {
+      html += ' · <a href="' + escHtml(a.episodio) + '" target="_blank" rel="noopener noreferrer" style="color:#7ec8ff;">Episodio</a>';
+    }
+    fichaAudio.innerHTML = html;
+    fichaAudio.style.display = 'block';
+  }
+
   function buildFichaButtons(f) {
     fichaButtons.innerHTML = '';
     f.entries.forEach(function (entry, idx) {
@@ -2034,6 +2054,7 @@
     fichaBackBtn.style.display = fichaDescubrir ? '' : 'none';
 
     buildFichaButtons(f);
+    renderFichaAudio(f);
     fichaOverlay.style.display = 'flex';
     isDragging = false;
     isPinching = false;

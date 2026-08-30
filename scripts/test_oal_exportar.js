@@ -221,5 +221,21 @@ ok(xmlSin.indexOf('<begin>2026-08-05T22:30:00+02:00</begin>') > -1, 'la sesión,
 ok(xmlSin.indexOf('+00:00') === -1, 'y nada se va a UTC por el camino');
 eq(OAL.xmlDe(OAL.leer(xmlSin)), xmlSin, 'y leerlo y volver a escribirlo no mueve la hora');
 
+/* ── El tramo de audio no viaja en el XML (ADR 0005) ──────────────────────── */
+
+console.log('el tramo de audio de una observación no sale en el XML (ADR 0005):');
+// El dialecto no lo conoce (ADR 0003): aunque el estado traiga los cuatro
+// campos colgando de la observación, xmlDe() no los mira, así que no pueden
+// aparecer en ningún <observation> ni en ningún bit:.
+var conAudio = estado();
+conAudio.observaciones[0].audio_url = 'https://suena.test/audio.mp3';
+conAudio.observaciones[0].audio_inicio = 125;
+conAudio.observaciones[0].audio_fin = 260;
+conAudio.observaciones[0].audio_episodio_url = 'https://suena.test/episodio-87';
+var xmlAudio = OAL.xmlDe(conAudio);
+eq(xmlAudio, xml, 'el XML con tramo de audio en el estado es idéntico al de sin él');
+ok(xmlAudio.indexOf('audio') === -1, 'ni el nombre del campo se cuela en ningún sitio');
+ok(xmlAudio.indexOf('suena.test') === -1, 'ni ninguna de sus URLs');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nok · la salida se exporta, se lee de vuelta igual y se cuenta en el correo');
