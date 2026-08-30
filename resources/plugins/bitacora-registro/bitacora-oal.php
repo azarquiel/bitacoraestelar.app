@@ -1517,7 +1517,7 @@ function bitacora_oal_estado_viaje( $viaje, $usuario_id ) {
     // Las observaciones borradas no se exportan.
     $obs = $wpdb->get_results( $wpdb->prepare(
         "SELECT * FROM $t_obs WHERE viaje_id = %d AND borrada_en IS NULL
-         ORDER BY ( hora_observacion = '' ) ASC, hora_observacion ASC, id ASC",
+         ORDER BY ( hora_observacion = '' ) ASC, fecha_observacion ASC, hora_observacion ASC, id ASC",
         $viaje->id
     ) );
 

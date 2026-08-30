@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.30.0
+ * Version:     1.30.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.30.0' );
+define( 'BITACORA_VERSION', '1.30.1' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -1010,7 +1010,7 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
                    b.lat AS base_lat, b.lon AS base_lon, b.tz AS base_tz, b.altitud_m AS base_altitud_m,
                    ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_objetos,
                    ( SELECT GROUP_CONCAT( COALESCE( NULLIF( o.objeto_etiqueta, '' ), o.objeto )
-                                          ORDER BY ( o.hora_observacion = '' ) ASC, o.hora_observacion ASC, o.id ASC
+                                          ORDER BY ( o.hora_observacion = '' ) ASC, o.fecha_observacion ASC, o.hora_observacion ASC, o.id ASC
                                           SEPARATOR '|' )
                      FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS objetos_ruta
             FROM $t_via v
@@ -1140,7 +1140,7 @@ function bitacora_viaje_leer( WP_REST_Request $peticion ) {
     $viaje->objetos = $wpdb->get_results( $wpdb->prepare(
         "SELECT id, objeto, objeto_etiqueta, tipo, num, fecha_observacion, hora_observacion, telescopio
          FROM $t_obs WHERE viaje_id = %d AND borrada_en IS NULL
-         ORDER BY ( hora_observacion = '' ) ASC, hora_observacion ASC, id ASC", $viaje->id
+         ORDER BY ( hora_observacion = '' ) ASC, fecha_observacion ASC, hora_observacion ASC, id ASC", $viaje->id
     ) );
 
     // Los instrumentos NO definen el viaje, pero se recuerdan: con qué lo vi.
@@ -2521,16 +2521,22 @@ function bitacora_boton_de_entrada( $e ) {
 }
 
 /**
- * El orden del recorrido de una salida: por hora de observación, y las que no
- * la registraron al final por id. Es el mismo criterio del ORDER BY de
- * bitacora_viaje_leer, aquí en PHP porque la ruta se arma sobre filas ya
- * traídas y una segunda consulta solo para ordenarlas sobraría.
+ * El orden del recorrido de una salida: por fecha y hora de observación, y las
+ * que no la registraron al final por id. La fecha entra antes que la hora
+ * porque una salida cruza medianoche (empieza el día 5 y sigue de madrugada el
+ * día 6): comparar solo la hora pondría la 00:30 del día 6 antes que la 23:00
+ * del día 5. Es el mismo criterio del ORDER BY de bitacora_viaje_leer, aquí en
+ * PHP porque la ruta se arma sobre filas ya traídas y una segunda consulta
+ * solo para ordenarlas sobraría.
  */
 function bitacora_orden_de_la_ruta( $a, $b ) {
     $sin_a = ( '' === $a['hora'] ) ? 1 : 0;
     $sin_b = ( '' === $b['hora'] ) ? 1 : 0;
     if ( $sin_a !== $sin_b ) {
         return $sin_a - $sin_b;
+    }
+    if ( ! $sin_a && $a['fecha'] !== $b['fecha'] ) {
+        return strcmp( $a['fecha'], $b['fecha'] );
     }
     if ( ! $sin_a && $a['hora'] !== $b['hora'] ) {
         return strcmp( $a['hora'], $b['hora'] );
@@ -2676,9 +2682,10 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
         if ( $viaje_id ) {
             $registro['viaje'] = $viaje_id;
             $viaje_objetos[ $viaje_id ][] = array(
-                'slug' => $slug,
-                'hora' => isset( $ob->hora_observacion ) ? (string) $ob->hora_observacion : '',
-                'id'   => (int) $ob->id,
+                'slug'  => $slug,
+                'fecha' => isset( $ob->fecha_observacion ) ? (string) $ob->fecha_observacion : '',
+                'hora'  => isset( $ob->hora_observacion ) ? (string) $ob->hora_observacion : '',
+                'id'    => (int) $ob->id,
             );
         }
         if ( ! isset( $observaciones[ $slug ] ) ) {
