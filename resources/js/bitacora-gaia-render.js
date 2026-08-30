@@ -2461,6 +2461,7 @@
     transmisionOptica: transmisionOptica,
     opticaTieneArana: opticaTieneArana,
     urlPlaca: urlPlaca,
+    cargarPlaca: cargarPlaca,
     renderPlaca: renderPlaca,
     sbUmbralContraste: sbUmbralContraste,
     dssMaxArcmin: DSS_MAX_ARCMIN,
