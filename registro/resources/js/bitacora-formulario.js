@@ -504,6 +504,40 @@
   // dejaba WP en `undefined` justo en esas líneas y el aviso nacía null.
   var WP = window.BITACORA_WP || null;
 
+  // ── Episodios del feed RSS del observador (issue #178) ──
+  // Se piden solo al abrir el fieldset, una vez por carga de página (nunca por
+  // cron). Elegir uno autorrellena las dos URLs manuales del tramo de audio.
+  var audioDetails = $('audioDetails'), episodiosPedidos = false;
+  if (audioDetails) {
+    audioDetails.addEventListener('toggle', function(){
+      if (!audioDetails.open || episodiosPedidos || !WP || !WP.observadorClave) return;
+      episodiosPedidos = true;
+      fetch(WP.observadores + '/' + encodeURIComponent(WP.observadorClave) + '/episodios', {
+        credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce }
+      })
+        .then(function(r){ return r.ok ? r.json() : { episodios: [] }; })
+        .then(function(d){
+          var episodios = (d && d.episodios) || [];
+          if (!episodios.length) { if ($('audioFeedAviso')) $('audioFeedAviso').hidden = false; return; }
+          var sel = $('audioFeedSelect');
+          episodios.forEach(function(ep, i){
+            var opt = document.createElement('option');
+            opt.value = i; opt.textContent = ep.titulo || ep.episodioUrl;
+            sel.appendChild(opt);
+          });
+          if ($('audioFeedCampo')) $('audioFeedCampo').hidden = false;
+          sel.addEventListener('change', function(){
+            if (sel.value === '') return;
+            var ep = episodios[parseInt(sel.value, 10)];
+            if ($('audioEpisodioUrl')) $('audioEpisodioUrl').value = ep.episodioUrl || '';
+            if ($('audioUrl')) $('audioUrl').value = ep.audioUrl || '';
+            recompute();
+          });
+        })
+        .catch(function(){ if ($('audioFeedAviso')) $('audioFeedAviso').hidden = false; });
+    });
+  }
+
   // ── Viaje de la noche (sesión de observación) ──
   // Toda observación pertenece a una salida, y la salida es OBLIGATORIA: es
   // ella la que dice desde dónde se observaba y la que da casa a la crónica, la
