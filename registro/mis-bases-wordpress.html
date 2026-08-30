@@ -12,8 +12,8 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260808_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260808_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260831_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260831_1200" />
 
 <style>
 /* Estilos propios de "Mis bases", encapsulados bajo #mw-obs-form. */
@@ -76,6 +76,16 @@
 #mw-obs-form .salud-serie {display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer;}
 #mw-obs-form .salud-serie input {accent-color:var(--ambar);cursor:pointer;}
 #mw-obs-form .salud-punto {width:11px;height:11px;border-radius:50%;flex:none;}
+
+/* ── Foco visible: mismo anillo ámbar que los campos, sobre fondo oscuro ── */
+#mw-obs-form .bi-btn, #mw-obs-form .geo-btn,
+#mw-obs-form .salud-serie input, #mw-obs-form .comp-list input:focus-visible {
+  outline:2px solid var(--ambar);outline-offset:2px;
+}
+/* ── Movimiento reducido: sin transiciones para quien lo pide ── */
+@media (prefers-reduced-motion:reduce) {
+  #mw-obs-form *, #mw-obs-form *::before, #mw-obs-form *::after {transition:none !important;}
+}
 </style>
 
 <div id="mw-obs-form">
@@ -138,7 +148,7 @@
         <div class="actions">
           <button type="submit" class="primary" id="baseGuardar">Guardar base</button>
           <button type="button" class="bi-btn" id="baseCancelar" style="display:none">Cancelar edición</button>
-          <span class="out-note" id="baseFormNota"></span>
+          <span class="out-note" id="baseFormNota" role="status"></span>
         </div>
       </form>
     </fieldset>
@@ -153,7 +163,7 @@
     <div id="saludTablaCont"></div>
   </div>
 </div>
-<div class="flash" id="flash"></div>
+<div class="flash" id="flash" role="status"></div>
 </div>
 
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260826_2340" defer></script>
