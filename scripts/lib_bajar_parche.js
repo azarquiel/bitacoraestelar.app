@@ -96,7 +96,7 @@ module.exports = function (R) {
   }
 
   function bajar(ra, dec, lado, salida, banda) {
-    banda = banda || R.ps1.banda;
+    banda = banda || window.BitacoraPS1.cfg.banda;
     var clave = crypto.createHash('md5')
       .update([ra, dec, lado, salida, banda].join('|')).digest('hex');
     var f = path.join(DIR, clave + '.json');
@@ -112,7 +112,7 @@ module.exports = function (R) {
         cadena = cadena.then(function () {
           return bajar1(urlRecorte(celda, ra, dec, lado, salida)).then(function (b) {
             var ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
-            var p = R.parseFITS(ab);
+            var p = window.BitacoraPS1.parseFITS(ab);
             if (p && p.datos) capas.push(p);
           }).catch(function () { /* una celda que falla no tumba el parche */ });
         });

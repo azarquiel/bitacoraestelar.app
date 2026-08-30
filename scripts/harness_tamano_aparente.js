@@ -22,6 +22,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot;
 var G = require('./lib_galaxias_sinteticas.js')(R);   // los MISMOS siete objetos
@@ -78,7 +79,7 @@ function textoOpt(o) {
 console.log('Ley A: C_MAG_REF ' + FOT.C_MAG_REF + ' (aumentos)   ·   ' +
   'Ley B: C_MAG_REF_B ' + f(C_MAG_REF_B, 2) + '′ PROVISIONAL (plateau ' + PLATEAU_PROV + '′)');
 console.log('C_MAG_EXP ' + FOT.C_MAG_EXP + ' · C_EXP ' + FOT.C_EXP + ' · clamps [' +
-  FOT.C_MAG_MIN + ', ' + FOT.C_MAG_MAX + '] · deltaPlena ' + R.ps1.deltaPlena +
+  FOT.C_MAG_MIN + ', ' + FOT.C_MAG_MAX + '] · deltaPlena ' + window.BitacoraPS1.cfg.deltaPlena +
   ' · 18″ · sqm ' + SQM + ' · T ' + T);
 console.log('Aumento mínimo usable: ' + MAG_MIN + 'x (pupila ' + POJO + ' mm). «↓» = óptimo en ese suelo.');
 
@@ -100,7 +101,7 @@ function medir(o, MAG, ley) {
     delta: u - G.MU_E,                       // Δ frente a μ(r_e) = 22,5
     rEnRe: rDet / o.re, rEnD25: 2 * rDet / (o.d25 * 60),
     thetaUmbral: 2 * rDet / 60 * MAG,        // tamaño aparente del disco detectable (′)
-    ops: MUS.map(function (m) { return R.ps1Opacidad(m, u); }),
+    ops: MUS.map(function (m) { return window.BitacoraPS1.ps1Opacidad(m, u); }),
     clamp: (ley === 'A') ? enClampA(MAG) : enClampB(o.d25, MAG) };
 }
 ['A', 'B'].forEach(function (ley) {

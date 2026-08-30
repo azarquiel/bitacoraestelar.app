@@ -26,8 +26,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var CFG = R.config, PS1 = R.ps1;
+var CFG = R.config, PS1 = window.BitacoraPS1.cfg;
 var P = require('./lib_parches_ps1.js')(R);
 var G = require('./lib_galaxias_sinteticas.js')(R);
 
@@ -61,7 +62,7 @@ function fila(c) { console.log(c.join(' | ')); }
    se inventa un m = 2 que es sólo su elipticidad. */
 function muestrearAnillo(p, rAs, opciones) {
   var fits = p.fits, g = p.gal, ba = g[5] || 1, pa = (g[6] || 0) * Math.PI / 180;
-  var af = R.ps1AfinParche(fits, { ra: g[2], dec: g[3], ladoArcmin: p.ladoArcmin }) ||
+  var af = window.BitacoraPS1.ps1AfinParche(fits, { ra: g[2], dec: g[3], ladoArcmin: p.ladoArcmin }) ||
            { cx: (fits.ancho - 1) / 2, cy: (fits.alto - 1) / 2,
              xe: -fits.ancho / (p.ladoArcmin * 60), xn: 0,
              ye: 0, yn: fits.alto / (p.ladoArcmin * 60) };
@@ -117,7 +118,7 @@ function modos(v, cielo) {
 function analizar(p, opciones) {
   var lado = p.ladoArcmin * 60;                        // ″
   var rMax = lado / 2 * 0.85;                          // lejos del borde del parche
-  var comps = R.ps1ComponentesSersic({ magV: p.gal[7], reArcsec: p.gal[4], n: p.gal[8],
+  var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: p.gal[7], reArcsec: p.gal[4], n: p.gal[8],
                                        ba: p.gal[5], bt: p.gal[9] });
   var r25 = G.radioIsofota(comps, 25);
   /* El cielo se resta ANTES de nada. Sin eso la «amplitud relativa» se mide
@@ -125,8 +126,8 @@ function analizar(p, opciones) {
      la galaxia ya no llega, el cociente se dispara y el método declara brazos
      donde solo hay fondo. */
   var datos = (opciones && opciones.datos) || p.fits.datos;
-  var cielo = R.ps1Cielo(datos, p.fits.ancho, p.fits.alto);
-  var sigma = R.ps1SigmaCielo(datos, p.fits.ancho, p.fits.alto, cielo);
+  var cielo = window.BitacoraPS1.ps1Cielo(datos, p.fits.ancho, p.fits.alto);
+  var sigma = window.BitacoraPS1.ps1SigmaCielo(datos, p.fits.ancho, p.fits.alto, cielo);
   var op = { datos: datos, cielo: cielo };
   var anillos = [], r;
   for (r = Math.max(6, p.gal[4] * 0.3); r <= Math.min(rMax, r25); r *= 1.15) {
@@ -207,7 +208,7 @@ console.log('  hay ruido. El giro separa espiral (≠0) de barra/costura/máscar
 console.log('\n═══ 2b. Test nulo: galaxia lisa (Sérsic puro + ruido) ═══');
 function parcheSintetico(opts) {
   var N = 512, lado = 20, esc = lado * 60 / N;         // ″/px
-  var comps = R.ps1ComponentesSersic({ magV: 9, reArcsec: opts.re, n: 4,
+  var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: 9, reArcsec: opts.re, n: 4,
                                        ba: opts.ba, bt: 0 });
   var d = new Float64Array(N * N), cielo = 1000, rnd = azar(20260813);
   var escalaCuentas = 1e12;                            // lleva el disco a ~10³ cuentas
@@ -215,7 +216,7 @@ function parcheSintetico(opts) {
     // Los signos son los de la afín de ps1AfinParche sin WCS: xe = −1/esc,
     // yn = +1/esc. Ponerlos al revés espeja el parche y le mete un m = 2 falso.
     var este = -(x - (N - 1) / 2) * esc, norte = (y - (N - 1) / 2) * esc;
-    d[y * N + x] = cielo + escalaCuentas * R.ps1FlujoModelo(comps, opts.pa, norte, este) +
+    d[y * N + x] = cielo + escalaCuentas * window.BitacoraPS1.ps1FlujoModelo(comps, opts.pa, norte, este) +
       opts.sigma * gauss(rnd);
   }
   return { fichero: 'sintético', nombre: 'liso', ladoArcmin: lado,
@@ -274,8 +275,8 @@ function tapaBrillantes(fits, umbralSigma) {
      la mediana local en vez de dejar el agujero, que es la regla ya establecida
      para esta capa. Lo que se comprueba es si la medida sobrevive a los ANILLOS
      que deja la máscara. */
-  var cielo = R.ps1Cielo(fits.datos, fits.ancho, fits.alto);
-  var sig = R.ps1SigmaCielo(fits.datos, fits.ancho, fits.alto, cielo);
+  var cielo = window.BitacoraPS1.ps1Cielo(fits.datos, fits.ancho, fits.alto);
+  var sig = window.BitacoraPS1.ps1SigmaCielo(fits.datos, fits.ancho, fits.alto, cielo);
   var d = Float64Array.from(fits.datos), W = fits.ancho, H = fits.alto;
   var lim = cielo + umbralSigma * sig, rad = 4;
   for (var y = rad; y < H - rad; y++) for (var x = rad; x < W - rad; x++) {
@@ -295,8 +296,8 @@ fila(['galaxia', 'A₂ original', '+ruido ×3', '+seeing ×2', 'con máscara de 
 ['NGC 5194', 'NGC 3031', 'NGC 205'].forEach(function (n) {
   var p = P.buscar(n);
   if (!p || !medidos[n]) { fila([n, 'sin parche', '-', '-', '-', '-']); return; }
-  var cielo = R.ps1Cielo(p.fits.datos, p.fits.ancho, p.fits.alto);
-  var sig = R.ps1SigmaCielo(p.fits.datos, p.fits.ancho, p.fits.alto, cielo);
+  var cielo = window.BitacoraPS1.ps1Cielo(p.fits.datos, p.fits.ancho, p.fits.alto);
+  var sig = window.BitacoraPS1.ps1SigmaCielo(p.fits.datos, p.fits.ancho, p.fits.alto, cielo);
   var aR = analizar(p, { datos: copiaConRuido(p.fits, 3, sig) });
   var aS = analizar(p, { datos: copiaSuavizada(p.fits, 2) });
   var aM = analizar(p, { datos: tapaBrillantes(p.fits, 8) });
@@ -313,7 +314,7 @@ console.log('\n═══ 4. La escala medida contra el atajo morfológico ══
 fila(['galaxia', 'D25 (′)', 'θ_det medido (″)', 'D25/25 (″)', 'r_e (″)', 'medido/(D25/25)', 'medido/r_e']);
 Object.keys(medidos).forEach(function (n) {
   var p = P.buscar(n), a = medidos[n];
-  var comps = R.ps1ComponentesSersic({ magV: p.gal[7], reArcsec: p.gal[4], n: p.gal[8],
+  var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: p.gal[7], reArcsec: p.gal[4], n: p.gal[8],
                                        ba: p.gal[5], bt: p.gal[9] });
   var d25 = 2 * G.radioIsofota(comps, 25) / 60;
   fila([n, f(d25, 1), f(a.thetaDet, 1), f(d25 * 60 / 25, 1), f(p.gal[4], 1),

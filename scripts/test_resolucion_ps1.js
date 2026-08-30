@@ -14,8 +14,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var CFG = R.config, PS1 = R.ps1, FOT = R.fot;
+var CFG = R.config, PS1 = window.BitacoraPS1.cfg, FOT = R.fot;
 var P = require('./lib_psf_parche.js')(R);
 
 var fallos = 0;
@@ -91,10 +92,10 @@ ok(R.ctxFotometrico.length <= 2, 'ctxFotometrico toma la óptica y a lo sumo θi
 console.log('\n— 5. El campo angular cubierto no se toca —');
 /* La propuesta sube `salida`, no baja `lado`. Es la diferencia entre afinar el
    muestreo y recortar galaxia: lo segundo se pagaría en ps1FraccionLuz. */
-casi(R.ps1LadoArcmin(200), Math.max(PS1.ladoMin, Math.min(PS1.ladoMax, 6 * 200 / 60)), 1e-12,
+casi(window.BitacoraPS1.ps1LadoArcmin(200), Math.max(PS1.ladoMin, Math.min(PS1.ladoMax, 6 * 200 / 60)), 1e-12,
   'ps1LadoArcmin(200″) sin cambios');
 [10, 60, 200, 400].forEach(function (re) {
-  casi(R.ps1LadoArcmin(re), R.ps1LadoArcmin(re), 1e-15, 'lado de r_e = ' + re + '″ estable');
+  casi(window.BitacoraPS1.ps1LadoArcmin(re), window.BitacoraPS1.ps1LadoArcmin(re), 1e-15, 'lado de r_e = ' + re + '″ estable');
 });
 casi(PS1.ladoMax, 20, 1e-12, 'ladoMax sigue en 20′');
 casi(PS1.ladoMin, 1.5, 1e-12, 'ladoMin sigue en 1,5′');

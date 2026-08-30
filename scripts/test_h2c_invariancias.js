@@ -21,6 +21,7 @@
 'use strict';
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot;
 
@@ -89,13 +90,13 @@ ok(Object.keys(FOT.H2C_DEFECTO).sort().join(',') === 'SEEING_AS,THETA_R_A,THETA_
 console.log('\n— θint de producción: ps1ThetaIntArcmin —');
 // Un disco puro: la analítica por componente ES la isofota exacta de la suma.
 var gal1 = { reArcsec: 120, ba: 0.5, magV: 9, n: 1, bt: 0 };
-var c1 = R.ps1ComponentesSersic(gal1);
+var c1 = window.BitacoraPS1.ps1ComponentesSersic(gal1);
 var esp = 2 * (function () { var r = 0; c1.forEach(function (c) {
   var I = Math.pow(10, -0.4 * 25);
   if (c.Ie > I) r = Math.max(r, c.re * Math.pow(1 + Math.log(c.Ie / I) / c.b, c.n));
 }); return r; })() / 60 * Math.sqrt(0.5);
-casi(R.ps1ThetaIntArcmin(c1, 0.5), esp, 1e-12, 'disco puro: 2·r(μ25)/60·√(b/a)');
-ok(R.ps1ThetaIntArcmin([], 1) === 0, 'sin componentes, θint = 0 (la ley cae al bloque C_MAG)');
+casi(window.BitacoraPS1.ps1ThetaIntArcmin(c1, 0.5), esp, 1e-12, 'disco puro: 2·r(μ25)/60·√(b/a)');
+ok(window.BitacoraPS1.ps1ThetaIntArcmin([], 1) === 0, 'sin componentes, θint = 0 (la ley cae al bloque C_MAG)');
 // Con FOT.H2C activa pero θint = 0 (o ausente), el bloque C_MAG sigue vivo.
 casi(cmin(158, 0), cmin(158, null), 0, 'θint=0 con H2C activa: cae al bloque C_MAG');
 

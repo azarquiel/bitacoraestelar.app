@@ -16,6 +16,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot, CFG = R.config;
 var G = require('./lib_galaxias_sinteticas.js')(R);
@@ -51,7 +52,7 @@ function dilucion(td, D, seeing) { var te = thetaEff(td, D, seeing); return td *
 
 /* Margen de estructura en magnitudes: contraste del detalle contra su umbral. */
 function margenEstr(obj, D, MAG, td, seeing) {
-  var fDisco = R.ps1FlujoModelo(obj.comps, 0, 0, obj.re);
+  var fDisco = window.BitacoraPS1.ps1FlujoModelo(obj.comps, 0, 0, obj.re);
   var cLocal = 0.30 * fDisco / (fDisco + FCIELO) * dilucion(td, D, seeing);
   var te = thetaEff(td, D, seeing);
   return 2.5 * Math.log10(cLocal / cmin(D, MAG, te / 60));
@@ -172,7 +173,7 @@ var CAT = window.BITACORA_GALAXIAS;
 function delCat(n) {
   for (var i = 0; i < CAT.length; i++) if (CAT[i][0] === n) {
     var g = CAT[i];
-    var comps = R.ps1ComponentesSersic({ magV: g[7], reArcsec: g[4], n: g[8], ba: g[5], bt: g[9] });
+    var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: g[7], reArcsec: g[4], n: g[8], ba: g[5], bt: g[9] });
     return { nombre: n, comps: comps, re: g[4], d25: 2 * G.radioIsofota(comps, 25) / 60 };
   }
   return null;
@@ -193,7 +194,7 @@ var objetos = [['M33', 'NGC 598'], ['M81', 'NGC 3031'], ['M51', 'NGC 5194'], ['M
 objetos.forEach(function (o) {
   var td = o.d25 * 60 / 25;
   var muLim = umbralDe(cmin(D18, 150, o.d25));
-  var fDisco = R.ps1FlujoModelo(o.comps, 0, 0, o.re);
+  var fDisco = window.BitacoraPS1.ps1FlujoModelo(o.comps, 0, 0, o.re);
   var cLocal = 0.30 * fDisco / (fDisco + FCIELO) * dilucion(td, D18);
   fila([o.nombre, f(o.d25, 1), f(muLim), f(G.radioIsofota(o.comps, muLim) / o.re, 2),
     f(cLocal, 4), f(td, 1), f(CFG.airyArcsec / D18, 2), f(CFG.seeingArcsec, 2),

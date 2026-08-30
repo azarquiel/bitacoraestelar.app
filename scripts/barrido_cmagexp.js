@@ -29,6 +29,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot;
 
@@ -102,15 +103,15 @@ EXPS.forEach(function (e) {
 });
 
 /* ── 4. Opacidad de la galaxia uniforme (deltaPlena SIN tocar) ────────────── */
-console.log('\n═══ Opacidad de una galaxia uniforme, 8″ (deltaPlena ' + R.ps1.deltaPlena +
-  ', deltaExp ' + R.ps1.deltaExp + ' — sin recalibrar) ═══');
+console.log('\n═══ Opacidad de una galaxia uniforme, 8″ (deltaPlena ' + window.BitacoraPS1.cfg.deltaPlena +
+  ', deltaExp ' + window.BitacoraPS1.cfg.deltaExp + ' — sin recalibrar) ═══');
 EXPS.forEach(function (e) {
   conExp(e, function () {
     console.log('— C_MAG_EXP ' + f(e, 2) + ' —');
     fila(['μ'].concat(MAGS.map(function (m) { return m + 'x'; })));
     MUS.forEach(function (mu) {
       fila([f(mu, 1)].concat(MAGS.map(function (m) {
-        return f(R.ps1Opacidad(mu, mulim(203, m)));
+        return f(window.BitacoraPS1.ps1Opacidad(mu, mulim(203, m)));
       })));
     });
   });

@@ -16,9 +16,9 @@ var MU_E = 22.5, N_SERSIC = 3, BA = 1;
 var TAMANOS = [0.5, 1, 2, 5, 10, 20, 30];   // DIÁMETRO de la isofota 25, en ′
 
 module.exports = function (R) {
-  function mu(comps, r) { return -2.5 * Math.log10(R.ps1FlujoModelo(comps, 0, 0, r)); }
+  function mu(comps, r) { return -2.5 * Math.log10(window.BitacoraPS1.ps1FlujoModelo(comps, 0, 0, r)); }
   function compsDe(re, magV) {
-    return R.ps1ComponentesSersic({ magV: magV, reArcsec: re, n: N_SERSIC, ba: BA, bt: 0 });
+    return window.BitacoraPS1.ps1ComponentesSersic({ magV: magV, reArcsec: re, n: N_SERSIC, ba: BA, bt: 0 });
   }
   /* Sumar Δ a magV apaga el objeto Δ magnitudes, así que μ sube Δ: para llevar
      μ(r_e) de donde está a MU_E hace falta Δ = MU_E − μ actual. Un solo paso,
@@ -44,7 +44,7 @@ module.exports = function (R) {
     var re = (d25Arcmin * 60 / 2) / razon;
     var magV = magVpara(re), comps = compsDe(re, magV);
     return { d25: d25Arcmin, re: re, magV: magV, comps: comps,
-             dHalo: 2 * radioIsofota(comps, R.ps1.muHalo) / 60 };
+             dHalo: 2 * radioIsofota(comps, window.BitacoraPS1.cfg.muHalo) / 60 };
   }
 
   return {

@@ -19,8 +19,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var CFG = R.config, PS1 = R.ps1, FOT = R.fot;
+var CFG = R.config, PS1 = window.BitacoraPS1.cfg, FOT = R.fot;
 var P = require('./lib_psf_parche.js')(R);
 var B = require('./lib_bajar_parche.js')(R);
 
@@ -60,7 +61,7 @@ function correr(parches) {
      pagaría en la fracción de luz que el parche abarca. */
   [10, 60, 114, 200, 400].forEach(function (re) {
     var esperado = Math.max(PS1.ladoMin, Math.min(PS1.ladoMax, PS1.ladoFactor * re / 60));
-    casi(R.ps1LadoArcmin(re), esperado, 1e-12, 'ps1LadoArcmin(' + re + '″)');
+    casi(window.BitacoraPS1.ps1LadoArcmin(re), esperado, 1e-12, 'ps1LadoArcmin(' + re + '″)');
   });
   OBJETOS.forEach(function (o) {
     var p = parches[o.nombre];
@@ -71,11 +72,11 @@ function correr(parches) {
   /* Si estas dos cuentas se separan, la reescritura introdujo física distinta. */
   [2.3511, 1.1738, 0.6680, 0.25].forEach(function (esc) {
     APERTURAS.forEach(function (D) {
-      casi(R.ps1ThetaAdd(D, esc), P.thetaAdd(D, esc), 1e-12,
+      casi(window.BitacoraPS1.ps1ThetaAdd(D, esc), P.thetaAdd(D, esc), 1e-12,
         'θ_add(' + D + ' mm, ' + esc + '″/px)');
     });
   });
-  casi(R.ps1ThetaAdd(80, 40), 0, 0, 'y si el parche ya viene más borroso que el telescopio, θ_add = 0');
+  casi(window.BitacoraPS1.ps1ThetaAdd(80, 40), 0, 0, 'y si el parche ya viene más borroso que el telescopio, θ_add = 0');
 
   console.log('\n— 4. La convolución de producción == la del harness, bit a bit —');
   /* Salvo por la máscara, que producción restaura y el harness no: por eso la
@@ -83,7 +84,7 @@ function correr(parches) {
   OBJETOS.forEach(function (o) {
     var p = parches[o.nombre];
     if (!p) return;
-    var a = R.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 457);
+    var a = window.BitacoraPS1.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 457);
     var b = P.convolucionar(p.datos, p.ancho, p.alto, p.escalaAs, 457, null);
     var peor = 0, n = 0;
     for (var i = 0; i < a.length; i++) {
@@ -100,7 +101,7 @@ function correr(parches) {
   OBJETOS.forEach(function (o) {
     var p = parches[o.nombre];
     if (!p) return;
-    var a = R.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 457);
+    var a = window.BitacoraPS1.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 457);
     var huecos = 0, iguales = 0, extra = 0;
     for (var i = 0; i < a.length; i++) {
       var e = !isFinite(p.datos[i]), s = !isFinite(a[i]);
@@ -116,7 +117,7 @@ function correr(parches) {
   OBJETOS.forEach(function (o) {
     var p = parches[o.nombre];
     if (!p) return;
-    var a = R.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 457);
+    var a = window.BitacoraPS1.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 457);
     var sa = 0, sb = 0;
     for (var i = 0; i < a.length; i++) {
       if (isFinite(p.datos[i])) sa += p.datos[i];
@@ -132,12 +133,12 @@ function correr(parches) {
   var p0 = parches[OBJETOS[0].nombre];
   if (p0) {
     var parche = { datos: p0.datos, ancho: p0.ancho, alto: p0.alto, ladoArcmin: LADO };
-    var d1 = R.ps1DatosConPsf(parche, p0.escalaAs, 457);
-    var d2 = R.ps1DatosConPsf(parche, p0.escalaAs, 457);
-    var d3 = R.ps1DatosConPsf(parche, p0.escalaAs, 457);
+    var d1 = window.BitacoraPS1.ps1DatosConPsf(parche, p0.escalaAs, 457);
+    var d2 = window.BitacoraPS1.ps1DatosConPsf(parche, p0.escalaAs, 457);
+    var d3 = window.BitacoraPS1.ps1DatosConPsf(parche, p0.escalaAs, 457);
     ok(d1 === d2 && d2 === d3, 'tres pasadas con la misma apertura devuelven el MISMO array');
     ok(parche.datos === p0.datos, 'y `parche.datos` no se muta nunca: se convoluciona desde el original');
-    var ref = R.ps1PsfParche(p0.datos, p0.ancho, p0.alto, p0.escalaAs, 457);
+    var ref = window.BitacoraPS1.ps1PsfParche(p0.datos, p0.ancho, p0.alto, p0.escalaAs, 457);
     var peor = 0;
     for (var i = 0; i < d3.length; i++) {
       if (!isFinite(ref[i]) || !isFinite(d3[i])) continue;
@@ -145,9 +146,9 @@ function correr(parches) {
     }
     casi(peor, 0, 0, 'y el resultado tras 3 pasadas == 1 sola convolución (sin acumular borrón)');
     // Cambiar de apertura sí tiene que recalcular, y desde el original.
-    var d914 = R.ps1DatosConPsf(parche, p0.escalaAs, 914);
+    var d914 = window.BitacoraPS1.ps1DatosConPsf(parche, p0.escalaAs, 914);
     ok(d914 !== d1, 'cambiar de apertura recalcula');
-    var ref914 = R.ps1PsfParche(p0.datos, p0.ancho, p0.alto, p0.escalaAs, 914);
+    var ref914 = window.BitacoraPS1.ps1PsfParche(p0.datos, p0.ancho, p0.alto, p0.escalaAs, 914);
     peor = 0;
     for (i = 0; i < d914.length; i++) {
       if (!isFinite(ref914[i]) || !isFinite(d914[i])) continue;
@@ -162,8 +163,8 @@ function correr(parches) {
   OBJETOS.forEach(function (o) {
     var p = parches[o.nombre];
     if (!p) return;
-    var a = R.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 457);
-    var b = R.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 914);
+    var a = window.BitacoraPS1.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 457);
+    var b = window.BitacoraPS1.ps1PsfParche(p.datos, p.ancho, p.alto, p.escalaAs, 914);
     var s2 = 0, n = 0, val = [];
     for (var i = 0; i < a.length; i++) {
       if (!isFinite(a[i]) || !isFinite(b[i])) continue;
@@ -190,7 +191,7 @@ function correr(parches) {
   console.log('\n— 9. Y el signo es el correcto: más apertura, menos borrón añadido —');
   var esc = LADO * 60 / PS1.salida, prev = Infinity;
   APERTURAS.forEach(function (D) {
-    var t = R.ps1ThetaAdd(D, esc);
+    var t = window.BitacoraPS1.ps1ThetaAdd(D, esc);
     ok(t <= prev + 1e-12, D + ' mm: θ_add = ' + t.toFixed(4) + '″ (no crece con D)');
     prev = t;
   });
@@ -219,7 +220,7 @@ function correr(parches) {
   [[457, 50], [457, 150], [457, 300]].forEach(function (t) {
     var D = t[0], MAG = t[1], pupila = D / MAG;
     casi(pupila * MAG, D, 1e-9, 'pupila×MAG a ' + MAG + '× reconstruye D = ' + D);
-    casi(R.ps1ThetaAdd(pupila * MAG, esc), R.ps1ThetaAdd(D, esc), 1e-12,
+    casi(window.BitacoraPS1.ps1ThetaAdd(pupila * MAG, esc), window.BitacoraPS1.ps1ThetaAdd(D, esc), 1e-12,
       'y θ_add a ' + MAG + '× es el mismo');
   });
 
@@ -229,8 +230,8 @@ function correr(parches) {
   var p2 = parches[OBJETOS[0].nombre];
   if (p2) {
     var pp = { datos: p2.datos, ancho: p2.ancho, alto: p2.alto, ladoArcmin: LADO };
-    ok(R.ps1DatosConPsf(pp, p2.escalaAs, 0) === p2.datos, 'sin apertura devuelve el array original');
-    ok(R.ps1DatosConPsf(pp, p2.escalaAs, undefined) === p2.datos, 'y con apertura indefinida, igual');
+    ok(window.BitacoraPS1.ps1DatosConPsf(pp, p2.escalaAs, 0) === p2.datos, 'sin apertura devuelve el array original');
+    ok(window.BitacoraPS1.ps1DatosConPsf(pp, p2.escalaAs, undefined) === p2.datos, 'y con apertura indefinida, igual');
   }
 
   console.log('\n— 13. Y el camino ENTERO, pintando de verdad con ps1PintarParche —');
@@ -246,7 +247,7 @@ function correr(parches) {
       var pr = { datos: pC.datos, ancho: pC.ancho, alto: pC.alto, ladoArcmin: LADO,
                  ra: OBJETOS[0].ra, dec: OBJETOS[0].dec, comps: [], pa: 0 };
       var lienzo = new Float32Array(SIZE * SIZE);
-      R.ps1PintarParche(lienzo, pr, { ra0: OBJETOS[0].ra, dec0: OBJETOS[0].dec,
+      window.BitacoraPS1.ps1PintarParche(lienzo, pr, { ra0: OBJETOS[0].ra, dec0: OBJETOS[0].dec,
         arcmin: ARCMIN, size: SIZE, cielo: cielo, apertura: D });
       return lienzo;
     }

@@ -20,9 +20,10 @@ var fs = require('fs'), path = require('path');
 var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
-var R = global.window.BitacoraGaiaRender, PS1 = R.ps1;
+var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 var GAL = global.window.BITACORA_GALAXIAS, NEB = global.window.BITACORA_NEBULOSAS;
 var B = require('./lib_bajar_parche.js')(R);
 var P = require('./lib_parche_produccion.js')(R);
@@ -40,8 +41,8 @@ var conClase = NEB.filter(function (f) { return typeof f[12] === 'string' && f[1
 ok(conClase.length === NEB.length, 'todas las filas llevan clase (' + conClase.length + '/' + NEB.length + ')');
 
 console.log('ps1CatalogoDifuso: la clase decide qué filas entran, no qué código corre:');
-ok(typeof R.ps1CatalogoDifuso === 'function', 'existe R.ps1CatalogoDifuso');
-var cat = R.ps1CatalogoDifuso ? R.ps1CatalogoDifuso(GAL, NEB) : [];
+ok(typeof window.BitacoraPS1.ps1CatalogoDifuso === 'function', 'existe window.BitacoraPS1.ps1CatalogoDifuso');
+var cat = window.BitacoraPS1.ps1CatalogoDifuso ? window.BitacoraPS1.ps1CatalogoDifuso(GAL, NEB) : [];
 // Clases abiertas hoy: PN (esta prueba), HII/EmN/RfN (validadas en
 // test_nebulosas_emision_reflexion.js) y SNR (test_resto_supernova.js).
 // Neb y Cl+N siguen cerradas.
@@ -51,11 +52,11 @@ ok(cat.length === GAL.length + NEB.filter(function (f) { return abiertas.indexOf
 ok(!!fila(cat, 'NGC6720'), 'M57 entra');
 ok(!fila(cat, 'NGC1333'), 'una clase cerrada (Cl+N, NGC 1333) NO entra');
 ok(!!fila(cat, 'NGC 5194'), 'M51 sigue entrando');
-ok(R.ps1CatalogoDifuso && R.ps1CatalogoDifuso(GAL, null).length === GAL.length,
+ok(window.BitacoraPS1.ps1CatalogoDifuso && window.BitacoraPS1.ps1CatalogoDifuso(GAL, null).length === GAL.length,
   'sin catálogo de nebulosas cargado, solo galaxias (robustez)');
 
 console.log('El campo de M57 la encuentra con la criba de siempre:');
-var campo = R.ps1GalaxiasDelCampo(cat, m57[2], m57[3], 20);
+var campo = window.BitacoraPS1.ps1GalaxiasDelCampo(cat, m57[2], m57[3], 20);
 var gal = null;
 for (var i = 0; i < campo.length; i++) if (campo[i].nombre === 'NGC6720') gal = campo[i];
 ok(!!gal, 'ps1GalaxiasDelCampo devuelve NGC 6720');
@@ -107,14 +108,14 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
   ok(Math.abs(parche.thetaIntArcmin - 2 * bordeAs / 60) < 0.02,
     'θ intrínseco para H2c = diámetro del borde real, ' + parche.thetaIntArcmin.toFixed(2) +
     '′ (≈1,27′ de M57), no los 3,57′ de la isofota del ala');
-  ok(R.ps1HaloActivo(parche.halo) === false, 'el halo extrapolado (ley de galaxias) queda cerrado');
+  ok(window.BitacoraPS1.ps1HaloActivo(parche.halo) === false, 'el halo extrapolado (ley de galaxias) queda cerrado');
 
   console.log('Y produce imagen por el mismo pintado (457 mm, 190x, SQM 21,2):');
   var cielo = { pupilaSalida: 457.2 / 190, pupilaOjo: 7, sqm: 21.2,
                 aumentos: 190, realceMax: PS1.realceMax, perceptual: true };
   var o = { ra0: gal.ra, dec0: gal.dec, arcmin: 70 / 190 * 60, size: 720, cielo: cielo, apertura: 457.2 };
   var difuso = new Float32Array(720 * 720);
-  R.ps1PintarParche(difuso, parche, o);
+  window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
   var enc = 0, nanD = 0;
   for (var p = 0; p < difuso.length; p++) { if (difuso[p] > 0) enc++; if (difuso[p] !== difuso[p]) nanD++; }
   ok(enc > 500, 'hay nebulosa en el lienzo (' + enc + ' px con flujo)');

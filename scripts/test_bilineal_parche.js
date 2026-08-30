@@ -28,8 +28,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1;
+var PS1 = window.BitacoraPS1.cfg;
 
 var fallos = 0;
 function ok(cond, etiqueta) {
@@ -66,13 +67,13 @@ function parcheNuevo(conNaN) {
     comps: comps, pa: 25,
     halo: { aArcmin: PS1.haloMenorMin + 1, bArcmin: PS1.haloMenorMin + 1,
             n: 1, muProm: PS1.haloMuFijo + 1 },     // halo activo a propósito
-    peso: R.ps1PesoImagen(datos, AN, AN, 1),
+    peso: window.BitacoraPS1.ps1PesoImagen(datos, AN, AN, 1),
     escalaMezcla: 0.95,
     datos: datos
   };
   return parche;
 }
-ok(R.ps1HaloActivo(parcheNuevo(false).halo), 'el halo del parche de prueba está activo');
+ok(window.BitacoraPS1.ps1HaloActivo(parcheNuevo(false).halo), 'el halo del parche de prueba está activo');
 
 function cieloNuevo() {
   return { pupilaSalida: 350 / 400, aumentos: 400, sqm: 21, pupilaOjo: 7,
@@ -100,11 +101,11 @@ function pintarVecino(difuso, parche, o) {
   var c = o.cielo ? R.ctxFotometrico(o.cielo) : null;
   var umbral = c ? R.sbUmbralContraste(c) : 0;
   var pxPorAs = escv / 3600;
-  var halo = !!c && R.ps1HaloActivo(parche.halo);
+  var halo = !!c && window.BitacoraPS1.ps1HaloActivo(parche.halo);
   var comps = halo ? (parche.comps || []) : [], pa = parche.pa || 0;
   var peso = halo ? (parche.peso || null) : null;
   var sMezcla = peso ? parche.escalaMezcla : 1;
-  var alcance = Math.max(ladoPx / 2, R.ps1RadioHaloAs(comps) * pxPorAs);
+  var alcance = Math.max(ladoPx / 2, window.BitacoraPS1.ps1RadioHaloAs(comps) * pxPorAs);
   var datos = c ? (parche.psfDatos || parche.datos) : parche.datos;
   var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
   var y0 = Math.max(0, Math.floor(cy - alcance)), y1 = Math.min(SIZE - 1, Math.ceil(cy + alcance));
@@ -125,12 +126,12 @@ function pintarVecino(difuso, parche, o) {
       // mezcla y el píxel quedaba sin pintar.
       if (!isFinite(f)) { f = 0; k = -1; }
       if (comps.length) {
-        var fm = R.ps1FlujoModelo(comps, pa, norte, este);
+        var fm = window.BitacoraPS1.ps1FlujoModelo(comps, pa, norte, este);
         var w = (peso && k >= 0) ? peso[k] : 0;
         f = w * sMezcla * f + (1 - w) * fm;
       }
       if (!(f > 0)) continue;
-      if (c) f = R.ps1FlujoConOpacidad(f, R.ps1Opacidad(-2.5 * Math.log10(f), umbral), c);
+      if (c) f = window.BitacoraPS1.ps1FlujoConOpacidad(f, window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(f), umbral), c);
       if (!(f > 0)) continue;
       difuso[y * SIZE + x] += f;
     }
@@ -169,8 +170,8 @@ console.log('\n— 1. parche.datos es inmutable y sus NaN quedan donde estaban �
   var p = parcheNuevo(true);
   var copia = new Float32Array(p.datos);
   var cielo = cieloNuevo();
-  R.ps1PintarParche(new Float32Array(240 * 240), p, oNuevo(1, cielo, 350));
-  R.ps1PintarParche(new Float32Array(480 * 480), p, oNuevo(2, cielo, 350));
+  window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p, oNuevo(1, cielo, 350));
+  window.BitacoraPS1.ps1PintarParche(new Float32Array(480 * 480), p, oNuevo(2, cielo, 350));
   ok(iguales(p.datos, copia), 'parche.datos idéntico tras pintar (NaN incluidos)');
   var nanAntes = 0, nanDespues = 0;
   for (var i = 0; i < copia.length; i++) {
@@ -183,7 +184,7 @@ console.log('\n— 1. parche.datos es inmutable y sus NaN quedan donde estaban �
 console.log('\n— 2. El lienzo no gana NaN ni infinitos —');
 (function () {
   [1, 2, 4].forEach(function (fac) {
-    var d = R.ps1PintarParche(new Float32Array(240 * fac * 240 * fac),
+    var d = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * fac * 240 * fac),
       parcheNuevo(true), oNuevo(fac, cieloNuevo(), 350));
     ok(!hayNoFinito(d), 'lienzo ×' + fac + ' todo finito (con hueco NaN en el parche)');
   });
@@ -193,12 +194,12 @@ console.log('\n— 3. A ×1 el bilineal ES el vecino de antes, bit a bit —');
 (function () {
   // Sin cielo: flujo tal cual, sin PSF ni mezcla (como los tests de geometría).
   var p = parcheNuevo(true), o = oNuevo(1, null, 0);
-  var dB = R.ps1PintarParche(new Float32Array(240 * 240), p, o);
+  var dB = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p, o);
   var dV = pintarVecino(new Float32Array(240 * 240), p, o);
   ok(iguales(dB, dV), 'sin cielo: idéntico al vecino');
   // Con cielo + halo + PSF: la mezcla completa por el mismo camino.
   var p2 = parcheNuevo(true), cielo = cieloNuevo(), o2 = oNuevo(1, cielo, 350);
-  var dB2 = R.ps1PintarParche(new Float32Array(240 * 240), p2, o2);
+  var dB2 = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p2, o2);
   // El vecino de referencia lee la MISMA caché de PSF que dejó producción.
   var dV2 = pintarVecino(new Float32Array(240 * 240), p2, o2);
   ok(iguales(dB2, dV2), 'con cielo, halo y PSF: idéntico al vecino');
@@ -208,7 +209,7 @@ console.log('\n— 4. A ×2 y ×4 el flujo del caso de prueba se conserva y el e
 (function () {
   [2, 4].forEach(function (fac) {
     var SIZE = 240 * fac, p = parcheNuevo(false), o = oNuevo(fac, null, 0);
-    var dB = R.ps1PintarParche(new Float32Array(SIZE * SIZE), p, o);
+    var dB = window.BitacoraPS1.ps1PintarParche(new Float32Array(SIZE * SIZE), p, o);
     var dV = pintarVecino(new Float32Array(SIZE * SIZE), p, o);
     var sB = sumaFinita(dB), sV = sumaFinita(dV);
     casi(sB / sV, 1, 1e-3, '×' + fac + ': flujo bilineal / vecino');
@@ -221,9 +222,9 @@ console.log('\n— 4. A ×2 y ×4 el flujo del caso de prueba se conserva y el e
 console.log('\n— 5. La PSF se aplica UNA vez: repintar no acumula ni cambia —');
 (function () {
   var p = parcheNuevo(false), cielo = cieloNuevo(), o = oNuevo(1, cielo, 350);
-  var d1 = R.ps1PintarParche(new Float32Array(240 * 240), p, o);
+  var d1 = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p, o);
   var psf1 = p.psfDatos;
-  var d2 = R.ps1PintarParche(new Float32Array(240 * 240), p, o);
+  var d2 = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p, o);
   ok(p.psfDatos === psf1, 'la caché de PSF no se reconvoluciona');
   ok(iguales(d1, d2), 'repetir el pintado da el mismo lienzo');
 })();
@@ -232,7 +233,7 @@ console.log('\n— 6. Cmin, nivelFondo y rango no ven el remuestreo —');
 (function () {
   var cielo = cieloNuevo();
   var antes = R.ctxFotometrico(cielo);
-  R.ps1PintarParche(new Float32Array(240 * 240), parcheNuevo(false), oNuevo(1, cielo, 350));
+  window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), parcheNuevo(false), oNuevo(1, cielo, 350));
   var despues = R.ctxFotometrico(cielo);
   ok(antes.Cmin === despues.Cmin, 'Cmin idéntico');
   ok(antes.nivelFondo === despues.nivelFondo, 'nivelFondo idéntico');
@@ -243,14 +244,14 @@ console.log('\n— 7. La apertura cambia la PSF, no el remuestreo —');
 (function () {
   // Sin cielo no hay óptica: la apertura no puede cambiar NADA.
   var p = parcheNuevo(false);
-  var dA = R.ps1PintarParche(new Float32Array(240 * 240), p, oNuevo(1, null, 200));
-  var dB = R.ps1PintarParche(new Float32Array(240 * 240), p, oNuevo(1, null, 450));
+  var dA = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p, oNuevo(1, null, 200));
+  var dB = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p, oNuevo(1, null, 450));
   ok(iguales(dA, dB), 'sin cielo, 200 y 450 mm pintan lo mismo');
   // Con cielo sí: y lo que cambia es la PSF cacheada, no otra cosa.
   var p2 = parcheNuevo(false), cielo = cieloNuevo();
-  var d200 = R.ps1PintarParche(new Float32Array(240 * 240), p2, oNuevo(1, cielo, 200));
+  var d200 = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p2, oNuevo(1, cielo, 200));
   ok(p2.psfD === 200, 'psfD = 200 tras pintar con 200 mm');
-  var d450 = R.ps1PintarParche(new Float32Array(240 * 240), p2, oNuevo(1, cielo, 450));
+  var d450 = window.BitacoraPS1.ps1PintarParche(new Float32Array(240 * 240), p2, oNuevo(1, cielo, 450));
   ok(p2.psfD === 450, 'psfD = 450 tras pintar con 450 mm');
   ok(!iguales(d200, d450), 'con cielo, 200 y 450 mm difieren (por la PSF)');
 })();
@@ -264,7 +265,7 @@ console.log('\n— 8. El borde del parche no estrena costura —');
      y el tránsito lo hace la mezcla. */
   var fac = 2, SIZE = 240 * fac;
   var p = parcheNuevo(false), cielo = cieloNuevo(), o = oNuevo(fac, cielo, 350);
-  var dB = R.ps1PintarParche(new Float32Array(SIZE * SIZE), p, o);
+  var dB = window.BitacoraPS1.ps1PintarParche(new Float32Array(SIZE * SIZE), p, o);
   var dV = pintarVecino(new Float32Array(SIZE * SIZE), p, o);
   // Borde del parche en px de lienzo: centro SIZE/2, medio lado 60″ × 2 px/″.
   var bordes = [SIZE / 2 - 120, SIZE / 2 + 120];
@@ -293,7 +294,7 @@ console.log('\n— 9. Los huecos (NaN) no se esparcen —');
      NaN y renormaliza, así que su huella no puede ser MAYOR que la del vecino. */
   var fac = 2, SIZE = 240 * fac;
   var p = parcheNuevo(true), o = oNuevo(fac, null, 0);
-  var dB = R.ps1PintarParche(new Float32Array(SIZE * SIZE), p, o);
+  var dB = window.BitacoraPS1.ps1PintarParche(new Float32Array(SIZE * SIZE), p, o);
   var dV = pintarVecino(new Float32Array(SIZE * SIZE), p, o);
   function cerosEnHueco(d) {
     /* El hueco del parche está en (45,45)±1. Con la afín sin giro, fx = 60 +

@@ -18,6 +18,7 @@
 // El módulo es un IIFE de navegador: se cuelga de window y no exporta nada.
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot;
 
@@ -535,7 +536,7 @@ console.log('\nCapa de galaxias desde imagen real (ps1cutouts):');
    eso depende que el parche se pueda cachear para siempre). Lo que hay detrás
    —skycells, wcs=1, el `size` en píxeles nativos— lo prueba
    scripts/test_ps1_proxy.php, que es donde vive. */
-var urlPar = R.ps1UrlParche({ ra: 10.6847, dec: 41.269, ladoArcmin: 3 });
+var urlPar = window.BitacoraPS1.ps1UrlParche({ ra: 10.6847, dec: 41.269, ladoArcmin: 3 });
 ok(/[?&]lado=3\.00(&|$)/.test(urlPar), 'la URL del parche lleva el lado en minutos');
 ok(/[?&]banda=g(&|$)/.test(urlPar), 'y la banda');
 ok(!/aumento|pupila|ocular/.test(urlPar), 'y nada del equipo: el parche no depende de él');
@@ -552,7 +553,7 @@ while (cab.length % 2880) cab += ' ';
 var buf = new ArrayBuffer(cab.length + 16), vistaB = new DataView(buf), bytesB = new Uint8Array(buf);
 for (var i18 = 0; i18 < cab.length; i18++) bytesB[i18] = cab.charCodeAt(i18);
 [1.5, -2.25, NaN, 100].forEach(function (v, k) { vistaB.setFloat32(cab.length + k * 4, v, false); });
-var fits = R.parseFITS(buf);
+var fits = window.BitacoraPS1.parseFITS(buf);
 ok(fits && fits.ancho === 2 && fits.alto === 2, 'el lector de FITS saca las dimensiones');
 casi(fits.escalaAs, 1, 1e-6, 'CDELT2 se lee en ″/px');
 casi(fits.zpt, 24.46, 1e-6, 'el punto cero de la cabecera se lee (aunque el nivel lo ponga el catálogo)');
@@ -578,10 +579,10 @@ function ps1H() { return RE / 1.678; }           // escala de un disco exponenci
 
 // El nivel absoluto lo pone el catálogo: la luz total del parche es la mag V del
 // RC3, corregida por la fracción de Sérsic que cae dentro del parche.
-var magV = 9.5, frac = R.ps1FraccionLuz(1, (LADO * 60 / 2) / RE);
+var magV = 9.5, frac = window.BitacoraPS1.ps1FraccionLuz(1, (LADO * 60 / 2) / RE);
 var opAncla = { magV: magV, n: 1, reArcsec: RE, ladoArcmin: LADO, escalaAs: ESCALA };
 function totalAnclado(pedestal) {
-  var a = R.ps1AnclarACatalogo(parcheSintetico(pedestal), ANCHO, ANCHO, opAncla);
+  var a = window.BitacoraPS1.ps1AnclarACatalogo(parcheSintetico(pedestal), ANCHO, ANCHO, opAncla);
   var s = 0; for (var i = 0; i < a.length; i++) s += a[i];
   return s * ESCALA * ESCALA;
 }
@@ -613,7 +614,7 @@ function parcheConRuido(sigma) {
   return d;
 }
 var SIGMA = 17;                                   // DN, el del stack de PS1 medido en M51
-var anclado = R.ps1AnclarACatalogo(parcheConRuido(SIGMA), ANCHO_R, ANCHO_R,
+var anclado = window.BitacoraPS1.ps1AnclarACatalogo(parcheConRuido(SIGMA), ANCHO_R, ANCHO_R,
   { magV: magV, n: 1, reArcsec: RE, ladoArcmin: LADO_R, escalaAs: ESCALA });
 var luzLejos = 0, luzTotal = 0, pxConLuz = 0, cA = (ANCHO_R - 1) / 2;
 for (var yA = 0; yA < ANCHO_R; yA++) {
@@ -642,9 +643,9 @@ function tocadosTrasQuitar(estrellas) {
   var d = parcheSintetico(0), enPx = [], pxPorAs = ANCHO / (LADO * 60);
   estrellas.forEach(function (e, k) {                         // [g, radio ″ desde el centro]
     enPx.push({ x: (ANCHO - 1) / 2 + e[1] * pxPorAs, y: (ANCHO - 1) / 2 + (k - 1) * 6,
-                rPx: R.ps1RadioMascaraAs(e[0]) * pxPorAs });
+                rPx: window.BitacoraPS1.ps1RadioMascaraAs(e[0]) * pxPorAs });
   });
-  var out = R.ps1QuitarEstrellas(d, ANCHO, ANCHO, enPx);
+  var out = window.BitacoraPS1.ps1QuitarEstrellas(d, ANCHO, ANCHO, enPx);
   var n = 0, s = 0;
   for (var j = 0; j < out.length; j++) { if (out[j] !== d[j]) n++; s += out[j]; }
   return { tocados: n, suma: s };
@@ -656,10 +657,10 @@ ok(qCero.tocados === 0 && qDebil.tocados > 0,
   'una estrella más débil que cualquier equipo también se enmascara (' + qDebil.tocados + ' px)');
 ok(qTodas.tocados > qDebil.tocados,
   'cuantas más estrellas, más parche limpiado (' + qDebil.tocados + ' < ' + qTodas.tocados + ')');
-ok(R.ps1RadioMascaraAs(12) > R.ps1RadioMascaraAs(19),
+ok(window.BitacoraPS1.ps1RadioMascaraAs(12) > window.BitacoraPS1.ps1RadioMascaraAs(19),
   'la estrella brillante se enmascara con más radio que la débil');
-casi(R.ps1RadioMascaraAs(2), R.ps1.mascaraMaxAs, 1e-9, 'el radio de máscara tiene tope');
-casi(R.ps1RadioMascaraAs(25), R.ps1.seeingAs, 1e-9, 'y suelo en el seeing del stack');
+casi(window.BitacoraPS1.ps1RadioMascaraAs(2), window.BitacoraPS1.cfg.mascaraMaxAs, 1e-9, 'el radio de máscara tiene tope');
+casi(window.BitacoraPS1.ps1RadioMascaraAs(25), window.BitacoraPS1.cfg.seeingAs, 1e-9, 'y suelo en el seeing del stack');
 casi(qTodas.suma / qCero.suma, 1, 0.02, 'quitar estrellas no mueve la luz del parche ni un 2 %');
 
 /* La ley magnitud → radio, contra lo medido en .scratch/alas-brillantes: 19031
@@ -667,7 +668,7 @@ casi(qTodas.suma / qCero.suma, 1, 0.02, 'quitar estrellas no mueve la luz del pa
    radio galactocéntrico restado. Lo que se fija aquí es lo que costó medir. */
 var gAntes = null, rAntes = null, escalones = 0;
 for (var gM = 20; gM >= 4; gM -= 0.05) {
-  var rM = R.ps1RadioMascaraAs(gM);
+  var rM = window.BitacoraPS1.ps1RadioMascaraAs(gM);
   if (rAntes != null) {
     if (rM < rAntes - 1e-9) escalones = -1;                       // se hizo MENOR al brillar más
     else if (escalones >= 0 && rM - rAntes > 0.02 * rAntes) escalones++;   // salto de más del 2 %
@@ -675,21 +676,21 @@ for (var gM = 20; gM >= 4; gM -= 0.05) {
   gAntes = gM; rAntes = rM;
 }
 ok(escalones === 0, 'R(g) no baja al brillar la estrella y no da saltos: es continua y monótona');
-ok(R.ps1RadioMascaraAs(-1.5) <= R.ps1.mascaraMaxAs + 1e-9,
-  'ni Sirio se salta el máximo absoluto (' + R.ps1RadioMascaraAs(-1.5).toFixed(1) + '″)');
+ok(window.BitacoraPS1.ps1RadioMascaraAs(-1.5) <= window.BitacoraPS1.cfg.mascaraMaxAs + 1e-9,
+  'ni Sirio se salta el máximo absoluto (' + window.BitacoraPS1.ps1RadioMascaraAs(-1.5).toFixed(1) + '″)');
 /* La FORMA es lo medido: el radio crece ×10^(0,4/3) = 1,359 por magnitud, y el
    ajuste sobre los datos dio ×1,362 (α = 2,98 contra el 3 de la ley). Se
    comprueba donde el tope no manda todavía. */
-casi(R.ps1RadioMascaraAs(15) / R.ps1RadioMascaraAs(16), Math.pow(10, 0.4 / 3), 1e-6,
+casi(window.BitacoraPS1.ps1RadioMascaraAs(15) / window.BitacoraPS1.ps1RadioMascaraAs(16), Math.pow(10, 0.4 / 3), 1e-6,
   'y crece ×1,359 por magnitud, el ala r^-3 que dicen los perfiles apilados');
 /* Los dos casos reales de M81 que dispararon la campaña. La estrella de g=11,3
    del parche pide ~30″: con el tope viejo de 25″ se quedaba corta, y las medidas
    por estrella piden 35–37″ en el tramo g 10–12. La de g=15,4, en cambio, ya
    estaba bien servida y no puede crecer por el cambio de tope. */
-ok(R.ps1RadioMascaraAs(11.29) > 25,
+ok(window.BitacoraPS1.ps1RadioMascaraAs(11.29) > 25,
   'la estrella de g=11,3 de M81 pasa de los 25″ que la recortaban (' +
-  R.ps1RadioMascaraAs(11.29).toFixed(1) + '″)');
-casi(R.ps1RadioMascaraAs(15.4), 8.3, 0.1,
+  window.BitacoraPS1.ps1RadioMascaraAs(11.29).toFixed(1) + '″)');
+casi(window.BitacoraPS1.ps1RadioMascaraAs(15.4), 8.3, 0.1,
   'y la de g=15,4 del mismo parche no se entera del cambio de tope');
 
 /* Relleno de la máscara. Hasta rellenoPlanoMaxAs manda la mediana de alrededor,
@@ -703,24 +704,24 @@ for (var yG = 0; yG < ANCHO; yG++) for (var xG = 0; xG < ANCHO; xG++)
 var ESC_AS = 2;                                          // ″/px
 function rellenoEn(rAs) {
   var e = { x: 60, y: 60, rPx: rAs / ESC_AS, rAs: rAs };
-  var o = R.ps1QuitarEstrellas(GRAD, ANCHO, ANCHO, [e]);
+  var o = window.BitacoraPS1.ps1QuitarEstrellas(GRAD, ANCHO, ANCHO, [e]);
   return o[60 * ANCHO + 60];
 }
-var cieloGrad = R.ps1Cielo(GRAD, ANCHO, ANCHO);
-ok(rellenoEn(R.ps1.rellenoPlanoMaxAs - 2) > cieloGrad + 1,
+var cieloGrad = window.BitacoraPS1.ps1Cielo(GRAD, ANCHO, ANCHO);
+ok(rellenoEn(window.BitacoraPS1.cfg.rellenoPlanoMaxAs - 2) > cieloGrad + 1,
   'una máscara estrecha se rellena con lo de alrededor, no con el cielo');
-casi(rellenoEn(R.ps1.rellenoPlanoMaxAs + 2), cieloGrad, 1e-6,
+casi(rellenoEn(window.BitacoraPS1.cfg.rellenoPlanoMaxAs + 2), cieloGrad, 1e-6,
   'y una ancha se deja al cielo, para que la apague el anclaje y la rellene el perfil');
-ok(R.ps1.rellenoPlanoMaxAs < R.ps1.mascaraMaxAs,
+ok(window.BitacoraPS1.cfg.rellenoPlanoMaxAs < window.BitacoraPS1.cfg.mascaraMaxAs,
   'el tope de máscara llega más lejos que el relleno plano: si no, el hueco no se usaría nunca');
 // Sin `rAs` (una llamada que no lo traiga) se conserva el trato de siempre.
-var sinRAs = R.ps1QuitarEstrellas(GRAD, ANCHO, ANCHO, [{ x: 60, y: 60, rPx: 60 / ESC_AS }]);
+var sinRAs = window.BitacoraPS1.ps1QuitarEstrellas(GRAD, ANCHO, ANCHO, [{ x: 60, y: 60, rPx: 60 / ESC_AS }]);
 ok(sinRAs[60 * ANCHO + 60] > cieloGrad + 1, 'sin rAs se rellena como antes, sea cual sea el radio');
 // Y ps1EstrellasEnPixeles lo trae, que es de donde sale en producción.
-var enPxRAs = R.ps1EstrellasEnPixeles(
+var enPxRAs = window.BitacoraPS1.ps1EstrellasEnPixeles(
   { ancho: ANCHO, alto: ANCHO, escalaAs: LADO * 60 / ANCHO },
   { ra: 10, dec: 41, ladoArcmin: LADO }, [[10, 41, 9]]);
-ok(enPxRAs.length === 1 && Math.abs(enPxRAs[0].rAs - R.ps1RadioMascaraAs(9)) < 1e-9,
+ok(enPxRAs.length === 1 && Math.abs(enPxRAs[0].rAs - window.BitacoraPS1.ps1RadioMascaraAs(9)) < 1e-9,
   'ps1EstrellasEnPixeles trae el radio en ″ además de en px');
 
 /* El caso que se vio en el simulador el 12-ago-2026: una estrella real deja un
@@ -733,8 +734,8 @@ var FONDO = 100, N = 201, PXAS = 0.7, xEst = 60, yEst = 60;  // ″/px, como un 
    `mascaraMagRef` asoma un 10 % del fondo a un radio de seeing, y las demás suben
    con su flujo. Si la ley de ps1RadioMascaraAs es la correcta, el borde de la
    máscara cae SIEMPRE en ese mismo 10 %, sea cual sea la magnitud. */
-var sEst = R.ps1.seeingAs, gEst = 14;
-var picoEst = 0.1 * FONDO * Math.pow(10, 0.4 * (R.ps1.mascaraMagRef - gEst));
+var sEst = window.BitacoraPS1.cfg.seeingAs, gEst = 14;
+var picoEst = 0.1 * FONDO * Math.pow(10, 0.4 * (window.BitacoraPS1.cfg.mascaraMagRef - gEst));
 var conEstrella = new Float32Array(N * N);
 for (var yP = 0; yP < N; yP++) {
   for (var xP = 0; xP < N; xP++) {
@@ -742,8 +743,8 @@ for (var yP = 0; yP < N; yP++) {
     conEstrella[yP * N + xP] = FONDO + picoEst / Math.pow(rAs / sEst, 3);
   }
 }
-var sinEstrella = R.ps1QuitarEstrellas(conEstrella, N, N,
-  [{ x: xEst, y: yEst, rPx: R.ps1RadioMascaraAs(gEst) / PXAS }]);
+var sinEstrella = window.BitacoraPS1.ps1QuitarEstrellas(conEstrella, N, N,
+  [{ x: xEst, y: yEst, rPx: window.BitacoraPS1.ps1RadioMascaraAs(gEst) / PXAS }]);
 var maxRes = -Infinity, minRes = Infinity;
 for (var iR = 0; iR < sinEstrella.length; iR++) {
   if (sinEstrella[iR] > maxRes) maxRes = sinEstrella[iR];
@@ -757,7 +758,7 @@ ok(minRes > FONDO * 0.9, 'ni hueco (mínimo ' + minRes.toFixed(1) + ')');
    scripts/test_quitar_estrellas.js. Sin `geo`, la máscara trata el centro como
    cualquier otro píxel. */
 var dN = parcheSintetico(0);
-var outN = R.ps1QuitarEstrellas(dN, ANCHO, ANCHO,
+var outN = window.BitacoraPS1.ps1QuitarEstrellas(dN, ANCHO, ANCHO,
   [{ x: (ANCHO - 1) / 2, y: (ANCHO - 1) / 2, rPx: 12 }]);
 var cN = Math.round((ANCHO - 1) / 2), iN = cN * ANCHO + cN;
 ok(outN[iN] !== dN[iN], 'sin geometría de galaxia no hay zona ciega en el centro');
@@ -771,7 +772,7 @@ var galRA = 10 + (5 / 60) / cos0, galDec = dec0 + 2 / 60;
 var marca = new Float32Array(ANCHO * ANCHO);
 marca[Math.round((ANCHO - 1) / 2) * ANCHO + Math.round((ANCHO - 1) / 2)] = 1;
 var lienzo = new Float32Array(SIZE * SIZE);
-R.ps1PintarParche(lienzo, { datos: marca, ancho: ANCHO, alto: ANCHO, ladoArcmin: LADO,
+window.BitacoraPS1.ps1PintarParche(lienzo, { datos: marca, ancho: ANCHO, alto: ANCHO, ladoArcmin: LADO,
                             ra: galRA, dec: galDec },
                   { ra0: 10, dec0: dec0, arcmin: CAMPO, size: SIZE });
 var mejor = -1, vMejor = 0;
@@ -791,7 +792,7 @@ var marcaN = new Float32Array(ANCHO * ANCHO);
 var cM = Math.round((ANCHO - 1) / 2);
 marcaN[(cM + 10) * ANCHO + (cM - 6)] = 1;        // 10 px al norte, 6 px al este
 var lienzoN = new Float32Array(SIZE * SIZE);
-R.ps1PintarParche(lienzoN, { datos: marcaN, ancho: ANCHO, alto: ANCHO, ladoArcmin: LADO,
+window.BitacoraPS1.ps1PintarParche(lienzoN, { datos: marcaN, ancho: ANCHO, alto: ANCHO, ladoArcmin: LADO,
                              ra: 10, dec: dec0 },
                   { ra0: 10, dec0: dec0, arcmin: CAMPO, size: SIZE });
 var mejorN = -1, vN = 0;
@@ -807,14 +808,14 @@ casi(mejorN % SIZE, SIZE / 2 - 6 * kPx, 1.5,
    la estrella intacta. */
 var galEst = { ra: 202.47208, dec: 47.19667, ladoArcmin: 18, magV: 8.2, n: 1, reArcsec: 180 };
 var estN = [[galEst.ra, galEst.dec + 3 / 60, 10]];                 // 3′ al norte
-var enPxN = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estN);
+var enPxN = window.BitacoraPS1.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estN);
 ok(enPxN.length === 1 && enPxN[0].y > (512 - 1) / 2,
   'una estrella al norte se enmascara en una fila mayor del parche');
 var estE = [[galEst.ra + (3 / 60) / Math.cos(galEst.dec * Math.PI / 180), galEst.dec, 10]];
-var enPxE = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estE);
+var enPxE = window.BitacoraPS1.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estE);
 ok(enPxE.length === 1 && enPxE[0].x < (512 - 1) / 2,
   'una estrella al este se enmascara en una columna menor del parche');
-ok(R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, [[galEst.ra, galEst.dec, 18]]).length === 1,
+ok(window.BitacoraPS1.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, [[galEst.ra, galEst.dec, 18]]).length === 1,
   'una estrella por debajo de la magnitud límite del equipo TAMBIÉN se enmascara');
 
 /* Y con la rejilla GIRADA. El recorte llega en la rejilla de la skycell, cuyo
@@ -828,20 +829,20 @@ var fGirado = { ancho: 512, alto: 512, escalaAs: escGrad * 3600,
                 wcs: { ra0: galEst.ra + 4, dec0: galEst.dec, x0: 255.5, y0: 255.5,
                        gx: -escGrad, gy: escGrad } };
 // El punto de referencia se mueve al sitio donde de verdad cae el objeto.
-var cGir = R.ps1CieloAPixel(fGirado.wcs, galEst.ra, galEst.dec);
+var cGir = window.BitacoraPS1.ps1CieloAPixel(fGirado.wcs, galEst.ra, galEst.dec);
 fGirado.wcs.x0 = 255.5 - (cGir[0] - 255.5); fGirado.wcs.y0 = 255.5 - (cGir[1] - 255.5);
-var aGir = R.ps1AfinParche(fGirado, galEst);
+var aGir = window.BitacoraPS1.ps1AfinParche(fGirado, galEst);
 var giroGrados = Math.atan2(aGir.xn, aGir.yn) * 180 / Math.PI;
 ok(Math.abs(giroGrados + 4 * Math.sin(galEst.dec * Math.PI / 180)) < 0.15,
   'la afín del parche recoge el giro de la rejilla (' + giroGrados.toFixed(2) + '°)');
-var pGir = R.ps1EstrellasEnPixeles(fGirado, galEst, estN)[0];
-var pRecto = R.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estN)[0];
+var pGir = window.BitacoraPS1.ps1EstrellasEnPixeles(fGirado, galEst, estN)[0];
+var pRecto = window.BitacoraPS1.ps1EstrellasEnPixeles({ ancho: 512, alto: 512 }, galEst, estN)[0];
 // La estrella está a 85 px del centro, así que 2,94° la mueven ~4,4 px: mucho
 // más que el radio de máscara de una débil, que es de un píxel escaso.
 ok(Math.hypot(pGir.x - pRecto.x, pGir.y - pRecto.y) > 3,
   'y la estrella se enmascara donde la pone la WCS, no donde la ponía el norte arriba');
 // Contra la verdad: la TAN llevada a mano hasta esa estrella.
-var espN = R.ps1CieloAPixel(fGirado.wcs, estN[0][0], estN[0][1]);
+var espN = window.BitacoraPS1.ps1CieloAPixel(fGirado.wcs, estN[0][0], estN[0][1]);
 ok(Math.hypot(pGir.x - espN[0], pGir.y - espN[1]) < 0.01,
   'y coincide con la gnomónica de su propia cabecera');
 // Y la vuelta de la afín deshace la ida: un píxel del parche da su (norte, este).
@@ -853,7 +854,7 @@ ok(Math.abs(aGir.xe * esteA + aGir.xn * norteA - dxA) < 1e-6 &&
 // Y el parche ocupa en el render el lado que le toca, ni más ni menos.
 var minX = SIZE, maxX = -1;
 var lienzoLleno = new Float32Array(SIZE * SIZE);
-R.ps1PintarParche(lienzoLleno, { datos: parcheSintetico(0), ancho: ANCHO, alto: ANCHO,
+window.BitacoraPS1.ps1PintarParche(lienzoLleno, { datos: parcheSintetico(0), ancho: ANCHO, alto: ANCHO,
                                  ladoArcmin: LADO, ra: 10, dec: dec0 },
                   { ra0: 10, dec0: dec0, arcmin: CAMPO, size: SIZE });
 for (var yy = 0; yy < SIZE; yy++) {
@@ -869,21 +870,21 @@ var catalogo = [
   ['NGC 2', '', 10, 41 + 5, 30, 1, 0, 12, 1, 0.3, 0],      // fuera del campo
   ['NGC 3', '', 10, -45, 30, 1, 0, 12, 1, 0.3, 0]          // fuera de cobertura
 ];
-var enCampo = R.ps1GalaxiasDelCampo(catalogo, 10, dec0, CAMPO).map(function (g) { return g.nombre; });
+var enCampo = window.BitacoraPS1.ps1GalaxiasDelCampo(catalogo, 10, dec0, CAMPO).map(function (g) { return g.nombre; });
 ok(enCampo.length === 1 && enCampo[0] === 'NGC 1',
   'solo entran las galaxias del campo que PS1 cubre (' + enCampo.join(',') + ')');
 
 /* Y las que no caben en el parche tampoco entran: con r_e = 36′ (M31) el parche
    de 20′ abarca el 8 % de la luz, y el stack de PanSTARRS ya no trae ese disco,
    así que el anclaje lo apretaría todo en el bulbo. La galaxia normal sí pasa. */
-var enormes = R.ps1GalaxiasDelCampo(
+var enormes = window.BitacoraPS1.ps1GalaxiasDelCampo(
   [['M31 (r_e 36′)', '', 10, 41.02, 2158.72, 0.324, 35, 3.61, 1, 0.3, 1],
    ['normal (r_e 3′)', '', 10, 41.02, 186.19, 0.135, 136, 9.67, 1, 0.3, 1]],
   10, dec0, CAMPO).map(function (g) { return g.nombre; });
 ok(enormes.length === 1 && enormes[0] === 'normal (r_e 3′)',
   'la galaxia mucho mayor que el parche se queda sin capa (' + enormes.join(',') + ')');
-casi(R.ps1LadoArcmin(8105), R.ps1.ladoMax, 1e-9, 'M31 se queda en el tope de 20′');
-casi(R.ps1LadoArcmin(1), R.ps1.ladoMin, 1e-9, 'una galaxia diminuta no baja del suelo de 1,5′');
+casi(window.BitacoraPS1.ps1LadoArcmin(8105), window.BitacoraPS1.cfg.ladoMax, 1e-9, 'M31 se queda en el tope de 20′');
+casi(window.BitacoraPS1.ps1LadoArcmin(1), window.BitacoraPS1.cfg.ladoMin, 1e-9, 'una galaxia diminuta no baja del suelo de 1,5′');
 
 /* ══════════════ HALO EXTRAPOLADO Y UMBRAL DE CONTRASTE ══════════════
    El perfil que se extrapola más allá de la imagen tiene que ser EL MISMO que
@@ -893,12 +894,12 @@ casi(R.ps1LadoArcmin(1), R.ps1.ladoMin, 1e-9, 'una galaxia diminuta no baja del 
 // 21 (Δμ = 1,68). Con magV 10 el mismo perfil se queda en Δμ = 1,09 y no entra.
 var galH = { magV: 11, reArcsec: 60, n: 1, ba: 0.6, pa: 30, bt: 0,
              nMedido: 1.2, ladoArcmin: 6 };
-var compsH = R.ps1ComponentesSersic(galH);
+var compsH = window.BitacoraPS1.ps1ComponentesSersic(galH);
 ok(compsH.length === 1, 'una galaxia sin bulbo trae una sola componente');
-var rMaxH = R.ps1RadioHaloAs(compsH);
-casi(-2.5 * Math.log10(R.ps1FlujoModelo(compsH, galH.pa, rMaxH * Math.cos(galH.pa * Math.PI / 180),
+var rMaxH = window.BitacoraPS1.ps1RadioHaloAs(compsH);
+casi(-2.5 * Math.log10(window.BitacoraPS1.ps1FlujoModelo(compsH, galH.pa, rMaxH * Math.cos(galH.pa * Math.PI / 180),
                                         rMaxH * Math.sin(galH.pa * Math.PI / 180))),
-     R.ps1.muHalo, 1e-6, 'el halo se extrapola justo hasta ' + R.ps1.muHalo + ' mag/arcsec²');
+     window.BitacoraPS1.cfg.muHalo, 1e-6, 'el halo se extrapola justo hasta ' + window.BitacoraPS1.cfg.muHalo + ' mag/arcsec²');
 ok(rMaxH > 2 * galH.reArcsec, 'y eso queda bastante más allá del parche (' +
   (rMaxH / galH.reArcsec).toFixed(1) + '·r_e)');
 
@@ -907,28 +908,28 @@ ok(rMaxH > 2 * galH.reArcsec, 'y eso queda bastante más allá del parche (' +
 var pasoH = 2, sumaH = 0;                     // ″ por celda
 for (var nH = -rMaxH; nH <= rMaxH; nH += pasoH) {
   for (var eH = -rMaxH; eH <= rMaxH; eH += pasoH) {
-    sumaH += R.ps1FlujoModelo(compsH, galH.pa, nH, eH) * pasoH * pasoH;
+    sumaH += window.BitacoraPS1.ps1FlujoModelo(compsH, galH.pa, nH, eH) * pasoH * pasoH;
   }
 }
-var esperadoH = Math.pow(10, -0.4 * galH.magV) * R.ps1FraccionLuz(galH.n, rMaxH / galH.reArcsec);
+var esperadoH = Math.pow(10, -0.4 * galH.magV) * window.BitacoraPS1.ps1FraccionLuz(galH.n, rMaxH / galH.reArcsec);
 casi(sumaH / esperadoH, 1, 0.02, 'el halo integrado da la magnitud del catálogo');
 
 // Reparto bulbo/disco: con B/T = 1 toda la luz va al bulbo (n=4, r_e más chico).
-var compsB = R.ps1ComponentesSersic({ magV: 10, reArcsec: 60, n: 1, ba: 1, pa: 0, bt: 1 });
+var compsB = window.BitacoraPS1.ps1ComponentesSersic({ magV: 10, reArcsec: 60, n: 1, ba: 1, pa: 0, bt: 1 });
 ok(compsB.length === 1 && compsB[0].n === 4 && compsB[0].re < 60,
   'con B/T = 1 solo queda el bulbo, más compacto que el disco');
 
 /* Umbral de Blackwell/Clark: por debajo del cielo no se ve nada, deltaPlena
    mag por encima se ve entero, y en medio la potencia de PS1.deltaExp. */
-casi(R.ps1Opacidad(21, 21), 0, 1e-12, 'un halo tan brillante como el cielo no se ve');
-casi(R.ps1Opacidad(22, 21), 0, 1e-12, 'y uno más débil, tampoco');
-casi(R.ps1Opacidad(21 - R.ps1.deltaPlena, 21), 1, 1e-12, 'a Δ = ' + R.ps1.deltaPlena + ' se ve entero');
-casi(R.ps1Opacidad(21 - 5, 21), 1, 1e-12, 'y no pasa de 1 por mucho que suba');
-casi(R.ps1Opacidad(21 - 1.5, 21), Math.pow(1.5 / R.ps1.deltaPlena, R.ps1.deltaExp), 1e-12,
+casi(window.BitacoraPS1.ps1Opacidad(21, 21), 0, 1e-12, 'un halo tan brillante como el cielo no se ve');
+casi(window.BitacoraPS1.ps1Opacidad(22, 21), 0, 1e-12, 'y uno más débil, tampoco');
+casi(window.BitacoraPS1.ps1Opacidad(21 - window.BitacoraPS1.cfg.deltaPlena, 21), 1, 1e-12, 'a Δ = ' + window.BitacoraPS1.cfg.deltaPlena + ' se ve entero');
+casi(window.BitacoraPS1.ps1Opacidad(21 - 5, 21), 1, 1e-12, 'y no pasa de 1 por mucho que suba');
+casi(window.BitacoraPS1.ps1Opacidad(21 - 1.5, 21), Math.pow(1.5 / window.BitacoraPS1.cfg.deltaPlena, window.BitacoraPS1.cfg.deltaExp), 1e-12,
   'en la transición sigue la potencia pedida');
 var opAnt = -1, monotona = true;
 for (var dOp = 0; dOp <= 4; dOp += 0.05) {
-  var opH = R.ps1Opacidad(21 - dOp, 21);
+  var opH = window.BitacoraPS1.ps1Opacidad(21 - dOp, 21);
   if (opH < opAnt - 1e-12) monotona = false;
   opAnt = opH;
 }
@@ -939,42 +940,42 @@ ok(monotona, 'la opacidad no retrocede en ningún punto (sin borde duro)');
 var cH = R.ctxFotometrico({ sqm: 21, pupilaSalida: 3, pupilaOjo: 7, transmision: 0.9 });
 var Fgal = cH.Fcielo * 4;
 var nivelPleno = 255 * 2.5 * Math.log10(1 + Fgal / cH.Fcielo) / cH.rango;
-casi(255 * 2.5 * Math.log10(1 + R.ps1FlujoConOpacidad(Fgal, 0.4, cH) / cH.Fcielo) / cH.rango,
+casi(255 * 2.5 * Math.log10(1 + window.BitacoraPS1.ps1FlujoConOpacidad(Fgal, 0.4, cH) / cH.Fcielo) / cH.rango,
      0.4 * nivelPleno, 1e-9, 'la opacidad 0,4 deja el nivel a 0,4 del camino al color de la galaxia');
-casi(R.ps1FlujoConOpacidad(Fgal, 0, cH), 0, 1e-30, 'opacidad 0 = el píxel se queda en el cielo');
-casi(R.ps1FlujoConOpacidad(Fgal, 1, cH), Fgal, 1e-30, 'opacidad 1 = el píxel de la galaxia entero');
+casi(window.BitacoraPS1.ps1FlujoConOpacidad(Fgal, 0, cH), 0, 1e-30, 'opacidad 0 = el píxel se queda en el cielo');
+casi(window.BitacoraPS1.ps1FlujoConOpacidad(Fgal, 1, cH), Fgal, 1e-30, 'opacidad 1 = el píxel de la galaxia entero');
 
 /* ── Activación: no toda galaxia enseña halo ──────────────────────────────────
    μ_medio = m + 2,5·log10(π·a·b/4) + 8,89, con a y b DIÁMETROS en ′. */
-casi(R.ps1BrilloMedio(10, 2, 1), 10 + 2.5 * Math.log10(Math.PI / 2) + 8.89, 1e-12,
+casi(window.BitacoraPS1.ps1BrilloMedio(10, 2, 1), 10 + 2.5 * Math.log10(Math.PI / 2) + 8.89, 1e-12,
   'el brillo superficial medio sigue la fórmula pedida');
 
 // Los ejes salen de la isofota 25 del mismo modelo del catálogo.
-var medH = R.ps1MedidasHalo(galH, compsH);
-casi(-2.5 * Math.log10(R.ps1FlujoModelo(compsH, galH.pa,
+var medH = window.BitacoraPS1.ps1MedidasHalo(galH, compsH);
+casi(-2.5 * Math.log10(window.BitacoraPS1.ps1FlujoModelo(compsH, galH.pa,
        (medH.aArcmin / 2) * 60 * Math.cos(galH.pa * Math.PI / 180),
        (medH.aArcmin / 2) * 60 * Math.sin(galH.pa * Math.PI / 180))),
      25, 1e-6, 'el eje mayor es el diámetro de la isofota de 25 mag/arcsec²');
 casi(medH.bArcmin / medH.aArcmin, galH.ba, 1e-12, 'y el menor va con el b/a del catálogo');
 
 // Condición A: por debajo de haloMenorMin no hay halo, sea cual sea el brillo.
-var difusa = { bArcmin: R.ps1.haloMenorMin + 0.01, muProm: R.ps1.haloMuFijo + 0.5 };
-ok(R.ps1HaloActivo({ bArcmin: R.ps1.haloMenorMin, muProm: difusa.muProm }) === false,
+var difusa = { bArcmin: window.BitacoraPS1.cfg.haloMenorMin + 0.01, muProm: window.BitacoraPS1.cfg.haloMuFijo + 0.5 };
+ok(window.BitacoraPS1.ps1HaloActivo({ bArcmin: window.BitacoraPS1.cfg.haloMenorMin, muProm: difusa.muProm }) === false,
   'una galaxia con el eje menor en el límite no entra (condición A)');
-ok(R.ps1HaloActivo(difusa) === true, 'y justo por encima, sí');
+ok(window.BitacoraPS1.ps1HaloActivo(difusa) === true, 'y justo por encima, sí');
 // Condición B: brillo superficial medio, un absoluto de la galaxia.
-ok(R.ps1HaloActivo({ bArcmin: 20, muProm: R.ps1.haloMuFijo - 0.01 }) === false,
+ok(window.BitacoraPS1.ps1HaloActivo({ bArcmin: 20, muProm: window.BitacoraPS1.cfg.haloMuFijo - 0.01 }) === false,
   'una galaxia compacta se queda fuera por grande que sea (condición B)');
-ok(R.ps1HaloActivo({ bArcmin: 20, muProm: R.ps1.haloMuFijo + 0.01 }) === true,
+ok(window.BitacoraPS1.ps1HaloActivo({ bArcmin: 20, muProm: window.BitacoraPS1.cfg.haloMuFijo + 0.01 }) === true,
   'y una difusa entra');
 // Sin medidas, nada de halos inventados.
-ok(R.ps1HaloActivo(null) === false, 'sin medidas no hay halo');
-ok(R.ps1HaloActivo({ bArcmin: 20, muProm: Infinity }) === false,
+ok(window.BitacoraPS1.ps1HaloActivo(null) === false, 'sin medidas no hay halo');
+ok(window.BitacoraPS1.ps1HaloActivo({ bArcmin: 20, muProm: Infinity }) === false,
   'ni con un brillo medio sin definir');
 
 /* La puerta no mira ni el ocular ni el cielo: en su firma solo cabe la galaxia.
    Mientras, SBe —el que sí manda en la rampa— se oscurece con el aumento. */
-ok(R.ps1HaloActivo.length === 1, 'la puerta se decide solo con la galaxia');
+ok(window.BitacoraPS1.ps1HaloActivo.length === 1, 'la puerta se decide solo con la galaxia');
 var cielo5 = R.ctxFotometrico({ sqm: 21, pupilaSalida: 5, pupilaOjo: 7, transmision: 0.9 });
 var cielo1 = R.ctxFotometrico({ sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 });
 ok(cielo1.SBe > cielo5.SBe + 1, 'y eso que SBe sí se oscurece con el aumento (' +
@@ -983,47 +984,47 @@ ok(cielo1.SBe > cielo5.SBe + 1, 'y eso que SBe sí se oscurece con el aumento ('
 /* Filas reales de galaxias-datos.js: M82 (μ=22,11) y NGC 4565 (22,23) fuera;
    M51 (22,39) y M101 (23,21) dentro; M49 (21,34), fuera. La columna 12 (n de
    S4G) viaja en las medidas pero no decide: M82 mide 2,44 y M51 3,87. */
-function medidas(g) { return R.ps1MedidasHalo(g, R.ps1ComponentesSersic(g)); }
+function medidas(g) { return window.BitacoraPS1.ps1MedidasHalo(g, window.BitacoraPS1.ps1ComponentesSersic(g)); }
 var m82 = medidas({ reArcsec: 137.47, ba: 0.38, magV: 8.75, n: 1, bt: 0.03, nMedido: 2.44 });
 var m51 = medidas({ reArcsec: 180.35, ba: 0.617, magV: 8.21, n: 1, bt: 0.15, nMedido: 3.87 });
 var m101 = medidas({ reArcsec: 379.23, ba: 0.933, magV: 7.76, n: 1, bt: 0.08, nMedido: 1.31 });
 var m49 = medidas({ reArcsec: 115.38, ba: 0.813, magV: 8.47, n: 4, bt: 1, nMedido: 4.49 });
 var m4565 = medidas({ reArcsec: 186.19, ba: 0.135, magV: 9.67, n: 1, bt: 0.3, nMedido: 1.28 });
-ok(R.ps1HaloActivo(m82) === false, 'M82 se queda fuera (μ = ' + m82.muProm.toFixed(2) + ')');
-ok(R.ps1HaloActivo(m4565) === false, 'NGC 4565 tampoco, por poco (μ = ' +
+ok(window.BitacoraPS1.ps1HaloActivo(m82) === false, 'M82 se queda fuera (μ = ' + m82.muProm.toFixed(2) + ')');
+ok(window.BitacoraPS1.ps1HaloActivo(m4565) === false, 'NGC 4565 tampoco, por poco (μ = ' +
   m4565.muProm.toFixed(2) + ')');
-ok(R.ps1HaloActivo(m51) === true, 'M51 lleva halo (μ = ' + m51.muProm.toFixed(2) +
+ok(window.BitacoraPS1.ps1HaloActivo(m51) === true, 'M51 lleva halo (μ = ' + m51.muProm.toFixed(2) +
   ') aunque su n de S4G sea 3,87');
-ok(R.ps1HaloActivo(m101) === true, 'M101 lleva halo (μ = ' + m101.muProm.toFixed(2) + ')');
-ok(R.ps1HaloActivo(m49) === false, 'M49, elíptica, no (μ = ' + m49.muProm.toFixed(2) + ')');
+ok(window.BitacoraPS1.ps1HaloActivo(m101) === true, 'M101 lleva halo (μ = ' + m101.muProm.toFixed(2) + ')');
+ok(window.BitacoraPS1.ps1HaloActivo(m49) === false, 'M49, elíptica, no (μ = ' + m49.muProm.toFixed(2) + ')');
 ok(m82.n === 2.44, 'el n medido sigue viajando en las medidas, sin decidir');
 
 /* ── n medido en la imagen por concentración ──────────────────────────────────
    Ya no abre la puerta (manda el brillo medio), pero se queda medido y probado:
    la razón r90/r50 crece con n, y por eso se puede invertir. */
 var aEnRe = 3;
-ok(R.ps1ConcentracionTeorica(1, aEnRe) < R.ps1ConcentracionTeorica(4, aEnRe),
+ok(window.BitacoraPS1.ps1ConcentracionTeorica(1, aEnRe) < window.BitacoraPS1.ps1ConcentracionTeorica(4, aEnRe),
   'un perfil concentrado tiene el r90/r50 mayor que uno exponencial (' +
-  R.ps1ConcentracionTeorica(1, aEnRe).toFixed(2) + ' contra ' +
-  R.ps1ConcentracionTeorica(4, aEnRe).toFixed(2) + ')');
-casi(R.ps1NDeConcentracion(R.ps1ConcentracionTeorica(2.2, aEnRe), aEnRe), 2.2, 1e-3,
+  window.BitacoraPS1.ps1ConcentracionTeorica(1, aEnRe).toFixed(2) + ' contra ' +
+  window.BitacoraPS1.ps1ConcentracionTeorica(4, aEnRe).toFixed(2) + ')');
+casi(window.BitacoraPS1.ps1NDeConcentracion(window.BitacoraPS1.ps1ConcentracionTeorica(2.2, aEnRe), aEnRe), 2.2, 1e-3,
   'y la inversión devuelve el n del que salió');
 
 /* Vuelta entera sobre un parche SINTÉTICO: se pinta el perfil de un n conocido
    y se recupera midiendo su curva de crecimiento. */
 function nDeParcheSintetico(n) {
   var g = { magV: 10, reArcsec: 30, n: n, ba: 0.7, pa: 25, bt: 0, ladoArcmin: 6 };
-  var comps = R.ps1ComponentesSersic(g), lado = 256, escalaAs = g.ladoArcmin * 60 / lado;
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(g), lado = 256, escalaAs = g.ladoArcmin * 60 / lado;
   var datos = new Float32Array(lado * lado);
   for (var py = 0; py < lado; py++) {
     var norte = (py - (lado - 1) / 2) * escalaAs;
     for (var px = 0; px < lado; px++) {
-      datos[py * lado + px] = R.ps1FlujoModelo(comps, g.pa, norte,
+      datos[py * lado + px] = window.BitacoraPS1.ps1FlujoModelo(comps, g.pa, norte,
         ((lado - 1) / 2 - px) * escalaAs);
     }
   }
-  var ejes = R.ps1EjesArcmin(comps, g.ba);
-  return R.ps1ConcentracionN({ datos: datos, ancho: lado, alto: lado, escalaAs: escalaAs },
+  var ejes = window.BitacoraPS1.ps1EjesArcmin(comps, g.ba);
+  return window.BitacoraPS1.ps1ConcentracionN({ datos: datos, ancho: lado, alto: lado, escalaAs: escalaAs },
     { pa: g.pa, ba: g.ba, aArcmin: ejes.a, reArcsec: g.reArcsec, ladoArcmin: g.ladoArcmin });
 }
 var nMedido1 = nDeParcheSintetico(1), nMedido4 = nDeParcheSintetico(4);
@@ -1031,9 +1032,9 @@ ok(Math.abs(nMedido1 - 1) < 0.15, 'un disco exponencial se mide como n≈1 (' +
   nMedido1.toFixed(2) + ')');
 ok(Math.abs(nMedido4 - 4) < 0.6, 'y un bulbo de de Vaucouleurs como n≈4 (' +
   nMedido4.toFixed(2) + ')');
-ok(nMedido1 < R.ps1.haloSersicMax && nMedido4 > R.ps1.haloSersicMax,
+ok(nMedido1 < window.BitacoraPS1.cfg.haloSersicMax && nMedido4 > window.BitacoraPS1.cfg.haloSersicMax,
   'la medida cae a los dos lados del tope de Sérsic, por si vuelve a hacer falta');
-ok(R.ps1ConcentracionN({ datos: new Float32Array(16), ancho: 4, alto: 4, escalaAs: 1 },
+ok(window.BitacoraPS1.ps1ConcentracionN({ datos: new Float32Array(16), ancho: 4, alto: 4, escalaAs: 1 },
   { pa: 0, ba: 1, aArcmin: 2, reArcsec: 30, ladoArcmin: 6 }) === 0,
   'un parche sin luz no inventa ninguna n');
 
@@ -1046,7 +1047,7 @@ var SH = 240, CAMPO_H = 20;
    del aumento por el tamaño aparente— y pasar solo una deja fuera media ley. */
 function haloPintado(equipo, medidas) {
   var lienzoH = new Float32Array(SH * SH), n2 = 0;
-  R.ps1PintarParche(lienzoH, {
+  window.BitacoraPS1.ps1PintarParche(lienzoH, {
     datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
     ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medidas
   }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
@@ -1056,7 +1057,7 @@ function haloPintado(equipo, medidas) {
   return n2;
 }
 var OCHO = { D: 203, MAG: 100 }, DIECIOCHO = { D: 457, MAG: 100 };
-ok(R.ps1HaloActivo(medH) === true, 'la galaxia de prueba cumple las dos condiciones');
+ok(window.BitacoraPS1.ps1HaloActivo(medH) === true, 'la galaxia de prueba cumple las dos condiciones');
 ok(haloPintado(OCHO, medH) > 0, 'y su halo se pinta (' + haloPintado(OCHO, medH) + ' px)');
 ok(haloPintado(OCHO, { bArcmin: 5, muProm: 21 }) === 0,
   'la que no las cumple no pinta nada donde no hay imagen');
@@ -1110,13 +1111,13 @@ ok(umbralCon(2.5, 200) > umbralCon(2.5, 50),
    contrario conviviendo. Se comprueba con una galaxia que NO abre la puerta y
    sí trae imagen: debe pasar por la rampa y quedar marcada igual. */
 var sinPuerta = { bArcmin: 5, muProm: 21 };   // eje grande pero brillante: no es difusa
-ok(R.ps1HaloActivo(sinPuerta) === false, 'la galaxia de control no abre la puerta del halo');
+ok(window.BitacoraPS1.ps1HaloActivo(sinPuerta) === false, 'la galaxia de control no abre la puerta del halo');
 var cieloU = { sqm: 21, pupilaSalida: 2.5, pupilaOjo: 7, transmision: 0.9,
                aumentos: 100, perceptual: true };
 var lienzoU = new Float32Array(SH * SH);
 var imagenU = new Float32Array(4);
 for (var iU = 0; iU < 4; iU++) imagenU[iU] = Math.pow(10, -0.4 * 20);   // μ=20, bien sobre el umbral
-R.ps1PintarParche(lienzoU, {
+window.BitacoraPS1.ps1PintarParche(lienzoU, {
   datos: imagenU, ancho: 2, alto: 2, ladoArcmin: 6,
   ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: sinPuerta
 }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloU });
@@ -1131,7 +1132,7 @@ var cU = R.ctxFotometrico(cieloU);
 // Cociente y no diferencia: el lienzo es Float32Array y estos flujos son ~1e-8,
 // donde el épsilon absoluto de la precisión simple ya es ~1e-15.
 casi(lienzoU[Math.round(SH / 2) * SH + Math.round(SH / 2)] /
-  R.ps1FlujoConOpacidad(imagenU[0], R.ps1Opacidad(20, R.sbUmbralContraste(cU)), cU),
+  window.BitacoraPS1.ps1FlujoConOpacidad(imagenU[0], window.BitacoraPS1.ps1Opacidad(20, R.sbUmbralContraste(cU)), cU),
   1, 1e-6,
   'y su píxel sale exactamente de la MISMA ley que el de una galaxia con halo');
 
@@ -1147,19 +1148,19 @@ var crudoP = new Float32Array(PX_P * PX_P), iP;
 for (iP = 0; iP < crudoP.length; iP++) {
   var yP = ((PX_P - 1) / 2 - Math.floor(iP / PX_P)) * ESCALA_P;
   var xP = ((PX_P - 1) / 2 - (iP % PX_P)) * ESCALA_P;
-  crudoP[iP] = 1000 + R.ps1FlujoModelo(compsH, galH.pa, yP, xP) * 1e9;
+  crudoP[iP] = 1000 + window.BitacoraPS1.ps1FlujoModelo(compsH, galH.pa, yP, xP) * 1e9;
 }
-var netoP = R.ps1AnclarACatalogo(crudoP, PX_P, PX_P, {
+var netoP = window.BitacoraPS1.ps1AnclarACatalogo(crudoP, PX_P, PX_P, {
   magV: galH.magV, n: galH.n, reArcsec: galH.reArcsec,
   ladoArcmin: LADO_P, escalaAs: ESCALA_P
 });
 var sumaP = 0;
 for (iP = 0; iP < netoP.length; iP++) sumaP += netoP[iP];
 var esperadoP = Math.pow(10, -0.4 * galH.magV) *
-  Math.max(R.ps1FraccionLuz(galH.n, (LADO_P * 60 / 2) / galH.reArcsec), 0.02);
+  Math.max(window.BitacoraPS1.ps1FraccionLuz(galH.n, (LADO_P * 60 / 2) / galH.reArcsec), 0.02);
 casi(sumaP * ESCALA_P * ESCALA_P / esperadoP, 1, 1e-6,
   'el parche anclado integra EXACTAMENTE la luz del catálogo');
-ok(R.ps1AnclarACatalogo.length === 4,
+ok(window.BitacoraPS1.ps1AnclarACatalogo.length === 4,
   'y su firma no admite apertura ninguna: (datos, ancho, alto, o)');
 
 /* ── La dependencia con el AUMENTO, a apertura fija ─────────────────────────
@@ -1193,9 +1194,9 @@ var R_SONDEO = 0.5;
 function halo(equipo) {
   var cielo = { sqm: 21, pupilaSalida: equipo.D / equipo.MAG, pupilaOjo: 7,
                 transmision: 0.9, aumentos: equipo.MAG,
-                perceptual: true, realceMax: R.ps1.realceMax };
+                perceptual: true, realceMax: window.BitacoraPS1.cfg.realceMax };
   var lienzo = new Float32Array(SH * SH);
-  R.ps1PintarParche(lienzo, {
+  window.BitacoraPS1.ps1PintarParche(lienzo, {
     datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
     ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
   }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cielo });
@@ -1208,7 +1209,7 @@ function halo(equipo) {
     dn: F > 0 ? R.valorDeFlujo(R.realzarPerceptual(F, c.Fcielo, c.rango, 0, 0),
       c.Fcielo, c.rango) : 0,
     dnVieja: (F > 0 && sVieja > 0) ? R.valorDeFlujo(R.realzarPerceptual(F * sVieja,
-      c.Fcielo, c.rango, sVieja, R.ps1.realceMax), c.Fcielo, c.rango) : 0
+      c.Fcielo, c.rango, sVieja, window.BitacoraPS1.cfg.realceMax), c.Fcielo, c.rango) : 0
   };
 }
 var hAlto = halo(DIECIOCHO);
@@ -1223,9 +1224,9 @@ ok(hAlto.dnVieja < hAlto.dn, 'pasarlo OTRA VEZ por visibilidadDifusa lo apagarí
    hacia fuera se pinta con una sola ley o la costura se ve. */
 var cieloD = { sqm: 21, pupilaSalida: DIECIOCHO.D / DIECIOCHO.MAG, pupilaOjo: 7,
                transmision: 0.9, aumentos: DIECIOCHO.MAG,
-               perceptual: true, realceMax: R.ps1.realceMax };
+               perceptual: true, realceMax: window.BitacoraPS1.cfg.realceMax };
 var lienzoD = new Float32Array(SH * SH);
-R.ps1PintarParche(lienzoD, {
+window.BitacoraPS1.ps1PintarParche(lienzoD, {
   datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
   ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
 }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH, cielo: cieloD });
@@ -1241,7 +1242,7 @@ var LADO_W = 64, mitad = new Float32Array(LADO_W * LADO_W);
 for (var yW = 0; yW < LADO_W; yW++) {
   for (var xW = 0; xW < LADO_W; xW++) if (xW < LADO_W / 2) mitad[yW * LADO_W + xW] = 1;
 }
-var wMitad = R.ps1PesoImagen(mitad, LADO_W, LADO_W, 2);        // caja de 25″ ≈ 12 px
+var wMitad = window.BitacoraPS1.ps1PesoImagen(mitad, LADO_W, LADO_W, 2);        // caja de 25″ ≈ 12 px
 var filaW = Math.round(LADO_W / 2) * LADO_W;
 casi(wMitad[filaW + 4], 1, 1e-9, 'donde toda la vecindad trae señal el peso satura en 1');
 casi(wMitad[filaW + LADO_W - 4], 0, 1e-9, 'y donde no hay nada medido, en 0');
@@ -1256,14 +1257,14 @@ ok(subeYBaja, 'y monótono: el peso solo baja al alejarse de la zona medida');
    envolvente añadió, así que la galaxia sigue emitiendo lo que dice el catálogo. */
 var imgM = new Float32Array([4, 3, 0, 0]), wM = new Float32Array([1, 0.5, 0.25, 0]);
 var perfM = new Float32Array([2, 2, 2, 2]);
-var sM = R.ps1EscalaMezcla(imgM, wM, perfM), sumaM = 0, sumaImg = 0;
+var sM = window.BitacoraPS1.ps1EscalaMezcla(imgM, wM, perfM), sumaM = 0, sumaImg = 0;
 for (var iM = 0; iM < imgM.length; iM++) {
   sumaM += wM[iM] * sM * imgM[iM] + (1 - wM[iM]) * perfM[iM];
   sumaImg += imgM[iM];
 }
 casi(sumaM, sumaImg, 1e-6, 'la mezcla suma exactamente lo que la imagen anclada');
 ok(sM > 0 && sM < 1, 'y el reanclaje baja la imagen para hacerle sitio (×' + sM.toFixed(3) + ')');
-ok(R.ps1EscalaMezcla(imgM, wM, new Float32Array([99, 99, 99, 99])) === 0,
+ok(window.BitacoraPS1.ps1EscalaMezcla(imgM, wM, new Float32Array([99, 99, 99, 99])) === 0,
   'si la envolvente se pasa del presupuesto, el reanclaje se corta en 0 y no se resta luz');
 
 /* Y al pintar: con la vecindad medida la imagen manda aunque el perfil valga
@@ -1273,7 +1274,7 @@ for (var iP = 0; iP < imgP.length; iP++) imgP[iP] = unoP;
 var pesoP = new Float32Array(imgP.length);
 for (var iP2 = 0; iP2 < pesoP.length; iP2++) pesoP[iP2] = 1;
 var lienzoM = new Float32Array(SH * SH);
-R.ps1PintarParche(lienzoM, {
+window.BitacoraPS1.ps1PintarParche(lienzoM, {
   datos: imgP, ancho: LADO_P, alto: LADO_P, ladoArcmin: 6,
   ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH,
   peso: pesoP, escalaMezcla: 1
@@ -1281,7 +1282,7 @@ R.ps1PintarParche(lienzoM, {
      cielo: { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 } });
 var iMz = Math.round(SH / 2) * SH + Math.round(SH / 2 + 0.2 * galH.reArcsec *
   ((SH / (CAMPO_H / 60)) / 3600));
-var perfilAhi = R.ps1FlujoModelo(compsH, galH.pa, 0, -0.2 * galH.reArcsec);
+var perfilAhi = window.BitacoraPS1.ps1FlujoModelo(compsH, galH.pa, 0, -0.2 * galH.reArcsec);
 ok(lienzoM[iMz] < perfilAhi, 'donde la imagen midió, manda la imagen aunque el perfil valga más');
 
 /* ── Ni halo Sérsic ni componente extra ──────────────────────────────────────
@@ -1292,13 +1293,13 @@ ok(lienzoM[iMz] < perfilAhi, 'donde la imagen midió, manda la imagen aunque el 
    corte de 1,5σ está en μ = 25,03 por píxel, así que más allá de ~1,6 r_e la
    imagen no mide, no es que la galaxia se acabe—. La única ley que queda fuera
    de la imagen es el perfil del catálogo, sin recortar. */
-ok(R.ps1ComponenteHalo === undefined && R.ps1FlujoHalo === undefined,
+ok(window.BitacoraPS1.ps1ComponenteHalo === undefined && window.BitacoraPS1.ps1FlujoHalo === undefined,
   'el halo con ley propia ya no existe');
-ok(R.ps1MedidasHalo(galH, compsH).halo === undefined,
+ok(window.BitacoraPS1.ps1MedidasHalo(galH, compsH).halo === undefined,
   'y las medidas de la galaxia no traen componente extra ninguna');
 // Fuera de la imagen manda el perfil del catálogo tal cual, sin modular.
 var lienzoF = new Float32Array(SH * SH);
-R.ps1PintarParche(lienzoF, {
+window.BitacoraPS1.ps1PintarParche(lienzoF, {
   datos: new Float32Array(4), ancho: 2, alto: 2, ladoArcmin: 6,
   ra: 10, dec: 41, comps: compsH, pa: galH.pa, halo: medH
 }, { ra0: 10, dec0: 41, arcmin: CAMPO_H, size: SH,
@@ -1306,7 +1307,7 @@ R.ps1PintarParche(lienzoF, {
               transmision: 0.9, aumentos: DIECIOCHO.MAG } });
 var pxAsF = (SH / (CAMPO_H / 60)) / 3600;
 var iF = Math.round(SH / 2) * SH + Math.round(SH / 2 + R_SONDEO * galH.reArcsec * pxAsF);
-ok(lienzoF[iF] > 0 && lienzoF[iF] <= R.ps1FlujoModelo(compsH, galH.pa, 0, -R_SONDEO * galH.reArcsec),
+ok(lienzoF[iF] > 0 && lienzoF[iF] <= window.BitacoraPS1.ps1FlujoModelo(compsH, galH.pa, 0, -R_SONDEO * galH.reArcsec),
   'sin imagen que mezclar queda el perfil del catálogo, ni más ni menos');
 
 /* ── Interruptor y avisos de la capa (ficha 12) ──────────────────────────────
@@ -1314,7 +1315,7 @@ ok(lienzoF[iF] > 0 && lienzoF[iF] <= R.ps1FlujoModelo(compsH, galH.pa, 0, -R_SON
    ni pedir el parche (aquí no hay fetch que valga) ni tocar el lienzo. Y el
    aviso solo habla del objeto apuntado, con la causa: por el sur no hay nada
    que esperar, por caída sí. */
-ok(R.galaxiasImagen === true, 'la capa de galaxias viene encendida por defecto');
+ok(window.BitacoraPS1.galaxiasImagen === true, 'la capa de galaxias viene encendida por defecto');
 
 // [nombre, alt, RA°, Dec°, r_e″, b/a, PA°, magV, n, B/T, polvo, n medido]
 var galNorte = ['NGC 0000', '', 180, 40, 60, 0.7, 0, 10, 1, 0.2, 0, 0];
@@ -1328,18 +1329,18 @@ function capa(gal, ra0, dec0) {
             estrellas: opCapa.estrellas, catalogo: [gal] };
   lienzoCapa = new Float32Array(4);
   peticionesParche = 0;
-  return R.ps1CapaGalaxias(lienzoCapa, null, { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 }, null, o);
+  return window.BitacoraPS1.ps1CapaGalaxias(lienzoCapa, null, { sqm: 21, pupilaSalida: 1, pupilaOjo: 7, transmision: 0.9 }, null, o);
 }
 function lienzoIntacto() {
   for (var i = 0; i < lienzoCapa.length; i++) if (lienzoCapa[i] !== 0) return false;
   return true;
 }
 
-R.galaxiasImagen = false;
+window.BitacoraPS1.galaxiasImagen = false;
 capa(galNorte, 180, 40).then(function (r) {
   ok(r.aviso === '', 'apagada, la capa no pide parche ni avisa de nada');
   ok(lienzoIntacto(), 'y el lienzo se queda como estaba');
-  R.galaxiasImagen = true;
+  window.BitacoraPS1.galaxiasImagen = true;
   // Servicio caído: el parche no llega y se dice, porque hay algo que esperar.
   global.fetch = function () { peticionesParche++; return Promise.reject(new Error('sin servicio')); };
   return capa(galNorte, 180, 40);
@@ -1350,7 +1351,7 @@ capa(galNorte, 180, 40).then(function (r) {
 }).then(function (r) {
   ok(/PanSTARRS no cubre/.test(r.aviso), 'al sur de −30° se avisa de la cobertura');
   // Más grande que su parche (M31, IC 342, M33): tercera causa, texto propio.
-  ok(R.ps1CabeEnParche(galEnorme) === false, 'la galaxia enorme no cabe en su parche');
+  ok(window.BitacoraPS1.ps1CabeEnParche(galEnorme) === false, 'la galaxia enorme no cabe en su parche');
   return capa(galEnorme, 180, 40);
 }).then(function (r) {
   ok(/mayor que el recorte/.test(r.aviso), 'a la que no cabe en su parche se le dice por qué');

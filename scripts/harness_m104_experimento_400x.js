@@ -46,8 +46,9 @@
 var fs = require('fs'), path = require('path');
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1, CFG = R.config, FOT = R.fot;
+var PS1 = window.BitacoraPS1.cfg, CFG = R.config, FOT = R.fot;
 var P = require('./lib_psf_parche.js')(R);
 var B = require('./lib_bajar_parche.js')(R);
 require('../simulador_ocular/resources/js/galaxias-datos.js');
@@ -70,7 +71,7 @@ if (!filaCat) { console.error('NGC 4594 no está en el catálogo'); process.exit
 var gal = {
   nombre: filaCat[0], ra: filaCat[2], dec: filaCat[3], reArcsec: filaCat[4],
   ba: filaCat[5], pa: filaCat[6], magV: filaCat[7], n: filaCat[8], bt: filaCat[9],
-  nMedido: filaCat[11] || 0, ladoArcmin: R.ps1LadoArcmin(filaCat[4])
+  nMedido: filaCat[11] || 0, ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(filaCat[4])
 };
 
 var CSV = path.join(__dirname, '..', '.scratch', 'm104-nucleo', 'gaia_m104.csv');
@@ -276,28 +277,28 @@ function lamina(nombre, filas, ladoPx, tope, lineal) {
    resto de piezas de la mezcla. */
 function construir(F, quitar) {
   var fSim = { ancho: F.ancho, alto: F.alto, escalaAs: F.escalaAs, wcs: F.wcs || null };
-  fSim.afin = R.ps1AfinParche(fSim, gal);
-  var enPx = R.ps1EstrellasEnPixeles(fSim, gal, estrellas);
+  fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
+  var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(fSim, gal, estrellas);
   var limpio;
   if (quitar === 'no') limpio = F.datos;
-  else if (quitar === 'sinGeo') limpio = R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx);
-  else limpio = R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx,
+  else if (quitar === 'sinGeo') limpio = window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx);
+  else limpio = window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx,
     { afin: fSim.afin, ba: gal.ba, pa: gal.pa });
-  var Ap = R.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
+  var Ap = window.BitacoraPS1.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
     magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
     ladoArcmin: F.ladoArcmin, escalaAs: F.escalaAs
   });
   return { Ap: Ap, afin: fSim.afin, enPx: enPx };
 }
 function parcheDe(F, C) {
-  var comps = R.ps1ComponentesSersic(gal);
-  var peso = R.ps1PesoImagen(C.Ap, F.ancho, F.alto, F.escalaAs);
-  var perfilP = R.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, C.afin);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+  var peso = window.BitacoraPS1.ps1PesoImagen(C.Ap, F.ancho, F.alto, F.escalaAs);
+  var perfilP = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, C.afin);
   return {
     ra: gal.ra, dec: gal.dec, ladoArcmin: F.ladoArcmin,
     ancho: F.ancho, alto: F.alto, afin: C.afin,
-    comps: comps, pa: gal.pa, halo: R.ps1MedidasHalo(gal, comps),
-    peso: peso, escalaMezcla: R.ps1EscalaMezcla(C.Ap, peso, perfilP),
+    comps: comps, pa: gal.pa, halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps),
+    peso: peso, escalaMezcla: window.BitacoraPS1.ps1EscalaMezcla(C.Ap, peso, perfilP),
     datos: C.Ap
   };
 }
@@ -311,7 +312,7 @@ function pintarVariante(parche, datos, o, modo) {
   var difuso = new Float32Array(SIZE * SIZE);
   if (modo === 'prox') {
     parche.psfD = o.apertura; parche.psfDatos = datos;
-    R.ps1PintarParche(difuso, parche, o);
+    window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
     return difuso;
   }
   var escv = SIZE / (o.arcmin / 60);
@@ -322,12 +323,12 @@ function pintarVariante(parche, datos, o, modo) {
   var c = R.ctxFotometrico(o.cielo);
   var umbral = R.sbUmbralContraste(c);
   var pxPorAs = escv / 3600;
-  var halo = R.ps1HaloActivo(parche.halo);
+  var halo = window.BitacoraPS1.ps1HaloActivo(parche.halo);
   var comps = halo ? (parche.comps || []) : [], pa = parche.pa || 0;
   var peso = halo ? (parche.peso || null) : null;
   var sMezcla = peso ? parche.escalaMezcla : 1;
   var ladoPx = (parche.ladoArcmin / 60) * escv;
-  var alcance = Math.max(ladoPx / 2, R.ps1RadioHaloAs(comps) * pxPorAs);
+  var alcance = Math.max(ladoPx / 2, window.BitacoraPS1.ps1RadioHaloAs(comps) * pxPorAs);
   var mask = R.difusoMaskDe(o.cielo, difuso.length);
   var SUB = (modo === 'super4') ? 4 : 1;
   var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
@@ -362,12 +363,12 @@ function pintarVariante(parche, datos, o, modo) {
           }
         }
         if (comps.length) {
-          var fm = R.ps1FlujoModelo(comps, pa, norte, este);
+          var fm = window.BitacoraPS1.ps1FlujoModelo(comps, pa, norte, este);
           var w = (peso && k >= 0) ? peso[k] : 0;
           fv = w * sMezcla * fv + (1 - w) * fm;
         }
         if (!(fv > 0)) { nsub++; continue; }
-        fv = R.ps1FlujoConOpacidad(fv, R.ps1Opacidad(-2.5 * Math.log10(fv), umbral), c);
+        fv = window.BitacoraPS1.ps1FlujoConOpacidad(fv, window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(fv), umbral), c);
         if (fv > 0) { acc += fv; pintado = true; }
         nsub++;
       }
@@ -443,7 +444,7 @@ console.log('  θ_parche(1024) = √(seeing PS1² + caja²) = √(' + PS1.seeing
   f(F.escalaAs * P.CAJA_A_FWHM, 3) + '²) = ' + f(P.thetaParche(F.escalaAs), 3) + '″ FWHM');
 fila(['  equipo', 'θ_res (″)', 'θ_parche (″)', 'θ_add (″)', 'σ (px parche)', 'FWHM efectiva (″)']);
 EQUIPOS.forEach(function (e) {
-  var tr = P.thetaRes(e.D), tp = P.thetaParche(F.escalaAs), ta = R.ps1ThetaAdd(e.D, F.escalaAs);
+  var tr = P.thetaRes(e.D), tp = P.thetaParche(F.escalaAs), ta = window.BitacoraPS1.ps1ThetaAdd(e.D, F.escalaAs);
   // FWHM efectiva de la imagen resultante: parche ⊕ añadido (= θ_res si ta>0)
   var fe = Math.sqrt(tp * tp + ta * ta);
   fila(['  ' + e.D + ' mm ' + e.foc, f(tr, 3), f(tp, 3), f(ta, 3),
@@ -457,7 +458,7 @@ EQUIPOS.forEach(function (e) {
   [50, 150, 400].forEach(function (m) {
     var pup = e.D / m;
     if (Math.abs(pup * m - e.D) > 1e-9) okD = false;
-    if (Math.abs(R.ps1ThetaAdd(pup * m, F.escalaAs) - R.ps1ThetaAdd(e.D, F.escalaAs)) > 1e-12) okD = false;
+    if (Math.abs(window.BitacoraPS1.ps1ThetaAdd(pup * m, F.escalaAs) - window.BitacoraPS1.ps1ThetaAdd(e.D, F.escalaAs)) > 1e-12) okD = false;
   });
 });
 console.log('  · apertura exacta 200,000/350,000/450,000 mm; θ_add invariante con MAG: ' +
@@ -470,7 +471,7 @@ var NORM_P = mediaEn(Ap, cuerpoIdx);                 // constante común del dom
 console.log('  denominador común (media del cuerpo r<40″, parche sin PSF): ' + g(NORM_P));
 
 var psfP = { 0: Ap };                                // 0 = sin PSF
-EQUIPOS.forEach(function (e) { psfP[e.D] = R.ps1PsfParche(Ap, F.ancho, F.alto, F.escalaAs, e.D); });
+EQUIPOS.forEach(function (e) { psfP[e.D] = window.BitacoraPS1.ps1PsfParche(Ap, F.ancho, F.alto, F.escalaAs, e.D); });
 
 var BANDAS = [[1, 5], [5, 10], [10, 30]];
 console.log('\n  Energía por banda (RMS de la banda / denominador común), r<40″:');
@@ -494,7 +495,7 @@ fila(['  variante', '1–5″', '5–10″', '10–30″']);
 console.log('  MTF analítica de θ_add (amplitud que sobrevive a un periodo dado):');
 fila(['  equipo', 'P=2″', 'P=5″', 'P=10″', 'P=30″']);
 EQUIPOS.forEach(function (e) {
-  var ta = R.ps1ThetaAdd(e.D, F.escalaAs);
+  var ta = window.BitacoraPS1.ps1ThetaAdd(e.D, F.escalaAs);
   fila(['  ' + e.D + ' mm'].concat([2, 5, 10, 30].map(function (per) { return f(P.mtf(ta, per), 3); })));
 });
 
@@ -525,8 +526,8 @@ SALIDAS.forEach(function (s) {
   var nucS = [(Fs.ancho - 1) / 2, (Fs.alto - 1) / 2];
   var idxS = zona(Cs.Ap, Fs.ancho, Fs.alto, Fs.escalaAs, nucS[0], nucS[1], 40);
   var normS = mediaEn(Cs.Ap, idxS);
-  var p200 = R.ps1PsfParche(Cs.Ap, Fs.ancho, Fs.alto, Fs.escalaAs, 200);
-  var p450 = R.ps1PsfParche(Cs.Ap, Fs.ancho, Fs.alto, Fs.escalaAs, 450);
+  var p200 = window.BitacoraPS1.ps1PsfParche(Cs.Ap, Fs.ancho, Fs.alto, Fs.escalaAs, 200);
+  var p450 = window.BitacoraPS1.ps1PsfParche(Cs.Ap, Fs.ancho, Fs.alto, Fs.escalaAs, 450);
   var t = pares(p200, p450, idxS);
   var b15 = pares(banda(p200, Fs.ancho, Fs.alto, Fs.escalaAs, 1, 5),
                   banda(p450, Fs.ancho, Fs.alto, Fs.escalaAs, 1, 5), idxS);
@@ -534,7 +535,7 @@ SALIDAS.forEach(function (s) {
                    banda(p450, Fs.ancho, Fs.alto, Fs.escalaAs, 5, 10), idxS);
   porRes[s] = { F: Fs, C: Cs, nuc: nucS, idx: idxS, norm: normS, p200: p200, p450: p450 };
   fila(['  ' + s, f(Fs.escalaAs, 3), f(P.thetaParche(Fs.escalaAs), 3),
-        f(R.ps1ThetaAdd(200, Fs.escalaAs), 3), f(R.ps1ThetaAdd(450, Fs.escalaAs), 3),
+        f(window.BitacoraPS1.ps1ThetaAdd(200, Fs.escalaAs), 3), f(window.BitacoraPS1.ps1ThetaAdd(450, Fs.escalaAs), 3),
         f(t.rms / normS, 4), f(b15.rms / normS, 4), f(b510.rms / normS, 4)]);
 });
 if (porRes[2048]) {
@@ -703,8 +704,8 @@ variantesQ.forEach(function (v) {
 // ¿La diferencia entre telescopios depende de la variante de quitado?
 console.log('\n  Δ(200↔450) en el parche según variante de quitado (RMS/norm r<40″):');
 variantesQ.forEach(function (v) {
-  var q200 = R.ps1PsfParche(v.C.Ap, F.ancho, F.alto, F.escalaAs, 200);
-  var q450 = R.ps1PsfParche(v.C.Ap, F.ancho, F.alto, F.escalaAs, 450);
+  var q200 = window.BitacoraPS1.ps1PsfParche(v.C.Ap, F.ancho, F.alto, F.escalaAs, 200);
+  var q450 = window.BitacoraPS1.ps1PsfParche(v.C.Ap, F.ancho, F.alto, F.escalaAs, 450);
   var normV = mediaEn(v.C.Ap, cuerpoIdx);
   console.log('    ' + v.id + ': ' + f(pares(q200, q450, cuerpoIdx).rms / normV, 4));
 });

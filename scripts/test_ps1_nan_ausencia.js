@@ -39,10 +39,11 @@ if (MODO !== 'actual' && MODO !== 'nuevo') {
 
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 var R = global.window.BitacoraGaiaRender;
 var CAT = global.window.BITACORA_GALAXIAS;
-var FOT = R.fot, PS1 = R.ps1;
+var FOT = R.fot, PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 var IN_GAIA = path.join(RAIZ, '.scratch', 'quitar-general');
 var SIZE = 720, AFOV = 70, CFG = { D: 457.2, M: 190, sqm: 21.2 };
@@ -54,7 +55,7 @@ function filaCat(n) { for (var i = 0; i < CAT.length; i++) if (CAT[i][0] === n) 
 function galDeFila(g) {
   return { nombre: g[0], ra: g[2], dec: g[3], reArcsec: g[4], ba: g[5], pa: g[6],
            magV: g[7], n: g[8], bt: g[9], nMedido: g[11] || 0,
-           ladoArcmin: R.ps1LadoArcmin(g[4]) };
+           ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(g[4]) };
 }
 function leerGaia(f) {
   return fs.readFileSync(path.join(IN_GAIA, f), 'utf8').trim().split('\n').slice(1)
@@ -100,28 +101,28 @@ function enAnillo(mapa, r, r0, r1) {
 // Cadena completa de producción a partir del parche crudo F.
 function cadena(gal, F, csv) {
   var fSim = { ancho: F.ancho, alto: F.alto, escalaAs: F.escalaAs, wcs: F.wcs || null };
-  fSim.afin = R.ps1AfinParche(fSim, gal);
-  var enPx = R.ps1EstrellasEnPixeles(fSim, gal, csv ? leerGaia(csv) : []);
-  var escena = R.ps1EscenaEnParche(fSim, gal, R.ps1GalaxiasDelCampo(CAT, gal.ra, gal.dec, gal.ladoArcmin));
-  var limpio = R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx,
+  fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
+  var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(fSim, gal, csv ? leerGaia(csv) : []);
+  var escena = window.BitacoraPS1.ps1EscenaEnParche(fSim, gal, window.BitacoraPS1.ps1GalaxiasDelCampo(CAT, gal.ra, gal.dec, gal.ladoArcmin));
+  var limpio = window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx,
     { afin: fSim.afin, ba: gal.ba, pa: gal.pa, escena: escena });
-  var comps = R.ps1ComponentesSersic(gal);
-  var datos = R.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+  var datos = window.BitacoraPS1.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
     magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
     ladoArcmin: gal.ladoArcmin, escalaAs: F.escalaAs });
-  var peso = R.ps1PesoImagen(datos, F.ancho, F.alto, F.escalaAs);
-  var perfil = R.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, fSim.afin);
+  var peso = window.BitacoraPS1.ps1PesoImagen(datos, F.ancho, F.alto, F.escalaAs);
+  var perfil = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, fSim.afin);
   return { ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
            ancho: F.ancho, alto: F.alto, afin: fSim.afin,
-           comps: comps, pa: gal.pa, halo: R.ps1MedidasHalo(gal, comps),
-           thetaIntArcmin: R.ps1ThetaIntArcmin(comps, gal.ba),
-           peso: peso, escalaMezcla: R.ps1EscalaMezcla(datos, peso, perfil),
+           comps: comps, pa: gal.pa, halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps),
+           thetaIntArcmin: window.BitacoraPS1.ps1ThetaIntArcmin(comps, gal.ba),
+           peso: peso, escalaMezcla: window.BitacoraPS1.ps1EscalaMezcla(datos, peso, perfil),
            datos: datos };
 }
 function pintar(parche, o) {
   var difuso = new Float32Array(SIZE * SIZE);
   o.cielo.difusoMask = null;                     // máscara limpia por pintado
-  R.ps1PintarParche(difuso, parche, o);
+  window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
   return difuso;
 }
 
@@ -134,7 +135,7 @@ console.log('── sintético (A–D), modo ' + MODO + ' ──');
   var gal = galDeFila(filaCat('NGC 3031'));
   var N = 256, lado = gal.ladoArcmin, escalaAs = lado * 60 / N;
   var fSim = { ancho: N, alto: N, escalaAs: escalaAs, wcs: null };
-  fSim.afin = R.ps1AfinParche(fSim, gal);
+  fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
   var a = fSim.afin;
   // Disco exponencial + ruido determinista; cielo≈0.
   var datos = new Float32Array(N * N);
@@ -160,24 +161,24 @@ console.log('── sintético (A–D), modo ' + MODO + ' ──');
   datos[cyp * N + cxp] = NaN;
   for (yy = 0; yy < 4; yy++) for (xx = 0; xx < 4; xx++) datos[(dy0 + yy) * N + (dx0 + xx)] = NaN;
 
-  var cielo = R.ps1Cielo(datos, N, N), sigma = R.ps1SigmaCielo(datos, N, N, cielo);
+  var cielo = window.BitacoraPS1.ps1Cielo(datos, N, N), sigma = window.BitacoraPS1.ps1SigmaCielo(datos, N, N, cielo);
   nota('cielo=' + cielo.toFixed(2) + ' σ=' + sigma.toFixed(2) +
        ' corte(2σ)=' + (cielo - 2 * sigma).toFixed(2) + ' suelo=' + (cielo + PS1.kRuido * sigma).toFixed(2));
   exige(-200 < cielo - 2 * sigma, 'el bloque B queda por debajo de cielo−2σ');
 
   var oAnc = { magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
                ladoArcmin: gal.ladoArcmin, escalaAs: escalaAs };
-  var anc = R.ps1AnclarACatalogo(datos, N, N, oAnc);
-  var comps = R.ps1ComponentesSersic(gal);
-  var peso = R.ps1PesoImagen(anc, N, N, escalaAs);
-  var perfil = R.ps1PerfilEnParche(comps, gal.pa, N, N, fSim.afin);
-  var sMezcla = R.ps1EscalaMezcla(anc, peso, perfil);
+  var anc = window.BitacoraPS1.ps1AnclarACatalogo(datos, N, N, oAnc);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+  var peso = window.BitacoraPS1.ps1PesoImagen(anc, N, N, escalaAs);
+  var perfil = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, N, N, fSim.afin);
+  var sMezcla = window.BitacoraPS1.ps1EscalaMezcla(anc, peso, perfil);
   var parche = { ra: gal.ra, dec: gal.dec, ladoArcmin: lado, ancho: N, alto: N,
                  afin: fSim.afin, comps: comps, pa: gal.pa,
-                 halo: R.ps1MedidasHalo(gal, comps),
-                 thetaIntArcmin: R.ps1ThetaIntArcmin(comps, gal.ba),
+                 halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps),
+                 thetaIntArcmin: window.BitacoraPS1.ps1ThetaIntArcmin(comps, gal.ba),
                  peso: peso, escalaMezcla: sMezcla, datos: anc };
-  exige(R.ps1HaloActivo(parche.halo), 'halo activo (la mezcla imagen/modelo está en juego)');
+  exige(window.BitacoraPS1.ps1HaloActivo(parche.halo), 'halo activo (la mezcla imagen/modelo está en juego)');
   exige(isFinite(sMezcla) && sMezcla > 0, 'escalaMezcla finita y positiva: ' + sMezcla.toFixed(4));
 
   var iB = (by + 1) * N + (bx + 1), iC = cyp * N + cxp, iD = (dy0 + 1) * N + (dx0 + 1);
@@ -221,14 +222,14 @@ console.log('── sintético (A–D), modo ' + MODO + ' ──');
      el pintado, o este test mediría la rampa antigua en vez de lo que vigila,
      que es la semántica de la ausencia. La fuente de flujo sigue siendo el
      perfil, que es lo que se comprueba. */
-  var soporte = R.ps1SoporteLocal(R.ps1PsfParche(anc, N, N, escalaAs, o.apertura), N, N, escalaAs);
+  var soporte = window.BitacoraPS1.ps1SoporteLocal(window.BitacoraPS1.ps1PsfParche(anc, N, N, escalaAs, o.apertura), N, N, escalaAs);
   function modeloConRampa(px, py) {
     var este = (a.cx - px) / q, norte = (py - a.cy) / q;
-    var fm = R.ps1FlujoModelo(parche.comps, parche.pa, norte, este);
+    var fm = window.BitacoraPS1.ps1FlujoModelo(parche.comps, parche.pa, norte, este);
     if (!(fm > 0)) return 0;
     var sx = Math.round(px), sy = Math.round(py);
     var sop = (sx >= 0 && sx < N && sy >= 0 && sy < N) ? soporte[sy * N + sx] : 0;
-    return R.ps1FlujoConOpacidad(fm, R.ps1Opacidad(-2.5 * Math.log10(sop > fm ? sop : fm), umbral), c);
+    return window.BitacoraPS1.ps1FlujoConOpacidad(fm, window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(sop > fm ? sop : fm), umbral), c);
   }
   var mB = modeloConRampa(bx + 1.5, by + 1.5), mD = modeloConRampa(dx0 + 1.5, dy0 + 1.5);
   nuevaBase.sintPintado = { fB: fB, fC: fC, fD: fD };

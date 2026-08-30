@@ -41,10 +41,11 @@ var RAIZ = path.join(__dirname, '..');
 
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 var R = global.window.BitacoraGaiaRender;
 var CAT = global.window.BITACORA_GALAXIAS;
-var FOT = R.fot, PS1 = R.ps1;
+var FOT = R.fot, PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 
 function arg(nombre, defecto) {
@@ -135,7 +136,7 @@ function filaCat(nombre) {
 function galDeFila(g) {
   return { nombre: g[0], ra: g[2], dec: g[3], reArcsec: g[4], ba: g[5], pa: g[6],
            magV: g[7], n: g[8], bt: g[9], nMedido: g[11] || 0,
-           ladoArcmin: R.ps1LadoArcmin(g[4]) };
+           ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(g[4]) };
 }
 function leerGaia(fich) {
   return fs.readFileSync(path.join(IN_GAIA, fich), 'utf8').trim().split('\n').slice(1)
@@ -380,11 +381,11 @@ function pintar(parche, o, soportes, compPatch) {
   res.ctx = c;
   var umbral = c ? R.sbUmbralContraste(c) : 0;
   var pxPorAs = escv / 3600;
-  var halo = !!c && R.ps1HaloActivo(parche.halo);
+  var halo = !!c && window.BitacoraPS1.ps1HaloActivo(parche.halo);
   var comps = halo ? (parche.comps || []) : [], pa = parche.pa || 0;
   var peso = halo ? (parche.peso || null) : null;
   var sMezcla = peso ? parche.escalaMezcla : 1;
-  var haloPx = R.ps1RadioHaloAs(comps) * pxPorAs;
+  var haloPx = window.BitacoraPS1.ps1RadioHaloAs(comps) * pxPorAs;
   var alcance = Math.max(ladoPx / 2, haloPx);
   var datos = parche.datosPsf;   // ya calculado fuera (con calientes si tocan)
   res.datosPsf = datos;
@@ -401,7 +402,7 @@ function pintar(parche, o, soportes, compPatch) {
       res.fx[i] = fx; res.fy[i] = fy;
       var px0 = Math.floor(fx), py0 = Math.floor(fy);
       var tx = fx - px0, ty = fy - py0;
-      var fm = comps.length ? R.ps1FlujoModelo(comps, pa, norte, este) : 0;
+      var fm = comps.length ? window.BitacoraPS1.ps1FlujoModelo(comps, pa, norte, este) : 0;
       res.fmMap[i] = fm;
       var acc = 0, cubierto = 0, accW = 0;
       for (var vj = 0; vj < 2; vj++) {
@@ -439,14 +440,14 @@ function pintar(parche, o, soportes, compPatch) {
           }
           if (compPatch) comp = compPatch[kS];
         }
-        var opProd = R.ps1Opacidad(-2.5 * Math.log10(sop > f ? sop : f), umbral);
+        var opProd = window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(sop > f ? sop : f), umbral);
         res.opProdMap[i] = opProd;
         res.compMap[i] = comp;
         var opFin = compPatch ? Math.max(opProd, comp) : opProd;
         res.opMap[i] = opFin;
         if (opFin < opProd) res.borrados++;
-        fPr = R.ps1FlujoConOpacidad(f, opProd, c);
-        fVar = compPatch ? R.ps1FlujoConOpacidad(f, opFin, c) : fPr;
+        fPr = window.BitacoraPS1.ps1FlujoConOpacidad(f, opProd, c);
+        fVar = compPatch ? window.BitacoraPS1.ps1FlujoConOpacidad(f, opFin, c) : fPr;
       }
       if (fPr > 0) res.fPostProd[i] = fPr;
       if (!(fVar > 0)) continue;
@@ -476,25 +477,25 @@ console.log('═══ ' + OBJ + ' (' + gal.nombre + ')  ' + ETIQ + '  D=' + CFG
 B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
   var W = F.ancho, H = F.alto;
   var fSim = { ancho: W, alto: H, escalaAs: F.escalaAs, wcs: F.wcs || null };
-  fSim.afin = R.ps1AfinParche(fSim, gal);
-  var enPx = R.ps1EstrellasEnPixeles(fSim, gal, leerGaia(O.csv));
-  var vecinos = R.ps1GalaxiasDelCampo(CAT, gal.ra, gal.dec, gal.ladoArcmin);
-  var escena = R.ps1EscenaEnParche(fSim, gal, vecinos);
-  var limpio = R.ps1QuitarEstrellas(F.datos, W, H, enPx,
+  fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
+  var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(fSim, gal, leerGaia(O.csv));
+  var vecinos = window.BitacoraPS1.ps1GalaxiasDelCampo(CAT, gal.ra, gal.dec, gal.ladoArcmin);
+  var escena = window.BitacoraPS1.ps1EscenaEnParche(fSim, gal, vecinos);
+  var limpio = window.BitacoraPS1.ps1QuitarEstrellas(F.datos, W, H, enPx,
     { afin: fSim.afin, ba: gal.ba, pa: gal.pa, escena: escena });
-  var cieloP = R.ps1Cielo(limpio, W, H);
-  var sigmaP = R.ps1SigmaCielo(limpio, W, H, cieloP);
-  var anc = R.ps1AnclarACatalogo(limpio, W, H, {
+  var cieloP = window.BitacoraPS1.ps1Cielo(limpio, W, H);
+  var sigmaP = window.BitacoraPS1.ps1SigmaCielo(limpio, W, H, cieloP);
+  var anc = window.BitacoraPS1.ps1AnclarACatalogo(limpio, W, H, {
     magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
     ladoArcmin: gal.ladoArcmin, escalaAs: F.escalaAs });
-  var comps = R.ps1ComponentesSersic(gal);
-  var peso = R.ps1PesoImagen(anc, W, H, F.escalaAs);
-  var perfil = R.ps1PerfilEnParche(comps, gal.pa, W, H, fSim.afin);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+  var peso = window.BitacoraPS1.ps1PesoImagen(anc, W, H, F.escalaAs);
+  var perfil = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, W, H, fSim.afin);
   var parche = { ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
                  ancho: W, alto: H, afin: fSim.afin,
-                 comps: comps, pa: gal.pa, halo: R.ps1MedidasHalo(gal, comps),
-                 thetaIntArcmin: R.ps1ThetaIntArcmin(comps, gal.ba),
-                 peso: peso, escalaMezcla: R.ps1EscalaMezcla(anc, peso, perfil),
+                 comps: comps, pa: gal.pa, halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps),
+                 thetaIntArcmin: window.BitacoraPS1.ps1ThetaIntArcmin(comps, gal.ba),
+                 peso: peso, escalaMezcla: window.BitacoraPS1.ps1EscalaMezcla(anc, peso, perfil),
                  datos: anc, escena: escena };
   var cielo = { pupilaSalida: CFG.D / CFG.M, pupilaOjo: 7, sqm: CFG.sqm,
                 aumentos: CFG.M, realceMax: PS1.realceMax, perceptual: true };
@@ -504,7 +505,7 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
   var ctx0 = R.ctxFotometrico(cielo, parche.thetaIntArcmin);
   var umbral0 = R.sbUmbralContraste(ctx0);
 
-  var datosPsf = R.ps1DatosConPsf(parche, escParche, CFG.D);
+  var datosPsf = window.BitacoraPS1.ps1DatosConPsf(parche, escParche, CFG.D);
   /* píxeles calientes sintéticos (solo sensibilidad, exploratoria): a p99,9 del
      parche, en posiciones fijas (centros de ROI + rejilla), sobre una COPIA. */
   var posCalientes = [];
@@ -545,7 +546,7 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
     var sopP = percentilCaja(datosPsf, W, H, radE1, PCT, umbral0);
     compPatch = new Float32Array(sopP.length);
     for (var iC = 0; iC < sopP.length; iC++) {
-      compPatch[iC] = sopP[iC] > 0 ? R.ps1Opacidad(-2.5 * Math.log10(sopP[iC]), umbral0) : 0;
+      compPatch[iC] = sopP[iC] > 0 ? window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(sopP[iC]), umbral0) : 0;
     }
     msComp = Number(process.hrtime.bigint() - tE1) / 1e6;
     console.log('  E1: p' + PCT + ' caja ' + ESCALAS[0] + '″ (rad=' + radE1 + ' px), ' + msComp.toFixed(0) + ' ms');
@@ -558,7 +559,7 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
       if (!isFinite(vN)) { nanM[iN] = 1; continue; }
       var sN = soportes[0][iN];
       var mx = vN > sN ? vN : sN;
-      if (mx > 0) opPatch[iN] = R.ps1Opacidad(-2.5 * Math.log10(mx), umbral0);
+      if (mx > 0) opPatch[iN] = window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(mx), umbral0);
     }
     compPatch = propagarOp(opPatch, nanM, W, H, escParche, ALCANCE, DECAI);
     msComp = Number(process.hrtime.bigint() - tE2) / 1e6;
@@ -583,12 +584,12 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
 
   /* PARIDAD (variante apagada, escala 25): réplica ≡ producción bit a bit */
   if (ES_BASE) {
-    var sopProd = R.ps1SoporteLocal(datosPsf, W, H, escParche);
+    var sopProd = window.BitacoraPS1.ps1SoporteLocal(datosPsf, W, H, escParche);
     var dSop = 0;
     for (var iS = 0; iS < sopProd.length; iS++) if (sopProd[iS] !== soportes[0][iS]) dSop++;
     exige(dSop === 0, 'soporte(25″) ≡ ps1SoporteLocal (' + dSop + ' px distintos)');
     var prod = new Float32Array(CFG.SIZE * CFG.SIZE);
-    R.ps1PintarParche(prod, parche, o);
+    window.BitacoraPS1.ps1PintarParche(prod, parche, o);
     var dmax = 0;
     for (var iP = 0; iP < prod.length; iP++) dmax = Math.max(dmax, Math.abs(prod[iP] - I.fPost[iP]));
     exige(dmax === 0, 'réplica = producción bit a bit (dmax=' + dmax + ')');

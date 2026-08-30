@@ -15,8 +15,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var CFG = R.config, PS1 = R.ps1;
+var CFG = R.config, PS1 = window.BitacoraPS1.cfg;
 var P = require('./lib_psf_parche.js')(R);
 var PAR = require('./lib_parches_ps1.js')(R);
 
@@ -61,7 +62,7 @@ function suavizarRef(datos, an, al, esc) {
   return P.convolucionar(datos, an, al, esc, null, null, REF_AS);
 }
 function estructura(datos, an, al, esc, rMaxAs) {
-  var cielo = R.ps1Cielo(datos, an, al), sm = suavizarRef(datos, an, al, esc);
+  var cielo = window.BitacoraPS1.ps1Cielo(datos, an, al), sm = suavizarRef(datos, an, al, esc);
   var cx = (an - 1) / 2, cy = (al - 1) / 2, rMax = rMaxAs / esc;
   var s2 = 0, sm1 = 0, n = 0;
   for (var y = 0; y < al; y++) {

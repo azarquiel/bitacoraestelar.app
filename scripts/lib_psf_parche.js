@@ -38,7 +38,7 @@
 var FWHM_A_SIGMA = 2 * Math.sqrt(2 * Math.LN2);   // 2,3548: definición, no ajuste
 
 module.exports = function (R) {
-  var PS1 = R.ps1, CFG = R.config;
+  var PS1 = window.BitacoraPS1.cfg, CFG = R.config;
 
   /* FWHM del telescopio, en ″. Es 2× el radio que ya usan las estrellas: la
      misma cuadratura Airy ⊕ seeing, sin tocar nada. */

@@ -30,6 +30,7 @@ var fs = require('fs'), path = require('path');
 var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 var R = global.window.BitacoraGaiaRender;
 var CAT = global.window.BITACORA_GALAXIAS;
@@ -49,9 +50,9 @@ function galDe(nombre) {
 }
 
 function margenDe(gal, D, M, sqm, seeingAs, T) {
-  var comps = R.ps1ComponentesSersic(gal);
-  var medidas = R.ps1MedidasHalo(gal, comps);
-  var thInt = R.ps1ThetaIntArcmin(comps, gal.ba);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+  var medidas = window.BitacoraPS1.ps1MedidasHalo(gal, comps);
+  var thInt = window.BitacoraPS1.ps1ThetaIntArcmin(comps, gal.ba);
   if (!(thInt > 0) || !isFinite(medidas.muProm)) return null;
   var H2C = { THETA_R_A: R.fot.H2C_DEFECTO.THETA_R_A,
               THETA_R_B: R.fot.H2C_DEFECTO.THETA_R_B,

@@ -22,6 +22,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 
 var fallos = 0;
@@ -51,7 +52,7 @@ for (var y = 0; y < N; y++) for (var x = 0; x < N; x++)
 
 var gal = { ra: 10, dec: 0, ladoArcmin: N * ESC / 60, ba: BA, pa: PA };
 var f = { ancho: N, alto: N, escalaAs: ESC };
-var afin = R.ps1AfinParche(f, gal);
+var afin = window.BitacoraPS1.ps1AfinParche(f, gal);
 
 /* Escena de un componente: la elipse de la propia galaxia, r25 = 40″. La misma
    convención que ps1EscenaEnParche: cos/sin del PA, b/a, radio isofotal en ″. */
@@ -71,20 +72,20 @@ console.log('A) fuente fuera de la escena: se elimina y se rellena');
 // y este punto tiene que quedar fuera de las DOS elipses.
 var pFuera = sobreEjeMayor(-60);
 var FUERA = { x: pFuera.x, y: pFuera.y, rPx: 3, rAs: 3, g: 19 };
-var outA = R.ps1QuitarEstrellas(GAL, N, N, [FUERA], geo);
+var outA = window.BitacoraPS1.ps1QuitarEstrellas(GAL, N, N, [FUERA], geo);
 var jFuera = Math.round(FUERA.y) * N + Math.round(FUERA.x);
 ok(outA[jFuera] !== GAL[jFuera], 'a 60″ (r25=40″) la fuente se enmascara y rellena');
 
 console.log('B) fuente dentro de la escena: se conserva entera');
 var pDentro = sobreEjeMayor(20);
 var DENTRO = { x: pDentro.x, y: pDentro.y, rPx: 3, rAs: 3, g: 18 };
-var outB = R.ps1QuitarEstrellas(GAL, N, N, [DENTRO], geo);
+var outB = window.BitacoraPS1.ps1QuitarEstrellas(GAL, N, N, [DENTRO], geo);
 var iguales = true;
 for (var i = 0; i < GAL.length; i++) if (outB[i] !== GAL[i]) { iguales = false; break; }
 ok(iguales, 'a 20″ el parche sale intacto: la estrella proyectada dentro no se toca');
 // El núcleo es el caso trivial de la misma regla: radio elíptico ~0.
 var NUC = { x: CX + 2, y: CY, rPx: 6, rAs: 6, g: 16 };
-var outNuc = R.ps1QuitarEstrellas(GAL, N, N, [NUC], geo);
+var outNuc = window.BitacoraPS1.ps1QuitarEstrellas(GAL, N, N, [NUC], geo);
 var jNuc = Math.round(NUC.y) * N + Math.round(NUC.x);
 ok(outNuc[jNuc] === GAL[jNuc], 'el núcleo se conserva por estar dentro, no por regla nuclear aparte');
 
@@ -97,20 +98,20 @@ var campo = [
   { ra: gal.ra, dec: gal.dec + 40 / 3600, reArcsec: 6, ba: 0.8, pa: 79, magV: 10.5, n: 1, bt: 0.03 }
 ];
 f.afin = afin;
-var escena = R.ps1EscenaEnParche(f, gal, campo);
+var escena = window.BitacoraPS1.ps1EscenaEnParche(f, gal, campo);
 ok(escena.length === 2, 'la escena tiene los dos componentes (' + escena.length + ')');
 casi(escena[1].cy, CY + 40, 0.5, 'la compañera cae donde le toca en el parche');
 ok(escena[1].r25As > 0, 'la compañera trae su radio isofotal (' + escena[1].r25As.toFixed(1) + '″)');
 var geoDoble = { afin: afin, ba: BA, pa: PA, escena: escena };
 var NUC2 = { x: escena[1].cx, y: escena[1].cy, rPx: 5, rAs: 5, g: 15 };
-var outC = R.ps1QuitarEstrellas(GAL, N, N, [NUC2], geoDoble);
+var outC = window.BitacoraPS1.ps1QuitarEstrellas(GAL, N, N, [NUC2], geoDoble);
 var jNuc2 = Math.round(NUC2.y) * N + Math.round(NUC2.x);
 ok(outC[jNuc2] === GAL[jNuc2], 'el núcleo de la compañera no se convierte en un punto negro');
 // Y una fuente fuera de las dos elipses se sigue eliminando (la del catálogo
 // de este caso llega a r25=66,6″: hay que salirse de ELLA, no de la de 40″).
 var pFueraC = sobreEjeMayor(-80);
 var FUERA_C = { x: pFueraC.x, y: pFueraC.y, rPx: 3, rAs: 3, g: 19 };
-var outC2 = R.ps1QuitarEstrellas(GAL, N, N, [FUERA_C], geoDoble);
+var outC2 = window.BitacoraPS1.ps1QuitarEstrellas(GAL, N, N, [FUERA_C], geoDoble);
 var jFueraC = Math.round(FUERA_C.y) * N + Math.round(FUERA_C.x);
 ok(outC2[jFueraC] !== GAL[jFueraC], 'con dos componentes, lo de fuera de ambos se elimina igual');
 
@@ -119,10 +120,10 @@ console.log('D) borde de la escena: decisión determinista, sin franja ambigua')
    veredicto ya es el suyo (el viaje por el afín mete ~1e-14, nada más), y el
    mismo punto devuelve siempre lo mismo. */
 var justoDentro = sobreEjeMayor(R25 - 1e-6), enBorde = sobreEjeMayor(R25), justoFuera = sobreEjeMayor(R25 + 1e-6);
-ok(R.ps1FuenteEnEscena([COMP], afin, justoDentro.x, justoDentro.y) === true, 'r25−1e−6″: dentro');
-ok(R.ps1FuenteEnEscena([COMP], afin, justoFuera.x, justoFuera.y) === false, 'r25+1e−6″: fuera');
-var v1 = R.ps1FuenteEnEscena([COMP], afin, enBorde.x, enBorde.y);
-var v2 = R.ps1FuenteEnEscena([COMP], afin, enBorde.x, enBorde.y);
+ok(window.BitacoraPS1.ps1FuenteEnEscena([COMP], afin, justoDentro.x, justoDentro.y) === true, 'r25−1e−6″: dentro');
+ok(window.BitacoraPS1.ps1FuenteEnEscena([COMP], afin, justoFuera.x, justoFuera.y) === false, 'r25+1e−6″: fuera');
+var v1 = window.BitacoraPS1.ps1FuenteEnEscena([COMP], afin, enBorde.x, enBorde.y);
+var v2 = window.BitacoraPS1.ps1FuenteEnEscena([COMP], afin, enBorde.x, enBorde.y);
 ok(v1 === v2, 'el mismo punto da siempre el mismo veredicto');
 
 console.log('E) lo eliminado pasa por el mismo relleno de siempre');
@@ -132,16 +133,16 @@ var esperado = 10 + 4000 * Math.exp(-rElip(FUERA.x, FUERA.y) / 15);
 casi(outA[jFuera], esperado, esperado * 0.05, 'el relleno sigue la isofota elíptica local');
 
 console.log('F) regresión: llamadas viejas y NaN');
-ok(R.ps1.nucleoPx === undefined, 'PS1.nucleoPx ya no existe');
+ok(window.BitacoraPS1.cfg.nucleoPx === undefined, 'PS1.nucleoPx ya no existe');
 // Sin `geo` no hay protección: una estrella clavada en el centro se enmascara.
-var sinGeo = R.ps1QuitarEstrellas(GAL, N, N, [{ x: CX, y: CY, rPx: 4, rAs: 4 }]);
+var sinGeo = window.BitacoraPS1.ps1QuitarEstrellas(GAL, N, N, [{ x: CX, y: CY, rPx: 4, rAs: 4 }]);
 var jC = Math.round(CY) * N + Math.round(CX);
 ok(sinGeo[jC] !== GAL[jC], 'sin geo no hay protección: el centro se enmascara como todo lo demás');
 // Los NaN originales de PS1 se conservan y fuera de las máscaras no cambia nada.
 var CON_NAN = Float32Array.from(GAL);
 var jLejos = 20 * N + 20, jBorde = 30 * N + 30;
 CON_NAN[jLejos] = NaN; CON_NAN[jBorde] = NaN;
-var outNaN = R.ps1QuitarEstrellas(CON_NAN, N, N, [NUC, FUERA], geo);
+var outNaN = window.BitacoraPS1.ps1QuitarEstrellas(CON_NAN, N, N, [NUC, FUERA], geo);
 ok(outNaN[jLejos] !== outNaN[jLejos] && outNaN[jBorde] !== outNaN[jBorde],
   'un NaN fuera de las máscaras sigue siendo NaN');
 var cambiadosFuera = 0;
@@ -159,7 +160,7 @@ console.log('G) hueco de saturación en una fuente conservada por escena: se rel
 var CON_HUECO = Float32Array.from(GAL);
 var jHueco = Math.round(DENTRO.y) * N + Math.round(DENTRO.x);
 CON_HUECO[jHueco] = NaN;
-var outHueco = R.ps1QuitarEstrellas(CON_HUECO, N, N, [DENTRO], geo);
+var outHueco = window.BitacoraPS1.ps1QuitarEstrellas(CON_HUECO, N, N, [DENTRO], geo);
 ok(outHueco[jHueco] === outHueco[jHueco], 'el hueco saturado ya no es NaN (' + outHueco[jHueco] + ')');
 ok(outHueco[jHueco] > 0, 'el relleno es luz de la propia estrella, no cero (' + outHueco[jHueco] + ')');
 var jVecino = Math.round(DENTRO.y) * N + Math.round(DENTRO.x) + 1;

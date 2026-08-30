@@ -625,7 +625,7 @@
         var ra0 = sexToDeg(objetoSel.ra, true), dec0 = sexToDeg(objetoSel.dec, false);
         var eq = datosOcular();
         // Galaxias + nebulosas cuya clase ya trata el pipeline (v1: planetarias).
-        var catDifuso = BitacoraGaiaRender.ps1CatalogoDifuso(
+        var catDifuso = BitacoraPS1.ps1CatalogoDifuso(
           window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
         /* «procesando información»: solo si la capa está encendida y hay de
            verdad un objeto difuso que procesar en el campo —la misma criba que
@@ -634,7 +634,7 @@
            resuelve también cuando el parche falla (nunca rechaza), y cualquier
            render posterior lo mata al entrar en actualizar(). */
         var procesando = $('sim-procesando');
-        var hayDifuso = BitacoraGaiaRender.galaxiasImagen && BitacoraGaiaRender
+        var hayDifuso = BitacoraPS1.galaxiasImagen && BitacoraPS1
           .ps1GalaxiasDelCampo(catDifuso, ra0, dec0, arcmin).length > 0;
         /* Toda la cadena (fondo → consulta → velo → magnitud límite → cúmulo →
            estrellas → capa de galaxias) vive en vistaGaia(), el módulo
@@ -769,7 +769,7 @@
            de estrellas que el TAP ordena para nada, porque el TOP recorta antes.
            Ver magConsultaGaia. */
         var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva(), datosOcular().aumentos);
-        if (paraCapa) mag = BitacoraGaiaRender.ps1MagConsulta(mag);
+        if (paraCapa) mag = BitacoraPS1.ps1MagConsulta(mag);
         return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
@@ -1198,9 +1198,9 @@
          empezar en desacuerdo. */
       var capaGal = $('sim-capa-galaxias');
       if (capaGal) {
-        BitacoraGaiaRender.galaxiasImagen = capaGal.checked;
+        BitacoraPS1.galaxiasImagen = capaGal.checked;
         capaGal.addEventListener('change', function () {
-          BitacoraGaiaRender.galaxiasImagen = capaGal.checked;
+          BitacoraPS1.galaxiasImagen = capaGal.checked;
           actualizar();
         });
       }

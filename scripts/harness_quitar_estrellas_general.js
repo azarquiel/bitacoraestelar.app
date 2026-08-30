@@ -42,8 +42,9 @@
 var fs = require('fs'), path = require('path');
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1;
+var PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 require('../simulador_ocular/resources/js/galaxias-datos.js');
 
@@ -95,7 +96,7 @@ function analizar(G, filaCat) {
   var gal = {
     nombre: filaCat[0], ra: filaCat[2], dec: filaCat[3], reArcsec: filaCat[4],
     ba: filaCat[5], pa: filaCat[6], magV: filaCat[7], n: filaCat[8], bt: filaCat[9],
-    ladoArcmin: R.ps1LadoArcmin(filaCat[4])
+    ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(filaCat[4])
   };
   var estrellas = fs.readFileSync(path.join(OUT_DIR, G.csv), 'utf8')
     .trim().split('\n').slice(1).map(function (l) {
@@ -110,8 +111,8 @@ function analizar(G, filaCat) {
       estrellas.length + ' fuentes Gaia G≤20 ═══════');
 
     var fSim = { ancho: F.ancho, alto: F.alto, escalaAs: esc, wcs: F.wcs || null };
-    fSim.afin = R.ps1AfinParche(fSim, gal);
-    var enPx = R.ps1EstrellasEnPixeles(fSim, gal, estrellas);
+    fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
+    var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(fSim, gal, estrellas);
 
     /* ── Fuentes <15″: nuclear si su máscara cubre el centro (d < rAs) ────── */
     console.log('\n── Fuentes Gaia a <15″ del núcleo ──');
@@ -210,7 +211,7 @@ function analizar(G, filaCat) {
         // arquitectura medida (anclaje lo apaga, el perfil lo rellena), y así
         // la producción nueva y el candidato son comparables bit a bit.
         if (e.rAs > PS1.rellenoPlanoMaxAs) {
-          if (cieloP == null) cieloP = R.ps1Cielo(F.datos, F.ancho, F.alto);
+          if (cieloP == null) cieloP = window.BitacoraPS1.ps1Cielo(F.datos, F.ancho, F.alto);
           fondo = cieloP;
         } else if (opts.relleno === 'plano') {
           fondo = fondoAlrededor(F.datos, mascara, F.ancho, F.alto, e.x, e.y, rE);
@@ -253,10 +254,10 @@ function analizar(G, filaCat) {
       if (nDist || dMaxRep > 0) process.exit(1);
     }
     compara('producción sin geo vs réplica plano-prot0',
-      R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx),
+      window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx),
       quitar(enPx, { modo: 'radio', rProtAs: 0, relleno: 'plano' }).out);
     compara('producción con geo vs candidato (por fuente + isofotas)',
-      R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx,
+      window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx,
         { afin: fSim.afin, ba: gal.ba, pa: gal.pa }),
       quitar(enPx, { modo: 'fuente', relleno: 'isofota' }).out);
 

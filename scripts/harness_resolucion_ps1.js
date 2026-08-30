@@ -11,8 +11,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var CFG = R.config, PS1 = R.ps1;
+var CFG = R.config, PS1 = window.BitacoraPS1.cfg;
 var P = require('./lib_psf_parche.js')(R);
 var PAR = require('./lib_parches_ps1.js')(R);
 

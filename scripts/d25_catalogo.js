@@ -13,6 +13,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = window.BitacoraGaiaRender, FOT = R.fot;
 require('../simulador_ocular/resources/js/galaxias-datos.js');
 var CAT = window.BITACORA_GALAXIAS;
@@ -20,7 +21,7 @@ var CAT = window.BITACORA_GALAXIAS;
 var POJO = 7, D = 457, MAG_MIN = Math.ceil(D / POJO);   // 18″, aumento mínimo usable
 var PLATEAU_PROV = 60, C_MAG_REF_B = PLATEAU_PROV * Math.pow(FOT.C_MAG_MIN, 1 / FOT.C_MAG_EXP);
 
-function mu(comps, r) { return -2.5 * Math.log10(R.ps1FlujoModelo(comps, 0, 0, r)); }
+function mu(comps, r) { return -2.5 * Math.log10(window.BitacoraPS1.ps1FlujoModelo(comps, 0, 0, r)); }
 function radioIsofota(comps, muObj) {          // bisección geométrica, perfil monótono
   var lo = 1e-4, hi = 1e6;
   if (mu(comps, lo) > muObj) return 0;
@@ -32,7 +33,7 @@ function radioIsofota(comps, muObj) {          // bisección geométrica, perfil
 }
 
 var d25 = CAT.map(function (g) {
-  var comps = R.ps1ComponentesSersic({ magV: g[7], reArcsec: g[4], n: g[8], ba: g[5], bt: g[9] });
+  var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: g[7], reArcsec: g[4], n: g[8], ba: g[5], bt: g[9] });
   return { nombre: g[0], magV: g[7], re: g[4], d25: 2 * radioIsofota(comps, 25) / 60 };
 }).filter(function (x) { return x.d25 > 0; }).sort(function (a, b) { return a.d25 - b.d25; });
 

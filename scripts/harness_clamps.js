@@ -13,6 +13,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot, CFG = R.config;
 var G = require('./lib_galaxias_sinteticas.js')(R);
@@ -74,7 +75,7 @@ console.log('\n═══ D. Rango de tamaño aparente que ocurre de verdad ═�
 require('../simulador_ocular/resources/js/galaxias-datos.js');
 var CAT = window.BITACORA_GALAXIAS;
 function d25De(g) {
-  var c = R.ps1ComponentesSersic({ magV: g[7], reArcsec: g[4], n: g[8], ba: g[5], bt: g[9] });
+  var c = window.BitacoraPS1.ps1ComponentesSersic({ magV: g[7], reArcsec: g[4], n: g[8], ba: g[5], bt: g[9] });
   return 2 * G.radioIsofota(c, 25) / 60;
 }
 var d25s = CAT.map(d25De).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });

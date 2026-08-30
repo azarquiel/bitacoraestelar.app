@@ -4,7 +4,7 @@
 
    Para cada galaxia de control monta el parche con la MISMA composición que
    ps1ParcheDeGalaxia (lib_parche_produccion.js, funciones de producción) y
-   pinta con R.ps1PintarParche en configuraciones fijas. Se comparan SHA-256
+   pinta con window.BitacoraPS1.ps1PintarParche en configuraciones fijas. Se comparan SHA-256
    de los bytes crudos de `parche.datos` (post quitar-estrellas + anclaje) y
    del buffer `difuso` final: cualquier bit distinto = FALLO.
 
@@ -25,8 +25,9 @@ var fs = require('fs'), path = require('path'), crypto = require('crypto');
 var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
-var R = global.window.BitacoraGaiaRender, PS1 = R.ps1;
+var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 var CAT = global.window.BITACORA_GALAXIAS;
 var B = require('./lib_bajar_parche.js')(R);
 var P = require('./lib_parche_produccion.js')(R);
@@ -74,7 +75,7 @@ function medir(O) {
       var o = { ra0: gal.ra, dec0: gal.dec, arcmin: AFOV / C.M * 60,
                 size: SIZE, cielo: cielo, apertura: C.D };
       var difuso = new Float32Array(SIZE * SIZE);
-      R.ps1PintarParche(difuso, parche, o);
+      window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
       m.difusos.push({ config: C, sha256: sha(difuso), stats: stats(difuso) });
     });
     return m;
