@@ -218,6 +218,23 @@
 #mw-obs-form .sim-gen-usar:hover {filter:brightness(1.08);}
 #mw-obs-form .sim-gen-usar:disabled {opacity:0.45;cursor:default;filter:none;}
 
+/* ── Foco visible: mismo anillo ámbar que los campos, sobre fondo oscuro ── */
+#mw-obs-form .add-entry:focus-visible, #mw-obs-form .entry-del:focus-visible,
+#mw-obs-form .rt-toolbar button:focus-visible, #mw-obs-form .geo-btn:focus-visible,
+#mw-obs-form .gen-img:focus-visible, #mw-obs-form .add-img:focus-visible,
+#mw-obs-form .img-del:focus-visible, #mw-obs-form .e-aux-mas:focus-visible,
+#mw-obs-form .rt-editor:focus-visible, #mw-obs-form summary:focus-visible {
+  outline:2px solid var(--ambar);outline-offset:2px;
+}
+
+/* ── Movimiento reducido: sin transiciones para quien lo pide ── */
+@media (prefers-reduced-motion:reduce) {
+  #mw-obs-form *, #mw-obs-form *::before, #mw-obs-form *::after,
+  .sim-gen *, .sim-gen-ov {
+    transition:none !important;
+  }
+}
+
 /* La sesión (viaje interestelar) a la que irá esta observación. Se resuelve
    sola, así que se anuncia con la misma línea .status que el objeto de SIMBAD;
    aquí solo van el selector de desempate y el botón de alta, que asoman poco. */
