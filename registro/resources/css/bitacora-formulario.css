@@ -245,3 +245,24 @@
   padding:9px 16px;border-radius:8px;cursor:pointer;white-space:nowrap;}
 #mw-obs-form .viaje-sesion button:hover {filter:brightness(1.08);}
 #mw-obs-form .viaje-sesion button:disabled {opacity:0.45;cursor:default;filter:none;}
+
+/* ── Blindaje del mapa Leaflet frente al CSS del tema ──
+   El tema de WordPress fuerza `#primary * {max-width:100% !important}` (y
+   variantes .site-content/.entry-content). Con id gana a la protección de
+   leaflet.css (.leaflet-container .leaflet-tile, sin id) y deja los tiles a
+   ancho 0: el contenedor de tiles mide 0 y el 100% de 0 es 0 -> mapa gris con
+   los tiles descargados (200 OK). Dos ids ganan a uno, sea cual sea el tema. */
+#mw-obs-form #map .leaflet-tile,
+#mw-obs-form #map .leaflet-tile-container img,
+#mw-obs-form #map .leaflet-marker-pane img,
+#mw-obs-form #map .leaflet-shadow-pane img {
+  max-width:none !important;
+  max-height:none !important;
+  width:256px;
+  height:256px;
+}
+#mw-obs-form #map .leaflet-marker-pane img,
+#mw-obs-form #map .leaflet-shadow-pane img {
+  width:auto;
+  height:auto;
+}
