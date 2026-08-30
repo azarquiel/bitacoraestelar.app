@@ -75,7 +75,7 @@ console.log('\nT5 · el halo sale por debajo del núcleo en d′ (estructura, no
 T.ACTIVO = true;
 try {
   AUMENTOS.forEach(function (mag) {
-    var m = H.medir(M13, { D: 200, MAG: mag, sqm: 21, realization: 0 });
+    var m = H.medirMemo(M13, { D: 200, MAG: mag, sqm: 21, realization: 0 });
     var tabla = m.tabla, rhAs = m.rhAs;
     var iNuc = indiceEn(tabla.r, 0.10 * rhAs);
     var iHalo = indiceEn(tabla.r, 1.50 * rhAs);
@@ -89,7 +89,7 @@ try {
   /* ── T6 · sGrano de la tabla radial ES P(ver) cuando la ley está activa ──── */
   console.log('\nT6 · sGrano de la tabla = P(ver) de la ley nueva (61/120/173/250×, M13):');
   AUMENTOS.forEach(function (mag) {
-    var m = H.medir(M13, { D: 200, MAG: mag, sqm: 21, realization: 0 });
+    var m = H.medirMemo(M13, { D: 200, MAG: mag, sqm: 21, realization: 0 });
     var tabla = m.tabla, i = indiceEn(tabla.r, 0.10 * m.rhAs);
     var rms = tabla.I[i] > 0 ? (tabla.sigma[i] * m.atenGrano) / tabla.I[i] : 0;
     var esperado = R.pVerTextura(rms, m.thGranoAs, mag,
@@ -106,7 +106,7 @@ try {
    una coma: sGrano sigue saliendo exactamente de visibilidadDifusa·Cmin. */
 console.log('\nT7 · producción apagada (canal a cero):');
 ok(R.textura.ACTIVO === false, 'TEXTURA.ACTIVO por defecto es false');
-var mApagado = H.medir(M13, { D: 200, MAG: 120, sqm: 21, realization: 0 });
+var mApagado = H.medirMemo(M13, { D: 200, MAG: 120, sqm: 21, realization: 0 });
 var iN = indiceEn(mApagado.tabla.r, 0.10 * mApagado.rhAs);
 var sgViejo = R.visibilidadDifusa(
   mApagado.tabla.sigma[iN] * mApagado.atenGrano,
