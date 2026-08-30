@@ -36,5 +36,12 @@ ok(/audioEl\.pause\(\)/.test(app), 'y lo para');
 ok(/id="ficha-audio-reset"/.test(app), 'hay un botón para volver al inicio del tramo');
 ok(/fichaAudioEl\.pause\(\); fichaAudioEl = null;/.test(app), 'cerrar o cambiar de ficha para el audio (no sigue sonando de fondo)');
 
+console.log('botones de salto (-10s / +30s), acotados al tramo:');
+ok(/id="ficha-audio-atras"/.test(app), 'hay un botón de retroceder 10 segundos');
+ok(/id="ficha-audio-adelante"/.test(app), 'hay un botón de avanzar 30 segundos');
+ok(/saltar\(-10\)/.test(app), 'retroceder llama a saltar(-10)');
+ok(/saltar\(30\)/.test(app), 'avanzar llama a saltar(30)');
+ok(/Math\.min\(tope, Math\.max\(inicio, audioEl\.currentTime \+ delta\)\)/.test(app), 'el salto se acota entre inicio y fin del tramo');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nok · el reproductor del tramo se corta solo al llegar a "fin" y se puede reiniciar');
