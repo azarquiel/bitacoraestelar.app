@@ -16,6 +16,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 
 var fallos = 0;
@@ -40,7 +41,7 @@ for (var y = 0; y < N; y++) for (var x = 0; x < N; x++)
 
 var gal = { ra: 10, dec: 0, ladoArcmin: N * ESC / 60, ba: BA, pa: PA };
 var f = { ancho: N, alto: N, escalaAs: ESC };
-var afin = R.ps1AfinParche(f, gal);
+var afin = window.BitacoraPS1.ps1AfinParche(f, gal);
 f.afin = afin;
 
 /* Escena con compañera catalogada a 40″ al norte (el caso M51 + NGC 5195),
@@ -49,7 +50,7 @@ var campo = [
   { ra: gal.ra, dec: gal.dec, reArcsec: 12, ba: BA, pa: PA, magV: 9, n: 1, bt: 0.15 },
   { ra: gal.ra, dec: gal.dec + 40 / 3600, reArcsec: 6, ba: 0.8, pa: 79, magV: 10.5, n: 1, bt: 0.03 }
 ];
-var escena = R.ps1EscenaEnParche(f, gal, campo);
+var escena = window.BitacoraPS1.ps1EscenaEnParche(f, gal, campo);
 
 // Fila Gaia en un punto del eje mayor a radio elíptico `d` (″); dec0=0.
 function filaEje(d, g) {
@@ -60,10 +61,10 @@ var EXTERIOR = filaEje(-80, 13);            // fuera de las dos elipses (r25 má
 var NUC_COMP = [gal.ra, gal.dec + 40 / 3600, 15];   // núcleo de la compañera
 var estrellas = [BRILLANTE, EXTERIOR, NUC_COMP];
 
-var enPx = R.ps1EstrellasEnPixeles(f, gal, estrellas);
+var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(f, gal, estrellas);
 ok(enPx.length === 3, 'las tres fuentes caen en el parche (' + enPx.length + ')');
-var dentro = R.ps1FuentesEnEscena(estrellas, enPx, afin, escena);
-var limpio = R.ps1QuitarEstrellas(GAL, N, N, enPx, { afin: afin, ba: BA, pa: PA, escena: escena });
+var dentro = window.BitacoraPS1.ps1FuentesEnEscena(estrellas, enPx, afin, escena);
+var limpio = window.BitacoraPS1.ps1QuitarEstrellas(GAL, N, N, enPx, { afin: afin, ba: BA, pa: PA, escena: escena });
 function pixelDe(fila) {
   for (var i = 0; i < enPx.length; i++) if (estrellas[enPx[i].i] === fila)
     return Math.round(enPx[i].y) * N + Math.round(enPx[i].x);
@@ -104,12 +105,12 @@ ok(dentro.indexOf(NUC_COMP) !== -1, 'y la capa no lo repinta encima');
 console.log('E) regresión: mismo veredicto que ps1QuitarEstrellas, y sin escena no se excluye nada');
 for (var k = 0; k < enPx.length; k++) {
   var e = enPx[k];
-  var v = R.ps1FuenteEnEscena(escena, afin, e.x, e.y);
+  var v = window.BitacoraPS1.ps1FuenteEnEscena(escena, afin, e.x, e.y);
   ok((dentro.indexOf(estrellas[e.i]) !== -1) === v,
     'fila ' + e.i + ': la capa y el parche comparten veredicto (' + (v ? 'dentro' : 'fuera') + ')');
 }
-ok(R.ps1FuentesEnEscena(estrellas, enPx, afin, []).length === 0, 'sin escena, la capa pinta todo');
-ok(R.ps1FuentesEnEscena(estrellas, enPx, afin, null).length === 0, 'con escena nula, igual');
+ok(window.BitacoraPS1.ps1FuentesEnEscena(estrellas, enPx, afin, []).length === 0, 'sin escena, la capa pinta todo');
+ok(window.BitacoraPS1.ps1FuentesEnEscena(estrellas, enPx, afin, null).length === 0, 'con escena nula, igual');
 
 console.log(fallos ? '\n' + fallos + ' FALLOS' : '\ntodo ok');
 process.exit(fallos ? 1 : 0);

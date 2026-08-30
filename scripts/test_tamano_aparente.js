@@ -15,6 +15,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot;
 
@@ -108,8 +109,8 @@ ok(Math.abs(e2.Cmin * terminoA(400) - e1.Cmin * terminoA(100)) > 1e-3,
 
 console.log('\n— El presupuesto fotométrico no se toca —');
 /* El término vive en el UMBRAL. El flujo del modelo no lo ve pasar. */
-var comps = R.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
-casi(R.ps1FlujoModelo(comps, 0, 0, 50), R.ps1FlujoModelo(comps, 0, 0, 50), 1e-18,
+var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
+casi(window.BitacoraPS1.ps1FlujoModelo(comps, 0, 0, 50), window.BitacoraPS1.ps1FlujoModelo(comps, 0, 0, 50), 1e-18,
   'ps1FlujoModelo no depende de aumentos ni de D25');
 
 console.log(fallos ? '\n' + fallos + ' FALLOS\n' : '\nTodo ok\n');

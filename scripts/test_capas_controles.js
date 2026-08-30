@@ -1,7 +1,7 @@
 /* Test de los controles propios de cada escala del mapa
-   (mapa/js/via-lactea-capas.js). El giro y el cambio cenital/canto son de la
-   VISTA DE LA VÍA LÁCTEA: en el atlas del Grupo Local y en el vecindario solar
-   no pintan nada y no deben verse.
+   (mapa/js/via-lactea-capas.js). El abatimiento y los giros son de la VISTA DE
+   LA VÍA LÁCTEA: en el atlas del Grupo Local y en el vecindario solar no pintan
+   nada y no deben verse.
    Sin framework:  node scripts/test_capas_controles.js */
 
 'use strict';
@@ -25,15 +25,13 @@ eq(C.capaActiva(0.8, 0.8), 'vecindario', 'el vecindario gana al atlas (no coinci
 
 console.log('controlesVisibles en la galaxia (vista cenital):');
 var cenital = C.controlesVisibles('galaxia', false, GIROS);
-eq(cenital.vista, true, 'se puede cambiar a la vista de canto');
-eq(cenital.giroCenital, true, 'giro cenital disponible');
+eq(cenital.abatimiento, true, 'deslizador de abatimiento disponible');
 eq(cenital.giroCanto, false, 'el giro azimutal de canto no, que estamos en cenital');
 eq(cenital.giroPlano, false, 'el giro en plano de canto tampoco');
 
 console.log('controlesVisibles en la galaxia (vista de canto):');
 var canto = C.controlesVisibles('galaxia', true, GIROS);
-eq(canto.vista, true, 'se puede volver a la cenital');
-eq(canto.giroCenital, false, 'el giro cenital no está en la vista de canto');
+eq(canto.abatimiento, true, 'de canto sigue el mismo mando: es su tope, 90°');
 eq(canto.giroCanto, true, 'giro azimutal de canto disponible');
 eq(canto.giroPlano, true, 'giro en plano de canto disponible');
 eq(C.controlesVisibles('galaxia', true, {}).giroCanto, false, 'sin el interruptor de CONFIG, no hay giro azimutal');
@@ -43,8 +41,7 @@ console.log('controlesVisibles fuera de la galaxia (cada escala, lo suyo):');
 ['grupoLocal', 'vecindario'].forEach(function (capa) {
   [false, true].forEach(function (esCanto) {
     var c = C.controlesVisibles(capa, esCanto, GIROS);
-    eq(c.vista, false, capa + ': sin cambio cenital/canto');
-    eq(c.giroCenital, false, capa + ': sin giro cenital');
+    eq(c.abatimiento, false, capa + ': sin abatimiento');
     eq(c.giroCanto, false, capa + ': sin giro azimutal de canto');
     eq(c.giroPlano, false, capa + ': sin giro en plano de canto');
   });

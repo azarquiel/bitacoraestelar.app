@@ -29,6 +29,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot, CFG = R.config;
 var G = require('./lib_galaxias_sinteticas.js')(R);   // los MISMOS siete objetos
@@ -90,7 +91,7 @@ function detectar(obj, D, MAG) {
 function estructurar(obj, D, MAG) {
   var thetaDet = obj.d25 * 60 * FRAC_BRAZO;                       // ″
   var te = thetaEff(thetaDet, D);
-  var fDisco = R.ps1FlujoModelo(obj.comps, 0, 0, obj.re);         // brillo local en r_e
+  var fDisco = window.BitacoraPS1.ps1FlujoModelo(obj.comps, 0, 0, obj.re);         // brillo local en r_e
   var cLocal = AMP_BRAZO * fDisco / (fDisco + FCIELO) * dilucion(thetaDet, D);
   var umbral = cmin(D, MAG, te / 60);
   return { thetaDet: thetaDet, thetaEff: te, cLocal: cLocal, umbral: umbral,
@@ -118,12 +119,12 @@ console.log('\n═══ 0. La apertura y la resolución de galaxias, en el cód
 console.log('  radioImagenEstelar(D) = √(Airy² + (seeing/2)²) existe y está exportada.');
 console.log('  Sus ÚNICOS consumidores son radioEstrella/sueloEstrella: estrellas.');
 console.log('  ps1PintarParche muestrea el parche por vecino más próximo, sin PSF: la');
-console.log('  resolución de una galaxia la fija el stack de PS1 (seeing ' + R.ps1.seeingAs +
+console.log('  resolución de una galaxia la fija el stack de PS1 (seeing ' + window.BitacoraPS1.cfg.seeingAs +
   '″), no el telescopio.');
 fila(['apertura (mm)', 'Airy r₁ (″)', 'θ_res = 2·r_imagen (″)', 'θ_res vs seeing PS1']);
 [80, 114, 203, 305, 457, 914].forEach(function (D) {
   fila([String(D), f(R.radioAiry(D), 2), f(thetaRes(D), 2),
-    f(thetaRes(D) / R.ps1.seeingAs, 2) + '×']);
+    f(thetaRes(D) / window.BitacoraPS1.cfg.seeingAs, 2) + '×']);
 });
 console.log('  Con seeing ' + CFG.seeingArcsec + '″ el suelo atmosférico manda desde ~200 mm:');
 console.log('  la apertura aprieta el detalle hasta ahí y luego satura. Eso es físico,');
@@ -194,7 +195,7 @@ function delCatalogo(nombre) {
   var g = null;
   for (var i = 0; i < CAT.length; i++) if (CAT[i][0] === nombre) { g = CAT[i]; break; }
   if (!g) return null;
-  var comps = R.ps1ComponentesSersic({ magV: g[7], reArcsec: g[4], n: g[8], ba: g[5], bt: g[9] });
+  var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: g[7], reArcsec: g[4], n: g[8], ba: g[5], bt: g[9] });
   return { nombre: nombre, d25: 2 * G.radioIsofota(comps, 25) / 60, re: g[4], comps: comps,
            polvo: g[10] };
 }
@@ -229,9 +230,9 @@ console.log('  El término tiene ' + f(recorrido, 2) + ' mag donde el fenómeno 
 
 /* ═══ 6. Comprobaciones de no-regresión ═══════════════════════════════════ */
 console.log('\n═══ 6. Comprobaciones ═══');
-var comps9 = R.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
+var comps9 = window.BitacoraPS1.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
 console.log('  1. presupuesto fotométrico: ps1FlujoModelo no recibe ni aumentos ni θ → ' +
-  (R.ps1FlujoModelo(comps9, 0, 0, 50) === R.ps1FlujoModelo(comps9, 0, 0, 50) ? 'intacto' : 'ROTO'));
+  (window.BitacoraPS1.ps1FlujoModelo(comps9, 0, 0, 50) === window.BitacoraPS1.ps1FlujoModelo(comps9, 0, 0, 50) ? 'intacto' : 'ROTO'));
 console.log('  2. PS1/E: este harness no llama a ps1PintarParche ni a ps1Mezcla → intactos');
 var e1 = R.ctxFotometrico({ sqm: SQM, transmision: T, pupilaOjo: POJO, pupilaSalida: 2.5 });
 var e2 = R.ctxFotometrico({ sqm: SQM, transmision: T, pupilaOjo: POJO, pupilaSalida: 2.5 });

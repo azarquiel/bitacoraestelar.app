@@ -38,8 +38,10 @@ var VecindarioSolar = (function () {
     var c = BitacoraGaiaColor.colorPorBpRp(bprp);
     return '#' + [c[0], c[1], c[2]].map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
   }
-  // 'aten' = estrella NO VISITADA por el observador activo: se mezcla con el
-  // gris clarito común a las tres vistas y pierde opacidad (VLObservadores).
+  // 'aten' = estrella POR VISITAR para el observador activo: solo se usa en el
+  // rótulo y en la línea guía, que pierden algo de color y de opacidad según
+  // las constantes comunes a las tres vistas (VLObservadores). El símbolo de la
+  // estrella no se apaga: cambia de forma (anillo hueco), más abajo.
   function rgbaDe(bprp, a, aten) {
     var c = BitacoraGaiaColor.colorPorBpRp(bprp);
     if (aten) {
@@ -221,7 +223,13 @@ var VecindarioSolar = (function () {
 
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
+
+  // Rectángulos de las etiquetas dibujadas y visibles este fotograma, para que
+  // hitTest() las trate como área pulsable igual que en la vista de la galaxia
+  // (allí lo resuelve el DOM: la etiqueta comparte el listener del punto).
+  var labelHitRects = [];
   function render() {
+    labelHitRects = [];
     ctx.clearRect(0, 0, W, H);
 
     // Fondo: degradado oscuro con un tinte cálido, para tapar el negro del visor.
@@ -273,9 +281,9 @@ var VecindarioSolar = (function () {
       ctx.textAlign = 'left';
     }
 
-    // Atenuación de marcadores (spec #102): el hovered del fotograma anterior
+    // Realce de marcadores (spec #102): el hovered del fotograma anterior
     // marca el realzado de este; se mueve al final del pintado para quedar por
-    // encima de las estrellas atenuadas.
+    // encima de las demás estrellas.
     var hovPrev = hovered && hovered.o;
     if (hovPrev) {
       for (var ri = 0; ri < projected.length; ri++) {
@@ -283,16 +291,23 @@ var VecindarioSolar = (function () {
       }
     }
     hovered = null;
+
+    // Etiquetas: por debajo de este zoom (fracción de FOV_MAX) se amontonan, así
+    // que solo se leen solas al pasar el cursor o recorriendo un viaje — igual
+    // que en la vista de la galaxia (etiquetaZoomMin) y el Grupo Local.
+    var fraccEtiqueta = (window.CONFIG && CONFIG.marcadores && CONFIG.marcadores.etiquetaFovFraccion != null)
+      ? CONFIG.marcadores.etiquetaFovFraccion : 0.15;
+    var etiquetaZoomOk = fov <= FOV_MAX * fraccEtiqueta;
+
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
-      var est = VLMarcadorEstilo.de({ realzado: o === hovPrev, viajeActivo: !!rutaIds },
-                                    CONFIG.marcadores);
-      var r = Math.max(2.4, 4 * p.persp) * est.escala;
-      ctx.save();
-      ctx.globalAlpha = est.opacidad;
-      // Estrella observada solo por otros: se atenúa (gris + menos opacidad),
-      // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable.
+      var realzado = o === hovPrev;
+      var r = Math.max(2.4, 4 * p.persp);
+
+      // Estrella observada solo por otros: es un destino POR VISITAR,
+      // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable. La
+      // estrella en sí va SIEMPRE a color intenso (spec #102 ya no la atenúa).
       var aten = window.VLObservadores.atenuadoPorObservador(o.id);
       var col = rgbaDe(o.bprp, 1, aten);   // COLOR EXACTO de Gaia (por BP–RP)
 
@@ -309,26 +324,48 @@ var VecindarioSolar = (function () {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
-      halo.addColorStop(0, rgbaDe(o.bprp, 0.55, aten));
-      halo.addColorStop(1, rgbaDe(o.bprp, 0, aten));
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
-
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#fff9ef'; ctx.fill();
-
-      if (onView) {
-        ctx.fillStyle = col;
-        ctx.font = '500 ' + (12 * est.escala).toFixed(1) + 'px Inter, sans-serif';
-        ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
+      if (!aten) {
+        var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
+        halo.addColorStop(0, rgbaDe(o.bprp, 0.55, false));
+        halo.addColorStop(1, rgbaDe(o.bprp, 0, false));
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
       }
-      ctx.restore();
 
-      // El radio de detección no se atenúa: el área pulsable no cambia.
+      // Visitado o por visitar: la diferencia es de SÍMBOLO, no de brillo. El
+      // objeto que el observador activo aún no ha observado se dibuja como
+      // anillo hueco de su propio color (sin halo); el visitado, como punto
+      // lleno con halo. Misma ley en las tres vistas del mapa.
+      var anillo = window.VLObservadores.ANILLO_NO_VISITADO;
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, aten ? r * anillo.escala : r, 0, Math.PI * 2);
+      if (aten) {
+        ctx.strokeStyle = rgbaDe(o.bprp, 0.95, false);
+        ctx.lineWidth = anillo.grosor;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#fff9ef'; ctx.fill();
+      }
+
+      var labelRect = null;
+      if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
+        ctx.fillStyle = col;
+        ctx.font = '500 12px Inter, sans-serif';
+        var lx = p.sx + r + 6, ly = p.sy + 4;
+        ctx.fillText(o.name, lx, ly);
+        // Área pulsable de la etiqueta (clic abre la ficha, igual que el punto).
+        var lw = ctx.measureText(o.name).width;
+        labelRect = { o: o, x0: lx - 2, y0: ly - 11, x1: lx + lw + 2, y1: ly + 4 };
+        labelHitRects.push(labelRect);
+      }
+
+      // El radio de detección no se atenúa: el área pulsable no cambia. La
+      // etiqueta pulsable también cuenta como hover, igual que en la galaxia.
       if (interactive && mouse.x != null) {
         var dx = mouse.x - p.sx, dy = mouse.y - p.sy;
-        if (dx * dx + dy * dy < 160) hovered = { o: o, p: p };
+        var enEtiqueta = labelRect && mouse.x >= labelRect.x0 && mouse.x <= labelRect.x1 &&
+          mouse.y >= labelRect.y0 && mouse.y <= labelRect.y1;
+        if (dx * dx + dy * dy < 160 || enEtiqueta) hovered = { o: o, p: p };
       }
     }
 
@@ -360,6 +397,13 @@ var VecindarioSolar = (function () {
 
   function hitTest(clientX, clientY) {
     if (layerAlpha <= 0.5) return null;
+    // La etiqueta es pulsable igual que el punto (spec: paridad con la galaxia).
+    // Se mira primero: es más grande y, si se solapa con otro punto, gana el
+    // objeto al que pertenece el texto que se está pulsando.
+    for (var li = labelHitRects.length - 1; li >= 0; li--) {
+      var lr = labelHitRects[li];
+      if (clientX >= lr.x0 && clientX <= lr.x1 && clientY >= lr.y0 && clientY <= lr.y1) return lr.o;
+    }
     var best = null, bestD = Infinity;
     for (var i = 0; i < objects.length; i++) {
       var p = project(objects[i]);

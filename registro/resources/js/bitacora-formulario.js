@@ -331,6 +331,22 @@
   // ═══════════════════════════════════════════════════════════════════════
   // CÁLCULO EN TIEMPO REAL
   // ═══════════════════════════════════════════════════════════════════════
+  // Tramo de audio (ADR 0005): hh:mm:ss (hh opcional) ↔ segundos enteros.
+  function audioHhmmssASegundos(txt){
+    var t=String(txt||'').trim();
+    if(t==='') return null;
+    var p=t.split(':').map(function(x){ return parseInt(x,10); });
+    if(p.length<2||p.length>3||p.some(isNaN)) return null;
+    if(p.length===2) return p[0]*60+p[1];
+    return p[0]*3600+p[1]*60+p[2];
+  }
+  function audioSegundosAHhmmss(seg){
+    if(seg==null) return '';
+    var s=Math.max(0,parseInt(seg,10)||0);
+    var h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sg=s%60;
+    var mmss=(m<10?'0':'')+m+':'+(sg<10?'0':'')+sg;
+    return h>0 ? h+':'+mmss : mmss;
+  }
   function fmtDeg(v){ return (v>=0?'+':'−')+Math.abs(v).toFixed(1)+'°'; }
   function fmtAz(v){
     var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
@@ -414,7 +430,11 @@
       horaObservacion:($('horaObs')?$('horaObs').value:''),
       cieloSqm: cielo.sqm, cieloBortle: cielo.clase, cieloBortleEtiqueta: cielo.etiqueta,
       cieloIr: transp.ir, cieloTransparencia: transp.etiqueta,
-      seeing: ($('seeing') && $('seeing').value !== '') ? parseInt($('seeing').value, 10) : null
+      seeing: ($('seeing') && $('seeing').value !== '') ? parseInt($('seeing').value, 10) : null,
+      audioUrl: $('audioUrl') ? $('audioUrl').value.trim() : '',
+      audioEpisodioUrl: $('audioEpisodioUrl') ? $('audioEpisodioUrl').value.trim() : '',
+      audioInicio: $('audioInicio') ? audioHhmmssASegundos($('audioInicio').value) : null,
+      audioFin: $('audioFin') ? audioHhmmssASegundos($('audioFin').value) : null
     };
     // Astrometría (solo si hay base): el servidor la usa para sembrar la ficha.
     if(astro){
@@ -428,6 +448,9 @@
   $('observer').addEventListener('input',recompute);
   if($('fechaObs')) $('fechaObs').addEventListener('change',recompute);
   if($('horaObs')) $('horaObs').addEventListener('change',recompute);
+  ['audioUrl','audioEpisodioUrl','audioInicio','audioFin'].forEach(function(id){
+    if($(id)) $(id).addEventListener('input',recompute);
+  });
 
   // Cielo de la sesión: selector Bortle enlazado al SQM (widget compartido).
   var cieloCtrl = (window.BitacoraBase && $('cieloBortle') && $('cieloSqm'))
@@ -481,6 +504,40 @@
   // dejaba WP en `undefined` justo en esas líneas y el aviso nacía null.
   var WP = window.BITACORA_WP || null;
 
+  // ── Episodios del feed RSS del observador (issue #178) ──
+  // Se piden solo al abrir el fieldset, una vez por carga de página (nunca por
+  // cron). Elegir uno autorrellena las dos URLs manuales del tramo de audio.
+  var audioDetails = $('audioDetails'), episodiosPedidos = false;
+  if (audioDetails) {
+    audioDetails.addEventListener('toggle', function(){
+      if (!audioDetails.open || episodiosPedidos || !WP || !WP.observadorClave) return;
+      episodiosPedidos = true;
+      fetch(WP.observadores + '/' + encodeURIComponent(WP.observadorClave) + '/episodios', {
+        credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce }
+      })
+        .then(function(r){ return r.ok ? r.json() : { episodios: [] }; })
+        .then(function(d){
+          var episodios = (d && d.episodios) || [];
+          if (!episodios.length) { if ($('audioFeedAviso')) $('audioFeedAviso').hidden = false; return; }
+          var sel = $('audioFeedSelect');
+          episodios.forEach(function(ep, i){
+            var opt = document.createElement('option');
+            opt.value = i; opt.textContent = ep.titulo || ep.episodioUrl;
+            sel.appendChild(opt);
+          });
+          if ($('audioFeedCampo')) $('audioFeedCampo').hidden = false;
+          sel.addEventListener('change', function(){
+            if (sel.value === '') return;
+            var ep = episodios[parseInt(sel.value, 10)];
+            if ($('audioEpisodioUrl')) $('audioEpisodioUrl').value = ep.episodioUrl || '';
+            if ($('audioUrl')) $('audioUrl').value = ep.audioUrl || '';
+            recompute();
+          });
+        })
+        .catch(function(){ if ($('audioFeedAviso')) $('audioFeedAviso').hidden = false; });
+    });
+  }
+
   // ── Viaje de la noche (sesión de observación) ──
   // Toda observación pertenece a una salida, y la salida es OBLIGATORIA: es
   // ella la que dice desde dónde se observaba y la que da casa a la crónica, la
@@ -490,7 +547,7 @@
   // rezagadas, alta) es de BitacoraBase.
   var viajeBox = $('viajeAviso'), viajeBtn = $('viajeAvisoBtn');
   var listaViajes = [], viajePendiente = null;   // pendiente: id a recuperar en modo edición
-  var VIAJES_API = WP ? WP.endpoint.replace(/observaciones\/?$/, 'viajes/de-la-noche') : '';
+  var VIAJES_API = WP ? BitacoraBase.ruta('viajes/de-la-noche') : '';
   function pedirViaje(datos, metodo){
     var q = '?fecha='+encodeURIComponent(datos.fecha)+'&hora='+encodeURIComponent(datos.hora);
     return fetch(VIAJES_API+q, { method:metodo, credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
@@ -563,7 +620,7 @@
   }
   function cargarBases(){
     if(!WP) return;
-    var API = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+    var API = BitacoraBase.ruta('bases');
     fetch(API, { credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
@@ -603,15 +660,14 @@
   // ENVÍO: por ahora, genera el bloque de datos de la observación
   // ═══════════════════════════════════════════════════════════════════════
   // ═══════════════════════════════════════════════════════════════════════
-  // EQUIPO DEL OBSERVADOR ("Mi flota"): telescopio + oculares + auxiliares +
-  // filtros. Al elegir telescopio y, por entrada, ocular (y opcionalmente hasta
+  // EQUIPO DEL OBSERVADOR ("Mi flota"): telescopio + oculares + auxiliares.
+  // Al elegir telescopio y, por entrada, ocular (y opcionalmente hasta
   // dos auxiliares), se autocalculan aumento, pupila de salida y campo real
   // (todos editables).
   //   aumentos = focal_efectiva / focal_ocular     (la efectiva la da BitacoraEquipo)
   //   pupila   = apertura / aumentos     campo_real = campo_aparente / aumentos
-  // El FILTRO no entra en ninguna de las tres: solo deja anotado con qué se miró.
   // ═══════════════════════════════════════════════════════════════════════
-  var flota = { telescopios: [], oculares: [], auxiliares: [], filtros: [] };
+  var flota = { telescopios: [], oculares: [], auxiliares: [] };
   var flotaCargada = false;
   var telescopioSel = null;             // telescopio elegido (objeto) o null
   var telescopioIdSel = null;           // su id (para guardar en la observación)
@@ -636,10 +692,6 @@
     } else if (cat === 'oculares') {
       if (n(p.focal_mm) != null) s.push(n(p.focal_mm) + 'mm');
       if (n(p.campo_aparente) != null) s.push(n(p.campo_aparente) + '°');
-    } else if (cat === 'filtros') {
-      // Un filtro no tiene números: lo que lo identifica es el tipo ("Oxygen III"),
-      // porque su nombre suele ser un código ("LP-3", "#58").
-      if (p.tipo) s.push(String(p.tipo));
     } else {
       if (n(p.factor) != null) s.push('×' + n(p.factor));
     }
@@ -718,7 +770,7 @@
   }
 
   // Rellena (una sola vez) los selects de equipo de una entrada y aplica la
-  // preselección guardada (modo edición: en._ocuPre / _auxPre / _aux2Pre / _filPre).
+  // preselección guardada (modo edición: en._ocuPre / _auxPre / _aux2Pre).
   function poblarEntrada(el) {
     if (!flotaCargada) return;
     var pob = function (sel, cat, placeholder, pre) {
@@ -730,15 +782,24 @@
     pob(el.querySelector('.e-ocular'), 'oculares', '— Elige un ocular —', el._ocuPre);
     pob(el.querySelector('.e-auxiliar'), 'auxiliares', '— Sin auxiliar —', el._auxPre);
     pob(el.querySelector('.e-auxiliar2'), 'auxiliares', '— Sin segundo auxiliar —', el._aux2Pre);
-    pob(el.querySelector('.e-filtro'), 'filtros', '— Sin filtro —', el._filPre);
   }
 
   // Rellena el select de telescopios y aplica la preselección pendiente.
+  //
+  // OJO con el orden: la observación y la flota son DOS peticiones en carrera, y
+  // esta función la llaman las dos (por sincronizarFlota). Poblar el select se
+  // hace una sola vez, pero la preselección puede llegar después —cuando gana la
+  // flota, aquí todavía no se sabe qué telescopio tenía la observación—, así que
+  // el "ya poblado" no puede cortar la función entera: cortaba la preselección y
+  // el telescopio se quedaba sin cargar al editar.
   function poblarTelescopios() {
     var sel = $('scopeSelect');
-    if (!sel || sel._pob) return;
+    if (!sel) return;
     var vacia = !(flota.telescopios && flota.telescopios.length);
-    llenarSelect(sel, 'telescopios', vacia ? '— No tienes telescopios en tu flota —' : '— Elige un telescopio de tu flota —');
+    if (!sel._pob) {
+      llenarSelect(sel, 'telescopios', vacia ? '— No tienes telescopios en tu flota —' : '— Elige un telescopio de tu flota —');
+      sel._pob = true;
+    }
     // Preselección pendiente (modo edición): telescopio de la flota por id.
     if (telescopioIdPendiente != null) {
       sel.value = String(telescopioIdPendiente);
@@ -749,8 +810,9 @@
       }
     }
     // Registro antiguo con telescopio fuera de la flota: opción para no perder el
-    // nombre (sin id → "Generar" queda deshabilitado en sus entradas).
-    if ((!sel.value || sel.value === '') && telescopioNombre) {
+    // nombre (sin id → "Generar" queda deshabilitado en sus entradas). Se añade
+    // una sola vez aunque se pase por aquí dos veces (ver la carrera de arriba).
+    if ((!sel.value || sel.value === '') && telescopioNombre && !sel.querySelector('option[value="__legacy__"]')) {
       var op = document.createElement('option');
       op.value = '__legacy__'; op.textContent = telescopioNombre + ' (fuera de tu flota)';
       sel.appendChild(op); sel.value = '__legacy__';
@@ -759,7 +821,6 @@
       var hint = $('scopeHint');
       if (hint) hint.innerHTML = 'No tienes telescopios en tu flota. Añádelos en <a href="/mi-flota/">Mi flota</a> para poder registrar (y generar la imagen con el simulador).';
     }
-    sel._pob = true;
     telescopioIdPendiente = null;
     recompute();
   }
@@ -775,14 +836,14 @@
 
   function cargarFlota() {
     if (!WP) return;
-    var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
+    var API = BitacoraBase.ruta('equipo');
     fetch(API, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d) return;
         flota = {
           telescopios: d.telescopios || [], oculares: d.oculares || [],
-          auxiliares: d.auxiliares || [], filtros: d.filtros || []
+          auxiliares: d.auxiliares || []
         };
         flotaCargada = true;
         sincronizarFlota();
@@ -836,6 +897,13 @@
       if (transpCtrl) $('cieloIr').dispatchEvent(new Event('input', { bubbles: true }));
     }
     if($('seeing') && obs.seeing != null && obs.seeing !== '') $('seeing').value = String(obs.seeing);
+    if(obs.audio_url) {
+      if($('audioUrl')) $('audioUrl').value = obs.audio_url;
+      if($('audioEpisodioUrl') && obs.audio_episodio_url) $('audioEpisodioUrl').value = obs.audio_episodio_url;
+      if($('audioInicio') && obs.audio_inicio != null) $('audioInicio').value = audioSegundosAHhmmss(obs.audio_inicio);
+      if($('audioFin') && obs.audio_fin != null) $('audioFin').value = audioSegundosAHhmmss(obs.audio_fin);
+      if($('audioDetails')) $('audioDetails').open = true;
+    }
     // Base: se preselecciona al cargar la lista de bases (basePendiente).
     if(obs.base_id){ basePendiente = obs.base_id; if(basesCargadas){ baseSel = basePorId(obs.base_id); if(baseSelect) baseSelect.value=String(obs.base_id); } }
     // Viaje: la lista de esa noche llega con la consulta que dispara la fecha,
@@ -999,6 +1067,7 @@
   // La imagen se sube como un adjunto más, marcada origen:'simulada'.
   // ═══════════════════════════════════════════════════════════════════════
   var AFOV_REF_SIM = 110;   // campo aparente de referencia (igual que el simulador)
+  var SQM_SIM_POR_DEFECTO = 21.4;   // cielo rural: solo si la observación no lo midió
   var _simModal = null, _simUsar = null, _simEntrada = null, _simPeticion = 0;
 
   // Rótulo de la fuente de una imagen simulada. Sin fuente conocida (una imagen
@@ -1029,7 +1098,10 @@
       pupilaSalida:(opt.pupila!=null?opt.pupila:D/opt.aumento),
       optica:telescopioSel.optica||'',
       arana:(typeof telescopioSel.arana==='boolean')?telescopioSel.arana:undefined,
-      sqm:(cielo.sqm!=null?cielo.sqm:21.4),
+      // SQM de partida para la imagen: el de la observación si lo hay. Es lo
+      // ÚNICO del render que cambia a lo largo de la noche (sale la Luna, entra
+      // bruma), así que el modal deja retocarlo sin tocar el de la observación.
+      sqm:(cielo.sqm!=null?cielo.sqm:SQM_SIM_POR_DEFECTO),
       objeto:resolved.etiqueta, telescopio:telescopioNombre, ocular:nombrePieza(ocular)
     };
   }
@@ -1046,6 +1118,9 @@
               '<option value="gaia">Estrellas de Gaia DR3</option>'+
               '<option value="dss">DSS (placas fotográficas)</option>'+
             '</select></label>'+
+          '<label class="sim-gen-fuente"><span>SQM</span>'+
+            '<input type="number" class="sim-gen-sqm" min="14" max="22" step="0.05" '+
+            'title="Brillo del cielo para esta imagen (no cambia el de la observación)"></label>'+
           '<button type="button" class="sim-gen-x" title="Cerrar">×</button></div>'+
         '<div class="sim-gen-info"></div>'+
         '<div class="sim-gen-vista"><canvas class="sim-gen-canvas" width="900" height="900"></canvas>'+
@@ -1070,6 +1145,11 @@
     // sobre la marcha y se queda con la que mejor cuente lo que vio (las nebulosas
     // oscuras de Barnard, por ejemplo, salen mucho mejor en la placa).
     ov.querySelector('.sim-gen-origen').addEventListener('change', function(){ if(_simEntrada) pintarSim(); });
+    // Igual con el SQM: es lo único del cielo que cambia durante la noche, así
+    // que se retoca aquí hasta que la imagen se parezca a lo que se recuerda.
+    // Va por 'change' (no 'input'): cada repintado consulta Gaia o el DSS y no
+    // hay que dispararlo con cada tecla.
+    ov.querySelector('.sim-gen-sqm').addEventListener('change', function(){ if(_simEntrada) pintarSim(); });
     _simModal=ov; return ov;
   }
 
@@ -1081,6 +1161,7 @@
     if(!window.BitacoraGaiaRender){ if(st){ st.textContent='El módulo del simulador no está cargado.'; st.className='gen-status err'; } return; }
     var ov=construirModalSim();
     _simEntrada={ el:el, d:d };
+    ov.querySelector('.sim-gen-sqm').value = d.sqm;   // parte del cielo de la observación
     ov.style.display='flex';
     pintarSim();
   }
@@ -1096,9 +1177,15 @@
     // que decirlo porque la imagen ya no cubre todo lo que se ve por el ocular.
     var maxDss=BitacoraGaiaRender.dssMaxArcmin;
     var arcmin=(fuente==='dss') ? Math.min(d.arcmin, maxDss) : d.arcmin;
+    // SQM de ESTA imagen: el del modal manda sobre el de la observación. Fuera
+    // del rango de la escala (o en blanco) se vuelve al de partida, para no
+    // pedirle al render un cielo imposible.
+    var sqmSim=parseFloat(ov.querySelector('.sim-gen-sqm').value);
+    if(isNaN(sqmSim) || sqmSim<14 || sqmSim>22) sqmSim=d.sqm;
     ov.querySelector('.sim-gen-info').innerHTML =
       BitacoraBase.esc(d.objeto)+' · '+BitacoraBase.esc(d.telescopio)+' · '+BitacoraBase.esc(d.ocular)+
       ' · '+d.aumentos+'× · campo '+fmtCampo(arcmin/60)+
+      ' · SQM '+String(sqmSim).replace('.', ',')+
       (arcmin<d.arcmin ? ' (recortado del máximo del DSS)' : '');
     ov.querySelector('.sim-gen-badge').textContent='simulada ('+etiquetaFuente(fuente)+')';
     usar.disabled=true; spin.style.display='flex';
@@ -1109,7 +1196,7 @@
     var off=document.createElement('canvas'); off.width=off.height=D;
     var opciones={
       ra:d.ra, dec:d.dec, arcmin:arcmin, apertura:d.apertura, aumentos:d.aumentos,
-      optica:d.optica, arana:d.arana, sqm:d.sqm, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
+      optica:d.optica, arana:d.arana, sqm:sqmSim, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
       // El campo aparente fija el tamaño de las estrellas: el lienzo se muestra a
       // un diámetro ∝ afov, así que el radio en píxeles va con 1/afov.
       afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, conGlow:true
@@ -1221,8 +1308,6 @@
         // observación que se edita, si ya venía con dos).
         '<label class="field e-aux2-wrap" hidden><span class="lab">Segundo auxiliar (opcional)</span>'+
           '<select class="e-auxiliar2"><option value="">— Sin segundo auxiliar —</option></select></label>'+
-        '<label class="field"><span class="lab">Filtro (opcional)</span>'+
-          '<select class="e-filtro"><option value="">— Sin filtro —</option></select></label>'+
       '</div>'+
       '<div class="row">'+
         '<label class="field"><span class="lab">Aumento (✕) *</span>'+
@@ -1269,7 +1354,6 @@
     if (datos.ocular_id) el._ocuPre = datos.ocular_id;
     if (datos.auxiliar_id) el._auxPre = datos.auxiliar_id;
     if (datos.auxiliar2_id) el._aux2Pre = datos.auxiliar2_id;
-    if (datos.filtro_id) el._filPre = datos.filtro_id;
 
     // El segundo auxiliar solo aparece si se pide (el "+") o si la observación
     // que se edita ya lo traía.
@@ -1284,7 +1368,6 @@
     el.querySelector('.e-ocular').addEventListener('change', function(){ recalcEntrada(el, true); });
     el.querySelector('.e-auxiliar').addEventListener('change', function(){ recalcEntrada(el, false); });
     el.querySelector('.e-auxiliar2').addEventListener('change', function(){ recalcEntrada(el, false); });
-    // El filtro NO dispara recálculo: no toca aumentos, pupila ni campo.
 
     // Editor con formato: Enter crea párrafos <p>.
     try{ document.execCommand('defaultParagraphSeparator', false, 'p'); }catch(_e){}
@@ -1353,7 +1436,7 @@
       var imagenes=recogerImagenes(el);
       var idSel=function(cls){ var s=el.querySelector(cls); return (s&&s.value)?parseInt(s.value,10):null; };
       var ocuId=idSel('.e-ocular'), auxId=idSel('.e-auxiliar');
-      var aux2Id=idSel('.e-auxiliar2'), filId=idSel('.e-filtro');
+      var aux2Id=idSel('.e-auxiliar2');
       if(aum==='' && campo==='' && pup==='' && titulo==='' && textoPlano(descHtml)==='' && !imagenes.length) return;
       out.push({
         aumento: aum==='' ? null : parseFloat(aum),
@@ -1364,7 +1447,6 @@
         ocularId: ocuId,
         auxiliarId: auxId,
         auxiliar2Id: aux2Id,
-        filtroId: filId,
         imagenes: imagenes
       });
     });

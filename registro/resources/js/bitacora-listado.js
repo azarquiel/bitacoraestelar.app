@@ -89,26 +89,12 @@
         cards.innerHTML = '<div class="msg' + (esError ? ' error' : '') + '">' + esc(texto) + '</div>';
       }
 
-      // Llamada al servidor con la cookie de sesión y el nonce.
-      function api(url, opciones) {
-        opciones = opciones || {};
-        opciones.credentials = 'same-origin';
-        opciones.headers = opciones.headers || {};
-        opciones.headers['X-WP-Nonce'] = WP.nonce;
-        return fetch(url, opciones).then(function (r) {
-          return r.json()
-            .catch(function () { return {}; })
-            .then(function (data) {
-              return { ok: r.ok, status: r.status, data: data };
-            });
-        });
-      }
-
+      // Llamada al servidor: fuente única en bitacora-base.js (había cinco
+      // copias de api() y ya habían divergido). El 403 del listado conserva su
+      // mensaje propio por parámetro.
+      var api = window.BitacoraBase.api;
       function mensajeError(res, porDefecto) {
-        if (res.status === 401) return 'Debes iniciar sesión.';
-        if (res.status === 403) return 'Solo puedes modificar tus propias observaciones.';
-        if (res.data && res.data.message) return res.data.message;
-        return porDefecto + ' (error ' + res.status + ')';
+        return window.BitacoraBase.errorDe(res, porDefecto, { m403: 'Solo puedes modificar tus propias observaciones.' });
       }
 
       // ═══════════════════════════════════════════════════════════════════
@@ -198,6 +184,20 @@
         return h;
       }
 
+      /* El telescopio de una tarjeta. Si la observación se hizo con un tubo de la
+         flota, manda su NOMBRE PROPIO —es como el observador identifica su
+         equipo— y el "vendor modelo" queda detrás, más discreto. Sin nombre
+         propio (o sin tubo de flota: las observaciones antiguas, escritas a
+         mano) se pinta el texto guardado en la observación, como siempre. */
+      function telescopioDe(obs) {
+        var r = (window.BitacoraEquipo && obs.tel_nombre)
+          ? BitacoraEquipo.rotuloFlota({ nombre: obs.tel_nombre, vendor: obs.tel_vendor, modelo: obs.tel_modelo })
+          : { principal: obs.telescopio || '', detalle: '' };
+        if (!r.principal) return '';
+        return ' <span style="color:var(--tinta-tenue)">· ' + esc(r.principal) + '</span>' +
+          (r.detalle ? ' <span style="color:var(--tinta-tenue);opacity:0.65;font-size:0.92em">' + esc(r.detalle) + '</span>' : '');
+      }
+
       function crearTarjeta(obs) {
         var card = document.createElement('div');
         card.className = 'card' + (viendoPapelera ? ' deleted' : '');
@@ -207,11 +207,10 @@
 
         card.innerHTML =
           '<div class="obj">' + esc(obs.objeto) +
+            (obs.audio_url ? ' <span title="Tiene tramo de audio">🎧</span>' : '') +
             '<span class="num">nº ' + esc(obs.id) + '</span></div>' +
           '<div class="meta">' +
-            '<div class="who">' + esc(obs.observador) +
-              (obs.telescopio ? ' <span style="color:var(--tinta-tenue)">· ' + esc(obs.telescopio) + '</span>' : '') +
-            '</div>' +
+            '<div class="who">' + esc(obs.observador) + telescopioDe(obs) + '</div>' +
             '<div class="when">' + fmtFecha(obs.fecha_observacion) + '</div>' +
           '</div>' +
           '<div class="acts">' + acciones + '</div>';
@@ -399,8 +398,8 @@
         // pintarse: ver las observaciones importa más que agruparlas.
         var viajes = porViajes
           // BITACORA_WP solo expone el endpoint de observaciones; el de viajes
-          // es hermano suyo en la misma raíz de la API.
-          ? api(WP.endpoint.replace(/\/observaciones$/, '/viajes') + '?mios=1').then(function (r) {
+          // es hermano suyo en la misma raíz de la API (BitacoraBase.ruta).
+          ? api(window.BitacoraBase.ruta('viajes') + '?mios=1').then(function (r) {
               return (r.ok && Array.isArray(r.data)) ? r.data : [];
             }).catch(function () { return []; })
           : Promise.resolve([]);

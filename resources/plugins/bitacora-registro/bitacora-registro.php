@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.29.1
+ * Version:     1.32.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.29.1' );
+define( 'BITACORA_VERSION', '1.32.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -40,10 +40,6 @@ define( 'BITACORA_TABLA_OCULARES', 'bitacora_oculares' );
 // Clave del transient que cachea el catálogo GLOBAL de equipo (ver bitacora_equipo_catalogo).
 define( 'BITACORA_EQUIPO_CATALOGO_CACHE', 'bitacora_equipo_catalogo' );
 define( 'BITACORA_TABLA_AUXILIARES', 'bitacora_auxiliares' );
-// Filtros (nebulares, de color, de banda estrecha…). Son equipo como los demás,
-// pero NO tocan la óptica: no entran en aumentos, pupila ni campo. Solo dejan
-// anotado con qué se miró.
-define( 'BITACORA_TABLA_FILTROS', 'bitacora_filtros' );
 // Bases del observador (lugares de observación reutilizables) y su compartición.
 define( 'BITACORA_TABLA_BASES', 'bitacora_bases' );
 define( 'BITACORA_TABLA_BASE_COMPARTIDA', 'bitacora_base_compartida' );
@@ -142,12 +138,6 @@ function bitacora_nombre_tabla_oculares() {
 function bitacora_nombre_tabla_auxiliares() {
     global $wpdb;
     return $wpdb->prefix . BITACORA_TABLA_AUXILIARES;
-}
-
-/** Nombre real de la tabla de filtros (catálogo + personal). */
-function bitacora_nombre_tabla_filtros() {
-    global $wpdb;
-    return $wpdb->prefix . BITACORA_TABLA_FILTROS;
 }
 
 /**
@@ -290,6 +280,7 @@ function bitacora_crear_tabla() {
         nombre varchar(160) NOT NULL DEFAULT '',
         equipo varchar(160) DEFAULT NULL,
         usuario_id bigint(20) unsigned DEFAULT NULL,
+        feed_rss_url varchar(255) NOT NULL DEFAULT '',
         creado_en datetime NOT NULL,
         actualizado_en datetime DEFAULT NULL,
         PRIMARY KEY  (id),
@@ -374,28 +365,6 @@ function bitacora_crear_tabla() {
         nombre varchar(160) NOT NULL DEFAULT '',
         factor double DEFAULT NULL,
         extension_mm double DEFAULT NULL,
-        notas varchar(255) NOT NULL DEFAULT '',
-        creado_en datetime NOT NULL,
-        actualizado_en datetime DEFAULT NULL,
-        PRIMARY KEY  (id),
-        KEY usuario_id (usuario_id)
-    ) $collate;";
-
-    // Catálogo de filtros (nebulares, de color, de banda estrecha, fotométricos…).
-    // A diferencia de las auxiliares NO tiene campos ópticos: un filtro no cambia
-    // aumentos ni campo, solo qué luz pasa. 'tipo' es lo único legible de la mayoría
-    // de los modelos (nombres como "#58" o "LP-3" no dicen nada por sí solos) y es
-    // por donde se busca. 'bandpass' se guarda como viene del catálogo, en texto
-    // ("496-501, 486-486"): hoy es informativo, y es el dato con el que algún día se
-    // podrá simular qué parte de la luz deja pasar.
-    $tabla_filtros = bitacora_nombre_tabla_filtros();
-    $sql_filtros = "CREATE TABLE $tabla_filtros (
-        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-        usuario_id bigint(20) unsigned DEFAULT NULL,
-        vendor varchar(96) NOT NULL DEFAULT '',
-        nombre varchar(160) NOT NULL DEFAULT '',
-        tipo varchar(96) NOT NULL DEFAULT '',
-        bandpass varchar(96) NOT NULL DEFAULT '',
         notas varchar(255) NOT NULL DEFAULT '',
         creado_en datetime NOT NULL,
         actualizado_en datetime DEFAULT NULL,
@@ -491,7 +460,6 @@ function bitacora_crear_tabla() {
     dbDelta( $sql_telescopios );
     dbDelta( $sql_oculares );
     dbDelta( $sql_auxiliares );
-    dbDelta( $sql_filtros );
     dbDelta( $sql_bases );
     dbDelta( $sql_base_comp );
     // El lugar del viaje pasó de "NULL = sin base" a "0 = sin lugar". Los NULL se
@@ -513,8 +481,6 @@ function bitacora_crear_tabla() {
     // Los dos huecos se aplican EN ORDEN (auxiliar_id primero, el montado más cerca
     // del telescopio), regla que vive en BitacoraEquipo.focalConAuxiliares.
     bitacora_asegurar_columna( $tabla_entradas, 'auxiliar2_id', "bigint(20) unsigned DEFAULT NULL" );
-    // Filtro con el que se miró el objeto. No entra en ningún cálculo óptico.
-    bitacora_asegurar_columna( $tabla_entradas, 'filtro_id', "bigint(20) unsigned DEFAULT NULL" );
     // Hora local y cielo de la SESIÓN, capturados ya en el registro (no en la ficha
     // astrométrica). El SQM alimenta la magnitud límite al generar la imagen del
     // simulador; la clase Bortle (1–9) es la etiqueta legible de ese SQM.
@@ -551,6 +517,15 @@ function bitacora_crear_tabla() {
     // cuando la estrella no tiene bp_rp (primarias muy brillantes, saturadas y
     // fuera de Gaia): el frontend lo convierte con BitacoraGaiaColor.bpRpPorTipo.
     bitacora_asegurar_columna( $tabla_objetos, 'sp_type', "varchar(32) DEFAULT NULL" );
+    // Tramo de audio de un reportaje sonoro ajeno que habla del objeto (ADR 0005):
+    // cuatro columnas anulables, invisibles para el importador/exportador de OAL.
+    bitacora_asegurar_columna( $tabla, 'audio_url', "varchar(255) NOT NULL DEFAULT ''" );
+    bitacora_asegurar_columna( $tabla, 'audio_inicio', "int unsigned DEFAULT NULL" );
+    bitacora_asegurar_columna( $tabla, 'audio_fin', "int unsigned DEFAULT NULL" );
+    bitacora_asegurar_columna( $tabla, 'audio_episodio_url', "varchar(255) NOT NULL DEFAULT ''" );
+    // Feed RSS del podcast del observador (issue #178): con ella, el fieldset de
+    // audio ofrece un desplegable de episodios en vez de pegar las URLs a mano.
+    bitacora_asegurar_columna( $tabla_observadores, 'feed_rss_url', "varchar(255) NOT NULL DEFAULT ''" );
 
     // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
     // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
@@ -1004,7 +979,7 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
                    b.lat AS base_lat, b.lon AS base_lon, b.tz AS base_tz, b.altitud_m AS base_altitud_m,
                    ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_objetos,
                    ( SELECT GROUP_CONCAT( COALESCE( NULLIF( o.objeto_etiqueta, '' ), o.objeto )
-                                          ORDER BY ( o.hora_observacion = '' ) ASC, o.hora_observacion ASC, o.id ASC
+                                          ORDER BY ( o.hora_observacion = '' ) ASC, o.fecha_observacion ASC, o.hora_observacion ASC, o.id ASC
                                           SEPARATOR '|' )
                      FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS objetos_ruta
             FROM $t_via v
@@ -1134,7 +1109,7 @@ function bitacora_viaje_leer( WP_REST_Request $peticion ) {
     $viaje->objetos = $wpdb->get_results( $wpdb->prepare(
         "SELECT id, objeto, objeto_etiqueta, tipo, num, fecha_observacion, hora_observacion, telescopio
          FROM $t_obs WHERE viaje_id = %d AND borrada_en IS NULL
-         ORDER BY ( hora_observacion = '' ) ASC, hora_observacion ASC, id ASC", $viaje->id
+         ORDER BY ( hora_observacion = '' ) ASC, fecha_observacion ASC, hora_observacion ASC, id ASC", $viaje->id
     ) );
 
     // Los instrumentos NO definen el viaje, pero se recuerdan: con qué lo vi.
@@ -1506,6 +1481,37 @@ function bitacora_validar_datos( $d ) {
         }
     }
 
+    // --- Tramo de audio (opcional): ADR 0005. Sin audio_url no hay tramo, aunque
+    //     lleguen inicio/fin/episodio sueltos: se descartan junto con ella. ---
+    $audio_url = isset( $d['audioUrl'] ) ? bitacora_sanitizar_url_https( $d['audioUrl'] ) : '';
+    if ( isset( $d['audioUrl'] ) && '' !== trim( (string) $d['audioUrl'] ) && '' === $audio_url ) {
+        return new WP_Error( 'campo_invalido', 'La URL del audio debe ser una URL https válida.', array( 'status' => 400 ) );
+    }
+    $audio_episodio_url = '';
+    $audio_inicio        = null;
+    $audio_fin            = null;
+    if ( '' !== $audio_url ) {
+        $audio_episodio_url = isset( $d['audioEpisodioUrl'] ) ? bitacora_sanitizar_url_https( $d['audioEpisodioUrl'] ) : '';
+        if ( isset( $d['audioEpisodioUrl'] ) && '' !== trim( (string) $d['audioEpisodioUrl'] ) && '' === $audio_episodio_url ) {
+            return new WP_Error( 'campo_invalido', 'La URL del episodio debe ser una URL https válida.', array( 'status' => 400 ) );
+        }
+        if ( isset( $d['audioInicio'] ) && '' !== $d['audioInicio'] && null !== $d['audioInicio'] ) {
+            if ( ! is_numeric( $d['audioInicio'] ) || $d['audioInicio'] < 0 ) {
+                return new WP_Error( 'campo_invalido', 'El inicio del tramo de audio no es válido.', array( 'status' => 400 ) );
+            }
+            $audio_inicio = intval( $d['audioInicio'] );
+        }
+        if ( isset( $d['audioFin'] ) && '' !== $d['audioFin'] && null !== $d['audioFin'] ) {
+            if ( ! is_numeric( $d['audioFin'] ) || $d['audioFin'] < 0 ) {
+                return new WP_Error( 'campo_invalido', 'El fin del tramo de audio no es válido.', array( 'status' => 400 ) );
+            }
+            $audio_fin = intval( $d['audioFin'] );
+        }
+        if ( null !== $audio_fin && null !== $audio_inicio && $audio_fin <= $audio_inicio ) {
+            return new WP_Error( 'campo_invalido', 'El fin del tramo de audio debe ser posterior al inicio.', array( 'status' => 400 ) );
+        }
+    }
+
     return array(
         'objeto'          => bitacora_identificador_objeto( $etiqueta, $tipo, $num ),
         'objeto_etiqueta' => $etiqueta,
@@ -1523,7 +1529,23 @@ function bitacora_validar_datos( $d ) {
         'cielo_ir'          => $cielo_ir,
         'seeing'            => $seeing,
         'base_id'           => $base_id,
+        'audio_url'          => $audio_url,
+        'audio_inicio'       => $audio_inicio,
+        'audio_fin'          => $audio_fin,
+        'audio_episodio_url' => $audio_episodio_url,
     );
+}
+
+/**
+ * Sanea una URL exigiendo esquema https, sin lista blanca de dominios (mismo
+ * criterio que imagen_url, ADR 0005). Cadena vacía si no es una https válida.
+ */
+function bitacora_sanitizar_url_https( $valor ) {
+    $v = esc_url_raw( trim( (string) $valor ) );
+    if ( '' === $v || 0 !== strpos( $v, 'https://' ) ) {
+        return '';
+    }
+    return mb_substr( $v, 0, 255 );
 }
 
 /**
@@ -1721,6 +1743,18 @@ function bitacora_registrar_rutas() {
         )
     );
 
+    // Episodios del feed RSS del observador (issue #178): ayuda de captura del
+    // fieldset de audio. Cerrado con sesión, como el resto del formulario.
+    register_rest_route(
+        'bitacora/v1',
+        '/observadores/(?P<clave>[^/]+)/episodios',
+        array(
+            'methods'             => 'GET',
+            'callback'            => 'bitacora_observador_episodios',
+            'permission_callback' => $solo_logueados,
+        )
+    );
+
     // Datos del visor: emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript,
     // en el mismo formato que via-lactea-datos.js. Lectura pública.
     register_rest_route(
@@ -1733,7 +1767,7 @@ function bitacora_registrar_rutas() {
         )
     );
 
-    // ── EQUIPO (telescopios, oculares, auxiliares y filtros) ──
+    // ── EQUIPO (telescopios, oculares y auxiliares) ──
     // Catálogo GLOBAL (semilla) del que el observador copia para su "flota".
     // Lectura PÚBLICA: son datos de referencia (modelos de telescopio/ocular),
     // sin ningún dato personal (bitacora_equipo_leer_todo(null) filtra
@@ -1761,7 +1795,7 @@ function bitacora_registrar_rutas() {
     );
     register_rest_route(
         'bitacora/v1',
-        '/equipo/(?P<tipo>telescopio|ocular|auxiliar|filtro)',
+        '/equipo/(?P<tipo>telescopio|ocular|auxiliar)',
         array(
             'methods'             => 'POST',
             'callback'            => 'bitacora_equipo_crear',
@@ -1771,7 +1805,7 @@ function bitacora_registrar_rutas() {
     // Editar / borrar una pieza personal concreta (con comprobación de propiedad).
     register_rest_route(
         'bitacora/v1',
-        '/equipo/(?P<tipo>telescopio|ocular|auxiliar|filtro)/(?P<id>\d+)',
+        '/equipo/(?P<tipo>telescopio|ocular|auxiliar)/(?P<id>\d+)',
         array(
             array(
                 'methods'             => 'PUT',
@@ -1967,18 +2001,17 @@ function bitacora_validar_entradas( $lista ) {
             }
         }
 
-        // Ocular, auxiliares y filtro de la flota (opcionales): enlazan la entrada
+        // Ocular y auxiliares de la flota (opcionales): enlazan la entrada
         // con la pieza usada. Los valores ópticos (aumento/campo/pupila) ya vienen
         // calculados desde el formulario, así que aquí solo se guardan los ids.
         // Las dos auxiliares se guardan en su ORDEN de montaje (la 1 va más cerca
-        // del telescopio); el filtro no interviene en ningún cálculo.
+        // del telescopio).
         $id_pieza = function ( $v ) {
             return ( isset( $v ) && is_numeric( $v ) && $v > 0 ) ? intval( $v ) : null;
         };
         $ocular_id    = $id_pieza( isset( $e['ocularId'] ) ? $e['ocularId'] : null );
         $auxiliar_id  = $id_pieza( isset( $e['auxiliarId'] ) ? $e['auxiliarId'] : null );
         $auxiliar2_id = $id_pieza( isset( $e['auxiliar2Id'] ) ? $e['auxiliar2Id'] : null );
-        $filtro_id    = $id_pieza( isset( $e['filtroId'] ) ? $e['filtroId'] : null );
 
         $salida[] = array(
             'aumento'       => $aumento,
@@ -1990,7 +2023,6 @@ function bitacora_validar_entradas( $lista ) {
             'ocular_id'     => $ocular_id,
             'auxiliar_id'   => $auxiliar_id,
             'auxiliar2_id'  => $auxiliar2_id,
-            'filtro_id'     => $filtro_id,
             'imagenes'      => $imagenes,
         );
     }
@@ -2057,7 +2089,6 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                 'ocular_id'      => isset( $e['ocular_id'] ) ? $e['ocular_id'] : null,
                 'auxiliar_id'    => isset( $e['auxiliar_id'] ) ? $e['auxiliar_id'] : null,
                 'auxiliar2_id'   => isset( $e['auxiliar2_id'] ) ? $e['auxiliar2_id'] : null,
-                'filtro_id'      => isset( $e['filtro_id'] ) ? $e['filtro_id'] : null,
                 'creado_en'      => current_time( 'mysql', true ),
             ),
             array(
@@ -2072,7 +2103,6 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                 ( empty( $e['ocular_id'] ) )   ? '%s' : '%d', // ocular_id (NULL como %s)
                 ( empty( $e['auxiliar_id'] ) ) ? '%s' : '%d', // auxiliar_id (NULL como %s)
                 ( empty( $e['auxiliar2_id'] ) ) ? '%s' : '%d', // auxiliar2_id (NULL como %s)
-                ( empty( $e['filtro_id'] ) )    ? '%s' : '%d', // filtro_id (NULL como %s)
                 '%s', // creado_en
             )
         );
@@ -2203,6 +2233,40 @@ function bitacora_listar_observadores( WP_REST_Request $peticion ) {
     return new WP_REST_Response( $filas ? $filas : array(), 200 );
 }
 
+/**
+ * Episodios del feed RSS de un observador (issue #178), para autorrellenar el
+ * fieldset de audio del formulario. fetch_feed() de WordPress ya cachea el
+ * feed unas horas en un transient propio: se pide solo al abrir el bloque,
+ * nunca por cron, y se reusa esa caché en vez de montar una propia.
+ */
+function bitacora_observador_episodios( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $t_obs    = bitacora_nombre_tabla_observadores();
+    $feed_url = $wpdb->get_var( $wpdb->prepare(
+        "SELECT feed_rss_url FROM $t_obs WHERE clave = %s", $peticion['clave']
+    ) );
+    if ( ! $feed_url ) {
+        return new WP_REST_Response( array( 'episodios' => array() ), 200 );
+    }
+
+    include_once ABSPATH . WPINC . '/feed.php';
+    $feed = fetch_feed( $feed_url );
+    if ( is_wp_error( $feed ) ) {
+        return new WP_REST_Response( array( 'episodios' => array() ), 200 );
+    }
+
+    $episodios = array();
+    foreach ( $feed->get_items( 0, 50 ) as $item ) {
+        $enclosure = $item->get_enclosure();
+        $episodios[] = array(
+            'titulo'      => $item->get_title(),
+            'episodioUrl' => $item->get_permalink(),
+            'audioUrl'    => $enclosure ? $enclosure->get_link() : '',
+        );
+    }
+    return new WP_REST_Response( array( 'episodios' => $episodios ), 200 );
+}
+
 /* ===========================================================================
  * 2-SEPTIES. EQUIPO DEL OBSERVADOR (telescopios, oculares, auxiliares)
  *
@@ -2211,12 +2275,11 @@ function bitacora_listar_observadores( WP_REST_Request $peticion ) {
  * copiando del catálogo o añadiendo piezas a medida.
  * =========================================================================== */
 
-/** tipo ('telescopio'|'ocular'|'auxiliar'|'filtro') -> nombre real de la tabla, o null. */
+/** tipo ('telescopio'|'ocular'|'auxiliar') -> nombre real de la tabla, o null. */
 function bitacora_equipo_tabla( $tipo ) {
     if ( 'telescopio' === $tipo ) { return bitacora_nombre_tabla_telescopios(); }
     if ( 'ocular' === $tipo )     { return bitacora_nombre_tabla_oculares(); }
     if ( 'auxiliar' === $tipo )   { return bitacora_nombre_tabla_auxiliares(); }
-    if ( 'filtro' === $tipo )     { return bitacora_nombre_tabla_filtros(); }
     return null;
 }
 
@@ -2231,11 +2294,6 @@ function bitacora_equipo_esquema( $tipo ) {
     if ( 'ocular' === $tipo ) {
         return array( 'modelo_col' => 'modelo', 'num' => array( 'focal_mm', 'campo_aparente', 'barril_mm' ), 'txt' => array( 'notas' ) );
     }
-    // Un filtro no tiene ninguna columna numérica: 'bandpass' es texto porque viene
-    // en tramos ("496-501, 486-486") y hoy no se parsea.
-    if ( 'filtro' === $tipo ) {
-        return array( 'modelo_col' => 'nombre', 'num' => array(), 'txt' => array( 'tipo', 'bandpass', 'notas' ) );
-    }
     return array( 'modelo_col' => 'nombre', 'num' => array( 'factor', 'extension_mm' ), 'txt' => array( 'notas' ) );
 }
 
@@ -2246,12 +2304,10 @@ function bitacora_equipo_leer_todo( $usuario_id ) {
     $tel = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_telescopios() . " WHERE $cond ORDER BY vendor ASC, modelo ASC" );
     $ocu = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_oculares() . " WHERE $cond ORDER BY vendor ASC, modelo ASC" );
     $aux = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_auxiliares() . " WHERE $cond ORDER BY vendor ASC, nombre ASC" );
-    $fil = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_filtros() . " WHERE $cond ORDER BY vendor ASC, nombre ASC" );
     return array(
         'telescopios' => $tel ? $tel : array(),
         'oculares'    => $ocu ? $ocu : array(),
         'auxiliares'  => $aux ? $aux : array(),
-        'filtros'     => $fil ? $fil : array(),
     );
 }
 
@@ -2468,16 +2524,22 @@ function bitacora_boton_de_entrada( $e ) {
 }
 
 /**
- * El orden del recorrido de una salida: por hora de observación, y las que no
- * la registraron al final por id. Es el mismo criterio del ORDER BY de
- * bitacora_viaje_leer, aquí en PHP porque la ruta se arma sobre filas ya
- * traídas y una segunda consulta solo para ordenarlas sobraría.
+ * El orden del recorrido de una salida: por fecha y hora de observación, y las
+ * que no la registraron al final por id. La fecha entra antes que la hora
+ * porque una salida cruza medianoche (empieza el día 5 y sigue de madrugada el
+ * día 6): comparar solo la hora pondría la 00:30 del día 6 antes que la 23:00
+ * del día 5. Es el mismo criterio del ORDER BY de bitacora_viaje_leer, aquí en
+ * PHP porque la ruta se arma sobre filas ya traídas y una segunda consulta
+ * solo para ordenarlas sobraría.
  */
 function bitacora_orden_de_la_ruta( $a, $b ) {
     $sin_a = ( '' === $a['hora'] ) ? 1 : 0;
     $sin_b = ( '' === $b['hora'] ) ? 1 : 0;
     if ( $sin_a !== $sin_b ) {
         return $sin_a - $sin_b;
+    }
+    if ( ! $sin_a && $a['fecha'] !== $b['fecha'] ) {
+        return strcmp( $a['fecha'], $b['fecha'] );
     }
     if ( ! $sin_a && $a['hora'] !== $b['hora'] ) {
         return strcmp( $a['hora'], $b['hora'] );
@@ -2609,12 +2671,24 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
             'defaultIndex' => (int) $ob->default_index,
             'entries'      => $entries,
         );
+        // Tramo de audio (ADR 0005): solo se emite si hay audio_url, la única
+        // condición de existencia del tramo.
+        if ( ! empty( $ob->audio_url ) ) {
+            $registro['audio'] = array(
+                'url'      => $ob->audio_url,
+                'inicio'   => ( isset( $ob->audio_inicio ) && null !== $ob->audio_inicio ) ? (int) $ob->audio_inicio : 0,
+                'fin'      => ( isset( $ob->audio_fin ) && null !== $ob->audio_fin ) ? (int) $ob->audio_fin : null,
+                'episodio' => isset( $ob->audio_episodio_url ) ? $ob->audio_episodio_url : '',
+            );
+        }
+
         if ( $viaje_id ) {
             $registro['viaje'] = $viaje_id;
             $viaje_objetos[ $viaje_id ][] = array(
-                'slug' => $slug,
-                'hora' => isset( $ob->hora_observacion ) ? (string) $ob->hora_observacion : '',
-                'id'   => (int) $ob->id,
+                'slug'  => $slug,
+                'fecha' => isset( $ob->fecha_observacion ) ? (string) $ob->fecha_observacion : '',
+                'hora'  => isset( $ob->hora_observacion ) ? (string) $ob->hora_observacion : '',
+                'id'    => (int) $ob->id,
             );
         }
         if ( ! isset( $observaciones[ $slug ] ) ) {
@@ -2676,6 +2750,23 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
     echo 'var OBJECTS = ' . wp_json_encode( $objetos ) . ";\n";
     echo 'var OBSERVACIONES = ' . wp_json_encode( (object) $observaciones ) . ";\n";
     echo 'var VIAJES = ' . wp_json_encode( (object) $viajes ) . ";\n";
+
+    // OBSERVADOR_ACTIVO: quién está mirando el mapa, para que arranque con SUS
+    // observaciones. El mapa se sirve como fichero estático (/mapa.html), así que
+    // no pasa por wp_head y no tiene la inyección de BITACORA_WP: este endpoint,
+    // que ya carga con la cookie de sesión, es el único sitio donde el mapa puede
+    // enterarse. La respuesta ya sale con nocache_headers() (private, no-store),
+    // así que no hay caché que sirva la clave de uno a otro.
+    //
+    // La cookie se valida a mano porque un <script src> no puede mandar el nonce
+    // del REST y, sin él, WordPress atiende la petición como anónima aunque la
+    // sesión viaje: get_current_user_id() devuelve 0 aquí. Es lectura pura, y la
+    // clave que se emite ya viaja en OBSERVADORES, que es público.
+    $uid = get_current_user_id();
+    if ( ! $uid ) {
+        $uid = (int) wp_validate_auth_cookie( '', 'logged_in' );
+    }
+    echo 'var OBSERVADOR_ACTIVO = ' . wp_json_encode( bitacora_observador_clave_de_usuario( $uid ) ) . ";\n";
     exit;
 }
 
@@ -3703,8 +3794,7 @@ function bitacora_csv_num( $v ) {
 
 /**
  * Lee un CSV del plugin (UTF-8) y devuelve un array de filas asociativas usando
- * la primera línea como cabecera. null si no existe. El separador es ';' salvo
- * en filtros.csv, que viene tabulado porque su texto ya contiene ';'.
+ * la primera línea como cabecera. null si no existe. El separador es ';'.
  */
 function bitacora_leer_csv( $nombre, $sep = ';' ) {
     $archivo = __DIR__ . '/datos/' . $nombre;
@@ -3735,7 +3825,7 @@ function bitacora_leer_csv( $nombre, $sep = ';' ) {
 }
 
 /**
- * Importa el catálogo GLOBAL de equipo (telescopios, oculares, auxiliares y filtros) desde
+ * Importa el catálogo GLOBAL de equipo (telescopios, oculares y auxiliares) desde
  * los CSV de datos/. Idempotente: upsert por (vendor, modelo) sobre las filas del
  * catálogo (usuario_id NULL); no toca el equipo personal de nadie.
  * Devuelve array con recuentos por categoría o WP_Error.
@@ -3743,7 +3833,7 @@ function bitacora_leer_csv( $nombre, $sep = ';' ) {
 function bitacora_importar_equipo_seed() {
     global $wpdb;
     $ahora = current_time( 'mysql', true );
-    $totales = array( 'telescopios' => 0, 'oculares' => 0, 'auxiliares' => 0, 'filtros' => 0 );
+    $totales = array( 'telescopios' => 0, 'oculares' => 0, 'auxiliares' => 0 );
 
     // Upsert de una fila del catálogo (usuario_id NULL) buscando por vendor+modelo.
     $upsert = function ( $tabla, $clave_modelo, $vendor, $modelo, $datos ) use ( $wpdb, $ahora ) {
@@ -3810,24 +3900,6 @@ function bitacora_importar_equipo_seed() {
             ) );
             if ( $r ) {
                 $totales['auxiliares']++;
-            }
-        }
-    }
-
-    // Filtros: Vendor<TAB>Name<TAB>Type<TAB>Bandpass (nm)<TAB>Min.Exit Pupil<TAB>Description
-    // Tabulado, no ';': 15 de sus filas llevan ';' dentro del texto. De las seis
-    // columnas se guardan tres: 'Min.Exit Pupil' viene vacía en el catálogo entero
-    // y 'Description' es prosa comercial de hasta 400 caracteres.
-    $fil = bitacora_leer_csv( 'filtros.csv', "\t" );
-    if ( is_array( $fil ) ) {
-        $t = bitacora_nombre_tabla_filtros();
-        foreach ( $fil as $f ) {
-            $r = $upsert( $t, 'nombre', sanitize_text_field( $f['Vendor'] ), sanitize_text_field( $f['Name'] ), array(
-                'tipo'     => sanitize_text_field( isset( $f['Type'] ) ? $f['Type'] : '' ),
-                'bandpass' => sanitize_text_field( isset( $f['Bandpass (nm)'] ) ? $f['Bandpass (nm)'] : '' ),
-            ) );
-            if ( $r ) {
-                $totales['filtros']++;
             }
         }
     }
@@ -4100,6 +4172,18 @@ function bitacora_panel_legacy() {
 function bitacora_panel_observadores() {
     global $wpdb;
     $t = bitacora_nombre_tabla_observadores();
+
+    // Feed RSS del podcast de un observador (issue #178): de aquí lee el
+    // fieldset de audio del formulario para ofrecer el desplegable de episodios.
+    if ( isset( $_POST['bitacora_guardar_feed'] ) && check_admin_referer( 'bitacora_guardar_feed' ) ) {
+        $obs_id   = intval( $_POST['bitacora_observador_id'] ?? 0 );
+        $feed_url = esc_url_raw( trim( $_POST['bitacora_feed_rss_url'] ?? '' ) );
+        if ( $obs_id ) {
+            $wpdb->update( $t, array( 'feed_rss_url' => $feed_url ), array( 'id' => $obs_id ), array( '%s' ), array( '%d' ) );
+            echo '<div class="notice notice-success"><p>Feed RSS actualizado.</p></div>';
+        }
+    }
+
     $obs = $wpdb->get_results(
         "SELECT o.*, ( SELECT COUNT(*) FROM " . bitacora_nombre_tabla() . " b WHERE b.observador_id = o.id AND b.borrada_en IS NULL ) AS num FROM $t o ORDER BY o.nombre ASC"
     );
@@ -4110,11 +4194,18 @@ function bitacora_panel_observadores() {
         return;
     }
     echo '<p>Disponibles en <code>/wp-json/bitacora/v1/observadores</code>. Filtra observaciones con <code>?observador=ID</code>.</p>';
-    echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Nombre</th><th>Clave</th><th>Observaciones</th></tr></thead><tbody>';
+    echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Nombre</th><th>Clave</th><th>Observaciones</th><th>Feed RSS (podcast)</th></tr></thead><tbody>';
     foreach ( $obs as $o ) {
         printf(
-            '<tr><td>%d</td><td><strong>%s</strong></td><td>%s</td><td>%d</td></tr>',
-            intval( $o->id ), esc_html( $o->nombre ), esc_html( $o->clave ), intval( $o->num )
+            '<tr><td>%d</td><td><strong>%s</strong></td><td>%s</td><td>%d</td><td>' .
+            '<form method="post" style="display:flex;gap:6px">%s' .
+            '<input type="hidden" name="bitacora_observador_id" value="%d">' .
+            '<input type="url" name="bitacora_feed_rss_url" value="%s" placeholder="https://…/feed.xml" style="flex:1">' .
+            '<button type="submit" name="bitacora_guardar_feed" value="1" class="button">Guardar</button>' .
+            '</form></td></tr>',
+            intval( $o->id ), esc_html( $o->nombre ), esc_html( $o->clave ), intval( $o->num ),
+            wp_nonce_field( 'bitacora_guardar_feed', '_wpnonce', true, false ),
+            intval( $o->id ), esc_attr( $o->feed_rss_url )
         );
     }
     echo '</tbody></table></div>';
@@ -5249,17 +5340,21 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
     $solo_mias    = '1' === (string) $peticion->get_param( 'mias' );
     $usuario      = get_current_user_id();
 
-    $where  = $ver_borradas ? 'borrada_en IS NOT NULL' : 'borrada_en IS NULL';
+    // Todas las columnas van con el prefijo "o.": la consulta cruza la tabla de
+    // telescopios, que comparte nombres (usuario_id, nombre, notas, id,
+    // creado_en). Sin prefijo, el motor las da por ambiguas y rechaza la
+    // consulta entera: el listado se quedaba vacío.
+    $where  = $ver_borradas ? 'o.borrada_en IS NOT NULL' : 'o.borrada_en IS NULL';
     $params = array();
 
     if ( $solo_mias ) {
-        $where   .= ' AND usuario_id = %d';
+        $where   .= ' AND o.usuario_id = %d';
         $params[] = $usuario;
     }
 
     $filtro_observador = intval( $peticion->get_param( 'observador' ) );
     if ( $filtro_observador ) {
-        $where   .= ' AND observador_id = %d';
+        $where   .= ' AND o.observador_id = %d';
         $params[] = $filtro_observador;
     }
 
@@ -5267,11 +5362,20 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
     // desde una observación al resto de su noche.
     $filtro_viaje = intval( $peticion->get_param( 'viaje' ) );
     if ( $filtro_viaje ) {
-        $where   .= ' AND viaje_id = %d';
+        $where   .= ' AND o.viaje_id = %d';
         $params[] = $filtro_viaje;
     }
 
-    $sql = "SELECT * FROM $tabla WHERE $where ORDER BY creado_en DESC, id DESC LIMIT 200";
+    // El telescopio se acompaña de su ficha en la flota: el texto guardado en la
+    // observación es "vendor modelo" y se pierde el NOMBRE PROPIO, que es como el
+    // observador reconoce su equipo. Lo compone el navegador
+    // (BitacoraEquipo.rotuloFlota), que es la fuente única de ese rótulo; aquí
+    // solo viajan los datos. LEFT JOIN: observación sin telescopio de flota (las
+    // viejas, escritas a mano) sigue listándose con su texto libre.
+    $t_tel = bitacora_nombre_tabla_telescopios();
+    $sql = "SELECT o.*, t.nombre AS tel_nombre, t.vendor AS tel_vendor, t.modelo AS tel_modelo
+            FROM $tabla o LEFT JOIN $t_tel t ON t.id = o.telescopio_id
+            WHERE $where ORDER BY o.creado_en DESC, o.id DESC LIMIT 200";
     if ( $params ) {
         $sql = $wpdb->prepare( $sql, $params );
     }
@@ -5291,6 +5395,66 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
  * uso que demuestra que la petición procede de esta página y no de un sitio
  * ajeno que intente aprovechar la sesión del usuario (ataque CSRF).
  * =========================================================================== */
+/**
+ * Clave del observador de un usuario de WordPress, para que el mapa arranque
+ * con SUS observaciones. Se busca primero por usuario_id y, si no, por la clave
+ * derivada de su nombre (misma regla que al crear observadores). Devuelve ''
+ * si el usuario aún no tiene observaciones registradas (o no hay sesión).
+ *
+ * La consultan los dos caminos por los que el mapa puede enterarse de quién
+ * mira: la inyección en la cabecera (páginas de WordPress) y datos.js (el mapa
+ * servido como fichero estático, donde no hay cabecera que inyectar).
+ */
+function bitacora_observador_clave_de_usuario( $uid, $nombre_apellidos = '' ) {
+    global $wpdb;
+    $uid = (int) $uid;
+    if ( ! $uid ) {
+        return '';
+    }
+    $t_obs = bitacora_nombre_tabla_observadores();
+    $t_ob  = bitacora_nombre_tabla();
+
+    // 1) Vía principal: el observador vinculado directamente a este usuario.
+    $clave_obs = $wpdb->get_var(
+        $wpdb->prepare( "SELECT clave FROM $t_obs WHERE usuario_id = %d ORDER BY id ASC LIMIT 1", $uid )
+    );
+
+    // 2) Respaldo por sus propias observaciones: el campo usuario_id SIEMPRE se
+    //    guarda al registrar, así que aunque el observador no tenga usuario_id,
+    //    llegamos a su clave a través de las observaciones de este usuario.
+    if ( ! $clave_obs ) {
+        $clave_obs = $wpdb->get_var( $wpdb->prepare(
+            "SELECT o.clave FROM $t_obs o
+             INNER JOIN $t_ob ob ON ob.observador_id = o.id
+             WHERE ob.usuario_id = %d AND ob.borrada_en IS NULL
+             ORDER BY ob.id DESC LIMIT 1",
+            $uid
+        ) );
+    }
+
+    // 3) Último respaldo: por el nombre del usuario de WordPress (solo acierta si
+    //    la clave del observador coincide con su nombre y apellidos).
+    if ( ! $clave_obs ) {
+        if ( '' === $nombre_apellidos ) {
+            $u = get_userdata( $uid );
+            if ( $u ) {
+                $nombre_apellidos = trim( $u->first_name . ' ' . $u->last_name );
+                if ( '' === $nombre_apellidos ) {
+                    $nombre_apellidos = $u->display_name;
+                }
+            }
+        }
+        $clave = sanitize_title( $nombre_apellidos );
+        if ( '' !== $clave ) {
+            $clave_obs = $wpdb->get_var(
+                $wpdb->prepare( "SELECT clave FROM $t_obs WHERE clave = %s", $clave )
+            );
+        }
+    }
+
+    return $clave_obs ? $clave_obs : '';
+}
+
 function bitacora_inyectar_datos() {
     // Solo tiene sentido para usuarios con sesión: son los únicos que pueden guardar.
     if ( ! is_user_logged_in() ) {
@@ -5303,49 +5467,17 @@ function bitacora_inyectar_datos() {
         $nombre_apellidos = $u->display_name;
     }
 
-    // Clave del observador de este usuario, para que el mapa arranque con SUS
-    // observaciones. Se busca primero por usuario_id y, si no, por la clave
-    // derivada de su nombre (misma regla que al crear observadores). Puede ser
-    // '' si el usuario aún no tiene observaciones registradas.
-    global $wpdb;
-    $t_obs = bitacora_nombre_tabla_observadores();
-    $t_ob  = bitacora_nombre_tabla();
     $uid = get_current_user_id();
-
-    // 1) Vía principal: el observador vinculado directamente a este usuario.
-    $observador_clave = $wpdb->get_var(
-        $wpdb->prepare( "SELECT clave FROM $t_obs WHERE usuario_id = %d ORDER BY id ASC LIMIT 1", $uid )
-    );
-
-    // 2) Respaldo por sus propias observaciones: el campo usuario_id SIEMPRE se
-    //    guarda al registrar, así que aunque el observador no tenga usuario_id,
-    //    llegamos a su clave a través de las observaciones de este usuario.
-    if ( ! $observador_clave ) {
-        $observador_clave = $wpdb->get_var( $wpdb->prepare(
-            "SELECT o.clave FROM $t_obs o
-             INNER JOIN $t_ob ob ON ob.observador_id = o.id
-             WHERE ob.usuario_id = %d AND ob.borrada_en IS NULL
-             ORDER BY ob.id DESC LIMIT 1",
-            $uid
-        ) );
-    }
-
-    // 3) Último respaldo: por el nombre del usuario de WordPress (solo acierta si
-    //    la clave del observador coincide con su nombre y apellidos).
-    if ( ! $observador_clave ) {
-        $clave = sanitize_title( $nombre_apellidos );
-        if ( '' !== $clave ) {
-            $observador_clave = $wpdb->get_var(
-                $wpdb->prepare( "SELECT clave FROM $t_obs WHERE clave = %s", $clave )
-            );
-        }
-    }
+    $observador_clave = bitacora_observador_clave_de_usuario( $uid, $nombre_apellidos );
 
     $datos = array(
         'endpoint'        => esc_url_raw( rest_url( 'bitacora/v1/observaciones' ) ),
         // Alta de un objeto del mapa: por aquí entra la distancia escrita a mano
         // cuando ninguna base de datos la sabe y el objeto se queda sin pintar.
         'objetos'         => esc_url_raw( rest_url( 'bitacora/v1/objetos' ) ),
+        // Base para pedir los episodios del feed RSS del observador (issue #178):
+        // el JS le añade "/{clave}/episodios" al abrir el fieldset de audio.
+        'observadores'    => esc_url_raw( rest_url( 'bitacora/v1/observadores' ) ),
         'media'           => esc_url_raw( rest_url( 'wp/v2/media' ) ),
         'nonce'           => wp_create_nonce( 'wp_rest' ),
         'usuarioId'       => $uid,

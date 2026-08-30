@@ -23,9 +23,10 @@
      estadoObservador(id)         -> 'propia' | 'ajena' | 'ninguna'
      visiblePorObservador(id)     -> ¿se dibuja con el filtro actual? (las 3 vistas)
      atenuadoPorObservador(id)    -> ¿se pinta como "no visitado"? (las 3 vistas)
-     grisNoVisitado(r, g, b)      -> [r,g,b] del gris clarito de "no visitado"
-     OPACIDAD_NO_VISITADO         -> multiplicador de opacidad de lo no visitado
+     grisNoVisitado(r, g, b)      -> [r,g,b] del color apagado de "por visitar"
+     OPACIDAD_NO_VISITADO         -> multiplicador de opacidad del rótulo
      MEZCLA_NO_VISITADO           -> proporción de gris (para el filtro CSS)
+     ANILLO_NO_VISITADO           -> {escala, grosor} del anillo de "por visitar"
    ============================================================================ */
 
 (function () {
@@ -102,15 +103,21 @@
     return 'ninguna';
   }
 
-  // ---- "No visitado": regla y aspecto ÚNICOS de las tres vistas -------------
+  // ---- "Por visitar": regla y aspecto ÚNICOS de las tres vistas -------------
   // Las tres escalas del mapa (extragaláctica, Vía Láctea y vecindario solar)
-  // pintan igual lo que el observador activo no ha visitado: en gris clarito y
-  // con menos opacidad, pero visible y pulsable. Aquí viven la regla y las
-  // constantes; cada vista solo las aplica con su técnica (filtro CSS en los
-  // marcadores, mezcla de color en los dos lienzos).
-  var GRIS = 150;          // gris hacia el que se mezcla el color del objeto
-  var MEZCLA = 0.82;       // cuánto del gris (0 = color intacto, 1 = gris puro)
-  var OPACIDAD = 0.55;     // multiplicador de opacidad del objeto atenuado
+  // pintan igual lo que el observador activo no ha visitado. La diferencia es
+  // de SÍMBOLO, no de brillo: anillo hueco del color del objeto en vez de punto
+  // lleno con halo, del tamaño que dice ANILLO. Lo único que se apaga es el
+  // rótulo, y poco: si se apagara el símbolo, un destino por visitar parecería
+  // un objeto de segunda. Aquí viven la regla y las constantes; cada vista solo
+  // las aplica con su técnica (filtro CSS en los marcadores de la galaxia,
+  // mezcla de color en los dos lienzos).
+  var GRIS = 150;          // gris hacia el que se mezcla el color del rótulo
+  var MEZCLA = 0.35;       // cuánto del gris (0 = color intacto, 1 = gris puro)
+  var OPACIDAD = 0.8;      // multiplicador de opacidad del rótulo por visitar
+  // Anillo hueco: 1,6 veces el radio del punto lleno, para que se distinga de
+  // un vistazo. Son los mismos números que .mw-no-visitado en mapa.html.
+  var ANILLO = { escala: 1.6, grosor: 1.4 };
 
   // ¿Se dibuja el objeto con el filtro de observador actual? Sí si el activo lo
   // observó ('propia') o si lo observaron otros y el descubrimiento está activo
@@ -141,6 +148,7 @@
     grisNoVisitado: grisNoVisitado,
     OPACIDAD_NO_VISITADO: OPACIDAD,
     MEZCLA_NO_VISITADO: MEZCLA,
+    ANILLO_NO_VISITADO: ANILLO,
     getActivo: getActivo,
     setActivo: setActivo,
     getFicha: getFicha,

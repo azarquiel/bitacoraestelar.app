@@ -1,8 +1,8 @@
 /* ===========================================================================
  * BITÁCORA MESSIER · Mi flota (equipo del observador)
  * ---------------------------------------------------------------------------
- * Gestiona el equipo PERSONAL del observador (telescopios, oculares, auxiliares
- * y filtros): listar, añadir desde el catálogo global (con buscador), añadir a
+ * Gestiona el equipo PERSONAL del observador (telescopios, oculares y
+ * auxiliares): listar, añadir desde el catálogo global (con buscador), añadir a
  * medida, editar y borrar. Habla con /wp-json/bitacora/v1/equipo*.
  *
  * Va SUBIDO POR FTP a /wp-content/uploads/bitacora/ (no se pega en el editor:
@@ -75,27 +75,6 @@
         if (num(it.extension_mm) != null) p.push('+' + num(it.extension_mm) + ' mm');
         return p.length ? p.join('  ·  ') : 'sin efecto óptico';
       }
-    },
-    // Los filtros no tienen campos ópticos: no cambian aumentos ni campo, solo qué
-    // luz llega al ojo. Se buscan por el TIPO además de por el nombre porque la
-    // mayoría se llaman "#58" o "LP-3", que no dicen nada; el tipo ("Green",
-    // "Oxygen III") es lo único por lo que alguien buscaría.
-    filtro: {
-      lista: 'listaFiltros', add: 'addFiltro', modeloCol: 'nombre',
-      etiquetaModelo: 'Nombre', singular: 'filtro',
-      campos: [
-        { k: 'tipo', lab: 'Tipo', tipo: 'text' },
-        { k: 'bandpass', lab: 'Banda que deja pasar (nm)', tipo: 'text' }
-      ],
-      buscarPor: function (it) {
-        return ((it.vendor ? it.vendor + ' ' : '') + (it.nombre || '') + ' ' + (it.tipo || '')).trim();
-      },
-      specs: function (it) {
-        var p = [];
-        if (it.tipo) p.push(it.tipo);
-        if (it.bandpass) p.push(it.bandpass + ' nm');
-        return p.length ? p.join('  ·  ') : 'sin datos de banda';
-      }
     }
   };
 
@@ -116,8 +95,8 @@
         return;
       }
 
-      // Base de la API de equipo, derivada de WP.endpoint (…/observaciones).
-      var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
+      // Base de la API de equipo, hermana de …/observaciones (fuente única).
+      var API = window.BitacoraBase.ruta('equipo');
 
       var estado = { personal: null, catalogo: null };
       // El catálogo global es grande; se carga EN DIFERIDO (solo al ir a buscar en
@@ -126,9 +105,9 @@
       function asegurarCatalogo() {
         if (!catalogoPromise) {
           catalogoPromise = api(API + '/catalogo').then(function (res) {
-            estado.catalogo = (res.ok && res.data) || { telescopios: [], oculares: [], auxiliares: [], filtros: [] };
+            estado.catalogo = (res.ok && res.data) || { telescopios: [], oculares: [], auxiliares: [] };
           }).catch(function () {
-            estado.catalogo = { telescopios: [], oculares: [], auxiliares: [], filtros: [] };
+            estado.catalogo = { telescopios: [], oculares: [], auxiliares: [] };
             catalogoPromise = null;   // permite reintentar si la carga falló
           });
         }
@@ -148,31 +127,15 @@
         mostrarFlash._t = setTimeout(function () { flash.className = 'flash'; }, 4000);
       }
 
-      // Llamada a la API con cookie de sesión, nonce y JSON.
-      function api(url, opciones) {
-        opciones = opciones || {};
-        opciones.credentials = 'same-origin';
-        opciones.headers = opciones.headers || {};
-        opciones.headers['X-WP-Nonce'] = WP.nonce;
-        if (opciones.body && typeof opciones.body !== 'string') {
-          opciones.headers['Content-Type'] = 'application/json';
-          opciones.body = JSON.stringify(opciones.body);
-        }
-        return fetch(url, opciones).then(function (r) {
-          return r.json().catch(function () { return {}; }).then(function (data) {
-            return { ok: r.ok, status: r.status, data: data };
-          });
-        });
-      }
-
+      // Llamada a la API: fuente única en bitacora-base.js (su variante era la
+      // más completa de las cinco copias y es la que quedó). El 403 del equipo
+      // conserva su mensaje propio por parámetro.
+      var api = window.BitacoraBase.api;
       function errorDe(res, porDefecto) {
-        if (res.status === 401) return 'Debes iniciar sesión.';
-        if (res.status === 403) return 'Solo puedes tocar tu propio equipo.';
-        if (res.data && res.data.message) return res.data.message;
-        return porDefecto + ' (error ' + res.status + ')';
+        return window.BitacoraBase.errorDe(res, porDefecto, { m403: 'Solo puedes tocar tu propio equipo.' });
       }
 
-      var plural = { telescopio: 'telescopios', ocular: 'oculares', auxiliar: 'auxiliares', filtro: 'filtros' };
+      var plural = { telescopio: 'telescopios', ocular: 'oculares', auxiliar: 'auxiliares' };
 
       // ── Pintado de cada sección ──
       function pintarCategoria(tipo) {
@@ -268,7 +231,6 @@
           contenedor: cont,
           fuente: function () { return (estado.catalogo && estado.catalogo[plural[tipo]]) || []; },
           texto: function (it) { return ((it.vendor ? it.vendor + ' ' : '') + (it[cfg.modeloCol] || '')).trim(); },
-          buscarPor: cfg.buscarPor,   // solo los filtros lo usan (se buscan por su tipo)
           specs: cfg.specs,
           onElegir: function (it) { crear(tipo, { catalogoId: parseInt(it.id, 10) }, null); }
         });
@@ -387,8 +349,8 @@
           mostrarFlash('No se pudo cargar tu flota.', true);
           return;
         }
-        estado.personal = res.data || { telescopios: [], oculares: [], auxiliares: [], filtros: [] };
-        ['telescopio', 'ocular', 'auxiliar', 'filtro'].forEach(function (tipo) {
+        estado.personal = res.data || { telescopios: [], oculares: [], auxiliares: [] };
+        ['telescopio', 'ocular', 'auxiliar'].forEach(function (tipo) {
           pintarCategoria(tipo);
           pintarAdd(tipo);
         });

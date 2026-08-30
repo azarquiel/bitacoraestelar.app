@@ -2,7 +2,7 @@
 /* Hojas de validación VISUAL de la rama nebulosa planetaria.
 
    Pinta el buffer difuso de producción (montaje lib_parche_produccion +
-   R.ps1PintarParche) y lo vuelca a PNG con el mapeo de nivel de pintarFot
+   window.BitacoraPS1.ps1PintarParche) y lo vuelca a PNG con el mapeo de nivel de pintarFot
    (nivelFondo + valorDeFlujo), sin la capa de estrellas-sprite ni el realce
    local: lo que se valida aquí es morfología, tamaño angular y respuesta de
    la rampa al fondo — los bits los vigila test_golden_difusas.js.
@@ -15,14 +15,15 @@ var fs = require('fs'), path = require('path');
 var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
-var R = global.window.BitacoraGaiaRender, PS1 = R.ps1;
+var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 var P = require('./lib_parche_produccion.js')(R);
 var png = require('./lib_png.js');
 
-var CAT = R.ps1CatalogoDifuso(global.window.BITACORA_GALAXIAS, global.window.BITACORA_NEBULOSAS);
+var CAT = window.BitacoraPS1.ps1CatalogoDifuso(global.window.BITACORA_GALAXIAS, global.window.BITACORA_NEBULOSAS);
 var OUT = path.join(RAIZ, '.scratch', 'vistas-np');
 fs.mkdirSync(OUT, { recursive: true });
 var GAIA = path.join(__dirname, 'fixtures', 'gaia');
@@ -73,7 +74,7 @@ function vista(v) {
     var o = { ra0: gal.ra, dec0: gal.dec, arcmin: AFOV / v.M * 60,
               size: SIZE, cielo: cielo, apertura: v.D };
     var difuso = new Float32Array(SIZE * SIZE);
-    R.ps1PintarParche(difuso, parche, o);
+    window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
     var c = R.ctxFotometrico(cielo, parche.thetaIntArcmin);
     var rgb = new Uint8Array(SIZE * SIZE * 3);
     var enc = 0, negros = 0, maxN = 0;

@@ -21,8 +21,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1;
+var PS1 = window.BitacoraPS1.cfg;
 
 var fallos = 0;
 function ok(cond, etiqueta) {
@@ -54,7 +55,7 @@ function oNuevo(conCielo) {
 var cRef = R.ctxFotometrico(Object.assign({}, CIELO));
 var UMBRAL = R.sbUmbralContraste(cRef);
 var F0 = Math.pow(10, -(UMBRAL - 1) / 2.5);
-ok(Math.abs(R.ps1Opacidad(-2.5 * Math.log10(F0), UMBRAL) - 0.4) < 1e-9,
+ok(Math.abs(window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(F0), UMBRAL) - 0.4) < 1e-9,
    'el brillo de prueba deja la rampa a media altura (op = 0,4)');
 
 /* Dos componentes difusos, como el parche de M51 (galaxia + compañera): sendas
@@ -74,7 +75,7 @@ function pintar(escena, bandera, conCielo) {
   var previo = PS1.opacidadInternaEscena;
   PS1.opacidadInternaEscena = bandera;
   var difuso = new Float32Array(SIZE * SIZE);
-  R.ps1PintarParche(difuso, parcheNuevo(escena), oNuevo(conCielo !== false));
+  window.BitacoraPS1.ps1PintarParche(difuso, parcheNuevo(escena), oNuevo(conCielo !== false));
   PS1.opacidadInternaEscena = previo;
   return difuso;
 }
@@ -107,7 +108,7 @@ for (var i = 0; i < centros.length; i++) {
 }
 /* Y lo que quitaba era exactamente la rampa, no otra cosa: op = 0,4 aplicado
    como lo aplica producción (mezcla sobre el NIVEL, no sobre el flujo). */
-ok(sinEscena[enLienzo(30, 30)] === Math.fround(R.ps1FlujoConOpacidad(F0, 0.4, cRef)),
+ok(sinEscena[enLienzo(30, 30)] === Math.fround(window.BitacoraPS1.ps1FlujoConOpacidad(F0, 0.4, cRef)),
    'lo que la rampa quitaba dentro de la escena era justo su op = 0,4');
 
 /* ── Fuera de la escena: rampa normal ──────────────────────────────────────*/
@@ -123,16 +124,16 @@ ok(todosApagados, 'fuera de la escena la rampa sigue desvaneciendo');
 
 /* El borde manda: 1 px dentro del radio protege, 1 px fuera no. Se compara con
    el veredicto de ps1FuenteEnEscena, que es quien decide también las estrellas. */
-ok(R.ps1FuenteEnEscena(ESCENA, AFIN, 37, 30) === true, 'a 7″ del centro: dentro de la escena');
-ok(R.ps1FuenteEnEscena(ESCENA, AFIN, 39, 30) === false, 'a 9″ del centro: fuera de la escena');
+ok(window.BitacoraPS1.ps1FuenteEnEscena(ESCENA, AFIN, 37, 30) === true, 'a 7″ del centro: dentro de la escena');
+ok(window.BitacoraPS1.ps1FuenteEnEscena(ESCENA, AFIN, 39, 30) === false, 'a 9″ del centro: fuera de la escena');
 ok(conOp[enLienzo(37, 30)] === sinOpacidad[enLienzo(37, 30)], 'el borde protege por dentro');
 ok(conOp[enLienzo(39, 30)] === sinEscena[enLienzo(39, 30)], 'el borde no protege por fuera');
 
 /* Ninguna de las dos elipses cubre a la otra: la protección es por componente,
    no un radio único alrededor del objeto apuntado. */
-ok(R.ps1FuenteEnEscena([ESCENA[0]], AFIN, 90, 92) === false,
+ok(window.BitacoraPS1.ps1FuenteEnEscena([ESCENA[0]], AFIN, 90, 92) === false,
    'la elipse del primer componente no alcanza al segundo');
-ok(R.ps1FuenteEnEscena([ESCENA[1]], AFIN, 30, 30) === false,
+ok(window.BitacoraPS1.ps1FuenteEnEscena([ESCENA[1]], AFIN, 30, 30) === false,
    'la elipse del segundo componente no alcanza al primero');
 
 /* ── Un parche sin escena no cambia de comportamiento ──────────────────────*/

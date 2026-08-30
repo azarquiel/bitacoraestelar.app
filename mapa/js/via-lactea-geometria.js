@@ -103,11 +103,126 @@
     return 50 - S * R0 * Math.cos(phiDeg * RAD);
   }
 
+  // ---------------------------------------------------------------------------
+  // VISTA CENITAL INCLINADA (rotateX + perspective)
+  // El plano del mapa es z=0 en las coordenadas de #mw-content; rotateX lo abate
+  // y la perspective del envoltorio lo proyecta. Como el desplazamiento (pan)
+  // vive FUERA de la perspectiva, aquí no entra: estas funciones trabajan en
+  // coordenadas del visor SIN desplazar, y quien llama suma o resta el pan.
+  //
+  // Cadena real de CSS: transform: scale(esc) rotateX(grados), con
+  // transform-origin y perspective-origin en el centro de la caja. Se aplica de
+  // derecha a izquierda, así que primero se abate y luego se escala; y scale()
+  // es 2D, o sea que NO escala z: la deformación de perspectiva es un efecto de
+  // pantalla, del mismo tamaño a cualquier zoom (y nunca se acerca al punto de
+  // fuga, así que no hay singularidad).
+  //
+  //   vista: { ancho, alto, escala, grados, perspectiva }
+  //   z:     altura del punto sobre el plano galáctico, en px del contenido.
+  // ---------------------------------------------------------------------------
+  function proyectarInclinado(x, y, z, vista) {
+    var a = (vista.grados || 0) * RAD;
+    var cos = Math.cos(a), sen = Math.sin(a);
+    var dx = x - vista.ancho / 2;
+    var dy = y - vista.alto / 2;
+    // El giro es DENTRO del disco y ocurre antes de abatirlo: gira el mapa
+    // sobre su eje polar, no la imagen ya abatida sobre la pantalla.
+    if (vista.giro) {
+      var g = vista.giro * RAD;
+      var cg = Math.cos(g), sg = Math.sin(g);
+      var rx = dx * cg - dy * sg;
+      dy = dx * sg + dy * cg;
+      dx = rx;
+    }
+    var ey = dy * cos - (z || 0) * sen;   // altura en pantalla tras abatir
+    var ez = dy * sen + (z || 0) * cos;   // profundidad hacia el observador
+    var k = 1 - ez / (vista.perspectiva || Infinity);   // división de perspectiva
+    if (!(k > 0)) k = 1e-6;               // detrás del observador: no se proyecta
+    return {
+      x: vista.ancho / 2 + vista.escala * dx / k,
+      y: vista.alto / 2 + vista.escala * ey / k,
+      k: k   // división de perspectiva del punto, que quien llama puede deshacer
+    };
+  }
+
+  // ¿La foto del disco tapa a un objeto que está POR DEBAJO del plano?
+  // Mirando el disco abatido, el rayo que va del ojo a un objeto hundido cruza
+  // el plano galáctico en un punto desplazado hacia el fondo. Igualando la
+  // altura en pantalla (ey de proyectarInclinado) ese punto es
+  //   dy0 = dy - z·tan(grados)
+  // y con z negativo se aleja del observador. Si dy0 cae dentro del disco, la
+  // foto se come al objeto; si se sale por detrás del borde, el abatimiento lo
+  // ha sacado a la vista y el objeto se ve tal cual.
+  // El disco es un círculo, así que el giro en plano no cambia el radio: basta
+  // girar el punto como hace la proyección. 'radio' va en px de contenido.
+  function tapadoPorDisco(x, y, z, radio, vista) {
+    if (!(z < 0) || !vista.grados) return false;
+    var dx = x - vista.ancho / 2;
+    var dy = y - vista.alto / 2;
+    if (vista.giro) {
+      var g = vista.giro * RAD;
+      var cg = Math.cos(g), sg = Math.sin(g);
+      var rx = dx * cg - dy * sg;
+      dy = dx * sg + dy * cg;
+      dx = rx;
+    }
+    var dy0 = dy - z * Math.tan(vista.grados * RAD);
+    return dx * dx + dy0 * dy0 <= radio * radio;
+  }
+
+  // Inversa de proyectarInclinado sobre el propio plano (z=0): qué punto del
+  // mapa hay bajo un punto de pantalla. Es la que ancla el zoom y el pellizco.
+  //   ey·esc/k = v  y  k = 1 - dy·sen/p  =>  dy = v / (esc·cos + v·sen/p)
+  function planoDesdePantalla(sx, sy, vista) {
+    var a = (vista.grados || 0) * RAD;
+    var cos = Math.cos(a), sen = Math.sin(a);
+    var p = vista.perspectiva || Infinity;
+    var u = sx - vista.ancho / 2;
+    var v = sy - vista.alto / 2;
+    var den = vista.escala * cos + v * sen / p;
+    var dy = den ? v / den : 0;
+    var k = 1 - dy * sen / p;
+    var dx = u * k / vista.escala;
+    if (vista.giro) {   // deshace el giro en el plano
+      var g = vista.giro * RAD;
+      var cg = Math.cos(g), sg = Math.sin(g);
+      var ux = dx * cg + dy * sg;
+      dy = -dx * sg + dy * cg;
+      dx = ux;
+    }
+    return {
+      x: vista.ancho / 2 + dx,
+      y: vista.alto / 2 + dy
+    };
+  }
+
+  // Caja envolvente en pantalla del rectángulo de la imagen ya inclinado, para
+  // que el clamp del desplazamiento no impida ver zonas que sí están dentro.
+  function huellaInclinada(rect, vista) {
+    var xs = [rect.left, rect.left + rect.width];
+    var ys = [rect.top, rect.top + rect.height];
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (var i = 0; i < 2; i++) {
+      for (var j = 0; j < 2; j++) {
+        var p = proyectarInclinado(xs[i], ys[j], 0, vista);
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+    }
+    return { w: maxX - minX, h: maxY - minY };
+  }
+
   var API = {
     rectContain: rectContain,
     huellaRotada: huellaRotada,
     clampDesplazamiento: clampDesplazamiento,
     zoomAlrededor: zoomAlrededor,
+    proyectarInclinado: proyectarInclinado,
+    planoDesdePantalla: planoDesdePantalla,
+    tapadoPorDisco: tapadoPorDisco,
+    huellaInclinada: huellaInclinada,
     xCantoObjeto: xCantoObjeto,
     xCantoSol: xCantoSol
   };

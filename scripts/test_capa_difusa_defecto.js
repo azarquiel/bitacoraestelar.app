@@ -13,6 +13,7 @@ var path = require('path');
 var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
 var R = global.window.BitacoraGaiaRender;
@@ -26,7 +27,7 @@ var pedidos = [];
 global.fetch = function (url) { pedidos.push(String(url)); return Promise.reject(new Error('sin red')); };
 
 var np = { ra: 305.59579, dec: 20.10453 };   // NGC 6905, clase PN
-R.ps1CapaGalaxias(new Float32Array(4), null, { sqm: 21.4 }, null, {
+window.BitacoraPS1.ps1CapaGalaxias(new Float32Array(4), null, { sqm: 21.4 }, null, {
   ra0: np.ra, dec0: np.dec, arcmin: 30, size: 2
 }).then(function () {
   ok(pedidos.length > 0, 'la capa pidió algún parche sin pasarle catálogo (' + pedidos.length + ')');

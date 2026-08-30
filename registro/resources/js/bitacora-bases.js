@@ -33,24 +33,12 @@
       if (n) n.textContent = 'Inicia sesión para gestionar tus bases.';
       return;
     }
-    var API_BASES = WP.endpoint.replace(/observaciones\/?$/, 'bases');
-    var API_OBS   = WP.endpoint.replace(/observaciones\/?$/, 'observadores');
+    var API_BASES = BitacoraBase.ruta('bases');
+    var API_OBS   = BitacoraBase.ruta('observadores');
 
-    function api(url, opts) {
-      opts = opts || {}; opts.credentials = 'same-origin';
-      opts.headers = opts.headers || {}; opts.headers['X-WP-Nonce'] = WP.nonce;
-      return fetch(url, opts).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, data: d }; });
-      });
-    }
-    function flash(txt, err) {
-      var f = $('flash'); if (!f) return;
-      f.textContent = txt; f.className = 'flash show' + (err ? ' err' : '');
-      clearTimeout(flash._t); flash._t = setTimeout(function () { f.className = 'flash'; }, 4000);
-    }
-    function errorDe(res, porDefecto) {
-      return (res.data && res.data.message) ? res.data.message : (porDefecto + ' (' + res.status + ')');
-    }
+    // Acceso a la API, aviso efímero y mensajes de error: fuente única en
+    // bitacora-base.js (había cinco copias de api() y ya habían divergido).
+    var api = BitacoraBase.api, flash = BitacoraBase.flash, errorDe = BitacoraBase.errorDe;
 
     var bases = [], observadores = [], editId = null, map = null, marker = null;
 

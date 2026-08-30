@@ -42,6 +42,18 @@ No hay pestaña «Estrellas dobles». El catálogo vive dentro del buscador de *
 
 **Derogado:** el render ya no recibe `sep` en las opciones de `capaEstrellas`, así que el recorte del suelo de visibilidad por `margenSuelo` **no actúa nunca en el simulador**: las dos componentes de una doble se dibujan con el mismo suelo que cualquier otra estrella del campo. Era lo que hacía que Achird A cayera de 10,08 px a 0,76 px a 133×, y esa era la diferencia de aspecto entre la pestaña de dobles y «Cualquier objeto». `radioEstrella` sigue aceptando `sep` (lo ejercitan `scripts/test_estrella_fisica.js` y `scripts/test_lienzo_invariante.js`); lo que no hay es quien se lo pase.
 
+## Vista de Gaia (`vistaGaia`)
+
+El pipeline completo del modo Canvas-2D — fondo → consulta de Gaia → velo del campo denso → magnitud límite → cúmulo → capa de estrellas → pintado fotométrico → capa de galaxias — detrás de una sola entrada: `BitacoraGaiaRender.vistaGaia(ctx, opts)`. El ORDEN de la cadena es del módulo; los dos llamadores (el simulador de oculares y `render()`, el envoltorio que usa el generador de imagen del formulario) pasan datos y reciben resultado, sin conocer la secuencia.
+
+- **Interfaz:** campos planos (el idioma de `magLimite`/`nivelFondo`): equipo (`apertura`, `aumentos`, `transmision|optica`, `arana`, `pupilaSalida`, `pupilaOjo`, `afov`), cielo (`sqm`), campo (`ra`, `dec`, `arcmin`, `size`) y objeto (`carbono`/`carbonoMag`, `cumulo` —la ficha física del catálogo, como DATO—, `catalogo` difuso, `conGlow`, `vivo`). Devuelve `{estrellas, estrellasDibujo, mlim, fondo, avisoCampo, galaxias}`.
+- **Dos ritmos, un dato:** `galaxias` es LA PROMESA de la capa PS1 (`{aviso}`, nunca rechaza). El formulario la espera (la imagen que sube debe llevar la galaxia); el simulador pinta estrellas ya y engancha el aviso cuando llegue.
+- **Cancelar no es un error:** con `vivo()` falso resuelve `{cancelada: true}` sin volver a tocar el ctx. El RECHAZO de la promesa significa «Gaia no responde» y en el simulador dispara el respaldo DSS.
+- **Los avisos los redacta el módulo** (`avisoCampo`: catálogo agotado / resplandor de fondo): fuente única de texto; cada pantalla decide dónde pintarlos y con qué prioridad.
+- **Dependencias implícitas documentadas:** los catálogos cargados por `<script defer>` en ambas páginas — `BITACORA_ESTRELLAS_BRILLANTES` (lo concatena `dibujar()`) y `BITACORA_GALAXIAS`/`BITACORA_NEBULOSAS` (catálogo difuso por defecto).
+- **Test de contrato:** `scripts/test_vista_gaia.js` — entra por la interfaz (fetch de mentira, ctx falso), y debe sobrevivir a cualquier refactor interno del pipeline.
+- _Evitar_: «escena» (ocupado por la escena difusa de PS1), «pipeline del render» sin nombre.
+
 ## Cadena de la placa (luma → flujo)
 
 Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de objeto por píxel** que come `pintarFot`. Es el otro motor que produce un `Fobj`, en paralelo a las capas difusas sintéticas del Canvas-2D.
@@ -51,6 +63,26 @@ Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de obj
 - **Por qué dos fuentes en el registro:** el catálogo dibujado gana en cúmulos y dobles; la placa gana en nebulosidad y, sobre todo, en las **nebulosas oscuras** (los Barnard), que son ausencia de estrellas sobre fondo rico y un catálogo de puntos no puede contar. El observador elige en el modal y compara antes de decidir.
 - **No es fotometría calibrada:** mapeo heurístico con parámetros puestos a ojo, y están para tocarlos. Lo que el test fija son los **invariantes**: más luma nunca es menos flujo, un píxel apagado no inventa luz (flujo 0), la escala es logarítmica en magnitudes, la fusión nunca oscurece lo que la placa profunda ya registró, y una fusión que no cuadra (pocos píxeles en común o pendiente no positiva) devuelve **la placa profunda tal cual** en vez de una recta inventada.
 - **La regla se prueba aparte del desenfoque:** `rellenarNucleo` recibe el entorno ya calculado, porque lo que se comprueba es el umbral, no el kernel (filtro nativo del canvas, necesita DOM). Test: `scripts/test_placa.js`.
+
+## PS1 (la capa difusa desde imagen)
+
+En este repo **«PS1» nombra la ley, no el sondeo**: la capa que convierte una imagen real del
+cielo en luz difusa visible —parche, PSF, quitar estrellas, perfil, fusión imagen/modelo,
+anclaje al catálogo, opacidad—. Que su único proveedor de imagen hoy sea Pan-STARRS 1 es un
+detalle de adquisición, no la definición.
+
+- **Fuente única:** `resources/js/bitacora-ps1.js`, global `window.BitacoraPS1`; las funciones
+  conservan el prefijo `ps1*` y la calibración vive en `BitacoraPS1.cfg`.
+- **Frontera:** es la otra ley del render, con dueño propio frente a la
+  [[cadena fotométrica]]. PS1 usa la fotometría; `vistaGaia` usa PS1 (`ps1MagConsulta`,
+  `ps1CapaGalaxias`). El ciclo es de llamada, no de carga, con la forma de
+  `bitacora-cumulos.js:92-93`. Decidido en ADR 0020.
+- **No confundir con la [[cadena de la placa]]:** aquella convierte una placa (DSS o PanSTARRS)
+  en `Fobj` para pintar el campo entero; ésta reconstruye un objeto extenso concreto y le
+  escribe su máscara difusa. Las dos son imagen de sondeo y viven a distinto lado del muro.
+- _Evitar_: «PS1» como sinónimo de Pan-STARRS 1 a secas cuando se habla de código; para el
+  sondeo, decir «Pan-STARRS 1» o «PanSTARRS».
+
 
 ## Adquisición de Gaia por celdas
 

@@ -17,7 +17,7 @@
 
    Interfaz (window.VLCapas):
      capaActiva(alphaAtlas, alphaVecindario) -> 'galaxia' | 'grupoLocal' | 'vecindario'
-     controlesVisibles(capa, canto, giros)   -> { vista, giroCenital, giroCanto,
+     controlesVisibles(capa, canto, giros)   -> { abatimiento, giroCanto,
                                                   giroPlano, leyendaObjetos,
                                                   leyendaHubble, leyendaEspectral }
    ============================================================================ */
@@ -35,17 +35,17 @@
     return 'galaxia';
   }
 
-  // Controles de la vista de la Vía Láctea: el botón de cambio de vista y los
-  // tres mandos de giro (cenital, azimutal de canto y en plano de canto, estos
-  // dos bajo su interruptor de CONFIG.giros). Fuera de la galaxia, ninguno.
+  // Controles de la vista de la Vía Láctea. El abatimiento manda en las dos
+  // vistas (0° cenital, 90° de canto), así que no hay botón de cambio de vista
+  // ni giro en plano que lo imite: los dos giros de canto siguen bajo su
+  // interruptor de CONFIG.giros. Fuera de la galaxia, ninguno.
   // Y la leyenda: cada escala enseña la suya y esconde las otras dos.
   function controlesVisibles(capa, canto, giros) {
     var g = giros || {};
     var c = capa || 'galaxia';
     var enGalaxia = c === 'galaxia';
     return {
-      vista:       enGalaxia,
-      giroCenital: enGalaxia && !canto,
+      abatimiento: enGalaxia,
       giroCanto:   enGalaxia && !!canto && !!g.giroAzimutalCanto,
       giroPlano:   enGalaxia && !!canto && !!g.giroPlanoCanto,
       leyendaObjetos:   enGalaxia,

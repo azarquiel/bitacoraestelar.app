@@ -36,14 +36,11 @@
       suelta.textContent = 'Inicia sesión para importar tus observaciones.';
       return;
     }
-    var API = WP.endpoint.replace(/observaciones\/?$/, 'importar-oal');
+    var API = BitacoraBase.ruta('importar-oal');
     var xml = '';   // el fichero leído, entre la previa y la confirmación
 
-    function flash(txt, err) {
-      var f = $('flash'); if (!f) { return; }
-      f.textContent = txt; f.className = 'flash show' + (err ? ' err' : '');
-      clearTimeout(flash._t); flash._t = setTimeout(function () { f.className = 'flash'; }, 4000);
-    }
+    // Aviso efímero: fuente única en bitacora-base.js.
+    var flash = BitacoraBase.flash;
 
     function enviar(confirmar) {
       return fetch(API, {

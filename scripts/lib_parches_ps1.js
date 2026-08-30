@@ -23,11 +23,11 @@ module.exports = function (R) {
     if (!/\.fits$/.test(nombre)) return;
     var buf = fs.readFileSync(path.join(DIR, nombre));
     var ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    var f = R.parseFITS(ab);
+    var f = window.BitacoraPS1.parseFITS(ab);
     if (!f || !f.wcs) return;
     var cx = (f.ancho - 1) / 2, cy = (f.alto - 1) / 2, mejor = null, dMejor = Infinity;
     for (var i = 0; i < CAT.length; i++) {
-      var p = R.ps1CieloAPixel(f.wcs, CAT[i][2], CAT[i][3]);   // devuelve [x, y]
+      var p = window.BitacoraPS1.ps1CieloAPixel(f.wcs, CAT[i][2], CAT[i][3]);   // devuelve [x, y]
       if (!p) continue;
       var d = Math.hypot(p[0] - cx, p[1] - cy);
       if (d < dMejor) { dMejor = d; mejor = CAT[i]; }

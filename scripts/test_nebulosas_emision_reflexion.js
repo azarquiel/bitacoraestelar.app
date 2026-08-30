@@ -22,9 +22,10 @@ var fs = require('fs'), path = require('path');
 var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
-var R = global.window.BitacoraGaiaRender, PS1 = R.ps1;
+var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 var GAL = global.window.BITACORA_GALAXIAS, NEB = global.window.BITACORA_NEBULOSAS;
 var B = require('./lib_bajar_parche.js')(R);
 var P = require('./lib_parche_produccion.js')(R);
@@ -39,7 +40,7 @@ function leerGaia(f) {
 }
 
 console.log('Las clases de emisión y reflexión entran por la puerta del catálogo:');
-var cat = R.ps1CatalogoDifuso(GAL, NEB);
+var cat = window.BitacoraPS1.ps1CatalogoDifuso(GAL, NEB);
 var abiertas = ['PN', 'HII', 'EmN', 'RfN', 'SNR'];
 var esperadas = GAL.length + NEB.filter(function (f) { return abiertas.indexOf(f[12]) >= 0; }).length;
 ok(cat.length === esperadas, 'catálogo difuso = galaxias + clases abiertas (' +
@@ -51,18 +52,18 @@ ok(!fila(cat, 'NGC1333') || NEB.filter(function (f) { return f[0] === 'NGC1333';
 ok(!fila(cat, 'IC1805') === (fila(NEB, 'IC1805')[12] === 'Cl+N'), 'coherencia Cl+N (IC1805)');
 
 console.log('Sin borde real: emisión/reflexión siguen la isofota, como las galaxias:');
-var campo78 = R.ps1GalaxiasDelCampo(cat, fila(NEB, 'NGC2068')[2], fila(NEB, 'NGC2068')[3], 20);
+var campo78 = window.BitacoraPS1.ps1GalaxiasDelCampo(cat, fila(NEB, 'NGC2068')[2], fila(NEB, 'NGC2068')[3], 20);
 var m78 = null;
 for (var i = 0; i < campo78.length; i++) if (campo78[i].nombre === 'NGC2068') m78 = campo78[i];
 ok(!!m78 && m78.clase === 'RfN', 'la fila mapeada lleva su clase (RfN)');
-ok(m78 && R.ps1RadioBordeAs(m78) === 0, 'ps1RadioBordeAs = 0: el borde real es de planetarias');
-var comps78 = R.ps1ComponentesSersic(m78);
-ok(m78 && R.ps1ThetaIntDeGal(m78, comps78) === R.ps1ThetaIntArcmin(comps78, m78.ba),
+ok(m78 && window.BitacoraPS1.ps1RadioBordeAs(m78) === 0, 'ps1RadioBordeAs = 0: el borde real es de planetarias');
+var comps78 = window.BitacoraPS1.ps1ComponentesSersic(m78);
+ok(m78 && window.BitacoraPS1.ps1ThetaIntDeGal(m78, comps78) === window.BitacoraPS1.ps1ThetaIntArcmin(comps78, m78.ba),
   'θint por la vía isofotal de siempre');
 
 function pipeline(nombre, csv, etiqueta) {
   var f = fila(NEB, nombre);
-  var campo = R.ps1GalaxiasDelCampo(cat, f[2], f[3], 20);
+  var campo = window.BitacoraPS1.ps1GalaxiasDelCampo(cat, f[2], f[3], 20);
   var gal = null;
   for (var i = 0; i < campo.length; i++) if (campo[i].nombre === nombre) gal = campo[i];
   if (!gal) { ok(false, nombre + ' no aparece en su propio campo'); return Promise.resolve(); }
@@ -74,14 +75,14 @@ function pipeline(nombre, csv, etiqueta) {
       if (v !== v) nan++; else suma += v;
     }
     var areaPx = (gal.ladoArcmin * 60 / parche.ancho); areaPx *= areaPx;
-    var frac = Math.max(R.ps1FraccionLuz(gal.n, (gal.ladoArcmin * 60 / 2) / gal.reArcsec), 0.02);
+    var frac = Math.max(window.BitacoraPS1.ps1FraccionLuz(gal.n, (gal.ladoArcmin * 60 / 2) / gal.reArcsec), 0.02);
     var magEsperada = gal.magV - 2.5 * Math.log10(frac);
     var magInt = -2.5 * Math.log10(suma * areaPx);
     var cielo = { pupilaSalida: 457.2 / 190, pupilaOjo: 7, sqm: 21.2,
                   aumentos: 190, realceMax: PS1.realceMax, perceptual: true };
     var o = { ra0: gal.ra, dec0: gal.dec, arcmin: 70 / 190 * 60, size: 720, cielo: cielo, apertura: 457.2 };
     var difuso = new Float32Array(720 * 720);
-    R.ps1PintarParche(difuso, parche, o);
+    window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
     var enc = 0, nanD = 0;
     for (var p = 0; p < difuso.length; p++) { if (difuso[p] > 0) enc++; if (difuso[p] !== difuso[p]) nanD++; }
     console.log(etiqueta + ' (' + nombre + ', parche real):');
@@ -106,12 +107,12 @@ console.log('Puerta de tamaño: si el recorte máximo no contiene el objeto, no 
    mag 4,3 sin nebulosa — el mismo fenómeno que dejó fuera a M31/IC342/M33,
    pero el corte de fracción no lo cazaba. Las clases extensas exigen además
    lado SIN recorte. Las compactas (PN) no: su borde es real y cabe. */
-ok(R.ps1CabeEnParche(fila(NEB, 'NGC7000')) === false, 'NGC 7000 (lado recortado) queda fuera');
-ok(R.ps1CabeEnParche(fila(NEB, 'NGC1499')) === false, 'la California también');
-ok(R.ps1CabeEnParche(fila(NEB, 'NGC6888')) === true, 'NGC 6888 (12,7′ sin recorte) se queda');
-ok(R.ps1CabeEnParche(fila(NEB, 'NGC2068')) === true, 'M78 se queda');
-ok(R.ps1CabeEnParche(fila(NEB, 'NGC6720')) === true, 'la puerta no toca a las planetarias');
-var campo7000 = R.ps1GalaxiasDelCampo(cat, fila(NEB, 'NGC7000')[2], fila(NEB, 'NGC7000')[3], 20);
+ok(window.BitacoraPS1.ps1CabeEnParche(fila(NEB, 'NGC7000')) === false, 'NGC 7000 (lado recortado) queda fuera');
+ok(window.BitacoraPS1.ps1CabeEnParche(fila(NEB, 'NGC1499')) === false, 'la California también');
+ok(window.BitacoraPS1.ps1CabeEnParche(fila(NEB, 'NGC6888')) === true, 'NGC 6888 (12,7′ sin recorte) se queda');
+ok(window.BitacoraPS1.ps1CabeEnParche(fila(NEB, 'NGC2068')) === true, 'M78 se queda');
+ok(window.BitacoraPS1.ps1CabeEnParche(fila(NEB, 'NGC6720')) === true, 'la puerta no toca a las planetarias');
+var campo7000 = window.BitacoraPS1.ps1GalaxiasDelCampo(cat, fila(NEB, 'NGC7000')[2], fila(NEB, 'NGC7000')[3], 20);
 var esta7000 = false;
 for (var c7 = 0; c7 < campo7000.length; c7++) if (campo7000[c7].nombre === 'NGC7000') esta7000 = true;
 ok(!esta7000, 'y su campo no la monta (el aviso de «mayor que el recorte» la explica)');

@@ -10,8 +10,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var CFG = R.config, PS1 = R.ps1;
+var CFG = R.config, PS1 = window.BitacoraPS1.cfg;
 var P = require('./lib_psf_parche.js')(R);
 
 var fallos = 0;
@@ -181,8 +182,8 @@ casi(P.thetaAdd(457, ESC) / P.thetaAdd(457, ESC), 1, 1e-15,
   'θ_add en ″ es el mismo a cualquier aumento: la resolución no se compra con oculares');
 
 console.log('\n— Nada de esto toca el presupuesto ni PS1/E —');
-var comps = R.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
-casi(R.ps1FlujoModelo(comps, 0, 0, 50), R.ps1FlujoModelo(comps, 0, 0, 50), 1e-18,
+var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
+casi(window.BitacoraPS1.ps1FlujoModelo(comps, 0, 0, 50), window.BitacoraPS1.ps1FlujoModelo(comps, 0, 0, 50), 1e-18,
   'ps1FlujoModelo no ve pasar ni apertura ni PSF');
 casi(PS1.seeingAs, 1.1, 1e-12, 'PS1.seeingAs leída, no escrita');
 casi(CFG.airyArcsec, 138.4, 1e-12, 'airyArcsec leída, no escrita');

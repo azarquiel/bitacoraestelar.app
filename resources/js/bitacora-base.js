@@ -34,10 +34,6 @@ window.BitacoraBase = (function () {
    *               (por defecto, input.parentNode)
    *   fuente:     function() -> [items]   (se llama en cada búsqueda)
    *   texto:      function(item) -> nombre visible
-   *   buscarPor:  function(item) -> texto sobre el que se filtra (opcional; por
-   *               defecto, el visible). Sirve para buscar por algo que NO se pinta:
-   *               los filtros se encuentran por su tipo ("O-III" da con el
-   *               "Thousand Oaks LP-3"), que ya se muestra aparte en las specs.
    *   specs:      function(item) -> texto de specs (columna derecha, opcional)
    *   onElegir:   function(item)
    *   max:        nº máximo de resultados (por defecto 12)
@@ -62,9 +58,8 @@ window.BitacoraBase = (function () {
       if (!q) {
         if (!opts.todosSiVacio) { sugg.style.display = 'none'; return; }
       }
-      var buscarPor = opts.buscarPor || opts.texto;
       var res = (opts.fuente() || []).filter(function (it) {
-        return !q || buscarPor(it).toLowerCase().indexOf(q) !== -1;
+        return !q || opts.texto(it).toLowerCase().indexOf(q) !== -1;
       }).slice(0, max);
 
       if (!res.length) {
@@ -615,8 +610,72 @@ window.BitacoraBase = (function () {
     return n ? 'M' + n : '';
   }
 
+  /* ─────────────────────────────────────────────────────────────────────────
+   * Acceso a la API REST de la bitácora (fuente única).
+   *
+   * Había CINCO copias de api() en los módulos de registro y ya habían
+   * divergido: tres políticas de Content-Type distintas, mensajes 401/403
+   * dispares y once derivaciones por regex del endpoint. Aquí queda el
+   * contrato único:
+   *
+   *   api(url, opts) -> Promise<{ok, status, data}>
+   *     cookie de sesión + X-WP-Nonce de window.BITACORA_WP; un body que no
+   *     sea string se serializa a JSON y lleva su Content-Type; la respuesta
+   *     sin JSON válido resuelve con data = {} (nunca revienta por el parseo).
+   *
+   *   ruta(nombre) -> URL de un endpoint hermano de observaciones.
+   *     BITACORA_WP solo expone el endpoint de observaciones; sus hermanos
+   *     ('bases', 'viajes', 'equipo', 'importar-oal', …) viven en la misma
+   *     raíz de la API. ÚNICO sitio con esa regla, con o sin barra final.
+   *
+   *   errorDe(res, porDefecto, textos) -> mensaje para el observador.
+   *     Los textos 401/403 propios de cada dominio («Solo puedes tocar tu
+   *     propio equipo») entran por parámetro, no por reimplementación.
+   *
+   *   flash(txt, err) -> aviso efímero en el elemento #flash de la página.
+   */
+  function api(url, opts) {
+    var WP = window.BITACORA_WP || {};
+    opts = opts || {};
+    opts.credentials = 'same-origin';
+    opts.headers = opts.headers || {};
+    opts.headers['X-WP-Nonce'] = WP.nonce;
+    if (opts.body) {
+      opts.headers['Content-Type'] = 'application/json';
+      if (typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+    }
+    return fetch(url, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        return { ok: r.ok, status: r.status, data: d };
+      });
+    });
+  }
+
+  function ruta(nombre) {
+    var WP = window.BITACORA_WP || {};
+    return String(WP.endpoint || '').replace(/\/observaciones\/?$/, '/' + nombre);
+  }
+
+  function errorDe(res, porDefecto, textos) {
+    textos = textos || {};
+    if (res.status === 401) return textos.m401 || 'Debes iniciar sesión.';
+    if (res.status === 403 && textos.m403) return textos.m403;
+    if (res.data && res.data.message) return res.data.message;
+    return porDefecto + ' (error ' + res.status + ')';
+  }
+
+  function flash(txt, err) {
+    var f = document.getElementById('flash'); if (!f) return;
+    f.textContent = txt; f.className = 'flash show' + (err ? ' err' : '');
+    clearTimeout(flash._t); flash._t = setTimeout(function () { f.className = 'flash'; }, 4000);
+  }
+
   return {
     esc: esc,
+    api: api,
+    ruta: ruta,
+    errorDe: errorDe,
+    flash: flash,
     aliasMessier: aliasMessier,
     aliasAbell: aliasAbell,
     leerSesame: leerSesame,

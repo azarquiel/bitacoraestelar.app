@@ -382,7 +382,19 @@
         return { aumentos: aumentos, campoReal: campoReal, pupila: pupila, afov: oc.afov };
       }
 
-      function ventanaBase() { return Math.min(560, window.innerWidth - 80, window.innerHeight - 240); }
+      /* Lado del círculo. Manda el hueco REAL de la columna de observación, no
+         un tope fijo: si la página es ancha, el ocular se ve grande sin tener
+         que ir a pantalla completa. Se mide la COLUMNA (.observacion) y no la
+         .vista-zona, porque esta última se ciñe al contenido (align-items:
+         center) y medirla realimentaría el tamaño del propio círculo. Los dos
+         guardas de ventana siguen mandando: el círculo no desborda ni a lo
+         ancho ni a lo alto. */
+      function ventanaBase() {
+        var zona = $('sim-zona');
+        var col = zona && zona.parentElement;
+        var hueco = col ? col.clientWidth : 0;
+        return Math.min(hueco || 560, window.innerWidth - 80, window.innerHeight - 240);
+      }
 
       /* Magnitud estelar límite del conjunto telescopio + ocular (TLM), según el
          "Método del umbral" de J. R. Torres Lapasió ("On the Prediction of
@@ -611,88 +623,44 @@
         })();
 
         var ra0 = sexToDeg(objetoSel.ra, true), dec0 = sexToDeg(objetoSel.dec, false);
-        // Magnitud límite del telescopio + ocular (Método del umbral): con más
-        // aumento el fondo se oscurece y se alcanzan estrellas más débiles; con
-        // el cielo más brillante, el límite baja y las débiles DESAPARECEN,
-        // igual que en el DSS. dibujarGaia solo pinta estrellas con Gmag <= mlim.
-        var mlim = magLimiteTelescopio();
-        consultarGaia(ra0, dec0, arcmin, true).then(function (estrellas) {
-          if (peticion !== contadorPeticion) return;
+        var eq = datosOcular();
+        // Galaxias + nebulosas cuya clase ya trata el pipeline (v1: planetarias).
+        var catDifuso = BitacoraPS1.ps1CatalogoDifuso(
+          window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
+        /* «procesando información»: solo si la capa está encendida y hay de
+           verdad un objeto difuso que procesar en el campo —la misma criba que
+           hará la capa—; así el indicador refleja trabajo real y no parpadea
+           en campos vacíos. Lo quita la promesa de la propia capa, que
+           resuelve también cuando el parche falla (nunca rechaza), y cualquier
+           render posterior lo mata al entrar en actualizar(). */
+        var procesando = $('sim-procesando');
+        var hayDifuso = BitacoraPS1.galaxiasImagen && BitacoraPS1
+          .ps1GalaxiasDelCampo(catDifuso, ra0, dec0, arcmin).length > 0;
+        /* Toda la cadena (fondo → consulta → velo → magnitud límite → cúmulo →
+           estrellas → capa de galaxias) vive en vistaGaia(), el módulo
+           compartido: el generador de imagen del formulario pinta EXACTAMENTE
+           esto mismo. Aquí queda solo lo que es del DOM: indicadores, dónde van
+           los avisos y el respaldo DSS. El cúmulo entra como DATO (la ficha
+           física del catálogo); la ley entera vive en el módulo. */
+        BitacoraGaiaRender.vistaGaia(ctx, {
+          ra: ra0, dec: dec0, arcmin: arcmin, size: PROC,
+          apertura: teleApertura(), aumentos: eq.aumentos, afov: eq.afov,
+          transmision: transmisionEfectiva(), arana: teleTieneArana(),
+          sqm: parseFloat($('sim-sqm').value) || 21,
+          pupilaSalida: eq.pupila, pupilaOjo: pupilaOjo(),
+          conGlow: true, carbono: !!objetoSel.carbono,
+          carbonoMag: objetoSel.carbono ? objetoSel.mag : null,
+          cumulo: (objetoSel.globular && objetoSel.cumulo) || null,
+          catalogo: catDifuso,
+          vivo: function () { return peticion === contadorPeticion; }
+        }).then(function (r) {
+          if (peticion !== contadorPeticion || r.cancelada) return;
           cargando.style.display = 'none';
-          /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
-             del equipo, faltan estrellas que SÍ se verían. Pasa en campos ricos y
-             muy anchos. Se avisa en vez de mostrar un campo pobre sin explicación. */
-          /* Campo denso: el proxy manda los momentos de la banda truncada y su
-             luz entra como velo (cielo extra) en toda la cadena, incluida la
-             magnitud límite (ADR 0014). */
-          var velo = BitacoraGaiaRender.veloSB(estrellas.fondo);
-          if (velo != null) mlim = magLimiteTelescopio(velo);
-          var mcorte = -Infinity;
-          for (var e = 0; e < estrellas.length; e++) if (estrellas[e][2] > mcorte) mcorte = estrellas[e][2];
-          if (mlim != null && isFinite(mcorte) && mcorte < mlim - 0.1) {
-            $('sim-aviso').textContent = velo != null
-              ? 'Campo muy rico: por debajo de magnitud ' + mcorte.toFixed(1) + ' las estrellas no se dibujan una a una; su luz entra como resplandor de fondo.'
-              : 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
-                ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
-          }
-          // Componente difusa del campo: la llenan las capas que la tengan (el
-          // campo no resuelto de un cúmulo, la imagen de una galaxia). En un
-          // campo sin ninguna queda a cero y las estrellas se dibujan sobre el
-          // nivel de cielo tal cual.
-          var difuso = new Float32Array(PROC * PROC);
-          /* Las componentes que Gaia no trae (satura con las primarias muy
-             brillantes: la de Almaak no está en DR3) las pone el catálogo de
-             estrellas que Gaia DR3 no trae, y las concatena dibujar(). Aquí no
-             se completa nada: las capas difusas siguen con la muestra tal cual,
-             que es de donde sale su función de luminosidad. */
-          var estrellasDibujo = estrellas;
-          var cieloGaia = cieloOptica(datosOcular().pupila);
-          cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
-          if (velo != null) cieloGaia.veloSB = velo;   // fondo agregado del campo denso
-          /* Cúmulo globular: lo que este equipo NO resuelve se pinta como campo
-             estadístico (media + grano de la función de luminosidad) y lo que sí,
-             como estrellas —las de Gaia más las sintéticas que el catálogo no
-             trae en el núcleo aglomerado—. Toda la ley vive en el módulo
-             compartido; aquí solo se le pasa el equipo. */
-          var cum = objetoSel.globular && objetoSel.cumulo
-            ? BitacoraGaiaRender.pintarCumulo(difuso, objetoSel.cumulo, {
-                ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
-                cielo: cieloGaia, apertura: teleApertura(), estrellas: estrellasDibujo
-              })
-            : null;
-          if (cum) estrellasDibujo = cum.estrellas;
-          var opEst = {
-            ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
-            apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
-            conGlow: true, carbono: !!objetoSel.carbono,
-            carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana()
-          };
-          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, opEst, PROC);
-          BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
-          /* Galaxias del campo con su imagen real de PanSTARRS (ps1cutouts).
-             Toda la capa vive en el módulo compartido, que es lo que hace que el
-             generador de imagen del formulario pinte exactamente esto mismo.
-             Solo se llama aquí: con origen DSS o HiPS la imagen ya la trae la
-             placa. */
-          /* «procesando información»: solo si la capa está encendida y hay de
-             verdad un objeto difuso que procesar en el campo —la misma criba
-             que hará la capa—; así el indicador refleja trabajo real y no
-             parpadea en campos vacíos. Lo quita la promesa de la propia capa,
-             que resuelve también cuando el parche falla (nunca rechaza), y
-             cualquier render posterior lo mata al entrar en actualizar(). */
-          var procesando = $('sim-procesando');
-          // Galaxias + nebulosas cuya clase ya trata el pipeline (v1: planetarias).
-          var catDifuso = BitacoraGaiaRender.ps1CatalogoDifuso(
-            window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
-          var hayDifuso = BitacoraGaiaRender.galaxiasImagen && BitacoraGaiaRender
-            .ps1GalaxiasDelCampo(catDifuso, ra0, dec0, arcmin).length > 0;
-          if (procesando && hayDifuso && peticion === contadorPeticion) procesando.hidden = false;
-          BitacoraGaiaRender.ps1CapaGalaxias(difuso, ctx, cieloGaia, capaEst, {
-            ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
-            estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
-            catalogo: catDifuso,
-            vivo: function () { return peticion === contadorPeticion; }
-          }).then(function (capa) {
+          // El aviso del campo (catálogo agotado / resplandor de fondo) lo
+          // redacta el módulo; aquí solo se decide dónde pintarlo.
+          if (r.avisoCampo) $('sim-aviso').textContent = r.avisoCampo;
+          if (procesando && hayDifuso) procesando.hidden = false;
+          r.galaxias.then(function (capa) {
             // Solo esta petición apaga SU indicador: si otra más nueva ya está
             // en marcha, el suyo lo gestiona ella (y actualizar() lo ha reseteado).
             if (procesando && peticion === contadorPeticion) procesando.hidden = true;
@@ -801,7 +769,7 @@
            de estrellas que el TAP ordena para nada, porque el TOP recorta antes.
            Ver magConsultaGaia. */
         var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva(), datosOcular().aumentos);
-        if (paraCapa) mag = BitacoraGaiaRender.ps1MagConsulta(mag);
+        if (paraCapa) mag = BitacoraPS1.ps1MagConsulta(mag);
         return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
@@ -1230,9 +1198,9 @@
          empezar en desacuerdo. */
       var capaGal = $('sim-capa-galaxias');
       if (capaGal) {
-        BitacoraGaiaRender.galaxiasImagen = capaGal.checked;
+        BitacoraPS1.galaxiasImagen = capaGal.checked;
         capaGal.addEventListener('change', function () {
-          BitacoraGaiaRender.galaxiasImagen = capaGal.checked;
+          BitacoraPS1.galaxiasImagen = capaGal.checked;
           actualizar();
         });
       }

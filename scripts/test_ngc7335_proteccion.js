@@ -12,6 +12,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 
 var fallos = 0;
@@ -24,9 +25,9 @@ function ok(cond, etiqueta) {
 var gal = { ra: 339.267, dec: 34.4156, ladoArcmin: 10 };
 var f = { ancho: 1024, alto: 1024 };
 f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
-f.afin = R.ps1AfinParche(f, gal);
+f.afin = window.BitacoraPS1.ps1AfinParche(f, gal);
 
-var escena = R.ps1EscenaEnParche(f, gal, []);   // campo vacío: sin catálogo
+var escena = window.BitacoraPS1.ps1EscenaEnParche(f, gal, []);   // campo vacío: sin catálogo
 ok(escena.length === 1, 'NGC 7335 entra en la escena sin fila de catálogo');
 
 if (escena.length) {
@@ -41,8 +42,8 @@ if (escena.length) {
 var galLejos = { ra: 10, dec: 0, ladoArcmin: 10 };
 var fLejos = { ancho: 1024, alto: 1024 };
 fLejos.escalaAs = galLejos.ladoArcmin * 60 / fLejos.ancho;
-fLejos.afin = R.ps1AfinParche(fLejos, galLejos);
-var escenaLejos = R.ps1EscenaEnParche(fLejos, galLejos, []);
+fLejos.afin = window.BitacoraPS1.ps1AfinParche(fLejos, galLejos);
+var escenaLejos = window.BitacoraPS1.ps1EscenaEnParche(fLejos, galLejos, []);
 ok(escenaLejos.length === 0, 'parche lejano no arrastra la protección');
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nok — todo pasa');
