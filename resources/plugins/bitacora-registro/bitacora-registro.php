@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.31.0
+ * Version:     1.32.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.31.0' );
+define( 'BITACORA_VERSION', '1.32.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -290,6 +290,7 @@ function bitacora_crear_tabla() {
         nombre varchar(160) NOT NULL DEFAULT '',
         equipo varchar(160) DEFAULT NULL,
         usuario_id bigint(20) unsigned DEFAULT NULL,
+        feed_rss_url varchar(255) NOT NULL DEFAULT '',
         creado_en datetime NOT NULL,
         actualizado_en datetime DEFAULT NULL,
         PRIMARY KEY  (id),
@@ -557,6 +558,9 @@ function bitacora_crear_tabla() {
     bitacora_asegurar_columna( $tabla, 'audio_inicio', "int unsigned DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla, 'audio_fin', "int unsigned DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla, 'audio_episodio_url', "varchar(255) NOT NULL DEFAULT ''" );
+    // Feed RSS del podcast del observador (issue #178): con ella, el fieldset de
+    // audio ofrece un desplegable de episodios en vez de pegar las URLs a mano.
+    bitacora_asegurar_columna( $tabla_observadores, 'feed_rss_url', "varchar(255) NOT NULL DEFAULT ''" );
 
     // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
     // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
@@ -1774,6 +1778,18 @@ function bitacora_registrar_rutas() {
         )
     );
 
+    // Episodios del feed RSS del observador (issue #178): ayuda de captura del
+    // fieldset de audio. Cerrado con sesión, como el resto del formulario.
+    register_rest_route(
+        'bitacora/v1',
+        '/observadores/(?P<clave>[^/]+)/episodios',
+        array(
+            'methods'             => 'GET',
+            'callback'            => 'bitacora_observador_episodios',
+            'permission_callback' => $solo_logueados,
+        )
+    );
+
     // Datos del visor: emite OBSERVADORES/OBJECTS/OBSERVACIONES como JavaScript,
     // en el mismo formato que via-lactea-datos.js. Lectura pública.
     register_rest_route(
@@ -2254,6 +2270,40 @@ function bitacora_listar_observadores( WP_REST_Request $peticion ) {
             FROM $t_obs o ORDER BY o.nombre ASC";
     $filas = $wpdb->get_results( $sql );
     return new WP_REST_Response( $filas ? $filas : array(), 200 );
+}
+
+/**
+ * Episodios del feed RSS de un observador (issue #178), para autorrellenar el
+ * fieldset de audio del formulario. fetch_feed() de WordPress ya cachea el
+ * feed unas horas en un transient propio: se pide solo al abrir el bloque,
+ * nunca por cron, y se reusa esa caché en vez de montar una propia.
+ */
+function bitacora_observador_episodios( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $t_obs    = bitacora_nombre_tabla_observadores();
+    $feed_url = $wpdb->get_var( $wpdb->prepare(
+        "SELECT feed_rss_url FROM $t_obs WHERE clave = %s", $peticion['clave']
+    ) );
+    if ( ! $feed_url ) {
+        return new WP_REST_Response( array( 'episodios' => array() ), 200 );
+    }
+
+    include_once ABSPATH . WPINC . '/feed.php';
+    $feed = fetch_feed( $feed_url );
+    if ( is_wp_error( $feed ) ) {
+        return new WP_REST_Response( array( 'episodios' => array() ), 200 );
+    }
+
+    $episodios = array();
+    foreach ( $feed->get_items( 0, 50 ) as $item ) {
+        $enclosure = $item->get_enclosure();
+        $episodios[] = array(
+            'titulo'      => $item->get_title(),
+            'episodioUrl' => $item->get_permalink(),
+            'audioUrl'    => $enclosure ? $enclosure->get_link() : '',
+        );
+    }
+    return new WP_REST_Response( array( 'episodios' => $episodios ), 200 );
 }
 
 /* ===========================================================================
@@ -4188,6 +4238,18 @@ function bitacora_panel_legacy() {
 function bitacora_panel_observadores() {
     global $wpdb;
     $t = bitacora_nombre_tabla_observadores();
+
+    // Feed RSS del podcast de un observador (issue #178): de aquí lee el
+    // fieldset de audio del formulario para ofrecer el desplegable de episodios.
+    if ( isset( $_POST['bitacora_guardar_feed'] ) && check_admin_referer( 'bitacora_guardar_feed' ) ) {
+        $obs_id   = intval( $_POST['bitacora_observador_id'] ?? 0 );
+        $feed_url = esc_url_raw( trim( $_POST['bitacora_feed_rss_url'] ?? '' ) );
+        if ( $obs_id ) {
+            $wpdb->update( $t, array( 'feed_rss_url' => $feed_url ), array( 'id' => $obs_id ), array( '%s' ), array( '%d' ) );
+            echo '<div class="notice notice-success"><p>Feed RSS actualizado.</p></div>';
+        }
+    }
+
     $obs = $wpdb->get_results(
         "SELECT o.*, ( SELECT COUNT(*) FROM " . bitacora_nombre_tabla() . " b WHERE b.observador_id = o.id AND b.borrada_en IS NULL ) AS num FROM $t o ORDER BY o.nombre ASC"
     );
@@ -4198,11 +4260,18 @@ function bitacora_panel_observadores() {
         return;
     }
     echo '<p>Disponibles en <code>/wp-json/bitacora/v1/observadores</code>. Filtra observaciones con <code>?observador=ID</code>.</p>';
-    echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Nombre</th><th>Clave</th><th>Observaciones</th></tr></thead><tbody>';
+    echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Nombre</th><th>Clave</th><th>Observaciones</th><th>Feed RSS (podcast)</th></tr></thead><tbody>';
     foreach ( $obs as $o ) {
         printf(
-            '<tr><td>%d</td><td><strong>%s</strong></td><td>%s</td><td>%d</td></tr>',
-            intval( $o->id ), esc_html( $o->nombre ), esc_html( $o->clave ), intval( $o->num )
+            '<tr><td>%d</td><td><strong>%s</strong></td><td>%s</td><td>%d</td><td>' .
+            '<form method="post" style="display:flex;gap:6px">%s' .
+            '<input type="hidden" name="bitacora_observador_id" value="%d">' .
+            '<input type="url" name="bitacora_feed_rss_url" value="%s" placeholder="https://…/feed.xml" style="flex:1">' .
+            '<button type="submit" name="bitacora_guardar_feed" value="1" class="button">Guardar</button>' .
+            '</form></td></tr>',
+            intval( $o->id ), esc_html( $o->nombre ), esc_html( $o->clave ), intval( $o->num ),
+            wp_nonce_field( 'bitacora_guardar_feed', '_wpnonce', true, false ),
+            intval( $o->id ), esc_attr( $o->feed_rss_url )
         );
     }
     echo '</tbody></table></div>';
@@ -5472,6 +5541,9 @@ function bitacora_inyectar_datos() {
         // Alta de un objeto del mapa: por aquí entra la distancia escrita a mano
         // cuando ninguna base de datos la sabe y el objeto se queda sin pintar.
         'objetos'         => esc_url_raw( rest_url( 'bitacora/v1/objetos' ) ),
+        // Base para pedir los episodios del feed RSS del observador (issue #178):
+        // el JS le añade "/{clave}/episodios" al abrir el fieldset de audio.
+        'observadores'    => esc_url_raw( rest_url( 'bitacora/v1/observadores' ) ),
         'media'           => esc_url_raw( rest_url( 'wp/v2/media' ) ),
         'nonce'           => wp_create_nonce( 'wp_rest' ),
         'usuarioId'       => $uid,
