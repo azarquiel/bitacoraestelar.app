@@ -2031,6 +2031,12 @@
         '<button type="button" id="ficha-audio-reset" title="Volver al inicio del tramo" style="' +
           'border:1px solid rgba(244,199,107,0.5);border-radius:14px;background:transparent;color:#f4c76b;' +
           'font-size:12px;padding:4px 10px;cursor:pointer;">⏮ Inicio</button>' +
+        '<button type="button" id="ficha-audio-atras" title="Retroceder 10 segundos" style="' +
+          'border:1px solid rgba(244,199,107,0.5);border-radius:14px;background:transparent;color:#f4c76b;' +
+          'font-size:12px;padding:4px 10px;cursor:pointer;">⏪ 10s</button>' +
+        '<button type="button" id="ficha-audio-adelante" title="Avanzar 30 segundos" style="' +
+          'border:1px solid rgba(244,199,107,0.5);border-radius:14px;background:transparent;color:#f4c76b;' +
+          'font-size:12px;padding:4px 10px;cursor:pointer;">30s ⏩</button>' +
         '<span id="ficha-audio-tiempo" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#cfd8e3;">' +
           fmtAudioTiempo(inicio) + ' / ' + rango + '</span>' +
       '</div>' +
@@ -2045,9 +2051,17 @@
     fichaAudioEl = audioEl;
     var btnPlay = fichaAudio.querySelector('#ficha-audio-play');
     var btnReset = fichaAudio.querySelector('#ficha-audio-reset');
+    var btnAtras = fichaAudio.querySelector('#ficha-audio-atras');
+    var btnAdelante = fichaAudio.querySelector('#ficha-audio-adelante');
     var spanTiempo = fichaAudio.querySelector('#ficha-audio-tiempo');
 
     function irAlInicio() { audioEl.currentTime = inicio; spanTiempo.textContent = fmtAudioTiempo(inicio) + ' / ' + rango; }
+    // Saltos acotados al tramo: no antes de inicio, no más allá de fin (si lo hay).
+    function saltar(delta) {
+      var tope = (a.fin != null) ? a.fin : audioEl.duration || Infinity;
+      audioEl.currentTime = Math.min(tope, Math.max(inicio, audioEl.currentTime + delta));
+      spanTiempo.textContent = fmtAudioTiempo(audioEl.currentTime) + ' / ' + rango;
+    }
 
     audioEl.addEventListener('loadedmetadata', function () { audioEl.currentTime = inicio; });
     audioEl.addEventListener('timeupdate', function () {
@@ -2078,6 +2092,8 @@
       irAlInicio();
       if (seguiaSonando) audioEl.play();
     });
+    btnAtras.addEventListener('click', function () { saltar(-10); });
+    btnAdelante.addEventListener('click', function () { saltar(30); });
   }
 
   function buildFichaButtons(f) {
