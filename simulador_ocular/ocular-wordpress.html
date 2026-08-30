@@ -28,8 +28,8 @@
          telescopio, por delante del catálogo global.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260808_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260829_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260831_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260831_1200" />
 
 <!-- Filtro de respuesta del ojo según la pupila de salida (modo de reserva
      sin canvas): y = pendiente·x + desplazamiento. -->
@@ -132,7 +132,7 @@
             <label class="field"><span class="lab">Declinación (Dec)</span>
               <input type="text" id="sim-libre-dec" placeholder="+50° 31′ 30″  ·  ó  50.52"></label>
           </div>
-          <div class="sim-libre-estado" id="sim-libre-estado"></div>
+          <div class="sim-libre-estado" id="sim-libre-estado" role="status"></div>
         </div>
         <div class="objeto-fijo" id="sim-objeto">
           <div class="obj-nom">—</div>
@@ -171,10 +171,10 @@
         <div class="vista" id="sim-vista">
           <img id="sim-img" crossorigin="anonymous" alt="Vista del objeto a través del ocular">
           <canvas id="sim-lienzo" aria-label="Vista del objeto"></canvas>
-          <div class="cargando" id="sim-cargando">preparando el simulador…</div>
+          <div class="cargando" id="sim-cargando" role="status">preparando el simulador…</div>
           <!-- Estado real de la capa difusa (galaxia/nubosidad): aparece cuando
                empieza su procesado y lo quita quien lo termina, sin temporizadores. -->
-          <div class="procesando" id="sim-procesando" hidden>consultando objetos espacio profundo de PanSTARRS…</div>
+          <div class="procesando" id="sim-procesando" role="status" hidden>consultando objetos espacio profundo de PanSTARRS…</div>
         </div>
 
         <!-- Acciones sobre la imagen (para todos, con o sin sesión): discretas,
@@ -223,7 +223,7 @@
 
       <p class="hint hint-maglim">★ Magnitud estelar límite (rango <strong>típico–óptimo</strong>) para el ocular y el cielo actuales, según el método de Torres Lapasió.</p>
 
-      <div class="aviso" id="sim-aviso"></div>
+      <div class="aviso" id="sim-aviso" role="status"></div>
 
     </main>
   </div>

@@ -88,7 +88,7 @@
 #mw-obs-form input[type=date], #mw-obs-form input[type=time] {color-scheme:dark;}
 #mw-obs-form input:focus, #mw-obs-form textarea:focus {
     outline:none;border-color:var(--ambar);box-shadow:0 0 0 3px var(--ambar-suave);}
-#mw-obs-form input::placeholder, #mw-obs-form textarea::placeholder {color:#54617d;}
+#mw-obs-form input::placeholder, #mw-obs-form textarea::placeholder {color:#7e90b0;} /* 5,5:1 sobre --noche-2 (WCAG AA) */
 
 /* El textarea toma la caja del input y añade lo suyo: varias líneas, y que se
    pueda estirar a lo alto (a lo ancho lo manda el campo). `display:block` quita
