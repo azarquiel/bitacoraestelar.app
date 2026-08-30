@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.30.1
+ * Version:     1.31.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.30.1' );
+define( 'BITACORA_VERSION', '1.31.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -551,6 +551,12 @@ function bitacora_crear_tabla() {
     // cuando la estrella no tiene bp_rp (primarias muy brillantes, saturadas y
     // fuera de Gaia): el frontend lo convierte con BitacoraGaiaColor.bpRpPorTipo.
     bitacora_asegurar_columna( $tabla_objetos, 'sp_type', "varchar(32) DEFAULT NULL" );
+    // Tramo de audio de un reportaje sonoro ajeno que habla del objeto (ADR 0005):
+    // cuatro columnas anulables, invisibles para el importador/exportador de OAL.
+    bitacora_asegurar_columna( $tabla, 'audio_url', "varchar(255) NOT NULL DEFAULT ''" );
+    bitacora_asegurar_columna( $tabla, 'audio_inicio', "int unsigned DEFAULT NULL" );
+    bitacora_asegurar_columna( $tabla, 'audio_fin', "int unsigned DEFAULT NULL" );
+    bitacora_asegurar_columna( $tabla, 'audio_episodio_url', "varchar(255) NOT NULL DEFAULT ''" );
 
     // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
     // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
@@ -1506,6 +1512,37 @@ function bitacora_validar_datos( $d ) {
         }
     }
 
+    // --- Tramo de audio (opcional): ADR 0005. Sin audio_url no hay tramo, aunque
+    //     lleguen inicio/fin/episodio sueltos: se descartan junto con ella. ---
+    $audio_url = isset( $d['audioUrl'] ) ? bitacora_sanitizar_url_https( $d['audioUrl'] ) : '';
+    if ( isset( $d['audioUrl'] ) && '' !== trim( (string) $d['audioUrl'] ) && '' === $audio_url ) {
+        return new WP_Error( 'campo_invalido', 'La URL del audio debe ser una URL https válida.', array( 'status' => 400 ) );
+    }
+    $audio_episodio_url = '';
+    $audio_inicio        = null;
+    $audio_fin            = null;
+    if ( '' !== $audio_url ) {
+        $audio_episodio_url = isset( $d['audioEpisodioUrl'] ) ? bitacora_sanitizar_url_https( $d['audioEpisodioUrl'] ) : '';
+        if ( isset( $d['audioEpisodioUrl'] ) && '' !== trim( (string) $d['audioEpisodioUrl'] ) && '' === $audio_episodio_url ) {
+            return new WP_Error( 'campo_invalido', 'La URL del episodio debe ser una URL https válida.', array( 'status' => 400 ) );
+        }
+        if ( isset( $d['audioInicio'] ) && '' !== $d['audioInicio'] && null !== $d['audioInicio'] ) {
+            if ( ! is_numeric( $d['audioInicio'] ) || $d['audioInicio'] < 0 ) {
+                return new WP_Error( 'campo_invalido', 'El inicio del tramo de audio no es válido.', array( 'status' => 400 ) );
+            }
+            $audio_inicio = intval( $d['audioInicio'] );
+        }
+        if ( isset( $d['audioFin'] ) && '' !== $d['audioFin'] && null !== $d['audioFin'] ) {
+            if ( ! is_numeric( $d['audioFin'] ) || $d['audioFin'] < 0 ) {
+                return new WP_Error( 'campo_invalido', 'El fin del tramo de audio no es válido.', array( 'status' => 400 ) );
+            }
+            $audio_fin = intval( $d['audioFin'] );
+        }
+        if ( null !== $audio_fin && null !== $audio_inicio && $audio_fin <= $audio_inicio ) {
+            return new WP_Error( 'campo_invalido', 'El fin del tramo de audio debe ser posterior al inicio.', array( 'status' => 400 ) );
+        }
+    }
+
     return array(
         'objeto'          => bitacora_identificador_objeto( $etiqueta, $tipo, $num ),
         'objeto_etiqueta' => $etiqueta,
@@ -1523,7 +1560,23 @@ function bitacora_validar_datos( $d ) {
         'cielo_ir'          => $cielo_ir,
         'seeing'            => $seeing,
         'base_id'           => $base_id,
+        'audio_url'          => $audio_url,
+        'audio_inicio'       => $audio_inicio,
+        'audio_fin'          => $audio_fin,
+        'audio_episodio_url' => $audio_episodio_url,
     );
+}
+
+/**
+ * Sanea una URL exigiendo esquema https, sin lista blanca de dominios (mismo
+ * criterio que imagen_url, ADR 0005). Cadena vacía si no es una https válida.
+ */
+function bitacora_sanitizar_url_https( $valor ) {
+    $v = esc_url_raw( trim( (string) $valor ) );
+    if ( '' === $v || 0 !== strpos( $v, 'https://' ) ) {
+        return '';
+    }
+    return mb_substr( $v, 0, 255 );
 }
 
 /**
@@ -2615,6 +2668,17 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
             'defaultIndex' => (int) $ob->default_index,
             'entries'      => $entries,
         );
+        // Tramo de audio (ADR 0005): solo se emite si hay audio_url, la única
+        // condición de existencia del tramo.
+        if ( ! empty( $ob->audio_url ) ) {
+            $registro['audio'] = array(
+                'url'      => $ob->audio_url,
+                'inicio'   => ( isset( $ob->audio_inicio ) && null !== $ob->audio_inicio ) ? (int) $ob->audio_inicio : 0,
+                'fin'      => ( isset( $ob->audio_fin ) && null !== $ob->audio_fin ) ? (int) $ob->audio_fin : null,
+                'episodio' => isset( $ob->audio_episodio_url ) ? $ob->audio_episodio_url : '',
+            );
+        }
+
         if ( $viaje_id ) {
             $registro['viaje'] = $viaje_id;
             $viaje_objetos[ $viaje_id ][] = array(

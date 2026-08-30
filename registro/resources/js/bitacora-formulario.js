@@ -331,6 +331,22 @@
   // ═══════════════════════════════════════════════════════════════════════
   // CÁLCULO EN TIEMPO REAL
   // ═══════════════════════════════════════════════════════════════════════
+  // Tramo de audio (ADR 0005): hh:mm:ss (hh opcional) ↔ segundos enteros.
+  function audioHhmmssASegundos(txt){
+    var t=String(txt||'').trim();
+    if(t==='') return null;
+    var p=t.split(':').map(function(x){ return parseInt(x,10); });
+    if(p.length<2||p.length>3||p.some(isNaN)) return null;
+    if(p.length===2) return p[0]*60+p[1];
+    return p[0]*3600+p[1]*60+p[2];
+  }
+  function audioSegundosAHhmmss(seg){
+    if(seg==null) return '';
+    var s=Math.max(0,parseInt(seg,10)||0);
+    var h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sg=s%60;
+    var mmss=(m<10?'0':'')+m+':'+(sg<10?'0':'')+sg;
+    return h>0 ? h+':'+mmss : mmss;
+  }
   function fmtDeg(v){ return (v>=0?'+':'−')+Math.abs(v).toFixed(1)+'°'; }
   function fmtAz(v){
     var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
@@ -414,7 +430,11 @@
       horaObservacion:($('horaObs')?$('horaObs').value:''),
       cieloSqm: cielo.sqm, cieloBortle: cielo.clase, cieloBortleEtiqueta: cielo.etiqueta,
       cieloIr: transp.ir, cieloTransparencia: transp.etiqueta,
-      seeing: ($('seeing') && $('seeing').value !== '') ? parseInt($('seeing').value, 10) : null
+      seeing: ($('seeing') && $('seeing').value !== '') ? parseInt($('seeing').value, 10) : null,
+      audioUrl: $('audioUrl') ? $('audioUrl').value.trim() : '',
+      audioEpisodioUrl: $('audioEpisodioUrl') ? $('audioEpisodioUrl').value.trim() : '',
+      audioInicio: $('audioInicio') ? audioHhmmssASegundos($('audioInicio').value) : null,
+      audioFin: $('audioFin') ? audioHhmmssASegundos($('audioFin').value) : null
     };
     // Astrometría (solo si hay base): el servidor la usa para sembrar la ficha.
     if(astro){
@@ -428,6 +448,9 @@
   $('observer').addEventListener('input',recompute);
   if($('fechaObs')) $('fechaObs').addEventListener('change',recompute);
   if($('horaObs')) $('horaObs').addEventListener('change',recompute);
+  ['audioUrl','audioEpisodioUrl','audioInicio','audioFin'].forEach(function(id){
+    if($(id)) $(id).addEventListener('input',recompute);
+  });
 
   // Cielo de la sesión: selector Bortle enlazado al SQM (widget compartido).
   var cieloCtrl = (window.BitacoraBase && $('cieloBortle') && $('cieloSqm'))
@@ -846,6 +869,13 @@
       if (transpCtrl) $('cieloIr').dispatchEvent(new Event('input', { bubbles: true }));
     }
     if($('seeing') && obs.seeing != null && obs.seeing !== '') $('seeing').value = String(obs.seeing);
+    if(obs.audio_url) {
+      if($('audioUrl')) $('audioUrl').value = obs.audio_url;
+      if($('audioEpisodioUrl') && obs.audio_episodio_url) $('audioEpisodioUrl').value = obs.audio_episodio_url;
+      if($('audioInicio') && obs.audio_inicio != null) $('audioInicio').value = audioSegundosAHhmmss(obs.audio_inicio);
+      if($('audioFin') && obs.audio_fin != null) $('audioFin').value = audioSegundosAHhmmss(obs.audio_fin);
+      if($('audioDetails')) $('audioDetails').open = true;
+    }
     // Base: se preselecciona al cargar la lista de bases (basePendiente).
     if(obs.base_id){ basePendiente = obs.base_id; if(basesCargadas){ baseSel = basePorId(obs.base_id); if(baseSelect) baseSelect.value=String(obs.base_id); } }
     // Viaje: la lista de esa noche llega con la consulta que dispara la fecha,

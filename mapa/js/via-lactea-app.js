@@ -1664,6 +1664,8 @@
   var fichaAnexos = document.getElementById('ficha-anexos');
   var fichaAnexosRight = document.getElementById('ficha-anexos-right');
   var fichaBackBtn = document.getElementById('ficha-back');
+ var fichaAudio = document.getElementById('ficha-audio');
+ var fichaAudioEl = null; // el <audio> del tramo actualmente montado, para poder pararlo al cerrar/cambiar de ficha
   var fichaCurrent = -1;
   // A dónde lleva "← Descubrir" desde la ficha que se está viendo: la pantalla
   // de descubrimiento de este objeto, con la observación actual excluida. null
@@ -1993,6 +1995,91 @@
     fichaAnexosRight.style.display = rightAnexos.length ? 'flex' : 'none';
   }
 
+  // Banda de audio (ADR 0005): <audio> nativo con media fragment #t=inicio,fin,
+  // crédito del observador y el enlace al episodio. Sin audio_url no hay tramo.
+  // mm:ss (o h:mm:ss) para mostrar el tramo; sin depender de bitacora-formulario.js.
+  function fmtAudioTiempo(seg) {
+    seg = Math.max(0, seg || 0);
+    var h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), s = Math.floor(seg % 60);
+    var mmss = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    return h > 0 ? h + ':' + mmss : mmss;
+  }
+
+  // El <audio> nativo con #t=inicio,fin arranca en el segundo correcto, pero el
+  // navegador NO recorta su barra de progreso al tramo (sigue enseñando el
+  // episodio entero) y no hay forma de "volver al principio del tramo" sin
+  // saber dónde estaba. Se sustituyen los controles nativos por unos mínimos
+  // (▶/⏸ + reinicio + mm:ss del tramo) que si acotan la reproducción al
+  // segmento: currentTime se fija al entrar y al pasarse del fin, se corta sola.
+  function renderFichaAudio(f) {
+    if (!fichaAudio) return;
+    if (fichaAudioEl) { fichaAudioEl.pause(); fichaAudioEl = null; }
+    var a = f.audio;
+    if (!a || !a.url) { fichaAudio.style.display = 'none'; fichaAudio.innerHTML = ''; return; }
+    var inicio = a.inicio || 0;
+    var credito = VLO.nombreObservador(f.observador);
+    var duracion = (a.fin != null) ? (a.fin - inicio) : null;
+    var rango = fmtAudioTiempo(inicio) + (a.fin != null ? '–' + fmtAudioTiempo(a.fin) : ' → fin del episodio');
+
+    fichaAudio.innerHTML =
+      '<div style="color:#f4c76b;font-weight:600;margin-bottom:6px;">🎧 Tramo de un reportaje sonoro' +
+        (credito ? ' de ' + escHtml(credito) : '') + '</div>' +
+      '<div style="display:inline-flex;align-items:center;gap:10px;">' +
+        '<button type="button" id="ficha-audio-play" style="' +
+          'width:34px;height:34px;border-radius:50%;border:1px solid #f4c76b;background:rgba(244,199,107,0.12);' +
+          'color:#f4c76b;font-size:14px;cursor:pointer;line-height:1;">▶</button>' +
+        '<button type="button" id="ficha-audio-reset" title="Volver al inicio del tramo" style="' +
+          'border:1px solid rgba(244,199,107,0.5);border-radius:14px;background:transparent;color:#f4c76b;' +
+          'font-size:12px;padding:4px 10px;cursor:pointer;">⏮ Inicio</button>' +
+        '<span id="ficha-audio-tiempo" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#cfd8e3;">' +
+          fmtAudioTiempo(inicio) + ' / ' + rango + '</span>' +
+      '</div>' +
+      (a.episodio
+        ? '<div style="margin-top:6px;"><a href="' + escHtml(a.episodio) +
+          '" target="_blank" rel="noopener noreferrer" style="color:#f4c76b;">Episodio</a></div>'
+        : '');
+    fichaAudio.style.display = 'block';
+
+    var audioEl = new Audio(a.url);
+    audioEl.preload = 'none';
+    fichaAudioEl = audioEl;
+    var btnPlay = fichaAudio.querySelector('#ficha-audio-play');
+    var btnReset = fichaAudio.querySelector('#ficha-audio-reset');
+    var spanTiempo = fichaAudio.querySelector('#ficha-audio-tiempo');
+
+    function irAlInicio() { audioEl.currentTime = inicio; spanTiempo.textContent = fmtAudioTiempo(inicio) + ' / ' + rango; }
+
+    audioEl.addEventListener('loadedmetadata', function () { audioEl.currentTime = inicio; });
+    audioEl.addEventListener('timeupdate', function () {
+      if (a.fin != null && audioEl.currentTime >= a.fin) {
+        audioEl.pause();
+        irAlInicio();
+        btnPlay.textContent = '▶';
+        return;
+      }
+      spanTiempo.textContent = fmtAudioTiempo(audioEl.currentTime) + ' / ' + rango;
+    });
+    audioEl.addEventListener('pause', function () { btnPlay.textContent = '▶'; });
+    audioEl.addEventListener('play', function () { btnPlay.textContent = '⏸'; });
+
+    btnPlay.addEventListener('click', function () {
+      if (audioEl.paused) {
+        // Si nunca se cargó o quedó fuera de rango (o al final), se retoma en el inicio.
+        if (!audioEl.currentTime || audioEl.currentTime < inicio || (a.fin != null && audioEl.currentTime >= a.fin)) {
+          irAlInicio();
+        }
+        audioEl.play();
+      } else {
+        audioEl.pause();
+      }
+    });
+    btnReset.addEventListener('click', function () {
+      var seguiaSonando = !audioEl.paused;
+      irAlInicio();
+      if (seguiaSonando) audioEl.play();
+    });
+  }
+
   function buildFichaButtons(f) {
     fichaButtons.innerHTML = '';
     f.entries.forEach(function (entry, idx) {
@@ -2034,6 +2121,7 @@
     fichaBackBtn.style.display = fichaDescubrir ? '' : 'none';
 
     buildFichaButtons(f);
+    renderFichaAudio(f);
     fichaOverlay.style.display = 'flex';
     isDragging = false;
     isPinching = false;
@@ -2150,6 +2238,7 @@
 
   function closeFicha() {
     fichaOverlay.style.display = 'none';
+    if (fichaAudioEl) { fichaAudioEl.pause(); fichaAudioEl = null; }
   }
 
   // Abre la ficha (o, en su defecto, el PDF) de un objeto a partir de sus datos,
