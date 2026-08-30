@@ -34,10 +34,6 @@ window.BitacoraBase = (function () {
    *               (por defecto, input.parentNode)
    *   fuente:     function() -> [items]   (se llama en cada búsqueda)
    *   texto:      function(item) -> nombre visible
-   *   buscarPor:  function(item) -> texto sobre el que se filtra (opcional; por
-   *               defecto, el visible). Sirve para buscar por algo que NO se pinta:
-   *               los filtros se encuentran por su tipo ("O-III" da con el
-   *               "Thousand Oaks LP-3"), que ya se muestra aparte en las specs.
    *   specs:      function(item) -> texto de specs (columna derecha, opcional)
    *   onElegir:   function(item)
    *   max:        nº máximo de resultados (por defecto 12)
@@ -62,9 +58,8 @@ window.BitacoraBase = (function () {
       if (!q) {
         if (!opts.todosSiVacio) { sugg.style.display = 'none'; return; }
       }
-      var buscarPor = opts.buscarPor || opts.texto;
       var res = (opts.fuente() || []).filter(function (it) {
-        return !q || buscarPor(it).toLowerCase().indexOf(q) !== -1;
+        return !q || opts.texto(it).toLowerCase().indexOf(q) !== -1;
       }).slice(0, max);
 
       if (!res.length) {
