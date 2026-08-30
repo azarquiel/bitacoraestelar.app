@@ -26,7 +26,7 @@
 #mw-obs-form .base-item .bi-specs {font-size:13px;color:var(--azul);
     font-family:ui-monospace,Menlo,monospace;margin-top:3px;}
 #mw-obs-form .base-item .bi-meta {font-size:12px;color:var(--tinta-tenue);margin-top:3px;}
-#mw-obs-form .base-item .bi-acts {display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
+#mw-obs-form .base-item .bi-acts {display:flex;gap:10px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
 #mw-obs-form .bi-btn {background:none;border:1px solid var(--linea);border-radius:14px;color:var(--tinta-tenue);
     font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:5px 11px;cursor:pointer;transition:.15s;}
 #mw-obs-form .bi-btn:hover:not(:disabled) {color:var(--tinta);border-color:var(--ambar);}
@@ -78,8 +78,8 @@
 #mw-obs-form .salud-punto {width:11px;height:11px;border-radius:50%;flex:none;}
 
 /* ── Foco visible: mismo anillo ámbar que los campos, sobre fondo oscuro ── */
-#mw-obs-form .bi-btn, #mw-obs-form .geo-btn,
-#mw-obs-form .salud-serie input, #mw-obs-form .comp-list input:focus-visible {
+#mw-obs-form .bi-btn:focus-visible, #mw-obs-form .geo-btn:focus-visible,
+#mw-obs-form .salud-serie input:focus-visible, #mw-obs-form .comp-list input:focus-visible {
   outline:2px solid var(--ambar);outline-offset:2px;
 }
 /* ── Movimiento reducido: sin transiciones para quien lo pide ── */
