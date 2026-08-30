@@ -36,14 +36,11 @@
       suelta.textContent = 'Inicia sesión para importar tus observaciones.';
       return;
     }
-    var API = WP.endpoint.replace(/observaciones\/?$/, 'importar-oal');
+    var API = BitacoraBase.ruta('importar-oal');
     var xml = '';   // el fichero leído, entre la previa y la confirmación
 
-    function flash(txt, err) {
-      var f = $('flash'); if (!f) { return; }
-      f.textContent = txt; f.className = 'flash show' + (err ? ' err' : '');
-      clearTimeout(flash._t); flash._t = setTimeout(function () { f.className = 'flash'; }, 4000);
-    }
+    // Aviso efímero: fuente única en bitacora-base.js.
+    var flash = BitacoraBase.flash;
 
     function enviar(confirmar) {
       return fetch(API, {
@@ -66,13 +63,20 @@
 
     function pintar(r) {
       $('impTitulo').textContent = r.aplicado ? 'Ya está en tu bitácora' : 'Esto es lo que entraría';
+      // Las adoptadas son tuyas, del formulario, y adoptar es SOBRESCRIBIR con
+      // lo que trae el fichero. No es lo mismo que actualizar una que ya vino
+      // de un XML, así que se cuentan y se dicen aparte. Solo aparecen si las
+      // hay: una cifra a cero no informa de nada.
+      var adoptadas = r.adoptadas || 0;
       $('impCifras').innerHTML = r.aplicado
-        ? cifra(r.creadas, 'nuevas') + cifra(r.actualizadas, 'actualizadas')
+        ? cifra(r.creadas, 'nuevas') + cifra(r.actualizadas, 'actualizadas') +
+          (adoptadas ? cifra(adoptadas, 'tuyas, adoptadas') : '')
         : cifra(r.noches, r.noches === 1 ? 'noche' : 'noches') +
           cifra(r.observaciones, 'objetos') +
           cifra(r.entradas, 'aumentos') +
           cifra(r.nuevas, 'nuevas') +
-          cifra(r.actualizadas, 'se actualizan');
+          cifra(r.actualizadas, 'se actualizan') +
+          (adoptadas ? cifra(adoptadas, 'tuyas, adoptadas') : '');
 
       var cambios = '';
       if (!r.aplicado && r.observador) {
@@ -88,6 +92,13 @@
       var reusado = (r.bases_reusadas || []).concat(r.equipo_reusado || []);
       if (reusado.length) {
         cambios += '<p>Se reutiliza lo que ya tienes: ' + esc(reusado.join(', ')) + '</p>';
+      }
+      if (adoptadas) {
+        cambios += r.aplicado
+          ? '<p>' + adoptadas + ' observación(es) tuyas del formulario eran estas mismas: se han quedado con lo que traía el fichero.</p>'
+          : '<p><strong>' + adoptadas + ' observación(es) tuyas del formulario</strong> son estas mismas ' +
+            '(misma noche, mismo objeto): van a quedar adoptadas y <strong>sobrescritas</strong> con lo que trae el fichero, ' +
+            'no duplicadas.</p>';
       }
       if (r.aplicado) {
         cambios += '<p class="imp-hecho">Ya puedes verlas en tu listado y en tus viajes.</p>';
@@ -145,7 +156,8 @@
       enviar(true).then(function (r) {
         $('impNota').textContent = '';
         pintar(r);
-        flash('Importadas ' + r.creadas + ' observación(es), actualizadas ' + r.actualizadas + '.');
+        flash('Importadas ' + r.creadas + ' observación(es), actualizadas ' + r.actualizadas +
+              (r.adoptadas ? ', adoptadas ' + r.adoptadas : '') + '.');
       }).catch(function (e) {
         boton.disabled = false;
         $('impNota').textContent = '';

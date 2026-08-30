@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<oal:observations version="2.1" xmlns:oal="https://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.0">
+<oal:observations version="2.1" xmlns:oal="http://groups.google.com/group/openastronomylog" xmlns:bit="https://bitacoraestelar.es/oal-ext/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" bit:plantilla="1.1">
   <sites>
     <site id="lu1">
       <name>El Culebrín II</name>
@@ -74,43 +74,51 @@
       <coObserver>co1</coObserver>
       <weather>Despejado, algo de humedad al final</weather>
       <comments>Primera salida del verano al Culebrín. El cielo aguantó toda la noche.</comments>
-      <bit:sqm>21.42</bit:sqm>
-      <bit:ir>-18</bit:ir>
-      <bit:seeing>3</bit:seeing>
-      <bit:bortle>4</bit:bortle>
     </session>
   </sessions>
-  <observation id="ob1">
-    <begin>2026-08-05T23:10:00+02:00</begin>
-    <session>no1</session>
-    <site>lu1</site>
+  <observation id="obs1">
     <observer>ob1</observer>
+    <site>lu1</site>
+    <session>no1</session>
     <target>tg1</target>
+    <begin>2026-08-05T23:10:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>
+    <seeing>3</seeing>
     <scope>te1</scope>
     <eyepiece>oc1</eyepiece>
-    <result><description>Enorme y granulado ya a pocos aumentos.</description></result>
     <magnification>67.9</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>Enorme y granulado ya a pocos aumentos.</description><rating>99</rating></result>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>4</bit:bortle>
   </observation>
-  <observation id="ob2">
-    <begin>2026-08-05T23:45:00+02:00</begin>
-    <session>no1</session>
-    <site>lu1</site>
+  <observation id="obs2">
     <observer>ob1</observer>
+    <site>lu1</site>
+    <session>no1</session>
     <target>tg2</target>
+    <begin>2026-08-05T23:45:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>
+    <seeing>3</seeing>
     <scope>te1</scope>
     <eyepiece>oc2</eyepiece>
-    <result><description>El anillo, con el centro claramente más oscuro.</description></result>
     <magnification>213.5</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>El anillo, con el centro claramente más oscuro.</description><rating>99</rating></result>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>4</bit:bortle>
   </observation>
-  <observation id="ob3">
-    <begin>2026-08-06T01:20:00+02:00</begin>
-    <session>no1</session>
-    <site>lu1</site>
+  <observation id="obs3">
     <observer>ob1</observer>
+    <site>lu1</site>
+    <session>no1</session>
     <target>tg3</target>
+    <begin>2026-08-06T01:20:00+02:00</begin>
+    <sky-quality unit="mags-per-squarearcsec">20.85</sky-quality>
+    <seeing>3</seeing>
     <scope>te1</scope>
     <eyepiece>oc1</eyepiece>
-    <result><description>De madrugada, con el filtro puesto, el Muro se recorta solo.</description></result>
     <magnification>67.9</magnification>
+    <result xsi:type="oal:findingsDeepSkyType"><description>De madrugada, con el filtro puesto, el Muro se recorta solo.</description><rating>99</rating></result>
+    <bit:ir>-18</bit:ir>
+    <bit:bortle>5</bit:bortle>
   </observation>
 </oal:observations>

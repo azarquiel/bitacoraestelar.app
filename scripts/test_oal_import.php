@@ -16,6 +16,11 @@ declare(strict_types=1);
 
    Sin framework:  php scripts/test_oal_import.php  */
 
+// Lo único de WordPress que pisa la mitad pura del fichero: quitar etiquetas.
+if (!function_exists('wp_strip_all_tags')) {
+    function wp_strip_all_tags(string $texto): string { return strip_tags($texto); }
+}
+
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-viaje.php';
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-oal.php';
 
@@ -41,7 +46,7 @@ function hay_problema(array $problemas, string $trozo): bool {
 echo "una noche sencilla se lee entera:\n";
 $d = bitacora_oal_leer(ejemplo('noche-simple'));
 ok(!isset($d['error']), 'el XML de la plantilla se lee sin error');
-eq($d['plantilla'], '1.0', 'la versión de la plantilla viene en la raíz');
+eq($d['plantilla'], '1.1', 'la versión de la plantilla viene en la raíz');
 eq($d['observador']['nombre'] . ' ' . $d['observador']['apellidos'], 'Ángel L. Huelmo', 'el primer observer es el autor');
 eq(count($d['lugares']), 1, 'un lugar');
 eq(count($d['observaciones']), 3, 'tres observaciones');
@@ -49,9 +54,21 @@ eq($d['lugares']['lu1']['nombre'], 'El Culebrín II', 'el nombre del sitio, con 
 eq($d['lugares']['lu1']['lat'], 38.06416667, 'la latitud, en grados decimales');
 eq($d['telescopios']['te1']['modelo'], 'Skywatcher 12"', 'las comillas escapadas vuelven a ser comillas');
 
-echo "la extensión bit: trae lo que OAL no sabe guardar:\n";
+echo "el cielo llega en cada observación, no en la noche (ADR 0001):\n";
+// El SQM es direccional: se mide hacia donde está el objeto. Las dos primeras
+// miraban alto, la tercera al este bajo sobre las luces del pueblo, y esa
+// diferencia es un dato, no una anomalía que haya que promediar.
+eq($d['observaciones'][0]['sqm'], 21.42, 'el SQM de la primera, del elemento estándar sky-quality');
+eq($d['observaciones'][0]['seeing'], 3.0, 'su seeing, del elemento estándar');
+eq($d['observaciones'][0]['ir'], -18.0, 'y el IR, de bit:, que OAL no lo tiene');
+eq($d['observaciones'][0]['bortle'], 4.0, 'igual que el Bortle');
+eq($d['observaciones'][2]['sqm'], 20.85, 'la tercera trae SU cielo, distinto');
+eq($d['observaciones'][2]['bortle'], 5.0, 'y su Bortle');
+eq($d['observaciones'][2]['ir'], -18.0, 'lo que no midió lo hereda de la noche');
+
+echo "y la noche se queda con un resumen, que es lo que guarda el viaje:\n";
 $n = $d['noches']['no1'];
-eq($n['sqm'], 21.42, 'el SQM');
+eq($n['sqm'], 21.42, 'el SQM del primer objeto registrado');
 eq($n['ir'], -18.0, 'el IR');
 eq($n['seeing'], 3.0, 'el seeing');
 eq($n['bortle'], 4.0, 'el Bortle');
@@ -85,8 +102,35 @@ eq(bitacora_oal_utc('2026-08-06', '02:15', '+02:00'), '2026-08-06 00:15:00', 'la
 eq(bitacora_oal_utc('2026-08-06', '02:15', '-04:00'), '2026-08-06 06:15:00', 'también hacia el otro lado');
 eq(bitacora_oal_utc('2026-08-06', '02:15', ''), null, 'sin desfase no se inventa una hora UTC');
 
+echo "en la forma nueva el cielo de una observación no se cuela en las otras:\n";
+// El SQM es direccional (ADR 0001): copiar el de la vecina inventaría una
+// medida que nadie hizo, y acabaría escrita en cielo_sqm de esa ficha.
+$sin = str_replace('<sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>', '', ejemplo('noche-simple'));
+$dsin = bitacora_oal_leer($sin);
+eq($dsin['observaciones'][0]['sqm'], null, 'la que se quedó sin SQM no hereda el de al lado');
+eq($dsin['noches']['no1']['sqm'], 20.85, 'pero el resumen de la noche sí sale del primero que quede');
+
+echo "una sesión con id numérico también resume su cielo:\n";
+// PHP convierte a int las claves de array que son números, así que el id "1"
+// de <session> no casa con el "1" de <session> de la observación si se comparan
+// en estricto. Sin esto el viaje se quedaría sin cielo ninguno.
+$dnum = bitacora_oal_leer(str_replace('no1', '1', ejemplo('noche-simple')));
+eq($dnum['noches']['1']['sqm'], 21.42, 'el resumen llega aunque el id sea un número');
+eq($dnum['noches']['1']['bortle'], 4.0, 'y el Bortle también');
+
+echo "un SQM en mag/arcmin² se convierte al entrar:\n";
+// OAL admite las dos unidades; la bitácora guarda solo mag/arcsec².
+$darcmin = bitacora_oal_leer(str_replace(
+    '<sky-quality unit="mags-per-squarearcsec">21.42</sky-quality>',
+    '<sky-quality unit="mags-per-squarearcmin">12.53</sky-quality>',
+    ejemplo('noche-simple')));
+eq(round($darcmin['observaciones'][0]['sqm'], 2), 21.42, '12,53 mag/arcmin² son 21,42 mag/arcsec²');
+
 echo "cada objeto de la noche sencilla es una observación:\n";
 $g = bitacora_oal_agrupar($d);
+eq($g[0]['sqm'], 21.42, 'que se lleva su cielo a la bitácora');
+eq($g[2]['sqm'], 20.85, 'cada una el suyo, no el de la noche');
+eq($g[2]['bortle'], 5.0, 'con su Bortle');
 eq(count($g), 3, 'tres objetos, tres observaciones');
 eq($g[0]['objeto'], 'M13', 'M13');
 eq($g[0]['tipo'], 'messier', 'reconocida como Messier');
@@ -114,6 +158,24 @@ eq($d2['auxiliares']['au1']['factor'], 2.0, 'que multiplica por 2');
 eq($g2[0]['hora'], '23:30', 'la observación se fecha en su entrada más temprana');
 eq($d2['noches']['no1']['tripulacion'], array('Isra', 'Víctor'), 'los dos compañeros de esa noche');
 
+echo "cada observación se queda con quien la firmó:\n";
+// En una salida con tripulación el <observer> de la observación no tiene por
+// qué ser el dueño del fichero. Atribuírselo todo al dueño sería escribir en
+// la bitácora que vio lo que vio otro.
+eq($d2['observaciones'][0]['observador'], 'Ángel L. Huelmo', 'la primera la firma el dueño del fichero');
+eq($d2['observaciones'][1]['observador'], 'Víctor', 'la segunda, el compañero que miró por el ocular');
+eq($g2[0]['observador'], 'Ángel L. Huelmo', 'y la ficha fusionada se queda con la de su entrada más temprana');
+
+echo "los identificadores del fichero no chocan entre sí:\n";
+// El id es un xs:ID: único en TODO el documento, no por elemento. Con la
+// observación llamada «ob1» chocaba con el <observer id="ob1">.
+$ids = array();
+foreach (array('noche-simple', 'dos-oculares') as $cual) {
+    preg_match_all('/\sid="([^"]+)"/', ejemplo($cual), $m);
+    $ids[$cual] = count($m[1]) - count(array_unique($m[1]));
+}
+eq($ids, array('noche-simple' => 0, 'dos-oculares' => 0), 'ningún id repetido en los ejemplos');
+
 echo "la clave de fusión no depende del orden de las hermanas:\n";
 // Es también el identificador con el que se reconoce la observación en una
 // segunda importación: si dependiera del id de la primera hermana, reordenar
@@ -122,6 +184,11 @@ eq($g2[0]['oal_id'], bitacora_oal_id($d2['noches']['no1']['noche'], 'Almaak'), '
 eq(bitacora_oal_id('2026-08-05', 'M 13'), bitacora_oal_id('2026-08-05', 'm13'), 'y no la parte cómo se escriba el nombre');
 ok($g2[0]['oal_id'] !== $g2[1]['oal_id'], 'dos objetos distintos, dos claves');
 ok(strlen(bitacora_oal_id('2026-08-05', str_repeat('x', 200))) <= 64, 'y cabe en la columna');
+// La noche del grupo es la que se usó para la clave, no la fecha de la entrada
+// más temprana: quien busque candidatas a adopción por fecha tiene que preguntar
+// por la misma noche que nombra el oal_id, o no encontrará nada y duplicará.
+eq($g2[0]['noche'], $d2['noches']['no1']['noche'], 'el grupo se lleva la FECHA de su noche');
+eq($g2[0]['oal_id'], bitacora_oal_id($g2[0]['noche'], $g2[0]['objeto']), 'que es con la que se construyó la clave');
 
 // Reimportar el MISMO fichero tiene que dar las mismas claves: es lo único que
 // separa «corregir una errata y volver a subirlo» de «duplicar la noche entera».
@@ -136,6 +203,46 @@ $con_otro_id = bitacora_oal_agrupar(array(
     'observaciones' => array_map(function ($o) { $o['noche'] = 'no1-9zq4k'; return $o; }, $d2['observaciones']),
 ));
 eq($con_otro_id[0]['oal_id'], $g2[0]['oal_id'], 'y no dependen del id de sesión, que la plantilla sortea');
+
+echo "una observación del formulario se adopta en vez de duplicarse (ADR 0002):\n";
+/* El importador desduplica con oal_id, y lo nacido en el formulario no tiene
+   ninguno: sin esto, exportar la bitácora, corregir una descripción y volver a
+   subir el fichero entra TODO otra vez como filas nuevas. La regla no es nueva
+   —«mismo usuario + misma noche + mismo objeto = la misma observación» es lo
+   que oal_id ya impone—: adoptar solo la aplica también hacia atrás. */
+$suelta = function (int $id, string $fecha, string $hora, string $objeto): array {
+    return array('id' => $id, 'fecha' => $fecha, 'hora' => $hora, 'objeto' => $objeto);
+};
+$grupos_m13 = array(array('oal_id' => bitacora_oal_id('2026-08-05', 'M13'), 'objeto' => 'M13'));
+
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array($suelta(5, '2026-08-05', '23:10', 'M 13')));
+eq($ad['adoptadas'], array(bitacora_oal_id('2026-08-05', 'M13') => 5), 'la del formulario de esa noche se adopta');
+eq($ad['ambiguas'], array(), 'sin ambigüedad ninguna');
+
+// La madrugada pertenece a la noche que la engendró, aquí igual que en el resto
+// del proyecto: si se mirara la fecha de reloj, la 01:20 no casaría con su noche.
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array($suelta(5, '2026-08-06', '01:20', 'M13')));
+eq($ad['adoptadas'], array(bitacora_oal_id('2026-08-05', 'M13') => 5), 'la de madrugada cae en su noche y se adopta');
+
+// Reimportar: la primera vez la adoptó y le puso la clave, así que la segunda ya
+// casa por oal_id y no hay nada que adoptar. Ni fila nueva ni doble aviso.
+$ad = bitacora_oal_adopciones($grupos_m13, array(bitacora_oal_id('2026-08-05', 'M13') => 5), array());
+eq($ad['adoptadas'], array(), 'reimportar el mismo fichero no adopta nada');
+
+// Dos salidas de la misma noche desde dos bases, el mismo objeto en las dos:
+// oal_id cuelga de la noche y no del viaje, así que no las distingue. Elegir una
+// sería inventarse cuál.
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array(
+    $suelta(5, '2026-08-05', '23:10', 'M13'),
+    $suelta(8, '2026-08-06', '02:40', 'M 13'),
+));
+eq($ad['adoptadas'], array(), 'con dos candidatas no se adopta ninguna');
+eq($ad['ambiguas'], array(bitacora_oal_id('2026-08-05', 'M13') => 2), 'y se cuentan para avisar');
+
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array($suelta(5, '2026-08-04', '23:10', 'M13')));
+eq($ad['adoptadas'], array(), 'la misma M13 de otra noche no es la misma observación');
+$ad = bitacora_oal_adopciones($grupos_m13, array(), array($suelta(5, '2026-08-05', '23:10', 'M92')));
+eq($ad['adoptadas'], array(), 'ni otro objeto de la misma noche');
 
 echo "dos noches distintas del mismo objeto NO se fusionan:\n";
 // Cada noche es una observación propia: fusionarlas perdería una de las dos.
@@ -184,6 +291,19 @@ eq($g3[0]['objeto'], 'M51', 'M51');
 eq($g3[1]['objeto'], 'M101', 'y M101, la de la descripción vacía');
 eq($g3[1]['entradas'][0]['descripcion'], '', 'que entra vacía, no se pierde');
 
+echo "los XML de la forma vieja siguen entrando enteros:\n";
+// Los compañeros ya rellenaron ficheros con el cielo en la sesión —bit:sqm y
+// compañía, un valor por noche—. Se leen igual y se reparten a las
+// observaciones de esa noche: lee viejo, escribe nuevo, sin migración.
+eq($d3['noches']['no1']['sqm'], 20.9, 'el bit:sqm de la sesión se sigue leyendo');
+foreach ($d3['observaciones'] as $o) {
+    if ('no1' === $o['noche']) { eq($o['sqm'], 20.9, 'y baja a la observación ' . $o['id']); }
+}
+eq($g3[0]['sqm'], 20.9, 'la observación de la bitácora se lo lleva puesto');
+// La forma nueva no vuelve a subir un cielo inventado a la noche: si nadie lo
+// midió, no hay resumen que dar.
+eq($d3['noches']['no2']['sqm'], null, 'la noche sin cielo ni observaciones se queda sin él');
+
 echo "un XML que no lo es se rechaza en vez de romperse:\n";
 ok(isset(bitacora_oal_leer('')['error']), 'el fichero vacío');
 ok(isset(bitacora_oal_leer('<a><b></a>')['error']), 'el XML mal cerrado');
@@ -226,11 +346,48 @@ eq(bitacora_oal_equipo_casado('TeleVue Nagler Type 6 7mm', $oculares), 4, 'aunqu
 eq(bitacora_oal_equipo_casado('Ethos 13mm', $oculares), 0, 'y el que no está, se crea');
 eq(bitacora_oal_equipo_casado('', $oculares), 0, 'sin modelo no se casa con el primero que pase');
 
+echo "y también por el nombre propio con el que sale exportado:\n";
+// Lo que esta bitácora escribe en <model> es «nombre · marca modelo»: el nombre
+// propio para quien lo conoce, el modelo para que otra bitácora lo reconozca.
+// Si el emparejador no supiera leerlo, reimportar duplicaría el tubo.
+$tubos = array(
+    // 'propio' es como lo devuelve bitacora_oal_equipo_visible(): el nombre propio
+    // solo existe en los telescopios, y sale aliasado con ese nombre para que el
+    // emparejador no tenga que saber de qué tabla viene la fila.
+    array('id' => 7, 'propio' => 'Endeavour', 'vendor' => 'Skywatcher', 'modelo' => 'Dobson 305/1524'),
+);
+eq(bitacora_oal_equipo_nombrado('Endeavour', 'Skywatcher Dobson 305/1524'), 'Endeavour · Skywatcher Dobson 305/1524',
+   'el nombre propio y el modelo salen juntos');
+eq(bitacora_oal_equipo_nombrado('', 'Skywatcher Dobson 305/1524'), 'Skywatcher Dobson 305/1524', 'sin nombre propio, el modelo solo');
+eq(bitacora_oal_equipo_nombrado('Endeavour', ''), 'Endeavour', 'y sin modelo, el nombre solo');
+eq(bitacora_oal_equipo_nombrado('Dobson 305 de casa', 'Dobson 305'), 'Dobson 305 de casa', 'si el nombre ya dice el modelo, no se repite');
+eq(bitacora_oal_equipo_casado('Endeavour · Skywatcher Dobson 305/1524', $tubos), 7, 'el compuesto vuelve a su tubo');
+eq(bitacora_oal_equipo_casado('Endeavour', $tubos), 7, 'el nombre propio a secas, también');
+eq(bitacora_oal_equipo_casado('Skywatcher Dobson 305/1524', $tubos), 7, 'y el modelo con su marca, como lo escribe otro programa');
+
+// Una Barlow no se bautiza: en la tabla de auxiliares 'nombre' ES el modelo, y
+// no hay nombre propio. Si se compusieran igual que un tubo saldría «Barlow 2x ·
+// TeleVue», que no casa con nada y duplica la lente en cada ida y vuelta.
+$lentes = array( array('id' => 5, 'propio' => '', 'vendor' => 'TeleVue', 'modelo' => 'Barlow 2x') );
+eq(bitacora_oal_equipo_nombrado('', 'TeleVue Barlow 2x'), 'TeleVue Barlow 2x', 'la lente sale con su marca delante');
+eq(bitacora_oal_equipo_casado('TeleVue Barlow 2x', $lentes), 5, 'y vuelve a su lente, sin duplicarla');
+
 echo "los Messier se reconocen y el resto entra tal cual:\n";
 eq(bitacora_oal_objeto('M13'), array('objeto' => 'M13', 'tipo' => 'messier', 'num' => 13), 'M13');
 eq(bitacora_oal_objeto('m 27'), array('objeto' => 'M27', 'tipo' => 'messier', 'num' => 27), 'con espacio y en minúscula');
 eq(bitacora_oal_objeto('M111'), array('objeto' => 'M111', 'tipo' => 'otro', 'num' => null), 'M111 no existe: no es Messier');
 eq(bitacora_oal_objeto('  NGC   7000 '), array('objeto' => 'NGC 7000', 'tipo' => 'otro', 'num' => null), 'y los espacios de más se van');
+
+echo "el texto que va al XML y al correo sale ya en limpio:\n";
+// El editor guarda espacios duros y entidades; si sobreviven, el correo las
+// vuelve a escapar y se lee «&nbsp;» en mitad de la frase.
+eq(bitacora_oal_texto_plano('&nbsp;Impresionante.'), 'Impresionante.', 'el espacio duro del principio no se ve');
+eq(bitacora_oal_texto_plano('Una l&iacute;nea'), 'Una línea', 'las entidades vuelven a ser letras');
+eq(bitacora_oal_texto_plano('Sol &amp; Luna'), 'Sol & Luna', 'y el ampersand, un ampersand');
+eq(bitacora_oal_texto_plano('&amp;nbsp;Impresionante.'), 'Impresionante.', 'ni con el & ya escapado en la base');
+eq(bitacora_oal_texto_plano('<p>Dos</p><p>párrafos</p>'), "Dos\npárrafos", 'los párrafos se vuelven saltos de línea');
+eq(bitacora_oal_texto_plano('&lt;script&gt;alert(1)&lt;/script&gt;'), '<script>alert(1)</script>',
+   'una etiqueta escrita como texto sigue siendo texto: se escapa al pintarla');
 
 echo $fallos ? "\n$fallos fallo(s)\n" : "\nok · el importador entiende lo que escribe la plantilla\n";
 exit($fallos ? 1 : 0);

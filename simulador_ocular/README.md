@@ -67,6 +67,7 @@ un bloque HTML.
 | ~~`resources/js/bitacora-ocular_main.js`~~ | **Código muerto**: copia antigua y duplicada del render de Gaia (su propio `spriteGaia()`, `magColor` fijo…), previa a la extracción a `bitacora-gaia-render.js`. Verificado (grep) que ningún `.html`/`.php` desplegado lo referencia. No se ha borrado a la espera de confirmación. | No desplegar |
 | `resources/js/globulares-datos.js` | Catálogo de cúmulos globulares (`window.BITACORA_GLOBULARES`), generado del catálogo de Harris | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-carbono-datos.js` | Catálogo de estrellas de carbono (`window.BITACORA_CARBONO`), generado del CSV | Servidor, por FTP a `…/uploads/bitacora/` |
+| `resources/js/estrellas-brillantes-datos.js` | **Las estrellas que Gaia DR3 no trae** (`window.BITACORA_ESTRELLAS_BRILLANTES`): catálogo hermano de Gaia con las 108 estrellas que su detector satura, generado por `scripts/gen_hipparcos.py`. Lo cargan **el simulador y el formulario de registro**: si se sube a uno, hay que subirlo al otro | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/estrellas-dobles-datos.js` | Catálogo unificado de estrellas dobles (`window.BITACORA_DOBLES`), generado de los CSV | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/js/galaxias-datos.js` | Catálogo de galaxias (`window.BITACORA_GALAXIAS`), con r_e, b/a, PA, n y mag V: es el presupuesto de luz al que se ancla el parche de PS1. Generado por `scripts/gen_galaxias.py` desde `mapa/datos/galaxias.csv`; no editar a mano | Servidor, por FTP a `…/uploads/bitacora/` |
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
@@ -182,14 +183,15 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   (su tamaño angular en el ocular), `factor = √(escalaMagAfov / campo_arcmin)`
   acotado a `[1, escalaMagMax]`. Así un cúmulo lejano a mucho aumento (NGC 7789 con
   un 18") se ve rico y uno cercano a poco aumento (M35) fino, con la misma regla.
-- **Brillo (alpha) relativo al equipo**: `alfaMin` y `rangoBrillo` (mag por debajo
-  del límite que satura la opacidad a 1) son deliberadamente **fijos, no escalan
+- **Brillo (alpha) relativo al equipo**: `alfaMin` y `magBlanco` (mag por debajo
+  del límite que satura la opacidad a 1; nace valiendo `rangoBrillo`, el rango de
+  la cadena fotométrica, pero es un número distinto — ADR 0019) son deliberadamente **fijos, no escalan
   con la apertura** — y eso es correcto, no un descuido. La detectabilidad de una
   estrella depende de su contraste sobre el fondo (ley de Weber-Fechner), y ese
   contraste ya está expresado en `(mlim − g)`: una estrella "3 mag por debajo del
   límite" tiene el mismo contraste perceptual en un 60 mm que en un 400 mm, porque
   `mlim` en sí YA integra la apertura (Torres Lapasió, más arriba). Lo que SÍ varía
-  con la apertura por su cuenta, sin que `rangoBrillo` tenga que hacerlo, es el
+  con la apertura por su cuenta, sin que `magBlanco` tenga que hacerlo, es el
   **halo** y el **color** — ver el punto siguiente —, porque esos dependen del
   flujo de fotones absoluto (∝ D²), no de lo cerca que esté la estrella del límite
   de detección de ese equipo concreto.
@@ -769,7 +771,7 @@ la lógica:
 
 | Bloque | Controla |
 |---|---|
-| `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo de estrella** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **halo de cúmulo globular** (`globular.rangoMag` = margen de la amortiguación cerca de estrellas resueltas, `globular.magResta`/`globular.restaMaxFrac` = profundidad fija y tope de la resta de luz ya resuelta — ver *Halo de los cúmulos globulares* más arriba); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo`); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
+| `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo de estrella** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **halo de cúmulo globular** (`globular.rangoMag` = margen de la amortiguación cerca de estrellas resueltas, `globular.magResta`/`globular.restaMaxFrac` = profundidad fija y tope de la resta de luz ya resuelta — ver *Halo de los cúmulos globulares* más arriba); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo` = rango de la cadena, `magBlanco` = pendiente del pintado, ADR 0019); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
 | `PS1` (= `BitacoraGaiaRender.ps1`) | Capa de galaxias desde imagen: **adquisición** (`salida` = px del recorte que se pide al proxy, hoy 1024 y tope del proxy — leer antes *La resolución del recorte*; `banda`, `seeingAs` = 1,1″ del stack, `ladoFactor`/`ladoMin`/`ladoMax` = campo del parche, `fracMin` = puerta de cobertura); **máscara de estrellas** (`mascaraMaxAs` = 60″, `rellenoPlanoMaxAs` = 40″ — **si tocas estos, mide antes**); **mezcla E** (`mezclaCajaAs`, `mezclaW0`); **halo** (`haloMenorMin`, `haloMuFijo`, `muHalo`, `deltaPlena`, `realceMax`). |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
@@ -958,6 +960,7 @@ desplegado con el permiso público.
   cambridge_double_star_atlas,RASC_Double_Star_Program}.csv`) se fusionan en
   `mapa/datos/estrellas_dobles.csv` con `python3 scripts/gen_dobles.py` (no editar el
   `.js` a mano). Física de resolución: ver [`docs/notas/resolucion-dobles.md`](docs/notas/resolucion-dobles.md).
+- **Hipparcos** (`public.hipparcos`, Hp<9) vía el [TAP de Gaia](https://gea.esac.esa.int/tap-server/tap), cruzado en local contra `gaiadr3.gaia_source` para quedarse **solo con lo que Gaia no trae**: `resources/js/estrellas-brillantes-datos.js` se **regenera** con `python3 scripts/gen_hipparcos.py` (no editar el `.js` a mano). Comprobación: `python3 scripts/test_hipparcos.py`. Por qué es un catálogo aparte y no un parche del dibujo: [`docs/adr/0018-las-estrellas-que-gaia-dr3-no-trae-son-un-catalogo-aparte.md`](docs/adr/0018-las-estrellas-que-gaia-dr3-no-trae-son-un-catalogo-aparte.md).
 - **Gaia DR3** vía [VizieR TAP](https://tapvizier.cds.unistra.fr/) (CDS).
 - **Colores estelares**: J.-V. Harre &amp; R. Heller (2021), *«Digital color codes of
   stars»*, Astron. Nachr. ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254);

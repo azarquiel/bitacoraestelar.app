@@ -33,8 +33,10 @@ en `scripts/test_capas_controles.js`); el `display` lo aplica
 ## Qué hace
 
 - **Dos vistas de la galaxia**: cenital (desde el polo norte galáctico) y de
-  canto (el disco de perfil). Se alterna entre ellas con una transición 3D en
-  la que el disco se abate sobre sí mismo.
+  canto (el disco de perfil). Son los dos extremos de un único mando, el
+  abatimiento: 0° es la cenital y 90° la de canto. El relevo de una foto a otra
+  es un fundido corto, y en los dos últimos grados la de perfil ya se ve
+  montada sobre el disco casi de canto, así que el cambio no da ningún salto.
 - **Zoom y desplazamiento**: rueda del ratón, pellizco táctil, arrastre.
 - **Rotación**: se puede girar el mapa para poner el norte donde se quiera.
   Las etiquetas de los objetos permanecen siempre legibles.
@@ -177,8 +179,8 @@ El mapa prioriza aparecer cuanto antes:
   `fetchpriority="high"` y `decoding="async"`.
 - La **imagen de canto** pesa ~6 MB y solo hace falta en la vista de perfil.
   No se carga en el arranque: su URL está en `data-src` y `via-lactea-app.js`
-  la carga **en segundo plano** cuando el navegador está ocioso (o al pulsar
-  «Vista de canto»). Así deja de competir con el primer pintado.
+  la carga **en segundo plano** cuando el navegador está ocioso (o al llevar el
+  abatimiento a 90°). Así deja de competir con el primer pintado.
 
 Si quieres afinar más, una versión de la cenital a menor resolución reduciría
 aún más el tiempo de carga sin pérdida visible al zoom inicial.
@@ -204,8 +206,7 @@ fisica: {
 },
 giros: {
   giroAzimutalCanto: false,  // 🛰️ girar el punto de vista alrededor de la galaxia
-  giroPlanoCanto: true,      // 🌀 girar la imagen de canto "como una foto"
-  transicion3D: true         // voltereta al cambiar de vista
+  giroPlanoCanto: false,     // 🌀 girar la imagen de canto "como una foto"
 },
 busqueda: {
   parpadeoSegundos: 3,       // cuánto parpadea el objeto encontrado
@@ -263,12 +264,15 @@ Cuando hay un observador seleccionado en el filtro, esta opción cambia lo que
 ocurre con los objetos que **ese** observador aún no ha observado (pero **sí**
 otros):
 
-- `true` (por defecto): esos objetos **no se ocultan**, se muestran **atenuados
-  en gris** (con algo de su color, como "deshabilitados") en las **tres vistas**:
-  Vía Láctea, atlas del Grupo Local y vecindario solar. La regla y el gris son
-  únicos (`VLObservadores.atenuadoPorObservador` / `grisNoVisitado`, en
-  `via-lactea-observadores.js`); cada vista solo los aplica con su técnica
-  (filtro CSS en los marcadores, mezcla de color en los dos lienzos). Al pulsar
+- `true` (por defecto): esos objetos **no se ocultan**, se marcan como **por
+  visitar** en las **tres vistas**: Vía Láctea, atlas del Grupo Local y
+  vecindario solar. El cambio es de **símbolo**, no de brillo: en vez del punto
+  lleno con halo se dibuja un **anillo hueco** del color del objeto, algo mayor
+  (`ANILLO_NO_VISITADO`). Lo único que se apaga —y poco— es el rótulo
+  (`grisNoVisitado` / `OPACIDAD_NO_VISITADO`). La regla y las constantes son
+  únicas (`VLObservadores.atenuadoPorObservador`, en
+  `via-lactea-observadores.js`); cada vista solo las aplica con su técnica
+  (CSS en los marcadores de la galaxia, dibujo en los dos lienzos). Al pulsar
   uno, su ficha muestra la
   información básica con el rótulo **NO VISITADO** y la lista de las
   observaciones que sí hay de él.
@@ -315,8 +319,14 @@ mano— es:
    la fórmula estándar (polo norte galáctico en RA 192,85948°, Dec 27,12825°).
 3. Se proyectan sobre cada imagen con la escala física real: la imagen abarca
    40 kpc (130 462 años luz), y el núcleo galáctico está anclado en el centro,
-   `(50, 50)`. La vista de canto comprime el eje vertical con un factor
-   calibrado (`S_edge ≈ S · 0,5882`).
+   `(50, 50)`. Las dos fotos son cuadradas y comparten esa escala, así que en la
+   vista de canto la altura sobre el plano se mide igual que la distancia en el
+   plano: `y = 50 − d·sen(b) / 130 462 · 100`, con la misma exageración
+   (`inclinacion.alturaObjetos`) que levanta a los objetos al abatir el disco.
+   Así, al llegar a 90°, cada objeto se queda a la altura en la que estaba un
+   grado antes. Las `y` tabuladas en `OBJECTS.edge` solo se usan si al objeto le
+   faltan las coordenadas galácticas: iban por su cuenta (medían unas 0,59 veces
+   la altura real) y hacían saltar a todo el halo hacia el plano.
 
 > Detalle: las constantes de esta proyección están **duplicadas** en el visor
 > (`via-lactea-config.js`) y en el plugin PHP. Si cambias la imagen del mapa o
@@ -446,9 +456,22 @@ Un objeto visitado que **no esté en `OBJECTS`** (sin marcador en el mapa)
 desaparece en silencio de la ruta y del recuento del combo; el viaje sigue
 pudiéndose seleccionar.
 
+La ruta se lee de la pantalla: cada vértice es la posición real del punto del
+marcador, con su altura sobre el plano ya incluida, y la línea se dibuja sobre
+un cristal encarado a la cámara y adelantado por delante del disco. Con el
+disco abatido va de objeto a objeto por el aire, en vez de quedarse pegada al
+plano y desaparecer bajo la foto.
+
 ---
 
 ## Controles
+
+El punto de vista tiene un solo mando, el **abatimiento**: 0° mira el disco
+desde arriba y 90° lo mira de canto, con su propia foto y sus marcadores. No
+hay botón de cambio de vista. En los dos últimos grados la foto de perfil se
+va montando encima del disco casi de canto, así que al llegar al tope el
+cambio ya está hecho y no se nota.
+
 
 | Acción | Ratón | Táctil |
 |---|---|---|
@@ -458,7 +481,7 @@ pudiéndose seleccionar.
 | Abrir ficha | Clic en el punto | Toque |
 
 Y en pantalla, de arriba abajo: registrar observación, buscador, deslizadores de
-rotación, cambio de vista, filtro de **observador** y combo de **viajes
+rotación y abatimiento, filtro de **observador** y combo de **viajes
 interestelares**; a la derecha los botones de zoom, y abajo la leyenda.
 
 Mientras se recorre un viaje el **buscador queda en pausa**: navegar a otro

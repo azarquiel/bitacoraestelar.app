@@ -58,16 +58,16 @@
       // Estrellas dobles: catálogo unificado (AL + Cambridge + RASC + WDS), cargado
       // desde estrellas-dobles-datos.js (window.BITACORA_DOBLES). Se marca `doble:true`
       // para que la ficha muestre Mag1/Mag2/Sep, las insignias de catálogo y el veredicto
-      // de resolución (Dawes + aumento). Las posiciones las sigue mandando Gaia; el
-      // ángulo de posición y los tipos espectrales solo se usan para completar las
-      // componentes que Gaia no trae (ver BitacoraGaiaRender.parDoble).
+      // de resolución (Dawes + aumento). Las posiciones las sigue mandando Gaia, y
+      // las componentes que no trae salen del catálogo de estrellas que Gaia DR3
+      // no trae, generado con esos mismos ángulos y tipos (scripts/gen_hipparcos.py).
       var CATALOGO_DOBLES = (window.BITACORA_DOBLES || []).map(function (e) {
         return {
           id: e.id, nombre: e.nombre, constelacion: e.constelacion, abrev: e.abrev,
           ra: e.ra, dec: e.dec, tipo: e.tipo,
           mag1: e.mag1, mag2: e.mag2, sep: e.sep, pa: e.pa,
           spect1: e.spect1, spect2: e.spect2,
-          catalogos: e.catalogos, aliases: e.aliases,
+          catalogos: e.catalogos, aliases: e.aliases, alias: e.aliases,
           doble: true
         };
       });
@@ -101,9 +101,10 @@
       };
 
       // Categorías del selector de objeto. La clave coincide con data-cat del HTML.
-      // Los cúmulos abiertos no tienen pestaña propia: viven en el buscador de
-      // "Cualquier objeto" (ver catalogoLibre), junto a galaxias y nebulosas.
-      var CATALOGOS_OBJ = { carbono: CATALOGO_CARBONO, dobles: CATALOGO_DOBLES, globulares: CATALOGO_GLOBULARES };
+      // Los cúmulos abiertos y las estrellas dobles no tienen pestaña propia: viven
+      // en el buscador de "Cualquier objeto" (ver catalogoLibre), junto a galaxias
+      // y nebulosas.
+      var CATALOGOS_OBJ = { carbono: CATALOGO_CARBONO, globulares: CATALOGO_GLOBULARES };
       var objetoSel = CATALOGO_CARBONO[0];   // primera estrella de carbono por defecto
 
       var TELE_EJEMPLO = [{ id: '_t200', vendor: '', modelo: 'Newton 200/1200 (ejemplo)', optica: 'Newtonian', apertura_mm: 200, focal_mm: 1200 }];
@@ -381,7 +382,19 @@
         return { aumentos: aumentos, campoReal: campoReal, pupila: pupila, afov: oc.afov };
       }
 
-      function ventanaBase() { return Math.min(560, window.innerWidth - 80, window.innerHeight - 240); }
+      /* Lado del círculo. Manda el hueco REAL de la columna de observación, no
+         un tope fijo: si la página es ancha, el ocular se ve grande sin tener
+         que ir a pantalla completa. Se mide la COLUMNA (.observacion) y no la
+         .vista-zona, porque esta última se ciñe al contenido (align-items:
+         center) y medirla realimentaría el tamaño del propio círculo. Los dos
+         guardas de ventana siguen mandando: el círculo no desborda ni a lo
+         ancho ni a lo alto. */
+      function ventanaBase() {
+        var zona = $('sim-zona');
+        var col = zona && zona.parentElement;
+        var hueco = col ? col.clientWidth : 0;
+        return Math.min(hueco || 560, window.innerWidth - 80, window.innerHeight - 240);
+      }
 
       /* Magnitud estelar límite del conjunto telescopio + ocular (TLM), según el
          "Método del umbral" de J. R. Torres Lapasió ("On the Prediction of
@@ -610,100 +623,44 @@
         })();
 
         var ra0 = sexToDeg(objetoSel.ra, true), dec0 = sexToDeg(objetoSel.dec, false);
-        // Magnitud límite del telescopio + ocular (Método del umbral): con más
-        // aumento el fondo se oscurece y se alcanzan estrellas más débiles; con
-        // el cielo más brillante, el límite baja y las débiles DESAPARECEN,
-        // igual que en el DSS. dibujarGaia solo pinta estrellas con Gmag <= mlim.
-        var mlim = magLimiteTelescopio();
-        consultarGaia(ra0, dec0, arcmin, true).then(function (estrellas) {
-          if (peticion !== contadorPeticion) return;
+        var eq = datosOcular();
+        // Galaxias + nebulosas cuya clase ya trata el pipeline (v1: planetarias).
+        var catDifuso = BitacoraGaiaRender.ps1CatalogoDifuso(
+          window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
+        /* «procesando información»: solo si la capa está encendida y hay de
+           verdad un objeto difuso que procesar en el campo —la misma criba que
+           hará la capa—; así el indicador refleja trabajo real y no parpadea
+           en campos vacíos. Lo quita la promesa de la propia capa, que
+           resuelve también cuando el parche falla (nunca rechaza), y cualquier
+           render posterior lo mata al entrar en actualizar(). */
+        var procesando = $('sim-procesando');
+        var hayDifuso = BitacoraGaiaRender.galaxiasImagen && BitacoraGaiaRender
+          .ps1GalaxiasDelCampo(catDifuso, ra0, dec0, arcmin).length > 0;
+        /* Toda la cadena (fondo → consulta → velo → magnitud límite → cúmulo →
+           estrellas → capa de galaxias) vive en vistaGaia(), el módulo
+           compartido: el generador de imagen del formulario pinta EXACTAMENTE
+           esto mismo. Aquí queda solo lo que es del DOM: indicadores, dónde van
+           los avisos y el respaldo DSS. El cúmulo entra como DATO (la ficha
+           física del catálogo); la ley entera vive en el módulo. */
+        BitacoraGaiaRender.vistaGaia(ctx, {
+          ra: ra0, dec: dec0, arcmin: arcmin, size: PROC,
+          apertura: teleApertura(), aumentos: eq.aumentos, afov: eq.afov,
+          transmision: transmisionEfectiva(), arana: teleTieneArana(),
+          sqm: parseFloat($('sim-sqm').value) || 21,
+          pupilaSalida: eq.pupila, pupilaOjo: pupilaOjo(),
+          conGlow: true, carbono: !!objetoSel.carbono,
+          carbonoMag: objetoSel.carbono ? objetoSel.mag : null,
+          cumulo: (objetoSel.globular && objetoSel.cumulo) || null,
+          catalogo: catDifuso,
+          vivo: function () { return peticion === contadorPeticion; }
+        }).then(function (r) {
+          if (peticion !== contadorPeticion || r.cancelada) return;
           cargando.style.display = 'none';
-          /* Si el TOP de la consulta se agotó antes de llegar a la magnitud límite
-             del equipo, faltan estrellas que SÍ se verían. Pasa en campos ricos y
-             muy anchos. Se avisa en vez de mostrar un campo pobre sin explicación. */
-          /* Campo denso: el proxy manda los momentos de la banda truncada y su
-             luz entra como velo (cielo extra) en toda la cadena, incluida la
-             magnitud límite (ADR 0014). */
-          var velo = BitacoraGaiaRender.veloSB(estrellas.fondo);
-          if (velo != null) mlim = magLimiteTelescopio(velo);
-          var mcorte = -Infinity;
-          for (var e = 0; e < estrellas.length; e++) if (estrellas[e][2] > mcorte) mcorte = estrellas[e][2];
-          if (mlim != null && isFinite(mcorte) && mcorte < mlim - 0.1) {
-            $('sim-aviso').textContent = velo != null
-              ? 'Campo muy rico: por debajo de magnitud ' + mcorte.toFixed(1) + ' las estrellas no se dibujan una a una; su luz entra como resplandor de fondo.'
-              : 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
-                ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
-          }
-          // Componente difusa del campo: la llenan las capas que la tengan (el
-          // campo no resuelto de un cúmulo, la imagen de una galaxia). En un
-          // campo sin ninguna queda a cero y las estrellas se dibujan sobre el
-          // nivel de cielo tal cual.
-          var difuso = new Float32Array(PROC * PROC);
-          /* Si el objeto es una doble, se completan del catálogo las componentes
-             que Gaia no trae (satura con las primarias muy brillantes: la de
-             Almaak no está en DR3). Solo para el dibujo de estrellas: las capas
-             difusas siguen con la muestra tal cual, que es de donde sale su
-             función de luminosidad. */
-          var estrellasDibujo = objetoSel.doble
-            ? BitacoraGaiaRender.parDoble(estrellas, {
-                ra: ra0, dec: dec0, sep: objetoSel.sep,
-                mag1: objetoSel.mag1, mag2: objetoSel.mag2,
-                pa: objetoSel.pa, spect1: objetoSel.spect1, spect2: objetoSel.spect2
-              })
-            : estrellas;
-          var cieloGaia = cieloOptica(datosOcular().pupila);
-          cieloGaia.perceptual = true;   // flujo calibrado, no la luma de una placa
-          if (velo != null) cieloGaia.veloSB = velo;   // fondo agregado del campo denso
-          /* Cúmulo globular: lo que este equipo NO resuelve se pinta como campo
-             estadístico (media + grano de la función de luminosidad) y lo que sí,
-             como estrellas —las de Gaia más las sintéticas que el catálogo no
-             trae en el núcleo aglomerado—. Toda la ley vive en el módulo
-             compartido; aquí solo se le pasa el equipo. */
-          var cum = objetoSel.globular && objetoSel.cumulo
-            ? BitacoraGaiaRender.pintarCumulo(difuso, objetoSel.cumulo, {
-                ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
-                cielo: cieloGaia, apertura: teleApertura(), estrellas: estrellasDibujo
-              })
-            : null;
-          if (cum) estrellasDibujo = cum.estrellas;
-          var opEst = {
-            ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
-            apertura: teleApertura(),   // fija el disco de Airy (va como 1/D)
-            // Solo si el objeto es una doble: el suelo de visibilidad de SUS dos
-            // componentes se recorta con el aumento para no comerse el hueco ya
-            // resuelto (ver radioEstrella en bitacora-gaia-render.js). Sin esto,
-            // sep queda undefined y el suelo se comporta igual que en cualquier
-            // otro campo.
-            sep: objetoSel.doble ? objetoSel.sep : null,
-            conGlow: true, carbono: !!objetoSel.carbono,
-            carbonoMag: objetoSel.carbono ? objetoSel.mag : null, arana: teleTieneArana()
-          };
-          var capaEst = BitacoraGaiaRender.capaEstrellas(estrellasDibujo, opEst, PROC);
-          BitacoraGaiaRender.pintarFot(difuso, ctx, cieloGaia, capaEst);
-          /* Galaxias del campo con su imagen real de PanSTARRS (ps1cutouts).
-             Toda la capa vive en el módulo compartido, que es lo que hace que el
-             generador de imagen del formulario pinte exactamente esto mismo.
-             Solo se llama aquí: con origen DSS o HiPS la imagen ya la trae la
-             placa. */
-          /* «procesando información»: solo si la capa está encendida y hay de
-             verdad un objeto difuso que procesar en el campo —la misma criba
-             que hará la capa—; así el indicador refleja trabajo real y no
-             parpadea en campos vacíos. Lo quita la promesa de la propia capa,
-             que resuelve también cuando el parche falla (nunca rechaza), y
-             cualquier render posterior lo mata al entrar en actualizar(). */
-          var procesando = $('sim-procesando');
-          // Galaxias + nebulosas cuya clase ya trata el pipeline (v1: planetarias).
-          var catDifuso = BitacoraGaiaRender.ps1CatalogoDifuso(
-            window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
-          var hayDifuso = BitacoraGaiaRender.galaxiasImagen && BitacoraGaiaRender
-            .ps1GalaxiasDelCampo(catDifuso, ra0, dec0, arcmin).length > 0;
-          if (procesando && hayDifuso && peticion === contadorPeticion) procesando.hidden = false;
-          BitacoraGaiaRender.ps1CapaGalaxias(difuso, ctx, cieloGaia, capaEst, {
-            ra0: ra0, dec0: dec0, arcmin: arcmin, size: PROC,
-            estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
-            catalogo: catDifuso,
-            vivo: function () { return peticion === contadorPeticion; }
-          }).then(function (capa) {
+          // El aviso del campo (catálogo agotado / resplandor de fondo) lo
+          // redacta el módulo; aquí solo se decide dónde pintarlo.
+          if (r.avisoCampo) $('sim-aviso').textContent = r.avisoCampo;
+          if (procesando && hayDifuso) procesando.hidden = false;
+          r.galaxias.then(function (capa) {
             // Solo esta petición apaga SU indicador: si otra más nueva ya está
             // en marcha, el suyo lo gestiona ella (y actualizar() lo ha reseteado).
             if (procesando && peticion === contadorPeticion) procesando.hidden = true;
@@ -989,6 +946,32 @@
         }).join('');
       }
 
+      /* Insignia de fidelidad (issue #133): esta doble se dibuja con la
+         compañera colocada a un ángulo ASUMIDO, no medido. La dispara un solo
+         escalón, `origen: 'asumida'` del catálogo de estrellas que Gaia DR3 no
+         trae (ver BitacoraGaiaRender.orientacionAsumida). Va en la misma fila
+         que las insignias de catálogo -que es flex con wrap, así que no
+         desplaza a ninguna- y NO en la línea de avisos del simulador, que es
+         una sola ranura ya disputada.
+
+         EL TEXTO LO ESCRIBE EL USUARIO, y es suyo: no se reescribe ni se
+         "mejora" desde aquí. Mientras `texto` esté vacío la insignia no se
+         pinta. `titulo` vacío no emite atributo `title`. */
+      var INSIGNIA_ASUMIDA = {
+        texto: 'PA 55°',
+        titulo: 'El ángulo de posición de la doble se dibuja por defecto a 55°, pues no se ha encontrado este dato en la literatura consultada. La separación y las magnitudes sí son oficiales.'
+      };
+      function insigniaAsumida(o) {
+        if (!INSIGNIA_ASUMIDA.texto) return '';
+        if (!window.BitacoraGaiaRender.orientacionAsumida({
+              ra: sexToDeg(o.ra, true), dec: sexToDeg(o.dec, false), sep: o.sep
+            })) return '';
+        var t = INSIGNIA_ASUMIDA.titulo;
+        return '<span class="obj-cat es-asumida"' +
+               (t ? ' title="' + BitacoraBase.esc(t) + '"' : '') + '>' +
+               BitacoraBase.esc(INSIGNIA_ASUMIDA.texto) + '</span>';
+      }
+
       // Veredicto "¿se resuelve con tu equipo?" para una doble. Dos condiciones
       // independientes: la APERTURA (límite de Dawes 116/D mm) y el AUMENTO (para
       // percibir el hueco hace falta que aumentos·sep alcance ~480" de campo aparente
@@ -1033,7 +1016,7 @@
             var r = resolucionDoble(o);
             meta.innerHTML =
               '<span class="obj-tags">' + BitacoraBase.esc(datos) + '</span>' +
-              '<span class="obj-cats">' + insigniasDoble(o.catalogos) + '</span>' +
+              '<span class="obj-cats">' + insigniasDoble(o.catalogos) + insigniaAsumida(o) + '</span>' +
               '<span class="obj-resol ' + r.clase + '">' + BitacoraBase.esc(r.texto) + '</span>';
             meta.hidden = false;
           } else {
@@ -1103,7 +1086,7 @@
           else { libreEstado('No se pudo consultar SIMBAD. Introduce RA/Dec a mano.'); }
         }
       });
-      // Catálogo combinado (cúmulos abiertos + galaxias + nebulosas) para sugerir
+      // Catálogo combinado (cúmulos abiertos + dobles + galaxias + nebulosas) para sugerir
       // en modo libre antes de tirar de SIMBAD. Los cúmulos ya vienen como
       // objetos completos (CATALOGO_CUMULOS); galaxias/nebulosas son filas
       // crudas [nombre, alt, RA°, Dec°, ...] en grados (ver galaxias-datos.js /
@@ -1123,6 +1106,7 @@
           }).filter(function (o) { return o.id; });
         }
         return CATALOGO_CUMULOS
+          .concat(CATALOGO_DOBLES)
           .concat(filas(window.BITACORA_GALAXIAS, 'galaxia'))
           .concat(filas(window.BITACORA_NEBULOSAS, 'nebulosa'));
       }
@@ -1138,7 +1122,10 @@
             fuente: catalogoLibre,
             texto: function (o) { return o.nombre; },
             buscarPor: function (o) { return [o.nombre, o.alias, o.alt].filter(Boolean).join(' '); },
-            specs: function (o) { return [o.alias, o.constelacion, (o.mag != null ? 'mag ' + Number(o.mag).toFixed(1) : '')].filter(Boolean).join('  ·  '); },
+            specs: function (o) {
+              if (o.doble) return [o.constelacion, (o.sep != null ? o.sep + '″' : '')].filter(Boolean).join('  ·  ');
+              return [o.alias, o.constelacion, (o.mag != null ? 'mag ' + Number(o.mag).toFixed(1) : '')].filter(Boolean).join('  ·  ');
+            },
             max: 12,
             sinResultados: 'Sin coincidencias en el catálogo local · sigue escribiendo para buscar en SIMBAD',
             onElegir: function (o) {
@@ -1152,7 +1139,7 @@
         }
       }
 
-      // Selector de objeto: pestañas (cúmulos / carbono / dobles [+ libre]) sobre
+      // Selector de objeto: pestañas (carbono / globulares [+ libre]) sobre
       // el buscador de catálogo común. Al cambiar de pestaña se limpia el input y
       // se listan los objetos de esa categoría; al elegir uno, se activa.
       function montarSelectorObjeto() {
@@ -1165,7 +1152,6 @@
           texto: function (o) { return o.nombre; },
           specs: function (o) {
             if (o.carbono) return (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '') || o.abrev || '';
-            if (o.doble) return [o.constelacion, (o.sep != null ? o.sep + '″' : '')].filter(Boolean).join('  ·  ');
             if (o.globular) return 'μV₀ ' + o.muV0.toFixed(1) + '  ·  r_t ' + o.rTidal.toFixed(0) + '′';
             return [o.constelacion, (o.mag != null ? 'mag ' + String(o.mag).replace('.', ',') : '')].filter(Boolean).join('  ·  ');
           },

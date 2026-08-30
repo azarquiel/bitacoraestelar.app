@@ -2,10 +2,10 @@
 /* Test de Almaak (doble mag 2.3 + 5.1, sep 9.6", pa/spect desconocidos) en
    resources/js/bitacora-gaia-render.js:
 
-   1. parDoble() sintetiza la primaria (satura, no está en DR3 -comentario en
-      bitacora-ocular.js-) a partir de solo la secundaria devuelta por Gaia,
-      infiriendo correctamente cuál falta por magnitud y desplazándola sep"
-      al pa por defecto (55°, porque el catálogo trae pa:null).
+   1. La primaria (satura, no está en DR3) la trae el catálogo de estrellas
+      que Gaia DR3 no trae (estrellas-brillantes-datos.js), con su posición
+      medida por Hipparcos y propagada a 2016.0 — no se sintetiza en tiempo
+      de dibujo (issue #134).
 
    2. dibujar() efectivamente pinta las DOS componentes (dos núcleos), no
       una. La separación en píxeles a 99x (Nagler T4 22mm, AFOV 82°, canvas
@@ -44,6 +44,7 @@ global.document = {
   }
 };
 require('../resources/js/bitacora-gaia-color.js');
+require('../simulador_ocular/resources/js/estrellas-brillantes-datos.js');
 require('../resources/js/bitacora-gaia-render.js');
 var R = global.window.BitacoraGaiaRender;
 
@@ -53,26 +54,29 @@ function ok(cond, etiqueta) {
   else { fallos++; console.error('  FALLA ' + etiqueta); }
 }
 
-console.log('1. parDoble() sintetiza la primaria que Gaia no trae');
+console.log('1. la primaria que Gaia no trae la pone el catálogo');
 // Datos reales del proxy Gaia en producción para el campo de Almaak: Gaia
-// solo devuelve la secundaria (mag~4.86, cerca de mag2=5.1), como documenta
-// el comentario "la de Almaak no está en DR3".
+// solo devuelve la secundaria (mag~4.86), como documenta el comentario "la de
+// Almaak no está en DR3". La primaria sale del catálogo, que dibujar()
+// concatena solo.
 var ra0 = 30.975, dec0 = 42.328333;
 var soloSecundaria = [[30.978258522125305, 42.330699217961474, 4.8627677, -0.040904045]];
-var pareja = R.parDoble(soloSecundaria, {
-  ra: ra0, dec: dec0, sep: 9.6, mag1: 2.3, mag2: 5.1, pa: null, spect1: null, spect2: null
-});
-ok(pareja.length === 2, 'parDoble devuelve 2 estrellas (' + pareja.length + ')');
-ok(pareja[0][2] === 4.8627677, 'mantiene la secundaria de Gaia sin tocar (mag ' + pareja[0][2] + ')');
-ok(pareja[1][2] === 2.3, 'sintetiza la primaria que faltaba, con la mag correcta del catálogo (' + pareja[1][2] + ')');
 
 function haversineArcsec(ra1, dec1, ra2, dec2) {
   var rad = Math.PI / 180, cosd = Math.cos(dec1 * rad);
   var dra = (ra2 - ra1) * cosd, ddec = dec2 - dec1;
   return Math.sqrt(dra * dra + ddec * ddec) * 3600;
 }
-var sepReal = haversineArcsec(pareja[0][0], pareja[0][1], pareja[1][0], pareja[1][1]);
-ok(Math.abs(sepReal - 9.6) < 0.05, 'la separación sintetizada respeta sep=9.6" del catálogo (' + sepReal.toFixed(2) + '")');
+var enElPar = (global.window.BITACORA_ESTRELLAS_BRILLANTES || []).filter(function (f) {
+  return haversineArcsec(ra0, dec0, f[0], f[1]) < 25;
+});
+ok(enElPar.length === 1, 'el catálogo trae UNA fila en el par, no dos (' + enElPar.length + ')');
+var primaria = enElPar[0];
+ok(primaria[5] === 'medida', 'y su posición es medida, no derivada de un ángulo (' + primaria[5] + ')');
+ok(primaria[2] < 2.5, 'es la primaria brillante, no la compañera (G ' + primaria[2].toFixed(2) + ')');
+
+var sepReal = haversineArcsec(soloSecundaria[0][0], soloSecundaria[0][1], primaria[0], primaria[1]);
+ok(Math.abs(sepReal - 9.6) < 0.5, 'a la separación del catálogo de dobles, 9,6" (' + sepReal.toFixed(2) + '")');
 
 console.log('\n2. dibujar() pinta las 2 componentes (aunque se vean fundidas a 99x)');
 // Nagler T4 22mm, AFOV 82°, 99x -> campo real = 82/99° = 49.7'. Canvas 720px.
@@ -82,7 +86,7 @@ var base = { ra: ra0, dec: dec0, arcmin: arcmin, afov: 82, apertura: 457, conGlo
 gradientes = [];
 R.dibujar(fakeCtx({ width: 720, height: 720 }), [], base);   // precalienta sprites
 gradientes = [];
-R.dibujar(fakeCtx({ width: 720, height: 720 }), pareja, base);
+R.dibujar(fakeCtx({ width: 720, height: 720 }), soloSecundaria, base);
 
 var nucleos = gradientes.filter(function (g) { return g.stops.length === 5; });
 ok(nucleos.length === 2, 'se dibujan 2 núcleos de estrella, uno por componente (' + nucleos.length + ')');

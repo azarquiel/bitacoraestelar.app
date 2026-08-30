@@ -281,8 +281,14 @@ var GrupoLocal = (function () {
 
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
+
+  // Rectángulos de las etiquetas dibujadas y visibles este fotograma, para que
+  // hitTest() las trate como área pulsable igual que en la vista de la galaxia
+  // (allí lo resuelve el DOM: la etiqueta comparte el listener del punto).
+  var labelHitRects = [];
   function render() {
     ctx.clearRect(0, 0, W, H);
+    labelHitRects = [];
 
     // Fondo del atlas: degradado oscuro para tapar el negro del visor. Solo se
     // ve según la opacidad de la capa (canvas.style.opacity).
@@ -323,7 +329,7 @@ var GrupoLocal = (function () {
       ctx.fillText('Vía Láctea', mw.sx + 12, mw.sy - 8);
     }
 
-    // Atenuación de marcadores (spec #102): el hovered del fotograma anterior
+    // Realce de marcadores (spec #102): el hovered del fotograma anterior
     // (o la galaxia buscada, anillo sobre marcador propio) marca el realzado de
     // este fotograma; se mueve al final del pintado para quedar por encima.
     var hovPrev = hovered && hovered.o;
@@ -335,19 +341,26 @@ var GrupoLocal = (function () {
       if (realzadoDe(projected[ri].o)) { projected.push(projected.splice(ri, 1)[0]); break; }
     }
     hovered = null;
+
+    // Etiquetas: por debajo de este zoom (fracción de FOV_MAX) se amontonan, así
+    // que solo se leen solas al pasar el cursor o recorriendo un viaje — igual
+    // que en la vista de la galaxia (etiquetaZoomMin), con la escala propia de
+    // este atlas (fov, logarítmico y de rango variable según los datos).
+    var fraccEtiqueta = (window.CONFIG && CONFIG.marcadores && CONFIG.marcadores.etiquetaFovFraccion != null)
+      ? CONFIG.marcadores.etiquetaFovFraccion : 0.15;
+    var etiquetaZoomOk = fov <= FOV_MAX * fraccEtiqueta;
+
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
-      var est = VLMarcadorEstilo.de({ realzado: realzadoDe(o), viajeActivo: !!rutaIds },
-                                    CONFIG.marcadores);
-      var r = Math.max(2.4, 4 * p.persp) * est.escala;
-      ctx.save();
-      ctx.globalAlpha = est.opacidad;
+      var realzado = realzadoDe(o);
+      var r = Math.max(2.4, 4 * p.persp);
 
-      // Galaxia observada solo por otros: se atenúa (gris + menor opacidad),
-      // pero sigue siendo pulsable para descubrir esas observaciones.
+      // Galaxia observada solo por otros: es un destino POR VISITAR. Sigue
+      // siendo pulsable para descubrir esas observaciones. Solo se apaga el
+      // rótulo, y poco: el símbolo va a color entero (spec #102).
       var aten = atenuadaPorObservador(o);
-      var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // multiplicador de opacidad
+      var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // opacidad del rótulo
 
       // línea guía hasta el plano galáctico
       var foot = project({ x: o.x, y: o.y, z: 0 });
@@ -361,26 +374,48 @@ var GrupoLocal = (function () {
       ctx.setLineDash([]);
 
       var col = o.color || '#7ec8ff';
-      var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
-      halo.addColorStop(0, colorRgba(col, 0.55 * am, aten));
-      halo.addColorStop(1, colorRgba(col, 0, aten));
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
-
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = aten ? 'rgba(210,214,220,0.65)' : '#f4faff'; ctx.fill();
-
-      if (onView) {
-        ctx.fillStyle = colorRgba(col, 0.95 * am, aten);
-        ctx.font = '500 ' + (12 * est.escala).toFixed(1) + 'px Inter, sans-serif';
-        ctx.fillText(o.name, p.sx + r + 6, p.sy + 4);
+      if (!aten) {
+        var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
+        halo.addColorStop(0, colorRgba(col, 0.55, false));
+        halo.addColorStop(1, colorRgba(col, 0, false));
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.5, 0, Math.PI * 2); ctx.fill();
       }
-      ctx.restore();
 
-      // El radio de detección no se atenúa: el área pulsable no cambia.
+      // Visitado o por visitar: la diferencia es de SÍMBOLO, no de brillo. El
+      // objeto que el observador activo aún no ha observado se dibuja como
+      // anillo hueco de su propio color (sin halo); el visitado, como punto
+      // lleno con halo. Misma ley en las tres vistas del mapa.
+      var anillo = VLObservadores.ANILLO_NO_VISITADO;
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, aten ? r * anillo.escala : r, 0, Math.PI * 2);
+      if (aten) {
+        ctx.strokeStyle = colorRgba(col, 0.95, false);
+        ctx.lineWidth = anillo.grosor;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#f4faff'; ctx.fill();
+      }
+
+      var labelRect = null;
+      if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
+        ctx.fillStyle = colorRgba(col, 0.95 * am, aten);
+        ctx.font = '500 12px Inter, sans-serif';
+        var lx = p.sx + r + 6, ly = p.sy + 4;
+        ctx.fillText(o.name, lx, ly);
+        // Área pulsable de la etiqueta (clic abre la ficha, igual que el punto).
+        var lw = ctx.measureText(o.name).width;
+        labelRect = { o: o, x0: lx - 2, y0: ly - 11, x1: lx + lw + 2, y1: ly + 4 };
+        labelHitRects.push(labelRect);
+      }
+
+      // El radio de detección no se atenúa: el área pulsable no cambia. La
+      // etiqueta pulsable también cuenta como hover, igual que en la galaxia.
       if (atlasInteractive && mouse.x != null) {
         var dx = mouse.x - p.sx, dy = mouse.y - p.sy;
-        if (dx * dx + dy * dy < 160) hovered = { o: o, p: p };
+        var enEtiqueta = labelRect && mouse.x >= labelRect.x0 && mouse.x <= labelRect.x1 &&
+          mouse.y >= labelRect.y0 && mouse.y <= labelRect.y1;
+        if (dx * dx + dy * dy < 160 || enEtiqueta) hovered = { o: o, p: p };
       }
     }
 
@@ -441,6 +476,13 @@ var GrupoLocal = (function () {
   // domina la vista. Se usa para el clic (abrir ficha) y el cursor.
   function hitTest(clientX, clientY) {
     if (layerAlpha <= 0.5) return null;
+    // La etiqueta es pulsable igual que el punto (spec: paridad con la galaxia).
+    // Se mira primero: es más grande y, si se solapa con otro punto, gana el
+    // objeto al que pertenece el texto que se está pulsando.
+    for (var li = labelHitRects.length - 1; li >= 0; li--) {
+      var lr = labelHitRects[li];
+      if (clientX >= lr.x0 && clientX <= lr.x1 && clientY >= lr.y0 && clientY <= lr.y1) return lr.o;
+    }
     var best = null, bestD = Infinity;
     for (var i = 0; i < objects.length; i++) {
       var p = project(objects[i]);
@@ -592,6 +634,7 @@ var GrupoLocal = (function () {
         var tipo = this.getAttribute('data-tipo');
         var nowHidden = !hiddenTipos[tipo];
         hiddenTipos[tipo] = nowHidden;
+        this.setAttribute('aria-pressed', nowHidden ? 'true' : 'false');
         this.style.opacity = nowHidden ? '0.4' : '1';
         var textEl = this.querySelector('.gl-legend-text');
         if (textEl) textEl.style.textDecoration = nowHidden ? 'line-through' : 'none';

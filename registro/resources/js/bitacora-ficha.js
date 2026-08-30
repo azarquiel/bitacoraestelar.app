@@ -60,13 +60,9 @@
     }
     function valor(id) { var el = $(id); return (el && el.value.trim() !== '') ? parseFloat(el.value) : null; }
 
-    function api(url, opts) {
-      opts = opts || {}; opts.credentials = 'same-origin';
-      opts.headers = opts.headers || {}; opts.headers['X-WP-Nonce'] = WP.nonce;
-      return fetch(url, opts).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, data: d }; });
-      });
-    }
+    // Acceso a la API: fuente única en bitacora-base.js (había cinco copias
+    // de api() y ya habían divergido).
+    var api = BitacoraBase.api;
 
     // ═══════════════════════════════════════════════════════════════════════
     // BASES (la ubicación es la base elegida; su mapa vive en "Mis bases")
@@ -88,7 +84,7 @@
       if (baseSel) baseSelect.value = String(baseSel.id);
     }
     function cargarBases() {
-      var API = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+      var API = BitacoraBase.ruta('bases');
       return api(API).then(function (res) {
         if (res.ok && Array.isArray(res.data)) {
           listaBases = res.data;

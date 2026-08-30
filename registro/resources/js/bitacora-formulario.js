@@ -331,6 +331,22 @@
   // ═══════════════════════════════════════════════════════════════════════
   // CÁLCULO EN TIEMPO REAL
   // ═══════════════════════════════════════════════════════════════════════
+  // Tramo de audio (ADR 0005): hh:mm:ss (hh opcional) ↔ segundos enteros.
+  function audioHhmmssASegundos(txt){
+    var t=String(txt||'').trim();
+    if(t==='') return null;
+    var p=t.split(':').map(function(x){ return parseInt(x,10); });
+    if(p.length<2||p.length>3||p.some(isNaN)) return null;
+    if(p.length===2) return p[0]*60+p[1];
+    return p[0]*3600+p[1]*60+p[2];
+  }
+  function audioSegundosAHhmmss(seg){
+    if(seg==null) return '';
+    var s=Math.max(0,parseInt(seg,10)||0);
+    var h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sg=s%60;
+    var mmss=(m<10?'0':'')+m+':'+(sg<10?'0':'')+sg;
+    return h>0 ? h+':'+mmss : mmss;
+  }
   function fmtDeg(v){ return (v>=0?'+':'−')+Math.abs(v).toFixed(1)+'°'; }
   function fmtAz(v){
     var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
@@ -414,7 +430,11 @@
       horaObservacion:($('horaObs')?$('horaObs').value:''),
       cieloSqm: cielo.sqm, cieloBortle: cielo.clase, cieloBortleEtiqueta: cielo.etiqueta,
       cieloIr: transp.ir, cieloTransparencia: transp.etiqueta,
-      seeing: ($('seeing') && $('seeing').value !== '') ? parseInt($('seeing').value, 10) : null
+      seeing: ($('seeing') && $('seeing').value !== '') ? parseInt($('seeing').value, 10) : null,
+      audioUrl: $('audioUrl') ? $('audioUrl').value.trim() : '',
+      audioEpisodioUrl: $('audioEpisodioUrl') ? $('audioEpisodioUrl').value.trim() : '',
+      audioInicio: $('audioInicio') ? audioHhmmssASegundos($('audioInicio').value) : null,
+      audioFin: $('audioFin') ? audioHhmmssASegundos($('audioFin').value) : null
     };
     // Astrometría (solo si hay base): el servidor la usa para sembrar la ficha.
     if(astro){
@@ -428,6 +448,9 @@
   $('observer').addEventListener('input',recompute);
   if($('fechaObs')) $('fechaObs').addEventListener('change',recompute);
   if($('horaObs')) $('horaObs').addEventListener('change',recompute);
+  ['audioUrl','audioEpisodioUrl','audioInicio','audioFin'].forEach(function(id){
+    if($(id)) $(id).addEventListener('input',recompute);
+  });
 
   // Cielo de la sesión: selector Bortle enlazado al SQM (widget compartido).
   var cieloCtrl = (window.BitacoraBase && $('cieloBortle') && $('cieloSqm'))
@@ -490,7 +513,7 @@
   // rezagadas, alta) es de BitacoraBase.
   var viajeBox = $('viajeAviso'), viajeBtn = $('viajeAvisoBtn');
   var listaViajes = [], viajePendiente = null;   // pendiente: id a recuperar en modo edición
-  var VIAJES_API = WP ? WP.endpoint.replace(/observaciones\/?$/, 'viajes/de-la-noche') : '';
+  var VIAJES_API = WP ? BitacoraBase.ruta('viajes/de-la-noche') : '';
   function pedirViaje(datos, metodo){
     var q = '?fecha='+encodeURIComponent(datos.fecha)+'&hora='+encodeURIComponent(datos.hora);
     return fetch(VIAJES_API+q, { method:metodo, credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
@@ -563,7 +586,7 @@
   }
   function cargarBases(){
     if(!WP) return;
-    var API = WP.endpoint.replace(/observaciones\/?$/, 'bases');
+    var API = BitacoraBase.ruta('bases');
     fetch(API, { credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
@@ -734,11 +757,21 @@
   }
 
   // Rellena el select de telescopios y aplica la preselección pendiente.
+  //
+  // OJO con el orden: la observación y la flota son DOS peticiones en carrera, y
+  // esta función la llaman las dos (por sincronizarFlota). Poblar el select se
+  // hace una sola vez, pero la preselección puede llegar después —cuando gana la
+  // flota, aquí todavía no se sabe qué telescopio tenía la observación—, así que
+  // el "ya poblado" no puede cortar la función entera: cortaba la preselección y
+  // el telescopio se quedaba sin cargar al editar.
   function poblarTelescopios() {
     var sel = $('scopeSelect');
-    if (!sel || sel._pob) return;
+    if (!sel) return;
     var vacia = !(flota.telescopios && flota.telescopios.length);
-    llenarSelect(sel, 'telescopios', vacia ? '— No tienes telescopios en tu flota —' : '— Elige un telescopio de tu flota —');
+    if (!sel._pob) {
+      llenarSelect(sel, 'telescopios', vacia ? '— No tienes telescopios en tu flota —' : '— Elige un telescopio de tu flota —');
+      sel._pob = true;
+    }
     // Preselección pendiente (modo edición): telescopio de la flota por id.
     if (telescopioIdPendiente != null) {
       sel.value = String(telescopioIdPendiente);
@@ -749,8 +782,9 @@
       }
     }
     // Registro antiguo con telescopio fuera de la flota: opción para no perder el
-    // nombre (sin id → "Generar" queda deshabilitado en sus entradas).
-    if ((!sel.value || sel.value === '') && telescopioNombre) {
+    // nombre (sin id → "Generar" queda deshabilitado en sus entradas). Se añade
+    // una sola vez aunque se pase por aquí dos veces (ver la carrera de arriba).
+    if ((!sel.value || sel.value === '') && telescopioNombre && !sel.querySelector('option[value="__legacy__"]')) {
       var op = document.createElement('option');
       op.value = '__legacy__'; op.textContent = telescopioNombre + ' (fuera de tu flota)';
       sel.appendChild(op); sel.value = '__legacy__';
@@ -759,7 +793,6 @@
       var hint = $('scopeHint');
       if (hint) hint.innerHTML = 'No tienes telescopios en tu flota. Añádelos en <a href="/mi-flota/">Mi flota</a> para poder registrar (y generar la imagen con el simulador).';
     }
-    sel._pob = true;
     telescopioIdPendiente = null;
     recompute();
   }
@@ -775,7 +808,7 @@
 
   function cargarFlota() {
     if (!WP) return;
-    var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
+    var API = BitacoraBase.ruta('equipo');
     fetch(API, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
@@ -836,6 +869,13 @@
       if (transpCtrl) $('cieloIr').dispatchEvent(new Event('input', { bubbles: true }));
     }
     if($('seeing') && obs.seeing != null && obs.seeing !== '') $('seeing').value = String(obs.seeing);
+    if(obs.audio_url) {
+      if($('audioUrl')) $('audioUrl').value = obs.audio_url;
+      if($('audioEpisodioUrl') && obs.audio_episodio_url) $('audioEpisodioUrl').value = obs.audio_episodio_url;
+      if($('audioInicio') && obs.audio_inicio != null) $('audioInicio').value = audioSegundosAHhmmss(obs.audio_inicio);
+      if($('audioFin') && obs.audio_fin != null) $('audioFin').value = audioSegundosAHhmmss(obs.audio_fin);
+      if($('audioDetails')) $('audioDetails').open = true;
+    }
     // Base: se preselecciona al cargar la lista de bases (basePendiente).
     if(obs.base_id){ basePendiente = obs.base_id; if(basesCargadas){ baseSel = basePorId(obs.base_id); if(baseSelect) baseSelect.value=String(obs.base_id); } }
     // Viaje: la lista de esa noche llega con la consulta que dispara la fecha,
@@ -999,6 +1039,7 @@
   // La imagen se sube como un adjunto más, marcada origen:'simulada'.
   // ═══════════════════════════════════════════════════════════════════════
   var AFOV_REF_SIM = 110;   // campo aparente de referencia (igual que el simulador)
+  var SQM_SIM_POR_DEFECTO = 21.4;   // cielo rural: solo si la observación no lo midió
   var _simModal = null, _simUsar = null, _simEntrada = null, _simPeticion = 0;
 
   // Rótulo de la fuente de una imagen simulada. Sin fuente conocida (una imagen
@@ -1029,7 +1070,10 @@
       pupilaSalida:(opt.pupila!=null?opt.pupila:D/opt.aumento),
       optica:telescopioSel.optica||'',
       arana:(typeof telescopioSel.arana==='boolean')?telescopioSel.arana:undefined,
-      sqm:(cielo.sqm!=null?cielo.sqm:21.4),
+      // SQM de partida para la imagen: el de la observación si lo hay. Es lo
+      // ÚNICO del render que cambia a lo largo de la noche (sale la Luna, entra
+      // bruma), así que el modal deja retocarlo sin tocar el de la observación.
+      sqm:(cielo.sqm!=null?cielo.sqm:SQM_SIM_POR_DEFECTO),
       objeto:resolved.etiqueta, telescopio:telescopioNombre, ocular:nombrePieza(ocular)
     };
   }
@@ -1046,6 +1090,9 @@
               '<option value="gaia">Estrellas de Gaia DR3</option>'+
               '<option value="dss">DSS (placas fotográficas)</option>'+
             '</select></label>'+
+          '<label class="sim-gen-fuente"><span>SQM</span>'+
+            '<input type="number" class="sim-gen-sqm" min="14" max="22" step="0.05" '+
+            'title="Brillo del cielo para esta imagen (no cambia el de la observación)"></label>'+
           '<button type="button" class="sim-gen-x" title="Cerrar">×</button></div>'+
         '<div class="sim-gen-info"></div>'+
         '<div class="sim-gen-vista"><canvas class="sim-gen-canvas" width="900" height="900"></canvas>'+
@@ -1070,6 +1117,11 @@
     // sobre la marcha y se queda con la que mejor cuente lo que vio (las nebulosas
     // oscuras de Barnard, por ejemplo, salen mucho mejor en la placa).
     ov.querySelector('.sim-gen-origen').addEventListener('change', function(){ if(_simEntrada) pintarSim(); });
+    // Igual con el SQM: es lo único del cielo que cambia durante la noche, así
+    // que se retoca aquí hasta que la imagen se parezca a lo que se recuerda.
+    // Va por 'change' (no 'input'): cada repintado consulta Gaia o el DSS y no
+    // hay que dispararlo con cada tecla.
+    ov.querySelector('.sim-gen-sqm').addEventListener('change', function(){ if(_simEntrada) pintarSim(); });
     _simModal=ov; return ov;
   }
 
@@ -1081,6 +1133,7 @@
     if(!window.BitacoraGaiaRender){ if(st){ st.textContent='El módulo del simulador no está cargado.'; st.className='gen-status err'; } return; }
     var ov=construirModalSim();
     _simEntrada={ el:el, d:d };
+    ov.querySelector('.sim-gen-sqm').value = d.sqm;   // parte del cielo de la observación
     ov.style.display='flex';
     pintarSim();
   }
@@ -1096,9 +1149,15 @@
     // que decirlo porque la imagen ya no cubre todo lo que se ve por el ocular.
     var maxDss=BitacoraGaiaRender.dssMaxArcmin;
     var arcmin=(fuente==='dss') ? Math.min(d.arcmin, maxDss) : d.arcmin;
+    // SQM de ESTA imagen: el del modal manda sobre el de la observación. Fuera
+    // del rango de la escala (o en blanco) se vuelve al de partida, para no
+    // pedirle al render un cielo imposible.
+    var sqmSim=parseFloat(ov.querySelector('.sim-gen-sqm').value);
+    if(isNaN(sqmSim) || sqmSim<14 || sqmSim>22) sqmSim=d.sqm;
     ov.querySelector('.sim-gen-info').innerHTML =
       BitacoraBase.esc(d.objeto)+' · '+BitacoraBase.esc(d.telescopio)+' · '+BitacoraBase.esc(d.ocular)+
       ' · '+d.aumentos+'× · campo '+fmtCampo(arcmin/60)+
+      ' · SQM '+String(sqmSim).replace('.', ',')+
       (arcmin<d.arcmin ? ' (recortado del máximo del DSS)' : '');
     ov.querySelector('.sim-gen-badge').textContent='simulada ('+etiquetaFuente(fuente)+')';
     usar.disabled=true; spin.style.display='flex';
@@ -1109,7 +1168,7 @@
     var off=document.createElement('canvas'); off.width=off.height=D;
     var opciones={
       ra:d.ra, dec:d.dec, arcmin:arcmin, apertura:d.apertura, aumentos:d.aumentos,
-      optica:d.optica, arana:d.arana, sqm:d.sqm, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
+      optica:d.optica, arana:d.arana, sqm:sqmSim, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
       // El campo aparente fija el tamaño de las estrellas: el lienzo se muestra a
       // un diámetro ∝ afov, así que el radio en píxeles va con 1/afov.
       afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, conGlow:true

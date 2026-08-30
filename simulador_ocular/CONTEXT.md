@@ -19,17 +19,40 @@ Lo que el ojo ve en el ocular tiene dos escalas distintas, y confundirlas es un 
 - **Límite conocido:** la ventana deja de crecer en `AFOV_REF` (110°), así que por encima de ese campo aparente la compensación ya no es exacta. Es de la página, no de la ley.
 - El **veredicto de desdoble** de una doble (`resolucionDoble`, que vive en el simulador —`bitacora-ocular.js`—, no en el render) no depende de nada de esto: es apertura (Dawes) y `aumentos · separación`. Un par de pocos segundos de arco cae por debajo del píxel en pantalla, así que en los pares justos el que dice si se resuelve es el veredicto, no la imagen.
 
-## Par de una doble (completar lo que Gaia no trae)
+## Estrellas que Gaia DR3 no trae
 
-Gaia DR3 **satura por arriba**: las primarias muy brillantes no están en el catálogo. La de Almaak (γ And A, V 2,3 pero G ≈ 1,5 por ser gigante K3 muy roja) no aparece, así que el Canvas-2D dibujaba una sola estrella —la compañera, G 4,86— mientras el veredicto decía «se resuelve». Los dos tenían razón: no hablaban del mismo par.
+Gaia DR3 **satura por arriba**: por encima de G≈3 el detector no mide y esas estrellas no tienen fila en el catálogo. Vega, Arturo y Rigel faltan; la primaria de Almaak (γ And A, V 2,3 pero G ≈ 1,5 por ser gigante K3 muy roja) también, así que el Canvas-2D dibujaba una sola estrella —la compañera, G 4,86— mientras el veredicto de desdoble decía «se resuelve». Los dos tenían razón: no hablaban del mismo par. El agujero es **instrumental** —saturación y *gating*—, no falta de tiempo de integración: **no** hay que dar por hecho que DR4 lo cierre.
 
-- **Fuente única:** `BitacoraGaiaRender.parDoble(estrellas, {ra, dec, sep, mag1, mag2})`, pura, devuelve la lista con las componentes que faltaban (sin tocar la original).
-- **Completa, no sustituye:** busca en círculo de `1,5 · sep` las estrellas brillantes que el catálogo sí trae y sintetiza solo lo que falta, para conservar la posición y el **color** reales de las presentes. No es problema general: Mizar (G 2,28 + 3,91), Achird (3,32 + 6,76) y 65 Psc (6,21 + 6,24) vienen completas y no se les añade nada.
-- **Solo el dibujo de estrellas.** Las capas difusas siguen recibiendo la muestra de Gaia tal cual, de donde sale su función de luminosidad.
-- **Ángulo de posición:** del catálogo cuando lo hay (lo trae el WDS, 132 de 289), medido desde el Norte hacia el Este y de la A a la B; si el par se completa al revés —falta la primaria— el desplazamiento va a PA+180°. Sin PA se asume uno oblicuo (55°) para que el par no salga pegado a un eje: para el desdoble lo que importa es la separación, y la orientación en el ocular depende del montaje, que tampoco se modela.
-- **Color:** del tipo espectral de cada componente con [[modelo de color Gaia]]`.bpRpPorTipo`, así que Albireo sale dorada + azul y no como dos puntos blancos. Sin tipo espectral (140 de 289), blanca.
-- Las magnitudes del catálogo son **visuales** y se usan como si fueran G: el error es de unas décimas, más en las estrellas muy rojas.
-- **Trampa:** `+null` es `0`, y como magnitud sería una estrella falsa deslumbrante; por eso los datos del catálogo entran por `numONulo`. Test: `scripts/test_par_doble.js`.
+- **No es un caso especial de las dobles, es una fuente de datos.** `simulador_ocular/resources/js/estrellas-brillantes-datos.js` (`window.BITACORA_ESTRELLAS_BRILLANTES`) es un **catálogo hermano de Gaia** que contiene *solo* lo que Gaia no trae: 108 filas, ~10 KB, generadas *offline* por `scripts/gen_hipparcos.py`. `dibujar()` concatena las dos listas y pinta. No hay precedencia que arbitrar en el render porque no hay solapamiento: el cruce ya se resolvió en el generador. Al ser fuente y no dibujo, sirve a cualquier campo —doble o no— y arregla de paso `renderPlaca()`, el render del formulario de registro.
+- **Solo el dibujo de estrellas.** La costura es `dibujar()`, no `consultar()`: `consultar()` alimenta también la capa difusa, de donde sale su función de luminosidad, y meterle estrellas de otro catálogo rompería esa ley. Las capas difusas siguen recibiendo la muestra de Gaia tal cual. Si el fichero no carga, el `|| []` deja el campo como estaba: un fallo de red no deja al observador sin cielo.
+- **«Falta» significa vacío, no débil.** El generador cruza en local —Hipparcos Hp<9 propagado de J1991.25 a 2016.0 con su movimiento propio, `cKDTree` sobre la esfera unidad, radio 2″, contra Gaia G<10,5— y da por ausente a la que no tiene *ninguna* fuente dentro de ese radio. Criterio binario, sin perilla de magnitud que calibrar. Medido: **89 ausentes de 78 348**, el 0,1 %, con acantilado en G≈3 (72 de las 89 están a Hp<3). La tabla `gaiadr3.hipparcos2_best_neighbour` **no** se usa: su incompletitud hacía creer que faltaba el 16 %.
+- **Cada fila declara su `origen`**, y con él lo fiable que es: `'medida'` (88 filas, astrometría propia de Hipparcos), `'derivada'` (18, compañera colocada a un ángulo medido del WDS o de Hipparcos) o `'asumida'` (2, compañera colocada al ángulo por defecto de 55° porque nadie publica el suyo). Solo ese último escalón se le confiesa al observador, con la insignia de fidelidad de la ficha (`INSIGNIA_ASUMIDA` en `bitacora-ocular.js`, texto del usuario, no generado): si el aviso saliera también con un ángulo medido, dejaría de significar algo.
+- **El generador abre los sistemas en componentes.** Hipparcos publica una fila por sistema cerrado; el render dibuja estrellas, no sistemas. En la separación manda la `sep` del catálogo de dobles: la `rho` de Hipparcos solo se acepta si `|rho − sep| ≤ máx(0,3″, 15 %·sep)` —fuera de esa banda describe **otro** par: ζ UMa da 715,5″ en el catálogo contra 14,43″ en Hipparcos—. En el ángulo manda el `pa` del WDS sobre el `theta` de Hipparcos.
+- **Ninguna doble gana una componente de más.** La compañera solo se escribe si el par, mirando Gaia *más* las filas de ausencia, no reúne ya sus dos componentes; y nunca si hay una fuente a menos de 2″ de su posición prevista. El recuento usa un círculo de `máx(3″, 1,5·sep, 25″)`: el suelo de 25″ cubre que el catálogo de dobles es J2000 con la AR redondeada a segundos enteros de tiempo (±7,5″·cos δ) mientras que Gaia y estas filas están en 2016.0. Ese suelo vive **en el generador**; en el render ya no hay ninguno.
+- **Magnitud G y color BP−RP por relaciones publicadas**, no ajustadas a ojo: tablas 5.7/5.8 de la documentación de Gaia EDR3 con pivote V−I (Riello et al. 2021). Residuo medido: G con mediana +0,007 y σ 0,023. Usar V como si fuera G —lo que hacía el código viejo— daba mediana +0,125 y un 46,8 % de estrellas desviadas más de 0,2 mag. El sesgo de −0,037 en BP−RP se deja sin corregir a propósito. Sin fotometría no hay color: `null`, nunca inventado.
+- **Ganancia medida: 24 pares ganan su segunda componente** (recuento de `scripts/test_hipparcos.py`). Mirando solo el tramo brillante: de los 44 pares con `mag1 < 4`, `sep` y `mag2`, 18 están incompletos en Gaia DR3 y **12 los cierra este catálogo**. Los 6 que quedan no son de saturación: tres son pares de sep ≤0,2″ que Gaia no resuelve, uno tiene la compañera por debajo de `G<10,5`, y en otro el `pa` publicado está caduco.
+- **Derogado (issue #134):** `BitacoraGaiaRender.parDoble()` y su suelo de 25″ en el render **ya no existen**, ni tampoco `scripts/test_par_doble.js`; sus invariantes viven ahora en `scripts/test_hipparcos.py`. La regla que sintetizaba la componente que faltaba en tiempo de dibujo —PA asumido de 55° por defecto, magnitud visual usada como si fuera G, blanco sin tipo espectral— queda derogada entera. `test_almaak_doble.js` se conserva: prueba el render (dos núcleos, separación en píxeles), no `parDoble`.
+- **Trampa:** `+null` es `0`, y como magnitud sería una estrella falsa deslumbrante; por eso los datos del catálogo entran por `numONulo`.
+- **Trabajo futuro apuntado, no hecho — «D4: sistemas múltiples».** La regla de la separación descarta a propósito la componente interna que Hipparcos sí conoce en ζ UMa y ε Lyr. Y el `theta` de Hipparcos es de época 1991,25, caduco para los pares de órbita rápida (Cástor, σ Ori, δ Gem, Mekbuda): mejor que 55° inventados, no verdad.
+- Decisiones: `simulador_ocular/docs/adr/0018-las-estrellas-que-gaia-dr3-no-trae-son-un-catalogo-aparte.md`. Historia y medidas: `simulador_ocular/docs/especificaciones/suplemento_hipparcos_objetivo.md` (D3, cerrado). Tests: `scripts/test_hipparcos.py` y `scripts/test_estrellas_brillantes.js`.
+
+### Dónde se elige una doble
+
+No hay pestaña «Estrellas dobles». El catálogo vive dentro del buscador de **«Cualquier objeto»** (`catalogoLibre`), con las galaxias, las nebulosas y los cúmulos abiertos. La ficha (mag A/B, separación, insignias de catálogo, veredicto de desdoble) se dispara con `objetoSel.doble`, no con la pestaña, así que sobrevive al cambio.
+
+**Derogado:** el render ya no recibe `sep` en las opciones de `capaEstrellas`, así que el recorte del suelo de visibilidad por `margenSuelo` **no actúa nunca en el simulador**: las dos componentes de una doble se dibujan con el mismo suelo que cualquier otra estrella del campo. Era lo que hacía que Achird A cayera de 10,08 px a 0,76 px a 133×, y esa era la diferencia de aspecto entre la pestaña de dobles y «Cualquier objeto». `radioEstrella` sigue aceptando `sep` (lo ejercitan `scripts/test_estrella_fisica.js` y `scripts/test_lienzo_invariante.js`); lo que no hay es quien se lo pase.
+
+## Vista de Gaia (`vistaGaia`)
+
+El pipeline completo del modo Canvas-2D — fondo → consulta de Gaia → velo del campo denso → magnitud límite → cúmulo → capa de estrellas → pintado fotométrico → capa de galaxias — detrás de una sola entrada: `BitacoraGaiaRender.vistaGaia(ctx, opts)`. El ORDEN de la cadena es del módulo; los dos llamadores (el simulador de oculares y `render()`, el envoltorio que usa el generador de imagen del formulario) pasan datos y reciben resultado, sin conocer la secuencia.
+
+- **Interfaz:** campos planos (el idioma de `magLimite`/`nivelFondo`): equipo (`apertura`, `aumentos`, `transmision|optica`, `arana`, `pupilaSalida`, `pupilaOjo`, `afov`), cielo (`sqm`), campo (`ra`, `dec`, `arcmin`, `size`) y objeto (`carbono`/`carbonoMag`, `cumulo` —la ficha física del catálogo, como DATO—, `catalogo` difuso, `conGlow`, `vivo`). Devuelve `{estrellas, estrellasDibujo, mlim, fondo, avisoCampo, galaxias}`.
+- **Dos ritmos, un dato:** `galaxias` es LA PROMESA de la capa PS1 (`{aviso}`, nunca rechaza). El formulario la espera (la imagen que sube debe llevar la galaxia); el simulador pinta estrellas ya y engancha el aviso cuando llegue.
+- **Cancelar no es un error:** con `vivo()` falso resuelve `{cancelada: true}` sin volver a tocar el ctx. El RECHAZO de la promesa significa «Gaia no responde» y en el simulador dispara el respaldo DSS.
+- **Los avisos los redacta el módulo** (`avisoCampo`: catálogo agotado / resplandor de fondo): fuente única de texto; cada pantalla decide dónde pintarlos y con qué prioridad.
+- **Dependencias implícitas documentadas:** los catálogos cargados por `<script defer>` en ambas páginas — `BITACORA_ESTRELLAS_BRILLANTES` (lo concatena `dibujar()`) y `BITACORA_GALAXIAS`/`BITACORA_NEBULOSAS` (catálogo difuso por defecto).
+- **Test de contrato:** `scripts/test_vista_gaia.js` — entra por la interfaz (fetch de mentira, ctx falso), y debe sobrevivir a cualquier refactor interno del pipeline.
+- _Evitar_: «escena» (ocupado por la escena difusa de PS1), «pipeline del render» sin nombre.
 
 ## Cadena de la placa (luma → flujo)
 
@@ -40,6 +63,26 @@ Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de obj
 - **Por qué dos fuentes en el registro:** el catálogo dibujado gana en cúmulos y dobles; la placa gana en nebulosidad y, sobre todo, en las **nebulosas oscuras** (los Barnard), que son ausencia de estrellas sobre fondo rico y un catálogo de puntos no puede contar. El observador elige en el modal y compara antes de decidir.
 - **No es fotometría calibrada:** mapeo heurístico con parámetros puestos a ojo, y están para tocarlos. Lo que el test fija son los **invariantes**: más luma nunca es menos flujo, un píxel apagado no inventa luz (flujo 0), la escala es logarítmica en magnitudes, la fusión nunca oscurece lo que la placa profunda ya registró, y una fusión que no cuadra (pocos píxeles en común o pendiente no positiva) devuelve **la placa profunda tal cual** en vez de una recta inventada.
 - **La regla se prueba aparte del desenfoque:** `rellenarNucleo` recibe el entorno ya calculado, porque lo que se comprueba es el umbral, no el kernel (filtro nativo del canvas, necesita DOM). Test: `scripts/test_placa.js`.
+
+## PS1 (la capa difusa desde imagen)
+
+En este repo **«PS1» nombra la ley, no el sondeo**: la capa que convierte una imagen real del
+cielo en luz difusa visible —parche, PSF, quitar estrellas, perfil, fusión imagen/modelo,
+anclaje al catálogo, opacidad—. Que su único proveedor de imagen hoy sea Pan-STARRS 1 es un
+detalle de adquisición, no la definición.
+
+- **Fuente única:** `resources/js/bitacora-ps1.js`, global `window.BitacoraPS1`; las funciones
+  conservan el prefijo `ps1*` y la calibración vive en `BitacoraPS1.cfg`.
+- **Frontera:** es la otra ley del render, con dueño propio frente a la
+  [[cadena fotométrica]]. PS1 usa la fotometría; `vistaGaia` usa PS1 (`ps1MagConsulta`,
+  `ps1CapaGalaxias`). El ciclo es de llamada, no de carga, con la forma de
+  `bitacora-cumulos.js:92-93`. Decidido en ADR 0020.
+- **No confundir con la [[cadena de la placa]]:** aquella convierte una placa (DSS o PanSTARRS)
+  en `Fobj` para pintar el campo entero; ésta reconstruye un objeto extenso concreto y le
+  escribe su máscara difusa. Las dos son imagen de sondeo y viven a distinto lado del muro.
+- _Evitar_: «PS1» como sinónimo de Pan-STARRS 1 a secas cuando se habla de código; para el
+  sondeo, decir «Pan-STARRS 1» o «PanSTARRS».
+
 
 ## Adquisición de Gaia por celdas
 
@@ -86,6 +129,8 @@ Ley única con la que TODOS los motores del render deciden qué se ve: convierte
 - **Umbral de contraste:** el contraste mínimo que un objeto extenso necesita para ser detectado. Depende de la luminancia que llega al ojo (vía pupila de salida y transmisión) y del **tamaño aparente** del objeto, que es por donde entran los aumentos.
 - **H2c** es la ley vigente de ese umbral: área de Ricco con el seeing en cuadratura, **calibrada contra 12 observaciones visuales reales**. Es la capa de visión humana del proyecto entero, y está congelada: si un objeto no cuadra, el sospechoso es su modelo, no la ley. La ley histórica `C_MAG` sobrevive solo como regresión.
 - **Es de detección, no de estructura.** Dice qué partes superan el umbral; no dice qué detalle se separa. Esa es otra ley y no deben mezclarse.
+- **El brillo de una ESTRELLA es umbral, no contraste (ADR 0018).** A igualdad de aumentos el contraste estrella/cielo no depende de la apertura: la pupila de salida sube estrella y fondo a la vez. Lo que el tubo grande da es iluminancia retinal absoluta, y eso vive en `mlim`. Una ley del alpha del disco que solo mire contraste pinta el 18" más apagado que el 8". La apertura entra además por el TAMAÑO (`sueloEstrella` lleva `(D/Dref)²`): repartir el flujo sobre el disco dibujado cancela ese mismo D². Guardián: `scripts/test_alfa_apertura.js`.
+- **El alpha de una estrella no es su nivel en pantalla (ADR 0019).** `pintarFot` relee la capa de estrellas como FLUJO (`flujoDeValor(v, c.Fref, c.rango)`) antes de mapearla; el alpha es solo la codificación. De ahí que **emparejar la pendiente del pintado con la de la lectura la cancele**: las dos conversiones son inversas exactas y el píxel no se mueve. Lo único que aclara una estrella es el DESCUADRE deliberado — `CFG.magBlanco` (magnitudes bajo `mlim` que pintan blanco) separado de `CFG.rangoBrillo` (rango de la cadena, que es lo que `pintarFot` sigue leyendo) —, y su precio es que el disco deja de estar en la escala de flujo de la aureola y que por debajo del margen `mlim − g` la más brillante satura. Barrido: `harness_alfa_estrellas.js --blanco`.
 
 ## Modelo de observación de cúmulos
 
@@ -108,5 +153,13 @@ Cadena que responde «¿qué distribución de estrellas produciría esta imagen 
 Etiqueta explícita de catálogo (Type del OpenNGC: `PN`, `HII`, `SNR`, `RfN`…) que dice **qué filas entran** en la capa difusa de imagen real, no qué código corre. El modelo intrínseco del objeto no es código: **es la fila de catálogo** (r_e, b/a, PA, mag V, n, B/T), y el generador de cada catálogo responde de que esa fila sea fotometría honesta. Una galaxia y una nebulosa planetaria recorren el mismo pipeline de observación; abrir una clase nueva exige validarla, no ramificar el render (ADR 0013).
 
 - **Borde real vs isofotal:** una galaxia se acaba donde su perfil cae bajo el ruido —su borde ES una isofota—, pero una planetaria tiene borde físico: la cáscara que trae el catálogo. La escena de protección y el tamaño intrínseco de la [[cadena fotométrica]] usan el borde real en las clases compactas y la isofota en el resto. Única divergencia por clase demostrada (M57: la isofota del ala exponencial cae 2,8 veces más lejos que la nebulosa).
+- **La ausencia manda cuando la máscara pisa un borde real (ADR 0017):** si la
+  máscara ancha de una estrella brillante pisa un componente compacto, su
+  elipse entera —y la imagen entera del parche, si toda la escena está pisada—
+  pasa a NaN y el objeto se pinta como su modelo de catálogo, forzando el
+  perfil por encima del interruptor del halo. Rellenar «al cielo» es un 0
+  medido que bloquea la mezcla (anillo oscuro), coser trozos pinta un remiendo,
+  y el ala superviviente se lleva el presupuesto del anclaje (motitas). Solo
+  compactas: las reglas de fusión de las galaxias están cerradas.
 - **v1 solo admite `PN`.** Las demás clases tienen fila generada pero puerta cerrada; si una clase necesita lo que una fila Sérsic no puede decir (filamentos, cáscara incompleta), la conversación es sobre el esquema del catálogo.
 - _Evitar_: «tipo» a secas (colisiona con el tipo de la [[observación]] y con la [[clasificación de objeto del mapa]]); «sistema de nebulosas».

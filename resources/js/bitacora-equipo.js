@@ -29,6 +29,10 @@
        ('18" f/4.5') y delante su nombre propio si lo tiene ('Excalibur · 18"
        f/4.5'). Sin medidas, el nombre o nombreTelescopio().
 
+     rotuloFlota(item) -> { principal, detalle }
+       El mismo rótulo partido en dos para pintarlo con jerarquía: el nombre
+       propio delante (si lo hay) y "vendor modelo" como detalle discreto.
+
      flotaPrimero(flota, catalogo) -> [items]
        Lista para elegir equipo: primero las piezas de "Mi flota" (marcadas con
        esFlota:true), luego las del catálogo global. Sin mutar la entrada.
@@ -92,6 +96,26 @@
     return nombre ? nombre + ' · ' + medidas : medidas;
   }
 
+  /* Rótulo del telescopio en DOS PIEZAS, para donde se pueden pintar con
+     jerarquía (el listado de observaciones). El nombre propio es como el
+     observador reconoce su equipo, así que va SIEMPRE que exista y manda; el
+     "vendor modelo" pasa a segundo plano, que es dato de catálogo. Sin nombre
+     propio, el modelo sube a principal y no hay detalle: nunca se pierde el
+     único rótulo disponible.
+
+     Es la misma jerarquía del selector de la flota (nombre — características),
+     pero devuelta en partes en vez de en una cadena: un <option> no se puede
+     estilar por trozos y una tarjeta sí. */
+  function rotuloFlota(item) {
+    if (!item) return { principal: '', detalle: '' };
+    var nombre = (item.nombre == null ? '' : String(item.nombre)).trim();
+    var vendor = (item.vendor == null ? '' : String(item.vendor)).trim();
+    var modelo = (item.modelo == null ? '' : String(item.modelo)).trim();
+    var catalogo = (vendor + ' ' + modelo).trim();
+    if (!nombre) return { principal: catalogo, detalle: '' };
+    return { principal: nombre, detalle: catalogo };
+  }
+
   // Un decimal, y sin el ",0" cuando es redondo: 457mm -> 18", no 18,0".
   function decimal(n) {
     return String(Math.round(n * 10) / 10);
@@ -113,6 +137,7 @@
     focalConAuxiliares: focalConAuxiliares,
     nombreTelescopio: nombreTelescopio,
     rotuloNave: rotuloNave,
+    rotuloFlota: rotuloFlota,
     flotaPrimero: flotaPrimero
   };
 

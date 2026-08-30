@@ -762,6 +762,9 @@
        suelo por densidad local (o quitarlo y fiar la visibilidad solo al
        tamaño, que ya tiene su propio suelo en radioSuelo). */
     alfaMin: 0.05,
+    /* A/B del alpha del disco (ver alfaEstrella): false = rampa histórica
+       anclada a mlim; true = flujo absoluto por la cadena fotométrica común. */
+    alfaPorFlujo: false,
     // Rango de magnitudes (por debajo del límite) que recorre el alpha de 0 a 1.
     // FIJO, no escala con apertura: la detectabilidad es contraste relativo a mlim
     // (Weber-Fechner), y mlim ya integra la apertura. Probado y confirmado: 12 da
@@ -782,6 +785,30 @@
     // Son la misma cantidad física: cuántas magnitudes caben en los 0-255 de la
     // pantalla. Si se toca SB_NEGRO/SB_BLANCO, esto acompaña solo.
     rangoBrillo: FOT.SB_NEGRO - FOT.SB_BLANCO,
+    /* Rama C (ADR 0019). Cuántas magnitudes por debajo de mlim pintan BLANCO en
+       el disco de una estrella. Nace valiendo `rangoBrillo` -producción no se
+       mueve ni un bit-, pero es un número DISTINTO y por eso tiene nombre
+       propio: `rangoBrillo` es el rango de la CADENA (lo que `flujoDeValor`
+       espera al releer la capa en pintarFot), y esto es la PENDIENTE DEL
+       PINTADO.
+       Separarlos es lo único que mueve el nivel en pantalla de una estrella.
+       Con la lectura emparejada a la pendiente las dos conversiones son
+       inversas exactas y la pendiente se cancela: el nivel final no cambia
+       (medido, test_alfa_magblanco.js T2). Como pintarFot lee con `c.rango`
+       FIJO, el flujo codificado queda Fref·(10^(0,4·Δmag·rango/magBlanco) − 1)
+       y el nivel sobre el fondo va ~como 255·Δmag/magBlanco: bajar esto aclara
+       TODO el campo de estrellas.
+       El precio, medido: (a) el disco deja de estar en la misma escala de flujo
+       que la aureola (que usa 10^(-0,4g) directo), y (b) por debajo del margen
+       (mlim − g) de la estrella más brillante, esa estrella satura a 1 y deja
+       de responder a la apertura -ahí falla el guardián test_alfa_apertura.js-.
+       El valor es una calibración contra notas de observación, no una
+       constante física: `node scripts/harness_alfa_estrellas.js <objeto> ... --blanco`
+       imprime el barrido. 9,5 es el elegido tras ese A/B contra las notas de
+       NGC 1245 / NGC 1664 / NGC 2266; queda justo por encima del margen
+       (mlim − g) de la más brillante con el 18", que es donde empieza a quemar
+       el pico y a perderse el orden de brillos del cúmulo. */
+    magBlanco: 9.5,
     /* El glow de las estrellas por debajo de la magnitud límite es lo que da
        textura al halo de un globular, así que va calibrado en las mismas unidades
        aparentes: ~1,4 px de radio en pantalla. Su intensidad en g=mlim ANCLA a
@@ -925,6 +952,13 @@
     // sin el segundo chequeo, cambiar a un equipo más grande sobre el mismo
     // objeto se quedaba con el catálogo más somero que trajo el equipo chico.
     if (ent && ent.rad >= rad - 1e-6 && ent.mag >= prof - 1e-6) return ent.promise;
+    // Superconjunto monotónico (ADR 0014): funde con lo ya cacheado ANTES de
+    // fetchear, para que una escritura tardía (precalentado somero llegando
+    // después de la vista honda) nunca pise profundidad ya conseguida.
+    if (ent) {
+      rad = Math.max(rad, ent.rad);
+      prof = Math.max(prof, ent.mag);
+    }
     var nueva = {
       rad: rad,
       mag: prof,
@@ -1115,39 +1149,6 @@
     return CFG.escalaMagAfov / a * escalaLienzo(size);
   }
 
-  /* ── Par de una doble: completar lo que Gaia DR3 no trae ─────────────────────
-     Gaia satura por arriba. Almaak es el caso que lo destapó: γ And A es una
-     gigante K3 muy roja (V 2,3, G ≈ 1,5) y NO está en DR3, así que en un círculo
-     de 36″ el catálogo solo devuelve su compañera (G 4,86) y dos estrellas de
-     campo. El simulador dibujaba una estrella y el veredicto decía «se resuelve»:
-     los dos tenían razón, pero no hablaban del mismo par.
-
-     No es general —Mizar (G 2,28 + 3,91), Achird (3,32 + 6,76) y 65 Psc (6,21 +
-     6,24) vienen completas— así que aquí NO se sustituye a Gaia: se completa. Se
-     buscan las componentes que el catálogo sí tiene y solo se sintetiza lo que
-     falta, para conservar la posición y el COLOR reales de las que están (el
-     BP–RP de la compañera de Almaak es −0,04: azul, y ese contraste es media
-     gracia del par).
-
-     El ángulo de posición sale del catálogo cuando lo hay (lo trae el WDS, para
-     132 de las 289 dobles): la B se coloca a ese ángulo de la A, medido desde el
-     Norte hacia el Este. Si el par se completa al revés —la que falta es la
-     primaria—, el desplazamiento va a PA+180°. Sin PA se asume uno oblicuo, para
-     que el par no salga alineado con los ejes; para el desdoble lo que importa es
-     la separación, y la orientación en el ocular depende del montaje, que tampoco
-     se modela.
-
-     El COLOR de la componente sintética sale de su tipo espectral con
-     BitacoraGaiaColor.bpRpPorTipo, así que el modelo de color sigue siendo la
-     única fuente: una K3 del catálogo se pinta igual que una estrella de Gaia con
-     ese mismo BP–RP. Sin tipo espectral sale blanca.
-
-     PURA: recibe y devuelve la lista de estrellas, sin tocar la original. */
-  var PAR = {
-    angulo: 55,        // ° de PA asumido (desde el Norte hacia el Este)
-    margenMag: 1.0,    // una componente puede venir hasta 1 mag más débil que mag2
-    radioMinBusca: 3   // ″ : suelo del círculo donde se buscan las componentes
-  };
   /* null / '' → null, y NO 0: el catálogo deja en null lo que no sabe, y `+null`
      es 0, que como magnitud sería una estrella falsa deslumbrante. */
   function numONulo(v) {
@@ -1155,56 +1156,42 @@
     var n = +v;
     return isFinite(n) ? n : null;
   }
-  function parDoble(estrellas, o) {
-    var sep = numONulo(o.sep), m1 = numONulo(o.mag1), m2 = numONulo(o.mag2);
-    // Sin separación o sin las dos magnitudes no hay par que completar (el
-    // catálogo deja ambas en null en muchas múltiples).
-    if (sep == null || !(sep > 0) || m1 == null || m2 == null) return estrellas;
+  /* ── ¿La orientación de esta doble es una suposición? (issue #133) ───────────
+     El catálogo de estrellas que Gaia DR3 no trae declara en cada fila su
+     `origen`: 'medida' (astrometría propia de Hipparcos), 'derivada'
+     (compañera colocada a un ángulo medido, WDS o Hipparcos) o 'asumida'
+     (compañera colocada al ángulo por defecto de 55°, porque nadie publica
+     el suyo). Sólo ese último escalón se le confiesa al observador: si el
+     aviso saliera también con un ángulo medido, dejaría de significar algo.
 
+     El vínculo entre la fila y la doble es POSICIONAL, con el mismo ancla de
+     40″ del generador (gen_hipparcos.py, RADIO_ANCLA_ARCSEC): cubre el
+     desajuste de época entre el catálogo de dobles —J2000, con AR redondeada
+     a segundos enteros de tiempo— y estas filas, ya propagadas a 2016.0.
+
+     Pero la fila 'asumida' es la COMPAÑERA, no la primaria, así que cae a la
+     separación del par de la posición del catálogo, y el ángulo al que cae es
+     justo lo que no se sabe. La zona buscada es por eso un ANILLO de radio
+     `sep` y no un disco de radio `sep`: con el disco, un par de 3705″ —los
+     hay— barría un grado entero de cielo y cualquier fila asumida ajena caía
+     dentro. El centro se acepta también, por si el catálogo diera la posición
+     de la compañera en vez de la de la primaria. */
+  var RADIO_ASUMIDA = 40;   // ″ el mismo ancla que usa el generador
+  function orientacionAsumida(o) {
+    var filas = (typeof window !== 'undefined') && window.BITACORA_ESTRELLAS_BRILLANTES;
+    if (!o || !filas || !filas.length) return false;
     var ra0 = numONulo(o.ra), dec0 = numONulo(o.dec);
-    if (ra0 == null || dec0 == null) return estrellas;
-
+    if (ra0 == null || dec0 == null) return false;
+    var sep = numONulo(o.sep) || 0;
     var cos0 = Math.cos(dec0 * Math.PI / 180);
-    var radio = Math.max(PAR.radioMinBusca, sep * 1.5) / 3600;   // grados
-    var limite = Math.max(m1, m2) + PAR.margenMag;
-    var halladas = [];
-    for (var i = 0; i < estrellas.length; i++) {
-      var e = estrellas[i];
-      if (!(e[2] <= limite)) continue;                            // demasiado débil para ser componente
-      var dra = (((e[0] - ra0 + 540) % 360) - 180) * cos0, ddec = e[1] - dec0;
-      if (dra * dra + ddec * ddec <= radio * radio) halladas.push(e);
+    for (var i = 0; i < filas.length; i++) {
+      var f = filas[i];
+      if (f[5] !== 'asumida') continue;
+      var dra = (((f[0] - ra0 + 540) % 360) - 180) * cos0, ddec = f[1] - dec0;
+      var d = Math.sqrt(dra * dra + ddec * ddec) * 3600;         // ″
+      if (d <= RADIO_ASUMIDA || Math.abs(d - sep) <= RADIO_ASUMIDA) return true;
     }
-    if (halladas.length >= 2) return estrellas;                  // Gaia trae el par: no se toca
-
-    // Desplazamiento de la B respecto de la A: PA del catálogo, o el asumido.
-    var paCat = numONulo(o.pa);
-    var pa = (paCat != null ? paCat : PAR.angulo) * Math.PI / 180;
-    function desplazar(estrella, signo) {
-      return [estrella[0] + signo * sep * Math.sin(pa) / (3600 * (cos0 || 1)),
-              estrella[1] + signo * sep * Math.cos(pa) / 3600];
-    }
-    // Color desde el tipo espectral. Guardado por si un caché sirviera una versión
-    // vieja del módulo de color: sin color se dibuja blanca, no se cae.
-    function bprpDe(tipo) {
-      var f = GColor && GColor.bpRpPorTipo;
-      return f ? f(tipo) : null;
-    }
-
-    var nuevas;
-    if (halladas.length === 1) {
-      // Falta una: la que peor encaja con la magnitud de la que sí está. Si la que
-      // falta es la primaria, va en sentido contrario al PA (que apunta de A a B).
-      var hallada = halladas[0], g0 = hallada[2];
-      var faltaLaB = Math.abs(g0 - m1) <= Math.abs(g0 - m2);
-      var xy = desplazar(hallada, faltaLaB ? 1 : -1);
-      nuevas = [[xy[0], xy[1], faltaLaB ? m2 : m1, bprpDe(faltaLaB ? o.spect2 : o.spect1)]];
-    } else {
-      // No hay ninguna: las dos, con la primaria en las coordenadas del catálogo.
-      var a = [ra0, dec0, m1, bprpDe(o.spect1)];
-      var xyB = desplazar(a, 1);
-      nuevas = [a, [xyB[0], xyB[1], m2, bprpDe(o.spect2)]];
-    }
-    return estrellas.concat(nuevas);
+    return false;
   }
 
   /* ── La imagen estelar de VERDAD: disco de Airy + seeing ─────────────────────
@@ -1281,6 +1268,44 @@
      fisico > suelo, por la cuadratura suelo²+fisico²=Rtot²). */
   function factorDilucion(suelo, Rtot) {
     return (Rtot > suelo * Math.SQRT2) ? (suelo * suelo) / (Rtot * Rtot) : 1;
+  }
+  /* Alpha del DISCO de una estrella resuelta. radioArcsec es el radio DIBUJADO
+     (Rtot) en segundos de arco; dilucion, el factor de reparto de radioEstrella.
+
+     Rama A (por defecto): rampa lineal en el margen de detección (mlim - g).
+     Es un margen, no un brillo: la misma estrella cambia de alpha cuando cambia
+     el cielo, y el blanco puro cae en g = mlim - 11,5, una magnitud que no
+     existe en un cúmulo abierto. De ahí el campo "apagado" que solo se anima
+     falseando el SQM (que en realidad añade estrellas, no brillo).
+
+     Rama B (CFG.alfaPorFlujo): INCORRECTA, banco de comparación, no candidata
+     -ver ADR 0018 y scripts/test_alfa_apertura.js-. Es puro contraste, y el
+     contraste estrella/cielo no depende de la apertura a igualdad de aumentos:
+     pinta un 18" más apagado que un 8". Además reparte el flujo sobre el disco
+     DIBUJADO, cuyo tamaño ya lleva (D/Dref)² por sueloEstrella, así que cancela
+     el D² una segunda vez. La ganancia del tubo grande es de umbral (mlim), que
+     es justo lo que esta rama deja de mirar.
+
+     La misma cadena que todo lo demás. El flujo de
+     la estrella repartido en el disco que se dibuja, medido contra el cielo de
+     REFERENCIA (Fref, sqm 21) -el mismo con el que pintarFot vuelve a leer esta
+     capa: flujoDeValor(v, c.Fref, c.rango)-. Lo que se pinta y lo que se lee
+     pasan a ser la misma magnitud, y el alpha deja de depender del cielo de la
+     escena. La dilución NO se aplica aparte: el área del disco ya la lleva.
+
+     ponytail: el sprite tiene perfil radial, no es un disco plano, así que esto
+     es el techo de brillo, no el flujo integrado exacto; si hiciera falta
+     conservar flujo al píxel, el factor perfil/plano entra aquí. */
+  function alfaEstrella(g, mlim, radioArcsec, dilucion) {
+    var d = (dilucion > 0) ? dilucion : 1;
+    if (!CFG.alfaPorFlujo) {
+      return Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.magBlanco))) * d;
+    }
+    var area = Math.PI * radioArcsec * radioArcsec;
+    if (!(area > 0)) return CFG.alfaMin;
+    var Fref = Math.pow(10, -0.4 * 21);
+    var a = CFG.brillo * valorDeFlujo(Math.pow(10, -0.4 * g) / area, Fref, CFG.rangoBrillo) / 255;
+    return Math.min(1, Math.max(CFG.alfaMin, a));
   }
   /* Opacidad de la aureola de dispersión (glare) de una estrella RESUELTA,
      proporcional a su flujo absoluto (mag Gaia g), no al margen sobre el
@@ -2040,6 +2065,7 @@
     mascaraMagRef: 22,     // mag G a la que el radio de máscara es el seeing (≈ el fondo del stack; ver ps1RadioMascaraAs)
     mascaraProf: 20,       // mag G hasta la que se piden estrellas para la máscara (tope del proxy)
     rellenoPlanoMaxAs: 40, // ″: hasta este radio la máscara se rellena con el fondo local; por encima se deja al cielo (ver ps1QuitarEstrellas)
+    mordidaCobMin: 0.6,    // fracción de la elipse de una compacta tapada por discos anchos a partir de la cual la mordida manda (ver ps1CoberturaMordida)
     muEscena: 25,          // mag/arcsec²: isofota que delimita la escena difusa protegida (ver ps1EscenaEnParche)
     realceMax: 2,          // techo del realce perceptual mientras haya parche de imagen (ver realzarPerceptual)
     kRuido: 1.5,           // σ del borde por debajo de las cuales no hay galaxia (ver ps1AnclarACatalogo)
@@ -2390,15 +2416,37 @@
     var a = geo && geo.afin, esc = a ? 1 / Math.hypot(a.xn, a.yn) : 0;
     var escena = (geo && geo.escena && geo.escena.length) ? geo.escena : null;
     var mascara = new Uint8Array(datos.length), quitar = [], huecos = [], i, e, x, y, cielo = null;
+    /* Veredicto de mordida, ANTES de marcar: cuánto tapan los discos anchos a
+       cada componente de borde real (ps1CoberturaMordida). Por encima del umbral
+       el componente queda `pisada` y su elipse entera pasa a NaN al final; por
+       debajo queda PROTEGIDO y el disco ancho se recorta en su borde. Una máscara
+       que nace FUERA de la escena no borra píxeles que están DENTRO de ella: es
+       el mismo principio que conserva entera a la fuente de dentro (abajo), y ahí
+       la imagen manda porque el objeto es mucho más brillante que el ala de la
+       estrella a esa distancia (el radio de máscara está anclado al fondo del
+       stack, no al brillo local). Las máscaras ESTRECHAS sí siguen entrando: su
+       relleno por isofotas no borra el objeto, lo cose. */
+    var compactas = null, protegidas = null;
+    if (a && escena) {
+      var cob = ps1CoberturaMordida(estrellas, a, escena);
+      for (i = 0; i < escena.length; i++) {
+        if (!escena[i].compacta) continue;
+        (compactas || (compactas = [])).push(escena[i]);
+        if (cob[i] >= PS1.mordidaCobMin) escena[i].pisada = true;
+        else if (cob[i] > 0) (protegidas || (protegidas = [])).push(escena[i]);
+      }
+    }
     for (i = 0; i < estrellas.length; i++) {
       e = estrellas[i];
       if (a && escena && ps1FuenteEnEscena(escena, a, e.x, e.y)) { huecos.push(e); continue; }   // dentro de la escena: se conserva entera
       quitar.push(e);
       var r = Math.max(1, e.rPx), r2 = r * r;
+      var recorta = protegidas && e.rAs > PS1.rellenoPlanoMaxAs;
       for (y = Math.max(0, Math.floor(e.y - r)); y <= Math.min(alto - 1, Math.ceil(e.y + r)); y++) {
         for (x = Math.max(0, Math.floor(e.x - r)); x <= Math.min(ancho - 1, Math.ceil(e.x + r)); x++) {
           var dx = x - e.x, dy = y - e.y;
           if (dx * dx + dy * dy > r2) continue;
+          if (recorta && ps1PuntoEnCompacta(protegidas, a, x, y)) continue;
           mascara[y * ancho + x] = 1;
         }
       }
@@ -2436,8 +2484,8 @@
     var out = Float32Array.from ? Float32Array.from(datos) : new Float32Array(datos);
     for (i = 0; i < quitar.length; i++) {
       e = quitar[i];
-      var rE = Math.max(1, e.rPx), fondo = null;
-      if (e.rAs > PS1.rellenoPlanoMaxAs) {                 // disco ancho: ausencia, que la rellene el perfil
+      var rE = Math.max(1, e.rPx), fondo = null, ancha = e.rAs > PS1.rellenoPlanoMaxAs;
+      if (ancha) {                                         // disco ancho: ausencia, que la rellene el perfil
         if (cielo == null) cielo = ps1Cielo(datos, ancho, alto);
         fondo = cielo;
       } else if (!isofotas) {
@@ -2464,6 +2512,55 @@
       }
     }
     if (huecos.length) ps1RellenoHuecosLocal(out, ancho, alto, huecos);
+    /* Compacta pisada por un disco ancho: su elipse entera a NaN, DESPUÉS de
+       todos los rellenos (incluido el de huecos de fuentes conservadas: aquí
+       también su fuente queda dentro del modelo). El pintado la cubre con
+       (1−w)·perfil, vecino a vecino con wv=0: el objeto completo, de una
+       pieza. Dos reglas juntas: la del anclaje (ps1AnclarACatalogo) —un 0 donde
+       no hay medida es una medida falsa que bloquea el relleno: la caja de
+       ps1PesoImagen a caballo del borde mantiene w alto y w·0 + (1−w)·perfil
+       deja un anillo oscuro— y la de ADR 0013 —la fila de catálogo ES el
+       modelo—: con la mayor parte del objeto bajo una máscara de saturación, lo
+       que queda de imagen es un remiendo (creciente contaminado por el ala de la
+       estrella + muescas de cielo), y coserlo pinta un objeto partido; el perfil
+       entero pinta UNO. Eso vale cuando la máscara tapa DE VERDAD el objeto: por
+       debajo de mordidaCobMin el remiendo no existe porque la máscara ni siquiera
+       entra (se recorta en el borde, ver el marcado arriba). Solo compactas: el
+       resto del disco ancho sigue al cielo, que es la arquitectura medida de las
+       galaxias (M81/NGC 5055).
+       Y si TODA la escena del parche son compactas pisadas, la imagen ENTERA
+       pasa a ausencia. No es cosmética: el anclaje reparte la luz del catálogo
+       entre lo que queda encendido, y con el objeto en NaN ese presupuesto se
+       lo lleva el ala de la estrella más allá del tope de su máscara
+       (mascaraMaxAs es extrapolación cortada, no el fin del ala: la ley sin
+       tope da 226″ para g=4,7) — motitas brillantes con la luz de la nebulosa.
+       La estrella la pinta la capa de estrellas (glow y spikes); aquí no queda
+       nada legítimo que conservar. Con componentes no pisados (una galaxia
+       vecina) no se toca: solo caen sus elipses pisadas. */
+    if (compactas) {
+      var pisadas = 0;
+      for (i = 0; i < compactas.length; i++) if (compactas[i].pisada) pisadas++;
+      if (pisadas && escena && pisadas === escena.length) {
+        for (i = 0; i < out.length; i++) out[i] = NaN;
+        for (i = 0; i < compactas.length; i++) delete compactas[i].pisada;
+        return out;
+      }
+      for (i = 0; i < compactas.length; i++) {
+        var cp = compactas[i];
+        if (!cp.pisada) continue;
+        delete cp.pisada;
+        var rPxE = cp.r25As / esc;
+        var yA = Math.max(0, Math.floor(cp.cy - rPxE)), yB = Math.min(alto - 1, Math.ceil(cp.cy + rPxE));
+        var xA = Math.max(0, Math.floor(cp.cx - rPxE)), xB = Math.min(ancho - 1, Math.ceil(cp.cx + rPxE));
+        for (y = yA; y <= yB; y++) {
+          for (x = xA; x <= xB; x++) {
+            var dxp = x - cp.cx, dyp = y - cp.cy;
+            var esteP = a.ex * dxp + a.ey * dyp, norteP = a.nx * dxp + a.ny * dyp;
+            if (ps1RadioEje(cp.cos, cp.sin, norteP, esteP, cp.ba) <= cp.r25As) out[y * ancho + x] = NaN;
+          }
+        }
+      }
+    }
     return out;
   }
 
@@ -2944,6 +3041,13 @@
      entra ningún dato del cielo ni del ocular. Sin medidas o sin ejes, false:
      antes que un halo inventado, ninguno. */
   function ps1HaloActivo(gal) {
+    // Una máscara ancha borró parte de la escena: el relleno (1−w)·perfil es
+    // OBLIGATORIO o el objeto que se está reproduciendo sale negro (ver
+    // ps1MascaraMuerdeEscena). Va por encima del interruptor maestro porque no
+    // es el halo voluntario que ese interruptor gobierna —extender el objeto
+    // más allá de la imagen—, sino la única regla de fusión permitida: el
+    // perfil rellena lo que la imagen no cubre, y aquí la imagen no cubre.
+    if (gal && gal.mordida) return true;
     if (!PS1.haloExtrapolado) return false;
     if (!gal || !(gal.bArcmin > PS1.haloMenorMin) || !isFinite(gal.muProm)) return false;
     return gal.muProm > PS1.haloMuFijo;
@@ -3590,6 +3694,90 @@
     return out;
   }
 
+  /* ¿Está el punto (px, py) dentro de la elipse de alguno de estos componentes?
+     Misma cuenta que ps1FuenteEnEscena, sobre una lista ya filtrada. */
+  function ps1PuntoEnCompacta(lista, a, px, py) {
+    for (var i = 0; i < lista.length; i++) {
+      var c = lista[i], dx = px - c.cx, dy = py - c.cy;
+      var este = a.ex * dx + a.ey * dy, norte = a.nx * dx + a.ny * dy;
+      if (ps1RadioEje(c.cos, c.sin, norte, este, c.ba) <= c.r25As) return true;
+    }
+    return false;
+  }
+
+  var MORDIDA_MUESTRAS = 64;   // lado de la rejilla con que se mide la elipse
+
+  /* CUÁNTO muerde cada componente COMPACTO de la escena (borde real: PN, SNR):
+     array paralelo a `escena` con la fracción de su elipse tapada por los discos
+     ANCHOS (rAs > rellenoPlanoMaxAs) de las fuentes que NO se conservan. 0 para
+     los no compactos —el borde de una galaxia es una isofota, y sus reglas de
+     fusión imagen/modelo están medidas y cerradas (M81/M104): la mordida no las
+     reabre—.
+
+     Antes esto era un test binario de CONTACTO (radios elípticos sumados), y por
+     eso disparaba de más: el radio de máscara está anclado al fondo del stack
+     (mascaraMagRef = 22), no al brillo del objeto, así que sobre una nebulosa
+     brillante el ala deja de mandar mucho antes del borde del disco. Medido
+     sobre el catálogo, el contacto marcaba OCHO planetarias y la cobertura las
+     separa: NGC 7026 y IC 5117 al 100 %, Abell 12 al 79,8 % —el caso que motivó
+     la regla, con μ Orionis saturando de verdad la cáscara— contra NGC 7008 al
+     43,6 %, NGC 7048 al 33,9 % y NGC 6578, Abell 33 y Abell 72 por debajo del
+     9 %, que la perdían por un roce. Ver docs/notas/ngc7008-render-planetarias.md.
+
+     Se muestrea en rejilla en vez de resolver la lente circular-elipse porque el
+     veredicto se compara contra un umbral lejos de los extremos y hay varios
+     discos que pueden solaparse entre sí: 64×64 da el 1 % de resolución, de
+     sobra, y cuesta una vez por parche. */
+  function ps1CoberturaMordida(enPx, a, escena) {
+    var cob = [], i, j;
+    for (i = 0; i < (escena || []).length; i++) cob.push(0);
+    if (!a || !escena || !escena.length || !enPx || !enPx.length) return cob;
+    var anchas = [];
+    for (i = 0; i < enPx.length; i++) {
+      var e = enPx[i];
+      if (!(e.rAs > PS1.rellenoPlanoMaxAs)) continue;
+      if (ps1FuenteEnEscena(escena, a, e.x, e.y)) continue;   // conservada: no borra nada
+      anchas.push(e);
+    }
+    if (!anchas.length) return cob;
+    var esc = 1 / Math.hypot(a.xn, a.yn);
+    for (j = 0; j < escena.length; j++) {
+      var c = escena[j];
+      if (!c.compacta) continue;
+      var rPx = c.r25As / esc, paso = 2 * rPx / MORDIDA_MUESTRAS, dentro = 0, tapados = 0;
+      for (var sy = 0; sy < MORDIDA_MUESTRAS; sy++) {
+        for (var sx = 0; sx < MORDIDA_MUESTRAS; sx++) {
+          var px = c.cx - rPx + (sx + 0.5) * paso, py = c.cy - rPx + (sy + 0.5) * paso;
+          if (!ps1PuntoEnCompacta([c], a, px, py)) continue;
+          dentro++;
+          for (i = 0; i < anchas.length; i++) {
+            var ea = anchas[i], ex = px - ea.x, ey = py - ea.y, rM = Math.max(1, ea.rPx);
+            if (ex * ex + ey * ey <= rM * rM) { tapados++; break; }
+          }
+        }
+      }
+      if (dentro) cob[j] = tapados / dentro;
+    }
+    return cob;
+  }
+
+  /* ¿Alguna máscara ANCHA muerde la escena difusa lo bastante como para que el
+     perfil tenga que tomar el relevo? El disco ancho se deja al nivel del cielo
+     (ver ps1QuitarEstrellas) confiando en que (1−w)·perfil rellene lo borrado;
+     con la mayor parte del objeto tapada, ese relleno deja de ser opcional: sin
+     él sale NEGRO (Abell 12 bajo la máscara de μ Orionis: 60″ de disco a 47″ del
+     centro de una cáscara de 19″). El veredicto viaja en las medidas del halo y
+     lo consume ps1HaloActivo.
+     Por debajo del umbral la respuesta ya no es el perfil sino conservar la
+     imagen: la máscara se recorta en el borde del objeto (ver ps1QuitarEstrellas),
+     así que aquí tampoco hay ausencia que rellenar. */
+  function ps1MascaraMuerdeEscena(enPx, a, escena) {
+    if (!a || !escena || !escena.length) return false;
+    var cob = ps1CoberturaMordida(enPx, a, escena);
+    for (var i = 0; i < cob.length; i++) if (cob[i] >= PS1.mordidaCobMin) return true;
+    return false;
+  }
+
   /* Compañeras demasiado débiles para el RC3 (BT_MAX de gen_galaxias.py corta
      en 13,0, "no se ve por un ocular") pero SÍ visibles con equipo real —caso
      NGC 7335, B=14,44, junto a NGC 7331— y catalogadas en SIMBAD/NED. Sin
@@ -3637,8 +3825,8 @@
     var cos0 = Math.cos(gal.dec * Math.PI / 180);
     var out = [];
     for (var i = 0; i < (campo || []).length; i++) {
-      var g = campo[i], r25 = ps1RadioBordeAs(g);
-      if (!(r25 > 0)) {
+      var g = campo[i], r25 = ps1RadioBordeAs(g), borde = r25 > 0;
+      if (!borde) {
         var comps = ps1ComponentesSersic(g);
         for (var j = 0; j < comps.length; j++) {
           var r = ps1RadioIsofota(comps[j], PS1.muEscena);
@@ -3652,7 +3840,12 @@
       var paR = (g.pa || 0) * Math.PI / 180;
       out.push({
         cx: p[0], cy: p[1], cos: Math.cos(paR), sin: Math.sin(paR),
-        ba: (g.ba > 0 && g.ba <= 1) ? g.ba : 1, r25As: r25
+        ba: (g.ba > 0 && g.ba <= 1) ? g.ba : 1, r25As: r25,
+        // Borde REAL (clases compactas, ver ps1RadioBordeAs): el único caso en
+        // que una máscara ancha que muerda la elipse fuerza el perfil
+        // (ps1MascaraMuerdeEscena). En una isofota de galaxia no: sus reglas
+        // de fusión están medidas aparte y no se cambian desde aquí.
+        compacta: borde
       });
     }
     for (var k = 0; k < PS1_PROTECCION_SIN_MODELO.length; k++) {
@@ -3697,13 +3890,17 @@
          por píxel. Dependen solo del parche y del catálogo, no de la escena. */
       var peso = ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
       var perfil = ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.afin);
+      var halo = ps1MedidasHalo(gal, comps);
+      // Máscara ancha sobre la escena: el perfil pasa a ser obligatorio
+      // (ps1HaloActivo), o lo borrado al cielo queda negro.
+      halo.mordida = ps1MascaraMuerdeEscena(enPx, f.afin, escena);
       return {
         ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
         ancho: f.ancho, alto: f.alto, afin: f.afin,
         // Modelo del catálogo para lo de más allá de la imagen (ver
         // ps1PintarParche). Se calcula una vez por galaxia, no por píxel; lo
         // único que falta al pintar es el cielo de la escena.
-        comps: comps, pa: gal.pa, halo: ps1MedidasHalo(gal, comps),
+        comps: comps, pa: gal.pa, halo: halo,
         // Tamaño intrínseco (arcmin) para la ley H2c; inerte con FOT.H2C nula.
         thetaIntArcmin: ps1ThetaIntDeGal(gal, comps),
         peso: peso, escalaMezcla: ps1EscalaMezcla(datos, peso, perfil),
@@ -3774,7 +3971,13 @@
     var cieloParche = {};
     for (var k in cielo) if (Object.prototype.hasOwnProperty.call(cielo, k)) cieloParche[k] = cielo[k];
     cieloParche.realceMax = PS1.realceMax;
-    var catalogo = o.catalogo || (typeof window !== 'undefined' ? window.BITACORA_GALAXIAS : null);
+    /* Sin catálogo explícito, la capa incluye TAMBIÉN las nebulosas cuya clase
+       trata el pipeline: si el defecto fuese solo BITACORA_GALAXIAS, quien no
+       lo pasa (el generador de imagen del formulario) nunca vería una
+       planetaria como NGC 6905, que sí ve el simulador de oculares. */
+    var catalogo = o.catalogo || (typeof window !== 'undefined'
+      ? ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS)
+      : null);
     var campo = ps1GalaxiasDelCampo(catalogo, o.ra0, o.dec0, o.arcmin);
     var apuntada = ps1FilaApuntada(catalogo, o.ra0, o.dec0);
     var vivo = o.vivo || function () { return true; };
@@ -3849,6 +4052,12 @@
 
   /* ── Dibujo de las estrellas (tamaño = ctx.canvas.width, cuadrado) ── */
   function dibujar(ctx, estrellas, o) {
+    // Estrellas que Gaia DR3 no trae (satura por arriba: Vega, Arturo, Rigel...)
+    // se concatenan aquí, no en consultar() -esa alimenta también la capa
+    // difusa, y meterle otro catálogo rompería su función de luminosidad-.
+    // Sin solapamiento que arbitrar: el fichero solo trae lo que Gaia no trae.
+    // Issue #130 (azarquiel/bitacoraestelar.app).
+    estrellas = estrellas.concat(window.BITACORA_ESTRELLAS_BRILLANTES || []);
     var SIZE = ctx.canvas.width;
     var ra0 = o.ra, dec0 = o.dec, arcmin = o.arcmin, mlim = o.mlim;
     var conGlow = (o.conGlow !== false), objetoCarbono = !!o.carbono, arana = !!o.arana;
@@ -3948,7 +4157,7 @@
         var Ra = CFG.aureolaRadio * escala;
         dibujarAureola(ctx, x, y, Ra, colEstrella, aAur * ganActual);
       }
-      ctx.globalAlpha = Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.rangoBrillo))) * ganActual * dilucion;
+      ctx.globalAlpha = alfaEstrella(g, mlim, Rtot * arcmin * 60 / SIZE, dilucion) * ganActual;
       dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG, esCarbono);
       if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
     }
@@ -4013,57 +4222,127 @@
     return out;
   }
 
-  /* ── Entrada de alto nivel: fondo + consulta + dibujo ── */
-  function render(canvas, o) {
-    var SIZE = canvas.width;
-    var ctx = canvas.getContext('2d');
+  /* ── La vista de Gaia: el pipeline completo del Canvas-2D ──
+     Módulo hondo dueño del ORDEN de la cadena: fondo → consulta → velo →
+     magnitud límite → cúmulo → capa de estrellas → pintado fotométrico → capa
+     de galaxias. Los dos llamadores (render() del formulario y el simulador de
+     oculares) no conocen la secuencia: pasan DATOS y reciben resultado.
+
+     Interfaz (campos planos, el idioma de magLimite/nivelFondo):
+       ctx  contexto 2D ya dimensionado (size × size)
+       o    { ra, dec, arcmin, size, apertura, aumentos, transmision|optica,
+              arana, sqm, pupilaSalida, pupilaOjo, afov, conGlow,
+              carbono, carbonoMag, cumulo, catalogo, vivo }
+     Devuelve una promesa de:
+       { estrellas, estrellasDibujo, mlim, fondo, avisoCampo, galaxias }
+     `galaxias` es LA PROMESA de la capa PS1 ({aviso}): el formulario la espera
+     (la imagen que sube debe llevar la galaxia) y el simulador pinta estrellas
+     ya y engancha el aviso cuando llegue. Nunca rechaza.
+     Con `vivo()` falso resuelve { cancelada: true } sin volver a tocar el ctx:
+     cancelar NO es un error — el rechazo de esta promesa significa «Gaia no
+     responde» y en el simulador dispara el respaldo DSS.
+     El cúmulo entra como DATO ya preparado (la ficha física del catálogo):
+     aquí no se lee nada de bitacora-cumulos.js (ADR 0002 del simulador).
+     Dependencias implícitas, documentadas: los catálogos de datos cargados por
+     <script defer> — BITACORA_ESTRELLAS_BRILLANTES (lo concatena dibujar()) y
+     BITACORA_GALAXIAS/BITACORA_NEBULOSAS (catálogo difuso por defecto de
+     ps1CapaGalaxias). Las dos páginas los cargan igual. */
+  function vistaGaia(ctx, o) {
+    var SIZE = o.size || ctx.canvas.width;
+    var vivo = o.vivo || function () { return true; };
     var t = (o.transmision > 0) ? o.transmision : (transmisionOptica(o.optica) || TRANSMISION_DEFECTO);
     var arana = (typeof o.arana === 'boolean') ? o.arana : opticaTieneArana(o.optica);
-    var fondo = nivelFondo({ pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t });
-    var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
-    ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, SIZE, SIZE);
-    var mlim = magLimite({
-      apertura: o.apertura, aumentos: o.aumentos, transmision: t,
-      sqm: o.sqm, pupilaOjo: o.pupilaOjo
-    });
+    function limite(veloSB) {
+      return magLimite({
+        apertura: o.apertura, aumentos: o.aumentos, transmision: t,
+        sqm: o.sqm, pupilaOjo: o.pupilaOjo, veloSB: veloSB
+      });
+    }
     var cielo = {
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t,
       aumentos: o.aumentos, perceptual: true   // el Canvas-2D produce flujo calibrado, no luma heurística
     };
+    var fondo = nivelFondo(cielo);
+    ctx.fillStyle = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    var mlim = limite();
     return consultar(o.ra, o.dec, o.arcmin, ps1MagConsulta(magConsultaGaia(o.apertura, t, o.aumentos))).then(function (estrellas) {
+      if (!vivo()) return { cancelada: true };
       /* Campo denso: la banda truncada llega como momentos y entra como velo
-         (cielo extra). mlim se recalcula con él: un fondo más brillante
-         también quita estrellas del límite. */
+         (cielo extra) en toda la cadena, incluida la magnitud límite (ADR
+         0014): un fondo más brillante también quita estrellas del límite. */
       var velo = veloSB(estrellas.fondo);
       if (velo != null) {
         cielo.veloSB = velo;
-        mlim = magLimite({
-          apertura: o.apertura, aumentos: o.aumentos, transmision: t,
-          sqm: o.sqm, pupilaOjo: o.pupilaOjo, veloSB: velo
-        });
-        fondo = nivelFondo({ pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm, transmision: t, veloSB: velo });
+        mlim = limite(velo);
+        fondo = nivelFondo(cielo);
       }
-      /* Estrellas y fondo se mapean en una sola curva de tono: el fondo pasa
-         por la curva logarítmica y las estrellas se dibujan encima en 8
-         bits, saltándosela; por eso el fondo va plano (sin capas difusas). */
+      /* Aviso del catálogo agotado: si el TOP de la consulta se quedó antes de
+         la magnitud límite del equipo, faltan estrellas que SÍ se verían.
+         Texto redactado aquí (fuente única con el formulario); cada pantalla
+         decide dónde pintarlo y con qué prioridad. */
+      var avisoCampo = '';
+      var mcorte = -Infinity;
+      for (var e = 0; e < estrellas.length; e++) if (estrellas[e][2] > mcorte) mcorte = estrellas[e][2];
+      if (mlim != null && isFinite(mcorte) && mcorte < mlim - 0.1) {
+        avisoCampo = velo != null
+          ? 'Campo muy rico: por debajo de magnitud ' + mcorte.toFixed(1) + ' las estrellas no se dibujan una a una; su luz entra como resplandor de fondo.'
+          : 'Campo muy rico: el catálogo se agotó en magnitud ' + mcorte.toFixed(1) +
+            ', por debajo de la límite de tu equipo (' + mlim.toFixed(1) + '). Faltan las más débiles; reduce el campo para verlas.';
+      }
+      /* Componente difusa del campo: la llenan las capas que la tengan (el
+         campo no resuelto de un cúmulo, la imagen de una galaxia). Sin ninguna
+         queda a cero y las estrellas van sobre el nivel de cielo tal cual. */
       var difuso = new Float32Array(SIZE * SIZE);
+      var estrellasDibujo = estrellas;
+      /* Cúmulo globular: lo que el equipo NO resuelve se pinta como campo
+         estadístico (media + grano de la función de luminosidad) y lo que sí,
+         como estrellas — las de Gaia más las sintéticas que el catálogo no
+         trae en el núcleo aglomerado. */
+      var cum = o.cumulo
+        ? pintarCumulo(difuso, o.cumulo, {
+            ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE,
+            cielo: cielo, apertura: o.apertura, estrellas: estrellasDibujo
+          })
+        : null;
+      if (cum) estrellasDibujo = cum.estrellas;
       var opEst = {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
         apertura: o.apertura,   // el disco de Airy va como 1/D
-        conGlow: (o.conGlow !== false), carbono: !!o.carbono, arana: arana
+        conGlow: (o.conGlow !== false), carbono: !!o.carbono,
+        carbonoMag: (o.carbono && o.carbonoMag != null) ? o.carbonoMag : null,
+        arana: arana
       };
-      var capaEst = capaEstrellas(estrellas, opEst, SIZE);
+      var capaEst = capaEstrellas(estrellasDibujo, opEst, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst);
-      /* La capa de galaxias se espera: la imagen que el formulario sube es la
-         que se ve, y si se resolviera antes de que llegue el parche subiría el
-         campo sin la galaxia. Si el parche no llega, esto resuelve igual y la
-         imagen sale como salía antes de esta capa. */
-      return ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
-        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, estrellas: estrellas,
-        estrellasDibujo: estrellas, opEstrellas: opEst,
-        apertura: o.apertura   // la PSF del parche va como 1/D, igual que el disco de Airy
-      }).then(function (capa) {
-        return { estrellas: estrellas, mlim: mlim, fondo: fondo, aviso: capa.aviso };
+      var galaxias = ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
+        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE,
+        estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
+        catalogo: o.catalogo || null,
+        apertura: o.apertura,   // la PSF del parche va como 1/D, igual que el disco de Airy
+        vivo: vivo
+      });
+      return { estrellas: estrellas, estrellasDibujo: estrellasDibujo, mlim: mlim,
+               fondo: fondo, avisoCampo: avisoCampo, galaxias: galaxias };
+    });
+  }
+
+  /* ── Entrada de alto nivel del formulario: envoltorio de vistaGaia que
+     ESPERA la capa de galaxias — la imagen que el formulario sube es la que se
+     ve, y si resolviera antes de llegar el parche subiría el campo sin la
+     galaxia. Si el parche no llega, resuelve igual (la capa nunca rechaza). ── */
+  function render(canvas, o) {
+    return vistaGaia(canvas.getContext('2d'), {
+      ra: o.ra, dec: o.dec, arcmin: o.arcmin, size: canvas.width,
+      apertura: o.apertura, aumentos: o.aumentos, transmision: o.transmision,
+      optica: o.optica, arana: o.arana, sqm: o.sqm,
+      pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, afov: o.afov,
+      conGlow: o.conGlow, carbono: o.carbono, carbonoMag: o.carbonoMag
+    }).then(function (r) {
+      if (r.cancelada) return r;
+      return r.galaxias.then(function (capa) {
+        return { estrellas: r.estrellas, mlim: r.mlim, fondo: r.fondo,
+                 aviso: capa.aviso, avisoCampo: r.avisoCampo };
       });
     });
   }
@@ -4132,7 +4411,9 @@
     config: CFG,
     fot: FOT,
     consultar: consultar,
+    cacheGaia: cacheGaia,
     dibujar: dibujar,
+    vistaGaia: vistaGaia,
     render: render,
     magLimite: magLimite,
     veloSB: veloSB,
@@ -4149,12 +4430,12 @@
     radioEstrella: radioEstrella,
     sueloEstrella: sueloEstrella,
     factorDilucion: factorDilucion,
+    alfaEstrella: alfaEstrella,
     alfaAureola: alfaAureola,
     blurEstrella: blurEstrella,
     colorEstrella: colorEstrella,
     fraccionFlujo: fraccionFlujo,
-    parDoble: parDoble,
-    par: PAR,
+    orientacionAsumida: orientacionAsumida,
     valorDeFlujo: valorDeFlujo,
     flujoDeValor: flujoDeValor,
     realzarPerceptual: realzarPerceptual,
@@ -4196,6 +4477,8 @@
     ps1Cielo: ps1Cielo,
     ps1SigmaCielo: ps1SigmaCielo,
     ps1RadioMascaraAs: ps1RadioMascaraAs,
+    ps1MascaraMuerdeEscena: ps1MascaraMuerdeEscena,
+    ps1CoberturaMordida: ps1CoberturaMordida,
     ps1QuitarEstrellas: ps1QuitarEstrellas,
     ps1FraccionLuz: ps1FraccionLuz,
     ps1ComponentesSersic: ps1ComponentesSersic,

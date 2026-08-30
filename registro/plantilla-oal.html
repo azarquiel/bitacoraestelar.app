@@ -15,11 +15,15 @@
   registro/spec-importar-oal.md. Dos desviaciones deliberadas de OAL 2.1:
     - <session> es OBLIGATORIA en cada observación (el estándar la deja en 0..1),
       porque la noche es la unidad del modelo.
-    - SQM, IR, seeing y Bortle de la noche van en el espacio de nombres bit:,
-      porque OAL no tiene dónde guardarlos.
+    - IR y Bortle van en el espacio de nombres bit:, porque OAL no tiene dónde
+      guardarlos. El SQM y el seeing sí lo tienen: <sky-quality> y <seeing>, en
+      cada observación (ADR 0001), que es de donde cuelga el cielo.
 
   El bloque <script id="motor"> es lógica PURA, sin DOM: lo carga tal cual
-  scripts/test_oal_plantilla.js.
+  scripts/test_oal_plantilla.js. Esta plantilla es la fuente de ese motor: el
+  sitio usa una copia literal en registro/resources/js/bitacora-oal-motor.js,
+  que extrae scripts/generar_motor_oal.js. Al tocar el bloque hay que
+  relanzarlo, o el test dirá que las dos copias se han separado.
 -->
 <style>
   :root { --fondo:#0d1117; --panel:#161b22; --borde:#30363d; --texto:#e6edf3;
@@ -120,11 +124,16 @@
    MOTOR · lógica pura de la plantilla: el estado a XML, el XML al estado y qué
    falta por rellenar. Sin DOM, para que scripts/test_oal_plantilla.js lo cargue
    tal cual.
+
+   Este bloque es la fuente; scripts/generar_motor_oal.js lo extrae, literal, a
+   registro/resources/js/bitacora-oal-motor.js, que es lo que sirve el sitio.
+   Esa copia está GENERADA: se toca aquí, nunca allí, o el siguiente extraído se
+   lleva el arreglo por delante.
    ========================================================================== */
 (function (raiz) {
   'use strict';
 
-  var VERSION_PLANTILLA = '1.0';
+  var VERSION_PLANTILLA = '1.1';
   var NS_BIT = 'https://bitacoraestelar.es/oal-ext/1';
 
   /* ── Texto ─────────────────────────────────────────────────────────────── */
@@ -156,9 +165,14 @@
   }
 
   /** Fecha de reloj de una hora dentro de una noche: 'Y-m-d'. */
+  /* La hora se lee ESTRICTA (HH:mm de dos dígitos), el mismo criterio que
+     bitacora_viaje_noche en el servidor: una hora ilegible («9:30», «ayer»,
+     «25:00») no desplaza la fecha. Son dos relojes del MISMO convenio de
+     mediodía y no pueden divergir: la paridad con la tabla de casos de
+     scripts/test_viaje_noche.php la fija scripts/test_noche_paridad.js. */
   function fechaDeReloj(noche, hora) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(noche || ''))) { return null; }
-    var h = /^(\d{1,2}):(\d{2})/.exec(String(hora || ''));
+    var h = /^([01]\d|2[0-3]):([0-5]\d)/.exec(String(hora || ''));
     if (!h) { return noche; }
     return (parseInt(h[1], 10) < 12) ? diaSiguiente(noche) : noche;
   }
@@ -166,7 +180,7 @@
   /** La noche a la que pertenece una fecha+hora de reloj (inversa de la anterior). */
   function nocheDe(fecha, hora) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ''))) { return null; }
-    var h = /^(\d{1,2}):(\d{2})/.exec(String(hora || ''));
+    var h = /^([01]\d|2[0-3]):([0-5]\d)/.exec(String(hora || ''));
     if (!h || parseInt(h[1], 10) >= 12) { return fecha; }
     var d = new Date(fecha + 'T12:00:00Z');
     d.setUTCDate(d.getUTCDate() - 1);
@@ -236,6 +250,17 @@
 
   function hijo(nodo, nombre) { return hijos(nodo, nombre)[0] || null; }
 
+  /**
+   * El <sky-quality> de una observación, siempre en mag/arcsec². OAL admite
+   * también mag/arcmin², y hay 8,89 mag de diferencia (2,5·log10 3600).
+   */
+  function sqmDe(nodo) {
+    var e = hijo(nodo, 'sky-quality');
+    var v = numero(nodo, 'sky-quality');
+    if (!e || v === '') { return ''; }
+    return e.attrs.unit === 'mags-per-squarearcmin' ? v + 8.89 : v;
+  }
+
   function texto(nodo, nombre) {
     var h = hijo(nodo, nombre);
     return h ? h.texto.trim() : '';
@@ -285,6 +310,70 @@
     return Math.round(ft * factor / fo * 10) / 10;
   }
 
+  /* ── El cielo ──────────────────────────────────────────────────────────────
+     El cielo cuelga de la OBSERVACIÓN, no de la noche (ADR 0001): el SQM se mide
+     hacia donde está el objeto, y en España uno bajo cae sobre un horizonte
+     contaminado. Que dos objetos de la misma noche discrepen es lo normal.
+
+     Preguntarlo seis veces sería hostil, así que la noche guarda un valor por
+     DEFECTO y siembra a sus observaciones. Sembrar nunca pisa: lo tecleado a
+     mano en una observación manda sobre lo que diga su noche.                */
+
+  var CIELO = ['sqm', 'ir', 'seeing', 'bortle'];
+
+  function vacio(v) { return v === '' || v == null; }
+
+  /**
+   * Vuelca el cielo de una noche en las observaciones suyas que lo heredan.
+   *
+   * Hereda la que no tiene valor propio y, si se pasa 'previo' —el cielo que
+   * la noche tenía antes del cambio—, también la que sigue mostrando ese
+   * valor: esa casilla venía de la noche y no de la mano de nadie. Lo tecleado
+   * a mano difiere del anterior y no se toca (ADR 0001).
+   */
+  function sembrarCielo(e, nocheId, previo) {
+    var n = indice((e || {}).noches)[nocheId];
+    if (!n) { return e; }
+    ((e || {}).observaciones || []).forEach(function (o) {
+      if (o.nocheId !== nocheId) { return; }
+      CIELO.forEach(function (c) {
+        var heredada = vacio(o[c]) ||
+          (previo && !vacio(previo[c]) && String(o[c]) === String(previo[c]));
+        if (heredada && !vacio(n[c])) { o[c] = n[c]; }
+      });
+    });
+    return e;
+  }
+
+  /** El seeing del estándar es la escala Antoniadi: entero de 1 a 5. */
+  function antoniadi(v) {
+    return vacio(v) ? '' : Math.min(5, Math.max(1, Math.round(v)));
+  }
+
+  /**
+   * Reparte el cielo al abrir un XML, y en este orden:
+   *   1. de la noche a sus observaciones sin valor propio. Como va ANTES del
+   *      paso 2, solo baja lo que la noche traía escrito, o sea la forma vieja
+   *      (bit:sqm en <session>). En un fichero nuevo la noche llega vacía y no
+   *      baja nada: el SQM es direccional y el de una observación no vale como
+   *      medida de la de al lado (ADR 0001);
+   *   2. y de vuelta a la noche, el primero de sus observaciones, para que la
+   *      casilla del valor por defecto no salga en blanco.
+   */
+  function repartirCielo(e) {
+    (((e || {}).noches) || []).forEach(function (n) {
+      sembrarCielo(e, n.id);
+      var mias = ((e || {}).observaciones || []).filter(function (o) { return o.nocheId === n.id; });
+      CIELO.forEach(function (c) {
+        if (!vacio(n[c])) { return; }
+        for (var i = 0; i < mias.length; i++) {
+          if (!vacio(mias[i][c])) { n[c] = mias[i][c]; break; }
+        }
+      });
+    });
+    return e;
+  }
+
   /* ── Qué falta ─────────────────────────────────────────────────────────────
      'falta' impide descargar; 'flojo' solo avisa. Recuperar una libreta de hace
      años no puede exigir la hora exacta ni el ocular.                        */
@@ -300,7 +389,8 @@
       if (!n.fecha) { out.push({ nivel: 'falta', que: et + ': sin fecha.' }); }
       if (!lugares[n.lugarId]) { out.push({ nivel: 'falta', que: et + ': sin lugar.' }); }
       if (!n.comienzo) { out.push({ nivel: 'flojo', que: et + ': sin hora de comienzo.' }); }
-      if (n.sqm === '' && n.ir === '' && n.seeing === '' && n.bortle === '') {
+      var conCielo = [n].concat((e.observaciones || []).filter(function (o) { return o.nocheId === n.id; }));
+      if (!conCielo.some(function (x) { return CIELO.some(function (c) { return !vacio(x[c]); }); })) {
         out.push({ nivel: 'flojo', que: et + ': sin ninguna medida de cielo.' });
       }
     });
@@ -343,19 +433,67 @@
       .toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
-  /** Los compañeros de todas las noches, sin repetir, con un id estable. */
-  function companeros(e) {
+  /**
+   * Quién firma el fichero, sin repetir y con un id estable.
+   *
+   * El que exporta es siempre 'ob1'. Detrás van los compañeros de todas las
+   * noches y quien firme alguna observación sin ser el que exporta: el mismo
+   * nombre normalizado es la misma persona, aparezca donde aparezca.
+   */
+  function observadores(e) {
+    var yo = e.observador || {};
+    var mio = (String(yo.nombre || '') + ' ' + String(yo.apellidos || '')).trim();
     var vistos = {}, out = [];
+    if (mio) { vistos[clave(mio)] = 'ob1'; }
+    function alta(raw) {
+      var nombre = String(raw == null ? '' : raw).trim();
+      if (!nombre || vistos[clave(nombre)]) { return; }
+      var id = 'co' + (out.length + 1);
+      vistos[clave(nombre)] = id;
+      out.push({ id: id, nombre: nombre });
+    }
     (e.noches || []).forEach(function (n) {
-      String(n.tripulacion || '').split(',').forEach(function (raw) {
-        var nombre = raw.trim();
-        if (!nombre || vistos[clave(nombre)]) { return; }
-        var id = 'co' + (out.length + 1);
-        vistos[clave(nombre)] = id;
-        out.push({ id: id, nombre: nombre });
-      });
+      String(n.tripulacion || '').split(',').forEach(alta);
     });
+    (e.observaciones || []).forEach(function (o) { alta(o.observador); });
     return { lista: out, porNombre: vistos };
+  }
+
+  /**
+   * Los recursos que alguna fila del fichero referencia de verdad.
+   *
+   * No es estética: el diálogo de importación de AstroPlanner pinta cada sitio,
+   * telescopio, ocular y lente del fichero como una fila que hay que emparejar
+   * a mano, y volcar el catálogo entero lo llena de ruido. El lugar cuenta si
+   * lo usa una NOCHE, porque las sesiones se emiten todas.
+   */
+  function usados(e) {
+    var u = { lugares: {}, telescopios: {}, oculares: {}, auxiliares: {} };
+    (e.noches || []).forEach(function (n) { if (n.lugarId) { u.lugares[n.lugarId] = 1; } });
+    (e.observaciones || []).forEach(function (o) {
+      if (o.telescopioId) { u.telescopios[o.telescopioId] = 1; }
+      if (o.ocularId) { u.oculares[o.ocularId] = 1; }
+      if (o.auxiliarId) { u.auxiliares[o.auxiliarId] = 1; }
+    });
+    return u;
+  }
+
+  function referenciados(lista, marcados) {
+    return (lista || []).filter(function (x) { return marcados[x.id]; });
+  }
+
+  /* Una referencia solo vale si el recurso está EN el fichero: un id que no
+     tiene <site>/<scope>/<eyepiece>/<lens> arriba es un IDREF colgando, y eso
+     no valida —y el que lo lea no sabe a qué apunta—. Mejor sin el dato. */
+  function ref(mapa, id) {
+    return (id && mapa[id]) ? id : '';
+  }
+
+  /* El huso con el que se fecha la noche: el del lugar, y si la salida no
+     tiene lugar, el que traiga la propia noche (el del sitio, que lo pone el
+     servidor). Sin esto todo salía en +00:00, o sea con la hora mal. */
+  function husoDe(noche, lugar) {
+    return (lugar && lugar.tz != null && lugar.tz !== '') ? lugar.tz : noche.tz;
   }
 
   /** Un target por objeto distinto (OAL los cataloga aparte de la observación). */
@@ -375,17 +513,23 @@
     var L = '\n', s = [];
     var lugares = indice(e.lugares), noches = indice(e.noches);
     var tel = indice(e.telescopios), ocu = indice(e.oculares), aux = indice(e.auxiliares);
-    var co = companeros(e), tg = targets(e);
+    var ob = observadores(e), tg = targets(e), usa = usados(e);
 
     s.push('<?xml version="1.0" encoding="UTF-8"?>');
     s.push('<oal:observations version="2.1"' +
-      ' xmlns:oal="https://groups.google.com/group/openastronomylog"' +
+      // Los dos con http:// y no https://. No es un descuido: un URI de espacio
+      // de nombres se compara LITERAL, nunca se resuelve, y el targetNamespace
+      // de oal21.xsd es http://. Con https:// el fichero es de otro dialecto
+      // para cualquier lector que no sea el nuestro —que compara por localName
+      // y es ciego a esto—. AstroPlanner emite https:// pero lee http://,
+      // comprobado importando este mismo fichero.
+      ' xmlns:oal="http://groups.google.com/group/openastronomylog"' +
       ' xmlns:bit="' + NS_BIT + '"' +
-      ' xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance"' +
+      ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' +
       ' bit:plantilla="' + VERSION_PLANTILLA + '">');
 
     s.push('  <sites>');
-    (e.lugares || []).forEach(function (l) {
+    referenciados(e.lugares, usa.lugares).forEach(function (l) {
       s.push('    <site id="' + escapar(l.id) + '">');
       s.push('      ' + etiqueta('name', l.nombre));
       s.push('      ' + etiqueta('longitude', l.lon, { unit: 'deg' }));
@@ -397,7 +541,7 @@
     s.push('  </sites>');
 
     s.push('  <scopes>');
-    (e.telescopios || []).forEach(function (t) {
+    referenciados(e.telescopios, usa.telescopios).forEach(function (t) {
       s.push('    <scope id="' + escapar(t.id) + '">');
       s.push('      ' + etiqueta('model', t.modelo));
       s.push('      ' + etiqueta('aperture', t.apertura));
@@ -407,7 +551,7 @@
     s.push('  </scopes>');
 
     s.push('  <eyepieces>');
-    (e.oculares || []).forEach(function (o) {
+    referenciados(e.oculares, usa.oculares).forEach(function (o) {
       s.push('    <eyepiece id="' + escapar(o.id) + '">');
       s.push('      ' + etiqueta('model', o.modelo));
       s.push('      ' + etiqueta('focalLength', o.focal));
@@ -417,7 +561,7 @@
     s.push('  </eyepieces>');
 
     s.push('  <lenses>');
-    (e.auxiliares || []).forEach(function (a) {
+    referenciados(e.auxiliares, usa.auxiliares).forEach(function (a) {
       s.push('    <lens id="' + escapar(a.id) + '">');
       s.push('      ' + etiqueta('model', a.modelo));
       s.push('      ' + etiqueta('factor', a.factor));
@@ -432,7 +576,7 @@
     s.push('      ' + etiqueta('lastName', yo.apellidos));
     s.push('      ' + etiqueta('contact', yo.correo));
     s.push('    </observer>');
-    co.lista.forEach(function (c) {
+    ob.lista.forEach(function (c) {
       s.push('    <observer id="' + escapar(c.id) + '">');
       s.push('      ' + etiqueta('firstName', c.nombre));
       s.push('    </observer>');
@@ -457,20 +601,17 @@
     s.push('  <sessions>');
     (e.noches || []).forEach(function (n) {
       var l = lugares[n.lugarId] || {};
+      var tzn = husoDe(n, l);
       s.push('    <session id="' + escapar(n.id) + '">');
-      s.push('      ' + etiqueta('begin', instante(n.fecha, n.comienzo || '21:00', l.tz)));
-      if (n.fin) { s.push('      ' + etiqueta('end', instante(n.fecha, n.fin, l.tz))); }
-      s.push('      ' + etiqueta('site', n.lugarId));
+      s.push('      ' + etiqueta('begin', instante(n.fecha, n.comienzo || '21:00', tzn)));
+      if (n.fin) { s.push('      ' + etiqueta('end', instante(n.fecha, n.fin, tzn))); }
+      s.push('      ' + etiqueta('site', ref(lugares, n.lugarId)));
       String(n.tripulacion || '').split(',').forEach(function (raw) {
-        var id = co.porNombre[clave(raw)];
+        var id = ob.porNombre[clave(raw)];
         if (id) { s.push('      ' + etiqueta('coObserver', id)); }
       });
       s.push('      ' + etiqueta('weather', n.meteo));
       s.push('      ' + etiqueta('comments', n.cronica));
-      s.push('      ' + etiqueta('bit:sqm', n.sqm));
-      s.push('      ' + etiqueta('bit:ir', n.ir));
-      s.push('      ' + etiqueta('bit:seeing', n.seeing));
-      s.push('      ' + etiqueta('bit:bortle', n.bortle));
       s.push('    </session>');
     });
     s.push('  </sessions>');
@@ -481,22 +622,105 @@
       var aum = o.aumentos !== '' && o.aumentos != null
         ? o.aumentos
         : aumentos(tel[o.telescopioId], ocu[o.ocularId], aux[o.auxiliarId]);
+      // El ORDEN es el de la xsd:sequence de observationType, que es ordenada;
+      // emitirlo bien no cuesta nada y es lo único que separa este fichero de
+      // uno válido. Lo de bit: va al final: es lo que el esquema no conoce.
       s.push('  <observation id="' + escapar(o.id || ('obs' + (i + 1))) + '">');
-      s.push('    ' + etiqueta('begin', instante(n.fecha, o.hora || n.comienzo || '21:00', l.tz)));
-      s.push('    ' + etiqueta('session', o.nocheId));
-      s.push('    ' + etiqueta('site', n.lugarId));
-      s.push('    <observer>ob1</observer>');
+      s.push('    ' + etiqueta('observer', ob.porNombre[clave(o.observador)] || 'ob1'));
+      s.push('    ' + etiqueta('site', ref(lugares, n.lugarId)));
+      s.push('    ' + etiqueta('session', ref(noches, o.nocheId)));
       s.push('    ' + etiqueta('target', tg.porNombre[clave(o.objeto)]));
-      s.push('    ' + etiqueta('scope', o.telescopioId));
-      s.push('    ' + etiqueta('eyepiece', o.ocularId));
-      s.push('    ' + etiqueta('lens', o.auxiliarId));
-      s.push('    <result>' + etiqueta('description', o.texto) + '</result>');
+      s.push('    ' + etiqueta('begin', instante(n.fecha, o.hora || n.comienzo || '21:00', husoDe(n, l))));
+      // El cielo, en la observación y con los elementos estándar donde existen.
+      // Solo IR y Bortle siguen en bit:, que es lo que OAL no tiene dónde poner.
+      s.push('    ' + etiqueta('sky-quality', o.sqm, { unit: 'mags-per-squarearcsec' }));
+      s.push('    ' + etiqueta('seeing', antoniadi(o.seeing)));
+      s.push('    ' + etiqueta('scope', ref(tel, o.telescopioId)));
+      s.push('    ' + etiqueta('eyepiece', ref(ocu, o.ocularId)));
+      s.push('    ' + etiqueta('lens', ref(aux, o.auxiliarId)));
       s.push('    ' + etiqueta('magnification', aum));
+      // resultType es ABSTRACTO: sin xsi:type el elemento no se puede instanciar.
+      // Se emite siempre el de cielo profundo —también para una variable, que es
+      // el único otro target que sale de aquí— porque es el que lleva <rating>, y
+      // 99 es «desconocido», que es la verdad: aquí nadie puntúa lo que ve.
+      // AstroPlanner no emite ninguno de los dos y los ignora al leer.
+      s.push('    <result xsi:type="oal:findingsDeepSkyType">' +
+             etiqueta('description', o.texto) + '<rating>99</rating></result>');
+      s.push('    ' + etiqueta('bit:ir', o.ir));
+      s.push('    ' + etiqueta('bit:bortle', o.bortle));
       s.push('  </observation>');
     });
 
     s.push('</oal:observations>');
     return s.filter(function (linea) { return linea.trim() !== ''; }).join(L) + L;
+  }
+
+  /* ── El correo ─────────────────────────────────────────────────────────────
+     Hermano de xmlDe(): el MISMO estado contado en HTML para pegarlo en un
+     correo. Sale de aquí y no de otra consulta, porque el correo y el fichero
+     que lo acompaña tienen que contar lo mismo, y dos consultas distintas acaban
+     dando dos números distintos.
+
+     Determinista y sin prosa generada (ADR 0004): no se redacta ni una frase que
+     no haya escrito el observador; solo se ordena lo que ya está.             */
+
+  var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+               'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+  function fechaLarga(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!m) { return String(iso || ''); }
+    return parseInt(m[3], 10) + ' de ' + MESES[parseInt(m[2], 10) - 1] + ' de ' + m[1];
+  }
+
+  /** El primer valor no vacío de una lista de filas, o ''. */
+  function primero(filas, campo) {
+    for (var i = 0; i < filas.length; i++) {
+      if (!vacio(filas[i][campo])) { return filas[i][campo]; }
+    }
+    return '';
+  }
+
+  function textoDe(estado) {
+    var e = estado || {};
+    var lugares = indice(e.lugares);
+    var tel = indice(e.telescopios), ocu = indice(e.oculares), aux = indice(e.auxiliares);
+    var s = [];
+
+    (e.noches || []).forEach(function (n) {
+      var mias = (e.observaciones || []).filter(function (o) { return o.nocheId === n.id; });
+      var l = lugares[n.lugarId] || {};
+      // El cielo cuelga de la observación (ADR 0001), así que la cabecera enseña
+      // el primero que haya de la noche: es un resumen, no una medida.
+      var conCielo = [n].concat(mias);
+      var sitio = [];
+      if (l.nombre) { sitio.push(l.nombre); }
+      if (n.comienzo || n.fin) { sitio.push((n.comienzo || '?') + '–' + (n.fin || '?')); }
+      var cielo = [];
+      if (!vacio(primero(conCielo, 'sqm'))) { cielo.push('SQM ' + primero(conCielo, 'sqm') + ' mag/arcsec²'); }
+      if (!vacio(primero(conCielo, 'bortle'))) { cielo.push('Bortle ' + primero(conCielo, 'bortle')); }
+      if (!vacio(primero(conCielo, 'seeing'))) { cielo.push('seeing ' + antoniadi(primero(conCielo, 'seeing'))); }
+      if (!vacio(primero(conCielo, 'ir'))) { cielo.push('IR ' + primero(conCielo, 'ir')); }
+      if (n.meteo) { cielo.push(n.meteo); }
+
+      s.push('<h2>Salida del ' + escapar(fechaLarga(n.fecha)) + '</h2>');
+      if (sitio.length) { s.push('<p>' + escapar(sitio.join(' · ')) + '</p>'); }
+      if (cielo.length) { s.push('<p>' + escapar(cielo.join(' · ')) + '</p>'); }
+      if (n.tripulacion) { s.push('<p>Tripulación: ' + escapar(n.tripulacion) + '</p>'); }
+      if (n.cronica) { s.push('<p>' + escapar(n.cronica) + '</p>'); }
+
+      s.push('<table border="1" cellpadding="6" cellspacing="0">');
+      s.push('<tr><th>Hora</th><th>Objeto</th><th>Aumento</th><th>Lo que se vio</th></tr>');
+      mias.forEach(function (o) {
+        var a = !vacio(o.aumentos) ? o.aumentos
+          : aumentos(tel[o.telescopioId], ocu[o.ocularId], aux[o.auxiliarId]);
+        s.push('<tr><td>' + escapar(o.hora) + '</td><td>' + escapar(o.objeto) + '</td>' +
+               '<td>' + (vacio(a) ? '' : escapar(a) + '×') + '</td>' +
+               '<td>' + escapar(o.texto) + '</td></tr>');
+      });
+      s.push('</table>');
+    });
+    return s.join('\n') + '\n';
   }
 
   /* ── XML: de vuelta al estado ────────────────────────────────────────────
@@ -547,8 +771,13 @@
         id: n.attrs.id,
         fecha: b.fecha && b.hora ? nocheDe(b.fecha, b.hora) : b.fecha,
         lugarId: texto(n, 'site'), comienzo: b.hora, fin: f.hora,
+        // El huso con el que venía fechada, por si la noche no trae lugar: sin
+        // esto, volver a escribirla la mandaría a UTC y le movería la hora.
+        tz: b.tz,
         tripulacion: hijos(n, 'coObserver').map(function (c) { return porId[c.texto.trim()] || ''; })
                        .filter(Boolean).join(', '),
+        // Forma vieja: el cielo de la noche entera. Ya no se escribe, pero los
+        // XML que los compañeros rellenaron lo traen, y de aquí se reparte.
         sqm: numero(n, 'bit:sqm'), ir: numero(n, 'bit:ir'),
         seeing: numero(n, 'bit:seeing'), bortle: numero(n, 'bit:bortle'),
         meteo: texto(n, 'weather'), cronica: texto(n, 'comments')
@@ -560,13 +789,18 @@
       var b = partirInstante(texto(n, 'begin'));
       e.observaciones.push({
         id: n.attrs.id, nocheId: texto(n, 'session'), objeto: t.nombre || '',
+        // Quién la firmó, por su NOMBRE: los ids de observador son del fichero
+        // y no significan nada fuera de él. El importador empareja por nombre.
+        observador: porId[texto(n, 'observer')] || '',
         ra: t.ra === undefined ? '' : t.ra, dec: t.dec === undefined ? '' : t.dec, otype: t.otype || '',
         hora: b.hora, telescopioId: texto(n, 'scope'), ocularId: texto(n, 'eyepiece'),
         auxiliarId: texto(n, 'lens'), aumentos: numero(n, 'magnification'),
+        sqm: sqmDe(n), ir: numero(n, 'bit:ir'),
+        seeing: numero(n, 'seeing'), bortle: numero(n, 'bit:bortle'),
         texto: texto(hijo(n, 'result'), 'description')
       });
     });
-    return e;
+    return repartirCielo(e);
   }
 
   /** Del xsi:type de OAL a un código de Sesame cualquiera que vuelva a él. */
@@ -577,8 +811,17 @@
   }
 
   function partirInstante(iso) {
-    var m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(String(iso || ''));
-    return m ? { fecha: m[1], hora: m[2] } : { fecha: '', hora: '' };
+    var m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?(Z|[+-]\d{2}:\d{2})?/.exec(String(iso || ''));
+    return m ? { fecha: m[1], hora: m[2], tz: minutosDeDesfase(m[3]) } : { fecha: '', hora: '', tz: '' };
+  }
+
+  /** '+02:00' -> 120. Inversa de desfase(). Sin desfase escrito, ''. */
+  function minutosDeDesfase(txt) {
+    if (!txt) { return ''; }
+    if (txt === 'Z') { return 0; }
+    var m = /^([+-])(\d{2}):(\d{2})$/.exec(txt);
+    if (!m) { return ''; }
+    return (m[1] === '-' ? -1 : 1) * (parseInt(m[2], 10) * 60 + parseInt(m[3], 10));
   }
 
   function estadoVacio() {
@@ -590,7 +833,10 @@
   var API = { VERSION_PLANTILLA: VERSION_PLANTILLA, escapar: escapar, desescapar: desescapar,
               nocheDe: nocheDe, fechaDeReloj: fechaDeReloj, instante: instante, desfase: desfase,
               tipoOal: tipoOal, aumentos: aumentos, problemas: problemas, clave: clave,
-              xmlDe: xmlDe, leer: leer, arbol: arbol, estadoVacio: estadoVacio };
+              CIELO: CIELO, sembrarCielo: sembrarCielo, repartirCielo: repartirCielo,
+              antoniadi: antoniadi,
+              xmlDe: xmlDe, textoDe: textoDe, fechaLarga: fechaLarga,
+              leer: leer, arbol: arbol, estadoVacio: estadoVacio };
 
   raiz.PlantillaOAL = API;
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
@@ -696,6 +942,10 @@
         selectFila('observaciones', o.id, 'ocularId', 'Ocular', o.ocularId, estado.oculares, 'modelo') +
         selectFila('observaciones', o.id, 'auxiliarId', 'Barlow / reductor', o.auxiliarId, estado.auxiliares, 'modelo') +
         campoFila('observaciones', o.id, 'aumentos', 'Aumentos (vacío = calculado)', o.aumentos, 'number') +
+        campoFila('observaciones', o.id, 'sqm', 'SQM', o.sqm, 'number') +
+        campoFila('observaciones', o.id, 'ir', 'IR °C', o.ir, 'number') +
+        campoFila('observaciones', o.id, 'seeing', 'Seeing 1-5', o.seeing, 'number') +
+        campoFila('observaciones', o.id, 'bortle', 'Bortle 1-9', o.bortle, 'number') +
         '</div>' +
         '<label class="campo">Qué viste<textarea data-lista="observaciones" data-id="' + esc(o.id) +
         '" data-clave="texto">' + esc(o.texto || '') + '</textarea></label>' +
@@ -734,6 +984,18 @@
     return h + '</select></label>';
   }
 
+  /** Pone al día en pantalla las casillas de cielo de las observaciones de una noche. */
+  function refrescarCielo(nocheId) {
+    (estado.observaciones || []).forEach(function (o) {
+      if (o.nocheId !== nocheId) { return; }
+      OAL.CIELO.forEach(function (c) {
+        var el = document.querySelector('input[data-lista="observaciones"][data-id="' +
+                                        o.id + '"][data-clave="' + c + '"]');
+        if (el) { el.value = (o[c] == null ? '' : o[c]); }
+      });
+    });
+  }
+
   function pintarAvisos() {
     var lista = OAL.problemas(estado);
     var faltan = lista.filter(function (p) { return p.nivel === 'falta'; });
@@ -757,8 +1019,25 @@
       ? estado.observador
       : (estado[el.dataset.lista] || []).filter(function (x) { return x.id === el.dataset.id; })[0];
     if (!destino) { return; }
+    var antes = destino[el.dataset.clave];
     destino[el.dataset.clave] = el.type === 'number' && el.value !== '' ? parseFloat(el.value) : el.value;
     if (el.dataset.resolver) { resolver(destino, el); }
+    // El cielo de la noche es un valor por defecto: siembra las observaciones
+    // que no tengan el suyo y no toca las tecleadas a mano (ADR 0001). Se
+    // refrescan a mano en vez de repintar, que repintar quitaría el cursor de
+    // la casilla que se está escribiendo.
+    if (el.dataset.lista === 'noches' && OAL.CIELO.indexOf(el.dataset.clave) > -1) {
+      var previo = {};
+      previo[el.dataset.clave] = antes;
+      OAL.sembrarCielo(estado, el.dataset.id, previo);
+      refrescarCielo(el.dataset.id);
+    }
+    // Al mudar de noche, lo heredado de la vieja se cambia por lo de la nueva.
+    if (el.dataset.lista === 'observaciones' && el.dataset.clave === 'nocheId') {
+      var vieja = estado.noches.filter(function (n) { return n.id === antes; })[0];
+      OAL.sembrarCielo(estado, destino.nocheId, vieja);
+      refrescarCielo(destino.nocheId);
+    }
     guardar();
     if (el.dataset.clave === 'nombre' || el.dataset.clave === 'modelo' ||
         el.dataset.clave === 'fecha' || el.dataset.clave === 'lugarId') { pintar(); }
@@ -796,6 +1075,10 @@
       base.objeto = ''; base.ra = ''; base.dec = ''; base.otype = ''; base.hora = '';
       base.telescopioId = ultima.telescopioId || ''; base.ocularId = ultima.ocularId || '';
       base.auxiliarId = ultima.auxiliarId || ''; base.aumentos = ''; base.texto = '';
+      // Nace con el cielo de su noche, que es el valor por defecto; teclear
+      // OTRO número encima es lo que hace que deje de seguirlo.
+      var suNoche = estado.noches.filter(function (n) { return n.id === base.nocheId; })[0] || {};
+      OAL.CIELO.forEach(function (c) { base[c] = (suNoche[c] == null ? '' : suNoche[c]); });
     } else {
       (COLUMNAS[lista] || []).forEach(function (c) { base[c[0]] = ''; });
     }

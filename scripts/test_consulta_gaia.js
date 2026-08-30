@@ -91,7 +91,7 @@ function pintadaEnLimite(D, F, t) {
   var mlim = R.magLimite({ apertura: D, aumentos: aum, transmision: t, sqm: 21 });
   var o = { afov: 82, apertura: D, arcmin: arcmin, size: 720, g: mlim, blur: R.blurEstrella(mlim, D), mlim: mlim };
   var Rtot = R.radioEstrella(o);
-  var alfa = Math.max(R.config.alfaMin, Math.min(1, (mlim - o.g) / R.config.rangoBrillo));
+  var alfa = Math.max(R.config.alfaMin, Math.min(1, (mlim - o.g) / R.config.magBlanco));
   return { mlim: mlim, radio: Rtot, alfa: alfa * R.factorDilucion(R.sueloEstrella(o), Rtot) };
 }
 var e18 = pintadaEnLimite(457.2, 457.2 * 4.5, 0.7);   // 18" f/4.5, 13 mm → 158x
@@ -104,6 +104,32 @@ ok(Math.abs(e18.radio - e8.radio) / e8.radio < 0.02,
   'y con el mismo tamaño (<2% de diferencia: ' + e8.radio.toFixed(3) + ' vs ' + e18.radio.toFixed(3) + ' px)');
 ok(Math.abs(R.config.alfaMin * Math.pow(10, -0.4 * 0) - R.config.alfaMin) < 1e-9,
   'el glow de la primera no resuelta arranca en ese mismo alfaMin (cruce continuo)');
+
+/* REGRESIÓN (ADR 0014, "somera pisa a la honda"): la vista (:619) cachea
+   honda y ESTRECHA sobre un punto; el precalentado (:1229, sin paraCapa)
+   llega después pidiendo el mismo punto pero MÁS ANCHO y más somero. Como el
+   radio pedido ya no cabe en la entrada cacheada, el chequeo de cobertura
+   falla y la escritura antigua sobreescribía la entrada entera -tirando la
+   profundidad honda ya conseguida, aunque el radio sí creciera. El caché por
+   coord+radio+profundidad debe ser un superconjunto monotónico en AMBAS
+   dimensiones: nunca puede perder cobertura ya conseguida en una al ganar
+   en la otra. */
+console.log('El caché de Gaia es monotónico (ganar radio no debe perder profundidad):');
+(function () {
+  var llamadas = [];
+  global.fetch = function (url) {
+    llamadas.push(url);
+    return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ data: [] }); } });
+  };
+  R.consultar(10, 20, 30, 20);  // vista: estrecha y honda (mag 20)
+  R.consultar(10, 20, 60, 16);  // precalentado llega después: ancho y somero (mag 16)
+  var clave = (10).toFixed(3) + ',' + (20).toFixed(3);
+  ok(R.cacheGaia[clave].mag >= 20 - 1e-6,
+    'al ganar radio el caché no pierde la profundidad honda ya cacheada (mag=' +
+    R.cacheGaia[clave].mag.toFixed(2) + ')');
+  ok(llamadas[1].indexOf('mag=20.00') !== -1,
+    'la segunda petición funde a la profundidad ya cacheada en vez de repetir la somera (' + llamadas[1] + ')');
+})();
 
 console.log(fallos === 0 ? '\n✓ Todo correcto.' : '\n✗ ' + fallos + ' fallo(s).');
 process.exit(fallos === 0 ? 0 : 1);

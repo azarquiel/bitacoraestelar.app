@@ -29,22 +29,115 @@
   var MAXSCALE_VECINDARIO = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.zoomMaximo) || 6500;
   var posX = 0;
   var posY = 0;
-  var rotation = 0; // grados de giro de la vista cenital (0 = orientación base)
   var edgePlaneRotation = 0; // giro en el plano de pantalla de la vista de canto
                              // (opción experimental: CONFIG.giros.giroPlanoCanto)
 
-  // Giro en plano vigente según la vista activa. La vista de canto solo gira
-  // en plano si el interruptor CONFIG.giros.giroPlanoCanto está activado.
+  // Giro en plano vigente según la vista activa. La cenital ya no se gira a
+  // mano: lleva un azimut fijo de partida (INCL.azimutBase) para casar con la
+  // foto de canto. La de canto solo gira en plano si el interruptor
+  // CONFIG.giros.giroPlanoCanto está activado.
   function currentPlaneRotation() {
-    if (isEdgeView) {
-      return (CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? edgePlaneRotation : 0;
-    }
-    return rotation;
+    if (!isEdgeView) return INCL.azimutBase || 0;
+    return (CONFIG.giros && CONFIG.giros.giroPlanoCanto) ? edgePlaneRotation : 0;
   }
 
   // Punto del núcleo (centro de giro) de la vista activa, en % de la imagen.
   function currentNucleo() {
     return isEdgeView ? CONFIG.nucleo.canto : CONFIG.nucleo.cenital;
+  }
+
+  // --------------------------------------------------------------------------
+  // INCLINACIÓN DE LA VISTA CENITAL (ver CONFIG.inclinacion)
+  // El disco se abate con rotateX y se proyecta en perspectiva, así que la
+  // relación pantalla <-> mapa deja de ser una simple escala. La matemática
+  // (proyección del plano, su inversa y la huella) vive en VLGeometria; aquí
+  // solo se lee el estado del mapa y se escribe el DOM.
+  // --------------------------------------------------------------------------
+  var plano = document.getElementById('mw-plano');
+  var INCL = (window.CONFIG && CONFIG.inclinacion) || {};
+
+  // Abatimiento vigente, en grados. Lo mueve el usuario (setTilt): 0 es la
+  // cenital de plano y 90 es el canto, donde el mapa cambia de vista. Solo se
+  // abate la cenital: la de canto ya se mira de perfil.
+  var tiltGrados = (INCL.gradosInicial != null) ? INCL.gradosInicial : 0;
+  var TILT_MAX = 90;
+  // Tope del adelanto de los objetos hundidos (ver repositionAnchors).
+  var K_MIN_EMPUJE = 0.25;
+
+  function tiltActual() {
+    return (INCL.activa && !isEdgeView) ? tiltGrados : 0;
+  }
+
+  // Parámetros de la proyección para VLGeometria: coordenadas del contenido
+  // (que ocupa el visor entero) y SIN el desplazamiento, que va por fuera.
+  function vistaProyeccion(esc) {
+    return {
+      ancho: img.clientWidth,
+      alto: img.clientHeight,
+      escala: (esc == null) ? scale : esc,
+      grados: tiltActual(),
+      // El giro solo entra en la proyección con el disco abatido: en plano lo
+      // resuelve el CSS alrededor del núcleo y la escala basta para el anclaje.
+      giro: tiltActual() ? currentPlaneRotation() : 0,
+      perspectiva: INCL.perspectiva || 1400
+    };
+  }
+
+  // Altura de un objeto sobre el plano galáctico, en px del contenido: es lo
+  // que lo despega del disco al abatirlo. z = d·sen(b), de sus coordenadas.
+  function alturaObjetoPx(id, r) {
+    var g = GAL[id];
+    if (!g || !r || !tiltActual()) return 0;
+    return g.d * Math.sin(g.b * Math.PI / 180) *
+      (r.width / CONFIG.fisica.anchoImagenAl) * (INCL.alturaObjetos || 1);
+  }
+
+  // Radio del disco que TAPA, en px de contenido. La foto es cuadrada y va
+  // centrada, así que su disco es el círculo inscrito (el mismo que recorta la
+  // máscara de #mw-image, "circle closest-side"). Se toma algo menos que el
+  // radio entero porque la máscara ya viene desvaneciéndose antes del borde:
+  // ahí la foto deja ver lo que hay detrás y no cuenta como tapadera.
+  var TAPA_RADIO = 0.80;
+
+  function radioDisco(r) {
+    return r ? Math.min(r.width, r.height) / 2 * TAPA_RADIO : 0;
+  }
+
+  // Un objeto de halo se pinta muy por encima del disco y, suelto en el aire,
+  // no se sabe sobre qué punto del mapa está. El tallo lo baja hasta su sitio:
+  // es una vertical del marcador al plano, la misma plomada de una gráfica 3D.
+  function pintarTallo(ancla, tilt, rect, counter) {
+    var tallo = ancla.querySelector('.mw-tallo');
+    var z = (tilt && INCL.tallos !== false && ancla.getAttribute('data-view') === 'top')
+      ? alturaObjetoPx(ancla.getAttribute('data-id'), rect) : 0;
+    if (!z) {
+      if (tallo) tallo.style.display = 'none';
+      return;
+    }
+    if (!tallo) {
+      tallo = document.createElement('div');
+      tallo.className = 'mw-tallo';
+      ancla.appendChild(tallo);
+    }
+    tallo.style.display = '';
+    // Vertical hacia el plano: el div se tiende sobre el eje y local y se
+    // levanta 90°, así que su largo pasa a medirse en z (hacia abajo del disco).
+    tallo.style.height = Math.abs(z).toFixed(1) + 'px';
+    tallo.style.width = (counter || 1).toFixed(3) + 'px';
+    tallo.style.transform = 'rotateX(' + (z > 0 ? -90 : 90) + 'deg)';
+  }
+
+  // Recoloca el desplazamiento para que el punto del mapa que hay bajo
+  // (clientX, clientY) siga cayendo ahí después de cambiar la escala. Sirve
+  // igual con el disco plano: grados = 0 reduce la proyección a la escala.
+  function anclarZoom(clientX, clientY, nuevaEscala) {
+    var rect = viewer.getBoundingClientRect();
+    var sx = clientX - rect.left, sy = clientY - rect.top;
+    var p = VLGeometria.planoDesdePantalla(sx - posX, sy - posY, vistaProyeccion());
+    var q = VLGeometria.proyectarInclinado(p.x, p.y, 0, vistaProyeccion(nuevaEscala));
+    posX = sx - q.x;
+    posY = sy - q.y;
+    scale = nuevaEscala;
   }
 
   // --------------------------------------------------------------------------
@@ -80,6 +173,20 @@
   function edgeXAt(g, phiDeg) {
     return VLGeometria.xCantoObjeto(g, phiDeg,
       CONFIG.fisica.anchoImagenAl, CONFIG.fisica.distanciaSolNucleoAl);
+  }
+  // Altura del marcador en la vista de canto, en % de la imagen. Se calcula
+  // con la misma física y la misma exageración (INCL.alturaObjetos) que usa el
+  // abatimiento, así que al llegar a 90° cada objeto se queda a la altura sobre
+  // el plano en la que estaba un grado antes. Las 'y' tabuladas en OBJECTS iban
+  // por su cuenta (medían ~0,6 veces la altura real) y hacían saltar a todo el
+  // halo hacia el plano; solo se usan si al objeto le faltan las galácticas.
+  function edgeYAt(g) {
+    return 50 - g.d * Math.sin(g.b * Math.PI / 180) /
+      CONFIG.fisica.anchoImagenAl * 100 * (INCL.alturaObjetos || 1);
+  }
+  function edgeYDe(obj) {
+    var g = GAL[obj.id];
+    return g ? edgeYAt(g) : obj.edge.y;
   }
   function sunEdgeXAt(phiDeg) {
     return VLGeometria.xCantoSol(phiDeg,
@@ -151,7 +258,58 @@
       a.style.top  = (r.top  + r.height * yPct) + 'px';
     }
 
+    pintarBulbo();
     dibujarRuta(); // la ruta se apoya en las posiciones que acaban de fijarse
+  }
+
+  // --------------------------------------------------------------------------
+  // BULBO DE CARA (solo con la vista cenital inclinada)
+  // Abatido el disco, el núcleo se aplasta hasta casi desaparecer. Este recorte
+  // de la PROPIA foto, puesto de cara a la cámara sobre el núcleo, le devuelve
+  // el volumen sin inventar ni color ni forma: solo altura. Radio y altura
+  // salen de CONFIG.inclinacion (bulboRadio, bulboAlto).
+  // --------------------------------------------------------------------------
+  var bulbo = document.createElement('img');
+  bulbo.className = 'mw-bulbo';
+  bulbo.alt = '';
+  bulbo.draggable = false;
+  bulbo.style.cssText = 'position:absolute;pointer-events:none;display:none;';
+
+  function pintarBulbo() {
+    var activeImg = document.getElementById('mw-image');
+    var tilt = tiltActual();
+    if (!tilt || !INCL.bulboRadio || !activeImg || !activeImg.naturalWidth) {
+      bulbo.style.display = 'none';
+      return;
+    }
+    // Justo detrás de los marcadores y delante del disco.
+    if (bulbo.parentNode !== img) img.insertBefore(bulbo, activeImg.nextSibling);
+
+    var r = getImgRect(activeImg);
+    var nuc = CONFIG.nucleo.cenital;
+    var cx = r.left + r.width  * (nuc.x / 100);
+    var cy = r.top  + r.height * (nuc.y / 100);
+    var radio = r.width * INCL.bulboRadio;
+    var mask = 'radial-gradient(circle ' + (radio * 2.2).toFixed(0) + 'px at ' +
+      (cx - r.left).toFixed(0) + 'px ' + (cy - r.top).toFixed(0) + 'px,' +
+      ' #000 45%, rgba(0,0,0,0.55) 72%, transparent 100%)';
+
+    bulbo.src = activeImg.currentSrc || activeImg.src;
+    bulbo.style.display = '';
+    bulbo.style.left = r.left + 'px';
+    bulbo.style.top = r.top + 'px';
+    bulbo.style.width = r.width + 'px';
+    bulbo.style.height = r.height + 'px';
+    bulbo.style.webkitMaskImage = mask;
+    bulbo.style.maskImage = mask;
+    // Gira sobre el propio núcleo: es el punto que no se debe mover.
+    bulbo.style.transformOrigin = (cx - r.left) + 'px ' + (cy - r.top) + 'px';
+    var rot = currentPlaneRotation();
+    bulbo.style.transform =
+      'translateZ(' + (r.width * (INCL.bulboAlto || 0)).toFixed(1) + 'px)' +
+      (rot ? ' rotate(' + (-rot) + 'deg)' : '') +
+      ' rotateX(' + (-tilt) + 'deg)' +
+      (rot ? ' rotate(' + rot + 'deg)' : '');
   }
 
   // --------------------------------------------------------------------------
@@ -168,7 +326,8 @@
   }
 
   function createMarker(obj, view) {
-    var pos = (view === 'edge') ? obj.edge : obj.top;
+    var pos = (view === 'edge')
+      ? { x: obj.edge.x, y: edgeYDe(obj) } : obj.top;
     var anchor = document.createElement('div');
     anchor.id = obj.id + (view === 'edge' ? '-edge' : '') + '-anchor';
     // Posición inicial en % del contenedor; repositionAnchors() la corrige a px.
@@ -177,6 +336,8 @@
       (view === 'edge' ? 'display:none;' : '');
     anchor.className = 'mw-object-anchor';
     anchor.setAttribute('data-color', obj.color);
+    // El CSS pinta el anillo de "por visitar" con el color del propio objeto.
+    anchor.style.setProperty('--mw-color', obj.color);
     anchor.setAttribute('data-view', view);
     anchor.setAttribute('data-id', obj.id);
     anchor.setAttribute('data-x', pos.x);
@@ -201,7 +362,7 @@
     content.style.cssText = 'position:absolute;top:0;left:0;';
 
     var dot = document.createElement('div');
-    dot.className = 'mw-pdf-dot';
+    dot.className = 'mw-pdf-dot mw-punto';
     dot.title = 'Ver ficha de ' + obj.label + ' (PDF)';
     dot.setAttribute('data-pdf', obj.pdf);
     dot.setAttribute('data-title', obj.name);
@@ -226,14 +387,17 @@
     label.setAttribute('data-title',  obj.name);
     label.setAttribute('data-coords', obj.coords);
     if (obj.ficha) label.setAttribute('data-ficha', obj.ficha);
-    label.className = 'mw-pdf-dot'; // reutiliza la clase para el listener global
+    label.className = 'mw-pdf-dot mw-label'; // reutiliza la clase para el listener global
 
-    // Wrapper de atenuación (spec #102): la escala/opacidad del estado base van
-    // por CSS sobre este div (variables --mw-aten-* en #mw-content). No pueden ir
-    // en .mw-marker-content: su transform lo pisa el JS del abanico.
+    // El punto va a color intenso SIEMPRE, fuera de la atenuación: es lo que
+    // marca dónde está el objeto ya observado y no debe apagarse con el resto.
+    content.appendChild(dot);
+
+    // Wrapper de atenuación (spec #102), ahora solo para la etiqueta: su
+    // visibilidad la decide el zoom (ver .mw-label en mapa.html), no ya la
+    // escala/opacidad de --mw-aten-*.
     var aten = document.createElement('div');
     aten.className = 'mw-aten';
-    aten.appendChild(dot);
     aten.appendChild(label);
     content.appendChild(aten);
 
@@ -282,6 +446,91 @@
   });
   img.appendChild(rutaSvg);
 
+  // --------------------------------------------------------------------------
+  // ANILLOS DE DISTANCIA DESDE EL SOL
+  // Circunferencias finas centradas en el Sol y rotuladas en años luz, para leer
+  // de un vistazo a qué distancia queda cada objeto. Viven dentro de #mw-content
+  // como la ruta, así que acompañan al desplazamiento, al zoom y al giro sin
+  // geometría propia. Solo en la vista cenital: de canto el disco se ve de
+  // perfil y una circunferencia del plano se proyectaría como un segmento, que
+  // mentiría sobre la distancia. Un anillo se enseña únicamente cuando su radio
+  // en pantalla es legible (ANILLO_RADIO_MIN_PX).
+  // --------------------------------------------------------------------------
+  var ANILLOS_AL = [1000, 5000, 12000, 25000];
+  var ANILLO_RADIO_MIN_PX = 26;
+  var ANILLO_ROTULO_MIN_PX = 70;   // por debajo, el anillo va sin rótulo
+  // Los anillos son rejilla de fondo, nunca protagonistas: trazo por debajo del
+  // píxel, raya corta y hueco largo. Al fijar el grosor en pantalla dejaron de
+  // adelgazar con el zoom, y con ello se comían la galaxia; estos valores les
+  // devuelven el peso que tenían.
+  var ANILLO_TRAZO_PX = 0.7;       // grosor del anillo EN PANTALLA (no del mapa)
+  var ANILLO_RAYA_PX = 1.5;        // raya y hueco del discontinuo, en pantalla
+  var ANILLO_HUECO_PX = 9;
+  var ANILLO_ROTULO_SEP_PX = 4;    // hueco entre el anillo y su rótulo
+  var anillosSvg = document.createElementNS(SVG_NS, 'svg');
+  anillosSvg.setAttribute('id', 'mw-anillos');
+  anillosSvg.style.display = 'none';
+  // El rótulo es HTML y no <text> del SVG: dentro del SVG habría que encogerlo
+  // con un scale() de hasta 1/25, y un texto de 9 px acaba pedido a 0,36 px,
+  // que es donde el navegador deja de dibujarlo del tamaño que se le pide. En
+  // HTML el texto conserva sus 9 px y solo se contraescala la caja, que es lo
+  // mismo que ya hacen los marcadores (.mw-counter-scale) y aguanta el zoom 25.
+  var anillos = ANILLOS_AL.map(function (al) {
+    var c = document.createElementNS(SVG_NS, 'circle');
+    var t = document.createElement('div');
+    t.className = 'mw-anillo-rotulo';
+    t.textContent = String(al).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' al';
+    anillosSvg.appendChild(c);
+    img.appendChild(t);
+    return { al: al, c: c, t: t };
+  });
+  img.insertBefore(anillosSvg, rutaSvg);   // la ruta pasa por encima
+
+  function dibujarAnillos() {
+    var sol = document.getElementById('mw-sun-anchor');
+    var activeImg = document.getElementById('mw-image');
+    if (isEdgeView || !sol || !sol.style.left || !activeImg || !activeImg.naturalWidth) {
+      anillosSvg.style.display = 'none';
+      anillos.forEach(function (a) { a.t.style.display = 'none'; });
+      return;
+    }
+    var r = getImgRect(activeImg);
+    var pxPorAl = r.width / CONFIG.fisica.anchoImagenAl;
+    var cx = parseFloat(sol.style.left);
+    var cy = parseFloat(sol.style.top);
+    // Todo lo que debe medir lo mismo en pantalla (el trazo, sus rayas y el
+    // rótulo) se divide por el zoom: el anillo vive dentro de #mw-content, que
+    // va escalado, y lo que se dibuja en unidades del mapa se agranda con él.
+    // vector-effect="non-scaling-stroke" no servía: solo deshace las
+    // transformaciones de dentro del SVG, no el scale() CSS del contenedor.
+    var inv = 1 / (scale || 1);
+    var rot = currentPlaneRotation();
+    var contraRot = rot ? (' rotate(' + (-rot) + 'deg)') : '';
+    anillosSvg.style.width  = img.clientWidth + 'px';
+    anillosSvg.style.height = img.clientHeight + 'px';
+    anillosSvg.style.display = '';
+    anillos.forEach(function (a) {
+      var rad = a.al * pxPorAl;
+      var visible = rad * scale >= ANILLO_RADIO_MIN_PX;
+      a.c.style.display = visible ? '' : 'none';
+      a.t.style.display = (visible && rad * scale >= ANILLO_ROTULO_MIN_PX) ? 'block' : 'none';
+      if (!visible) return;
+      a.c.setAttribute('cx', cx);
+      a.c.setAttribute('cy', cy);
+      a.c.setAttribute('r', rad);
+      a.c.setAttribute('stroke-width', (ANILLO_TRAZO_PX * inv).toFixed(5));
+      a.c.setAttribute('stroke-dasharray',
+        (ANILLO_RAYA_PX * inv).toFixed(5) + ' ' + (ANILLO_HUECO_PX * inv).toFixed(5));
+      // El rótulo cuelga bajo el anillo: la caja se ancla en ese punto y el
+      // centrado y el hueco van DESPUÉS de la contraescala, para que midan lo
+      // mismo en pantalla que el texto que acompañan.
+      a.t.style.left = cx + 'px';
+      a.t.style.top  = (cy + rad) + 'px';
+      a.t.style.transform = contraRot + ' scale(' + inv.toFixed(6) + ')' +
+        ' translate(-50%, ' + ANILLO_ROTULO_SEP_PX + 'px)';
+    });
+  }
+
   // Viaje que se está recorriendo ('' = ninguno). Lo fija aplicarViaje().
   var viajeActivo = '';
 
@@ -292,18 +541,65 @@
   function puntosRuta() {
     var sufijo = isEdgeView ? '-edge' : '';
     var sol = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
+    // La caja de #mw-plano es la de #mw-content SIN transformar, así que restarla
+    // deja cada vértice en el sistema de la ruta ya encarada (ver encararRuta).
+    var caja = plano.getBoundingClientRect();
+    // Se lee la posición REAL en pantalla del punto del marcador, la que ya
+    // incluye su altura sobre el plano y el adelanto de los que están hundidos:
+    // así la línea llega hasta donde se ve el objeto y no hasta su vertical en
+    // el plano, sin una segunda manera de calcular la misma posición.
+    function punto(a) {
+      var el = a.querySelector('.mw-punto') || a;
+      var r = el.getBoundingClientRect();
+      return (r.left + r.width / 2 - caja.left).toFixed(1) + ',' +
+             (r.top + r.height / 2 - caja.top).toFixed(1);
+    }
     var pts = [];
-    if (sol) pts.push(parseFloat(sol.style.left) + ',' + parseFloat(sol.style.top));
+    if (sol) pts.push(punto(sol));
     var tramo = VLViaje.rutaDe(viajeActivo).galaxia;
     for (var i = 0; i < tramo.length; i++) {
       var a = document.getElementById(tramo[i].id + sufijo + '-anchor');
       if (!a || a.style.display === 'none' || !a.style.left) continue;
-      pts.push(parseFloat(a.style.left) + ',' + parseFloat(a.style.top));
+      pts.push(punto(a));
     }
     return pts;
   }
 
+  // La ruta vive DENTRO de #mw-content, así que el contenedor se la llevaba
+  // consigo: abatida se quedaba pegada al plano mientras los marcadores subían
+  // a su altura, y encima media galaxia le pasaba por delante. Se le deshace la
+  // transformación del contenedor (el mismo contragiro que llevan los
+  // marcadores, más la escala) para dejarla como un cristal plano delante de la
+  // escena, con sus vértices en píxeles de pantalla; y se adelanta hacia la
+  // cámara lo justo para pasar por delante del disco abatido, lo que la agranda
+  // y deshace la misma división de perspectiva.
+  function encararRuta() {
+    var tilt = tiltActual();
+    var rot = currentPlaneRotation();
+    var o = origenTransformacion();
+    var ox = o.x - img.clientWidth / 2, oy = o.y - img.clientHeight / 2;
+    var dz = 0;
+    if (tilt) {
+      var activeImg = document.getElementById(isEdgeView ? 'mw-image-edge' : 'mw-image');
+      if (activeImg && activeImg.naturalWidth) {
+        dz = getImgRect(activeImg).height / 2 * Math.sin(tilt * Math.PI / 180) + 4;
+      }
+    }
+    var kz = 1 - dz / (INCL.perspectiva || 1400);
+    // El contenedor gira alrededor del núcleo y aquí el origen es el centro (el
+    // mismo de la perspectiva, para que el adelanto no desplace nada), así que
+    // el contragiro va envuelto en el salto de un origen al otro.
+    rutaSvg.style.transformOrigin = 'center center';
+    rutaSvg.style.transform =
+      'translate(' + ox.toFixed(1) + 'px,' + oy.toFixed(1) + 'px)' +
+      ' rotate(' + (-rot) + 'deg) rotateX(' + (-tilt) + 'deg)' +
+      ' scale(' + (1 / (scale || 1)).toFixed(6) + ')' +
+      ' translate(' + (-ox).toFixed(1) + 'px,' + (-oy).toFixed(1) + 'px)' +
+      ' translate3d(0px,0px,' + dz.toFixed(1) + 'px) scale(' + kz.toFixed(6) + ')';
+  }
+
   function dibujarRuta() {
+    dibujarAnillos();
     var pts = viajeActivo ? puntosRuta() : [];
     if (pts.length < 2) {           // el Sol solo no es un viaje
       rutaSvg.style.display = 'none';
@@ -311,6 +607,7 @@
     }
     rutaSvg.style.width  = img.clientWidth + 'px';
     rutaSvg.style.height = img.clientHeight + 'px';
+    encararRuta();
     var puntos = pts.join(' ');
     rutaTrazos.forEach(function (pl) { pl.setAttribute('points', puntos); });
     rutaSvg.style.display = '';
@@ -321,13 +618,12 @@
     edgeAnchors.push(createMarker(obj, 'edge'));
   });
 
-  // Estado base atenuado de los marcadores (spec #102): la ley vive en
-  // VLMarcadorEstilo; aquí solo se publica como variables CSS. El realce por
+  // Tamaño base atenuado de la etiqueta (spec #102): la ley vive en
+  // VLMarcadorEstilo; aquí solo se publica como variable CSS. El realce por
   // hover/búsqueda y el modo viaje los resuelven las reglas de mapa.html.
   if (typeof VLMarcadorEstilo !== 'undefined') {
     var estiloBase = VLMarcadorEstilo.de({}, CONFIG.marcadores);
     img.style.setProperty('--mw-aten-esc', estiloBase.escala);
-    img.style.setProperty('--mw-aten-op', estiloBase.opacidad);
   }
 
   // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los
@@ -383,6 +679,55 @@
   // --------------------------------------------------------------------------
   // NAVEGACIÓN: arrastre, zoom y reseteo
   // --------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // ANTESALA DE LA VISTA DE CANTO (de TILT_PREVIA a 90°)
+  // Casi de canto, el disco abatido ya no cuenta nada y el cambio de foto
+  // llegaba de golpe en el último grado. En esos grados finales la foto de
+  // perfil se va montando encima, con su propio contragiro para que no se abata
+  // con el disco: al llegar a 90° ya está entera y el cambio no se nota.
+  // --------------------------------------------------------------------------
+  var TILT_PREVIA = 87;
+
+  function mezclaCanto(tilt) {
+    if (isEdgeView || !(tilt > TILT_PREVIA)) return 0;
+    return Math.min(1, (tilt - TILT_PREVIA) / (TILT_MAX - TILT_PREVIA));
+  }
+
+  function pintarPreviaCanto(tilt, rot) {
+    if (!imgEdge || isEdgeView) return;   // en canto la foto ya es la de verdad
+    var mezcla = mezclaCanto(tilt);
+    if (!mezcla) {
+      if (imgEdge.style.display !== 'none') {
+        imgEdge.style.display = 'none';
+        imgEdge.style.opacity = '';
+        imgEdge.style.transform = '';
+      }
+      return;
+    }
+    ensureEdgeImage();
+    imgEdge.style.display = 'block';
+    imgEdge.style.position = 'absolute';
+    imgEdge.style.transition = 'none';
+    imgEdge.style.opacity = mezcla.toFixed(3);
+    imgEdge.style.transformOrigin = 'center center';
+    // Deshace lo que el contenedor le hace al disco (el mismo contragiro que
+    // los marcadores): la galaxia de perfil se mira de frente, no abatida.
+    imgEdge.style.transform =
+      (rot ? 'rotate(' + (-rot) + 'deg) ' : '') + 'rotateX(' + (-tilt) + 'deg)';
+  }
+
+  // Punto sobre el que giran imagen y marcadores: el núcleo galáctico de la
+  // vista activa mientras haya giro en plano, y el centro de la caja si no.
+  function origenTransformacion() {
+    var cx = img.clientWidth / 2, cy = img.clientHeight / 2;
+    if (!currentPlaneRotation()) return { x: cx, y: cy };
+    var activeImg = document.getElementById(isEdgeView ? 'mw-image-edge' : 'mw-image');
+    if (!activeImg || !activeImg.naturalWidth) return { x: cx, y: cy };
+    var r = getImgRect(activeImg);
+    var nuc = currentNucleo();
+    return { x: r.left + r.width * (nuc.x / 100), y: r.top + r.height * (nuc.y / 100) };
+  }
+
   function applyTransform() {
     // El giro en plano rota el contenedor alrededor del núcleo galáctico de la
     // vista activa (cenital siempre disponible; canto solo si el interruptor
@@ -390,21 +735,33 @@
     // punto del núcleo y añadimos rotate() al final para que gire imagen +
     // marcadores juntos manteniendo el pan/zoom.
     var rot = currentPlaneRotation();
-    if (rot) {
-      var activeImg = document.getElementById(isEdgeView ? 'mw-image-edge' : 'mw-image');
-      if (activeImg && activeImg.naturalWidth) {
-        var r = getImgRect(activeImg);
-        var nuc = currentNucleo();
-        var nx = r.left + r.width  * (nuc.x / 100);
-        var ny = r.top  + r.height * (nuc.y / 100);
-        img.style.transformOrigin = nx + 'px ' + ny + 'px';
-      }
-    } else {
-      img.style.transformOrigin = 'center center';
-    }
+    var origen = origenTransformacion();
+    img.style.transformOrigin = origen.x + 'px ' + origen.y + 'px';
 
+    // El desplazamiento va en el envoltorio #mw-plano, DELANTE de la
+    // perspectiva (ver mapa.html): si entrase en ella, arrastraría dividido por
+    // la profundidad y dejaría de seguir al ratón. Aquí quedan la escala, el
+    // giro en plano y el abatimiento.
+    var tilt = tiltActual();
+    if (plano) {
+      plano.style.transform = 'translate(' + posX + 'px, ' + posY + 'px)';
+      // La perspectiva se aleja conforme la foto de canto se monta encima, y a
+      // 90° ya no hay: si no, la foto montada (que se contragira para mirarse
+      // de frente) sale aumentada y desplazada según el encuadre, y al cambiar
+      // de vista, que conserva el zoom, la imagen pegaba un salto.
+      var mez = mezclaCanto(tilt);
+      plano.style.perspective = !tilt ? ''
+        : (mez >= 0.999 ? 'none'
+                        : ((INCL.perspectiva || 1400) / (1 - mez)).toFixed(1) + 'px');
+    }
+    img.style.transformStyle = tilt ? 'preserve-3d' : '';
+    img.classList.toggle('mw-inclinado', !!tilt);
+    // La lista se aplica de derecha a izquierda: primero el giro DENTRO del
+    // plano, luego el abatimiento. Al revés giraría el disco ya abatido sobre
+    // la pantalla, que es otra cosa (y no cuadra con VLGeometria).
     img.style.transform =
-      'translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ')' +
+      'scale(' + scale + ')' +
+      (tilt ? ' rotateX(' + tilt + 'deg)' : '') +
       (rot ? ' rotate(' + rot + 'deg)' : '');
 
     // Contraescala de los marcadores: al ampliar se encogen un poco en pantalla
@@ -418,26 +775,140 @@
 
     // Contra-rotación: cada marcador (punto + etiqueta) se gira en sentido
     // opuesto al mapa para que los nombres y el Sol se lean siempre horizontales.
+    // (el orden importa: es la inversa de rotateX·rotate, o sea rotate⁻¹·rotateX⁻¹)
     var counterRot = rot ? (' rotate(' + (-rot) + 'deg)') : '';
+    // Y en sentido opuesto al abatimiento, para que el punto y la etiqueta se
+    // vean de frente y no aplastados sobre el disco.
+    var counterTilt = tilt ? (' rotateX(' + (-tilt) + 'deg)') : '';
+    // El Sol no es un .mw-object-anchor (no lleva altura), pero su marcador
+    // también se pone de cara: sin preserve-3d en su ancla, el contragiro se
+    // aplana y la etiqueta sale estirada sobre el disco.
+    var solAncla = document.getElementById('mw-sun-anchor');
+    if (solAncla) solAncla.style.transformStyle = tilt ? 'preserve-3d' : '';
+
+    pintarPreviaCanto(tilt, rot);
+
+    dibujarAnillos();
 
     var scales = img.querySelectorAll('.mw-counter-scale');
     for (var i = 0; i < scales.length; i++) {
-      scales[i].style.transform = 'scale(' + counter + ')' + counterRot;
+      // scale3d y no scale: scale() no toca z, así que encajada entre el
+      // abatimiento y su contragiro deja de ser uniforme y estira el marcador
+      // (se ve al ampliar, cuando counter se aleja de 1). En 3D sí conmuta.
+      scales[i].style.transform =
+        'scale3d(' + counter + ',' + counter + ',' + counter + ')' + counterRot + counterTilt;
     }
+
+    // Etiquetas: por debajo del umbral de zoom se amontonan, así que solo se
+    // enseñan al pasar el cursor o durante un viaje (ver .mw-label en mapa.html).
+    var zoomMin = (CONFIG.marcadores && CONFIG.marcadores.etiquetaZoomMin != null)
+      ? CONFIG.marcadores.etiquetaZoomMin : 3;
+    img.classList.toggle('mw-etiquetas-visibles', scale >= zoomMin);
 
     // Posiciona el contenido abanicado y su línea-guía en cada marcador.
     var anchors = img.querySelectorAll('.mw-object-anchor');
+    var rectAlturas = null;
+    if (tilt) {
+      var imgAlturas = document.getElementById('mw-image');
+      if (imgAlturas && imgAlturas.naturalWidth) rectAlturas = getImgRect(imgAlturas);
+    }
+    var vistaAlturas = tilt ? vistaProyeccion() : null;
+    var radioTapa = tilt ? radioDisco(rectAlturas) : 0;
     for (var k = 0; k < anchors.length; k++) {
       var a = anchors[k];
+      var enTop = a.getAttribute('data-view') === 'top';
+      // Cada objeto se despega del disco según su altura real sobre el plano.
+      var alturaPx = (tilt && enTop)
+        ? alturaObjetoPx(a.getAttribute('data-id'), rectAlturas) : 0;
+      // BAJO EL PLANO: la altura NO se aplica en 3D. Con translateZ negativo el
+      // objeto se mete detrás de la foto, que se lo come y además le quita el
+      // clic (en 3D el orden de pintado manda sobre el z-index). Así que el
+      // ancla se queda en el plano y el desplazamiento que le toca por su
+      // hundimiento se hace en píxeles de PANTALLA, dentro del marcador ya
+      // contragirado: sale exactamente donde lo pondría el 3D, se mueve con el
+      // abatimiento como el resto, pero se pinta encima y sigue siendo pulsable.
+      var bajo = alturaPx < 0;
+      var hundidoX = 0, hundidoY = 0;
+      if (bajo) {
+        var ax = a.offsetLeft, ay = a.offsetTop;
+        var pz = VLGeometria.proyectarInclinado(ax, ay, alturaPx, vistaAlturas);
+        var p0 = VLGeometria.proyectarInclinado(ax, ay, 0, vistaAlturas);
+        // No basta con no hundir el ancla: el marcador se contragira hasta
+        // quedar de cara, pero sigue estando a la profundidad del ancla, y ahí
+        // la foto del disco le pasa por delante (más abajo en pantalla, el
+        // disco está MÁS cerca del ojo). Así que además se adelanta hacia la
+        // cámara lo justo para pasar por delante de la foto: en profundidad de
+        // vista, el objeto hundido está |z|/cos(abatimiento) por detrás del
+        // punto del disco que lo tapa. El margen es para no rozar el empate.
+        var cosT = Math.cos(tilt * Math.PI / 180);
+        var empuje = (cosT ? -alturaPx / cosT : 0) + 4;
+        // El marcador cuelga a la profundidad del ancla, así que la perspectiva
+        // le agranda por su cuenta lo que se le traslade: se le devuelve
+        // multiplicando por la k del ancla, que es la que va a aplicar.
+        var kAncla = p0.k;
+        hundidoX = (pz.x - p0.x) * kAncla;
+        hundidoY = (pz.y - p0.y) * kAncla;
+        // El adelanto NO va en línea recta hacia la cámara: así el marcador se
+        // agranda y se separa del centro de la pantalla, y arrastra con él el
+        // origen del conector, que se va del disco (líneas largas y gordas).
+        // Se adelanta por el RAYO DEL OJO: acercarse al ojo por su propio rayo
+        // deja la proyección del ancla clavada y solo cambia la escala, que se
+        // deshace con un scale3d(f) al final. Todo lo de dentro del marcador
+        // (punto, etiqueta y plomada) queda igual que sin adelantar.
+        // El adelanto crece como 1/cos(abatimiento): cerca del canto se
+        // dispara y el marcador acaba pasando por delante del ojo (k <= 0), que
+        // es donde los objetos más despegados del plano desaparecían de golpe
+        // pasados los ~78°. Se le pone tope: nunca más cerca de la cámara que
+        // K_MIN de la distancia del ancla. Con el disco casi de canto ya no hay
+        // foto que esquivar, así que lo que se pierde no se ve.
+        var dPersp = INCL.perspectiva || 1400;
+        var kEmpuje = Math.max(kAncla * K_MIN_EMPUJE, kAncla - empuje / dPersp);
+        empuje = (kAncla - kEmpuje) * dPersp;
+        var f = kAncla ? (kEmpuje / kAncla) : 1;
+        var cx = vistaAlturas.ancho / 2, cy = vistaAlturas.alto / 2;
+        var mLocal = (counter * scale) || 1;
+        var tx = (f - 1) * (p0.x - cx) * kAncla / mLocal;
+        var ty = (f - 1) * (p0.y - cy) * kAncla / mLocal;
+        var esc = a.querySelector('.mw-counter-scale');
+        if (esc) esc.style.transform = 'scale3d(' + counter + ',' + counter + ',' + counter + ')' +
+          counterRot + counterTilt +
+          ' translate3d(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px,' +
+          (empuje / (counter || 1)).toFixed(2) + 'px)' +
+          ' scale3d(' + f.toFixed(4) + ',' + f.toFixed(4) + ',' + f.toFixed(4) + ')';
+      }
+      // preserve-3d también en el hundido: sin él el ancla APLANA a sus hijos
+      // sobre el disco abatido, el contragiro del marcador deja de deshacer el
+      // abatimiento y el desplazamiento en pantalla sale encogido (y torcido).
+      if (tilt && enTop) {
+        a.style.transformStyle = 'preserve-3d';
+        a.style.transform = bajo ? '' : ('translateZ(' + alturaPx.toFixed(1) + 'px)');
+      } else if (a.style.transform) {
+        a.style.transform = '';
+      }
+      // Aspecto de "está debajo de la imagen" solo mientras la foto lo tape: en
+      // cuanto el abatimiento lo saca por detrás del borde del disco, se ve de
+      // verdad y vuelve a su aspecto normal.
+      // El conector le hace de plomada al hundido, tape la foto o no: sin esta
+      // clase se queda con su color liso en línea y pinta un trazo largo y
+      // opaco cruzando la galaxia.
+      a.classList.toggle('mw-hundido', bajo);
+      a.classList.toggle('mw-bajo-plano', bajo &&
+        VLGeometria.tapadoPorDisco(a.offsetLeft, a.offsetTop, alturaPx,
+                                   radioTapa, vistaAlturas));
+      // El tallo en 3D solo vale para lo que está por encima: al hundido le
+      // hace de plomada el conector, que ya va en píxeles de pantalla.
+      pintarTallo(a, bajo ? 0 : tilt, rectAlturas, counter);
+
       var content = a.querySelector('.mw-marker-content');
       var connector = a.querySelector('.mw-connector');
       if (!content) continue;
 
       var oxPct = parseFloat(a.getAttribute('data-ox'));
       var oyPct = parseFloat(a.getAttribute('data-oy'));
-      if (!oxPct && !oyPct) {
-        // Sin abanico: contenido en el punto, sin línea.
+      if (!oxPct && !oyPct && !hundidoX && !hundidoY) {
+        // Sin abanico ni hundimiento: contenido en el punto, sin línea.
         content.style.transform = 'translate(0px, 0px)';
+        content.style.transformOrigin = '';
         if (connector) connector.style.display = 'none';
         continue;
       }
@@ -447,8 +918,11 @@
       // dentro de img (scale=scale del mapa). Para que en pantalla el marcador
       // se desplace 'screenPx' px, el translate local debe ser
       //   screenPx / (counter * scale).
-      var screenPx = oxPct;  // en data-ox guardamos ya el desplazamiento en px
-      var screenPy = oyPct;
+      // en data-ox guardamos ya el desplazamiento en px; el hundimiento del
+      // objeto bajo el plano se suma aquí, y así el conector le hace de plomada
+      // hasta su sitio en el disco sin geometría aparte.
+      var screenPx = (oxPct || 0) + hundidoX;
+      var screenPy = (oyPct || 0) + hundidoY;
       var oxPx = screenPx / (counter * scale);
       var oyPx = screenPy / (counter * scale);
       content.style.transform = 'translate(' + oxPx + 'px, ' + oyPx + 'px)';
@@ -461,6 +935,10 @@
         connector.style.transform = 'rotate(' + angDeg + 'deg)';
       }
     }
+
+    // La ruta se lee de la pantalla, así que se redibuja DESPUÉS de mover a los
+    // marcadores: el zoom y el abatimiento no pasan por repositionAnchors.
+    dibujarRuta();
 
     // Tránsito a la vista del Grupo Local (zoom out) y al Vecindario Solar
     // (zoom máximo sobre el Sol). Se recalculan en cada cambio de zoom.
@@ -495,8 +973,7 @@
     var v = VLCapas.controlesVisibles(capa, isEdgeView, (window.CONFIG && CONFIG.giros) || {});
     capaEnPantalla = capa;
     var mandos = [
-      ['mw-vista-control', v.vista, 'flex'],
-      ['mw-rotate-control', v.giroCenital, 'flex'],
+      ['mw-tilt-control', v.abatimiento && INCL.activa, 'flex'],
       ['mw-rotate-edge-control', v.giroCanto, 'flex'],
       ['mw-rotate-plane-control', v.giroPlano, 'flex'],
       ['mw-legend', v.leyendaObjetos, ''],
@@ -682,8 +1159,19 @@
       effW = huella.w;
       effH = huella.h;
     }
+    // Abatida, la huella en pantalla ya no es el rectángulo por la escala: se
+    // ensancha en el borde cercano y se achata en alto. Se toma la mayor de las
+    // dos huellas: si el clamp se quedara con la achatada, el mapa quedaría
+    // clavado en vertical (el disco cabe de sobra a lo alto hasta zooms muy
+    // grandes) y no se podría llevar al centro un objeto alto sobre el plano.
+    var anchoPant = effW * scale, altoPant = effH * scale;
+    if (tiltActual()) {
+      var h3 = VLGeometria.huellaInclinada(r, vistaProyeccion());
+      anchoPant = Math.max(anchoPant, h3.w);
+      altoPant = Math.max(altoPant, h3.h);
+    }
     var pos = VLGeometria.clampDesplazamiento(
-      posX, posY, effW * scale, effH * scale, viewerRect.width, viewerRect.height);
+      posX, posY, anchoPant, altoPant, viewerRect.width, viewerRect.height);
     posX = pos.x;
     posY = pos.y;
   }
@@ -693,15 +1181,7 @@
   }
 
   function zoomAt(clientX, clientY, newScale) {
-    var rect = viewer.getBoundingClientRect();
-    var cx = clientX - rect.left - rect.width / 2;
-    var cy = clientY - rect.top - rect.height / 2;
-
-    var pos = VLGeometria.zoomAlrededor(posX, posY, cx, cy, scale, newScale);
-    posX = pos.x;
-    posY = pos.y;
-    scale = newScale;
-
+    anclarZoom(clientX, clientY, newScale);
     clampPosition();
     applyTransform();
   }
@@ -717,7 +1197,7 @@
   var rotDragStartAngle = 0;   // ángulo cursor-núcleo al iniciar (grados)
   var rotDragStartValue = 0;   // valor de rotación/azimut al iniciar
   var rotDragStartX = 0;       // para el azimut (horizontal)
-  var rotDragMode = '';        // 'cenital' | 'plano-canto' | 'azimut'
+  var rotDragMode = '';        // 'plano-canto' | 'azimut'
 
   function nucleusScreenPoint() {
     // Posición en pantalla del núcleo de la vista activa. Con transform-origin
@@ -738,7 +1218,8 @@
   // enfocar el buscador o desplegar un combo. Todo control nuevo que se añada
   // al mapa tiene que entrar en esta lista.
   var CONTROLES_UI = '#mw-search, #mw-observador, #mw-viaje, #mw-nuevo,' +
-                     ' #mw-toggle-view, #mw-legend, #mw-reset, .mw-ui-control';
+                     ' #mw-legend, #mw-consola-panel,' +
+                     ' .mw-ui-control';
 
   viewer.addEventListener('mousedown', function (e) {
     if (overlayOpen()) return;
@@ -749,16 +1230,8 @@
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
     // Ctrl/Shift + arrastre: modo rotación en lugar de desplazamiento.
-    if (e.ctrlKey || e.shiftKey) {
-      if (!isEdgeView) {
-        var np = nucleusScreenPoint();
-        if (np) {
-          isRotateDragging = true;
-          rotDragMode = 'cenital';
-          rotDragStartAngle = Math.atan2(e.clientY - np.y, e.clientX - np.x) * 180 / Math.PI;
-          rotDragStartValue = rotation;
-        }
-      } else if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
+    if ((e.ctrlKey || e.shiftKey) && isEdgeView) {
+      if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
         var np2 = nucleusScreenPoint();
         if (np2) {
           isRotateDragging = true;
@@ -799,9 +1272,7 @@
         var np = nucleusScreenPoint();
         if (np) {
           var ang = Math.atan2(e.clientY - np.y, e.clientX - np.x) * 180 / Math.PI;
-          var val = rotDragStartValue + (ang - rotDragStartAngle);
-          if (rotDragMode === 'cenital') setRotation(val);
-          else setEdgePlaneRotation(val);
+          setEdgePlaneRotation(rotDragStartValue + (ang - rotDragStartAngle));
         }
       }
       return;
@@ -896,9 +1367,9 @@
       // movimiento una transformación coherente (sin acumular errores):
       //   - pinchStartDist / pinchStartScale: para la relación de zoom.
       //   - pinchStartPosX/Y: desplazamiento del mapa al empezar.
-      //   - pinchAnchorX/Y: punto del MAPA (en coords del contenido, relativas
-      //     al centro del visor y SIN escala) que está bajo el punto medio de
-      //     los dedos. Ese punto debe permanecer bajo los dedos todo el gesto.
+      //   - pinchAnchorX/Y: punto del MAPA (en coordenadas del contenido) que
+      //     está bajo el punto medio de los dedos. Ese punto debe permanecer
+      //     bajo los dedos todo el gesto.
       isPinching = true;
       isDragging = false;
       pinchStartDist = touchDistance(e.touches[0], e.touches[1]);
@@ -909,12 +1380,11 @@
 
       var rect = viewer.getBoundingClientRect();
       var mid = touchMidpoint(e.touches[0], e.touches[1]);
-      // Posición del punto medio respecto al centro del visor (en píxeles).
-      var midCX = mid.x - rect.left - rect.width / 2;
-      var midCY = mid.y - rect.top - rect.height / 2;
-      // Punto del mapa (sin escala) que cae bajo el punto medio.
-      pinchAnchorX = (midCX - posX) / scale;
-      pinchAnchorY = (midCY - posY) / scale;
+      // Punto del mapa que cae bajo el punto medio de los dedos.
+      var anc = VLGeometria.planoDesdePantalla(
+        mid.x - rect.left - posX, mid.y - rect.top - posY, vistaProyeccion());
+      pinchAnchorX = anc.x;
+      pinchAnchorY = anc.y;
 
       hideHint();
       e.preventDefault();
@@ -933,31 +1403,28 @@
 
         var rect = viewer.getBoundingClientRect();
         var mid = touchMidpoint(e.touches[0], e.touches[1]);
-        // Punto medio actual respecto al centro del visor.
-        var midCX = mid.x - rect.left - rect.width / 2;
-        var midCY = mid.y - rect.top - rect.height / 2;
 
         // Imponemos que el punto de mapa anclado (pinchAnchor) quede justo bajo
-        // el punto medio actual de los dedos, a la nueva escala. De ahí se
-        // despeja posX/posY directamente (un solo paso, sin acumular):
-        //   midC = pos + anchor * scale  =>  pos = midC - anchor * scale
+        // el punto medio actual de los dedos, a la nueva escala: se proyecta a
+        // esa escala y el desplazamiento es lo que falta hasta los dedos (un
+        // solo paso, sin acumular).
         scale = targetScale;
-        posX = midCX - pinchAnchorX * targetScale;
-        posY = midCY - pinchAnchorY * targetScale;
+        var proj = VLGeometria.proyectarInclinado(
+          pinchAnchorX, pinchAnchorY, 0, vistaProyeccion(targetScale));
+        posX = (mid.x - rect.left) - proj.x;
+        posY = (mid.y - rect.top) - proj.y;
 
         clampPosition();
         applyTransform();
 
         // Giro de dos dedos (twist): acumulamos el incremento angular entre
-        // pasos. En cenital gira el mapa; en canto mueve el azimut (o el giro
-        // en plano si esa opción está activada).
+        // pasos. Solo la vista de canto gira: mueve el azimut (o el giro en
+        // plano si esa opción está activada).
         var angNow = touchAngle(e.touches[0], e.touches[1]);
         var dAng = angleDelta(angNow, pinchPrevAngle);
         pinchPrevAngle = angNow;
-        if (dAng) {
-          if (!isEdgeView) {
-            setRotation(rotation + dAng);
-          } else if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
+        if (dAng && isEdgeView) {
+          if (CONFIG.giros && CONFIG.giros.giroPlanoCanto) {
             setEdgePlaneRotation(edgePlaneRotation + dAng);
           } else if (CONFIG.giros && CONFIG.giros.giroAzimutalCanto) {
             setEdgeRotation(edgeRotation + dAng);
@@ -999,22 +1466,67 @@
     hideHint();
   }, { passive: false });
 
-  document.getElementById('mw-zoom-in').addEventListener('click', function () {
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    var rect = viewer.getBoundingClientRect();
-    var newScale = Math.min(effMaxScale(), scale * 1.3);
-    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, newScale);
-    hideHint();
-  });
+  // Tirador de la consola. El ratón la abre al posarse (eso lo hace el :hover
+  // del CSS) y el tabulador al entrar el foco; en una pantalla táctil no hay
+  // ninguna de las dos cosas, así que el tirador la deja fijada al pulsarlo.
+  var consola = document.getElementById('mw-consola');
+  var consolaTirador = document.getElementById('mw-consola-tirador');
+  if (consola && consolaTirador) {
+    // Un arrastre que empieza dentro del panel lo mantiene abierto aunque el
+    // puntero se salga: sin esto, mover un deslizador hasta el borde perdía el
+    // :hover y el panel se desvanecía con el arrastre en curso.
+    var consolaPanel = document.getElementById('mw-consola-panel');
+    if (consolaPanel) {
+      consolaPanel.addEventListener('pointerdown', function () {
+        consola.classList.add('mw-consola-arrastre');
+      });
+      ['pointerup', 'pointercancel'].forEach(function (ev) {
+        window.addEventListener(ev, function () {
+          consola.classList.remove('mw-consola-arrastre');
+        });
+      });
+    }
 
-  document.getElementById('mw-zoom-out').addEventListener('click', function () {
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    var rect = viewer.getBoundingClientRect();
-    var newScale = Math.max(minScale, scale / 1.3);
-    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, newScale);
-  });
+    // El tirador cierra tanto la consola fijada como la abierta por el ratón:
+    // con el puntero encima, quitar la clase fija no bastaba porque el :hover
+    // la dejaba abierta igual. 'mw-consola-cerrada' gana al :hover y al foco,
+    // y se quita al volver a entrar el puntero.
+    consolaTirador.addEventListener('click', function () {
+      // Abierta o no se decide mirando el panel, no las clases: la abre
+      // también el :hover del CSS, que no deja rastro en el DOM.
+      var abierta = consolaPanel &&
+                    parseFloat(getComputedStyle(consolaPanel).opacity) > 0.5;
+      consola.classList.toggle('mw-consola-fija', !abierta);
+      consola.classList.toggle('mw-consola-cerrada', abierta);
+      consolaTirador.setAttribute('aria-expanded', abierta ? 'false' : 'true');
+    });
 
-  document.getElementById('mw-reset').addEventListener('click', function () {
+    // Volver a entrar con el ratón la despierta: el cierre a mano solo vale
+    // para la visita en curso, no deja la consola muerta para siempre.
+    consola.addEventListener('pointerenter', function () {
+      consola.classList.remove('mw-consola-cerrada');
+    });
+
+    // Barrido de arranque: la consola se despliega sola una vez al cargar y se
+    // repliega, que es como se descubre que el tirador existe. Si en ese rato
+    // el usuario la fija con un clic (aria-expanded='true') se queda abierta, y
+    // si está encima con el ratón la mantiene abierta el :hover del CSS.
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      consola.classList.add('mw-consola-fija');
+      setTimeout(function () {
+        if (consolaTirador.getAttribute('aria-expanded') !== 'true') {
+          consola.classList.remove('mw-consola-fija');
+        }
+      }, 2200);
+    }
+  }
+
+  // El zoom se hace con la rueda y con el pellizco, que es lo que ya usa todo
+  // el mundo: los botones + y − no añadían un gesto que no existiera. Volver a
+  // la vista inicial es doble clic sobre el mapa.
+  viewer.addEventListener('dblclick', function (e) {
+    if (overlayOpen()) return;
+    if (e.target.closest && e.target.closest(CONTROLES_UI + ', .mw-pdf-dot')) return;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     scale = 1;
     posX = 0;
@@ -1145,7 +1657,6 @@
   var fichaOverlay = document.getElementById('ficha-overlay');
   var fichaTitle = document.getElementById('ficha-title');
   var fichaCoords = document.getElementById('ficha-coords');
-  var fichaPdfLink = document.getElementById('ficha-pdf-link');
   var fichaCloseBtn = document.getElementById('ficha-close');
   var fichaImgTitle = document.getElementById('ficha-img-title');
   var fichaButtons = document.getElementById('ficha-buttons');
@@ -1153,6 +1664,8 @@
   var fichaAnexos = document.getElementById('ficha-anexos');
   var fichaAnexosRight = document.getElementById('ficha-anexos-right');
   var fichaBackBtn = document.getElementById('ficha-back');
+ var fichaAudio = document.getElementById('ficha-audio');
+ var fichaAudioEl = null; // el <audio> del tramo actualmente montado, para poder pararlo al cerrar/cambiar de ficha
   var fichaCurrent = -1;
   // A dónde lleva "← Descubrir" desde la ficha que se está viendo: la pantalla
   // de descubrimiento de este objeto, con la observación actual excluida. null
@@ -1482,6 +1995,107 @@
     fichaAnexosRight.style.display = rightAnexos.length ? 'flex' : 'none';
   }
 
+  // Banda de audio (ADR 0005): <audio> nativo con media fragment #t=inicio,fin,
+  // crédito del observador y el enlace al episodio. Sin audio_url no hay tramo.
+  // mm:ss (o h:mm:ss) para mostrar el tramo; sin depender de bitacora-formulario.js.
+  function fmtAudioTiempo(seg) {
+    seg = Math.max(0, seg || 0);
+    var h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), s = Math.floor(seg % 60);
+    var mmss = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    return h > 0 ? h + ':' + mmss : mmss;
+  }
+
+  // El <audio> nativo con #t=inicio,fin arranca en el segundo correcto, pero el
+  // navegador NO recorta su barra de progreso al tramo (sigue enseñando el
+  // episodio entero) y no hay forma de "volver al principio del tramo" sin
+  // saber dónde estaba. Se sustituyen los controles nativos por unos mínimos
+  // (▶/⏸ + reinicio + mm:ss del tramo) que si acotan la reproducción al
+  // segmento: currentTime se fija al entrar y al pasarse del fin, se corta sola.
+  function renderFichaAudio(f) {
+    if (!fichaAudio) return;
+    if (fichaAudioEl) { fichaAudioEl.pause(); fichaAudioEl = null; }
+    var a = f.audio;
+    if (!a || !a.url) { fichaAudio.style.display = 'none'; fichaAudio.innerHTML = ''; return; }
+    var inicio = a.inicio || 0;
+    var credito = VLO.nombreObservador(f.observador);
+    var duracion = (a.fin != null) ? (a.fin - inicio) : null;
+    var rango = fmtAudioTiempo(inicio) + (a.fin != null ? '–' + fmtAudioTiempo(a.fin) : ' → fin del episodio');
+
+    fichaAudio.innerHTML =
+      '<div style="color:#f4c76b;font-weight:600;margin-bottom:6px;">🎧 Tramo de un reportaje sonoro' +
+        (credito ? ' de ' + escHtml(credito) : '') + '</div>' +
+      '<div style="display:inline-flex;align-items:center;gap:10px;">' +
+        '<button type="button" id="ficha-audio-play" style="' +
+          'width:34px;height:34px;border-radius:50%;border:1px solid #f4c76b;background:rgba(244,199,107,0.12);' +
+          'color:#f4c76b;font-size:14px;cursor:pointer;line-height:1;">▶</button>' +
+        '<button type="button" id="ficha-audio-reset" title="Volver al inicio del tramo" style="' +
+          'border:1px solid rgba(244,199,107,0.5);border-radius:14px;background:transparent;color:#f4c76b;' +
+          'font-size:12px;padding:4px 10px;cursor:pointer;">⏮ Inicio</button>' +
+        '<button type="button" id="ficha-audio-atras" title="Retroceder 10 segundos" style="' +
+          'border:1px solid rgba(244,199,107,0.5);border-radius:14px;background:transparent;color:#f4c76b;' +
+          'font-size:12px;padding:4px 10px;cursor:pointer;">⏪ 10s</button>' +
+        '<button type="button" id="ficha-audio-adelante" title="Avanzar 30 segundos" style="' +
+          'border:1px solid rgba(244,199,107,0.5);border-radius:14px;background:transparent;color:#f4c76b;' +
+          'font-size:12px;padding:4px 10px;cursor:pointer;">30s ⏩</button>' +
+        '<span id="ficha-audio-tiempo" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#cfd8e3;">' +
+          fmtAudioTiempo(inicio) + ' / ' + rango + '</span>' +
+      '</div>' +
+      (a.episodio
+        ? '<div style="margin-top:6px;"><a href="' + escHtml(a.episodio) +
+          '" target="_blank" rel="noopener noreferrer" style="color:#f4c76b;">Episodio</a></div>'
+        : '');
+    fichaAudio.style.display = 'block';
+
+    var audioEl = new Audio(a.url);
+    audioEl.preload = 'none';
+    fichaAudioEl = audioEl;
+    var btnPlay = fichaAudio.querySelector('#ficha-audio-play');
+    var btnReset = fichaAudio.querySelector('#ficha-audio-reset');
+    var btnAtras = fichaAudio.querySelector('#ficha-audio-atras');
+    var btnAdelante = fichaAudio.querySelector('#ficha-audio-adelante');
+    var spanTiempo = fichaAudio.querySelector('#ficha-audio-tiempo');
+
+    function irAlInicio() { audioEl.currentTime = inicio; spanTiempo.textContent = fmtAudioTiempo(inicio) + ' / ' + rango; }
+    // Saltos acotados al tramo: no antes de inicio, no más allá de fin (si lo hay).
+    function saltar(delta) {
+      var tope = (a.fin != null) ? a.fin : audioEl.duration || Infinity;
+      audioEl.currentTime = Math.min(tope, Math.max(inicio, audioEl.currentTime + delta));
+      spanTiempo.textContent = fmtAudioTiempo(audioEl.currentTime) + ' / ' + rango;
+    }
+
+    audioEl.addEventListener('loadedmetadata', function () { audioEl.currentTime = inicio; });
+    audioEl.addEventListener('timeupdate', function () {
+      if (a.fin != null && audioEl.currentTime >= a.fin) {
+        audioEl.pause();
+        irAlInicio();
+        btnPlay.textContent = '▶';
+        return;
+      }
+      spanTiempo.textContent = fmtAudioTiempo(audioEl.currentTime) + ' / ' + rango;
+    });
+    audioEl.addEventListener('pause', function () { btnPlay.textContent = '▶'; });
+    audioEl.addEventListener('play', function () { btnPlay.textContent = '⏸'; });
+
+    btnPlay.addEventListener('click', function () {
+      if (audioEl.paused) {
+        // Si nunca se cargó o quedó fuera de rango (o al final), se retoma en el inicio.
+        if (!audioEl.currentTime || audioEl.currentTime < inicio || (a.fin != null && audioEl.currentTime >= a.fin)) {
+          irAlInicio();
+        }
+        audioEl.play();
+      } else {
+        audioEl.pause();
+      }
+    });
+    btnReset.addEventListener('click', function () {
+      var seguiaSonando = !audioEl.paused;
+      irAlInicio();
+      if (seguiaSonando) audioEl.play();
+    });
+    btnAtras.addEventListener('click', function () { saltar(-10); });
+    btnAdelante.addEventListener('click', function () { saltar(30); });
+  }
+
   function buildFichaButtons(f) {
     fichaButtons.innerHTML = '';
     f.entries.forEach(function (entry, idx) {
@@ -1513,7 +2127,6 @@
 
     // Restaura el modo normal (por si venimos de la pantalla de descubrimiento).
     fichaLeftCol.style.display = '';
-    fichaPdfLink.style.display = '';
 
     var coords = (info && info.coords) || '';
     if (opts.observadorNombre) {
@@ -1521,10 +2134,10 @@
     }
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = coords;
-    fichaPdfLink.href = f.pdf || (info && info.pdf) || '#';
     fichaBackBtn.style.display = fichaDescubrir ? '' : 'none';
 
     buildFichaButtons(f);
+    renderFichaAudio(f);
     fichaOverlay.style.display = 'flex';
     isDragging = false;
     isPinching = false;
@@ -1565,7 +2178,6 @@
     ctx = ctx || {};
     fichaDescubrir = null;
     fichaBackBtn.style.display = 'none';
-    fichaPdfLink.style.display = 'none';
     fichaLeftCol.style.display = 'none';         // solo se usa la columna de texto
     fichaAnexos.style.display = 'none';
     fichaAnexosRight.style.display = 'none';
@@ -1642,6 +2254,7 @@
 
   function closeFicha() {
     fichaOverlay.style.display = 'none';
+    if (fichaAudioEl) { fichaAudioEl.pause(); fichaAudioEl = null; }
   }
 
   // Abre la ficha (o, en su defecto, el PDF) de un objeto a partir de sus datos,
@@ -1727,7 +2340,6 @@
   // --------------------------------------------------------------------------
   var imgTop = document.getElementById('mw-image');
   var imgEdge = document.getElementById('mw-image-edge');
-  var toggleBtn = document.getElementById('mw-toggle-view');
   var isEdgeView = false;
 
   // Carga diferida de la imagen de canto (~6 MB): su URL está en data-src para
@@ -1781,13 +2393,14 @@
       var enRuta = !viajeActivo || VLViaje.enViaje(viajeActivo, id);
       a.style.display = (inView && !typeHidden && enRuta && !EN_VECINDARIO[id]
         && VLO.visiblePorObservador(id)) ? '' : 'none';
-      // Objeto observado solo por otros: se muestra atenuado (gris con algo de
-      // su color), como "deshabilitado". El filtro no afecta a los clics, así
-      // que sigue pudiéndose pulsar para descubrir las observaciones ajenas.
-      // Durante un viaje los objetos de la ruta van siempre a todo color: son
-      // las escalas de la travesía, no observaciones ajenas.
-      a.style.filter = (VLO.atenuadoPorObservador(id) && !viajeActivo)
-        ? 'grayscale(' + VLO.MEZCLA_NO_VISITADO + ') opacity(' + VLO.OPACIDAD_NO_VISITADO + ')' : '';
+      // Objeto observado solo por otros: es un destino POR VISITAR y se dibuja
+      // como anillo hueco de su color, no como punto lleno apagado (la
+      // distinción es de símbolo, no de brillo: ver .mw-no-visitado en
+      // mapa.html). Sigue pudiéndose pulsar para descubrir las observaciones
+      // ajenas. Durante un viaje los objetos de la ruta van todos como
+      // visitados: son las escalas de la travesía, no observaciones ajenas.
+      a.classList.toggle('mw-no-visitado',
+        VLO.atenuadoPorObservador(id) && !viajeActivo);
     }
   }
 
@@ -1803,70 +2416,67 @@
       imgTop.style.display = 'none';
       imgEdge.style.display = 'block';
       imgEdge.style.position = 'absolute';
-      toggleBtn.textContent = '🔄 Vista cenital';
+      imgEdge.style.opacity = '';      // la antesala la deja a medio fundir
+      imgEdge.style.transform = '';    // y contragirada: aquí ya es la vista
     } else {
       imgTop.style.display = 'block';
       imgTop.style.position = 'absolute';
       imgEdge.style.display = 'none';
-      toggleBtn.textContent = '🔄 Vista de canto';
     }
     refreshAnchors();
     repositionAnchors();
 
+    // El mando de abatimiento marca la vista: 90° de canto, y al volver el
+    // abatimiento con el que se vuelve. Se pinta aquí y no al pedir el cambio,
+    // porque el fundido tarda y hasta su mitad la vista sigue siendo la otra.
+    pintarTilt();
     aplicarControlesDeCapa();
 
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    scale = 1;
-    posX = 0;
-    posY = 0;
+    // El encuadre NO se reinicia: en la antesala la foto de canto ya se ve con
+    // este zoom y este desplazamiento (misma caja, mismo object-fit), así que
+    // reiniciarlo al llegar a 90° devolvía la vista global de golpe. Quien
+    // necesite otro encuadre (irAlVecindario) lo fija después.
     applyTransform();
     hideHint();
   }
 
-  // Voltereta 3D entre vistas: la vista actual se abate sobre su eje horizontal
-  // (como inclinar el disco galáctico) hasta desaparecer de perfil; en ese
-  // instante se intercambian las imágenes y la nueva vista se levanta desde el
-  // otro lado. Desactivable con CONFIG.giros.transicion3D = false.
-  var isFlipping = false;
-  var FLIP_MS = 350; // duración de cada mitad de la voltereta
+  // Fundido entre vistas. Antes era una voltereta 3D de dos mitades (0,7 s con
+  // el disco girando); ahora el punto de vista es un mando continuo de 0° a 90°
+  // y la voltereta lo cortaba en seco justo al llegar al tope. Se funde la
+  // vista actual, se cambian foto y marcadores, y se funde la nueva.
+  var cambiandoVista = false;
+  var FUNDIDO_MS = 140;
 
-  toggleBtn.addEventListener('click', function () {
+  // Cambia de vista. Ya no hay botón: lo llama el mando de abatimiento al
+  // llegar al tope (90° = de canto) y al bajar de él. El fundido va en las DOS
+  // FOTOS y no en #mw-content: la opacidad del contenedor es de los fundidos
+  // con el atlas y el vecindario (updateGrupoLocal/updateVecindario la reponen
+  // en cada fotograma), así que un fundido puesto ahí se borraba solo.
+  function cambiarVista() {
     ensureEdgeImage(); // asegura que la imagen de canto esté (o empiece a) cargarse
-    if (!(CONFIG.giros && CONFIG.giros.transicion3D)) {
-      performViewSwap();
-      return;
-    }
-    if (isFlipping) return;
-    isFlipping = true;
-
-    viewer.style.perspective = '1200px';
-    img.style.transformOrigin = 'center center';
-    img.style.transition = 'transform ' + (FLIP_MS / 1000) + 's ease-in';
-    img.style.transform =
-      'translate(' + posX + 'px, ' + posY + 'px) scale(' + scale + ') rotateX(90deg)';
-
+    if (cambiandoVista) return;
+    cambiandoVista = true;
+    var saliente = isEdgeView ? imgEdge : imgTop;
+    var entrante = isEdgeView ? imgTop : imgEdge;
+    var trans = 'opacity ' + (FUNDIDO_MS / 1000) + 's linear';
+    saliente.style.transition = trans;
+    saliente.style.opacity = '0';
     setTimeout(function () {
-      // Mitad de la voltereta: cambiamos de vista con el mapa "de perfil".
-      performViewSwap(); // deja transform = base (translate 0, scale 1)
-
-      // La nueva vista entra levantándose desde el otro lado. Si la vista de
-      // destino tiene un giro en plano activo, lo incluimos en la animación
-      // para que no haya un salto al terminar.
-      var destRot = currentPlaneRotation();
-      var rotSuffix = destRot ? ' rotate(' + destRot + 'deg)' : '';
-      img.style.transition = 'none';
-      img.style.transform = 'translate(0px, 0px) scale(1) rotateX(-90deg)' + rotSuffix;
-      void img.offsetWidth; // forzar reflow para que la transición aplique
-      img.style.transition = 'transform ' + (FLIP_MS / 1000) + 's ease-out';
-      img.style.transform = 'translate(0px, 0px) scale(1) rotateX(0deg)' + rotSuffix;
-
+      performViewSwap();          // cambia foto y marcadores, ya invisible
+      saliente.style.transition = 'none';
+      saliente.style.opacity = '1';   // preparada para la próxima vez
+      entrante.style.transition = 'none';
+      entrante.style.opacity = '0';
+      void entrante.offsetWidth;      // reflujo para que la transición aplique
+      entrante.style.transition = trans;
+      entrante.style.opacity = '1';
       setTimeout(function () {
-        img.style.transition = 'none';
-        applyTransform(); // transform definitivo sin restos de la animación
-        isFlipping = false;
-      }, FLIP_MS + 30);
-    }, FLIP_MS + 30);
-  });
+        entrante.style.transition = 'none';
+        cambiandoVista = false;
+      }, FUNDIDO_MS + 20);
+    }, FUNDIDO_MS + 20);
+  }
 
   // Reposicionar cuando carga cada imagen (la cenital es remota y puede tardar)
   [imgTop, imgEdge].forEach(function (el) {
@@ -1900,6 +2510,7 @@
 
       // Estilo de la fila en la leyenda
       var textEl = this.querySelector('.mw-legend-text');
+      this.setAttribute('aria-pressed', nowHidden ? 'true' : 'false');
       this.style.opacity = nowHidden ? '0.4' : '1';
       if (textEl) textEl.style.textDecoration = nowHidden ? 'line-through' : 'none';
 
@@ -1930,9 +2541,16 @@
     observadorSelect.innerHTML = opts;
 
     // Si el usuario está logado y tiene observaciones registradas, el mapa
-    // arranca mostrando LAS SUYAS (el plugin inyecta su clave en BITACORA_WP).
-    // Un visitante anónimo (o sin observaciones) arranca con "Todas".
-    var claveInicial = (window.BITACORA_WP && BITACORA_WP.observadorClave) ? BITACORA_WP.observadorClave : '';
+    // arranca mostrando LAS SUYAS. Un visitante anónimo (o sin observaciones)
+    // arranca con "Todas".
+    //
+    // Quién mira llega por dos caminos, y el mapa acepta los dos: BITACORA_WP si
+    // la página la pinta WordPress, y OBSERVADOR_ACTIVO (que emite datos.js) si
+    // el mapa se sirve como fichero estático, donde no hay cabecera que inyectar
+    // y BITACORA_WP no existe. Este es el caso de /mapa.html en producción.
+    var claveInicial = (window.BITACORA_WP && BITACORA_WP.observadorClave)
+      ? BITACORA_WP.observadorClave
+      : (window.OBSERVADOR_ACTIVO || '');
     if (claveInicial && conObs[claveInicial]) {
       observadorSelect.value = claveInicial;
       VLO.setActivo(claveInicial);
@@ -1971,6 +2589,7 @@
     var fila = legendByColor[color];
     var nombreTipo = 'este tipo de objeto';
     if (fila) {
+      fila.setAttribute('aria-pressed', 'false');
       fila.style.opacity = '1';
       var textEl = fila.querySelector('.mw-legend-text');
       if (textEl) {
@@ -2094,7 +2713,7 @@
         { x: (edgeRotation !== 0) ? sunEdgeXAt(edgeRotation) : CONFIG.sol.canto.x,
           y: CONFIG.sol.canto.y },
         { x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : inicio.objeto.edge.x,
-          y: inicio.objeto.edge.y });
+          y: edgeYDe(inicio.objeto) });
     } else {
       encuadrarDosPuntos(CONFIG.sol.cenital, inicio.objeto.top);
     }
@@ -2166,7 +2785,7 @@
   // el zoom pedido. Reutiliza la misma geometría que repositionAnchors().
   // topeMax eleva el tope de zoom por encima del normal: solo lo usa la entrada
   // al vecindario solar, que vive mucho más cerca que el resto del mapa.
-  function centerOnAnchor(xPct, yPct, targetScale, topeMax) {
+  function centerOnAnchor(xPct, yPct, targetScale, topeMax, zPx) {
     var activeImg = isEdgeView
       ? document.getElementById('mw-image-edge')
       : document.getElementById('mw-image');
@@ -2180,7 +2799,9 @@
 
     // Si la vista está girada, el objeto aparece rotado alrededor del núcleo:
     // aplicamos la misma rotación al punto antes de calcular el desplazamiento.
-    var rot = currentPlaneRotation();
+    // Con el disco abatido no: ahí el giro ya va dentro de la proyección
+    // (vistaProyeccion), y hacerlo dos veces manda el encuadre a otro sitio.
+    var rot = tiltActual() ? 0 : currentPlaneRotation();
     if (rot) {
       var nuc = currentNucleo();
       var nx = r.left + r.width  * (nuc.x / 100);
@@ -2192,10 +2813,13 @@
     }
 
     scale = Math.min(topeMax || maxScale, Math.max(minScale, targetScale));
-    // Para que (ax,ay) quede en el centro del visor:
-    //   posición_en_pantalla = (ax - W/2) * scale + posX = 0  →  posX = -(ax-W/2)*scale
-    posX = -(ax - W / 2) * scale;
-    posY = -(ay - H / 2) * scale;
+    // Para que (ax,ay) quede en el centro del visor, se proyecta a la escala de
+    // destino y el desplazamiento es lo que falta hasta el centro. Con el disco
+    // abatido cuenta además la altura del objeto sobre el plano, o el encuadre
+    // se queda corto justo con los que más se despegan.
+    var proj = VLGeometria.proyectarInclinado(ax, ay, zPx || 0, vistaProyeccion(scale));
+    posX = W / 2 - proj.x;
+    posY = H / 2 - proj.y;
 
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     clampPosition();
@@ -2274,12 +2898,17 @@
       var g = GAL[obj.id];
       pos = {
         x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : obj.edge.x,
-        y: obj.edge.y
+        y: edgeYDe(obj)
       };
     } else {
       pos = obj.top;
     }
-    centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom);
+    // Con el disco abatido, el objeto no está sobre el plano sino a su altura:
+    // se la pasamos al centrado o los que más se despegan quedan descuadrados.
+    var imgCen = document.getElementById('mw-image');
+    var zObj = (!isEdgeView && imgCen && imgCen.naturalWidth)
+      ? alturaObjetoPx(obj.id, getImgRect(imgCen)) : 0;
+    centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom, null, zObj);
     // El parpadeo se lanza tras un instante para que el centrado ya esté hecho.
     setTimeout(function () { blinkObject(obj.id); }, 60);
   }
@@ -2448,28 +3077,68 @@
   }
 
   // ===========================================================================
-  // CONTROL DE GIRO DE LA VISTA CENITAL
-  // El deslizador fija el ángulo (0-360°); el mapa rota alrededor del núcleo
-  // galáctico y las etiquetas se mantienen horizontales (ver applyTransform).
+  // MANDO DEL PUNTO DE VISTA (ABATIMIENTO)
+  // Único mando de la vista de la galaxia: del cenital de plano (0°) al canto
+  // (90°). Al llegar al tope no se deja el disco convertido en una raya: el
+  // mapa funde a la vista de canto, que tiene su propia foto y sus propios
+  // marcadores. Al bajar del tope se vuelve a la cenital con ese abatimiento.
   // ===========================================================================
-  var rotateInput = document.getElementById('mw-rotate');
-  var rotateValue = document.getElementById('mw-rotate-value');
-  var rotateReset = document.getElementById('mw-rotate-reset');
+  var tiltInput = document.getElementById('mw-tilt');
+  var tiltValue = document.getElementById('mw-tilt-value');
+  var tiltReset = document.getElementById('mw-tilt-reset');
 
-  function setRotation(deg) {
-    rotation = ((deg % 360) + 360) % 360; // normaliza a 0-360
-    if (rotateInput) rotateInput.value = rotation;
-    if (rotateValue) rotateValue.textContent = Math.round(rotation) + '°';
+  // De canto el mando marca el tope: la vista de canto ES el abatimiento a 90°,
+  // aunque por dentro esa foto no se abata (tiene su propio punto de vista).
+  function pintarTilt() {
+    var deg = isEdgeView ? TILT_MAX : tiltGrados;
+    if (tiltInput) {
+      tiltInput.value = deg;
+      tiltInput.setAttribute('aria-valuetext', Math.round(deg) + ' grados');
+    }
+    if (tiltValue) tiltValue.textContent = Math.round(deg) + '°';
+  }
+
+  function setTilt(deg) {
+    if (cambiandoVista) return;
+    deg = Math.max(0, Math.min(TILT_MAX, deg || 0));
+    // De dónde se viene: si el mando ya estaba en la antesala, la foto de canto
+    // está montada y el cambio de vista va directo; si se salta al tope de un
+    // tirón (extremo del deslizador), se funde como cualquier otro cambio.
+    var desdeAntesala = !isEdgeView && tiltGrados > TILT_PREVIA;
+    if (isEdgeView) {
+      // Bajar del tope devuelve a la cenital con el abatimiento que se pida:
+      // el mando es el mismo de punta a punta y no hay botón de vista.
+      if (deg >= TILT_MAX) { pintarTilt(); return; }
+      tiltGrados = deg;
+      // Dentro de la antesala el cambio no se funde: la foto de canto sigue en
+      // pantalla, ahora como capa sobre el disco, y fundirla sería un parpadeo.
+      if (deg > TILT_PREVIA) { performViewSwap(); } else { cambiarVista(); }
+      return;
+    }
+    tiltGrados = deg;
+    if (tiltGrados >= TILT_MAX) {
+      // El tope ES la vista de canto, con su propia foto y sus marcadores. El
+      // abatimiento guardado vuelve a 0: quien devuelve a la cenital sin tocar
+      // el mando (el vecindario solar, que solo existe ahí) aterriza de plano y
+      // no con el disco hecho una raya. Desde el mando se vuelve con el ángulo
+      // que se pida, que lo fija la rama de arriba.
+      tiltGrados = 0;
+      if (desdeAntesala) { performViewSwap(); } else { cambiarVista(); }
+      return;
+    }
+    pintarTilt();
+    repositionAnchors();   // el bulbo y las plomadas dependen del abatimiento
     applyTransform();
   }
 
-  if (rotateInput) {
-    rotateInput.addEventListener('input', function () {
-      setRotation(parseFloat(rotateInput.value) || 0);
+  pintarTilt();
+  if (tiltInput) {
+    tiltInput.addEventListener('input', function () {
+      setTilt(parseFloat(tiltInput.value) || 0);
     });
   }
-  if (rotateReset) {
-    rotateReset.addEventListener('click', function () { setRotation(0); });
+  if (tiltReset) {
+    tiltReset.addEventListener('click', function () { setTilt(0); });
   }
 
   // ===========================================================================
@@ -2484,7 +3153,10 @@
 
   function setEdgeRotation(deg) {
     edgeRotation = ((deg % 360) + 360) % 360;
-    if (rotateEdgeInput) rotateEdgeInput.value = edgeRotation;
+    if (rotateEdgeInput) {
+      rotateEdgeInput.value = edgeRotation;
+      rotateEdgeInput.setAttribute('aria-valuetext', Math.round(edgeRotation) + ' grados');
+    }
     if (rotateEdgeValue) rotateEdgeValue.textContent = Math.round(edgeRotation) + '°';
     repositionAnchors();
   }
@@ -2509,7 +3181,10 @@
 
   function setEdgePlaneRotation(deg) {
     edgePlaneRotation = ((deg % 360) + 360) % 360;
-    if (rotatePlaneInput) rotatePlaneInput.value = edgePlaneRotation;
+    if (rotatePlaneInput) {
+      rotatePlaneInput.value = edgePlaneRotation;
+      rotatePlaneInput.setAttribute('aria-valuetext', Math.round(edgePlaneRotation) + ' grados');
+    }
     if (rotatePlaneValue) rotatePlaneValue.textContent = Math.round(edgePlaneRotation) + '°';
     clampPosition();
     applyTransform();
