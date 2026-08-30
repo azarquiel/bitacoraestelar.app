@@ -15,9 +15,10 @@ var fs = require('fs'), path = require('path'), https = require('https');
 var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
-var R = global.window.BitacoraGaiaRender, PS1 = R.ps1;
+var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 
 var OUT = path.join(__dirname, 'fixtures', 'gaia');
 fs.mkdirSync(OUT, { recursive: true });
@@ -44,7 +45,7 @@ function fila(fuente, nombre) {
 
 function bajar(o) {
   var f = fila(o.fuente, o.cat);
-  var lado = R.ps1LadoArcmin(f[4]);
+  var lado = window.BitacoraPS1.ps1LadoArcmin(f[4]);
   var radDeg = (lado * 0.75) / 60;
   var adql = 'SELECT TOP 200000 RA_ICRS, DE_ICRS, Gmag FROM "I/355/gaiadr3"' +
     ' WHERE Gmag <= ' + PS1.mascaraProf +

@@ -12,10 +12,11 @@ var ETIQ = process.env.ETIQUETA || 'despues';
 
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 var R = global.window.BitacoraGaiaRender;
 var CAT = global.window.BITACORA_GALAXIAS;
-var FOT = R.fot, PS1 = R.ps1;
+var FOT = R.fot, PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 var IN_GAIA = path.join(RAIZ, '.scratch', 'quitar-general');
 var SIZE = 720, AFOV = 70, CFG = { D: 457.2, M: 190, sqm: 21.2 };
@@ -55,32 +56,32 @@ function corre(O) {
   var g = filaCat(O.cat);
   var gal = { nombre: g[0], ra: g[2], dec: g[3], reArcsec: g[4], ba: g[5], pa: g[6],
               magV: g[7], n: g[8], bt: g[9], nMedido: g[11] || 0,
-              ladoArcmin: R.ps1LadoArcmin(g[4]) };
+              ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(g[4]) };
   return B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
     var fSim = { ancho: F.ancho, alto: F.alto, escalaAs: F.escalaAs, wcs: F.wcs || null };
-    fSim.afin = R.ps1AfinParche(fSim, gal);
-    var enPx = R.ps1EstrellasEnPixeles(fSim, gal, leerGaia(O.csv));
-    var escena = R.ps1EscenaEnParche(fSim, gal, R.ps1GalaxiasDelCampo(CAT, gal.ra, gal.dec, gal.ladoArcmin));
-    var limpio = R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx,
+    fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
+    var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(fSim, gal, leerGaia(O.csv));
+    var escena = window.BitacoraPS1.ps1EscenaEnParche(fSim, gal, window.BitacoraPS1.ps1GalaxiasDelCampo(CAT, gal.ra, gal.dec, gal.ladoArcmin));
+    var limpio = window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx,
       { afin: fSim.afin, ba: gal.ba, pa: gal.pa, escena: escena });
-    var comps = R.ps1ComponentesSersic(gal);
-    var datos = R.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
+    var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+    var datos = window.BitacoraPS1.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
       magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
       ladoArcmin: gal.ladoArcmin, escalaAs: F.escalaAs });
-    var peso = R.ps1PesoImagen(datos, F.ancho, F.alto, F.escalaAs);
-    var perfil = R.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, fSim.afin);
+    var peso = window.BitacoraPS1.ps1PesoImagen(datos, F.ancho, F.alto, F.escalaAs);
+    var perfil = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, fSim.afin);
     var parche = { ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
                    ancho: F.ancho, alto: F.alto, afin: fSim.afin,
-                   comps: comps, pa: gal.pa, halo: R.ps1MedidasHalo(gal, comps),
-                   thetaIntArcmin: R.ps1ThetaIntArcmin(comps, gal.ba),
-                   peso: peso, escalaMezcla: R.ps1EscalaMezcla(datos, peso, perfil),
+                   comps: comps, pa: gal.pa, halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps),
+                   thetaIntArcmin: window.BitacoraPS1.ps1ThetaIntArcmin(comps, gal.ba),
+                   peso: peso, escalaMezcla: window.BitacoraPS1.ps1EscalaMezcla(datos, peso, perfil),
                    datos: datos };
     var cielo = { pupilaSalida: CFG.D / CFG.M, pupilaOjo: 7, sqm: CFG.sqm,
                   aumentos: CFG.M, realceMax: PS1.realceMax, perceptual: true };
     var o = { ra0: gal.ra, dec0: gal.dec, arcmin: AFOV / CFG.M * 60, size: SIZE,
               cielo: cielo, apertura: CFG.D };
     var difuso = new Float32Array(SIZE * SIZE);
-    R.ps1PintarParche(difuso, parche, o);
+    window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
     var c = R.ctxFotometrico(cielo, parche.thetaIntArcmin);
     var E = new Float32Array(difuso.length), flujo = 0;
     for (var i = 0; i < difuso.length; i++) {

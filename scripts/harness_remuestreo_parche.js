@@ -15,8 +15,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1;
+var PS1 = window.BitacoraPS1.cfg;
 var PAR = require('./lib_parches_ps1.js')(R);
 
 function f(v, d) { return (v == null || !isFinite(v)) ? '-' : v.toFixed(d == null ? 3 : d); }

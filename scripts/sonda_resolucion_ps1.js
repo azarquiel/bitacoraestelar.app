@@ -12,8 +12,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1;
+var PS1 = window.BitacoraPS1.cfg;
 var https = require('https');
 
 var RA = Number(process.argv[2] || 202.46957);      // M51
@@ -71,7 +72,7 @@ nombres().then(function (celda) {
         '&x=' + RA + '&y=' + DEC + '&size=' + SIZE + '&output_size=' + os + '&format=fits&wcs=1';
       return bajar(url).then(function (r) {
         var ab = r.buf.buffer.slice(r.buf.byteOffset, r.buf.byteOffset + r.buf.byteLength);
-        var m = medir(R.parseFITS(ab));
+        var m = medir(window.BitacoraPS1.parseFITS(ab));
         var nota = os > SIZE ? '  ← PASA DE NATIVO: interpola' : (os === SIZE ? '  ← nativo' : '');
         console.log('\n  output_size = ' + os + nota);
         console.log('    NAXIS1 ' + m.ancho + ' · escalaAs ' + f(m.esc, 4) + '″/px · ' +

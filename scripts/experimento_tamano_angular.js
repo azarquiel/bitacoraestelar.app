@@ -19,6 +19,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot;
 
@@ -120,7 +121,7 @@ OBJETOS.forEach(function (o) {
   var rDet = radioIsofota(o.comps, u);
   fila([f(o.d25, 2), f(cmin, 4), f(terminoHoy(150), 4), f(u), f(rDet, 1),
     f(rDet / o.re, 3), f(2 * rDet / (o.d25 * 60), 3)]
-    .concat(MUS.map(function (x) { return f(R.ps1Opacidad(x, u), 3); })));
+    .concat(MUS.map(function (x) { return f(window.BitacoraPS1.ps1Opacidad(x, u), 3); })));
 });
 console.log('  ↑ μ_lim, Cmin y opacidad: iguales para los siete. El radio detectable en ″\n' +
   '    escala con el objeto, pero RELATIVO al objeto es constante: la ley no distingue.');
@@ -218,9 +219,9 @@ console.log('  (M31 no cabe en el campo de un 18″ ni a 66x: su «uso real» lo
 fila(['galaxia', 'uso real', 'HOY'].concat(CANDIDATOS.map(function (c) { return c.id; }))
   .concat(['LOCAL']));
 REALES.forEach(function (g) {
-  var comps = R.ps1ComponentesSersic({ magV: g.magV, reArcsec: g.re, n: g.n, ba: g.ba, bt: 0 });
+  var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: g.magV, reArcsec: g.re, n: g.n, ba: g.ba, bt: 0 });
   var o = { d25: 2 * radioIsofota(comps, 25) / 60, re: g.re, comps: comps,
-            dHalo: 2 * radioIsofota(comps, R.ps1.muHalo) / 60 };
+            dHalo: 2 * radioIsofota(comps, window.BitacoraPS1.cfg.muHalo) / 60 };
   fila([g.nombre, g.uso, textoOpt(optHoy())]
     .concat(CANDIDATOS.map(function (c) { return textoOpt(optCand(c, o)); }))
     .concat([textoOpt(optimo(function (m) { return umbralLocal(o, m); }))]));
@@ -265,9 +266,9 @@ var CAND6 = [
   { id: 'LOCAL 2·r(μ_lim)', theta: function (g, o) { return o.thetaLocal; } }
 ];
 var FILAS6 = REALES.map(function (g) {
-  var comps = R.ps1ComponentesSersic({ magV: g.magV, reArcsec: g.re, n: g.n, ba: g.ba, bt: 0 });
+  var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: g.magV, reArcsec: g.re, n: g.n, ba: g.ba, bt: 0 });
   var o = { d25: 2 * radioIsofota(comps, 25) / 60, re: g.re, comps: comps,
-            dHalo: 2 * radioIsofota(comps, R.ps1.muHalo) / 60 };
+            dHalo: 2 * radioIsofota(comps, window.BitacoraPS1.cfg.muHalo) / 60 };
   o.thetaLocal = 2 * radioIsofota(comps, umbralLocal(o, g.magUso)) / 60;
   return { g: g, o: o };
 });

@@ -41,10 +41,11 @@ var Rmain = global.window.BitacoraGaiaRender;          // ley desplegada (A0)
 
 global.window = {};
 require(RUTA_RAMA);
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 var R = global.window.BitacoraGaiaRender;              // rama (A)
 var CAT = global.window.BITACORA_GALAXIAS;
-var FOT = R.fot, PS1 = R.ps1, CFG = R.config;
+var FOT = R.fot, PS1 = window.BitacoraPS1.cfg, CFG = R.config;
 var P = require('./lib_psf_parche.js')(R);
 var B = require('./lib_bajar_parche.js')(R);
 var SINT = require('./lib_galaxias_sinteticas.js')(R);
@@ -241,19 +242,19 @@ function galDe(nombre) {
   if (!g) return null;
   return { nombre: g[0], ra: g[2], dec: g[3], reArcsec: g[4], ba: g[5], pa: g[6],
            magV: g[7], n: g[8], bt: g[9], nMedido: g[11] || 0,
-           ladoArcmin: R.ps1LadoArcmin(g[4]) };
+           ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(g[4]) };
 }
 /* θint del MODELO del catálogo: diámetro de la isofota μ=25 del perfil Sérsic
    anclado a magV (misma maquinaria que el halo), circularizado por √(b/a). */
 function thetaIntDe(gal) {
-  var comps = R.ps1ComponentesSersic(gal);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
   /* Bisección de μ=25 sobre la SUMA de componentes, en el SEMIEJE MAYOR
      (pa=0 → norte). SINT.radioIsofota medía sobre `este`, que con pa=0 es el
      eje MENOR (r/q): en NGC 205 eso encogía la referencia exactamente 1/ba y
      hacía parecer que producción sobrestimaba. La circularización por √(b/a)
      presupone el semieje mayor. */
   var lo = 1e-4, hi = 1e6;
-  function mu(r) { return -2.5 * log10(R.ps1FlujoModelo(comps, 0, r, 0)); }
+  function mu(r) { return -2.5 * log10(window.BitacoraPS1.ps1FlujoModelo(comps, 0, r, 0)); }
   if (mu(lo) > 25) return 0;
   for (var i = 0; i < 60; i++) {
     var m = Math.sqrt(lo * hi);
@@ -273,20 +274,20 @@ function oDe(gal, cfg, cielo) {
 }
 function construirParche(F, gal) {
   var fSim = { ancho: F.ancho, alto: F.alto, escalaAs: F.escalaAs, wcs: F.wcs || null };
-  fSim.afin = R.ps1AfinParche(fSim, gal);
+  fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
   // Gaia: sin muestra aquí (idéntico en A y B; limitación declarada)
-  var limpio = R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, [],
+  var limpio = window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, [],
     { afin: fSim.afin, ba: gal.ba, pa: gal.pa });
-  var Ap = R.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
+  var Ap = window.BitacoraPS1.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
     magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
     ladoArcmin: F.ladoArcmin, escalaAs: F.escalaAs });
-  var comps = R.ps1ComponentesSersic(gal);
-  var peso = R.ps1PesoImagen(Ap, F.ancho, F.alto, F.escalaAs);
-  var perfilP = R.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, fSim.afin);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+  var peso = window.BitacoraPS1.ps1PesoImagen(Ap, F.ancho, F.alto, F.escalaAs);
+  var perfilP = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, fSim.afin);
   return { ra: gal.ra, dec: gal.dec, ladoArcmin: F.ladoArcmin,
            ancho: F.ancho, alto: F.alto, afin: fSim.afin,
-           comps: comps, pa: gal.pa, halo: R.ps1MedidasHalo(gal, comps),
-           peso: peso, escalaMezcla: R.ps1EscalaMezcla(Ap, peso, perfilP),
+           comps: comps, pa: gal.pa, halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps),
+           peso: peso, escalaMezcla: window.BitacoraPS1.ps1EscalaMezcla(Ap, peso, perfilP),
            datos: Ap };
 }
 function pintar(Rmod, parche, gal, cfg, hook, psfDatos) {
@@ -294,7 +295,7 @@ function pintar(Rmod, parche, gal, cfg, hook, psfDatos) {
   var cielo = cieloDe(cfg, hook);
   var o = oDe(gal, cfg, cielo);
   parche.psfD = cfg.D; parche.psfDatos = psfDatos;
-  Rmod.ps1PintarParche(difuso, parche, o);
+  window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
   // El 2º argumento solo actúa con FOT.H2C activa (rama B); en A se ignora.
   return { difuso: difuso, cielo: cielo,
            ctx: Rmod.ctxFotometrico(cieloDe(cfg, hook), parche.thetaIntArcmin) };
@@ -371,7 +372,7 @@ function correObjeto(gal, alias, F) {
      (ps1ThetaIntArcmin: máx. por componente, analítico). El θint de referencia
      del harness (bisección sobre la SUMA de componentes) se conserva para
      vigilar que las dos definiciones no se separen. */
-  parche.thetaIntArcmin = R.ps1ThetaIntArcmin(parche.comps, gal.ba);
+  parche.thetaIntArcmin = window.BitacoraPS1.ps1ThetaIntArcmin(parche.comps, gal.ba);
   exige(Math.abs(parche.thetaIntArcmin / thInt - 1) < 0.05,
     alias + ': θint producción (' + f(parche.thetaIntArcmin, 3) + '′) ≈ bisección de la suma (' +
     f(thInt, 3) + '′)');
@@ -380,7 +381,7 @@ function correObjeto(gal, alias, F) {
     f(parche.thetaIntArcmin, 2) + '′) · parche ' +
     F.ancho + '×' + F.alto + ' (' + f(F.escalaAs, 3) + '″/px) ──');
   CONFIGS.forEach(function (cfg) {
-    if (!psfCache[cfg.D]) psfCache[cfg.D] = R.ps1PsfParche(parche.datos, F.ancho, F.alto, F.escalaAs, cfg.D);
+    if (!psfCache[cfg.D]) psfCache[cfg.D] = window.BitacoraPS1.ps1PsfParche(parche.datos, F.ancho, F.alto, F.escalaAs, cfg.D);
     var escLAs = (AFOV / cfg.M * 3600) / SIZE;
     var rA = pintar(R, parche, gal, cfg, null, psfCache[cfg.D]);
     R.fot.H2C = R.fot.H2C_DEFECTO;
@@ -425,12 +426,12 @@ function correSintetico() {
   var ob = SINT.objeto(6);          // D25 = 6′, μ(re)=22.5, n=3, b/a=1
   var gal = { nombre: 'SINT6', ra: 180, dec: 30, reArcsec: ob.re, ba: 1, pa: 0,
               magV: ob.magV, n: SINT.N_SERSIC, bt: 0, nMedido: 0,
-              ladoArcmin: R.ps1LadoArcmin(ob.re) };
+              ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(ob.re) };
   var lado = gal.ladoArcmin, AN = 512, escAs = lado * 60 / AN;
   var datos = new Float32Array(AN * AN);
   for (var y = 0; y < AN; y++) for (var x = 0; x < AN; x++) {
     var este = (x - (AN - 1) / 2) * escAs, norte = (y - (AN - 1) / 2) * escAs;
-    datos[y * AN + x] = R.ps1FlujoModelo(ob.comps, 0, norte, este);
+    datos[y * AN + x] = window.BitacoraPS1.ps1FlujoModelo(ob.comps, 0, norte, este);
   }
   var F = { ancho: AN, alto: AN, escalaAs: escAs, ladoArcmin: lado, datos: datos, wcs: null };
   correObjeto(gal, 'SINT6', F);

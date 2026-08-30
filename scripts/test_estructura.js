@@ -16,6 +16,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 var FOT = R.fot, CFG = R.config;
 
@@ -149,8 +150,8 @@ casi(cmin(457, 150, 5), cmin(457, 150, 5), 1e-15,
   'y el umbral no depende del campo aparente: no lo recibe');
 
 console.log('\n— Nada de esto toca el flujo ni las estrellas —');
-var comps = R.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
-casi(R.ps1FlujoModelo(comps, 0, 0, 50), R.ps1FlujoModelo(comps, 0, 0, 50), 1e-18,
+var comps = window.BitacoraPS1.ps1ComponentesSersic({ magV: 9, reArcsec: 100, n: 3, ba: 1, bt: 0 });
+casi(window.BitacoraPS1.ps1FlujoModelo(comps, 0, 0, 50), window.BitacoraPS1.ps1FlujoModelo(comps, 0, 0, 50), 1e-18,
   'ps1FlujoModelo no ve pasar ni aumentos ni θ');
 casi(grande.rango, chico.rango, 1e-12, 'rango (lo que consumen las estrellas) idéntico');
 

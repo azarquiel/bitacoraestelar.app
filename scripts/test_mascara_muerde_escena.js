@@ -10,7 +10,8 @@
 var path = require('path');
 global.window = {};
 require(path.join(__dirname, '..', 'resources', 'js', 'bitacora-gaia-render.js'));
-var R = global.window.BitacoraGaiaRender, PS1 = R.ps1;
+require(path.join(__dirname, '..', 'resources', 'js', 'bitacora-ps1.js'));
+var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 
 var fallos = 0;
 function ok(c, msg) { if (!c) { fallos++; console.error('FALLO: ' + msg); } }
@@ -21,31 +22,31 @@ var ESC = [{ cx: 50, cy: 50, cos: 1, sin: 0, ba: 1, r25As: 19, compacta: true }]
 var GALAXIA = [{ cx: 50, cy: 50, cos: 1, sin: 0, ba: 1, r25As: 19, compacta: false }];
 var ancha = PS1.rellenoPlanoMaxAs + 20, estrecha = PS1.rellenoPlanoMaxAs - 10;
 
-ok(R.ps1MascaraMuerdeEscena([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, ESC) === true,
+ok(window.BitacoraPS1.ps1MascaraMuerdeEscena([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, ESC) === true,
   'máscara ancha a 47″ de una escena de 19″ la muerde (47 ≤ 19 + ' + ancha + ')');
-ok(R.ps1MascaraMuerdeEscena([{ x: 50, y: 250, rAs: ancha, rPx: ancha }], A, ESC) === false,
+ok(window.BitacoraPS1.ps1MascaraMuerdeEscena([{ x: 50, y: 250, rAs: ancha, rPx: ancha }], A, ESC) === false,
   'la misma máscara a 200″ no la toca');
-ok(R.ps1MascaraMuerdeEscena([{ x: 97, y: 50, rAs: estrecha, rPx: estrecha }], A, ESC) === false,
+ok(window.BitacoraPS1.ps1MascaraMuerdeEscena([{ x: 97, y: 50, rAs: estrecha, rPx: estrecha }], A, ESC) === false,
   'una máscara estrecha no cuenta: su relleno por isofotas no borra la escena');
-ok(R.ps1MascaraMuerdeEscena([{ x: 55, y: 50, rAs: ancha, rPx: ancha }], A, ESC) === false,
+ok(window.BitacoraPS1.ps1MascaraMuerdeEscena([{ x: 55, y: 50, rAs: ancha, rPx: ancha }], A, ESC) === false,
   'una fuente DENTRO de la escena se conserva entera: no muerde nada');
-ok(R.ps1MascaraMuerdeEscena([], A, ESC) === false && R.ps1MascaraMuerdeEscena([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, []) === false,
+ok(window.BitacoraPS1.ps1MascaraMuerdeEscena([], A, ESC) === false && window.BitacoraPS1.ps1MascaraMuerdeEscena([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, []) === false,
   'sin estrellas o sin escena, false');
-ok(R.ps1MascaraMuerdeEscena([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, GALAXIA) === false,
+ok(window.BitacoraPS1.ps1MascaraMuerdeEscena([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, GALAXIA) === false,
   'una isofota de GALAXIA no cuenta: sus reglas de fusión están cerradas (solo borde real)');
 
 /* La puerta del halo: las medidas de Abell 12 (compacta, muProm 21,7) la tienen
    cerrada; la mordida la abre, y respeta el interruptor maestro. */
 var medidas = { aArcmin: 1.3, bArcmin: 1.3, n: 0, muProm: 21.7 };
-ok(R.ps1HaloActivo(medidas) === false, 'sin mordida, una compacta brillante no abre el halo');
+ok(window.BitacoraPS1.ps1HaloActivo(medidas) === false, 'sin mordida, una compacta brillante no abre el halo');
 medidas.mordida = true;
-ok(R.ps1HaloActivo(medidas) === true, 'con mordida, el halo es obligatorio');
+ok(window.BitacoraPS1.ps1HaloActivo(medidas) === true, 'con mordida, el halo es obligatorio');
 var interruptor = PS1.haloExtrapolado;
 PS1.haloExtrapolado = false;
-ok(R.ps1HaloActivo(medidas) === true,
+ok(window.BitacoraPS1.ps1HaloActivo(medidas) === true,
   'la mordida manda incluso con el halo voluntario apagado: es relleno de ausencia, no extensión');
 delete medidas.mordida;
-ok(R.ps1HaloActivo(medidas) === false, 'sin mordida el interruptor maestro sigue mandando');
+ok(window.BitacoraPS1.ps1HaloActivo(medidas) === false, 'sin mordida el interruptor maestro sigue mandando');
 medidas.mordida = true;
 PS1.haloExtrapolado = interruptor;
 
@@ -68,7 +69,7 @@ function pintar(mordida) {
   var difuso = new Float32Array(SIZE * SIZE);
   var cielo = { pupilaSalida: 3.4, pupilaOjo: 7, sqm: 21.4, aumentos: 150,
                 realceMax: PS1.realceMax, perceptual: true };
-  R.ps1PintarParche(difuso, parcheSintetico(mordida), {
+  window.BitacoraPS1.ps1PintarParche(difuso, parcheSintetico(mordida), {
     ra0: 90, dec0: 9, arcmin: 4, size: SIZE, cielo: cielo, apertura: 500
   });
   var s = 0;
@@ -85,7 +86,7 @@ ok(pintar(false) === 0, 'sin mordida (estado antiguo), el mismo parche pinta 0: 
 function quitar(escena) {
   var W = 120, datos = new Float32Array(W * W).fill(100);
   var e = [{ x: 97, y: 50, rPx: 60, rAs: ancha }];
-  return { W: W, out: R.ps1QuitarEstrellas(datos, W, W, e, { afin: A, ba: 1, pa: 0, escena: escena }) };
+  return { W: W, out: window.BitacoraPS1.ps1QuitarEstrellas(datos, W, W, e, { afin: A, ba: 1, pa: 0, escena: escena }) };
 }
 var q = quitar(ESC);
 ok(q.out[50 * q.W + 50] !== q.out[50 * q.W + 50],
@@ -121,13 +122,13 @@ function lenteCircular(d, R, r) {
   return area / (Math.PI * r * r);
 }
 [47, 55, 62, 70, 79].forEach(function (d) {
-  var medida = R.ps1CoberturaMordida([{ x: 50 + d, y: 50, rAs: 60, rPx: 60 }], A, ESC)[0];
+  var medida = window.BitacoraPS1.ps1CoberturaMordida([{ x: 50 + d, y: 50, rAs: 60, rPx: 60 }], A, ESC)[0];
   ok(Math.abs(medida - lenteCircular(d, 60, 19)) < 0.01,
     'cobertura medida a ' + d + '″ (' + medida.toFixed(3) + ') = lente exacta (' + lenteCircular(d, 60, 19).toFixed(3) + ')');
 });
-ok(R.ps1CoberturaMordida([{ x: 97, y: 50, rAs: estrecha, rPx: estrecha }], A, ESC)[0] === 0,
+ok(window.BitacoraPS1.ps1CoberturaMordida([{ x: 97, y: 50, rAs: estrecha, rPx: estrecha }], A, ESC)[0] === 0,
   'una máscara estrecha no cubre nada: su relleno por isofotas no borra el objeto');
-ok(R.ps1CoberturaMordida([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, GALAXIA)[0] === 0,
+ok(window.BitacoraPS1.ps1CoberturaMordida([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, GALAXIA)[0] === 0,
   'una isofota de GALAXIA no se mide: sus reglas de fusión están cerradas');
 
 /* Roce, no mordida (caso NGC 7008: 43,6 % de la elipse bajo el disco). El radio
@@ -135,12 +136,12 @@ ok(R.ps1CoberturaMordida([{ x: 97, y: 50, rAs: ancha, rPx: ancha }], A, GALAXIA)
    ahí la imagen sigue mandando: el disco ancho se recorta en el borde real y NO
    se pierde el parche. Nada de NaN, y ni un píxel del objeto tocado. */
 var ROCE = [{ x: 112, y: 50, rPx: 60, rAs: ancha }];       // 62″ del centro → 0,40
-ok(R.ps1CoberturaMordida(ROCE, A, ESC)[0] < PS1.mordidaCobMin,
+ok(window.BitacoraPS1.ps1CoberturaMordida(ROCE, A, ESC)[0] < PS1.mordidaCobMin,
   'a 62″ el disco tapa el 40 % de la elipse: por debajo del umbral');
-ok(R.ps1MascaraMuerdeEscena(ROCE, A, ESC) === false,
+ok(window.BitacoraPS1.ps1MascaraMuerdeEscena(ROCE, A, ESC) === false,
   'un roce no fuerza el perfil: no hay ausencia que rellenar');
 var W2 = 120, datos2 = new Float32Array(W2 * W2).fill(100);
-var qr = R.ps1QuitarEstrellas(datos2, W2, W2, ROCE, { afin: A, ba: 1, pa: 0, escena: ESC });
+var qr = window.BitacoraPS1.ps1QuitarEstrellas(datos2, W2, W2, ROCE, { afin: A, ba: 1, pa: 0, escena: ESC });
 ok(qr[50 * W2 + 50] === 100 && qr[50 * W2 + 66] === 100,
   'el objeto conserva sus píxeles reales, también los que caían bajo el disco');
 var hayNaN = false;
@@ -153,7 +154,7 @@ ok(qr[50 * W2 + 112] === 100,
 var ESTRECHA = [{ x: 75, y: 50, rPx: 30, rAs: estrecha }];   // fuera de la elipse (25″), su disco sí entra en ella
 var datos3 = new Float32Array(W2 * W2).fill(100);
 datos3[50 * W2 + 66] = 9999;
-var qe = R.ps1QuitarEstrellas(datos3, W2, W2, ESTRECHA, { afin: A, ba: 1, pa: 0, escena: ESC });
+var qe = window.BitacoraPS1.ps1QuitarEstrellas(datos3, W2, W2, ESTRECHA, { afin: A, ba: 1, pa: 0, escena: ESC });
 ok(qe[50 * W2 + 66] === 100,
   'una máscara estrecha dentro del objeto se sigue quitando: el recorte es solo para discos anchos');
 

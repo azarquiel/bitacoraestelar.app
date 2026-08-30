@@ -47,8 +47,9 @@
 var fs = require('fs'), path = require('path');
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1;
+var PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 require('../simulador_ocular/resources/js/galaxias-datos.js');
 
@@ -65,7 +66,7 @@ for (var i = 0; i < CAT.length; i++) if (CAT[i][0] === 'NGC 4594') filaCat = CAT
 var gal = {
   nombre: filaCat[0], ra: filaCat[2], dec: filaCat[3], reArcsec: filaCat[4],
   ba: filaCat[5], pa: filaCat[6], magV: filaCat[7], n: filaCat[8], bt: filaCat[9],
-  ladoArcmin: R.ps1LadoArcmin(filaCat[4])
+  ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(filaCat[4])
 };
 if (!fs.existsSync(CSV)) { console.error('falta ' + CSV + ' (lo dejó harness_m104_nucleo.js)'); process.exit(1); }
 var estrellas = fs.readFileSync(CSV, 'utf8').trim().split('\n').slice(1).map(function (l) {
@@ -86,8 +87,8 @@ function cuerpo() {
 
 /* ── Estrellas en píxeles del parche, y las de <15″ del núcleo ───────────── */
 var fSim = { ancho: F.ancho, alto: F.alto, escalaAs: esc, wcs: F.wcs || null };
-fSim.afin = R.ps1AfinParche(fSim, gal);
-var enPx = R.ps1EstrellasEnPixeles(fSim, gal, estrellas);
+fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
+var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(fSim, gal, estrellas);
 console.log('\n── Fuentes de Gaia eliminadas a <15″ del núcleo ──');
 fila(['  px (x, y)', 'offset (″)', 'G', 'radio máscara (″/px)']);
 var cerca = [];
@@ -189,7 +190,7 @@ function quitarVariante(datos, ancho, alto, lista, rProtAs, relleno) {
     var rE = Math.max(1, e.rPx), fondo = null;
     if (relleno === 'plano') {
       if (e.rAs > PS1.rellenoPlanoMaxAs) {
-        if (cieloP == null) cieloP = R.ps1Cielo(datos, ancho, alto);
+        if (cieloP == null) cieloP = window.BitacoraPS1.ps1Cielo(datos, ancho, alto);
         fondo = cieloP;
       } else {
         fondo = fondoAlrededor(datos, mascara, ancho, alto, e.x, e.y, rE);
@@ -220,7 +221,7 @@ function quitarVariante(datos, ancho, alto, lista, rProtAs, relleno) {
 }
 
 /* ── Verificación de la réplica contra producción ────────────────────────── */
-var prod = R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx);
+var prod = window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx);
 var replica = quitarVariante(F.datos, F.ancho, F.alto, enPx, PS1.nucleoPx * esc, 'plano');
 var dMax = 0, nDist = 0;
 for (i = 0; i < prod.length; i++) {
@@ -412,7 +413,7 @@ VARIANTES.forEach(function (v) {
 console.log('\n── Factor de anclaje por variante (mismo catálogo; solo cambia la suma) ──');
 VARIANTES.forEach(function (v) {
   if (!v.clase) return;
-  var anc = R.ps1AnclarACatalogo(v.datos, F.ancho, F.alto, {
+  var anc = window.BitacoraPS1.ps1AnclarACatalogo(v.datos, F.ancho, F.alto, {
     magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec, ladoArcmin: gal.ladoArcmin, escalaAs: esc
   });
   // k implícito: valor anclado / DN neto en el píxel más brillante del recorte
@@ -436,8 +437,8 @@ fila(['  variante', 'sin PSF', '200 mm', '450 mm']);
   VARIANTES.forEach(function (w) { if (w.nombre === nom) v = w; });
   var celdas = ['  ' + nom];
   [null, 200, 450].forEach(function (D) {
-    var dat = D ? R.ps1PsfParche(v.datos, F.ancho, F.alto, esc, D) : v.datos;
-    var ref = D ? perfil(R.ps1PsfParche(F.datos, F.ancho, F.alto, esc, D), null) : P_REF;
+    var dat = D ? window.BitacoraPS1.ps1PsfParche(v.datos, F.ancho, F.alto, esc, D) : v.datos;
+    var ref = D ? perfil(window.BitacoraPS1.ps1PsfParche(F.datos, F.ancho, F.alto, esc, D), null) : P_REF;
     var P = perfil(dat, null), peor = null;
     for (var a = 0; a < RMAX; a++) {
       var d = 1 - P[a].med / ref[a].med;

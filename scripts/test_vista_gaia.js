@@ -59,6 +59,7 @@ global.fetch = function () {
 
 require('../resources/js/bitacora-gaia-color.js');
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 require('../resources/js/lf-globulares-datos.js');
 require('../simulador_ocular/resources/js/globulares-datos.js');
 require('../resources/js/bitacora-cumulos.js');
@@ -67,7 +68,7 @@ var CATALOGO = global.window.BITACORA_GLOBULARES;
 
 /* La capa PS1 se apaga: sin red no hay parche que descargar, y su contrato
    («resuelve {aviso} y nunca rechaza») se afirma igual con la capa apagada. */
-R.galaxiasImagen = false;
+window.BitacoraPS1.galaxiasImagen = false;
 
 var fallos = 0;
 function ok(cond, etiqueta) {

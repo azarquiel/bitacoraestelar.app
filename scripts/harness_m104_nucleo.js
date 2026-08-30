@@ -32,8 +32,9 @@
 var fs = require('fs'), path = require('path');
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var FOT = R.fot, PS1 = R.ps1;
+var FOT = R.fot, PS1 = window.BitacoraPS1.cfg;
 var PAR = require('./lib_parches_ps1.js')(R);
 
 var OUT_DIR = path.join(__dirname, '..', '.scratch', 'm104-nucleo');
@@ -56,7 +57,7 @@ if (!filaCat) { console.error('NGC 4594 no está en el catálogo'); process.exit
 var gal = {
   nombre: filaCat[0], ra: filaCat[2], dec: filaCat[3], reArcsec: filaCat[4],
   ba: filaCat[5], pa: filaCat[6], magV: filaCat[7], n: filaCat[8], bt: filaCat[9],
-  nMedido: filaCat[11] || 0, ladoArcmin: R.ps1LadoArcmin(filaCat[4])
+  nMedido: filaCat[11] || 0, ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(filaCat[4])
 };
 var p = PAR.buscar('NGC 4594');
 var B = require('./lib_bajar_parche.js')(R);
@@ -77,7 +78,7 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (f1024) {
 }).catch(function (e) {
   if (!p) { console.error('sin red y sin parche en cache-ps1: ' + e.message); process.exit(1); }
   F = p.fits; ladoUsado = p.ladoArcmin;
-  nuc = F.wcs ? R.ps1CieloAPixel(F.wcs, gal.ra, gal.dec) : [(F.ancho - 1) / 2, (F.alto - 1) / 2];
+  nuc = F.wcs ? window.BitacoraPS1.ps1CieloAPixel(F.wcs, gal.ra, gal.dec) : [(F.ancho - 1) / 2, (F.alto - 1) / 2];
   console.log('  ⚠ sin red (' + e.message + '): parche de CACHÉ 512 px, escalaAs=' + f(F.escalaAs, 3) + '″/px');
   cuerpo();
 });
@@ -241,7 +242,7 @@ function convSinRestaurar(datos, ancho, alto, sigmaPx) {
   return out;
 }
 var FWHM_A_SIGMA = 2 * Math.sqrt(2 * Math.LN2);
-function sigmaPxDe(D, escalaAs) { return R.ps1ThetaAdd(D, escalaAs) / FWHM_A_SIGMA / escalaAs; }
+function sigmaPxDe(D, escalaAs) { return window.BitacoraPS1.ps1ThetaAdd(D, escalaAs) / FWHM_A_SIGMA / escalaAs; }
 
 /* ── Equipos ─────────────────────────────────────────────────────────────── */
 var MAG = 400, SIZE = 720, AFOV = 70;
@@ -265,7 +266,7 @@ fila(['  equipo', 'FWHM telescopio (″)', 'θ_add (″)', 'σ kernel (px parche
 EQUIPOS.forEach(function (e) {
   fila(['  ' + e.D + ' mm ' + e.foc,
     f(2 * R.radioImagenEstelar(e.D), 2),
-    f(R.ps1ThetaAdd(e.D, F.escalaAs), 2),
+    f(window.BitacoraPS1.ps1ThetaAdd(e.D, F.escalaAs), 2),
     f(sigmaPxDe(e.D, F.escalaAs), 2),
     f(120 / MAG, 2)]);
 });
@@ -280,7 +281,7 @@ var REF_AS = 12;
 function estructura(datos, an, al, esc, cx, cy, rMaxAs) {
   var sm = convSinRestaurar(datos, an, al, REF_AS / FWHM_A_SIGMA / esc);
   var rMax = rMaxAs / esc, s2 = 0, s1 = 0, n = 0;
-  var cielo = R.ps1Cielo(datos, an, al);
+  var cielo = window.BitacoraPS1.ps1Cielo(datos, an, al);
   for (var y = 0; y < al; y++) for (var x = 0; x < an; x++) {
     var dx = x - cx, dy = y - cy;
     if (dx * dx + dy * dy > rMax * rMax) continue;
@@ -300,8 +301,8 @@ var A = F.datos;
 resumen('A · parche PS1 crudo', A, F.ancho, F.alto, F.escalaAs, nuc[0], nuc[1], 'DN del stack');
 
 // A': quitar estrellas (aquí no-op, sin Gaia) + anclar (lo que producción guarda)
-var limpio = R.ps1QuitarEstrellas(A, F.ancho, F.alto, []);
-var Ap = R.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
+var limpio = window.BitacoraPS1.ps1QuitarEstrellas(A, F.ancho, F.alto, []);
+var Ap = window.BitacoraPS1.ps1AnclarACatalogo(limpio, F.ancho, F.alto, {
   magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
   ladoArcmin: ladoUsado, escalaAs: F.escalaAs
 });
@@ -313,7 +314,7 @@ var porAper = {};
 EQUIPOS.forEach(function (e) {
   var sig = sigmaPxDe(e.D, F.escalaAs);
   var B = convSinRestaurar(Ap, F.ancho, F.alto, sig);
-  var C = R.ps1PsfParche(Ap, F.ancho, F.alto, F.escalaAs, e.D);
+  var C = window.BitacoraPS1.ps1PsfParche(Ap, F.ancho, F.alto, F.escalaAs, e.D);
   porAper[e.D] = { B: B, C: C };
   resumen('B · A′+PSF sin restaurar máscara · ' + e.D + ' mm (σ=' + f(sig, 2) + ' px)',
     B, F.ancho, F.alto, F.escalaAs, nuc[0], nuc[1], 'flujo/arcsec²');
@@ -333,7 +334,7 @@ EQUIPOS.forEach(function (e) {
 console.log('\n── Control: PSF sobre el parche CRUDO (NaN vivos) · 450 mm ──');
 var sig450 = sigmaPxDe(450, F.escalaAs);
 var Bcrudo = convSinRestaurar(A, F.ancho, F.alto, sig450);
-var Ccrudo = R.ps1PsfParche(A, F.ancho, F.alto, F.escalaAs, 450);
+var Ccrudo = window.BitacoraPS1.ps1PsfParche(A, F.ancho, F.alto, F.escalaAs, 450);
 resumen('crudo+PSF sin restaurar', Bcrudo, F.ancho, F.alto, F.escalaAs, nuc[0], nuc[1], 'DN');
 resumen('crudo+PSF restaurando', Ccrudo, F.ancho, F.alto, F.escalaAs, nuc[0], nuc[1], 'DN');
 
@@ -354,14 +355,14 @@ console.log('  escala del lienzo: ' + f(escLienzoAs, 3) + '″/px  (parche: ' + 
 
 function parcheNuevo() {
   // Parche COMPLETO de producción, reconstruido con las mismas funciones.
-  var comps = R.ps1ComponentesSersic(gal);
-  var peso = R.ps1PesoImagen(Ap, F.ancho, F.alto, F.escalaAs);
-  var perfilP = R.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, F.afin || R.ps1AfinParche(F, gal));
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+  var peso = window.BitacoraPS1.ps1PesoImagen(Ap, F.ancho, F.alto, F.escalaAs);
+  var perfilP = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, F.ancho, F.alto, F.afin || window.BitacoraPS1.ps1AfinParche(F, gal));
   return {
     ra: gal.ra, dec: gal.dec, ladoArcmin: ladoUsado,
-    ancho: F.ancho, alto: F.alto, afin: F.afin || R.ps1AfinParche(F, gal),
-    comps: comps, pa: gal.pa, halo: R.ps1MedidasHalo(gal, comps),
-    peso: peso, escalaMezcla: R.ps1EscalaMezcla(Ap, peso, perfilP),
+    ancho: F.ancho, alto: F.alto, afin: F.afin || window.BitacoraPS1.ps1AfinParche(F, gal),
+    comps: comps, pa: gal.pa, halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps),
+    peso: peso, escalaMezcla: window.BitacoraPS1.ps1EscalaMezcla(Ap, peso, perfilP),
     datos: Ap
   };
 }
@@ -412,11 +413,11 @@ function pintarParcheBilineal(difuso, parche, o, datos) {
   var c = R.ctxFotometrico(o.cielo);
   var umbral = R.sbUmbralContraste(c);
   var pxPorAs = esc / 3600;
-  var halo = R.ps1HaloActivo(parche.halo);
+  var halo = window.BitacoraPS1.ps1HaloActivo(parche.halo);
   var comps = halo ? (parche.comps || []) : [], pa = parche.pa || 0;
   var peso = halo ? (parche.peso || null) : null;
   var sMezcla = peso ? parche.escalaMezcla : 1;
-  var haloPx = R.ps1RadioHaloAs(comps) * pxPorAs;
+  var haloPx = window.BitacoraPS1.ps1RadioHaloAs(comps) * pxPorAs;
   var alcance = Math.max(ladoPx / 2, haloPx);
   var mask = R.difusoMaskDe(o.cielo, difuso.length);
   var x0 = Math.max(0, Math.floor(cx - alcance)), x1 = Math.min(SIZE - 1, Math.ceil(cx + alcance));
@@ -439,12 +440,12 @@ function pintarParcheBilineal(difuso, parche, o, datos) {
         k = Math.round(fy) * parche.ancho + Math.round(fx);
       }
       if (comps.length) {
-        var fm = R.ps1FlujoModelo(comps, pa, norte, este);
+        var fm = window.BitacoraPS1.ps1FlujoModelo(comps, pa, norte, este);
         var w = (peso && k >= 0) ? peso[k] : 0;
         f = w * sMezcla * f + (1 - w) * fm;
       }
       if (!(f > 0)) continue;
-      f = R.ps1FlujoConOpacidad(f, R.ps1Opacidad(-2.5 * Math.log10(f), umbral), c);
+      f = window.BitacoraPS1.ps1FlujoConOpacidad(f, window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(f), umbral), c);
       if (!(f > 0)) continue;
       difuso[y * SIZE + x] += f;
       mask[y * SIZE + x] = 0;
@@ -473,14 +474,14 @@ EQUIPOS.forEach(function (e) {
               cielo: cielo, apertura: e.D };
     var difuso = new Float32Array(SIZE * SIZE);
     if (v.id === 'psfBilineal') {
-      var datosPsf = R.ps1DatosConPsf(parche, F.escalaAs, e.D);
+      var datosPsf = window.BitacoraPS1.ps1DatosConPsf(parche, F.escalaAs, e.D);
       pintarParcheBilineal(difuso, parche, o, datosPsf);
     } else {
       /* Inyección por la caché de ps1DatosConPsf: si parche.psfD === D devuelve
          parche.psfDatos tal cual. Así se elige la variante SIN tocar producción. */
       if (v.id === 'sinPSF') { parche.psfD = e.D; parche.psfDatos = parche.datos; }
       if (v.id === 'psfSinMask') { parche.psfD = e.D; parche.psfDatos = porAper[e.D].B; }
-      R.ps1PintarParche(difuso, parche, o);
+      window.BitacoraPS1.ps1PintarParche(difuso, parche, o);
     }
     var mask = cielo.difusoMask;
     var c = R.ctxFotometrico(cielo);
@@ -538,8 +539,8 @@ if (fs.existsSync(CSV)) {
   }).filter(function (e) { return isFinite(e[2]); });
   console.log('  estrellas de la muestra: ' + estrellas.length + ' (G≤20, radio 7,5′)');
   var fSim = { ancho: F.ancho, alto: F.alto, escalaAs: F.escalaAs, wcs: F.wcs || null,
-               afin: R.ps1AfinParche(F, gal) };
-  var enPx = R.ps1EstrellasEnPixeles(fSim, gal, estrellas);
+               afin: window.BitacoraPS1.ps1AfinParche(F, gal) };
+  var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(fSim, gal, estrellas);
   var cerca = enPx.filter(function (e) {
     return Math.hypot(e.x - nuc[0], e.y - nuc[1]) * F.escalaAs < 30;
   });
@@ -549,8 +550,8 @@ if (fs.existsSync(CSV)) {
       '″ (' + f(e.rPx, 1) + ' px)  · núcleo protegido: ' + PS1.nucleoPx + ' px = ' +
       f(PS1.nucleoPx * F.escalaAs, 1) + '″');
   });
-  var limpioF = R.ps1QuitarEstrellas(A, F.ancho, F.alto, enPx);
-  var ApF = R.ps1AnclarACatalogo(limpioF, F.ancho, F.alto, {
+  var limpioF = window.BitacoraPS1.ps1QuitarEstrellas(A, F.ancho, F.alto, enPx);
+  var ApF = window.BitacoraPS1.ps1AnclarACatalogo(limpioF, F.ancho, F.alto, {
     magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
     ladoArcmin: ladoUsado, escalaAs: F.escalaAs
   });
@@ -559,14 +560,14 @@ if (fs.existsSync(CSV)) {
   // y el render completo (D y E) con ese parche, 450 mm producción
   var parcheF = parcheNuevo();
   parcheF.datos = ApF;
-  parcheF.peso = R.ps1PesoImagen(ApF, F.ancho, F.alto, F.escalaAs);
-  parcheF.escalaMezcla = R.ps1EscalaMezcla(ApF, parcheF.peso,
-    R.ps1PerfilEnParche(parcheF.comps, gal.pa, F.ancho, F.alto, parcheF.afin));
+  parcheF.peso = window.BitacoraPS1.ps1PesoImagen(ApF, F.ancho, F.alto, F.escalaAs);
+  parcheF.escalaMezcla = window.BitacoraPS1.ps1EscalaMezcla(ApF, parcheF.peso,
+    window.BitacoraPS1.ps1PerfilEnParche(parcheF.comps, gal.pa, F.ancho, F.alto, parcheF.afin));
   EQUIPOS.forEach(function (e) {
     var cieloF = cieloDe(e.D);
     var oF = { ra0: gal.ra, dec0: gal.dec, arcmin: ARCMIN, size: SIZE, cielo: cieloF, apertura: e.D };
     var difusoF = new Float32Array(SIZE * SIZE);
-    R.ps1PintarParche(difusoF, parcheF, oF);
+    window.BitacoraPS1.ps1PintarParche(difusoF, parcheF, oF);
     var EF = etapaE(difusoF, cieloF.difusoMask, R.ctxFotometrico(cieloF));
     resumen('F2 · D con Gaia · ' + e.D + ' mm', difusoF, SIZE, SIZE, escLienzoAs, cxL, cyL, 'flujo sumado');
     resumen('F3 · E con Gaia · ' + e.D + ' mm', EF, SIZE, SIZE, escLienzoAs, cxL, cyL, 'nivel 0–255');

@@ -22,8 +22,9 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1;
+var PS1 = window.BitacoraPS1.cfg;
 
 var SQM = 21.3, T = 0.82, POJO = 7, SIZE = 200, PARCHE_PX = 96;
 var DELTAS = [1.0, 1.5, 2.0, 2.5, 3.25];
@@ -52,10 +53,10 @@ function conDelta(d, fn) {
 /* Perfil por el eje mayor: para cada radio, el flujo máximo sobre 36 azimutes.
    Sale de ps1FlujoModelo, o sea del MISMO perfil que pinta el render. */
 function perfil(gal, r) {
-  var comps = R.ps1ComponentesSersic(gal), max = 0;
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal), max = 0;
   for (var k = 0; k < 36; k++) {
     var a = k * Math.PI / 18;
-    var f = R.ps1FlujoModelo(comps, gal.pa, r * Math.cos(a), r * Math.sin(a));
+    var f = window.BitacoraPS1.ps1FlujoModelo(comps, gal.pa, r * Math.cos(a), r * Math.sin(a));
     if (f > max) max = f;
   }
   return max;
@@ -65,7 +66,7 @@ function perfil(gal, r) {
    un perfil monótono decreciente. */
 function radioCruce(gal, umbral, nivel) {
   var lo = 1e-3, hi = 12 * gal.reArcsec;
-  function op(r) { return R.ps1Opacidad(-2.5 * Math.log10(perfil(gal, r)), umbral); }
+  function op(r) { return window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(perfil(gal, r)), umbral); }
   if (op(lo) < nivel) return 0;
   for (var i = 0; i < 40; i++) {
     var m = 0.5 * (lo + hi);
@@ -79,26 +80,26 @@ function radioCruce(gal, umbral, nivel) {
    recuento mezcla tamaño en pantalla con umbral. */
 var CAMPO_FIJO = 30;
 function parcheSintetico(gal, ladoArcmin) {
-  var comps = R.ps1ComponentesSersic(gal);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
   var escalaAs = ladoArcmin * 60 / PARCHE_PX;
   var datos = new Float32Array(PARCHE_PX * PARCHE_PX);
   for (var y = 0; y < PARCHE_PX; y++) {
     var norte = ((PARCHE_PX - 1) / 2 - y) * escalaAs;
     for (var x = 0; x < PARCHE_PX; x++) {
       var este = ((PARCHE_PX - 1) / 2 - x) * escalaAs;
-      datos[y * PARCHE_PX + x] = R.ps1FlujoModelo(comps, gal.pa, norte, este);
+      datos[y * PARCHE_PX + x] = window.BitacoraPS1.ps1FlujoModelo(comps, gal.pa, norte, este);
     }
   }
   return datos;
 }
 function render(gal, caso) {
-  var comps = R.ps1ComponentesSersic(gal);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
   var lado = Math.min(20, gal.reArcsec * 6 / 60);
   var lienzo = new Float32Array(SIZE * SIZE);
-  R.ps1PintarParche(lienzo, {
+  window.BitacoraPS1.ps1PintarParche(lienzo, {
     datos: parcheSintetico(gal, lado), ancho: PARCHE_PX, alto: PARCHE_PX,
     ladoArcmin: lado, ra: 10, dec: 41, comps: comps, pa: gal.pa,
-    halo: R.ps1MedidasHalo(gal, comps)
+    halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps)
   }, { ra0: 10, dec0: 41, arcmin: CAMPO_FIJO, size: SIZE, cielo: cieloDe(caso) });
   var sobre = 0, flujo = 0;
   for (var i = 0; i < lienzo.length; i++) if (lienzo[i] > 0) { sobre++; flujo += lienzo[i]; }
@@ -132,8 +133,8 @@ GALAXIAS.forEach(function (gal) {
         var r = render(gal, caso);
         fila([f(d, 2), f(umbral - d, 2),
           f(radioCruce(gal, umbral, 0.05), 2), f(radioCruce(gal, umbral, 0.5), 2),
-          f(R.ps1Opacidad(-2.5 * Math.log10(perfil(gal, 0.5)), umbral)),
-          f(R.ps1Opacidad(-2.5 * Math.log10(perfil(gal, gal.reArcsec)), umbral)),
+          f(window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(perfil(gal, 0.5)), umbral)),
+          f(window.BitacoraPS1.ps1Opacidad(-2.5 * Math.log10(perfil(gal, gal.reArcsec)), umbral)),
           String(r.sobre), r.flujo.toExponential(3)]);
       });
     });
@@ -169,12 +170,12 @@ GALAXIAS.forEach(function (gal) {
     return conDelta(d, function () {
       var base = parcheSintetico(gal, lado), crudo = new Float32Array(base.length), i;
       for (i = 0; i < crudo.length; i++) crudo[i] = 1000 + base[i] * 1e9;
-      var neto = R.ps1AnclarACatalogo(crudo, PARCHE_PX, PARCHE_PX, {
+      var neto = window.BitacoraPS1.ps1AnclarACatalogo(crudo, PARCHE_PX, PARCHE_PX, {
         magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec, ladoArcmin: lado, escalaAs: escalaAs });
       var suma = 0;
       for (i = 0; i < neto.length; i++) suma += neto[i];
       var esperado = Math.pow(10, -0.4 * gal.magV) *
-        Math.max(R.ps1FraccionLuz(gal.n, (lado * 60 / 2) / gal.reArcsec), 0.02);
+        Math.max(window.BitacoraPS1.ps1FraccionLuz(gal.n, (lado * 60 / 2) / gal.reArcsec), 0.02);
       return f((suma * escalaAs * escalaAs / esperado - 1) * 100, 4) + ' %';
     });
   })));

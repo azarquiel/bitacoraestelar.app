@@ -20,6 +20,7 @@
 
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
 
 var SQM = 21.3, T = 0.82, POJO = 7;
@@ -43,7 +44,7 @@ var CASOS = [
 
 function cieloDe(caso) {
   return { sqm: SQM, transmision: T, pupilaOjo: POJO, aumentos: caso.MAG,
-           pupilaSalida: caso.D / caso.MAG, perceptual: true, realceMax: R.ps1.realceMax };
+           pupilaSalida: caso.D / caso.MAG, perceptual: true, realceMax: window.BitacoraPS1.cfg.realceMax };
 }
 
 /* Campo real del caso: a más aumentos, menos campo. Así el render de cada
@@ -58,14 +59,14 @@ function arcminDe(caso) { return 70 * 60 / caso.MAG; }
    la columna se queda vacía. */
 var PARCHE_PX = 96;
 function parcheSintetico(gal, ladoArcmin) {
-  var comps = R.ps1ComponentesSersic(gal);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
   var escalaAs = ladoArcmin * 60 / PARCHE_PX;
   var datos = new Float32Array(PARCHE_PX * PARCHE_PX);
   for (var y = 0; y < PARCHE_PX; y++) {
     var norte = ((PARCHE_PX - 1) / 2 - y) * escalaAs;
     for (var x = 0; x < PARCHE_PX; x++) {
       var este = ((PARCHE_PX - 1) / 2 - x) * escalaAs;
-      datos[y * PARCHE_PX + x] = R.ps1FlujoModelo(comps, gal.pa, norte, este);
+      datos[y * PARCHE_PX + x] = window.BitacoraPS1.ps1FlujoModelo(comps, gal.pa, norte, este);
     }
   }
   return datos;
@@ -77,13 +78,13 @@ function parcheSintetico(gal, ladoArcmin) {
    en pantalla con el umbral. Con él, lo único que puede mover el recuento es el
    umbral, que es lo que se quiere medir. */
 function render(gal, caso, campoFijo) {
-  var comps = R.ps1ComponentesSersic(gal);
-  var medidas = R.ps1MedidasHalo(gal, comps);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+  var medidas = window.BitacoraPS1.ps1MedidasHalo(gal, comps);
   var cielo = cieloDe(caso);
   var arcmin = campoFijo || arcminDe(caso);
   var ladoParche = Math.min(20, gal.reArcsec * 6 / 60);
   var lienzo = new Float32Array(SIZE * SIZE);
-  R.ps1PintarParche(lienzo, {
+  window.BitacoraPS1.ps1PintarParche(lienzo, {
     datos: parcheSintetico(gal, ladoParche), ancho: PARCHE_PX, alto: PARCHE_PX,
     ladoArcmin: ladoParche,
     ra: 10, dec: 41, comps: comps, pa: gal.pa, halo: medidas
@@ -100,9 +101,9 @@ function render(gal, caso, campoFijo) {
     pupila: caso.D / caso.MAG, Cmin: c.Cmin, Fcielo: c.Fcielo, SBe: c.SBe,
     umbral: umbral,
     d220: umbral - 22.0, d235: umbral - 23.5,
-    op220: R.ps1Opacidad(22.0, umbral), op235: R.ps1Opacidad(23.5, umbral),
+    op220: window.BitacoraPS1.ps1Opacidad(22.0, umbral), op235: window.BitacoraPS1.ps1Opacidad(23.5, umbral),
     sobre: sobre, fracSobre: sobre / lienzo.length, flujo: flujo, marcados: marcados,
-    haloActivo: R.ps1HaloActivo(medidas)
+    haloActivo: window.BitacoraPS1.ps1HaloActivo(medidas)
   };
 }
 
@@ -116,11 +117,11 @@ function presupuesto(gal) {
   var escalaAs = lado * 60 / PARCHE_PX;
   // Cuentas crudas (DN): el parche tal como llega, sin anclar. Se le suma un
   // pedestal de cielo para que ps1AnclarACatalogo tenga algo que restar.
-  var comps = R.ps1ComponentesSersic(gal);
+  var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
   var crudo = new Float32Array(PARCHE_PX * PARCHE_PX), i;
   var base = parcheSintetico(gal, lado);
   for (i = 0; i < crudo.length; i++) crudo[i] = 1000 + base[i] * 1e9;
-  var neto = R.ps1AnclarACatalogo(crudo, PARCHE_PX, PARCHE_PX, {
+  var neto = window.BitacoraPS1.ps1AnclarACatalogo(crudo, PARCHE_PX, PARCHE_PX, {
     magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec, ladoArcmin: lado, escalaAs: escalaAs
   });
   var suma = 0;
@@ -128,7 +129,7 @@ function presupuesto(gal) {
   var radioEnRe = (lado * 60 / 2) / gal.reArcsec;
   return {
     integrado: suma * escalaAs * escalaAs,
-    esperado: Math.pow(10, -0.4 * gal.magV) * Math.max(R.ps1FraccionLuz(gal.n, radioEnRe), 0.02)
+    esperado: Math.pow(10, -0.4 * gal.magV) * Math.max(window.BitacoraPS1.ps1FraccionLuz(gal.n, radioEnRe), 0.02)
   };
 }
 

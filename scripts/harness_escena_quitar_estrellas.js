@@ -26,8 +26,9 @@
 var fs = require('fs'), path = require('path');
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
+require('../resources/js/bitacora-ps1.js');
 var R = global.window.BitacoraGaiaRender;
-var PS1 = R.ps1;
+var PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 require('../simulador_ocular/resources/js/galaxias-datos.js');
 var CAT = global.window.BITACORA_GALAXIAS;
@@ -57,7 +58,7 @@ function filaCat(nombre) {
 function galDeFila(fc) {
   return { nombre: fc[0], ra: fc[2], dec: fc[3], reArcsec: fc[4], ba: fc[5],
            pa: fc[6], magV: fc[7], n: fc[8], bt: fc[9],
-           ladoArcmin: R.ps1LadoArcmin(fc[4]) };
+           ladoArcmin: window.BitacoraPS1.ps1LadoArcmin(fc[4]) };
 }
 
 function residuoEstrella(datos, ancho, alto, e) {
@@ -118,13 +119,13 @@ function analizar(G) {
     console.log('\n═══════ ' + G.alias + ' (' + gal.nombre + ') · ' + F.ancho + '×' + F.alto +
       ' px · ' + f(esc, 3) + '″/px · ' + estrellas.length + ' fuentes Gaia G≤20 ═══════');
     var fSim = { ancho: F.ancho, alto: F.alto, escalaAs: esc, wcs: F.wcs || null };
-    fSim.afin = R.ps1AfinParche(fSim, gal);
-    var enPx = R.ps1EstrellasEnPixeles(fSim, gal, estrellas);
+    fSim.afin = window.BitacoraPS1.ps1AfinParche(fSim, gal);
+    var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(fSim, gal, estrellas);
 
     // La MISMA escena que producción: componentes del catálogo alrededor de la
     // galaxia con el lado de su parche (ver ps1ParcheDeGalaxia).
-    var vecinos = R.ps1GalaxiasDelCampo(CAT, gal.ra, gal.dec, gal.ladoArcmin);
-    var escena = R.ps1EscenaEnParche(fSim, gal, vecinos);
+    var vecinos = window.BitacoraPS1.ps1GalaxiasDelCampo(CAT, gal.ra, gal.dec, gal.ladoArcmin);
+    var escena = window.BitacoraPS1.ps1EscenaEnParche(fSim, gal, vecinos);
     console.log('  escena: ' + escena.length + ' componente(s) — ' +
       vecinos.map(function (g) { return g.nombre; }).join(', '));
     escena.forEach(function (c, i) {
@@ -134,7 +135,7 @@ function analizar(G) {
 
     var dentro = [], fuera = [];
     enPx.forEach(function (e) {
-      (R.ps1FuenteEnEscena(escena, fSim.afin, e.x, e.y) ? dentro : fuera).push(e);
+      (window.BitacoraPS1.ps1FuenteEnEscena(escena, fSim.afin, e.x, e.y) ? dentro : fuera).push(e);
     });
     console.log('  fuentes: ' + dentro.length + ' dentro de escena (se conservan) · ' +
       fuera.length + ' fuera (se eliminan)');
@@ -142,7 +143,7 @@ function analizar(G) {
     /* Propietario visual único: las filas que ps1FuentesEnEscena aparta de la
        capa de estrellas son EXACTAMENTE las conservadas en el parche, y la
        doble cuenta fotométrica (capa + parche a la vez) desaparece entera. */
-    var conservadas = R.ps1FuentesEnEscena(estrellas, enPx, fSim.afin, escena);
+    var conservadas = window.BitacoraPS1.ps1FuentesEnEscena(estrellas, enPx, fSim.afin, escena);
     ok(conservadas.length === dentro.length, 'la capa excluye exactamente las conservadas (' +
       conservadas.length + ' = ' + dentro.length + ')');
     function flujoG(filas) {
@@ -164,7 +165,7 @@ function analizar(G) {
     });
 
     var geo = { afin: fSim.afin, ba: gal.ba, pa: gal.pa, escena: escena };
-    var limpio = R.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx, geo);
+    var limpio = window.BitacoraPS1.ps1QuitarEstrellas(F.datos, F.ancho, F.alto, enPx, geo);
 
     // Coherencia de la partición: lo conservado no cambia ni un píxel de su
     // disco — salvo donde lo pisa la MÁSCARA de una eliminada, que ahí manda
@@ -211,7 +212,7 @@ function analizar(G) {
     // M51: el núcleo de NGC 5195, sin punto negro y sin regla por nombre.
     if (G.alias === 'M51') {
       var fc2 = filaCat('NGC 5195'), g2 = galDeFila(fc2);
-      var p2 = fSim.wcs ? R.ps1CieloAPixel(fSim.wcs, g2.ra, g2.dec) : null;
+      var p2 = fSim.wcs ? window.BitacoraPS1.ps1CieloAPixel(fSim.wcs, g2.ra, g2.dec) : null;
       if (!p2) {
         var cos0 = Math.cos(gal.dec * Math.PI / 180);
         var este = ((((g2.ra - gal.ra) + 540) % 360) - 180) * cos0 * 3600;

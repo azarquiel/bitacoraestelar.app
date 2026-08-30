@@ -10,11 +10,11 @@
 'use strict';
 
 module.exports = function (R) {
-  var PS1 = R.ps1;
+  var PS1 = window.BitacoraPS1.cfg;
 
   /* Fila de catálogo → objeto `gal` con el mapeo de ps1GalaxiasDelCampo. */
   function galDeFila(f) {
-    var campo = R.ps1GalaxiasDelCampo([f], f[2], f[3], R.ps1LadoArcmin(f[4]));
+    var campo = window.BitacoraPS1.ps1GalaxiasDelCampo([f], f[2], f[3], window.BitacoraPS1.ps1LadoArcmin(f[4]));
     if (!campo.length) throw new Error('la fila no se mapea a sí misma: ' + f[0]);
     return campo[0];
   }
@@ -24,29 +24,29 @@ module.exports = function (R) {
   function montar(F, gal, estrellas, catalogo) {
     var f = { ancho: F.ancho, alto: F.alto, escalaAs: F.escalaAs,
               wcs: F.wcs || null, datos: F.datos };
-    f.afin = R.ps1AfinParche(f, gal);
-    var vecinos = catalogo ? R.ps1GalaxiasDelCampo(catalogo, gal.ra, gal.dec, gal.ladoArcmin) : [gal];
-    var enPx = R.ps1EstrellasEnPixeles(f, gal, estrellas);
-    var escena = R.ps1EscenaEnParche(f, gal, vecinos);
-    var limpio = R.ps1QuitarEstrellas(f.datos, f.ancho, f.alto, enPx,
+    f.afin = window.BitacoraPS1.ps1AfinParche(f, gal);
+    var vecinos = catalogo ? window.BitacoraPS1.ps1GalaxiasDelCampo(catalogo, gal.ra, gal.dec, gal.ladoArcmin) : [gal];
+    var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(f, gal, estrellas);
+    var escena = window.BitacoraPS1.ps1EscenaEnParche(f, gal, vecinos);
+    var limpio = window.BitacoraPS1.ps1QuitarEstrellas(f.datos, f.ancho, f.alto, enPx,
       { afin: f.afin, ba: gal.ba, pa: gal.pa, escena: escena });
-    var comps = R.ps1ComponentesSersic(gal);
-    var datos = R.ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
+    var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
+    var datos = window.BitacoraPS1.ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
       magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
       ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs
     });
-    var peso = R.ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
-    var perfil = R.ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.afin);
-    var halo = R.ps1MedidasHalo(gal, comps);
-    halo.mordida = R.ps1MascaraMuerdeEscena(enPx, f.afin, escena);
+    var peso = window.BitacoraPS1.ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
+    var perfil = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.afin);
+    var halo = window.BitacoraPS1.ps1MedidasHalo(gal, comps);
+    halo.mordida = window.BitacoraPS1.ps1MascaraMuerdeEscena(enPx, f.afin, escena);
     return {
       ra: gal.ra, dec: gal.dec, ladoArcmin: gal.ladoArcmin,
       ancho: f.ancho, alto: f.alto, afin: f.afin,
       comps: comps, pa: gal.pa, halo: halo,
-      thetaIntArcmin: R.ps1ThetaIntDeGal(gal, comps),
-      peso: peso, escalaMezcla: R.ps1EscalaMezcla(datos, peso, perfil),
+      thetaIntArcmin: window.BitacoraPS1.ps1ThetaIntDeGal(gal, comps),
+      peso: peso, escalaMezcla: window.BitacoraPS1.ps1EscalaMezcla(datos, peso, perfil),
       perfil: PS1.confianzaLocalNaN ? perfil : null,
-      enEscena: R.ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena),
+      enEscena: window.BitacoraPS1.ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena),
       escena: escena,
       datos: datos
     };
