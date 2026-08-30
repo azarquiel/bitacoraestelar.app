@@ -63,7 +63,7 @@ $wpdb = new WpdbFalso();
 //    WordPress entero) ─────────────────────────────────────────────────────────
 foreach ( array( '', '_entradas', '_imagenes', '_objetos', '_observadores', '_fichas', '_bases',
                  '_base_compartida', '_viajes', '_viaje_tripulacion', '_telescopios', '_oculares',
-                 '_auxiliares', '_filtros' ) as $sufijo ) {
+                 '_auxiliares' ) as $sufijo ) {
     eval( 'function bitacora_nombre_tabla' . $sufijo . '() { return "wp_bitacora' . $sufijo . '"; }' );
 }
 function bitacora_observador_id_desde_nombre( $nombre, $usuario_id ) { return 7; }
