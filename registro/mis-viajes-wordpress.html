@@ -17,8 +17,8 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260808_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260829_1300" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260831_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260831_1300" />
 
 <style>
 /* Estilos propios de "Mis viajes", encapsulados bajo #mw-obs-form. */
@@ -57,6 +57,15 @@
     color:var(--tinta);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;}
 #mw-obs-form .flash.show {opacity:1;}
 #mw-obs-form .flash.err {border-color:var(--rojo);color:var(--rojo);}
+
+/* ── Foco visible: mismo anillo ámbar que los campos, sobre fondo oscuro ── */
+#mw-obs-form .vi-btn:focus-visible {
+  outline:2px solid var(--ambar);outline-offset:2px;
+}
+/* ── Movimiento reducido: sin transiciones para quien lo pide ── */
+@media (prefers-reduced-motion:reduce) {
+  #mw-obs-form *, #mw-obs-form *::before, #mw-obs-form *::after {transition:none !important;}
+}
 </style>
 
 <div id="mw-obs-form">
@@ -129,12 +138,12 @@
       <div class="actions">
         <button type="submit" class="primary" id="viajeGuardar">Guardar salida</button>
         <button type="button" class="vi-btn" id="viajeCancelar" style="display:none">Cancelar edición</button>
-        <span class="out-note" id="viajeFormNota"></span>
+        <span class="out-note" id="viajeFormNota" role="status"></span>
       </div>
     </form>
   </fieldset>
 </div>
-<div class="flash" id="flash"></div>
+<div class="flash" id="flash" role="status"></div>
 </div>
 
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260826_2340" defer></script>

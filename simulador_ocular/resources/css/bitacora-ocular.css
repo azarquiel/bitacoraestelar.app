@@ -41,6 +41,8 @@
 #mw-obs-form .obj-tabs {
   display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;
 }
+/* Con número impar de pestañas, la última ocupa la fila entera (sin hueco muerto). */
+#mw-obs-form .obj-tab:last-child:nth-child(odd) {grid-column:1 / -1;}
 #mw-obs-form .obj-tab {
   padding:8px 10px;border:1px solid var(--linea);border-radius:9px;
   background:var(--noche-2);color:var(--tinta-tenue);cursor:pointer;
@@ -149,7 +151,7 @@
 #mw-obs-form .vista-acciones {display:flex;gap:8px;margin-top:12px;}
 #mw-obs-form .accion-vista {
   display:inline-flex;align-items:center;justify-content:center;
-  width:32px;height:32px;padding:0;
+  width:44px;height:44px;padding:0; /* objetivo táctil mínimo 44px */
   border:1px solid var(--linea);border-radius:8px;background:transparent;
   color:var(--tinta-tenue);opacity:.6;cursor:pointer;
   transition:opacity .18s, color .18s, border-color .18s;
@@ -161,7 +163,7 @@
   opacity:1;color:var(--ambar);border-color:var(--ambar);
 }
 #mw-obs-form .accion-vista svg {
-  width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;
+  width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round;
 }
 
@@ -252,6 +254,19 @@
 #mw-obs-form .creditos strong {color:var(--tinta);font-weight:600;}
 #mw-obs-form .creditos a {color:var(--azul);text-decoration:underline;text-underline-offset:2px;}
 #mw-obs-form .creditos a:hover {color:var(--ambar);}
+
+/* ── Foco visible: mismo anillo ámbar que los campos, sobre fondo oscuro ── */
+#mw-obs-form .obj-tab:focus-visible, #mw-obs-form .link-manual:focus-visible,
+#mw-obs-form .accion-vista:focus-visible, #mw-obs-form label.capa input:focus-visible {
+  outline:2px solid var(--ambar);outline-offset:2px;
+}
+
+/* ── Movimiento reducido: sin transiciones para quien lo pide ── */
+@media (prefers-reduced-motion:reduce) {
+  #mw-obs-form.sim *, #mw-obs-form.sim *::before, #mw-obs-form.sim *::after {
+    transition:none !important;
+  }
+}
 
 /* ── Modo "Cualquier objeto" (panel libre RA/Dec + SIMBAD) ── */
 #mw-obs-form .obj-libre {margin:2px 0 6px;padding:12px;border:1px dashed var(--linea);border-radius:10px;}

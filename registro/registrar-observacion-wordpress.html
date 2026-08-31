@@ -11,8 +11,8 @@
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260808_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260829_1300" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260831_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260831_1300" />
 
 <style>
 /* Selectores de equipo (telescopio / ocular / auxiliar), con el mismo aspecto
@@ -54,7 +54,7 @@
            con su ✓. Si la hora cae dentro de dos salidas, eso es un error de sus
            fichas y se canta como tal; no hay selector con el que taparlo. -->
       <div class="viaje-sesion">
-        <div class="status info" id="viajeAviso" hidden></div>
+        <div class="status info" id="viajeAviso" role="status" hidden></div>
         <button type="button" id="viajeAvisoBtn" hidden>Registrar el viaje de esa noche</button>
       </div>
 
@@ -62,7 +62,7 @@
         <span class="lab">Objeto observado</span>
         <input type="text" id="obj" placeholder="M30, U Hya, TX Psc, NGC 6826…" />
         <div class="suggest" id="suggest"></div>
-        <div class="status info" id="objStatus">Escribe un objeto Messier (M1–M110), una estrella de carbono o un NGC/IC.</div>
+        <div class="status info" id="objStatus" role="status">Escribe un objeto Messier (M1–M110), una estrella de carbono o un NGC/IC.</div>
         <div class="radec" id="radecBox">
           <p class="hint">Este objeto no es del catálogo Messier, así que no conozco sus coordenadas.
              Introdúcelas (las encuentras en Stellarium o en cualquier atlas) para poder calcular su posición.</p>
@@ -131,12 +131,12 @@
 
       <div class="field"><span class="lab">Síntesis / retos</span>
         <div class="rt-toolbar" id="explToolbar">
-          <button type="button" data-cmd="bold" title="Negrita"><b>B</b></button>
-          <button type="button" data-cmd="italic" title="Cursiva"><i>i</i></button>
-          <button type="button" data-cmd="insertUnorderedList" title="Lista">• lista</button>
-          <button type="button" data-cmd="formatBlock" data-arg="p" title="Párrafo">¶</button>
+          <button type="button" data-cmd="bold" title="Negrita" aria-label="Negrita"><b>B</b></button>
+          <button type="button" data-cmd="italic" title="Cursiva" aria-label="Cursiva"><i>i</i></button>
+          <button type="button" data-cmd="insertUnorderedList" title="Lista" aria-label="Lista">• lista</button>
+          <button type="button" data-cmd="formatBlock" data-arg="p" title="Párrafo" aria-label="Párrafo">¶</button>
         </div>
-        <div class="e-desc rt-editor" id="explDesc" contenteditable="true"></div>
+        <div class="e-desc rt-editor" id="explDesc" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Síntesis o retos de la exploración"></div>
       </div>
     </fieldset>
 
@@ -149,7 +149,7 @@
         <div class="field" id="audioFeedCampo" hidden><span class="lab">Episodio del feed</span>
           <select id="audioFeedSelect"><option value="">— elige un episodio —</option></select>
         </div>
-        <p class="out-note" id="audioFeedAviso" hidden>Feed RSS no encontrado/configurado para este observador.</p>
+        <p class="out-note" id="audioFeedAviso" role="status" hidden>Feed RSS no encontrado/configurado para este observador.</p>
         <div class="field"><span class="lab">URL del episodio</span>
           <input type="url" id="audioEpisodioUrl" placeholder="https://…" />
         </div>
@@ -157,10 +157,10 @@
           <input type="url" id="audioUrl" placeholder="https://…" />
         </div>
         <div class="field"><span class="lab">Inicio (hh:mm:ss)</span>
-          <input type="text" id="audioInicio" placeholder="mm:ss" />
+          <input type="text" id="audioInicio" placeholder="hh:mm:ss  ·  ó  mm:ss" />
         </div>
         <div class="field"><span class="lab">Fin (hh:mm:ss, opcional)</span>
-          <input type="text" id="audioFin" placeholder="mm:ss" />
+          <input type="text" id="audioFin" placeholder="hh:mm:ss  ·  ó  mm:ss" />
         </div>
       </details>
     </fieldset>
@@ -170,7 +170,7 @@
       <!-- Encadenar objetos de la misma noche: aparece al guardar y deja el
            formulario listo para el siguiente, con el mismo viaje. -->
       <button type="button" class="add-entry" id="otraBtn" hidden>Añadir otra</button>
-      <span class="out-note" id="outNote">Se generará el bloque de datos de la observación.</span>
+      <span class="out-note" id="outNote" role="status">Se generará el bloque de datos de la observación.</span>
     </div>
 
     <!-- Sin distancia no hay sitio en el mapa. Si ninguna base de datos la sabe
@@ -180,11 +180,11 @@
       <label for="distAl">Distancia al Sol (años luz)</label>
       <input type="number" id="distAl" min="1" step="1" style="max-width:12ch">
       <button type="button" class="add-entry" id="distBtn">Situar en el mapa</button>
-      <span class="out-note" id="distNota"></span>
+      <span class="out-note" id="distNota" role="status"></span>
     </div>
 
     <div class="json-out" id="jsonOut">
-      <textarea id="jsonArea" readonly></textarea>
+      <textarea id="jsonArea" readonly aria-label="Bloque de datos de la observación generado"></textarea>
     </div>
   </form>
 </div>
