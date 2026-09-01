@@ -9,3 +9,4 @@ Orden cronológico de ejecución:
 3. `notas-render-difuso-gaia.md` → `render-difuso-gaia.md` (2026-08-19)
 4. `notas-pupila-salida-fondo-cielo.md` → `pupila-salida-fondo-cielo.md` (2026-08-19)
 5. `informe_color_estrellas.md` → `color_estrellas.md` (2026-08-19)
+6. `tonalidad-azul-estrellas.md` (2026-09-02)
