@@ -9,14 +9,18 @@ Complementa a `color_estrellas.md`, que fija los principios; esta nota mide lo
 que hace cada etapa y contrasta la tabla de color con la fuente de la que salió.
 
 Respuesta corta: hay **tres cosas distintas solapadas**, y solo una es un
-defecto real.
+defecto real —y no es la que parecía—.
 
 1. El modelo de color **sí** pinta azul: Vega sale `[179, 203, 255]`, croma
    0,298 — más azul, incluso, de lo que le corresponde por física.
 2. En las estrellas brillantes ese azul se pierde **solo en el núcleo**: la
    tabla normaliza el canal azul a 255 y el render suma en un lienzo de 8 bits,
    así que el azul no tiene espacio de cabecera por construcción y el centro se
-   recorta a blanco (croma 0,253 → 0,018).
+   recorta a blanco (croma 0,253 → 0,018). Medido después: eso **no tiene
+   arreglo y no debe tenerlo** — el rescate HDR cuesta 1,8-2,6× y no cambia un
+   solo píxel en pantalla, porque `pintarFot` vuelve a recortar a 8 bits
+   (Parte D). El color de una estrella brillante vive en su aureola, y ahí ya
+   está.
 3. La tabla `GAIA_COLOR` tiene un **tramo plano** entre BP−RP −0,40 y 0,00: 34
    de las 108 estrellas del catálogo de brillantes comparten el mismo RGB byte a
    byte. Vega, Sirio, Espiga, Mimosa, Bellatrix y Régulo se pintan idénticas.
@@ -412,16 +416,12 @@ pregunta.
 ## C.3 Si lo que se quiere es *ver* el azul (esto es estética, no física)
 
 El azul existe y está bien calculado; falla que el ojo lo busca en el núcleo y el
-núcleo está recortado (A.2.f). Las palancas útiles son las que devuelven espacio
-de cabecera al canal azul:
+núcleo está recortado (A.2.f). Las palancas candidatas eran las que devuelven
+espacio de cabecera al canal azul:
 
-1. **Activar `CFG.hdrRescate`** (`bitacora-gaia-render.js:919`, hoy `false`). Es
-   *exactamente* el mecanismo diseñado para esto: la segunda pasada atenuada de
-   `capaEstrellas()` recupera el color de los núcleos recortados, y el comentario
-   de `:2331-2333` ya declara que cruza por el canal más alto «para no torcer el
-   color». Única opción que ataca la causa sin mover ninguna calibración. Coste:
-   un render completo y un `getImageData` extra por cuadro — en esta máquina hay
-   que **medirlo antes de encenderlo**.
+1. **Activar `CFG.hdrRescate`** (`bitacora-gaia-render.js:919`, hoy `false`).
+   Parecía la única que ataca la causa. **Medida y descartada: coste 1,8-2,6×,
+   beneficio nulo.** Ver la Parte D.
 2. **Subir `CFG.tinteNucleo`** hacia 0,95 (como ya se hizo con
    `tinteNucleoCarbono`). Una línea y un dorado, pero el techo medido es croma
    0,061: alivio cosmético, no solución.
@@ -432,9 +432,10 @@ de cabecera al canal azul:
    `aureolaAlfaK/Max` están calibradas contra Albireo y contra el aspecto de
    Sirio y Vega.
 
-**Recomendación operativa:** medir (1) y, si el coste es asumible, encenderlo;
-es la única que arregla la causa. (2) como parche barato mientras tanto. (3) y
-(4), descartadas. Y C.2 en paralelo, que es independiente y sí es fidelidad.
+**Recomendación operativa, tras medir:** no tocar ninguna de las cuatro. El
+núcleo blanco de una estrella brillante **no tiene arreglo por esta vía** y
+probablemente no debe tenerlo (D.3). Queda C.2, que es independiente, es
+fidelidad y sí merece la pena.
 
 Lo que **no** hay que hacer: subir `config.saturacion` por encima de 1,4. Es
 palanca global compartida con el mapa (principio 14), actúa *antes* del recorte
@@ -447,6 +448,92 @@ sino el **croma del píxel central** de una estrella brillante. Hoy vale 0,018. 
 test que lo mida sobre el perfil analítico —sin canvas: las fórmulas de
 `dibujarAureola` y `dibujarEstrellaColor` son cerradas— cazaría cualquier
 regresión sin depender del navegador.
+
+---
+
+# Parte D — Medición de `hdrRescate`: descartado
+
+Medido el 2026-09-02 con el módulo real en Chrome headless (`--disable-gpu`,
+lienzo por software), llamando a `capaEstrellas` y a `pintarFot` directamente.
+Campo de 40′, mlim 13,5, apertura 200 mm, sqm 21,0, pupila de salida 2 mm.
+Medidas intercaladas off/on, 15 repeticiones, mediana y mínimo.
+
+## D.1 El coste: entre 1,8× y 2,6×
+
+| lienzo | campo | off (mín) | on (mín) | Δ | factor | 1 pasada |
+|---|---|---|---|---|---|---|
+| 720 px | 300 estrellas | 12,3 ms | 28,5 ms | +16,2 ms | 2,32× | 4,5 ms |
+| 720 px | 1500 estrellas | 12,3 ms | 32,3 ms | +20,0 ms | 2,63× | 9,0 ms |
+| 720 px | 6000 estrellas | 34,0 ms | 62,0 ms | +28,0 ms | 1,82× | 30,5 ms |
+| 1440 px | 300 estrellas | 24,0 ms | 50,4 ms | +26,4 ms | 2,10× | 10,0 ms |
+| 1440 px | 1500 estrellas | 32,7 ms | 60,0 ms | +27,3 ms | 1,83× | 18,3 ms |
+| 1440 px | 6000 estrellas | 64,6 ms | 145,9 ms | +81,3 ms | 2,26× | 51,0 ms |
+
+Coincide con lo que dice el comentario del propio flag: un render completo más
+un `getImageData` extra. El sobrecoste es **por llamada a `capaEstrellas`**, y en
+un campo con galaxia hay dos —`vistaGaia` (`:2442`) y `ps1CapaGalaxias`
+(`bitacora-ps1.js:1991`)—, así que ahí se paga dos veces. Es coste por
+re-render, no por cuadro de animación.
+
+## D.2 El beneficio: nulo
+
+La capa intermedia sí mejora. En el núcleo de Vega, lo que devuelve
+`capaEstrellas`:
+
+| | píxel del núcleo | croma |
+|---|---|---|
+| off | `[232, 255, 255]` | 0,090 |
+| on | `[240, 272, 304]` | **0,211** |
+
+Pero eso **no llega a la pantalla**. Pasando la misma capa por `pintarFot` y
+leyendo el píxel final del lienzo:
+
+| r del núcleo | off | on |
+|---|---|---|
+| 0 px | `[255, 255, 255]` croma 0,000 | `[255, 255, 255]` croma **0,000** |
+| 2 px | `[253, 255, 255]` croma 0,008 | `[254, 255, 255]` croma 0,004 |
+| 4 px | `[136, 147, 173]` croma 0,214 | `[136, 147, 173]` croma 0,214 |
+
+Idéntico. Barrido sobre campos completos, contando solo píxeles de estrella
+(luminancia ≥ 40 DN):
+
+| escena | píxeles | recortados | croma medio off | croma medio on | píxeles con +0,02 |
+|---|---|---|---|---|---|
+| mag 8-11 (1500) | 18 059 | 148 | 0,1105 | 0,1105 | 0 |
+| mag 5-8 (400) | 18 795 | 2 727 | 0,2756 | 0,2754 | 1 |
+| mag 1-4 (30) | 10 265 | 716 | 0,3407 | 0,3405 | 43 |
+| mag 11-14 (6000) | 20 125 | 0 | 0,0000 | 0,0000 | 0 |
+
+**El croma medio es idéntico a la cuarta cifra en todos los regímenes.** En el
+mejor caso —treinta estrellas de magnitud 1-4— mejoran 43 píxeles de 10 265.
+
+## D.3 Por qué: hay un segundo recorte, y ese sí es irreducible
+
+`hdrRescate` devuelve espacio de cabecera a la capa intermedia, y `pintarFot` lo
+tira: la salida vuelve a ser un lienzo de 8 bits con el fondo del cielo en 5 DN.
+Una estrella de magnitud 0 está tantísimo por encima de ese fondo que su núcleo
+pega en 255 con o sin rescate.
+
+Y eso no es un defecto que corregir. Con el fondo en 5 DN, **cualquier** mapeo
+que quiera enseñar a la vez el cielo y una estrella de magnitud 0 satura el
+núcleo: es rango dinámico, no colorimetría. Al ocular pasa lo mismo, con el
+centro de la imagen de Sirio saturando la retina.
+
+Conclusión práctica, y es la respuesta final a la pregunta de partida: **el
+núcleo blanco es correcto; el color de una estrella brillante vive en su
+aureola**, y ahí ya está —croma 0,214 a 4 px del centro—. Lo que el simulador
+puede mejorar de verdad es lo de C.2: que Espiga y Mimosa dejen de ser clones de
+Vega.
+
+## D.4 Hallazgo colateral
+
+La fila de mag 11-14 sale con croma **0,0000 exacto**: ninguna de esas estrellas
+recibe color. Es `margenColorMag` (A.2.d) actuando — con mlim 13,5 el umbral cae
+en magnitud 9,0 y todo lo más débil se pinta blanco puro. En un campo típico,
+donde el grueso de las estrellas está bastante por debajo del umbral, **esa es
+la mayor pérdida de color del simulador, no el recorte del núcleo**. El corte es
+duro (blanco puro, no desvanecido), aunque la saturación por flujo de A.2(c) ya
+sabría desvanecerlo sola. Merece revisión propia; no se toca aquí.
 
 ---
 
