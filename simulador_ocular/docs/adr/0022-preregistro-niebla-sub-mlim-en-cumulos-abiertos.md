@@ -248,3 +248,65 @@ de gusto tomada a sabiendas (ver arriba), no un listón que se haya reinterpreta
 para que pase. Para cerrarlo haría falta o bien una base de campo más ancha en
 los cúmulos pequeños —y volver a medir—, o bien mirar NGC 2266 en el simulador y
 juzgar si la niebla que pinta es defendible.
+
+### Actualización tras el ADR 0023 (2026-09-02)
+
+El fallo de P3 con la ganancia puesta **queda resuelto sin tocar la ganancia**.
+Al corregir la ley de umbral (H2c a `θ_eff = max(θ_R/M, R50)`, ADR 0023), los
+tres anillos de NGC 2266 que se colaban con la ganancia a 1,5 pasaron a quedar
+por debajo del umbral. No hizo falta ni ensanchar la base ni bajar el mando: el
+sobre-pintado no venía del parche, venía de que producción juzgaba con la ley
+equivocada (C_MAG, entre 2,4× y 8,9× más permisiva que la que este ADR decía
+aplicar).
+
+Que el veredicto de una regla no se dé la vuelta al mover un mando declarado es,
+además, evidencia a favor de la regla: quedó anotado como argumento de cierre en
+el ADR 0023.
+
+## El parche estético NO sobra: medido
+
+Medido el 2026-09-02 con la ley del ADR 0023 ya en producción, campo de ocular
+real (68°/aumentos), sqm 21,5, componiendo las primitivas exportadas de
+producción (`nieblaCampo` → `visibilidadDifusa` → `realzarPerceptual` →
+`valorDeFlujo`). «Salto» = niveles sobre el fondo de cielo, de 255.
+
+| Objeto | Equipo | pico DN g=1 | pico DN g=1,5 | píxeles ≥1 DN g=1 | g=1,5 |
+|---|---|---|---|---|---|
+| M11 | 200 mm/61× | 18,2 | 20,8 | 73,2 % | 76,7 % |
+| M11 | 457 mm/61× | 12,5 | 14,7 | 81,5 % | 83,9 % |
+| NGC 7789 | 200 mm/61× | 7,5 | 12,3 | **10,3 %** | **52,5 %** |
+| NGC 7789 | 457 mm/61× | 5,9 | 8,8 | **12,3 %** | **58,7 %** |
+
+En M11 quitar la ganancia cuesta poco (−14 % de pico). En NGC 7789 la niebla se
+cae: de 52 % de píxeles visibles a 10 %, un factor 5, y es justo el positivo que
+costó recuperar con la regla v2 del ADR 0023. **Conclusión: la ganancia no sobra
+y no se retira.**
+
+### Y esto es exactamente la deuda de la gamma perceptual
+
+El dato que importa no es el pico, es la discrepancia: a ganancia 1, NGC 7789
+**pasa el listón** —C_exc = 0,362 contra Cmin = 0,279, la ley dice «visible»—
+pero solo el **10,3 %** de sus píxeles llega a 1 DN en pantalla. La ley
+perceptual y el monitor no están diciendo lo mismo.
+
+Ese hueco entre «cruza el umbral del ojo en el ocular» y «se distingue en una
+pantalla» es lo que el parche estético está tapando, y su causa está aguas
+arriba: `FOT.GAMMA_PERCEPTUAL` = 0,45, calibrada contra perfiles sintéticos.
+Síntomas de que está mal calibrada fuera de ese conjunto: necesitó un techo
+(`realceMax`) en cuanto llegaron las imágenes de PS1, y a sqm 18 amplifica ×42.
+
+Cuidado con el enunciado de la deuda, porque «medir la gamma» presupone que hay
+algo que medir y no lo hay: a diferencia de `Cmin` (Blackwell/Riccò, validada en
+campo con 12 observaciones), la gamma depende del monitor, de la luz ambiente y
+de la distancia de visión, igual que su hermana `SB_CIELO_BLANCO`, que el propio
+código llama «la perilla artística». La pregunta bien planteada es **si el lado
+del display merece su propio modelo de detectabilidad**, con la misma maquinaria
+Riccò/Blackwell aplicada al ojo que mira la pantalla. Riesgo a aceptar de
+antemano: ese modelo necesita luminancia de pantalla, ambiente y distancia, que
+la app no tiene, así que puede acabar cambiando un mando por tres.
+
+Y el radio de impacto es grande: `perceptual: true` se fija una sola vez
+(`bitacora-gaia-render.js`, en `vistaGaia`) para todo el render Canvas-2D, o sea
+que la misma constante gobierna el halo de los globulares, las galaxias de PS1,
+las planetarias y la niebla, todas validadas con goldens. No es trabajo de la
+niebla: es trabajo de la cadena, y merece su propia sesión y su propio ADR.
