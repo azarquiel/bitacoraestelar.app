@@ -774,6 +774,31 @@
         if (paraCapa) mag = BitacoraPS1.ps1MagConsulta(mag);
         return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }
+      /* Campo que la vista actual va a pedir a Gaia: el mismo número que calcula
+         actualizar() para el render (campo real del ocular, acotado por el tope
+         del origen). Sin equipo elegido devuelve undefined y la consulta usa su
+         radio por defecto, como antes. */
+      function arcminVista() {
+        if (!teleSel || !teleFocal() || !teleApertura() || !ocularSel) return undefined;
+        var max = ($('sim-origen').value === 'canvas-2d') ? GAIA_MAX_ARCMIN : DSS_MAX_ARCMIN;
+        return Math.min(datosOcular().campoReal * 60, max);
+      }
+
+      /* Precalentado de la consulta de Gaia, con los MISMOS parámetros que va a
+         pedir la vista. Antes pedía el radio por defecto (60') y la profundidad
+         sin capa: en cuanto el ocular abarcaba más de eso, la consulta de verdad
+         no cabía en la entrada cacheada y se pagaban DOS descargas (medido en el
+         arranque: 598 kB tirados y luego 2,4 MB). El caché es un superconjunto
+         monotónico (ADR 0014), así que pedir exactamente lo de la vista solo
+         puede acabar en acierto; y NO se pide de más a propósito, porque una
+         consulta más honda de la necesaria encarece el ORDER BY del TAP para
+         esas coordenadas durante el resto de la sesión. */
+      function precalentarGaia(o) {
+        return consultarGaia(sexToDeg(o.ra, true), sexToDeg(o.dec, false),
+          arcminVista(), $('sim-origen').value === 'canvas-2d')
+          .catch(function () { /* se reintentará al usarse */ });
+      }
+
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
         BitacoraGaiaRender.dibujar(ctx, estrellas, {
           ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
@@ -1035,7 +1060,7 @@
         objetoSel = o;
         pintarObjeto();
         actualizar();
-        consultarGaia(sexToDeg(o.ra, true), sexToDeg(o.dec, false)).catch(function () { /* se reintentará al usarse */ });
+        precalentarGaia(o);
       }
 
       /* ══════════════════ MODO "CUALQUIER OBJETO" ══════════════════
@@ -1216,7 +1241,7 @@
       cargarCatalogo();
       // Precalienta la consulta de Gaia del objeto en segundo plano: cuando el
       // usuario cambie a Canvas 2D (o el overlay la necesite) ya estará en caché.
-      consultarGaia(sexToDeg(objetoSel.ra, true), sexToDeg(objetoSel.dec, false)).catch(function () { /* se reintentará al usarse */ });
+      precalentarGaia(objetoSel);
 
     } catch (err) {
       console.error('[Bitácora] Error al iniciar el simulador de ocular:', err);
