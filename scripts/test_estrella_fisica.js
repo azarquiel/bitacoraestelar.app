@@ -262,5 +262,26 @@ ok(dilMucho < 1, 'a mucho aumento (Rtot=' + RtotMucho.toFixed(2) + ' px), factor
 casi(dilMucho * RtotMucho * RtotMucho, sueloMucho * sueloMucho, 1e-6,
   'diluido, alfa_pico·Rtot² = suelo² (conserva el flujo total, no crece con el aumento)');
 
+
+/* ── Sección 11: cuánto puede engordar una brillante sobre una débil ─────────
+   El engorde por magnitud (radioSueloMag/radioSueloMax) es convención de atlas,
+   no física: el disco real (Airy+seeing) es el mismo para todas las estrellas
+   del campo. Sirve para que el brillo se lea de un vistazo, pero pasado cierto
+   punto las brillantes salen como bolas y el campo pierde el aire de estrella
+   puntual. Este techo acota ESA convención sin tocar el término físico:
+
+     · una brillante saturada (mag 2) no pasa de 3,0× el radio de una del
+       límite (mag 13) en un campo típico;
+     · la débil no se toca: el recorte es solo del extremo brillante, así que
+       una mag 13 sigue pegada al suelo puro sin magnitud. */
+console.log('\n11. Techo del engorde por magnitud (convención, no física):');
+var TECHO_ENGORDE = 3.0;
+var brillante = radioConMag(campoTipico, 2), debil = radioConMag(campoTipico, 13);
+ok(brillante / debil <= TECHO_ENGORDE,
+  'mag 2 (' + brillante.toFixed(2) + ' px) frente a mag 13 (' + debil.toFixed(2) +
+  ' px): ' + (brillante / debil).toFixed(2) + '× ≤ ' + TECHO_ENGORDE.toFixed(1) + '×');
+ok(debil <= radioPantalla(campoTipico) * 1.08,
+  'la mag 13 sigue en el suelo puro (' + debil.toFixed(2) + ' px vs ' +
+  radioPantalla(campoTipico).toFixed(2) + ' px sin magnitud): el recorte es solo del extremo brillante');
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);

@@ -779,9 +779,17 @@
        más gorda la MISMA estrella (más fotones recogidos), que es lo que se
        quería conservar. */
     radioSuelo: 2.0,
-    radioSueloMag: 40,      // escala del término extra sobre el flujo relativo, elevado a radioSueloExp
+    /* Cuánto engorda una estrella por su brillo. Es convención de atlas, no
+       física: el disco real (Airy+seeing) es el mismo para todas las del campo,
+       y el tope lo alcanza cualquier estrella a simple vista, así que de ahí
+       hacia arriba TODAS se dibujan iguales. 40/8,0 dejaba a las brillantes en
+       3,8× el radio de una del límite —bolas, no estrellas—; con 24/6,0 el
+       extremo brillante adelgaza un 25 % y la escala baja a 2,9×, mientras las
+       débiles (que viven en radioSuelo) se quedan donde estaban. El techo lo
+       fija la sección 11 de scripts/test_estrella_fisica.js. */
+    radioSueloMag: 24,      // escala del término extra sobre el flujo relativo, elevado a radioSueloExp
     radioSueloExp: 0.5,
-    radioSueloMax: 8.0,    // tope de seguridad; en la práctica solo lo tocan objetos extremos (Venus, la Luna...)
+    radioSueloMax: 6.0,    // tope de seguridad; en la práctica solo lo tocan objetos extremos (Venus, la Luna...)
     brillo: 1.0,
     /* ponytail: suelo de opacidad por estrella, SIN conciencia de densidad. En
        un campo disperso evita que la más débil se apague del todo; en un campo
