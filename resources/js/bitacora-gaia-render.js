@@ -922,14 +922,16 @@
        la rampa lineal en magnitud de antes (longMag, retirada): la envolvente
        del sinc² del brazo cae como 1/u², así que la espiga llega hasta donde esa
        cola supera el umbral y multiplicar el flujo por 10 la alarga √10, no 10.
-       8,5 deja a una mag 5 donde la dejaba la rampa (85 px), y de ahí arriba la
-       potencia hace lo que la rampa no hacía: separar de verdad a las dos o tres
-       brillantes del campo. longMax 320 solo muerde por debajo de mag 2,3
-       -Vega, Sirio, Arturo-, que es donde el brazo ya cruzaría el lienzo.
+       6 es la perilla del conjunto: toda la curva a la vez, conservando la ley
+       (8,5 clavaba una mag 5 en los 85 px de la rampa anterior, pero en pantalla
+       salían demasiado largas). De ahí arriba la potencia hace lo que la rampa
+       no hacía: separar de verdad a las dos o tres brillantes del campo. longMax
+       320 solo muerde por debajo de mag 1,5 -Vega, Sirio, Arturo-, que es donde
+       el brazo ya cruzaría el lienzo.
        Lo fijan las secciones 3 y 4 de scripts/test_dobles_spikes.js. */
     spikes: {
       magMax: 10, rango: 5, brazos: 4, angulo: 0,
-      longRef: 8.5, longMax: 320, grosor: 3, lobulos: 2, intensidad: 0.8
+      longRef: 6, longMax: 320, grosor: 3, lobulos: 2, intensidad: 0.8
     }
   };
 
