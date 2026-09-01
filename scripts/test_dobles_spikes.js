@@ -56,6 +56,10 @@ function ok(cond, etiqueta) {
   if (cond) { console.log('  ok   ' + etiqueta); }
   else { fallos++; console.error('  FALLA ' + etiqueta); }
 }
+function casi(a, b, tolRel, etiqueta) {
+  ok(Math.abs(a - b) <= b * tolRel,
+    etiqueta + ': ' + a.toFixed(3) + ' (esperado ' + b.toFixed(3) + ' ±' + (tolRel * 100) + '%)');
+}
 
 console.log('1. Spikes de una componente de doble == spikes de una suelta de la misma mag');
 // dec0=0 (cos0=1), arcmin=30 -> escv=64/(30/60)=128 px/grado = 0.035556 px/arcsec.
@@ -93,5 +97,58 @@ ok(colB.indexOf(esperB.join(',')) !== -1,
   'B sale con SU color (azulada, ' + colB + '), esperado rgb ' + esperB.join(','));
 ok(colA !== colB, 'A y B no comparten el mismo color (no hay mezcla entre componentes)');
 
+
+/* ── 3. La espiga tiene que LEERSE como espiga, no como un pincho corto ──────
+   La ley (sección 4) dice cómo CRECE la espiga con el brillo, pero no a qué
+   tamaño arranca: eso lo pone longRef, y lo que lo ancla es la proporción con
+   el disco de la propia estrella. En un reflector, la cruz de una brillante se
+   ve como una aguja larga y fina saliendo de un punto, no como cuatro tocones:
+   con la rampa lineal anterior el brazo de una mag 3,1 medía 5,5 radios de
+   disco; aquí se exige que pase de 9. */
+console.log('\n3. La espiga de una brillante es larga frente a su propio disco');
+var ANCLA_LARGO = 9;
+var oDisco = {
+  afov: base.afov, apertura: base.apertura, arcmin: base.arcmin, size: 64,
+  g: 3.1, blur: R.blurEstrella(3.1, base.apertura), mlim: base.mlim
+};
+var Rdisco = R.radioEstrella(oDisco);
+ok(spikeA.L / Rdisco >= ANCLA_LARGO,
+  'mag 3,1: brazo de ' + spikeA.L.toFixed(2) + ' px sobre un disco de ' + Rdisco.toFixed(2) +
+  ' px de radio = ' + (spikeA.L / Rdisco).toFixed(1) + '× ≥ ' + ANCLA_LARGO + '×');
+// El tope (longMax) no puede estar mordiendo a una estrella corriente: si
+// mordiera, todas las brillantes saldrían con la MISMA espiga y la ley por
+// magnitud dejaría de significar nada.
+var cf = R.config.spikes;
+function largoNominal(g) { return cf.longRef * Math.pow(10, 0.2 * (cf.magMax - g)); }
+ok(largoNominal(3.1) < cf.longMax,
+  'el tope longMax (' + cf.longMax + ') no recorta a una mag 3,1 (' +
+  largoNominal(3.1).toFixed(0) + '): la ley por magnitud sigue viva');
+
+/* ── 4. La longitud sigue la ley física: L ∝ √flujo ─────────────────────────
+   Cada brazo de la araña difracta como una rendija (Babinet), así que a lo
+   largo del brazo la intensidad va como sinc², cuya envolvente cae como 1/u².
+   La espiga se ve hasta donde esa cola supera el umbral del ojo, de modo que
+   duplicar el flujo NO alarga el doble: alarga √2. En magnitudes,
+
+       L ∝ 10^(0,2·(magMax − g))     [= √flujo]
+
+   Una rampa lineal en magnitud (la de antes) no tiene esa firma: reparte plano
+   y deja a las dos o tres estrellas de verdad brillantes del campo con una
+   cruz apenas mayor que la de una mediana. La prueba es la razón de longitudes
+   entre dos estrellas separadas 2,5 mag —un factor 10 de flujo—: la ley exige
+   √10 = 3,162, y solo lo cumple la potencia. */
+console.log('\n4. L ∝ √flujo: 2,5 magnitudes de más alargan la espiga √10 veces');
+var RAIZ10 = Math.sqrt(10);
+function largoDe(g) {
+  gradientes = []; spikes = [];
+  R.dibujar(fakeCtx({ width: 64, height: 64 }), [[0, 0, g, 0.5]], base);
+  return spikes.length ? spikes[0].L : 0;
+}
+var L75 = largoDe(7.5), L50 = largoDe(5.0), L25 = largoDe(2.5);
+ok(L25 > 0 && L50 > 0 && L75 > 0, 'las tres magnitudes de prueba dibujan espiga');
+ok(cf.longRef * Math.pow(10, 0.2 * (cf.magMax - 2.5)) < cf.longMax,
+  'el tope longMax (' + cf.longMax + ') no recorta a una mag 2,5: la ley se mide sin truncar');
+casi(L50 / L75, RAIZ10, 0.02, 'mag 5,0 frente a mag 7,5');
+casi(L25 / L50, RAIZ10, 0.02, 'mag 2,5 frente a mag 5,0');
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
 process.exit(fallos === 0 ? 0 : 1);
