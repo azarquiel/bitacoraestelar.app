@@ -705,6 +705,8 @@
       return;
     }
     ensureEdgeImage();
+    // Al asomar (abatimiento), la de canto entra en el reparto de resolución.
+    if (imgEdge.style.display === 'none') escalaImagenComprobada = -1;
     imgEdge.style.display = 'block';
     imgEdge.style.position = 'absolute';
     imgEdge.style.transition = 'none';
@@ -726,6 +728,24 @@
     var r = getImgRect(activeImg);
     var nuc = currentNucleo();
     return { x: r.left + r.width * (nuc.x / 100), y: r.top + r.height * (nuc.y / 100) };
+  }
+
+  // Imagen progresiva: las dos vistas arrancan con una copia a 2048 px (0,5 MB
+  // la cenital, 50 kB la de canto) y la original (7 y 6 MB) solo se pide cuando
+  // el zoom pide más píxeles de los que la copia tiene. Quien solo mira el mapa
+  // —la mayoría— nunca paga esos megas. El cambio de src no parpadea: la nueva
+  // imagen se descarga aparte y se pone cuando ya está lista.
+  var escalaImagenComprobada = -1;   // última escala ya juzgada por asegurarImagenPlena
+  function asegurarImagenPlena(imgEl) {
+    if (!imgEl) return;
+    var plena = imgEl.getAttribute('data-src-full'); // lo primero: sin él no hay nada que medir
+    if (!plena || !imgEl.naturalWidth) return;
+    var pedidos = getImgRect(imgEl).width * scale * (window.devicePixelRatio || 1);
+    if (pedidos <= imgEl.naturalWidth) return;
+    imgEl.removeAttribute('data-src-full'); // una sola vez
+    var pre = new Image();
+    pre.onload = function () { imgEl.src = plena; };
+    pre.src = plena;
   }
 
   function applyTransform() {
@@ -786,7 +806,20 @@
     var solAncla = document.getElementById('mw-sun-anchor');
     if (solAncla) solAncla.style.transformStyle = tilt ? 'preserve-3d' : '';
 
+    // La original solo se pide para la imagen que se está viendo: la de canto
+    // asoma tanto en la vista de canto como abatida bajo la cenital (previa),
+    // y en ambos casos pintarPreviaCanto ya le ha quitado el display:none.
     pintarPreviaCanto(tilt, rot);
+    // Solo al cambiar el zoom: la comprobación mide el DOM (getImgRect) y
+    // applyTransform corre en cada fotograma del arrastre, donde la escala no
+    // cambia y la respuesta no puede cambiar tampoco.
+    if (scale !== escalaImagenComprobada) {
+      escalaImagenComprobada = scale;
+      ['mw-image', 'mw-image-edge'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && el.style.display !== 'none') asegurarImagenPlena(el);
+      });
+    }
 
     dibujarAnillos();
 
@@ -2412,6 +2445,7 @@
   // Cambia efectivamente de vista (imágenes, marcadores, controles y estado).
   function performViewSwap() {
     isEdgeView = !isEdgeView;
+    escalaImagenComprobada = -1;  // la imagen que se ve es otra: hay que volver a juzgarla
     if (isEdgeView) {
       imgTop.style.display = 'none';
       imgEdge.style.display = 'block';
@@ -2483,8 +2517,9 @@
     if (!el) return;
     if (el.complete && el.naturalWidth) {
       repositionAnchors();
+      asegurarImagenPlena(el);
     } else {
-      el.addEventListener('load', function () { repositionAnchors(); });
+      el.addEventListener('load', function () { repositionAnchors(); asegurarImagenPlena(el); });
     }
   });
 
@@ -2495,6 +2530,7 @@
     resizeTimer = setTimeout(function () {
       repositionAnchors();
       clampPosition();
+      escalaImagenComprobada = -1;  // otro tamaño de visor = otros píxeles pedidos
       applyTransform();
     }, 80);
   });

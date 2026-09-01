@@ -654,13 +654,25 @@
     inset: 0;
     transform-origin: 0 0;
   ">
+  <!-- El giro de partida va YA en el HTML: es el azimutBase de la vista cenital
+       (CONFIG.inclinacion.azimutBase, 90°), que applyTransform vuelve a poner en
+       cuanto arranca via-lactea-app.js. Sin él aquí, el navegador pintaba el mapa
+       sin girar y ~1,4 s después la app le metía el giro de golpe: un salto feo.
+       Coincide exactamente con lo que hace la app porque el núcleo cenital está
+       en el centro de la imagen (CONFIG.nucleo.cenital = 50%,50%), que es este
+       mismo transform-origin. Los dos números están atados en
+       scripts/test_giro_inicial_mapa.js. -->
   <div id="mw-content" style="
     position: absolute;
     inset: 0;
     transform-origin: center center;
-    transform: scale(1);
+    transform: scale(1) rotate(90deg);
   ">
-    <img id="mw-image" src="/bitacora-mapa/images/The_best_Milky_Way_map_by_Gaia.webp" alt="Mapa cenital de la Vía Láctea (Gaia)"
+    <!-- Arranca con la copia a 2048 px (0,5 MB): a escala 1 el mapa ocupa menos
+         que eso en pantalla, así que se ve igual y aparece antes. La original de
+         5000 px (7 MB) la pide via-lactea-app.js cuando el zoom la necesita. -->
+    <img id="mw-image" src="/bitacora-mapa/images/The_best_Milky_Way_map_by_Gaia-2048.webp" alt="Mapa cenital de la Vía Láctea (Gaia)"
+      data-src-full="/bitacora-mapa/images/The_best_Milky_Way_map_by_Gaia.webp"
       decoding="async" fetchpriority="high"
       style="
         position: absolute;
@@ -671,10 +683,13 @@
         object-position: center;
         pointer-events: none;
       " draggable="false" />
-    <!-- La imagen de canto (~6 MB) NO se carga al inicio: su src está en
-         data-src y via-lactea-app.js la carga en segundo plano tras el arranque
-         (o al pulsar «Vista de canto»), para que el mapa aparezca antes. -->
-    <img id="mw-image-edge" data-src="/bitacora-mapa/images/MilkyWay_25J14_40KPC_Edge_10K.webp" alt="Vía Láctea vista de canto (Gaia)"
+    <!-- La imagen de canto NO se carga al inicio: su src está en data-src y
+         via-lactea-app.js la carga en segundo plano tras el arranque (o al
+         pulsar «Vista de canto»), para que el mapa aparezca antes. Lo que se
+         precarga es la copia a 2048 px (50 kB); la original de 10000 px (6 MB)
+         solo se pide si el zoom la necesita. -->
+    <img id="mw-image-edge" data-src="/bitacora-mapa/images/MilkyWay_25J14_40KPC_Edge_10K-2048.webp" alt="Vía Láctea vista de canto (Gaia)"
+      data-src-full="/bitacora-mapa/images/MilkyWay_25J14_40KPC_Edge_10K.webp"
       decoding="async"
       style="
         position: absolute;
@@ -1438,5 +1453,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260829_1500"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260901_2100"></script>
 </li>
