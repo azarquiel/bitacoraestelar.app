@@ -695,8 +695,18 @@ no a un ajuste visual:
 Las estrellas **brillantes** lucen el destello en cruz que produce la **araña** del
 secundario en los reflectores (Newton, etc.). Solo se dibuja en telescopios **con
 araña** (`OPTICA_ARANA`: Newtonian, Cassegrain, RC…); refractores y SC/Mak, que no
-tienen brazos, no lo muestran. **Longitud e intensidad ∝ el brillo (magnitud)** de
-cada estrella, y todo escala con el aumento.
+tienen brazos, no lo muestran. La **longitud va como la raíz del flujo**
+(`L = longRef · 10^(0,2·(magMax − g))`, con tope `longMax`) y la **intensidad**,
+como una rampa lineal en magnitud; todo escala con el aumento.
+
+La raíz no es arbitraria: la envolvente del sinc² del brazo (más abajo) cae como
+`1/u²`, así que la espiga se ve hasta donde esa cola supera el umbral del ojo y
+multiplicar el flujo por 10 la alarga **√10**, no 10. Antes era una rampa lineal
+en magnitud (`longMag`), que repartía plano y dejaba a las dos o tres estrellas
+de verdad brillantes del campo con una cruz apenas mayor que la de una mediana.
+`longRef` (px de brazo justo en `magMax`) está anclado a que la cruz de una mag
+3,1 pase de 9 radios de su propio disco: aguja larga y fina, no cuatro tocones.
+Lo miden las secciones 3 y 4 de `scripts/test_dobles_spikes.js`.
 
 Cada brazo de la araña es un obstáculo fino: por el **principio de Babinet**
 difracta como una **rendija**, de modo que la intensidad **a lo largo del brazo**
@@ -837,7 +847,7 @@ la lógica:
 | `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo de estrella** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **halo de cúmulo globular** (`globular.rangoMag` = margen de la amortiguación cerca de estrellas resueltas, `globular.magResta`/`globular.restaMaxFrac` = profundidad fija y tope de la resta de luz ya resuelta — ver *Halo de los cúmulos globulares* más arriba); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo` = rango de la cadena, `magBlanco` = pendiente del pintado, ADR 0019); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
 | `PS1` (= `BitacoraGaiaRender.ps1`) | Capa de galaxias desde imagen: **adquisición** (`salida` = px del recorte que se pide al proxy, hoy 1024 y tope del proxy — leer antes *La resolución del recorte*; `banda`, `seeingAs` = 1,1″ del stack, `ladoFactor`/`ladoMin`/`ladoMax` = campo del parche, `fracMin` = puerta de cobertura); **máscara de estrellas** (`mascaraMaxAs` = 60″, `rellenoPlanoMaxAs` = 40″ — **si tocas estos, mide antes**); **mezcla E** (`mezclaCajaAs`, `mezclaW0`); **halo** (`haloMenorMin`, `haloMuFijo`, `muHalo`, `deltaPlena`, `realceMax`). |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
-| `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
+| `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longRef`/`longMax` (longitud, ley √flujo), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
 | `FOT` | Curvas de la fotometría: brillo del objeto y del fondo de cielo. Incluye `H2C` (ley del umbral por tamaño aparente, activa por defecto; `null` = vía histórica C_MAG, solo regresión), `H2C_DEFECTO` (`THETA_R_A/B` de Blackwell, `SEEING_AS` = 2″ fijo) y `NIEBLA_GANANCIA_ESTETICA` (**parche estético** de la niebla de los abiertos, 1,5 por defecto; 1 = fotometría limpia — ver *Niebla sub-límite de los cúmulos abiertos*). |
 | `TRANSMISION_TELE` / `TRANSMISION_OPTICA` | Transmisión por defecto y por tipo óptico. |

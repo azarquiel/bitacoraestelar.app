@@ -779,9 +779,17 @@
        más gorda la MISMA estrella (más fotones recogidos), que es lo que se
        quería conservar. */
     radioSuelo: 2.0,
-    radioSueloMag: 40,      // escala del término extra sobre el flujo relativo, elevado a radioSueloExp
+    /* Cuánto engorda una estrella por su brillo. Es convención de atlas, no
+       física: el disco real (Airy+seeing) es el mismo para todas las del campo,
+       y el tope lo alcanza cualquier estrella a simple vista, así que de ahí
+       hacia arriba TODAS se dibujan iguales. 40/8,0 dejaba a las brillantes en
+       3,8× el radio de una del límite —bolas, no estrellas—; con 24/6,0 el
+       extremo brillante adelgaza un 25 % y la escala baja a 2,9×, mientras las
+       débiles (que viven en radioSuelo) se quedan donde estaban. El techo lo
+       fija la sección 11 de scripts/test_estrella_fisica.js. */
+    radioSueloMag: 24,      // escala del término extra sobre el flujo relativo, elevado a radioSueloExp
     radioSueloExp: 0.5,
-    radioSueloMax: 8.0,    // tope de seguridad; en la práctica solo lo tocan objetos extremos (Venus, la Luna...)
+    radioSueloMax: 6.0,    // tope de seguridad; en la práctica solo lo tocan objetos extremos (Venus, la Luna...)
     brillo: 1.0,
     /* ponytail: suelo de opacidad por estrella, SIN conciencia de densidad. En
        un campo disperso evita que la más débil se apague del todo; en un campo
@@ -909,9 +917,21 @@
        completo + getImageData extra, así que por defecto va OFF -una sola
        pasada-; actívalo solo si hace falta rescatar núcleos recortados. */
     hdrRescate: false,
+    /* longRef son los px de brazo de una estrella justo en magMax, y la ley que
+       lo estira es L ∝ √flujo = 10^(0,2·(magMax − g)) -ver dibujarSpikes-, no
+       la rampa lineal en magnitud de antes (longMag, retirada): la envolvente
+       del sinc² del brazo cae como 1/u², así que la espiga llega hasta donde esa
+       cola supera el umbral y multiplicar el flujo por 10 la alarga √10, no 10.
+       6 es la perilla del conjunto: toda la curva a la vez, conservando la ley
+       (8,5 clavaba una mag 5 en los 85 px de la rampa anterior, pero en pantalla
+       salían demasiado largas). De ahí arriba la potencia hace lo que la rampa
+       no hacía: separar de verdad a las dos o tres brillantes del campo. longMax
+       320 solo muerde por debajo de mag 1,5 -Vega, Sirio, Arturo-, que es donde
+       el brazo ya cruzaría el lienzo.
+       Lo fijan las secciones 3 y 4 de scripts/test_dobles_spikes.js. */
     spikes: {
       magMax: 10, rango: 5, brazos: 4, angulo: 0,
-      longMag: 10, longMax: 180, grosor: 3, lobulos: 2, intensidad: 0.8
+      longRef: 6, longMax: 320, grosor: 3, lobulos: 2, intensidad: 0.8
     }
   };
 
@@ -1169,7 +1189,12 @@
       var along = s * s * (1 - u);
       var g0 = Math.min(1, u / 0.12); along *= g0 * g0 * (3 - 2 * g0);
       for (var y = 0; y < H; y++) {
-        var t = (y - m) / m, a = along * Math.exp(-(t * t) * 10), idx = (y * W + x) * 4;
+        /* y+0,5 es el CENTRO de la fila: sin ese medio píxel el eje del brazo
+           cae en la frontera entre filas y no en mitad del sprite, así que el
+           perfil transversal queda descentrado (centro de masa en 16,5 de 32) y
+           los cuatro brazos salen desviados en el mismo sentido de giro: la
+           cruz en molinete. Lo mide scripts/test_simetria_estrella.js. */
+        var t = (y + 0.5 - m) / m, a = along * Math.exp(-(t * t) * 10), idx = (y * W + x) * 4;
         im.data[idx] = im.data[idx + 1] = im.data[idx + 2] = 255;
         im.data[idx + 3] = Math.round(255 * Math.max(0, Math.min(1, a)));
       }
@@ -1193,8 +1218,12 @@
   function dibujarSpikes(ctx, x, y, g, escala, rgb) {
     var cf = CFG.spikes, sobre = cf.magMax - g;
     if (sobre <= 0) return;
-    // Como el radio: el tope, sobre la longitud nominal; la escala, después.
-    var L = Math.min(cf.longMax, cf.longMag * sobre) * escala;
+    /* L ∝ √flujo. El brazo difracta como una rendija (Babinet) y la envolvente
+       del sinc² cae como 1/u², así que la espiga se ve hasta donde esa cola
+       supera el umbral: ×10 de flujo alarga ×√10, no ×10. 10^(0,2·sobre) es
+       justo √(10^(0,4·sobre)) = la raíz del flujo relativo a magMax.
+       Como el radio: el tope, sobre la longitud nominal; la escala, después. */
+    var L = Math.min(cf.longMax, cf.longRef * Math.pow(10, 0.2 * sobre)) * escala;
     if (L < 3) return;
     var alpha = Math.min(1, cf.intensidad * (sobre / cf.rango));
     var sp = spriteSpikeColor(rgb), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
