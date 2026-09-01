@@ -507,25 +507,71 @@ Idéntico. Barrido sobre campos completos, contando solo píxeles de estrella
 **El croma medio es idéntico a la cuarta cifra en todos los regímenes.** En el
 mejor caso —treinta estrellas de magnitud 1-4— mejoran 43 píxeles de 10 265.
 
-## D.3 Por qué: hay un segundo recorte, y ese sí es irreducible
+## D.3 Por qué: un techo compartido, y un realce que quema
 
-`hdrRescate` devuelve espacio de cabecera a la capa intermedia, y `pintarFot` lo
-tira: la salida vuelve a ser un lienzo de 8 bits con el fondo del cielo en 5 DN.
-Una estrella de magnitud 0 está tantísimo por encima de ese fondo que su núcleo
-pega en 255 con o sin rescate.
+Dos causas distintas, y conviene no confundirlas.
 
-Y eso no es un defecto que corregir. Con el fondo en 5 DN, **cualquier** mapeo
-que quiera enseñar a la vez el cielo y una estrella de magnitud 0 satura el
-núcleo: es rango dinámico, no colorimetría. Al ocular pasa lo mismo, con el
-centro de la imagen de Sirio saturando la retina.
+**Primera: el techo de la capa de estrellas y el de la pantalla son el mismo.**
+La capa entra en `pintarFot` con `flujoDeValor(v, c.Fref, c.rango)` —contra el
+cielo de REFERENCIA, sqm 21— y sale con
+`valorDeFlujo(F, c.FcieloPintado, c.rango)` (`:657`). Cuando la escena es de sqm
+21, `FcieloPintado == Fref` y las dos son inversas exactas: `DN = nivelFondo + v`.
+El 255 de la capa de estrellas *es* el 255 de la pantalla, así que en el cielo de
+referencia `hdrRescate` no puede notarse por construcción. No hay dos techos: hay
+uno. (`rango = FOT.SB_NEGRO − FOT.SB_BLANCO = 11,5 mag`: los 0-255 de pantalla
+son 11,5 magnitudes.)
 
-Conclusión práctica, y es la respuesta final a la pregunta de partida: **el
-núcleo blanco es correcto; el color de una estrella brillante vive en su
-aureola**, y ahí ya está —croma 0,214 a 4 px del centro—. Lo que el simulador
-puede mejorar de verdad es lo de C.2: que Espiga y Mimosa dejen de ser clones de
-Vega.
+**Segunda, y es la que manda con cualquier cielo: `adaptacionLocal`.** La curva
+de tono, por sí sola, **no** blanquea el núcleo. Trazando el píxel central de
+Vega paso a paso:
 
-## D.4 Hallazgo colateral
+| escena | tras la curva de tono | croma | realce local | tras adaptación | pantalla |
+|---|---|---|---|---|---|
+| sqm 18,5 off | [210,6, 233,6, 233,6] | **0,098** | +86,0 DN | [296, 319, 319] | [255,255,255] |
+| sqm 18,5 on | [218,6, 250,6, 282,6] | **0,143** | +98,3 DN | [317, 349, 381] | [255,255,255] |
+| sqm 21,0 off | [237,0, 260,0, 260,0] | 0,071 | +108,2 DN | [345, 368, 368] | [255,255,255] |
+| sqm 21,0 on | [245,0, 277,0, 309,0] | 0,039 | +120,5 DN | [366, 398, 430] | [255,255,255] |
+
+La curva de tono deja el núcleo **con color** —croma 0,07 a 0,14—. Quien lo
+blanquea es `adaptacionLocal` (`:420-427`), que le suma entre **+86 y +120 DN**,
+hasta el 47 % de toda la escala, como
+`realceDetalle(lum − desenfocar(lum, SIZE/60), 0,5)`.
+
+Y desatura dos veces. El realce se calcula sobre la luminancia y se suma igual a
+los tres canales (`:673-676`), a propósito, «para no desviar el color». Pero un
+sumando igual δ baja el croma aunque no recorte —`(max−min)/(max+δ)`— y después
+todo lo que pasa de 255 colapsa al mismo valor. La intención de no torcer el
+tono se cumple; la de conservar la saturación, no.
+
+Nótese además que a sqm 21 `hdrRescate` **empeora** el croma antes de recortar
+(0,071 → 0,039): sube más el azul, que es justo el canal que ya rebasaba el techo.
+
+## D.4 Qué de esto es inevitable
+
+- **El destino de 8 bits, sí.** `pintarFot` acaba en `createImageData` →
+  `Uint8ClampedArray` → `putImageData`; la pantalla es sRGB de 8 bits. Canvas
+  admite `colorSpace: 'display-p3'`, pero eso ensancharía la gama, no el techo.
+- **La curva logarítmica sobre 11,5 mag, también.** Es compresión de rango
+  dinámico bien planteada, no un recorte ingenuo.
+- **El realce local sobre un núcleo puntual, no.** `realceDetalle` se calibró
+  para detalle EXTENSO —su comentario habla de anillos concéntricos en el halo de
+  un cúmulo— y `UMBRAL_DETALLE = 12` está puesto para no amplificar ruido de
+  fondo. En el pico de una estrella no hay detalle que realzar, y sí color que
+  quemar.
+
+Candidato mínimo, si algún día se ataca: **recortar proporcional en vez de por
+canal** — escalar la terna para que el máximo caiga en 255, en lugar de tres
+`Math.min(255, ·)` independientes. Con `[345, 368, 368]` daría `[239, 255, 255]`,
+croma 0,063, en vez de blanco puro. Una línea en el bucle de salida, sin tocar
+ninguna calibración. No evaluado ni contra los dorados ni contra el aspecto del
+campo.
+
+Con todo, la conclusión práctica de la pregunta de partida no cambia: **el color
+de una estrella brillante vive en su aureola**, y ahí ya está —croma 0,214 a 4 px
+del centro—. Y lo que el simulador puede mejorar de verdad sigue siendo C.2: que
+Espiga y Mimosa dejen de ser clones de Vega.
+
+## D.5 Hallazgo colateral
 
 La fila de mag 11-14 sale con croma **0,0000 exacto**: ninguna de esas estrellas
 recibe color. Es `margenColorMag` (A.2.d) actuando — con mlim 13,5 el umbral cae
