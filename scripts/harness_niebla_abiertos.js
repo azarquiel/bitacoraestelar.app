@@ -7,8 +7,8 @@
      glow    (mlim, mlim+2,30]   — sprite de glow (alfaMin/glowCorte)
      perdida (mlim+2,30, 20,0]   — se descarta entera (aGlow < glowCorte)
    y juzga C_total = F/Fcielo contra el Cmin de PRODUCCIÓN (ctxFotometrico,
-   H2c activa, thetaInt = diámetro exterior del anillo) — ADR 0008: la ley se
-   importa, no se copia.
+   H2c activa, thetaInt = thetaNieblaArcmin = θ_R/aumentos, ADR 0023) — ADR
+   0008: la ley se importa, no se copia.
 
    Datos pineados en scripts/fixtures/gaia/niebla_<id>.csv (ra,dec,g). Si
    faltan, se bajan de VizieR (I/355/gaiadr3, G<=20) en serie — VizieR
@@ -95,6 +95,19 @@ function medir(c, eq) {
   var estrellas = leer(c[0]);
   var cos0 = Math.cos(c[2] * Math.PI / 180);
 
+  /* Escala de juicio de PRODUCCION (ADR 0023 v2): max(theta_R/M, R50). No se
+     reimplementa aqui (ADR 0008): se llama a nieblaCampo() sobre un lienzo de
+     usar y tirar y se lee la theta que ella misma escribe. El campo del harness
+     es el del fixture (radio 1,1R), que NO es el campo del ocular: threat
+     anotado en el ADR. SIZE pequeno basta porque R50 sale en arcmin y es
+     invariante de escala; el lado 2,2R cubre el circulo del fixture. */
+  var SIZE_TH = 64;
+  var opTh = {
+    ra0: c[1], dec0: c[2], arcmin: 2.2 * c[3], size: SIZE_TH, mlim: mlim, cielo: cielo
+  };
+  R.nieblaCampo(new Float32Array(SIZE_TH * SIZE_TH), estrellas, opTh);
+  var thJuicio = opTh.thetaJuicioArcmin || R.thetaNieblaArcmin(cielo);
+
   // Flujo sub-mlim por bandas en una corona [r0,r1) arcmin.
   function corona(r0, r1) {
     var Fglow = 0, Fperd = 0, nGlow = 0, nPerd = 0;
@@ -122,7 +135,8 @@ function medir(c, eq) {
     var r0 = ANILLOS[a][0] * c[3], r1 = ANILLOS[a][1] * c[3]; // arcmin
     var m = corona(r0, r1);
     var Fexc = Math.max(0, m.F - base.F);                       // exceso sobre el campo
-    var ctx = R.ctxFotometrico(cielo, 2 * r1);                  // theta = diámetro exterior del anillo
+    // theta de produccion, ya calculada arriba por la propia nieblaCampo().
+    var ctx = R.ctxFotometrico(cielo, thJuicio);
     var C = Fexc / ctx.Fcielo;
     filas.push({
       anillo: r0.toFixed(1) + '–' + r1.toFixed(1) + '′',
@@ -134,7 +148,8 @@ function medir(c, eq) {
       C: C, Cmin: ctx.Cmin, visible: C >= ctx.Cmin
     });
   }
-  return { mlim: mlim, muBase: base.F > 0 ? -2.5 * Math.log10(base.F) : Infinity, filas: filas };
+  return { mlim: mlim, thJuicio: thJuicio,
+           muBase: base.F > 0 ? -2.5 * Math.log10(base.F) : Infinity, filas: filas };
 }
 
 function correr() {
@@ -153,7 +168,8 @@ function correr() {
         var m = medir(c, eq);
         res[c[0]][eq.id] = m;
         console.log('  ' + eq.id + ' ' + eq.D + 'mm ' + eq.MAG + '×  mlim=' + m.mlim.toFixed(2) +
-          '  μ_campo=' + (isFinite(m.muBase) ? m.muBase.toFixed(2) : '—'));
+          '  μ_campo=' + (isFinite(m.muBase) ? m.muBase.toFixed(2) : '—') +
+          '  θ_juicio=' + (m.thJuicio * 60).toFixed(1) + '″');
         m.filas.forEach(function (f) {
           console.log('    ' + f.anillo.padEnd(12) +
             ' μ=' + (isFinite(f.mu) ? f.mu.toFixed(2) : '—').padStart(6) +
@@ -177,17 +193,32 @@ function correr() {
     });
     var P4 = res['M11'].E3.filas[0].C < res['M11'].E1.filas[0].C;
 
-    console.log('\n== Listones (ADR 0022) ==');
+    /* P5 (ADR 0023, sustituye al Q5 descartado): a APERTURA FIJA, el umbral de
+       la niebla crece con el aumento. Es la version con dientes y sin
+       referencia a la ley C_MAG: no compara contra la ley vieja -que era la
+       equivocada- sino contra la fisica que la nota midio, que la niebla se
+       apaga al subir aumento. Falla si alguna vez subir aumento hiciera la
+       niebla mas facil de ver. */
+    var P5 = true, P5det = [];
+    [['M11', 'E1', 'E2', '200 mm'], ['M11', 'E3', 'E4', '457 mm']].forEach(function (par) {
+      var bajo = res[par[0]][par[1]].filas[0].Cmin, alto = res[par[0]][par[2]].filas[0].Cmin;
+      if (!(alto > bajo)) P5 = false;
+      P5det.push(par[3] + ': ' + bajo.toFixed(3) + '→' + alto.toFixed(3));
+    });
+
+    console.log('\n== Listones (ADR 0022, P5 del ADR 0023) ==');
     console.log('P1 M11/E1 algún anillo visible:        ' + (P1 ? 'PASA' : 'FALLA'));
     console.log('P2 NGC 7789/E1 algún anillo visible:   ' + (P2 ? 'PASA' : 'FALLA'));
     console.log('P3 controles nunca visibles:           ' + (P3 ? 'PASA' : 'FALLA'));
     console.log('P4 C(M11 nuclear) E3 < E1:             ' + (P4 ? 'PASA' : 'FALLA') +
       '  (E1=' + res['M11'].E1.filas[0].C.toFixed(3) + ', E3=' + res['M11'].E3.filas[0].C.toFixed(3) + ')');
+    console.log('P5 Cmin crece con el aumento:          ' + (P5 ? 'PASA' : 'FALLA') +
+      '  (' + P5det.join(', ') + ')');
     console.log('Informativos: M37/E1 ' + (visibleEn('M37', 'E1') ? 'visible' : 'no visible') +
       ', M46/E1 ' + (visibleEn('M46', 'E1') ? 'visible' : 'no visible'));
 
-    var ok = P1 && P2 && P3 && P4;
-    console.log('\nVEREDICTO: ' + (ok ? 'PASA (4/4)' : 'FALLA'));
+    var ok = P1 && P2 && P3 && P4 && P5;
+    console.log('\nVEREDICTO: ' + (ok ? 'PASA (5/5)' : 'FALLA'));
     process.exit(ok ? 0 : 1);
   }).catch(function (e) { console.error(e.message || e); process.exit(2); });
 }

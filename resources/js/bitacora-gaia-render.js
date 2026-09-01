@@ -592,9 +592,16 @@
     return (techo > 0 && realzado > F * techo) ? F * techo : realzado;
   }
 
-  function pintarFot(Fobj, ctx, o, estrellas) {
+  /* `thetaDifusaArcmin` (opcional): escala de la capa difusa SIN máscara propia
+     que haya en Fobj —hoy solo la niebla del ADR 0022—, para que su umbral se
+     juzgue con la ley H2c y no con la C_MAG heredada (ADR 0023). Sin ella,
+     ctxFotometrico no ve tamaño y H2c no puede entrar: ese era el bug H1, y por
+     eso el argumento es explícito y no un campo de `o` que se pueda quedar
+     rancio entre renders. Las capas que SÍ marcan difusoMask (cúmulo, PS1) no
+     pasan por aquí: traen su desvanecido hecho con su propia θ. */
+  function pintarFot(Fobj, ctx, o, estrellas, thetaDifusaArcmin) {
     var SIZE = ctx.canvas.width, n = Fobj.length;
-    var c = ctxFotometrico(o);
+    var c = ctxFotometrico(o, thetaDifusaArcmin);
     var canales = estrellas ? 3 : 1;
     var perceptual = !!o.perceptual && FOT.GAMMA_PERCEPTUAL !== 1;
     var salida = [new Float32Array(n), null, null];
@@ -989,6 +996,18 @@
      Devuelve el flujo total enrutado SIN el parche estético (unidades de
      estrella G=0): el contador sigue siendo fotometría real, y lo que se
      desvía de ella es solo lo pintado. Ver FOT.NIEBLA_GANANCIA_ESTETICA. */
+  /* Escala a la que la niebla se suaviza Y se juzga: θ_R(SBe) proyectada al
+     cielo (ADR 0023). Es la misma regla que ya usa el grano SBF en
+     pintarCumulo —el término de Riccò vale 1 justo ahí—, y aquí además es la
+     escala del propio núcleo tienda: por debajo de ella la capa no tiene
+     estructura que juzgar. Vive aparte para que la use quien suaviza
+     (nieblaCampo) y quien decide el umbral (pintarFot) sin dos copias, y para
+     que el harness la importe en vez de reimplementarla (ADR 0008). */
+  function thetaNieblaArcmin(cielo) {
+    if (!(cielo && cielo.aumentos > 0)) return 0;
+    return thetaRiccoArcmin(ctxFotometrico(cielo).SBe) / cielo.aumentos;
+  }
+
   /* Ganancia del parche estético de la niebla (FOT.NIEBLA_GANANCIA_ESTETICA).
      Se lee en cada render, no se cachea, para que valga cambiarla por consola. */
   function gananciaNiebla() {
@@ -998,8 +1017,7 @@
 
   function nieblaCampo(difuso, estrellas, o) {
     if (!FOT.H2C) return 0;                 // la vía C_MAG no tiene ley de tamaño
-    var c = ctxFotometrico(o.cielo);
-    var thSkyArcmin = thetaRiccoArcmin(c.SBe) / o.cielo.aumentos;
+    var thSkyArcmin = thetaNieblaArcmin(o.cielo);
     if (!(thSkyArcmin > 0)) return 0;
     var SIZE = o.size;
     var escv = SIZE / (o.arcmin / 60);      // px por grado
@@ -1010,6 +1028,13 @@
     var areaPxAs2 = asPorPx * asPorPx;
     var wx = new Float64Array(2 * Math.ceil(hPx) + 1), wy = new Float64Array(wx.length);
     var total = 0;
+    /* Momento de segundo orden de la niebla, para su ESCALA DE JUICIO (R50,
+       ADR 0023 v2). Se acumula en la misma pasada: Σf, Σfx, Σfy y Σf(x²+y²),
+       que dan ⟨r²⟩ sin necesitar el centroide de antemano ni una segunda
+       vuelta. Es la escala a la que se juzga, NO a la que se suaviza: el
+       núcleo tienda sigue siendo θ_R/M (por debajo de ahí no hay estructura),
+       y esto solo decide con qué Cmin se mira lo ya suavizado. */
+    var mx = 0, my = 0, mr2 = 0;
     for (var i = 0; i < estrellas.length; i++) {
       var g = estrellas[i][2];
       if (!(g > corte)) continue;
@@ -1018,6 +1043,7 @@
       if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) continue;
       var f = Math.pow(10, -0.4 * g);
       total += f;                           // el total devuelto es el flujo REAL
+      mx += f * x; my += f * y; mr2 += f * (x * x + y * y);
       f *= gananciaNiebla();                // ...y lo pintado lleva el parche
       /* Reparto en tienda separable de semiancho hPx: los pesos se normalizan
          a 1 en cada eje, así que el flujo se conserva EXACTO incluso cuando el
@@ -1036,7 +1062,24 @@
         for (px = x0; px <= x1; px++) difuso[fila + px] += wx[px - x0] * ky;
       }
     }
+    o.thetaJuicioArcmin = thetaJuicioNiebla(thSkyArcmin, total, mx, my, mr2, asPorPx);
     return total;
+  }
+
+  /* Escala a la que se JUZGA la niebla (ADR 0023 v2): max(θ_R/M, R50), con R50
+     estimado del momento de segundo orden del flujo, no de un percentil
+     ordenado —mismo resultado en O(n) y sin guardar la lista—. El 0,832 es
+     exacto para una gaussiana 2D (R50 = σ√(2·ln2), ⟨r²⟩ = 2σ²) y es una
+     HIPÓTESIS DE FORMA declarada: un perfil más picudo tiene un R50 real menor
+     que este estimado. El max mantiene el suelo del v1: nunca se juzga a una
+     escala menor que aquella a la que se suavizó. */
+  function thetaJuicioNiebla(thSkyArcmin, total, mx, my, mr2, asPorPx) {
+    if (!(total > 0)) return thSkyArcmin;
+    var cx = mx / total, cy = my / total;
+    var r2 = mr2 / total - (cx * cx + cy * cy);   // px²
+    if (!(r2 > 0)) return thSkyArcmin;
+    var r50 = 0.832 * Math.sqrt(r2) * asPorPx / 60;   // px → arcsec → arcmin
+    return Math.max(thSkyArcmin, r50);
   }
 
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio+profundidad) ── */
@@ -2429,9 +2472,19 @@
       if (cum) estrellasDibujo = cum.estrellas;
       /* Campo ordinario: la banda que ni el glow ni el veloSB representan se
          conserva como niebla (ADR 0022). Con cúmulo no: S1campo ya la lleva. */
-      else nieblaCampo(difuso, estrellas, {
-        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, mlim: mlim, cielo: cielo
-      });
+      var thNiebla = 0;
+      if (!cum) {
+        var opNiebla = {
+          ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, mlim: mlim, cielo: cielo
+        };
+        nieblaCampo(difuso, estrellas, opNiebla);
+        /* La niebla es la única capa difusa sin máscara propia, así que su
+           escala tiene que viajar hasta pintarFot o su umbral cae en C_MAG
+           (bug H1, ADR 0023). La escribe nieblaCampo en la misma pasada que
+           deposita el flujo. Con cúmulo se queda en 0: el halo trae su
+           desvanecido hecho y marca difusoMask. */
+        thNiebla = opNiebla.thetaJuicioArcmin || 0;
+      }
       var opEst = {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
         apertura: o.apertura,   // el disco de Airy va como 1/D
@@ -2440,7 +2493,7 @@
         arana: arana
       };
       var capaEst = capaEstrellas(estrellasDibujo, opEst, SIZE);
-      pintarFot(difuso, ctx, cielo, capaEst);
+      pintarFot(difuso, ctx, cielo, capaEst, thNiebla);
       var galaxias = P.ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
         ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE,
         estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
@@ -2567,7 +2620,7 @@
     difusoMarcado: difusoMarcado,
     difusoMaskDe: difusoMaskDe,
     ctxFotometrico: ctxFotometrico,
-    thetaRiccoArcmin: thetaRiccoArcmin,
+    thetaRiccoArcmin: thetaRiccoArcmin, thetaNieblaArcmin: thetaNieblaArcmin,
     textura: TEXTURA,
     frecuenciaGranoCdeg: frecuenciaGranoCdeg,
     csfTextura: csfTextura,

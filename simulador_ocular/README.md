@@ -617,8 +617,18 @@ un **núcleo tienda separable a la escala de Riccò en cielo** (θ_R/aumentos). 
 de rejilla de celdas: una rejilla pinta cuadrados de borde duro y fase arbitraria,
 y ese escalón sí es estructura visible que el modelo no predice. Los pesos se
 normalizan a 1 por eje, así que el flujo se conserva exacto. Después `pintarFot`
-la juzga con el `Cmin` de siempre: la niebla no lleva umbral propio y **se apaga
-sola** donde no da (μ≈24 con 200 mm/61×). Con cúmulo globular no se ejecuta:
+la juzga con la ley H2c: la niebla no lleva umbral propio y **se apaga sola**
+donde no da.
+
+La escala a la que se la juzga no es la misma a la que se la suaviza
+(ADR 0023): `θ_eff = max(θ_R/M, R50)`, donde `R50` es el radio que engloba la
+mitad del flujo de la niebla, estimado del momento de segundo orden en la misma
+pasada que la deposita. El suelo `θ_R/M` impide juzgarla a una escala menor que
+aquella a la que se suavizó, y `R50` sale de la fotometría del propio campo, sin
+etiquetar nada como cúmulo ni recorrer cajas. Hasta el ADR 0023 esto estaba
+**roto**: `pintarFot` llamaba a `ctxFotometrico` sin el segundo argumento, la
+guarda de H2c no se cumplía nunca y la niebla caía en la ley heredada C_MAG,
+entre 2,4× y 8,9× más permisiva. Con cúmulo globular no se ejecuta:
 `S1campo` ya lleva su sub-umbral y sumar el catálogo encima sería doble conteo.
 
 Medida y prerregistro en `docs/adr/0022-preregistro-niebla-sub-mlim-en-cumulos-abiertos.md`
