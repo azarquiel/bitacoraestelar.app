@@ -33,7 +33,16 @@
   var config = { gammaGlobal: false, gammaHasta: 0.9, gammaDesvanece: 1.6, saturacion: 1.4 };
 
   var GAIA_COLOR = [
-    [-0.40, 125, 153, 255], [0.00, 125, 153, 255], [0.33, 181, 194, 255],
+    /* El nodo de 0,00 es la A0V de Harre & Heller (9600 K, RGB lineal
+       0,49/0,601/1,0). El de -0,40 repetía ese MISMO valor, así que todo el
+       extremo caliente colapsaba en un color: Vega, Sirio, Espiga, Mimosa,
+       Bellatrix y Régulo salían idénticas byte a byte. Ahora lleva el código de
+       una B0.5V (29 000 K, 0,368/0,498/1,0), y la interpolación entre los dos
+       reproduce las anclas intermedias con ≤1 nivel de error: Régulo B8V
+       (-0,160) → 113,143; Bellatrix B2V (-0,316) → 100,133; Espiga B1V
+       (-0,356) → 97,130. Tipo espectral → Teff por Pecaut & Mamajek (2013).
+       Ver simulador_ocular/docs/notas/tonalidad-azul-estrellas.md, C.2. */
+    [-0.40,  94, 127, 255], [0.00, 125, 153, 255], [0.33, 181, 194, 255],
     [ 0.60, 233, 238, 255], [0.82, 255, 237, 231], [1.00, 255, 222, 192],
     [ 1.30, 255, 189, 136], [1.60, 255, 174, 113], [2.00, 255, 162,  90],
     [ 2.40, 255, 162,  81], [2.70, 255, 163,  75], [3.00, 255, 146,  55],

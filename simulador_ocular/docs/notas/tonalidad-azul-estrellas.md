@@ -397,21 +397,49 @@ trae para cada estrella:
 | Régulo | B8V | −0,160 | 12 300 | (113, 143, 255) |
 | Vega | A0V | −0,046 | 9 700 | (125, 153, 255) |
 
-Sale una curva monótona y suave. La corrección mínima es sustituir el nodo
-plano por dos o tres:
+Sale una curva monótona y suave, y no hacen falta nodos nuevos: basta con
+corregir el valor del que ya existe en −0,40. La interpolación lineal entre
+−0,40 y 0,00 reproduce las tres anclas intermedias con ≤1 nivel de error.
+
+**APLICADO** (`resources/js/bitacora-gaia-color.js:36`):
 
 ```js
-[-0.40, 94, 127, 255], [-0.30, 100, 133, 255], [-0.16, 113, 143, 255],
-[ 0.00, 125, 153, 255], [0.33, 181, 194, 255],
+[-0.40,  94, 127, 255], [0.00, 125, 153, 255], [0.33, 181, 194, 255],
 ```
 
-Coste: rompe los dorados de `scripts/test_gaia_color.js:27-28` (`BP-RP -0.40` y
-`BP-RP 0.00`, hoy idénticos a propósito) y toca `scripts/test_blur_color_absoluto.js`.
+Colores resultantes, con la saturación de producción (1,4):
 
-Efecto que conviene decir alto: **esto no hace a Vega más azul**. Su nodo no se
-mueve. Lo que hace es que Espiga, Mimosa y Bellatrix dejen de parecerse a Vega.
-Es la mejora de fidelidad disponible, pero no responde al deseo literal de la
-pregunta.
+| estrella | BP−RP | antes | ahora | croma |
+|---|---|---|---|---|
+| Mimosa B0.5 | −0,383 | `[179, 203, 255]` | `[155, 188, 255]` | 0,298 → 0,392 |
+| Espiga B1V | −0,356 | `[179, 203, 255]` | `[157, 189, 255]` | 0,298 → 0,384 |
+| Bellatrix B2 | −0,316 | `[179, 203, 255]` | `[159, 191, 255]` | 0,298 → 0,376 |
+| Régulo B8 | −0,160 | `[179, 203, 255]` | `[169, 197, 255]` | 0,298 → 0,337 |
+| Sirio A1V | −0,058 | `[179, 203, 255]` | `[175, 201, 255]` | 0,298 → 0,314 |
+| Vega A0V | −0,046 | `[179, 203, 255]` | `[176, 201, 255]` | 0,298 → 0,310 |
+
+Vega y Sirio se mueven 3-4 niveles porque están a la izquierda del nodo de 0,00
+y ahora interpolan hacia uno más azul. Es ruido frente al cambio de las B, y no
+merece mover el nodo a −0,037 para evitarlo: sería ajustar la tabla a una
+estrella.
+
+Y llega a pantalla. Aureola pintada a 6 px del centro (200 mm, sqm 21, 40′),
+donde antes las tres eran idénticas byte a byte:
+
+| estrella | píxel | croma |
+|---|---|---|
+| Vega | `[27, 31, 38]` | 0,289 |
+| Mimosa | `[43, 50, 61]` | 0,295 |
+| Espiga | `[41, 48, 60]` | 0,317 |
+
+Dorados rehechos en `scripts/test_gaia_color.js`: los dos valores de −0,40 y
+0,00, más una fila nueva para −0,16 (Régulo) y un invariante estructural que
+caza la regresión de raíz —«una B temprana es más azul que una A0V»—, que es lo
+que ningún test comprobaba. `scripts/test_blur_color_absoluto.js` no necesitó
+cambios: compara contra el propio módulo, no contra literales.
+
+Efecto que conviene decir alto: **esto no hace a Vega más azul**. Lo que hace es
+que Espiga, Mimosa y Bellatrix dejen de ser sus clones.
 
 ## C.3 Si lo que se quiere es *ver* el azul (esto es estética, no física)
 

@@ -24,7 +24,8 @@ function casi(actual, esperado, tol, etiqueta) {
 }
 
 console.log('colorPorBpRp — valores dorados (RGB):');
-eq(G.colorPorBpRp(-0.40), [179, 203, 255], 'BP-RP -0.40 (caliente O)');
+eq(G.colorPorBpRp(-0.40), [154, 187, 255], 'BP-RP -0.40 (caliente O/B0, azul franco)');
+eq(G.colorPorBpRp(-0.16), [169, 197, 255], 'BP-RP -0.16 (Régulo B8)');
 eq(G.colorPorBpRp(0.00),  [179, 203, 255], 'BP-RP  0.00 (M39, azul-blanco)');
 eq(G.colorPorBpRp(0.33),  [216, 226, 255], 'BP-RP  0.33');
 eq(G.colorPorBpRp(0.60),  [244, 247, 255], 'BP-RP  0.60');
@@ -40,6 +41,10 @@ console.log('colorPorBpRp — invariantes estructurales:');
 var caliente = G.colorPorBpRp(-0.40), frio = G.colorPorBpRp(4.20);
 ok(caliente[2] > caliente[0], 'estrella caliente es azulada (B > R)');
 ok(frio[0] > frio[2],         'estrella fría es rojiza (R > B)');
+/* El extremo caliente NO puede colapsar en un solo color: con los dos nodos
+   iguales, Vega y Mimosa salían idénticas y el simulador no distinguía una B0
+   de una A0. Ver notas/tonalidad-azul-estrellas.md, C.2. */
+ok(caliente[0] < G.colorPorBpRp(0.00)[0], 'una B temprana es más azul que una A0V');
 
 console.log('claseEspectral:');
 eq(G.claseEspectral(-0.40), 'O', 'BP-RP -0.40 → O');
