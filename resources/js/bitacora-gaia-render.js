@@ -220,6 +220,27 @@
        cuña negra en vez de una línea. Aquí barre ~5 magnitudes y no deja borde.
        Las placas conservan el desvanecido original. */
     UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4,
+    /* PARCHE ESTÉTICO, y se llama así a propósito. Multiplica el flujo que la
+       niebla sub-mlim de los cúmulos abiertos deposita en el campo difuso
+       (nieblaCampo, ADR 0022) ANTES de que la cadena lo juzgue.
+
+       Contradice de frente el ADR 0004 («no se introduce ningún parámetro cuyo
+       único criterio de ajuste sea el aspecto de la imagen»). Se introduce a
+       sabiendas: la niebla vive justo en la zona de umbral, sale a unos +24 DN
+       sobre el fondo en el caso nominal (M11 nuclear, 200 mm/61×, sqm 21,5) y
+       eso se percibe flojo. No hay medida detrás de 1,5: es un mando de gusto.
+
+       OJO, no es solo brillo: el factor entra antes de visibilidadDifusa, así
+       que también BAJA el umbral efectivo de detección. Sube el riesgo de que
+       pinte niebla en cúmulos pobres donde nadie la reporta (el listón P3 del
+       ADR 0022 ya sale marginal a sqm 22). No es un realce neutro.
+
+       Ajustable en caliente desde la consola del navegador, sin recompilar:
+         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 2.0;   // más niebla
+         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 1.0;   // fotometría limpia
+       y volver a renderizar. Con 1 la cadena es exactamente la de antes del
+       parche y la conservación del ADR 0003 vuelve a ser exacta. */
+    NIEBLA_GANANCIA_ESTETICA: 1.5,
     /* El recorte a cero de `pintarCumulo` (el campo no puede quitar luz) manda a
        negro el 50-70 % del campo cuando el grano se enciende y regala al cúmulo
        un 2-7 % de flujo que crece con el aumento (issue #98, medido en
@@ -926,6 +947,76 @@
     var techo = magLimite({ apertura: apertura, aumentos: mag, transmision: transmision, sqm: GAIA_SQM_MAS_OSCURO });
     if (techo == null) return GAIA_MAG_DEFECTO;
     return Math.max(GAIA_MAG_MIN, Math.min(GAIA_MAG_TOPE, techo + colaGlowMag() + 0.3));
+  }
+
+  /* ── Niebla sub-mlim de un campo ordinario (ADR 0022) ──
+     Tercer caso del invariante de conservación: en un globular la población
+     sub-m_res entra como <I>(r)=Σ·S1campo (ADR 0012) y en un campo denso la
+     banda truncada entra como veloSB (ADR 0014), pero en el campo ordinario
+     las estrellas catalogadas con g > mlim + colaGlow se descartaban enteras
+     (dibujar(): aGlow < glowCorte) y su flujo no iba a ningún sitio. Aquí esa
+     banda perdida se acumula en el campo difuso repartiendo cada estrella con un
+     núcleo tienda a la escala de Ricco en cielo (θ_R/aumentos, la escala de
+     integración del ojo: por debajo de ella el ojo no resuelve estructura, así
+     que suavizar ahí no borra nada real), y pintarFot la juzga con el Cmin de
+     siempre. Nada de rejilla de celdas: una rejilla pinta cuadrados de borde
+     duro y fase arbitraria, y ese escalón SÍ es estructura visible. Cortes
+     disjuntos por construcción: (mlim, mlim+cola] es del glow, (magConsulta,∞)
+     del veloSB. Los cúmulos globulares NO pasan por aquí (su sub-umbral ya lo
+     conserva S1campo; sumar el catálogo encima sería doble conteo).
+     Prerregistro y medida: harness_niebla_abiertos.js — la mancha es real en
+     M11/NGC 7789 (exceso local sobre el campo) y nula en Pléyades/NGC 1664.
+     Devuelve el flujo total enrutado SIN el parche estético (unidades de
+     estrella G=0): el contador sigue siendo fotometría real, y lo que se
+     desvía de ella es solo lo pintado. Ver FOT.NIEBLA_GANANCIA_ESTETICA. */
+  /* Ganancia del parche estético de la niebla (FOT.NIEBLA_GANANCIA_ESTETICA).
+     Se lee en cada render, no se cachea, para que valga cambiarla por consola. */
+  function gananciaNiebla() {
+    var k = FOT.NIEBLA_GANANCIA_ESTETICA;
+    return (k > 0) ? k : 1;
+  }
+
+  function nieblaCampo(difuso, estrellas, o) {
+    if (!FOT.H2C) return 0;                 // la vía C_MAG no tiene ley de tamaño
+    var c = ctxFotometrico(o.cielo);
+    var thSkyArcmin = thetaRiccoArcmin(c.SBe) / o.cielo.aumentos;
+    if (!(thSkyArcmin > 0)) return 0;
+    var SIZE = o.size;
+    var escv = SIZE / (o.arcmin / 60);      // px por grado
+    var hPx = Math.max(1, (thSkyArcmin / 60) * escv);   // semiancho del núcleo
+    var corte = o.mlim + colaGlowMag();     // por debajo ya lo pinta el glow
+    var cos0 = Math.cos(o.dec0 * Math.PI / 180);
+    var asPorPx = (o.arcmin * 60) / SIZE;
+    var areaPxAs2 = asPorPx * asPorPx;
+    var wx = new Float64Array(2 * Math.ceil(hPx) + 1), wy = new Float64Array(wx.length);
+    var total = 0;
+    for (var i = 0; i < estrellas.length; i++) {
+      var g = estrellas[i][2];
+      if (!(g > corte)) continue;
+      var x = SIZE / 2 - (((estrellas[i][0] - o.ra0 + 540) % 360) - 180) * cos0 * escv;
+      var y = SIZE / 2 - (estrellas[i][1] - o.dec0) * escv;
+      if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) continue;
+      var f = Math.pow(10, -0.4 * g);
+      total += f;                           // el total devuelto es el flujo REAL
+      f *= gananciaNiebla();                // ...y lo pintado lleva el parche
+      /* Reparto en tienda separable de semiancho hPx: los pesos se normalizan
+         a 1 en cada eje, así que el flujo se conserva EXACTO incluso cuando el
+         núcleo se sale del lienzo (lo que sobresale se reparte hacia dentro en
+         vez de perderse). */
+      var x0 = Math.max(0, Math.ceil(x - hPx)), x1 = Math.min(SIZE - 1, Math.floor(x + hPx));
+      var y0 = Math.max(0, Math.ceil(y - hPx)), y1 = Math.min(SIZE - 1, Math.floor(y + hPx));
+      var sx = 0, sy = 0, px, py;
+      for (px = x0; px <= x1; px++) { var w = 1 - Math.abs(px + 0.5 - x) / hPx; if (w < 0) w = 0; wx[px - x0] = w; sx += w; }
+      for (py = y0; py <= y1; py++) { var v = 1 - Math.abs(py + 0.5 - y) / hPx; if (v < 0) v = 0; wy[py - y0] = v; sy += v; }
+      if (!(sx > 0) || !(sy > 0)) { difuso[Math.floor(y) * SIZE + Math.floor(x)] += f / areaPxAs2; continue; }
+      var k = f / (sx * sy * areaPxAs2);
+      for (py = y0; py <= y1; py++) {
+        var fila = py * SIZE, ky = wy[py - y0] * k;
+        if (ky <= 0) continue;
+        for (px = x0; px <= x1; px++) difuso[fila + px] += wx[px - x0] * ky;
+      }
+    }
+    return total;
   }
 
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio+profundidad) ── */
@@ -2307,6 +2398,11 @@
           })
         : null;
       if (cum) estrellasDibujo = cum.estrellas;
+      /* Campo ordinario: la banda que ni el glow ni el veloSB representan se
+         conserva como niebla (ADR 0022). Con cúmulo no: S1campo ya la lleva. */
+      else nieblaCampo(difuso, estrellas, {
+        ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, mlim: mlim, cielo: cielo
+      });
       var opEst = {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
         apertura: o.apertura,   // el disco de Airy va como 1/D
@@ -2418,6 +2514,7 @@
     render: render,
     magLimite: magLimite,
     veloSB: veloSB,
+    nieblaCampo: nieblaCampo,
     sumaSB: sumaSB,
     magConsultaGaia: magConsultaGaia,
     nivelFondo: nivelFondo,

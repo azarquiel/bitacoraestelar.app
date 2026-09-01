@@ -598,6 +598,69 @@ Los de la resolución y la PSF van aparte, porque necesitan parches de verdad:
 > que se compare.** Medir un parche de 1024 px sobre un lienzo de 512 tira tres
 > de cada cuatro píxeles y produce un aliasing que se confunde con física.
 
+### Niebla sub-límite de los cúmulos abiertos
+
+Un cúmulo abierto rico y lejano —M11, NGC 7789— se ve con un **fondo nebuloso**:
+las estrellas que el equipo no separa una a una, pero cuya luz sumada sí llega al
+ojo. Hasta ahora esa luz **se perdía**. El render descartaba entera la banda por
+debajo de `mlim + cola de glow` (`aGlow < glowCorte` en `dibujar()`), así que su
+flujo no iba a ningún sitio.
+
+No es una capa nueva, es el **tercer caso del mismo invariante de conservación**:
+en un globular la población sub-`m_res` ya entra como ⟨I⟩(r)=Σ·S1campo (ADR 0012)
+y en un campo denso la banda truncada entra como `veloSB` (ADR 0014). Faltaba el
+campo ordinario, y es donde caen los abiertos (`o.cumulo` solo se rellena con
+globulares).
+
+`nieblaCampo()` acumula esa banda en el campo difuso repartiendo cada estrella con
+un **núcleo tienda separable a la escala de Riccò en cielo** (θ_R/aumentos). Nada
+de rejilla de celdas: una rejilla pinta cuadrados de borde duro y fase arbitraria,
+y ese escalón sí es estructura visible que el modelo no predice. Los pesos se
+normalizan a 1 por eje, así que el flujo se conserva exacto. Después `pintarFot`
+la juzga con el `Cmin` de siempre: la niebla no lleva umbral propio y **se apaga
+sola** donde no da (μ≈24 con 200 mm/61×). Con cúmulo globular no se ejecuta:
+`S1campo` ya lleva su sub-umbral y sumar el catálogo encima sería doble conteo.
+
+Medida y prerregistro en `docs/adr/0022-preregistro-niebla-sub-mlim-en-cumulos-abiertos.md`
+(harness `scripts/harness_niebla_abiertos.js`, conservación en
+`scripts/test_niebla_abiertos.js`). La primera medida —toda la luz sub-`mlim`
+contra el cielo— **falsó el control**: lo que encendía a NGC 1664 y NGC 2266 no
+era el cúmulo sino el campo galáctico, casi plano en radio. La medida buena es el
+**exceso local sobre el campo**, y con ella pasan los cuatro listones.
+
+#### El parche estético (`FOT.NIEBLA_GANANCIA_ESTETICA`)
+
+**Esto es una trampa deliberada y conviene saberlo antes de fiarse del render.**
+
+La cadena limpia deja la niebla en unos **+24 DN sobre el fondo** (de 255) en el
+caso nominal: M11 nuclear, 200 mm/61×, sqm 21,5. Es fotometría correcta y se
+percibe flojo. `FOT.NIEBLA_GANANCIA_ESTETICA` multiplica el flujo que la niebla
+deposita **antes** de que la cadena lo juzgue. Por defecto **1,5**. No hay ninguna
+medida detrás de ese número: es un mando de gusto, y contradice de frente el
+ADR 0004 (*nada de parámetros estéticos para tapar fotometría*).
+
+Dos consecuencias que no son negociables ni se pueden documentar como detalle
+menor:
+
+- **No es solo brillo.** El factor entra antes de `visibilidadDifusa`, así que
+  también baja el umbral efectivo de detección. Sube el riesgo de pintar niebla
+  en cúmulos pobres donde nadie la reporta — el listón P3 ya salía marginal a
+  sqm 22 **sin** el parche.
+- **Rompe la conservación** del ADR 0003 en lo pintado. `nieblaCampo()` sigue
+  devolviendo el flujo real sin multiplicar, para que el desvío quede acotado a
+  lo que se dibuja y siga siendo medible.
+
+Se ajusta en caliente desde la consola del navegador, sin recompilar:
+
+```js
+BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 2.0;  // más niebla
+BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 1.0;  // fotometría limpia
+```
+
+y volver a renderizar. Con **1** la cadena es exactamente la de antes del parche
+y la conservación vuelve a ser exacta (lo comprueba T1b de
+`test_niebla_abiertos.js`).
+
 ### Halo de los cúmulos globulares (perfil de King)
 
 Los 149 cúmulos del catálogo de **Harris** (1996, rev. 2010) pintan, además de sus
@@ -776,7 +839,7 @@ la lógica:
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longMag`/`longMax` (longitud), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
-| `FOT` | Curvas de la fotometría: brillo del objeto y del fondo de cielo. Incluye `H2C` (ley del umbral por tamaño aparente, activa por defecto; `null` = vía histórica C_MAG, solo regresión) y `H2C_DEFECTO` (`THETA_R_A/B` de Blackwell, `SEEING_AS` = 2″ fijo). |
+| `FOT` | Curvas de la fotometría: brillo del objeto y del fondo de cielo. Incluye `H2C` (ley del umbral por tamaño aparente, activa por defecto; `null` = vía histórica C_MAG, solo regresión), `H2C_DEFECTO` (`THETA_R_A/B` de Blackwell, `SEEING_AS` = 2″ fijo) y `NIEBLA_GANANCIA_ESTETICA` (**parche estético** de la niebla de los abiertos, 1,5 por defecto; 1 = fotometría limpia — ver *Niebla sub-límite de los cúmulos abiertos*). |
 | `TRANSMISION_TELE` / `TRANSMISION_OPTICA` | Transmisión por defecto y por tipo óptico. |
 | `MARGEN_MAGLIM` | Margen entre el límite típico y el óptimo. |
 | `GAIA_MAG_MAX` / `TOP` | Profundidad y tope de la consulta a Gaia (afecta al rendimiento). |
