@@ -68,7 +68,7 @@ var ocular = fs.readFileSync(
 
 console.log('El simulador precalienta con lo que va a pedir la vista:');
 ok(/function precalentarGaia\(/.test(ocular),
-  'existe precalentarGaia(), fuente única del precalentado');
+  'existe precalentarGaia(), el precalentado del simulador');
 ok((ocular.match(/precalentarGaia\(/g) || []).length >= 3,
   'los dos sitios que precalentaban (elegirObjeto y el arranque) lo llaman');
 ok(!/consultarGaia\(sexToDeg\([^)]*\)\s*,\s*sexToDeg\([^)]*\)\)/.test(ocular),
@@ -83,6 +83,40 @@ ok(/function arcminVista\(\)[\s\S]{0,400}GAIA_MAX_ARCMIN[\s\S]{0,120}DSS_MAX_ARC
   'canvas-2d usa GAIA_MAX_ARCMIN y las placas DSS_MAX_ARCMIN');
 ok(/function arcminVista\(\)[\s\S]{0,300}return undefined/.test(ocular),
   'sin equipo elegido devuelve undefined y la consulta usa su radio por defecto');
+
+/* -- El otro disparador: el botón "Generar" del formulario de registro ------
+   Misma ley (BitacoraGaiaRender.profundidadConsulta) y misma vara de medir: si
+   el precalentado pide lo que va a pedir la vista, la vista no vuelve a
+   descargar. Aquí se ejerce la entrada de verdad, precalentar(), no una copia
+   del cálculo. */
+global.window.BitacoraPS1 = { ps1MagConsulta: function (m) { return m + 1.5; } };
+var EQUIPO = { ra: 200, dec: 30, arcmin: 90, apertura: 200, aumentos: 100, optica: 'newton' };
+
+function descargasPrecalentar(o) {
+  var llamadas = [];
+  global.fetch = function (url) {
+    llamadas.push(url);
+    return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ data: [] }); } });
+  };
+  R.precalentar(o);
+  // Lo que pedirá la vista de Gaia con ese mismo equipo (render -> vistaGaia).
+  var t = R.transmisionOptica(o.optica) || 0.8;
+  R.consultar(o.ra, o.dec, o.arcmin, R.profundidadConsulta(o.apertura, t, o.aumentos, true));
+  return llamadas.length;
+}
+
+console.log('El formulario precalienta con lo que va a pedir el modal:');
+ok(typeof R.precalentar === 'function',
+  'existe BitacoraGaiaRender.precalentar(), el precalentado compartido');
+ok(typeof R.profundidadConsulta === 'function',
+  'y una sola dueña de la profundidad, profundidadConsulta()');
+ok(descargasPrecalentar(EQUIPO) === 1,
+  'apuntar al botón y generar después: una sola descarga');
+
+var formulario = fs.readFileSync(
+  path.join(__dirname, '../registro/resources/js/bitacora-formulario.js'), 'utf8');
+ok(/entradasBox\.addEventListener\('pointerover', precalentarSim\)/.test(formulario),
+  'el disparador va delegado en el contenedor, no un listener por entrada');
 
 console.log(fallos === 0 ? '\nTodo verde.' : '\n' + fallos + ' fallo(s).');
 process.exit(fallos === 0 ? 0 : 1);

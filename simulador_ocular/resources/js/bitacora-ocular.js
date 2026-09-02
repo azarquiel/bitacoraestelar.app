@@ -770,8 +770,8 @@
            siempre sobre el radio mayor. Hacia el bulbo (M6, M7) eso son millones
            de estrellas que el TAP ordena para nada, porque el TOP recorta antes.
            Ver magConsultaGaia. */
-        var mag = BitacoraGaiaRender.magConsultaGaia(teleApertura(), transmisionEfectiva(), datosOcular().aumentos);
-        if (paraCapa) mag = BitacoraPS1.ps1MagConsulta(mag);
+        var mag = BitacoraGaiaRender.profundidadConsulta(
+          teleApertura(), transmisionEfectiva(), datosOcular().aumentos, paraCapa);
         return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
       }
       /* Campo que la vista actual va a pedir a Gaia: el mismo número que calcula

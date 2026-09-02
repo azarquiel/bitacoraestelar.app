@@ -35,6 +35,7 @@
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
  *   BitacoraGaiaRender.magLimite({ apertura, aumentos, transmision, sqm }) → number|null
  *   BitacoraGaiaRender.magConsultaGaia(apertura, transmision, aumentos) → number (profundidad de consulta)
+ *   BitacoraGaiaRender.profundidadConsulta(apertura, transmision, aumentos, paraCapa) → number
  *   BitacoraGaiaRender.nivelFondo({ pupilaSalida, pupilaOjo, sqm }) → 0..255
  *   BitacoraGaiaRender.transmisionOptica(optica) → number|null
  *   BitacoraGaiaRender.opticaTieneArana(optica) → bool
@@ -456,7 +457,12 @@
     if (n < 500) return vd;
     var a = (n * sxy - sx * sy) / (n * sxx - sx * sx);
     var b = (sy - a * sx) / n;
-    if (!(a > 0)) return vd;
+    /* isFinite además de > 0: si los 500 píxeles comunes tienen la MISMA luma en
+       la corta (una placa plana, o un error del servidor servido como imagen),
+       el denominador es 0 y la pendiente sale ±Infinity, que pasa el `> 0`. Con
+       ella b sale −Infinity y la fusión pinta NaN en toda la placa. Sin recta
+       fiable se devuelve la profunda tal cual, que es lo que dice el rótulo. */
+    if (!(a > 0) || !isFinite(a) || !isFinite(b)) return vd;
     var out = new Float32Array(vd.length);
     for (i = 0; i < vd.length; i++) {
       var t = suave((vd[i] - 210) / 40);
@@ -1107,6 +1113,24 @@
       return fetchGaiaUnaVez(ra, dec, rad, mag);
     });
   }
+  /* Profundidad a la que se consulta Gaia para UNA vista. Estaba copiada en
+     cuatro sitios (vistaGaia, renderPlaca, el precalentado del simulador y el
+     del formulario) y la copia es justo lo que no puede divergir: un
+     precalentado solo acierta en el caché si pide EXACTAMENTE lo que pedirá la
+     vista, y pedir de más encarece el ORDER BY del TAP para esas coordenadas el
+     resto de la sesión (scripts/test_precalentado_gaia.js).
+
+     `paraCapa`: solo la vista de Gaia pinta la capa de galaxias, y su máscara
+     quiere todas las estrellas que PanSTARRS registra. El realce sobre una
+     placa no pinta capa y no paga esa profundidad. */
+  function profundidadConsulta(apertura, transmision, aumentos, paraCapa) {
+    var mag = magConsultaGaia(apertura, transmision, aumentos);
+    if (!paraCapa) return mag;
+    var P = window.BitacoraPS1;
+    if (!P) throw new Error('profundidadConsulta(paraCapa) necesita BitacoraPS1; carga bitacora-ps1.js');
+    return P.ps1MagConsulta(mag);
+  }
+
   /* Precalentado: dispara la MISMA consulta que hará render(), antes de que se
      pida el render (al apuntar al botón de generar). La consulta a Gaia es lo
      más lento de la cadena —una vuelta al TAP, segundos en frío— y no depende
@@ -1116,12 +1140,19 @@
      No cuesta nada de más: consultar() cachea por coordenada, radio y
      profundidad (superconjunto monotónico), así que si luego se genera la
      imagen se reutiliza la promesa ya en vuelo, y si no se genera se queda una
-     entrada en la caché. Un fallo aquí borra su entrada y lo reintenta render(). */
+     entrada en la caché. Un fallo aquí borra su entrada y lo reintenta render().
+
+     UNA salvedad, y no es gratis: se precalienta a la profundidad de la vista
+     de Gaia, que es la fuente por defecto del modal, porque al apuntar al botón
+     la fuente todavía no está elegida. Si el observador cambia a DSS, el realce
+     de esa vista solo necesitaba la profundidad sin capa, y lo pedido de más se
+     queda fundido en el caché encareciendo el ORDER BY del TAP para esas
+     coordenadas el resto de la sesión. Se acepta a sabiendas: adivinar la
+     fuente no se puede, y la de por defecto es la que casi siempre se genera. */
   function precalentar(o) {
-    var P = window.BitacoraPS1;
-    if (!P || !o || o.ra == null || o.dec == null || !(o.apertura > 0)) return;
+    if (!window.BitacoraPS1 || !o || o.ra == null || o.dec == null || !(o.apertura > 0)) return;
     var t = (o.transmision > 0) ? o.transmision : (transmisionOptica(o.optica) || TRANSMISION_DEFECTO);
-    consultar(o.ra, o.dec, o.arcmin, P.ps1MagConsulta(magConsultaGaia(o.apertura, t, o.aumentos)))
+    consultar(o.ra, o.dec, o.arcmin, profundidadConsulta(o.apertura, t, o.aumentos, true))
       .catch(function () {});
   }
 
@@ -1264,10 +1295,18 @@
     ctx.putImageData(im, 0, 0);
     return (SPIKE_SPRITE = c);
   }
+  /* Un sprite por color redondeado a entero, y el color de una estrella es
+     continuo: una sesión larga (zoom, pan, cambios de equipo) va dejando un
+     lienzo de 256x32 por tono nuevo y no suelta ninguno. Se topa como la caché
+     del grano —vaciar entera al llegar al tope, que es O(1); el patrón real
+     (pocas estrellas con spikes por campo) reconstruye enseguida lo que hace
+     falta—. */
+  var SPIKE_TINT_TOPE = 512;
   function spriteSpikeColor(rgb) {
     if (!rgb) return spriteSpike();
     var r = Math.round(rgb[0]), gc = Math.round(rgb[1]), b = Math.round(rgb[2]), key = r + ',' + gc + ',' + b;
     if (SPIKE_TINT[key]) return SPIKE_TINT[key];
+    if (Object.keys(SPIKE_TINT).length >= SPIKE_TINT_TOPE) { SPIKE_TINT = {}; }
     var base = spriteSpike();
     var c = document.createElement('canvas'); c.width = base.width; c.height = base.height;
     var g = c.getContext('2d');
@@ -1718,23 +1757,39 @@
   // proceso. Vaciar entero es O(1) amortizado y aquí el patrón real de uso
   // (píxeles contiguos de un cúmulo) reconstruye rápido lo que hace falta.
   var GRANO_CACHE = new Map(), GRANO_CACHE_N = 0, GRANO_CACHE_TOPE = 20000;
+  /* La clave exterior se arma "una vez por llamada a granoEn"... que es una vez
+     por PIXEL: en un cumulo que ocupa medio lienzo son cientos de miles de
+     concatenaciones (semilla es un entero, cell un flotante: las dos se pasan a
+     cadena) y otras tantas busquedas en el Map. Se recuerda la ultima tabla: el
+     patron real -pixeles contiguos del mismo cumulo, misma semilla y mismo
+     paso- la acierta siempre menos la primera vez. */
+  var GRANO_ULT_SEMILLA = null, GRANO_ULT_CELL = null, GRANO_ULT_TABLA = null;
   function granoTablaCelda(semilla, cell) {
+    if (GRANO_ULT_TABLA && semilla === GRANO_ULT_SEMILLA && cell === GRANO_ULT_CELL) {
+      return GRANO_ULT_TABLA;
+    }
     var clave = semilla + '_' + cell;
     var tabla = GRANO_CACHE.get(clave);
-    if (tabla) return tabla;
-    tabla = new Map();
-    GRANO_CACHE.set(clave, tabla);
+    if (!tabla) { tabla = new Map(); GRANO_CACHE.set(clave, tabla); }
+    GRANO_ULT_SEMILLA = semilla; GRANO_ULT_CELL = cell; GRANO_ULT_TABLA = tabla;
     return tabla;
   }
+  /* Los impulsos van en un Float64Array PLANO de tripletes (x, y, w), no en un
+     array de objetos: granoEn recorre los de ~(2*GRANO_RADIO+1)^2 celdas por
+     pixel y en cada uno leia tres propiedades de un objeto distinto. Mismos
+     valores y mismo orden de suma -un Float64 es exactamente un number de JS-,
+     pero contiguos en memoria. */
   function granoCelda(tabla, semilla, i, j, cell) {
     var claveInterna = (i + 32768) * 65536 + (j + 32768);
     var impulsos = tabla.get(claveInterna);
     if (impulsos) return impulsos;
     var n = granoCeldaN(semilla, i, j);
-    impulsos = new Array(n);
+    impulsos = new Float64Array(n * 3);
     for (var k = 0; k < n; k++) {
       var pos = granoImpPos(semilla, i, j, k);
-      impulsos[k] = { x: (i + pos[0]) * cell, y: (j + pos[1]) * cell, w: granoImpPeso(semilla, i, j, k) };
+      impulsos[k * 3]     = (i + pos[0]) * cell;
+      impulsos[k * 3 + 1] = (j + pos[1]) * cell;
+      impulsos[k * 3 + 2] = granoImpPeso(semilla, i, j, k);
     }
     if (GRANO_CACHE_N >= GRANO_CACHE_TOPE) { GRANO_CACHE.clear(); GRANO_CACHE_N = 0; tabla.clear(); GRANO_CACHE.set(semilla + '_' + cell, tabla); }
     tabla.set(claveInterna, impulsos);
@@ -1768,12 +1823,11 @@
       for (var dj = -GRANO_RADIO; dj <= GRANO_RADIO; dj++) {
         var j = j0 + dj;
         var impulsos = granoCelda(tabla, semilla, i, j, cell);
-        for (var k = 0; k < impulsos.length; k++) {
-          var imp = impulsos[k];
-          var dx = (xAs - imp.x) / bw, dy = (yAs - imp.y) / bw, d2 = dx * dx + dy * dy;
+        for (var k = 0; k < impulsos.length; k += 3) {
+          var dx = (xAs - impulsos[k]) / bw, dy = (yAs - impulsos[k + 1]) / bw, d2 = dx * dx + dy * dy;
           if (d2 > GRANO_RADIO * GRANO_RADIO) continue;
           var c = Math.exp(-0.5 * d2);
-          suma += imp.w * c;
+          suma += impulsos[k + 2] * c;
           sumaC2 += c * c;
         }
       }
@@ -2103,11 +2157,18 @@
        para medir el objetivo (Im·sHalo, sin grano) y lo realmente pintado
        (recortado) por anillo; la segunda pinta con el factor ya calculado.
        `campoLognormal`/`granoEn` son deterministas en (semilla, r), así que
-       repetir el cálculo en dos pasadas da el mismo campo, sin guardarlo. */
+       repetir el cálculo en dos pasadas daría el mismo campo. Se guarda igual:
+       `granoEn` es ~75 exponenciales por píxel y es lo más caro del render de
+       un cúmulo, así que recalcularlo costaba el doble de todo. La caja son
+       Float64 (no Float32: el valor tiene que ser el MISMO bit a bit que el de
+       la primera pasada) y solo se reserva cuando la renormalización está
+       activa. */
     var nAnillos = tabla.r.length, factorAnillo = null;
     function kAnillo(rAs) { return Math.min(nAnillos - 1, Math.floor(rAs / tabla.paso)); }
+    var anchoCaja = x1 - x0 + 1, crudoCaja = null;
     if (renormGrano) {
       var sumObjetivo = new Float64Array(nAnillos), sumRecorte = new Float64Array(nAnillos);
+      crudoCaja = new Float64Array(anchoCaja * (y1 - y0 + 1));
       for (var y1p = y0; y1p <= y1; y1p++) {
         var norte1p = -(y1p - cy) * asPorPx;
         for (var x1p = x0; x1p <= x1; x1p++) {
@@ -2121,6 +2182,7 @@
           var sLn1p = interpTabla(tabla, tabla.lnS, rAs1p);
           var crudo1p = campoLognormal(Math.log(Im1p) - sLn1p * sLn1p / 2, sLn1p,
             granoEn(semilla, este1p, norte1p, pasoGrano));
+          crudoCaja[(y1p - y0) * anchoCaja + (x1p - x0)] = crudo1p;
           var I1p = Im1p * sH1p + (crudo1p - Im1p) * sG1p;
           var k1p = kAnillo(rAs1p);
           sumObjetivo[k1p] += Im1p * sH1p * areaPx;
@@ -2144,8 +2206,13 @@
         var sH = interpTabla(tabla, tabla.sHalo, rAs);
         var sG = interpTabla(tabla, tabla.sGrano, rAs);
         var sLn = interpTabla(tabla, tabla.lnS, rAs);
-        var crudo = campoLognormal(Math.log(Im) - sLn * sLn / 2, sLn,
-          granoEn(semilla, este, norte, pasoGrano));
+        // Lo que ya calculó la pasada de medida: descarta los mismos píxeles
+        // que esta (mismas condiciones sobre los mismos valores), así que
+        // cuando hay caja, el valor guardado existe.
+        var crudo = crudoCaja
+          ? crudoCaja[(y - y0) * anchoCaja + (x - x0)]
+          : campoLognormal(Math.log(Im) - sLn * sLn / 2, sLn,
+              granoEn(semilla, este, norte, pasoGrano));
         var dI = crudo - Im;
         var I = Im * sH + dI * sG;
         if (!(I > 0)) I = 0;                      // el campo no puede quitar luz
@@ -2449,7 +2516,7 @@
     var mlim = limite();
     var P = window.BitacoraPS1;
     if (!P) throw new Error('BitacoraGaiaRender necesita BitacoraPS1 (capa de galaxias desde imagen); carga bitacora-ps1.js');
-    return consultar(o.ra, o.dec, o.arcmin, P.ps1MagConsulta(magConsultaGaia(o.apertura, t, o.aumentos))).then(function (estrellas) {
+    return consultar(o.ra, o.dec, o.arcmin, profundidadConsulta(o.apertura, t, o.aumentos, true)).then(function (estrellas) {
       if (!vivo()) return { cancelada: true };
       /* Campo denso: la banda truncada llega como momentos y entra como velo
          (cielo extra) en toda la cadena, incluida la magnitud límite (ADR
@@ -2592,9 +2659,15 @@
       // Realce de las brillantes con Gaia: la placa las quema y pierde su color.
       // El límite es mucho más brillante que la magnitud límite del equipo (que
       // sí manda en la vista de Gaia): aquí el campo débil ya lo trae la placa.
+      /* urlPlaca acepta ra/dec en sexagesimal (texto); consultar() hace
+         ra0.toFixed(3) y con texto lanza un TypeError DENTRO del .then, donde
+         el respaldo de abajo ya no lo atrapa: la placa quedaba pintada y aun
+         así renderPlaca rechazaba. Sin coordenadas numéricas no hay realce,
+         que es justo lo que el respaldo haría con la consulta caída. */
       if (o.conGaia === false || !(o.apertura > 0)) return r;
+      if (typeof o.ra !== 'number' || typeof o.dec !== 'number') return r;
       var mlim = 7.7 + 5 * Math.log10(o.apertura / 100);
-      return consultar(o.ra, o.dec, arcmin, magConsultaGaia(o.apertura, t, o.aumentos)).then(function (estrellas) {
+      return consultar(o.ra, o.dec, arcmin, profundidadConsulta(o.apertura, t, o.aumentos, false)).then(function (estrellas) {
         dibujar(ctx, estrellas, {
           ra: o.ra, dec: o.dec, arcmin: arcmin, mlim: mlim, afov: o.afov,
           apertura: o.apertura, conGlow: false,
@@ -2610,6 +2683,7 @@
     fot: FOT,
     consultar: consultar,
     precalentar: precalentar,
+    profundidadConsulta: profundidadConsulta,
     cacheGaia: cacheGaia,
     dibujar: dibujar,
     vistaGaia: vistaGaia,
