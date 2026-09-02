@@ -1,27 +1,37 @@
 <!-- ============================================================
-     MIS VIAJES · Sesiones de observación · Bitácora Messier
+     MI BITÁCORA · Viajes y observaciones · Bitácora Messier
 
      Pega este bloque en un bloque "HTML personalizado" de Gutenberg,
-     en una página nueva ("Mis viajes", ruta /mis-viajes/), protegida
-     por login.
+     en la página "Mis viajes" (ruta /mis-viajes/), protegida por login.
+
+     Una sola página con tres vistas de lo mismo:
+       · Viajes    — cada salida con su ficha y, plegados, sus objetos.
+       · Todas     — la lista plana, con buscador por nombre de objeto.
+       · Papelera  — lo borrado, restaurable.
 
      Aquí vive el LUGAR de la salida: se indica una vez para toda la
      noche, y el formulario de registro solo vuelve a preguntarlo si el
      viaje no lo tiene.
 
      Reutiliza bitacora-base.css + bitacora-formulario.css (wrapper
-     #mw-obs-form) y añade estilos propios. El JS va subido por FTP a
+     #mw-obs-form) + bitacora-listado.css (#mw-obs-list, anidado) y añade
+     estilos propios. El JS va subido por FTP a
      /wp-content/uploads/bitacora/ (no lo pegues aquí: el editor escapa
      los "&" y rompería el JavaScript).
+
+     AJUSTA data-form si la página del formulario no está en
+     /index.php/registro-de-observacion/ — es la ruta a la que llevan
+     los botones "Editar" de cada observación.
 
      Al actualizar un archivo, incrementa su ?v=N para saltarse la caché.
      ============================================================ -->
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260831_1200" />
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-formulario.css?v=20260831_1300" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-listado.css?v=20260902_1200" />
 
 <style>
-/* Estilos propios de "Mis viajes", encapsulados bajo #mw-obs-form. */
+/* Estilos propios de "Mi bitácora", encapsulados bajo #mw-obs-form. */
 #mw-obs-form .viajes-list {display:flex;flex-direction:column;gap:10px;margin:6px 0 22px;}
 #mw-obs-form .viajes-empty {color:var(--tinta-tenue);font-size:14px;font-style:italic;margin:2px 0 18px;}
 /* La ficha envuelve: con la salida a un lado y sus botones al otro, en cuanto
@@ -72,82 +82,117 @@
 <div class="wrap">
   <header class="masthead">
     <p class="eyebrow">Bitácora · Sesiones de observación</p>
-    <h1>Mis viajes
-      <span class="sub">Cada salida es un viaje: una noche, un lugar, un observador. Aquí se dice desde dónde se observó —vale para toda la noche— y se escribe la crónica de la sesión.</span>
+    <h1>Mi bitácora
+      <span class="sub">Cada salida es un viaje: una noche, un lugar, un observador. Aquí se dice desde dónde se observó —vale para toda la noche—, se escribe la crónica de la sesión y se ve, edita o retira todo lo registrado bajo el cielo.</span>
     </h1>
   </header>
 
-  <fieldset>
-    <legend><div class="leg"><span class="num">1</span>
-      <div><h2>Mis salidas</h2><p>De la más reciente a la más antigua. Solo se borran las que no tienen observaciones dentro.</p></div></div></legend>
-    <div class="viajes-list" id="viajesMios"></div>
-  </fieldset>
+  <div id="mw-obs-list" data-form="/index.php/registro-de-observacion/" data-ficha="/index.php/datos-de-ficha/">
 
-  <fieldset>
-    <legend><div class="leg"><span class="num">2</span>
-      <div><h2 id="viajeFormTitulo">Registrar una salida</h2><p>Da de alta la noche antes de registrar sus objetos: el registro de observaciones la exige.</p></div></div></legend>
-
-    <form id="viajeForm" autocomplete="off">
-      <div class="row">
-        <label class="field"><span class="lab">Noche de la salida</span>
-          <input type="date" id="vNoche" required /></label>
-        <label class="field"><span class="lab">Nombre del viaje (opcional)</span>
-          <input type="text" id="vNombre" placeholder="Perseidas desde la sierra" /></label>
+    <div class="bar">
+      <div class="tabs">
+        <button type="button" class="tab active" id="tabViajes">Viajes</button>
+        <button type="button" class="tab" id="tabActivas">Todas</button>
+        <button type="button" class="tab" id="tabPapelera">Papelera</button>
       </div>
-      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">Si la observación empezó pasada la medianoche (00:00 en adelante), pon aquí la fecha del día ANTERIOR: esa madrugada sigue siendo la misma noche que empezó la tarde de antes. Ej.: si saliste el 19 por la noche y observaste ya el 20 a las 00:10, la Noche es 19, no 20.</p>
-
-      <label class="field"><span class="lab">Lugar de observación (base)</span>
-        <select id="vBase"><option value="">— Sin lugar —</option></select></label>
-      <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">El lugar es de la salida entera: con él se calculan la altura y el azimut del objeto, del Sol y de la Luna de cada observación de esa noche. Si lo dejas en blanco, el formulario de registro volverá a preguntarlo objeto a objeto. Gestiona tus lugares en <a href="/mis-bases/">Mis bases</a>.</p>
-
-      <div class="row" style="margin-top:14px">
-        <label class="field"><span class="lab">Comienzo (hora local)</span>
-          <input type="time" id="vComienzo" /></label>
-        <label class="field"><span class="lab">Fin (hora local)</span>
-          <input type="time" id="vFin" /></label>
+      <div class="buscador" id="buscadorCaja" hidden>
+        <input type="search" id="buscador" autocomplete="off"
+               placeholder="Buscar objeto…" aria-label="Buscar por nombre de objeto" />
       </div>
+      <div class="spacer"></div>
+      <a class="new-btn" href="/index.php/registro-de-observacion/">+ Nueva observación</a>
+      <a class="new-btn" href="/index.php/importar-observaciones/">+ Importar</a>
+    </div>
 
-      <label class="field" style="margin-top:14px"><span class="lab">Meteorología</span>
-        <input type="text" id="vMeteo" placeholder="Despejado, 12 °C, sin viento" /></label>
+    <!-- ── Pestaña "Viajes": las salidas y, plegados, sus objetos ── -->
+    <div id="panelViajes">
 
-      <div class="row" style="margin-top:14px">
-        <label class="field"><span class="lab">Cielo (escala Bortle)</span>
-          <select id="vBortle"></select></label>
-        <label class="field"><span class="lab">SQM del cielo (mag/arcsec²)</span>
-          <input type="number" id="vSqm" min="14" max="22" step="0.05" placeholder="sin medir" /></label>
-      </div>
-      <div class="row" style="margin-top:14px">
-        <label class="field"><span class="lab">Transparencia (escala IR)</span>
-          <select id="vTransp"></select></label>
-        <label class="field"><span class="lab">Índice IR</span>
-          <input type="number" id="vIr" min="-50" max="50" step="1" placeholder="−20" /></label>
-      </div>
-      <label class="field" style="margin-top:14px"><span class="lab">Seeing (1 excelente – 5 pésimo)</span>
-        <select id="vSeeing">
-          <option value="">— Sin anotar —</option>
-          <option value="1">1 · Excelente</option>
-          <option value="2">2 · Bueno</option>
-          <option value="3">3 · Regular</option>
-          <option value="4">4 · Malo</option>
-          <option value="5">5 · Pésimo</option>
-        </select></label>
+      <fieldset>
+        <legend><div class="leg"><span class="num">1</span>
+          <div><h2>Mis salidas</h2><p>De la más reciente a la más antigua. Despliega una para ver sus objetos. Solo se borran las que no tienen observaciones dentro.</p></div></div></legend>
+        <div class="viajes-list" id="viajesMios"></div>
+        <div id="viajesSueltos"></div>
+      </fieldset>
 
-      <label class="field" style="margin-top:14px"><span class="lab">Crónica de la noche</span>
-        <textarea id="vCronica" placeholder="Cómo fue la salida: quién vino, qué se buscó, qué se vio, qué se torció…"></textarea></label>
+      <fieldset>
+        <legend><div class="leg"><span class="num">2</span>
+          <div><h2 id="viajeFormTitulo">Registrar una salida</h2><p>Da de alta la noche antes de registrar sus objetos: el registro de observaciones la exige.</p></div></div></legend>
 
-      <div class="actions">
-        <button type="submit" class="primary" id="viajeGuardar">Guardar salida</button>
-        <button type="button" class="vi-btn" id="viajeCancelar" style="display:none">Cancelar edición</button>
-        <span class="out-note" id="viajeFormNota" role="status"></span>
-      </div>
-    </form>
-  </fieldset>
+        <form id="viajeForm" autocomplete="off">
+          <div class="row">
+            <label class="field"><span class="lab">Noche de la salida</span>
+              <input type="date" id="vNoche" required /></label>
+            <label class="field"><span class="lab">Nombre del viaje (opcional)</span>
+              <input type="text" id="vNombre" placeholder="Perseidas desde la sierra" /></label>
+          </div>
+          <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">Si la observación empezó pasada la medianoche (00:00 en adelante), pon aquí la fecha del día ANTERIOR: esa madrugada sigue siendo la misma noche que empezó la tarde de antes. Ej.: si saliste el 19 por la noche y observaste ya el 20 a las 00:10, la Noche es 19, no 20.</p>
+
+          <label class="field"><span class="lab">Lugar de observación (base)</span>
+            <select id="vBase"><option value="">— Sin lugar —</option></select></label>
+          <p class="hint" style="margin:-8px 0 0;font-size:12.5px;">El lugar es de la salida entera: con él se calculan la altura y el azimut del objeto, del Sol y de la Luna de cada observación de esa noche. Si lo dejas en blanco, el formulario de registro volverá a preguntarlo objeto a objeto. Gestiona tus lugares en <a href="/mis-bases/">Mis bases</a>.</p>
+
+          <div class="row" style="margin-top:14px">
+            <label class="field"><span class="lab">Comienzo (hora local)</span>
+              <input type="time" id="vComienzo" /></label>
+            <label class="field"><span class="lab">Fin (hora local)</span>
+              <input type="time" id="vFin" /></label>
+          </div>
+
+          <label class="field" style="margin-top:14px"><span class="lab">Meteorología</span>
+            <input type="text" id="vMeteo" placeholder="Despejado, 12 °C, sin viento" /></label>
+
+          <div class="row" style="margin-top:14px">
+            <label class="field"><span class="lab">Cielo (escala Bortle)</span>
+              <select id="vBortle"></select></label>
+            <label class="field"><span class="lab">SQM del cielo (mag/arcsec²)</span>
+              <input type="number" id="vSqm" min="14" max="22" step="0.05" placeholder="sin medir" /></label>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <label class="field"><span class="lab">Transparencia (escala IR)</span>
+              <select id="vTransp"></select></label>
+            <label class="field"><span class="lab">Índice IR</span>
+              <input type="number" id="vIr" min="-50" max="50" step="1" placeholder="−20" /></label>
+          </div>
+          <label class="field" style="margin-top:14px"><span class="lab">Seeing (1 excelente – 5 pésimo)</span>
+            <select id="vSeeing">
+              <option value="">— Sin anotar —</option>
+              <option value="1">1 · Excelente</option>
+              <option value="2">2 · Bueno</option>
+              <option value="3">3 · Regular</option>
+              <option value="4">4 · Malo</option>
+              <option value="5">5 · Pésimo</option>
+            </select></label>
+
+          <label class="field" style="margin-top:14px"><span class="lab">Crónica de la noche</span>
+            <textarea id="vCronica" placeholder="Cómo fue la salida: quién vino, qué se buscó, qué se vio, qué se torció…"></textarea></label>
+
+          <div class="actions">
+            <button type="submit" class="primary" id="viajeGuardar">Guardar salida</button>
+            <button type="button" class="vi-btn" id="viajeCancelar" style="display:none">Cancelar edición</button>
+            <span class="out-note" id="viajeFormNota" role="status"></span>
+          </div>
+        </form>
+      </fieldset>
+
+    </div>
+
+    <!-- ── Pestañas "Todas" y "Papelera": la lista plana de observaciones ── -->
+    <div class="cards" id="cards" hidden>
+      <div class="msg">Cargando observaciones…</div>
+    </div>
+
+  </div>
 </div>
 <div class="flash" id="flash" role="status"></div>
 </div>
 
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260826_2340" defer></script>
+<!-- Rótulo del telescopio (nombre propio + modelo): la regla vive en BitacoraEquipo. -->
+<script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260829_1200" defer></script>
 <!-- El motor OAL, copia literal del bloque de plantilla-oal.html (ADR 0003):
      es quien escribe el XML de "Exportar esta salida" y el correo. -->
 <script src="/wp-content/uploads/bitacora/bitacora-oal-motor.js?v=20260827_0000" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20260826_2340" defer></script>
+<!-- Orden importante: listado.js publica window.BitacoraListado (las tarjetas y
+     la caché de observaciones) y viajes.js lo consume para llenar sus desplegables. -->
+<script src="/wp-content/uploads/bitacora/bitacora-listado.js?v=20260902_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20260902_1200" defer></script>

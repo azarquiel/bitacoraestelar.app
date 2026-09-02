@@ -11,6 +11,46 @@
 (function () {
   'use strict';
 
+  // ── Funciones puras (las prueba scripts/test_listado_unificado.js) ──
+
+  // Sin acentos y en minúsculas, para que "andromeda" encuentre "Andrómeda".
+  function normaliza(txt) {
+    return String(txt === null || txt === undefined ? '' : txt)
+      .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  // Filtra por NOMBRE DEL OBJETO, por subcadena. Búsqueda vacía = todo.
+  function filtrarPorNombre(filas, texto) {
+    var q = normaliza(texto).trim();
+    if (!q) return filas.slice();
+    return filas.filter(function (obs) {
+      return normaliza(obs.objeto).indexOf(q) !== -1;
+    });
+  }
+
+  // Reparte las observaciones por viaje conservando su orden. Lo que no
+  // tiene viaje (registrado sin base) va a `sin`, para que no desaparezca
+  // de la vista en ninguna agrupación.
+  function repartirPorViaje(filas) {
+    var porViaje = {}, sin = [];
+    filas.forEach(function (obs) {
+      if (!obs.viaje_id) { sin.push(obs); return; }
+      var k = String(obs.viaje_id);
+      (porViaje[k] = porViaje[k] || []).push(obs);
+    });
+    return { porViaje: porViaje, sin: sin };
+  }
+
+  // Las funciones puras se publican ANTES de tocar el DOM: así las puede cargar
+  // un test de Node (scripts/test_listado_unificado.js) con un `window` de
+  // mentira y sin navegador. arrancar() le añade luego el resto del módulo.
+  window.BitacoraListado = {
+    filtrarPorNombre: filtrarPorNombre,
+    repartirPorViaje: repartirPorViaje
+  };
+
+  if (typeof document === 'undefined') { return; }   // corriendo bajo Node
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', arrancar);
   } else {
@@ -28,6 +68,8 @@
       var tabActivas = $('tabActivas');
       var tabPapelera = $('tabPapelera');
       var tabViajes = $('tabViajes');
+      var buscador = $('buscador');
+      var buscadorCaja = $('buscadorCaja');
 
       // URL de la página del formulario, para los enlaces de "Editar".
       // Se toma del atributo data-form del contenedor; si falta, se asume esta ruta.
@@ -36,10 +78,17 @@
       var URL_FICHA = (contenedor && contenedor.getAttribute('data-ficha')) || '/datos-de-ficha/';
 
       var viendoPapelera = false;
-      // Agrupar por viaje es una FORMA DE VER lo mismo, no otra consulta: las
-      // observaciones son las mismas y solo cambia cómo se reparten en la
-      // página. La lista plana sigue disponible para buscar un objeto suelto.
-      var porViajes = false;
+      // Lo último pintado en la pestaña plana, para poder refiltrarlo al
+      // teclear en el buscador sin volver a pedirlo al servidor.
+      var ultimasFilas = [];
+      // La caché de "mis observaciones": una sola petición por sesión, que
+      // comparten la pestaña plana y las tarjetas que cuelgan de cada viaje
+      // (agrupar por viaje es una FORMA DE VER lo mismo, no otra consulta).
+      // Se invalida al borrar o restaurar, único momento en que miente.
+      var cacheObs = null;
+      // Cuántas veces ha caducado. bitacora-viajes.js lo mira al volver a su
+      // pestaña: si no ha cambiado nada, no repinta (y no cierra los desplegables).
+      var cambios = 0;
 
       if (!WP) {
         mostrarMensaje('Inicia sesión para ver tus observaciones.', true);
@@ -101,85 +150,36 @@
       // PINTAR EL LISTADO
       // ═══════════════════════════════════════════════════════════════════
 
-      function pintar(filas, viajes) {
-        if (!filas.length) {
-          mostrarMensaje(viendoPapelera
-            ? 'La papelera está vacía.'
-            : 'Todavía no hay observaciones registradas.');
+      function pintar(filas) {
+        ultimasFilas = filas;
+        var q = buscador ? buscador.value : '';
+        var vistas = filtrarPorNombre(filas, q);
+
+        if (!vistas.length) {
+          if (q.trim()) {
+            mostrarMensaje('Ningún objeto coincide con «' + q.trim() + '».');
+          } else {
+            mostrarMensaje(viendoPapelera
+              ? 'La papelera está vacía.'
+              : 'Todavía no hay observaciones registradas.');
+          }
           return;
         }
 
         cards.innerHTML = '';
-        if (porViajes) {
-          pintarPorViajes(filas, viajes || []);
-          return;
-        }
-        filas.forEach(function (obs) {
+        vistas.forEach(function (obs) {
           cards.appendChild(crearTarjeta(obs));
         });
       }
 
-      // Una cabecera por viaje y debajo sus objetos. El servidor manda los
-      // viajes de la noche más reciente a la más antigua, y ese es el orden en
-      // que se pintan; lo que no tiene viaje (registrado sin base) cae al final,
-      // bajo su propio epígrafe, para que no desaparezca de la vista.
-      function pintarPorViajes(filas, viajes) {
-        var porId = {};
-        filas.forEach(function (obs) {
-          var k = obs.viaje_id ? String(obs.viaje_id) : 'sin';
-          (porId[k] = porId[k] || []).push(obs);
-        });
-
-        var pintados = 0;
-        viajes.forEach(function (v) {
-          var suyas = porId[String(v.id)];
-          if (!suyas || !suyas.length) return;   // viaje vacío: nada que enseñar aquí
-          cards.appendChild(cabeceraViaje(v, suyas.length));
-          suyas.forEach(function (obs) { cards.appendChild(crearTarjeta(obs)); });
-          pintados += suyas.length;
-        });
-
-        if (porId.sin && porId.sin.length) {
-          cards.appendChild(cabeceraSueltas(porId.sin.length));
-          porId.sin.forEach(function (obs) { cards.appendChild(crearTarjeta(obs)); });
-          pintados += porId.sin.length;
-        }
-
-        // Cinturón de seguridad: si alguna observación apunta a un viaje que no
-        // vino en la lista, se pinta igual antes que perderla de vista.
-        if (pintados < filas.length) {
-          var huerfanas = filas.filter(function (obs) {
-            return obs.viaje_id && !viajes.some(function (v) { return String(v.id) === String(obs.viaje_id); });
-          });
-          if (huerfanas.length) {
-            cards.appendChild(cabeceraSueltas(huerfanas.length, 'Sin viaje reconocible'));
-            huerfanas.forEach(function (obs) { cards.appendChild(crearTarjeta(obs)); });
-          }
-        }
-      }
-
-      function cabeceraViaje(v, cuantas) {
-        var h = document.createElement('div');
-        h.className = 'viaje-head';
-        var titulo = v.nombre || ('Viaje del ' + fmtFecha(v.noche));
-        var detalle = [];
-        if (v.nombre) detalle.push(fmtFecha(v.noche));
-        if (v.base_nombre) detalle.push(v.base_nombre);
-        if (v.cielo_sqm) detalle.push('SQM ' + v.cielo_sqm);
-        if (v.cielo_bortle) detalle.push('Bortle ' + v.cielo_bortle);
-        h.innerHTML =
-          '<div class="viaje-t">' + esc(titulo) + '</div>' +
-          '<div class="viaje-d">' + esc(detalle.join(' · ')) + '</div>' +
-          '<div class="viaje-n">' + cuantas + (cuantas === 1 ? ' objeto' : ' objetos') + '</div>';
-        return h;
-      }
-
-      function cabeceraSueltas(cuantas, titulo) {
+      // Cabecera de un grupo sin viaje propio ("Sin viaje", "Sin viaje
+      // reconocible"). La usa la pestaña de viajes como <summary> de su grupo.
+      function cabeceraSueltas(cuantas, titulo, detalle) {
         var h = document.createElement('div');
         h.className = 'viaje-head suelto';
         h.innerHTML =
           '<div class="viaje-t">' + esc(titulo || 'Sin viaje') + '</div>' +
-          '<div class="viaje-d">Registradas sin base, así que no se pueden agrupar por noche</div>' +
+          '<div class="viaje-d">' + esc(detalle || 'Registradas sin base, así que no se pueden agrupar por noche') + '</div>' +
           '<div class="viaje-n">' + cuantas + (cuantas === 1 ? ' objeto' : ' objetos') + '</div>';
         return h;
       }
@@ -198,12 +198,15 @@
           (r.detalle ? ' <span style="color:var(--tinta-tenue);opacity:0.65;font-size:0.92em">' + esc(r.detalle) + '</span>' : '');
       }
 
-      function crearTarjeta(obs) {
+      // `borrada` va explícito porque las tarjetas de la pestaña de viajes las
+      // pide otro script: no puede depender de en qué pestaña crea estar este.
+      function crearTarjeta(obs, borrada) {
+        var enPapelera = (borrada === undefined) ? viendoPapelera : !!borrada;
         var card = document.createElement('div');
-        card.className = 'card' + (viendoPapelera ? ' deleted' : '');
+        card.className = 'card' + (enPapelera ? ' deleted' : '');
         card.setAttribute('data-id', obs.id);
 
-        var acciones = accionesDe(obs);
+        var acciones = accionesDe(obs, enPapelera);
 
         card.innerHTML =
           '<div class="obj">' + esc(obs.objeto) +
@@ -219,8 +222,8 @@
         return card;
       }
 
-      function accionesDe(obs) {
-        if (viendoPapelera) {
+      function accionesDe(obs, enPapelera) {
+        if (enPapelera) {
           return obs.mia
             ? '<button type="button" class="act restore" data-accion="restaurar">Restaurar</button>'
             : '<span class="not-mine">de otro observador</span>';
@@ -280,11 +283,13 @@
         api(WP.endpoint + '/' + obs.id, { method: 'DELETE' })
           .then(function (res) {
             if (res.ok && res.data && res.data.ok) {
+              invalidar(obs.id);   // la lista guardada ya no dice la verdad
               card.style.transition = 'opacity .3s';
               card.style.opacity = '0';
               setTimeout(function () {
+                var enListaPlana = cards.contains(card);
                 card.remove();
-                if (!cards.children.length) {
+                if (enListaPlana && !cards.children.length) {
                   mostrarMensaje('Todavía no hay observaciones registradas.');
                 }
               }, 300);
@@ -307,6 +312,7 @@
         api(WP.endpoint + '/' + obs.id + '/restaurar', { method: 'POST' })
           .then(function (res) {
             if (res.ok && res.data && res.data.ok) {
+              invalidar(obs.id);   // vuelve a estar viva: la lista guardada miente
               card.style.transition = 'opacity .3s';
               card.style.opacity = '0';
               setTimeout(function () {
@@ -388,53 +394,93 @@
       // CARGA Y PESTAÑAS
       // ═══════════════════════════════════════════════════════════════════
 
-      function cargar() {
-        mostrarMensaje('Cargando observaciones…');
-        // "Mis observaciones": solo las del usuario en sesión (mias=1). La
-        // papelera muestra, igualmente, solo las suyas ya borradas.
-        var url = WP.endpoint + '?mias=1' + (viendoPapelera ? '&borradas=1' : '');
-        // Agrupado: hacen falta los viajes para sus cabeceras (nombre, base,
-        // cielo). Si esa petición falla, el listado se pinta plano en vez de no
-        // pintarse: ver las observaciones importa más que agruparlas.
-        var viajes = porViajes
-          // BITACORA_WP solo expone el endpoint de observaciones; el de viajes
-          // es hermano suyo en la misma raíz de la API (BitacoraBase.ruta).
-          ? api(window.BitacoraBase.ruta('viajes') + '?mios=1').then(function (r) {
-              return (r.ok && Array.isArray(r.data)) ? r.data : [];
-            }).catch(function () { return []; })
-          : Promise.resolve([]);
-
-        Promise.all([api(url), viajes])
-          .then(function (r) {
-            var res = r[0];
-            if (!res.ok) {
-              mostrarMensaje(mensajeError(res, 'No se pudieron cargar las observaciones'), true);
-              return;
-            }
-            pintar(Array.isArray(res.data) ? res.data : [], r[1]);
-          })
-          .catch(function () {
-            mostrarMensaje('No se pudo contactar con el servidor.', true);
-          });
+      // La lista guardada deja de valer. `id` es la observación que acaba de
+      // moverse: se saca también de lo ya pintado, porque el buscador repinta
+      // desde ahí y si no resucitaría la tarjeta recién borrada.
+      function invalidar(id) {
+        cacheObs = null;
+        cambios++;
+        if (id === undefined) return;
+        ultimasFilas = ultimasFilas.filter(function (o) { return String(o.id) !== String(id); });
       }
 
-      function cambiarPestana(papelera, agrupado) {
-        viendoPapelera = papelera;
-        // La papelera nunca se agrupa: son restos sueltos, no una salida.
-        porViajes = papelera ? false : !!agrupado;
-        tabActivas.classList.toggle('active', !papelera && !porViajes);
-        tabPapelera.classList.toggle('active', papelera);
-        if (tabViajes) tabViajes.classList.toggle('active', porViajes);
+      // "Mis observaciones": solo las del usuario en sesión (mias=1), vivas.
+      // Es la lista que comparten la pestaña plana y los desplegables de cada
+      // viaje, así que se pide UNA vez y se guarda la promesa.
+      function observaciones() {
+        if (!cacheObs) {
+          cacheObs = api(WP.endpoint + '?mias=1').then(function (res) {
+            if (!res.ok) { cacheObs = null; throw mensajeError(res, 'No se pudieron cargar las observaciones'); }
+            return Array.isArray(res.data) ? res.data : [];
+          });
+        }
+        return cacheObs;
+      }
+
+      function cargar() {
+        mostrarMensaje('Cargando observaciones…');
+        // La papelera es otra consulta (solo las borradas) y no se cachea: se
+        // visita poco y su contenido cambia justo cuando se restaura algo.
+        var filas = viendoPapelera
+          ? api(WP.endpoint + '?mias=1&borradas=1').then(function (res) {
+              if (!res.ok) { throw mensajeError(res, 'No se pudieron cargar las observaciones'); }
+              return Array.isArray(res.data) ? res.data : [];
+            })
+          : observaciones();
+
+        filas.then(pintar).catch(function (msg) {
+          mostrarMensaje(typeof msg === 'string' ? msg : 'No se pudo contactar con el servidor.', true);
+        });
+      }
+
+      // Las pestañas las comparten los dos scripts de la página: este manda en
+      // la lista de tarjetas y en el buscador; bitacora-viajes.js, en el panel
+      // de salidas. Cada uno escucha los mismos botones y hace su mitad.
+      function cambiarPestana(cual) {
+        viendoPapelera = (cual === 'papelera');
+        tabActivas.classList.toggle('active', cual === 'activas');
+        tabPapelera.classList.toggle('active', cual === 'papelera');
+        if (tabViajes) tabViajes.classList.toggle('active', cual === 'viajes');
+        // El buscador solo existe en la lista plana. Se limpia al salir: una
+        // caja invisible que sigue filtrando es una trampa.
+        if (buscadorCaja) buscadorCaja.hidden = (cual !== 'activas');
+        if (buscador && cual !== 'activas') buscador.value = '';
+
+        cards.hidden = (cual === 'viajes');
+        if (cual === 'viajes') return;
         cargar();
       }
 
-      tabActivas.addEventListener('click', function () { cambiarPestana(false, false); });
-      tabPapelera.addEventListener('click', function () { cambiarPestana(true, false); });
+      tabActivas.addEventListener('click', function () { cambiarPestana('activas'); });
+      tabPapelera.addEventListener('click', function () { cambiarPestana('papelera'); });
       if (tabViajes) {
-        tabViajes.addEventListener('click', function () { cambiarPestana(false, true); });
+        tabViajes.addEventListener('click', function () { cambiarPestana('viajes'); });
       }
 
-      cargar();
+      // Filtrar es repintar lo ya traído: ni petición ni retardo, son unos
+      // cientos de filas que ya están en memoria.
+      if (buscador) {
+        buscador.addEventListener('input', function () { pintar(ultimasFilas); });
+      }
+
+      // Lo que este módulo presta a bitacora-viajes.js para poder colgar las
+      // tarjetas de cada salida de su desplegable.
+      Object.assign(window.BitacoraListado, {
+        observaciones: observaciones,
+        invalidar: invalidar,
+        cambios: function () { return cambios; },
+        filtrarPorNombre: filtrarPorNombre,
+        repartirPorViaje: repartirPorViaje,
+        tarjetasDe: function (filas) {
+          return (filas || []).map(function (obs) { return crearTarjeta(obs, false); });
+        },
+        cabeceraSueltas: cabeceraSueltas
+      });
+
+      // La página abre por la pestaña de viajes, así que aquí no se carga nada
+      // todavía: la lista plana se pide la primera vez que se entra en ella.
+      cards.hidden = !!tabViajes;
+      if (!tabViajes) cargar();
 
     } catch (err) {
       console.error('[Bitácora] Error al iniciar el listado:', err);

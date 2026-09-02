@@ -38,7 +38,7 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 
 ## Viaje interestelar
 
-**Sesión de observación**: salida de UN observador, UNA noche, desde UNA [[base]]. Todo objeto observado bajo esa terna cuelga del mismo viaje, y ahí viven los datos de la salida y no del objeto (lugar, crónica, meteo, cielo, comienzo y fin, tripulación). Se gestionan en **Mis viajes** (`registro/mis-viajes-wordpress.html` + `bitacora-viajes.js`).
+**Sesión de observación**: salida de UN observador, UNA noche, desde UNA [[base]]. Todo objeto observado bajo esa terna cuelga del mismo viaje, y ahí viven los datos de la salida y no del objeto (lugar, crónica, meteo, cielo, comienzo y fin, tripulación). Se gestionan en **Mi bitácora** (`registro/mis-viajes-wordpress.html` + `bitacora-viajes.js` + `bitacora-listado.js`).
 
 - **Fuente única de la identidad:** `bitacora-viaje.php` (puro, sin WordPress), `bitacora_viaje_noche(fecha, hora)` y `bitacora_viaje_clave(usuario, base, fecha, hora)`.
 - **Convenio de mediodía:** la noche de una observación es la del día anterior si la hora es menor que las 12:00, igual que la fecha juliana cuenta desde el mediodía. Así el objeto de las 22:40 y el de las 02:15 caen en la misma salida. Cuenta va sobre el reloj de PARED de la base, así que el horario de verano no la mueve.
@@ -55,6 +55,7 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 - **Se anuncia como lo que resuelve SIMBAD:** misma línea `.status` con su ✓ y su clase (`ok`/`info`/`err`), porque es la misma idea —«esto te lo hemos rellenado nosotros»—. El texto lo decide `BitacoraBase.mensajeViaje(estado,
   etiquetas)`, en texto plano (se pinta con `textContent`, así que el nombre de una salida no inyecta nada). Test: `scripts/test_aviso_viaje.js`.
 - **Invariante:** la misma observación da siempre la misma clave, lo que hace relanzable el reparto histórico (backfill) sin duplicar viajes. Test: `scripts/test_viaje_noche.php`.
+- **Viaje y observación son dos vistas de la MISMA página, no dos páginas.** «Mi bitácora» tiene tres pestañas —Viajes, Todas, Papelera— sobre una sola lista de observaciones, pedida una vez y repartida en el navegador: agrupar por salida es una FORMA DE VER lo mismo, no otra consulta. Fue al revés durante un tiempo (una página de viajes y otra de observaciones con una pestaña «Por viajes» que duplicaba a la primera), y volver a partirlas devuelve esa duplicación. Los objetos de una salida cuelgan plegados de su ficha; el buscador por nombre de objeto solo existe en la lista plana, y filtra en el navegador. Reparto y filtro son puros: `BitacoraListado.repartirPorViaje` / `.filtrarPorNombre`, test `scripts/test_listado_unificado.js`.
 - **La ruta en el mapa** (recorrido visual de un viaje) es concepto de `mapa/`: ver [[la ruta en el mapa]].
 
 ## Astrometría de la sesión

@@ -165,3 +165,43 @@
 
 /* Botón de generar la ficha .docx */
 #mw-obs-list .act.ficha:hover { color: var(--azul); border-color: var(--azul); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MI BITÁCORA · lo que añade la unificación de viajes y observaciones
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* `hidden` no basta cuando el elemento tiene display propio: .cards es flex y
+   la regla del navegador ([hidden]{display:none}) pierde por especificidad. */
+#mw-obs-list [hidden] { display: none !important; }
+
+/* Buscador de la lista plana: vive en la barra, junto a las pestañas. */
+#mw-obs-list .buscador { flex: 0 1 240px; min-width: 150px; }
+#mw-obs-list .buscador input {
+  width: 100%; box-sizing: border-box;
+  background: var(--noche-2); border: 1px solid var(--linea);
+  border-radius: 20px; color: var(--tinta);
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  padding: 8px 16px;
+}
+#mw-obs-list .buscador input::placeholder { color: var(--tinta-tenue); }
+#mw-obs-list .buscador input:focus {
+  outline: none; border-color: var(--ambar);
+}
+
+/* Los objetos de una salida, plegados bajo su ficha. El <details> va DEBAJO de
+   la ficha —nunca envolviéndola—, así que ningún botón del viaje cae dentro de
+   un <summary>, donde el clic lo pisaría. Ocupa línea propia dentro del flex. */
+#mw-obs-form .viaje-item .vi-objetos { flex: 1 0 100%; margin-top: 10px; }
+#mw-obs-form .viaje-item .vi-objetos > summary {
+  cursor: pointer; font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px; color: var(--tinta-tenue); padding: 4px 0;
+}
+#mw-obs-form .viaje-item .vi-objetos > summary:hover { color: var(--ambar); }
+#mw-obs-form .viaje-item .vi-objetos[open] > summary { color: var(--ambar); }
+#mw-obs-form .viaje-item .vi-objetos > .cards { margin: 10px 0 4px; }
+
+/* Grupos sin salida propia ("Sin viaje", "Sin viaje reconocible"). */
+#mw-obs-list .grupo-suelto { margin-top: 14px; }
+#mw-obs-list .grupo-suelto > summary { cursor: pointer; }
+#mw-obs-list .grupo-suelto > summary .viaje-head { display: inline-flex; margin-top: 0; }
+#mw-obs-list .grupo-suelto > .cards { margin: 12px 0 4px; }
