@@ -1389,7 +1389,20 @@
       });
     });
     var genBtn=el.querySelector('.gen-img');
-    if(genBtn) genBtn.addEventListener('click',function(){ abrirModalGenerar(el); });
+    if(genBtn){
+      genBtn.addEventListener('click',function(){ abrirModalGenerar(el); });
+      // Apuntar al botón ya es intención de generar: se lanza la consulta a
+      // Gaia mientras el observador termina de decidir, y el modal la encuentra
+      // en vuelo o servida. Un fallo aquí no se enseña: lo reintenta el render.
+      function precalentarSim(){
+        if(!window.BitacoraGaiaRender || !BitacoraGaiaRender.precalentar) return;
+        var d=datosSimEntrada(el);
+        if(d.error) return;   // sin objeto, tubo u ocular no hay nada que pedir
+        BitacoraGaiaRender.precalentar(d);   // consultar() dedupe: apuntar dos veces no pide dos veces
+      }
+      genBtn.addEventListener('pointerenter', precalentarSim);
+      genBtn.addEventListener('focus', precalentarSim);
+    }
 
     // Imágenes existentes (modo edición)
     if(Array.isArray(datos.imagenes)){

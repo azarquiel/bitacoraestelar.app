@@ -132,6 +132,23 @@
     // se colocan. La lista de observaciones es la MISMA que ve la pestaña
     // plana, así que se pide a su caché en vez de volver a bajarla.
 
+    // Las tarjetas de una salida se fabrican la PRIMERA vez que se despliega.
+    // Construirlas todas al cargar son cientos de nodos y dos listeners por
+    // tarjeta que casi nadie llega a mirar: los desplegables nacen cerrados.
+    function llenarAlAbrir(det, caja, L, filas) {
+      var hecho = false;
+      function llenar() {
+        if (hecho) return;
+        hecho = true;
+        var frag = document.createDocumentFragment();
+        L.tarjetasDe(filas).forEach(function (n) { frag.appendChild(n); });
+        caja.innerHTML = '';
+        caja.appendChild(frag);
+      }
+      if (det.open) { llenar(); return; }   // ya abierto: nada que aplazar
+      det.addEventListener('toggle', llenar);
+    }
+
     function grupoSuelto(L, obs, titulo, detalle) {
       var d = document.createElement('details');
       d.className = 'grupo-suelto';
@@ -140,53 +157,60 @@
       d.appendChild(s);
       var caja = document.createElement('div');
       caja.className = 'cards';
-      L.tarjetasDe(obs).forEach(function (n) { caja.appendChild(n); });
       d.appendChild(caja);
+      llenarAlAbrir(d, caja, L, obs);
       return d;
     }
 
-    function pintarObjetos() {
+    // `filas` son las observaciones ya traídas por cargar(). Se reciben como
+    // argumento (y no se piden aquí) para que la petición salga a la vez que
+    // las de viajes y bases: no depende de ninguna de las dos.
+    function pintarObjetos(filas) {
       var L = window.BitacoraListado;
-      if (!L || !L.observaciones) return Promise.resolve();
-      return L.observaciones().then(function (filas) {
-        var grupos = L.repartirPorViaje(filas);
-        var conocidos = {};
-        viajes.forEach(function (v) { conocidos[String(v.id)] = true; });
+      if (!L || !filas) return;   // sin objetos colgados: las fichas ya se ven
+      var grupos = L.repartirPorViaje(filas);
+      var conocidos = {};
+      viajes.forEach(function (v) { conocidos[String(v.id)] = true; });
 
-        var huerfanas = [];
-        Object.keys(grupos.porViaje).forEach(function (id) {
-          var suyas = grupos.porViaje[id];
-          if (!conocidos[id]) { huerfanas = huerfanas.concat(suyas); return; }
-          var caja = document.querySelector('#viajesMios details[data-viaje="' + id + '"] .cards');
-          if (!caja) return;   // viaje que el servidor da por vacío: nada que colgar
-          caja.innerHTML = '';
-          L.tarjetasDe(suyas).forEach(function (n) { caja.appendChild(n); });
-        });
+      var huerfanas = [];
+      Object.keys(grupos.porViaje).forEach(function (id) {
+        var suyas = grupos.porViaje[id];
+        if (!conocidos[id]) { huerfanas = huerfanas.concat(suyas); return; }
+        var det = document.querySelector('#viajesMios details[data-viaje="' + id + '"]');
+        if (!det) return;   // viaje que el servidor da por vacío: nada que colgar
+        llenarAlAbrir(det, det.querySelector('.cards'), L, suyas);
+      });
 
-        // Lo que no cuelga de ninguna salida conocida NO se pierde de vista:
-        // va al final, con su propio epígrafe plegable.
-        var cont = $('viajesSueltos');
-        if (!cont) return;
-        cont.innerHTML = '';
-        if (grupos.sin.length) {
-          cont.appendChild(grupoSuelto(L, grupos.sin, 'Sin viaje', null));
-        }
-        if (huerfanas.length) {
-          cont.appendChild(grupoSuelto(L, huerfanas, 'Sin viaje reconocible',
-            'Apuntan a una salida que no está en tu lista'));
-        }
-      }).catch(function () { /* sin objetos colgados: las fichas ya se ven */ });
+      // Lo que no cuelga de ninguna salida conocida NO se pierde de vista:
+      // va al final, con su propio epígrafe plegable.
+      var cont = $('viajesSueltos');
+      if (!cont) return;
+      cont.innerHTML = '';
+      if (grupos.sin.length) {
+        cont.appendChild(grupoSuelto(L, grupos.sin, 'Sin viaje', null));
+      }
+      if (huerfanas.length) {
+        cont.appendChild(grupoSuelto(L, huerfanas, 'Sin viaje reconocible',
+          'Apuntan a una salida que no está en tu lista'));
+      }
     }
 
+    // Las tres peticiones salen a la vez: los objetos no dependen ni de los
+    // viajes ni de las bases, y pedirlos después costaba una vuelta entera al
+    // servidor con la página ya pintada a medias.
     function cargar() {
+      var L = window.BitacoraListado;
       return Promise.all([
         api(API_VIAJES + '?mios=1'),
-        api(API_BASES)
+        api(API_BASES),
+        (L && L.observaciones)
+          ? L.observaciones().catch(function () { return null; })
+          : Promise.resolve(null)
       ]).then(function (r) {
         viajes = Array.isArray(r[0].data) ? r[0].data : [];
         bases  = Array.isArray(r[1].data) ? r[1].data : [];
         poblarBases(); pintarViajes();
-        return pintarObjetos();
+        pintarObjetos(Array.isArray(r[2]) ? r[2] : null);
       });
     }
 

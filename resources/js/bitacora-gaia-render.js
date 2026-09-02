@@ -31,6 +31,7 @@
  *       en vez del catálogo: mismas opts, más { dssProxy, fuente, conGaia }.
  *   BitacoraGaiaRender.urlPlaca({ base, survey, ra, dec, arcmin, fuente }) → URL del proxy
  *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
+ *   BitacoraGaiaRender.precalentar(opts) → void   (la consulta de render(), disparada antes)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
  *   BitacoraGaiaRender.magLimite({ apertura, aumentos, transmision, sqm }) → number|null
  *   BitacoraGaiaRender.magConsultaGaia(apertura, transmision, aumentos) → number (profundidad de consulta)
@@ -1106,6 +1107,24 @@
       return fetchGaiaUnaVez(ra, dec, rad, mag);
     });
   }
+  /* Precalentado: dispara la MISMA consulta que hará render(), antes de que se
+     pida el render (al apuntar al botón de generar). La consulta a Gaia es lo
+     más lento de la cadena —una vuelta al TAP, segundos en frío— y no depende
+     de nada que el observador decida después en el modal: la profundidad sale
+     de la apertura y los aumentos, que ya están elegidos.
+
+     No cuesta nada de más: consultar() cachea por coordenada, radio y
+     profundidad (superconjunto monotónico), así que si luego se genera la
+     imagen se reutiliza la promesa ya en vuelo, y si no se genera se queda una
+     entrada en la caché. Un fallo aquí borra su entrada y lo reintenta render(). */
+  function precalentar(o) {
+    var P = window.BitacoraPS1;
+    if (!P || !o || o.ra == null || o.dec == null || !(o.apertura > 0)) return;
+    var t = (o.transmision > 0) ? o.transmision : (transmisionOptica(o.optica) || TRANSMISION_DEFECTO);
+    consultar(o.ra, o.dec, o.arcmin, P.ps1MagConsulta(magConsultaGaia(o.apertura, t, o.aumentos)))
+      .catch(function () {});
+  }
+
   function consultar(ra0, dec0, arcmin, mag) {
     var rad = radioConsulta(arcmin || GAIA_ARCMIN_DEFECTO);
     var prof = (mag > 0) ? mag : GAIA_MAG_DEFECTO;
@@ -2590,6 +2609,7 @@
     config: CFG,
     fot: FOT,
     consultar: consultar,
+    precalentar: precalentar,
     cacheGaia: cacheGaia,
     dibujar: dibujar,
     vistaGaia: vistaGaia,
