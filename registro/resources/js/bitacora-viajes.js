@@ -114,8 +114,68 @@
               : '')
           + '<button type="button" class="vi-btn" data-accion="editar">Editar</button>'
           + '<button type="button" class="vi-btn danger" data-accion="borrar"' + (v.num_objetos ? ' disabled title="Tiene observaciones dentro"' : '') + '>Borrar</button>'
-          + '</div></div>';
+          + '</div>'
+          // Los objetos de la salida, plegados. La ficha de arriba no cambia:
+          // el <details> va debajo, así que ninguno de sus botones queda dentro
+          // de un <summary> (donde el clic los pisaría).
+          + (v.num_objetos
+              ? '<details class="vi-objetos" data-viaje="' + v.id + '">'
+                + '<summary>Objetos de la salida</summary>'
+                + '<div class="cards"></div></details>'
+              : '')
+          + '</div>';
       }).join('');
+    }
+
+    // ── Los objetos de cada salida ─────────────────────────────────────────
+    // Las tarjetas las fabrica bitacora-listado.js, que es su dueño: aquí solo
+    // se colocan. La lista de observaciones es la MISMA que ve la pestaña
+    // plana, así que se pide a su caché en vez de volver a bajarla.
+
+    function grupoSuelto(L, obs, titulo, detalle) {
+      var d = document.createElement('details');
+      d.className = 'grupo-suelto';
+      var s = document.createElement('summary');
+      s.appendChild(L.cabeceraSueltas(obs.length, titulo, detalle));
+      d.appendChild(s);
+      var caja = document.createElement('div');
+      caja.className = 'cards';
+      L.tarjetasDe(obs).forEach(function (n) { caja.appendChild(n); });
+      d.appendChild(caja);
+      return d;
+    }
+
+    function pintarObjetos() {
+      var L = window.BitacoraListado;
+      if (!L || !L.observaciones) return Promise.resolve();
+      return L.observaciones().then(function (filas) {
+        var grupos = L.repartirPorViaje(filas);
+        var conocidos = {};
+        viajes.forEach(function (v) { conocidos[String(v.id)] = true; });
+
+        var huerfanas = [];
+        Object.keys(grupos.porViaje).forEach(function (id) {
+          var suyas = grupos.porViaje[id];
+          if (!conocidos[id]) { huerfanas = huerfanas.concat(suyas); return; }
+          var caja = document.querySelector('#viajesMios details[data-viaje="' + id + '"] .cards');
+          if (!caja) return;   // viaje que el servidor da por vacío: nada que colgar
+          caja.innerHTML = '';
+          L.tarjetasDe(suyas).forEach(function (n) { caja.appendChild(n); });
+        });
+
+        // Lo que no cuelga de ninguna salida conocida NO se pierde de vista:
+        // va al final, con su propio epígrafe plegable.
+        var cont = $('viajesSueltos');
+        if (!cont) return;
+        cont.innerHTML = '';
+        if (grupos.sin.length) {
+          cont.appendChild(grupoSuelto(L, grupos.sin, 'Sin viaje', null));
+        }
+        if (huerfanas.length) {
+          cont.appendChild(grupoSuelto(L, huerfanas, 'Sin viaje reconocible',
+            'Apuntan a una salida que no está en tu lista'));
+        }
+      }).catch(function () { /* sin objetos colgados: las fichas ya se ven */ });
     }
 
     function cargar() {
@@ -126,6 +186,7 @@
         viajes = Array.isArray(r[0].data) ? r[0].data : [];
         bases  = Array.isArray(r[1].data) ? r[1].data : [];
         poblarBases(); pintarViajes();
+        return pintarObjetos();
       });
     }
 
@@ -303,6 +364,28 @@
         });
       });
     }
+
+    // ── Pestañas ───────────────────────────────────────────────────────────
+    // Las tres pestañas de la barra las comparten los dos scripts: este manda
+    // en el panel de salidas; bitacora-listado.js, en la lista de tarjetas y
+    // en el buscador. Cada uno escucha los mismos botones y hace su mitad.
+    var panel = $('panelViajes');
+    var vistos = 0;   // cuántos cambios de la lista de observaciones llevamos vistos
+
+    function verPanel(si) {
+      if (panel) panel.hidden = !si;
+      if (!si) return;
+      // Solo se repinta si algo se ha borrado o restaurado desde la última vez:
+      // si no, se conservan los desplegables que el observador dejó abiertos.
+      var L = window.BitacoraListado;
+      var ahora = L && L.cambios ? L.cambios() : 0;
+      if (ahora !== vistos) { vistos = ahora; cargar(); }
+    }
+
+    ['tabActivas', 'tabPapelera'].forEach(function (id) {
+      if ($(id)) $(id).addEventListener('click', function () { verPanel(false); });
+    });
+    if ($('tabViajes')) $('tabViajes').addEventListener('click', function () { verPanel(true); });
 
     limpiar();
     cargar();

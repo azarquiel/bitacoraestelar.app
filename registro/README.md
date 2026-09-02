@@ -24,13 +24,12 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `resources/js/bitacora-gaia-color.js`, `bitacora-gaia-render.js` (compartidos) | Motor de render de estrellas de Gaia, reutilizado del simulador para *Generar con el simulador* | Servidor, por FTP (mismos que usa el simulador) |
 | `datos-ficha-wordpress.html` | Fragmento del formulario de datos de ficha (astrometría) | Editor de WordPress |
 | `bitacora-ficha.js` | Lógica del formulario de datos de ficha | Servidor, por FTP |
-| `listado-observaciones-wordpress.html` | Fragmento del listado | Editor de WordPress |
-| `bitacora-listado.js` | Lógica del listado | Servidor, por FTP |
+| `bitacora-listado.js` | Lógica del listado de observaciones (tarjetas, buscador, papelera) | Servidor, por FTP |
 | `bitacora-listado.css` | Estilos del listado | Servidor, por FTP |
 | `mi-flota-wordpress.html` | Fragmento de "Mi flota" (equipo del observador) | Editor de WordPress |
 | `bitacora-flota.js` | Lógica de "Mi flota" | Servidor, por FTP |
-| `mis-viajes-wordpress.html` | Fragmento de "Mis viajes" (sesiones de observación: lugar, crónica, meteo, cielo) | Editor de WordPress |
-| `bitacora-viajes.js` | Lógica de "Mis viajes" | Servidor, por FTP |
+| `mis-viajes-wordpress.html` | Fragmento de "Mi bitácora": las salidas con sus objetos, la lista plana de observaciones y la papelera | Editor de WordPress |
+| `bitacora-viajes.js` | Lógica de las salidas (ficha, OAL, desplegable de objetos) | Servidor, por FTP |
 | `plantilla-oal.html` | La **plantilla** que se dan a los compañeros: un único archivo que anota sus noches y escribe el XML | Servidor, por FTP (se descarga desde la página de importar) |
 | `importar-oal-wordpress.html` | Fragmento de "Importar observaciones" | Editor de WordPress |
 | `bitacora-importar-oal.js` | Lógica de "Importar observaciones" | Servidor, por FTP |
@@ -200,12 +199,27 @@ y aparece en el mapa (es el caso de las nebulosas difusas, como NGC 2024).
 
 ## El listado
 
-Muestra las observaciones como tarjetas, con dos pestañas: **Registradas** y
-**Papelera**.
+Vive dentro de **Mi bitácora** (`mis-viajes-wordpress.html`), que es una sola
+página con tres pestañas: **Viajes**, **Todas** y **Papelera**. Las tres enseñan
+lo mismo repartido de otra forma, así que la lista de observaciones se pide una
+vez y se comparte; agrupar por salida no es otra consulta.
 
+- **Viajes** es la pestaña de entrada: cada salida con su ficha y, plegados bajo
+  ella, sus objetos como tarjetas. Lo que no cuelga de ninguna salida conocida no
+  se pierde de vista: baja al final, bajo «Sin viaje» o «Sin viaje reconocible».
+- **Todas** es la lista plana, con un **buscador** por nombre de objeto: filtra
+  según se teclea, por subcadena, sin distinguir mayúsculas ni acentos
+  («andromeda» encuentra «Andrómeda»). Filtra en el navegador sobre lo ya
+  traído; el servidor no interviene. La caja se limpia al cambiar de pestaña.
 - «Mis observaciones» lista **solo las del usuario en sesión** (`?mias=1`); la
   papelera muestra, igualmente, solo las suyas ya borradas. Las observaciones de
   otros observadores no aparecen aquí (sí en el mapa, que es público).
+- La **papelera** no se agrupa ni se busca: son restos sueltos, no una salida.
+
+El reparto por salida y el filtro por nombre son funciones puras
+(`BitacoraListado.repartirPorViaje` y `.filtrarPorNombre`), publicadas antes de
+tocar la página para poder probarlas sin navegador:
+`node scripts/test_listado_unificado.js`.
 - **Editar** lleva al formulario, precargado con esa observación. Si se cambia
   la fecha o el lugar, el cielo se recalcula solo.
 - **Borrar** es un **borrado suave**: la fila se marca con la fecha de borrado,
@@ -257,7 +271,8 @@ puede reimportarse desde el panel de administración de Bitácora.
 
 ## Mis viajes (las sesiones de observación)
 
-`mis-viajes-wordpress.html` lista tus salidas y edita su ficha: **nombre**,
+`mis-viajes-wordpress.html` es la página **Mi bitácora**: lista tus salidas y
+edita su ficha: **nombre**,
 **lugar**, hora de **comienzo** y **fin**, **meteorología**, **cielo** (SQM o
 Bortle, transparencia, seeing) y la **crónica** de la noche. Todo eso es de la
 salida, no del objeto, y por eso vive aquí y no en el formulario de registro.
@@ -267,6 +282,12 @@ lugar. Un viaje solo se puede borrar cuando ya no le cuelga ninguna observación
 
 Un viaje se puede crear desde aquí, o desde el propio formulario de registro
 cuando esa noche todavía no tiene ninguno.
+
+Bajo la ficha de cada salida hay un desplegable, **«Objetos de la salida»**,
+**plegado por defecto**: dentro van las tarjetas de sus observaciones, las
+mismas de la pestaña «Todas» y con los mismos botones. El desplegable va
+*debajo* de la ficha y nunca envolviéndola, para que los botones del viaje no
+queden dentro de un `<summary>`, donde el clic los pisaría.
 
 Cada salida enseña además su **ruta**: los objetos que se visitaron, en el orden
 en que se observaron (hora ascendente y, sin hora, al final por antigüedad de
@@ -681,9 +702,6 @@ Y, para el botón *Generar con el simulador*, los del simulador de ocular:
 observación". Añade un bloque **HTML personalizado** y pega dentro todo el
 contenido de `registrar-observacion-wordpress.html`. Publica.
 
-**Página del listado.** Otra página, título "Mis observaciones", con un bloque
-**HTML personalizado** y el contenido de `listado-observaciones-wordpress.html`.
-
 **Página de "Mi flota".** Otra página, título "Mi flota", con un bloque **HTML
 personalizado** y el contenido de `mi-flota-wordpress.html`. Si su ruta no es
 `/mi-flota/`, ajusta el enlace del formulario de registro.
@@ -692,8 +710,10 @@ personalizado** y el contenido de `mi-flota-wordpress.html`. Si su ruta no es
 desde los que observas (nombre, lat/lon, altitud, huso).
 
 **Página de "Mis viajes".** Igual, con `mis-viajes-wordpress.html`: las sesiones
-de observación. Si su ruta no es `/mis-viajes/`, ajusta el enlace que el
-formulario de registro muestra cuando un viaje no tiene lugar.
+de observación y, en sus otras dos pestañas, el listado de observaciones y la
+papelera. Si su ruta no es `/mis-viajes/`, ajusta el enlace que el formulario de
+registro muestra cuando un viaje no tiene lugar. Esta página sustituye a la
+antigua "Mis observaciones", que ya no existe: bórrala si la tenías publicada.
 
 **Página de "Importar observaciones".** Igual, con
 `importar-oal-wordpress.html`: subir el XML que un compañero haya rellenado con

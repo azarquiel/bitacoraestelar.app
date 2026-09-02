@@ -141,10 +141,10 @@ eq(r3.detalle, '', 'sin datos de catálogo, sin detalle');
 eq(E.rotuloFlota(null).principal, '', 'sin telescopio, sin rótulo');
 
 var listado = require('fs').readFileSync(__dirname + '/../registro/resources/js/bitacora-listado.js', 'utf8');
-var listadoHtml = require('fs').readFileSync(__dirname + '/../registro/listado-observaciones-wordpress.html', 'utf8');
+var listadoHtml = require('fs').readFileSync(__dirname + '/../registro/mis-viajes-wordpress.html', 'utf8');
 eq(/BitacoraEquipo\.rotuloFlota/.test(listado), true, 'el listado compone el rótulo con BitacoraEquipo');
 eq(/obs\.telescopio \|\| ''/.test(listado), true, 'y cae al texto guardado si no hay tubo de flota');
-eq(/bitacora-equipo\.js/.test(listadoHtml), true, 'la página del listado carga bitacora-equipo.js');
+eq(/bitacora-equipo\.js/.test(listadoHtml), true, 'Mi bitácora, donde vive el listado, carga bitacora-equipo.js');
 
 // La ficha del mapa enseña la nave junto a la fecha estelar. El rótulo sale de
 // aquí (fuente única); si la observación no trae telescopio de la flota, cae al
