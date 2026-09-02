@@ -1009,6 +1009,14 @@
       <span style="width:9px;height:9px;border-radius:50%;background:#ff8a80;box-shadow:0 0 4px 1px rgba(255,138,128,0.9);flex:none;"></span>
       <span class="mw-legend-text">Nebulosa de emisión</span>
     </button>
+    <!-- Reflexión: no emite, DISPERSA la luz de una estrella vecina en su polvo, y
+         por eso es azul. Cajón propio y no dentro de "emisión" porque la leyenda
+         también apaga y enciende: fundirlas quitaría al observador poder ver una
+         sin la otra. Color en bitacora_categorias_mapa() del plugin. -->
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#a9c6ff" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#a9c6ff;box-shadow:0 0 4px 1px rgba(169,198,255,0.9);flex:none;"></span>
+      <span class="mw-legend-text">Nebulosa de reflexión</span>
+    </button>
     <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#8aff9e" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#8aff9e;box-shadow:0 0 4px 1px rgba(138,255,158,0.9);flex:none;"></span>
       <span class="mw-legend-text">Cúmulo abierto</span>

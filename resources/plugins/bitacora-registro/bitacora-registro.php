@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.32.0
+ * Version:     1.33.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.32.0' );
+define( 'BITACORA_VERSION', '1.33.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -2907,6 +2907,17 @@ function bitacora_categorias_mapa() {
         array( 'abierto',    array( 'OPC', 'CL*' ),  '#8aff9e' ),
         array( 'planetaria', array( 'PN' ),          '#5fe0c8' ),
         array( 'emision',    array( 'HII', 'EMO' ),  '#ff8a80' ),
+        // Nebulosa de reflexión: no emite luz propia, DISPERSA la de una estrella
+        // vecina en su polvo. Por eso su color es azul —la dispersión favorece las
+        // longitudes de onda cortas— y por eso es una categoría aparte de 'emision':
+        // gas ionizado y polvo que refleja son física distinta, y la leyenda es
+        // filtro además de rótulo. 'RNe' es el otype de SIMBAD (M78, NGC 1788,
+        // NGC 1999, NGC 2023). CUIDADO con dos vecinas que NO lo llevan: NGC 7023
+        // (la Iris) responde 'OpC' y NGC 1435 (Mérope) responde 'ISM', así que caen
+        // en 'abierto' y en 'desconocido'. Es correcto: la fuente de la clasificación
+        // es el otype, y forzarlas por nombre resucitaría el regex de prefijos de
+        // catálogo que este modelo ya expulsó una vez.
+        array( 'reflexion',  array( 'RNE' ),         '#a9c6ff' ),
         // Nebulosa oscura: no emite, TAPA. Es la silueta de polvo sobre un fondo
         // rico en estrellas (Barnard 33, los Barnard, las LDN), y por eso su color
         // es el pardo del polvo y no uno de los brillantes del resto de la leyenda.
