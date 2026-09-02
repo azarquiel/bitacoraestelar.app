@@ -989,6 +989,27 @@
   // ═══════════════════════════════════════════════════════════════════════
   var entradasBox = $('entradas'), addEntryBtn = $('addEntry');
 
+  /* Precalentado de la consulta a Gaia. Apuntar al botón "Generar con el
+     simulador" ya es intención de generar, así que la consulta sale mientras el
+     observador termina de decidir y el modal la encuentra en vuelo o servida.
+     Delegado en el contenedor, no un par de listeners por entrada: pointerover
+     y focusin burbujean (pointerenter no). consultar() deduplica, así que pasar
+     el ratón por encima varias veces no pide varias veces, y un fallo no se
+     enseña: lo reintenta el render. */
+  function precalentarSim(e){
+    var btn = e.target && e.target.closest ? e.target.closest('.gen-img') : null;
+    if(!btn || !window.BitacoraGaiaRender || !BitacoraGaiaRender.precalentar) return;
+    var entrada = btn.closest('.entry');
+    if(!entrada) return;
+    var d = datosSimEntrada(entrada);
+    if(d.error) return;   // sin objeto, tubo u ocular no hay nada que pedir
+    BitacoraGaiaRender.precalentar(d);
+  }
+  if(entradasBox){
+    entradasBox.addEventListener('pointerover', precalentarSim);
+    entradasBox.addEventListener('focusin', precalentarSim);
+  }
+
   // "1º 10′", "1 10", "70′", "1.17" -> grados decimales
   function parseCampo(txt){
     txt = String(txt==null?'':txt).trim(); if(txt==='') return null;
