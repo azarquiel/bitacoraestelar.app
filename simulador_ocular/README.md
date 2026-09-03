@@ -598,6 +598,36 @@ Los de la resolución y la PSF van aparte, porque necesitan parches de verdad:
 > que se compare.** Medir un parche de 1024 px sobre un lienzo de 512 tira tres
 > de cada cuatro píxeles y produce un aliasing que se confunde con física.
 
+#### Las nebulosas de reflexión no traen fotometría propia
+
+La misma cadena pinta las nebulosas cuya clase está abierta en
+`PS1_CLASES_DIFUSAS` (`PN`, `HII`, `EmN`, `RfN`, `SNR`). En la clase `RfN` hay una
+salvedad que conviene saber antes de leer un render suyo: **la magnitud del
+OpenNGC no es fotometría de la nebulosa**. Muchas filas traen la magnitud de la
+estrella que la ilumina —NGC 1788 da μ_e = 14,47 crudo— y por eso existe el suelo
+`MU_MIN` de `gen_nebulosas.py`. De las 13 filas `RfN` con magnitud, **12 caen bajo
+ese suelo y acaban a μ_e = 20,0 exactos**, M78 incluida, que es la que validó la
+clase en el ADR 0013.
+
+Otras 25 filas `RfN` no traen magnitud ninguna, y 16 de ellas sí tienen imagen de
+Pan-STARRS disponible (NGC 2023 entre ellas). Para esas:
+
+> En ausencia de fotometría nebular utilizable, la implementación actual
+> representa las RfN con μ asumida = 20,0, coincidente con el suelo actual de la
+> tubería. Este valor no se interpreta como una medición física.
+
+Prerregistro y listones en el ADR 0024. Lo que la μ asumida decide **no** es la
+forma de la mancha —eso lo trae el parche real— sino a qué brillo total se ancla
+esa imagen; medido sobre NGC 2023, la extensión visible va de 19.439 px con
+μ_e = 20 a 4.806 px con μ_e = 23.
+
+Riesgo propio de la clase, ya descartado con medida: una nebulosa de reflexión
+tiene por definición una estrella brillante dentro. En NGC 2023 es HD 37903
+(G = 7,76), cuya máscara toca el tope de 60″; aun así `ps1CoberturaMordida` da
+0,0 % porque la iluminadora cae dentro de la escena μ25 y la ampara
+`ps1FuentesEnEscena`. No es el caso de NGC 7008 (ADR 0021), donde la compacta no
+tenía escena que amparase a μ Orionis.
+
 ### Niebla sub-límite de los cúmulos abiertos
 
 Un cúmulo abierto rico y lejano —M11, NGC 7789— se ve con un **fondo nebuloso**:
