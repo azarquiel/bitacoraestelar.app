@@ -379,10 +379,10 @@ difusa, `ps1CabeEnParche`, `PS1_CLASES_DIFUSAS`.
 
 Fixtures: `scripts/fixtures/dso/` con las texturas del **banco golden** (los 11
 objetos con Gaia pineada: 4 galaxias + 5 nebulosas + NGC 7008 + Abell 12) **a
-`salida = 1024`** para la equivalencia. Pesan ≈ 15–25 MB en PNG-16. Los otros 42
-del banco estratificado se descargan en la primera ejecución (hoy de STScI; tras la
-fase 1, de `dso/` en producción). Decisión pendiente (apartado 9): los 11 en git, o
-también descargados. NGC 7008 y Abell 12 no tienen todavía CSV de Gaia en
+`salida = 1024`** para la equivalencia. Pesan **18,33 MB** en PNG-16 y **van en
+git** (decisión 9.1, ADR 0024). Los otros objetos del banco se descargan en la
+primera ejecución (hoy de STScI; tras la fase 1, de `dso/` en producción).
+NGC 7008 y Abell 12 no tienen todavía CSV de Gaia en
 `scripts/fixtures/gaia/`: se generan con `gen_fixtures_gaia.js` antes de la fase 1.
 
 ---
@@ -739,10 +739,13 @@ px), y **ningún píxel del segundo sondeo fuera de la máscara de ausencia**. E
 
 ## 9. Decisiones que no toma este documento
 
-1. **Fixtures del banco golden en git** (los 11 con Gaia pineada, ≈ 15–25 MB de
-   PNG-16) o descargadas de producción en la primera ejecución (dependencia de
-   `bitacoraestelar.app` en los tests, pero de un servicio propio). Los otros 42
-   del banco estratificado no van a git en ningún caso.
+1. ~~**Fixtures del banco golden en git** (los 11 con Gaia pineada, ≈ 15–25 MB de
+   PNG-16) o descargadas de producción en la primera ejecución.~~
+   **DECIDIDO el 2026-09-04: van en git**, 18,33 MB medidos, porque el golden no
+   puede depender del orden en que STScI devuelve las skycells. Las dos
+   condiciones —solo los 11, y que la fase 2 decida por escrito si siguen a
+   producción— están en el ADR 0024 §«Decisión 9.1». Los demás objetos del banco
+   no van a git en ningún caso (97,4 MB).
 2. **Tope de 2048 px** (regla C, 1,0 GB) frente a **1794 px** (el objetivo de
    0,67″/px del README, ≈ 0,8 GB). Se decide con la compresión real de la fase 0.
 3. **Cuándo poner `proxyRespaldo = false`** por defecto: al cubrir el 100 % del

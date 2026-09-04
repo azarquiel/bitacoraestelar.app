@@ -234,10 +234,47 @@ no hay v2 de la fase 3; una máscara congelada que no ahorra red no compensa.
   píxel) y el renombrado de `bitacora-ps1.js` que el ADR 0020 presupuesta para
   cuando entre un segundo sondeo. Se abre solo con la fracción de escena
   saturada medida en la fase 0 y con su propio prerregistro.
-- Fixtures del banco golden en git o descargadas de producción; tope 2048 frente
-  a 1794 antes de medir; cuándo `proxyRespaldo = false` pasa a ser el defecto.
-  Son las decisiones del apartado 9 del objetivo y se toman con las cifras de la
-  fase 0.
+- Tope 2048 frente a 1794 y cuándo `proxyRespaldo = false` pasa a ser el defecto.
+  Son las decisiones 9.2 y 9.3 del objetivo. La 9.2 se toma al entrar en la
+  fase 2, con las cifras de volumen ya medidas (regla C = 1,51 GB, por encima del
+  listón de L2.4; tope 1794 = 1,42 GB).
+
+## Decisión 9.1 — Las fixtures del banco golden van en git (2026-09-04)
+
+Tomada con las cifras de la fase 0 delante: los 11 objetos golden a
+`salida = 1024` pesan **18,33 MB** en PNG-16, pesados uno a uno.
+
+El motivo no es el tamaño. Es que hoy el guardián bit a bit
+(`test_golden_difusas.js`) depende de un servicio externo cuyo orden de respuesta
+nadie controla: `lib_bajar_parche.js` cose las skycells quedándose con el primer
+píxel válido, en el orden en que las devuelve `ps1filenames.py`, y el solape
+discrepa un 15 % en la mediana. Los stacks de PS1 son inmutables; **ese orden no
+lo garantiza nada**. Un golden cuya entrada puede cambiar sin que nadie toque
+código no es un golden. Pinchar la entrada es lo que pide, y es la misma razón por
+la que los CSV de Gaia ya están en `scripts/fixtures/gaia/`.
+
+El coste encaja: el repo ya lleva 58 MB de imágenes de experimentos versionadas,
+así que 18 MB son un +6 % del histórico. La alternativa de descargarlas de
+producción se descarta por dos motivos, no por tamaño: durante la fase 1 no hay
+nada desplegado en `dso/` que leer, y después el guardián fallaría por un
+despliegue desincronizado en vez de por un cambio de código.
+
+**Dos condiciones, escritas para que no se decidan solas:**
+
+1. **Solo los 11 objetos golden.** El banco entero a 1024 son 97,4 MB y no entra
+   en git en ningún caso; los otros 58 se descargan como hoy.
+2. **La fase 2 decide, aparte y por escrito, si las fixtures siguen a
+   producción.** El golden hashea el parche que producción pide, así que al pasar
+   `PS1.salida` a `salida(lado)` o las fixtures van con él —**39,9 MB** con tope
+   2048, 34,3 con 1794— o el golden deja de guardar el camino real y se convierte
+   en una regresión de la ley a resolución fija, que es otra cosa y hay que
+   llamarla por su nombre. Sin esta decisión explícita, la recaptura de la fase 2
+   la toma por omisión.
+
+Cada regeneración reescribe los once enteros (un PNG no delta-comprime): con las
+tres previstas —fase 1, fase 2 por resolución y fase 3 por máscara— el histórico
+crece entre 55 y 75 MB. Se acepta. Si alguna vez deja de aceptarse, la salida es
+Git LFS, no descargar de producción.
 
 ## Ampliación del ADR 0013
 

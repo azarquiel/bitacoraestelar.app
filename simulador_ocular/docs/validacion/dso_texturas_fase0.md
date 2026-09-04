@@ -238,8 +238,12 @@ siendo necesario, pero cubre navegadores anteriores a 2023, no un hueco vivo.
   objetivo de 0,67 ″/px del README es el número que 1794 persigue. Decisión del
   usuario, con la tabla delante.
 - **9.1, fixtures en git**: los 11 objetos golden a 1024 px, pesados uno a uno,
-  suman **18,4 MB** en PNG-16. Cae dentro de la estimación del objetivo (15–25 MB),
-  así que la decisión sigue siendo de política de repositorio y no de tamaño.
+  suman **18,33 MB** en PNG-16, dentro de la estimación del objetivo (15–25 MB).
+  **Decidido el 2026-09-04: van en git** (ADR 0024 §«Decisión 9.1»), no por el
+  tamaño sino porque el golden no puede depender del orden en que STScI devuelve
+  las skycells. El banco entero serían 97,4 MB y no entra; si las fixtures
+  siguieran a producción en la fase 2 subirían a 39,9 MB con tope 2048 y 34,3 con
+  1794, y eso es lo que la segunda condición obliga a decidir por escrito.
 - **9.3 y 9.4** no dependen de nada medido aquí y siguen abiertas.
 
 ## Lo que esta fase no responde
