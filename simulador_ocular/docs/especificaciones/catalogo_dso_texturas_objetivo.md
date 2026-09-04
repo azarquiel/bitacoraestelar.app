@@ -140,7 +140,7 @@ Ese objeto es la frontera natural del cambio.
 | 20 | Metadatos por objeto | Sidecar JSON por textura + manifiesto; los campos de la fila no cambian de sitio | apartado 4.1 |
 | 22, 23 | Mapa de procedencia y `quality` | Sí: el mapa de procedencia vive en el árbol de construcción; la calidad (`fracAusencia`, `fracAusenciaEscena`, `fracSaturada`) va al sidecar y alimenta la lista de revisión | — |
 | 24 | Pan-STARRS como fuente principal | Sí en fases 1-3 (es lo que ya calibra la cadena: `seeingAs`, ley de máscara medida sobre 19 031 estrellas, `kAusencia`). Un segundo sondeo obliga a renombrar `bitacora-ps1.js` (ADR 0020 lo presupuesta) y solo entra en la fase 4 | ADR 0020 |
-| 26 | Prototipo con M31, M51, M64, M81, M82, M87, M104 | Banco = el que ya tiene fixtures y golden: **M51, M101, M104, M81** (galaxias) y **M57, M78, NGC 7635, NGC 6888, M1** (nebulosas), más **NGC 7008** (mordida al 43,6 %) y **Abell 12** (mordida al 79,8 %) como controles de la regla de ausencia. M31 no cabe en el parche por construcción (`fracMin`), así que no vale como prueba de la fuente; M64 y M82 se añaden en la fase 2 como casos de banda de polvo y núcleo intenso | fixtures existentes, ADR 0013/0017/0021 |
+| 26 | Prototipo con M31, M51, M64, M81, M82, M87, M104 | **Banco estratificado de 53 objetos** (apartado 5.0), elegido por modo de fallo y por cuantil de tamaño, no por tipo: incluye los 11 con fixtures y golden (M51, M101, M104, M81, M57, M78, NGC 7635, NGC 6888, M1, NGC 7008, Abell 12), M64, M82, M87 y M104 de la lista original, y **todas** las HII, RfN y SNR aptas (23). M31 no cabe en el parche por construcción (`fracMin`) y entra solo como control de exclusión. Las fases 0-2 se ejecutan sobre el banco; las 1050 filas se generan tras el PASA de la fase 2 | fixtures existentes, ADR 0005/0012 bis/0013/0017/0021 |
 | 27 | «Objetivo de almacenamiento 1-3 GB para NGC completo» | Para las **1050 filas aptas de hoy**: 0,7–1,3 GB en PNG-16 según regla de resolución (tabla 4.2). Ampliar a OpenNGC completo es la mejora M6, no este objetivo | medido en este árbol |
 
 ---
@@ -370,10 +370,13 @@ difusa, `ps1CabeEnParche`, `PS1_CLASES_DIFUSAS`.
 | `test_ps1_nan_ausencia.js`, `test_mascara_muerde_escena.js`, `test_psf_produccion.js` | sin cambios de contenido; sus parches pasan a venir de las fixtures `dso/` | fase 1 |
 | `test_estrellas_capa_escena.js` | fase 3: las `fuentesConservadas` del sidecar excluyen exactamente las mismas filas que hoy `parche.enEscena` | fase 3 |
 
-Fixtures: `scripts/fixtures/dso/` con las texturas del banco (4 galaxias + 5
-nebulosas + NGC 7008 + Abell 12) **a `salida = 1024`** para la equivalencia. Pesan
-≈ 15–25 MB en PNG-16. Decisión pendiente (apartado 9): en git, o descargadas de
-producción en la primera ejecución como hoy se descargan de STScI.
+Fixtures: `scripts/fixtures/dso/` con las texturas del **banco golden** (los 11
+objetos con Gaia pineada: 4 galaxias + 5 nebulosas + NGC 7008 + Abell 12) **a
+`salida = 1024`** para la equivalencia. Pesan ≈ 15–25 MB en PNG-16. Los otros 42
+del banco estratificado se descargan en la primera ejecución (hoy de STScI; tras la
+fase 1, de `dso/` en producción). Decisión pendiente (apartado 9): los 11 en git, o
+también descargados. NGC 7008 y Abell 12 no tienen todavía CSV de Gaia en
+`scripts/fixtures/gaia/`: se generan con `gen_fixtures_gaia.js` antes de la fase 1.
 
 ---
 
@@ -384,9 +387,66 @@ Una capa por fase (ADR 0007). Los listones se escriben en un ADR de prerregistro
 (ADR 0012 bis) y un tope duro por fase. Si un listón falla, no se ajusta el umbral:
 se documenta y se decide.
 
+### 5.0 Banco estratificado: sobre qué se ejecutan las fases 0-2
+
+Las fases 0-2 no necesitan las 1050 filas: lo que juzgan (equivalencia,
+codificación, resolución, coste) se decide igual sobre un banco, y el runtime ya
+admite el régimen mixto (fila en el manifiesto → textura; fila ausente → proxy como
+hoy). La generación completa se hace **después** del PASA de la fase 2.
+
+Reglas del banco, fijadas aquí y copiadas al ADR de prerregistro:
+
+- **Se elige por modo de fallo y por cuantil de tamaño, no por tipo.** «Diez por
+  tipo» no es un reparto posible: de las 1050 aptas, 927 son galaxias, 100 PN, 12
+  RfN, 10 HII y 1 SNR. HII, RfN y SNR entran **enteras** (23 objetos).
+- **Se elige antes de generar nada.** Un banco escogido después de ver resultados
+  invalida los listones (ADR 0012 bis) y convierte el test de cardinalidad en
+  decoración (ADR 0005).
+- **Cada objeto lleva el motivo por el que está.** Un objeto sin motivo no entra;
+  uno que cubra un modo de fallo sin representar se añade con su motivo, y el ADR
+  registra el cambio.
+
+Lados y cifras medidos con `ps1GalaxiasDelCampo` sobre el catálogo de este árbol.
+
+**Galaxias (20):**
+
+| Motivo | Objetos (lado del parche) |
+|---|---|
+| Cuantiles de lado (mín, p25, p50, p75, p90, tope) | NGC 3310 (1,57′), NGC 404 (2,80′), NGC 3377 (4,54′), NGC 4125 (7,89′), NGC 7331 (12,0′), NGC 205 (20′) |
+| Golden existente (bit a bit hoy) | M51 = NGC 5194 (18,0′), M101 = NGC 5457 (20′), M104 = NGC 4594 (13,3′), M81 = NGC 3031 (20′) |
+| Núcleo saturado en el stack | M87 = NGC 4486 (10,6′), M77 = NGC 1068 (5,35′) |
+| Banda de polvo / de canto | M64 = NGC 4826 (12,5′), NGC 4565 (18,6′), NGC 891 (20′) |
+| Vecinas en la escena / campo denso | NGC 5195 (6,55′, con M51), M84 = NGC 4374 (5,46′) y M86 = NGC 4406 (12,9′) en Virgo, M82 = NGC 3034 (13,8′, con M81) |
+| Borde de cobertura (δ = −25,3°) | NGC 253 (20′) |
+
+**Nebulosas planetarias (10):**
+
+| Motivo | Objetos |
+|---|---|
+| Golden existente | M57 = NGC 6720 (2,29′) |
+| Mordida (ADR 0021) por debajo, sobre y en el tope del umbral 0,6 | NGC 7008 (43,6 %), Abell 12 (79,8 %), NGC 7026 (100 %) |
+| Compacta brillante en el lado mínimo (1,5′) | NGC 7662, NGC 6543 |
+| Cuantiles de lado entre las PN | M97 = NGC 3587 (6,4′), NGC 1360 (11,6′), M27 = NGC 6853 (12,1′), NGC 7293 (20′, tope) |
+
+**HII (10), RfN (12), SNR (1): todas las aptas**, incluidas las golden M78 =
+NGC 2068, NGC 7635, NGC 6888 y M1 = NGC 1952.
+
+**Controles de exclusión** (deben salir `modelo = "fila"` con su motivo, sin
+petición de red): M31 = NGC 224, M33 = NGC 598, IC 342 y NGC 7000 (`no-cabe`);
+una galaxia de δ < −30° a elegir en el ADR (`sur`).
+
+Total: **53 texturas + 5 controles**. Cardinalidad mínima de los tests del banco:
+53 (ADR 0005).
+
+Lo que el banco **no** responde y queda para la generación completa: compresión y
+volumen reales (muestra aleatoria de la fase 0), límite de tasa de STScI a 1050
+peticiones, fricción del FTP de ≈ 1 GB y la lista de revisión por
+`fracAusenciaEscena`.
+
 ### Fase 0 — Medir (sin código de producción)
 
-Sobre el banco (11 objetos) y sobre una muestra aleatoria de 50 filas aptas:
+Sobre el banco estratificado (53 objetos) y sobre una muestra aleatoria de 50
+filas aptas (semilla fija, escrita en el informe) para las cifras de volumen:
 
 - Compresión real PNG-16 (`bytes/px`) → sustituir el ×0,6 de la tabla 4.2.
 - `errCuantMaxSigma` de `asinh16` con `a = σ`.
@@ -407,9 +467,10 @@ lee textura, proxy como respaldo.
 
 Listones:
 
-- **L1.1 Equivalencia**: para los 11 objetos del banco, `parche.datos` tras
+- **L1.1 Equivalencia**: para los 53 objetos del banco, `parche.datos` tras
   `ps1AnclarACatalogo` difiere del camino FITS en `max|Δ| ≤ 0,05·σ` píxel a píxel
-  y `|ΣΔ|/Σ ≤ 1e-4`; la máscara de NaN es idéntica (0 píxeles de diferencia).
+  y `|ΣΔ|/Σ ≤ 1e-4`; la máscara de NaN es idéntica (0 píxeles de diferencia). Los
+  5 controles de exclusión salen `fila` con su motivo.
 - **L1.2 Sin red**: con el manifiesto completo y `proxyRespaldo = false`, un render
   del campo de M51 no emite ninguna petición fuera de `dso/` (fetch de mentira que
   registra URLs, como `test_capa_difusa_defecto.js`).
@@ -431,7 +492,9 @@ Listones:
 - **L2.1** σ_PSF ≥ 1 px para D ∈ {80, 203, 457, 914} mm en todos los objetos con
   lado < 17′ y ≥ 0,85 px en el tope de 2048 (ninguno «subpíxel»).
 - **L2.2** 457 mm y 914 mm se separan en M51/M81/M101/NGC 205 por ≥ 1σ del ruido de
-  cielo (el listón del README), medido con `harness_decision_psf_resolucion.js`.
+  cielo (el listón del README), medido con `harness_decision_psf_resolucion.js`;
+  y en los seis representantes de cuantil de lado el signo es el correcto (más
+  apertura, menos `θ_add`).
 - **L2.3** Flujo total por objeto invariante con la resolución (±2e-3), como fija
   `test_resolucion_ps1.js`.
 - **L2.4** Volumen total ≤ 1,5 GB en PNG; memoria por parche decodificado ≤ 16 MB
@@ -657,9 +720,10 @@ px), y **ningún píxel del segundo sondeo fuera de la máscara de ausencia**. E
 
 ## 9. Decisiones que no toma este documento
 
-1. **Fixtures del banco en git** (≈ 15–25 MB de PNG-16) o descargadas de
-   producción en la primera ejecución (dependencia de `bitacoraestelar.app` en los
-   tests, pero de un servicio propio).
+1. **Fixtures del banco golden en git** (los 11 con Gaia pineada, ≈ 15–25 MB de
+   PNG-16) o descargadas de producción en la primera ejecución (dependencia de
+   `bitacoraestelar.app` en los tests, pero de un servicio propio). Los otros 42
+   del banco estratificado no van a git en ningún caso.
 2. **Tope de 2048 px** (regla C, 1,0 GB) frente a **1794 px** (el objetivo de
    0,67″/px del README, ≈ 0,8 GB). Se decide con la compresión real de la fase 0.
 3. **Cuándo poner `proxyRespaldo = false`** por defecto: al cubrir el 100 % del
@@ -679,9 +743,9 @@ px), y **ningún píxel del segundo sondeo fuera de la máscara de ausencia**. E
 3. Lista de tests nuevos y de golden a recapturar, con el procedimiento de
    recaptura.
 4. Estrategia de validación visual: `harness_vistas_np.js` y las vistas del banco
-   (M51, M101, M104, M81, M57, M78, NGC 7635, NGC 6888, M1, NGC 7008, Abell 12),
-   antes/después, en {457 mm · 190× · SQM 21,2} y {203 mm · 100× · SQM 20,5}, más
-   M64 y M82 en la fase 2. Ningún sistema nuevo de validación.
+   estratificado (5.0), antes/después, en {457 mm · 190× · SQM 21,2} y
+   {203 mm · 100× · SQM 20,5}; en la fase 2, además, los seis representantes de
+   cuantil a 80 y 914 mm. Ningún sistema nuevo de validación.
 
 Después de la aprobación: fase 1 completa (generador, decodificador, fuente,
 tests, golden, README, CONTEXT, HTML de los dos consumidores), suite verde,
