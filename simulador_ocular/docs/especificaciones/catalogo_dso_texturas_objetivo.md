@@ -467,10 +467,14 @@ lee textura, proxy como respaldo.
 
 Listones:
 
-- **L1.1 Equivalencia**: para los 53 objetos del banco, `parche.datos` tras
+- **L1.1 Equivalencia**: para los objetos del banco, `parche.datos` tras
   `ps1AnclarACatalogo` difiere del camino FITS en `max|Δ| ≤ 0,05·σ` píxel a píxel
-  y `|ΣΔ|/Σ ≤ 1e-4`; la máscara de NaN es idéntica (0 píxeles de diferencia). Los
+  y `|ΣΔ|/Σ ≤ 1e-4`; los NaN heredados del stack son idénticos (0 píxeles de
+  diferencia) y los que nacen de la regla de ausencia solo difieren en píxeles a
+  `|v − corte| ≤ paso de cuantización`, y en no más de 1e-4 del parche. Los
   5 controles de exclusión salen `fila` con su motivo.
+  (Redacción corregida el 2026-09-04 con lo medido en la fase 0; el porqué está
+  en el ADR 0024, «Corrección de la redacción de L1.1».)
 - **L1.2 Sin red**: con el manifiesto completo y `proxyRespaldo = false`, un render
   del campo de M51 no emite ninguna petición fuera de `dso/` (fetch de mentira que
   registra URLs, como `test_capa_difusa_defecto.js`).

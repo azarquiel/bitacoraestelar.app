@@ -8,3 +8,4 @@ Orden cronológico de ejecución:
 2. `trager1995.tsv` (2026-08-17)
 3. `matriz_v7.json` (2026-08-17)
 4. `m13_gaia_dr3.csv` (2026-08-17)
+5. `dso_texturas_fase0.md` (2026-09-04) — medidas de la fase 0 del catálogo de texturas DSO

@@ -17,7 +17,8 @@
    son de un experimento, no del simulador.
 
    Uso:  var B = require('./lib_bajar_parche.js')(R);
-         B.bajar(ra, dec, ladoArcmin, salida).then(fits => …) */
+         B.bajar(ra, dec, ladoArcmin, salida).then(fits => …)
+         B.bajar(ra, dec, ladoArcmin, salida, banda, true)   // con WCS, ver abajo */
 'use strict';
 
 var https = require('https');
@@ -95,15 +96,26 @@ module.exports = function (R) {
     return base;
   }
 
-  function bajar(ra, dec, lado, salida, banda) {
+  /* `conWcs`: devolver también la WCS del recorte. NO es el defecto, y el
+     motivo no es de gusto: sin ella `ps1AfinParche` monta el afín sin el giro
+     de la skycell, y así es como está capturado el golden y como miden todos
+     los arneses anteriores. Encenderla cambia `parche.datos`. El generador de
+     texturas la necesita —el sidecar lleva la WCS— y ese cambio va con la
+     recaptura del golden que la fase 1 ya tiene prevista, no aquí. */
+  function bajar(ra, dec, lado, salida, banda, conWcs) {
     banda = banda || window.BitacoraPS1.cfg.banda;
     var clave = crypto.createHash('md5')
       .update([ra, dec, lado, salida, banda].join('|')).digest('hex');
     var f = path.join(DIR, clave + '.json');
     if (fs.existsSync(f)) {
       var g = JSON.parse(fs.readFileSync(f, 'utf8'));
-      g.datos = new Float32Array(Buffer.from(g.datos, 'base64').buffer.slice(0));
-      return Promise.resolve(g);
+      /* Una entrada anterior a la WCS no la trae: solo hay que volver a pedirla
+         si quien llama la ha pedido. */
+      if (!conWcs || 'wcs' in g) {
+        g.datos = new Float32Array(Buffer.from(g.datos, 'base64').buffer.slice(0));
+        if (!conWcs) delete g.wcs;
+        return Promise.resolve(g);
+      }
     }
     return celdas(ra, dec, lado, banda).then(function (cs) {
       if (!cs.length) throw new Error('sin cobertura de PS1');
@@ -122,12 +134,17 @@ module.exports = function (R) {
         var p = coser(capas);
         var g = { ancho: p.ancho, alto: p.alto, escalaAs: p.escalaAs,
                   datos: p.datos, ladoArcmin: lado, salida: salida };
+        if (conWcs) g.wcs = p.wcs || null;
         if (!(g.escalaAs > 0)) g.escalaAs = lado * 60 / p.ancho;
-        fs.writeFileSync(f, JSON.stringify({
+        var guardar = {
           ancho: g.ancho, alto: g.alto, escalaAs: g.escalaAs,
           ladoArcmin: lado, salida: salida,
           datos: Buffer.from(new Float32Array(g.datos).buffer).toString('base64')
-        }));
+        };
+        /* Solo se guarda la clave `wcs` si se pidió: su ausencia es lo que
+           distingue una entrada que no la tiene de una que la tiene a null. */
+        if (conWcs) guardar.wcs = g.wcs;
+        fs.writeFileSync(f, JSON.stringify(guardar));
         return g;
       });
     });

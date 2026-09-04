@@ -9,6 +9,12 @@ conclusiones —implementar o descartar— son válidas de antemano.
 Fuente: `simulador_ocular/docs/especificaciones/catalogo_dso_texturas_objetivo.md`
 (objetivo del 2026-09-04). Este ADR no lo repite: fija lo que no puede moverse.
 
+Una sola excepción, y va firmada: **la redacción de L1.1 se corrigió el mismo día**
+con lo que midió la fase 0, antes de que la fase 1 existiera. El apartado
+«Corrección de la redacción de L1.1» dice qué cambió, por qué, y por qué esto no
+es el ajuste a posteriori que el párrafo de arriba prohíbe. Ningún otro listón se
+ha tocado.
+
 ## Qué se decide
 
 La imagen de cada objeto difuso deja de descargarse en caliente de STScI
@@ -87,7 +93,7 @@ proxy como respaldo (`cfg.proxyRespaldo = true`).
 
 | # | Comprobación | Umbral | Qué falsea |
 |---|---|---|---|
-| L1.1 | Equivalencia: `parche.datos` tras `ps1AnclarACatalogo` por textura frente a por FITS, en los 53 | `max|Δ| ≤ 0,05·σ` píxel a píxel; `|ΣΔ|/Σ ≤ 1e-4`; máscara de NaN idéntica (0 píxeles); los 5 controles salen `fila` con su motivo | que la codificación cambie la decisión `cielo − 2σ` (ausencia) o mueva el presupuesto de luz |
+| L1.1 | Equivalencia: `parche.datos` tras `ps1AnclarACatalogo` por textura frente a por FITS, en el banco | `max|Δ| ≤ 0,05·σ` píxel a píxel; `|ΣΔ|/Σ ≤ 1e-4`; **NaN heredados del stack idénticos (0 píxeles)**; **NaN nacidos de la regla de ausencia: los que difieran, todos con `|v − corte| ≤ paso de cuantización`, y ≤ 1e-4 de los píxeles del parche**; los 5 controles salen `fila` con su motivo | que la codificación cambie la decisión `cielo − 2σ` (ausencia) o mueva el presupuesto de luz |
 | L1.2 | Sin red: manifiesto completo del banco y `proxyRespaldo = false`, render del campo de M51 y del de NGC 7008 | 0 peticiones fuera de `dso/` (fetch de mentira que registra URLs, como `test_capa_difusa_defecto.js`) | que quede una dependencia externa escondida en la capa |
 | L1.3 | Coste en el navegador, 4 golden, caché de sesión vacía | tiempo de `ps1LeerTextura` (descarga + decodificación) ≤ tiempo del FITS por proxy **en caliente**; bytes transferidos ≤ 0,5× del FITS | que la decodificación en JS cueste más de lo que ahorra |
 | L1.4 | Suite completa tras recapturar el golden | todo verde; informe con la tabla de deltas de la recaptura, todos dentro de L1.1 | que la sustitución toque algo fuera de la frontera declarada |
@@ -101,6 +107,43 @@ sino de la codificación (signo, `uMin`, centinela).
 sigue fallando, la codificación pasa a float32 crudo con `Content-Encoding: gzip`
 y se vuelve a medir el volumen. **Tope duro**: dos codificaciones que no cierran
 L1.1 son un no, y la fase se cierra sin código de producción.
+
+### Corrección de la redacción de L1.1 (2026-09-04, antes de la fase 1)
+
+La redacción original pedía «máscara de NaN idéntica (0 píxeles)». Estaba mal
+escrita, y la fase 0 lo enseñó antes de que nadie midiera contra ella
+(`docs/validacion/dso_texturas_fase0.md`, apartado A): en `parche.datos` conviven
+dos NaN de origen distinto y el listón los trataba como uno.
+
+- Los **heredados del stack** (huecos de saturación, fuera de skycell) los
+  transporta el centinela 0 sin tocarlos. Son exactos y el listón puede exigir —y
+  exige— cero diferencias: en los 118 objetos de la fase 0 no se movió ninguno.
+- Los **nacidos de la regla de ausencia** (`v < cielo − kσ`, que
+  `ps1AnclarACatalogo` convierte en NaN) dependen de una comparación de dos
+  números reales contra un umbral. Cualquier codificación que pierda el último bit
+  mueve de lado a los píxeles que están pegados al umbral, y solo a esos. Medido:
+  603 píxeles de 123 731 968 (0,0005 %), en 57 de 118 objetos, **todos dentro de
+  un paso de cuantización del corte**, y al afinar el paso (`a = σ/4`) se reducen
+  en la misma proporción.
+
+Exigir cero en este segundo grupo no es exigir fidelidad: es exigir aritmética
+exacta, que solo cumple guardar float32 sin codificar. El listón corregido cambia
+un recuento imposible por la condición que de verdad separa el ruido de
+cuantización de un fallo de codificación: **dónde** están los píxeles que
+difieren. Si el códec tuviera el signo, el `uMin` o el centinela mal, los píxeles
+discrepantes aparecerían lejos del corte y el listón lo cazaría igual que antes;
+el tope de 1e-4 del parche (2,5× el peor objeto de la fase 0) impide además que
+una patología se cuele por acumulación.
+
+Hay que decirlo sin adornos: **esto es tocar un listón prerregistrado después de
+ver una medida**, que es justo lo que la cabecera de este ADR prohíbe. Se hace
+con tres condiciones y queda escrito para que se pueda juzgar. Primera: lo medido
+en la fase 0 es la codificación aislada, no el experimento de L1.1 —la fase 1 no
+ha corrido y no hay resultado que salvar—. Segunda: el listón corregido es más
+exigente en especie, porque añade una condición de posición que la redacción
+original no pedía, y solo más laxo en el recuento del grupo que era imposible.
+Tercera: la parte alcanzable se queda en cero, sin margen. Si en la fase 1 hiciera
+falta mover algo más, no se mueve: se cierra.
 
 ## Fase 2 — Resolución por objeto
 
