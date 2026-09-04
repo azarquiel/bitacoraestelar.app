@@ -66,3 +66,10 @@ clase necesita algo que una fila Sérsic no puede decir (filamentos, cáscara
 incompleta), la conversación es sobre el esquema del catálogo, no sobre añadir
 ramas al render. Los cúmulos siguen su propia vía (ADR 0002): su modelo
 intrínseco es una población, no una fila fotométrica.
+
+**Ampliación (2026-09-04, ADR 0024):** la fila puede tener dos fuentes declaradas
+por fila en un manifiesto hermano —la fila Sérsic sola, o la fila más una textura
+generada offline de un sondeo público con procedencia—. Con textura manda la
+imagen y la fila fija el presupuesto de luz (ADR 0021); sin textura, la fila es el
+modelo. La clase sigue sin decidir código. Listones, banco y vías de escape en
+`0024-preregistro-catalogo-de-texturas-dso.md`.
