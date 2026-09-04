@@ -576,8 +576,8 @@ px), y **ningún píxel del segundo sondeo fuera de la máscara de ausencia**. E
 | `scripts/test_resolucion_ps1.js`, `scripts/test_capa_difusa_defecto.js` | adaptar (4.6) | 1, 2 |
 | `simulador_ocular/README.md` | sección nueva; retirar `generar_niveles.py`/`ps1_service.py`; tabla de causas de aviso; despliegue | 1 |
 | `simulador_ocular/CONTEXT.md`, `CONTEXT-MAP.md` | término «Textura DSO»; «PS1» sigue nombrando la ley | 1 |
-| `simulador_ocular/docs/adr/0024-…` | prerregistro de listones de las fases 1-3 (un ADR; las fases son secciones) | antes de 1 |
-| `simulador_ocular/docs/adr/0013-…` | **ampliar**, no duplicar: la textura es una segunda fuente del modelo intrínseco, declarada por fila en el manifiesto; la clase sigue sin decidir código | 1 |
+| `simulador_ocular/docs/adr/0024-preregistro-catalogo-de-texturas-dso.md` | prerregistro de listones de las fases 1-3, banco, vías de escape y topes; ampliación del ADR 0013 | redactado (2026-09-04) |
+| `simulador_ocular/docs/adr/0013-…` | **ampliado** desde el ADR 0024 (párrafo de remisión al final): la textura es una segunda fuente del modelo intrínseco, declarada por fila en el manifiesto; la clase sigue sin decidir código | redactado |
 | `simulador_ocular/docs/especificaciones/README.md` | añadir este documento al orden cronológico | ya |
 | `simulador_ocular/gaia_proxy.php` | (mejora M4) devolver `source_id` | 3 |
 | `simulador_ocular/ps1-proxy.php` | sin cambios; se retira del despliegue cuando `proxyRespaldo = false` sea el defecto | tras 1 |
