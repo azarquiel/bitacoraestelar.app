@@ -81,14 +81,20 @@ Dónde están, medido en NGC 7331 (16 flips):
 se reducen en la misma proporción. Es frontera, no defecto: ninguna codificación
 con paso finito los lleva a cero.
 
-Consecuencia para la fase 1, dicha aquí y no después: **L1.1 exige «máscara de
-NaN idéntica (0 píxeles)»**, y esos flips se convierten en NaN aguas abajo, en la
-rama de ausencia de `ps1AnclarACatalogo`. Tal como está escrito, el listón solo lo
-cumple una codificación exacta, y la vía de escape del ADR 0024 (`a = σ/4` una
-vez, y después float32 con gzip) termina en float32. Este informe **no toca el
-listón**: lo señala antes de que se mida contra él, que es para lo que existe la
-fase 0. La decisión —si un píxel a 1e-4 σ del corte cuenta como máscara distinta—
-es del ADR, no de la medida.
+Consecuencia para la fase 1: la redacción original de L1.1 exigía «máscara de NaN
+idéntica (0 píxeles)» sin distinguir los NaN que el stack ya traía —que el
+centinela transporta exactos— de los que nacen de la regla de ausencia, que
+dependen de una comparación contra un umbral. Tal como estaba escrito, el listón
+solo lo cumplía una codificación exacta, y la vía de escape del ADR 0024
+(`a = σ/4` una vez, y después float32 con gzip) terminaba en float32 por un
+efecto de frontera y no por un fallo de fidelidad.
+
+**El ADR 0024 corrigió esa redacción el 2026-09-04**, antes de que nadie midiera
+contra ella, con estas cifras delante: los NaN del stack siguen exigiéndose a cero
+diferencias, y los de la regla de ausencia deben caer todos a `|v − corte| ≤` paso
+de cuantización y no pasar de 1e-4 del parche. El razonamiento completo, y por qué
+tocar un listón prerregistrado es aquí defendible, está en su apartado
+«Corrección de la redacción de L1.1».
 
 Una salvedad de método: aquí el corte se calcula con el cielo y la σ del parche
 original para las dos versiones. En producción, `ps1AnclarACatalogo` los recalcula
@@ -207,8 +213,10 @@ siendo necesario, pero cubre navegadores anteriores a 2023, no un hueco vivo.
    releerlas con estos números.
 3. **El ×0,6 de compresión es ×0,95** en todo lo que no esté sobremuestreado.
 4. **La regla C no cabe en L2.4** (1,51 GB contra 1,5), y la fase 1 sube 1,7 GB.
-5. **L1.1 con máscara de NaN a cero píxeles** no lo cumple ninguna codificación de
-   paso finito (apartado A).
+5. **L1.1 con máscara de NaN a cero píxeles** no lo cumplía ninguna codificación de
+   paso finito (apartado A). Corregido en el ADR 0024 el mismo día, separando los
+   NaN heredados del stack —que siguen a cero— de los que nacen de la regla de
+   ausencia, que se juzgan por su distancia al corte.
 6. **`lib_bajar_parche.js` no devolvía la WCS del recorte**, así que todo lo que
    monta un parche en Node —el golden incluido— lo hace con un afín sin el giro
    de la skycell, aunque `fitscut` la sirve (`&wcs=1`) y `parseFITS` la lee. Se
