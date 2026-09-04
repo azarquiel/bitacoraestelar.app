@@ -41,4 +41,32 @@ function escribir(ruta, rgb, W, H) {
   ]));
 }
 
-module.exports = { escribir: escribir };
+/* Gris de 16 bits (tipo de color 0, profundidad 16), big-endian como manda el
+   formato. Filtro 0 por fila: los datos son fotometría, no una foto, y los
+   filtros predictivos de PNG se pensaron para gradientes de 8 bits.
+   `bytes` devuelve solo el tamaño, para medir compresión sin escribir. */
+function filas16(u16, W, H) {
+  var raw = Buffer.alloc((W * 2 + 1) * H);
+  for (var y = 0; y < H; y++) {
+    var o = y * (W * 2 + 1);
+    raw[o] = 0;
+    for (var x = 0; x < W; x++) raw.writeUInt16BE(u16[y * W + x], o + 1 + x * 2);
+  }
+  return raw;
+}
+function bufferGris16(u16, W, H) {
+  var ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4);
+  ihdr[8] = 16; ihdr[9] = 0; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(filas16(u16, W, H), { level: 9 })),
+    chunk('IEND', Buffer.alloc(0))
+  ]);
+}
+function escribirGris16(ruta, u16, W, H) {
+  fs.writeFileSync(ruta, bufferGris16(u16, W, H));
+}
+
+module.exports = { escribir: escribir, escribirGris16: escribirGris16,
+                   bufferGris16: bufferGris16 };
