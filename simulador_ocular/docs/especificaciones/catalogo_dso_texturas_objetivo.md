@@ -72,6 +72,13 @@ precedencias.
 
 ### 2.2 El catálogo difuso hoy (cifras de este árbol, `scripts/…` con `ps1CatalogoDifuso`)
 
+> **Desfasadas desde la PR #189** (nebulosas de reflexión), que subió las RfN
+> aptas de 12 a 28. Al 2026-09-04: **1510 filas, 1066 aptas** (429 al sur, 15 no
+> caben), 927 galaxias, 100 PN, 28 RfN, 10 HII, 1 SNR. Las cifras vivas están en
+> el ADR 0024 §«Premisas medidas» y en `docs/validacion/dso_texturas_fase0.md`;
+> la tabla de abajo se conserva como estaba escrita el día del objetivo. Ninguna
+> de estas cuentas es un listón: se recuentan.
+
 | Cifra | Valor |
 |---|---|
 | Filas del catálogo difuso (galaxias + nebulosas de clase abierta) | 1485 (1295 galaxias RC3 BT < 13; 190 nebulosas) |
@@ -399,6 +406,8 @@ Reglas del banco, fijadas aquí y copiadas al ADR de prerregistro:
 - **Se elige por modo de fallo y por cuantil de tamaño, no por tipo.** «Diez por
   tipo» no es un reparto posible: de las 1050 aptas, 927 son galaxias, 100 PN, 12
   RfN, 10 HII y 1 SNR. HII, RfN y SNR entran **enteras** (23 objetos).
+  (Con las RfN de la PR #189 son 39 de clase entera y **69 objetos** en total. El
+  reparto de arriba es el del día del objetivo; la regla no cambia.)
 - **Se elige antes de generar nada.** Un banco escogido después de ver resultados
   invalida los listones (ADR 0012 bis) y convierte el test de cardinalidad en
   decoración (ADR 0005).
@@ -437,6 +446,12 @@ una galaxia de δ < −30° a elegir en el ADR (`sur`).
 
 Total: **53 texturas + 5 controles**. Cardinalidad mínima de los tests del banco:
 53 (ADR 0005).
+
+Corregido el 2026-09-04: son **69 texturas** (30 nombrados + 39 de clase entera:
+10 HII, 28 RfN, 1 SNR) y los mismos 5 controles. La cardinalidad de los tests
+**no se escribe**: la devuelve `lib_banco_dso.js`, porque el número es derivado y
+clavarlo hace que el guardián falle cuando el catálogo crece. Ver el ADR 0024
+§«Banco».
 
 Lo que el banco **no** responde y queda para la generación completa: compresión y
 volumen reales (muestra aleatoria de la fase 0), límite de tasa de STScI a 1050

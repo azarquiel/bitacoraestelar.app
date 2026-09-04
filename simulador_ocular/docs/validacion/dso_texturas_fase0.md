@@ -206,8 +206,11 @@ siendo necesario, pero cubre navegadores anteriores a 2023, no un hueco vivo.
 1. **El banco ya no son 53 objetos, son 69.** El ADR 0024 fija «todas las HII,
    RfN y SNR aptas» y escribe 12 RfN; este árbol tiene **28** desde que entró
    `feat: nebulosas de reflexión` (PR #189, commit b208618). El banco crece solo,
-   que es lo que la regla pedía, pero la cardinalidad mínima de los tests deja de
-   ser 53. Los cinco controles de exclusión salen exactos (`no-cabe` ×4, `sur`).
+   que es lo que la regla pedía. Los cinco controles de exclusión salen exactos
+   (`no-cabe` ×4, `sur`). **Enmendado en el ADR 0024 el 2026-09-04**: la
+   cardinalidad de los tests deja de ser un número escrito y pasa a ser la que
+   devuelve `lib_banco_dso.js`, que avisa cuando una clase entera se aparta de la
+   cuenta registrada.
 2. **El catálogo difuso ya no son 1485 filas ni 1050 aptas**, sino **1510 y
    1066**, por lo mismo. Las premisas del ADR 0024 §«Premisas medidas» hay que
    releerlas con estos números.
