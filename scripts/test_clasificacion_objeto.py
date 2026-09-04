@@ -85,6 +85,8 @@ DORADOS = [
     ("glb", "", "oscura"),        # glóbulo de Bok (B68), case-insensitive
     ("CGb", "", "oscura"),        # glóbulo cometario
     ("MoC", "", "desconocido"),   # nube molecular: a propósito FUERA de 'oscura'
+    ("RNe", "", "reflexion"),     # nebulosa de reflexión: M78, NGC 1788/1999/2023
+    ("ISM", "", "desconocido"),   # NGC 1435 (Mérope): SIMBAD no la llama 'RNe'
     ("",    "", "desconocido"),   # SIMBAD no respondió: no se adivina que sea estrella
     ("PN",  "carbono", "carbono"),# override del registro gana sobre otype
 ]
@@ -95,13 +97,22 @@ for otype, tob, esperado in DORADOS:
 
 # Regla clave del bug: un objeto MW NO debe caer en el azul de 'Resto de supernova'
 # salvo que SEA un SNR.
-for otype in ("GlC", "OpC", "PN", "HII", "C*", "*"):
+for otype in ("GlC", "OpC", "PN", "HII", "C*", "*", "RNe"):
     _, color = clasificar_mw(otype)
     check(color != "#7ec8ff", f"otype={otype!r} NO se pinta de #7ec8ff (SNR)")
 
+# Emisión y reflexión son categorías DISTINTAS: gas ionizado frente a polvo que
+# dispersa la luz de una estrella vecina. Si compartieran color, la leyenda no
+# podría apagar una sin apagar la otra.
+check(clasificar_mw("RNe")[1] != clasificar_mw("HII")[1],
+      "'reflexion' y 'emision' NO comparten color")
+
 # ── 2) Sincronía con la leyenda #mw-legend ───────────────────────────────────
 # Colores data-color de los mw-legend-item (leyenda del mapa MW).
-leyenda = set(c.lower() for c in re.findall(r'class="mw-legend-item"\s+data-color="(#[0-9a-fA-F]{6})"', HTML))
+# [^>]* y no \s+: entre `class` y `data-color` hay hoy un `aria-pressed`, y con la
+# regex pegada el test leía 0 colores y daba por sincronizada una leyenda que no
+# estaba mirando. Un guardián que no ve nada pasa siempre.
+leyenda = set(c.lower() for c in re.findall(r'class="mw-legend-item"[^>]*data-color="(#[0-9a-fA-F]{6})"', HTML))
 check(len(leyenda) >= 6, f"leyenda #mw-legend parseada ({len(leyenda)} colores)")
 print("Sincronía clasificador -> leyenda:")
 for tipo, codes, color in reglas:

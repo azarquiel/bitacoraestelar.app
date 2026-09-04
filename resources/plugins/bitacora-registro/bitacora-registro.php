@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.32.0
+ * Version:     1.33.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.32.0' );
+define( 'BITACORA_VERSION', '1.33.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -2907,6 +2907,17 @@ function bitacora_categorias_mapa() {
         array( 'abierto',    array( 'OPC', 'CL*' ),  '#8aff9e' ),
         array( 'planetaria', array( 'PN' ),          '#5fe0c8' ),
         array( 'emision',    array( 'HII', 'EMO' ),  '#ff8a80' ),
+        // Nebulosa de reflexión: no emite luz propia, DISPERSA la de una estrella
+        // vecina en su polvo. Por eso su color es azul —la dispersión favorece las
+        // longitudes de onda cortas— y por eso es una categoría aparte de 'emision':
+        // gas ionizado y polvo que refleja son física distinta, y la leyenda es
+        // filtro además de rótulo. 'RNe' es el otype de SIMBAD (M78, NGC 1788,
+        // NGC 1999, NGC 2023). CUIDADO con dos vecinas que NO lo llevan: NGC 7023
+        // (la Iris) responde 'OpC' y NGC 1435 (Mérope) responde 'ISM', así que caen
+        // en 'abierto' y en 'desconocido'. Es correcto: la fuente de la clasificación
+        // es el otype, y forzarlas por nombre resucitaría el regex de prefijos de
+        // catálogo que este modelo ya expulsó una vez.
+        array( 'reflexion',  array( 'RNE' ),         '#a9c6ff' ),
         // Nebulosa oscura: no emite, TAPA. Es la silueta de polvo sobre un fondo
         // rico en estrellas (Barnard 33, los Barnard, las LDN), y por eso su color
         // es el pardo del polvo y no uno de los brillantes del resto de la leyenda.
@@ -3680,6 +3691,16 @@ function bitacora_objetos_backfill() {
  * otype: era a la vez "es una estrella" y "no sé qué es". Mientras un objeto siga
  * siendo 'otro' no es estrella para nadie y no sale en el vecindario solar.
  *
+ * Entra TAMBIÉN 'desconocido', y no es lo mismo que 'otro': 'desconocido' es la
+ * ausencia de clasificación, así que un objeto que cayó ahí cuando se registró
+ * merece que se le vuelva a preguntar cada vez que el clasificador aprende un
+ * otype nuevo. Es el caso real: al abrir 'RNe' (nebulosa de reflexión), M78,
+ * NGC 1788, NGC 1999 y NGC 2023 seguían grises porque nadie los revisitaba.
+ * Con el WHERE limitado a 'otro' no había ningún botón capaz de rescatarlos —el
+ * de «Colocar en el mapa los objetos que falten» solo INSERTA los que no existen,
+ * nunca reescribe una fila—. Idempotente: si SIMBAD sigue sin decir nada, se
+ * reescriben los mismos valores.
+ *
  * Solo toca esas dos columnas: la posición y la distancia ya guardadas se quedan
  * como están, para que una reclasificación no pueda estropear datos buenos.
  * Idempotente: los que ya tienen tipo nuevo no entran en la consulta.
@@ -3688,7 +3709,7 @@ function bitacora_objetos_reclasificar() {
     global $wpdb;
     $t_obj = bitacora_nombre_tabla_objetos();
     $filas = $wpdb->get_results(
-        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '') ORDER BY id ASC"
+        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '', 'desconocido') ORDER BY id ASC"
     );
     $hechos = 0;
     foreach ( (array) $filas as $o ) {
@@ -4272,11 +4293,14 @@ function bitacora_panel_objetos() {
         $n = bitacora_objetos_reclasificar();
         echo '<div class="notice notice-success"><p>Reclasificados: <strong>' . intval( $n ) . '</strong> objeto(s).</p></div>';
     }
-    $sin_clasificar = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $tabla WHERE tipo IN ('otro', '')" ) );
+    // El MISMO conjunto que reclasifica bitacora_objetos_reclasificar(): si el
+    // contador y la consulta se separan, el panel promete cero pendientes con
+    // objetos sin clasificar dentro (o al revés).
+    $sin_clasificar = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $tabla WHERE tipo IN ('otro', '', 'desconocido')" ) );
     echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
     wp_nonce_field( 'bitacora_reclasificar_objetos' );
-    echo '<button type="submit" name="bitacora_reclasificar_objetos" value="1" class="button">Reclasificar los objetos guardados como «otro»</button>';
-    echo ' <span style="color:#646970">El antiguo tipo «otro» mezclaba «es una estrella» con «no se pudo clasificar»; esto vuelve a preguntar el tipo a SIMBAD y los separa en «Estrella» y «Sin clasificar». Hasta entonces no salen en el vecindario solar. Pendientes: <strong>' . $sin_clasificar . '</strong>. Idempotente; no toca la posición ni la distancia.</span>';
+    echo '<button type="submit" name="bitacora_reclasificar_objetos" value="1" class="button">Reclasificar los objetos sin clasificar («otro» o «desconocido»)</button>';
+    echo ' <span style="color:#646970">Vuelve a preguntar el tipo a SIMBAD para los objetos que no tienen clasificación. Sirve para dos cosas: separar el antiguo cajón «otro» —que mezclaba «es una estrella» con «no se pudo clasificar»— y rescatar los que están en «Sin clasificar» porque el clasificador aún no conocía su tipo cuando se registraron. Pendientes: <strong>' . $sin_clasificar . '</strong>. Idempotente; no toca la posición ni la distancia.</span>';
     echo '</form></div>';
 
     // ── Catálogo de equipo (telescopios / oculares / auxiliares) ──

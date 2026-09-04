@@ -32,6 +32,10 @@ var OBJS = [
   { cat: 'NGC6720',  csv: 'gaia_ngc6720.csv', fuente: global.window.BITACORA_NEBULOSAS },
   // Validación de emisión/reflexión (rama nebulosas-emision-reflexion):
   { cat: 'NGC2068',  csv: 'gaia_ngc2068.csv', fuente: global.window.BITACORA_NEBULOSAS },
+  // NGC 2023: reflexión con mag DERIVADA de la mu asumida (ADR 0024), y con su
+  // estrella iluminadora dentro del campo (HD 37903, G 7,76, cuya máscara toca
+  // el tope de 60 arcsec).
+  { cat: 'NGC2023',  csv: 'gaia_ngc2023.csv', fuente: global.window.BITACORA_NEBULOSAS },
   { cat: 'NGC7635',  csv: 'gaia_ngc7635.csv', fuente: global.window.BITACORA_NEBULOSAS },
   { cat: 'NGC6888',  csv: 'gaia_ngc6888.csv', fuente: global.window.BITACORA_NEBULOSAS },
   // Resto de supernova (M1):
@@ -43,38 +47,63 @@ function fila(fuente, nombre) {
   throw new Error('no está en el catálogo: ' + nombre);
 }
 
+/* Dos servidores, el MISMO failover que gaia_proxy.php en producción: CDS
+   (VizieR I/355/gaiadr3) y, si falla, GAVO (gaia.dr3lite). VizieR responde 403 a
+   ráfagas según la IP que consulte, y sin la alternativa un fixture nuevo no se
+   puede generar desde según qué máquina. Es el mismo DR3 con otros nombres de
+   columna. */
+function consultas(ra, dec, radDeg) {
+  return [
+    { nombre: 'CDS',
+      url: 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=',
+      adql: 'SELECT TOP 200000 RA_ICRS, DE_ICRS, Gmag FROM "I/355/gaiadr3"' +
+        ' WHERE Gmag <= ' + PS1.mascaraProf +
+        ' AND 1=CONTAINS(POINT(\'ICRS\', RA_ICRS, DE_ICRS),' +
+        ' CIRCLE(\'ICRS\',' + ra + ',' + dec + ',' + radDeg + ')) ORDER BY Gmag' },
+    { nombre: 'GAVO',
+      url: 'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=',
+      adql: 'SELECT TOP 200000 ra, dec, phot_g_mean_mag FROM gaia.dr3lite' +
+        ' WHERE phot_g_mean_mag <= ' + PS1.mascaraProf +
+        ' AND 1=CONTAINS(POINT(\'ICRS\', ra, dec),' +
+        ' CIRCLE(\'ICRS\',' + ra + ',' + dec + ',' + radDeg + ')) ORDER BY phot_g_mean_mag' }
+  ];
+}
+
+function pedir(c) {
+  return new Promise(function (res, rej) {
+    https.get(c.url + encodeURIComponent(c.adql),
+      { headers: { 'User-Agent': 'simulador-ocular/1.0' } }, function (r) {
+        var trozos = [];
+        if (r.statusCode !== 200) { r.resume(); rej(new Error('HTTP ' + r.statusCode + ' en ' + c.nombre)); return; }
+        r.on('data', function (d) { trozos.push(d); });
+        r.on('end', function () {
+          try { res(JSON.parse(Buffer.concat(trozos).toString('utf8'))); } catch (e) { rej(e); }
+        });
+      }).on('error', rej);
+  });
+}
+
 function bajar(o) {
   var f = fila(o.fuente, o.cat);
   var lado = window.BitacoraPS1.ps1LadoArcmin(f[4]);
   var radDeg = (lado * 0.75) / 60;
-  var adql = 'SELECT TOP 200000 RA_ICRS, DE_ICRS, Gmag FROM "I/355/gaiadr3"' +
-    ' WHERE Gmag <= ' + PS1.mascaraProf +
-    ' AND 1=CONTAINS(POINT(\'ICRS\', RA_ICRS, DE_ICRS),' +
-    ' CIRCLE(\'ICRS\',' + f[2] + ',' + f[3] + ',' + radDeg + ')) ORDER BY Gmag';
-  var url = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' +
-    encodeURIComponent(adql);
-  return new Promise(function (res, rej) {
-    https.get(url, function (r) {
-      var trozos = [];
-      if (r.statusCode !== 200) { rej(new Error('HTTP ' + r.statusCode + ' para ' + o.cat)); return; }
-      r.on('data', function (d) { trozos.push(d); });
-      r.on('end', function () {
-        try {
-          var j = JSON.parse(Buffer.concat(trozos).toString('utf8'));
-          var lineas = ['ra,dec,g'];
-          for (var i = 0; i < j.data.length; i++) {
-            var d = j.data[i];
-            if (d[2] == null) continue;
-            lineas.push(d[0] + ',' + d[1] + ',' + d[2]);
-          }
-          fs.writeFileSync(path.join(OUT, o.csv), lineas.join('\n') + '\n');
-          console.log(o.cat + ': ' + (lineas.length - 1) + ' fuentes (radio ' +
-            (radDeg * 60).toFixed(1) + '′) → ' + o.csv);
-          res();
-        } catch (e) { rej(e); }
-      });
-    }).on('error', rej);
-  });
+  var cs = consultas(f[2], f[3], radDeg);
+  return pedir(cs[0])
+    .catch(function (e) {
+      console.log('  ' + o.cat + ': ' + e.message + ', se prueba ' + cs[1].nombre);
+      return pedir(cs[1]);
+    })
+    .then(function (j) {
+      var lineas = ['ra,dec,g'];
+      for (var i = 0; i < j.data.length; i++) {
+        var d = j.data[i];
+        if (d[2] == null) continue;
+        lineas.push(d[0] + ',' + d[1] + ',' + d[2]);
+      }
+      fs.writeFileSync(path.join(OUT, o.csv), lineas.join('\n') + '\n');
+      console.log(o.cat + ': ' + (lineas.length - 1) + ' fuentes (radio ' +
+        (radDeg * 60).toFixed(1) + '′) → ' + o.csv);
+    });
 }
 
 var cola = Promise.resolve();

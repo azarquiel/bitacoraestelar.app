@@ -51,6 +51,31 @@ ok(!fila(cat, 'NGC1333') || NEB.filter(function (f) { return f[0] === 'NGC1333';
   'las clases no abiertas (Neb, Cl+N) siguen fuera');
 ok(!fila(cat, 'IC1805') === (fila(NEB, 'IC1805')[12] === 'Cl+N'), 'coherencia Cl+N (IC1805)');
 
+/* μ ASUMIDA (ADR 0024). En la clase RfN la magnitud del OpenNGC es la de la
+   estrella que ilumina, no la de la nebulosa: 12 de las 13 filas que la traen
+   acaban a μ_e = 20,0 por el suelo MU_MIN. Las 25 que no traían ninguna entran
+   con la magnitud DERIVADA de ese mismo valor, que no es una medición física.
+   Lo que aquí se fija es que esa derivación deja la fila EXACTAMENTE en el
+   suelo: si se desvía, la fila entró con un brillo que nadie ha decidido. */
+console.log('μ asumida: la fila derivada cae exactamente en el suelo de la tubería:');
+function muEfectivo(f) {
+  var n = f[8], b = 2 * n - 1 / 3 + 0.009876 / n;
+  var factor = 2 * Math.PI * n * Math.exp(b) * 1 / Math.pow(b, 2 * n);   // Γ(2)=1
+  return f[7] + 2.5 * Math.log10(f[4] * f[4] * factor * f[5]);
+}
+/* Tolerancia 0,01 y no cero: el catálogo emite mag y r_e con dos decimales, y
+   ese redondeo mueve μ unas milésimas. La igualdad EXACTA la guarda la
+   autocomprobación de gen_nebulosas.py, que trabaja antes de redondear. */
+var f2023 = fila(NEB, 'NGC2023');
+ok(!!f2023 && f2023[12] === 'RfN', 'NGC 2023 está en el catálogo y es RfN');
+ok(f2023 && Math.abs(muEfectivo(f2023) - 20.0) < 0.01,
+  'μ_e de NGC 2023 = 20,0 (sale ' + (f2023 ? muEfectivo(f2023).toFixed(4) : '—') + ')');
+ok(Math.abs(muEfectivo(fila(NEB, 'NGC2068')) - 20.0) < 0.01,
+  'y M78, con mag de catálogo, acaba en el MISMO valor por el suelo (sale ' +
+  muEfectivo(fila(NEB, 'NGC2068')).toFixed(4) + ')');
+var rfn = NEB.filter(function (f) { return f[12] === 'RfN'; });
+ok(rfn.length === 38, 'las 38 RfN del OpenNGC están en el catálogo (' + rfn.length + ')');
+
 console.log('Sin borde real: emisión/reflexión siguen la isofota, como las galaxias:');
 var campo78 = window.BitacoraPS1.ps1GalaxiasDelCampo(cat, fila(NEB, 'NGC2068')[2], fila(NEB, 'NGC2068')[3], 20);
 var m78 = null;
@@ -118,6 +143,13 @@ for (var c7 = 0; c7 < campo7000.length; c7++) if (campo7000[c7].nombre === 'NGC7
 ok(!esta7000, 'y su campo no la monta (el aviso de «mayor que el recorte» la explica)');
 
 pipeline('NGC2068', 'gaia_ngc2068.csv', 'Reflexión')
+  /* NGC 2023: la misma clase pero con la magnitud DERIVADA de la μ asumida, y
+     con su estrella iluminadora dentro (HD 37903, G 7,76, cuya máscara toca el
+     tope de 60″). El precedente de NGC 7008 (ADR 0021) es que una máscara ancha
+     puede mandar el parche entero a ausencia; aquí no ocurre porque la
+     iluminadora cae dentro de la escena μ25 y la ampara ps1FuentesEnEscena.
+     Listones L1 y L2 del ADR 0024. */
+  .then(function () { return pipeline('NGC2023', 'gaia_ngc2023.csv', 'Reflexión con μ asumida'); })
   .then(function () { return pipeline('NGC7635', 'gaia_ngc7635.csv', 'Emisión'); })
   .then(function () { return pipeline('NGC6888', 'gaia_ngc6888.csv', 'Emisión filamentosa'); })
   .then(function () {

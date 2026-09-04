@@ -77,6 +77,22 @@ COMPACTAS = ('PN', 'SNR')
 MU_MIN = 20.0
 MU_MIN_COMPACTA = 17.5
 
+# μ ASUMIDA de las nebulosas de reflexión sin magnitud de catálogo (ADR 0024).
+# En la clase RfN la magnitud del OpenNGC tampoco es fotometría de la nebulosa:
+# muchas filas traen la de la estrella que la ilumina, y de las 13 que sí la
+# traen, 12 caen bajo MU_MIN y acaban en ese mismo valor por el recorte de
+# arriba. Otras 25 no traen ninguna y se perdían enteras, NGC 2023 incluida.
+#
+#   En ausencia de fotometría nebular utilizable, la implementación actual
+#   representa las RfN con μ asumida = 20,0, coincidente con el suelo actual de
+#   la tubería. Este valor no se interpreta como una medición física.
+#
+# De ahí se deriva la magnitud invirtiendo mu_efectivo() con el tamaño de
+# catálogo. Solo RfN: las otras clases también tienen filas sin magnitud (56
+# 'Neb', 42 'HII', 26 'Cl+N', 4 'EmN', 5 'SNR') y cada una exige su validación.
+MU_ASUMIDA = MU_MIN
+CLASES_MU_ASUMIDA = ('RfN',)
+
 # B−V típico para pasar la magnitud azul a visual cuando falta V. La emisión
 # nebular reparte luz entre Hβ/[OIII] (verde-azul) y Hα, así que sale casi neutra.
 BV_NEBULAR = 0.30
@@ -121,6 +137,11 @@ def mu_efectivo(mag, re_arcsec, q, n):
     return mag + 2.5 * math.log10(re_arcsec ** 2 * factor_luz(n) * q)
 
 
+def mag_desde_mu(mu, re_arcsec, q, n):
+    """Inversa de mu_efectivo: qué magnitud da ese brillo superficial."""
+    return mu - 2.5 * math.log10(re_arcsec ** 2 * factor_luz(n) * q)
+
+
 def autocomprobacion():
     """Lo que puede salir mal en silencio: el signo de una declinación sur, y que
     `factor_luz` deje de coincidir con el `factorLuz` del render —si divergen, las
@@ -136,6 +157,11 @@ def autocomprobacion():
     mu = mu_efectivo(mag, 83.7, 1.0, SERSIC_N)
     assert mu < MU_MIN, mu
     assert abs(mu_efectivo(mag + (MU_MIN - mu), 83.7, 1.0, SERSIC_N) - MU_MIN) < 1e-9
+    # La mu asumida entra por la puerta de atras: mag_desde_mu debe devolver
+    # EXACTAMENTE el suelo al pasar por mu_efectivo, o la fila entraria con un
+    # brillo que nadie ha decidido (ADR 0024).
+    m_as = mag_desde_mu(MU_ASUMIDA, 80.5, 1.0, SERSIC_N)
+    assert abs(mu_efectivo(m_as, 80.5, 1.0, SERSIC_N) - MU_ASUMIDA) < 1e-9
 
 
 def main():
@@ -144,6 +170,7 @@ def main():
     sin_datos = 0
     redondas = 0
     recortadas = 0
+    asumidas = 0
 
     registros = []
     for src in (SRC, SRC_ABELL):
@@ -159,10 +186,13 @@ def main():
         mag_b = numero(c['B-Mag'])
         if mag_v is None and mag_b is not None:
             mag_v = mag_b - BV_NEBULAR
-        if ra is None or dec is None or not maj or maj <= 0 or mag_v is None:
+        # Sin magnitud solo se salvan las clases con μ asumida (ADR 0024); la
+        # magnitud se deriva más abajo, cuando ya hay r_e y b/a que invertir.
+        mu_asumida = mag_v is None and c['Type'] in CLASES_MU_ASUMIDA
+        if ra is None or dec is None or not maj or maj <= 0 or (mag_v is None and not mu_asumida):
             sin_datos += 1
             continue
-        if mag_v > MAG_MAX:
+        if mag_v is not None and mag_v > MAG_MAX:
             sin_datos += 1
             continue
 
@@ -182,6 +212,10 @@ def main():
         escala = RE_SOBRE_SEMIEJE_COMPACTA if compacta else RE_SOBRE_SEMIEJE
         re_arcsec = escala * semieje * 60.0
         suelo = MU_MIN_COMPACTA if compacta else MU_MIN
+        if mu_asumida:
+            # No hay magnitud que recortar: se ENTRA por el brillo superficial.
+            mag_v = mag_desde_mu(MU_ASUMIDA, re_arcsec, q, SERSIC_N)
+            asumidas += 1
         mu = mu_efectivo(mag_v, re_arcsec, q, SERSIC_N)
         if mu < suelo:
             mag_v += suelo - mu
@@ -220,7 +254,12 @@ def main():
         fh.write('   catálogo no trae ángulo de posición, no que el objeto sea redondo.\n')
         fh.write('   El 0 ocupa la columna del n de S4G de las galaxias (aquí no hay medida)\n')
         fh.write('   y la clase es el Type del OpenNGC (PN, HII, SNR, RfN, EmN, Neb, Cl+N):\n')
-        fh.write('   decide qué filas entran en la capa difusa (ps1CatalogoDifuso). */\n')
+        fh.write('   decide qué filas entran en la capa difusa (ps1CatalogoDifuso).\n')
+        fh.write('   OJO con las RfN: en esa clase la magnitud del OpenNGC es la de la\n')
+        fh.write('   estrella que ilumina, no la de la nebulosa. Las que no traían ninguna\n')
+        fh.write('   llevan mag DERIVADA de mu asumida = 20,0, que no es una medición\n')
+        fh.write('   física (ADR 0024); y de las que sí la traían, 12 de 13 acaban en ese\n')
+        fh.write('   mismo valor por el suelo MU_MIN. */\n')
         fh.write('window.BITACORA_NEBULOSAS = [\n')
         for f in filas:
             fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s,0,"%s"],\n' % (
@@ -229,8 +268,9 @@ def main():
                 f['sersic_n'], f['frac_bulbo'], f['polvo'], f['clase']))
         fh.write('];\n')
 
-    print('nebulosas: %d  (redondas por falta de PA %d; recortadas por brillo %d; descartadas %d)'
-          % (len(filas), redondas, recortadas, sin_datos))
+    print('nebulosas: %d  (redondas por falta de PA %d; recortadas por brillo %d; '
+          'con mu asumida %d; descartadas %d)'
+          % (len(filas), redondas, recortadas, asumidas, sin_datos))
     print('->', OUT_CSV)
     print('->', OUT_JS)
 
