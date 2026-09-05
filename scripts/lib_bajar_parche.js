@@ -17,8 +17,8 @@
    son de un experimento, no del simulador.
 
    Uso:  var B = require('./lib_bajar_parche.js')(R);
-         B.bajar(ra, dec, ladoArcmin, salida).then(fits => …)
-         B.bajar(ra, dec, ladoArcmin, salida, banda, true)   // con WCS, ver abajo */
+         B.bajar(ra, dec, ladoArcmin, salida).then(fits => …)   // con WCS
+         B.bajar(ra, dec, ladoArcmin, salida, banda, false)     // sin ella, ver abajo */
 'use strict';
 
 var https = require('https');
@@ -96,13 +96,16 @@ module.exports = function (R) {
     return base;
   }
 
-  /* `conWcs`: devolver también la WCS del recorte. NO es el defecto, y el
-     motivo no es de gusto: sin ella `ps1AfinParche` monta el afín sin el giro
-     de la skycell, y así es como está capturado el golden y como miden todos
-     los arneses anteriores. Encenderla cambia `parche.datos`. El generador de
-     texturas la necesita —el sidecar lleva la WCS— y ese cambio va con la
-     recaptura del golden que la fase 1 ya tiene prevista, no aquí. */
+  /* `conWcs`: devolver también la WCS del recorte. ES el defecto, porque el
+     navegador la lee del FITS del proxy y sin ella `ps1AfinParche` monta el
+     afín alineado al norte, sin el giro de la skycell: el camino de Node medía
+     una geometría que producción no usa. Apagarla (`false`) solo tiene sentido
+     para comparar contra la geometría vieja, como hace
+     `scripts/harness_r1_wcs.js`. Encenderla cambió `parche.datos` de los cuatro
+     objetos del golden: recaptura R1, con su tabla en
+     `simulador_ocular/docs/validacion/recaptura_r1_wcs.md`. */
   function bajar(ra, dec, lado, salida, banda, conWcs) {
+    conWcs = conWcs !== false;
     banda = banda || window.BitacoraPS1.cfg.banda;
     var clave = crypto.createHash('md5')
       .update([ra, dec, lado, salida, banda].join('|')).digest('hex');
