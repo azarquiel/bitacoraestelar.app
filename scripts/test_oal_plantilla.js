@@ -301,5 +301,97 @@ ok(xml2.indexOf('<datasource>Observador</datasource>') > -1, 'y se dice de dónd
 ok(xml2.indexOf('xsi:type="oal:deepSkyNA"') > -1, 'tipo desconocido: zona del cielo, sin mentir');
 eq(OAL.leer(xml2).observaciones[0].objeto, 'M13', 'el nombre vuelve igual');
 
+/* ── La caja de pegar (ADR 0004) ──────────────────────────────────────────
+   Un asistente produce el `estado` en JSON y se pega. La caja valida, no
+   confía: basura delante, campos desconocidos y tipos que no cuadran son
+   avisos; solo la ausencia de JSON es un error. */
+
+console.log('la caja de pegar lee el JSON aunque venga con cortesía pegada:');
+var pegado = OAL.pegar('Claro, aquí tienes el JSON:\n```json\n' + JSON.stringify(estado()) + '\n```\n¿Algo más?');
+eq(pegado.avisos, [], 'un estado limpio no genera avisos');
+eq(OAL.xmlDe(pegado.estado), xml, 'y produce el mismo XML que el estado original');
+
+console.log('lo que no es JSON no rompe: avisa con una excepción legible:');
+var explota = null;
+try { OAL.pegar('Lo siento, no puedo leer ese PDF.'); } catch (e) { explota = e; }
+ok(explota && /JSON/.test(explota.message), 'sin llaves no hay JSON');
+explota = null;
+try { OAL.pegar('{ "observador": { "nombre": "Ángel", }'); } catch (e) { explota = e; }
+ok(explota instanceof SyntaxError, 'JSON roto: SyntaxError de JSON.parse, no eval');
+explota = null;
+try { OAL.pegar('[1, 2, 3]'); } catch (e) { explota = e; }
+ok(explota && /JSON/.test(explota.message), 'una lista de números tampoco es un estado');
+
+console.log('los campos desconocidos se ignoran y se avisa:');
+var raro = estado();
+raro.nota = 'esto sobra';
+raro.observaciones[0].constelacion = 'Hércules';
+pegado = OAL.pegar(JSON.stringify(raro));
+ok(pegado.avisos.some(function (a) { return /«nota»/.test(a); }), 'la clave de arriba se nombra');
+ok(pegado.avisos.some(function (a) { return /«constelacion»/.test(a); }), 'y la de la observación');
+eq(pegado.estado.nota, undefined, 'ninguna entra en el estado');
+eq(pegado.estado.observaciones[0].constelacion, undefined, 'tampoco la de la fila');
+eq(OAL.xmlDe(pegado.estado), xml, 'y el resto sigue intacto');
+
+console.log('los tipos que no cuadran son avisos, no excepciones:');
+var torcido = estado();
+torcido.observaciones[0].sqm = '21.4 mag';
+torcido.observaciones[1].sqm = '20.9';
+torcido.noches[0].sqm = '';                 // para que la noche no rellene el hueco
+torcido.lugares[0].lat = { grados: 38 };
+torcido.noches[0].cronica = 42;
+torcido.telescopios = 'Skywatcher 12"';
+pegado = OAL.pegar(JSON.stringify(torcido));
+eq(pegado.estado.observaciones[0].sqm, '', 'un número con unidades pegadas se deja en blanco');
+ok(pegado.avisos.some(function (a) { return /«sqm»/.test(a) && /21\.4 mag/.test(a); }), 'y se avisa citando el valor');
+eq(pegado.estado.observaciones[1].sqm, 20.9, 'un número entre comillas se acepta');
+eq(pegado.estado.lugares[0].lat, '', 'un objeto donde iba un número, en blanco');
+eq(pegado.estado.noches[0].cronica, '42', 'un número donde iba texto se guarda como texto');
+eq(pegado.estado.telescopios, [], 'una lista que no es lista queda vacía');
+ok(pegado.avisos.some(function (a) { return /telescopios/.test(a); }), 'con su aviso');
+ok(OAL.problemas(pegado.estado).some(function (p) { return p.nivel === 'flojo' && /sin telescopio/.test(p.que); }),
+   'y el hueco lo canta la plantilla en amarillo, como cualquier otro');
+
+console.log('las referencias colgando se sueltan, y las filas sin id lo reciben:');
+var colgado = estado();
+colgado.observaciones[0].ocularId = 'oc-inventado';
+delete colgado.noches[0].id;
+colgado.observaciones.forEach(function (o) { o.nocheId = 'no1'; });
+pegado = OAL.pegar(JSON.stringify(colgado));
+eq(pegado.estado.observaciones[0].ocularId, '', 'el ocular que no existe no se referencia');
+ok(pegado.avisos.some(function (a) { return /oc-inventado/.test(a); }), 'y se dice cuál era');
+ok(pegado.estado.noches[0].id, 'la noche sin id recibe uno');
+ok(OAL.problemas(pegado.estado).some(function (p) { return /ninguna noche/.test(p.que); }),
+   'las observaciones que apuntaban al id que no vino quedan huérfanas y se avisa');
+
+console.log('el cielo puesto en la noche baja a sus observaciones, como al abrir un XML:');
+var soloNoche = estado();
+soloNoche.observaciones.forEach(function (o) { OAL.CIELO.forEach(function (c) { delete o[c]; }); });
+pegado = OAL.pegar(JSON.stringify(soloNoche));
+eq(pegado.estado.observaciones[1].sqm, 21.42, 'la observación hereda el SQM de la noche');
+
+console.log('un lugar sin desfase horario se avisa: el modelo no lo deduce y alguien lo tiene que poner:');
+var sinTz = estado();
+sinTz.lugares[0].tz = '';
+ok(OAL.problemas(sinTz).some(function (p) { return p.nivel === 'flojo' && /sin desfase/.test(p.que); }),
+   'flojo, no bloquea');
+
+/* ── El protocolo describe el estado que la caja acepta ──────────────────── */
+
+console.log('registro/protocolo-llm-oal.md nombra exactamente los campos del esquema:');
+var fs = require('fs');
+var md = fs.readFileSync(path.join(__dirname, '..', 'registro', 'protocolo-llm-oal.md'), 'utf8');
+Object.keys(OAL.ESQUEMA).forEach(function (lista) {
+  var m = new RegExp('^### `' + lista + '`[\\s\\S]*?(?=^### |^## |$(?![\\s\\S]))', 'm').exec(md);
+  var enDoc = [];
+  (m ? m[0] : '').split('\n').forEach(function (linea) {
+    var c = /^\| `(\w+)`/.exec(linea);
+    if (c) { enDoc.push(c[1]); }
+  });
+  eq(enDoc.sort(), Object.keys(OAL.ESQUEMA[lista]).sort(), lista);
+});
+ok(/JSON\.parse/.test(md) && /eval/.test(md), 'el protocolo dice cómo se valida');
+ok(/tercero/.test(md), 'y avisa de a quién se le manda el correo');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nok · la plantilla escribe y lee su propio XML sin perder nada');

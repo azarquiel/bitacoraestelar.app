@@ -263,6 +263,12 @@
       out.push({ nivel: 'falta', que: 'Tu nombre.' });
     }
     var lugares = indice(e.lugares);
+    (e.lugares || []).forEach(function (l, i) {
+      if (vacio(l.tz)) {
+        out.push({ nivel: 'flojo', que: 'Lugar ' + (i + 1) + (l.nombre ? ' (' + l.nombre + ')' : '') +
+                                        ': sin desfase horario (las horas saldrían en UTC).' });
+      }
+    });
     (e.noches || []).forEach(function (n, i) {
       var et = 'Noche ' + (i + 1) + (n.fecha ? ' (' + n.fecha + ')' : '');
       if (!n.fecha) { out.push({ nivel: 'falta', que: et + ': sin fecha.' }); }
@@ -707,6 +713,112 @@
     return (m[1] === '-' ? -1 : 1) * (parseInt(m[2], 10) * 60 + parseInt(m[3], 10));
   }
 
+  /* ── La caja de pegar ──────────────────────────────────────────────────────
+     Un asistente lee el correo de un compañero y devuelve el estado en JSON
+     (registro/protocolo-llm-oal.md; ADR 0004). Aquí se valida, no se confía:
+     JSON.parse y nunca eval; campos desconocidos fuera, con aviso; tipos que
+     no cuadran, en blanco y con aviso. Lo que falte lo canta problemas().
+
+     ESQUEMA es la especificación del estado: 't' texto, 'n' número. El test
+     comprueba que el protocolo nombra exactamente estos campos.              */
+
+  var ESQUEMA = {
+    observador:    { nombre: 't', apellidos: 't', correo: 't' },
+    lugares:       { id: 't', nombre: 't', lat: 'n', lon: 'n', altitud: 'n', tz: 'n' },
+    telescopios:   { id: 't', modelo: 't', apertura: 'n', focal: 'n' },
+    oculares:      { id: 't', modelo: 't', focal: 'n', campo: 'n' },
+    auxiliares:    { id: 't', modelo: 't', factor: 'n' },
+    noches:        { id: 't', fecha: 't', lugarId: 't', comienzo: 't', fin: 't', tz: 'n', tripulacion: 't',
+                     sqm: 'n', ir: 'n', seeing: 'n', bortle: 'n', meteo: 't', cronica: 't' },
+    observaciones: { id: 't', nocheId: 't', objeto: 't', observador: 't', ra: 'n', dec: 'n', otype: 't',
+                     hora: 't', telescopioId: 't', ocularId: 't', auxiliarId: 't', aumentos: 'n',
+                     sqm: 'n', ir: 'n', seeing: 'n', bortle: 'n', texto: 't' }
+  };
+
+  /* Una fila contra su esquema. Devuelve solo campos conocidos. */
+  function filaPegada(obj, esquema, et, avisos) {
+    var out = {};
+    if (obj == null) { obj = {}; }
+    if (typeof obj !== 'object' || Array.isArray(obj)) {
+      avisos.push(et + ': no es un objeto, se deja en blanco.');
+      obj = {};
+    }
+    Object.keys(obj).forEach(function (k) {
+      if (!esquema[k]) { avisos.push(et + ': se ignora «' + k + '», que la plantilla no conoce.'); }
+    });
+    Object.keys(esquema).forEach(function (k) {
+      var v = obj[k];
+      if (vacio(v)) { out[k] = ''; return; }
+      if (typeof v === 'object') {
+        avisos.push(et + ': «' + k + '» no es un valor simple, se deja en blanco.');
+        out[k] = ''; return;
+      }
+      if (esquema[k] === 'n') {
+        var n = typeof v === 'number' ? v : Number(String(v).trim().replace(',', '.'));
+        if (!isFinite(n)) {
+          avisos.push(et + ': «' + k + '» no es un número (' + JSON.stringify(v) + '), se deja en blanco.');
+          out[k] = ''; return;
+        }
+        out[k] = n; return;
+      }
+      out[k] = String(v);
+    });
+    return out;
+  }
+
+  /**
+   * Del texto pegado al estado. Lanza si no hay JSON (o está roto: el
+   * SyntaxError de JSON.parse); todo lo demás son avisos.
+   * Devuelve { estado, avisos: [texto] }.
+   */
+  function pegar(texto) {
+    var s = String(texto || '');
+    var a = s.indexOf('{'), z = s.lastIndexOf('}');
+    if (a < 0 || z < a) { throw new Error('No se encuentra ningún JSON: falta la llave { de apertura o la } de cierre.'); }
+    var crudo = JSON.parse(s.slice(a, z + 1));
+    if (!crudo || typeof crudo !== 'object' || Array.isArray(crudo)) {
+      throw new Error('El JSON no es un objeto con observador, lugares, noches…');
+    }
+    var avisos = [];
+    var e = estadoVacio();
+    Object.keys(crudo).forEach(function (k) {
+      if (!ESQUEMA[k]) { avisos.push('Se ignora «' + k + '», que la plantilla no conoce.'); }
+    });
+    e.observador = filaPegada(crudo.observador, ESQUEMA.observador, 'Observador', avisos);
+    Object.keys(ESQUEMA).forEach(function (lista) {
+      if (lista === 'observador') { return; }
+      var filas = crudo[lista];
+      if (vacio(filas)) { filas = []; }
+      if (!Array.isArray(filas)) {
+        avisos.push('«' + lista + '» debería ser una lista, se deja vacía.');
+        filas = [];
+      }
+      e[lista] = filas.map(function (f, i) {
+        var fila = filaPegada(f, ESQUEMA[lista], lista + ' ' + (i + 1), avisos);
+        if (!fila.id) { fila.id = lista.slice(0, 2) + (i + 1) + '-pegado'; }
+        return fila;
+      });
+    });
+    var refs = { lugares: indice(e.lugares), telescopios: indice(e.telescopios),
+                 oculares: indice(e.oculares), auxiliares: indice(e.auxiliares) };
+    function soltar(fila, campo, mapa, et) {
+      if (fila[campo] && !mapa[fila[campo]]) {
+        avisos.push(et + ': «' + campo + '» apunta a ' + fila[campo] + ', que no existe; se deja en blanco.');
+        fila[campo] = '';
+      }
+    }
+    e.noches.forEach(function (n, i) { soltar(n, 'lugarId', refs.lugares, 'noches ' + (i + 1)); });
+    e.observaciones.forEach(function (o, i) {
+      var et = 'observaciones ' + (i + 1) + (o.objeto ? ' (' + o.objeto + ')' : '');
+      soltar(o, 'telescopioId', refs.telescopios, et);
+      soltar(o, 'ocularId', refs.oculares, et);
+      soltar(o, 'auxiliarId', refs.auxiliares, et);
+    });
+    // nocheId colgando NO se suelta: problemas() lo marca como huérfana, que es
+    // lo que es, y el compañero la cuelga a mano de la noche que toque.
+    return { estado: repartirCielo(e), avisos: avisos };
+  }
+
   function estadoVacio() {
     return { observador: { nombre: '', apellidos: '', correo: '' },
              lugares: [], telescopios: [], oculares: [], auxiliares: [],
@@ -719,7 +831,8 @@
               CIELO: CIELO, sembrarCielo: sembrarCielo, repartirCielo: repartirCielo,
               antoniadi: antoniadi,
               xmlDe: xmlDe, textoDe: textoDe, fechaLarga: fechaLarga,
-              leer: leer, arbol: arbol, estadoVacio: estadoVacio };
+              leer: leer, arbol: arbol, estadoVacio: estadoVacio,
+              pegar: pegar, ESQUEMA: ESQUEMA };
 
   raiz.PlantillaOAL = API;
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
