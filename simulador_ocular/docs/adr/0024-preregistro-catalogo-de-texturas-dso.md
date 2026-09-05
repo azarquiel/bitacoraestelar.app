@@ -225,7 +225,10 @@ no hay v2 de la fase 3; una máscara congelada que no ahorra red no compensa.
 - Ningún 8 bits ni compresión con pérdida: la ausencia (`cielo − 2σ`) y el rango
   del núcleo no caben, y una pérdida no invertible es una ley de display dentro
   del fichero (ADR 0019).
-- Ninguna recaptura del golden sin su tabla de deltas en el informe.
+- Ninguna recaptura del golden sin su tabla de deltas en el informe, y ninguna
+  con dos causas en el mismo commit. El procedimiento, con las cuatro recapturas
+  previstas y el invariante que cada una debe respetar, está en
+  `docs/notas/recaptura-golden-difusas.md`.
 - Los cúmulos no entran (ADR 0002, 0012).
 
 ## Lo que este ADR no decide

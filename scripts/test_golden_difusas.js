@@ -18,7 +18,11 @@
    contrato entre máquinas.
 
    Uso:  node scripts/test_golden_difusas.js             (compara)
-         node scripts/test_golden_difusas.js --capturar  (fija la línea base) */
+         node scripts/test_golden_difusas.js --capturar  (fija la línea base)
+
+   `--capturar` no se teclea a ojo: una causa por recaptura, medida antes de
+   capturar y con su tabla de deltas. El procedimiento está en
+   simulador_ocular/docs/notas/recaptura-golden-difusas.md */
 'use strict';
 
 var fs = require('fs'), path = require('path'), crypto = require('crypto');
