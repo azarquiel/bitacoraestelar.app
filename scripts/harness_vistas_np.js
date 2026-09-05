@@ -7,8 +7,15 @@
    local: lo que se valida aquí es morfología, tamaño angular y respuesta de
    la rampa al fondo — los bits los vigila test_golden_difusas.js.
 
-   Salidas: .scratch/vistas-np/*.png + resumen por consola.
-   Uso:  node scripts/harness_vistas_np.js */
+   Salidas: .scratch/vistas-np[-etiqueta]/*.png + resumen por consola.
+
+   La etiqueta existe para que «antes/después» sea posible: sin ella, la segunda
+   pasada sobrescribe la primera y el antes se pierde. El procedimiento está en
+   simulador_ocular/docs/notas/validacion-visual-difusas.md
+
+   Uso:  node scripts/harness_vistas_np.js
+         node scripts/harness_vistas_np.js --etiqueta antes
+         node scripts/harness_vistas_np.js --solo "NGC 5194" */
 'use strict';
 
 var fs = require('fs'), path = require('path');
@@ -23,15 +30,29 @@ var B = require('./lib_bajar_parche.js')(R);
 var P = require('./lib_parche_produccion.js')(R);
 var png = require('./lib_png.js');
 
+var arg = {};
+process.argv.slice(2).forEach(function (a, i, v) { if (a.slice(0, 2) === '--') arg[a.slice(2)] = v[i + 1]; });
+
 var CAT = window.BitacoraPS1.ps1CatalogoDifuso(global.window.BITACORA_GALAXIAS, global.window.BITACORA_NEBULOSAS);
-var OUT = path.join(RAIZ, '.scratch', 'vistas-np');
+var OUT = path.join(RAIZ, '.scratch', 'vistas-np' + (arg.etiqueta ? '-' + arg.etiqueta : ''));
 fs.mkdirSync(OUT, { recursive: true });
 var GAIA = path.join(__dirname, 'fixtures', 'gaia');
+/* Gaia de los objetos que solo se miran (no son golden): fuera del repo, como
+   los FITS. Pinearlos en git costaría ~12 MB y solo el golden necesita entrada
+   estable bit a bit (decisión 9.1, ADR 0024). */
+var GAIA_CACHE = process.env.BITACORA_GAIA_DIR ||
+  path.join(require('os').tmpdir(), 'bitacora-gaia-vistas');
 var SIZE = 720, AFOV = 70;
 
 function fila(n) { for (var i = 0; i < CAT.length; i++) if (CAT[i][0] === n) return CAT[i]; throw new Error('sin fila: ' + n); }
+function rutaGaia(f) {
+  var a = path.join(GAIA, f);
+  if (fs.existsSync(a)) return a;
+  var b = path.join(GAIA_CACHE, f);
+  return fs.existsSync(b) ? b : null;
+}
 function leerGaia(f) {
-  return fs.readFileSync(path.join(GAIA, f), 'utf8').trim().split('\n').slice(1)
+  return fs.readFileSync(rutaGaia(f), 'utf8').trim().split('\n').slice(1)
     .map(function (l) { var t = l.split(','); return [parseFloat(t[0]), parseFloat(t[1]), parseFloat(t[2])]; });
 }
 
@@ -53,7 +74,24 @@ var VISTAS = [
   { obj: 'NGC7635', csv: 'gaia_ngc7635.csv', D: 457.2, M: 190, sqm: 21.2 },
   { obj: 'NGC6888', csv: 'gaia_ngc6888.csv', D: 457.2, M: 100, sqm: 21.2 },
   // resto de supernova
-  { obj: 'NGC1952', csv: 'gaia_ngc1952.csv', D: 457.2, M: 190, sqm: 21.2 }
+  { obj: 'NGC1952', csv: 'gaia_ngc1952.csv', D: 457.2, M: 190, sqm: 21.2 },
+
+  /* Modos de fallo del catálogo de texturas que las vistas de arriba no cubren
+     (notas/validacion-visual-difusas.md). Su Gaia no va en git: se genera con
+     `gen_fixtures_gaia.js --vistas` a la caché, y sin ella la vista se salta con
+     aviso en vez de tumbar la corrida. */
+  { obj: 'NGC7008',  csv: 'gaia_ngc7008.csv',  D: 457.2, M: 190, sqm: 21.2 },   // mordida 43,6 %
+  { obj: 'Abell 12', csv: 'gaia_abell12.csv',  D: 457.2, M: 190, sqm: 21.2 },   // mordida 79,8 %
+  { obj: 'NGC 4486', csv: 'gaia_ngc4486.csv',  D: 457.2, M: 190, sqm: 21.2 },   // núcleo saturado
+  { obj: 'NGC 4826', csv: 'gaia_ngc4826.csv',  D: 457.2, M: 190, sqm: 21.2 },   // banda de polvo
+  { obj: 'NGC 253',  csv: 'gaia_ngc253.csv',   D: 457.2, M: 190, sqm: 21.2 },   // borde de cobertura
+  { obj: 'NGC1982',  csv: 'gaia_ngc1982.csv',  D: 457.2, M: 190, sqm: 21.2 },   // 77,8 % de ausencia en escena
+  { obj: 'NGC 3310', csv: 'gaia_ngc3310.csv',  D: 457.2, M: 190, sqm: 21.2 },   // lado mínimo, 1,57′
+  { obj: 'NGC 205',  csv: 'gaia_ngc205.csv',   D: 457.2, M: 190, sqm: 21.2 },   // lado en el tope, 20′
+  { obj: 'NGC7008',  csv: 'gaia_ngc7008.csv',  D: 203.0, M: 100, sqm: 20.5 },
+  { obj: 'NGC 4486', csv: 'gaia_ngc4486.csv',  D: 203.0, M: 100, sqm: 20.5 },
+  { obj: 'NGC1982',  csv: 'gaia_ngc1982.csv',  D: 203.0, M: 100, sqm: 20.5 },
+  { obj: 'NGC 205',  csv: 'gaia_ngc205.csv',   D: 203.0, M: 100, sqm: 20.5 }
 ];
 
 var parches = {};   // un montaje por objeto, como producción
@@ -94,7 +132,26 @@ function vista(v) {
   });
 }
 
-var cola = Promise.resolve();
-VISTAS.forEach(function (v) { cola = cola.then(function () { return vista(v); }); });
-cola.then(function () { console.log('→ ' + path.relative(RAIZ, OUT)); })
-  .catch(function (e) { console.error('ERROR: ' + (e && e.stack || e)); process.exit(1); });
+var cola = Promise.resolve(), saltadas = [];
+VISTAS.filter(function (v) { return !arg.solo || v.obj === arg.solo; }).forEach(function (v) {
+  cola = cola.then(function () {
+    /* Sin Gaia no hay máscara de estrellas, así que la vista no sería la de
+       producción: se salta con su nombre en vez de pintar algo distinto. */
+    if (!rutaGaia(v.csv)) {
+      if (saltadas.indexOf(v.csv) < 0) saltadas.push(v.csv);
+      return;
+    }
+    return vista(v);
+  });
+});
+cola.then(function () {
+  console.log('→ ' + path.relative(RAIZ, OUT));
+  if (saltadas.length) {
+    console.log('\nSin Gaia (' + saltadas.length + '), vistas saltadas: ' + saltadas.join(' '));
+    console.log('  banco golden (van a fixtures/gaia, versionados):');
+    console.log('    node scripts/gen_fixtures_gaia.js');
+    console.log('  solo-mirar (van a la caché, sin versionar):');
+    console.log('    node scripts/gen_fixtures_gaia.js --vistas');
+    console.log('    destino: ' + GAIA_CACHE + '  ($BITACORA_GAIA_DIR para cambiarlo)');
+  }
+}).catch(function (e) { console.error('ERROR: ' + (e && e.stack || e)); process.exit(1); });

@@ -72,6 +72,13 @@ precedencias.
 
 ### 2.2 El catálogo difuso hoy (cifras de este árbol, `scripts/…` con `ps1CatalogoDifuso`)
 
+> **Desfasadas desde la PR #189** (nebulosas de reflexión), que subió las RfN
+> aptas de 12 a 28. Al 2026-09-04: **1510 filas, 1066 aptas** (429 al sur, 15 no
+> caben), 927 galaxias, 100 PN, 28 RfN, 10 HII, 1 SNR. Las cifras vivas están en
+> el ADR 0024 §«Premisas medidas» y en `docs/validacion/dso_texturas_fase0.md`;
+> la tabla de abajo se conserva como estaba escrita el día del objetivo. Ninguna
+> de estas cuentas es un listón: se recuentan.
+
 | Cifra | Valor |
 |---|---|
 | Filas del catálogo difuso (galaxias + nebulosas de clase abierta) | 1485 (1295 galaxias RC3 BT < 13; 190 nebulosas) |
@@ -372,10 +379,10 @@ difusa, `ps1CabeEnParche`, `PS1_CLASES_DIFUSAS`.
 
 Fixtures: `scripts/fixtures/dso/` con las texturas del **banco golden** (los 11
 objetos con Gaia pineada: 4 galaxias + 5 nebulosas + NGC 7008 + Abell 12) **a
-`salida = 1024`** para la equivalencia. Pesan ≈ 15–25 MB en PNG-16. Los otros 42
-del banco estratificado se descargan en la primera ejecución (hoy de STScI; tras la
-fase 1, de `dso/` en producción). Decisión pendiente (apartado 9): los 11 en git, o
-también descargados. NGC 7008 y Abell 12 no tienen todavía CSV de Gaia en
+`salida = 1024`** para la equivalencia. Pesan **18,33 MB** en PNG-16 y **van en
+git** (decisión 9.1, ADR 0024). Los otros objetos del banco se descargan en la
+primera ejecución (hoy de STScI; tras la fase 1, de `dso/` en producción).
+NGC 7008 y Abell 12 no tienen todavía CSV de Gaia en
 `scripts/fixtures/gaia/`: se generan con `gen_fixtures_gaia.js` antes de la fase 1.
 
 ---
@@ -399,6 +406,8 @@ Reglas del banco, fijadas aquí y copiadas al ADR de prerregistro:
 - **Se elige por modo de fallo y por cuantil de tamaño, no por tipo.** «Diez por
   tipo» no es un reparto posible: de las 1050 aptas, 927 son galaxias, 100 PN, 12
   RfN, 10 HII y 1 SNR. HII, RfN y SNR entran **enteras** (23 objetos).
+  (Con las RfN de la PR #189 son 39 de clase entera y **69 objetos** en total. El
+  reparto de arriba es el del día del objetivo; la regla no cambia.)
 - **Se elige antes de generar nada.** Un banco escogido después de ver resultados
   invalida los listones (ADR 0012 bis) y convierte el test de cardinalidad en
   decoración (ADR 0005).
@@ -437,6 +446,12 @@ una galaxia de δ < −30° a elegir en el ADR (`sur`).
 
 Total: **53 texturas + 5 controles**. Cardinalidad mínima de los tests del banco:
 53 (ADR 0005).
+
+Corregido el 2026-09-04: son **69 texturas** (30 nombrados + 39 de clase entera:
+10 HII, 28 RfN, 1 SNR) y los mismos 5 controles. La cardinalidad de los tests
+**no se escribe**: la devuelve `lib_banco_dso.js`, porque el número es derivado y
+clavarlo hace que el guardián falle cuando el catálogo crece. Ver el ADR 0024
+§«Banco».
 
 Lo que el banco **no** responde y queda para la generación completa: compresión y
 volumen reales (muestra aleatoria de la fase 0), límite de tasa de STScI a 1050
@@ -724,10 +739,13 @@ px), y **ningún píxel del segundo sondeo fuera de la máscara de ausencia**. E
 
 ## 9. Decisiones que no toma este documento
 
-1. **Fixtures del banco golden en git** (los 11 con Gaia pineada, ≈ 15–25 MB de
-   PNG-16) o descargadas de producción en la primera ejecución (dependencia de
-   `bitacoraestelar.app` en los tests, pero de un servicio propio). Los otros 42
-   del banco estratificado no van a git en ningún caso.
+1. ~~**Fixtures del banco golden en git** (los 11 con Gaia pineada, ≈ 15–25 MB de
+   PNG-16) o descargadas de producción en la primera ejecución.~~
+   **DECIDIDO el 2026-09-04: van en git**, 18,33 MB medidos, porque el golden no
+   puede depender del orden en que STScI devuelve las skycells. Las dos
+   condiciones —solo los 11, y que la fase 2 decida por escrito si siguen a
+   producción— están en el ADR 0024 §«Decisión 9.1». Los demás objetos del banco
+   no van a git en ningún caso (97,4 MB).
 2. **Tope de 2048 px** (regla C, 1,0 GB) frente a **1794 px** (el objetivo de
    0,67″/px del README, ≈ 0,8 GB). Se decide con la compresión real de la fase 0.
 3. **Cuándo poner `proxyRespaldo = false`** por defecto: al cubrir el 100 % del
@@ -750,6 +768,15 @@ px), y **ningún píxel del segundo sondeo fuera de la máscara de ausencia**. E
    estratificado (5.0), antes/después, en {457 mm · 190× · SQM 21,2} y
    {203 mm · 100× · SQM 20,5}; en la fase 2, además, los seis representantes de
    cuantil a 80 y 914 mm. Ningún sistema nuevo de validación.
+   **Escrita el 2026-09-05** en `docs/notas/validacion-visual-difusas.md`, con
+   tres correcciones sobre este párrafo: se miran **18 objetos y 26 vistas**, no
+   los 69 del banco (setenta y ocho PNG que nadie abre no son validación); la
+   Gaia de los que no son golden **no se pinea** (~12 MB por una propiedad que
+   una vista no usa); y el «antes» se guarda con `--etiqueta`, porque el harness
+   escribía siempre al mismo sitio y la segunda pasada borraba la primera.
+
+   Los entregables 3 y 4 están en `docs/notas/recaptura-golden-difusas.md` y
+   `docs/notas/validacion-visual-difusas.md`.
 
 Después de la aprobación: fase 1 completa (generador, decodificador, fuente,
 tests, golden, README, CONTEXT, HTML de los dos consumidores), suite verde,

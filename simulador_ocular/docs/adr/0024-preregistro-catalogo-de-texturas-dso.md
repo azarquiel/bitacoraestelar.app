@@ -9,11 +9,18 @@ conclusiones —implementar o descartar— son válidas de antemano.
 Fuente: `simulador_ocular/docs/especificaciones/catalogo_dso_texturas_objetivo.md`
 (objetivo del 2026-09-04). Este ADR no lo repite: fija lo que no puede moverse.
 
-Una sola excepción, y va firmada: **la redacción de L1.1 se corrigió el mismo día**
-con lo que midió la fase 0, antes de que la fase 1 existiera. El apartado
-«Corrección de la redacción de L1.1» dice qué cambió, por qué, y por qué esto no
-es el ajuste a posteriori que el párrafo de arriba prohíbe. Ningún otro listón se
-ha tocado.
+Dos enmiendas, las dos del 2026-09-04, las dos anteriores a la fase 1 y las dos
+firmadas:
+
+1. **La redacción de L1.1**, con lo que midió la fase 0. El apartado «Corrección
+   de la redacción de L1.1» dice qué cambió, por qué, y por qué esto no es el
+   ajuste a posteriori que el párrafo de arriba prohíbe.
+2. **Las cuentas del catálogo y del banco** (apartados «Premisas medidas» y
+   «Banco»): eran las del árbol anterior a la PR #189 y el banco pasó de 53 a 69
+   objetos sin que nadie decidiera nada, porque la regla dice «todas las aptas».
+   No es un listón movido: es un número derivado que se recuenta.
+
+Ningún otro listón se ha tocado.
 
 ## Qué se decide
 
@@ -33,9 +40,14 @@ cayó**: medir el resto sería pescar un pretexto (informe E4 del ADR 0012 bis).
 
 ## Premisas medidas (no se re-miden)
 
-- Catálogo difuso: 1485 filas; **1050 aptas** (δ > −30° y `ps1CabeEnParche`),
-  422 al sur, 13 no caben. Lado del parche `clamp(6·r_e/60, 1,5′, 20′)`:
-  p25 2,8′, p50 4,6′, p75 7,8′, p90 12,2′.
+- Catálogo difuso: **1510 filas; 1066 aptas** (δ > −30° y `ps1CabeEnParche`),
+  429 al sur, 15 no caben; por clase, 927 galaxias, 100 PN, 28 RfN, 10 HII y
+  1 SNR. Lado del parche `clamp(6·r_e/60, 1,5′, 20′)`: p25 2,8′, p50 4,6′,
+  p75 7,9′, p90 12,2′.
+  (Contadas el 2026-09-04 sobre este árbol. La redacción original decía 1485 y
+  1050 con 12 RfN, y era la del árbol de antes de la PR #189; el catálogo cambia
+  y estas cifras son **descriptivas, no listones**: se recuentan, no se defienden.
+  Lo que no se mueve es la regla que las produce.)
 - Hoy `PS1.salida = 1024` fijo: 0,088 – 0,27 – 1,17 ″/px (mín, mediana, máx). A
   20′, σ de la PSF del telescopio en 0,54–0,72 px: «marginal» (README
   §«Lo que sigue sin estar resuelto»). Objetivo escrito en
@@ -70,11 +82,26 @@ motivo o no entra; añadir uno después exige anotarlo aquí con fecha.
 | PN con mordida bajo, sobre y en el tope de `mordidaCobMin` = 0,6 | NGC 7008 (43,6 %), Abell 12 (79,8 %), NGC 7026 (100 %) |
 | PN compacta brillante en el lado mínimo | NGC 7662, NGC 6543 (1,5′) |
 | PN por cuantil de lado | NGC 3587 (6,4′), NGC 1360 (11,6′), NGC 6853 (12,1′), NGC 7293 (20′) |
-| HII (10), RfN (12), SNR (1) | todas las aptas, incluidas NGC 2068, NGC 7635, NGC 6888, NGC 1952 |
+| HII, RfN y SNR | **todas las aptas**, incluidas NGC 2068, NGC 7635, NGC 6888, NGC 1952 |
 
-**53 texturas.** Controles de exclusión (deben salir `modelo = "fila"` con motivo y
-sin petición de red): NGC 224, NGC 598, IC 342, NGC 7000 (`no-cabe`) y NGC 55
-(`sur`). Cardinalidad mínima de todo test sobre el banco: 53 (ADR 0005).
+Los 30 nombrados de la tabla más las clases enteras. **Al 2026-09-04, 39 de clase
+entera (10 HII, 28 RfN, 1 SNR) = 69 texturas.** Controles de exclusión (deben
+salir `modelo = "fila"` con motivo y sin petición de red): NGC 224, NGC 598,
+IC 342, NGC 7000 (`no-cabe`) y NGC 55 (`sur`).
+
+**Cardinalidad mínima de todo test sobre el banco: la que devuelva
+`lib_banco_dso.js` (ADR 0005), no un número escrito.** La redacción original
+decía «53 texturas» y fijaba 53 como cardinalidad; era la cuenta del árbol de
+antes de la PR #189, que subió las RfN aptas de 12 a 28. El banco no encogió ni
+creció por decisión de nadie: la regla siempre dijo «todas las aptas» de esas tres
+clases, así que el número es **derivado**. Clavarlo en un test lo convierte en un
+guardián que falla cuando el catálogo crece, que es justo cuando no debe fallar.
+`lib_banco_dso.js` avisa cuando la cuenta de una clase entera se aparta de la que
+este ADR registró, para que el cambio se vea sin bloquear nada.
+
+Lo que sí queda fijo: los **30 objetos nombrados** de la tabla, cada uno con su
+motivo, y los **5 controles**. Añadir o quitar uno de esos exige anotarlo aquí con
+fecha.
 
 Entradas pineadas: CSV de Gaia en `scripts/fixtures/gaia/` para los 11 objetos
 golden (los 9 actuales más NGC 7008 y Abell 12, generados con
@@ -152,10 +179,10 @@ falta mover algo más, no se mueve: se cierra.
 
 | # | Comprobación | Umbral | Qué falsea |
 |---|---|---|---|
-| L2.1 | σ de la PSF del telescopio en píxeles del parche (`ps1ThetaAdd`), D ∈ {80, 203, 457, 914}, en los 53 | ≥ 1 px para lado < 17′; ≥ 0,85 px en el tope de 2048 | que quede algún objeto «subpíxel» (la apertura no se nota) |
+| L2.1 | σ de la PSF del telescopio en píxeles del parche (`ps1ThetaAdd`), D ∈ {80, 203, 457, 914}, en todo el banco | ≥ 1 px para lado < 17′; ≥ 0,85 px en el tope de 2048 | que quede algún objeto «subpíxel» (la apertura no se nota) |
 | L2.2 | 457 frente a 914 mm en NGC 5194, 3031, 5457, 205 (`harness_decision_psf_resolucion.js`) | separación ≥ 1σ del ruido de cielo, con el signo correcto; en los 6 representantes de cuantil, `θ_add` decrece con D | que subir la resolución no haga visible la apertura, que es su único motivo |
-| L2.3 | Flujo total por objeto, textura de fase 2 frente a textura de fase 1 | `|ΔF|/F ≤ 2e-3` en los 53 | que el remuestreo de `fitscut` deje de conservar brillo superficial |
-| L2.4 | Volumen y memoria | PNG de los 53 + muestra aleatoria de 50 (semilla fija) extrapolados a 1050 ≤ 1,5 GB; ≤ 16 MB por parche decodificado; campo de Virgo (NGC 4374/4406 y vecinas) ≤ 150 MB en el navegador | que el coste supere lo que el hosting y el navegador aguantan |
+| L2.3 | Flujo total por objeto, textura de fase 2 frente a textura de fase 1 | `|ΔF|/F ≤ 2e-3` en todo el banco | que el remuestreo de `fitscut` deje de conservar brillo superficial |
+| L2.4 | Volumen y memoria | PNG del banco + muestra aleatoria de 50 (semilla fija) extrapolados a las filas aptas ≤ 1,5 GB; ≤ 16 MB por parche decodificado; campo de Virgo (NGC 4374/4406 y vecinas) ≤ 150 MB en el navegador | que el coste supere lo que el hosting y el navegador aguantan |
 
 **Vía de escape única**: si L2.4 falla, tope 1794 px (el número del README para
 0,67 ″/px) en vez de 2048. **Tope duro**: si con 1794 sigue fallando, la fase 2 se
@@ -171,12 +198,12 @@ estrellas, `fuentesConservadas` y `procedencia`; el runtime salta
 
 | # | Comprobación | Umbral | Qué falsea |
 |---|---|---|---|
-| L3.1 | `parche.datos` de fase 3 frente a fase 2 con la misma Gaia pineada, y `excluidas` de la capa de estrellas | bit a bit idéntico; `excluidas` idénticas fila a fila en los 53 | que mover la ley de sitio la cambie (ADR 0008) |
+| L3.1 | `parche.datos` de fase 3 frente a fase 2 con la misma Gaia pineada, y `excluidas` de la capa de estrellas | bit a bit idéntico; `excluidas` idénticas fila a fila en todo el banco | que mover la ley de sitio la cambie (ADR 0008) |
 | L3.2 | Filas de Gaia transferidas para el campo de NGC 5194 a 133× con 200 mm | bajan ≥ 40 % respecto a hoy | que quitar la consulta profunda no compense la congelación de la máscara |
 | L3.3 | Versión `<v>` de la textura | cambia al mutar cualquiera de `mascaraMaxAs`, `mascaraMagRef`, `rellenoPlanoMaxAs`, `mordidaCobMin` (test que muta la cfg y espera hash nuevo) | que una máscara vieja sobreviva a un cambio de ley sin que nadie se entere |
 
 Riesgo aceptado y escrito: la máscara queda congelada con Gaia DR3 y la cfg del
-momento; cambiarla obliga a regenerar 1050 texturas. La caché local de FITS
+momento; cambiarla obliga a regenerar el catálogo entero (1066 texturas hoy). La caché local de FITS
 (`$PS1_HARNESS_DIR`, ≈ 4–8 GB) se guarda con copia fuera del repo.
 
 **Vía de escape única**: si L3.2 no llega al 40 %, la fase 3 se cierra: la
@@ -198,7 +225,10 @@ no hay v2 de la fase 3; una máscara congelada que no ahorra red no compensa.
 - Ningún 8 bits ni compresión con pérdida: la ausencia (`cielo − 2σ`) y el rango
   del núcleo no caben, y una pérdida no invertible es una ley de display dentro
   del fichero (ADR 0019).
-- Ninguna recaptura del golden sin su tabla de deltas en el informe.
+- Ninguna recaptura del golden sin su tabla de deltas en el informe, y ninguna
+  con dos causas en el mismo commit. El procedimiento, con las cuatro recapturas
+  previstas y el invariante que cada una debe respetar, está en
+  `docs/notas/recaptura-golden-difusas.md`.
 - Los cúmulos no entran (ADR 0002, 0012).
 
 ## Lo que este ADR no decide
@@ -207,10 +237,47 @@ no hay v2 de la fase 3; una máscara congelada que no ahorra red no compensa.
   píxel) y el renombrado de `bitacora-ps1.js` que el ADR 0020 presupuesta para
   cuando entre un segundo sondeo. Se abre solo con la fracción de escena
   saturada medida en la fase 0 y con su propio prerregistro.
-- Fixtures del banco golden en git o descargadas de producción; tope 2048 frente
-  a 1794 antes de medir; cuándo `proxyRespaldo = false` pasa a ser el defecto.
-  Son las decisiones del apartado 9 del objetivo y se toman con las cifras de la
-  fase 0.
+- Tope 2048 frente a 1794 y cuándo `proxyRespaldo = false` pasa a ser el defecto.
+  Son las decisiones 9.2 y 9.3 del objetivo. La 9.2 se toma al entrar en la
+  fase 2, con las cifras de volumen ya medidas (regla C = 1,51 GB, por encima del
+  listón de L2.4; tope 1794 = 1,42 GB).
+
+## Decisión 9.1 — Las fixtures del banco golden van en git (2026-09-04)
+
+Tomada con las cifras de la fase 0 delante: los 11 objetos golden a
+`salida = 1024` pesan **18,33 MB** en PNG-16, pesados uno a uno.
+
+El motivo no es el tamaño. Es que hoy el guardián bit a bit
+(`test_golden_difusas.js`) depende de un servicio externo cuyo orden de respuesta
+nadie controla: `lib_bajar_parche.js` cose las skycells quedándose con el primer
+píxel válido, en el orden en que las devuelve `ps1filenames.py`, y el solape
+discrepa un 15 % en la mediana. Los stacks de PS1 son inmutables; **ese orden no
+lo garantiza nada**. Un golden cuya entrada puede cambiar sin que nadie toque
+código no es un golden. Pinchar la entrada es lo que pide, y es la misma razón por
+la que los CSV de Gaia ya están en `scripts/fixtures/gaia/`.
+
+El coste encaja: el repo ya lleva 58 MB de imágenes de experimentos versionadas,
+así que 18 MB son un +6 % del histórico. La alternativa de descargarlas de
+producción se descarta por dos motivos, no por tamaño: durante la fase 1 no hay
+nada desplegado en `dso/` que leer, y después el guardián fallaría por un
+despliegue desincronizado en vez de por un cambio de código.
+
+**Dos condiciones, escritas para que no se decidan solas:**
+
+1. **Solo los 11 objetos golden.** El banco entero a 1024 son 97,4 MB y no entra
+   en git en ningún caso; los otros 58 se descargan como hoy.
+2. **La fase 2 decide, aparte y por escrito, si las fixtures siguen a
+   producción.** El golden hashea el parche que producción pide, así que al pasar
+   `PS1.salida` a `salida(lado)` o las fixtures van con él —**39,9 MB** con tope
+   2048, 34,3 con 1794— o el golden deja de guardar el camino real y se convierte
+   en una regresión de la ley a resolución fija, que es otra cosa y hay que
+   llamarla por su nombre. Sin esta decisión explícita, la recaptura de la fase 2
+   la toma por omisión.
+
+Cada regeneración reescribe los once enteros (un PNG no delta-comprime): con las
+tres previstas —fase 1, fase 2 por resolución y fase 3 por máscara— el histórico
+crece entre 55 y 75 MB. Se acepta. Si alguna vez deja de aceptarse, la salida es
+Git LFS, no descargar de producción.
 
 ## Ampliación del ADR 0013
 

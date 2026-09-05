@@ -32,8 +32,10 @@ var NOMBRADOS = [
   ['NGC 6853', 'cuantil de lado entre PN'], ['NGC 7293', 'cuantil de lado entre PN (tope)']
 ];
 
-/* Clases que entran enteras, con la cuenta que el ADR escribió el 2026-09-04. */
-var CLASES_ENTERAS = [['HII', 10], ['RfN', 12], ['SNR', 1]];
+/* Clases que entran enteras, con la cuenta que el ADR 0024 tiene registrada
+   (enmienda del 2026-09-04). No es un listón: si el catálogo crece, el banco
+   crece con él y `avisos` lo dice para que se anote allí. */
+var CLASES_ENTERAS = [['HII', 10], ['RfN', 28], ['SNR', 1]];
 
 /* Deben salir modelo = "fila", con su motivo y sin petición de red. */
 var CONTROLES = [

@@ -206,8 +206,11 @@ siendo necesario, pero cubre navegadores anteriores a 2023, no un hueco vivo.
 1. **El banco ya no son 53 objetos, son 69.** El ADR 0024 fija «todas las HII,
    RfN y SNR aptas» y escribe 12 RfN; este árbol tiene **28** desde que entró
    `feat: nebulosas de reflexión` (PR #189, commit b208618). El banco crece solo,
-   que es lo que la regla pedía, pero la cardinalidad mínima de los tests deja de
-   ser 53. Los cinco controles de exclusión salen exactos (`no-cabe` ×4, `sur`).
+   que es lo que la regla pedía. Los cinco controles de exclusión salen exactos
+   (`no-cabe` ×4, `sur`). **Enmendado en el ADR 0024 el 2026-09-04**: la
+   cardinalidad de los tests deja de ser un número escrito y pasa a ser la que
+   devuelve `lib_banco_dso.js`, que avisa cuando una clase entera se aparta de la
+   cuenta registrada.
 2. **El catálogo difuso ya no son 1485 filas ni 1050 aptas**, sino **1510 y
    1066**, por lo mismo. Las premisas del ADR 0024 §«Premisas medidas» hay que
    releerlas con estos números.
@@ -235,8 +238,12 @@ siendo necesario, pero cubre navegadores anteriores a 2023, no un hueco vivo.
   objetivo de 0,67 ″/px del README es el número que 1794 persigue. Decisión del
   usuario, con la tabla delante.
 - **9.1, fixtures en git**: los 11 objetos golden a 1024 px, pesados uno a uno,
-  suman **18,4 MB** en PNG-16. Cae dentro de la estimación del objetivo (15–25 MB),
-  así que la decisión sigue siendo de política de repositorio y no de tamaño.
+  suman **18,33 MB** en PNG-16, dentro de la estimación del objetivo (15–25 MB).
+  **Decidido el 2026-09-04: van en git** (ADR 0024 §«Decisión 9.1»), no por el
+  tamaño sino porque el golden no puede depender del orden en que STScI devuelve
+  las skycells. El banco entero serían 97,4 MB y no entra; si las fixtures
+  siguieran a producción en la fase 2 subirían a 39,9 MB con tope 2048 y 34,3 con
+  1794, y eso es lo que la segunda condición obliga a decidir por escrito.
 - **9.3 y 9.4** no dependen de nada medido aquí y siguen abiertas.
 
 ## Lo que esta fase no responde
