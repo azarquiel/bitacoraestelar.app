@@ -1185,9 +1185,16 @@
       refrescarCielo(destino.nocheId);
     }
     guardar();
-    if (el.dataset.clave === 'nombre' || el.dataset.clave === 'modelo' ||
-        el.dataset.clave === 'fecha' || el.dataset.clave === 'lugarId') { pintar(); }
-    else { pintarAvisos(); }
+    // Otros bloques enseñan lo que aquí se teclea: el nombre del lugar y del
+    // equipo en los selects, la fecha y el lugar en la etiqueta de la noche.
+    // Se repintan SOLO esos bloques: repintar el que se está escribiendo
+    // destruye la casilla y con ella el foco, a cada carácter.
+    var lista = el.dataset.lista, clave = el.dataset.clave;
+    if (lista === 'lugares' && clave === 'nombre') { pintarNoches(); pintarObservaciones(); }
+    else if (clave === 'modelo' || (lista === 'noches' && (clave === 'fecha' || clave === 'lugarId'))) {
+      pintarObservaciones();
+    }
+    pintarAvisos();
   });
 
   document.addEventListener('change', function (ev) {
