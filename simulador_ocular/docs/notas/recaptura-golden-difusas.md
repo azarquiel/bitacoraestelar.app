@@ -27,6 +27,9 @@ En este orden, cada una con su commit, su tabla y su invariante propio:
 | R3 | **Resolución por objeto** (fase 2, regla C) | todo, incluidos `ancho`/`alto` | `thetaIntArcmin`; el flujo total por objeto, dentro del ±2e-3 de L2.3 |
 | R4 | **Máscara offline** (fase 3) | nada, si la ley se movió de sitio sin cambiar | L3.1 pide **bit a bit idéntico**: si el hash cambia, la fase 3 falló, y no se recaptura |
 
+**R1 está hecha** (2026-09-06): la WCS es el defecto en `lib_bajar_parche.js` y
+la tabla de deltas vive en `simulador_ocular/docs/validacion/recaptura_r1_wcs.md`.
+
 R1 no estaba prevista en el objetivo: apareció al medir la fase 0
 (`docs/validacion/dso_texturas_fase0.md`, discrepancia 6). Va **antes** que R2 y
 en su propio commit, porque si entran juntas no hay forma de saber si un delta lo
@@ -102,6 +105,12 @@ El mensaje dice **qué causa** la movió y **cuál era el umbral**.
 >
 > Y una fila por cada `difuso` (457,2 mm · 190× · SQM 21,2 y 203 mm · 100× ·
 > SQM 20,5), donde el umbral es el mismo que el de su `parche.datos`.
+
+El 0,05·σ de la plantilla es el listón de **equivalencia**: vale cuando los dos
+caminos deben pintar lo mismo (R2, R4). Una recaptura que cambia la geometría a
+propósito —R1 giró el parche hasta 3,6°— no puede pasarlo ni debe fingirlo: ahí
+la columna va vacía, con el invariante propio de la recaptura en su lugar
+(en R1, `thetaIntArcmin`). Lo que no se admite es dejarla vacía sin decir por qué.
 
 ## Qué invalida una recaptura
 

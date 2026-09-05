@@ -224,12 +224,12 @@ siendo necesario, pero cubre navegadores anteriores a 2023, no un hueco vivo.
    monta un parche en Node —el golden incluido— lo hace con un afín sin el giro
    de la skycell, aunque `fitscut` la sirve (`&wcs=1`) y `parseFITS` la lee. Se
    descubrió al medir la escena de la fase 0: al devolverla, `parche.datos` cambia
-   y el golden falla en los cuatro objetos. Aquí queda **opcional** (`conWcs`,
+   y el golden falla en los cuatro objetos. Aquí quedó **opcional** (`conWcs`,
    apagada por defecto) para no mover nada; los arneses de la fase 0 la piden y el
-   generador de texturas tendrá que pedirla, porque el sidecar lleva la WCS. Es un
-   motivo más —y no previsto— para la recaptura de golden que la fase 1 ya tiene
-   presupuestada, y conviene comprobar de paso si la ruta del navegador (que sí
-   lee la WCS del FITS del proxy) y la de Node estaban divergiendo en silencio.
+   generador de texturas tendrá que pedirla, porque el sidecar lleva la WCS.
+   **Corregido el 2026-09-06**: la WCS pasa a ser el defecto en Node y el golden
+   se recaptura por esa causa y solo por ella (recaptura R1, tabla de deltas en
+   `recaptura_r1_wcs.md`). La divergencia era real y llegaba a 3,6° en M81.
 
 ## Qué decide esta fase, de las preguntas abiertas del apartado 9
 
