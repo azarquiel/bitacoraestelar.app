@@ -889,7 +889,7 @@
     Object.keys(esquema).forEach(function (k) {
       var v = obj[k];
       if (vacio(v)) { out[k] = ''; return; }
-      if (typeof v === 'object') {
+      if (typeof v === 'object' || typeof v === 'boolean') {
         aviso(avisos, et + ': «' + k + '» no es un valor simple, se deja en blanco.');
         out[k] = ''; return;
       }
@@ -1315,7 +1315,10 @@
     try { r = OAL.pegar(document.getElementById('pegado').value); }
     catch (e) { marcar(estadoEl, 'no se pudo leer: ' + e.message, 'mal'); return; }
     if ((estado.observaciones || []).length &&
-        !confirm('Esto sustituye todo lo que hay en la plantilla. ¿Seguir?')) { return; }
+        !confirm('Esto sustituye todo lo que hay en la plantilla. ¿Seguir?')) {
+      marcar(estadoEl, 'cancelado: la plantilla sigue como estaba', '');
+      return;
+    }
     estado = r.estado;
     guardar(); pintar();
     pintarLista(ul, r.avisos);

@@ -342,12 +342,14 @@ torcido.noches[0].sqm = '';                 // para que la noche no rellene el h
 torcido.lugares[0].lat = { grados: 38 };
 torcido.noches[0].cronica = 42;
 torcido.telescopios = 'Skywatcher 12"';
+torcido.noches[0].meteo = true;
 pegado = OAL.pegar(JSON.stringify(torcido));
 eq(pegado.estado.observaciones[0].sqm, '', 'un número con unidades pegadas se deja en blanco');
 ok(pegado.avisos.some(function (a) { return /«sqm»/.test(a.que) && /21\.4 mag/.test(a.que); }), 'y se avisa citando el valor');
 eq(pegado.estado.observaciones[1].sqm, 20.9, 'un número entre comillas se acepta');
 eq(pegado.estado.lugares[0].lat, '', 'un objeto donde iba un número, en blanco');
 eq(pegado.estado.noches[0].cronica, '42', 'un número donde iba texto se guarda como texto');
+eq(pegado.estado.noches[0].meteo, '', 'un booleano no es texto ni número: en blanco');
 eq(pegado.estado.telescopios, [], 'una lista que no es lista queda vacía');
 ok(pegado.avisos.some(function (a) { return /telescopios/.test(a.que); }), 'con su aviso');
 ok(OAL.problemas(pegado.estado).some(function (p) { return p.nivel === 'flojo' && /sin telescopio/.test(p.que); }),

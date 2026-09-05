@@ -79,7 +79,9 @@ y ya.
 3. **Una noche por fecha de anochecer.** Lo visto a las 02:15 pertenece a la
    noche anterior; la `fecha` de la noche es la del anochecer y la `hora` de la
    observación es la del reloj, tal cual (`"02:15"`). No cambies la fecha de la
-   noche para «cuadrar» la madrugada.
+   noche para «cuadrar» la madrugada. Es la única deducción que se te pide,
+   porque la observación no lleva fecha propia: solo `hora` y la noche de la
+   que cuelga.
 4. **El mismo objeto a dos aumentos son dos observaciones** de la misma noche
    con el mismo `objeto` y distinto `ocularId`.
 5. **El texto del observador se copia literal** en `texto` y `cronica`, con sus
@@ -88,7 +90,9 @@ y ya.
    `oc1`, `au1`, `no1`, `ob1`…). Solo sirven para que una observación diga de qué
    noche cuelga y con qué equipo se hizo.
 7. **Números como números** (`21.42`, no `"21,42"` ni `"21.42 mag"`). Textos
-   como textos. Fechas `AAAA-MM-DD`, horas `HH:MM` en 24 horas.
+   como textos; nunca `true`/`false`. Fechas `AAAA-MM-DD`, horas `HH:MM` en 24
+   horas. (La caja tolera un número entre comillas o con coma decimal; todo lo
+   demás se deja en blanco y se avisa.)
 
 ### Forma del `estado`
 
@@ -160,7 +164,10 @@ Barlows y reductores.
 
 ### `noches`
 
-Una por fecha de anochecer y lugar.
+Una por fecha de anochecer y lugar. El cielo (`sqm`, `ir`, `seeing`, `bortle`)
+vive de verdad en cada observación, porque el SQM se mide hacia donde está el
+objeto; el de la noche es solo el valor por defecto que, al cargar, baja a las
+observaciones que no traen el suyo.
 
 | Campo | Tipo | Qué es |
 |---|---|---|

@@ -751,7 +751,7 @@
     Object.keys(esquema).forEach(function (k) {
       var v = obj[k];
       if (vacio(v)) { out[k] = ''; return; }
-      if (typeof v === 'object') {
+      if (typeof v === 'object' || typeof v === 'boolean') {
         aviso(avisos, et + ': «' + k + '» no es un valor simple, se deja en blanco.');
         out[k] = ''; return;
       }
