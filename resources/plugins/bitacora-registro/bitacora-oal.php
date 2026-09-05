@@ -1341,13 +1341,13 @@ function bitacora_oal_panel_exportar() {
         '<script>(function(){var b=document.getElementById("bitacora_oal_exportar"),s=document.getElementById("bitacora_oal_exportar_usuario"),a=document.getElementById("bitacora_oal_exportar_aviso");'
         . 'b.addEventListener("click",function(){if(!window.PlantillaOAL){a.textContent="Falta el motor OAL (bitacora-oal-motor.js).";return;}'
         . 'b.disabled=true;a.textContent="Preparando…";'
-        . 'fetch(%s+"?usuario="+encodeURIComponent(s.value),{credentials:"same-origin",headers:{"X-WP-Nonce":%s}})'
-        . '.then(function(r){return r.json().then(function(d){if(!r.ok){throw new Error(d&&d.message||("HTTP "+r.status));}return d;});})'
+        . 'fetch(%s.replace("__U__",encodeURIComponent(s.value)),{credentials:"same-origin",headers:{"X-WP-Nonce":%s}})'
+        . '.then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(e){}if(!r.ok||!d){throw new Error((d&&d.message)||("HTTP "+r.status));}return d;});})'
         . '.then(function(e){var x=window.PlantillaOAL.xmlDe(e);var u=URL.createObjectURL(new Blob([x],{type:"application/xml;charset=utf-8"}));'
         . 'var l=document.createElement("a");l.href=u;l.download="bitacora-todo-"+new Date().toISOString().slice(0,10)+".xml";document.body.appendChild(l);l.click();document.body.removeChild(l);'
         . 'setTimeout(function(){URL.revokeObjectURL(u);},1000);a.textContent=e.noches.length+" salidas, "+e.observaciones.length+" observaciones.";})'
         . '.catch(function(err){a.textContent=err.message||"No se pudo exportar.";}).then(function(){b.disabled=false;});});})();</script>',
-        wp_json_encode( rest_url( 'bitacora/v1/estado-oal-de' ) ),
+        wp_json_encode( add_query_arg( 'usuario', '__U__', rest_url( 'bitacora/v1/estado-oal-de' ) ) ),
         wp_json_encode( wp_create_nonce( 'wp_rest' ) )
     );
 }
@@ -1543,6 +1543,7 @@ function bitacora_oal_estado_viajes( $viajes, $usuario_id ) {
     $firma_dueno = trim( $estado['observador']['nombre'] . ' ' . $estado['observador']['apellidos'] );
 
     $bases  = array();   // base_id => fila, o null: cada base se lee UNA vez
+    $tipos  = array();   // slug => tipo del catálogo del mapa, acumulado entre salidas
     $equipo = array( 'telescopios' => array(), 'oculares' => array(), 'auxiliares' => array() );
 
     foreach ( (array) $viajes as $viaje ) {
@@ -1597,12 +1598,16 @@ function bitacora_oal_estado_viajes( $viajes, $usuario_id ) {
         ) );
 
         // De qué tipo es cada objeto lo sabe el catálogo del mapa, por su slug.
-        $tipos = array();
+        // Se pregunta solo por los que aún no se conocen: con la bitácora
+        // entera el mismo objeto se repite en muchas noches.
         $slugs = array();
         foreach ( (array) $obs as $o ) {
-            $slugs[] = bitacora_oal_slug( $o->objeto );
+            $slug = bitacora_oal_slug( $o->objeto );
+            if ( '' !== $slug && ! array_key_exists( $slug, $tipos ) ) {
+                $tipos[ $slug ] = '';
+                $slugs[]        = $slug;
+            }
         }
-        $slugs = array_values( array_unique( array_filter( $slugs ) ) );
         if ( $slugs ) {
             $huecos = implode( ', ', array_fill( 0, count( $slugs ), '%s' ) );
             $filas  = $wpdb->get_results( $wpdb->prepare( "SELECT slug, tipo FROM $t_obj WHERE slug IN ( $huecos )", $slugs ) );
