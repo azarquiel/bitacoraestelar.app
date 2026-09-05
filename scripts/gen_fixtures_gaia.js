@@ -8,7 +8,8 @@
    puede cambiar de orden o de contenido entre corridas.
 
    Uso:  node scripts/gen_fixtures_gaia.js          (solo los que falten)
-         node scripts/gen_fixtures_gaia.js --forzar */
+         node scripts/gen_fixtures_gaia.js --forzar
+         node scripts/gen_fixtures_gaia.js --vistas  (los de solo mirar, a la caché) */
 'use strict';
 
 var fs = require('fs'), path = require('path'), https = require('https');
@@ -20,9 +21,12 @@ require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.j
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
 var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 
-var OUT = path.join(__dirname, 'fixtures', 'gaia');
-fs.mkdirSync(OUT, { recursive: true });
 var FORZAR = process.argv.indexOf('--forzar') >= 0;
+var VISTAS = process.argv.indexOf('--vistas') >= 0;
+var OUT = VISTAS
+  ? (process.env.BITACORA_GAIA_DIR || path.join(require('os').tmpdir(), 'bitacora-gaia-vistas'))
+  : path.join(__dirname, 'fixtures', 'gaia');
+fs.mkdirSync(OUT, { recursive: true });
 
 var OBJS = [
   { cat: 'NGC 5194', csv: 'gaia_ngc5194.csv', fuente: global.window.BITACORA_GALAXIAS },
@@ -39,7 +43,25 @@ var OBJS = [
   { cat: 'NGC7635',  csv: 'gaia_ngc7635.csv', fuente: global.window.BITACORA_NEBULOSAS },
   { cat: 'NGC6888',  csv: 'gaia_ngc6888.csv', fuente: global.window.BITACORA_NEBULOSAS },
   // Resto de supernova (M1):
-  { cat: 'NGC1952',  csv: 'gaia_ngc1952.csv', fuente: global.window.BITACORA_NEBULOSAS }
+  { cat: 'NGC1952',  csv: 'gaia_ngc1952.csv', fuente: global.window.BITACORA_NEBULOSAS },
+  /* Los dos que le faltan al banco golden del catálogo de texturas (ADR 0024):
+     controles de la regla de ausencia por mordida de máscara. */
+  { cat: 'NGC7008',  csv: 'gaia_ngc7008.csv', fuente: global.window.BITACORA_NEBULOSAS },
+  { cat: 'Abell 12', csv: 'gaia_abell12.csv', fuente: global.window.BITACORA_NEBULOSAS }
+];
+
+/* Objetos que SOLO se miran (harness_vistas_np.js), nunca bit a bit. NO se
+   versionan: una vista no exige entrada estable, y pinear estos costaría ~12 MB
+   por una propiedad que no se usa (decisión 9.1 del ADR 0024). Van a
+   $BITACORA_GAIA_DIR o al temporal, como los FITS.
+   Uso:  node scripts/gen_fixtures_gaia.js --vistas */
+var VISUALES = [
+  { cat: 'NGC 4486', csv: 'gaia_ngc4486.csv', fuente: global.window.BITACORA_GALAXIAS },
+  { cat: 'NGC 4826', csv: 'gaia_ngc4826.csv', fuente: global.window.BITACORA_GALAXIAS },
+  { cat: 'NGC 253',  csv: 'gaia_ngc253.csv',  fuente: global.window.BITACORA_GALAXIAS },
+  { cat: 'NGC 3310', csv: 'gaia_ngc3310.csv', fuente: global.window.BITACORA_GALAXIAS },
+  { cat: 'NGC 205',  csv: 'gaia_ngc205.csv',  fuente: global.window.BITACORA_GALAXIAS },
+  { cat: 'NGC1982',  csv: 'gaia_ngc1982.csv', fuente: global.window.BITACORA_NEBULOSAS }
 ];
 
 function fila(fuente, nombre) {
@@ -107,7 +129,7 @@ function bajar(o) {
 }
 
 var cola = Promise.resolve();
-OBJS.forEach(function (o) {
+(VISTAS ? VISUALES : OBJS).forEach(function (o) {
   cola = cola.then(function () {
     if (!FORZAR && fs.existsSync(path.join(OUT, o.csv))) {
       console.log(o.cat + ': ya existe, no se toca'); return;

@@ -768,6 +768,15 @@ px), y **ningún píxel del segundo sondeo fuera de la máscara de ausencia**. E
    estratificado (5.0), antes/después, en {457 mm · 190× · SQM 21,2} y
    {203 mm · 100× · SQM 20,5}; en la fase 2, además, los seis representantes de
    cuantil a 80 y 914 mm. Ningún sistema nuevo de validación.
+   **Escrita el 2026-09-05** en `docs/notas/validacion-visual-difusas.md`, con
+   tres correcciones sobre este párrafo: se miran **18 objetos y 26 vistas**, no
+   los 69 del banco (setenta y ocho PNG que nadie abre no son validación); la
+   Gaia de los que no son golden **no se pinea** (~12 MB por una propiedad que
+   una vista no usa); y el «antes» se guarda con `--etiqueta`, porque el harness
+   escribía siempre al mismo sitio y la segunda pasada borraba la primera.
+
+   Los entregables 3 y 4 están en `docs/notas/recaptura-golden-difusas.md` y
+   `docs/notas/validacion-visual-difusas.md`.
 
 Después de la aprobación: fase 1 completa (generador, decodificador, fuente,
 tests, golden, README, CONTEXT, HTML de los dos consumidores), suite verde,
