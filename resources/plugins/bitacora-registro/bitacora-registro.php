@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.33.0
+ * Version:     1.34.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.33.0' );
+define( 'BITACORA_VERSION', '1.34.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -1864,17 +1864,35 @@ function bitacora_registrar_rutas() {
         'methods' => 'POST', 'callback' => 'bitacora_oal_rest_importar', 'permission_callback' => $solo_logueados,
     ) );
 
-    // El `estado` de una salida, para exportarla. El servidor no compone XML:
-    // eso lo hace el motor en el navegador (ADR 0003). Lo que sale es SIEMPRE
-    // del usuario de la sesión —nunca de un parámetro—, y encima se comprueba
-    // que el viaje sea suyo: una exportación que acepte un usuario_id cualquiera
-    // es una fuga de datos con forma de descarga.
+    // El `estado` de una salida (?viaje=<id>) o de todas las del usuario, para
+    // exportarlas. El servidor no compone XML: eso lo hace el motor en el
+    // navegador (ADR 0003). Lo que sale es SIEMPRE del usuario de la sesión
+    // —nunca de un parámetro—, y con `viaje` encima se comprueba que la salida
+    // sea suya: una exportación que acepte un usuario_id cualquiera es una fuga
+    // de datos con forma de descarga.
     register_rest_route( 'bitacora/v1', '/estado-oal', array(
         'methods'             => 'GET',
         'callback'            => 'bitacora_oal_rest_estado',
         'permission_callback' => $solo_logueados,
         'args'                => array(
-            'viaje' => array( 'required' => true, 'validate_callback' => function ( $v ) {
+            'viaje' => array( 'required' => false, 'validate_callback' => function ( $v ) {
+                return is_numeric( $v ) && intval( $v ) > 0;
+            } ),
+        ),
+    ) );
+
+    // El `estado` de TODAS las salidas de un usuario elegido: solo para el panel
+    // del escritorio, con la misma llave que el importador (manage_options más
+    // el nonce de la REST API). Ruta aparte a propósito: la del frontend no
+    // tiene forma de pedir los de otro.
+    register_rest_route( 'bitacora/v1', '/estado-oal-de', array(
+        'methods'             => 'GET',
+        'callback'            => 'bitacora_oal_rest_estado_de',
+        'permission_callback' => function () {
+            return current_user_can( 'manage_options' );
+        },
+        'args'                => array(
+            'usuario' => array( 'required' => true, 'validate_callback' => function ( $v ) {
                 return is_numeric( $v ) && intval( $v ) > 0;
             } ),
         ),
