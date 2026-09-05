@@ -489,11 +489,15 @@
     return (id && mapa[id]) ? id : '';
   }
 
-  /* El huso con el que se fecha la noche: el del lugar, y si la salida no
-     tiene lugar, el que traiga la propia noche (el del sitio, que lo pone el
-     servidor). Sin esto todo salía en +00:00, o sea con la hora mal. */
+  /* El huso con el que se fecha la noche: el suyo si lo trae (el servidor lo
+     calcula para ESA fecha, con su horario de verano o de invierno), y si no,
+     el del lugar. Al revés no vale: con la bitácora entera el lugar sale una
+     vez, con el huso de la primera noche que lo pisó, y un sitio pisado en
+     marzo y en agosto dejaría una de las dos una hora corrida. Sin ninguno
+     todo salía en +00:00, o sea con la hora mal. */
   function husoDe(noche, lugar) {
-    return (lugar && lugar.tz != null && lugar.tz !== '') ? lugar.tz : noche.tz;
+    if (noche.tz != null && noche.tz !== '') { return noche.tz; }
+    return (lugar && lugar.tz != null && lugar.tz !== '') ? lugar.tz : '';
   }
 
   /** Un target por objeto distinto (OAL los cataloga aparte de la observación). */

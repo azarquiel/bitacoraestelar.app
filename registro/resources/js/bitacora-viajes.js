@@ -320,13 +320,15 @@
       flash('No se pudo exportar la salida.', true);
     }
 
+    /* Sin salida (v == null) es el estado de TODAS las mías: la ruta sin
+       `viaje` solo sabe devolver las del usuario de la sesión. */
     function estadoDe(v) {
       var OAL = window.PlantillaOAL;
       if (!OAL) {
         flash('Falta el motor OAL (bitacora-oal-motor.js).', true);
         return Promise.reject('sin motor');
       }
-      return api(API_ESTADO + '?viaje=' + encodeURIComponent(v.id)).then(function (r) {
+      return api(API_ESTADO + (v ? '?viaje=' + encodeURIComponent(v.id) : '')).then(function (r) {
         if (!r.ok) { throw errorDe(r, 'No se pudo preparar la exportación'); }
         return r.data;
       });
@@ -348,6 +350,20 @@
               window.PlantillaOAL.xmlDe(estado), 'application/xml');
         flash('Salida exportada. Ábrela en la plantilla para corregirla y vuelve a subirla.');
       }).catch(fallo);
+    }
+
+    // Todas las salidas en un solo fichero: lo que siembra AstroPlanner y lo
+    // que sirve de respaldo. Sin filtros: o una salida o todas.
+    function exportarTodo(btn) {
+      btn.disabled = true;
+      estadoDe(null).then(function (estado) {
+        bajar('bitacora-todo-' + new Date().toISOString().slice(0, 10) + '.xml',
+              window.PlantillaOAL.xmlDe(estado), 'application/xml');
+        flash(estado.noches.length + ' salidas y ' + estado.observaciones.length + ' observaciones exportadas.');
+      }).catch(fallo).then(function () { btn.disabled = false; });
+    }
+    if ($('viajesExportarTodo')) {
+      $('viajesExportarTodo').addEventListener('click', function () { exportarTodo(this); });
     }
 
     // El correo se abre en una pestaña ya compuesto: se selecciona todo y se

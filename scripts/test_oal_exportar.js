@@ -221,6 +221,26 @@ ok(xmlSin.indexOf('<begin>2026-08-05T22:30:00+02:00</begin>') > -1, 'la sesión,
 ok(xmlSin.indexOf('+00:00') === -1, 'y nada se va a UTC por el camino');
 eq(OAL.xmlDe(OAL.leer(xmlSin)), xmlSin, 'y leerlo y volver a escribirlo no mueve la hora');
 
+console.log('con la bitácora entera, cada noche lleva SU huso, no el de la primera que pisó el lugar:');
+// El lugar sale una vez y su tz es el de la primera noche. Un sitio pisado en
+// marzo (+01:00) y en agosto (+02:00) tiene que fechar cada noche con el suyo,
+// o todas las del otro horario entran una hora corridas en AstroPlanner.
+var dos = estado();
+dos.lugares[0].tz = 60;
+dos.noches[0].tz = 120;
+dos.noches.push({ id: 'n43', fecha: '2026-03-10', lugarId: 'lu7', tz: 60, comienzo: '21:00', fin: '',
+                  tripulacion: '', meteo: '', cronica: '' });
+dos.observaciones.push({ id: 'obs12-1', nocheId: 'n43', objeto: 'M42', ra: 83.8, dec: -5.4, otype: 'HII',
+  hora: '22:00', telescopioId: 'te3', ocularId: 'oc2', auxiliarId: '', aumentos: 67.9,
+  sqm: '', ir: '', seeing: '', bortle: '', texto: 'Trapecio', observador: 'Israel Pérez de Tudela' });
+var xmlDos = OAL.xmlDe(dos);
+ok(xmlDos.indexOf('<begin>2026-08-05T22:30:00+02:00</begin>') > -1, 'la noche de agosto, en +02:00');
+ok(xmlDos.indexOf('<begin>2026-03-10T21:00:00+01:00</begin>') > -1, 'la de marzo, en +01:00');
+ok(xmlDos.indexOf('<begin>2026-03-10T22:00:00+01:00</begin>') > -1, 'y su observación también');
+var sinTzNoche = estado();
+delete sinTzNoche.noches[0].tz;
+ok(OAL.xmlDe(sinTzNoche).indexOf('<begin>2026-08-05T22:30:00+02:00</begin>') > -1, 'sin tz en la noche, manda el del lugar');
+
 /* ── El tramo de audio no viaja en el XML (ADR 0005) ──────────────────────── */
 
 console.log('el tramo de audio de una observación no sale en el XML (ADR 0005):');
