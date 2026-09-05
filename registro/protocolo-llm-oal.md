@@ -6,8 +6,9 @@ Este documento es dos cosas a la vez:
    Desde «Instrucciones para el asistente» hasta el final, tal cual.
 2. **La especificación del `estado`** que valida la caja de pegar de
    `plantilla-oal.html`. Las tablas de campos de aquí y el `ESQUEMA` del motor
-   (`registro/resources/js/bitacora-oal-motor.js`) son la misma lista;
-   `scripts/test_oal_plantilla.js` falla si se separan.
+   (bloque `<script id="motor">` de `plantilla-oal.html`, del que se extrae
+   `bitacora-oal-motor.js`) son la misma lista; `scripts/test_oal_plantilla.js`
+   falla si se separan.
 
 El porqué está en el [ADR 0004](docs/adr/0004-el-llm-produce-datos-nunca-formato-ni-prosa.md):
 el modelo produce **datos, nunca XML**. Un OAL correcto exige espacio de nombres

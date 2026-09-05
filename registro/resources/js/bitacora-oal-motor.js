@@ -735,28 +735,30 @@
                      sqm: 'n', ir: 'n', seeing: 'n', bortle: 'n', texto: 't' }
   };
 
+  function aviso(lista, que) { lista.push({ nivel: 'flojo', que: que }); }
+
   /* Una fila contra su esquema. Devuelve solo campos conocidos. */
   function filaPegada(obj, esquema, et, avisos) {
     var out = {};
     if (obj == null) { obj = {}; }
     if (typeof obj !== 'object' || Array.isArray(obj)) {
-      avisos.push(et + ': no es un objeto, se deja en blanco.');
+      aviso(avisos, et + ': no es un objeto, se deja en blanco.');
       obj = {};
     }
     Object.keys(obj).forEach(function (k) {
-      if (!esquema[k]) { avisos.push(et + ': se ignora «' + k + '», que la plantilla no conoce.'); }
+      if (!esquema[k]) { aviso(avisos, et + ': se ignora «' + k + '», que la plantilla no conoce.'); }
     });
     Object.keys(esquema).forEach(function (k) {
       var v = obj[k];
       if (vacio(v)) { out[k] = ''; return; }
       if (typeof v === 'object') {
-        avisos.push(et + ': «' + k + '» no es un valor simple, se deja en blanco.');
+        aviso(avisos, et + ': «' + k + '» no es un valor simple, se deja en blanco.');
         out[k] = ''; return;
       }
       if (esquema[k] === 'n') {
         var n = typeof v === 'number' ? v : Number(String(v).trim().replace(',', '.'));
         if (!isFinite(n)) {
-          avisos.push(et + ': «' + k + '» no es un número (' + JSON.stringify(v) + '), se deja en blanco.');
+          aviso(avisos, et + ': «' + k + '» no es un número (' + JSON.stringify(v) + '), se deja en blanco.');
           out[k] = ''; return;
         }
         out[k] = n; return;
@@ -769,7 +771,8 @@
   /**
    * Del texto pegado al estado. Lanza si no hay JSON (o está roto: el
    * SyntaxError de JSON.parse); todo lo demás son avisos.
-   * Devuelve { estado, avisos: [texto] }.
+   * Devuelve { estado, avisos } con los avisos en la forma de problemas()
+   * ({ nivel: 'flojo', que }), para pintarlos con la misma función.
    */
   function pegar(texto) {
     var s = String(texto || '');
@@ -782,7 +785,7 @@
     var avisos = [];
     var e = estadoVacio();
     Object.keys(crudo).forEach(function (k) {
-      if (!ESQUEMA[k]) { avisos.push('Se ignora «' + k + '», que la plantilla no conoce.'); }
+      if (!ESQUEMA[k]) { aviso(avisos, 'Se ignora «' + k + '», que la plantilla no conoce.'); }
     });
     e.observador = filaPegada(crudo.observador, ESQUEMA.observador, 'Observador', avisos);
     Object.keys(ESQUEMA).forEach(function (lista) {
@@ -790,7 +793,7 @@
       var filas = crudo[lista];
       if (vacio(filas)) { filas = []; }
       if (!Array.isArray(filas)) {
-        avisos.push('«' + lista + '» debería ser una lista, se deja vacía.');
+        aviso(avisos, '«' + lista + '» debería ser una lista, se deja vacía.');
         filas = [];
       }
       e[lista] = filas.map(function (f, i) {
@@ -801,18 +804,18 @@
     });
     var refs = { lugares: indice(e.lugares), telescopios: indice(e.telescopios),
                  oculares: indice(e.oculares), auxiliares: indice(e.auxiliares) };
-    function soltar(fila, campo, mapa, et) {
+    function soltarRefColgante(fila, campo, mapa, et) {
       if (fila[campo] && !mapa[fila[campo]]) {
-        avisos.push(et + ': «' + campo + '» apunta a ' + fila[campo] + ', que no existe; se deja en blanco.');
+        aviso(avisos, et + ': «' + campo + '» apunta a ' + fila[campo] + ', que no existe; se deja en blanco.');
         fila[campo] = '';
       }
     }
-    e.noches.forEach(function (n, i) { soltar(n, 'lugarId', refs.lugares, 'noches ' + (i + 1)); });
+    e.noches.forEach(function (n, i) { soltarRefColgante(n, 'lugarId', refs.lugares, 'noches ' + (i + 1)); });
     e.observaciones.forEach(function (o, i) {
       var et = 'observaciones ' + (i + 1) + (o.objeto ? ' (' + o.objeto + ')' : '');
-      soltar(o, 'telescopioId', refs.telescopios, et);
-      soltar(o, 'ocularId', refs.oculares, et);
-      soltar(o, 'auxiliarId', refs.auxiliares, et);
+      soltarRefColgante(o, 'telescopioId', refs.telescopios, et);
+      soltarRefColgante(o, 'ocularId', refs.oculares, et);
+      soltarRefColgante(o, 'auxiliarId', refs.auxiliares, et);
     });
     // nocheId colgando NO se suelta: problemas() lo marca como huérfana, que es
     // lo que es, y el compañero la cuelga a mano de la noche que toque.

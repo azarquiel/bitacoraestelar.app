@@ -24,6 +24,7 @@
 
 var motor = require('./lib_motor_oal.js');
 var path = require('path');
+var fs = require('fs');
 
 var incrustado = motor.fuenteIncrustada();
 var OAL = motor.cargar(incrustado);
@@ -327,8 +328,8 @@ var raro = estado();
 raro.nota = 'esto sobra';
 raro.observaciones[0].constelacion = 'Hércules';
 pegado = OAL.pegar(JSON.stringify(raro));
-ok(pegado.avisos.some(function (a) { return /«nota»/.test(a); }), 'la clave de arriba se nombra');
-ok(pegado.avisos.some(function (a) { return /«constelacion»/.test(a); }), 'y la de la observación');
+ok(pegado.avisos.some(function (a) { return /«nota»/.test(a.que); }), 'la clave de arriba se nombra');
+ok(pegado.avisos.some(function (a) { return /«constelacion»/.test(a.que); }), 'y la de la observación');
 eq(pegado.estado.nota, undefined, 'ninguna entra en el estado');
 eq(pegado.estado.observaciones[0].constelacion, undefined, 'tampoco la de la fila');
 eq(OAL.xmlDe(pegado.estado), xml, 'y el resto sigue intacto');
@@ -343,12 +344,12 @@ torcido.noches[0].cronica = 42;
 torcido.telescopios = 'Skywatcher 12"';
 pegado = OAL.pegar(JSON.stringify(torcido));
 eq(pegado.estado.observaciones[0].sqm, '', 'un número con unidades pegadas se deja en blanco');
-ok(pegado.avisos.some(function (a) { return /«sqm»/.test(a) && /21\.4 mag/.test(a); }), 'y se avisa citando el valor');
+ok(pegado.avisos.some(function (a) { return /«sqm»/.test(a.que) && /21\.4 mag/.test(a.que); }), 'y se avisa citando el valor');
 eq(pegado.estado.observaciones[1].sqm, 20.9, 'un número entre comillas se acepta');
 eq(pegado.estado.lugares[0].lat, '', 'un objeto donde iba un número, en blanco');
 eq(pegado.estado.noches[0].cronica, '42', 'un número donde iba texto se guarda como texto');
 eq(pegado.estado.telescopios, [], 'una lista que no es lista queda vacía');
-ok(pegado.avisos.some(function (a) { return /telescopios/.test(a); }), 'con su aviso');
+ok(pegado.avisos.some(function (a) { return /telescopios/.test(a.que); }), 'con su aviso');
 ok(OAL.problemas(pegado.estado).some(function (p) { return p.nivel === 'flojo' && /sin telescopio/.test(p.que); }),
    'y el hueco lo canta la plantilla en amarillo, como cualquier otro');
 
@@ -359,7 +360,7 @@ delete colgado.noches[0].id;
 colgado.observaciones.forEach(function (o) { o.nocheId = 'no1'; });
 pegado = OAL.pegar(JSON.stringify(colgado));
 eq(pegado.estado.observaciones[0].ocularId, '', 'el ocular que no existe no se referencia');
-ok(pegado.avisos.some(function (a) { return /oc-inventado/.test(a); }), 'y se dice cuál era');
+ok(pegado.avisos.some(function (a) { return /oc-inventado/.test(a.que); }), 'y se dice cuál era');
 ok(pegado.estado.noches[0].id, 'la noche sin id recibe uno');
 ok(OAL.problemas(pegado.estado).some(function (p) { return /ninguna noche/.test(p.que); }),
    'las observaciones que apuntaban al id que no vino quedan huérfanas y se avisa');
@@ -379,7 +380,6 @@ ok(OAL.problemas(sinTz).some(function (p) { return p.nivel === 'flojo' && /sin d
 /* ── El protocolo describe el estado que la caja acepta ──────────────────── */
 
 console.log('registro/protocolo-llm-oal.md nombra exactamente los campos del esquema:');
-var fs = require('fs');
 var md = fs.readFileSync(path.join(__dirname, '..', 'registro', 'protocolo-llm-oal.md'), 'utf8');
 Object.keys(OAL.ESQUEMA).forEach(function (lista) {
   var m = new RegExp('^### `' + lista + '`[\\s\\S]*?(?=^### |^## |$(?![\\s\\S]))', 'm').exec(md);
