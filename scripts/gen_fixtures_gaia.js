@@ -47,7 +47,13 @@ var OBJS = [
   /* Los dos que le faltan al banco golden del catálogo de texturas (ADR 0024):
      controles de la regla de ausencia por mordida de máscara. */
   { cat: 'NGC7008',  csv: 'gaia_ngc7008.csv', fuente: global.window.BITACORA_NEBULOSAS },
-  { cat: 'Abell 12', csv: 'gaia_abell12.csv', fuente: global.window.BITACORA_NEBULOSAS }
+  { cat: 'Abell 12', csv: 'gaia_abell12.csv', fuente: global.window.BITACORA_NEBULOSAS },
+  /* NGC 205 estaba entre los de solo mirar, pero lo consume un GUARDIÁN
+     (test_ps1_nan_ausencia, caso E: los huecos de estrellas saturadas). La
+     razón de la decisión 9.1 para no versionar es que «una vista no exige
+     entrada estable»; un guardián sí, y sin el CSV en el repo el test revienta
+     en un clon nuevo. */
+  { cat: 'NGC 205',  csv: 'gaia_ngc205.csv',  fuente: global.window.BITACORA_GALAXIAS }
 ];
 
 /* Objetos que SOLO se miran (harness_vistas_np.js), nunca bit a bit. NO se
@@ -60,7 +66,6 @@ var VISUALES = [
   { cat: 'NGC 4826', csv: 'gaia_ngc4826.csv', fuente: global.window.BITACORA_GALAXIAS },
   { cat: 'NGC 253',  csv: 'gaia_ngc253.csv',  fuente: global.window.BITACORA_GALAXIAS },
   { cat: 'NGC 3310', csv: 'gaia_ngc3310.csv', fuente: global.window.BITACORA_GALAXIAS },
-  { cat: 'NGC 205',  csv: 'gaia_ngc205.csv',  fuente: global.window.BITACORA_GALAXIAS },
   { cat: 'NGC1982',  csv: 'gaia_ngc1982.csv', fuente: global.window.BITACORA_NEBULOSAS }
 ];
 

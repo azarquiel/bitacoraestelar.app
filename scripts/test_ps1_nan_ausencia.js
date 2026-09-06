@@ -1,39 +1,53 @@
 #!/usr/bin/env node
-/* Test de semántica de ausencia en el parche PS1 (previo al cambio de producción
-   del INFORME2 y guardián después de él).
+/* Guardián de la semántica de ausencia en el parche PS1: `v < cielo−2σ` y los
+   NaN del stack son AUSENCIA (fuera del parche), no ceros.
 
-   Dos modos:
-     node scripts/test_ps1_nan_ausencia.js actual   ← documenta la semántica
-       vigente y guarda la línea base (test_nan_baseline.json);
-     node scripts/test_ps1_nan_ausencia.js nuevo    ← exige la semántica nueva
-       (v < cielo−2σ y NaN del stack = ausencia / fuera del parche) y compara
-       contra la línea base.
+     node scripts/test_ps1_nan_ausencia.js              compara
+     node scripts/test_ps1_nan_ausencia.js --capturar   fija la línea base
+
+   QUÉ PRUEBA HOY, y qué no. Nació con dos modos: `actual` fijaba la línea base
+   con el módulo PREVIO al cambio (INFORME2) y `nuevo` exigía la semántica nueva
+   contra ella, así que sus números demostraban una MEJORA sobre aquel módulo.
+   Esa línea base vivía en `.scratch/` —ignorado por git— y se perdió sin haber
+   estado nunca en el repo, y con el código previo ya fuera de producción no se
+   puede volver a fabricar: fijarla hoy y llamarla «la del módulo previo» sería
+   falsificarla. Así que el modo `actual` se ha retirado, la línea base es la de
+   HOY, versionada en `scripts/fixtures/`, y lo que el guardián demuestra es
+   **no-deriva**: si alguien rompe la semántica de ausencia, los números salen de
+   sus márgenes y esto se pone rojo. Lo que ya no demuestra es la mejora de
+   entonces; eso vive en INFORME2/INFORME3, no aquí.
 
    Casos:
-     A  píxel válido: idéntico en ambos modos (anclaje bit a bit).
-     B  bloque sobresustraído (v ≪ cielo−2σ): actual → 0 y no se pinta;
-        nuevo → NaN y el lienzo recibe exactamente (1−w)·perfil (aquí w=0 en el
-        centro del bloque: el modelo entero, con su opacidad).
+     A  píxel válido: el anclaje no se mueve (bit a bit contra la línea base).
+     B  bloque sobresustraído (v ≪ cielo−2σ): NaN, y el lienzo recibe
+        exactamente (1−w)·perfil (aquí w=0 en el centro del bloque: el modelo
+        entero, con su opacidad).
      C  NaN aislado ya existente (hueco del stack).
      D  región contigua de NaN.
      E  NGC 205 real: los huecos de estrellas saturadas no fabrican puntos
         brillantes ni halo artificial.
      F  M51 real: el foso desaparece sin discontinuidades nuevas.
 
+   MUTACIÓN QUE LO PONE ROJO (ADR 0005): en `ps1AnclarACatalogo`
+   (`bitacora-ps1.js`, `if (v !== v || v < corte) { neto[i] = NaN; ...`),
+   cambiar ese `NaN` por `0` —la semántica de antes—. Deja 6 aserciones en rojo:
+   los tres anclajes A–D y los tres del pintado de B y D.
+
    Sin red si los parches están en la caché del harness. */
 'use strict';
 
 var fs = require('fs'), path = require('path');
 var RAIZ = path.join(__dirname, '..');
-var OUT = path.join(RAIZ, '.scratch', 'diagnostico-oscuros');
-fs.mkdirSync(OUT, { recursive: true });
-var BASE = path.join(OUT, 'test_nan_baseline.json');
+/* Versionada, no en `.scratch/`: una línea base que git no guarda es una que
+   nadie tiene en un clon nuevo, y este test llevaba tiempo reventando por eso. */
+var BASE = path.join(__dirname, 'fixtures', 'nan_ausencia_baseline.json');
 
-// Sin argumento hace de GUARDIÁN de la semántica nueva (modo 'nuevo'); 'actual'
-// solo sirvió para fijar la línea base con el módulo previo al cambio.
-var MODO = process.argv[2] || 'nuevo';
-if (MODO !== 'actual' && MODO !== 'nuevo') {
-  console.error('uso: node scripts/test_ps1_nan_ausencia.js [actual|nuevo]');
+var CAPTURAR = process.argv.indexOf('--capturar') >= 0;
+if (!CAPTURAR && !fs.existsSync(BASE)) {
+  console.error('no hay línea base en ' + path.relative(RAIZ, BASE) + '.\n' +
+    'Debería venir con el repo; si la has borrado, recupérala con git en vez de\n' +
+    'refabricarla. Para fijar una nueva a propósito (y decir por qué en el\n' +
+    'commit): node scripts/test_ps1_nan_ausencia.js --capturar');
   process.exit(2);
 }
 
@@ -45,7 +59,10 @@ var R = global.window.BitacoraGaiaRender;
 var CAT = global.window.BITACORA_GALAXIAS;
 var FOT = R.fot, PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
-var IN_GAIA = path.join(RAIZ, '.scratch', 'quitar-general');
+/* Los CSV de Gaia, versionados: estaban en `.scratch/quitar-general`, que
+   tampoco lo guarda el repo, así que los casos E y F no podían correr en un
+   clon nuevo ni aunque hubiera línea base. */
+var IN_GAIA = path.join(__dirname, 'fixtures', 'gaia');
 var SIZE = 720, AFOV = 70, CFG = { D: 457.2, M: 190, sqm: 21.2 };
 
 var fallos = 0;
@@ -130,7 +147,7 @@ var base = fs.existsSync(BASE) ? JSON.parse(fs.readFileSync(BASE, 'utf8')) : {};
 var nuevaBase = {};
 
 /* ═══ SINTÉTICO (casos A–D): parche fabricado sobre la geometría de M81 ═══ */
-console.log('── sintético (A–D), modo ' + MODO + ' ──');
+console.log('── sintético (A–D) ──');
 (function () {
   var gal = galDeFila(filaCat('NGC 3031'));
   var N = 256, lado = gal.ladoArcmin, escalaAs = lado * 60 / N;
@@ -178,21 +195,25 @@ console.log('── sintético (A–D), modo ' + MODO + ' ──');
                  halo: window.BitacoraPS1.ps1MedidasHalo(gal, comps),
                  thetaIntArcmin: window.BitacoraPS1.ps1ThetaIntArcmin(comps, gal.ba),
                  peso: peso, escalaMezcla: sMezcla, datos: anc };
-  exige(window.BitacoraPS1.ps1HaloActivo(parche.halo), 'halo activo (la mezcla imagen/modelo está en juego)');
+  /* El halo extrapolado de Sérsic está apagado a propósito desde 59cf1a3, así
+     que hoy la ÚNICA vía por la que el modelo entra en el parche es la mordida
+     (una máscara ancha borró parte de la escena y el relleno pasa a ser
+     obligatorio: `ps1HaloActivo`). El caso sintético la activa a mano, porque
+     lo que vigila es la semántica de la ausencia dentro de la mezcla, no el
+     interruptor del halo. Sin esto, B y D no se pintan y el caso no mide nada. */
+  parche.halo.mordida = true;
+  exige(window.BitacoraPS1.ps1HaloActivo(parche.halo),
+    'la mezcla imagen/modelo está en juego (por la mordida: el halo extrapolado se apagó en 59cf1a3)');
   exige(isFinite(sMezcla) && sMezcla > 0, 'escalaMezcla finita y positiva: ' + sMezcla.toFixed(4));
 
   var iB = (by + 1) * N + (bx + 1), iC = cyp * N + cxp, iD = (dy0 + 1) * N + (dx0 + 1);
   nuevaBase.sint = { ancA: anc[pA], sMezcla: sMezcla, wB: peso[iB], wC: peso[iC], wD: peso[iD] };
 
-  if (MODO === 'actual') {
-    exige(anc[iB] === 0, 'B (sobresustraído) ancla a 0 — semántica vigente');
-    exige(anc[iC] === 0, 'C (NaN del stack) ancla a 0 — semántica vigente: el hueco DEJA de ser hueco aquí');
-    exige(anc[iD] === 0, 'D (región NaN) ancla a 0 — semántica vigente');
-  } else {
-    exige(anc[iB] !== anc[iB], 'B (sobresustraído) ancla a NaN (ausencia)');
-    exige(anc[iC] !== anc[iC], 'C (NaN del stack) sigue NaN (ausencia unificada)');
-    exige(anc[iD] !== anc[iD], 'D (región NaN) sigue NaN');
-    exige(anc[pA] === base.sint.ancA, 'A: el píxel válido ancla BIT A BIT igual que antes');
+  exige(anc[iB] !== anc[iB], 'B (sobresustraído) ancla a NaN (ausencia)');
+  exige(anc[iC] !== anc[iC], 'C (NaN del stack) sigue NaN (ausencia unificada)');
+  exige(anc[iD] !== anc[iD], 'D (región NaN) sigue NaN');
+  if (!CAPTURAR) {
+    exige(anc[pA] === base.sint.ancA, 'A: el píxel válido ancla BIT A BIT igual que la línea base');
     exige(peso[iB] === base.sint.wB && peso[iC] === base.sint.wC && peso[iD] === base.sint.wD,
       'peso: NaN cuenta como sin-señal, igual que el 0 de antes (sin cambio)');
     exige(Math.abs(sMezcla - base.sint.sMezcla) / base.sint.sMezcla < 0.05,
@@ -234,33 +255,22 @@ console.log('── sintético (A–D), modo ' + MODO + ' ──');
   var mB = modeloConRampa(bx + 1.5, by + 1.5), mD = modeloConRampa(dx0 + 1.5, dy0 + 1.5);
   nuevaBase.sintPintado = { fB: fB, fC: fC, fD: fD };
 
-  if (MODO === 'actual') {
-    // Hoy el bloque ancla a 0 y el peso alrededor sigue alto: solo entra la
-    // fracción (1−w)·modelo, muy por debajo del modelo entero. Ese déficit ES
-    // el defecto de M51.
-    exige(fB < 0.6 * mB, 'B se queda muy por debajo del modelo (f=' + fB.toExponential(3) +
-      ' modelo=' + mB.toExponential(3) + '): el 0 con w alto bloquea el relleno — el defecto');
-    exige(fD < 0.6 * mD, 'D ídem con NaN del stack (f=' + fD.toExponential(3) +
-      ' modelo=' + mD.toExponential(3) + ')');
-    nota('C aislado: f=' + fC.toExponential(3) + ' (bilineal mezcla con vecinos finitos)');
-  } else {
-    // Ausencia: los 4 vecinos NaN aportan fv=0, wv=0 y cuentan en la cobertura
-    // → el lienzo trae EXACTAMENTE el modelo con su rampa, sin renormalizar.
-    exige(fB > 0, 'B se pinta (ausencia → (1−w)·perfil)');
-    exige(Math.abs(fB - mB) <= 2e-2 * Math.max(mB, 1e-30),
-      'B trae el MODELO exacto (f=' + fB.toExponential(3) + ' esperado=' + mB.toExponential(3) + ')');
-    exige(fD > 0 && Math.abs(fD - mD) <= 2e-2 * Math.max(mD, 1e-30),
-      'D (región NaN del stack) trae el modelo exacto: semántica UNIFICADA con la sobresustracción');
-    exige(fC > 0, 'C aislado se pinta');
-    exige(fB <= mB * 1.02 && fD <= mD * 1.02,
-      'el relleno no INVENTA brillo por encima del modelo');
-    // La igualdad del caso A se exige en el ANCLAJE (bit a bit, arriba): el
-    // nivel pintado cambia legítimamente porque deltaExp también cambia.
-  }
+  // Ausencia: los 4 vecinos NaN aportan fv=0, wv=0 y cuentan en la cobertura
+  // → el lienzo trae EXACTAMENTE el modelo con su rampa, sin renormalizar.
+  exige(fB > 0, 'B se pinta (ausencia → (1−w)·perfil)');
+  exige(Math.abs(fB - mB) <= 2e-2 * Math.max(mB, 1e-30),
+    'B trae el MODELO exacto (f=' + fB.toExponential(3) + ' esperado=' + mB.toExponential(3) + ')');
+  exige(fD > 0 && Math.abs(fD - mD) <= 2e-2 * Math.max(mD, 1e-30),
+    'D (región NaN del stack) trae el modelo exacto: semántica UNIFICADA con la sobresustracción');
+  exige(fC > 0, 'C aislado se pinta');
+  exige(fB <= mB * 1.02 && fD <= mD * 1.02,
+    'el relleno no INVENTA brillo por encima del modelo');
+  // La igualdad del caso A se exige en el ANCLAJE (bit a bit, arriba): el
+  // nivel pintado cambia legítimamente porque deltaExp también cambia.
 })();
 
 /* ═══ E: NGC 205 — huecos de estrellas saturadas ═══ */
-console.log('── E: NGC 205, modo ' + MODO + ' ──');
+console.log('── E: NGC 205 ──');
 var gal205 = galDeFila(filaCat('NGC 205'));
 B.bajar(gal205.ra, gal205.dec, gal205.ladoArcmin, PS1.salida).then(function (F205) {
   var nHuecos = 0;
@@ -282,7 +292,7 @@ B.bajar(gal205.ra, gal205.dec, gal205.ladoArcmin, PS1.salida).then(function (F20
   nota('cuerpo p50=' + m.p50.toFixed(2) + ' p99=' + m.p99.toFixed(2) + ' max=' + m.maxE.toFixed(2) +
        '; fuera(1.2–1.6a) pintado=' + m.fueraPct.toFixed(1) + ' %; flujo=' + m.flujoTotal.toExponential(4));
   nuevaBase.n205 = m;
-  if (MODO === 'nuevo') {
+  if (!CAPTURAR) {
     exige(m.maxE <= base.n205.maxE + 2, 'sin puntos brillantes nuevos (max E ' +
       m.maxE.toFixed(2) + ' ≤ ' + base.n205.maxE.toFixed(2) + '+2)');
     exige(m.fueraPct <= base.n205.fueraPct + 5, 'sin halo artificial fuera del cuerpo (' +
@@ -297,7 +307,7 @@ B.bajar(gal205.ra, gal205.dec, gal205.ladoArcmin, PS1.salida).then(function (F20
   }
 
   /* ═══ F: M51 — el foso desaparece sin discontinuidades ═══ */
-  console.log('── F: M51, modo ' + MODO + ' ──');
+  console.log('── F: M51 ──');
   var gal51 = galDeFila(filaCat('NGC 5194'));
   return B.bajar(gal51.ra, gal51.dec, gal51.ladoArcmin, PS1.salida).then(function (F51) {
     var parche51 = cadena(gal51, F51, 'gaia_ngc5194.csv');
@@ -331,21 +341,29 @@ B.bajar(gal205.ra, gal205.dec, gal205.ladoArcmin, PS1.salida).then(function (F20
     nota('anillo 60–160″ p20=' + m51.p20.toFixed(2) + ' p50=' + m51.p50.toFixed(2) +
          '; foso desde r=' + m51.rFoso + '″; salto relativo máximo=' + m51.saltoRelMax.toFixed(2));
     nuevaBase.m51 = m51;
-    if (MODO === 'nuevo') {
-      exige(m51.rFoso >= 200, 'el foso interno desaparece (arrancaba en ' + base.m51.rFoso + '″, ahora ' + m51.rFoso + '″)');
-      exige(m51.p50 >= base.m51.p50 + 4, 'la mediana del anillo sube (' +
+    if (!CAPTURAR) {
+      exige(m51.rFoso >= 200, 'el foso interno no vuelve (arranca en ' + m51.rFoso + '″, tope 200)');
+      /* Estas dos exigían una MEJORA sobre el módulo previo («la mediana sube
+         +4», «el negro absoluto desaparece»). Con la línea base de hoy, «sube
+         +4 sobre sí misma» es imposible, así que vigilan lo que este guardián
+         puede vigilar: que no baje. Y el negro absoluto SÍ está: p20 aterriza en
+         el fondo desde que 59cf1a3 apagó el halo extrapolado y el perfil dejó de
+         rellenar fuera de la imagen. Prohibirlo aquí sería exigir una ley que
+         producción retiró a propósito; lo que se prohíbe es que empeore. */
+      exige(m51.p50 >= base.m51.p50 - 0.5, 'la mediana del anillo no baja (' +
         base.m51.p50.toFixed(2) + ' → ' + m51.p50.toFixed(2) + ')');
-      exige(m51.p20 > c51.nivelFondo + 0.2, 'el negro absoluto desaparece (p20 ' +
-        m51.p20.toFixed(2) + ' > fondo ' + c51.nivelFondo.toFixed(2) + '+0.2)');
+      exige(m51.p20 >= base.m51.p20 - 0.5, 'el p20 del anillo no baja (' +
+        base.m51.p20.toFixed(2) + ' → ' + m51.p20.toFixed(2) +
+        '; hoy aterriza en el fondo, ' + c51.nivelFondo.toFixed(2) + ')');
       exige(m51.saltoRelMax <= base.m51.saltoRelMax + 0.05, 'sin discontinuidades nuevas (salto relativo ' +
         m51.saltoRelMax.toFixed(2) + ' ≤ ' + base.m51.saltoRelMax.toFixed(2) + '+0.05)');
     }
 
-    if (MODO === 'actual') {
+    if (CAPTURAR) {
       fs.writeFileSync(BASE, JSON.stringify(nuevaBase, null, 1));
       nota('línea base guardada en ' + path.relative(RAIZ, BASE));
     }
-    console.log(fallos ? '\nFALLOS: ' + fallos : '\nTodo en orden (' + MODO + ').');
+    console.log(fallos ? '\nFALLOS: ' + fallos : '\nTodo en orden.');
     process.exit(fallos ? 1 : 0);
   });
 }).catch(function (e) { console.error(e); process.exit(2); });
