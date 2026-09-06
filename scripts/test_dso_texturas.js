@@ -82,7 +82,7 @@ ok(n === fs.readdirSync(G.FIXTURES).filter(function (f) { return /\.json$/.test(
    'una fila por sidecar, ni más ni menos');
 
 console.log('\nLos bits publicados son los que dice el sidecar:');
-var sc = JSON.parse(fs.readFileSync(path.join(G.FIXTURES, 'NGC5194.' + v0 + '.json'), 'utf8'));
+var sc = JSON.parse(fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.json'), 'utf8'));
 ok(sc.version === v0, 'el sidecar del banco lleva el hash que este generador calcula hoy');
 ok(sc.generador === G.GENERADOR, 'y la versión del generador que lo escribió (' + sc.generador + ')');
 ok(Math.abs(sc.escalaAs - sc.ladoArcmin * 60 / sc.ancho) < 1e-3,
@@ -90,7 +90,7 @@ ok(Math.abs(sc.escalaAs - sc.ladoArcmin * 60 / sc.ancho) < 1e-3,
 ok(!!sc.wcs && isFinite(sc.wcs.ra0) && isFinite(sc.wcs.gx),
    'trae la WCS del recorte, no el supuesto de norte arriba');
 
-var png = fs.readFileSync(path.join(G.FIXTURES, 'NGC5194.' + v0 + '.png'));
+var png = fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.png'));
 P16.leer(png).then(function (img) {
   ok(!!img && img.ancho === sc.ancho && img.alto === sc.alto,
      'el PNG se lee y mide lo que declara el sidecar');

@@ -109,9 +109,12 @@ Promise.resolve().then(function () {
   ok(!!FILA, 'NGC 5194 está en el manifiesto generado');
   ok(FILA && FILA[1] === 'imagen', 'y declara modelo «imagen»');
   var id = PS1.ps1IdTextura('NGC 5194');
-  ok(id === 'NGC5194', 'el nombre de fichero pierde el espacio (' + id + ')');
-  ok(PS1.ps1IdTextura('PN A66 12') === 'PNA6612', 'todos los espacios, no solo el primero');
-  ok(PS1.ps1IdTextura('LDN 1622/B') === 'LDN1622_B', 'y la barra, que no puede ir en un nombre de fichero');
+  ok(id === 'NGC_5194', 'el espacio del nombre pasa a guion bajo (' + id + ')');
+  ok(PS1.ps1IdTextura('PN A66 12') === 'PN_A66_12', 'todos los espacios, no solo el primero');
+  ok(PS1.ps1IdTextura('LDN 1622/B') === 'LDN_1622_B', 'y la barra, que no puede ir en un nombre de fichero');
+  /* La regla se lee a ojo al desplegar; si se pegaran, 'PNA6612' no se lee. Y
+     no se puede cambiar sin republicar: el id va en URL inmutables. */
+  ok(PS1.ps1IdTextura('  NGC   5194 ') === 'NGC_5194', 'los espacios de sobra no fabrican guiones de sobra');
   ok(fs.existsSync(path.join(FIXT, id + '.' + FILA[2] + '.png')) &&
      fs.existsSync(path.join(FIXT, id + '.' + FILA[2] + '.json')),
      'la textura y el sidecar de esa versión están en scripts/fixtures/dso/');
@@ -141,7 +144,7 @@ Promise.resolve().then(function () {
     ok(!!f.wcs && claves(f.wcs) === claves(patron.wcs),
        'la WCS trae las mismas claves que la de parseFITS (' + (f.wcs ? claves(f.wcs) : 'null') + ')');
 
-    var sc = JSON.parse(fs.readFileSync(path.join(FIXT, 'NGC5194.' + FILA[2] + '.json'), 'utf8'));
+    var sc = JSON.parse(fs.readFileSync(path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.json'), 'utf8'));
     ok(f.ancho === sc.ancho && f.alto === sc.alto && f.escalaAs === sc.escalaAs,
        'tamaño y escala son los que declara el sidecar');
     var nan = 0, i;
@@ -246,8 +249,8 @@ Promise.resolve().then(function () {
 
     /* Y el sidecar que no cuadra con el PNG: fichero legible, textura falsa. */
     var Q = fresco();
-    var buenoPng = fs.readFileSync(path.join(FIXT, 'NGC5194.' + FILA[2] + '.png'));
-    var sc = JSON.parse(fs.readFileSync(path.join(FIXT, 'NGC5194.' + FILA[2] + '.json'), 'utf8'));
+    var buenoPng = fs.readFileSync(path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.png'));
+    var sc = JSON.parse(fs.readFileSync(path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.json'), 'utf8'));
     sc.ancho = sc.ancho / 2;
     var previo = global.fetch;
     global.fetch = function (u) {

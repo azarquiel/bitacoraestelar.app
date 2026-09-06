@@ -160,8 +160,8 @@ Ese objeto es la frontera natural del cambio.
 por objeto y versión:
 
 ```
-dso/NGC5194.<v>.png      textura (PNG, tipo de color 0, 16 bits, un canal)
-dso/NGC5194.<v>.json     sidecar
+dso/NGC_5194.<v>.png     textura (PNG, tipo de color 0, 16 bits, un canal)
+dso/NGC_5194.<v>.json    sidecar
 dso-texturas-datos.js    manifiesto (window.BITACORA_DSO_TEXTURAS)
 ```
 
@@ -170,8 +170,9 @@ generador, sondeo y banda, `lado`, `salida`, parámetros de codificación y, des
 fase 3, la versión de `BitacoraPS1.cfg` que gobernó la máscara. Un nombre distinto
 por versión hace inmutable la URL: `Cache-Control: public, max-age=31536000,
 immutable` por `.htaccess` sobre `dso/`, sin `?v=` que mantener a mano. El nombre
-de fichero es el `nombre` de la fila (`g[0]`) sin espacios ni barras
-(`NGC 5194` → `NGC5194`, `PN A66 12` → `PN_A66_12`), y la clave del manifiesto es
+de fichero es el `nombre` de la fila (`g[0]`) con los espacios y las barras
+convertidos en **guion bajo** (`NGC 5194` → `NGC_5194`, `PN A66 12` →
+`PN_A66_12`), y la clave del manifiesto es
 el `nombre` **literal** de la fila: la identidad es la del catálogo generado, no un
 cruce por posición (ADR 0015).
 
@@ -235,13 +236,15 @@ rellenan en las fases 3 y 4.
 >    que cosió, y su caché en disco tampoco los guarda. Añadirlos obliga a tocar
 >    esa biblioteca —compartida con los arneses— y a volver a bajar lo cacheado.
 >
-> Queda **sin decidir** el nombre de fichero de los objetos con varias palabras:
-> los dos ejemplos de arriba se contradicen (`NGC 5194` → `NGC5194` quita los
-> espacios; `PN A66 12` → `PN_A66_12` los sustituye). El código de T3 quita los
-> espacios (`PN A66 12` → `PNA6612`) porque es la regla del primer ejemplo, que es
-> la del único objeto publicado. **Hay que firmarlo antes de generar el banco**
-> (#201): el id entra en URL que se sirven como inmutables, y renombrar después
-> cuesta republicar el catálogo entero.
+> **Decidido (usuario, 2026-09-06): el nombre de fichero lleva guiones bajos.**
+> Los dos ejemplos originales de este apartado se contradecían (`NGC 5194` →
+> `NGC5194` pegaba las palabras; `PN A66 12` → `PN_A66_12` las separaba). Manda
+> el segundo, **porque se lee**: el nombre de fichero se mira a ojo al desplegar
+> y en la carpeta, y `PNA6612` no dice nada. El texto de arriba y la única
+> textura publicada (`NGC_5194.a4ddf9db`) ya siguen esta regla.
+>
+> Cambiarla otra vez cuesta el catálogo entero: el id va en URL que se sirven
+> como inmutables.
 
 **Codificación `asinh16`** (declarada, invertible, sin ley de display):
 

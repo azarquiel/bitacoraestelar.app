@@ -1626,14 +1626,20 @@
     return m;
   }
 
-  /* Nombre de fichero de la textura: el `nombre` de la fila sin espacios, y la
-     barra a guion bajo ('NGC 5194' → 'NGC5194', 'PN A66 12' → 'PNA6612'). La
-     regla es la del objetivo §4.1 —sin espacios ni barras—; su segundo ejemplo
-     ('PN_A66_12') sale de otra regla y no puede valer con el primero. La CLAVE del
-     manifiesto sigue siendo el nombre LITERAL: la identidad es la del catálogo,
-     no un cruce por posición (ADR 0015). */
+  /* Nombre de fichero de la textura: el `nombre` de la fila con los espacios y
+     las barras convertidos en guion bajo ('NGC 5194' → 'NGC_5194',
+     'PN A66 12' → 'PN_A66_12'). Se separan en vez de pegarse porque el nombre
+     de fichero se lee a ojo al desplegar y al mirar la carpeta, y 'PNA6612' no
+     se lee. Decidido por el usuario el 2026-09-06; el §4.1 del objetivo daba dos
+     ejemplos incompatibles y esta es la regla del segundo.
+
+     No se puede cambiar a la ligera: el id va en URL que se sirven como
+     inmutables, así que renombrar obliga a republicar el catálogo entero.
+
+     La CLAVE del manifiesto sigue siendo el nombre LITERAL: la identidad es la
+     del catálogo, no un cruce por posición (ADR 0015). */
   function ps1IdTextura(nombre) {
-    return String(nombre == null ? '' : nombre).trim().replace(/[\\/]/g, '_').replace(/\s+/g, '');
+    return String(nombre == null ? '' : nombre).trim().replace(/[\s\\/]+/g, '_');
   }
 
   /* Fila del manifiesto (window.BITACORA_DSO_TEXTURAS, generado):
