@@ -246,6 +246,36 @@ rellenan en las fases 3 y 4.
 > Cambiarla otra vez cuesta el catálogo entero: el id va en URL que se sirven
 > como inmutables.
 
+> **Enmienda (2026-09-06, al implementar T4 / #201).**
+>
+> 1. **`auditoria.fracSaturada` y `fuente.skycells` siguen sin escribirse.** El
+>    punto 4 de la enmienda anterior los dejaba en #201 y ahí se quedan: el
+>    precio no ha cambiado —tocar `lib_bajar_parche.js`, que comparten los
+>    arneses, e invalidar la caché de disco— y ninguno de los dos entra en los
+>    listones de la fase 1. La saturación tiene además su propio veredicto: la
+>    fase 0 (§C) midió tres objetos por encima del 5 % de ausencia en escena y
+>    dejó la fase 4 **cerrada**, así que el dato no decide nada hoy.
+> 2. **Un objeto sin cobertura deja su fila en disco** (`<id>.fila.json`, sin
+>    PNG). No estaba en el boceto: sin ella, la reanudación volvería a pedirle a
+>    STScI en cada pasada lo que ya se sabe que no está, y el manifiesto dejaría
+>    de reconstruirse solo del disco. Las filas de los **controles** no se
+>    escriben: se calculan del catálogo en cada regeneración.
+> 3. **Un objeto del banco todavía sin textura NO tiene fila en el manifiesto.**
+>    Una fila «fila» con motivo vacío apagaría el respaldo por proxy en silencio
+>    (`ps1FuenteParche` no pide red cuando hay fila), y el régimen mixto de la
+>    fase 1 es justo lo contrario: sin fila → proxy. Por eso el manifiesto de hoy
+>    tiene 6 filas y no 74: el criterio «una fila por objeto del banco» se cumple
+>    cuando la tirada completa haya corrido, y hasta entonces lo que falta es un
+>    pendiente declarado en el informe, no una fila muda.
+> 4. **Trampa conocida de la tirada completa** (heredada de #200, sin resolver):
+>    el manifiesto y el informe commiteados son la regeneración sobre
+>    `scripts/fixtures/dso/`, que es lo único que va en git, y `test_dso_texturas.js`
+>    los compara byte a byte contra ella. En cuanto `--banco` escriba en
+>    `simulador_ocular/dso/` —ignorado por git— los dos ficheros commiteados serán
+>    un superconjunto y ese guardián se pondrá rojo. Hay que decidir entonces qué
+>    compara el test: hoy no se toca porque la generación completa espera al PASA
+>    de la fase 2.
+
 **Codificación `asinh16`** (declarada, invertible, sin ley de display):
 
 ```
