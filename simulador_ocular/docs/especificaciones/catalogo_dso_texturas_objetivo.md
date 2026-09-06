@@ -246,6 +246,25 @@ rellenan en las fases 3 y 4.
 > Cambiarla otra vez cuesta el catálogo entero: el id va en URL que se sirven
 > como inmutables.
 
+> **Enmienda (2026-09-06, al implementar T4 / #201).**
+>
+> 1. **`auditoria.fracSaturada` y `fuente.skycells` siguen sin escribirse.** El
+>    punto 4 de la enmienda anterior los dejaba en #201 y ahí se quedan: el
+>    precio no ha cambiado —tocar `lib_bajar_parche.js`, que comparten los
+>    arneses, e invalidar la caché de disco— y ninguno de los dos entra en los
+>    listones de la fase 1. La saturación tiene además su propio veredicto: la
+>    fase 0 (§C) midió tres objetos por encima del 5 % de ausencia en escena y
+>    dejó la fase 4 **cerrada**, así que el dato no decide nada hoy.
+> 2. **Un objeto sin cobertura deja su fila en disco** (`<id>.fila.json`, sin
+>    PNG). No estaba en el boceto: sin ella, la reanudación volvería a pedirle a
+>    STScI en cada pasada lo que ya se sabe que no está, y el manifiesto dejaría
+>    de reconstruirse solo del disco. Las filas de los **controles** no se
+>    escriben: se calculan del catálogo en cada regeneración.
+> 3. **Un objeto del banco todavía sin textura NO tiene fila en el manifiesto.**
+>    Una fila «fila» con motivo vacío apagaría el respaldo por proxy en silencio
+>    (`ps1FuenteParche` no pide red cuando hay fila), y el régimen mixto de la
+>    fase 1 es justo lo contrario: sin fila → proxy.
+
 **Codificación `asinh16`** (declarada, invertible, sin ley de display):
 
 ```

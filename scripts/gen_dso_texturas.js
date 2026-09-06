@@ -8,13 +8,21 @@
    resources/js/, y las comparte con el navegador. Copiarlas a Python sería la
    deriva que prohíbe el ADR 0008. Aquí no se define ninguna ley: se llaman.
 
-   Un objeto por ejecución (`--solo`), que es la rebanada de #200; cubrir el
-   banco entero, con reanudación e informe, es #201.
+   Un objeto por ejecución (`--solo`) o el banco entero del ADR 0024
+   (`--banco`), que la lista la devuelve lib_banco_dso.js y no se escribe aquí.
+   Reanudable: lo que ya tiene su `<v>` en disco no se vuelve a pedir ni a
+   escribir, así que una ejecución interrumpida continúa donde estaba.
 
    El parche viene de lib_bajar_parche.js, con su caché en $PS1_HARNESS_DIR: si
-   el objeto ya está bajado, esto no toca la red.
+   el objeto ya está bajado, esto no toca la red. Un objeto sin cobertura de PS1
+   no se reintenta para siempre: deja su fila de manifiesto (`sin-cobertura`) y
+   la siguiente ejecución lo salta. Sin pausas ni espera creciente: la fase 0
+   midió 147 descargas seguidas sin un solo estrangulamiento y basta con un
+   reintento simple (docs/validacion/dso_texturas_fase0.md §D).
 
    Uso:  node scripts/gen_dso_texturas.js --solo "NGC 5194"
+         node scripts/gen_dso_texturas.js --banco
+         node scripts/gen_dso_texturas.js --banco --seco   # qué haría, sin red
          node scripts/gen_dso_texturas.js --solo "NGC 5194" --dir scripts/fixtures/dso
 */
 'use strict';
@@ -46,6 +54,13 @@ var GENERADOR = 'gen_dso_texturas 1';
 var SONDEO = 'PS1 DR2 3π stack';
 var MANIFIESTO = path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js');
 var FIXTURES = path.join(RAIZ, 'scripts', 'fixtures', 'dso');
+var INFORME = path.join(RAIZ, 'simulador_ocular', 'docs', 'validacion', 'dso_texturas_informe.md');
+
+/* Umbral de la lista de revisión, del §5 fase 0 del objetivo: por encima de esta
+   fracción de ausencia DENTRO de la escena, el objeto se mira a ojo antes de
+   darlo por bueno. No excluye a nadie —eso sería una ley nueva, y las leyes van
+   al ADR— solo lo pone en la lista del informe. */
+var REVISION = 0.2;
 
 function arg(n, pordefecto) {
   var i = process.argv.indexOf(n);
@@ -94,22 +109,59 @@ function sidecars(dir) {
     .map(function (n) { return JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8')); });
 }
 
-function escribirManifiesto(dir) {
+/* Un objeto que no puede tener textura deja su propio sidecar (`<id>.fila.json`,
+   sin PNG): así el veredicto es reanudable —no se vuelve a pedir a STScI lo que
+   ya se sabe que no está— y el manifiesto se sigue reconstruyendo del disco.
+   Los cinco controles de exclusión NO pasan por aquí: su veredicto es el del
+   banco y se calcula sin tocar la red ni el disco. */
+function escribirFila(dir, nombre, motivo, ra, dec) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, PS1.ps1IdTextura(nombre) + '.fila.json'),
+    JSON.stringify({ nombre: nombre, modelo: 'fila', motivo: motivo,
+                     generador: GENERADOR, ra: ra, dec: dec }, null, 1) + '\n');
+}
+
+/* Filas de los controles del ADR 0024. Se leen del banco, que las decide con
+   `decMin` y `ps1CabeEnParche` —las leyes de producción— y no de una lista de
+   motivos escrita a mano: si el catálogo cambiara y uno dejara de ser control,
+   el banco lo dice en `avisos` y aquí no aparece con un motivo falso. */
+function filasControl() {
+  return BANCO.banco().controles.filter(function (c) {
+    return c.fila && (c.real === 'sur' || c.real === 'no-cabe');
+  }).map(function (c) {
+    return { ra: c.fila[2], fila: [c.fila[0], 'fila', '', 0, 0, 0, c.real] };
+  });
+}
+
+/* Los sidecars de los dos directorios, uno por objeto. Si un objeto tiene los
+   dos —primero se quedó sin cobertura y luego apareció— manda la textura: el
+   veredicto de ausencia caducó en cuanto hubo píxeles. */
+function sidecarsDe(dir) {
   var porNombre = {};
   sidecars(FIXTURES).concat(dir === FIXTURES ? [] : sidecars(dir))
-    .forEach(function (s) { porNombre[s.nombre] = s; });
-  var filas = Object.keys(porNombre).map(function (n) { return porNombre[n]; })
-    .sort(function (a, b) { return a.ra - b.ra; })
-    .map(function (s) {
-      return [s.nombre, 'imagen', s.version, s.ancho, s.escalaAs,
-              s.auditoria.fracAusencia, ''];
+    .forEach(function (s) {
+      var v = porNombre[s.nombre];
+      if (!v || v.modelo === 'fila' || s.modelo !== 'fila') porNombre[s.nombre] = s;
     });
+  return Object.keys(porNombre).map(function (n) { return porNombre[n]; });
+}
+
+function escribirManifiesto(dir) {
+  var filas = sidecarsDe(dir)
+    .map(function (s) {
+      return { ra: s.ra, fila: s.modelo === 'fila'
+        ? [s.nombre, 'fila', '', 0, 0, 0, s.motivo]
+        : [s.nombre, 'imagen', s.version, s.ancho, s.escalaAs, s.auditoria.fracAusencia, ''] };
+    })
+    .concat(filasControl())
+    .sort(function (a, b) { return a.ra - b.ra; })
+    .map(function (e) { return e.fila; });
   var cuerpo = filas.map(function (f) {
     return '  ' + JSON.stringify(f).replace(/,/g, ', ') + ',';
   }).join('\n');
   fs.writeFileSync(MANIFIESTO,
     '/* Texturas DSO — GENERADO, no editar a mano.\n' +
-    '   Regenerar: node scripts/gen_dso_texturas.js --solo "<nombre>"\n' +
+    '   Regenerar: node scripts/gen_dso_texturas.js --banco (o --solo "<nombre>")\n' +
     '   Campos: [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo]\n' +
     '   modelo ∈ {imagen, fila}; motivo ∈ {"", sur, no-cabe, sin-cobertura,\n' +
     '   pisada, ausencia-excesiva}. Una fila que no está aquí se pide al proxy\n' +
@@ -122,17 +174,30 @@ function generar(nombre, dir) {
   var f = filaDe(nombre);
   if (!f) throw new Error('no está en el catálogo difuso: ' + nombre);
   var motivo = motivoAusencia(f);
-  if (motivo) throw new Error(nombre + ' no admite textura (' + motivo + '): eso es una fila de manifiesto, y las escribe #201');
+  /* Un objeto que no cabe o está al sur no se descarga ni se escribe: su fila de
+     manifiesto sale del banco (`filasControl`), sin disco y sin red. */
+  if (motivo) throw new Error(nombre + ' no admite textura (' + motivo + '): su fila la pone el manifiesto, no una textura');
 
   var lado = PS1.ps1LadoArcmin(f[4]);
   var campo = PS1.ps1GalaxiasDelCampo([f], f[2], f[3], lado);
   if (!campo.length) throw new Error(nombre + ': ps1GalaxiasDelCampo no lo devuelve');
   var gal = campo[0], salida = PS1.cfg.salida, v = version(gal, salida);
 
-  var base = path.join(dir, PS1.ps1IdTextura(gal.nombre) + '.' + v);
-  if (fs.existsSync(base + '.png') && fs.existsSync(base + '.json')) {
-    console.log('ya estaba: ' + path.basename(base) + '.{png,json}');
-    return Promise.resolve();
+  var id = PS1.ps1IdTextura(gal.nombre), base = path.join(dir, id + '.' + v);
+  /* Reanudación: lo ya resuelto —textura escrita, o veredicto de que no la
+     tendrá— no se vuelve a pedir. Se mira también en las fixtures, que es donde
+     viven las texturas del banco golden. */
+  if ([dir, FIXTURES].some(function (d) { return fs.existsSync(path.join(d, id + '.fila.json')); })) {
+    console.log('ya estaba (fila): ' + id);
+    return Promise.resolve('fila');
+  }
+  var hecho = [dir, FIXTURES].filter(function (d) {
+    return fs.existsSync(path.join(d, id + '.' + v + '.png')) &&
+           fs.existsSync(path.join(d, id + '.' + v + '.json'));
+  })[0];
+  if (hecho) {
+    console.log('ya estaba: ' + id + '.' + v + '.{png,json} en ' + path.relative(RAIZ, hecho));
+    return Promise.resolve('ya');
   }
 
   return bajar(gal.ra, gal.dec, gal.ladoArcmin, salida).then(function (p) {
@@ -208,26 +273,210 @@ function generar(nombre, dir) {
       ' (en escena ' + (100 * sidecar.auditoria.fracAusenciaEscena).toFixed(2) + ' %)');
     console.log('  error de cuantización: ' + errSigma.toExponential(2) + ' σ cerca del cielo, ' +
       errRel.toExponential(2) + ' relativo por encima de 5σ');
+    return 'nuevo';
   });
+}
+
+/* ── El banco entero ──────────────────────────────────────────────────────
+   La lista la devuelve lib_banco_dso.js: aquí no hay ningún nombre ni ninguna
+   cuenta de objetos (ADR 0005). En serie a propósito —STScI es un servicio
+   ajeno— y reanudable, que `generar` salta lo ya escrito.
+
+   `--seco` recorre el banco sin pedir nada: dice qué falta y qué haría. Es lo
+   que se puede probar sin red, y lo que se mira antes de una tirada larga. */
+function correrBanco(dir, seco) {
+  var b = BANCO.banco();
+  b.avisos.forEach(function (a) { console.log('AVISO · ' + a); });
+  var estado = { objetos: b.objetos.length, controles: b.controles.length,
+                 nuevos: 0, ya: 0, filas: 0, pendientes: 0, fallos: [] };
+
+  return b.objetos.reduce(function (cadena, o, i) {
+    return cadena.then(function () {
+      console.log('\n[' + (i + 1) + '/' + b.objetos.length + '] ' + o.nombre + '  (' + o.motivo + ')');
+      if (seco) {
+        var v = version(o.gal, PS1.cfg.salida), id = PS1.ps1IdTextura(o.nombre);
+        var hay = [dir, FIXTURES].some(function (d) {
+          return fs.existsSync(path.join(d, id + '.' + v + '.png')) ||
+                 fs.existsSync(path.join(d, id + '.fila.json'));
+        });
+        console.log('  ' + (hay ? 'ya está' : 'pediría') + '  ' + id + '.' + v +
+          '  ' + o.gal.ladoArcmin.toFixed(2) + '′ → ' + PS1.cfg.salida + ' px');
+        if (hay) estado.ya++; else estado.pendientes++;
+        return;
+      }
+      /* `generar` avisa de lo suyo tirando —también antes de la primera promesa,
+         cuando el objeto ni siquiera admite textura—, así que la llamada va
+         envuelta: un objeto que revienta no puede tumbar la tirada entera.
+         Un reintento simple, que es lo que la fase 0 justificó (§D): sin pausas
+         ni espera creciente, porque no se midió estrangulamiento alguno. */
+      var intento = function () { return Promise.resolve().then(function () { return generar(o.nombre, dir); }); };
+      return intento().catch(intento)
+        .then(function (r) { estado[r === 'nuevo' ? 'nuevos' : r === 'fila' ? 'filas' : 'ya']++; })
+        .catch(function (e) {
+          /* Sin cobertura de PS1 es un veredicto, no una avería: se anota como
+             fila de manifiesto y no se vuelve a pedir nunca más. */
+          if (/sin cobertura|ninguna celda/.test(e.message)) {
+            escribirFila(dir, o.nombre, 'sin-cobertura', o.gal.ra, o.gal.dec);
+            estado.filas++;
+            console.log('  sin cobertura de PS1 → fila de manifiesto');
+          } else {
+            estado.fallos.push(o.nombre + ': ' + e.message);
+            console.log('  FALLO: ' + e.message);
+          }
+        });
+    });
+  }, Promise.resolve()).then(function () { return estado; });
+}
+
+/* ── El informe ───────────────────────────────────────────────────────────
+   Lo que hay ESCRITO, no lo que se pretendía escribir: sale de los sidecars y
+   del peso de los PNG en disco, igual que el manifiesto, y por eso una tirada a
+   medias se ve como lo que es. Sin fecha dentro, para que regenerarlo sin haber
+   generado nada no ensucie el árbol: la fecha la lleva el commit. */
+function escribirInforme(dir) {
+  var todos = sidecarsDe(dir);
+  var imagenes = todos.filter(function (s) { return s.modelo !== 'fila'; })
+    .sort(function (a, b) { return a.ra - b.ra; });
+
+  var b = BANCO.banco(), cuenta = {};
+  cuenta['imagen'] = imagenes.length;
+  todos.filter(function (s) { return s.modelo === 'fila'; })
+    .forEach(function (s) { cuenta[s.motivo] = (cuenta[s.motivo] || 0) + 1; });
+  filasControl().forEach(function (e) { cuenta[e.fila[6]] = (cuenta[e.fila[6]] || 0) + 1; });
+  /* Pendiente = sin textura Y sin veredicto. Un objeto con su fila escrita
+     (`sin-cobertura`) está resuelto: no se le va a volver a pedir nada. */
+  var resuelto = {};
+  todos.forEach(function (s) { resuelto[BANCO.clave(s.nombre)] = 1; });
+  var pendientes = b.objetos.filter(function (o) { return !resuelto[BANCO.clave(o.nombre)]; });
+
+  /* Volumen: bytes en disco, y bytes/px, que es la cifra con la que la fase 0
+     corrigió el ×0,6 de la tabla 4.2 del objetivo. */
+  var bytes = 0, bpp = [];
+  imagenes.forEach(function (s) {
+    var f = [dir, FIXTURES].map(function (d) {
+      return path.join(d, PS1.ps1IdTextura(s.nombre) + '.' + s.version + '.png');
+    }).filter(function (p) { return fs.existsSync(p); })[0];
+    if (!f) return;
+    var n = fs.statSync(f).size;
+    bytes += n;
+    bpp.push(n / (s.ancho * s.alto));
+  });
+  bpp.sort(function (a, c) { return a - c; });
+  var mediana = bpp.length ? bpp[bpp.length >> 1] : 0;
+
+  /* Los mismos tramos de escala que la tabla B de la fase 0, para poder
+     comparar sin volver a decidir dónde cortar. */
+  var TRAMOS = [[0, 0.15], [0.15, 0.25], [0.25, 0.5], [0.5, Infinity]];
+  var hist = TRAMOS.map(function (t) {
+    return imagenes.filter(function (s) { return s.escalaAs >= t[0] && s.escalaAs < t[1]; }).length;
+  });
+
+  var revision = imagenes.filter(function (s) {
+    return s.auditoria && s.auditoria.fracAusenciaEscena > REVISION;
+  }).sort(function (a, c) { return c.auditoria.fracAusenciaEscena - a.auditoria.fracAusenciaEscena; });
+
+  var L = [];
+  L.push('# Texturas DSO — informe de generación');
+  L.push('');
+  L.push('GENERADO por `node scripts/gen_dso_texturas.js --banco`, no editar a mano.');
+  L.push('Sale de los sidecars y de los PNG escritos, así que una tirada a medias se');
+  L.push('ve como lo que es. El banco lo fija el ADR 0024 y lo devuelve');
+  L.push('`scripts/lib_banco_dso.js`.');
+  L.push('');
+  L.push('## Cuenta por motivo');
+  L.push('');
+  L.push('| modelo / motivo | objetos |');
+  L.push('|---|---|');
+  Object.keys(cuenta).sort().forEach(function (k) { L.push('| ' + k + ' | ' + cuenta[k] + ' |'); });
+  L.push('| pendientes del banco | ' + pendientes.length + ' |');
+  L.push('| **banco (ADR 0024)** | **' + b.objetos.length + ' + ' + b.controles.length + ' controles** |');
+  b.avisos.forEach(function (a) { L.push(''); L.push('> AVISO · ' + a); });
+  L.push('');
+  L.push('## Volumen');
+  L.push('');
+  L.push('| medida | valor |');
+  L.push('|---|---|');
+  L.push('| texturas escritas | ' + imagenes.length + ' |');
+  L.push('| total en disco | ' + (bytes / 1048576).toFixed(1) + ' MB |');
+  L.push('| bytes/px (mediana) | ' + mediana.toFixed(2) + ' |');
+  L.push('');
+  L.push('## Histograma de `escalaAs`');
+  L.push('');
+  L.push('| ″/px | texturas |');
+  L.push('|---|---|');
+  L.push('| < 0,15 | ' + hist[0] + ' |');
+  L.push('| 0,15 – 0,25 | ' + hist[1] + ' |');
+  L.push('| 0,25 – 0,5 | ' + hist[2] + ' |');
+  L.push('| ≥ 0,5 | ' + hist[3] + ' |');
+  L.push('');
+  L.push('## Lista de revisión');
+  L.push('');
+  L.push('Objetos con `fracAusenciaEscena` > ' + (100 * REVISION).toFixed(0) +
+         ' %: la ausencia cae dentro de la escena y hay que mirarlos a ojo antes');
+  L.push('de darlos por buenos (objetivo §5, fase 0).');
+  L.push('');
+  if (!revision.length) L.push('Ninguno.');
+  else {
+    L.push('| objeto | fracAusenciaEscena | fracAusencia |');
+    L.push('|---|---|---|');
+    revision.forEach(function (s) {
+      L.push('| ' + s.nombre + ' | ' + (100 * s.auditoria.fracAusenciaEscena).toFixed(1) +
+             ' % | ' + (100 * s.auditoria.fracAusencia).toFixed(1) + ' % |');
+    });
+  }
+  if (pendientes.length) {
+    L.push('');
+    L.push('## Pendientes');
+    L.push('');
+    L.push('Objetos del banco sin textura ni veredicto: caen al proxy mientras');
+    L.push('`BitacoraPS1.cfg.proxyRespaldo` siga encendido (régimen mixto).');
+    L.push('');
+    L.push(pendientes.map(function (o) { return o.nombre; }).join(', ') + '.');
+  }
+  L.push('');
+  fs.writeFileSync(INFORME, L.join('\n'));
+  return { imagenes: imagenes.length, pendientes: pendientes.length,
+           revision: revision.length, bytes: bytes, cuenta: cuenta };
 }
 
 /* Requerido como módulo (scripts/test_dso_texturas.js) no genera nada: expone
    lo que se puede probar sin red ni disco. */
 module.exports = { version: version, filaDe: filaDe, motivoAusencia: motivoAusencia,
-                   escribirManifiesto: escribirManifiesto, generar: generar,
-                   GENERADOR: GENERADOR, FIXTURES: FIXTURES, MANIFIESTO: MANIFIESTO };
+                   escribirManifiesto: escribirManifiesto, escribirInforme: escribirInforme,
+                   filasControl: filasControl, generar: generar, correrBanco: correrBanco,
+                   GENERADOR: GENERADOR, FIXTURES: FIXTURES, MANIFIESTO: MANIFIESTO,
+                   INFORME: INFORME, REVISION: REVISION };
 if (require.main !== module) return;
 
 var nombre = arg('--solo', '');
 var dir = path.resolve(RAIZ, arg('--dir', path.join('simulador_ocular', 'dso')));
-if (!nombre) {
-  console.error('uso: node scripts/gen_dso_texturas.js --solo "NGC 5194" [--dir <ruta>]');
+var enBanco = process.argv.indexOf('--banco') > 0, seco = process.argv.indexOf('--seco') > 0;
+if (!nombre && !enBanco) {
+  console.error('uso: node scripts/gen_dso_texturas.js --solo "NGC 5194" | --banco [--seco] [--dir <ruta>]');
   process.exit(2);
 }
-generar(nombre, dir).then(function () {
-  console.log('manifiesto: ' + escribirManifiesto(dir) + ' textura(s) en ' +
+
+/* El manifiesto y el informe se escriben SIEMPRE al final, también tras una
+   tirada a medias o con fallos: los dos se reconstruyen de lo que hay en disco,
+   así que declarar de menos es correcto y declarar de más, imposible. */
+function cerrar(estado) {
+  console.log('\nmanifiesto: ' + escribirManifiesto(dir) + ' fila(s) en ' +
     path.relative(RAIZ, MANIFIESTO));
-}).catch(function (e) {
-  console.error('FALLO: ' + e.message);
-  process.exit(1);
-});
+  var inf = escribirInforme(dir);
+  console.log('informe: ' + path.relative(RAIZ, INFORME) + '  ' + inf.imagenes +
+    ' textura(s), ' + inf.pendientes + ' pendiente(s), ' + inf.revision + ' a revisar, ' +
+    (inf.bytes / 1048576).toFixed(1) + ' MB');
+  if (estado && estado.fallos.length) {
+    console.error('\n' + estado.fallos.length + ' fallo(s):\n  ' + estado.fallos.join('\n  '));
+    process.exit(1);
+  }
+}
+
+/* Envuelto: `generar` avisa tirando, y también antes de la primera promesa. */
+Promise.resolve().then(function () {
+  return enBanco ? correrBanco(dir, seco) : generar(nombre, dir).then(function () { return null; });
+}).then(cerrar)
+  .catch(function (e) {
+    console.error('FALLO: ' + e.message);
+    process.exit(1);
+  });
