@@ -137,6 +137,28 @@
     return u16;
   }
 
+  /* CRC-32 del formato (PNG §5.5), la misma tabla que usa el escritor de
+     `scripts/lib_png.js`, que la toma de aquí para que no haya dos.
+     Lo que protege no es el IDAT —el Adler-32 de zlib ya lo cubre— sino el
+     IHDR: un byte volteado en las dimensiones da un fichero coherente que se
+     decodifica entero y sale mal, que es el fallo silencioso peor de todos. */
+  var tabla = null;
+  function crc32(buf, ini, fin) {
+    if (!tabla) {
+      tabla = new Int32Array(256);
+      for (var n = 0; n < 256; n++) {
+        var t = n;
+        for (var k = 0; k < 8; k++) t = (t & 1) ? (0xedb88320 ^ (t >>> 1)) : (t >>> 1);
+        tabla[n] = t;
+      }
+    }
+    var c = -1;
+    for (var i = ini == null ? 0 : ini, f = fin == null ? buf.length : fin; i < f; i++) {
+      c = tabla[(c ^ buf[i]) & 255] ^ (c >>> 8);
+    }
+    return (c ^ -1) >>> 0;
+  }
+
   var FIRMA = [137, 80, 78, 71, 13, 10, 26, 10];
 
   function leer(bytes) {
@@ -149,6 +171,7 @@
       var len = dv.getUint32(p), tipo = String.fromCharCode(b[p + 4], b[p + 5], b[p + 6], b[p + 7]);
       if (p + 12 + len > b.length) return Promise.resolve(null);
       var d = p + 8;
+      if (crc32(b, p + 4, d + len) !== dv.getUint32(d + len)) return Promise.resolve(null);
       if (tipo === 'IHDR') {
         ancho = dv.getUint32(d); alto = dv.getUint32(d + 4);
         /* Solo el formato que escribe lib_png.escribirGris16: gris, 16 bits, sin
@@ -171,7 +194,8 @@
     });
   }
 
-  var API = { codificar: codificar, decodificar: decodificar, leer: leer, PASOS: PASOS };
+  var API = { codificar: codificar, decodificar: decodificar, leer: leer,
+              crc32: crc32, PASOS: PASOS };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.BitacoraPNG16 = API; }

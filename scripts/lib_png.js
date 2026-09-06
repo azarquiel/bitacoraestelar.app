@@ -4,21 +4,11 @@
    escribir(ruta, rgb Uint8Array W*H*3, W, H) */
 'use strict';
 var fs = require('fs'), zlib = require('zlib');
+/* El CRC-32 del formato lo pone el lector, que es quien lo comprueba y quien
+   además vive en el navegador: escritor y lector usan la misma tabla o no
+   sirve de nada que uno la verifique (ADR 0008). */
+var crc32 = require('../resources/js/bitacora-png16.js').crc32;
 
-var tabla = null;
-function crc32(buf) {
-  if (!tabla) {
-    tabla = new Int32Array(256);
-    for (var n = 0; n < 256; n++) {
-      var c = n;
-      for (var k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-      tabla[n] = c;
-    }
-  }
-  var c2 = -1;
-  for (var i = 0; i < buf.length; i++) c2 = tabla[(c2 ^ buf[i]) & 255] ^ (c2 >>> 8);
-  return (c2 ^ -1) >>> 0;
-}
 function chunk(tipo, datos) {
   var b = Buffer.alloc(8 + datos.length + 4);
   b.writeUInt32BE(datos.length, 0); b.write(tipo, 4);
@@ -69,4 +59,4 @@ function escribirGris16(ruta, u16, W, H) {
 }
 
 module.exports = { escribir: escribir, escribirGris16: escribirGris16,
-                   bufferGris16: bufferGris16 };
+                   bufferGris16: bufferGris16, chunk: chunk };

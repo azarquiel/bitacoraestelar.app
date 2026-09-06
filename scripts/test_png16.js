@@ -11,7 +11,9 @@
    Reimplementación a propósito, declarada como manda el ADR 0008: `pngFiltrado`
    ARMA ficheros PNG con filtros 1-4 y con el IDAT partido. No es una copia de la
    ley que se mide —el decodificador— sino su contraparte: contrastar el lector
-   contra un escritor independiente es justamente lo que se quiere.
+   contra un escritor independiente es justamente lo que se quiere. Por lo mismo
+   el CRC-32 propio se compara con `zlib.crc32`: escritor y lector comparten la
+   tabla, así que solo un tercero puede decir que la tabla es la correcta.
 
    Sin dependencias:  node scripts/test_png16.js  */
 'use strict';
@@ -35,28 +37,10 @@ function casi(a, b, tol, etiqueta) {
 
 /* ── Escritor de contraste ────────────────────────────────────────────────────
    PNG gris de 16 bits con el filtro `f` en TODAS las filas y el IDAT partido en
-   `trozos` pedazos. crc32 propio: el formato lo exige por chunk. */
-var tabla = null;
-function crc32(buf) {
-  if (!tabla) {
-    tabla = new Int32Array(256);
-    for (var n = 0; n < 256; n++) {
-      var c = n;
-      for (var k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-      tabla[n] = c;
-    }
-  }
-  var c2 = -1;
-  for (var i = 0; i < buf.length; i++) c2 = tabla[(c2 ^ buf[i]) & 255] ^ (c2 >>> 8);
-  return (c2 ^ -1) >>> 0;
-}
-function chunk(tipo, datos) {
-  var b = Buffer.alloc(8 + datos.length + 4);
-  b.writeUInt32BE(datos.length, 0); b.write(tipo, 4);
-  datos.copy(b, 8);
-  b.writeUInt32BE(crc32(b.slice(4, 8 + datos.length)), 8 + datos.length);
-  return b;
-}
+   `trozos` pedazos. El empaquetado en chunks lo pone `lib_png`, que es el
+   escritor de verdad; lo que este fichero aporta —y que ningún escritor del
+   árbol emite— son los filtros 1-4 y el IDAT troceado. */
+var chunk = LP.chunk;
 function paeth(a, b, c) {
   var p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
   return (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
@@ -186,11 +170,48 @@ P.leer(png).then(function (img) {
   pendientes.push(P.leer(png.slice(0, png.length - 40)).then(function (r) {
     ok(r === null, 'PNG truncado devuelve null, no una imagen a medias');
   }));
+  /* Profundidad 8: con el CRC del IHDR rehecho, para que lo que rechace sea la
+     profundidad y no la corrupción. */
   var otro = LP.bufferGris16(cod.u16, W, H);
-  otro[24] = 8;   // profundidad 8 en el IHDR: no es una textura
+  otro[24] = 8;
+  otro.writeUInt32BE(P.crc32(otro, 12, 29), 29);
   pendientes.push(P.leer(otro).then(function (r) {
-    ok(r === null, 'profundidad distinta de 16 devuelve null');
+    ok(r === null, 'profundidad distinta de 16 devuelve null (con el CRC bueno)');
   }));
+
+  /* ── Integridad: el CRC del formato ──────────────────────────────────────────
+     Los dos casos de abajo tocan SOLO los cuatro bytes del CRC y dejan los datos
+     intactos: el fichero se decodificaría entero y sin un error, así que el
+     único que puede rechazarlo es el CRC. Es la forma de que estos asserts no
+     pasen por otra causa (ADR 0005) —el ancho falseado, por ejemplo, ya lo caza
+     el guardián de filtro, y un bit volteado dentro del IDAT lo caza el
+     Adler-32 de zlib—. */
+  var ihdrMal = LP.bufferGris16(cod.u16, W, H);
+  ihdrMal.writeUInt32BE((ihdrMal.readUInt32BE(29) ^ 1) >>> 0, 29);   // CRC del IHDR
+  pendientes.push(P.leer(ihdrMal).then(function (r) {
+    ok(r === null, 'CRC del IHDR corrupto: null, y sin él la imagen saldría entera y mal');
+  }));
+  var idatMal = LP.bufferGris16(cod.u16, W, H);
+  var finIdat = idatMal.length - 12 - 4;                     // antes del IEND
+  idatMal.writeUInt32BE((idatMal.readUInt32BE(finIdat) ^ 1) >>> 0, finIdat);
+  pendientes.push(P.leer(idatMal).then(function (r) {
+    ok(r === null, 'CRC del IDAT corrupto: null');
+  }));
+
+  /* Y el ancho falseado, que es el fallo que se teme: da igual quién lo cace,
+     el contrato es que no salga imagen. */
+  var anchoMal = LP.bufferGris16(cod.u16, W, H);
+  anchoMal.writeUInt32BE(18, 16);
+  pendientes.push(P.leer(anchoMal).then(function (r) {
+    ok(r === null, 'IHDR con el ancho falseado no devuelve una imagen equivocada');
+  }));
+
+  /* El CRC propio, contra el del zlib de Node: implementación independiente,
+     que es lo único que descarta que escritor y lector compartan un error. */
+  ok(P.crc32(Buffer.from('IHDR')) === zlib.crc32(Buffer.from('IHDR')) &&
+     P.crc32(png) === zlib.crc32(png) &&
+     P.crc32(png, 12, 29) === zlib.crc32(png.slice(12, 29)),
+     'crc32 coincide con zlib.crc32 (entero y por tramo)');
 
   return Promise.all(pendientes);
 }).then(function () {
@@ -208,11 +229,12 @@ P.leer(png).then(function (img) {
 }).then(function () {
   /* ADR 0005: cardinalidad mínima. Si una promesa se pierde por el camino, el
      proceso terminaría en verde con la mitad de las comprobaciones sin correr.
-     Mutación documentada que pone rojo este test: en bitacora-png16.js, cambiar
-     `if (f === 3) v += (a + b) >> 1;` por `v += a;` (o quitar el `+ 1` de
-     `q = 1 + Math.round(...)` en `codificar`). */
+     Mutaciones documentadas que ponen rojo este test, las tres comprobadas: en
+     bitacora-png16.js, cambiar `if (f === 3) v += (a + b) >> 1;` por `v += a;`;
+     quitar el `+ 1` de `q = 1 + Math.round(...)` en `codificar`; o quitar la
+     línea que compara el CRC del chunk. */
   console.log('');
-  ok(asserts >= 26, 'cardinalidad: ' + asserts + ' comprobaciones ejecutadas (mínimo 26)');
+  ok(asserts >= 30, 'cardinalidad: ' + asserts + ' comprobaciones ejecutadas (mínimo 30)');
   console.log(fallos ? '\nFALLOS: ' + fallos : '\nTodo correcto (' + asserts + ' comprobaciones)');
   process.exit(fallos ? 1 : 0);
 }).catch(function (e) {
