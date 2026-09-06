@@ -1,0 +1,39 @@
+{
+ "nombre": "NGC 5194",
+ "version": "a4ddf9db",
+ "generador": "gen_dso_texturas 1",
+ "ra": 202.47208,
+ "dec": 47.19667,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-06"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 18.035,
+ "escalaAs": 1.0566406369318824,
+ "wcs": {
+  "ra0": 202.499999999994,
+  "dec0": 45.9999999999984,
+  "x0": 447.026808001101,
+  "y0": -3566.1636320278,
+  "gx": -0.000293511288036634,
+  "gy": 0.000293511288036634
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 28.33162865695953,
+  "uMin": -4.735233071847906,
+  "uMax": 10.776568426436251,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": -0.37134265899658203,
+  "sigma": 28.33162865695953,
+  "fracAusencia": 0.000507354736328125,
+  "fracAusenciaEscena": 0.000011817844472439605,
+  "errCuantMaxSigma": 0.0005999757804763352,
+  "errCuantMaxRel": 0.00012065661630633606
+ }
+}

@@ -84,6 +84,29 @@ detalle de adquisición, no la definición.
   sondeo, decir «Pan-STARRS 1» o «PanSTARRS».
 
 
+## Textura DSO
+
+La imagen de un objeto difuso **como dato del proyecto**: un PNG de 16 bits en gris con la
+codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
+`uploads/bitacora/dso/`. Es una **fuente** del parche, no una capa nueva del render.
+
+- **Fuente única:** la ley de codificación, en `resources/js/bitacora-png16.js`
+  (`window.BitacoraPNG16`), compartida por el generador (`scripts/gen_dso_texturas.js`) y el
+  navegador; el manifiesto, en `dso-texturas-datos.js` (`window.BITACORA_DSO_TEXTURAS`),
+  generado. Quién elige la fuente: `ps1FuenteParche`.
+- **Invariante:** lo que devuelve `ps1LeerTextura` es indistinguible en forma de lo que
+  devuelve `parseFITS`. Nada aguas abajo de esa frontera —`ps1AnclarACatalogo`, la mezcla,
+  `ps1PsfParche`, H2c, la máscara difusa— puede saber de dónde vino el parche.
+- **La ausencia es un dato:** un objeto sin textura tiene igualmente su fila en el manifiesto,
+  con `modelo = "fila"` y el motivo (`sur`, `no-cabe`, `sin-cobertura`, `pisada`,
+  `ausencia-excesiva`). No estar en el manifiesto es otra cosa: el catálogo va por delante de
+  la generación y ese objeto se pide al proxy mientras `cfg.proxyRespaldo` siga encendido.
+- **`asinh16` es una codificación, no una ley de display:** se deshace entera antes de
+  `ps1Cielo`; el único valor con significado propio es el 0, ausencia (los NaN del stack).
+  Quién decide qué es ausencia sigue siendo `ps1AnclarACatalogo` con su `kAusencia`.
+- _Evitar_: «asset», «sprite» o «imagen maestra» sin calificar; y «textura» para la placa del
+  campo entero, que es la [[cadena de la placa]].
+
 ## Adquisición de Gaia por celdas
 
 Vocabulario del estudio de la capa de adquisición y caché de Gaia DR3 para campo arbitrario (ver `especificacion_optimizacion_gaia.md` y ADR 0012). El estudio se cerró con veredicto NO PASA en sus dos ejes (informes `informe_gaia_e*.md`): nada de esto llegó a producción; el vocabulario se conserva porque nombra los conceptos con los que se midió.

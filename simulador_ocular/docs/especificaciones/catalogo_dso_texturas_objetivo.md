@@ -213,6 +213,36 @@ recalcula con `ps1Cielo`/`ps1SigmaCielo` sobre los datos decodificados, para que
 ley viva en un solo sitio (ADR 0008). `fuentesConservadas` y `procedencia` se
 rellenan en las fases 3 y 4.
 
+> **Enmienda (2026-09-06, al implementar T3 / #200).** Tres cosas de este boceto
+> no sobrevivieron al código, y se anotan aquí porque el boceto es anterior:
+>
+> 1. **La WCS del sidecar va en la forma que devuelve `parseFITS`**
+>    (`{ra0, dec0, x0, y0, gx, gy}`), no en tarjetas FITS (`crval`/`crpix`/
+>    `cdelt`/`pc`). Pasar de una a otra es una ley —CRPIX es 1-based, el PC se
+>    multiplica— y esa ley ya vive en `parseFITS`; escribirla otra vez en el
+>    generador y en el lector es justo la deriva del ADR 0008. Así
+>    `ps1LeerTextura` entrega la WCS sin tocarla y el criterio «indistinguible de
+>    `parseFITS`» se cumple por construcción y no por coincidencia.
+> 2. **`zpt` es `NaN`, no `null`** (§4.4 punto 2): es lo que devuelve `parseFITS`
+>    cuando no hay tarjeta `ZPT_0000`, y la promesa es que las dos fuentes den el
+>    mismo objeto. No lo lee nadie: el nivel absoluto lo pone el catálogo.
+> 3. **`fuentesConservadas` y `procedencia` no se escriben todavía.** Vacíos no
+>    dicen nada y el hash de versión no los cubre; nacen en las fases 3 y 4, con
+>    la versión de generador que los llene.
+> 4. **`auditoria.fracSaturada` y `fuente.skycells` quedan para #201**, y no por
+>    olvido: `lib_bajar_parche.js` no devuelve ni la cabecera del FITS (de donde
+>    sale el umbral de saturación, §4.3 paso 4) ni los nombres de las skycells
+>    que cosió, y su caché en disco tampoco los guarda. Añadirlos obliga a tocar
+>    esa biblioteca —compartida con los arneses— y a volver a bajar lo cacheado.
+>
+> Queda **sin decidir** el nombre de fichero de los objetos con varias palabras:
+> los dos ejemplos de arriba se contradicen (`NGC 5194` → `NGC5194` quita los
+> espacios; `PN A66 12` → `PN_A66_12` los sustituye). El código de T3 quita los
+> espacios (`PN A66 12` → `PNA6612`) porque es la regla del primer ejemplo, que es
+> la del único objeto publicado. **Hay que firmarlo antes de generar el banco**
+> (#201): el id entra en URL que se sirven como inmutables, y renombrar después
+> cuesta republicar el catálogo entero.
+
 **Codificación `asinh16`** (declarada, invertible, sin ley de display):
 
 ```

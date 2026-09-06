@@ -1039,6 +1039,52 @@ Test de las funciones puras: `php scripts/test_ps1_proxy.php`.
 
 ---
 
+### Texturas de cielo profundo (`dso/`)
+
+La imagen de un objeto difuso no tiene por qué venir de STScI en caliente:
+puede ser **un dato del proyecto**, generado una vez y servido desde el propio
+dominio. Cada objeto con textura tiene dos ficheros en
+`/wp-content/uploads/bitacora/dso/`:
+
+- `NGC5194.<v>.png` — el parche en **PNG de 16 bits en gris**, con la
+  codificación `asinh16` (`resources/js/bitacora-png16.js`, la misma para el
+  generador y el navegador). No es una curva de tono: se deshace entera antes de
+  que ningún píxel entre en `ps1Cielo`. El 0 es el único valor con significado
+  propio: ausencia (los NaN que ya traía el stack).
+- `NGC5194.<v>.json` — el sidecar: WCS, escala, procedencia y auditoría (cielo,
+  σ, fracción de ausencia, error de cuantización medido sobre lo escrito).
+
+`<v>` es un hash de lo que determina los píxeles, así que la URL es inmutable y
+se puede cachear para siempre. Qué objetos tienen textura lo declara el
+manifiesto `dso-texturas-datos.js` (`window.BITACORA_DSO_TEXTURAS`), generado.
+
+En el navegador, `ps1FuenteParche` elige: fila con `imagen` → la textura;
+fila con `fila` → el modelo del catálogo, sin una sola petición; **sin fila** →
+el proxy de siempre, y solo mientras `BitacoraPS1.cfg.proxyRespaldo` siga
+encendido. Lo que `ps1LeerTextura` devuelve es el mismo objeto que `parseFITS`,
+así que nada aguas abajo sabe de dónde vino el parche.
+
+Regenerar una textura (sin red si el parche ya está en `$PS1_HARNESS_DIR`):
+
+```
+node scripts/gen_dso_texturas.js --solo "NGC 5194"                        # → simulador_ocular/dso/
+node scripts/gen_dso_texturas.js --solo "NGC 5194" --dir scripts/fixtures/dso
+```
+
+Las texturas del banco golden van en `scripts/fixtures/dso/` (en git) porque son
+la entrada de los tests; el resto queda en `simulador_ocular/dso/`, ignorado.
+Tests: `node scripts/test_fuente_parche.js`, `node scripts/test_dso_texturas.js`
+y `node scripts/test_png16.js`.
+
+**Todavía no está en la página**: las dos páginas no cargan aún el manifiesto ni
+el decodificador, así que en el navegador todo sigue yendo por el proxy. Eso lo
+enciende el ticket T7 (#204), y el despliegue, el T12 (#209).
+
+Objetivo y listones: `docs/especificaciones/catalogo_dso_texturas_objetivo.md`
+y ADR 0024.
+
+---
+
 ## Despliegue
 
 1. **JS y CSS** → por FTP a `/wp-content/uploads/bitacora/`.
