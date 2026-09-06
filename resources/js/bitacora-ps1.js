@@ -452,7 +452,17 @@
     }
     for (i = 0; i < estrellas.length; i++) {
       e = estrellas[i];
-      if (a && escena && ps1FuenteEnEscena(escena, a, e.x, e.y)) { huecos.push(e); continue; }   // dentro de la escena: se conserva entera
+      if (a && escena && ps1FuenteEnEscena(escena, a, e.x, e.y)) {
+        /* Dentro de la escena se conserva entera… salvo que el EQUIPO no la
+           vea: una fuente más débil que la magnitud límite es, fuera del
+           recorte, niebla sub-mlim (ADR 0022), y dentro no puede ser un punto
+           brillante solo porque la imagen la traiga. Medido en NGC 6888 a 457
+           mm · 100× (harness_costura_parche.js): 30 estrellas/arcmin² dentro
+           del parche contra 1,1 fuera, o sea la costura de #210. Sin `mlim`
+           (tests sintéticos, golden) todo se conserva como antes. */
+        if (!(geo.mlim > 0) || !(e.g > geo.mlim)) { huecos.push(e); continue; }
+        e.debil = true;   // se rellena con su anillo local, no con la isofota del objeto
+      }
       quitar.push(e);
       var r = Math.max(1, e.rPx), r2 = r * r;
       var recorta = protegidas && e.rAs > PS1.rellenoPlanoMaxAs;
@@ -502,7 +512,10 @@
       if (ancha) {                                         // disco ancho: ausencia, que la rellene el perfil
         if (cielo == null) cielo = ps1Cielo(datos, ancho, alto);
         fondo = cielo;
-      } else if (!isofotas) {
+      } else if (!isofotas || e.debil) {
+        /* La débil de dentro de la escena: la banda isofotal es el fondo del
+           objeto ENTERO a ese radio, que en una nebulosa filamentosa no dice
+           nada del filamento local; el anillo inmediato sí. */
         fondo = ps1FondoAlrededor(datos, mascara, ancho, alto, e.x, e.y, rE);
         if (fondo == null) continue;                       // sin muestras limpias: mejor dejarlo como está
       }
@@ -1804,11 +1817,12 @@
      posiciones enPx), calculado una sola vez. Cada fuente Gaia tiene un único
      propietario visual: si el parche la conserva, la capa de estrellas no debe
      pintarla otra vez encima (ver ps1CapaGalaxias). */
-  function ps1FuentesEnEscena(estrellas, enPx, afin, escena) {
+  function ps1FuentesEnEscena(estrellas, enPx, afin, escena, mlim) {
     var out = [];
     if (!escena || !escena.length) return out;
     for (var i = 0; i < enPx.length; i++) {
       var e = enPx[i];
+      if (mlim > 0 && e.g > mlim) continue;   // el parche ya no la conserva (ver ps1QuitarEstrellas)
       if (ps1FuenteEnEscena(escena, afin, e.x, e.y)) out.push(estrellas[e.i]);
     }
     return out;
@@ -1988,7 +2002,7 @@
      de él sale la escena que decide qué fuentes se conservan (las compañeras
      que asoman por el parche incluidas). Sin catálogo, la escena es la propia
      galaxia sola, que ya protege su núcleo. */
-  function ps1ParcheDeGalaxia(gal, estrellas, catalogo) {
+  function ps1ParcheDeGalaxia(gal, estrellas, catalogo, mlim) {
     return ps1FuenteParche(gal).then(function (f) {
       if (!f) return null;
       // Cómo está puesta la rejilla del recorte respecto al cielo. Una vez por
@@ -2000,7 +2014,7 @@
       var enPx = ps1EstrellasEnPixeles(f, gal, estrellas);
       var escena = ps1EscenaEnParche(f, gal, vecinos);
       var limpio = ps1QuitarEstrellas(f.datos, f.ancho, f.alto, enPx,
-        { afin: f.afin, ba: gal.ba, pa: gal.pa, escena: escena });
+        { afin: f.afin, ba: gal.ba, pa: gal.pa, escena: escena, mlim: mlim });
       var comps = ps1ComponentesSersic(gal);
       var datos = ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
         magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
@@ -2029,7 +2043,7 @@
         perfil: PS1.confianzaLocalNaN ? perfil : null,
         // Fuentes Gaia conservadas dentro de la escena: la capa de estrellas
         // las excluye para no representarlas dos veces (parche + sprite).
-        enEscena: ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena),
+        enEscena: ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena, mlim),
         // La misma escena, para PS1.opacidadInternaEscena (unas pocas elipses).
         escena: escena,
         datos: datos
@@ -2118,8 +2132,14 @@
       }
       return R().capaEstrellas(filtradas, o.opEstrellas, o.size);
     }
+    /* Magnitud límite del equipo: profundidad a la que el parche conserva sus
+       estrellas dentro de la escena (la misma a la que dibujar() corta los
+       sprites de fuera). `render` la trae hecha; sin ella se calcula del cielo. */
+    var mlim = (o.mlim > 0) ? o.mlim : R().magLimite({
+      apertura: o.apertura, aumentos: cielo.aumentos, sqm: cielo.sqm, pupilaOjo: cielo.pupilaOjo
+    });
     return Promise.all(campo.map(function (gal) {
-      return ps1ParcheDeGalaxia(gal, o.estrellas, catalogo).then(function (parche) {
+      return ps1ParcheDeGalaxia(gal, o.estrellas, catalogo, mlim).then(function (parche) {
         var esLaApuntada = !!apuntada && gal.ra === apuntada[2] && gal.dec === apuntada[3];
         if (!parche) { if (esLaApuntada) apuntadaSinParche = true; return; }
         if (!vivo()) return;

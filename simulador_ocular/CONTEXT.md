@@ -184,6 +184,14 @@ Etiqueta explícita de catálogo (Type del OpenNGC: `PN`, `HII`, `SNR`, `RfN`…
   medido que bloquea la mezcla (anillo oscuro), coser trozos pinta un remiendo,
   y el ala superviviente se lleva el presupuesto del anclaje (motitas). Solo
   compactas: las reglas de fusión de las galaxias están cerradas.
+- **El grano del parche se recorta a la magnitud límite del equipo (#210):**
+  dentro de la escena se conserva una fuente Gaia solo si el equipo la vería
+  como estrella (g ≤ `mlim`); la más débil se enmascara y se rellena con su
+  anillo inmediato, y vuelve a la capa de estrellas como niebla sub-mlim.
+  Fuera del recorte los sprites ya se cortaban en `mlim`; sin esta regla una
+  nebulosa que llena el parche mostraba 5,5 veces más estrellas dentro que
+  fuera (NGC 6888, `docs/notas/costura-parche-nebulosas.md`). Sin `mlim`
+  (golden, tests sintéticos) se conserva todo, como antes.
 - **v1 solo admite `PN`.** Las demás clases tienen fila generada pero puerta cerrada; si una clase necesita lo que una fila Sérsic no puede decir (filamentos, cáscara incompleta), la conversación es sobre el esquema del catálogo.
 - **El tinte de una `PN` está prerregistrado, no implementado (ADR 0025).** Su entrada no es la `mag_v` de la fila (recortada al suelo 17,5) sino fotometría de líneas de Acker V/84 (`log F(Hβ)`, `I5007`, `I6563`, `I4686`); sin `I5007` no hay color. La ley declarada, F1, es una ventana de aumentos: puerta de iluminancia retinal (E_c leído en NGC 6905) por tamaño aparente (θ_c = 1°) por pureza del espectro. Listones y vía de escape en `docs/adr/0025-tinte-planetarias/prerregistro.md`; entradas en `scripts/entradas_tinte_np.py`.
 - _Evitar_: «tipo» a secas (colisiona con el tipo de la [[observación]] y con la [[clasificación de objeto del mapa]]); «sistema de nebulosas».
