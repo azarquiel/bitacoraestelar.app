@@ -60,6 +60,11 @@
     ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
     ladoMin: 1.5,          // ′: por debajo no queda parche que mirar
     decMin: -30,           // PS1 no cubre más al sur (365 de las 1295 filas del RC3)
+    /* Objeto que el manifiesto de texturas no menciona: se pide a STScI como
+       hasta ahora. Es el régimen mixto mientras el manifiesto no cubra el
+       catálogo entero; con `false`, un objeto sin textura se pinta por su fila
+       y no sale una sola petición fuera de dso/. */
+    proxyRespaldo: true,
     fracMin: 0.4,          // fracción mínima de la luz del catálogo que el parche debe abarcar (ver ps1GalaxiasDelCampo)
     seeingAs: 1.1,         // ″: FWHM típica del stack, suelo del radio de máscara
     mascaraMaxAs: 60,      // ″: tope del radio de máscara de una estrella (una de g≈9 ya lo toca)
@@ -181,8 +186,16 @@
 
   /* URL del parche en el proxy. El parche NO depende del ocular ni del aumento
      (ficha 10), así que la petición solo lleva objeto, lado y banda: por eso el
-     proxy puede cachearlo para siempre. */
+     proxy puede cachearlo para siempre.
+
+     Las dos URL son configurables (`cfg` no: son direcciones, no calibración;
+     van con getter/setter en el objeto exportado, como
+     BitacoraGaiaRender.dssProxyUrl). Hasta ahora eran constantes sin setter y
+     ningún test podía redirigirlas a una fixture. */
   var PS1_PROXY_URL = '/wp-content/uploads/bitacora/ps1-proxy.php';
+  /* Directorio de texturas propias, servido por el mismo dominio: ahí viven el
+     PNG de 16 bits y el sidecar de cada objeto (ver ps1LeerTextura). */
+  var TEXTURAS_URL = '/wp-content/uploads/bitacora/dso/';
 
   function ps1UrlParche(gal, salida) {
     return PS1_PROXY_URL +
@@ -1596,31 +1609,140 @@
     return out;
   }
 
-  /* ── Descarga (efectos) ──────────────────────────────────────────────────────
-     Una petición por galaxia a ps1-proxy.php, que resuelve las skycells, pide los
-     recortes y devuelve el parche ya cosido; de la segunda vez en adelante sale de
-     su disco. La caché de aquí es solo de sesión, y la clave es el objeto: el
-     parche no depende del ocular ni del aumento. */
+  /* ── Origen del parche (efectos) ─────────────────────────────────────────────
+     Dos orígenes posibles y un solo resultado: el objeto que devuelve parseFITS.
+     El de casa es la TEXTURA (dso/), un dato del proyecto generado offline por
+     scripts/gen_dso_texturas.js; el de fuera es ps1-proxy.php, que resuelve las
+     skycells contra STScI y cose el recorte en caliente. La caché de aquí es
+     solo de sesión y la clave es el objeto: el parche no depende del ocular ni
+     del aumento, así que la textura se decodifica una vez. */
   var cachePS1 = {};
 
-  /* Descarga el parche de una galaxia, ya cosido. Resuelve a null si PS1 no lo
-     cubre (502 del proxy) o si el servicio no responde: la capa se apaga sola y
-     el aviso lo da quien llama. gal: {ra, dec, ladoArcmin, …}. */
-  function ps1DescargarParche(gal) {
+  /* Módulo del códec asinh16 y del PNG de 16 bits. Se lee al usarlo, no al
+     cargar: el ciclo es de llamada (ADR 0020), igual que R(). */
+  function P16() {
+    var m = typeof window !== 'undefined' ? window.BitacoraPNG16 : null;
+    if (!m) throw new Error('BitacoraPS1 necesita BitacoraPNG16 (códec asinh16)');
+    return m;
+  }
+
+  /* Nombre de fichero de la textura: el `nombre` de la fila sin espacios, y la
+     barra a guion bajo ('NGC 5194' → 'NGC5194', 'PN A66 12' → 'PNA6612'). La
+     regla es la del objetivo §4.1 —sin espacios ni barras—; su segundo ejemplo
+     ('PN_A66_12') sale de otra regla y no puede valer con el primero. La CLAVE del
+     manifiesto sigue siendo el nombre LITERAL: la identidad es la del catálogo,
+     no un cruce por posición (ADR 0015). */
+  function ps1IdTextura(nombre) {
+    return String(nombre == null ? '' : nombre).trim().replace(/[\\/]/g, '_').replace(/\s+/g, '');
+  }
+
+  /* Fila del manifiesto (window.BITACORA_DSO_TEXTURAS, generado):
+     [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo].
+     Que un objeto no tenga textura es un DATO (modelo = "fila" con su motivo) y
+     no un silencio; sin manifiesto cargado, null y todo sigue como antes. */
+  function ps1FilaTextura(nombre) {
+    var t = (typeof window !== 'undefined' && window.BITACORA_DSO_TEXTURAS) || null;
+    if (!t) return null;
+    for (var i = 0; i < t.length; i++) if (t[i][0] === nombre) return t[i];
+    return null;
+  }
+
+  /* Lee la textura y su sidecar y devuelve el MISMO objeto que parseFITS:
+     mismas claves, mismas unidades, la escala en ″/px y la WCS ya en la forma
+     que usa ps1CieloAPixel. Nada aguas abajo puede saber de dónde vino.
+
+     El sidecar guarda la WCS tal cual la deja parseFITS (ra0, dec0, x0, y0, gx,
+     gy) y no en tarjetas FITS: traducir CRPIX/CDELT/PC es una ley, y esa ley ya
+     vive en parseFITS. Escribirla otra vez aquí sería la deriva del ADR 0008.
+
+     Cualquier tropiezo —red, sidecar incoherente, códec, navegador sin
+     DecompressionStream— da null con el motivo en `notas`, nunca una imagen a
+     medias: quien llama pinta la fila del catálogo, el mismo respaldo que
+     cuando el proxy no responde. */
+  function ps1LeerTextura(urlPng, urlJson, notas) {
+    /* El guardián va FUERA de la promesa: que falte el módulo del códec es un
+       error de carga de la página, no una textura rota, y tiene que sonar en
+       vez de disfrazarse de fallo de red (ADR 0020). */
+    var png = P16();
+    notas = notas || {};
+    return Promise.all([
+      fetch(urlPng).then(function (r) {
+        if (!r.ok) throw new Error('textura ' + r.status);
+        return r.arrayBuffer();
+      }),
+      fetch(urlJson).then(function (r) {
+        if (!r.ok) throw new Error('sidecar ' + r.status);
+        return r.json();
+      })
+    ]).then(function (par) {
+      var sc = par[1] || {};
+      return png.leer(new Uint8Array(par[0]), notas).then(function (img) {
+        if (!img) return null;
+        var cod = sc.codificacion;
+        if (img.ancho !== sc.ancho || img.alto !== sc.alto ||
+            !cod || !(cod.a > 0) || !(cod.uMax > cod.uMin) || !(sc.escalaAs > 0)) {
+          notas.motivo = 'sidecar';
+          return null;
+        }
+        return {
+          ancho: img.ancho, alto: img.alto,
+          datos: png.decodificar(img.u16, cod),
+          escalaAs: sc.escalaAs, wcs: sc.wcs || null,
+          // parseFITS lo lee de ZPT_0000 y no lo usa nadie: el nivel absoluto lo
+          // pone el catálogo (ps1AnclarACatalogo). Mismo valor que allí sin la
+          // tarjeta, para que la forma del objeto sea la misma.
+          zpt: NaN
+        };
+      });
+    }).catch(function () {
+      if (!notas.motivo) notas.motivo = 'red';
+      return null;
+    });
+  }
+
+  /* De dónde sale el parche de este objeto, en este orden:
+       manifiesto con `imagen` → la textura de dso/, sin salir del dominio;
+       manifiesto con `fila`   → null con su motivo y SIN una sola petición;
+       sin fila en el manifiesto (catálogo más nuevo que él) → el proxy, y solo
+       si cfg.proxyRespaldo sigue encendido.
+     Resuelve a null también cuando PS1 no cubre el campo (502 del proxy) o el
+     servicio no responde: la capa se apaga sola y el aviso lo da quien llama.
+     gal: {nombre, ra, dec, ladoArcmin, …}. */
+  function ps1FuenteParche(gal, notas) {
+    notas = notas || {};
     var clave = gal.ra.toFixed(5) + ',' + gal.dec.toFixed(5) + ',' + gal.ladoArcmin.toFixed(2);
     if (cachePS1[clave]) return cachePS1[clave];
-    var p = fetch(ps1UrlParche(gal)).then(function (r) {
-      if (!r.ok) throw new Error('ps1-proxy ' + r.status);
-      return r.arrayBuffer();
-    }).then(function (buf) {
-      var f = parseFITS(buf);
+    var fila = ps1FilaTextura(gal.nombre), p;
+    if (fila && fila[1] === 'imagen') {
+      var base = TEXTURAS_URL + ps1IdTextura(gal.nombre) + '.' + fila[2];
+      p = ps1LeerTextura(base + '.png', base + '.json', notas);
+    } else if (fila) {
+      notas.motivo = fila[6] || 'fila';
+      return Promise.resolve(null);
+    } else if (!PS1.proxyRespaldo) {
+      notas.motivo = 'sin-textura';
+      return Promise.resolve(null);
+    } else {
+      p = ps1DescargarParche(gal);
+    }
+    p = p.then(function (f) {
       if (!f) return null;
       f.ra = gal.ra; f.dec = gal.dec; f.ladoArcmin = gal.ladoArcmin;
       if (!(f.escalaAs > 0)) f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
       return f;
-    }).catch(function () { return null; });
+    });
     cachePS1[clave] = p;
     return p;
+  }
+
+  /* Camino de respaldo: el parche cosido por ps1-proxy.php, en caliente. */
+  function ps1DescargarParche(gal) {
+    return fetch(ps1UrlParche(gal)).then(function (r) {
+      if (!r.ok) throw new Error('ps1-proxy ' + r.status);
+      return r.arrayBuffer();
+    }).then(function (buf) {
+      return parseFITS(buf);
+    }).catch(function () { return null; });
   }
 
   /* Estrellas de Gaia ([ra, dec, g, …][]) en píxeles del parche, con su radio de
@@ -1861,7 +1983,7 @@
      que asoman por el parche incluidas). Sin catálogo, la escena es la propia
      galaxia sola, que ya protege su núcleo. */
   function ps1ParcheDeGalaxia(gal, estrellas, catalogo) {
-    return ps1DescargarParche(gal).then(function (f) {
+    return ps1FuenteParche(gal).then(function (f) {
       if (!f) return null;
       // Cómo está puesta la rejilla del recorte respecto al cielo. Una vez por
       // galaxia: no depende del ocular ni del aumento.
@@ -2029,6 +2151,10 @@
     cfg: PS1,
     ps1LadoArcmin: ps1LadoArcmin,
     ps1UrlParche: ps1UrlParche,
+    ps1IdTextura: ps1IdTextura,
+    ps1FilaTextura: ps1FilaTextura,
+    ps1LeerTextura: ps1LeerTextura,
+    ps1FuenteParche: ps1FuenteParche,
     parseFITS: parseFITS,
     ps1CieloAPixel: ps1CieloAPixel,
     ps1AfinParche: ps1AfinParche,
@@ -2072,6 +2198,10 @@
     ps1MagConsulta: ps1MagConsulta,
     ps1CapaGalaxias: ps1CapaGalaxias,
     set galaxiasImagen(v) { GALAXIAS_IMAGEN = !!v; },
-    get galaxiasImagen() { return GALAXIAS_IMAGEN; }
+    get galaxiasImagen() { return GALAXIAS_IMAGEN; },
+    set proxyUrl(u) { PS1_PROXY_URL = u; },
+    get proxyUrl() { return PS1_PROXY_URL; },
+    set texturasUrl(u) { TEXTURAS_URL = u; },
+    get texturasUrl() { return TEXTURAS_URL; }
   };
 })();

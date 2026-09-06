@@ -23,3 +23,7 @@ mapa/datos/cumulos_abiertos.xlsx
 .scratch/
 simulador_ocular/cache-ps1/
 simulador_ocular/cache_gaia/
+
+# Ignorar las texturas DSO que genera scripts/gen_dso_texturas.js (se publican
+# por FTP en uploads/bitacora/dso/; en git solo van el manifiesto y las fixtures)
+simulador_ocular/dso/
