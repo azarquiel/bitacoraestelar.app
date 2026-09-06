@@ -227,6 +227,8 @@
         fecha: lista[i].fecha || (v && v.noche ? v.noche : ''),
         nave: lista[i].nave || null,
         instrumento: lista[i].instrumento || '',
+        // Si lleva tramo de audio (ADR 0005), la lista lo señala con el 🎧.
+        audio: !!(lista[i].audio && lista[i].audio.url),
         etiqueta: nombre
       });
     }

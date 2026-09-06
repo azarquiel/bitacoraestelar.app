@@ -35,7 +35,8 @@ global.VIAJES = {
 
 global.OBSERVACIONES = {
   m13: [
-    { observador: 'israel', viaje: 7 },
+    { observador: 'israel', viaje: 7,
+      audio: { url: 'https://ejemplo.test/ep.mp3', inicio: 10, fin: 20 } },   // con tramo de audio
     { observador: 'ana',    viaje: 9 },
     { observador: 'israel', viaje: 8,
       nave: { nombre: 'Excalibur', apertura_mm: 457, f_ratio: 4.5 } },  // el MISMO observador, otra salida
@@ -126,6 +127,14 @@ var itemLista = app.slice(app.indexOf('function abrirFichaDescubrimiento'),
                           app.indexOf('function abrirObservacionPorIndice'));
 eq(/rotuloNave\(/.test(itemLista), true, 'el ítem compone la nave con el rótulo de la ficha');
 eq(/Nave /.test(itemLista), true, 'y la rotula como tal');
+// El tramo de audio (ADR 0005) es de UNA observación: la lista lo señala en el
+// ítem que lo tiene y NO enseña el faldón (que se quedaba puesto de la ficha
+// anterior al volver con «← Descubrir»).
+eq(VLV.otrasObservaciones('m13', null).filter(function (o) { return o.indice === 0; })[0].audio, true,
+   'la observación con tramo de audio lo dice');
+eq(otras[0].audio, false, 'y la que no lo tiene, no');
+eq(/o\.audio \? [^:]*🎧/.test(itemLista), true, 'el ítem con audio lleva el 🎧');
+eq(/renderFichaAudio\(\{\}\)/.test(itemLista), true, 'la lista apaga el faldón del audio');
 eq(/Explorado en la fecha estelar/.test(app), false, 'la fecha va sola, sin la perífrasis');
 // Y el clic en el marcador la usa para ELEGIR cuando hay más de una: sin esto,
 // el mapa abre una observación cualquiera por el usuario.
