@@ -585,7 +585,11 @@
         dz = getImgRect(activeImg).height / 2 * Math.sin(tilt * Math.PI / 180) + 4;
       }
     }
-    var kz = 1 - dz / (INCL.perspectiva || 1400);
+    // La MISMA perspectiva que lleva #mw-plano ahora mismo: en la antesala del
+    // canto (88-89°) se aleja y a 90° no hay, y con la nominal la ruta se
+    // encogía y se iba de sus marcadores.
+    var P = perspectivaPlano(tilt);
+    var kz = isFinite(P) ? 1 - dz / P : 1;
     // El contenedor gira alrededor del núcleo y aquí el origen es el centro (el
     // mismo de la perspectiva, para que el adelanto no desplace nada), así que
     // el contragiro va envuelto en el salto de un origen al otro.
@@ -693,6 +697,16 @@
     return Math.min(1, (tilt - TILT_PREVIA) / (TILT_MAX - TILT_PREVIA));
   }
 
+  // Perspectiva REAL de #mw-plano para un abatimiento, en px (Infinity = sin
+  // perspectiva). Se aleja conforme la foto de canto se monta encima y a 90° ya
+  // no hay (ver applyTransform). Única fuente: quien deshaga la perspectiva
+  // (encararRuta) tiene que leer la misma que se aplica, o se descuadra.
+  function perspectivaPlano(tilt) {
+    var mez = mezclaCanto(tilt);
+    if (mez >= 0.999) return Infinity;
+    return (INCL.perspectiva || 1400) / (1 - mez);
+  }
+
   function pintarPreviaCanto(tilt, rot) {
     if (!imgEdge || isEdgeView) return;   // en canto la foto ya es la de verdad
     var mezcla = mezclaCanto(tilt);
@@ -769,10 +783,8 @@
       // 90° ya no hay: si no, la foto montada (que se contragira para mirarse
       // de frente) sale aumentada y desplazada según el encuadre, y al cambiar
       // de vista, que conserva el zoom, la imagen pegaba un salto.
-      var mez = mezclaCanto(tilt);
-      plano.style.perspective = !tilt ? ''
-        : (mez >= 0.999 ? 'none'
-                        : ((INCL.perspectiva || 1400) / (1 - mez)).toFixed(1) + 'px');
+      var P = perspectivaPlano(tilt);
+      plano.style.perspective = !tilt ? '' : (isFinite(P) ? P.toFixed(1) + 'px' : 'none');
     }
     img.style.transformStyle = tilt ? 'preserve-3d' : '';
     img.classList.toggle('mw-inclinado', !!tilt);
@@ -2215,6 +2227,9 @@
     fichaAnexos.style.display = 'none';
     fichaAnexosRight.style.display = 'none';
     fichaImgTitle.style.display = 'none';
+    // El faldón del audio es de UNA observación: la lista no lo lleva (venía
+    // puesto de la ficha anterior al volver con «← Descubrir»).
+    renderFichaAudio({});
 
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = (info && info.coords) || '';
@@ -2238,7 +2253,9 @@
         'background:rgba(126,200,255,0.10);color:#cfe6f7;' +
         'border:1px solid rgba(126,200,255,0.35);border-radius:10px;' +
         'padding:10px 14px;margin:6px 0;font-family:sans-serif;font-size:14px;">' +
-        '✦ ' + escHtml(o.etiqueta) + cuando + '</button></li>';
+        '✦ ' + escHtml(o.etiqueta) +
+        (o.audio ? ' <span title="Tiene tramo de audio">🎧</span>' : '') +
+        cuando + '</button></li>';
     }).join('');
 
     fichaText.innerHTML =
