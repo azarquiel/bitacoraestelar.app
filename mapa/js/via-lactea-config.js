@@ -239,6 +239,13 @@
     //   abajo): fuera de ahí el zoom sigue topado en ×25, sin afectar a la
     //   navegación normal.
     //
+    //   El campo (radio) a cada zoom es 0,42 × 130.462 / zoom: a ×25 son ~2.190 al.
+    //   fovInicioAl va por DEBAJO de eso (2.000 al = ×27) a propósito: todo el
+    //   rango normal de zoom es galaxia, y los objetos del espacio profundo que
+    //   rodean al Sol (Orión a 1.300-1.600 al, Cefeo a ~2.900 al) se miran al
+    //   tope sin que la capa se cuele. Entrar exige centrar el Sol de verdad
+    //   (proximidad) y seguir empujando pasado ×25.
+    //
     //   zoomMaximo  : tope de zoom cuando el Sol está centrado (si no, 25).
     //   proximidad  : el Sol debe estar a < esta fracción del lado menor respecto
     //                 al centro para elevar el tope y activar la capa.
@@ -257,10 +264,10 @@
     // -------------------------------------------------------------------------
     vecindario: {
       zoomMaximo: 6500,
-      proximidad: 0.28,
-      fovInicioAl: 4000,
-      fovFinalAl: 1500,
-      fovSalidaAl: 2500,
+      proximidad: 0.12,
+      fovInicioAl: 2000,
+      fovFinalAl: 1300,
+      fovSalidaAl: 1600,
       fovMinAl: 8,
       distMaxAl: 1500,
       autoGiro: 0.0006
