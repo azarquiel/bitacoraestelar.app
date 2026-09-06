@@ -93,7 +93,7 @@ ok(W3.codificar === P.codificar && W3.decodificar === P.decodificar && W3.leer =
    'las tres funciones son las mismas, no dos copias');
 
 console.log('\nIda y vuelta Float32Array → PNG-16 → Float32Array:');
-var cod = P.codificar(datos, sigma);
+var cod = P.codificar(datos, { a: sigma });
 var png = LP.bufferGris16(cod.u16, W, H);
 
 /* ── La rama del sidecar: uMin y uMax vienen dados ────────────────────────────
@@ -101,7 +101,7 @@ var png = LP.bufferGris16(cod.u16, W, H);
    parche (una recaptura, un test de regresión) los pasa de vuelta. Es la rama
    que produce los bits que se publican, así que se prueba igual que la otra. */
 console.log('\nCodificación con uMin y uMax dados (los del sidecar):');
-var dados = P.codificar(datos, sigma, cod.uMin, cod.uMax);
+var dados = P.codificar(datos, { a: sigma, uMin: cod.uMin, uMax: cod.uMax });
 var identicos = 0;
 for (var t = 0; t < N; t++) if (dados.u16[t] === cod.u16[t]) identicos++;
 ok(identicos === N, 'reproduce bit a bit lo que calculó la rama automática (' + identicos + '/' + N + ')');
@@ -109,7 +109,7 @@ ok(dados.uMin === cod.uMin && dados.uMax === cod.uMax, 'y devuelve los mismos ex
 
 /* Extremos más estrechos que los datos: se satura en los dos topes, nunca se
    sale del rango de 16 bits ni pisa el 0, que es la ausencia. */
-var estrecho = P.codificar(datos, sigma, cod.uMin + 0.3, cod.uMax - 0.3);
+var estrecho = P.codificar(datos, { a: sigma, uMin: cod.uMin + 0.3, uMax: cod.uMax - 0.3 });
 var abajo = 0, arriba = 0, ceros = 0;
 for (var s = 0; s < N; s++) {
   if (estrecho.u16[s] === 0) ceros++;
@@ -120,16 +120,21 @@ ok(abajo > 0 && arriba > 0, 'satura en 1 y en 65535 (' + abajo + ' abajo, ' + ar
 ok(ceros === 3, 'y la saturación no inventa ausencias: siguen siendo 3 ceros (' + ceros + ')');
 
 function lanza(fn) { try { fn(); return false; } catch (e) { return true; } }
-ok(lanza(function () { return P.codificar(datos, sigma, cod.uMin); }),
+ok(lanza(function () { return P.codificar(datos, { a: sigma, uMin: cod.uMin }); }),
    'pasar uMin sin uMax es un error, no un recálculo silencioso');
-ok(lanza(function () { return P.codificar(datos, sigma, null, cod.uMax); }),
+ok(lanza(function () { return P.codificar(datos, { a: sigma, uMax: cod.uMax }); }),
    'pasar uMax sin uMin también');
-ok(lanza(function () { return P.codificar(datos, sigma, 2, 2); }), 'uMax = uMin es un error');
-ok(lanza(function () { return P.codificar(datos, 0); }), 'a = 0 sigue siendo un error');
+ok(lanza(function () { return P.codificar(datos, { a: sigma, uMin: 2, uMax: 2 }); }), 'uMax = uMin es un error');
+ok(lanza(function () { return P.codificar(datos, { a: 0 }); }), 'a = 0 sigue siendo un error');
+/* El objeto que sale de `codificar` es el que entra en `decodificar` y el que
+   escribe el sidecar: mismo tipo, sin desarmarlo en primitivos por el camino. */
+ok(P.decodificar(dados.u16, dados).length === N, 'lo que devuelve codificar lo come decodificar tal cual');
 
 console.log('');
-P.leer(png).then(function (img) {
+var notasBuenas = {};
+P.leer(png, notasBuenas).then(function (img) {
   ok(!!img, 'el PNG que escribe lib_png se lee');
+  ok(notasBuenas.motivo === '', 'y no deja motivo de fallo puesto');
   ok(img.ancho === W && img.alto === H, 'dimensiones del IHDR (' + img.ancho + '×' + img.alto + ')');
   var iguales = 0;
   for (var j = 0; j < N; j++) if (img.u16[j] === cod.u16[j]) iguales++;
@@ -163,47 +168,55 @@ P.leer(png).then(function (img) {
     ok(bien, 'IDAT partido en 7 trozos, concatenado antes de inflar');
   }));
 
-  /* Basura declarada: un fichero que no es nuestra textura no se lee «a medias». */
-  pendientes.push(P.leer(Buffer.from([137, 80, 78, 71, 0, 0, 0, 0])).then(function (r) {
-    ok(r === null, 'sin firma válida devuelve null');
-  }));
-  pendientes.push(P.leer(png.slice(0, png.length - 40)).then(function (r) {
-    ok(r === null, 'PNG truncado devuelve null, no una imagen a medias');
-  }));
+  /* Basura declarada: un fichero que no es nuestra textura no se lee «a medias».
+     El valor de vuelta es siempre null —el llamador solo puede pintar la fila—,
+     pero el motivo tiene que llegar entero, que es de donde saldrá el aviso. */
+  function leerConMotivo(bytes, motivo, etiqueta) {
+    var notas = {};
+    return P.leer(bytes, notas).then(function (r) {
+      ok(r === null && notas.motivo === motivo && P.MOTIVOS.indexOf(notas.motivo) >= 0,
+         etiqueta + ' → null con motivo «' + motivo + '» declarado en MOTIVOS (dio «' + notas.motivo + '»)');
+    });
+  }
+  pendientes.push(leerConMotivo(Buffer.from([137, 80, 78, 71, 0, 0, 0, 0]), 'truncado', 'ocho bytes sueltos'));
+  pendientes.push(leerConMotivo(Buffer.concat([Buffer.from([137, 80, 0, 0, 0, 0, 0, 0]), png.slice(8)]),
+                                'sin-firma', 'firma cambiada'));
+  pendientes.push(leerConMotivo(png.slice(0, png.length - 40), 'truncado', 'PNG cortado por la mitad'));
   /* Profundidad 8: con el CRC del IHDR rehecho, para que lo que rechace sea la
      profundidad y no la corrupción. */
   var otro = LP.bufferGris16(cod.u16, W, H);
   otro[24] = 8;
   otro.writeUInt32BE(P.crc32(otro, 12, 29), 29);
-  pendientes.push(P.leer(otro).then(function (r) {
-    ok(r === null, 'profundidad distinta de 16 devuelve null (con el CRC bueno)');
-  }));
+  pendientes.push(leerConMotivo(otro, 'formato', 'profundidad distinta de 16, con el CRC bueno'));
 
   /* ── Integridad: el CRC del formato ──────────────────────────────────────────
      Los dos casos de abajo tocan SOLO los cuatro bytes del CRC y dejan los datos
      intactos: el fichero se decodificaría entero y sin un error, así que el
      único que puede rechazarlo es el CRC. Es la forma de que estos asserts no
      pasen por otra causa (ADR 0005) —el ancho falseado, por ejemplo, ya lo caza
-     el guardián de filtro, y un bit volteado dentro del IDAT lo caza el
-     Adler-32 de zlib—. */
+     el CRC del IHDR, porque cambiar el ancho lo invalida—. */
+  var notasAncho = {};
   var ihdrMal = LP.bufferGris16(cod.u16, W, H);
   ihdrMal.writeUInt32BE((ihdrMal.readUInt32BE(29) ^ 1) >>> 0, 29);   // CRC del IHDR
-  pendientes.push(P.leer(ihdrMal).then(function (r) {
-    ok(r === null, 'CRC del IHDR corrupto: null, y sin él la imagen saldría entera y mal');
-  }));
+  pendientes.push(leerConMotivo(ihdrMal, 'crc', 'CRC del IHDR corrupto (sin él saldría entera y mal)'));
   var idatMal = LP.bufferGris16(cod.u16, W, H);
   var finIdat = idatMal.length - 12 - 4;                     // antes del IEND
   idatMal.writeUInt32BE((idatMal.readUInt32BE(finIdat) ^ 1) >>> 0, finIdat);
-  pendientes.push(P.leer(idatMal).then(function (r) {
-    ok(r === null, 'CRC del IDAT corrupto: null');
-  }));
+  pendientes.push(leerConMotivo(idatMal, 'crc', 'CRC del IDAT corrupto'));
 
-  /* Y el ancho falseado, que es el fallo que se teme: da igual quién lo cace,
-     el contrato es que no salga imagen. */
+  /* Y el ancho falseado, que es el fallo que se teme. Dos versiones: con el CRC
+     como quedó (lo caza el CRC) y con el CRC rehecho, que es un fichero
+     perfectamente formado y mentiroso —lo que un CRC no puede ver— y donde
+     quien lo para es el guardián de tamaño o el de filtro. */
   var anchoMal = LP.bufferGris16(cod.u16, W, H);
   anchoMal.writeUInt32BE(18, 16);
-  pendientes.push(P.leer(anchoMal).then(function (r) {
-    ok(r === null, 'IHDR con el ancho falseado no devuelve una imagen equivocada');
+  pendientes.push(leerConMotivo(anchoMal, 'crc', 'IHDR con el ancho falseado'));
+  var anchoMalFirmado = LP.bufferGris16(cod.u16, W, H);
+  anchoMalFirmado.writeUInt32BE(18, 16);
+  anchoMalFirmado.writeUInt32BE(P.crc32(anchoMalFirmado, 12, 29), 29);
+  pendientes.push(P.leer(anchoMalFirmado, notasAncho).then(function (r) {
+    ok(r === null && (notasAncho.motivo === 'filtro' || notasAncho.motivo === 'tamaño'),
+       'ancho falseado con el CRC rehecho: lo para el desfiltrado, no el CRC (' + notasAncho.motivo + ')');
   }));
 
   /* El CRC propio, contra el del zlib de Node: implementación independiente,
@@ -217,11 +230,13 @@ P.leer(png).then(function (img) {
 }).then(function () {
   /* ── Sin DecompressionStream ──────────────────────────────────────────────── */
   console.log('\nNavegador sin DecompressionStream:');
-  var guardado = globalThis.DecompressionStream;
+  var guardado = globalThis.DecompressionStream, notas = {};
   delete globalThis.DecompressionStream;
-  return P.leer(png).then(function (r) {
+  return P.leer(png, notas).then(function (r) {
     globalThis.DecompressionStream = guardado;
     ok(r === null, 'devuelve null y no una imagen a medias');
+    ok(notas.motivo === 'sin-descompresor',
+       'y el motivo distingue el navegador viejo de la textura rota (' + notas.motivo + ')');
   }, function (e) {
     globalThis.DecompressionStream = guardado;
     ok(false, 'devuelve null en vez de lanzar (' + e.message + ')');
@@ -229,12 +244,13 @@ P.leer(png).then(function (img) {
 }).then(function () {
   /* ADR 0005: cardinalidad mínima. Si una promesa se pierde por el camino, el
      proceso terminaría en verde con la mitad de las comprobaciones sin correr.
-     Mutaciones documentadas que ponen rojo este test, las tres comprobadas: en
-     bitacora-png16.js, cambiar `if (f === 3) v += (a + b) >> 1;` por `v += a;`;
-     quitar el `+ 1` de `q = 1 + Math.round(...)` en `codificar`; o quitar la
-     línea que compara el CRC del chunk. */
+     Mutaciones documentadas que ponen rojo este test, las cuatro comprobadas en
+     bitacora-png16.js: cambiar `if (f === 3) v += (a + b) >> 1;` por `v += a;`
+     (1 fallo); quitar el `+ 1` de `q = 1 + Math.round(...)` en `codificar` (1);
+     quitar la línea que compara el CRC del chunk (3); o dejar de anotar el
+     motivo en `fallo` (9). */
   console.log('');
-  ok(asserts >= 30, 'cardinalidad: ' + asserts + ' comprobaciones ejecutadas (mínimo 30)');
+  ok(asserts >= 35, 'cardinalidad: ' + asserts + ' comprobaciones ejecutadas (mínimo 35)');
   console.log(fallos ? '\nFALLOS: ' + fallos : '\nTodo correcto (' + asserts + ' comprobaciones)');
   process.exit(fallos ? 1 : 0);
 }).catch(function (e) {

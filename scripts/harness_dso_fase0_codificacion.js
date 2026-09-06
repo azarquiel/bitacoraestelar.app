@@ -81,7 +81,7 @@ lista.forEach(function (o) {
     return BAJAR.bajar(o.gal.ra, o.gal.dec, o.gal.ladoArcmin, 1024, 'g', true).then(function (F) {
       var cielo = PS1.ps1Cielo(F.datos, F.ancho, F.alto);
       var sigma = PS1.ps1SigmaCielo(F.datos, F.ancho, F.alto, cielo);
-      var cod = COD.codificar(F.datos, sigma);
+      var cod = COD.codificar(F.datos, { a: sigma });
       var n = F.ancho * F.alto;
       var bs = FILTROS.map(function (_, t) {
         return zlib.deflateSync(filtrar(cod.u16, F.ancho, F.alto, t), { level: 9 }).length;
@@ -92,7 +92,7 @@ lista.forEach(function (o) {
       /* 2 · barrido de `a`, con el mejor filtro de la tabla de arriba (Sub). */
       var corte = cielo - PS1.cfg.kAusencia * sigma;
       FACTORES.forEach(function (fa, i) {
-        var c2 = COD.codificar(F.datos, fa * sigma);
+        var c2 = COD.codificar(F.datos, { a: fa * sigma });
         var dd = COD.decodificar(c2.u16, c2);
         var err = 0, rel = 0, flips = 0;
         for (var j = 0; j < n; j++) {

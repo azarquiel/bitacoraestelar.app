@@ -60,7 +60,7 @@ function medir(o, F) {
   var sigma = PS1.ps1SigmaCielo(d, F.ancho, F.alto, cielo);
   if (!(sigma > 0)) return { error: 'σ del cielo no positiva (' + sigma + ')' };
 
-  var cod = COD.codificar(d, sigma);
+  var cod = COD.codificar(d, { a: sigma });
   var dd = COD.decodificar(cod.u16, cod);
 
   /* A · error de cuantización, en las dos zonas que el objetivo distingue. */

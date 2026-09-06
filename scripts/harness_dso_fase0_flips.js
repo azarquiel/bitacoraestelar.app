@@ -31,7 +31,7 @@ BAJAR.bajar(o.gal.ra, o.gal.dec, o.gal.ladoArcmin, 1024, 'g', true).then(functio
   var corte = cielo - PS1.cfg.kAusencia * sigma;
 
   [['a = σ', sigma], ['a = σ/4', sigma / 4]].forEach(function (par) {
-    var cod = COD.codificar(d, par[1]);
+    var cod = COD.codificar(d, { a: par[1] });
     var dd = COD.decodificar(cod.u16, cod);
     var dist = [], peor = 0;
     for (var i = 0; i < d.length; i++) {
