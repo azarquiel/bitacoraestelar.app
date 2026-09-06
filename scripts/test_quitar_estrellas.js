@@ -166,5 +166,28 @@ ok(outHueco[jHueco] > 0, 'el relleno es luz de la propia estrella, no cero (' + 
 var jVecino = Math.round(DENTRO.y) * N + Math.round(DENTRO.x) + 1;
 ok(outHueco[jVecino] === GAL[jVecino], 'el vecino inmediato, que ya tenía dato, no se toca');
 
+console.log('H) dentro de la escena, más débil que la mlim del equipo: se quita con su anillo local (#210)');
+/* La costura de NGC 6888: fuera del recorte dibujar() corta los sprites en mlim
+   y dentro la imagen traía estrellas hasta g≈23. Con `geo.mlim`, la fuente de
+   dentro más débil que mlim se enmascara y se rellena con el fondo INMEDIATO
+   (no con la isofota del objeto entero); la más brillante que mlim se conserva
+   como antes; y sin mlim (golden, tests viejos) no cambia nada. */
+var geoMlim = { afin: afin, ba: BA, pa: PA, escena: [COMP], mlim: 15.5 };
+var CON_DEBIL = Float32Array.from(GAL);
+var jDebil = Math.round(DENTRO.y) * N + Math.round(DENTRO.x);
+CON_DEBIL[jDebil] += 5000;                                  // la estrella g=18 sobre la galaxia
+var outH = window.BitacoraPS1.ps1QuitarEstrellas(CON_DEBIL, N, N, [DENTRO], geoMlim);
+ok(outH[jDebil] !== CON_DEBIL[jDebil], 'g=18 > mlim 15,5 dentro de la escena: se enmascara');
+casi(outH[jDebil], GAL[jDebil], 0.15 * GAL[jDebil], 'y se rellena con el fondo local de la galaxia, no con el cielo');
+var outH2 = window.BitacoraPS1.ps1QuitarEstrellas(CON_DEBIL, N, N, [DENTRO], geo);
+ok(outH2[jDebil] === CON_DEBIL[jDebil], 'sin mlim en geo, la misma fuente se conserva entera (golden intacto)');
+var geoMlimHonda = { afin: afin, ba: BA, pa: PA, escena: [COMP], mlim: 19 };
+var outH3 = window.BitacoraPS1.ps1QuitarEstrellas(CON_DEBIL, N, N, [DENTRO], geoMlimHonda);
+ok(outH3[jDebil] === CON_DEBIL[jDebil], 'con mlim 19 la g=18 sí se ve: se conserva');
+// La capa de estrellas deja de excluirla: ya no la pinta el parche.
+var enPxH = [{ x: DENTRO.x, y: DENTRO.y, rPx: 3, rAs: 3, g: 18, i: 0 }];
+ok(window.BitacoraPS1.ps1FuentesEnEscena([[10, 0, 18]], enPxH, afin, [COMP]).length === 1, 'sin mlim la capa la excluye (la pinta el parche)');
+ok(window.BitacoraPS1.ps1FuentesEnEscena([[10, 0, 18]], enPxH, afin, [COMP], 15.5).length === 0, 'con mlim 15,5 no la excluye: el parche ya no la conserva');
+
 console.log(fallos ? '\n' + fallos + ' FALLOS' : '\ntodo ok');
 process.exit(fallos ? 1 : 0);

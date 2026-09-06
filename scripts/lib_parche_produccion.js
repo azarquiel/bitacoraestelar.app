@@ -6,7 +6,7 @@
    fichero debe cambiar con ella — el golden que la consume lo delatará.
 
    Uso:  var P = require('./lib_parche_produccion.js')(R);
-         P.montar(F, gal, estrellas, catalogo)  →  parche               */
+         P.montar(F, gal, estrellas, catalogo, mlim)  →  parche               */
 'use strict';
 
 module.exports = function (R) {
@@ -21,7 +21,9 @@ module.exports = function (R) {
 
   /* Réplica de ps1ParcheDeGalaxia con `F` (de lib_bajar_parche) como
      descarga ya hecha. Misma composición, mismos nombres. */
-  function montar(F, gal, estrellas, catalogo) {
+  /* `mlim` opcional: sin ella el parche conserva TODA fuente de la escena (el
+     golden se capturó así); producción la pasa siempre (ps1CapaGalaxias). */
+  function montar(F, gal, estrellas, catalogo, mlim) {
     var f = { ancho: F.ancho, alto: F.alto, escalaAs: F.escalaAs,
               wcs: F.wcs || null, datos: F.datos };
     f.afin = window.BitacoraPS1.ps1AfinParche(f, gal);
@@ -29,7 +31,7 @@ module.exports = function (R) {
     var enPx = window.BitacoraPS1.ps1EstrellasEnPixeles(f, gal, estrellas);
     var escena = window.BitacoraPS1.ps1EscenaEnParche(f, gal, vecinos);
     var limpio = window.BitacoraPS1.ps1QuitarEstrellas(f.datos, f.ancho, f.alto, enPx,
-      { afin: f.afin, ba: gal.ba, pa: gal.pa, escena: escena });
+      { afin: f.afin, ba: gal.ba, pa: gal.pa, escena: escena, mlim: mlim });
     var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
     var datos = window.BitacoraPS1.ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
       magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
@@ -46,7 +48,7 @@ module.exports = function (R) {
       thetaIntArcmin: window.BitacoraPS1.ps1ThetaIntDeGal(gal, comps),
       peso: peso, escalaMezcla: window.BitacoraPS1.ps1EscalaMezcla(datos, peso, perfil),
       perfil: PS1.confianzaLocalNaN ? perfil : null,
-      enEscena: window.BitacoraPS1.ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena),
+      enEscena: window.BitacoraPS1.ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena, mlim),
       escena: escena,
       datos: datos
     };

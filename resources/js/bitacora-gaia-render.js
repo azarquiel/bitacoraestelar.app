@@ -2585,6 +2585,7 @@
         estrellas: estrellas, estrellasDibujo: estrellasDibujo, opEstrellas: opEst,
         catalogo: o.catalogo || null,
         apertura: o.apertura,   // la PSF del parche va como 1/D, igual que el disco de Airy
+        mlim: mlim,             // profundidad del grano del parche dentro de la escena (#210)
         vivo: vivo
       });
       return { estrellas: estrellas, estrellasDibujo: estrellasDibujo, mlim: mlim,
