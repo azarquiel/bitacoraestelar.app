@@ -17,6 +17,7 @@
 'use strict';
 
 var zlib = require('zlib');
+global.window = {};                       // el navegador, para ver qué publica el módulo
 var P = require('../resources/js/bitacora-png16.js');
 var LP = require('./lib_png.js');
 
@@ -97,10 +98,52 @@ for (var i = 0; i < N; i++) {
 datos[0] = NaN; datos[N - 1] = NaN; datos[5 * W + 9] = NaN;   // ausencia del stack
 var sigma = 12.5;
 
-console.log('Ida y vuelta Float32Array → PNG-16 → Float32Array:');
+/* ── Una sola implementación para los dos extremos ────────────────────────────
+   El motivo entero del módulo: que la ley que codifica en Node sea la MISMA que
+   decodifica en el navegador. No basta con que las dos APIs existan; se compara
+   por identidad de función, que es lo que una copia no puede fingir. */
+console.log('El códec que ve Node y el que ve el navegador son el mismo:');
+var W3 = global.window.BitacoraPNG16;
+ok(!!W3, 'el módulo publica window.BitacoraPNG16');
+ok(W3.codificar === P.codificar && W3.decodificar === P.decodificar && W3.leer === P.leer,
+   'las tres funciones son las mismas, no dos copias');
+
+console.log('\nIda y vuelta Float32Array → PNG-16 → Float32Array:');
 var cod = P.codificar(datos, sigma);
 var png = LP.bufferGris16(cod.u16, W, H);
 
+/* ── La rama del sidecar: uMin y uMax vienen dados ────────────────────────────
+   El generador escribe `{a, uMin, uMax}` en el sidecar y quien recodifique un
+   parche (una recaptura, un test de regresión) los pasa de vuelta. Es la rama
+   que produce los bits que se publican, así que se prueba igual que la otra. */
+console.log('\nCodificación con uMin y uMax dados (los del sidecar):');
+var dados = P.codificar(datos, sigma, cod.uMin, cod.uMax);
+var identicos = 0;
+for (var t = 0; t < N; t++) if (dados.u16[t] === cod.u16[t]) identicos++;
+ok(identicos === N, 'reproduce bit a bit lo que calculó la rama automática (' + identicos + '/' + N + ')');
+ok(dados.uMin === cod.uMin && dados.uMax === cod.uMax, 'y devuelve los mismos extremos que se le pasaron');
+
+/* Extremos más estrechos que los datos: se satura en los dos topes, nunca se
+   sale del rango de 16 bits ni pisa el 0, que es la ausencia. */
+var estrecho = P.codificar(datos, sigma, cod.uMin + 0.3, cod.uMax - 0.3);
+var abajo = 0, arriba = 0, ceros = 0;
+for (var s = 0; s < N; s++) {
+  if (estrecho.u16[s] === 0) ceros++;
+  else if (estrecho.u16[s] === 1) abajo++;
+  else if (estrecho.u16[s] === 65535) arriba++;
+}
+ok(abajo > 0 && arriba > 0, 'satura en 1 y en 65535 (' + abajo + ' abajo, ' + arriba + ' arriba)');
+ok(ceros === 3, 'y la saturación no inventa ausencias: siguen siendo 3 ceros (' + ceros + ')');
+
+function lanza(fn) { try { fn(); return false; } catch (e) { return true; } }
+ok(lanza(function () { return P.codificar(datos, sigma, cod.uMin); }),
+   'pasar uMin sin uMax es un error, no un recálculo silencioso');
+ok(lanza(function () { return P.codificar(datos, sigma, null, cod.uMax); }),
+   'pasar uMax sin uMin también');
+ok(lanza(function () { return P.codificar(datos, sigma, 2, 2); }), 'uMax = uMin es un error');
+ok(lanza(function () { return P.codificar(datos, 0); }), 'a = 0 sigue siendo un error');
+
+console.log('');
 P.leer(png).then(function (img) {
   ok(!!img, 'el PNG que escribe lib_png se lee');
   ok(img.ancho === W && img.alto === H, 'dimensiones del IHDR (' + img.ancho + '×' + img.alto + ')');
@@ -169,7 +212,7 @@ P.leer(png).then(function (img) {
      `if (f === 3) v += (a + b) >> 1;` por `v += a;` (o quitar el `+ 1` de
      `q = 1 + Math.round(...)` en `codificar`). */
   console.log('');
-  ok(asserts >= 15, 'cardinalidad: ' + asserts + ' comprobaciones ejecutadas (mínimo 15)');
+  ok(asserts >= 26, 'cardinalidad: ' + asserts + ' comprobaciones ejecutadas (mínimo 26)');
   console.log(fallos ? '\nFALLOS: ' + fallos : '\nTodo correcto (' + asserts + ' comprobaciones)');
   process.exit(fallos ? 1 : 0);
 }).catch(function (e) {

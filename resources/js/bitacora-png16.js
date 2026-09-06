@@ -46,7 +46,12 @@
   function codificar(datos, a, uMin, uMax) {
     if (!(a > 0)) throw new Error('asinh16: a debe ser > 0 (es σ del cielo)');
     var n = datos.length, i, u;
-    if (uMin == null || uMax == null) {
+    /* Los dos extremos van juntos o no va ninguno: recodificar un parche con el
+       `uMin`/`uMax` del sidecar y que uno de los dos se pierda por el camino
+       daría otra escala con el mismo aspecto y sin aviso. */
+    if ((uMin == null) !== (uMax == null)) throw new Error('asinh16: uMin y uMax se pasan juntos o ninguno');
+    if (uMin != null && !(uMax > uMin)) throw new Error('asinh16: uMax debe ser > uMin');
+    if (uMin == null) {
       uMin = Infinity; uMax = -Infinity;
       for (i = 0; i < n; i++) {
         var v = datos[i];
