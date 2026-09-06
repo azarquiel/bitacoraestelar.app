@@ -72,9 +72,11 @@ Por objeto y equipo:
   trolands, con L_cielo = 10^(−0,4·(SQM − 12,6)) cd/m². Misma dependencia
   fondo × pupila² que ya usa `dPrimeTextura` en el render.
 - **θ_ap** = anchura de la estructura brillante × aumentos, en grados. Para
-  un disco lleno, el diámetro. Para un anillo (M57), la anchura del anillo
-  medida en el parche PS1 a mitad del pico; queda declarado aquí porque es la
-  única ambigüedad de la entrada.
+  un disco lleno, el diámetro. Para un anillo, la anchura del anillo medida
+  en el parche PS1 a mitad del pico; hoy ningún objeto del alcance con dato
+  es anular (M57 está sin dato), así que la cláusula solo se activa si M57
+  entra con su fuente secundaria. Queda declarada porque es la única
+  ambigüedad de la entrada.
 - **p_ef** = pureza · L_fot / (L_fot + L_cielo): el velo del cielo diluye el
   color en proporción a su luminancia.
 - **Señal cromática**: `d′_c = p_ef · min(1, (θ_ap/θ_c)²) · [E_ret ≥ E_c]`.
@@ -124,7 +126,7 @@ bitácora que diga lo contrario.
 | P2 | NGC 7662 | 200 mm, 200× (1,0 mm) | 0,024 | 0,93° | 0,172 | **tinte** |
 | P3 | NGC 7662 | 200 mm, 300× (0,67 mm) | 0,011 | 1,40° | 0 | **acromática** (bajo E_c) |
 | P4 | NGC 3242 | 200 mm, 100× / 200× / 300× | 0,103 / 0,026 / 0,012 | 0,70° / 1,40° / 2,10° | 0,111 / 0,228 / 0 | tinte / tinte / acromática |
-| P5 | NGC 6572 | 200 mm, 300× (0,67 mm) | 0,036 | 0,90° | 0,160 | **tinte** (a 200×: 0,071, zona gris) |
+| P5 | NGC 6572 | 200 mm, 300× (0,67 mm) | 0,036 | 0,90° | 0,160 | **tinte** (la fila de 200×, 0,071, es informativa: no es listón y no consume la zona gris) |
 | P6 | NGC 2392 | 457 mm, 98× / 270× | 0,069 / 0,009 | 1,40° / 3,87° | 0,255 / 0 | tinte / acromática; a 200 mm 100×: acromática |
 | P7 | M27 | 457 mm, 70× / 154× (SQM 21,45) | 0,024 / 0,005 | 7,8° / 17° | 0,156 / 0 | **tinte débil a 70×**, acromática a 154× |
 
@@ -166,7 +168,7 @@ cualquiera de estas cosas, y se anota con el número medido:
 1. **No hay E_c**: ningún valor en [0,001, 1] td deja las cinco anclas de §3
    del lado correcto, ni con F1 ni con F2.
 2. **Solo se enciende con un equipo**: con F1 (o F2) anclada, ningún objeto
-   del alcance (88 `PN` con μ_fot ≤ 21,2) alcanza d′_c ≥ 0,10 con apertura
+   del alcance (81 `PN` con μ_fot ≤ 21,2) alcanza d′_c ≥ 0,10 con apertura
    ≤ 250 mm y pupila de salida entre 0,5 y 7 mm bajo SQM 21,0. P2, P4 y P5 ya
    dicen que sí debería; si el render lo desmiente, gana el render.
 3. **Nunca se ve**: ningún objeto del alcance alcanza d′_c ≥ 0,10 con
@@ -177,7 +179,14 @@ cualquiera de estas cosas, y se anota con el número medido:
 Cerrar no borra nada: quedan las cuatro columnas de la fila `PN` y esta
 carpeta, para que el siguiente no vuelva a empezar de cero.
 
-## 7. Lo que hay que decir aunque todo pase
+## 7. Estado
+
+Ni una línea de render escrita antes de este commit. `scripts/entradas_tinte_np.py`
+tabula las entradas y comprueba las anclas; no se importa desde
+`resources/js/`. El siguiente documento de la carpeta es `veredicto.md`, y lo
+escribe el ticket de implementación, si se abre.
+
+## 8. Lo que hay que decir aunque todo pase
 
 - Que el tinte dependa del **tamaño aparente** significa que **el aumento
   útil para ver color no es el mayor ni el menor**, sino una ventana; ninguna

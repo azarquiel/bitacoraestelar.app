@@ -13,7 +13,8 @@ Fuentes por objeto (todas citadas en el ADR):
   · [O III] 4959       fijada a I5007 / 2,98 (razón atómica)
 Conversión μ ↔ cd/m²: μ_V = 12,6 − 2,5·log10(L) (Crumey 2014, MNRAS 442, 2600).
 
-Uso: python3 scripts/entradas_tinte_np.py
+Uso: python3 scripts/entradas_tinte_np.py            # anclas y predicciones (sin red)
+     python3 scripts/entradas_tinte_np.py --alcance  # cruce del catálogo con V/84 (VizieR)
 """
 import math
 
@@ -36,9 +37,6 @@ OBJETOS = {
     'NGC 3242': (25.2, -9.79, 17, 698, 352),
     'NGC 6572': (10.8, -9.82, 0, 399, 297),
     'NGC 2392': (51.6, -10.39, 29, 1406, 395),
-    'NGC 6210': (30.0, -10.09, 2.3, 365, 254),
-    'NGC 1535': (51.0, -10.42, 17, 1253, 285),
-    'NGC 6818': (46.2, -10.48, 72, 1495, 298),
     'NGC 6853': (402.0, -9.46, 70, 1106, 262),
     'NGC 7293': (979.8, -9.37, 0, 592, 189),
 }
@@ -70,11 +68,10 @@ def trolands(L, pupila_salida_mm, pupila_ojo_mm=7.0):
 
 def entradas(nombre, aumentos, pupila_salida, sqm, ancho_as=None):
     """Lo que F1 recibe: E_ret (objeto + cielo), θ aparente de la estructura y pureza efectiva."""
-    diam, lf, a, b, c = OBJETOS[nombre]
-    L, x, y, p = luminancia_y_pureza(diam, lf, a, b, c)
+    L, x, y, p = luminancia_y_pureza(*OBJETOS[nombre])
     Lc = luminancia_cielo(sqm)
     E = trolands(L + Lc, pupila_salida)
-    theta = (ancho_as or diam) * aumentos / 3600.0     # grados
+    theta = (ancho_as or OBJETOS[nombre][0]) * aumentos / 3600.0     # grados
     p_ef = p * L / (L + Lc)
     return L, E, theta, p_ef
 
@@ -110,15 +107,14 @@ PREDICCIONES = [
     ('NGC 6572', 200, 1.0, 21.0, None), ('NGC 6572', 300, 0.67, 21.0, None), ('NGC 6572', 400, 0.5, 21.0, None),
     ('NGC 2392', 100, 2.0, 21.0, None), ('NGC 2392', 98, 4.7, 21.4, None), ('NGC 2392', 270, 1.7, 21.4, None),
     ('NGC 6853', 70, 6.6, 21.45, None), ('NGC 6853', 154, 3.0, 21.45, None),
-    ('NGC 6853', 30, 6.7, 21.0, None),
 ]
 
 
 def main():
     print('%-9s %7s %9s %6s %6s %6s %6s' % ('objeto', 'diám″', 'L_fot', 'x', 'y', 'Δxy', 'μ_fot'))
-    for n, (d, lf, a, b, c) in OBJETOS.items():
-        L, x, y, p = luminancia_y_pureza(d, lf, a, b, c)
-        print('%-9s %7.1f %9.2e %6.3f %6.3f %6.3f %6.2f' % (n, d, L, x, y, p, 12.6 - 2.5 * math.log10(L)))
+    for n, fila in OBJETOS.items():
+        L, x, y, p = luminancia_y_pureza(*fila)
+        print('%-9s %7.1f %9.2e %6.3f %6.3f %6.3f %6.2f' % (n, fila[0], L, x, y, p, 12.6 - 2.5 * math.log10(L)))
 
     print('\nAnclas (457 mm, ojo 7 mm) — E_ret objeto+cielo, θ aparente, pureza efectiva, F1:')
     for n, aum, pup, sqm, dicho in ANCLAS:
@@ -147,5 +143,69 @@ def main():
     print('\nOK: las cinco anclas caen del lado que dice la bitácora con E_c = %.3f td, θ_c = %.1f°' % (E_C, THETA_C))
 
 
+# ---- alcance: cruce del catálogo PN con V/84 (red) ----
+MU_ALCANCE = 21.2   # μ_fot máxima: por debajo ni una pupila de 7 mm alcanza E_c
+
+
+def alcance():
+    import csv, re, urllib.parse, urllib.request
+    asu = 'https://vizier.cds.unistra.fr/viz-bin/asu-tsv'
+
+    def tabla(nombre):
+        p = {'-source': nombre, '-out.max': 'unlimited', '-out.form': 'TSV', '-out': '**'}
+        txt = urllib.request.urlopen(asu + '?' + urllib.parse.urlencode(p), timeout=180).read().decode('utf-8', 'replace')
+        lineas = [l for l in txt.splitlines() if l and not l.startswith('#')]
+        cab = lineas[0].split('\t')
+        filas = [dict(zip(cab, l.split('\t'))) for l in lineas[2:]]
+        return [f for f in filas if not set(list(f.values())[0]) <= set('-')]
+
+    def norm(n):   # 'NGC   40' -> 'NGC0040'
+        m = re.match(r'^(NGC|IC)\s*(\d+)\s*$', n.strip())
+        return '%s%04d' % (m.group(1), int(m.group(2))) if m else None
+
+    def num(s):
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    png_de = {norm(f['Name']): f['PNG'].strip() for f in tabla('V/84/main') if norm(f['Name'])}
+    intens = {}
+    for f in tabla('V/84/intens'):
+        if f['LineRef'].strip() == 'b':
+            intens.setdefault(f['PNG'].strip(), []).append(f)
+    hbeta = {f['PNG'].strip(): num(f['log(Fbeta)']) for f in tabla('V/84/hbeta')}
+    ongc = {f['Name']: f for f in csv.DictReader(open('mapa/datos/ongc_nebulosas.csv', encoding='utf-8'), delimiter=';')}
+
+    total = con_png = con_5007 = con_todo = en_alcance = 0
+    sin_dato = []
+    for f in csv.DictReader(open('mapa/datos/nebulosas.csv', encoding='utf-8')):
+        if f['clase'] != 'PN' or not f['nombre'].startswith(('NGC', 'IC')):
+            continue
+        total += 1
+        png = png_de.get(f['nombre'])
+        if not png:
+            sin_dato.append(f['nombre']); continue
+        con_png += 1
+        filas = intens.get(png, [])
+        i5007 = next((num(x['I5007']) for x in filas if num(x['I5007'])), None)
+        i6563 = next((num(x['I6563']) for x in filas if num(x['I6563'])), None)
+        i4686 = next((num(x['I4686']) for x in filas if num(x['I4686'])), 0.0)
+        lf = hbeta.get(png)
+        if i5007:
+            con_5007 += 1
+        if not (i5007 and i6563 and lf is not None):
+            sin_dato.append(f['nombre']); continue
+        con_todo += 1
+        L = luminancia_y_pureza(num(ongc[f['nombre']]['MajAx']) * 60.0, lf, i4686, i5007, i6563)[0]
+        if 12.6 - 2.5 * math.log10(L) <= MU_ALCANCE:
+            en_alcance += 1
+    print('PN NGC/IC en nebulosas.csv: %d | con PNG en V/84: %d | con I5007 (b): %d | con I5007+I6563+logF(Hβ): %d'
+          % (total, con_png, con_5007, con_todo))
+    print('en alcance (μ_fot ≤ %.1f): %d' % (MU_ALCANCE, en_alcance))
+    print('sin dato completo (%d): %s' % (len(sin_dato), ' '.join(sin_dato)))
+
+
 if __name__ == '__main__':
-    main()
+    import sys
+    alcance() if '--alcance' in sys.argv else main()

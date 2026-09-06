@@ -40,7 +40,8 @@ números, y solo después se decide si merece la pena escribir la ley.
    (o sin fila) se pinta acromática, y se escribe así en la fila (`i5007 = null`),
    no se estima a partir de su clase de excitación ni de su magnitud. Medido
    el 2026-09-06: de las 128 `PN` NGC/IC del catálogo, 119 tienen PNG en V/84,
-   107 traen `I5007` y **104 traen las tres cosas**. Entre las 24 sin dato
+   107 traen `I5007` y **104 traen las tres cosas** (recuento reproducible con
+   `scripts/entradas_tinte_np.py --alcance`). Entre las 24 sin dato
    completo están **M57** (sin fila en `intens`) y **NGC 40** (`I5007` en
    blanco): las dos quedan grises por regla, no por ley. Si más adelante se
    quiere M57, la fuente secundaria declarada es la fotometría de líneas de
@@ -51,7 +52,7 @@ números, y solo después se decide si merece la pena escribir la ley.
    L_fot ≥ 3,6·10⁻⁴ cd/m² (μ_fot ≤ 21,2 mag/arcsec² con μ = 12,6 − 2,5·log L,
    Crumey 2014). Es el brillo por debajo del cual ni una pupila de 7 mm alcanza
    el umbral E_c que fija el ancla (§ prerregistro); no es un corte estético.
-   Con las tablas de hoy: 88 objetos, de IC 2501 (1,8″, μ_fot 12,6, casi
+   Con las tablas de hoy (`entradas_tinte_np.py --alcance`): 81 objetos, de IC 2501 (1,8″, μ_fot 12,6, casi
    estelar) a M27 (21,07); NGC 6572 (15,1), NGC 7662 (16,4) y NGC 6905 (19,9)
    en medio.
    Quedan fuera Helix (23,4), NGC 246, NGC 1514, todos los Abell, y cualquier
@@ -63,13 +64,14 @@ números, y solo después se decide si merece la pena escribir la ley.
    Están en el prerregistro con sus parámetros; ninguna tiene un tercer
    parámetro que ajustar a posteriori.
 
-6. **Criterio de invisibilidad.** Si con F1 anclada ningún objeto del alcance
-   alcanza tinte con apertura ≤ 500 mm y pupila de salida entre 0,5 y 7 mm, o
-   si ningún E_c en [0,001, 1] td satisface a la vez las cinco anclas ni con F1
-   ni con F2, la ley se cierra apagada como la de textura, con la medida
-   anotada aquí. Las anclas ya dicen que el tinte existe a 457 mm; lo que este
-   criterio protege es que no se construya una capa que solo se enciende con
-   un equipo.
+6. **Criterio de invisibilidad.** Tres cierres, numerados igual en el
+   prerregistro (§6): (1) ningún E_c en [0,001, 1] td deja las cinco anclas
+   del lado correcto, ni con F1 ni con F2; (2) con la ley anclada, ningún
+   objeto del alcance alcanza tinte con apertura ≤ 250 mm bajo SQM 21,0 y
+   pupila de salida entre 0,5 y 7 mm; (3) ninguno lo alcanza con apertura
+   ≤ 500 mm. Cualquiera de los tres cierra la ley apagada como la de textura,
+   con la medida anotada. Las anclas ya dicen que el tinte existe a 457 mm;
+   el (2) protege de construir una capa que solo se enciende con un equipo.
 
 ## Lo que este ADR no decide
 
