@@ -121,6 +121,21 @@ function escribirFila(dir, nombre, motivo, ra, dec) {
                      generador: GENERADOR, ra: ra, dec: dec }, null, 1) + '\n');
 }
 
+/* LA regla de reanudación, en un solo sitio: un objeto está resuelto si tiene su
+   textura completa (PNG **y** sidecar: media textura no vale) o su veredicto de
+   ausencia. Se mira en el directorio de salida y en las fixtures, que es donde
+   viven las texturas del banco golden. La usan `generar` y el recorrido en seco,
+   que si no acabarían discrepando. */
+function yaResuelto(dir, id, v) {
+  var dirs = dir === FIXTURES ? [dir] : [dir, FIXTURES];
+  for (var i = 0; i < dirs.length; i++) {
+    if (fs.existsSync(path.join(dirs[i], id + '.fila.json'))) return { dir: dirs[i], estado: 'fila' };
+    if (fs.existsSync(path.join(dirs[i], id + '.' + v + '.png')) &&
+        fs.existsSync(path.join(dirs[i], id + '.' + v + '.json'))) return { dir: dirs[i], estado: 'ya' };
+  }
+  return null;
+}
+
 /* Filas de los controles del ADR 0024. Se leen del banco, que las decide con
    `decMin` y `ps1CabeEnParche` —las leyes de producción— y no de una lista de
    motivos escrita a mano: si el catálogo cambiara y uno dejara de ser control,
@@ -136,7 +151,7 @@ function filasControl() {
 /* Los sidecars de los dos directorios, uno por objeto. Si un objeto tiene los
    dos —primero se quedó sin cobertura y luego apareció— manda la textura: el
    veredicto de ausencia caducó en cuanto hubo píxeles. */
-function sidecarsDe(dir) {
+function sidecarsUnicos(dir) {
   var porNombre = {};
   sidecars(FIXTURES).concat(dir === FIXTURES ? [] : sidecars(dir))
     .forEach(function (s) {
@@ -147,7 +162,7 @@ function sidecarsDe(dir) {
 }
 
 function escribirManifiesto(dir) {
-  var filas = sidecarsDe(dir)
+  var filas = sidecarsUnicos(dir)
     .map(function (s) {
       return { ra: s.ra, fila: s.modelo === 'fila'
         ? [s.nombre, 'fila', '', 0, 0, 0, s.motivo]
@@ -184,20 +199,11 @@ function generar(nombre, dir) {
   var gal = campo[0], salida = PS1.cfg.salida, v = version(gal, salida);
 
   var id = PS1.ps1IdTextura(gal.nombre), base = path.join(dir, id + '.' + v);
-  /* Reanudación: lo ya resuelto —textura escrita, o veredicto de que no la
-     tendrá— no se vuelve a pedir. Se mira también en las fixtures, que es donde
-     viven las texturas del banco golden. */
-  if ([dir, FIXTURES].some(function (d) { return fs.existsSync(path.join(d, id + '.fila.json')); })) {
-    console.log('ya estaba (fila): ' + id);
-    return Promise.resolve('fila');
-  }
-  var hecho = [dir, FIXTURES].filter(function (d) {
-    return fs.existsSync(path.join(d, id + '.' + v + '.png')) &&
-           fs.existsSync(path.join(d, id + '.' + v + '.json'));
-  })[0];
-  if (hecho) {
-    console.log('ya estaba: ' + id + '.' + v + '.{png,json} en ' + path.relative(RAIZ, hecho));
-    return Promise.resolve('ya');
+  var y = yaResuelto(dir, id, v);
+  if (y) {
+    console.log('ya estaba' + (y.estado === 'fila' ? ' (fila)' : '') + ': ' + id +
+      ' en ' + path.relative(RAIZ, y.dir));
+    return Promise.resolve(y.estado);
   }
 
   return bajar(gal.ra, gal.dec, gal.ladoArcmin, salida).then(function (p) {
@@ -287,30 +293,41 @@ function generar(nombre, dir) {
 function correrBanco(dir, seco) {
   var b = BANCO.banco();
   b.avisos.forEach(function (a) { console.log('AVISO · ' + a); });
-  var estado = { objetos: b.objetos.length, controles: b.controles.length,
-                 nuevos: 0, ya: 0, filas: 0, pendientes: 0, fallos: [] };
+  var estado = { seco: !!seco, nuevos: 0, ya: 0, filas: 0, pendientes: 0, fallos: [] };
 
   return b.objetos.reduce(function (cadena, o, i) {
     return cadena.then(function () {
       console.log('\n[' + (i + 1) + '/' + b.objetos.length + '] ' + o.nombre + '  (' + o.motivo + ')');
+      /* El banco lo devuelve con `gal` resuelto; si algún día no, es un aviso
+         suyo y aquí una línea del informe, no una tirada tumbada. */
+      if (!o.gal) {
+        estado.fallos.push(o.nombre + ': el banco no lo resuelve a campo (gal = null)');
+        console.log('  FALLO: el banco no lo resuelve a campo');
+        return;
+      }
+      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, PS1.cfg.salida);
       if (seco) {
-        var v = version(o.gal, PS1.cfg.salida), id = PS1.ps1IdTextura(o.nombre);
-        var hay = [dir, FIXTURES].some(function (d) {
-          return fs.existsSync(path.join(d, id + '.' + v + '.png')) ||
-                 fs.existsSync(path.join(d, id + '.fila.json'));
-        });
-        console.log('  ' + (hay ? 'ya está' : 'pediría') + '  ' + id + '.' + v +
+        var y = yaResuelto(dir, id, v);
+        console.log('  ' + (y ? 'ya está (' + y.estado + ')' : 'pediría') + '  ' + id + '.' + v +
           '  ' + o.gal.ladoArcmin.toFixed(2) + '′ → ' + PS1.cfg.salida + ' px');
-        if (hay) estado.ya++; else estado.pendientes++;
+        if (y) estado.ya++; else estado.pendientes++;
         return;
       }
       /* `generar` avisa de lo suyo tirando —también antes de la primera promesa,
          cuando el objeto ni siquiera admite textura—, así que la llamada va
-         envuelta: un objeto que revienta no puede tumbar la tirada entera.
-         Un reintento simple, que es lo que la fase 0 justificó (§D): sin pausas
-         ni espera creciente, porque no se midió estrangulamiento alguno. */
+         envuelta: un objeto que revienta no puede tumbar la tirada entera. */
       var intento = function () { return Promise.resolve().then(function () { return generar(o.nombre, dir); }); };
-      return intento().catch(intento)
+      return intento()
+        /* Un reintento simple, y SOLO de lo que puede salir distinto la segunda
+           vez: la descarga. Lo que ya es un veredicto —no cabe, no está en el
+           catálogo, sin cobertura— da lo mismo repetido y duplicaría la petición
+           a STScI. Sin pausas ni espera creciente: la fase 0 (§D) no midió
+           estrangulamiento en 147 descargas seguidas. */
+        .catch(function (e) {
+          if (/sin cobertura|no admite textura|no está en el catálogo|no lo devuelve/.test(e.message)) throw e;
+          console.log('  reintento: ' + e.message);
+          return intento();
+        })
         .then(function (r) { estado[r === 'nuevo' ? 'nuevos' : r === 'fila' ? 'filas' : 'ya']++; })
         .catch(function (e) {
           /* Sin cobertura de PS1 es un veredicto, no una avería: se anota como
@@ -334,7 +351,7 @@ function correrBanco(dir, seco) {
    medias se ve como lo que es. Sin fecha dentro, para que regenerarlo sin haber
    generado nada no ensucie el árbol: la fecha la lleva el commit. */
 function escribirInforme(dir) {
-  var todos = sidecarsDe(dir);
+  var todos = sidecarsUnicos(dir);
   var imagenes = todos.filter(function (s) { return s.modelo !== 'fila'; })
     .sort(function (a, b) { return a.ra - b.ra; });
 
@@ -436,16 +453,16 @@ function escribirInforme(dir) {
   L.push('');
   fs.writeFileSync(INFORME, L.join('\n'));
   return { imagenes: imagenes.length, pendientes: pendientes.length,
-           revision: revision.length, bytes: bytes, cuenta: cuenta };
+           revision: revision.length, bytes: bytes };
 }
 
 /* Requerido como módulo (scripts/test_dso_texturas.js) no genera nada: expone
    lo que se puede probar sin red ni disco. */
 module.exports = { version: version, filaDe: filaDe, motivoAusencia: motivoAusencia,
                    escribirManifiesto: escribirManifiesto, escribirInforme: escribirInforme,
-                   filasControl: filasControl, generar: generar, correrBanco: correrBanco,
+                   filasControl: filasControl, generar: generar,
                    GENERADOR: GENERADOR, FIXTURES: FIXTURES, MANIFIESTO: MANIFIESTO,
-                   INFORME: INFORME, REVISION: REVISION };
+                   INFORME: INFORME };
 if (require.main !== module) return;
 
 var nombre = arg('--solo', '');
@@ -460,6 +477,16 @@ if (!nombre && !enBanco) {
    tirada a medias o con fallos: los dos se reconstruyen de lo que hay en disco,
    así que declarar de menos es correcto y declarar de más, imposible. */
 function cerrar(estado) {
+  /* En seco no se escribe NADA: el recorrido dice qué haría, y un manifiesto o
+     un informe reescritos tras una tirada real parcial son justo lo que no debe
+     pasar por mirar. */
+  if (estado && estado.seco) {
+    console.log('\nen seco: ' + estado.ya + ' ya está(n), ' + estado.pendientes +
+      ' pendiente(s)' + (estado.fallos.length ? ', ' + estado.fallos.length + ' fallo(s)' : '') +
+      '. Ni manifiesto ni informe tocados.');
+    if (estado.fallos.length) { console.error('  ' + estado.fallos.join('\n  ')); process.exit(1); }
+    return;
+  }
   console.log('\nmanifiesto: ' + escribirManifiesto(dir) + ' fila(s) en ' +
     path.relative(RAIZ, MANIFIESTO));
   var inf = escribirInforme(dir);

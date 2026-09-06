@@ -263,7 +263,18 @@ rellenan en las fases 3 y 4.
 > 3. **Un objeto del banco todavía sin textura NO tiene fila en el manifiesto.**
 >    Una fila «fila» con motivo vacío apagaría el respaldo por proxy en silencio
 >    (`ps1FuenteParche` no pide red cuando hay fila), y el régimen mixto de la
->    fase 1 es justo lo contrario: sin fila → proxy.
+>    fase 1 es justo lo contrario: sin fila → proxy. Por eso el manifiesto de hoy
+>    tiene 6 filas y no 74: el criterio «una fila por objeto del banco» se cumple
+>    cuando la tirada completa haya corrido, y hasta entonces lo que falta es un
+>    pendiente declarado en el informe, no una fila muda.
+> 4. **Trampa conocida de la tirada completa** (heredada de #200, sin resolver):
+>    el manifiesto y el informe commiteados son la regeneración sobre
+>    `scripts/fixtures/dso/`, que es lo único que va en git, y `test_dso_texturas.js`
+>    los compara byte a byte contra ella. En cuanto `--banco` escriba en
+>    `simulador_ocular/dso/` —ignorado por git— los dos ficheros commiteados serán
+>    un superconjunto y ese guardián se pondrá rojo. Hay que decidir entonces qué
+>    compara el test: hoy no se toca porque la generación completa espera al PASA
+>    de la fase 2.
 
 **Codificación `asinh16`** (declarada, invertible, sin ley de display):
 
