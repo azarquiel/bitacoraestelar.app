@@ -17,7 +17,7 @@ var R = global.window.BitacoraGaiaRender;
 var PS1 = window.BitacoraPS1;
 var B = require('./lib_banco_dso.js')(R);
 var BAJAR = require('./lib_bajar_parche.js')(R);
-var COD = require('./lib_asinh16.js');
+var COD = require('../resources/js/bitacora-png16.js');
 
 var nombre = process.argv[2] || 'NGC 7331';
 var b = B.banco();
@@ -31,7 +31,7 @@ BAJAR.bajar(o.gal.ra, o.gal.dec, o.gal.ladoArcmin, 1024, 'g', true).then(functio
   var corte = cielo - PS1.cfg.kAusencia * sigma;
 
   [['a = σ', sigma], ['a = σ/4', sigma / 4]].forEach(function (par) {
-    var cod = COD.codificar(d, par[1]);
+    var cod = COD.codificar(d, { a: par[1] });
     var dd = COD.decodificar(cod.u16, cod);
     var dist = [], peor = 0;
     for (var i = 0; i < d.length; i++) {
