@@ -162,4 +162,5 @@ Etiqueta explícita de catálogo (Type del OpenNGC: `PN`, `HII`, `SNR`, `RfN`…
   y el ala superviviente se lleva el presupuesto del anclaje (motitas). Solo
   compactas: las reglas de fusión de las galaxias están cerradas.
 - **v1 solo admite `PN`.** Las demás clases tienen fila generada pero puerta cerrada; si una clase necesita lo que una fila Sérsic no puede decir (filamentos, cáscara incompleta), la conversación es sobre el esquema del catálogo.
+- **El tinte de una `PN` está prerregistrado, no implementado (ADR 0025).** Su entrada no es la `mag_v` de la fila (recortada al suelo 17,5) sino fotometría de líneas de Acker V/84 (`log F(Hβ)`, `I5007`, `I6563`, `I4686`); sin `I5007` no hay color. La ley declarada, F1, es una ventana de aumentos: puerta de iluminancia retinal (E_c leído en NGC 6905) por tamaño aparente (θ_c = 1°) por pureza del espectro. Listones y vía de escape en `docs/adr/0025-tinte-planetarias/prerregistro.md`; entradas en `scripts/entradas_tinte_np.py`.
 - _Evitar_: «tipo» a secas (colisiona con el tipo de la [[observación]] y con la [[clasificación de objeto del mapa]]); «sistema de nebulosas».
