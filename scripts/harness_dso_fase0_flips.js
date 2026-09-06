@@ -17,7 +17,7 @@ var R = global.window.BitacoraGaiaRender;
 var PS1 = window.BitacoraPS1;
 var B = require('./lib_banco_dso.js')(R);
 var BAJAR = require('./lib_bajar_parche.js')(R);
-var COD = require('./lib_asinh16.js');
+var COD = require('../resources/js/bitacora-png16.js');
 
 var nombre = process.argv[2] || 'NGC 7331';
 var b = B.banco();
