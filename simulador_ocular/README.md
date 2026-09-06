@@ -1046,12 +1046,12 @@ puede ser **un dato del proyecto**, generado una vez y servido desde el propio
 dominio. Cada objeto con textura tiene dos ficheros en
 `/wp-content/uploads/bitacora/dso/`:
 
-- `NGC5194.<v>.png` — el parche en **PNG de 16 bits en gris**, con la
+- `NGC_5194.<v>.png` — el parche en **PNG de 16 bits en gris**, con la
   codificación `asinh16` (`resources/js/bitacora-png16.js`, la misma para el
   generador y el navegador). No es una curva de tono: se deshace entera antes de
   que ningún píxel entre en `ps1Cielo`. El 0 es el único valor con significado
   propio: ausencia (los NaN que ya traía el stack).
-- `NGC5194.<v>.json` — el sidecar: WCS, escala, procedencia y auditoría (cielo,
+- `NGC_5194.<v>.json` — el sidecar: WCS, escala, procedencia y auditoría (cielo,
   σ, fracción de ausencia, error de cuantización medido sobre lo escrito).
 
 `<v>` es un hash de lo que determina los píxeles, así que la URL es inmutable y
