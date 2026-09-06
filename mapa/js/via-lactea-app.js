@@ -79,7 +79,9 @@
       // El giro solo entra en la proyección con el disco abatido: en plano lo
       // resuelve el CSS alrededor del núcleo y la escala basta para el anclaje.
       giro: tiltActual() ? currentPlaneRotation() : 0,
-      perspectiva: INCL.perspectiva || 1400
+      // La REAL de #mw-plano, no la nominal: en la antesala del canto (88-89°)
+      // se aleja, y con la nominal los objetos hundidos (b<0) salían disparados.
+      perspectiva: perspectivaPlano(tiltActual())
     };
   }
 
@@ -906,9 +908,12 @@
         // pasados los ~78°. Se le pone tope: nunca más cerca de la cámara que
         // K_MIN de la distancia del ancla. Con el disco casi de canto ya no hay
         // foto que esquivar, así que lo que se pierde no se ve.
-        var dPersp = INCL.perspectiva || 1400;
-        var kEmpuje = Math.max(kAncla * K_MIN_EMPUJE, kAncla - empuje / dPersp);
-        empuje = (kAncla - kEmpuje) * dPersp;
+        // La misma perspectiva que divide en el DOM (perspectivaPlano): sin
+        // perspectiva (Infinity) no hay adelanto que deshacer.
+        var dPersp = vistaAlturas.perspectiva;
+        var kEmpuje = isFinite(dPersp)
+          ? Math.max(kAncla * K_MIN_EMPUJE, kAncla - empuje / dPersp) : kAncla;
+        empuje = isFinite(dPersp) ? (kAncla - kEmpuje) * dPersp : 0;
         var f = kAncla ? (kEmpuje / kAncla) : 1;
         var cx = vistaAlturas.ancho / 2, cy = vistaAlturas.alto / 2;
         var mLocal = (counter * scale) || 1;
