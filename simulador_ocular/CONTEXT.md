@@ -189,7 +189,7 @@ Etiqueta explícita de catálogo (Type del OpenNGC: `PN`, `HII`, `SNR`, `RfN`…
   como estrella (g ≤ `mlim`); la más débil se enmascara y se rellena con su
   anillo inmediato, y vuelve a la capa de estrellas como niebla sub-mlim.
   Fuera del recorte los sprites ya se cortaban en `mlim`; sin esta regla una
-  nebulosa que llena el parche mostraba 5,8 veces más estrellas dentro que
+  nebulosa que llena el parche mostraba 5,5 veces más estrellas dentro que
   fuera (NGC 6888, `docs/notas/costura-parche-nebulosas.md`). Sin `mlim`
   (golden, tests sintéticos) se conserva todo, como antes.
 - **v1 solo admite `PN`.** Las demás clases tienen fila generada pero puerta cerrada; si una clase necesita lo que una fila Sérsic no puede decir (filamentos, cáscara incompleta), la conversación es sobre el esquema del catálogo.

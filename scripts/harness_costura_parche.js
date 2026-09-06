@@ -22,9 +22,12 @@
    Poisson con ~100 cuentas es ±10 %; el resto del margen es para el gradiente
    real de densidad estelar en el Cisne. Fuera del intervalo: costura.
 
+   Sale con código 1 si el ratio se sale del listón.
+
    Uso:  node scripts/harness_costura_parche.js [--obj NGC6888] [--csv gaia_ngc6888.csv]
-         [--D 457.2] [--M 100] [--sqm 21.2] [--viaA] [--png]
-   --viaA: monta el parche con la mlim del equipo (vía A, la de producción). */
+         [--D 457.2] [--M 100] [--sqm 21.2] [--viaA | --viaB <arcmin>] [--png]
+   --viaA: monta el parche con la mlim del equipo (vía A, la de producción).
+   --viaB: quita las conservadas a menos de <arcmin> del borde (vía B, emulada). */
 'use strict';
 
 var fs = require('fs'), path = require('path');
@@ -51,6 +54,25 @@ var gal = P.galDeFila(fila(arg.obj));
 B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
   var mlimMontaje = arg.viaA ? R.magLimite({ apertura: D, aumentos: M, sqm: SQM }) : undefined;
   var parche = P.montar(F, gal, gaia, CAT, mlimMontaje);   // --viaA: grano recortado a mlim (producción)
+  /* --viaB <arcmin>: emula «desvanecer la conservación cerca del borde»: toda
+     fuente conservada a menos de esa distancia del borde del recorte se quita
+     como si estuviera fuera de la escena (misma máscara y relleno que fuera).
+     Solo aquí, no en producción: es la vía que se mide para descartarla. */
+  var bandaB = +arg.viaB || 0, perdidaB = 0;
+  if (bandaB > 0) {
+    var fB = { ancho: F.ancho, alto: F.alto, escalaAs: F.escalaAs, wcs: F.wcs || null, afin: parche.afin };
+    var enPxB = window.BitacoraPS1.ps1EstrellasEnPixeles(fB, gal, gaia);
+    var bandaPx = bandaB * 60 / F.escalaAs, enBanda = [];
+    for (var ib = 0; ib < enPxB.length; ib++) {
+      var eb = enPxB[ib];
+      if (!window.BitacoraPS1.ps1FuenteEnEscena(parche.escena, parche.afin, eb.x, eb.y)) continue;
+      if (Math.min(eb.x, eb.y, F.ancho - 1 - eb.x, F.alto - 1 - eb.y) < bandaPx) enBanda.push(eb);
+    }
+    parche.datos = window.BitacoraPS1.ps1QuitarEstrellas(parche.datos, F.ancho, F.alto, enBanda,
+      { afin: parche.afin, ba: gal.ba, pa: gal.pa });
+    var ladoInt = Math.max(0, gal.ladoArcmin - 2 * bandaB);
+    perdidaB = 100 * (1 - ladoInt * ladoInt / (gal.ladoArcmin * gal.ladoArcmin));
+  }
   var cielo = { pupilaSalida: D / M, pupilaOjo: 7, sqm: SQM, aumentos: M, realceMax: PS1.realceMax, perceptual: true };
   var o = { ra0: gal.ra, dec0: gal.dec, arcmin: AFOV / M * 60, size: SIZE, cielo: cielo, apertura: D };
   var difuso = new Float32Array(SIZE * SIZE);
@@ -91,9 +113,13 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
       dentroGaia++;
       if (g < mlim) control++;
       if (destaca(p.x, p.y)) { dentro++; var b = Math.floor(g); porMag[b] = (porMag[b] || 0) + 1; }
-      // nulo: el mismo detector 7 px (25″) al lado, donde no hay fuente catalogada:
+      // nulo: el mismo detector a 7 px (25″) de la fuente, promediado en las
+      // cuatro diagonales para que la orientación de un filamento no lo sesgue:
       // lo que «destaca» ahí es estructura de la nebulosa o grano del anclaje, no estrella
-      if (Math.abs(dx + 7) <= medioLado && Math.abs(dy + 7) <= medioLado && destaca(p.x + 7, p.y + 7)) nulo++;
+      for (var kn = 0; kn < 4; kn++) {
+        var ox7 = (kn & 1) ? 7 : -7, oy7 = (kn & 2) ? 7 : -7;
+        if (Math.abs(dx + ox7) <= medioLado && Math.abs(dy + oy7) <= medioLado && destaca(p.x + ox7, p.y + oy7)) nulo += 0.25;
+      }
     } else if (r > rInt && r <= rExt) {
       fueraTot++;
       if (g < mlim) fuera++;
@@ -128,13 +154,13 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
   }
   var cobertura = 100 * n / muestras;
   var dd = Math.max(0, dentro - nulo) / areaParche, df = fuera / areaParche, ratio = dd / df;
-  console.log((arg.viaA ? '[vía A] ' : '[sin mlim] ') + arg.obj + ' · D ' + D + ' · ' + M + '× · SQM ' + SQM + ' · mlim ' + mlim.toFixed(2) +
+  console.log((arg.viaA ? '[vía A] ' : bandaB ? '[vía B ' + bandaB + '′] ' : '[sin mlim] ') + arg.obj + ' · D ' + D + ' · ' + M + '× · SQM ' + SQM + ' · mlim ' + mlim.toFixed(2) +
     ' · escena cubre ' + cobertura.toFixed(1) + ' % del parche · ' + asPx.toFixed(2) + '″/px lienzo');
   console.log('  parche ' + gal.ladoArcmin.toFixed(2) + '′ (' + areaParche.toFixed(0) + ' arcmin²), anillo ' +
     rInt.toFixed(1) + '–' + rExt.toFixed(1) + ' px · Gaia de la fixture hasta g ' +
     Math.max.apply(null, gaia.map(function (s) { return s[2]; })).toFixed(1));
   console.log('  dentro: Gaia ' + dentroGaia + ' · g<mlim (control) ' + control + ' · destacan en el difuso ' + dentro +
-    ' · nulo (detector a 25″ de cada fuente) ' + nulo + '  = (destacan − nulo) ' + dd.toFixed(3) + '/arcmin²');
+    ' · nulo (detector a 25″ de cada fuente, 4 direcciones) ' + nulo.toFixed(0) + '  = (destacan − nulo) ' + dd.toFixed(3) + '/arcmin²');
   console.log('  dentro por magnitud (destacan): ' + JSON.stringify(porMag));
   console.log('  dentro sin catalogar (picos sin Gaia a ≤2 px): ' + sinCatalogar +
     '  = ' + (sinCatalogar / areaParche).toFixed(3) + '/arcmin²');
@@ -142,6 +168,8 @@ B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
   console.log('  ratio dentro/fuera = ' + ratio.toFixed(2) + '  (listón 0,67–1,5): ' +
     (ratio >= 0.67 && ratio <= 1.5 ? 'SIN costura' : 'COSTURA'));
   console.log('  control/fuera = ' + (control / fuera).toFixed(2) + ' (gradiente real de densidad)');
+  if (bandaB) console.log('  vía B: la franja de ' + bandaB + '′ deja sin protección el ' + perdidaB.toFixed(0) + ' % del área del parche');
+  process.exitCode = (ratio >= 0.67 && ratio <= 1.5) ? 0 : 1;
   if (arg.png) {
     var png = require('./lib_png.js'), c = R.ctxFotometrico(cielo, parche.thetaIntArcmin);
     var rgb = new Uint8Array(SIZE * SIZE * 3);
