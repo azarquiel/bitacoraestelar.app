@@ -48,5 +48,17 @@ eq(/perspectivaPlano\(tilt\)/.test(encarar), true, 'encararRuta deshace la MISMA
 eq(/INCL\.perspectiva/.test(encarar), false, 'encararRuta ya no lee la nominal');
 eq(/isFinite\(P\) \? 1 - dz \/ P : 1/.test(encarar), true, 'sin perspectiva (90°) no hay nada que deshacer: kz = 1');
 
+// Los objetos BAJO el plano (b<0) se adelantan hacia la cámara para pasar por
+// delante de la foto, y ese adelanto se deshace con la perspectiva. Con la
+// nominal, en el viaje 41 (Néstor, 2008-09-06) NGC 281 saltaba de x=250 px a
+// 87° a 516/1438/2756 px a 88/89/89,5° y su punto encogía de 6,4 a 1,9 px.
+console.log('los marcadores hundidos deshacen también la real:');
+var vista = app.slice(app.indexOf('function vistaProyeccion'), app.indexOf('function alturaObjetoPx'));
+var hundido = app.slice(app.indexOf('var bajo = alturaPx < 0'), app.indexOf("a.classList.toggle('mw-hundido'"));
+eq(/perspectiva: perspectivaPlano\(tiltActual\(\)\)/.test(vista), true, 'vistaProyeccion proyecta con perspectivaPlano');
+eq(/var dPersp = vistaAlturas\.perspectiva/.test(hundido), true, 'el empuje del hundido deshace la de la vista');
+eq(/isFinite\(dPersp\)/.test(hundido), true, 'y sin perspectiva no empuja');
+eq((app.match(/INCL\.perspectiva/g) || []).length, 1, 'la nominal solo la lee perspectivaPlano');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nok · la ruta deshace la misma perspectiva que lleva el plano, también entre 87° y 90°');
