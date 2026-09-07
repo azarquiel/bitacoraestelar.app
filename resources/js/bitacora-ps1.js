@@ -1602,6 +1602,11 @@
     return out;
   }
 
+  /* El nombre con el que este objeto se conoce fuera del catálogo: el primero,
+     y el alias solo si no tiene. Es la CLAVE del manifiesto (ADR 0015), así que
+     el campo y el aviso tienen que leerlo igual o el aviso buscaría otra fila. */
+  function ps1NombreFila(f) { return f[0] || f[1]; }
+
   function ps1GalaxiasDelCampo(catalogo, ra0, dec0, arcmin) {
     var out = [], cos0 = Math.cos(dec0 * Math.PI / 180), radio = arcmin / 120;
     for (var i = 0; i < (catalogo || []).length; i++) {
@@ -1614,7 +1619,7 @@
       var ddec = g[3] - dec0;
       if (Math.abs(dra) > margen || Math.abs(ddec) > margen) continue;
       out.push({
-        nombre: g[0] || g[1], ra: g[2], dec: g[3], reArcsec: g[4],
+        nombre: ps1NombreFila(g), ra: g[2], dec: g[3], reArcsec: g[4],
         ba: g[5], pa: g[6], magV: g[7], n: g[8], bt: g[9],
         nMedido: g[11] || 0, clase: g[12] || '', ladoArcmin: lado
       });
@@ -1630,10 +1635,13 @@
      solo de sesión y la clave es el objeto: el parche no depende del ocular ni
      del aumento, así que la textura se decodifica una vez. */
   var cachePS1 = {};
-  /* El motivo del parche que no vino, junto a su promesa: la caché es de
-     sesión y el campo se repinta con cada ocular, así que sin esto el segundo
-     repintado se quedaría sin causa y el aviso caería al comodín del proxy. */
-  var motivoPS1 = {};
+  /* Las notas del parche que no vino, con la MISMA clave que su promesa: la
+     caché es de sesión y el campo se repinta con cada ocular, así que sin esto
+     el segundo repintado se quedaría sin causa y el aviso caería al comodín del
+     proxy. Se guarda el objeto del primer llamador, no una copia del motivo:
+     así el segundo lo lee cuando la promesa resuelve y no antes, que es cuando
+     el motivo existe. */
+  var notasPS1 = {};
 
   /* Módulo del códec asinh16 y del PNG de 16 bits. Se lee al usarlo, no al
      cargar: el ciclo es de llamada (ADR 0020), igual que R(). */
@@ -1735,8 +1743,11 @@
     notas = notas || {};
     var clave = gal.ra.toFixed(5) + ',' + gal.dec.toFixed(5) + ',' + gal.ladoArcmin.toFixed(2);
     if (cachePS1[clave]) {
-      if (motivoPS1[clave]) notas.motivo = motivoPS1[clave];
-      return cachePS1[clave];
+      var previas = notasPS1[clave];
+      return cachePS1[clave].then(function (f) {
+        if (!f && previas && previas.motivo) notas.motivo = previas.motivo;
+        return f;
+      });
     }
     var fila = ps1FilaTextura(gal.nombre), p;
     if (fila && fila[1] === 'imagen') {
@@ -1751,8 +1762,9 @@
     } else {
       p = ps1DescargarParche(gal);
     }
+    notasPS1[clave] = notas;
     p = p.then(function (f) {
-      if (!f) { if (notas.motivo) motivoPS1[clave] = notas.motivo; return null; }
+      if (!f) return null;
       f.ra = gal.ra; f.dec = gal.dec; f.ladoArcmin = gal.ladoArcmin;
       if (!(f.escalaAs > 0)) f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
       return f;
@@ -2083,24 +2095,32 @@
      Por eso ningún texto de aquí habla de servicios: «el servicio de imágenes
      no responde» es exclusivo del respaldo al proxy, y vive en ps1CapaGalaxias.
      Motivos del manifiesto (los congela la cabecera de gen_dso_texturas.js):
-     sur, no-cabe, sin-cobertura, pisada, ausencia-excesiva; los de la frontera
-     —red, sidecar, sin-textura— los pone el runtime. */
-  var TAPADA = 'la imagen del cartografiado está tapada por una estrella brillante; ' +
+     sur, no-cabe, sin-cobertura, pisada, ausencia-excesiva. La frontera añade
+     los suyos —sin-textura, sidecar y los diez de BitacoraPNG16.MOTIVOS—, y
+     esos NO se enumeran aquí: un motivo con nombre nuevo no puede acabar
+     diciendo que el servicio no responde, así que lo que no está en la tabla
+     cae en ILEGIBLE, que es lo que tienen todos en común. */
+  var TAPADA = 'la imagen está tapada por una estrella brillante; ' +
     'se muestra el modelo del catálogo';
+  var ILEGIBLE = 'la imagen de este objeto no se pudo leer; se muestra el modelo del catálogo';
   var TEXTO_AVISO = {
     'sur': 'sin imagen de cartografiado: PanSTARRS no cubre por debajo de −30° de declinación',
     'no-cabe': 'sin imagen de cartografiado: esta galaxia es mayor que el recorte que sirve PanSTARRS, ' +
       'y el stack pierde su disco exterior al restar el fondo; se muestra el campo sin ella',
-    'sin-cobertura': 'sin imagen de cartografiado: PanSTARRS no cubre este campo',
+    'sin-cobertura': 'el cartografiado no cubre este campo',
     'pisada': TAPADA,
     'ausencia-excesiva': TAPADA,
-    'red': 'la imagen de este objeto no se pudo leer; se muestra el modelo del catálogo',
-    'sidecar': 'la imagen de este objeto no se pudo leer; se muestra el modelo del catálogo',
-    'sin-textura': 'este objeto todavía no tiene imagen publicada; se muestra el modelo del catálogo'
+    'sin-textura': 'este objeto todavía no tiene imagen publicada; se muestra el modelo del catálogo',
+    /* El único del códec que no habla del fichero sino del navegador
+       (BitacoraPNG16): quien lo ve no puede hacer nada con ESE objeto, pero
+       sabe que le pasa con todos. */
+    'sin-descompresor': 'este navegador no sabe leer las imágenes del cielo profundo; ' +
+      'se muestra el modelo del catálogo'
   };
 
   function ps1TextoAviso(motivo) {
-    return (motivo && TEXTO_AVISO[motivo]) || '';
+    if (!motivo) return '';
+    return TEXTO_AVISO[motivo] || ILEGIBLE;
   }
 
   function ps1FilaApuntada(catalogo, ra0, dec0) {
@@ -2206,9 +2226,12 @@
          manifiesto (sin fila, con el respaldo encendido: nadie ha declarado
          nada y el 502 del proxy no distingue el sur de una caída), y el
          servicio, para ese mismo camino. */
-      var filaAp = apuntada ? ps1FilaTextura(apuntada[0] || apuntada[1]) : null;
+      var filaAp = apuntada ? ps1FilaTextura(ps1NombreFila(apuntada)) : null;
+      /* Una fila declarada sin motivo (manifiesto viejo) es «no hay imagen»,
+         que es lo único que se sabe de ella; sin esto caería hasta el servicio,
+         que es lo que no puede pasar: de esa fila nadie pidió nada. */
       var aviso = ps1TextoAviso(filaAp && filaAp[1] === 'fila'
-        ? (filaAp[6] || '') : notasApuntada.motivo);
+        ? (filaAp[6] || 'sin-textura') : notasApuntada.motivo);
       if (!aviso && apuntada && !(apuntada[3] > PS1.decMin)) {
         aviso = TEXTO_AVISO['sur'];
       } else if (!aviso && apuntada && !ps1CabeEnParche(apuntada)) {
@@ -2270,7 +2293,6 @@
     ps1FuentesEnEscena: ps1FuentesEnEscena,
     ps1MagConsulta: ps1MagConsulta,
     ps1CapaGalaxias: ps1CapaGalaxias,
-    ps1TextoAviso: ps1TextoAviso,
     set galaxiasImagen(v) { GALAXIAS_IMAGEN = !!v; },
     get galaxiasImagen() { return GALAXIAS_IMAGEN; },
     set proxyUrl(u) { PS1_PROXY_URL = u; },

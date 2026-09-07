@@ -101,6 +101,13 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   con `modelo = "fila"` y el motivo (`sur`, `no-cabe`, `sin-cobertura`, `pisada`,
   `ausencia-excesiva`). No estar en el manifiesto es otra cosa: el catálogo va por delante de
   la generación y ese objeto se pide al proxy mientras `cfg.proxyRespaldo` siga encendido.
+- **El aviso lee el manifiesto, no el resultado de una petición:** el motivo de la fila del
+  objeto apuntado es el que se le enseña al observador (`ps1TextoAviso`), y por eso los del
+  sur y los que no caben —de los que la capa ni siquiera pide parche— tienen causa. La
+  frontera añade los suyos, que el manifiesto no puede saber: `sin-textura` (fila que falta),
+  `sidecar` y los diez de `BitacoraPNG16.MOTIVOS`; todos dicen que la imagen no se pudo leer.
+  «El servicio de imágenes no responde» es EXCLUSIVO del respaldo al proxy: ningún motivo
+  del manifiesto puede acabar diciéndolo.
 - **`asinh16` es una codificación, no una ley de display:** se deshace entera antes de
   `ps1Cielo`; el único valor con significado propio es el 0, ausencia (los NaN del stack).
   Quién decide qué es ausencia sigue siendo `ps1AnclarACatalogo` con su `kAusencia`.

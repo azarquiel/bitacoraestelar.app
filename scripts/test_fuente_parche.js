@@ -111,6 +111,7 @@ function capaDe(P, nombre) {
   /* La fila cruda, no la del campo: los objetos del sur y los que no caben no
      salen de ps1GalaxiasDelCampo, y de ellos también se avisa. */
   var f = catalogo.filter(function (r) { return r[0] === nombre; })[0];
+  if (!f) throw new Error('el catálogo no tiene a ' + nombre);
   var gal = { ra: f[2], dec: f[3] };
   var ctx = { canvas: { width: 32, height: 32 },
               createImageData: function (w, h) { return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h }; },
@@ -358,6 +359,45 @@ Promise.resolve().then(function () {
   });
 
 }).then(function () {
+  /* ── La textura rota tampoco culpa al servicio ───────────────────────────── */
+  console.log('\nUna textura que el códec no sabe leer:');
+  /* El códec tiene sus DIEZ motivos (BitacoraPNG16.MOTIVOS) y ninguno está en
+     la tabla de textos: si el aviso solo supiera de los del manifiesto, todos
+     acabarían diciendo que el servicio no responde, y el servicio está bien.
+     Lo que se sirve aquí es un PNG que no es un PNG, con su sidecar bueno. */
+  var P = fresco();
+  var basura = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  var sidecarBueno = JSON.parse(fs.readFileSync(
+    path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.json'), 'utf8'));
+  var previo = global.fetch;
+  global.fetch = function (u) {
+    u = String(u);
+    pedidos.push(u);
+    return Promise.resolve({
+      ok: true, status: 200,
+      arrayBuffer: function () { return Promise.resolve(basura.buffer); },
+      json: function () { return Promise.resolve(sidecarBueno); }
+    });
+  };
+  window.BITACORA_DSO_TEXTURAS = MANIFIESTO;
+  pedidos = [];
+  var notas = {};
+  return P.ps1FuenteParche(galDe(P, 'NGC 5194'), notas).then(function (f) {
+    ok(f === null, 'no hay parche');
+    return capaDe(P, 'NGC 5194');
+  }).then(function (r) {
+    ok(!/servici/i.test(r.aviso || ''),
+       'el motivo del códec (' + notas.motivo + ') no habla del servicio («' + (r.aviso || '') + '»)');
+    ok(/no se pudo leer/.test(r.aviso || ''), 'dice que la imagen no se pudo leer');
+    /* Y el segundo repintado —otro ocular, misma sesión, parche en caché— tiene
+       que decir lo mismo: si la causa se perdiera, caería al comodín del proxy. */
+    return capaDe(P, 'NGC 5194').then(function (r2) {
+      ok(r2.aviso === r.aviso, 'el repintado conserva la causa («' + (r2.aviso || '') + '»)');
+      global.fetch = previo;
+    });
+  }, function (e) { global.fetch = previo; ok(false, 'lanzó: ' + e.message); });
+
+}).then(function () {
   /* ADR 0005: cardinalidad mínima. Sin ella, una promesa perdida por el camino
      deja el proceso en verde con la mitad de los casos sin correr.
      Mutaciones documentadas, comprobadas: en ps1FuenteParche, cambiar
@@ -365,9 +405,12 @@ Promise.resolve().then(function () {
      —el campo de M51 vuelve a salir al proxy por NGC 5195, y el respaldo
      apagado deja de apagar nada—; en ps1CapaGalaxias, dejar `filaAp` en null
      (el aviso deja de leer el manifiesto) pone rojo el objeto del sur, que es
-     de quien nadie pide parche. */
+     de quien nadie pide parche; en ps1TextoAviso, cambiar el `|| ILEGIBLE` por
+     `|| ''` deja 2 rojos —los diez motivos del códec vuelven a culpar al
+     servicio—; y quitar la línea que lee las notas cacheadas en
+     ps1FuenteParche, otros 2, porque la causa se pierde al repintar. */
   console.log('');
-  ok(comprobaciones >= 55, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 55)');
+  ok(comprobaciones >= 61, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 61)');
   console.log(fallos ? '\n' + fallos + ' fallo(s).' : '\ntodo en orden.');
   process.exit(fallos ? 1 : 0);
 }).catch(function (e) {
