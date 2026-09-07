@@ -16,7 +16,11 @@ if ($uri === '/' || $uri === '/ocular') {
     return true;
 }
 
-if (preg_match('#^/wp-content/uploads/bitacora/([A-Za-z0-9._-]+)$#', $uri, $m)) {
+/* Las texturas DSO viven en uploads/bitacora/dso/ (en el repo, simulador_ocular/dso/,
+   generado por gen_dso_texturas.js e ignorado en git). El subdirectorio solo
+   puede ser ese; la clase de caracteres no admite «/», así que `dso/..` es lo
+   peor que llega y lo rechaza is_file(). */
+if (preg_match('#^/wp-content/uploads/bitacora/((?:dso/)?[A-Za-z0-9._-]+)$#', $uri, $m)) {
     $nombre = $m[1];
     $candidatos = array(
         '/resources/js/', '/resources/css/',
@@ -31,7 +35,8 @@ if (preg_match('#^/wp-content/uploads/bitacora/([A-Za-z0-9._-]+)$#', $uri, $m)) 
             require $ruta;
             return true;
         }
-        $tipos = array('js' => 'application/javascript', 'css' => 'text/css');
+        $tipos = array('js' => 'application/javascript', 'css' => 'text/css',
+                       'png' => 'image/png', 'json' => 'application/json');
         $ext = pathinfo($nombre, PATHINFO_EXTENSION);
         header('Content-Type: ' . (isset($tipos[$ext]) ? $tipos[$ext] : 'application/octet-stream'));
         readfile($ruta);

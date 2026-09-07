@@ -4,7 +4,8 @@
    Cada test de `scripts/test_*.js` es un proceso node independiente que no
    comparte estado con los demás -los tres que escriben a disco
    (test_disciplina_v7, test_golden_difusas, test_ps1_nan_ausencia) escriben
-   cada uno SU fichero-, así que se pueden correr a la vez.
+   cada uno SU fichero, y test_consumidores_dso copia una fixture con el pid en
+   el nombre a simulador_ocular/dso/ y la borra-, así que se pueden correr a la vez.
 
    Pero DOS a la vez por defecto, no ocho. Hay 8 núcleos y solo 8 GB, y la
    máquina ya trabaja con el swap lleno: medido, con cuatro a la vez el mismo
