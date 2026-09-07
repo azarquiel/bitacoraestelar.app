@@ -8,7 +8,10 @@
    Lo que se mide no es el resultado, son las URL: el `fetch` es de mentira y
    registra todas. Sirve los ficheros de `scripts/fixtures/dso/` y, cuando el
    banco está generado, los de `simulador_ocular/dso/` (ignorado en git); lo
-   que llegue a cualquier otra dirección cuenta como salida del dominio.
+   que llegue a cualquier otra dirección cuenta como salida del dominio. Y no
+   solo `fetch`: `new Image()` —el canal por el que bajan las placas DSS— está
+   igual de vigilado, porque una dependencia externa por ahí no aparecería en
+   la lista de peticiones.
 
    «Manifiesto completo» es el estado que tendrá el banco desplegado: TODO
    objeto del campo con su fila. El commiteado solo trae las 11 fixtures y los
@@ -16,8 +19,10 @@
    estos dos campos con lo que haya en disco: `imagen` si la textura del objeto
    está, `fila` si no. En el árbol limpio NGC 5195 sale `fila`; con el banco
    generado (`node scripts/gen_dso_texturas.js --banco`) sale `imagen` y el
-   campo de M51 lee DOS texturas. El listón es el mismo en los dos modos, y el
-   test dice en cuál corrió.
+   campo de M51 lee DOS texturas. El listón es el mismo en los dos modos, el
+   test dice en cuál corrió, y la comprobación de que se pidió cada textura va
+   objeto a objeto: por la cuenta total, la segunda podría no pedirse nunca y
+   el modo banco daría verde igual.
 
    Y el régimen mixto, que es el de hoy: mientras el banco no cubra el catálogo
    habrá objetos del campo sin fila (NGC 5195). Apagar el respaldo tiene que
@@ -81,9 +86,29 @@ global.fetch = function (url) {
   });
 };
 
+/* `fetch` no es el único canal de salida del navegador: `cargarPlaca`
+   (bitacora-gaia-render.js) baja las placas DSS con `new Image()`, y una capa
+   que volviera a pedir su imagen por ahí no aparecería en `pedidos`. El stub
+   registra el `src` y no carga nada, así que esa vía cuenta como salida del
+   dominio igual que una URL de `fetch`. */
+global.Image = function () {
+  var im = { crossOrigin: '', onload: null, onerror: null };
+  Object.defineProperty(im, 'src', {
+    set: function (u) { pedidos.push(String(u)); },
+    get: function () { return ''; }
+  });
+  return im;
+};
+
 /* La textura publicada de este objeto, si alguno de los dos directorios la
    tiene: `<id>.<version>.png` con su sidecar. Devuelve la versión, que es lo
-   único que la fila del manifiesto necesita para pedirla. */
+   único que la fila del manifiesto necesita para pedirla.
+
+   El nombre de fichero se lee al revés (del disco a la versión), que es lo
+   contrario de lo que hace la producción (`ps1IdTextura` + la versión de la
+   fila): la ley de nombrado la sigue poniendo `ps1IdTextura`, y lo único que
+   aquí se deduce es el trozo que el manifiesto commiteado no trae. La ida
+   —montar la URL— la sigue haciendo `ps1FuenteParche` (ADR 0008). */
 function versionEnDisco(P, nombre) {
   var id = P.ps1IdTextura(nombre), ver = null;
   DIRS.forEach(function (d) {
@@ -143,7 +168,10 @@ function renderCampo(P, f, arcmin, size) {
 }
 
 /* Los dos campos del listón. NGC 7008 mide 2,6′ de lado: 10′ de campo ya lo
-   trae entero y no hace falta más para saber a quién se le pidió el parche. */
+   trae entero y no hace falta más para saber a quién se le pidió el parche.
+   Los nombres van como los escribe SU catálogo —las galaxias con espacio
+   ('NGC 5194'), las nebulosas sin él ('NGC7008')—, que es la clave del
+   manifiesto (ADR 0015): no es una errata. */
 var CAMPOS = [['NGC 5194', 40, 64], ['NGC7008', 10, 64]];
 
 CAMPOS.reduce(function (cadena, c) {
@@ -162,9 +190,19 @@ CAMPOS.reduce(function (cadena, c) {
       ok(fueraDeDso().length === 0,
          'ninguna petición fuera de dso/ (' + pedidos.length + ' en total; fuera: ' +
          (fueraDeDso()[0] || 'ninguna') + ')');
-      ok(pedidos.length >= 2 && pedidos.some(function (u) { return /\.png$/.test(u); }) &&
-         pedidos.some(function (u) { return /\.json$/.test(u); }),
-         'y sí se pidió la textura con su sidecar (' + pedidos.length + ' peticiones a dso/)');
+      /* Objeto a objeto, no por la cuenta total: en modo banco el campo de M51
+         lee DOS texturas, y un `pedidos.length >= 2` daría verde aunque la
+         segunda no se hubiera pedido nunca. */
+      var conImagen = comp.campo.filter(function (g) { return P.ps1FilaTextura(g.nombre)[1] === 'imagen'; });
+      var sinPedir = conImagen.filter(function (g) {
+        var fila = P.ps1FilaTextura(g.nombre);
+        var base = BASE + P.ps1IdTextura(g.nombre) + '.' + fila[2];
+        return pedidos.indexOf(base + '.png') < 0 || pedidos.indexOf(base + '.json') < 0;
+      });
+      ok(conImagen.length > 0 && sinPedir.length === 0,
+         'cada objeto con textura pidió la suya y su sidecar (' + conImagen.length +
+         ' de ' + comp.campo.length + '; sin pedir: ' +
+         (sinPedir.map(function (g) { return g.nombre; }).join(', ') || 'ninguno') + ')');
       ok(r.pintado > 0, 'el campo lleva luz del objeto (' + r.pintado + ' px)');
       ok(r.aviso === '', 'y no hay aviso de que falte la imagen ("' + r.aviso + '")');
     });
