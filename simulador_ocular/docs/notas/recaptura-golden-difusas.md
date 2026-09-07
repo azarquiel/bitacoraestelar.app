@@ -30,6 +30,14 @@ En este orden, cada una con su commit, su tabla y su invariante propio:
 **R1 está hecha** (2026-09-06): la WCS es el defecto en `lib_bajar_parche.js` y
 la tabla de deltas vive en `simulador_ocular/docs/validacion/recaptura_r1_wcs.md`.
 
+**R2 NO se ha hecho** (2026-09-07), y por el paso 5 de este mismo procedimiento:
+L1.1 no cierra. El comparador es `scripts/harness_l1_equivalencia.js` y la
+medida está en `simulador_ocular/docs/validacion/dso_texturas_l1_equivalencia.md`
+— cuatro de las cinco condiciones pasan en los 69 objetos del banco y la de la
+posición de los NaN de ausencia se sale por 1,07 a 1,92 pasos en cuatro objetos.
+El golden sigue midiendo el camino del FITS y sigue verde. Cuando se decida la
+vía de escape del ADR 0024, R2 se hace con este procedimiento y no antes.
+
 R1 no estaba prevista en el objetivo: apareció al medir la fase 0
 (`docs/validacion/dso_texturas_fase0.md`, discrepancia 6). Va **antes** que R2 y
 en su propio commit, porque si entran juntas no hay forma de saber si un delta lo

@@ -1,0 +1,39 @@
+{
+ "nombre": "NGC7008",
+ "version": "f0408ffe",
+ "generador": "gen_dso_texturas 1",
+ "ra": 315.13667,
+ "dec": 54.54319,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 2.574,
+ "escalaAs": 0.15087890487995928,
+ "wcs": {
+  "ra0": 314.18182373049,
+  "dec0": 53.9999999999982,
+  "x0": 13728.2253761888,
+  "y0": -12537.8725857139,
+  "gx": -0.0000419108069110998,
+  "gy": 0.0000419108069110998
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 80.17574173736571,
+  "uMin": -2.806229819708283,
+  "uMax": 9.225761437186824,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 11.929542541503906,
+  "sigma": 80.17574173736571,
+  "fracAusencia": 0.0030002593994140625,
+  "fracAusenciaEscena": 0,
+  "errCuantMaxSigma": 0.00046361167793134144,
+  "errCuantMaxRel": 0.00009315220568484328
+ }
+}

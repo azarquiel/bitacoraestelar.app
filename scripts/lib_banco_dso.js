@@ -37,6 +37,17 @@ var NOMBRADOS = [
    crece con él y `avisos` lo dice para que se anote allí. */
 var CLASES_ENTERAS = [['HII', 10], ['RfN', 28], ['SNR', 1]];
 
+/* Decisión 9.1 del ADR 0024: los ÚNICOS objetos cuya textura va en git
+   (scripts/fixtures/dso/, 18 MB medidos). No es una selección de aquí: son los
+   que consumen guardianes bit a bit, y son los mismos que ya tienen su CSV de
+   Gaia pineado. El banco entero a 1024 son 93 MB y no entra en git en ningún
+   caso; los demás se descargan como hoy.
+
+   Los nombres van como los escribe SU catálogo —galaxias 'NGC 5194', nebulosas
+   'NGC6720'—, que es la clave del manifiesto (ADR 0015). */
+var GOLDEN = ['NGC 5194', 'NGC 5457', 'NGC 4594', 'NGC 3031', 'NGC6720',
+              'NGC2068', 'NGC7635', 'NGC6888', 'NGC1952', 'NGC7008', 'Abell 12'];
+
 /* Deben salir modelo = "fila", con su motivo y sin petición de red. */
 var CONTROLES = [
   ['NGC 224', 'no-cabe'], ['NGC 598', 'no-cabe'], ['IC 342', 'no-cabe'],
@@ -108,5 +119,6 @@ module.exports = function (R) {
   }
 
   return { banco: banco, apta: apta, gal: gal, clave: clave,
-           NOMBRADOS: NOMBRADOS, CLASES_ENTERAS: CLASES_ENTERAS, CONTROLES: CONTROLES };
+           NOMBRADOS: NOMBRADOS, CLASES_ENTERAS: CLASES_ENTERAS, CONTROLES: CONTROLES,
+           GOLDEN: GOLDEN };
 };
