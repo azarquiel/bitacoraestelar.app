@@ -325,9 +325,13 @@ Promise.resolve().then(function () {
     });
   }, Promise.resolve()).then(function () {
     ok(vistos['sur'].indexOf('−30') > 0, 'el del sur dice la declinación');
-    ok(/estrella brillante/.test(vistos['pisada']) &&
-       vistos['ausencia-excesiva'] === vistos['pisada'],
-       'pisada y ausencia-excesiva dicen lo de la estrella brillante');
+    ok(/estrella brillante/.test(vistos['pisada']), 'el de pisada dice lo de la estrella brillante');
+    /* Y ausencia-excesiva NO lo dice: desde #229 el motivo lo emite el generador
+       cuando el stack no tiene datos donde está el objeto (NGC 1982), y ahí no
+       hay ninguna estrella tapando que enseñar. */
+    ok(!/estrella/.test(vistos['ausencia-excesiva']) &&
+       vistos['ausencia-excesiva'] !== vistos['pisada'],
+       'y el de ausencia-excesiva dice que no hay imagen, no que haya una estrella');
     ok(vistos['no-cabe'] !== vistos['sin-cobertura'],
        'no caber y no estar cubierto no dicen lo mismo');
     /* Y quién manda cuando el manifiesto y la geometría no dicen lo mismo: el

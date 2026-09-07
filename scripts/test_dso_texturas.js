@@ -16,6 +16,10 @@
        con su motivo y sin red, y un objeto sin textura NO tiene fila, porque
        una fila sin motivo apagaría el respaldo por proxy en silencio. La
        cardinalidad la devuelve lib_banco_dso.js, no este fichero (ADR 0005);
+     · la ausencia se juzga DENTRO de la extensión del objeto y no en el parche
+       ni en la escena (#229): un objeto entero dentro del agujero sale «fila»
+       con motivo `ausencia-excesiva`, y uno con la ausencia repartida por fuera
+       y el interior medido sigue siendo `imagen`;
      · el informe (docs/validacion/dso_texturas_informe.md) sale de lo escrito y
        regenerarlo no cambia un byte;
      · y los bits publicados son los que dicen ser: la textura del banco, leída
@@ -164,6 +168,95 @@ var sobran = Object.keys(enRepo).filter(function (id) {
 });
 ok(!sobran.length, 'y no hay ninguna textura de más' + (sobran.length ? ': ' + sobran.join(', ') : ''));
 
+/* La regla de #229: si el objeto no tiene imagen DONDE ESTÁ EL OBJETO, no hay
+   imagen. Se prueba sobre parches sintéticos —la regla es geométrica y no
+   necesita PS1— y luego sobre el veredicto escrito, que sí sale de píxeles
+   reales. Es un criterio y no un umbral: el corte está en «ningún píxel medido
+   dentro del objeto», así que no hay ninguna raya que estos casos rocen. */
+console.log('\nAusencia excesiva: dónde se mide y qué se exige:');
+var galSint = { nombre: 'sintética', ra: 0, dec: 0, ladoArcmin: 1, reArcsec: 10, ba: 1, pa: 0, clase: '' };
+var LADO = 64, fitsSint = { ancho: LADO, alto: LADO, escalaAs: 1, wcs: null };
+var afinSint = PS1.ps1AfinParche(fitsSint, galSint);
+function parche(dentroNaN, fueraNaN) {
+  var d = new Float32Array(LADO * LADO);
+  for (var y = 0; y < LADO; y++) for (var x = 0; x < LADO; x++) {
+    var dx = x - afinSint.cx, dy = y - afinSint.cy;
+    var dentro = dx * dx + dy * dy <= 10 * 10;
+    d[y * LADO + x] = (dentro ? dentroNaN : fueraNaN) ? NaN : 1;
+  }
+  return d;
+}
+var rSint = G.radioObjetoAs(galSint);
+ok(rSint === 10, 'sin borde real, la extensión del objeto es r_e (' + rSint + '″)');
+/* Una compacta (PN/SNR) sí tiene borde físico, y es más ancho que su r_e: si la
+   regla midiera con r_e en las compactas, juzgaría solo el 60 % del objeto. */
+var galPN = { nombre: 'pn', ra: 0, dec: 0, ladoArcmin: 1, reArcsec: 10, ba: 1, pa: 0, clase: 'PN' };
+ok(G.radioObjetoAs(galPN) === PS1.ps1RadioBordeAs(galPN) && G.radioObjetoAs(galPN) > 10,
+   'y en una compacta es el borde real, no r_e (' + G.radioObjetoAs(galPN).toFixed(1) + '″)');
+
+var todoDentro = G.ausenciaEnObjeto(parche(true, false), LADO, LADO, afinSint, rSint);
+ok(todoDentro.n > 0 && todoDentro.frac === 1 && G.ausenciaExcesiva(todoDentro),
+   'el objeto entero dentro del agujero: ' + todoDentro.ausentes + '/' + todoDentro.n + ' → fila');
+/* El control: NGC 253 es esto, la ausencia repartida por fuera mientras el
+   interior está medido. Sigue siendo `imagen` pase lo que pase con el parche. */
+var soloFuera = G.ausenciaEnObjeto(parche(false, true), LADO, LADO, afinSint, rSint);
+ok(soloFuera.frac === 0 && !G.ausenciaExcesiva(soloFuera),
+   'ausencia repartida fuera del objeto y el interior medido: sigue siendo imagen');
+var casiTodo = parche(true, false);
+casiTodo[Math.round(afinSint.cy) * LADO + Math.round(afinSint.cx)] = 1;
+var unPixel = G.ausenciaEnObjeto(casiTodo, LADO, LADO, afinSint, rSint);
+ok(unPixel.frac < 1 && !G.ausenciaExcesiva(unPixel),
+   'con un solo píxel medido dentro ya hay imagen: el criterio no es un umbral');
+/* Un objeto sin extensión en el catálogo no lo juzga esta regla: no hay nada
+   que medir, y `n = 0` no puede significar «todo ausente». */
+var sinR = G.ausenciaEnObjeto(parche(true, true), LADO, LADO, afinSint, 0);
+ok(sinR.n === 0 && !G.ausenciaExcesiva(sinR), 'sin extensión medible, no hay veredicto');
+
+/* Y el veredicto escrito, sobre píxeles reales. El nombre no se escribe aquí: se
+   lee de los sidecars de las fixtures (ADR 0005), que es quien lo sabe. */
+var excesivas = fs.readdirSync(G.FIXTURES).filter(function (f) { return /\.fila\.json$/.test(f); })
+  .map(function (f) { return JSON.parse(fs.readFileSync(path.join(G.FIXTURES, f), 'utf8')); })
+  .filter(function (s) { return s.motivo === 'ausencia-excesiva'; });
+ok(excesivas.length > 0, 'hay ' + excesivas.length + ' objeto(s) con veredicto de ausencia excesiva');
+excesivas.forEach(function (s) {
+  var f = filaMan(s.nombre);
+  ok(!!f && f[1] === 'fila' && f[6] === 'ausencia-excesiva' && f[2] === '',
+     s.nombre + ' viaja al runtime como «fila» con motivo «ausencia-excesiva»' +
+     (f ? '' : ' — y no está en el manifiesto'));
+  /* Reanudable y auditable: el veredicto conserva con qué se midió, para poder
+     revisarlo sin volver a bajar el parche. */
+  ok(!!s.auditoria && s.auditoria.fracAusenciaObjeto === 1 && s.auditoria.radioObjetoAs > 0 &&
+     s.auditoria.pxObjeto > 0,
+     'y con su auditoría: ' + (s.auditoria ? s.auditoria.pxObjeto + ' px dentro de ' +
+     s.auditoria.radioObjetoAs.toFixed(1) + '″, todos ausentes' : 'NO LA TRAE'));
+  ok(!fs.existsSync(path.join(G.FIXTURES, PS1.ps1IdTextura(s.nombre) + '.' + s.version + '.png')) &&
+     !enRepo[PS1.ps1IdTextura(s.nombre)],
+     'y no deja PNG: lo que había no era una imagen del objeto');
+});
+
+/* Y el veredicto no lo resucita un parche viejo en disco: `ausencia-excesiva` se
+   dictó MIRANDO esa textura, así que no caduca porque los píxeles sigan ahí
+   (a diferencia de `sin-cobertura`, que sí). Un directorio de salida con la
+   textura rechazada dentro es exactamente lo que queda en la máquina de quien
+   generó el banco antes de esta regla. */
+if (excesivas.length) {
+  var tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dso-229-'));
+  var viejo = excesivas[0];
+  fs.writeFileSync(path.join(tmpDir, PS1.ps1IdTextura(viejo.nombre) + '.deadbeef.json'),
+    JSON.stringify({ nombre: viejo.nombre, version: 'deadbeef', ra: viejo.ra, dec: viejo.dec,
+                     ancho: 1024, alto: 1024, escalaAs: 0.5,
+                     auditoria: { fracAusencia: viejo.auditoria.fracAusencia } }));
+  G.escribirManifiesto(tmpDir);
+  var conVieja = fs.readFileSync(G.MANIFIESTO, 'utf8');
+  fs.writeFileSync(G.MANIFIESTO, antes);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  var fv = (new Function('window', conVieja + ';return window.BITACORA_DSO_TEXTURAS;'))({})
+    .filter(function (f) { return f[0] === viejo.nombre; })[0];
+  ok(!!fv && fv[1] === 'fila' && fv[6] === 'ausencia-excesiva',
+     'la textura rechazada que siga en el directorio de salida no resucita a «imagen»' +
+     (fv ? '' : ' — y ' + viejo.nombre + ' desaparece del manifiesto'));
+}
+
 console.log('\nEl informe sale de lo escrito:');
 var infAntes = fs.readFileSync(G.INFORME, 'utf8');
 var inf = G.escribirInforme(G.FIXTURES);
@@ -174,6 +267,8 @@ ok(inf.imagenes === sidecars && inf.pendientes === b.objetos.length - resueltos,
    'cuenta las ' + inf.imagenes + ' texturas escritas y las ' + inf.pendientes + ' pendientes');
 ok(/fracAusenciaEscena/.test(infAntes) && /Volumen/.test(infAntes),
    'trae la lista de revisión y el volumen');
+ok(new RegExp('\\| ausencia-excesiva \\| ' + excesivas.length + ' \\|').test(infAntes),
+   'y cuenta los ' + excesivas.length + ' de «ausencia-excesiva» por motivo, no en revisión');
 
 console.log('\nLos bits publicados son los que dice el sidecar:');
 var sc = JSON.parse(fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.json'), 'utf8'));
@@ -228,8 +323,18 @@ P16.leer(png).then(function (img) {
          uno a uno y no por el resultado final;
        · quitar `.concat(filasControl())` de `escribirManifiesto()` deja 7 rojos:
          los 5 controles, la cuenta de filas y el manifiesto commiteado, que
-         deja de salir byte a byte de lo que hay en disco. */
-  var MINIMO = 23 + b.controles.length;
+         deja de salir byte a byte de lo que hay en disco;
+       · medir la ausencia en el PARCHE y no dentro del objeto —quitar el
+         `continue` del radio en `ausenciaEnObjeto()`— deja 3 rojos: el objeto
+         entero en el agujero deja de salir «fila», la ausencia de fuera empieza
+         a contar y el objeto sin extensión medible pasa a tener veredicto. Es
+         la mutación de #229: dónde se mide ES la regla;
+       · relajar el criterio a `a.ausentes > 0` en `ausenciaExcesiva()` deja 1
+         rojo, el del píxel medido dentro: la regla es «ningún píxel medido
+         dentro», no «alguno ausente». Solo uno porque el control de la ausencia
+         repartida por fuera no tiene ni un píxel ausente dentro del objeto, que
+         es justo lo que lo hace control. */
+  var MINIMO = 31 + b.controles.length + 4 * excesivas.length;
   console.log('');
   ok(comprobaciones >= MINIMO,
      'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ ' + MINIMO + ')');

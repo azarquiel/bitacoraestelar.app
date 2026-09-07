@@ -2109,7 +2109,13 @@
       'y el stack pierde su disco exterior al restar el fondo; se muestra el campo sin ella',
     'sin-cobertura': 'el cartografiado no cubre este campo',
     'pisada': TAPADA,
-    'ausencia-excesiva': TAPADA,
+    /* No es una estrella encima: es que el stack no tiene datos donde está el
+       objeto (#229). El §5 del objetivo le daba el texto de `pisada`, pero desde
+       que el generador lo emite —NGC 1982, el núcleo de Orión, demasiado
+       brillante para el stack— decirle al observador que hay una estrella
+       tapando sería falso. */
+    'ausencia-excesiva': 'el cartografiado no tiene imagen donde está este objeto; ' +
+      'se muestra el modelo del catálogo',
     'sin-textura': 'este objeto todavía no tiene imagen publicada; se muestra el modelo del catálogo',
     /* El único del códec que no habla del fichero sino del navegador
        (BitacoraPNG16): quien lo ve no puede hacer nada con ESE objeto, pero
