@@ -1093,7 +1093,8 @@ y ADR 0024.
    Al actualizar un archivo, **incrementa su `?v=N`** en el HTML para saltar la caché.
    Un `.js` nuevo es un paso manual nuevo (ADR 0020): desde T7 las dos páginas piden
    `bitacora-png16.js` y `dso-texturas-datos.js`. Sin el manifiesto, todo va al
-   proxy como antes; sin el códec, la textura falla y se pinta la fila.
+   proxy como antes; sin el códec, `bitacora-ps1.js` lanza al pedir una textura
+   (el guardián suena a propósito, ADR 0020).
 2. **`dss-proxy.php`** y **`ps1-proxy.php`** → a esa misma carpeta, junto a
    `bitacora-cache-lru.php` (crean `cache-dss/` y `cache-ps1/` solos).
 3. **`ocular-wordpress.html`** → pégalo en un bloque "HTML personalizado" de la página.

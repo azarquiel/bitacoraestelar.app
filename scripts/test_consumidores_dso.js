@@ -29,7 +29,7 @@ var PAGINAS = ['simulador_ocular/ocular-wordpress.html',
 PAGINAS.forEach(function (p) {
   var html = fs.readFileSync(path.join(RAIZ, p), 'utf8');
   function pos(f) {
-    var m = html.match(new RegExp('<script src="/wp-content/uploads/bitacora/' + f + '\\?v=[0-9_]+" defer>'));
+    var m = html.match(new RegExp('<script src="/wp-content/uploads/bitacora/' + f.replace(/\./g, '\\.') + '\\?v=[0-9_]+" defer>'));
     return m ? m.index : -1;
   }
   var ps1 = pos('bitacora-ps1.js'), png = pos('bitacora-png16.js'), man = pos('dso-texturas-datos.js');
@@ -45,9 +45,7 @@ var DSO = path.join(RAIZ, 'simulador_ocular/dso');
 var FIX = path.join(RAIZ, 'scripts/fixtures/dso/NGC_5194.a4ddf9db');
 var NOMBRE = '_test_consumidores.' + process.pid;
 var creado = !fs.existsSync(DSO);
-if (creado) fs.mkdirSync(DSO);
-fs.copyFileSync(FIX + '.png', path.join(DSO, NOMBRE + '.png'));
-fs.copyFileSync(FIX + '.json', path.join(DSO, NOMBRE + '.json'));
+fs.mkdirSync(DSO, { recursive: true });   // dos copias a la vez (bateria -j 2) no chocan
 function limpiar() {
   try {
     fs.unlinkSync(path.join(DSO, NOMBRE + '.png'));
@@ -78,6 +76,7 @@ function pedir(ruta) {
   });
 }
 function esperar(n) {
+  if (srv.exitCode !== null) return Promise.resolve(null);   // php murió (puerto pisado, php ausente)
   return pedir('/').then(function (r) {
     if (r || n <= 0) return r;
     return new Promise(function (s) { setTimeout(s, 100); }).then(function () { return esperar(n - 1); });
@@ -93,7 +92,9 @@ puertoLibre().then(function (p) {
     srv.on('spawn', res);
   });
 }).then(function () {
-  return esperar(100);
+  fs.copyFileSync(FIX + '.png', path.join(DSO, NOMBRE + '.png'));
+  fs.copyFileSync(FIX + '.json', path.join(DSO, NOMBRE + '.json'));
+  return esperar(30);
 }).then(function (arriba) {
   console.log('scripts/dev_servidor_ocular.php:');
   ok(arriba, 'php -S arranca');
@@ -106,7 +107,11 @@ puertoLibre().then(function (p) {
   ok(png && png.cuerpo.length === fs.statSync(FIX + '.png').size && png.cuerpo[0] === 0x89,
      'el PNG llega entero y sin tocar');
   ok(json && json.estado === 200 && /^application\/json/.test(json.tipo), 'sirve dso/*.json como application/json');
+  /* Mutación que lo pone rojo (ADR 0005): admitir «/» en la clase de caracteres
+     de la regex del PHP ([A-Za-z0-9._/-]+) sirve ocular-wordpress.html por aquí. */
   ok(!fuga || fuga.estado !== 200 || !/sim-aux2-input/.test(String(fuga.cuerpo)), 'no sale de dso/ con ../');
+  /* Guardián de cardinalidad (ADR 0005): si un then se salta por una excepción
+     tragada, el recuento baja de 11 aunque `fallos` siga a 0. */
   ok(comprobaciones >= 11, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 11)');
   console.log(fallos ? '\n' + fallos + ' fallo(s).' : '\nTodo verde.');
   process.exitCode = fallos ? 1 : 0;
