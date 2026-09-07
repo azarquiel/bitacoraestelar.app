@@ -17,7 +17,7 @@
      getActivo()                  -> clave del observador activo ('' = todas)
      setActivo(clave)             -> fija el observador activo del filtro
      getEstado() / setEstado(e)   -> eje ESTADO: 'todo' | 'visitados' | 'porvisitar'
-     getConjunto()/setConjunto(l) -> eje CONJUNTO: null (todos) o lista de ids
+     setConjunto(l)               -> eje CONJUNTO: null (todos) o lista de ids
      recuento(ids)                -> cuántos de esos ids deja a la vista la regla
      getFicha(id)                 -> la ficha visible del objeto, o null
      observacionesAjenasActivo()  -> ¿está activo el "descubrir observaciones"?
@@ -50,7 +50,6 @@
 
   function getEstado() { return estado; }
   function setEstado(e) { estado = ESTADOS[e] ? e : 'visitados'; }
-  function getConjunto() { return conjunto ? Object.keys(conjunto) : null; }
   function setConjunto(ids) {
     if (!ids) { conjunto = null; return; }
     conjunto = {};
@@ -189,7 +188,6 @@
     setActivo: setActivo,
     getEstado: getEstado,
     setEstado: setEstado,
-    getConjunto: getConjunto,
     setConjunto: setConjunto,
     recuento: recuento,
     getFicha: getFicha,

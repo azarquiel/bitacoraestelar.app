@@ -646,14 +646,16 @@
   // vista de canto un cambio de estado puede no notarse, y el número confirma
   // que el control hizo algo. Si no queda nada, se avisa: una pantalla vacía
   // no debe parecer un fallo.
+  // OBJECTS es el catálogo de las tres capas (los dos lienzos también se
+  // construyen desde él), así que el recuento es el de las tres vistas.
   var IDS_CATALOGO = OBJECTS.map(function (o) { return o.id; });
+  var estadoRadios = document.querySelectorAll('#mw-estado input[type=radio]');
+  var estadoCuentas = document.querySelectorAll('#mw-estado .mw-estado-n');
   function pintarRecuentoEstado() {
-    var radios = document.querySelectorAll('#mw-estado input[type=radio]');
-    if (!radios.length) return;
-    var n = VLO.recuento(IDS_CATALOGO);
-    for (var i = 0; i < radios.length; i++) {
-      var cuenta = radios[i].parentNode.querySelector('.mw-estado-n');
-      if (cuenta) cuenta.textContent = radios[i].checked ? ' · ' + n.toLocaleString('es-ES') : '';
+    if (!estadoRadios.length) return;
+    var n = String(VLO.recuento(IDS_CATALOGO)).replace(/\B(?=(\d{3})+$)/g, '\u202f');  // 1 248
+    for (var i = 0; i < estadoRadios.length; i++) {
+      estadoCuentas[i].textContent = estadoRadios[i].checked ? ' · ' + n : '';
     }
     if (VLO.getActivo() && !n) {
       showToast('Ningún objeto con este filtro: prueba otro estado o conjunto.');
@@ -1657,11 +1659,8 @@
       return;
     }
 
-    // Nadie lo ha observado (un destino "por visitar" de nadie, #233): sin PDF
-    // lo único que hay es su ficha de catálogo (título y coordenadas), y se
-    // enseña con la pantalla de descubrimiento, con la lista vacía.
-    if (!url) {
-      abrirFichaDescubrimiento(fichaId || dot.getAttribute('data-id') || '', {
+    if (sinFichaQueAbrir(url)) {
+      abrirFichaCatalogo(fichaId || dot.getAttribute('data-id') || '', {
         title:  dot.getAttribute('data-title') || '',
         coords: dot.getAttribute('data-coords') || ''
       });
@@ -2253,6 +2252,19 @@
   // Las observaciones se identifican por su ÍNDICE, no por observador: un mismo
   // observador puede haber visitado el objeto en dos salidas distintas y las dos
   // tienen que poder abrirse. 'ctx' es { excluir, desdeFicha }.
+  // Un objeto "por visitar" (#233) puede no tener nada que abrir: nadie lo ha
+  // observado (sin PDF) o solo otros y el descubrimiento está apagado (el PDF
+  // que lleva el marcador es la ficha del OTRO observador: no se abre). Queda
+  // su ficha de catálogo, título y coordenadas, en la pantalla de
+  // descubrimiento; la lista de otras observaciones solo si el interruptor
+  // lo permite.
+  function sinFichaQueAbrir(url) {
+    return !url || (!!VLO.getActivo() && !VLO.observacionesAjenasActivo());
+  }
+  function abrirFichaCatalogo(id, info) {
+    abrirFichaDescubrimiento(id, info, { sinOtras: !VLO.observacionesAjenasActivo() });
+  }
+
   function abrirFichaDescubrimiento(id, info, ctx) {
     ctx = ctx || {};
     fichaDescubrir = null;
@@ -2272,7 +2284,7 @@
     // reciente a la más antigua) — «12 ago 2026 · Nave Excalibur · 18" f/4.5».
     // La nave se rotula con el mismo BitacoraEquipo que la ficha, así que dice lo
     // mismo aquí y dentro. El nombre del viaje no pinta nada aquí.
-    var otras = VLViaje.otrasObservaciones(id, ctx.excluir);
+    var otras = ctx.sinOtras ? [] : VLViaje.otrasObservaciones(id, ctx.excluir);
     var items = otras.map(function (o) {
       var nave = rotuloNave(o);
       var linea = [
@@ -2365,7 +2377,7 @@
       return;
     }
     var url = desc.pdf;
-    if (!url) { abrirFichaDescubrimiento(fichaId || '', info); return; } // sin PDF: ficha de catálogo (#233)
+    if (sinFichaQueAbrir(url)) { abrirFichaCatalogo(fichaId || '', info); return; }
     pdfTitle.textContent = desc.title || '';
     pdfCoords.textContent = desc.coords || '';
     pdfOpenLink.href = url;
@@ -2822,52 +2834,6 @@
     }
   }
 
-  function aplicarViaje(id) {
-    viajeActivo = id || '';
-    if (viajeSelect && viajeSelect.value !== viajeActivo) viajeSelect.value = viajeActivo;
-    // Con viaje activo la atenuación base se desactiva (spec #102): los pocos
-    // objetos de la ruta se ven a tamaño y opacidad completos.
-    img.classList.toggle('mw-viaje', !!viajeActivo);
-
-    // Sin viaje va null: cada capa vuelve a enseñar su catálogo entero. Con
-    // viaje va la lista, aunque venga vacía, y esa capa se queda sin objetos
-    // (el viaje no pasa por su escala).
-    var ruta = VLViaje.rutaDe(viajeActivo);
-    var idsDe = function (objs) {
-      return viajeActivo ? objs.map(function (o) { return o.id; }) : null;
-    };
-    // Eje CONJUNTO: la ruta entera (todas las capas) entra en la regla única;
-    // cada capa recibe además su tramo para dibujar la línea dorada. Con viaje
-    // el eje ESTADO queda fijado en 'todo': las escalas van a todo color.
-    VLO.setConjunto(viajeActivo
-      ? idsDe(ruta.vecindario.concat(ruta.galaxia, ruta.grupoLocal)) : null);
-    aplicarEstado(viajeActivo ? 'todo' : estadoElegido);
-    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setViaje) {
-      GrupoLocal.setViaje(idsDe(ruta.grupoLocal));
-      // Una búsqueda anterior deja su anillo puesto: en el viaje sobra, porque
-      // ninguna escala está más señalada que las demás.
-      if (viajeActivo && GrupoLocal.clearTarget) GrupoLocal.clearTarget();
-    }
-    if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.setViaje) {
-      VecindarioSolar.setViaje(idsDe(ruta.vecindario));
-    }
-    // Durante el viaje el buscador no navega: se apaga y se dice por qué.
-    if (searchInput) {
-      searchInput.disabled = !!viajeActivo;
-      searchInput.placeholder = viajeActivo ? 'Buscador en pausa durante el viaje' : 'Buscar objeto…';
-      searchInput.style.opacity = viajeActivo ? '0.5' : '';
-    }
-    aplicarFiltroObservador();
-    repositionAnchors();
-
-    reflejarEnUrl();
-    if (viajeActivo) { encuadrarViaje(viajeActivo); avisarCambioDeCapa(viajeActivo); }
-  }
-
-  if (viajeSelect) {
-    viajeSelect.addEventListener('change', function () { aplicarViaje(viajeSelect.value); });
-  }
-
   // ---- Eje ESTADO (#233): Todo · Visitados · Por visitar -------------------
   // Los dos ejes son independientes: elegir un viaje no pierde el estado que
   // eligió el usuario (estadoElegido); solo lo fija en 'todo' mientras dura.
@@ -2907,6 +2873,52 @@
     else u.searchParams.delete('estado');
     history.replaceState(null, '', u.toString());
   }
+
+  function aplicarViaje(id) {
+    viajeActivo = id || '';
+    if (viajeSelect && viajeSelect.value !== viajeActivo) viajeSelect.value = viajeActivo;
+    // Con viaje activo la atenuación base se desactiva (spec #102): los pocos
+    // objetos de la ruta se ven a tamaño y opacidad completos.
+    img.classList.toggle('mw-viaje', !!viajeActivo);
+
+    // Sin viaje va null: cada capa vuelve a enseñar su catálogo entero. Con
+    // viaje va la lista, aunque venga vacía, y esa capa se queda sin objetos
+    // (el viaje no pasa por su escala).
+    var ruta = VLViaje.rutaDe(viajeActivo);
+    var idsDe = function (objs) {
+      return viajeActivo ? objs.map(function (o) { return o.id; }) : null;
+    };
+    // Eje CONJUNTO: la ruta entera (todas las capas) entra en la regla única;
+    // cada capa recibe además su tramo para dibujar la línea dorada. Con viaje
+    // el eje ESTADO queda fijado en 'todo': las escalas van a todo color.
+    VLO.setConjunto(idsDe(ruta.vecindario.concat(ruta.galaxia, ruta.grupoLocal)));
+    aplicarEstado(viajeActivo ? 'todo' : estadoElegido);
+    if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setViaje) {
+      GrupoLocal.setViaje(idsDe(ruta.grupoLocal));
+      // Una búsqueda anterior deja su anillo puesto: en el viaje sobra, porque
+      // ninguna escala está más señalada que las demás.
+      if (viajeActivo && GrupoLocal.clearTarget) GrupoLocal.clearTarget();
+    }
+    if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.setViaje) {
+      VecindarioSolar.setViaje(idsDe(ruta.vecindario));
+    }
+    // Durante el viaje el buscador no navega: se apaga y se dice por qué.
+    if (searchInput) {
+      searchInput.disabled = !!viajeActivo;
+      searchInput.placeholder = viajeActivo ? 'Buscador en pausa durante el viaje' : 'Buscar objeto…';
+      searchInput.style.opacity = viajeActivo ? '0.5' : '';
+    }
+    aplicarFiltroObservador();
+    repositionAnchors();
+
+    reflejarEnUrl();
+    if (viajeActivo) { encuadrarViaje(viajeActivo); avisarCambioDeCapa(viajeActivo); }
+  }
+
+  if (viajeSelect) {
+    viajeSelect.addEventListener('change', function () { aplicarViaje(viajeSelect.value); });
+  }
+
 
   // Centra el mapa en un ancla concreta (posición en % de la imagen) y aplica
   // el zoom pedido. Reutiliza la misma geometría que repositionAnchors().
