@@ -658,7 +658,7 @@
       estadoCuentas[i].textContent = estadoRadios[i].checked ? ' · ' + n : '';
     }
     if (VLO.getActivo() && !n) {
-      showToast('Ningún objeto con este filtro: prueba otro estado o conjunto.');
+      showToast('Nada que enseñar con este filtro: prueba otro estado o conjunto.');
     }
   }
 
@@ -2838,6 +2838,7 @@
   // Los dos ejes son independientes: elegir un viaje no pierde el estado que
   // eligió el usuario (estadoElegido); solo lo fija en 'todo' mientras dura.
   var estadoFieldset = document.getElementById('mw-estado');
+  var estadoAviso = document.getElementById('mw-estado-aviso');
   var estadoElegido = 'visitados';
 
   function aplicarEstado(e) {
@@ -2846,9 +2847,12 @@
     var radio = estadoFieldset.querySelector('input[value="' + VLO.getEstado() + '"]');
     if (radio) radio.checked = true;
     estadoFieldset.disabled = !VLO.getActivo() || !!viajeActivo;
-    estadoFieldset.title = !VLO.getActivo()
-      ? 'Seleccione un observador para filtrar por estado'
+    // El motivo de estar deshabilitado se lee, no solo se adivina.
+    var motivo = !VLO.getActivo()
+      ? 'Seleccione un observador para ver qué ha explorado'
       : (viajeActivo ? 'Durante un viaje se ven todas sus escalas' : '');
+    estadoFieldset.title = motivo;
+    if (estadoAviso) estadoAviso.textContent = motivo;
   }
 
   if (estadoFieldset) {
