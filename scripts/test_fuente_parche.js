@@ -104,6 +104,23 @@ function galDe(PS1, nombre) {
   return PS1.ps1GalaxiasDelCampo([f], f[2], f[3], PS1.ps1LadoArcmin(f[4]))[0];
 }
 
+/* La capa entera sobre el objeto apuntado, que es de quien se avisa. Lo único
+   que se mira de ella aquí es el aviso y las peticiones que salieron. */
+function capaDe(P, nombre) {
+  var catalogo = P.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
+  /* La fila cruda, no la del campo: los objetos del sur y los que no caben no
+     salen de ps1GalaxiasDelCampo, y de ellos también se avisa. */
+  var f = catalogo.filter(function (r) { return r[0] === nombre; })[0];
+  var gal = { ra: f[2], dec: f[3] };
+  var ctx = { canvas: { width: 32, height: 32 },
+              createImageData: function (w, h) { return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h }; },
+              putImageData: function () {} };
+  return P.ps1CapaGalaxias(new Float32Array(32 * 32), ctx,
+    { sqm: 21.4, pupilaSalida: 3.3, pupilaOjo: 7, transmision: 0.8 }, null,
+    { ra0: gal.ra, dec0: gal.dec, arcmin: 20, size: 32, estrellas: [],
+      catalogo: catalogo, apertura: 200 });
+}
+
 Promise.resolve().then(function () {
   console.log('\nEl manifiesto y su fixture:');
   ok(!!FILA, 'NGC 5194 está en el manifiesto generado');
@@ -282,14 +299,75 @@ Promise.resolve().then(function () {
      'y la URL del proxy sale de proxyUrl (' + P.ps1UrlParche({ ra: 1, dec: 2, ladoArcmin: 3 }).slice(0, 20) + '…)');
 
 }).then(function () {
+  /* ── El aviso, motivo a motivo, contra un manifiesto de fixture ──────────── */
+  console.log('\nEl aviso del objeto apuntado sale del manifiesto:');
+  /* Una fila por motivo del vocabulario que congela gen_dso_texturas.js. No
+     hacen falta las texturas del banco: lo que se prueba es que cada motivo
+     tiene SU texto, que ninguno habla de servicios (la causa no lo es) y que
+     un objeto declarado `fila` no emite una sola petición. */
+  var MOTIVOS = ['sur', 'no-cabe', 'sin-cobertura', 'pisada', 'ausencia-excesiva'];
+  var vistos = {};
+  return MOTIVOS.reduce(function (cadena, motivo) {
+    return cadena.then(function () {
+      var P = fresco();
+      /* Respaldo apagado a propósito: si el aviso dependiera de una petición
+         fallida, aquí no habría ninguna que fallar y saldría en blanco. */
+      P.cfg.proxyRespaldo = false;
+      window.BITACORA_DSO_TEXTURAS = [['NGC 5194', 'fila', '', 0, 0, 0, motivo]];
+      pedidos = [];
+      return capaDe(P, 'NGC 5194').then(function (r) {
+        ok(!!r.aviso, motivo + ' tiene su texto («' + (r.aviso || '') + '»)');
+        ok(!/servici/i.test(r.aviso || ''), '  y no menciona servicios');
+        ok(pedidos.length === 0, '  y no salió ni una petición (' + pedidos.length + ')');
+        vistos[motivo] = r.aviso;
+      });
+    });
+  }, Promise.resolve()).then(function () {
+    ok(vistos['sur'].indexOf('−30') > 0, 'el del sur dice la declinación');
+    ok(/estrella brillante/.test(vistos['pisada']) &&
+       vistos['ausencia-excesiva'] === vistos['pisada'],
+       'pisada y ausencia-excesiva dicen lo de la estrella brillante');
+    ok(vistos['no-cabe'] !== vistos['sin-cobertura'],
+       'no caber y no estar cubierto no dicen lo mismo');
+    /* Y quién manda cuando el manifiesto y la geometría no dicen lo mismo: el
+       manifiesto. NGC 25 está a −57°, y de un objeto así la capa ni siquiera
+       pide parche (ps1GalaxiasDelCampo lo descarta antes), así que su causa no
+       puede venir de una petición; si el aviso saliera de la comprobación local
+       diría lo del sur, y lo que el manifiesto declara es otra cosa. */
+    var S = fresco();
+    S.cfg.proxyRespaldo = false;
+    window.BITACORA_DSO_TEXTURAS = [['NGC 25', 'fila', '', 0, 0, 0, 'pisada']];
+    pedidos = [];
+    return capaDe(S, 'NGC 25').then(function (r) {
+      ok(r.aviso === vistos['pisada'],
+         'el motivo del manifiesto manda sobre el veredicto local («' + (r.aviso || '') + '»)');
+      ok(pedidos.length === 0, 'y tampoco pidió nada (' + pedidos.length + ')');
+    });
+  }).then(function () {
+    /* Y el texto del servicio, que es lo que ya NO sale por ninguno de los
+       cinco, sigue saliendo donde toca: sin fila, con el respaldo encendido y
+       el proxy sin responder. */
+    var Q = fresco();
+    window.BITACORA_DSO_TEXTURAS = [];
+    pedidos = [];
+    return capaDe(Q, 'NGC 5194').then(function (r) {
+      ok(/servicio de imágenes no responde/.test(r.aviso || ''),
+         'el respaldo al proxy caído sí habla del servicio («' + (r.aviso || '') + '»)');
+      ok(pedidos.length > 0, 'y ese es el único camino que pide algo (' + pedidos.length + ')');
+    });
+  });
+
+}).then(function () {
   /* ADR 0005: cardinalidad mínima. Sin ella, una promesa perdida por el camino
      deja el proceso en verde con la mitad de los casos sin correr.
-     Mutación documentada, comprobada: en ps1FuenteParche, cambiar
+     Mutaciones documentadas, comprobadas: en ps1FuenteParche, cambiar
      `} else if (!PS1.proxyRespaldo) {` por `} else if (false) {` deja 3 rojos
      —el campo de M51 vuelve a salir al proxy por NGC 5195, y el respaldo
-     apagado deja de apagar nada—. */
+     apagado deja de apagar nada—; en ps1CapaGalaxias, dejar `filaAp` en null
+     (el aviso deja de leer el manifiesto) pone rojo el objeto del sur, que es
+     de quien nadie pide parche. */
   console.log('');
-  ok(comprobaciones >= 30, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 30)');
+  ok(comprobaciones >= 55, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 55)');
   console.log(fallos ? '\n' + fallos + ' fallo(s).' : '\ntodo en orden.');
   process.exit(fallos ? 1 : 0);
 }).catch(function (e) {

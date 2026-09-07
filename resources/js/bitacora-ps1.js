@@ -1630,6 +1630,10 @@
      solo de sesión y la clave es el objeto: el parche no depende del ocular ni
      del aumento, así que la textura se decodifica una vez. */
   var cachePS1 = {};
+  /* El motivo del parche que no vino, junto a su promesa: la caché es de
+     sesión y el campo se repinta con cada ocular, así que sin esto el segundo
+     repintado se quedaría sin causa y el aviso caería al comodín del proxy. */
+  var motivoPS1 = {};
 
   /* Módulo del códec asinh16 y del PNG de 16 bits. Se lee al usarlo, no al
      cargar: el ciclo es de llamada (ADR 0020), igual que R(). */
@@ -1730,7 +1734,10 @@
   function ps1FuenteParche(gal, notas) {
     notas = notas || {};
     var clave = gal.ra.toFixed(5) + ',' + gal.dec.toFixed(5) + ',' + gal.ladoArcmin.toFixed(2);
-    if (cachePS1[clave]) return cachePS1[clave];
+    if (cachePS1[clave]) {
+      if (motivoPS1[clave]) notas.motivo = motivoPS1[clave];
+      return cachePS1[clave];
+    }
     var fila = ps1FilaTextura(gal.nombre), p;
     if (fila && fila[1] === 'imagen') {
       var base = TEXTURAS_URL + ps1IdTextura(gal.nombre) + '.' + fila[2];
@@ -1745,7 +1752,7 @@
       p = ps1DescargarParche(gal);
     }
     p = p.then(function (f) {
-      if (!f) return null;
+      if (!f) { if (notas.motivo) motivoPS1[clave] = notas.motivo; return null; }
       f.ra = gal.ra; f.dec = gal.dec; f.ladoArcmin = gal.ladoArcmin;
       if (!(f.escalaAs > 0)) f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
       return f;
@@ -2002,8 +2009,8 @@
      de él sale la escena que decide qué fuentes se conservan (las compañeras
      que asoman por el parche incluidas). Sin catálogo, la escena es la propia
      galaxia sola, que ya protege su núcleo. */
-  function ps1ParcheDeGalaxia(gal, estrellas, catalogo, mlim) {
-    return ps1FuenteParche(gal).then(function (f) {
+  function ps1ParcheDeGalaxia(gal, estrellas, catalogo, mlim, notas) {
+    return ps1FuenteParche(gal, notas).then(function (f) {
       if (!f) return null;
       // Cómo está puesta la rejilla del recorte respecto al cielo. Una vez por
       // galaxia: no depende del ocular ni del aumento.
@@ -2069,6 +2076,32 @@
      el aviso: de las compañeras del campo no se dice nada (en Virgo saldrían
      cinco líneas sobre galaxias que el observador ni buscaba). */
   var APUNTADA_ARCMIN = 2;
+
+  /* Lo que ve el observador para cada motivo. El motivo lo pone
+     ps1FuenteParche LEYENDO EL MANIFIESTO, no una petición que falla: los
+     objetos declarados `fila` no emiten ninguna y aun así dicen su causa.
+     Por eso ningún texto de aquí habla de servicios: «el servicio de imágenes
+     no responde» es exclusivo del respaldo al proxy, y vive en ps1CapaGalaxias.
+     Motivos del manifiesto (los congela la cabecera de gen_dso_texturas.js):
+     sur, no-cabe, sin-cobertura, pisada, ausencia-excesiva; los de la frontera
+     —red, sidecar, sin-textura— los pone el runtime. */
+  var TAPADA = 'la imagen del cartografiado está tapada por una estrella brillante; ' +
+    'se muestra el modelo del catálogo';
+  var TEXTO_AVISO = {
+    'sur': 'sin imagen de cartografiado: PanSTARRS no cubre por debajo de −30° de declinación',
+    'no-cabe': 'sin imagen de cartografiado: esta galaxia es mayor que el recorte que sirve PanSTARRS, ' +
+      'y el stack pierde su disco exterior al restar el fondo; se muestra el campo sin ella',
+    'sin-cobertura': 'sin imagen de cartografiado: PanSTARRS no cubre este campo',
+    'pisada': TAPADA,
+    'ausencia-excesiva': TAPADA,
+    'red': 'la imagen de este objeto no se pudo leer; se muestra el modelo del catálogo',
+    'sidecar': 'la imagen de este objeto no se pudo leer; se muestra el modelo del catálogo',
+    'sin-textura': 'este objeto todavía no tiene imagen publicada; se muestra el modelo del catálogo'
+  };
+
+  function ps1TextoAviso(motivo) {
+    return (motivo && TEXTO_AVISO[motivo]) || '';
+  }
 
   function ps1FilaApuntada(catalogo, ra0, dec0) {
     var cos0 = Math.cos(dec0 * Math.PI / 180), tol = APUNTADA_ARCMIN / 60;
@@ -2138,9 +2171,12 @@
     var mlim = (o.mlim > 0) ? o.mlim : R().magLimite({
       apertura: o.apertura, aumentos: cielo.aumentos, sqm: cielo.sqm, pupilaOjo: cielo.pupilaOjo
     });
+    /* La causa del objeto APUNTADO, y solo de él: es el único del que se avisa. */
+    var notasApuntada = {};
     return Promise.all(campo.map(function (gal) {
-      return ps1ParcheDeGalaxia(gal, o.estrellas, catalogo, mlim).then(function (parche) {
-        var esLaApuntada = !!apuntada && gal.ra === apuntada[2] && gal.dec === apuntada[3];
+      var esLaApuntada = !!apuntada && gal.ra === apuntada[2] && gal.dec === apuntada[3];
+      return ps1ParcheDeGalaxia(gal, o.estrellas, catalogo, mlim,
+                                esLaApuntada ? notasApuntada : null).then(function (parche) {
         if (!parche) { if (esLaApuntada) apuntadaSinParche = true; return; }
         if (!vivo()) return;
         for (var x = 0; x < (parche.enEscena || []).length; x++) {
@@ -2159,14 +2195,25 @@
       /* Aviso SOLO del objeto apuntado, y con la causa: cambia lo que el
          observador puede hacer. Por el sur no hay nada que esperar; por tamaño
          tampoco, pero el motivo es otro y merece decirse; por caída, sí.
-         Fuera del RC3 no se avisa: no había nada prometido. */
-      var aviso = '';
-      if (apuntada && !(apuntada[3] > PS1.decMin)) {
-        aviso = 'sin imagen de cartografiado: PanSTARRS no cubre por debajo de −30° de declinación';
-      } else if (apuntada && !ps1CabeEnParche(apuntada)) {
-        aviso = 'sin imagen de cartografiado: esta galaxia es mayor que el recorte que sirve PanSTARRS, ' +
-          'y el stack pierde su disco exterior al restar el fondo; se muestra el campo sin ella';
-      } else if (apuntadaSinParche) {
+         Fuera del RC3 no se avisa: no había nada prometido.
+
+         El motivo manda, y sale del MANIFIESTO: la fila del apuntado lo trae
+         hecho, lo haya pedido alguien o no —los del sur y los que no caben ni
+         llegan a entrar en el campo, así que su causa no puede venir de una
+         petición—. De la frontera (notasApuntada) solo llegan los motivos que
+         el manifiesto no puede saber: la textura ilegible y la fila que falta.
+         Las dos comprobaciones locales quedan para el catálogo más nuevo que el
+         manifiesto (sin fila, con el respaldo encendido: nadie ha declarado
+         nada y el 502 del proxy no distingue el sur de una caída), y el
+         servicio, para ese mismo camino. */
+      var filaAp = apuntada ? ps1FilaTextura(apuntada[0] || apuntada[1]) : null;
+      var aviso = ps1TextoAviso(filaAp && filaAp[1] === 'fila'
+        ? (filaAp[6] || '') : notasApuntada.motivo);
+      if (!aviso && apuntada && !(apuntada[3] > PS1.decMin)) {
+        aviso = TEXTO_AVISO['sur'];
+      } else if (!aviso && apuntada && !ps1CabeEnParche(apuntada)) {
+        aviso = TEXTO_AVISO['no-cabe'];
+      } else if (!aviso && apuntadaSinParche) {
         aviso = 'el servicio de imágenes no responde; se muestra el campo sin la galaxia';
       }
       return { aviso: aviso };
@@ -2223,6 +2270,7 @@
     ps1FuentesEnEscena: ps1FuentesEnEscena,
     ps1MagConsulta: ps1MagConsulta,
     ps1CapaGalaxias: ps1CapaGalaxias,
+    ps1TextoAviso: ps1TextoAviso,
     set galaxiasImagen(v) { GALAXIAS_IMAGEN = !!v; },
     get galaxiasImagen() { return GALAXIAS_IMAGEN; },
     set proxyUrl(u) { PS1_PROXY_URL = u; },
