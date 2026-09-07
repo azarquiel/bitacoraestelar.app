@@ -652,7 +652,7 @@ px), y **ningún píxel del segundo sondeo fuera de la máscara de ausencia**. E
 | `simulador_ocular/ocular-wordpress.html`, `registro/registrar-observacion-wordpress.html` | dos `<script defer>` nuevos antes de `bitacora-ps1.js` | 1 |
 | `scripts/dev_servidor_ocular.php` | servir `dso/` y `.png/.json` | 1 |
 | `.gitignore` | `simulador_ocular/dso/` | 1 |
-| `scripts/test_dso_texturas.js`, `scripts/test_png16.js`, `scripts/test_fuente_parche.js` | nuevos | 1 |
+| `scripts/test_dso_texturas.js`, `scripts/test_png16.js`, `scripts/test_fuente_parche.js`, `scripts/test_sin_red_dso.js` (L1.2) | nuevos | 1 |
 | `scripts/fixtures/dso/` | banco a 1024 (decisión 9.1) | 1 |
 | `scripts/fixtures/golden_difusas.json` | recaptura con informe | 1, 2 |
 | `scripts/test_resolucion_ps1.js`, `scripts/test_capa_difusa_defecto.js` | adaptar (4.6) | 1, 2 |
