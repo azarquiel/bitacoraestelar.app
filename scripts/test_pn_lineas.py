@@ -44,13 +44,17 @@ Ejecutar:  python3 scripts/test_pn_lineas.py
 import csv
 import json
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gen_nebulosas as G          # las columnas y las clases las manda él
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FUENTE = os.path.join(RAIZ, 'mapa', 'datos', 'pn_lineas_v84.csv')
 CSV_GEN = os.path.join(RAIZ, 'mapa', 'datos', 'nebulosas.csv')
 JS_GEN = os.path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js')
 
-COLS = ('log_fhb', 'i5007', 'i6563', 'i4686', 'i5007_es_4959')
+COLS = G.COLS_LINEAS
 I_CLASE = 12                       # la clase cierra el bloque que lee capaGalaxias
 comprobaciones = 0
 
@@ -139,12 +143,11 @@ assert 'NGC6826' in marcadas and 'NGC6905' not in marcadas, marcadas
 ok('%d PN con el 5007 saturado, marcadas y con valor; NGC 6905 no está entre ellas'
    % len(marcadas))
 
-# 5) El bloque que lee capaGalaxias no se ha movido: las cuatro columnas van
+# 5) El bloque que lee capaGalaxias no se ha movido: las columnas de líneas van
 #    DETRÁS de la clase (decisión del #220), no en medio.
 for f in js:
     assert len(f) == I_CLASE + 1 + len(COLS), f
-    assert isinstance(f[I_CLASE], str) and f[I_CLASE] in (
-        'Neb', 'HII', 'Cl+N', 'RfN', 'EmN', 'PN', 'SNR'), f
+    assert isinstance(f[I_CLASE], str) and f[I_CLASE] in G.TIPOS, f
 ok('la clase sigue en el índice %d y las líneas van detrás' % I_CLASE)
 
 # 6) La cabecera del generado documenta la procedencia y el enrojecimiento.
@@ -153,5 +156,7 @@ for aviso in ('V/84', 'hbeta', 'intens', 'LineRef', 'enrojecimiento', 'null'):
     assert aviso in cabecera, aviso
 ok('la cabecera cita tabla de origen, LineRef y que no hay corrección de enrojecimiento')
 
-assert comprobaciones >= 12, comprobaciones
+# Un `ok` por columna en dos bloques, más los siete sueltos: si alguien borra
+# una columna de COLS_LINEAS y con ella su comprobación, la cuenta no cuadra.
+assert comprobaciones == 7 + 2 * len(COLS), (comprobaciones, len(COLS))
 print('\nOK: %d comprobaciones' % comprobaciones)

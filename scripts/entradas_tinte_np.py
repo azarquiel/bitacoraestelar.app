@@ -30,6 +30,18 @@ D65 = (0.3127, 0.3290)
 SR_POR_ARCSEC2 = 2.3504e-11
 
 # nombre: (diámetro ″, log F(Hβ), I4686, I5007, I6563)   — V/84 LineRef b, OpenNGC
+#
+# AVISO POSTERIOR AL PRERREGISTRO (#220, 2026-09-07), sin tocar ni un número:
+# en NGC 6826, NGC 7662, NGC 3242 y NGC 6572, V/84 marca esa observación con
+# n_I5007 = '*', o sea que el valor de la columna I5007 —242, 425, 698 y 399—
+# es en realidad el de [OIII] 4959, porque el 5007 salió saturado; y ninguno de
+# los cuatro tiene otra observación con LineRef = b. Aquí eso entra dos veces:
+# como 5007 y, dividido por 2,98, como un 4959 que ya estaba contado. Sus
+# luminancias y purezas —y las predicciones que salen de ellas— arrastran ese
+# sesgo. Los valores se dejan COMO SE PRERREGISTRARON: corregirlos ahora sería
+# retocar las entradas después de ver la salida, que es justo lo que el ADR
+# 0025 prohíbe. La corrección, si se hace, se decide y se anota en #84.
+# La marca por objeto vive en la columna i5007_es_4959 de nebulosas.csv.
 OBJETOS = {
     'NGC 6905': (40.2, -10.92, 91, 958, 319),
     'NGC 6826': (25.2, -9.98, 4, 242, 344),
@@ -167,7 +179,7 @@ def alcance():
               csv.DictReader(open('mapa/datos/pn_lineas_v84.csv', encoding='utf-8'))}
     ongc = {f['Name']: f for f in csv.DictReader(open('mapa/datos/ongc_nebulosas.csv', encoding='utf-8'), delimiter=';')}
 
-    total = con_png = con_5007 = con_todo = en_alcance = 0
+    total = con_png = con_5007 = con_todo = en_alcance = saturadas = 0
     sin_dato = []
     for f in csv.DictReader(open('mapa/datos/nebulosas.csv', encoding='utf-8')):
         if f['clase'] != 'PN' or not f['nombre'].startswith(('NGC', 'IC')):
@@ -189,9 +201,14 @@ def alcance():
         L = luminancia_y_pureza(num(ongc[f['nombre']]['MajAx']) * 60.0, lf, i4686, i5007, i6563)[0]
         if 12.6 - 2.5 * math.log10(L) <= MU_ALCANCE:
             en_alcance += 1
+            # Su μ_fot está calculada con un I5007 que es el 4959 (#220): sale
+            # más apagada de lo que es. No se corrige aquí; se cuenta, para que
+            # el que lea el alcance sepa cuánto del conjunto lleva ese sesgo.
+            saturadas += 1 if f['i5007_es_4959'].strip() else 0
     print('PN NGC/IC en nebulosas.csv: %d | con PNG en V/84: %d | con I5007 (b): %d | con I5007+I6563+logF(Hβ): %d'
           % (total, con_png, con_5007, con_todo))
-    print('en alcance (μ_fot ≤ %.1f): %d' % (MU_ALCANCE, en_alcance))
+    print('en alcance (μ_fot ≤ %.1f): %d  (de ellas %d con el 5007 saturado: su '
+          'μ_fot es del 4959)' % (MU_ALCANCE, en_alcance, saturadas))
     print('sin dato completo (%d): %s' % (len(sin_dato), ' '.join(sin_dato)))
 
 

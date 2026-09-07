@@ -269,7 +269,7 @@ def descarga_v84():
 
 
 def lineas_v84(refrescar=False):
-    """{nombre de catálogo: {log_fhb, i5007, i6563, i4686}} desde la caché."""
+    """{nombre de catálogo: {columna de COLS_LINEAS: valor}} desde la caché."""
     if refrescar or not os.path.exists(SRC_V84):
         descarga_v84()
     with open(SRC_V84, encoding='utf-8') as fh:
