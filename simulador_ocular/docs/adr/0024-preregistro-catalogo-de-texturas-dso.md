@@ -351,6 +351,19 @@ tres previstas —fase 1, fase 2 por resolución y fase 3 por máscara— el his
 crece entre 55 y 75 MB. Se acepta. Si alguna vez deja de aceptarse, la salida es
 Git LFS, no descargar de producción.
 
+**Corolario: la tabla de Volumen del informe es la de los golden, no la de la
+tirada.** `escribirInforme` mide los PNG del disco con `statSync`, así que suma
+los once que están en git y nada más: 17,5 MB, reproducibles en cualquier máquina
+justo porque esas fixtures van versionadas. La tirada completa del banco son
+92,9 MB, y esa cifra el informe commiteado no la puede dar mientras el volumen se
+mida del disco: haría falta que cada sidecar declarase los bytes de su PNG. Se
+probó (rama `sidecar-bytes`, descartada el 2026-09-07) y la conclusión es que el
+cambio solo se paga si entran al repo los 69 sidecars —decisión que esta 9.1 deja
+fuera a propósito—; con los once de hoy da el mismo número y añade un modo de
+fallo mudo: un sidecar sin `bytes` desaparece del volumen sin avisar, y el test
+byte a byte del informe se pone rojo hasta que los once se rellenan a mano. Quien
+reabra esto que empiece por ahí.
+
 ## Ampliación del ADR 0013
 
 El modelo intrínseco sigue viviendo en la fila de catálogo. Lo que este ADR añade
