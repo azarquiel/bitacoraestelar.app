@@ -639,6 +639,25 @@
     refreshAnchors();
     // Los dos lienzos (Grupo Local y vecindario solar) consultan la misma regla
     // (VLO.atenuadoPorObservador) en cada fotograma: no hay nada que avisarles.
+    pintarRecuentoEstado();
+  }
+
+  // El estado activo lleva el recuento de lo que deja a la vista (#233): en la
+  // vista de canto un cambio de estado puede no notarse, y el número confirma
+  // que el control hizo algo. Si no queda nada, se avisa: una pantalla vacía
+  // no debe parecer un fallo.
+  var IDS_CATALOGO = OBJECTS.map(function (o) { return o.id; });
+  function pintarRecuentoEstado() {
+    var radios = document.querySelectorAll('#mw-estado input[type=radio]');
+    if (!radios.length) return;
+    var n = VLO.recuento(IDS_CATALOGO);
+    for (var i = 0; i < radios.length; i++) {
+      var cuenta = radios[i].parentNode.querySelector('.mw-estado-n');
+      if (cuenta) cuenta.textContent = radios[i].checked ? ' · ' + n.toLocaleString('es-ES') : '';
+    }
+    if (VLO.getActivo() && !n) {
+      showToast('Ningún objeto con este filtro: prueba otro estado o conjunto.');
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -1618,8 +1637,7 @@
   function openObjectPdf(e) {
     if (e) e.stopPropagation();
     var dot = e.currentTarget;
-    var url = dot.getAttribute('data-pdf');
-    if (!url) return;
+    var url = dot.getAttribute('data-pdf');   // '' si nadie lo ha observado (#233)
 
     // Si el objeto tiene ficha interactiva, se abre esta en lugar del PDF
     var fichaId = dot.getAttribute('data-ficha');
@@ -1633,6 +1651,17 @@
     // observaciones en vez de ir directamente al PDF.
     if (fichaId && VLO.observacionesAjenasActivo() && VLO.observadoresDe(fichaId, VLO.getActivo()).length) {
       abrirFichaDescubrimiento(fichaId, {
+        title:  dot.getAttribute('data-title') || '',
+        coords: dot.getAttribute('data-coords') || ''
+      });
+      return;
+    }
+
+    // Nadie lo ha observado (un destino "por visitar" de nadie, #233): sin PDF
+    // lo único que hay es su ficha de catálogo (título y coordenadas), y se
+    // enseña con la pantalla de descubrimiento, con la lista vacía.
+    if (!url) {
+      abrirFichaDescubrimiento(fichaId || dot.getAttribute('data-id') || '', {
         title:  dot.getAttribute('data-title') || '',
         coords: dot.getAttribute('data-coords') || ''
       });
@@ -2336,7 +2365,7 @@
       return;
     }
     var url = desc.pdf;
-    if (!url) return; // sin ficha ni PDF no hay nada que abrir
+    if (!url) { abrirFichaDescubrimiento(fichaId || '', info); return; } // sin PDF: ficha de catálogo (#233)
     pdfTitle.textContent = desc.title || '';
     pdfCoords.textContent = desc.coords || '';
     pdfOpenLink.href = url;
@@ -2432,10 +2461,11 @@
     if (sunTop) sunTop.style.display = isEdgeView ? 'none' : '';
     if (sunEdge) sunEdge.style.display = isEdgeView ? '' : 'none';
 
-    // La visibilidad de cada marcador combina CINCO filtros: la vista activa
-    // (cenital/canto), el tipo (leyenda), el observador seleccionado, la escala
-    // (lo que ya enseña el vecindario no se repite aquí) y, si se está
-    // recorriendo un viaje, la propia ruta. Deben aplicarse juntos: si no,
+    // La visibilidad de cada marcador combina CUATRO filtros: la vista activa
+    // (cenital/canto), el tipo (leyenda), la escala (lo que ya enseña el
+    // vecindario no se repite aquí) y la regla de observador, que ya lleva
+    // dentro el conjunto (la ruta del viaje) y el estado (visitados / por
+    // visitar). Deben aplicarse juntos: si no,
     // el filtro de observador podría revelar el marcador de la otra vista (a su
     // posición 'edge'), que aparecería como un duplicado en una zona distinta
     // del mapa.
@@ -2445,8 +2475,7 @@
       var id = a.getAttribute('data-id');
       var inView = a.getAttribute('data-view') === currentView;
       var typeHidden = !!hiddenColors[a.getAttribute('data-color')];
-      var enRuta = !viajeActivo || VLViaje.enViaje(viajeActivo, id);
-      a.style.display = (inView && !typeHidden && enRuta && !EN_VECINDARIO[id]
+      a.style.display = (inView && !typeHidden && !EN_VECINDARIO[id]
         && VLO.visiblePorObservador(id)) ? '' : 'none';
       // Objeto observado solo por otros: es un destino POR VISITAR y se dibuja
       // como anillo hueco de su color, no como punto lleno apagado (la
@@ -2611,15 +2640,13 @@
       : (window.OBSERVADOR_ACTIVO || '');
     if (claveInicial && conObs[claveInicial]) {
       observadorSelect.value = claveInicial;
-      VLO.setActivo(claveInicial);
-      aplicarFiltroObservador();
+      VLO.setActivo(claveInicial);   // el filtro se pinta al final del arranque, con el estado de la URL
     }
 
     observadorSelect.addEventListener('change', function () {
       VLO.setActivo(observadorSelect.value);
       poblarViajes();          // los viajes son de cada observador: se rehacen
-      aplicarViaje('');        // y el que se estuviera recorriendo termina aquí
-      aplicarFiltroObservador();
+      aplicarViaje('');        // y el que se estuviera recorriendo termina aquí (y pinta el filtro)
       var fO = document.getElementById('ficha-overlay');
       if (fO && fO.style.display === 'flex' && typeof closeFicha === 'function') closeFicha();
     });
@@ -2700,12 +2727,14 @@
       viajeSelect.disabled = true;
       return;
     }
-    var html = '<option value="">— Todo el catálogo del observador —</option>';
+    // Eje CONJUNTO (#233): todo el catálogo o un viaje; mañana, un catálogo
+    // (Messier, RASC…) será otro <optgroup> y nada más.
+    var html = '<option value="">— Todo mi catálogo —</option><optgroup label="Viajes">';
     lista.forEach(function (v) {
       html += '<option value="' + v.id + '">' +
         v.etiqueta.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
     });
-    viajeSelect.innerHTML = html;
+    viajeSelect.innerHTML = html + '</optgroup>';
     viajeSelect.disabled = false;
   }
 
@@ -2807,6 +2836,12 @@
     var idsDe = function (objs) {
       return viajeActivo ? objs.map(function (o) { return o.id; }) : null;
     };
+    // Eje CONJUNTO: la ruta entera (todas las capas) entra en la regla única;
+    // cada capa recibe además su tramo para dibujar la línea dorada. Con viaje
+    // el eje ESTADO queda fijado en 'todo': las escalas van a todo color.
+    VLO.setConjunto(viajeActivo
+      ? idsDe(ruta.vecindario.concat(ruta.galaxia, ruta.grupoLocal)) : null);
+    aplicarEstado(viajeActivo ? 'todo' : estadoElegido);
     if (typeof GrupoLocal !== 'undefined' && GrupoLocal.setViaje) {
       GrupoLocal.setViaje(idsDe(ruta.grupoLocal));
       // Una búsqueda anterior deja su anillo puesto: en el viaje sobra, porque
@@ -2822,21 +2857,55 @@
       searchInput.placeholder = viajeActivo ? 'Buscador en pausa durante el viaje' : 'Buscar objeto…';
       searchInput.style.opacity = viajeActivo ? '0.5' : '';
     }
-    refreshAnchors();
+    aplicarFiltroObservador();
     repositionAnchors();
 
-    // La URL refleja el viaje para poder compartirlo tal cual se está viendo.
-    if (window.history && history.replaceState) {
-      var u = new URL(window.location.href);
-      if (viajeActivo) u.searchParams.set('viaje', viajeActivo);
-      else u.searchParams.delete('viaje');
-      history.replaceState(null, '', u.toString());
-    }
+    reflejarEnUrl();
     if (viajeActivo) { encuadrarViaje(viajeActivo); avisarCambioDeCapa(viajeActivo); }
   }
 
   if (viajeSelect) {
     viajeSelect.addEventListener('change', function () { aplicarViaje(viajeSelect.value); });
+  }
+
+  // ---- Eje ESTADO (#233): Todo · Visitados · Por visitar -------------------
+  // Los dos ejes son independientes: elegir un viaje no pierde el estado que
+  // eligió el usuario (estadoElegido); solo lo fija en 'todo' mientras dura.
+  var estadoFieldset = document.getElementById('mw-estado');
+  var estadoElegido = 'visitados';
+
+  function aplicarEstado(e) {
+    VLO.setEstado(e);
+    if (!estadoFieldset) return;
+    var radio = estadoFieldset.querySelector('input[value="' + VLO.getEstado() + '"]');
+    if (radio) radio.checked = true;
+    estadoFieldset.disabled = !VLO.getActivo() || !!viajeActivo;
+    estadoFieldset.title = !VLO.getActivo()
+      ? 'Seleccione un observador para filtrar por estado'
+      : (viajeActivo ? 'Durante un viaje se ven todas sus escalas' : '');
+  }
+
+  if (estadoFieldset) {
+    estadoFieldset.addEventListener('change', function (ev) {
+      if (ev.target.name !== 'mw-estado') return;
+      estadoElegido = ev.target.value;
+      aplicarEstado(estadoElegido);
+      aplicarFiltroObservador();
+      reflejarEnUrl();
+    });
+  }
+
+  // La URL refleja viaje y estado para poder compartir lo que se está viendo.
+  // El estado solo viaja cuando no es el de por defecto: los ?viaje= de siempre
+  // siguen valiendo tal cual.
+  function reflejarEnUrl() {
+    if (!(window.history && history.replaceState)) return;
+    var u = new URL(window.location.href);
+    if (viajeActivo) u.searchParams.set('viaje', viajeActivo);
+    else u.searchParams.delete('viaje');
+    if (estadoElegido !== 'visitados') u.searchParams.set('estado', estadoElegido);
+    else u.searchParams.delete('estado');
+    history.replaceState(null, '', u.toString());
   }
 
   // Centra el mapa en un ancla concreta (posición en % de la imagen) y aplica
@@ -3285,10 +3354,15 @@
   // que haya cargado.
   // --------------------------------------------------------------------------
   poblarViajes();
-  var viajePedido = (function () {
-    try { return new URL(window.location.href).searchParams.get('viaje') || ''; }
-    catch (e) { return ''; }
+  var params = (function () {
+    try { return new URL(window.location.href).searchParams; }
+    catch (e) { return { get: function () { return ''; } }; }
   })();
+  var viajePedido = params.get('viaje') || '';
+  // ?estado=todo|visitados|porvisitar acompaña al viaje en la URL (#233).
+  aplicarEstado(params.get('estado') || 'visitados');
+  estadoElegido = VLO.getEstado();   // un valor desconocido cae a 'visitados'
+  aplicarFiltroObservador();
   if (viajePedido) {
     var arrancarViaje = function () {
       var duenyo = VLViaje.observadorDe(viajePedido);
@@ -3303,9 +3377,8 @@
       }
       if (observadorSelect) observadorSelect.value = duenyo;
       VLO.setActivo(duenyo);
-      aplicarFiltroObservador();
       poblarViajes();
-      aplicarViaje(viajePedido);
+      aplicarViaje(viajePedido);   // pinta el filtro
     };
     if (_galImg && _galImg.complete && _galImg.naturalWidth) arrancarViaje();
     else if (_galImg) _galImg.addEventListener('load', arrancarViaje);

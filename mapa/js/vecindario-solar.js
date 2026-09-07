@@ -246,8 +246,8 @@ var VecindarioSolar = (function () {
 
     var projected = objects
       .filter(function (o) { return !(hiddenClases && hiddenClases[o.clase || '']); })
-      // Recorriendo un viaje, solo se ven las estrellas de esa salida.
-      .filter(function (o) { return !rutaIds || rutaIds.indexOf(o.id) >= 0; })
+      // Conjunto (viaje) y estado (visitados / por visitar) los decide la
+      // regla única de via-lactea-observadores.js; aquí solo se aplica.
       .filter(function (o) { return window.VLObservadores.visiblePorObservador(o.id); })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });

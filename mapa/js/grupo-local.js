@@ -303,11 +303,11 @@ var GrupoLocal = (function () {
     drawGrid();
     drawRutaViaje();
 
-    // Se omiten los tipos de Hubble ocultados desde la leyenda y, si se está
-    // recorriendo un viaje, todo lo que no forme parte de esa salida.
+    // Se omiten los tipos de Hubble ocultados desde la leyenda; conjunto
+    // (viaje) y estado (visitados / por visitar) los decide la regla única de
+    // via-lactea-observadores.js, aquí solo se aplica.
     var projected = objects
       .filter(function (o) { return !(hiddenTipos && hiddenTipos[o.tipo || '']); })
-      .filter(function (o) { return !rutaIds || rutaIds.indexOf(o.id) >= 0; })
       .filter(function (o) { return window.VLObservadores.visiblePorObservador(o.id); })
       .map(function (o) { return { o: o, p: project(o) }; })
       .sort(function (a, b) { return a.p.depth - b.p.depth; });
