@@ -16,6 +16,9 @@
    Interfaz (window.VLObservadores):
      getActivo()                  -> clave del observador activo ('' = todas)
      setActivo(clave)             -> fija el observador activo del filtro
+     getEstado() / setEstado(e)   -> eje ESTADO: 'todo' | 'visitados' | 'porvisitar'
+     setConjunto(l)               -> eje CONJUNTO: null (todos) o lista de ids
+     recuento(ids)                -> cuántos de esos ids deja a la vista la regla
      getFicha(id)                 -> la ficha visible del objeto, o null
      observacionesAjenasActivo()  -> ¿está activo el "descubrir observaciones"?
      fichaDeObservador(id, clave) -> la observación de 'clave' sobre 'id', o null
@@ -37,6 +40,21 @@
 
   function getActivo() { return observadorActivo; }
   function setActivo(clave) { observadorActivo = clave || ''; }
+
+  // Los dos ejes del filtro (#233). CONJUNTO: qué objetos entran (null = todos;
+  // una lista de ids = un viaje o, mañana, un catálogo). ESTADO: cómo están
+  // respecto al observador activo. Sin observador ninguno de los dos manda.
+  var ESTADOS = { todo: 1, visitados: 1, porvisitar: 1 };
+  var estado = 'visitados';
+  var conjunto = null;      // {id: true} o null
+
+  function getEstado() { return estado; }
+  function setEstado(e) { estado = ESTADOS[e] ? e : 'visitados'; }
+  function setConjunto(ids) {
+    if (!ids) { conjunto = null; return; }
+    conjunto = {};
+    for (var i = 0; i < ids.length; i++) conjunto[ids[i]] = true;
+  }
 
   function getFicha(id) {
     var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
@@ -119,18 +137,35 @@
   // un vistazo. Son los mismos números que .mw-no-visitado en mapa.html.
   var ANILLO = { escala: 1.6, grosor: 1.4 };
 
-  // ¿Se dibuja el objeto con el filtro de observador actual? Sí si el activo lo
-  // observó ('propia') o si lo observaron otros y el descubrimiento está activo
-  // ('ajena', atenuado); no si no queda nadie relevante ('ninguna').
+  // ¿Se dibuja el objeto con el filtro actual? Primero el conjunto (fuera de
+  // la lista no hay nada que ver); luego el estado:
+  //   visitados  -> solo con observación propia.
+  //   porvisitar -> todo lo del conjunto SIN observación propia, lo haya
+  //                 observado otro o nadie; ignora CONFIG.observacionesAjenas,
+  //                 que gobierna "descubrir a otros", no "qué me falta".
+  //   todo       -> la regla de siempre: propias y, si el descubrimiento está
+  //                 activo, ajenas atenuadas; las de nadie se ocultan.
   function visiblePorObservador(id) {
+    if (conjunto && !conjunto[id]) return false;
+    if (!observadorActivo) return true;
+    if (estado === 'visitados') return !!getFicha(id);
+    if (estado === 'porvisitar') return !getFicha(id);
     return estadoObservador(id) !== 'ninguna';
   }
 
-  // ¿Se dibuja atenuado ("no visitado") para el observador activo? Solo cuando
-  // lo observaron OTROS: sin observaciones (o con el descubrimiento apagado) el
-  // objeto se oculta, no se atenúa.
+  // ¿Se dibuja como "por visitar" (anillo hueco)? En 'visitados' nunca; en
+  // 'porvisitar' todo lo visible lo es; en 'todo' solo lo observado por otros.
   function atenuadoPorObservador(id) {
+    if (!observadorActivo || estado === 'visitados') return false;
+    if (estado === 'porvisitar') return !getFicha(id);
     return estadoObservador(id) === 'ajena';
+  }
+
+  // Cuántos de esos ids deja a la vista la regla (el recuento del control).
+  function recuento(ids) {
+    var n = 0;
+    for (var i = 0; i < ids.length; i++) if (visiblePorObservador(ids[i])) n++;
+    return n;
   }
 
   // Color de un objeto no visitado: su RGB mezclado con el gris clarito.
@@ -151,6 +186,10 @@
     ANILLO_NO_VISITADO: ANILLO,
     getActivo: getActivo,
     setActivo: setActivo,
+    getEstado: getEstado,
+    setEstado: setEstado,
+    setConjunto: setConjunto,
+    recuento: recuento,
     getFicha: getFicha,
     observacionesAjenasActivo: observacionesAjenasActivo,
     nombreObservador: nombreObservador,
