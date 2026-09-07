@@ -13,8 +13,13 @@
      · `max|Δ| ≤ 0,05·σ` en `parche.datos` tras ps1AnclarACatalogo;
      · `|ΣΔ|/Σ ≤ 1e-4` (el presupuesto de luz);
      · los NaN HEREDADOS del stack, idénticos: cero píxeles de diferencia;
-     · los NaN nacidos de la REGLA DE AUSENCIA que difieran, todos a
-       `|v − corte| ≤` paso de cuantización, y no más de 1e-4 del parche;
+     · los NaN nacidos de la REGLA DE AUSENCIA que difieran: no más de 1e-4
+       del parche, con el VALOR movido ≤ 1 paso de cuantización y el CORTE
+       movido ≤ 6,93 pasos (redacción del 2026-09-07 del ADR 0024). El 6,93 no
+       sale de ninguna medida: si cada valor del borde se mueve como mucho un
+       paso, la mediana se mueve como mucho uno y la MAD como mucho dos, así
+       que `cielo − kσ` con `k = kAusencia` se mueve como mucho
+       `1 + 2·1,4826·k` pasos. Es el techo de una codificación correcta;
      · los 5 controles de exclusión salen «fila» con su motivo y sin red.
 
    Ninguna ley se reimplementa (ADR 0008): el camino FITS es lib_bajar_parche +
@@ -76,7 +81,11 @@ var GAIA = path.join(__dirname, 'fixtures', 'gaia');
 var CAT = PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
 
 /* Umbrales de L1.1. Prerregistrados: no se tocan aquí. */
-var MAX_SIGMA = 0.05, MAX_FLUJO = 1e-4, MAX_FRAC_NAN = 1e-4;
+var MAX_SIGMA = 0.05, MAX_FLUJO = 1e-4, MAX_FRAC_NAN = 1e-4, MAX_SALTO = 1;
+/* Techo del desplazamiento del corte, derivado y no medido: la mediana del
+   borde se mueve ≤ 1 paso y la MAD ≤ 2, así que cielo − kσ se mueve ≤
+   1 + 2·1,4826·k. Sale de la cfg para que mover kAusencia lo mueva con ella. */
+var MAX_CORTE = 1 + 2 * 1.4826 * CFG.kAusencia;
 
 function arg(n, pordefecto) {
   var i = process.argv.indexOf(n);
@@ -275,7 +284,8 @@ function comparar(o) {
 function veredicto(m) {
   return m.nanFuenteDif === 0 && m.nanHeredDif === 0 &&
          m.maxSigma <= MAX_SIGMA && m.flujo <= MAX_FLUJO &&
-         m.fracNanAus <= MAX_FRAC_NAN && (m.nanAusDif === 0 || m.peorDist <= 1);
+         m.fracNanAus <= MAX_FRAC_NAN &&
+         (m.nanAusDif === 0 || (m.peorSalto <= MAX_SALTO && m.deltaCorte <= MAX_CORTE));
 }
 
 var b = BANCO.banco();
@@ -334,7 +344,8 @@ objetos.reduce(function (cadena, o, i) {
   }
 
   console.log('\nL1.1 · umbrales: max|Δ| ≤ ' + MAX_SIGMA + '·σ, |ΣΔ|/Σ ≤ ' + MAX_FLUJO +
-    ', NaN del stack = 0 px, NaN de ausencia ≤ ' + MAX_FRAC_NAN + ' del parche y a ≤ 1 paso del corte.');
+    ', NaN del stack = 0 px, NaN de ausencia ≤ ' + MAX_FRAC_NAN + ' del parche, ' +
+    'valor movido ≤ ' + MAX_SALTO + ' paso y corte movido ≤ ' + MAX_CORTE.toFixed(2) + ' pasos.');
   console.log('objetos medidos: ' + hechas.length + ' de ' + medidas.length +
     (faltan.length ? '  (' + faltan.length + ' sin textura en disco)' : '') +
     (rotas.length ? '  (' + rotas.length + ' con error)' : ''));

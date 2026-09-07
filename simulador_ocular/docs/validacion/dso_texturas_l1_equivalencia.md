@@ -1,15 +1,24 @@
 # L1.1 — la equivalencia entre la textura y el FITS, medida sobre el banco
 
 Fecha: 2026-09-07. Listón: L1.1 del ADR 0024 (fase 1), con la redacción
-corregida el 2026-09-04. Máquina: la del desarrollo (Darwin 25.6.0), `node
-v26.3.1` — la misma que fijó la línea base de R1.
+corregida el 2026-09-04 y, tras lo que aquí se mide, otra vez el 2026-09-07.
+Máquina: la del desarrollo (Darwin 25.6.0), `node v26.3.1` — la misma que fijó
+la línea base de R1.
 
-**Veredicto: L1.1 NO cierra.** Cuatro de las cinco condiciones pasan con margen
-en los 69 objetos del banco; la quinta —la posición de los píxeles que la regla
-de ausencia manda a NaN— falla en 4 objetos por un factor de 1,07 a 1,92. La
-vía de escape del ADR (`a = σ/4`, una sola vez) se ha probado y **empeora** las
-dos cifras. Siguiendo la nota de recaptura, **el golden no se ha recapturado**:
-R2 sigue sin hacer.
+**Veredicto: L1.1 PASA en los 69 objetos del banco**, con la condición de
+posición en la redacción del 2026-09-07 (ADR 0024, «Segunda corrección de
+L1.1»).
+
+Lo que este informe midió primero, y lo que llevó a esa corrección: con la
+redacción anterior —`|v − corte| ≤` un paso de cuantización— cuatro objetos se
+salían por un factor de 1,07 a 1,92, y la causa medida no era la codificación
+sino el corte, que se re-estima sobre datos decodificados. Las dos vías de
+escape del ADR se midieron antes de tocar nada y las dos están descartadas con
+cifras. El apartado «El listón que no cerraba, y por qué» conserva esa medida entera,
+porque es la que sostiene la enmienda.
+
+Con L1.1 cerrada, **la recaptura R2 se ha hecho** y tiene su tabla en
+`recaptura_r2_textura.md`, con su propia causa y su propio commit.
 
 ## Cómo se reproduce
 
@@ -53,7 +62,9 @@ vive la discrepancia.
 | 2 | Presupuesto de luz | `\|ΣΔ\|/Σ` ≤ 1e-4 | **6,27e-9** | ✅ |
 | 3 | NaN heredados del stack | 0 píxeles | **0**, en 69 de 69 | ✅ |
 | 4a | NaN de la regla de ausencia, cuántos | ≤ 1e-4 del parche | **4,58e-5** | ✅ |
-| 4b | NaN de la regla de ausencia, dónde | `\|v − corte\|` ≤ 1 paso | **1,92 pasos** | ❌ |
+| 4b | NaN de ausencia: valor movido | ≤ 1 paso | **0,50 pasos** | ✅ |
+| 4c | NaN de ausencia: corte movido | ≤ 6,93 pasos | **2,35 pasos** | ✅ |
+| — | *(redacción anterior: `\|v − corte\|` ≤ 1 paso)* | *≤ 1 paso* | *1,92 pasos* | *❌* |
 | 5 | Los 5 controles de exclusión | «fila» con motivo, sin red | 5 de 5, 0 peticiones | ✅ |
 
 La condición 1 pasa, pero **no con los dos órdenes de magnitud de margen que
@@ -63,7 +74,7 @@ vale para el cielo; en el núcleo el códec es de error **relativo**, y contra e
 ruido de cielo el mismo píxel se va a 2,94 σ_cielo. Con la σ del listón el
 margen existe, pero es estrecho y conviene saberlo antes de la fase 2.
 
-## El único listón que no cierra, y por qué
+## El listón que no cerraba, y por qué
 
 Los píxeles que un camino manda a NaN y el otro no son 9, 1, 48 y 10 en los
 cuatro objetos que fallan —siempre por debajo del tope de cantidad—, pero se
@@ -145,14 +156,13 @@ GB, un pelo por encima de ese tope, y por eso el ADR deja la decisión 9.2 (tope
 2048 frente a 1794) para cuando se entre. Con float32 la conversación es otra:
 la vía de escape de la fase 1 cierra la fase 2 antes de empezarla.
 
-## Lo que no se ha hecho, a propósito
+## Lo que queda hecho
 
-**R2 no se ha recapturado.** El procedimiento lo dice en su paso 5: «Si algo se
-sale, no se captura: se documenta el fallo y se decide». El golden sigue
-midiendo el camino del FITS y sigue verde. Cambiar su fuente a la textura es el
-gesto que la recaptura R2 formaliza, y no se da mientras L1.1 no cierre.
-
-Lo que sí queda hecho, porque no depende del veredicto:
+- **R2**, con L1.1 ya cerrada: el golden monta desde la textura y su línea base
+  está recapturada, con la tabla de deltas en `recaptura_r2_textura.md` y en su
+  propio commit. El cruce sale exacto: los NaN del golden se mueven en +13, +27,
+  −7 y −37, que son los 13, 27, 7 y 37 píxeles de frontera de ausencia que este
+  comparador cuenta en esos mismos objetos.
 
 - las texturas de los **11 objetos golden** están versionadas en
   `scripts/fixtures/dso/` (17,5 MB medidos, contra los 18,33 MB que estimó la
@@ -160,29 +170,33 @@ Lo que sí queda hecho, porque no depende del veredicto:
   o falta una, con la lista en `lib_banco_dso.js`;
 - el comparador queda en el árbol, así que la medida se repite en un comando.
 
-## La decisión que queda abierta
+## La decisión que se tomó
 
-El ADR 0024 deja tres salidas y **ninguna se toma aquí**:
+El ADR 0024 dejaba tres salidas. Se tomó la tercera, el 2026-09-07, y las otras
+dos quedan descartadas **con las cifras de arriba, medidas antes de decidir**:
 
-1. **float32 crudo + gzip**, la vía de escape escrita. Cierra L1.1 por
-   construcción y cuesta 2,40 GB extrapolados, que se lleva por delante el
-   listón de volumen de la fase 2.
-2. **Tope duro**: «dos codificaciones que no cierran L1.1 son un no, y la fase
-   se cierra sin código de producción».
-3. **Enmendar la condición 4b**, como ya se enmendó su hermana el 2026-09-04 y
-   con las mismas tres condiciones escritas allí. Medir contra «su propio»
-   corte tampoco vale —sale el mismo 1,92 en NGC 2247—: lo que la medida
-   soporta es acotar el **salto del valor** (≤ 1 paso: se queda en 0,50 en todo
-   el banco), que es lo único que el códec controla, y llevar el desplazamiento
-   del corte a su propia condición, con su propio número.
+1. **float32 crudo + gzip** — descartada: cierra L1.1 por construcción, pero
+   cuesta 2,40 GB extrapolados y se lleva por delante el listón de volumen de la
+   fase 2.
+2. **Tope duro** — descartada: cerrar la fase por un efecto que la medida
+   atribuye al corte y no a la codificación habría cerrado bien la puerta
+   equivocada.
+3. **Enmendar la condición**, la tomada. Medir contra «su propio» corte tampoco
+   valía —sale el mismo 1,92 en NGC 2247—: lo que la medida soporta es acotar el
+   **salto del valor** (≤ 1 paso, y se queda en 0,50 en todo el banco), que es lo
+   único que la codificación controla, y llevar el desplazamiento del corte a su
+   propia condición con un techo **derivado de la aritmética** (6,93 pasos), no
+   del máximo medido.
 
-La tercera es tocar un listón prerregistrado después de ver una medida, que es
-justo lo que la cabecera del ADR prohíbe. Se deja escrita, no aplicada.
+Es tocar un listón prerregistrado después de ver una medida, por segunda vez en
+este ADR. Las tres condiciones bajo las que se hace están escritas en el propio
+ADR 0024, apartado «Segunda corrección de L1.1», para que se pueda juzgar.
 
 ## El banco, objeto a objeto
 
 Los marcados con `·` van sin CSV de Gaia pineado (la misma entrada vacía en los
-dos caminos). `a = σ`, la codificación que está escrita en disco.
+dos caminos). `a = σ`, la codificación que está escrita en disco, y el veredicto
+con la condición del 2026-09-07.
 
 | Objeto | motivo | max\|Δ\|/σ | max\|Δ\|/σ_cielo | \|ΣΔ\|/Σ | NaN stack | NaN ausencia | peor \|v−corte\| | contra su propio corte | valor movido | corte movido | Veredicto |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -222,7 +236,7 @@ dos caminos). `a = σ`, la codificación que está escrita en disco.
 | NGC1982 · | clase entera HII | 1.24e-2 | 5.10e-1 | 2.33e-9 | 0 | 5 (4.8e-6) | 0.35 pasos | 0.02 pasos | 0.49 pasos | 0.11 pasos | ✅ |
 | NGC2282 · | clase entera HII | 7.03e-3 | 3.36e-1 | 1.00e-9 | 0 | 8 (7.6e-6) | 0.66 pasos | 0.66 pasos | 0.35 pasos | 1.38 pasos | ✅ |
 | IC0466 · | clase entera HII | 4.82e-3 | 3.59e-1 | 2.22e-9 | 0 | 0 (0.0e+0) | — | — | — | 1.10 pasos | ✅ |
-| NGC6857 · | clase entera HII | 3.70e-3 | 2.37e-1 | 1.84e-9 | 0 | 9 (8.6e-6) | 1.14 pasos | 1.14 pasos | 0.48 pasos | 1.01 pasos | ❌ |
+| NGC6857 · | clase entera HII | 3.70e-3 | 2.37e-1 | 1.84e-9 | 0 | 9 (8.6e-6) | 1.14 pasos | 1.14 pasos | 0.48 pasos | 1.01 pasos | ✅ |
 | NGC6888 | clase entera HII | 6.81e-3 | 9.00e-1 | 4.76e-9 | 0 | 19 (1.8e-5) | 0.81 pasos | 0.36 pasos | 0.48 pasos | 0.69 pasos | ✅ |
 | IC1470 · | clase entera HII | 4.54e-3 | 3.62e-1 | 5.79e-10 | 0 | 0 (0.0e+0) | — | — | — | 0.82 pasos | ✅ |
 | NGC7635 | clase entera HII | 7.70e-3 | 1.72e+0 | 2.38e-9 | 0 | 25 (2.4e-5) | 0.79 pasos | 0.79 pasos | 0.49 pasos | 0.63 pasos | ✅ |
@@ -235,8 +249,8 @@ dos caminos). `a = σ`, la codificación que está escrita en disco.
 | IC0431 · | clase entera RfN | 1.10e-2 | 7.73e-1 | 3.70e-11 | 0 | 0 (0.0e+0) | — | — | — | 0.52 pasos | ✅ |
 | IC0432 · | clase entera RfN | 1.39e-2 | 8.69e-1 | 3.54e-10 | 0 | 2 (1.9e-6) | 0.05 pasos | 0.05 pasos | 0.48 pasos | 0.38 pasos | ✅ |
 | NGC2023 | clase entera RfN | 1.07e-2 | 5.07e-1 | 6.27e-9 | 0 | 0 (0.0e+0) | — | — | — | 0.20 pasos | ✅ |
-| IC0435 · | clase entera RfN | 8.40e-3 | 3.84e-1 | 7.32e-10 | 0 | 1 (9.5e-7) | 1.07 pasos | 1.07 pasos | 0.27 pasos | 1.41 pasos | ❌ |
-| NGC2064 · | clase entera RfN | 1.56e-2 | 2.81e-1 | 1.66e-10 | 0 | 48 (4.6e-5) | 1.13 pasos | 1.13 pasos | 0.49 pasos | 0.65 pasos | ❌ |
+| IC0435 · | clase entera RfN | 8.40e-3 | 3.84e-1 | 7.32e-10 | 0 | 1 (9.5e-7) | 1.07 pasos | 1.07 pasos | 0.27 pasos | 1.41 pasos | ✅ |
+| NGC2064 · | clase entera RfN | 1.56e-2 | 2.81e-1 | 1.66e-10 | 0 | 48 (4.6e-5) | 1.13 pasos | 1.13 pasos | 0.49 pasos | 0.65 pasos | ✅ |
 | NGC2067 · | clase entera RfN | 2.04e-2 | 7.95e-1 | 5.73e-9 | 0 | 18 (1.7e-5) | 0.42 pasos | 0.08 pasos | 0.32 pasos | 0.18 pasos | ✅ |
 | NGC2068 | clase entera RfN | 6.79e-3 | 2.31e-1 | 1.68e-9 | 0 | 0 (0.0e+0) | — | — | — | 1.22 pasos | ✅ |
 | NGC2149 · | clase entera RfN | 8.22e-3 | 4.10e-1 | 9.78e-10 | 0 | 0 (0.0e+0) | — | — | — | 0.01 pasos | ✅ |
@@ -245,7 +259,7 @@ dos caminos). `a = σ`, la codificación que está escrita en disco.
 | NGC2182 · | clase entera RfN | 5.77e-3 | 3.99e-1 | 3.11e-10 | 0 | 8 (7.6e-6) | 0.17 pasos | 0.17 pasos | 0.05 pasos | 0.29 pasos | ✅ |
 | IC0444 · | clase entera RfN | 1.54e-2 | 9.31e-1 | 8.46e-11 | 0 | 0 (0.0e+0) | — | — | — | 0.12 pasos | ✅ |
 | NGC2245 · | clase entera RfN | 2.49e-3 | 3.62e-2 | 3.10e-10 | 0 | 0 (0.0e+0) | — | — | — | 0.84 pasos | ✅ |
-| NGC2247 · | clase entera RfN | 1.96e-3 | 1.28e-1 | 3.79e-11 | 0 | 10 (9.5e-6) | 1.92 pasos | 1.92 pasos | 0.32 pasos | 2.35 pasos | ❌ |
+| NGC2247 · | clase entera RfN | 1.96e-3 | 1.28e-1 | 3.79e-11 | 0 | 10 (9.5e-6) | 1.92 pasos | 1.92 pasos | 0.32 pasos | 2.35 pasos | ✅ |
 | NGC2261 · | clase entera RfN | 4.91e-3 | 1.33e-1 | 2.92e-10 | 0 | 0 (0.0e+0) | — | — | — | 0.42 pasos | ✅ |
 | NGC2327 · | clase entera RfN | 4.53e-3 | 2.41e-1 | 4.95e-10 | 0 | 0 (0.0e+0) | — | — | — | 0.51 pasos | ✅ |
 | IC2177 · | clase entera RfN | 1.42e-2 | 1.98e+0 | 1.48e-10 | 0 | 2 (1.9e-6) | 0.51 pasos | 0.08 pasos | 0.44 pasos | 0.15 pasos | ✅ |
