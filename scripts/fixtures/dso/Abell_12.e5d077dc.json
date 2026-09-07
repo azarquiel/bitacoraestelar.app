@@ -1,0 +1,39 @@
+{
+ "nombre": "Abell 12",
+ "version": "e5d077dc",
+ "generador": "gen_dso_texturas 1",
+ "ra": 90.58354,
+ "dec": 9.65391,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 1.5,
+ "escalaAs": 0.08789062499999964,
+ "wcs": {
+  "ra0": 88.988761901897,
+  "dec0": 9.99999999999966,
+  "x0": 64928.21268332,
+  "y0": 14538.8781298399,
+  "gx": -0.0000244140624999999,
+  "gy": 0.0000244140624999999
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 855.8237917236328,
+  "uMin": -0.8724747845420168,
+  "uMax": 6.9260149561616835,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 1000.1810302734375,
+  "sigma": 855.8237917236328,
+  "fracAusencia": 0.03672313690185547,
+  "fracAusenciaEscena": 0,
+  "errCuantMaxSigma": 0.00029668052285463075,
+  "errCuantMaxRel": 0.000060492339862161515
+ }
+}

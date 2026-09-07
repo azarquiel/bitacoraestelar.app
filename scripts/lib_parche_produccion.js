@@ -50,7 +50,12 @@ module.exports = function (R) {
       perfil: PS1.confianzaLocalNaN ? perfil : null,
       enEscena: window.BitacoraPS1.ps1FuentesEnEscena(estrellas || [], enPx, f.afin, escena, mlim),
       escena: escena,
-      datos: datos
+      datos: datos,
+      /* El array del que ps1AnclarACatalogo saca su cielo, su σ y su corte de
+         ausencia. Lo pide el comparador de L1.1 (harness_l1_equivalencia.js):
+         sin él, «¿está el píxel discrepante pegado al corte?» no se puede
+         responder sin volver a montar media cadena aquí. */
+      limpio: limpio
     };
   }
 

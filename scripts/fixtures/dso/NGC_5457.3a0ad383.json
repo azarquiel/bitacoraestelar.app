@@ -1,0 +1,39 @@
+{
+ "nombre": "NGC 5457",
+ "version": "3a0ad383",
+ "generador": "gen_dso_texturas 1",
+ "ra": 210.80208,
+ "dec": 54.34861,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 20,
+ "escalaAs": 1.1718749999999953,
+ "wcs": {
+  "ra0": 209.454544067392,
+  "dec0": 53.9999999999982,
+  "x0": 2924.40673749149,
+  "y0": -582.366680756211,
+  "gx": -0.000325520833333332,
+  "gy": 0.000325520833333332
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 31.131239824962613,
+  "uMin": -4.607993793823469,
+  "uMax": 10.352300568403201,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": -3.7014803886413574,
+  "sigma": 31.131239824962613,
+  "fracAusencia": 0.0006113052368164062,
+  "fracAusenciaEscena": 0.00038035282350292615,
+  "errCuantMaxSigma": 0.0005818008765158216,
+  "errCuantMaxRel": 0.00011624144825495009
+ }
+}

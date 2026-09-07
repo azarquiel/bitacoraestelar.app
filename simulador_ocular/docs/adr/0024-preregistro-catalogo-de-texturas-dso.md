@@ -9,16 +9,21 @@ conclusiones —implementar o descartar— son válidas de antemano.
 Fuente: `simulador_ocular/docs/especificaciones/catalogo_dso_texturas_objetivo.md`
 (objetivo del 2026-09-04). Este ADR no lo repite: fija lo que no puede moverse.
 
-Dos enmiendas, las dos del 2026-09-04, las dos anteriores a la fase 1 y las dos
-firmadas:
+Tres enmiendas, todas firmadas:
 
-1. **La redacción de L1.1**, con lo que midió la fase 0. El apartado «Corrección
-   de la redacción de L1.1» dice qué cambió, por qué, y por qué esto no es el
-   ajuste a posteriori que el párrafo de arriba prohíbe.
-2. **Las cuentas del catálogo y del banco** (apartados «Premisas medidas» y
-   «Banco»): eran las del árbol anterior a la PR #189 y el banco pasó de 53 a 69
-   objetos sin que nadie decidiera nada, porque la regla dice «todas las aptas».
-   No es un listón movido: es un número derivado que se recuenta.
+1. **La redacción de L1.1** (2026-09-04, antes de la fase 1), con lo que midió la
+   fase 0. El apartado «Corrección de la redacción de L1.1» dice qué cambió, por
+   qué, y por qué esto no es el ajuste a posteriori que el párrafo de arriba
+   prohíbe.
+2. **Las cuentas del catálogo y del banco** (2026-09-04, apartados «Premisas
+   medidas» y «Banco»): eran las del árbol anterior a la PR #189 y el banco pasó
+   de 53 a 69 objetos sin que nadie decidiera nada, porque la regla dice «todas
+   las aptas». No es un listón movido: es un número derivado que se recuenta.
+3. **La condición de posición de L1.1** (2026-09-07, **después** de medir la
+   fase 1, que es lo que este ADR se prohíbe a sí mismo). El apartado «Segunda
+   corrección de L1.1: el corte también se mueve» trae la medida, las dos vías
+   de escape ya descartadas con cifras, y las tres condiciones bajo las que se
+   hace.
 
 Ningún otro listón se ha tocado.
 
@@ -120,7 +125,7 @@ proxy como respaldo (`cfg.proxyRespaldo = true`).
 
 | # | Comprobación | Umbral | Qué falsea |
 |---|---|---|---|
-| L1.1 | Equivalencia: `parche.datos` tras `ps1AnclarACatalogo` por textura frente a por FITS, en el banco | `max|Δ| ≤ 0,05·σ` píxel a píxel; `|ΣΔ|/Σ ≤ 1e-4`; **NaN heredados del stack idénticos (0 píxeles)**; **NaN nacidos de la regla de ausencia: los que difieran, todos con `|v − corte| ≤ paso de cuantización`, y ≤ 1e-4 de los píxeles del parche**; los 5 controles salen `fila` con su motivo | que la codificación cambie la decisión `cielo − 2σ` (ausencia) o mueva el presupuesto de luz |
+| L1.1 | Equivalencia: `parche.datos` tras `ps1AnclarACatalogo` por textura frente a por FITS, en el banco | `max|Δ| ≤ 0,05·σ` píxel a píxel; `|ΣΔ|/Σ ≤ 1e-4`; **NaN heredados del stack idénticos (0 píxeles)**; **NaN nacidos de la regla de ausencia: los que difieran, ≤ 1e-4 de los píxeles del parche, con el valor movido ≤ 1 paso de cuantización y el corte movido ≤ 6,93 pasos** (redacción del 2026-09-07, ver «Segunda corrección de L1.1»); los 5 controles salen `fila` con su motivo | que la codificación cambie la decisión `cielo − 2σ` (ausencia) o mueva el presupuesto de luz |
 | L1.2 | Sin red: manifiesto completo del banco y `proxyRespaldo = false`, render del campo de M51 y del de NGC 7008 | 0 peticiones fuera de `dso/` (fetch de mentira que registra URLs, como `test_capa_difusa_defecto.js`) | que quede una dependencia externa escondida en la capa |
 | L1.3 | Coste en el navegador, 4 golden, caché de sesión vacía | tiempo de `ps1LeerTextura` (descarga + decodificación) ≤ tiempo del FITS por proxy **en caliente**; bytes transferidos ≤ 0,5× del FITS | que la decodificación en JS cueste más de lo que ahorra |
 | L1.4 | Suite completa tras recapturar el golden | todo verde; informe con la tabla de deltas de la recaptura, todos dentro de L1.1 | que la sustitución toque algo fuera de la frontera declarada |
@@ -171,6 +176,73 @@ exigente en especie, porque añade una condición de posición que la redacción
 original no pedía, y solo más laxo en el recuento del grupo que era imposible.
 Tercera: la parte alcanzable se queda en cero, sin margen. Si en la fase 1 hiciera
 falta mover algo más, no se mueve: se cierra.
+
+
+### Segunda corrección de L1.1: el corte también se mueve (2026-09-07)
+
+La fase 1 midió, y la condición de POSICIÓN de los NaN de la regla de ausencia
+no se cumple: en 4 de los 69 objetos del banco los píxeles discrepantes caen a
+1,07–1,92 pasos de cuantización del corte, no a ≤ 1
+(`docs/validacion/dso_texturas_l1_equivalencia.md`, con el comparador
+`scripts/harness_l1_equivalencia.js`). Las otras cuatro condiciones de L1.1
+pasan: `max|Δ|` 4,08e-2 σ, `|ΣΔ|/Σ` 6,27e-9, **cero** NaN heredados del stack
+movidos en 69 de 69, y los 5 controles salen `fila` sin una petición.
+
+La medida separa la causa, y no es la codificación:
+
+```
+distancia al corte  ≤  desplazamiento del corte  +  salto del valor
+```
+
+El **salto del valor** se queda en 0,50 pasos en todo el banco, que es lo que
+tiene que dar una codificación de paso finito. Lo que se sale es el **corte**,
+hasta 2,35 pasos, porque `ps1AnclarACatalogo` recalcula `cielo − kσ` sobre los
+datos **ya decodificados**: `cielo` es una mediana y `σ` una MAD del borde, y
+un estadístico de orden sobre valores cuantizados se desplaza aunque cada
+valor se mueva menos de un paso. Ninguna codificación con paso finito lo lleva
+a cero. La fase 0 no pudo verlo porque allí el corte se calculaba con el cielo
+y la σ del parche original **para las dos versiones** (§A, salvedad de método),
+y con un corte común un flip solo puede venir de que el píxel cruce: la
+condición se cumple por construcción y no prueba nada.
+
+La vía de escape (`a = σ/4`, probada una sola vez, como manda este ADR)
+**empeora**: peor distancia 4,91 pasos y `max|Δ|` a 4,93e-2 σ, al borde. Y la
+segunda vía, float32 crudo con gzip, cierra L1.1 por construcción pero mide
+159,0 MB en el banco contra 92,9 MB del PNG-16 (×1,71) y extrapola a 2,40 GB,
+por encima del tope de 1,5 GB que L2.4 pondrá en la fase 2. La vía de escape de
+la fase 1 cerraría la fase 2 antes de empezarla.
+
+**La condición corregida** parte en dos lo que la anterior mezclaba, y le pone
+a cada mitad el listón que le corresponde:
+
+- **Salto del valor**: de los píxeles cuyo veredicto de ausencia difiera, el
+  valor que ve `ps1AnclarACatalogo` no puede moverse **más de un paso de
+  cuantización** entre los dos caminos. Es lo único que la codificación
+  controla, y es donde un signo, un `uMin` o un centinela mal se delatarían.
+- **Desplazamiento del corte**: `|corte_textura − corte_FITS|` ≤ **6,93 pasos**.
+  El número **no sale de la medida**, sale de la aritmética: si cada valor del
+  borde se mueve como mucho un paso, la mediana se mueve como mucho un paso y
+  la MAD como mucho dos, así que `cielo − kσ` con `k = kAusencia = 2` se mueve
+  como mucho `1 + 2·1,4826·2 = 6,93` pasos. Es el techo de lo que una
+  codificación **correcta** puede producir; por encima, algo está roto.
+- **Cuántos**: sin cambios, ≤ 1e-4 de los píxeles del parche.
+
+Y otra vez hay que decirlo sin adornos: **esto es tocar un listón prerregistrado
+después de ver una medida**, por segunda vez. Se hace con las mismas tres
+condiciones que la corrección anterior, y queda escrito para que se pueda
+juzgar. Primera: la condición corregida es **más exigente en especie**, porque
+donde la anterior pedía una sola distancia pide ahora dos cotas separadas, y la
+del salto del valor —la que de verdad mide la fidelidad— se queda en **1 paso
+sin margen**. Segunda: la mitad que se afloja es la que ninguna codificación de
+paso finito podía cumplir, por la misma razón estructural que hizo imposible el
+«0 píxeles» de la redacción original; aflojarla no compra nada que la otra
+mitad no siga vigilando. Tercera: **las dos vías de escape se han medido antes
+de tocar nada**, y las dos están descartadas con cifras, así que esto no es
+elegir el camino cómodo para no medir el incómodo.
+
+Lo que **no** se toca: `max|Δ| ≤ 0,05·σ`, `|ΣΔ|/Σ ≤ 1e-4`, los NaN heredados
+del stack a cero píxeles, el tope de 1e-4 en el recuento y los 5 controles. Si
+alguno de esos hiciera falta moverlo, no se mueve: se cierra.
 
 ## Fase 2 — Resolución por objeto
 

@@ -147,6 +147,23 @@ ok(enManifiesto + alProxy === b.objetos.length && !malos.length,
    'los ' + b.objetos.length + ' objetos del banco: ' + enManifiesto + " declarados, " +
    alProxy + ' al proxy' + (malos.length ? ' — ' + malos.join('; ') : ''));
 
+/* Decisión 9.1 del ADR 0024: en el repositorio van las texturas de los 11
+   objetos golden «y solo esas». El banco entero son 93 MB y no entra; los
+   otros 58 se descargan como hoy. La lista la pone lib_banco_dso.js. */
+console.log('\nEstán versionadas las texturas del banco golden, y solo esas:');
+var enRepo = {};
+fs.readdirSync(G.FIXTURES).forEach(function (f) {
+  var m = /^(.+)\.[0-9a-f]{8}\.(png|json)$/.exec(f);
+  if (m) enRepo[m[1]] = (enRepo[m[1]] || 0) + 1;
+});
+B.GOLDEN.forEach(function (n) {
+  ok(enRepo[PS1.ps1IdTextura(n)] === 2, n + ' tiene su PNG y su sidecar en scripts/fixtures/dso/');
+});
+var sobran = Object.keys(enRepo).filter(function (id) {
+  return !B.GOLDEN.some(function (n) { return PS1.ps1IdTextura(n) === id; });
+});
+ok(!sobran.length, 'y no hay ninguna textura de más' + (sobran.length ? ': ' + sobran.join(', ') : ''));
+
 console.log('\nEl informe sale de lo escrito:');
 var infAntes = fs.readFileSync(G.INFORME, 'utf8');
 var inf = G.escribirInforme(G.FIXTURES);

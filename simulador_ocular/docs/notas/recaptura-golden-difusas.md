@@ -30,6 +30,18 @@ En este orden, cada una con su commit, su tabla y su invariante propio:
 **R1 está hecha** (2026-09-06): la WCS es el defecto en `lib_bajar_parche.js` y
 la tabla de deltas vive en `simulador_ocular/docs/validacion/recaptura_r1_wcs.md`.
 
+**R2 está hecha** (2026-09-07): el golden lee el parche con `ps1LeerTextura`
+sobre las texturas versionadas de `scripts/fixtures/dso/` y ya no toca la red ni
+la caché de FITS. La tabla de deltas vive en
+`simulador_ocular/docs/validacion/recaptura_r2_textura.md`; los deltas que el
+golden no puede dar salen de `scripts/harness_l1_equivalencia.js`, con el
+veredicto de L1.1 en `docs/validacion/dso_texturas_l1_equivalencia.md`.
+
+R2 se paró una vez en el paso 5 —L1.1 no cerraba por la condición de posición de
+los NaN de ausencia— y no se capturó hasta que el ADR 0024 corrigió esa
+condición con su medida delante («Segunda corrección de L1.1», 2026-09-07). Ese
+orden es el que vale: primero juzgar, después capturar.
+
 R1 no estaba prevista en el objetivo: apareció al medir la fase 0
 (`docs/validacion/dso_texturas_fase0.md`, discrepancia 6). Va **antes** que R2 y
 en su propio commit, porque si entran juntas no hay forma de saber si un delta lo
