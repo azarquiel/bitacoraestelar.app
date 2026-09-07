@@ -16,9 +16,12 @@
    El parche viene de lib_bajar_parche.js, con su caché en $PS1_HARNESS_DIR: si
    el objeto ya está bajado, esto no toca la red. Un objeto sin cobertura de PS1
    no se reintenta para siempre: deja su fila de manifiesto (`sin-cobertura`) y
-   la siguiente ejecución lo salta. Sin pausas ni espera creciente: la fase 0
-   midió 147 descargas seguidas sin un solo estrangulamiento y basta con un
-   reintento simple (docs/validacion/dso_texturas_fase0.md §D).
+   la siguiente ejecución lo salta. Lo mismo el que sí tiene parche pero no tiene
+   imagen donde está el objeto (`ausencia-excesiva`), que es un veredicto
+   POSTERIOR a la descarga porque sin los píxeles no se puede saber. Sin pausas
+   ni espera creciente: la fase 0 midió 147 descargas seguidas sin un solo
+   estrangulamiento y basta con un reintento simple
+   (docs/validacion/dso_texturas_fase0.md §D).
 
    Uso:  node scripts/gen_dso_texturas.js --solo "NGC 5194"
          node scripts/gen_dso_texturas.js --banco
@@ -61,6 +64,58 @@ var INFORME = path.join(RAIZ, 'simulador_ocular', 'docs', 'validacion', 'dso_tex
    darlo por bueno. No excluye a nadie —eso sería una ley nueva, y las leyes van
    al ADR— solo lo pone en la lista del informe. */
 var REVISION = 0.2;
+
+/* Si el objeto no tiene imagen DONDE ESTÁ EL OBJETO, no hay imagen (#229).
+
+   Es un criterio, no un umbral: se exige que NINGÚN píxel dentro de la
+   extensión del objeto esté medido, así que no hay ninguna raya que poner entre
+   el caso que cae y el que no. La extensión es la del propio objeto —el borde
+   REAL si su clase lo tiene (`ps1RadioBordeAs`) y si no r_e—, no el parche ni la
+   escena: la escena mete a los vecinos y el parche, cielo.
+
+   NGC 1982 (M43) es el caso que lo destapa: el núcleo de Orión es demasiado
+   brillante para el stack 3π y PS1 no tiene datos ahí; da 100 % y no se arregla
+   regenerando. NGC 253, el segundo peor del banco, tiene su interior medido y
+   sigue siendo `imagen`. */
+function radioObjetoAs(gal) {
+  var rb = PS1.ps1RadioBordeAs(gal);
+  return rb > 0 ? rb : gal.reArcsec;
+}
+
+/* La extensión, con la MISMA forma que un componente de escena: así la
+   pertenencia la decide `ps1FuenteEnEscena` —la elipse de producción, con `ba` y
+   `pa`— y aquí no se escribe ninguna geometría (ADR 0008). Lo único que cambia
+   respecto de `ps1EscenaEnParche` es el radio: el del objeto, no la isofota μ25,
+   que en una galaxia llega mucho más lejos que el objeto que #229 juzga. */
+function extensionDelObjeto(gal, afin) {
+  var paR = (gal.pa || 0) * Math.PI / 180;
+  return [{ cx: afin.cx, cy: afin.cy, cos: Math.cos(paR), sin: Math.sin(paR),
+            ba: (gal.ba > 0 && gal.ba <= 1) ? gal.ba : 1, r25As: radioObjetoAs(gal) }];
+}
+
+/* Fracción de píxeles ausentes dentro de esa extensión. La afín es la del parche
+   (`ps1AfinParche`), la misma que usa la escena: el centro y la rotación son los
+   del WCS, no el supuesto de norte arriba. */
+function ausenciaEnObjeto(datos, ancho, alto, afin, ext) {
+  var n = 0, aus = 0, x, y;
+  /* Sin radio no hay región que mirar, y `ps1FuenteEnEscena` con r = 0 diría que
+     sí al píxel del centro exacto: un objeto sin extensión en el catálogo no lo
+     juzga esta regla. */
+  if (!(ext && ext.length && ext[0].r25As > 0)) return { n: 0, ausentes: 0, frac: 0 };
+  for (y = 0; y < alto; y++) {
+    for (x = 0; x < ancho; x++) {
+      if (!PS1.ps1FuenteEnEscena(ext, afin, x, y)) continue;
+      n++;
+      var v = datos[y * ancho + x];
+      if (v !== v) aus++;
+    }
+  }
+  return { n: n, ausentes: aus, frac: n ? aus / n : 0 };
+}
+
+/* El veredicto. `n === 0` no es ausencia excesiva: es que el objeto no tiene
+   extensión medible en el catálogo, y eso no lo decide esta regla. */
+function ausenciaExcesiva(a) { return a.n > 0 && a.ausentes === a.n; }
 
 function arg(n, pordefecto) {
   var i = process.argv.indexOf(n);
@@ -114,11 +169,16 @@ function sidecars(dir) {
    ya se sabe que no está— y el manifiesto se sigue reconstruyendo del disco.
    Los cinco controles de exclusión NO pasan por aquí: su veredicto es el del
    banco y se calcula sin tocar la red ni el disco. */
-function escribirFila(dir, nombre, motivo, ra, dec) {
+function escribirFila(dir, nombre, motivo, ra, dec, auditoria) {
   fs.mkdirSync(dir, { recursive: true });
+  var s = { nombre: nombre, modelo: 'fila', motivo: motivo,
+            generador: GENERADOR, ra: ra, dec: dec };
+  /* `ausencia-excesiva` es el único motivo que se mide sobre píxeles: su
+     auditoría va al sidecar para que el veredicto se pueda revisar sin volver a
+     bajar el parche. Los demás motivos no la tienen y no la escriben. */
+  if (auditoria) s.auditoria = auditoria;
   fs.writeFileSync(path.join(dir, PS1.ps1IdTextura(nombre) + '.fila.json'),
-    JSON.stringify({ nombre: nombre, modelo: 'fila', motivo: motivo,
-                     generador: GENERADOR, ra: ra, dec: dec }, null, 1) + '\n');
+    JSON.stringify(s, null, 1) + '\n');
 }
 
 /* LA regla de reanudación, en un solo sitio: un objeto está resuelto si tiene su
@@ -150,13 +210,26 @@ function filasControl() {
 
 /* Los sidecars de los dos directorios, uno por objeto. Si un objeto tiene los
    dos —primero se quedó sin cobertura y luego apareció— manda la textura: el
-   veredicto de ausencia caducó en cuanto hubo píxeles. */
+   veredicto de ausencia caducó en cuanto hubo píxeles.
+
+   Con una excepción, y es la de #229: `ausencia-excesiva` se dicta MIRANDO esa
+   misma textura, así que ahí no hay nada que caducar. Si mandara la textura, un
+   parche viejo en disco resucitaría la imagen que el veredicto acaba de
+   rechazar. Prioridad: veredicto medido > textura > el resto de veredictos, y a
+   igualdad manda el directorio de salida, que es el recién escrito. Revisar el
+   veredicto es borrar su `.fila.json`, igual que con `sin-cobertura`: la
+   siguiente ejecución lo vuelve a pedir y lo vuelve a juzgar. */
+function rangoSidecar(s) {
+  if (s.modelo !== 'fila') return 1;
+  return s.motivo === 'ausencia-excesiva' ? 2 : 0;
+}
+
 function sidecarsUnicos(dir) {
   var porNombre = {};
   sidecars(FIXTURES).concat(dir === FIXTURES ? [] : sidecars(dir))
     .forEach(function (s) {
       var v = porNombre[s.nombre];
-      if (!v || v.modelo === 'fila' || s.modelo !== 'fila') porNombre[s.nombre] = s;
+      if (!v || rangoSidecar(s) >= rangoSidecar(v)) porNombre[s.nombre] = s;
     });
   return Object.keys(porNombre).map(function (n) { return porNombre[n]; });
 }
@@ -231,6 +304,27 @@ function generar(nombre, dir) {
         nAus++;
         if (dentro) nAusEsc++;
       }
+    }
+
+    /* El veredicto de ausencia, con la textura YA DESCARGADA: la ausencia no se
+       puede saber sin la imagen, así que esto no es un filtro previo como `sur`
+       o `no-cabe`. Si el objeto entero está en el agujero, no se escribe PNG:
+       lo que hay no es una imagen del objeto y el runtime está mejor con el
+       modelo Sérsic de la fila (ADR 0013). */
+    var rObj = radioObjetoAs(gal);
+    var enObjeto = ausenciaEnObjeto(p.datos, p.ancho, p.alto, fits.afin,
+                                    extensionDelObjeto(gal, fits.afin));
+    if (ausenciaExcesiva(enObjeto)) {
+      escribirFila(dir, gal.nombre, 'ausencia-excesiva', gal.ra, gal.dec, {
+        cielo: cielo, sigma: sigma,
+        fracAusencia: nAus / p.datos.length,
+        fracAusenciaEscena: nEsc ? nAusEsc / nEsc : 0,
+        fracAusenciaObjeto: enObjeto.frac,
+        radioObjetoAs: rObj, pxObjeto: enObjeto.n
+      });
+      console.log(gal.nombre + ' → fila (ausencia-excesiva): ' + enObjeto.ausentes +
+        ' de ' + enObjeto.n + ' px dentro de ' + rObj.toFixed(1) + '″ están ausentes');
+      return 'fila';
     }
 
     /* a = σ del cielo: con él el paso de cuantización cerca del cielo vale
@@ -430,7 +524,8 @@ function escribirInforme(dir) {
   L.push('');
   L.push('Objetos con `fracAusenciaEscena` > ' + (100 * REVISION).toFixed(0) +
          ' %: la ausencia cae dentro de la escena y hay que mirarlos a ojo antes');
-  L.push('de darlos por buenos (objetivo §5, fase 0).');
+  L.push('de darlos por buenos (objetivo §5, fase 0). Lo que ya tiene veredicto');
+  L.push('—`ausencia-excesiva`— no se lista aquí: está en la cuenta por motivo.');
   L.push('');
   if (!revision.length) L.push('Ninguno.');
   else {
@@ -459,6 +554,9 @@ function escribirInforme(dir) {
 /* Requerido como módulo (scripts/test_dso_texturas.js) no genera nada: expone
    lo que se puede probar sin red ni disco. */
 module.exports = { version: version, filaDe: filaDe, motivoAusencia: motivoAusencia,
+                   radioObjetoAs: radioObjetoAs, extensionDelObjeto: extensionDelObjeto,
+                   ausenciaEnObjeto: ausenciaEnObjeto,
+                   ausenciaExcesiva: ausenciaExcesiva,
                    escribirManifiesto: escribirManifiesto, escribirInforme: escribirInforme,
                    filasControl: filasControl, generar: generar,
                    GENERADOR: GENERADOR, FIXTURES: FIXTURES, MANIFIESTO: MANIFIESTO,

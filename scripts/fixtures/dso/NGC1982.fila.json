@@ -1,0 +1,17 @@
+{
+ "nombre": "NGC1982",
+ "modelo": "fila",
+ "motivo": "ausencia-excesiva",
+ "generador": "gen_dso_texturas 1",
+ "ra": 83.88075,
+ "dec": -5.26747,
+ "auditoria": {
+  "cielo": 12.252107620239258,
+  "sigma": 133.78528215751646,
+  "fracAusencia": 0.5784263610839844,
+  "fracAusenciaEscena": 0.7776495745254564,
+  "fracAusenciaObjeto": 1,
+  "radioObjetoAs": 155.88,
+  "pxObjeto": 91604
+ }
+}

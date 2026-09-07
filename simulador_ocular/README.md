@@ -350,7 +350,8 @@ primeros no emiten ninguna.
 | `sur` (δ < −30°) | PanSTARRS no cubre por debajo de −30° de declinación | nada: ahí no hay cartografiado |
 | `no-cabe` (`fracMin`) | la galaxia es mayor que el recorte que sirve PanSTARRS, y el stack pierde su disco exterior al restar el fondo | nada: son M31, IC 342 y M33, y con el parche saldría un bulbo suelto |
 | `sin-cobertura` | el cartografiado no cubre este campo | nada: hay hueco en PS1 |
-| `pisada`, `ausencia-excesiva` | la imagen está tapada por una estrella brillante; se muestra el modelo del catálogo | nada: el parche no serviría |
+| `pisada` | la imagen está tapada por una estrella brillante; se muestra el modelo del catálogo | nada: el parche no serviría |
+| `ausencia-excesiva` | el cartografiado no tiene imagen donde está este objeto; se muestra el modelo del catálogo | nada: el stack 3π no midió esa zona (M43, el núcleo de Orión) |
 | `sin-textura` | todavía no tiene imagen publicada | esperar a la siguiente generación |
 | textura ilegible (`sidecar` y los de `BitacoraPNG16`) | la imagen no se pudo leer | recargar; si es `sin-descompresor`, es el navegador |
 | el proxy no responde | el servicio de imágenes no responde | volver a intentarlo |
