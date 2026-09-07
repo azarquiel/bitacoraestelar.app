@@ -18,7 +18,8 @@ if ($uri === '/' || $uri === '/ocular') {
 
 /* Las texturas DSO viven en uploads/bitacora/dso/ (en el repo, simulador_ocular/dso/,
    generado por gen_dso_texturas.js e ignorado en git). El subdirectorio solo
-   puede ser ese: sin ../ ni nada que salga del árbol. */
+   puede ser ese; la clase de caracteres no admite «/», así que `dso/..` es lo
+   peor que llega y lo rechaza is_file(). */
 if (preg_match('#^/wp-content/uploads/bitacora/((?:dso/)?[A-Za-z0-9._-]+)$#', $uri, $m)) {
     $nombre = $m[1];
     $candidatos = array(

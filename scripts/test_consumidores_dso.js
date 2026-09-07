@@ -13,11 +13,13 @@
 var fs = require('fs');
 var path = require('path');
 var http = require('http');
+var net = require('net');
 var cp = require('child_process');
 
 var RAIZ = path.join(__dirname, '..');
-var fallos = 0;
+var fallos = 0, comprobaciones = 0;
 function ok(cond, et) {
+  comprobaciones++;
   if (cond) { console.log('  ok   ' + et); }
   else { fallos++; console.log('  FALLA ' + et); }
 }
@@ -54,9 +56,15 @@ function limpiar() {
   } catch (e) {}
 }
 
-var PUERTO = 18000 + (process.pid % 1000);
-var srv = cp.spawn('php', ['-S', '127.0.0.1:' + PUERTO, 'scripts/dev_servidor_ocular.php'],
-                   { cwd: RAIZ, stdio: 'ignore' });
+var PUERTO, srv;
+/* Puerto libre de verdad: el SO lo asigna y se suelta justo antes del php -S. */
+function puertoLibre() {
+  return new Promise(function (res, rej) {
+    var s = net.createServer();
+    s.on('error', rej);
+    s.listen(0, '127.0.0.1', function () { var p = s.address().port; s.close(function () { res(p); }); });
+  });
+}
 
 function pedir(ruta) {
   return new Promise(function (res) {
@@ -76,7 +84,17 @@ function esperar(n) {
   });
 }
 
-esperar(30).then(function (arriba) {
+puertoLibre().then(function (p) {
+  PUERTO = p;
+  srv = cp.spawn('php', ['-S', '127.0.0.1:' + PUERTO, 'scripts/dev_servidor_ocular.php'],
+                 { cwd: RAIZ, stdio: 'ignore' });
+  return new Promise(function (res, rej) {
+    srv.on('error', rej);
+    srv.on('spawn', res);
+  });
+}).then(function () {
+  return esperar(100);
+}).then(function (arriba) {
   console.log('scripts/dev_servidor_ocular.php:');
   ok(arriba, 'php -S arranca');
   var base = '/wp-content/uploads/bitacora/dso/' + NOMBRE;
@@ -89,9 +107,13 @@ esperar(30).then(function (arriba) {
      'el PNG llega entero y sin tocar');
   ok(json && json.estado === 200 && /^application\/json/.test(json.tipo), 'sirve dso/*.json como application/json');
   ok(!fuga || fuga.estado !== 200 || !/sim-aux2-input/.test(String(fuga.cuerpo)), 'no sale de dso/ con ../');
-}).finally(function () {
-  srv.kill();
-  limpiar();
+  ok(comprobaciones >= 11, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 11)');
   console.log(fallos ? '\n' + fallos + ' fallo(s).' : '\nTodo verde.');
-  process.exit(fallos ? 1 : 0);
+  process.exitCode = fallos ? 1 : 0;
+}).catch(function (e) {
+  console.error('EXCEPCIÓN: ' + (e && e.stack || e));
+  process.exitCode = 1;
+}).then(function () {
+  limpiar();
+  if (srv && srv.exitCode === null) srv.kill();
 });

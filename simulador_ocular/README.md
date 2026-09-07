@@ -73,7 +73,6 @@ un bloque HTML.
 | `resources/css/bitacora-ocular.css` | Estilos del módulo | Servidor, por FTP a `…/uploads/bitacora/` |
 | `dss-proxy.php` | Proxy de placas del DSS con caché en disco acotada, de dos fuentes (`fuente=eso` y `fuente=skyview`) | Servidor, junto al JS/CSS |
 | `ps1-proxy.php` | Proxy de `ps1cutouts` (STScI) con caché en disco: entrega el parche de una galaxia ya cosido de sus skycells (capa de galaxias desde imagen real) | Servidor, junto al JS/CSS |
-| `generar_niveles.py`, `ps1_service.py` | Pipeline/servicio **experimental** de placas fotométricas (ver más abajo) | Herramientas offline, no requeridas |
 
 Depende además de dos piezas **compartidas** con el resto de la web:
 
@@ -1134,17 +1133,6 @@ desplegado con el permiso público.
 - **DSS** (Digitized Sky Survey) desde el [archivo de ESO](https://archive.eso.org/),
   servido por `dss-proxy.php`.
 - Todo el render es **HTML5 Canvas** puro; sin frameworks ni librerías externas.
-
----
-
-## Herramientas auxiliares (experimental)
-
-`generar_niveles.py` y `ps1_service.py` son un **pipeline offline** que genera placas
-**fotométricas calibradas** a partir de FITS de Pan-STARRS DR2 (mosaica skycells,
-reconstruye núcleos saturados con la PSF y el flujo de Gaia, y exporta una pirámide de
-PNG de 16 bits lineales + un JSON de calibración). Es una vía **alternativa y más
-avanzada** de generar el fondo, **no requerida** por el despliegue actual (que usa
-hips2fits, el DSS y Gaia directamente). Se documentan aquí para no perderlos de vista.
 
 ---
 
