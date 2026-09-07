@@ -1076,9 +1076,12 @@ la entrada de los tests; el resto queda en `simulador_ocular/dso/`, ignorado.
 Tests: `node scripts/test_fuente_parche.js`, `node scripts/test_dso_texturas.js`
 y `node scripts/test_png16.js`.
 
-**Todavía no está en la página**: las dos páginas no cargan aún el manifiesto ni
-el decodificador, así que en el navegador todo sigue yendo por el proxy. Eso lo
-enciende el ticket T7 (#204), y el despliegue, el T12 (#209).
+Las dos páginas (`ocular-wordpress.html` y `registro/registrar-observacion-wordpress.html`)
+cargan `bitacora-png16.js` y `dso-texturas-datos.js` **antes** de `bitacora-ps1.js`:
+el orden importa (ADR 0020) y lo fija `node scripts/test_consumidores_dso.js`, que
+también arranca `scripts/dev_servidor_ocular.php` y comprueba que sirve
+`dso/*.png` y `dso/*.json` con su tipo. En producción, hasta que el T12 (#209)
+suba las texturas por FTP, el manifiesto declara filas y el proxy sigue en pie.
 
 Objetivo y listones: `docs/especificaciones/catalogo_dso_texturas_objetivo.md`
 y ADR 0024.
@@ -1089,6 +1092,9 @@ y ADR 0024.
 
 1. **JS y CSS** → por FTP a `/wp-content/uploads/bitacora/`.
    Al actualizar un archivo, **incrementa su `?v=N`** en el HTML para saltar la caché.
+   Un `.js` nuevo es un paso manual nuevo (ADR 0020): desde T7 las dos páginas piden
+   `bitacora-png16.js` y `dso-texturas-datos.js`. Sin el manifiesto, todo va al
+   proxy como antes; sin el códec, la textura falla y se pinta la fila.
 2. **`dss-proxy.php`** y **`ps1-proxy.php`** → a esa misma carpeta, junto a
    `bitacora-cache-lru.php` (crean `cache-dss/` y `cache-ps1/` solos).
 3. **`ocular-wordpress.html`** → pégalo en un bloque "HTML personalizado" de la página.
