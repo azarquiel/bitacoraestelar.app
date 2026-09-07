@@ -14,7 +14,7 @@ Fuentes por objeto (todas citadas en el ADR):
 Conversión μ ↔ cd/m²: μ_V = 12,6 − 2,5·log10(L) (Crumey 2014, MNRAS 442, 2600).
 
 Uso: python3 scripts/entradas_tinte_np.py            # anclas y predicciones (sin red)
-     python3 scripts/entradas_tinte_np.py --alcance  # cruce del catálogo con V/84 (VizieR)
+     python3 scripts/entradas_tinte_np.py --alcance  # cruce del catálogo con V/84 (fila, sin red)
 """
 import math
 
@@ -30,6 +30,18 @@ D65 = (0.3127, 0.3290)
 SR_POR_ARCSEC2 = 2.3504e-11
 
 # nombre: (diámetro ″, log F(Hβ), I4686, I5007, I6563)   — V/84 LineRef b, OpenNGC
+#
+# AVISO POSTERIOR AL PRERREGISTRO (#220, 2026-09-07), sin tocar ni un número:
+# en NGC 6826, NGC 7662, NGC 3242 y NGC 6572, V/84 marca esa observación con
+# n_I5007 = '*', o sea que el valor de la columna I5007 —242, 425, 698 y 399—
+# es en realidad el de [OIII] 4959, porque el 5007 salió saturado; y ninguno de
+# los cuatro tiene otra observación con LineRef = b. Aquí eso entra dos veces:
+# como 5007 y, dividido por 2,98, como un 4959 que ya estaba contado. Sus
+# luminancias y purezas —y las predicciones que salen de ellas— arrastran ese
+# sesgo. Los valores se dejan COMO SE PRERREGISTRARON: corregirlos ahora sería
+# retocar las entradas después de ver la salida, que es justo lo que el ADR
+# 0025 prohíbe. La corrección, si se hace, se decide y se anota en #84.
+# La marca por objeto vive en la columna i5007_es_4959 de nebulosas.csv.
 OBJETOS = {
     'NGC 6905': (40.2, -10.92, 91, 958, 319),
     'NGC 6826': (25.2, -9.98, 4, 242, 344),
@@ -143,25 +155,19 @@ def main():
     print('\nOK: las cinco anclas caen del lado que dice la bitácora con E_c = %.3f td, θ_c = %.1f°' % (E_C, THETA_C))
 
 
-# ---- alcance: cruce del catálogo PN con V/84 (red) ----
+# ---- alcance: cruce del catálogo PN con V/84 (sin red desde el ticket #220) ----
+# Las intensidades ya viven en la fila de nebulosas.csv (gen_nebulosas.py las
+# baja de V/84 y cachea el cruce en mapa/datos/pn_lineas_v84.csv), así que aquí
+# se leen de ahí en vez de volver a consultar VizieR. Los recuentos son los
+# mismos: mismas tablas, mismo filtro LineRef = b y misma regla de «primera
+# observación con la línea medida». El único matiz es I4686 ausente, que aquí
+# entra como 0 —igual que antes— porque el color no tiene HeII que sumar,
+# mientras que la fila lo guarda como null: no medido no es medido a cero.
 MU_ALCANCE = 21.2   # μ_fot máxima: por debajo ni una pupila de 7 mm alcanza E_c
 
 
 def alcance():
-    import csv, re, urllib.parse, urllib.request
-    asu = 'https://vizier.cds.unistra.fr/viz-bin/asu-tsv'
-
-    def tabla(nombre):
-        p = {'-source': nombre, '-out.max': 'unlimited', '-out.form': 'TSV', '-out': '**'}
-        txt = urllib.request.urlopen(asu + '?' + urllib.parse.urlencode(p), timeout=180).read().decode('utf-8', 'replace')
-        lineas = [l for l in txt.splitlines() if l and not l.startswith('#')]
-        cab = lineas[0].split('\t')
-        filas = [dict(zip(cab, l.split('\t'))) for l in lineas[2:]]
-        return [f for f in filas if not set(list(f.values())[0]) <= set('-')]
-
-    def norm(n):   # 'NGC   40' -> 'NGC0040'
-        m = re.match(r'^(NGC|IC)\s*(\d+)\s*$', n.strip())
-        return '%s%04d' % (m.group(1), int(m.group(2))) if m else None
+    import csv
 
     def num(s):
         try:
@@ -169,15 +175,11 @@ def alcance():
         except ValueError:
             return None
 
-    png_de = {norm(f['Name']): f['PNG'].strip() for f in tabla('V/84/main') if norm(f['Name'])}
-    intens = {}
-    for f in tabla('V/84/intens'):
-        if f['LineRef'].strip() == 'b':
-            intens.setdefault(f['PNG'].strip(), []).append(f)
-    hbeta = {f['PNG'].strip(): num(f['log(Fbeta)']) for f in tabla('V/84/hbeta')}
+    png_de = {f['nombre']: f['png'] for f in
+              csv.DictReader(open('mapa/datos/pn_lineas_v84.csv', encoding='utf-8'))}
     ongc = {f['Name']: f for f in csv.DictReader(open('mapa/datos/ongc_nebulosas.csv', encoding='utf-8'), delimiter=';')}
 
-    total = con_png = con_5007 = con_todo = en_alcance = 0
+    total = con_png = con_5007 = con_todo = en_alcance = saturadas = 0
     sin_dato = []
     for f in csv.DictReader(open('mapa/datos/nebulosas.csv', encoding='utf-8')):
         if f['clase'] != 'PN' or not f['nombre'].startswith(('NGC', 'IC')):
@@ -187,11 +189,10 @@ def alcance():
         if not png:
             sin_dato.append(f['nombre']); continue
         con_png += 1
-        filas = intens.get(png, [])
-        i5007 = next((num(x['I5007']) for x in filas if num(x['I5007'])), None)
-        i6563 = next((num(x['I6563']) for x in filas if num(x['I6563'])), None)
-        i4686 = next((num(x['I4686']) for x in filas if num(x['I4686'])), 0.0)
-        lf = hbeta.get(png)
+        i5007 = num(f['i5007'])
+        i6563 = num(f['i6563'])
+        i4686 = num(f['i4686']) or 0.0     # ausente = sin HeII que sumar al color
+        lf = num(f['log_fhb'])
         if i5007:
             con_5007 += 1
         if not (i5007 and i6563 and lf is not None):
@@ -200,9 +201,14 @@ def alcance():
         L = luminancia_y_pureza(num(ongc[f['nombre']]['MajAx']) * 60.0, lf, i4686, i5007, i6563)[0]
         if 12.6 - 2.5 * math.log10(L) <= MU_ALCANCE:
             en_alcance += 1
+            # Su μ_fot está calculada con un I5007 que es el 4959 (#220): sale
+            # más apagada de lo que es. No se corrige aquí; se cuenta, para que
+            # el que lea el alcance sepa cuánto del conjunto lleva ese sesgo.
+            saturadas += 1 if f['i5007_es_4959'].strip() else 0
     print('PN NGC/IC en nebulosas.csv: %d | con PNG en V/84: %d | con I5007 (b): %d | con I5007+I6563+logF(Hβ): %d'
           % (total, con_png, con_5007, con_todo))
-    print('en alcance (μ_fot ≤ %.1f): %d' % (MU_ALCANCE, en_alcance))
+    print('en alcance (μ_fot ≤ %.1f): %d  (de ellas %d con el 5007 saturado: su '
+          'μ_fot es del 4959)' % (MU_ALCANCE, en_alcance, saturadas))
     print('sin dato completo (%d): %s' % (len(sin_dato), ' '.join(sin_dato)))
 
 

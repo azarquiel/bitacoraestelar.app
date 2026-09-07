@@ -95,4 +95,17 @@ números, y solo después se decide si merece la pena escribir la ley.
 - La bitácora manda. Una observación futura que contradiga una predicción P1–P7
   falsa F1 y dispara F2; si F2 también falla, la capa se cierra.
 
+**Ampliación (2026-09-07, ticket #220):** la fila `PN` lleva ya esas cuatro
+columnas, más una quinta que este ADR no previó: `i5007_es_4959`. V/84 marca con
+`n_I5007 = '*'` las observaciones cuya medida es de [O III] 4959 porque el 5007
+salió saturado, y así están **14 objetos del catálogo**, entre ellos cuatro de
+los ocho de la tabla §2 —NGC 6826, NGC 7662, NGC 3242 y NGC 6572— sin ninguna
+otra observación con `LineRef = b` que traiga el 5007. La fila publica el valor
+MEDIDO y lo marca; reconstruir el 5007 multiplicando por 2,98 mueve la
+colorimetría de esas cuatro y con ella parte de las predicciones §4, así que esa
+decisión no la toma el ticket de datos: se toma al implementar la ley, con su
+propia nota. El detalle de lo que queda sesgado está en
+`0025-tinte-planetarias/README.md`; los números prerregistrados **no se han
+tocado**.
+
 Documentos de apoyo: `0025-tinte-planetarias/` (README con el orden).
