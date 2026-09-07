@@ -82,16 +82,29 @@ function radioObjetoAs(gal) {
   return rb > 0 ? rb : gal.reArcsec;
 }
 
-/* Fracción de píxeles ausentes dentro de esa extensión. La geometría sale de la
-   afín del parche (`ps1AfinParche`), la misma que usa la escena: el centro y la
-   rotación son los del WCS, no el supuesto de norte arriba. */
-function ausenciaEnObjeto(datos, ancho, alto, afin, rAs) {
+/* La extensión, con la MISMA forma que un componente de escena: así la
+   pertenencia la decide `ps1FuenteEnEscena` —la elipse de producción, con `ba` y
+   `pa`— y aquí no se escribe ninguna geometría (ADR 0008). Lo único que cambia
+   respecto de `ps1EscenaEnParche` es el radio: el del objeto, no la isofota μ25,
+   que en una galaxia llega mucho más lejos que el objeto que #229 juzga. */
+function extensionDelObjeto(gal, afin) {
+  var paR = (gal.pa || 0) * Math.PI / 180;
+  return [{ cx: afin.cx, cy: afin.cy, cos: Math.cos(paR), sin: Math.sin(paR),
+            ba: (gal.ba > 0 && gal.ba <= 1) ? gal.ba : 1, r25As: radioObjetoAs(gal) }];
+}
+
+/* Fracción de píxeles ausentes dentro de esa extensión. La afín es la del parche
+   (`ps1AfinParche`), la misma que usa la escena: el centro y la rotación son los
+   del WCS, no el supuesto de norte arriba. */
+function ausenciaEnObjeto(datos, ancho, alto, afin, ext) {
   var n = 0, aus = 0, x, y;
+  /* Sin radio no hay región que mirar, y `ps1FuenteEnEscena` con r = 0 diría que
+     sí al píxel del centro exacto: un objeto sin extensión en el catálogo no lo
+     juzga esta regla. */
+  if (!(ext && ext.length && ext[0].r25As > 0)) return { n: 0, ausentes: 0, frac: 0 };
   for (y = 0; y < alto; y++) {
     for (x = 0; x < ancho; x++) {
-      var dx = x - afin.cx, dy = y - afin.cy;
-      var este = afin.ex * dx + afin.ey * dy, norte = afin.nx * dx + afin.ny * dy;
-      if (este * este + norte * norte > rAs * rAs) continue;
+      if (!PS1.ps1FuenteEnEscena(ext, afin, x, y)) continue;
       n++;
       var v = datos[y * ancho + x];
       if (v !== v) aus++;
@@ -203,7 +216,9 @@ function filasControl() {
    misma textura, así que ahí no hay nada que caducar. Si mandara la textura, un
    parche viejo en disco resucitaría la imagen que el veredicto acaba de
    rechazar. Prioridad: veredicto medido > textura > el resto de veredictos, y a
-   igualdad manda el directorio de salida, que es el recién escrito. */
+   igualdad manda el directorio de salida, que es el recién escrito. Revisar el
+   veredicto es borrar su `.fila.json`, igual que con `sin-cobertura`: la
+   siguiente ejecución lo vuelve a pedir y lo vuelve a juzgar. */
 function rangoSidecar(s) {
   if (s.modelo !== 'fila') return 1;
   return s.motivo === 'ausencia-excesiva' ? 2 : 0;
@@ -297,7 +312,8 @@ function generar(nombre, dir) {
        lo que hay no es una imagen del objeto y el runtime está mejor con el
        modelo Sérsic de la fila (ADR 0013). */
     var rObj = radioObjetoAs(gal);
-    var enObjeto = ausenciaEnObjeto(p.datos, p.ancho, p.alto, fits.afin, rObj);
+    var enObjeto = ausenciaEnObjeto(p.datos, p.ancho, p.alto, fits.afin,
+                                    extensionDelObjeto(gal, fits.afin));
     if (ausenciaExcesiva(enObjeto)) {
       escribirFila(dir, gal.nombre, 'ausencia-excesiva', gal.ra, gal.dec, {
         cielo: cielo, sigma: sigma,
@@ -538,7 +554,8 @@ function escribirInforme(dir) {
 /* Requerido como módulo (scripts/test_dso_texturas.js) no genera nada: expone
    lo que se puede probar sin red ni disco. */
 module.exports = { version: version, filaDe: filaDe, motivoAusencia: motivoAusencia,
-                   radioObjetoAs: radioObjetoAs, ausenciaEnObjeto: ausenciaEnObjeto,
+                   radioObjetoAs: radioObjetoAs, extensionDelObjeto: extensionDelObjeto,
+                   ausenciaEnObjeto: ausenciaEnObjeto,
                    ausenciaExcesiva: ausenciaExcesiva,
                    escribirManifiesto: escribirManifiesto, escribirInforme: escribirInforme,
                    filasControl: filasControl, generar: generar,
