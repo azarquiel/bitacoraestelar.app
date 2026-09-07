@@ -1085,7 +1085,11 @@ node scripts/gen_dso_texturas.js --solo "NGC 5194" --dir scripts/fixtures/dso
 Las texturas del banco golden van en `scripts/fixtures/dso/` (en git) porque son
 la entrada de los tests; el resto queda en `simulador_ocular/dso/`, ignorado.
 Tests: `node scripts/test_fuente_parche.js`, `node scripts/test_dso_texturas.js`
-y `node scripts/test_png16.js`.
+y `node scripts/test_png16.js`. El listón L1.2 del ADR 0024 —con el manifiesto
+completo y `proxyRespaldo` apagado, el campo de M51 y el de NGC 7008 no emiten
+ninguna petición fuera de `dso/`— lo mide `node scripts/test_sin_red_dso.js`,
+que sirve las texturas de `scripts/fixtures/dso/` y, si el banco está generado,
+también las de `simulador_ocular/dso/`.
 
 Las dos páginas (`ocular-wordpress.html` y `registro/registrar-observacion-wordpress.html`)
 cargan `bitacora-png16.js` y `dso-texturas-datos.js` **antes** de `bitacora-ps1.js`:
