@@ -30,7 +30,9 @@ Decisiones que cuestan precisión a cambio de honestidad:
 
 Fotometría de líneas de las planetarias (ADR 0025): las filas `PN` llevan cuatro
 columnas más al final —log F(Hβ) e intensidades de [OIII] 5007, Hα 6563 y
-HeII 4686 relativas a Hβ = 100— tomadas de Acker et al. 1992 (VizieR V/84).
+HeII 4686 relativas a Hβ = 100— tomadas de Acker et al. 1992 (VizieR V/84), más
+una quinta que marca los 14 objetos cuyo I5007 es en realidad el 4959 porque el
+5007 estaba saturado (ver el bloque de COLS_LINEAS).
 Dónde van, que era la decisión abierta del ticket #220: AL FINAL DE LA MISMA
 FILA, con `null` en las clases que no las tienen. Las otras dos opciones eran un
 objeto aparte indexado por nombre y un fichero hermano; las dos obligan a quien
@@ -40,7 +42,7 @@ de esquema con las galaxias sigue valiendo para los TRECE primeros campos, que
 son los que lee `capaGalaxias`: lo que va detrás lo ignora el render.
 
 La `mag_v` de la fila NO sirve para esto: viene recortada al suelo
-MU_MIN_COMPACTA, que le quita 1,6 mag a NGC 6826. Las cuatro columnas son
+MU_MIN_COMPACTA, que le quita 1,6 mag a NGC 6826. Las columnas nuevas son
 fotometría publicada sin recortar y sin corregir de enrojecimiento —cuentan lo
 que llega al ojo, no lo intrínseco.
 
@@ -125,10 +127,20 @@ BV_NEBULAR = 0.30
 #   · i5007, i6563, i4686 = V/84/intens con LineRef = 'b' (Hβ de referencia),
 #     relativas a Hβ = 100 y SIN corregir de enrojecimiento.
 # [OIII] 4959 no es columna: sale de i5007 / 2,98 y lo calcula quien use el dato.
+#
+# Y una quinta columna que el ticket no pedía, i5007_es_4959, porque sin ella la
+# cuarta miente en 14 objetos del catálogo: V/84 marca con n_I5007 = '*' las
+# observaciones en las que «the measurement refers to 495.9nm because 500.7nm
+# line is saturated», y ninguno de esos 14 —NGC 6826, NGC 7662, NGC 3242 y
+# NGC 6572 entre ellos, o sea cuatro de las ocho anclas del ADR 0025— tiene otra
+# observación con LineRef = b que traiga el 5007 de verdad. Aquí se publica el
+# valor MEDIDO y se marca lo que es; multiplicarlo por 2,98 para reconstruir el
+# 5007 mueve la colorimetría de esas anclas, y esa es una decisión de la ley del
+# tinte (#84), no de la fila. La marca vale 1 o null, como las demás.
 # El cruce se cachea en SRC_V84 porque la descarga de V/84/intens tarda y este
 # generador se ejecuta a menudo; --refrescar-v84 lo vuelve a bajar.
 VIZIER_ASU = 'https://vizier.cds.unistra.fr/viz-bin/asu-tsv'
-COLS_LINEAS = ('log_fhb', 'i5007', 'i6563', 'i4686')
+COLS_LINEAS = ('log_fhb', 'i5007', 'i6563', 'i4686', 'i5007_es_4959')
 CLASES_LINEAS = ('PN',)
 
 
@@ -190,7 +202,12 @@ def nombre_catalogo(nombre_v84):
 def vizier(tabla):
     """Tabla completa de VizieR en TSV -> lista de dicts por nombre de columna.
     Las filas cortas se rellenan: en V/84/intens faltan las columnas finales
-    cuando la observación no midió esas líneas, y un zip a secas las desplaza."""
+    cuando la observación no midió esas líneas, y un zip a secas las desplaza.
+
+    Sí, gen_abell_pn.py tiene otra casi igual, y a propósito: aquella DESCARTA
+    la fila corta en vez de rellenarla, y de sus medianas sale una magnitud que
+    ya está publicada en mapa/datos/abell_pn.csv. Unificarlas movería ese
+    catálogo, que no es lo que se está tocando aquí."""
     url = VIZIER_ASU + '?' + urllib.parse.urlencode(
         {'-source': tabla, '-out.max': 'unlimited', '-out.form': 'TSV', '-out': '**'})
     with urllib.request.urlopen(url, timeout=300) as fh:
@@ -230,8 +247,17 @@ def descarga_v84():
             # Es la regla de entradas_tinte_np.py, no la mediana de
             # gen_abell_pn.py: aquí la fila publica el dato tal cual, y allí se
             # promedia porque de ahí sale una magnitud.
-            fila[col] = next((numero(x.get('I' + col[1:])) for x in obs
-                              if numero(x.get('I' + col[1:]))), None)
+            # El filtro es por PRESENCIA, no por verdad: si algún día V/84
+            # publicase una intensidad de 0,0, medido a cero no es no medido.
+            # (Hoy no hay ninguna en las 944 observaciones con LineRef = b, así
+            # que esto no mueve ningún número; es la simétrica de null ≠ 0.)
+            usada = next((x for x in obs if numero(x.get('I' + col[1:])) is not None), None)
+            fila[col] = numero(usada.get('I' + col[1:])) if usada else None
+            if col == 'i5007':
+                # La marca acompaña a la observación que se usa, no al objeto:
+                # otra fila del mismo PNG puede no estar saturada.
+                fila['i5007_es_4959'] = (
+                    1 if usada and usada.get('n_I5007', '').strip() == '*' else None)
         filas.append(fila)
 
     with open(SRC_V84, 'w', encoding='utf-8', newline='') as fh:
@@ -360,6 +386,7 @@ def main(refrescar_v84=False):
             'i5007': med.get('i5007'),
             'i6563': med.get('i6563'),
             'i4686': med.get('i4686'),
+            'i5007_es_4959': med.get('i5007_es_4959'),
         })
 
     filas.sort(key=lambda f: f['ra_grados'])
@@ -374,9 +401,9 @@ def main(refrescar_v84=False):
         fh.write('   Regenerar con: python3 scripts/gen_nebulosas.py\n')
         fh.write('   Fuente: %s\n' % FUENTE)
         fh.write('   Campos: [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n, B/T, polvo,\n')
-        fh.write('            0, clase, log F(Hβ), I5007, I6563, I4686]\n')
+        fh.write('            0, clase, log F(Hβ), I5007, I6563, I4686, I5007-es-4959]\n')
         fh.write('   Los TRECE primeros son el mismo esquema que las galaxias: las pinta la\n')
-        fh.write('   misma capa, y las cuatro últimas las ignora. n = 1 es un\n')
+        fh.write('   misma capa, y las de fotometría de líneas las ignora. n = 1 es un\n')
         fh.write('   exponencial; sin bulbo y sin banda de polvo. b/a = 1 significa que el\n')
         fh.write('   catálogo no trae ángulo de posición, no que el objeto sea redondo.\n')
         fh.write('   El 0 ocupa la columna del n de S4G de las galaxias (aquí no hay medida)\n')
@@ -387,7 +414,7 @@ def main(refrescar_v84=False):
         fh.write('   llevan mag DERIVADA de mu asumida = 20,0, que no es una medición\n')
         fh.write('   física (ADR 0024); y de las que sí la traían, 12 de 13 acaban en ese\n')
         fh.write('   mismo valor por el suelo MU_MIN. */\n')
-        fh.write('/* Las cuatro últimas columnas son fotometría de líneas de Acker+ 1992\n')
+        fh.write('/* Las últimas columnas son fotometría de líneas de Acker+ 1992\n')
         fh.write('   (VizieR V/84): log F(Hβ) de V/84/hbeta (erg cm⁻² s⁻¹) e intensidades de\n')
         fh.write('   [OIII] 5007, Hα 6563 y HeII 4686 de V/84/intens con LineRef = b,\n')
         fh.write('   relativas a Hβ = 100 y SIN corregir de enrojecimiento: cuentan lo que\n')
@@ -395,16 +422,22 @@ def main(refrescar_v84=False):
         fh.write('   Solo las llevan las PN; en el resto de clases van a null, y null también\n')
         fh.write('   en la PN sin dato publicado (M57 no tiene fila en intens; NGC 40 tiene\n')
         fh.write('   I5007 en blanco). null NO es cero: no medido no es medido a cero.\n')
+        fh.write('   La ÚLTIMA columna avisa de que ese I5007 es en realidad el 4959: V/84\n')
+        fh.write('   marca esas observaciones porque el 5007 salió saturado, y esos 14\n')
+        fh.write('   objetos (NGC 6826, NGC 7662, NGC 3242, NGC 6572...) no tienen ninguna\n')
+        fh.write('   otra observación con LineRef = b. El valor se publica MEDIDO; quien\n')
+        fh.write('   quiera el 5007 lo reconstruye multiplicando por 2,98, y eso mueve la\n')
+        fh.write('   colorimetría de esas anclas: es decisión de la ley del tinte.\n')
         fh.write('   La mag V de la fila no vale para esto: va recortada al suelo del\n')
         fh.write('   brillo superficial (MU_MIN_COMPACTA). */\n')
         fh.write('window.BITACORA_NEBULOSAS = [\n')
         js = lambda v: 'null' if v is None else ('%g' % v)
         for f in filas:
-            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s,0,"%s",%s,%s,%s,%s],\n' % (
+            fh.write('  ["%s","%s",%s,%s,%s,%s,%s,%s,%s,%s,%s,0,"%s",%s],\n' % (
                 f['nombre'], f['alt'], f['ra_grados'], f['dec_grados'],
                 f['re_arcsec'], f['razon_ejes'], f['pa_grados'], f['mag_v'],
                 f['sersic_n'], f['frac_bulbo'], f['polvo'], f['clase'],
-                js(f['log_fhb']), js(f['i5007']), js(f['i6563']), js(f['i4686'])))
+                ','.join(js(f[c]) for c in COLS_LINEAS)))
         fh.write('];\n')
 
     print('nebulosas: %d  (redondas por falta de PA %d; recortadas por brillo %d; '
@@ -413,6 +446,12 @@ def main(refrescar_v84=False):
     pn = [f for f in filas if f['clase'] in CLASES_LINEAS]
     print('líneas V/84 en las %d PN: ' % len(pn) + ', '.join(
         '%s %d' % (c, sum(1 for f in pn if f[c] is not None)) for c in COLS_LINEAS))
+    # Sin este recuento, una caché rancia —p. ej. tras meter Abell nuevos con
+    # gen_abell_pn.py— sale idéntica a «esa PN no está en V/84»: todo a null y
+    # ni un aviso. Si el número crece sin motivo, toca --refrescar-v84.
+    fuera = [f['nombre'] for f in pn if f['nombre'] not in lineas]
+    print('  PN sin fila en la caché de V/84: %d%s'
+          % (len(fuera), (' (' + ', '.join(fuera[:6]) + ')') if fuera else ''))
     print('->', OUT_CSV)
     print('->', OUT_JS)
 

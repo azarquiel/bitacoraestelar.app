@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Self-check de las cuatro columnas de líneas de V/84 en la fila PN (#220).
+"""Self-check de las columnas de líneas de V/84 en la fila PN (#220).
 
-Vigila que la fotometría de líneas —log F(Hβ), I5007, I6563, I4686— llegue
-íntegra desde la fuente hasta las dos salidas de gen_nebulosas.py, que solo la
-lleven las PN y que el objeto sin dato lleve null y NO cero.
+Vigila que la fotometría de líneas —log F(Hβ), I5007, I6563, I4686, más la marca
+i5007_es_4959— llegue íntegra desde la fuente hasta las dos salidas de
+gen_nebulosas.py, que solo la lleven las PN y que el objeto sin dato lleve null
+y NO cero.
 
 La cardinalidad no está escrita a mano (ADR 0005): cada recuento se calcula
 cruzando mapa/datos/pn_lineas_v84.csv —el volcado de V/84— con los nombres del
@@ -20,8 +21,18 @@ Mutaciones documentadas que lo ponen rojo (ejecutadas el 2026-09-07):
        'i4686': med.get('i4686') or 0,
      -> rojo en el bloque «cuenta-i4686»: la fila deja de coincidir con la
      fuente en las 50 PN sin HeII medido (Abell 12, Abell 21, ...).
+  3. En gen_nebulosas.py, dejar de leer la marca de saturación de V/84:
+       fila['i5007_es_4959'] = None
+     -> rojo en «cuenta-i5007_es_4959»: 0 de 140, o sea el guardián de no
+     vacuidad, que es justo lo que el ADR 0005 pide que no pase en silencio.
 
-Lo que este test NO demuestra (ADR 0005): quitar el filtro de clase en el
+Lo que este test NO demuestra (ADR 0005), primero: la fuente que compara es la
+caché del cruce, el mismo fichero que leyó el generador, así que mide TRANSPORTE
+—que el dato llega entero y sin inventarse— y no frescura: una caché rancia sale
+verde por construcción. Quien vigila eso es el recuento «PN sin fila en la caché
+de V/84» que imprime gen_nebulosas.py, y la cura es --refrescar-v84.
+
+Y segundo: quitar el filtro de clase en el
 generador —`med = lineas.get(nombre, {})` sin `if c['Type'] in CLASES_LINEAS`—
 lo deja verde, porque hoy ningún nombre no-PN del catálogo existe en V/84. La
 comprobación «solo-PN» es por eso un guardián de regresión, no evidencia
@@ -39,7 +50,7 @@ FUENTE = os.path.join(RAIZ, 'mapa', 'datos', 'pn_lineas_v84.csv')
 CSV_GEN = os.path.join(RAIZ, 'mapa', 'datos', 'nebulosas.csv')
 JS_GEN = os.path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js')
 
-COLS = ('log_fhb', 'i5007', 'i6563', 'i4686')
+COLS = ('log_fhb', 'i5007', 'i6563', 'i4686', 'i5007_es_4959')
 I_CLASE = 12                       # la clase cierra el bloque que lee capaGalaxias
 comprobaciones = 0
 
@@ -115,6 +126,18 @@ ok('M57 tiene Hβ pero no fila en intens: I5007 e I6563 a null')
 ngc40 = dict(zip(COLS, por_nombre['NGC0040'][I_CLASE + 1:]))
 assert ngc40['i5007'] is None and ngc40['i6563'] == 287.0, ngc40
 ok('NGC 40 trae Hα 287 con el I5007 en blanco')
+
+# 4.bis) La marca de saturación va donde tiene que ir: NGC 6826 mide el 4959,
+#    NGC 6905 —el ancla de color del ADR 0025— mide el 5007 de verdad. Sin este
+#    aviso, quien use la columna creería que 242 y 958 son comparables.
+marcadas = [f['nombre'] for f in pn if f['i5007_es_4959'].strip()]
+assert marcadas, 'ninguna marcada: la columna n_I5007 de V/84 no se está leyendo'
+for nombre in marcadas:
+    fila = dict(zip(COLS, por_nombre[nombre][I_CLASE + 1:]))
+    assert fila['i5007'] is not None and fila['i5007_es_4959'] == 1, (nombre, fila)
+assert 'NGC6826' in marcadas and 'NGC6905' not in marcadas, marcadas
+ok('%d PN con el 5007 saturado, marcadas y con valor; NGC 6905 no está entre ellas'
+   % len(marcadas))
 
 # 5) El bloque que lee capaGalaxias no se ha movido: las cuatro columnas van
 #    DETRÁS de la clase (decisión del #220), no en medio.
