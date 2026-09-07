@@ -8,10 +8,16 @@
    de los bytes crudos de `parche.datos` (post quitar-estrellas + anclaje) y
    del buffer `difuso` final: cualquier bit distinto = FALLO.
 
-   Entradas clavadas: CSV de Gaia versionados (scripts/fixtures/gaia/, ver
-   gen_fixtures_gaia.js) y parches PS1 de la caché de lib_bajar_parche
-   ($PS1_HARNESS_DIR o tmpdir; primera corrida descarga de STScI — los stacks
-   PS1 son inmutables).
+   Entradas clavadas y COMPLETAS desde la recaptura R2 (2026-09-07): CSV de Gaia
+   versionados (scripts/fixtures/gaia/, ver gen_fixtures_gaia.js) y la TEXTURA
+   del objeto en scripts/fixtures/dso/, que también va en git (decisión 9.1 del
+   ADR 0024). Este test ya no toca la red ni la caché de FITS: antes el parche
+   lo cosía lib_bajar_parche quedándose con el primer píxel válido en el orden
+   en que STScI devolvía las skycells, y ese orden no lo garantizaba nada.
+
+   El parche se lee con ps1LeerTextura, la MISMA función que usa el navegador,
+   sobre un fetch de mentira que sirve los ficheros de disco: lo que el golden
+   hashea es el camino de producción, no una réplica suya.
 
    Nota: los hashes dependen de libm de la máquina (Math.exp/pow). El golden
    garantiza no-regresión en una misma máquina y versión de Node; no es un
@@ -30,11 +36,48 @@ var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
+require(path.join(RAIZ, 'resources', 'js', 'bitacora-png16.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
-var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
+require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js'));
+var R = global.window.BitacoraGaiaRender, API = window.BitacoraPS1, PS1 = API.cfg;
 var CAT = global.window.BITACORA_GALAXIAS;
-var B = require('./lib_bajar_parche.js')(R);
 var P = require('./lib_parche_produccion.js')(R);
+
+/* La textura, servida de disco por un fetch de mentira. El lector es el del
+   navegador y la URL la arma el manifiesto, igual que en producción. */
+var FIXT = path.join(__dirname, 'fixtures', 'dso');
+var BASE = 'https://textura-local/dso/';
+API.texturasUrl = BASE;
+global.fetch = function (url) {
+  url = String(url);
+  if (url.indexOf(BASE) !== 0) return Promise.resolve({ ok: false, status: 599 });
+  var ruta = path.join(FIXT, url.slice(BASE.length));
+  if (!fs.existsSync(ruta)) return Promise.resolve({ ok: false, status: 404 });
+  var b = fs.readFileSync(ruta);
+  return Promise.resolve({
+    ok: true, status: 200,
+    arrayBuffer: function () { return Promise.resolve(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); },
+    json: function () { return Promise.resolve(JSON.parse(b.toString('utf8'))); }
+  });
+};
+
+/* Un objeto del golden SIN textura versionada no es un fallo de la ley: es una
+   fixture que falta, y el test lo dice con esas palabras en vez de comparar
+   contra nada. */
+function texturaDe(gal) {
+  var fila = API.ps1FilaTextura(gal.nombre);
+  if (!fila || fila[1] !== 'imagen') {
+    return Promise.reject(new Error('el manifiesto no declara textura de ' + gal.nombre));
+  }
+  var base = BASE + API.ps1IdTextura(gal.nombre) + '.' + fila[2], notas = {};
+  return API.ps1LeerTextura(base + '.png', base + '.json', notas).then(function (F) {
+    if (!F) throw new Error('textura ilegible (' + (notas.motivo || '?') + '): ' + gal.nombre);
+    if (F.ancho !== PS1.salida) {
+      throw new Error(gal.nombre + ': la textura mide ' + F.ancho + ' px y PS1.salida es ' + PS1.salida);
+    }
+    return F;
+  });
+}
 
 var FICH = path.join(__dirname, 'fixtures', 'golden_difusas.json');
 var GAIA = path.join(__dirname, 'fixtures', 'gaia');
@@ -67,7 +110,7 @@ function stats(f32) {
 function medir(O) {
   var fila = filaCat(O.cat);
   var gal = P.galDeFila(fila);
-  return B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
+  return texturaDe(gal).then(function (F) {
     var parche = P.montar(F, gal, leerGaia(O.csv), CAT);
     var m = { alias: O.alias, ancho: parche.ancho, alto: parche.alto,
               thetaIntArcmin: parche.thetaIntArcmin,
