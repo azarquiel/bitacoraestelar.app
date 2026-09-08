@@ -49,6 +49,10 @@
 <script>
 'use strict';
 var PS1 = window.BitacoraPS1, CFG = PS1.cfg;
+/* El buffer por defecto son 250 entradas, y una pasada larga las pasa: cuando
+   se llena, getEntriesByName no encuentra la petición y sus bytes saldrían 0,
+   que en esta tabla se leería como un ahorro. */
+performance.setResourceTimingBufferSize(5000);
 var GOLDEN = [['NGC 5194', 'M51'], ['NGC 5457', 'M101'], ['NGC 4594', 'M104'], ['NGC 3031', 'M81']];
 /* 9 repeticiones por objeto y camino, mediana. Menos no aguanta el ruido de una
    máquina de trabajo; `?reps=N` lo baja para las pasadas con la red frenada,
@@ -74,10 +78,17 @@ function entradaRed(url) {
 
 /* La parte de RED de un camino: sus peticiones van en paralelo (el PNG y su
    sidecar), así que lo que tarda la red es el intervalo que las cubre, no la
-   suma. Lo que quede del tiempo total es CPU: inflar el PNG y aplicar el
-   sinh, o dar la vuelta al orden de bytes del FITS. Es la partida que decide
-   la pregunta del listón —«¿cuesta la decodificación más de lo que ahorra?»— y
-   por eso va desglosada. */
+   suma.
+
+   Lo que sobra del tiempo total se llama RESTO y no «CPU», que es lo que
+   parece: ahí dentro está el trabajo de verdad —inflar el PNG y aplicar el
+   sinh, o dar la vuelta al orden de bytes del FITS— pero también lo que pasa
+   antes del primer `startTime` (encolado, resolución, la promesa que espera).
+   La textura pide dos ficheros y el FITS uno, así que ese sobrante le cae algo
+   más caro a la textura. Es la partida que contesta la pregunta del listón
+   —«¿cuesta la decodificación más de lo que ahorra?»— y por eso va desglosada,
+   pero se lee como una cota superior de lo que cuesta decodificar, no como una
+   medida limpia de CPU. */
 function costeRed(urls) {
   var b = 0, desde = Infinity, hasta = 0;
   urls.forEach(function (u) {
@@ -90,10 +101,10 @@ function costeRed(urls) {
 }
 
 /* La medida de un camino, con la misma forma para los dos: el total que vio
-   performance.now(), su reparto en red y CPU, y el parche que salió. */
+   performance.now(), su reparto en red y resto, y el parche que salió. */
 function medida(ms, urls, F) {
   var r = costeRed(urls);
-  return { ms: ms, redMs: r.ms, cpuMs: Math.max(0, ms - r.ms), bytes: r.bytes,
+  return { ms: ms, redMs: r.ms, restoMs: Math.max(0, ms - r.ms), bytes: r.bytes,
            ancho: F.ancho, memoria: F.datos.byteLength };
 }
 
@@ -139,7 +150,7 @@ function medirObjeto(par) {
         nombre: par[0], alias: par[1],
         texturaMs: med(tex, 'ms'), fitsMs: med(fits, 'ms'),
         texturaRedMs: med(tex, 'redMs'), fitsRedMs: med(fits, 'redMs'),
-        texturaCpuMs: med(tex, 'cpuMs'), fitsCpuMs: med(fits, 'cpuMs'),
+        texturaRestoMs: med(tex, 'restoMs'), fitsRestoMs: med(fits, 'restoMs'),
         texturaBytes: med(tex, 'bytes'), fitsBytes: med(fits, 'bytes'),
         memoriaParche: tex[0].memoria, ancho: tex[0].ancho, anchoFits: fits[0].ancho,
         texturaMsTodas: tex.map(function (m) { return m.ms; }),
@@ -166,14 +177,56 @@ function medirObjeto(par) {
   return medirFits(gal, sello).then(function () { return medirTextura(gal, sello); }).then(paso);
 }
 
-/* El campo de Virgo no se decodifica: en la fase 1 todos los parches miden lo
-   mismo (cfg.salida), así que su memoria es una multiplicación, no una medida.
-   Los parches son los objetos que la capa pediría en ese campo, contados con su
-   propia función (ps1GalaxiasDelCampo), no con una regla escrita aquí. */
-function campoVirgo(memoriaParche) {
-  var VIRGO = { ra: 187.7059, dec: 12.3911, ladoArcmin: 120 };   // M87, campo de 2°
-  var enCampo = PS1.ps1GalaxiasDelCampo(window.BITACORA_GALAXIAS, VIRGO.ra, VIRGO.dec, VIRGO.ladoArcmin);
-  return { objetos: enCampo.length, bytes: enCampo.length * memoriaParche };
+/* El campo de Virgo del listón, con el centro que la spec nombra: «NGC 4374/4406
+   y vecinas» (ADR 0024 §Fase 2, L2.4). El centro es el punto medio de esas dos y
+   el lado, 120′. No vale centrarlo en M87: a 120′ deja fuera justo a las dos que
+   dan nombre al listón, y el recuento —que es lo que multiplica la memoria— es
+   muy sensible al centro. Quiénes caen dentro lo decide ps1GalaxiasDelCampo, la
+   función de la capa, no una regla escrita aquí. */
+function campoVirgo() {
+  var cat = window.BITACORA_GALAXIAS, a = null, b = null, i;
+  for (i = 0; i < cat.length; i++) {
+    if (cat[i][0] === 'NGC 4374') a = cat[i];
+    if (cat[i][0] === 'NGC 4406') b = cat[i];
+  }
+  if (!a || !b) throw new Error('el catálogo no trae NGC 4374 y NGC 4406');
+  var enCampo = PS1.ps1GalaxiasDelCampo(cat, (a[2] + b[2]) / 2, (a[3] + b[3]) / 2, 120);
+  return { objetos: enCampo.length, nombres: enCampo.map(function (g) { return g.nombre; }) };
+}
+
+/* La memoria del campo, MEDIDA: se decodifican tantos parches como objetos hay
+   en el campo y se mira lo que crece el montón, con `performance.memory` de
+   Chrome. Multiplicar 4 MB por el número de objetos daría una identidad que no
+   puede fallar y que además ignora lo que la decodificación pide de más (el
+   ImageData RGBA y el Uint16 intermedios).
+
+   Los parches se leen de las texturas de los golden, no de las de las galaxias
+   del campo: en la fase 1 no todas están publicadas y todos los parches miden lo
+   mismo (`cfg.salida`), así que uno vale por otro para pesar. Cada lectura lleva
+   su propio `cb`, así que ninguna se reaprovecha, y las referencias se guardan
+   para que nadie las recoja antes de pesar. */
+function memoriaDelCampo(objetos) {
+  if (!performance.memory) return Promise.resolve(null);
+  var vivos = [], pico = 0, antes = performance.memory.usedJSHeapSize, i = 0;
+  function paso() {
+    if (i >= objetos) {
+      return { objetos: objetos, bytes: pico - antes, parches: vivos.length,
+               antes: antes, despues: performance.memory.usedJSHeapSize };
+    }
+    var gal = galDe(GOLDEN[i % GOLDEN.length][0]);
+    var fila = PS1.ps1FilaTextura(gal.nombre);
+    var base = '/wp-content/uploads/bitacora/dso/' + PS1.ps1IdTextura(gal.nombre) + '.' + fila[2];
+    var sello = 'virgo-' + i + '-' + Date.now();
+    return PS1.ps1LeerTextura(base + '.png?cb=' + sello, base + '.json?cb=' + sello, {}).then(function (F) {
+      if (!F) throw new Error('textura ilegible al pesar el campo: ' + gal.nombre);
+      vivos.push(F);
+      var u = performance.memory.usedJSHeapSize;
+      if (u > pico) pico = u;
+      i++;
+      return paso();
+    });
+  }
+  return Promise.resolve().then(paso);
 }
 
 function fmt(n, d) { return Number(n).toFixed(d == null ? 2 : d).replace('.', ','); }
@@ -191,18 +244,27 @@ function fmt(n, d) { return Number(n).toFixed(d == null ? 2 : d).replace('.', ',
        antes; por encima, el FITS. Se informa para que el veredicto se pueda
        leer con la conexión del observador delante. */
     filas.forEach(function (f) {
-      var dCpu = (f.texturaCpuMs - f.fitsCpuMs) / 1000, dBytes = f.fitsBytes - f.texturaBytes;
-      f.empateMbps = dCpu > 0 ? (dBytes * 8 / dCpu) / 1e6 : Infinity;
+      var dResto = (f.texturaRestoMs - f.fitsRestoMs) / 1000, dBytes = f.fitsBytes - f.texturaBytes;
+      f.empateMbps = dResto > 0 ? (dBytes * 8 / dResto) / 1e6 : Infinity;
     });
     var peorParche = Math.max.apply(null, filas.map(function (f) { return f.memoriaParche; }));
-    var virgo = campoVirgo(peorParche);
-    var veredicto = {
-      tiempo: filas.every(function (f) { return f.texturaMs <= f.fitsMs; }),
-      bytes: filas.every(function (f) { return f.texturaBytes <= 0.5 * f.fitsBytes; }),
-      memoria: peorParche <= 16 * 1024 * 1024,
-      virgo: virgo.bytes <= 150 * 1024 * 1024
-    };
-    veredicto.pasa = veredicto.tiempo && veredicto.bytes && veredicto.memoria && veredicto.virgo;
+    var virgo = campoVirgo();
+    return memoriaDelCampo(virgo.objetos).then(function (m) {
+      virgo.medida = m;
+      /* Sin `performance.memory` (no es estándar; en Chrome está) no se inventa
+         un número: el campo se queda sin veredicto y se dice. */
+      virgo.bytes = m ? m.bytes : NaN;
+      var veredicto = {
+        tiempo: filas.every(function (f) { return f.texturaMs <= f.fitsMs; }),
+        bytes: filas.every(function (f) { return f.texturaBytes <= 0.5 * f.fitsBytes; }),
+        memoria: peorParche <= 16 * 1024 * 1024,
+        virgo: virgo.bytes <= 150 * 1024 * 1024
+      };
+      veredicto.pasa = veredicto.tiempo && veredicto.bytes && veredicto.memoria && veredicto.virgo;
+      return { filas: filas, virgo: virgo, veredicto: veredicto, peorParche: peorParche };
+    });
+  }).then(function (r) {
+    var filas = r.filas, virgo = r.virgo, veredicto = r.veredicto, peorParche = r.peorParche;
     var salida = {
       fecha: new Date().toISOString(), agente: navigator.userAgent,
       repeticiones: REPETICIONES, salida: CFG.salida,
@@ -212,13 +274,14 @@ function fmt(n, d) { return Number(n).toFixed(d == null ? 2 : d).replace('.', ',
     document.getElementById('salida').textContent =
       filas.map(function (f) {
         return f.alias +
-               '\ttextura ' + fmt(f.texturaMs) + ' ms (red ' + fmt(f.texturaRedMs) + ' + cpu ' + fmt(f.texturaCpuMs) + ') / ' + fmt(f.texturaBytes / 1024, 0) + ' kB' +
-               '\tFITS ' + fmt(f.fitsMs) + ' ms (red ' + fmt(f.fitsRedMs) + ' + cpu ' + fmt(f.fitsCpuMs) + ') / ' + fmt(f.fitsBytes / 1024, 0) + ' kB' +
+               '\ttextura ' + fmt(f.texturaMs) + ' ms (red ' + fmt(f.texturaRedMs) + ' + resto ' + fmt(f.texturaRestoMs) + ') / ' + fmt(f.texturaBytes / 1024, 0) + ' kB' +
+               '\tFITS ' + fmt(f.fitsMs) + ' ms (red ' + fmt(f.fitsRedMs) + ' + resto ' + fmt(f.fitsRestoMs) + ') / ' + fmt(f.fitsBytes / 1024, 0) + ' kB' +
                '\t×' + fmt(f.texturaBytes / f.fitsBytes) + ' bytes, ×' + fmt(f.texturaMs / f.fitsMs) + ' tiempo' +
                '\tempatan a ' + fmt(f.empateMbps, 0) + ' Mbps';
       }).join('\n') +
       '\n\nmemoria por parche: ' + fmt(peorParche / 1048576, 2) + ' MB (tope 16)' +
-      '\nVirgo: ' + virgo.objetos + ' parches · ' + fmt(virgo.bytes / 1048576, 1) + ' MB (tope 150)' +
+      '\nVirgo: ' + virgo.objetos + ' parches · ' + fmt(virgo.bytes / 1048576, 1) + ' MB medidos en el montón (tope 150)' +
+      '\n  ' + virgo.nombres.join(', ') +
       '\n\nL1.3: ' + (veredicto.pasa ? 'PASA' : 'NO PASA') +
       '\n\n' + JSON.stringify(salida);
   }).catch(function (e) {

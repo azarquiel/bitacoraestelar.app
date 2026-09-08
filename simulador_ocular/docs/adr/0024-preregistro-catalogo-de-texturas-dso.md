@@ -248,15 +248,18 @@ alguno de esos hiciera falta moverlo, no se mueve: se cierra.
 
 Medida en Chrome sobre los 4 golden con `scripts/harness_l1_coste.html`
 (`docs/validacion/dso_texturas_l1_coste.md`). **Bytes: 0,473–0,478× los del
-FITS. Memoria: 4,00 MB por parche y 40,0 MB el campo de Virgo (10 parches).**
-Las tres condiciones de volumen pasan sin discusión.
+FITS. Memoria: 4,00 MB por parche y 57,5 MB el campo de Virgo de L2.4 (14
+parches, pesados en el montón del navegador).** Las tres condiciones de volumen
+pasan sin discusión.
 
-La de tiempo depende del enlace, y el listón no dijo cuál: contra un servidor
-en la misma máquina la textura tarda 2,1–4,1× lo que el FITS, y por 4G rápida
-tarda 0,52×. La causa está separada: decodificar cuesta 40–55 ms de CPU más que
-leer un FITS, y la textura ahorra 2,17 MB, así que las dos curvas se cruzan a
-**~350 Mbps**. Por bucle local el transporte que la textura ahorra vale cero y
-el listón mide solo la decodificación.
+La de tiempo depende del enlace, y el listón no dijo cuál: contra un servidor en
+la misma máquina la textura tarda 1,4–3,8× lo que el FITS, y por 4G rápida tarda
+0,55–0,64×. La causa está separada: decodificar cuesta decenas de ms más que
+leer un FITS y la textura ahorra 2,17 MB, así que las dos curvas se cruzan entre
+**30 y 450 Mbps** según la pasada; incluso con la estimación más desfavorable a
+la textura, el cruce queda por encima del enlace de un observador en casa. Por
+bucle local el transporte que la textura ahorra vale cero y el listón mide solo
+la decodificación.
 
 **No se toca el listón**: se anota que su lectura de producción —un enlace real,
 que es por donde se sirven las texturas— pasa, y que la de bucle local no. La
