@@ -70,6 +70,11 @@ node scripts/harness_vistas_np.js --etiqueta antes     # ANTES de tocar nada
 node scripts/harness_vistas_np.js --etiqueta despues
 ```
 
+Cuando el cambio es de dónde salen los píxeles —la fase 1— no hay nada que tocar
+entre las dos pasadas: el «después» es `--fuente textura`, que lee la textura
+publicada con el `ps1LeerTextura` del navegador en vez de bajar el FITS. La
+corrida de la fase 1 está en `docs/validacion/dso_texturas_vistas_fase1.md`.
+
 Cada etiqueta escribe a `.scratch/vistas-np-<etiqueta>/`. Sin etiqueta se usa el
 directorio de siempre. El «antes» hay que sacarlo **antes**: no se puede
 reconstruir después, porque el código que lo pintaba ya no está.
