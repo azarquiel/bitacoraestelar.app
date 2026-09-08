@@ -305,7 +305,7 @@
   var MS_PAUSA = 1000;
 
   // La nave hace escala en cada objeto antes de seguir: se para, y sale suave.
-  var MS_ESPERA = 800;
+  var MS_ESPERA = 400;
 
   // Arranque y frenada. La velocidad no es plana dentro del tramo: sale lenta,
   // cruza rápido y llega frenando, pero solo un VEINTE POR CIENTO arriba y abajo
