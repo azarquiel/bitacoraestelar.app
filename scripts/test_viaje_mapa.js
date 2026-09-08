@@ -145,22 +145,19 @@ eq(VLV.hayQueElegir('m13'), true, 'cinco observaciones -> el mapa enseña la lis
 eq(VLV.hayQueElegir('m57'), false, 'una sola observación -> se abre directamente');
 eq(VLV.hayQueElegir('m92'), false, 'objeto sin observaciones -> nada que elegir');
 
-console.log('fase (el punteado en movimiento):');
-var ciclo = VLV.PATRON[0] + VLV.PATRON[1];
-var f0 = VLV.fase(0), f1 = VLV.fase(1000);
-eq(f0, 0, 'en t=0 el punteado está en su origen');
-eq(f1 < 0 && f1 > -ciclo, true, 'avanza hacia el destino (offset negativo) y se envuelve en un ciclo');
-eq(VLV.fase(ciclo / 26 * 1000).toFixed(6), (-0).toFixed(6), 'un ciclo completo vuelve al punto de partida');
-
 console.log('tramoEncendido (la luz recorre UN tramo cada vez, a velocidad constante):');
 VLV.reiniciar(0);
-// La luz va a PX_POR_SEGUNDO_LUZ píxeles por segundo, así que un tramo de esa
-// longitud dura justo un segundo: la ruta de prueba va en tramos de 1 s.
-var MS = 1000;
+// Con todos los tramos iguales, cada uno se lleva su parte del recorrido y dura
+// la media: MS_TRAMO_MEDIO. La ruta de prueba va en tramos iguales.
+var MS = VLV.MS_TRAMO_MEDIO;
 function ruta(nTramos, largoPx) {
-  var paso = (largoPx == null) ? VLV.PX_POR_SEGUNDO_LUZ : largoPx, pts = [];
+  var paso = (largoPx == null) ? 300 : largoPx, pts = [];
   for (var i = 0; i <= nTramos; i++) pts.push({ sx: i * paso, sy: 0 });
   return pts;
+}
+// La MISMA ruta con el zoom puesto: todos los tramos por el mismo factor.
+function conZoom(pts, k) {
+  return pts.map(function (p) { return { sx: p.sx * k, sy: p.sy * k }; });
 }
 var tres = ruta(3), uno = ruta(1);
 eq(VLV.tramoEncendido(0, tres), { tramo: 0, u: 0 }, 'arranca en el primer tramo, saliendo del origen');
@@ -175,16 +172,29 @@ eq(VLV.tramoEncendido(0, ruta(0)), null, 'menos de dos puntos no es un recorrido
 eq(VLV.tramoEncendido(0, []), null, 'sin puntos tampoco');
 eq(VLV.tramoEncendido(0, null), null, 'sin ruta tampoco');
 
-// La luz NO acelera en los saltos largos: el tramo dura lo que mide, así que a
-// doble longitud, doble tiempo, y a la mitad del reloj va por la mitad de los dos.
-var largo = ruta(1, 2 * VLV.PX_POR_SEGUNDO_LUZ);
-eq(VLV.tramoEncendido(MS, largo), { tramo: 0, u: 0.5 }, 'el tramo del doble de largo tarda el doble');
-eq(VLV.tramoEncendido(MS, ruta(1)).u, VLV.tramoEncendido(2 * MS, largo).u,
-   'los dos acaban su tramo, cada uno a su tiempo: la velocidad es la misma');
+// La nave NO acelera en los saltos largos: el tramo que es el doble de trozo
+// del recorrido tarda el doble en cruzarse.
+// Dos tramos, el segundo el doble de largo: se reparten el reloj 1/3 y 2/3, o
+// sea 2000 ms y 4000 ms de los 2 x MS_TRAMO_MEDIO que dura el recorrido.
+var desigual = [{ sx: 0, sy: 0 }, { sx: 100, sy: 0 }, { sx: 300, sy: 0 }];
+var corto = 2 * MS / 3;
+eq(VLV.tramoEncendido(corto - 1, desigual).tramo, 0, 'el tramo corto se lleva un tercio del reloj');
+eq(VLV.tramoEncendido(corto, desigual), { tramo: 1, u: 0 }, 'y ahí empieza el largo');
+eq(VLV.tramoEncendido(corto + corto, desigual), { tramo: 1, u: 0.5 },
+   'y a media travesía del largo ya ha corrido lo que el corto entero: misma velocidad');
+
+// EL ZOOM NO TOCA EL VIAJE: alarga todos los tramos por igual, así que las
+// partes del recorrido no cambian y la nave sigue donde estaba.
+eq(VLV.tramoEncendido(1.5 * MS, conZoom(desigual, 7)), VLV.tramoEncendido(1.5 * MS, desigual),
+   'acercarse no adelanta ni retrasa la travesía');
+eq(VLV.tramoEncendido(1.5 * MS, conZoom(desigual, 0.2)), VLV.tramoEncendido(1.5 * MS, desigual),
+   'alejarse tampoco');
+
 // Los topes protegen las dos puntas: ni parpadeo ni travesía eterna.
-eq(VLV.tramoEncendido(VLV.MS_MIN_TRAMO - 1, ruta(1, 1)).tramo, 0, 'un tramo cortísimo dura al menos el mínimo');
-eq(VLV.tramoEncendido(VLV.MS_MAX_TRAMO + 10, ruta(1, 100000)), { tramo: 0, u: 1 },
-   'y un saltazo no dura más que el máximo');
+var minucia = [{ sx: 0, sy: 0 }, { sx: 1, sy: 0 }, { sx: 4001, sy: 0 }];
+eq(VLV.tramoEncendido(VLV.MS_MIN_TRAMO - 1, minucia).tramo, 0, 'el tramo ínfimo dura al menos el mínimo');
+eq(VLV.tramoEncendido(VLV.MS_MIN_TRAMO + VLV.MS_MAX_TRAMO + 10, minucia), { tramo: 1, u: 1 },
+   'y el saltazo no dura más que el máximo');
 
 // El mismo instante da el mismo tramo: el origen del reloj es UNO.
 eq(VLV.tramoEncendido(MS + 300, tres), VLV.tramoEncendido(MS + 300, tres), 'el estado solo depende del instante');
@@ -193,27 +203,34 @@ eq(VLV.tramoEncendido(5000, tres), { tramo: 0, u: 0 }, 'reiniciar() devuelve la 
 VLV.reiniciar(0);
 
 console.log('trazarCanvas (no dibuja lo que no es una ruta):');
-var trazos = 0, cabezas = 0;
+var trazos = 0, naves = 0, giro = null;
 var ctxFalso = {
   save: function () {}, restore: function () {}, beginPath: function () {},
-  moveTo: function () {}, lineTo: function () {}, setLineDash: function () {},
-  arc: function () {}, fill: function () { cabezas++; },
+  moveTo: function () {}, lineTo: function () {}, closePath: function () {},
+  setLineDash: function () {}, translate: function () {},
+  rotate: function (r) { giro = r; }, fill: function () { naves++; },
   stroke: function () { trazos++; }
 };
-VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }], 0);
+VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }], 1);
 eq(trazos, 0, 'un solo punto no es un viaje: no se traza nada');
-trazos = 0; cabezas = 0;
+trazos = 0; naves = 0;
 var tres = [{ sx: 0, sy: 0 }, { sx: 10, sy: 10 }, { sx: 20, sy: 0 }];
-VLV.trazarCanvas(ctxFalso, tres, 0, 1, { tramo: 1, u: 0.5 });
-eq(trazos, 4, 'a mitad del viaje: estela, pasado, base del activo y su punteado (ya no queda futuro)');
-eq(cabezas, 1, 'y la luz que lo recorre, en la cabeza del tramo');
-trazos = 0; cabezas = 0;
-VLV.trazarCanvas(ctxFalso, tres, 0, 1, { tramo: 0, u: 0.5 });
-eq(trazos, 4, 'en el primer tramo no hay pasado, pero sí futuro');
-trazos = 0; cabezas = 0;
-VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }, { sx: 10, sy: 10 }, { sx: 20, sy: 0 }], 0, 1, null);
-eq(trazos, 3, 'sin tramo encendido (movimiento reducido) la ruta va entera, quieta y con su brillo de siempre');
-eq(cabezas, 0, 'y sin luz que la recorra');
+VLV.trazarCanvas(ctxFalso, tres, 1, { tramo: 1, u: 0.5 });
+eq(trazos, 3, 'a mitad del viaje: pasado, estela y tramo encendido (ya no queda futuro)');
+eq(naves, 1, 'y la nave que lo recorre');
+trazos = 0; naves = 0;
+VLV.trazarCanvas(ctxFalso, tres, 1, { tramo: 0, u: 0.5 });
+eq(trazos, 3, 'en el primer tramo no hay pasado, pero sí futuro');
+// La nave mira al destino, no al norte: el tramo 0 sube en diagonal (45°) y el
+// tramo 1 baja (-45°).
+VLV.trazarCanvas(ctxFalso, tres, 1, { tramo: 0, u: 0.5 });
+eq(Math.round(giro * 180 / Math.PI), 45, 'la nave apunta al destino del tramo');
+VLV.trazarCanvas(ctxFalso, tres, 1, { tramo: 1, u: 0.5 });
+eq(Math.round(giro * 180 / Math.PI), -45, 'y gira con él');
+trazos = 0; naves = 0;
+VLV.trazarCanvas(ctxFalso, tres, 1, null);
+eq(trazos, 2, 'sin tramo encendido (movimiento reducido) la ruta va entera, quieta y con su brillo');
+eq(naves, 0, 'y sin nave que la recorra');
 
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

@@ -437,26 +437,28 @@
   // De la ruta solo está ENCENDIDO el tramo que la luz recorre ahora (#254);
   // quién es ese tramo lo decide VLViaje.tramoEncendido(), el mismo reloj que usan
   // los dos lienzos, para que las tres escalas no vayan cada una por su lado.
-  // El movimiento ya no lo puede poner una animación CSS —cambia de tramo, no
-  // solo de fase—, así que lo lleva un requestAnimationFrame mientras hay viaje.
+  // El tramo encendido es una línea fija: lo único que se mueve es la nave, y eso
+  // no lo puede poner una animación CSS —cambia de tramo, de sitio y de rumbo—,
+  // así que lo lleva un requestAnimationFrame mientras hay viaje.
   // --------------------------------------------------------------------------
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var rutaSvg = document.createElementNS(SVG_NS, 'svg');
   rutaSvg.setAttribute('id', 'mw-ruta');
   rutaSvg.style.display = 'none';
   var rutaTrazos = {};
-  ['estela', 'futuro', 'pasado', 'activo', 'flujo'].forEach(function (clase) {
+  ['estela', 'futuro', 'pasado', 'activo'].forEach(function (clase) {
     var pl = document.createElementNS(SVG_NS, 'polyline');
     pl.setAttribute('class', 'mw-ruta-' + clase);
     pl.setAttribute('vector-effect', 'non-scaling-stroke');
     rutaSvg.appendChild(pl);
     rutaTrazos[clase] = pl;
   });
-  // La luz (o la nave) que va recorriendo el tramo encendido.
-  var rutaCabeza = document.createElementNS(SVG_NS, 'circle');
-  rutaCabeza.setAttribute('class', 'mw-ruta-cabeza');
-  rutaCabeza.setAttribute('r', String(VLViaje.R_LUZ));
-  rutaSvg.appendChild(rutaCabeza);
+  // La nave que recorre el tramo encendido. La figura la pone VLViaje.NAVE, la
+  // misma que dibujan los dos lienzos; aquí solo se traslada y se gira.
+  var rutaNave = document.createElementNS(SVG_NS, 'polygon');
+  rutaNave.setAttribute('class', 'mw-ruta-nave');
+  rutaNave.setAttribute('points', VLViaje.NAVE.map(function (p) { return p.join(','); }).join(' '));
+  rutaSvg.appendChild(rutaNave);
   img.appendChild(rutaSvg);
 
   // --------------------------------------------------------------------------
@@ -641,13 +643,12 @@
     rutaTrazos.futuro.setAttribute('points', partes ? comoPolilinea(partes.futuro) : '');
     rutaTrazos.estela.setAttribute('points', lucido);
     rutaTrazos.activo.setAttribute('points', lucido);
-    rutaTrazos.flujo.setAttribute('points', lucido);
-    rutaTrazos.flujo.style.strokeDashoffset = VLViaje.fase();
-    if (!partes) { rutaCabeza.style.display = 'none'; return; }
+    if (!partes) { rutaNave.style.display = 'none'; return; }
 
-    rutaCabeza.setAttribute('cx', partes.cabeza.sx.toFixed(1));
-    rutaCabeza.setAttribute('cy', partes.cabeza.sy.toFixed(1));
-    rutaCabeza.style.display = '';
+    rutaNave.setAttribute('transform',
+      'translate(' + partes.cabeza.sx.toFixed(1) + ',' + partes.cabeza.sy.toFixed(1) + ')' +
+      ' rotate(' + (partes.cabeza.angulo * 180 / Math.PI).toFixed(1) + ')');
+    rutaNave.style.display = '';
     // Manda otra escala: la galaxia está fundida a cero y no hay nada que
     // animar. El bucle vuelve solo, porque llegar a la galaxia es hacer zoom y
     // cada fotograma de zoom pasa por dibujarRuta().

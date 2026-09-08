@@ -259,15 +259,16 @@
   // quedan en un dorado apagado y los que faltan, casi invisibles; así una
   // salida de veinte objetos se lee como una secuencia y no como una maraña.
   //
-  // Dentro del tramo activo, el punteado se desplaza hacia el destino ('fase',
-  // en píxeles) y una luz lo recorre. Con movimiento reducido, fase() devuelve
-  // 0 y tramoEncendido() devuelve null: la ruta se dibuja entera y quieta, sin
-  // perder ningún tramo.
+  // El tramo encendido es una línea FIJA y brillante: lo único que se mueve por
+  // ella es la nave. Con movimiento reducido, tramoEncendido() devuelve null: la
+  // ruta se dibuja entera y quieta, sin nave y sin perder ningún tramo.
   // ---------------------------------------------------------------------------
   var ORO = '244, 199, 107';          // #f4c76b, el ámbar del mapa
-  var PATRON = [8, 24];               // guion, hueco (px de pantalla)
-  var R_LUZ = 2.6;                    // radio de la luz que recorre el tramo (px)
-  var PX_POR_SEGUNDO = 26;
+
+  // La nave, apuntando al destino (+x) y centrada en su posición: la punta
+  // delante, las dos alas barridas hacia atrás y la muesca de la popa. Es la
+  // misma figura en el lienzo y en el SVG, así que vive aquí y no en cada uno.
+  var NAVE = [[7.5, 0], [-4.5, -5.5], [-1.5, 0], [-4.5, 5.5]];
 
   // La consulta se guarda una vez: esto se pregunta en cada fotograma y de los
   // tres bucles (galaxia, atlas y vecindario), y matchMedia() no es gratis.
@@ -278,25 +279,18 @@
     return !!(consultaMovimiento && consultaMovimiento.matches);
   }
 
-  // Fase del punteado en píxeles. Negativa para que los guiones avancen del
-  // origen al destino (stroke-dashoffset corre al revés).
-  function fase(ahoraMs) {
-    if (movimientoReducido()) return 0;
-    var t = (typeof ahoraMs === 'number') ? ahoraMs : Date.now();
-    var ciclo = PATRON[0] + PATRON[1];
-    return -((t / 1000) * PX_POR_SEGUNDO) % ciclo;
-  }
-
-  // La luz va a VELOCIDAD constante en pantalla, así que cada tramo dura lo que
-  // mide: con una duración fija por tramo, el salto largo se recorría más
-  // deprisa que el corto y la nave parecía acelerar según lo lejos que estuviera
-  // el objeto. Los topes evitan las dos formas de que eso se vaya de las manos:
-  // el tramo cortísimo que sería un parpadeo y el saltazo que duraría media
-  // vuelta del reloj.
-  var PX_POR_SEGUNDO_LUZ = 140;
-  var MS_MIN_TRAMO = 800;
-  var MS_MAX_TRAMO = 3000;
-  var MS_PAUSA = 800;
+  // La nave va a velocidad constante: cada tramo dura EN PROPORCIÓN a lo que
+  // mide, no lo mismo que los demás —con duración fija, el salto largo se
+  // recorría más deprisa que el corto y la nave parecía acelerar según lo lejos
+  // que estuviera el objeto—. Pero la proporción se mide sobre el total de la
+  // ruta, no en píxeles sueltos: el zoom alarga todos los tramos por igual, así
+  // que los repartos no se mueven y la travesía no da un salto al acercarse.
+  // Los topes evitan las dos puntas: el tramo cortísimo que sería un parpadeo y
+  // el saltazo que duraría media vuelta del reloj.
+  var MS_TRAMO_MEDIO = 3000;
+  var MS_MIN_TRAMO = 1200;
+  var MS_MAX_TRAMO = 6000;
+  var MS_PAUSA = 1000;
 
   // Origen del reloj del recorrido. Es el ÚNICO estado del módulo, y a propósito:
   // la vista de la galaxia (SVG) y los dos lienzos (Grupo Local, vecindario)
@@ -310,16 +304,25 @@
   function reiniciar(ahoraMs) { origenReloj = ahora(ahoraMs); }
 
   /**
-   * Lo que tarda la luz en cada tramo de la ruta, en milisegundos: su longitud
-   * en pantalla dividida por la velocidad, entre los dos topes. Se recalcula en
-   * cada consulta porque las longitudes cambian con el zoom.
+   * Lo que tarda la nave en cada tramo de la ruta, en milisegundos: lo que ese
+   * tramo es del recorrido entero, repartido sobre una duración media por tramo
+   * y entre los dos topes. Va en PROPORCIÓN y no en píxeles justamente para que
+   * el zoom no la cambie.
    */
   function duracionesDe(puntos) {
-    var ms = [];
-    for (var i = 0; i + 1 < puntos.length; i++) {
+    var largos = [], total = 0, i;
+    for (i = 0; i + 1 < puntos.length; i++) {
       var dx = puntos[i + 1].sx - puntos[i].sx;
       var dy = puntos[i + 1].sy - puntos[i].sy;
-      var t = Math.sqrt(dx * dx + dy * dy) / PX_POR_SEGUNDO_LUZ * 1000;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      largos.push(d);
+      total += d;
+    }
+    var ms = [];
+    for (i = 0; i < largos.length; i++) {
+      // La parte del recorrido que es este tramo, que no cambia con el zoom.
+      var parte = total > 0 ? largos[i] / total : 1 / largos.length;
+      var t = MS_TRAMO_MEDIO * largos.length * parte;
       ms.push(Math.min(MS_MAX_TRAMO, Math.max(MS_MIN_TRAMO, t)));
     }
     return ms;
@@ -353,7 +356,7 @@
    *   pasado  — de donde se salió hasta el tramo activo (dorado apagado)
    *   activo  — los dos vértices del tramo que se recorre ahora
    *   futuro  — lo que queda por recorrer (casi invisible)
-   *   cabeza  — dónde va la luz dentro del tramo activo
+   *   cabeza  — dónde va la nave dentro del tramo activo, y con qué rumbo
    * Los vértices son {sx, sy}; lo usan el canvas y el SVG de la galaxia.
    */
   function tramosDe(puntos, estado) {
@@ -364,7 +367,13 @@
       pasado: puntos.slice(0, i + 1),
       activo: [a, b],
       futuro: puntos.slice(i + 1),
-      cabeza: { sx: a.sx + (b.sx - a.sx) * estado.u, sy: a.sy + (b.sy - a.sy) * estado.u }
+      cabeza: {
+        sx: a.sx + (b.sx - a.sx) * estado.u,
+        sy: a.sy + (b.sy - a.sy) * estado.u,
+        // Rumbo: hacia dónde apunta la nave. Un tramo de longitud cero no tiene
+        // rumbo, y entonces se deja mirando al frente en vez de dar un giro.
+        angulo: (b.sx === a.sx && b.sy === a.sy) ? 0 : Math.atan2(b.sy - a.sy, b.sx - a.sx)
+      }
     };
   }
 
@@ -380,7 +389,7 @@
    * Lo comparten el atlas del Grupo Local y el Vecindario Solar; la vista de la
    * galaxia usa SVG, que es otro idioma pero el mismo aspecto.
    */
-  function trazarCanvas(ctx, puntos, faseActual, alpha, estado) {
+  function trazarCanvas(ctx, puntos, alpha, estado) {
     if (!ctx || !puntos || puntos.length < 2) return;
     var a = (typeof alpha === 'number') ? alpha : 1;
     var e = (estado === undefined) ? tramoEncendido(null, puntos) : estado;
@@ -404,8 +413,6 @@
       ctx.stroke();
     }
 
-    ctx.setLineDash([]);
-
     // Sin tramo encendido (movimiento reducido) la ruta va entera y quieta, con
     // el brillo que tenía antes de que hubiera tramos: quitar el movimiento no
     // es apagar la ruta.
@@ -419,26 +426,23 @@
     // gusano", y ponerla en toda la ruta igualaba el brillo de lo apagado con
     // el de lo encendido, que es justo lo que hay que separar.
     trazo(lucido, 4, 0.10);
-    trazo(lucido, 1.4, 0.42);           // el tramo encendido, más grueso
-
-    // Punteado, solo en el tramo encendido: hacia dónde va la luz. Quieto si
-    // fase() lo dejó a 0.
-    camino(lucido);
-    ctx.setLineDash(PATRON);
-    ctx.lineDashOffset = faseActual || 0;
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = 'rgba(' + ORO + ',' + (0.9 * a) + ')';
+    // El tramo encendido: línea FIJA, gruesa y brillante. Lo único que se mueve
+    // por ella es la nave, y con el punteado corriendo por debajo se veían dos
+    // movimientos a la vez donde solo hay un viaje.
     ctx.shadowColor = 'rgba(' + ORO + ',0.85)';
     ctx.shadowBlur = 8;
-    ctx.stroke();
-    ctx.setLineDash([]);
+    trazo(lucido, 1.6, 0.85);
 
-    if (!partes) { ctx.restore(); return; }   // sin recorrido no hay luz que mover
+    if (!partes) { ctx.restore(); return; }   // sin recorrido no hay nave que mover
 
-    // Y la luz misma, recorriendo el tramo.
+    // Y la nave, en su sitio del tramo y apuntando al destino.
+    ctx.translate(partes.cabeza.sx, partes.cabeza.sy);
+    ctx.rotate(partes.cabeza.angulo);
     ctx.beginPath();
-    ctx.arc(partes.cabeza.sx, partes.cabeza.sy, R_LUZ, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(' + ORO + ',' + (0.95 * a) + ')';
+    ctx.moveTo(NAVE[0][0], NAVE[0][1]);
+    for (var k = 1; k < NAVE.length; k++) ctx.lineTo(NAVE[k][0], NAVE[k][1]);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(' + ORO + ',' + (0.98 * a) + ')';
     ctx.fill();
 
     ctx.restore();
@@ -447,9 +451,8 @@
   var API = {
     DIST_MIN_EXTRAGALACTICA: DIST_MIN_EXTRAGALACTICA,
     ORO: ORO,
-    PATRON: PATRON,
-    R_LUZ: R_LUZ,
-    PX_POR_SEGUNDO_LUZ: PX_POR_SEGUNDO_LUZ,
+    NAVE: NAVE,
+    MS_TRAMO_MEDIO: MS_TRAMO_MEDIO,
     MS_MIN_TRAMO: MS_MIN_TRAMO,
     MS_MAX_TRAMO: MS_MAX_TRAMO,
     MS_PAUSA: MS_PAUSA,
@@ -466,7 +469,6 @@
     otrasObservaciones: otrasObservaciones,
     hayQueElegir: hayQueElegir,
     movimientoReducido: movimientoReducido,
-    fase: fase,
     reiniciar: reiniciar,
     tramoEncendido: tramoEncendido,
     tramosDe: tramosDe,
