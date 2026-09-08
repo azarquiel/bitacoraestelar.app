@@ -66,7 +66,7 @@ function galDe(nombre) {
    petición. transferSize vale 0 si el recurso vino de la caché HTTP; con el
    `cb` no debería pasar, y si pasa se ve como un 0 en la tabla en vez de
    colarse como un ahorro. */
-function red(url) {
+function entradaRed(url) {
   var e = performance.getEntriesByName(new URL(url, location.href).href);
   var r = e.length ? e[e.length - 1] : null;
   return { bytes: r ? r.transferSize : 0, desde: r ? r.startTime : 0, hasta: r ? r.responseEnd : 0 };
@@ -78,10 +78,10 @@ function red(url) {
    sinh, o dar la vuelta al orden de bytes del FITS. Es la partida que decide
    la pregunta del listón —«¿cuesta la decodificación más de lo que ahorra?»— y
    por eso va desglosada. */
-function redDe(urls) {
+function costeRed(urls) {
   var b = 0, desde = Infinity, hasta = 0;
   urls.forEach(function (u) {
-    var r = red(u);
+    var r = entradaRed(u);
     b += r.bytes;
     if (r.desde < desde) desde = r.desde;
     if (r.hasta > hasta) hasta = r.hasta;
@@ -89,33 +89,37 @@ function redDe(urls) {
   return { bytes: b, ms: hasta > desde ? hasta - desde : 0 };
 }
 
-function medirTextura(gal, cb) {
+/* La medida de un camino, con la misma forma para los dos: el total que vio
+   performance.now(), su reparto en red y CPU, y el parche que salió. */
+function medida(ms, urls, F) {
+  var r = costeRed(urls);
+  return { ms: ms, redMs: r.ms, cpuMs: Math.max(0, ms - r.ms), bytes: r.bytes,
+           ancho: F.ancho, memoria: F.datos.byteLength };
+}
+
+function medirTextura(gal, sello) {
   var fila = PS1.ps1FilaTextura(gal.nombre);
   if (!fila || fila[1] !== 'imagen') {
     return Promise.reject(new Error('el manifiesto no declara textura de ' + gal.nombre));
   }
   var base = '/wp-content/uploads/bitacora/dso/' + PS1.ps1IdTextura(gal.nombre) + '.' + fila[2];
-  var png = base + '.png?cb=' + cb, json = base + '.json?cb=' + cb, notas = {}, t0 = performance.now();
+  var png = base + '.png?cb=' + sello, json = base + '.json?cb=' + sello, notas = {}, t0 = performance.now();
   return PS1.ps1LeerTextura(png, json, notas).then(function (F) {
     var ms = performance.now() - t0;
     if (!F) throw new Error('textura ilegible (' + (notas.motivo || '?') + '): ' + gal.nombre);
-    var r = redDe([png, json]);
-    return { ms: ms, redMs: r.ms, cpuMs: Math.max(0, ms - r.ms), bytes: r.bytes,
-             ancho: F.ancho, memoria: F.datos.byteLength };
+    return medida(ms, [png, json], F);
   });
 }
 
-function medirFits(gal, cb) {
-  var url = PS1.ps1UrlParche(gal) + '&cb=' + cb, t0 = performance.now();
+function medirFits(gal, sello) {
+  var url = PS1.ps1UrlParche(gal) + '&cb=' + sello, t0 = performance.now();
   return fetch(url).then(function (r) {
     if (!r.ok) throw new Error('ps1-proxy ' + r.status + ' en ' + gal.nombre);
     return r.arrayBuffer();
   }).then(function (buf) {
     var F = PS1.parseFITS(buf), ms = performance.now() - t0;
     if (!F) throw new Error('FITS ilegible: ' + gal.nombre);
-    var r = redDe([url]);
-    return { ms: ms, redMs: r.ms, cpuMs: Math.max(0, ms - r.ms), bytes: r.bytes,
-             ancho: F.ancho, memoria: F.datos.byteLength };
+    return medida(ms, [url], F);
   });
 }
 
@@ -142,10 +146,10 @@ function medirObjeto(par) {
         fitsMsTodas: fits.map(function (m) { return m.ms; })
       };
     }
-    var cb = i + '-' + Date.now(), primeroTextura = (i % 2 === 0);
-    var a = primeroTextura ? medirTextura(gal, cb) : medirFits(gal, cb);
+    var sello = i + '-' + Date.now(), primeroTextura = (i % 2 === 0);
+    var a = primeroTextura ? medirTextura(gal, sello) : medirFits(gal, sello);
     return a.then(function (m1) {
-      var b = primeroTextura ? medirFits(gal, cb) : medirTextura(gal, cb);
+      var b = primeroTextura ? medirFits(gal, sello) : medirTextura(gal, sello);
       return b.then(function (m2) {
         tex.push(primeroTextura ? m1 : m2);
         fits.push(primeroTextura ? m2 : m1);
@@ -158,8 +162,8 @@ function medirObjeto(par) {
      FITS de este objeto, y una lectura de la textura para que el JIT ya haya
      compilado el códec. Sin la segunda, el primer objeto de la lista paga el
      arranque del motor y sale 4× más lento que los otros tres. */
-  var cb = 'precalentado-' + Date.now();
-  return medirFits(gal, cb).then(function () { return medirTextura(gal, cb); }).then(paso);
+  var sello = 'precalentado-' + Date.now();
+  return medirFits(gal, sello).then(function () { return medirTextura(gal, sello); }).then(paso);
 }
 
 /* El campo de Virgo no se decodifica: en la fase 1 todos los parches miden lo
