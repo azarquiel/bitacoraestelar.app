@@ -242,6 +242,28 @@ P.leer(png, notasBuenas).then(function (img) {
     ok(false, 'devuelve null en vez de lanzar (' + e.message + ')');
   });
 }).then(function () {
+  /* ── lib_png.leer: la vuelta del escritor RGB ──────────────────────────────
+     Lo usa comparar_vistas.js para restar dos corridas del arnés de vistas, así
+     que lo que tiene que cumplir es leer EXACTAMENTE lo que escribe `escribir`
+     —y negarse a adivinar lo demás, que un lector que se inventa píxeles daría
+     un veredicto de validación falso. */
+  var os = require('os'), path = require('path'), fs = require('fs');
+  var rutaRGB = path.join(os.tmpdir(), 'lib_png_ida_vuelta.png');
+  var Wr = 5, Hr = 3, rgb = new Uint8Array(Wr * Hr * 3);
+  for (var i = 0; i < rgb.length; i++) rgb[i] = (i * 37) & 255;
+  LP.escribir(rutaRGB, rgb, Wr, Hr);
+  var vuelta = LP.leer(rutaRGB);
+  ok(vuelta.W === Wr && vuelta.H === Hr, 'lib_png.leer devuelve las dimensiones (' + vuelta.W + '×' + vuelta.H + ')');
+  var mismos = 0;
+  for (i = 0; i < rgb.length; i++) if (vuelta.rgb[i] === rgb[i]) mismos++;
+  ok(mismos === rgb.length, 'ida y vuelta RGB byte a byte (' + mismos + '/' + rgb.length + ')');
+  var gris16 = path.join(os.tmpdir(), 'lib_png_gris16.png');
+  LP.escribirGris16(gris16, new Uint16Array([1, 2, 3, 4]), 2, 2);
+  var tiro = false;
+  try { LP.leer(gris16); } catch (e) { tiro = true; }
+  ok(tiro, 'y se niega a leer un PNG que no es RGB de 8 bits en vez de inventar píxeles');
+  fs.unlinkSync(rutaRGB); fs.unlinkSync(gris16);
+
   /* ADR 0005: cardinalidad mínima. Si una promesa se pierde por el camino, el
      proceso terminaría en verde con la mitad de las comprobaciones sin correr.
      Mutaciones documentadas que ponen rojo este test, las cuatro comprobadas en

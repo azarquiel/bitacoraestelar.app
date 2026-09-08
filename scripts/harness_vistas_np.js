@@ -13,8 +13,18 @@
    pasada sobrescribe la primera y el antes se pierde. El procedimiento está en
    simulador_ocular/docs/notas/validacion-visual-difusas.md
 
+   De dónde sale el parche: `--fuente fits` (por defecto) baja el stack por
+   lib_bajar_parche, que es el camino de ANTES de la fase 1; `--fuente textura`
+   lo lee de la textura publicada con el `ps1LeerTextura` del navegador sobre
+   ficheros de disco, que es el de DESPUÉS. Es el mismo cambio que mide
+   harness_l1_equivalencia.js en bits, aquí mirado a ojo. Un objeto cuya textura
+   sea una `fila` (no cabe, sur, ausencia-excesiva) no tiene vista por textura:
+   se salta con su motivo, que en producción es la capa apagada.
+
    Uso:  node scripts/harness_vistas_np.js
          node scripts/harness_vistas_np.js --etiqueta antes
+         node scripts/harness_vistas_np.js --etiqueta despues --fuente textura
+         node scripts/harness_vistas_np.js --fuente textura --dir simulador_ocular/dso
          node scripts/harness_vistas_np.js --solo "NGC 5194" */
 'use strict';
 
@@ -25,6 +35,7 @@ require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
+require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js'));
 var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 var P = require('./lib_parche_produccion.js')(R);
@@ -43,6 +54,63 @@ var GAIA = path.join(__dirname, 'fixtures', 'gaia');
 var GAIA_CACHE = process.env.BITACORA_GAIA_DIR ||
   path.join(require('os').tmpdir(), 'bitacora-gaia-vistas');
 var SIZE = 720, AFOV = 70;
+var TEXTURA = arg.fuente === 'textura';
+/* Dónde vive la textura: lo publicado y, para los de solo-mirar, el `--dir` de
+   la corrida. Quién manda sigue siendo el manifiesto (ver fuenteDe); esto es
+   solo el disco donde se busca el fichero, igual que en
+   harness_l1_equivalencia.js. */
+var DIRS = [path.resolve(RAIZ, arg.dir || path.join('simulador_ocular', 'dso')),
+            path.join(__dirname, 'fixtures', 'dso')];
+
+/* `fetch` de mentira que sirve ficheros: así el camino de la textura es el del
+   NAVEGADOR (ps1LeerTextura), no una relectura del PNG escrita aquí. */
+if (TEXTURA) {
+  var BASE = 'https://textura-local/dso/';
+  window.BitacoraPS1.texturasUrl = BASE;
+  require(path.join(RAIZ, 'resources', 'js', 'bitacora-png16.js'));
+  global.fetch = function (url) {
+    url = String(url);
+    if (url.indexOf(BASE) !== 0) return Promise.resolve({ ok: false, status: 599 });
+    var n = url.slice(BASE.length), ruta = null;
+    DIRS.forEach(function (d) { if (!ruta && fs.existsSync(path.join(d, n))) ruta = path.join(d, n); });
+    if (!ruta) return Promise.resolve({ ok: false, status: 404 });
+    var b = fs.readFileSync(ruta);
+    return Promise.resolve({
+      ok: true, status: 200,
+      arrayBuffer: function () { return Promise.resolve(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); },
+      json: function () { return Promise.resolve(JSON.parse(b.toString('utf8'))); }
+    });
+  };
+}
+
+/* El sidecar del objeto en disco. Solo se mira cuando el MANIFIESTO no conoce al
+   objeto: los de solo-mirar no están publicados y su textura vive en el `--dir`.
+   Dentro de un directorio manda la misma precedencia que el generador escribe en
+   `rangoSidecar`: una `fila` de `ausencia-excesiva` gana a un `<id>.<v>.json` en
+   disco, porque si mandara la textura un parche viejo resucitaría la imagen que
+   el veredicto acaba de rechazar. Dos versiones del mismo objeto en el mismo
+   directorio no se desempatan a ojo: se tira, que elegir por orden alfabético
+   del hash es pintar una textura vieja y llamarla «después». */
+function sidecarDe(nombre) {
+  var id = window.BitacoraPS1.ps1IdTextura(nombre);
+  for (var i = 0; i < DIRS.length; i++) {
+    if (!fs.existsSync(DIRS[i])) continue;
+    var hay = fs.readdirSync(DIRS[i]).filter(function (n) {
+      return n.indexOf(id + '.') === 0 && /\.json$/.test(n);
+    });
+    var leer = function (n) { return JSON.parse(fs.readFileSync(path.join(DIRS[i], n), 'utf8')); };
+    var filas = hay.filter(function (n) { return /\.fila\.json$/.test(n); });
+    for (var j = 0; j < filas.length; j++) {
+      var sc = leer(filas[j]);
+      if (sc.motivo === 'ausencia-excesiva') return sc;
+    }
+    var vers = hay.filter(function (n) { return !/\.fila\.json$/.test(n); });
+    if (vers.length > 1) throw new Error(id + ': ' + vers.length + ' versiones en ' + DIRS[i] + ', no se elige por hash');
+    if (vers.length) return leer(vers[0]);
+    if (filas.length) return leer(filas[0]);
+  }
+  return null;
+}
 
 function fila(n) { for (var i = 0; i < CAT.length; i++) if (CAT[i][0] === n) return CAT[i]; throw new Error('sin fila: ' + n); }
 function rutaGaia(f) {
@@ -94,18 +162,60 @@ var VISTAS = [
   { obj: 'NGC 205',  csv: 'gaia_ngc205.csv',   D: 203.0, M: 100, sqm: 20.5 }
 ];
 
+/* El parche crudo del objeto: el FITS del stack (antes) o la textura publicada
+   (después). Cuando no hay imagen que leer devuelve null y deja el motivo en
+   `notas`, que es lo que se escribe en el resumen: en producción es la capa
+   apagada para ese objeto, no un fallo de la corrida. */
+function fuenteDe(gal, notas) {
+  if (!TEXTURA) return B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida);
+  /* Quién decide: el MANIFIESTO, como en producción (ps1FuenteParche). Solo
+     cuando no tiene fila del objeto —los de solo-mirar, que no se publican— se
+     mira el sidecar del disco. Al revés, el arnés informaría de una capa que
+     producción no pinta. */
+  var fila = window.BitacoraPS1.ps1FilaTextura(gal.nombre), version;
+  if (fila && fila[1] === 'imagen') {
+    version = fila[2];
+  } else if (fila) {
+    notas.motivo = fila[6] || 'fila';
+    return Promise.resolve(null);
+  } else {
+    var sc = sidecarDe(gal.nombre);
+    if (!sc) { notas.motivo = 'sin-textura'; return Promise.resolve(null); }
+    if (sc.modelo === 'fila' || !sc.version) {
+      notas.motivo = sc.motivo || 'fila';
+      return Promise.resolve(null);
+    }
+    version = sc.version;
+  }
+  var base = window.BitacoraPS1.texturasUrl + window.BitacoraPS1.ps1IdTextura(gal.nombre) + '.' + version;
+  return window.BitacoraPS1.ps1LeerTextura(base + '.png', base + '.json', notas).then(function (T) {
+    if (!T) return null;
+    return { ancho: T.ancho, alto: T.alto, escalaAs: T.escalaAs, wcs: T.wcs || null, datos: T.datos };
+  });
+}
+
+function nombreVista(v) {
+  return v.obj.replace(/\s+/g, '') + '_D' + Math.round(v.D) + '_M' + v.M + '_sqm' + v.sqm;
+}
+
 var parches = {};   // un montaje por objeto, como producción
-function parcheDe(v) {
+function parcheDe(v, notas) {
   if (parches[v.obj]) return Promise.resolve(parches[v.obj]);
   var gal = P.galDeFila(fila(v.obj));
-  return B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida).then(function (F) {
+  return fuenteDe(gal, notas).then(function (F) {
+    if (!F) return null;
     parches[v.obj] = { gal: gal, parche: P.montar(F, gal, leerGaia(v.csv), CAT) };
     return parches[v.obj];
   });
 }
 
 function vista(v) {
-  return parcheDe(v).then(function (m) {
+  var notas = {};
+  return parcheDe(v, notas).then(function (m) {
+    if (!m) {
+      sinImagen.push(nombreVista(v) + ' (' + (notas.motivo || 'sin imagen') + ')');
+      return;
+    }
     var gal = m.gal, parche = m.parche;
     var cielo = { pupilaSalida: v.D / v.M, pupilaOjo: 7, sqm: v.sqm,
                   aumentos: v.M, realceMax: PS1.realceMax, perceptual: true };
@@ -124,7 +234,8 @@ function vista(v) {
       if (g > maxN) maxN = g;
       rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = g;
     }
-    var nombre = v.obj.replace(/\s+/g, '') + '_D' + Math.round(v.D) + '_M' + v.M + '_sqm' + v.sqm;
+    var nombre = nombreVista(v);
+    pintadas++;
     png.escribir(path.join(OUT, nombre + '.png'), rgb, SIZE, SIZE);
     console.log(nombre + '.png  θint ' + parche.thetaIntArcmin.toFixed(2) + '′ · campo ' +
       o.arcmin.toFixed(1) + '′ · fondo nivel ' + Math.round(c.nivelFondo) + ' · px con objeto ' +
@@ -132,7 +243,7 @@ function vista(v) {
   });
 }
 
-var cola = Promise.resolve(), saltadas = [];
+var cola = Promise.resolve(), saltadas = [], sinImagen = [], pintadas = 0;
 VISTAS.filter(function (v) { return !arg.solo || v.obj === arg.solo; }).forEach(function (v) {
   cola = cola.then(function () {
     /* Sin Gaia no hay máscara de estrellas, así que la vista no sería la de
@@ -145,7 +256,17 @@ VISTAS.filter(function (v) { return !arg.solo || v.obj === arg.solo; }).forEach(
   });
 });
 cola.then(function () {
-  console.log('→ ' + path.relative(RAIZ, OUT));
+  console.log('→ ' + path.relative(RAIZ, OUT) + '  (fuente: ' + (TEXTURA ? 'textura' : 'FITS') + ')');
+  /* Una corrida que no pinta NADA no es una corrida buena: sin este aviso, un
+     `--dir` equivocado sale con código 0 y con las 26 vistas en la lista de
+     saltadas, indistinguible de una validación pasada (ADR 0005). */
+  if (!pintadas) {
+    console.error('\nNi una sola vista pintada: revisa --dir, --fuente o los CSV de Gaia.');
+    process.exit(1);
+  }
+  if (sinImagen.length) {
+    console.log('\nSin imagen (' + sinImagen.length + '), con su motivo: ' + sinImagen.join(', '));
+  }
   if (saltadas.length) {
     console.log('\nSin Gaia (' + saltadas.length + '), vistas saltadas: ' + saltadas.join(' '));
     console.log('  banco golden (van a fixtures/gaia, versionados):');

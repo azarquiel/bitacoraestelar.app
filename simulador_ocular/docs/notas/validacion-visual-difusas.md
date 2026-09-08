@@ -70,6 +70,11 @@ node scripts/harness_vistas_np.js --etiqueta antes     # ANTES de tocar nada
 node scripts/harness_vistas_np.js --etiqueta despues
 ```
 
+Cuando el cambio es de dónde salen los píxeles —la fase 1— no hay nada que tocar
+entre las dos pasadas: el «después» es `--fuente textura`, que lee la textura
+publicada con el `ps1LeerTextura` del navegador en vez de bajar el FITS. La
+corrida de la fase 1 está en `docs/validacion/dso_texturas_vistas_fase1.md`.
+
 Cada etiqueta escribe a `.scratch/vistas-np-<etiqueta>/`. Sin etiqueta se usa el
 directorio de siempre. El «antes» hay que sacarlo **antes**: no se puede
 reconstruir después, porque el código que lo pintaba ya no está.
@@ -81,7 +86,10 @@ reconstruir después, porque el código que lo pintaba ya no está.
    una comparación.
 2. Se aplica el cambio.
 3. `--etiqueta despues`.
-4. Se comparan **los dos directorios, imagen a imagen**, y también la línea de
+4. Se comparan **los dos directorios, imagen a imagen** —a ojo y con
+   `node scripts/comparar_vistas.js antes despues`, que da los píxeles
+   distintos, el |Δ| máximo en niveles y la distancia entre ellos, que es lo que
+   separa el redondeo suelto de un borde o una malla—, y también la línea de
    resumen que el harness imprime por vista: `θint`, campo, nivel de fondo,
    píxeles con objeto y nivel máximo. Esa línea es la que convierte «se ve
    parecido» en algo revisable, y la que caza un cambio que el ojo no pilla.

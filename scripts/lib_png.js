@@ -58,5 +58,27 @@ function escribirGris16(ruta, u16, W, H) {
   fs.writeFileSync(ruta, bufferGris16(u16, W, H));
 }
 
+/* Lee lo que escribe `escribir`, y solo eso: RGB de 8 bits con filtro 0 en todas
+   las filas. No es un lector de PNG general —si el fichero trae otro filtro, se
+   tira en vez de devolver píxeles inventados—; existe para poder comparar dos
+   corridas del arnés de vistas sin traer una dependencia (CLAUDE.md: sin npm).
+   Devuelve { W, H, rgb } con rgb Uint8Array W*H*3. */
+function leer(ruta) {
+  var b = fs.readFileSync(ruta), W = b.readUInt32BE(16), H = b.readUInt32BE(20), idat = [], i = 8;
+  if (b[24] !== 8 || b[25] !== 2) throw new Error(ruta + ': no es RGB de 8 bits');
+  while (i < b.length) {
+    var n = b.readUInt32BE(i), tipo = b.toString('ascii', i + 4, i + 8);
+    if (tipo === 'IDAT') idat.push(b.slice(i + 8, i + 8 + n));
+    i += 12 + n;
+  }
+  var raw = zlib.inflateSync(Buffer.concat(idat)), rgb = new Uint8Array(W * H * 3);
+  for (var y = 0; y < H; y++) {
+    var o = y * (W * 3 + 1);
+    if (raw[o] !== 0) throw new Error(ruta + ': fila ' + y + ' con filtro ' + raw[o]);
+    raw.copy(Buffer.from(rgb.buffer), y * W * 3, o + 1, o + 1 + W * 3);
+  }
+  return { W: W, H: H, rgb: rgb };
+}
+
 module.exports = { escribir: escribir, escribirGris16: escribirGris16,
-                   bufferGris16: bufferGris16, chunk: chunk };
+                   bufferGris16: bufferGris16, chunk: chunk, leer: leer };
