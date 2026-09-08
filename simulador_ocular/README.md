@@ -531,8 +531,8 @@ cuerpo en mesetas de contorno duro (M81 posterizada). Juzgar la opacidad con el
 **perfil del catálogo** también está probado y **descartado**: el modelo solo
 representa la galaxia apuntada, así que borraba todo lo demás (NGC 5195 casi
 desaparecía). La protección que falta tendrá que mirar el entorno del píxel, no
-la elipse. Guardianes: `scripts/test_opacidad_escena.js` (la regla, con la
-bandera puesta a mano) y `scripts/vistas_opacidad_escena.js` (las vistas).
+la elipse. Guardián: `scripts/test_opacidad_escena.js` (la regla, con la
+bandera puesta a mano).
 
 Esa protección es la **opacidad por soporte local** (`ps1SoporteLocal`): la
 rampa se evalúa con `max(flujo del píxel, media de la caja de mezcla)` —la caja
@@ -544,8 +544,9 @@ uno tenue rodeado de fondo sigue sin protección (no vuelve la envolvente).
 Medido a 190×/21,2: ningún píxel baja, los brazos salen **bit a bit iguales**,
 y la amplificación de la rampa (contraste de imagen → contraste pintado) cae de
 ×1,6-×178 a ×1,00-×2,03; el salto brazo−zona oscura baja un 8-21 % y el flujo
-total sube del 1,6 % (M104) al 13 % (M101). Harness: `harness_depresiones_cielo.js`
-(el diagnóstico) y `scripts/vistas_opacidad_vecindad.js` (las vistas).
+total sube del 1,6 % (M104) al 13 % (M101). Los barridos posteriores del
+soporte, con sus veredictos: `docs/experimentos/ricco/soporte/` y
+`scripts/harness_soporte_rampa.js`.
 
 Con el cambio, la semántica de NaN queda **unificada en toda la cadena**
 (antes el anclaje lo convertía en 0 y la rama de «hueco» del pintado era
@@ -1099,8 +1100,17 @@ también arranca `scripts/dev_servidor_ocular.php` y comprueba que sirve
 `dso/*.png` y `dso/*.json` con su tipo. En producción, hasta que el T12 (#209)
 suba las texturas por FTP, el manifiesto declara filas y el proxy sigue en pie.
 
+**Publicarlas** es copiar los dos ficheros de cada objeto a
+`/wp-content/uploads/bitacora/dso/` y subir el manifiesto regenerado con ellos:
+el nombre lleva el hash, así que no hay `?v=` que tocar y una textura vieja
+puede convivir con la nueva. El manifiesto sí es un `.js` normal y necesita su
+`?v=N` (paso 1 del despliegue). Los dos van juntos: un manifiesto que declara
+`imagen` sin su PNG delante deja el objeto sin parche —y con `proxyRespaldo`
+apagado, sin imagen ninguna—.
+
 Objetivo y listones: `docs/especificaciones/catalogo_dso_texturas_objetivo.md`
-y ADR 0024.
+y ADR 0024. Veredicto de la fase 1 (los cuatro listones y las dos recapturas
+del golden): `docs/validacion/dso_texturas_fase1.md`.
 
 ---
 
@@ -1112,10 +1122,21 @@ y ADR 0024.
    `bitacora-png16.js` y `dso-texturas-datos.js`. Sin el manifiesto, todo va al
    proxy como antes; sin el códec, `bitacora-ps1.js` lanza al pedir una textura
    (el guardián suena a propósito, ADR 0020).
-2. **`dss-proxy.php`** y **`ps1-proxy.php`** → a esa misma carpeta, junto a
+2. **Texturas DSO** → los `dso/*.png` y `dso/*.json` a
+   `/wp-content/uploads/bitacora/dso/`. Están en **dos** directorios y hay que
+   subir los dos: `simulador_ocular/dso/` (ignorado, no versionado) y
+   `scripts/fixtures/dso/` (las 11 del banco golden, versionadas porque son la
+   entrada de los tests). El manifiesto los cuenta a los dos, así que subir solo
+   uno deja filas `imagen` sin su PNG delante. El manifiesto de esa misma tirada
+   (`dso-texturas-datos.js`) va donde el resto del JS, por el paso 1 y con su
+   `?v=N`: es lo único que hay que sincronizar con esta carpeta. La URL de una
+   textura es inmutable (el hash va en el nombre), así que subir una nueva no
+   invalida nada; borrar las viejas es opcional y solo se hace cuando ningún
+   manifiesto desplegado las nombra.
+3. **`dss-proxy.php`** y **`ps1-proxy.php`** → a esa misma carpeta, junto a
    `bitacora-cache-lru.php` (crean `cache-dss/` y `cache-ps1/` solos).
-3. **`ocular-wordpress.html`** → pégalo en un bloque "HTML personalizado" de la página.
-4. **El plugin** (`bitacora-registro.php`) → a `wp-content/plugins/bitacora-registro/`
+4. **`ocular-wordpress.html`** → pégalo en un bloque "HTML personalizado" de la página.
+5. **El plugin** (`bitacora-registro.php`) → a `wp-content/plugins/bitacora-registro/`
    (necesario para que el catálogo sea público). No hay que reactivarlo.
 
 **Verificar el acceso público** (en incógnito, sin sesión):

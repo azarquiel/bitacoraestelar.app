@@ -5,13 +5,17 @@ Fuente: Mattia Verga, «OpenNGC» (NGC.csv + IC.csv), revisión de NGC/IC con
 tamaños, magnitudes y tipos. El fichero de partida (mapa/datos/ongc_nebulosas.csv)
 es la unión de ambos ya filtrada a los tipos nebulares.
 
-Por qué sintético y no un mapa all-sky: la alternativa era muestrear el mapa Hα
-de Finkbeiner a 6'/px. A esa resolución un campo de 30' recibe 5×5 píxeles —un
+Por qué no un mapa all-sky de Hα: la alternativa era muestrear el mapa de
+Finkbeiner a 6'/px. A esa resolución un campo de 30' recibe 5×5 píxeles —un
 degradado, no estructura— y el ojo es casi ciego a 656 nm (la visión escotópica
-pica en 507 nm), así que un mapa Hα crudo pone brillo donde el ojo ve poco.
-Mismo argumento que llevó a las galaxias a un perfil sintético: por el ocular
-una nebulosa es una mancha difusa de bordes suaves, y eso se dibuja desde el
-catálogo sin descargar un solo megabyte.
+pica en 507 nm), así que un mapa Hα crudo pone brillo donde el ojo ve poco. Eso
+sigue en pie; lo que ya NO se sostiene es la parte que decía «y por eso el
+perfil sintético basta». La estructura de una nebulosa la pinta la imagen
+profunda cuando la hay: las de emisión, las de reflexión, las planetarias y los
+restos de supernova entran en el banco de texturas DSO igual que las galaxias
+(NGC 6888, NGC 2068, NGC 7008, NGC 1952…), y
+el perfil de esta fila queda de presupuesto de luz al que se ancla ese parche y
+de dibujo de respaldo cuando no hay imagen (ADR 0020 y ADR 0024).
 
 Las nebulosas comparten la tubería de las galaxias: se emiten con el MISMO
 esquema de fila, y el render las pinta con `capaGalaxias`. El perfil es
