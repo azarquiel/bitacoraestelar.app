@@ -456,7 +456,8 @@
      marcadores. non-scaling-stroke (lo pone el JS) mantiene el grosor constante
      en pantalla pese al zoom. Los trazos se superponen: el futuro y el pasado
      dan la forma del viaje, la estela ancha pone el resplandor bajo el tramo
-     encendido y ese tramo lleva el trazo grueso por el que va la nave.
+     encendido y ese tramo lleva el trazo grueso, iluminado desde la nave que lo
+     recorre y apagándose hacia sus dos extremos.
      Todos son el mismo oro #f4c76b (244,199,107) de "Registrar".
 
      La ruta va por encima de la imagen de la galaxia y por debajo de los
@@ -645,10 +646,13 @@
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
   .mw-ruta-futuro { stroke: rgba(244,199,107,0.04); stroke-width: 0.8; }
   .mw-ruta-pasado { stroke: rgba(244,199,107,0.14); stroke-width: 0.8; }
+  /* El trazo del tramo encendido lo pinta un degradado que pone el JS
+     (#mw-ruta-brillo): brillante bajo la nave y apagándose hacia los extremos,
+     siempre por debajo de la nave, que es lo que hay que mirar. Aquí solo va el
+     grosor; sin el degradado puesto, el trazo no se vería. */
   .mw-ruta-activo {
-    stroke: rgba(244,199,107,0.85);
     stroke-width: 1.6;
-    filter: drop-shadow(0 0 4px rgba(244,199,107,0.75));
+    filter: drop-shadow(0 0 4px rgba(244,199,107,0.55));
   }
   .mw-ruta-nave {
     fill: rgba(244,199,107,0.98);

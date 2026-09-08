@@ -209,6 +209,7 @@ var ctxFalso = {
   moveTo: function () {}, lineTo: function () {}, closePath: function () {},
   setLineDash: function () {}, translate: function () {},
   rotate: function (r) { giro = r; }, fill: function () { naves++; },
+  createLinearGradient: function () { return { addColorStop: function () {} }; },
   stroke: function () { trazos++; }
 };
 VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }], 1);
@@ -231,6 +232,29 @@ trazos = 0; naves = 0;
 VLV.trazarCanvas(ctxFalso, tres, 1, null);
 eq(trazos, 2, 'sin tramo encendido (movimiento reducido) la ruta va entera, quieta y con su brillo');
 eq(naves, 0, 'y sin nave que la recorra');
+
+console.log('la nave y el brillo del tramo que recorre:');
+// El delta de la solapa no es simétrico: un ala barrida más larga que la otra.
+var alas = VLV.NAVE.filter(function (p) { return p[0] < 0 && p[1] !== 0; });
+eq(alas.length, 2, 'la nave tiene dos alas hacia atrás');
+eq(Math.abs(alas[0][1]) !== Math.abs(alas[1][1]), true, 'y una es más larga que la otra');
+eq(VLV.NAVE[0][0] > 0 && VLV.NAVE[0][1] === 0, true, 'la punta va delante y centrada');
+// El tramo se ilumina DESDE la nave: máximo en ella, y siempre por debajo de
+// ella para que la nave sea lo que se mira.
+function brilloEn(paradas, x) {
+  for (var i = 0; i < paradas.length; i++) if (Math.abs(paradas[i][0] - x) < 1e-9) return paradas[i][1];
+  return null;
+}
+var pm = VLV.paradasDeBrillo(0.5);
+eq(brilloEn(pm, 0.5) > brilloEn(pm, 0), true, 'bajo la nave brilla más que en el extremo');
+eq(brilloEn(pm, 0.5) < 0.98, true, 'pero menos que la nave misma');
+eq(pm.map(function (p) { return p[0]; }), [0, 0.5 - VLV.CAIDA, 0.5, 0.5 + VLV.CAIDA, 1],
+   'las paradas van en orden, con la caída a los dos lados');
+// En las puntas del tramo no hay medio degradado que se salga: se recorta.
+var p0 = VLV.paradasDeBrillo(0);
+eq(p0[0][0] === 0 && p0[0][1] > p0[p0.length - 1][1], true,
+   'saliendo del origen, el brillo arranca en la nave y cae hacia adelante');
+eq(VLV.paradasDeBrillo(1)[0][0], 0, 'y al llegar, al revés, sin paradas fuera del tramo');
 
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

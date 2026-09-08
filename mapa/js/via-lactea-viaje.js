@@ -266,9 +266,20 @@
   var ORO = '244, 199, 107';          // #f4c76b, el ámbar del mapa
 
   // La nave, apuntando al destino (+x) y centrada en su posición: la punta
-  // delante, las dos alas barridas hacia atrás y la muesca de la popa. Es la
-  // misma figura en el lienzo y en el SVG, así que vive aquí y no en cada uno.
-  var NAVE = [[7.5, 0], [-4.5, -5.5], [-1.5, 0], [-4.5, 5.5]];
+  // delante, la muesca de la popa y las dos alas barridas hacia atrás, DESIGUALES
+  // —una larga y otra corta—, que es lo que hace reconocible al delta de la
+  // solapa. Es la misma figura en el lienzo y en el SVG, así que vive aquí y no
+  // en cada uno.
+  var NAVE = [[8.5, 0], [-7, -7], [-2, 0], [-3.5, 4.5]];
+
+  // El tramo encendido se ilumina DESDE la nave: brillante bajo ella y apagándose
+  // hacia los dos extremos. Menos que la nave, para que ella siga siendo lo que
+  // se mira, y con la caída lo bastante larga como para que no se lea como un
+  // foco. La caída va en partes del tramo, no en píxeles: en un tramo corto y en
+  // uno largo se ve igual de suave.
+  var BRILLO_NAVE = 0.7;              // bajo la nave
+  var BRILLO_LEJOS = 0.16;            // en las puntas del tramo
+  var CAIDA = 0.35;                   // en qué parte del tramo se apaga
 
   // La consulta se guarda una vez: esto se pregunta en cada fotograma y de los
   // tres bucles (galaxia, atlas y vecindario), y matchMedia() no es gratis.
@@ -378,6 +389,30 @@
   }
 
   /**
+   * Pone en un degradado ya creado (canvas) las paradas del brillo del tramo:
+   * la nave en 'u' y la caída hacia los dos extremos. Devuelve el degradado.
+   * Las paradas se piden en orden, así que se recortan al tramo.
+   */
+  function paradasDeBrillo(u) {
+    var v = Math.min(1, Math.max(0, u));
+    var paradas = [];
+    if (v > 0) paradas.push([0, BRILLO_LEJOS]);
+    if (v - CAIDA > 0) paradas.push([v - CAIDA, BRILLO_LEJOS]);
+    paradas.push([v, BRILLO_NAVE]);
+    if (v + CAIDA < 1) paradas.push([v + CAIDA, BRILLO_LEJOS]);
+    if (v < 1) paradas.push([1, BRILLO_LEJOS]);
+    return paradas;
+  }
+
+  function degradadoDelTramo(grad, u, alpha) {
+    var paradas = paradasDeBrillo(u);
+    for (var i = 0; i < paradas.length; i++) {
+      grad.addColorStop(paradas[i][0], 'rgba(' + ORO + ',' + (paradas[i][1] * alpha) + ')');
+    }
+    return grad;
+  }
+
+  /**
    * Dibuja la ruta sobre un canvas 2D ya escalado a píxeles de pantalla.
    * 'puntos' es [{sx, sy}, ...] en el orden del recorrido (el primero es el
    * origen de la capa: el Sol o la Vía Láctea). Menos de dos puntos no es una
@@ -426,14 +461,24 @@
     // gusano", y ponerla en toda la ruta igualaba el brillo de lo apagado con
     // el de lo encendido, que es justo lo que hay que separar.
     trazo(lucido, 4, 0.10);
-    // El tramo encendido: línea FIJA, gruesa y brillante. Lo único que se mueve
-    // por ella es la nave, y con el punteado corriendo por debajo se veían dos
-    // movimientos a la vez donde solo hay un viaje.
+
+    // El tramo encendido: línea FIJA y gruesa. Lo único que se mueve por ella es
+    // la nave, y con el punteado corriendo por debajo se veían dos movimientos a
+    // la vez donde solo hay un viaje.
     ctx.shadowColor = 'rgba(' + ORO + ',0.85)';
     ctx.shadowBlur = 8;
-    trazo(lucido, 1.6, 0.85);
-
-    if (!partes) { ctx.restore(); return; }   // sin recorrido no hay nave que mover
+    if (!partes) {                    // sin recorrido no hay nave ni degradado
+      trazo(lucido, 1.6, BRILLO_NAVE);
+      ctx.restore();
+      return;
+    }
+    camino(partes.activo);
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = degradadoDelTramo(
+      ctx.createLinearGradient(partes.activo[0].sx, partes.activo[0].sy,
+                               partes.activo[1].sx, partes.activo[1].sy),
+      e.u, a);
+    ctx.stroke();
 
     // Y la nave, en su sitio del tramo y apuntando al destino.
     ctx.translate(partes.cabeza.sx, partes.cabeza.sy);
@@ -452,6 +497,10 @@
     DIST_MIN_EXTRAGALACTICA: DIST_MIN_EXTRAGALACTICA,
     ORO: ORO,
     NAVE: NAVE,
+    BRILLO_NAVE: BRILLO_NAVE,
+    BRILLO_LEJOS: BRILLO_LEJOS,
+    CAIDA: CAIDA,
+    paradasDeBrillo: paradasDeBrillo,
     MS_TRAMO_MEDIO: MS_TRAMO_MEDIO,
     MS_MIN_TRAMO: MS_MIN_TRAMO,
     MS_MAX_TRAMO: MS_MAX_TRAMO,

@@ -445,6 +445,22 @@
   var rutaSvg = document.createElementNS(SVG_NS, 'svg');
   rutaSvg.setAttribute('id', 'mw-ruta');
   rutaSvg.style.display = 'none';
+  // El brillo del tramo encendido: fuerte bajo la nave y apagándose hacia los dos
+  // extremos. Las paradas las decide VLViaje.paradasDeBrillo(), la misma ley que
+  // usan los lienzos; aquí solo se copian al degradado y se le dan los extremos
+  // del tramo en coordenadas de la ruta (userSpaceOnUse).
+  var rutaDefs = document.createElementNS(SVG_NS, 'defs');
+  var rutaBrillo = document.createElementNS(SVG_NS, 'linearGradient');
+  rutaBrillo.setAttribute('id', 'mw-ruta-brillo');
+  rutaBrillo.setAttribute('gradientUnits', 'userSpaceOnUse');
+  var rutaParadas = VLViaje.paradasDeBrillo(0.5).map(function () {
+    var st = document.createElementNS(SVG_NS, 'stop');
+    rutaBrillo.appendChild(st);
+    return st;
+  });
+  rutaDefs.appendChild(rutaBrillo);
+  rutaSvg.appendChild(rutaDefs);
+
   var rutaTrazos = {};
   ['estela', 'futuro', 'pasado', 'activo'].forEach(function (clase) {
     var pl = document.createElementNS(SVG_NS, 'polyline');
@@ -634,7 +650,8 @@
   function pintarRuta() {
     rutaFrame = 0;
     if (rutaPuntos.length < 2) return;
-    var partes = VLViaje.tramosDe(rutaPuntos, VLViaje.tramoEncendido(null, rutaPuntos));
+    var estado = VLViaje.tramoEncendido(null, rutaPuntos);
+    var partes = VLViaje.tramosDe(rutaPuntos, estado);
 
     // Sin tramo encendido (movimiento reducido) la ruta entera es el tramo: se
     // ve quieta y con el brillo de siempre, no apagada.
@@ -643,7 +660,26 @@
     rutaTrazos.futuro.setAttribute('points', partes ? comoPolilinea(partes.futuro) : '');
     rutaTrazos.estela.setAttribute('points', lucido);
     rutaTrazos.activo.setAttribute('points', lucido);
-    if (!partes) { rutaNave.style.display = 'none'; return; }
+    if (!partes) {                  // sin nave no hay de dónde iluminar: plano
+      rutaTrazos.activo.setAttribute('stroke', 'rgba(244,199,107,0.7)');
+      rutaNave.style.display = 'none';
+      return;
+    }
+    var a0 = partes.activo[0], a1 = partes.activo[1];
+    rutaBrillo.setAttribute('x1', a0.sx.toFixed(1));
+    rutaBrillo.setAttribute('y1', a0.sy.toFixed(1));
+    rutaBrillo.setAttribute('x2', a1.sx.toFixed(1));
+    rutaBrillo.setAttribute('y2', a1.sy.toFixed(1));
+    var paradas = VLViaje.paradasDeBrillo(estado.u);
+    for (var i = 0; i < rutaParadas.length; i++) {
+      // Las paradas son cinco o menos según dónde vaya la nave; las que sobran
+      // se pegan al final para no tener que crear y borrar nodos por fotograma.
+      var pa = paradas[Math.min(i, paradas.length - 1)];
+      rutaParadas[i].setAttribute('offset', pa[0]);
+      rutaParadas[i].setAttribute('stop-color', 'rgb(244,199,107)');
+      rutaParadas[i].setAttribute('stop-opacity', pa[1]);
+    }
+    rutaTrazos.activo.setAttribute('stroke', 'url(#mw-ruta-brillo)');
 
     rutaNave.setAttribute('transform',
       'translate(' + partes.cabeza.sx.toFixed(1) + ',' + partes.cabeza.sy.toFixed(1) + ')' +
