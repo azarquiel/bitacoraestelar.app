@@ -94,6 +94,18 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   (`window.BitacoraPNG16`), compartida por el generador (`scripts/gen_dso_texturas.js`) y el
   navegador; el manifiesto, en `dso-texturas-datos.js` (`window.BITACORA_DSO_TEXTURAS`),
   generado. Quién elige la fuente: `ps1FuenteParche`.
+- **Consumidores:** en producción, `ps1LeerTextura` —**la única que decodifica**, en
+  cualquier camino y también en los tests— y las dos páginas que cargan
+  `bitacora-png16.js` y `dso-texturas-datos.js` antes de `bitacora-ps1.js`
+  (`ocular-wordpress.html` y `registro/registrar-observacion-wordpress.html`). Fuera
+  de producción, los guardianes montan parche por esa misma función desde
+  `scripts/fixtures/dso/` (golden difuso, `test_fuente_parche`, `test_sin_red_dso`),
+  y hay quien abre los ficheros por su cuenta para auditarlos, no para pintar:
+  `test_dso_texturas` cuadra los sidecar con el manifiesto y llama a `BitacoraPNG16`
+  directamente sobre lo escrito, y `harness_l1_coste.html` los sirve para
+  cronometrarlos. La regla no es «solo tres los leen»: es que **en el camino del
+  render solo `ps1LeerTextura` los convierte en parche**, y quien decodifica lo hace
+  siempre con la ley de `bitacora-png16.js`, nunca con una copia suya.
 - **Invariante:** lo que devuelve `ps1LeerTextura` es indistinguible en forma de lo que
   devuelve `parseFITS`. Nada aguas abajo de esa frontera —`ps1AnclarACatalogo`, la mezcla,
   `ps1PsfParche`, H2c, la máscara difusa— puede saber de dónde vino el parche.

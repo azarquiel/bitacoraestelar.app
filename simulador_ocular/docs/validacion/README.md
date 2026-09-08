@@ -15,3 +15,4 @@ Orden cronológico de ejecución:
 9. `recaptura_r2_textura.md` (2026-09-07) — deltas de la recaptura R2 del golden difuso (la fuente pasa a ser la textura)
 10. `dso_texturas_vistas_fase1.md` (2026-09-08) — validación visual antes/después de la fase 1 (FITS → textura)
 11. `dso_texturas_l1_coste.md` (2026-09-08) — L1.3: tiempo, bytes y memoria en el navegador, sobre los 4 golden
+12. `dso_texturas_fase1.md` (2026-09-08) — informe de cierre de la fase 1: veredicto de L1.1 a L1.4 y las tablas de deltas de R1 y R2

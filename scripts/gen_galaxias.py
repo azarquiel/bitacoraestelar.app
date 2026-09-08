@@ -5,11 +5,21 @@ Fuente: G. de Vaucouleurs et al. (1991), «Third Reference Catalogue of Bright
 Galaxies», vía VizieR VII/155/rc3. El fichero de partida
 (mapa/datos/rc3_brillantes.tsv) es la consulta ya filtrada a BT < 13,5.
 
-Para qué: el simulador pinta las galaxias como PERFIL DE SÉRSIC sintético. Por el
-ocular una galaxia es un óvalo difuso con el núcleo más brillante —brazos y
-bandas de polvo exigen apertura grande y cielo oscuro—, así que un perfil
-sintético no es una aproximación barata: es más honesto que una foto profunda, y
-no cuesta ningún asset de imagen.
+Para qué: el perfil de SÉRSIC de esta fila es el PRESUPUESTO DE LUZ de la galaxia.
+Desde la capa de imagen difusa, quien manda en la morfología es la imagen
+profunda: el parche de PanSTARRS, que llega por el proxy y, según se vayan
+publicando, como textura DSO propia del proyecto. El perfil hace dos papeles
+distintos: es el presupuesto al que `ps1AnclarACatalogo` amarra ese
+parche (la mag total de aquí fija cuánta luz pinta), y es lo que se dibuja cuando
+no hay imagen: objeto sin fila de textura con `imagen`, ausencia excesiva, o el
+halo por fuera del recorte. Los papeles y la frontera están en el ADR 0020 y en
+`simulador_ocular/CONTEXT.md` («capa de imagen difusa», «textura DSO»).
+
+Lo que el perfil NO es: una alternativa más honesta que la foto profunda. Esa
+doctrina —la de este mismo docstring hasta la fase 1 del catálogo de texturas—
+la sustituyó la imagen real: brazos y bandas de polvo exigen apertura grande y
+cielo oscuro, sí, pero eso lo decide el modelo visual sobre la luz que la imagen
+trae, no un óvalo suave dibujado de antemano.
 
 De RC3 salen los cuatro parámetros que definen el perfil:
   · r_e  — radio efectivo (semieje mayor que encierra la mitad de la luz).
