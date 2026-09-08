@@ -43,7 +43,10 @@
 
   // Los dos ejes del filtro (#233). CONJUNTO: qué objetos entran (null = todos;
   // una lista de ids = un viaje o, mañana, un catálogo). ESTADO: cómo están
-  // respecto al observador activo. Sin observador ninguno de los dos manda.
+  // respecto al observador activo... y sin observador ("Todas las
+  // observaciones"), respecto a CUALQUIERA: explorado = lo ha observado
+  // alguien. Así el eje también sirve al visitante anónimo, que no tiene
+  // observador propio pero sí catálogo que mirar.
   var ESTADOS = { todo: 1, visitados: 1, porvisitar: 1 };
   var estado = 'visitados';
   var conjunto = null;      // {id: true} o null
@@ -139,7 +142,8 @@
 
   // ¿Se dibuja el objeto con el filtro actual? Primero el conjunto (fuera de
   // la lista no hay nada que ver); luego el estado:
-  //   visitados  -> solo con observación propia.
+  //   visitados  -> solo con observación propia (sin observador activo, de
+  //                 cualquiera: el visitante anónimo ve lo ya explorado).
   //   porvisitar -> todo lo del conjunto SIN observación propia, lo haya
   //                 observado otro o nadie; ignora CONFIG.observacionesAjenas,
   //                 que gobierna "descubrir a otros", no "qué me falta".
@@ -147,17 +151,20 @@
   //                 activo, ajenas atenuadas; las de nadie se ocultan.
   function visiblePorObservador(id) {
     if (conjunto && !conjunto[id]) return false;
-    if (!observadorActivo) return true;
+    // getFicha() ya resuelve las dos lecturas de "explorado": con observador
+    // activo, la ficha suya; sin observador, la de cualquiera.
     if (estado === 'visitados') return !!getFicha(id);
     if (estado === 'porvisitar') return !getFicha(id);
+    if (!observadorActivo) return true;
     return estadoObservador(id) !== 'ninguna';
   }
 
   // ¿Se dibuja como "por visitar" (anillo hueco)? En 'visitados' nunca; en
   // 'porvisitar' todo lo visible lo es; en 'todo' solo lo observado por otros.
   function atenuadoPorObservador(id) {
-    if (!observadorActivo || estado === 'visitados') return false;
+    if (estado === 'visitados') return false;
     if (estado === 'porvisitar') return !getFicha(id);
+    if (!observadorActivo) return false;
     return estadoObservador(id) === 'ajena';
   }
 

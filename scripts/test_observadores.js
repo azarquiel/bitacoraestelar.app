@@ -94,10 +94,24 @@ eq(VLO.visiblePorObservador('m57'), false, 'todo: sujeto a CONFIG.observacionesA
 global.CONFIG.observacionesAjenas.activo = true;
 VLO.setEstado('cualquier cosa');
 eq(VLO.getEstado(), 'visitados', 'estado desconocido -> visitados');
-VLO.setEstado('porvisitar');
+
+// Sin observador ("Todas las observaciones", el caso del visitante anónimo) el
+// eje ESTADO sigue mandando, leyendo "explorado" como "lo ha explorado
+// alguien": es lo único que puede significar cuando no hay observador propio.
 VLO.setActivo('');
-eq(VLO.visiblePorObservador('m42'), true, 'sin observador el estado no manda: todo visible');
-eq(VLO.atenuadoPorObservador('m57'), false, 'sin observador nada lleva el anillo');
+VLO.setEstado('todo');
+eq(VLO.visiblePorObservador('m42'), true, 'sin observador, todo: hasta lo que nadie observó');
+eq(VLO.atenuadoPorObservador('m57'), false, 'sin observador, todo: nada lleva el anillo');
+VLO.setEstado('visitados');
+eq(VLO.visiblePorObservador('m13'), true, 'sin observador, explorados: observado por alguien');
+eq(VLO.visiblePorObservador('m57'), true, 'sin observador, explorados: da igual quién lo observó');
+eq(VLO.visiblePorObservador('m42'), false, 'sin observador, explorados: lo de nadie se oculta');
+eq(VLO.atenuadoPorObservador('m57'), false, 'sin observador, explorados: nada lleva el anillo');
+VLO.setEstado('porvisitar');
+eq(VLO.visiblePorObservador('m13'), false, 'sin observador, por explorar: lo observado se oculta');
+eq(VLO.visiblePorObservador('m42'), true, 'sin observador, por explorar: lo que nadie observó');
+eq(VLO.atenuadoPorObservador('m42'), true, 'sin observador, por explorar: con el anillo');
+eq(VLO.recuento(['m13', 'm42', 'm57']), 1, 'sin observador, recuento de por explorar: solo m42');
 
 console.log('eje conjunto (lista de ids o null):');
 VLO.setActivo('israel');

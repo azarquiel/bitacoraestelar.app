@@ -657,7 +657,7 @@
     for (var i = 0; i < estadoRadios.length; i++) {
       estadoCuentas[i].textContent = estadoRadios[i].checked ? ' · ' + n : '';
     }
-    if (VLO.getActivo() && !n) {
+    if (VLO.getEstado() !== 'todo' && !n) {
       showToast('Nada que enseñar con este filtro: prueba otro estado o conjunto.');
     }
   }
@@ -2650,13 +2650,22 @@
     var claveInicial = (window.BITACORA_WP && BITACORA_WP.observadorClave)
       ? BITACORA_WP.observadorClave
       : (window.OBSERVADOR_ACTIVO || '');
-    if (claveInicial && conObs[claveInicial]) {
-      observadorSelect.value = claveInicial;
-      VLO.setActivo(claveInicial);   // el filtro se pinta al final del arranque, con el estado de la URL
-    }
+    // El valor se fija SIEMPRE, también cuando no hay clave inicial: al recargar,
+    // el navegador restaura por su cuenta el <select> con lo último elegido (y
+    // algunos lo autocompletan), y entonces el combo enseñaba a un compañero que
+    // el filtro no tenía por activo — mapa de todos con nombre de uno. Vacío es
+    // "Todas las observaciones", el arranque del visitante sin sesión.
+    observadorSelect.value = (claveInicial && conObs[claveInicial]) ? claveInicial : '';
+    // El filtro se lee del combo, no de la clave: así no pueden discrepar. Se
+    // pinta al final del arranque, con el estado de la URL.
+    VLO.setActivo(observadorSelect.value);
 
     observadorSelect.addEventListener('change', function () {
       VLO.setActivo(observadorSelect.value);
+      // Elegir a un compañero es pedir ver SUS exploraciones, y volver a
+      // "Todas" es pedir el catálogo entero; mientras el usuario no toque el
+      // eje ESTADO, lo lleva el observador.
+      if (!estadoTocado) estadoElegido = estadoPorDefecto();
       poblarViajes();          // los viajes son de cada observador: se rehacen
       aplicarViaje('');        // y el que se estuviera recorriendo termina aquí (y pinta el filtro)
       var fO = document.getElementById('ficha-overlay');
@@ -2839,18 +2848,25 @@
   // eligió el usuario (estadoElegido); solo lo fija en 'todo' mientras dura.
   var estadoFieldset = document.getElementById('mw-estado');
   var estadoAviso = document.getElementById('mw-estado-aviso');
-  var estadoElegido = 'visitados';
+  // El estado de arranque depende de a quién se está mirando: con observador
+  // (sesión iniciada o elegido a mano) se abre por SUS explorados; sin
+  // observador, "Todas las observaciones" enseña el catálogo entero, así que el
+  // control tiene que decir 'todo' o mentiría sobre lo que se ve.
+  function estadoPorDefecto() { return VLO.getActivo() ? 'visitados' : 'todo'; }
+  var estadoElegido = estadoPorDefecto();
+  var estadoTocado = false;   // ¿lo ha elegido el usuario? entonces no se toca
 
   function aplicarEstado(e) {
     VLO.setEstado(e);
     if (!estadoFieldset) return;
     var radio = estadoFieldset.querySelector('input[value="' + VLO.getEstado() + '"]');
     if (radio) radio.checked = true;
-    estadoFieldset.disabled = !VLO.getActivo() || !!viajeActivo;
+    // Sin observador el eje sigue mandando: 'explorado' pasa a significar
+    // "lo ha explorado alguien", que es justo lo que puede mirar un visitante
+    // anónimo. Lo único que lo deshabilita es el viaje.
+    estadoFieldset.disabled = !!viajeActivo;
     // El motivo de estar deshabilitado se lee, no solo se adivina.
-    var motivo = !VLO.getActivo()
-      ? 'Seleccione un observador para ver qué ha explorado'
-      : (viajeActivo ? 'Durante un viaje se ven todas sus escalas' : '');
+    var motivo = viajeActivo ? 'Durante un viaje se ven todas sus escalas' : '';
     estadoFieldset.title = motivo;
     if (estadoAviso) estadoAviso.textContent = motivo;
   }
@@ -2859,6 +2875,7 @@
     estadoFieldset.addEventListener('change', function (ev) {
       if (ev.target.name !== 'mw-estado') return;
       estadoElegido = ev.target.value;
+      estadoTocado = true;
       aplicarEstado(estadoElegido);
       aplicarFiltroObservador();
       reflejarEnUrl();
@@ -2873,7 +2890,7 @@
     var u = new URL(window.location.href);
     if (viajeActivo) u.searchParams.set('viaje', viajeActivo);
     else u.searchParams.delete('viaje');
-    if (estadoElegido !== 'visitados') u.searchParams.set('estado', estadoElegido);
+    if (estadoElegido !== estadoPorDefecto()) u.searchParams.set('estado', estadoElegido);
     else u.searchParams.delete('estado');
     history.replaceState(null, '', u.toString());
   }
@@ -3376,8 +3393,10 @@
   })();
   var viajePedido = params.get('viaje') || '';
   // ?estado=todo|visitados|porvisitar acompaña al viaje en la URL (#233).
-  aplicarEstado(params.get('estado') || 'visitados');
+  var estadoPedido = params.get('estado') || '';
+  aplicarEstado(estadoPedido || estadoPorDefecto());
   estadoElegido = VLO.getEstado();   // un valor desconocido cae a 'visitados'
+  estadoTocado = !!estadoPedido;     // el ?estado= de la URL es una elección
   aplicarFiltroObservador();
   if (viajePedido) {
     var arrancarViaje = function () {
@@ -3393,6 +3412,9 @@
       }
       if (observadorSelect) observadorSelect.value = duenyo;
       VLO.setActivo(duenyo);
+      // El viaje trae dueño: si el usuario no ha elegido estado, al salir del
+      // viaje se queda el defecto de ESE observador, no el del arranque anónimo.
+      if (!estadoTocado) estadoElegido = estadoPorDefecto();
       poblarViajes();
       aplicarViaje(viajePedido);   // pinta el filtro
     };
