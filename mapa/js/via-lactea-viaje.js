@@ -287,11 +287,15 @@
     return -((t / 1000) * PX_POR_SEGUNDO) % ciclo;
   }
 
-  // Cuánto dura la travesía de UN tramo y cuánto se espera al final antes de
-  // volver a salir del origen. Fija por tramo, no proporcional a su longitud en
-  // pantalla: con las distancias de por medio, un tramo duraría tres fotogramas
-  // y el siguiente medio minuto.
-  var MS_POR_TRAMO = 1200;
+  // La luz va a VELOCIDAD constante en pantalla, así que cada tramo dura lo que
+  // mide: con una duración fija por tramo, el salto largo se recorría más
+  // deprisa que el corto y la nave parecía acelerar según lo lejos que estuviera
+  // el objeto. Los topes evitan las dos formas de que eso se vaya de las manos:
+  // el tramo cortísimo que sería un parpadeo y el saltazo que duraría media
+  // vuelta del reloj.
+  var PX_POR_SEGUNDO_LUZ = 140;
+  var MS_MIN_TRAMO = 800;
+  var MS_MAX_TRAMO = 3000;
   var MS_PAUSA = 800;
 
   // Origen del reloj del recorrido. Es el ÚNICO estado del módulo, y a propósito:
@@ -306,22 +310,42 @@
   function reiniciar(ahoraMs) { origenReloj = ahora(ahoraMs); }
 
   /**
+   * Lo que tarda la luz en cada tramo de la ruta, en milisegundos: su longitud
+   * en pantalla dividida por la velocidad, entre los dos topes. Se recalcula en
+   * cada consulta porque las longitudes cambian con el zoom.
+   */
+  function duracionesDe(puntos) {
+    var ms = [];
+    for (var i = 0; i + 1 < puntos.length; i++) {
+      var dx = puntos[i + 1].sx - puntos[i].sx;
+      var dy = puntos[i + 1].sy - puntos[i].sy;
+      var t = Math.sqrt(dx * dx + dy * dy) / PX_POR_SEGUNDO_LUZ * 1000;
+      ms.push(Math.min(MS_MAX_TRAMO, Math.max(MS_MIN_TRAMO, t)));
+    }
+    return ms;
+  }
+
+  /**
    * Qué tramo está encendido y por dónde va la luz dentro de él, para una ruta
-   * de 'nPuntos' vértices (origen incluido): { tramo, u }, con u de 0 a 1.
+   * de vértices {sx, sy} (el primero es el origen de la capa): { tramo, u }, con
+   * u de 0 a 1.
    *
    * null = no hay recorrido que animar: o no hay ni un tramo, o el visitante
    * pidió movimiento reducido y la ruta va entera y quieta.
    */
-  function tramoEncendido(ahoraMs, nPuntos) {
-    var nTramos = (nPuntos | 0) - 1;
-    if (nTramos < 1 || movimientoReducido()) return null;
-    var ciclo = nTramos * MS_POR_TRAMO + MS_PAUSA;
-    var recorrido = nTramos * MS_POR_TRAMO;
-    var t = (ahora(ahoraMs) - origenReloj) % ciclo;
-    if (t < 0) t += ciclo;                       // reloj movido hacia adelante
-    if (t >= recorrido) return { tramo: nTramos - 1, u: 1 };  // pausa del final
-    var tramo = Math.floor(t / MS_POR_TRAMO);
-    return { tramo: tramo, u: (t - tramo * MS_POR_TRAMO) / MS_POR_TRAMO };
+  function tramoEncendido(ahoraMs, puntos) {
+    if (!puntos || puntos.length < 2 || movimientoReducido()) return null;
+    var ms = duracionesDe(puntos);
+    var recorrido = 0;
+    for (var i = 0; i < ms.length; i++) recorrido += ms[i];
+    var t = (ahora(ahoraMs) - origenReloj) % (recorrido + MS_PAUSA);
+    if (t < 0) t += recorrido + MS_PAUSA;        // reloj movido hacia adelante
+    if (t >= recorrido) return { tramo: ms.length - 1, u: 1 };  // pausa del final
+    for (var j = 0; j < ms.length; j++) {
+      if (t < ms[j]) return { tramo: j, u: t / ms[j] };
+      t -= ms[j];
+    }
+    return { tramo: ms.length - 1, u: 1 };       // por redondeo, nunca por lógica
   }
 
   /**
@@ -359,7 +383,7 @@
   function trazarCanvas(ctx, puntos, faseActual, alpha, estado) {
     if (!ctx || !puntos || puntos.length < 2) return;
     var a = (typeof alpha === 'number') ? alpha : 1;
-    var e = (estado === undefined) ? tramoEncendido(null, puntos.length) : estado;
+    var e = (estado === undefined) ? tramoEncendido(null, puntos) : estado;
     var partes = tramosDe(puntos, e);
 
     ctx.save();
@@ -381,26 +405,28 @@
     }
 
     ctx.setLineDash([]);
-    // Estela: ancha, muy tenue, sobre la ruta entera. Es el "agujero de gusano",
-    // y lo que deja leer la forma del viaje aunque solo brille un tramo.
-    trazo(puntos, 4, 0.10);
 
     // Sin tramo encendido (movimiento reducido) la ruta va entera y quieta, con
     // el brillo que tenía antes de que hubiera tramos: quitar el movimiento no
     // es apagar la ruta.
     var lucido = partes ? partes.activo : puntos;
     if (partes) {
-      trazo(partes.futuro, 0.8, 0.06);  // lo que falta: se intuye, no compite
-      trazo(partes.pasado, 0.8, 0.22);  // por dónde ya se pasó
+      trazo(partes.futuro, 0.8, 0.04);  // lo que falta: se intuye, no compite
+      trazo(partes.pasado, 0.8, 0.14);  // por dónde ya se pasó
     }
-    trazo(lucido, 0.8, 0.38);           // el tramo encendido
+
+    // Estela: ancha y tenue, solo bajo el tramo encendido. Es el "agujero de
+    // gusano", y ponerla en toda la ruta igualaba el brillo de lo apagado con
+    // el de lo encendido, que es justo lo que hay que separar.
+    trazo(lucido, 4, 0.10);
+    trazo(lucido, 1.4, 0.42);           // el tramo encendido, más grueso
 
     // Punteado, solo en el tramo encendido: hacia dónde va la luz. Quieto si
     // fase() lo dejó a 0.
     camino(lucido);
     ctx.setLineDash(PATRON);
     ctx.lineDashOffset = faseActual || 0;
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 1.6;
     ctx.strokeStyle = 'rgba(' + ORO + ',' + (0.9 * a) + ')';
     ctx.shadowColor = 'rgba(' + ORO + ',0.85)';
     ctx.shadowBlur = 8;
@@ -423,7 +449,9 @@
     ORO: ORO,
     PATRON: PATRON,
     R_LUZ: R_LUZ,
-    MS_POR_TRAMO: MS_POR_TRAMO,
+    PX_POR_SEGUNDO_LUZ: PX_POR_SEGUNDO_LUZ,
+    MS_MIN_TRAMO: MS_MIN_TRAMO,
+    MS_MAX_TRAMO: MS_MAX_TRAMO,
     MS_PAUSA: MS_PAUSA,
     viajesDe: viajesDe,
     viajeDe: viajeDe,

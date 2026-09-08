@@ -632,14 +632,14 @@
   function pintarRuta() {
     rutaFrame = 0;
     if (rutaPuntos.length < 2) return;
-    var partes = VLViaje.tramosDe(rutaPuntos, VLViaje.tramoEncendido(null, rutaPuntos.length));
+    var partes = VLViaje.tramosDe(rutaPuntos, VLViaje.tramoEncendido(null, rutaPuntos));
 
-    rutaTrazos.estela.setAttribute('points', comoPolilinea(rutaPuntos));
     // Sin tramo encendido (movimiento reducido) la ruta entera es el tramo: se
     // ve quieta y con el brillo de siempre, no apagada.
     var lucido = partes ? comoPolilinea(partes.activo) : comoPolilinea(rutaPuntos);
     rutaTrazos.pasado.setAttribute('points', partes ? comoPolilinea(partes.pasado) : '');
     rutaTrazos.futuro.setAttribute('points', partes ? comoPolilinea(partes.futuro) : '');
+    rutaTrazos.estela.setAttribute('points', lucido);
     rutaTrazos.activo.setAttribute('points', lucido);
     rutaTrazos.flujo.setAttribute('points', lucido);
     rutaTrazos.flujo.style.strokeDashoffset = VLViaje.fase();

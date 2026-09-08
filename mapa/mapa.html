@@ -636,19 +636,19 @@
     user-select: none;
   }
 
-  /* De la ruta solo brilla el tramo que la luz recorre ahora (#254): la estela
-     ancha da la forma del viaje entero, el futuro se intuye, el pasado queda en
-     un dorado apagado y el activo se lleva el punteado y la luz. Quién es cada
+  /* De la ruta solo brilla el tramo que la luz recorre ahora (#254): el futuro
+     se intuye, el pasado queda en un dorado apagado, y el tramo encendido se
+     lleva la estela ancha, el trazo más grueso, el punteado y la luz. Quién es cada
      tramo lo reparte VLViaje.tramosDe(); el desplazamiento del punteado y la
      posición de la luz los pone el JS por fotograma, y con movimiento reducido
      no hay tramo activo: la ruta se ve entera y quieta. */
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
-  .mw-ruta-futuro { stroke: rgba(244,199,107,0.06); stroke-width: 0.8; }
-  .mw-ruta-pasado { stroke: rgba(244,199,107,0.22); stroke-width: 0.8; }
-  .mw-ruta-activo { stroke: rgba(244,199,107,0.38); stroke-width: 0.8; }
+  .mw-ruta-futuro { stroke: rgba(244,199,107,0.04); stroke-width: 0.8; }
+  .mw-ruta-pasado { stroke: rgba(244,199,107,0.14); stroke-width: 0.8; }
+  .mw-ruta-activo { stroke: rgba(244,199,107,0.42); stroke-width: 1.4; }
   .mw-ruta-flujo {
     stroke: rgba(244,199,107,0.9);
-    stroke-width: 1.2;
+    stroke-width: 1.6;
     stroke-dasharray: 8 24;
     filter: drop-shadow(0 0 4px rgba(244,199,107,0.75));
   }

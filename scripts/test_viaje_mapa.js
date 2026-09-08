@@ -152,23 +152,44 @@ eq(f0, 0, 'en t=0 el punteado está en su origen');
 eq(f1 < 0 && f1 > -ciclo, true, 'avanza hacia el destino (offset negativo) y se envuelve en un ciclo');
 eq(VLV.fase(ciclo / 26 * 1000).toFixed(6), (-0).toFixed(6), 'un ciclo completo vuelve al punto de partida');
 
-console.log('tramoEncendido (la luz recorre UN tramo cada vez):');
+console.log('tramoEncendido (la luz recorre UN tramo cada vez, a velocidad constante):');
 VLV.reiniciar(0);
-var MS = VLV.MS_POR_TRAMO;
-eq(VLV.tramoEncendido(0, 4), { tramo: 0, u: 0 }, 'arranca en el primer tramo, saliendo del origen');
-eq(VLV.tramoEncendido(MS / 2, 4), { tramo: 0, u: 0.5 }, 'a media travesía la luz va por la mitad del tramo');
-eq(VLV.tramoEncendido(MS, 4), { tramo: 1, u: 0 }, 'al llegar al destino se enciende el siguiente tramo');
-eq(VLV.tramoEncendido(2 * MS, 4), { tramo: 2, u: 0 }, 'y así hasta el último');
-eq(VLV.tramoEncendido(3 * MS + 10, 4), { tramo: 2, u: 1 }, 'el último tramo se queda encendido durante la pausa');
-eq(VLV.tramoEncendido(3 * MS + VLV.MS_PAUSA, 4), { tramo: 0, u: 0 }, 'y el ciclo reinicia desde el origen');
-eq(VLV.tramoEncendido(0, 2), { tramo: 0, u: 0 }, 'un viaje de un solo objeto es UN tramo, y no se rompe');
-eq(VLV.tramoEncendido(MS + 10, 2), { tramo: 0, u: 1 }, 'ese único tramo también espera en la pausa');
-eq(VLV.tramoEncendido(0, 1), null, 'menos de dos puntos no es un recorrido');
-eq(VLV.tramoEncendido(0, 0), null, 'sin puntos tampoco');
-// El mismo instante da el mismo tramo en las tres escalas: el reloj es UNO.
-eq(VLV.tramoEncendido(MS + 300, 4), VLV.tramoEncendido(MS + 300, 4), 'el estado solo depende del instante');
+// La luz va a PX_POR_SEGUNDO_LUZ píxeles por segundo, así que un tramo de esa
+// longitud dura justo un segundo: la ruta de prueba va en tramos de 1 s.
+var MS = 1000;
+function ruta(nTramos, largoPx) {
+  var paso = (largoPx == null) ? VLV.PX_POR_SEGUNDO_LUZ : largoPx, pts = [];
+  for (var i = 0; i <= nTramos; i++) pts.push({ sx: i * paso, sy: 0 });
+  return pts;
+}
+var tres = ruta(3), uno = ruta(1);
+eq(VLV.tramoEncendido(0, tres), { tramo: 0, u: 0 }, 'arranca en el primer tramo, saliendo del origen');
+eq(VLV.tramoEncendido(MS / 2, tres), { tramo: 0, u: 0.5 }, 'a media travesía la luz va por la mitad del tramo');
+eq(VLV.tramoEncendido(MS, tres), { tramo: 1, u: 0 }, 'al llegar al destino se enciende el siguiente tramo');
+eq(VLV.tramoEncendido(2 * MS, tres), { tramo: 2, u: 0 }, 'y así hasta el último');
+eq(VLV.tramoEncendido(3 * MS + 10, tres), { tramo: 2, u: 1 }, 'el último tramo se queda encendido durante la pausa');
+eq(VLV.tramoEncendido(3 * MS + VLV.MS_PAUSA, tres), { tramo: 0, u: 0 }, 'y el ciclo reinicia desde el origen');
+eq(VLV.tramoEncendido(0, uno), { tramo: 0, u: 0 }, 'un viaje de un solo objeto es UN tramo, y no se rompe');
+eq(VLV.tramoEncendido(MS + 10, uno), { tramo: 0, u: 1 }, 'ese único tramo también espera en la pausa');
+eq(VLV.tramoEncendido(0, ruta(0)), null, 'menos de dos puntos no es un recorrido');
+eq(VLV.tramoEncendido(0, []), null, 'sin puntos tampoco');
+eq(VLV.tramoEncendido(0, null), null, 'sin ruta tampoco');
+
+// La luz NO acelera en los saltos largos: el tramo dura lo que mide, así que a
+// doble longitud, doble tiempo, y a la mitad del reloj va por la mitad de los dos.
+var largo = ruta(1, 2 * VLV.PX_POR_SEGUNDO_LUZ);
+eq(VLV.tramoEncendido(MS, largo), { tramo: 0, u: 0.5 }, 'el tramo del doble de largo tarda el doble');
+eq(VLV.tramoEncendido(MS, ruta(1)).u, VLV.tramoEncendido(2 * MS, largo).u,
+   'los dos acaban su tramo, cada uno a su tiempo: la velocidad es la misma');
+// Los topes protegen las dos puntas: ni parpadeo ni travesía eterna.
+eq(VLV.tramoEncendido(VLV.MS_MIN_TRAMO - 1, ruta(1, 1)).tramo, 0, 'un tramo cortísimo dura al menos el mínimo');
+eq(VLV.tramoEncendido(VLV.MS_MAX_TRAMO + 10, ruta(1, 100000)), { tramo: 0, u: 1 },
+   'y un saltazo no dura más que el máximo');
+
+// El mismo instante da el mismo tramo: el origen del reloj es UNO.
+eq(VLV.tramoEncendido(MS + 300, tres), VLV.tramoEncendido(MS + 300, tres), 'el estado solo depende del instante');
 VLV.reiniciar(5000);
-eq(VLV.tramoEncendido(5000, 4), { tramo: 0, u: 0 }, 'reiniciar() devuelve la luz al origen (cambio de vista)');
+eq(VLV.tramoEncendido(5000, tres), { tramo: 0, u: 0 }, 'reiniciar() devuelve la luz al origen (cambio de vista)');
 VLV.reiniciar(0);
 
 console.log('trazarCanvas (no dibuja lo que no es una ruta):');
