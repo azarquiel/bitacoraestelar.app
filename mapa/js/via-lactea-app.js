@@ -2650,10 +2650,15 @@
     var claveInicial = (window.BITACORA_WP && BITACORA_WP.observadorClave)
       ? BITACORA_WP.observadorClave
       : (window.OBSERVADOR_ACTIVO || '');
-    if (claveInicial && conObs[claveInicial]) {
-      observadorSelect.value = claveInicial;
-      VLO.setActivo(claveInicial);   // el filtro se pinta al final del arranque, con el estado de la URL
-    }
+    // El valor se fija SIEMPRE, también cuando no hay clave inicial: al recargar,
+    // el navegador restaura por su cuenta el <select> con lo último elegido (y
+    // algunos lo autocompletan), y entonces el combo enseñaba a un compañero que
+    // el filtro no tenía por activo — mapa de todos con nombre de uno. Vacío es
+    // "Todas las observaciones", el arranque del visitante sin sesión.
+    observadorSelect.value = (claveInicial && conObs[claveInicial]) ? claveInicial : '';
+    // El filtro se lee del combo, no de la clave: así no pueden discrepar. Se
+    // pinta al final del arranque, con el estado de la URL.
+    VLO.setActivo(observadorSelect.value);
 
     observadorSelect.addEventListener('change', function () {
       VLO.setActivo(observadorSelect.value);
