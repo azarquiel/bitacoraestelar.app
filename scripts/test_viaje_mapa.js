@@ -140,29 +140,199 @@ eq(/Explorado en la fecha estelar/.test(app), false, 'la fecha va sola, sin la p
 // el mapa abre una observación cualquiera por el usuario.
 eq(/VLViaje\.hayQueElegir\(/.test(app), true, 'el clic en el objeto consulta si hay que elegir');
 
+// La nave vive en la ruta, que va en píxeles de PANTALLA, así que sin pedirlo se
+// quedaría del mismo tamaño mientras el mapa se aleja. Encoge con la misma ley
+// que los marcadores, y esa ley está en un solo sitio.
+eq(/rutaNave\.setAttribute\('transform',[\s\S]{0,260}escalaAparenteMarcador\(scale\)/.test(app), true,
+   'la nave encoge con la escena, con la ley de los marcadores');
+eq((app.match(/function escalaAparenteMarcador/g) || []).length, 1,
+   'y esa ley se escribe una sola vez');
+
 console.log('hayQueElegir (con varias observaciones se elige, no se abre una):');
 eq(VLV.hayQueElegir('m13'), true, 'cinco observaciones -> el mapa enseña la lista');
 eq(VLV.hayQueElegir('m57'), false, 'una sola observación -> se abre directamente');
 eq(VLV.hayQueElegir('m92'), false, 'objeto sin observaciones -> nada que elegir');
 
-console.log('fase (el punteado en movimiento):');
-var ciclo = VLV.PATRON[0] + VLV.PATRON[1];
-var f0 = VLV.fase(0), f1 = VLV.fase(1000);
-eq(f0, 0, 'en t=0 el punteado está en su origen');
-eq(f1 < 0 && f1 > -ciclo, true, 'avanza hacia el destino (offset negativo) y se envuelve en un ciclo');
-eq(VLV.fase(ciclo / 26 * 1000).toFixed(6), (-0).toFixed(6), 'un ciclo completo vuelve al punto de partida');
+console.log('tramoEncendido (la nave avanza a velocidad constante):');
+// La nave hace PX_POR_SEGUNDO_LUZ píxeles por segundo, así que un tramo de dos
+// veces esa longitud dura dos segundos. La ruta de prueba va en tramos de 2 s,
+// por encima del mínimo (MS_MIN_TRAMO), que si no mandaría él y no la velocidad.
+var PXS = VLV.PX_POR_SEGUNDO_LUZ, LARGO = 2 * PXS, MS = 2000;
+function ruta(nTramos, largoPx) {
+  var paso = (largoPx == null) ? LARGO : largoPx, pts = [];
+  for (var i = 0; i <= nTramos; i++) pts.push({ sx: i * paso, sy: 0 });
+  return pts;
+}
+// La MISMA ruta con el zoom puesto: todos los tramos por el mismo factor.
+function conZoom(pts, k) {
+  return pts.map(function (p) { return { sx: p.sx * k, sy: p.sy * k }; });
+}
+// La nave avanza con el reloj, así que el test la lleva paso a paso, y en
+// fotogramas de 20 ms como en el mapa: de una tacada no valdría, porque un salto
+// grande lo recorta el tope de la pestaña dormida (MS_SALTO_MAX).
+// Sumar fotograma a fotograma acumula el error del float (0,5 sale
+// 0,5000000000000002), así que la posición de la nave se compara con tolerancia:
+// lo que se fija es dónde va, no el último bit.
+function eqCasi(a, b, et) {
+  var ok = (a === null && b === null) ||
+           (a && b && a.tramo === b.tramo && Math.abs(a.u - b.u) < 1e-9);
+  if (ok) { console.log('  ok   ' + et); }
+  else { fallos++; console.log('  FALLA ' + et + '\n         esperado ' + JSON.stringify(b) + '\n         obtenido ' + JSON.stringify(a)); }
+}
+
+var reloj = 0, FOTOGRAMA = 20;
+function anda(ms, pts) {
+  var fin = reloj + ms, ultimo = VLV.tramoEncendido(reloj, pts);
+  while (reloj < fin) {
+    reloj = Math.min(fin, reloj + FOTOGRAMA);
+    ultimo = VLV.tramoEncendido(reloj, pts);
+  }
+  return ultimo;
+}
+
+var tres = ruta(3), uno = ruta(1);
+// En cada objeto la nave hace escala antes de salir, así que el test la deja
+// salir primero. 'sale' se come esa espera.
+function sale(pts) { return anda(VLV.MS_ESPERA, pts); }
+
+VLV.reiniciar(reloj);
+eqCasi(anda(0, tres), { tramo: 0, u: 0 }, 'arranca parada en el origen');
+eqCasi(anda(VLV.MS_ESPERA / 2, tres), { tramo: 0, u: 0 }, 'y sigue parada mientras dura la escala');
+anda(VLV.MS_ESPERA / 2, tres);   // lo que le quedaba de escala
+eqCasi(anda(MS / 2, tres), { tramo: 0, u: 0.5 }, 'a media travesía la nave va por la mitad del tramo');
+eqCasi(anda(MS / 2, tres), { tramo: 1, u: 0 }, 'al llegar al destino se enciende el siguiente tramo');
+eqCasi(sale(tres), { tramo: 1, u: 0 }, 'que empieza con su propia escala');
+eqCasi(anda(MS, tres), { tramo: 2, u: 0 }, 'y así hasta el último');
+eqCasi(anda(VLV.MS_ESPERA + MS, tres), { tramo: 2, u: 1 }, 'el último tramo se queda encendido durante la pausa');
+eqCasi(anda(VLV.MS_PAUSA, tres), { tramo: 0, u: 0 }, 'y el ciclo reinicia desde el origen');
+
+VLV.reiniciar(reloj);
+eqCasi(anda(0, uno), { tramo: 0, u: 0 }, 'un viaje de un solo objeto es UN tramo, y no se rompe');
+sale(uno);
+eqCasi(anda(MS, uno), { tramo: 0, u: 1 }, 'ese único tramo también espera en la pausa');
+eq(VLV.tramoEncendido(reloj, ruta(0)), null, 'menos de dos puntos no es un recorrido');
+eq(VLV.tramoEncendido(reloj, []), null, 'sin puntos tampoco');
+eq(VLV.tramoEncendido(reloj, null), null, 'sin ruta tampoco');
+
+// ARRANQUE Y FRENADA: sale despacio, cruza rápido y llega frenando, pero la
+// travesía dura lo mismo que si fuera plana y el centro cae donde caía.
+eq(VLV.suavizar(0), 0, 'el tramo empieza donde empezaba');
+eq(VLV.suavizar(1), 1, 'y acaba donde acababa');
+eq(VLV.suavizar(0.5), 0.5, 'y a mitad de reloj va por la mitad del tramo');
+var dp = 1e-4;
+var vSalida = (VLV.suavizar(dp) - VLV.suavizar(0)) / dp;
+var vCentro = (VLV.suavizar(0.5 + dp) - VLV.suavizar(0.5)) / dp;
+var vLlegada = (VLV.suavizar(1) - VLV.suavizar(1 - dp)) / dp;
+eq(Math.abs(vSalida - (1 - VLV.VAIVEN)) < 0.01, true, 'sale a un 20% por debajo del crucero');
+eq(Math.abs(vLlegada - (1 - VLV.VAIVEN)) < 0.01, true, 'y llega igual de despacio');
+eq(Math.abs(vCentro - (1 + VLV.VAIVEN)) < 0.01, true, 'y en el centro va un 20% por encima');
+
+// LA VELOCIDAD DE CRUCERO ES LA MISMA SEA CUAL SEA EL VIAJE: el tramo del doble
+// de largo tarda el doble en cruzarse, no lo mismo repartido de otra forma.
+VLV.reiniciar(reloj);
+var doble = ruta(1, 2 * LARGO);
+sale(doble);
+eqCasi(anda(2 * MS, doble), { tramo: 0, u: 1 }, 'el tramo del doble de largo tarda el doble');
+VLV.reiniciar(reloj);
+sale(doble);
+eqCasi(anda(MS, doble), { tramo: 0, u: 0.5 }, 'y a la mitad del tiempo va por la mitad');
+// Y por eso cambiar de viaje no acelera la nave: en una ruta más extensa avanza
+// los mismos píxeles en el mismo tiempo.
+VLV.reiniciar(reloj);
+var extensa = ruta(2, 2 * LARGO);
+sale(extensa);
+eq(Math.abs(anda(MS, extensa).u * (2 * LARGO) - PXS * MS / 1000) < 1e-6, true,
+   'en un viaje más extenso recorre los mismos píxeles por segundo');
+
+// EL ZOOM NO TELETRANSPORTA LA NAVE: el avance es estado, no una fase que se
+// recalcula. Acercarse cambia lo que queda por delante, no dónde está.
+VLV.reiniciar(reloj);
+sale(tres);
+anda(MS / 2, tres);
+eqCasi(VLV.tramoEncendido(reloj, conZoom(tres, 7)), { tramo: 0, u: 0.5 }, 'acercarse no la mueve de sitio');
+eqCasi(VLV.tramoEncendido(reloj, conZoom(tres, 0.2)), { tramo: 0, u: 0.5 }, 'alejarse tampoco');
+
+// Preguntar dos veces en el mismo fotograma no avanza el doble: es lo que deja
+// que las tres escalas compartan una sola nave.
+VLV.reiniciar(reloj);
+sale(tres);
+anda(MS / 2, tres);
+eqCasi(VLV.tramoEncendido(reloj, tres), { tramo: 0, u: 0.5 }, 'dos vistas preguntando a la vez no la adelantan');
+
+// Los topes protegen las dos puntas: ni parpadeo ni travesía eterna.
+VLV.reiniciar(reloj);
+sale(ruta(1, 1));
+eq(anda(VLV.MS_MIN_TRAMO - 1, ruta(1, 1)).u < 1, true, 'un tramo cortísimo dura al menos el mínimo');
+VLV.reiniciar(reloj);
+var saltazo = ruta(1, 1000000);
+sale(saltazo);
+eqCasi(anda(VLV.MS_MAX_TRAMO, saltazo), { tramo: 0, u: 1 }, 'y un saltazo no dura más que el máximo');
+
+// Un parón (pestaña dormida) no adelanta el viaje.
+VLV.reiniciar(reloj);
+reloj += 60000;
+eq(VLV.tramoEncendido(reloj, tres).tramo, 0, 'un minuto sin pintar no manda la nave al final');
+
+// La ruta puede encoger bajo los pies de la nave (otra escala, otro viaje).
+VLV.reiniciar(reloj);
+sale(tres);
+anda(2.5 * MS, tres);
+eq(VLV.tramoEncendido(reloj, uno).tramo, 0, 'si la ruta encoge, la nave no se queda fuera de ella');
+VLV.reiniciar(reloj);
 
 console.log('trazarCanvas (no dibuja lo que no es una ruta):');
-var trazos = 0;
+var trazos = 0, naves = 0, giro = null;
 var ctxFalso = {
   save: function () {}, restore: function () {}, beginPath: function () {},
-  moveTo: function () {}, lineTo: function () {}, setLineDash: function () {},
+  moveTo: function () {}, lineTo: function () {}, closePath: function () {},
+  setLineDash: function () {}, translate: function () {},
+  rotate: function (r) { giro = r; }, fill: function () { naves++; },
+  createLinearGradient: function () { return { addColorStop: function () {} }; },
   stroke: function () { trazos++; }
 };
-VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }], 0);
+VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }], 1);
 eq(trazos, 0, 'un solo punto no es un viaje: no se traza nada');
-VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }, { sx: 10, sy: 10 }], 0);
-eq(trazos, 3, 'dos puntos -> estela, línea base y punteado');
+trazos = 0; naves = 0;
+var tres = [{ sx: 0, sy: 0 }, { sx: 10, sy: 10 }, { sx: 20, sy: 0 }];
+VLV.trazarCanvas(ctxFalso, tres, 1, { tramo: 1, u: 0.5 });
+eq(trazos, 3, 'a mitad del viaje: pasado, estela y tramo encendido (ya no queda futuro)');
+eq(naves, 1, 'y la nave que lo recorre');
+trazos = 0; naves = 0;
+VLV.trazarCanvas(ctxFalso, tres, 1, { tramo: 0, u: 0.5 });
+eq(trazos, 3, 'en el primer tramo no hay pasado, pero sí futuro');
+// La nave mira al destino, no al norte: el tramo 0 sube en diagonal (45°) y el
+// tramo 1 baja (-45°).
+VLV.trazarCanvas(ctxFalso, tres, 1, { tramo: 0, u: 0.5 });
+eq(Math.round(giro * 180 / Math.PI), 45, 'la nave apunta al destino del tramo');
+VLV.trazarCanvas(ctxFalso, tres, 1, { tramo: 1, u: 0.5 });
+eq(Math.round(giro * 180 / Math.PI), -45, 'y gira con él');
+trazos = 0; naves = 0;
+VLV.trazarCanvas(ctxFalso, tres, 1, null);
+eq(trazos, 2, 'sin tramo encendido (movimiento reducido) la ruta va entera, quieta y con su brillo');
+eq(naves, 0, 'y sin nave que la recorra');
+
+console.log('la nave y el brillo del tramo que recorre:');
+// El delta de la solapa no es simétrico: un ala barrida más larga que la otra.
+var alas = VLV.NAVE.filter(function (p) { return p[0] < 0 && p[1] !== 0; });
+eq(alas.length, 2, 'la nave tiene dos alas hacia atrás');
+eq(Math.abs(alas[0][1]) !== Math.abs(alas[1][1]), true, 'y una es más larga que la otra');
+eq(VLV.NAVE[0][0] > 0 && VLV.NAVE[0][1] === 0, true, 'la punta va delante y centrada');
+// El tramo se ilumina DESDE la nave: máximo en ella, y siempre por debajo de
+// ella para que la nave sea lo que se mira.
+function brilloEn(paradas, x) {
+  for (var i = 0; i < paradas.length; i++) if (Math.abs(paradas[i][0] - x) < 1e-9) return paradas[i][1];
+  return null;
+}
+var pm = VLV.paradasDeBrillo(0.5);
+eq(brilloEn(pm, 0.5) > brilloEn(pm, 0), true, 'bajo la nave brilla más que en el extremo');
+eq(brilloEn(pm, 0.5) < 0.98, true, 'pero menos que la nave misma');
+eq(pm.map(function (p) { return p[0]; }), [0, 0.5 - VLV.CAIDA, 0.5, 0.5 + VLV.CAIDA, 1],
+   'las paradas van en orden, con la caída a los dos lados');
+// En las puntas del tramo no hay medio degradado que se salga: se recorta.
+var p0 = VLV.paradasDeBrillo(0);
+eq(p0[0][0] === 0 && p0[0][1] > p0[p0.length - 1][1], true,
+   'saliendo del origen, el brillo arranca en la nave y cae hacia adelante');
+eq(VLV.paradasDeBrillo(1)[0][0], 0, 'y al llegar, al revés, sin paradas fuera del tramo');
 
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

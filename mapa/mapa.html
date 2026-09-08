@@ -453,12 +453,12 @@
 
   /* RUTA DEL VIAJE INTERESTELAR (tramo de la Vía Láctea). Vive dentro de
      #mw-content, que se desplaza, escala y gira: la línea acompaña sola a los
-     marcadores. non-scaling-stroke (lo pone el JS) mantiene el grosor y el
-     punteado constantes en pantalla pese al zoom. Los tres trazos se superponen:
-     la estela ancha da el resplandor, la base marca el camino recorrido y el
-     flujo es el punteado que corre hacia el destino, como una nave entrando en
-     el hiperespacio. El ciclo del punteado (8+24 px) a 26 px/s = 1,231 s.
-     Los tres colores son el mismo oro #f4c76b (244,199,107) de "Registrar".
+     marcadores. non-scaling-stroke (lo pone el JS) mantiene el grosor constante
+     en pantalla pese al zoom. Los trazos se superponen: el futuro y el pasado
+     dan la forma del viaje, la estela ancha pone el resplandor bajo el tramo
+     encendido y ese tramo lleva el trazo grueso, iluminado desde la nave que lo
+     recorre y apagándose hacia sus dos extremos.
+     Todos son el mismo oro #f4c76b (244,199,107) de "Registrar".
 
      La ruta va por encima de la imagen de la galaxia y por debajo de los
      marcadores: la línea pasa bajo los puntos, no por encima. El orden del DOM
@@ -636,18 +636,28 @@
     user-select: none;
   }
 
+  /* De la ruta solo brilla el tramo que la nave recorre ahora (#254): el futuro
+     se intuye, el pasado queda en un dorado apagado, y el tramo encendido se
+     lleva la estela ancha y el trazo grueso. La línea del tramo NO se mueve: lo
+     único que viaja por ella es la nave. Quién es cada tramo lo reparte
+     VLViaje.tramosDe(); el sitio y el rumbo de la nave los pone el JS por
+     fotograma, y con movimiento reducido no hay tramo activo ni nave: la ruta
+     se ve entera y quieta. */
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
-  .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 0.8; }
-  .mw-ruta-flujo {
-    stroke: rgba(244,199,107,0.9);
-    stroke-width: 1.2;
-    stroke-dasharray: 8 24;
-    filter: drop-shadow(0 0 4px rgba(244,199,107,0.75));
-    animation: mw-ruta-flujo 1.231s linear infinite;
+  .mw-ruta-futuro { stroke: rgba(244,199,107,0.04); stroke-width: 0.8; }
+  .mw-ruta-pasado { stroke: rgba(244,199,107,0.14); stroke-width: 0.8; }
+  /* El trazo del tramo encendido lo pinta un degradado que pone el JS
+     (#mw-ruta-brillo): brillante bajo la nave y apagándose hacia los extremos,
+     siempre por debajo de la nave, que es lo que hay que mirar. Aquí solo va el
+     grosor; sin el degradado puesto, el trazo no se vería. */
+  .mw-ruta-activo {
+    stroke-width: 1.6;
+    filter: drop-shadow(0 0 4px rgba(244,199,107,0.55));
   }
-  @keyframes mw-ruta-flujo { to { stroke-dashoffset: -32; } }
-  @media (prefers-reduced-motion: reduce) {
-    .mw-ruta-flujo { animation: none; }
+  .mw-ruta-nave {
+    fill: rgba(244,199,107,0.98);
+    stroke: none;
+    filter: drop-shadow(0 0 5px rgba(244,199,107,0.85));
   }
 </style>
 

@@ -276,7 +276,7 @@ var GrupoLocal = (function () {
         break;
       }
     }
-    VLViaje.trazarCanvas(ctx, puntos, VLViaje.fase(), layerAlpha);
+    VLViaje.trazarCanvas(ctx, puntos, layerAlpha);
   }
 
   // ---- Dibujo principal -----------------------------------------------------
