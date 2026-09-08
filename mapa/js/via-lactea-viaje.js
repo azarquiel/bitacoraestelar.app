@@ -290,59 +290,91 @@
     return !!(consultaMovimiento && consultaMovimiento.matches);
   }
 
-  // La nave va a velocidad constante: cada tramo dura EN PROPORCIÓN a lo que
-  // mide, no lo mismo que los demás —con duración fija, el salto largo se
-  // recorría más deprisa que el corto y la nave parecía acelerar según lo lejos
-  // que estuviera el objeto—. Pero la proporción se mide sobre el total de la
-  // ruta, no en píxeles sueltos: el zoom alarga todos los tramos por igual, así
-  // que los repartos no se mueven y la travesía no da un salto al acercarse.
+  // La nave va a VELOCIDAD de crucero constante: recorre tantos píxeles de
+  // pantalla por segundo, y punto. De ahí sale lo que dura cada tramo, y por eso
+  // ni el tamaño del salto ni el del viaje entero la aceleran: una salida con los
+  // objetos muy separados no manda más deprisa a la nave que una recogida.
+  // Dentro del tramo sí sale y llega más despacio (ver VAIVEN), y en cada objeto
+  // hace escala antes de volver a salir (MS_ESPERA).
+  //
   // Los topes evitan las dos puntas: el tramo cortísimo que sería un parpadeo y
   // el saltazo que duraría media vuelta del reloj.
-  var MS_TRAMO_MEDIO = 3000;
+  var PX_POR_SEGUNDO_LUZ = 95;
   var MS_MIN_TRAMO = 1200;
   var MS_MAX_TRAMO = 6000;
   var MS_PAUSA = 1000;
 
-  // Origen del reloj del recorrido. Es el ÚNICO estado del módulo, y a propósito:
-  // la vista de la galaxia (SVG) y los dos lienzos (Grupo Local, vecindario)
-  // tienen que ir por el mismo tramo en el mismo instante, y con un contador por
-  // vista acabarían divergiendo. Lo mueve reiniciar() al cambiar de escala.
-  var origenReloj = 0;
+  // La nave hace escala en cada objeto antes de seguir: se para, y sale suave.
+  var MS_ESPERA = 800;
+
+  // Arranque y frenada. La velocidad no es plana dentro del tramo: sale lenta,
+  // cruza rápido y llega frenando, pero solo un VEINTE POR CIENTO arriba y abajo
+  // de la de crucero —lo justo para que se note salir y llegar, no para que
+  // parezca otra nave—. La suma no cambia: el seno se va, así que el tramo dura
+  // exactamente lo mismo que si fuera plano y la velocidad media sigue siendo la
+  // de crucero.
+  var VAIVEN = 0.2;
+
+  // De la parte del tramo YA CORRIDA (que avanza a ritmo fijo) a la parte
+  // RECORRIDA en pantalla. La derivada va de 1-VAIVEN en las puntas a 1+VAIVEN
+  // en el centro, y suaviza sin mover ni el principio ni el final.
+  function suavizar(p) {
+    return p - (VAIVEN / (2 * Math.PI)) * Math.sin(2 * Math.PI * p);
+  }
+
+  // Un fotograma perdido no adelanta el viaje: si la pestaña estuvo dormida o el
+  // navegador se atascó, la nave sigue donde estaba en vez de dar un salto.
+  var MS_SALTO_MAX = 250;
+
+  // POR DÓNDE VA LA NAVE. Es el único estado del módulo, y a propósito: la vista
+  // de la galaxia (SVG) y los dos lienzos (Grupo Local, vecindario) tienen que ir
+  // por el mismo sitio en el mismo instante, y con un contador por vista
+  // acabarían divergiendo. Lo devuelve al origen reiniciar().
+  //
+  // Se guarda el AVANCE, no un instante de salida, y esa es la diferencia que
+  // arregla el zoom: acercarse cambia lo que mide un tramo, y con una fase
+  // recalculada desde el reloj eso movía la nave de sitio de golpe. Avanzando
+  // desde donde está, el zoom solo cambia lo que queda por delante.
+  // Y se guarda la PARTE del tramo ya recorrida, no los milisegundos que se lleva
+  // en él: los milisegundos hay que dividirlos por lo que dura el tramo para
+  // saber dónde está la nave, y el zoom cambia justamente eso.
+  var enTramo = 0;      // tramo que se recorre
+  var enU = 0;          // parte de ESE tramo ya corrida, de 0 a 1, a ritmo fijo
+  var enEspera = 0;     // lo que queda de la escala en el objeto de salida
+  var enPausa = 0;      // lo que queda de la pausa del final (0 = no está en ella)
+  var ultimoMs = null;  // instante del último avance
 
   function ahora(ms) { return (typeof ms === 'number') ? ms : Date.now(); }
 
-  // Devuelve la luz al origen: al elegir un viaje y al cambiar de escala.
-  function reiniciar(ahoraMs) { origenReloj = ahora(ahoraMs); }
+  // Devuelve la nave al origen: al elegir un viaje y al cambiar de escala.
+  function reiniciar(ahoraMs) {
+    enTramo = 0; enU = 0; enPausa = 0; enEspera = MS_ESPERA;
+    ultimoMs = ahora(ahoraMs);
+  }
 
   /**
-   * Lo que tarda la nave en cada tramo de la ruta, en milisegundos: lo que ese
-   * tramo es del recorrido entero, repartido sobre una duración media por tramo
-   * y entre los dos topes. Va en PROPORCIÓN y no en píxeles justamente para que
-   * el zoom no la cambie.
+   * Lo que tarda la nave en cada tramo de la ruta, en milisegundos: lo que mide
+   * en pantalla dividido por su velocidad, entre los dos topes.
    */
   function duracionesDe(puntos) {
-    var largos = [], total = 0, i;
-    for (i = 0; i + 1 < puntos.length; i++) {
+    var ms = [];
+    for (var i = 0; i + 1 < puntos.length; i++) {
       var dx = puntos[i + 1].sx - puntos[i].sx;
       var dy = puntos[i + 1].sy - puntos[i].sy;
-      var d = Math.sqrt(dx * dx + dy * dy);
-      largos.push(d);
-      total += d;
-    }
-    var ms = [];
-    for (i = 0; i < largos.length; i++) {
-      // La parte del recorrido que es este tramo, que no cambia con el zoom.
-      var parte = total > 0 ? largos[i] / total : 1 / largos.length;
-      var t = MS_TRAMO_MEDIO * largos.length * parte;
+      var t = Math.sqrt(dx * dx + dy * dy) / PX_POR_SEGUNDO_LUZ * 1000;
       ms.push(Math.min(MS_MAX_TRAMO, Math.max(MS_MIN_TRAMO, t)));
     }
     return ms;
   }
 
   /**
-   * Qué tramo está encendido y por dónde va la luz dentro de él, para una ruta
-   * de vértices {sx, sy} (el primero es el origen de la capa): { tramo, u }, con
-   * u de 0 a 1.
+   * Avanza la nave hasta 'ahoraMs' y dice dónde ha quedado, para una ruta de
+   * vértices {sx, sy} (el primero es el origen de la capa): { tramo, u }, con u
+   * de 0 a 1.
+   *
+   * Llamarla dos veces en el mismo fotograma no avanza el doble: lo que avanza
+   * es el tiempo transcurrido desde el último avance, lo pregunte quien lo
+   * pregunte. Es lo que deja que las tres escalas compartan una sola nave.
    *
    * null = no hay recorrido que animar: o no hay ni un tramo, o el visitante
    * pidió movimiento reducido y la ruta va entera y quieta.
@@ -350,16 +382,45 @@
   function tramoEncendido(ahoraMs, puntos) {
     if (!puntos || puntos.length < 2 || movimientoReducido()) return null;
     var ms = duracionesDe(puntos);
-    var recorrido = 0;
-    for (var i = 0; i < ms.length; i++) recorrido += ms[i];
-    var t = (ahora(ahoraMs) - origenReloj) % (recorrido + MS_PAUSA);
-    if (t < 0) t += recorrido + MS_PAUSA;        // reloj movido hacia adelante
-    if (t >= recorrido) return { tramo: ms.length - 1, u: 1 };  // pausa del final
-    for (var j = 0; j < ms.length; j++) {
-      if (t < ms[j]) return { tramo: j, u: t / ms[j] };
-      t -= ms[j];
+    var t = ahora(ahoraMs);
+    if (ultimoMs === null) ultimoMs = t;
+    var dt = Math.min(MS_SALTO_MAX, Math.max(0, t - ultimoMs));
+    ultimoMs = t;
+
+    // La ruta puede haber encogido (otra escala, otro viaje) con la nave más
+    // allá de su final.
+    if (enTramo > ms.length - 1) { enTramo = ms.length - 1; enU = 1; }
+
+    if (enPausa > 0) {                      // esperando al final del recorrido
+      enPausa -= dt;
+      if (enPausa > 0) return { tramo: ms.length - 1, u: 1 };
+      enTramo = 0; enU = 0;                 // y otra vez desde el origen
+      enEspera = Math.max(1, MS_ESPERA + enPausa);
+      enPausa = 0;
+      return { tramo: 0, u: 0 };
     }
-    return { tramo: ms.length - 1, u: 1 };       // por redondeo, nunca por lógica
+
+    if (enEspera > 0) {                     // escala en el objeto antes de salir
+      enEspera -= dt;
+      if (enEspera > 0) return { tramo: enTramo, u: suavizar(enU) };
+      dt = -enEspera;                       // lo que sobró ya es camino
+      enEspera = 0;
+    }
+
+    enU += dt / ms[enTramo];
+    if (enU >= 1) {                         // llegó al destino de este tramo
+      var sobra = (enU - 1) * ms[enTramo];  // lo que se pasó del destino, en ms
+      if (enTramo + 1 >= ms.length) {       // llegó: pausa y vuelta a empezar
+        enU = 1;
+        enPausa = Math.max(1, MS_PAUSA - sobra);
+        return { tramo: ms.length - 1, u: 1 };
+      }
+      enTramo++;
+      enU = 0;                              // recién llegado al siguiente objeto
+      enEspera = Math.max(1, MS_ESPERA - sobra);  // y hace escala antes de salir
+      return { tramo: enTramo, u: 0 };
+    }
+    return { tramo: enTramo, u: suavizar(enU) };
   }
 
   /**
@@ -497,11 +558,14 @@
     DIST_MIN_EXTRAGALACTICA: DIST_MIN_EXTRAGALACTICA,
     ORO: ORO,
     NAVE: NAVE,
+    PX_POR_SEGUNDO_LUZ: PX_POR_SEGUNDO_LUZ,
+    MS_ESPERA: MS_ESPERA,
+    VAIVEN: VAIVEN,
+    suavizar: suavizar,
     BRILLO_NAVE: BRILLO_NAVE,
     BRILLO_LEJOS: BRILLO_LEJOS,
     CAIDA: CAIDA,
     paradasDeBrillo: paradasDeBrillo,
-    MS_TRAMO_MEDIO: MS_TRAMO_MEDIO,
     MS_MIN_TRAMO: MS_MIN_TRAMO,
     MS_MAX_TRAMO: MS_MAX_TRAMO,
     MS_PAUSA: MS_PAUSA,

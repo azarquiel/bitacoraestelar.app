@@ -632,6 +632,18 @@
       ' translate3d(0px,0px,' + dz.toFixed(1) + 'px) scale(' + kz.toFixed(6) + ')';
   }
 
+  // Tamaño APARENTE de un marcador en pantalla, con la contraescala ya aplicada:
+  // scale^0.1 al ampliar (se encogen para no tapar el mapa, sin desaparecer) y
+  // scale a secas al alejar, porque la contraescala tiene tope 1 y por debajo de
+  // 1 el marcador encoge con la escena. La nave usa la MISMA ley: vive en la
+  // ruta, que va en píxeles de pantalla, y sin esto se quedaba del mismo tamaño
+  // mientras el mapa entero se alejaba.
+  function escalaAparenteMarcador(s) {
+    var counter = Math.pow(s, -0.9);
+    if (counter > 1) counter = 1;
+    return s * counter;
+  }
+
   // Los vértices de la ruta, tal como están AHORA en pantalla. Los calcula
   // dibujarRuta() (que lee el DOM) y los reaprovecha pintarRuta() en cada
   // fotograma: la geometría solo cambia cuando se mueve el mapa, el tramo
@@ -683,7 +695,8 @@
 
     rutaNave.setAttribute('transform',
       'translate(' + partes.cabeza.sx.toFixed(1) + ',' + partes.cabeza.sy.toFixed(1) + ')' +
-      ' rotate(' + (partes.cabeza.angulo * 180 / Math.PI).toFixed(1) + ')');
+      ' rotate(' + (partes.cabeza.angulo * 180 / Math.PI).toFixed(1) + ')' +
+      ' scale(' + escalaAparenteMarcador(scale).toFixed(3) + ')');
     rutaNave.style.display = '';
     // Manda otra escala: la galaxia está fundida a cero y no hay nada que
     // animar. El bucle vuelve solo, porque llegar a la galaxia es hacer zoom y
@@ -915,8 +928,7 @@
     // (escalado por scale), su tamaño aparente es counter·scale = scale^0.1; un
     // suelo en counter (p. ej. 0.12) haría crecer el marcador linealmente con el
     // zoom (a scale 25, 3× su tamaño), que es justo lo que hay que evitar.
-    var counter = Math.pow(scale, -0.9);
-    if (counter > 1) counter = 1;
+    var counter = escalaAparenteMarcador(scale) / scale;
 
     // Contra-rotación: cada marcador (punto + etiqueta) se gira en sentido
     // opuesto al mapa para que los nombres y el Sol se lean siempre horizontales.
