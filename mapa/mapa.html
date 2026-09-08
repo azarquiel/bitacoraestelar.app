@@ -636,18 +636,26 @@
     user-select: none;
   }
 
+  /* De la ruta solo brilla el tramo que la luz recorre ahora (#254): la estela
+     ancha da la forma del viaje entero, el futuro se intuye, el pasado queda en
+     un dorado apagado y el activo se lleva el punteado y la luz. Quién es cada
+     tramo lo reparte VLViaje.tramosDe(); el desplazamiento del punteado y la
+     posición de la luz los pone el JS por fotograma, y con movimiento reducido
+     no hay tramo activo: la ruta se ve entera y quieta. */
   .mw-ruta-estela { stroke: rgba(244,199,107,0.10); stroke-width: 4; }
-  .mw-ruta-base   { stroke: rgba(244,199,107,0.38); stroke-width: 0.8; }
+  .mw-ruta-futuro { stroke: rgba(244,199,107,0.06); stroke-width: 0.8; }
+  .mw-ruta-pasado { stroke: rgba(244,199,107,0.22); stroke-width: 0.8; }
+  .mw-ruta-activo { stroke: rgba(244,199,107,0.38); stroke-width: 0.8; }
   .mw-ruta-flujo {
     stroke: rgba(244,199,107,0.9);
     stroke-width: 1.2;
     stroke-dasharray: 8 24;
     filter: drop-shadow(0 0 4px rgba(244,199,107,0.75));
-    animation: mw-ruta-flujo 1.231s linear infinite;
   }
-  @keyframes mw-ruta-flujo { to { stroke-dashoffset: -32; } }
-  @media (prefers-reduced-motion: reduce) {
-    .mw-ruta-flujo { animation: none; }
+  .mw-ruta-cabeza {
+    fill: rgba(244,199,107,0.95);
+    stroke: none;
+    filter: drop-shadow(0 0 5px rgba(244,199,107,0.85));
   }
 </style>
 

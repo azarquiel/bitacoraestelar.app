@@ -152,17 +152,47 @@ eq(f0, 0, 'en t=0 el punteado está en su origen');
 eq(f1 < 0 && f1 > -ciclo, true, 'avanza hacia el destino (offset negativo) y se envuelve en un ciclo');
 eq(VLV.fase(ciclo / 26 * 1000).toFixed(6), (-0).toFixed(6), 'un ciclo completo vuelve al punto de partida');
 
+console.log('tramoEncendido (la luz recorre UN tramo cada vez):');
+VLV.reiniciar(0);
+var MS = VLV.MS_POR_TRAMO;
+eq(VLV.tramoEncendido(0, 4), { tramo: 0, u: 0 }, 'arranca en el primer tramo, saliendo del origen');
+eq(VLV.tramoEncendido(MS / 2, 4), { tramo: 0, u: 0.5 }, 'a media travesía la luz va por la mitad del tramo');
+eq(VLV.tramoEncendido(MS, 4), { tramo: 1, u: 0 }, 'al llegar al destino se enciende el siguiente tramo');
+eq(VLV.tramoEncendido(2 * MS, 4), { tramo: 2, u: 0 }, 'y así hasta el último');
+eq(VLV.tramoEncendido(3 * MS + 10, 4), { tramo: 2, u: 1 }, 'el último tramo se queda encendido durante la pausa');
+eq(VLV.tramoEncendido(3 * MS + VLV.MS_PAUSA, 4), { tramo: 0, u: 0 }, 'y el ciclo reinicia desde el origen');
+eq(VLV.tramoEncendido(0, 2), { tramo: 0, u: 0 }, 'un viaje de un solo objeto es UN tramo, y no se rompe');
+eq(VLV.tramoEncendido(MS + 10, 2), { tramo: 0, u: 1 }, 'ese único tramo también espera en la pausa');
+eq(VLV.tramoEncendido(0, 1), null, 'menos de dos puntos no es un recorrido');
+eq(VLV.tramoEncendido(0, 0), null, 'sin puntos tampoco');
+// El mismo instante da el mismo tramo en las tres escalas: el reloj es UNO.
+eq(VLV.tramoEncendido(MS + 300, 4), VLV.tramoEncendido(MS + 300, 4), 'el estado solo depende del instante');
+VLV.reiniciar(5000);
+eq(VLV.tramoEncendido(5000, 4), { tramo: 0, u: 0 }, 'reiniciar() devuelve la luz al origen (cambio de vista)');
+VLV.reiniciar(0);
+
 console.log('trazarCanvas (no dibuja lo que no es una ruta):');
-var trazos = 0;
+var trazos = 0, cabezas = 0;
 var ctxFalso = {
   save: function () {}, restore: function () {}, beginPath: function () {},
   moveTo: function () {}, lineTo: function () {}, setLineDash: function () {},
+  arc: function () {}, fill: function () { cabezas++; },
   stroke: function () { trazos++; }
 };
 VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }], 0);
 eq(trazos, 0, 'un solo punto no es un viaje: no se traza nada');
-VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }, { sx: 10, sy: 10 }], 0);
-eq(trazos, 3, 'dos puntos -> estela, línea base y punteado');
+trazos = 0; cabezas = 0;
+var tres = [{ sx: 0, sy: 0 }, { sx: 10, sy: 10 }, { sx: 20, sy: 0 }];
+VLV.trazarCanvas(ctxFalso, tres, 0, 1, { tramo: 1, u: 0.5 });
+eq(trazos, 4, 'a mitad del viaje: estela, pasado, base del activo y su punteado (ya no queda futuro)');
+eq(cabezas, 1, 'y la luz que lo recorre, en la cabeza del tramo');
+trazos = 0; cabezas = 0;
+VLV.trazarCanvas(ctxFalso, tres, 0, 1, { tramo: 0, u: 0.5 });
+eq(trazos, 4, 'en el primer tramo no hay pasado, pero sí futuro');
+trazos = 0; cabezas = 0;
+VLV.trazarCanvas(ctxFalso, [{ sx: 0, sy: 0 }, { sx: 10, sy: 10 }, { sx: 20, sy: 0 }], 0, 1, null);
+eq(trazos, 3, 'sin tramo encendido (movimiento reducido) la ruta va entera, quieta y con su brillo de siempre');
+eq(cabezas, 0, 'y sin luz que la recorra');
 
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

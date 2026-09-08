@@ -24,7 +24,7 @@
    vecindario (VLVecindarioCatalogo.enVecindario), igual que el atlas del Grupo
    Local solo se queda con lo extragaláctico. Cada escala enseña la suya.
 
-   Sin DOM y sin estado: lee VIAJES, OBSERVACIONES, OBJECTS, OBSERVADORES y
+   Sin DOM: lee VIAJES, OBSERVACIONES, OBJECTS, OBSERVADORES y
    CONFIG como globales EN TIEMPO DE LLAMADA, igual que via-lactea-observadores.js.
    Se carga ANTES de via-lactea-app.js, grupo-local.js y vecindario-solar.js.
    Expone window.VLViaje (+ module.exports para scripts/test_viaje_mapa.js).
@@ -254,19 +254,28 @@
 
   // ---------------------------------------------------------------------------
   // TRAZO DORADO (el "hiperespacio")
-  // Dos capas sobre los mismos puntos: una línea tenue continua que dice por
-  // dónde pasó la nave, y encima un punteado brillante desplazándose hacia el
-  // destino, que es lo que da la sensación de movimiento. El desplazamiento lo
-  // marca 'fase' (en píxeles); con movimiento reducido, fase() devuelve 0 y la
-  // ruta se queda quieta sin perder ninguna información.
+  // La ruta entera se ve siempre —es la forma del viaje—, pero solo UN tramo
+  // está encendido: el que la luz está recorriendo ahora. Los ya recorridos
+  // quedan en un dorado apagado y los que faltan, casi invisibles; así una
+  // salida de veinte objetos se lee como una secuencia y no como una maraña.
+  //
+  // Dentro del tramo activo, el punteado se desplaza hacia el destino ('fase',
+  // en píxeles) y una luz lo recorre. Con movimiento reducido, fase() devuelve
+  // 0 y tramoEncendido() devuelve null: la ruta se dibuja entera y quieta, sin
+  // perder ningún tramo.
   // ---------------------------------------------------------------------------
   var ORO = '244, 199, 107';          // #f4c76b, el ámbar del mapa
   var PATRON = [8, 24];               // guion, hueco (px de pantalla)
+  var R_LUZ = 2.6;                    // radio de la luz que recorre el tramo (px)
   var PX_POR_SEGUNDO = 26;
 
+  // La consulta se guarda una vez: esto se pregunta en cada fotograma y de los
+  // tres bucles (galaxia, atlas y vecindario), y matchMedia() no es gratis.
+  var consultaMovimiento = (typeof window !== 'undefined' && window.matchMedia)
+    ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+
   function movimientoReducido() {
-    return !!(typeof window !== 'undefined' && window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    return !!(consultaMovimiento && consultaMovimiento.matches);
   }
 
   // Fase del punteado en píxeles. Negativa para que los guiones avancen del
@@ -278,44 +287,117 @@
     return -((t / 1000) * PX_POR_SEGUNDO) % ciclo;
   }
 
+  // Cuánto dura la travesía de UN tramo y cuánto se espera al final antes de
+  // volver a salir del origen. Fija por tramo, no proporcional a su longitud en
+  // pantalla: con las distancias de por medio, un tramo duraría tres fotogramas
+  // y el siguiente medio minuto.
+  var MS_POR_TRAMO = 1200;
+  var MS_PAUSA = 800;
+
+  // Origen del reloj del recorrido. Es el ÚNICO estado del módulo, y a propósito:
+  // la vista de la galaxia (SVG) y los dos lienzos (Grupo Local, vecindario)
+  // tienen que ir por el mismo tramo en el mismo instante, y con un contador por
+  // vista acabarían divergiendo. Lo mueve reiniciar() al cambiar de escala.
+  var origenReloj = 0;
+
+  function ahora(ms) { return (typeof ms === 'number') ? ms : Date.now(); }
+
+  // Devuelve la luz al origen: al elegir un viaje y al cambiar de escala.
+  function reiniciar(ahoraMs) { origenReloj = ahora(ahoraMs); }
+
+  /**
+   * Qué tramo está encendido y por dónde va la luz dentro de él, para una ruta
+   * de 'nPuntos' vértices (origen incluido): { tramo, u }, con u de 0 a 1.
+   *
+   * null = no hay recorrido que animar: o no hay ni un tramo, o el visitante
+   * pidió movimiento reducido y la ruta va entera y quieta.
+   */
+  function tramoEncendido(ahoraMs, nPuntos) {
+    var nTramos = (nPuntos | 0) - 1;
+    if (nTramos < 1 || movimientoReducido()) return null;
+    var ciclo = nTramos * MS_POR_TRAMO + MS_PAUSA;
+    var recorrido = nTramos * MS_POR_TRAMO;
+    var t = (ahora(ahoraMs) - origenReloj) % ciclo;
+    if (t < 0) t += ciclo;                       // reloj movido hacia adelante
+    if (t >= recorrido) return { tramo: nTramos - 1, u: 1 };  // pausa del final
+    var tramo = Math.floor(t / MS_POR_TRAMO);
+    return { tramo: tramo, u: (t - tramo * MS_POR_TRAMO) / MS_POR_TRAMO };
+  }
+
+  /**
+   * Reparte los vértices de la ruta según el tramo encendido:
+   *   pasado  — de donde se salió hasta el tramo activo (dorado apagado)
+   *   activo  — los dos vértices del tramo que se recorre ahora
+   *   futuro  — lo que queda por recorrer (casi invisible)
+   *   cabeza  — dónde va la luz dentro del tramo activo
+   * Los vértices son {sx, sy}; lo usan el canvas y el SVG de la galaxia.
+   */
+  function tramosDe(puntos, estado) {
+    if (!estado || !puntos || puntos.length < 2) return null;
+    var i = Math.min(Math.max(estado.tramo, 0), puntos.length - 2);
+    var a = puntos[i], b = puntos[i + 1];
+    return {
+      pasado: puntos.slice(0, i + 1),
+      activo: [a, b],
+      futuro: puntos.slice(i + 1),
+      cabeza: { sx: a.sx + (b.sx - a.sx) * estado.u, sy: a.sy + (b.sy - a.sy) * estado.u }
+    };
+  }
+
   /**
    * Dibuja la ruta sobre un canvas 2D ya escalado a píxeles de pantalla.
    * 'puntos' es [{sx, sy}, ...] en el orden del recorrido (el primero es el
    * origen de la capa: el Sol o la Vía Láctea). Menos de dos puntos no es una
    * ruta y no se dibuja nada.
    *
+   * 'estado' es el de tramoEncendido(); si no se pasa, se pregunta por el instante
+   * actual, que es lo que hacen los dos lienzos.
+   *
    * Lo comparten el atlas del Grupo Local y el Vecindario Solar; la vista de la
    * galaxia usa SVG, que es otro idioma pero el mismo aspecto.
    */
-  function trazarCanvas(ctx, puntos, faseActual, alpha) {
+  function trazarCanvas(ctx, puntos, faseActual, alpha, estado) {
     if (!ctx || !puntos || puntos.length < 2) return;
     var a = (typeof alpha === 'number') ? alpha : 1;
+    var e = (estado === undefined) ? tramoEncendido(null, puntos.length) : estado;
+    var partes = tramosDe(puntos, e);
 
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    function camino() {
+    function camino(pts) {
       ctx.beginPath();
-      ctx.moveTo(puntos[0].sx, puntos[0].sy);
-      for (var i = 1; i < puntos.length; i++) ctx.lineTo(puntos[i].sx, puntos[i].sy);
+      ctx.moveTo(pts[0].sx, pts[0].sy);
+      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].sx, pts[i].sy);
     }
 
-    // 1. Estela: ancha, muy tenue. Es el "agujero de gusano".
-    camino();
+    function trazo(pts, ancho, opacidad) {
+      if (!pts || pts.length < 2) return;
+      camino(pts);
+      ctx.lineWidth = ancho;
+      ctx.strokeStyle = 'rgba(' + ORO + ',' + (opacidad * a) + ')';
+      ctx.stroke();
+    }
+
     ctx.setLineDash([]);
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(' + ORO + ',' + (0.10 * a) + ')';
-    ctx.stroke();
+    // Estela: ancha, muy tenue, sobre la ruta entera. Es el "agujero de gusano",
+    // y lo que deja leer la forma del viaje aunque solo brille un tramo.
+    trazo(puntos, 4, 0.10);
 
-    // 2. Línea base continua: por dónde se pasó.
-    camino();
-    ctx.lineWidth = 0.8;
-    ctx.strokeStyle = 'rgba(' + ORO + ',' + (0.38 * a) + ')';
-    ctx.stroke();
+    // Sin tramo encendido (movimiento reducido) la ruta va entera y quieta, con
+    // el brillo que tenía antes de que hubiera tramos: quitar el movimiento no
+    // es apagar la ruta.
+    var lucido = partes ? partes.activo : puntos;
+    if (partes) {
+      trazo(partes.futuro, 0.8, 0.06);  // lo que falta: se intuye, no compite
+      trazo(partes.pasado, 0.8, 0.22);  // por dónde ya se pasó
+    }
+    trazo(lucido, 0.8, 0.38);           // el tramo encendido
 
-    // 3. Punteado en movimiento: hacia dónde se iba.
-    camino();
+    // Punteado, solo en el tramo encendido: hacia dónde va la luz. Quieto si
+    // fase() lo dejó a 0.
+    camino(lucido);
     ctx.setLineDash(PATRON);
     ctx.lineDashOffset = faseActual || 0;
     ctx.lineWidth = 1.2;
@@ -323,6 +405,15 @@
     ctx.shadowColor = 'rgba(' + ORO + ',0.85)';
     ctx.shadowBlur = 8;
     ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (!partes) { ctx.restore(); return; }   // sin recorrido no hay luz que mover
+
+    // Y la luz misma, recorriendo el tramo.
+    ctx.beginPath();
+    ctx.arc(partes.cabeza.sx, partes.cabeza.sy, R_LUZ, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(' + ORO + ',' + (0.95 * a) + ')';
+    ctx.fill();
 
     ctx.restore();
   }
@@ -331,6 +422,9 @@
     DIST_MIN_EXTRAGALACTICA: DIST_MIN_EXTRAGALACTICA,
     ORO: ORO,
     PATRON: PATRON,
+    R_LUZ: R_LUZ,
+    MS_POR_TRAMO: MS_POR_TRAMO,
+    MS_PAUSA: MS_PAUSA,
     viajesDe: viajesDe,
     viajeDe: viajeDe,
     etiquetaViaje: etiquetaViaje,
@@ -345,6 +439,9 @@
     hayQueElegir: hayQueElegir,
     movimientoReducido: movimientoReducido,
     fase: fase,
+    reiniciar: reiniciar,
+    tramoEncendido: tramoEncendido,
+    tramosDe: tramosDe,
     trazarCanvas: trazarCanvas
   };
 

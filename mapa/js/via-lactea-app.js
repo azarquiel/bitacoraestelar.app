@@ -431,21 +431,32 @@
   // #mw-content, el contenedor que ya se desplaza, escala y gira, así que la
   // ruta acompaña a los marcadores sin geometría propia; el grosor y el
   // punteado se mantienen constantes en pantalla con vector-effect
-  // ("non-scaling-stroke"), y el movimiento lo pone una animación CSS sobre
-  // stroke-dashoffset (ver #mw-ruta en mapa.html, donde también se fija que
+  // ("non-scaling-stroke") (ver #mw-ruta en mapa.html, donde también se fija que
   // quede por encima de la imagen y por debajo de los marcadores).
+  //
+  // De la ruta solo está ENCENDIDO el tramo que la luz recorre ahora (#254);
+  // quién es ese tramo lo decide VLViaje.tramoEncendido(), el mismo reloj que usan
+  // los dos lienzos, para que las tres escalas no vayan cada una por su lado.
+  // El movimiento ya no lo puede poner una animación CSS —cambia de tramo, no
+  // solo de fase—, así que lo lleva un requestAnimationFrame mientras hay viaje.
   // --------------------------------------------------------------------------
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var rutaSvg = document.createElementNS(SVG_NS, 'svg');
   rutaSvg.setAttribute('id', 'mw-ruta');
   rutaSvg.style.display = 'none';
-  var rutaTrazos = ['estela', 'base', 'flujo'].map(function (clase) {
+  var rutaTrazos = {};
+  ['estela', 'futuro', 'pasado', 'activo', 'flujo'].forEach(function (clase) {
     var pl = document.createElementNS(SVG_NS, 'polyline');
     pl.setAttribute('class', 'mw-ruta-' + clase);
     pl.setAttribute('vector-effect', 'non-scaling-stroke');
     rutaSvg.appendChild(pl);
-    return pl;
+    rutaTrazos[clase] = pl;
   });
+  // La luz (o la nave) que va recorriendo el tramo encendido.
+  var rutaCabeza = document.createElementNS(SVG_NS, 'circle');
+  rutaCabeza.setAttribute('class', 'mw-ruta-cabeza');
+  rutaCabeza.setAttribute('r', String(VLViaje.R_LUZ));
+  rutaSvg.appendChild(rutaCabeza);
   img.appendChild(rutaSvg);
 
   // --------------------------------------------------------------------------
@@ -553,8 +564,7 @@
     function punto(a) {
       var el = a.querySelector('.mw-punto') || a;
       var r = el.getBoundingClientRect();
-      return (r.left + r.width / 2 - caja.left).toFixed(1) + ',' +
-             (r.top + r.height / 2 - caja.top).toFixed(1);
+      return { sx: r.left + r.width / 2 - caja.left, sy: r.top + r.height / 2 - caja.top };
     }
     var pts = [];
     if (sol) pts.push(punto(sol));
@@ -604,18 +614,61 @@
       ' translate3d(0px,0px,' + dz.toFixed(1) + 'px) scale(' + kz.toFixed(6) + ')';
   }
 
+  // Los vértices de la ruta, tal como están AHORA en pantalla. Los calcula
+  // dibujarRuta() (que lee el DOM) y los reaprovecha pintarRuta() en cada
+  // fotograma: la geometría solo cambia cuando se mueve el mapa, el tramo
+  // encendido cambia veinte veces por segundo.
+  var rutaPuntos = [];
+  var rutaFrame = 0;
+
+  function comoPolilinea(pts) {
+    return pts.map(function (p) { return p.sx.toFixed(1) + ',' + p.sy.toFixed(1); }).join(' ');
+  }
+
+  // Reparte los vértices entre los trazos según el tramo encendido y coloca la
+  // luz. Corre por fotograma, así que no lee el DOM ni mide nada. Es el mismo
+  // reparto que hace trazarCanvas() en los dos lienzos, con los brillos puestos
+  // por las clases .mw-ruta-* de mapa.html.
+  function pintarRuta() {
+    rutaFrame = 0;
+    if (rutaPuntos.length < 2) return;
+    var partes = VLViaje.tramosDe(rutaPuntos, VLViaje.tramoEncendido(null, rutaPuntos.length));
+
+    rutaTrazos.estela.setAttribute('points', comoPolilinea(rutaPuntos));
+    // Sin tramo encendido (movimiento reducido) la ruta entera es el tramo: se
+    // ve quieta y con el brillo de siempre, no apagada.
+    var lucido = partes ? comoPolilinea(partes.activo) : comoPolilinea(rutaPuntos);
+    rutaTrazos.pasado.setAttribute('points', partes ? comoPolilinea(partes.pasado) : '');
+    rutaTrazos.futuro.setAttribute('points', partes ? comoPolilinea(partes.futuro) : '');
+    rutaTrazos.activo.setAttribute('points', lucido);
+    rutaTrazos.flujo.setAttribute('points', lucido);
+    rutaTrazos.flujo.style.strokeDashoffset = VLViaje.fase();
+    if (!partes) { rutaCabeza.style.display = 'none'; return; }
+
+    rutaCabeza.setAttribute('cx', partes.cabeza.sx.toFixed(1));
+    rutaCabeza.setAttribute('cy', partes.cabeza.sy.toFixed(1));
+    rutaCabeza.style.display = '';
+    // Manda otra escala: la galaxia está fundida a cero y no hay nada que
+    // animar. El bucle vuelve solo, porque llegar a la galaxia es hacer zoom y
+    // cada fotograma de zoom pasa por dibujarRuta().
+    if (capaEnPantalla && capaEnPantalla !== 'galaxia') return;
+    rutaFrame = requestAnimationFrame(pintarRuta);
+  }
+
   function dibujarRuta() {
     dibujarAnillos();
     var pts = viajeActivo ? puntosRuta() : [];
+    if (rutaFrame) { cancelAnimationFrame(rutaFrame); rutaFrame = 0; }
     if (pts.length < 2) {           // el Sol solo no es un viaje
+      rutaPuntos = [];
       rutaSvg.style.display = 'none';
       return;
     }
     rutaSvg.style.width  = img.clientWidth + 'px';
     rutaSvg.style.height = img.clientHeight + 'px';
     encararRuta();
-    var puntos = pts.join(' ');
-    rutaTrazos.forEach(function (pl) { pl.setAttribute('points', puntos); });
+    rutaPuntos = pts;
+    pintarRuta();
     rutaSvg.style.display = '';
   }
 
@@ -1060,7 +1113,11 @@
   // Refresca los controles solo cuando cambia la escala que manda (esto corre en
   // cada fotograma de zoom).
   function sincronizarControlesDeCapa() {
-    if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== capaEnPantalla) aplicarControlesDeCapa();
+    if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) === capaEnPantalla) return;
+    // La escala que manda es otra, y con ella el tramo de ruta que se ve: el
+    // viaje vuelve a salir de su origen en vez de aparecer empezado (#254).
+    VLViaje.reiniciar();
+    aplicarControlesDeCapa();
   }
 
   function updateGrupoLocal() {
@@ -2897,6 +2954,7 @@
 
   function aplicarViaje(id) {
     viajeActivo = id || '';
+    VLViaje.reiniciar();   // la luz sale del origen, no del tramo del viaje anterior
     if (viajeSelect && viajeSelect.value !== viajeActivo) viajeSelect.value = viajeActivo;
     // Con viaje activo la atenuación base se desactiva (spec #102): los pocos
     // objetos de la ruta se ven a tamaño y opacidad completos.
