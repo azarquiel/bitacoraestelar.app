@@ -17,6 +17,7 @@ node scripts/gen_fixtures_gaia.js --vistas                       # los 5 CSV que
 node scripts/harness_vistas_np.js --etiqueta antes               # camino FITS
 node scripts/gen_dso_texturas.js --solo "<objeto>" --dir .scratch/dso-vistas
 node scripts/harness_vistas_np.js --etiqueta despues --fuente textura --dir .scratch/dso-vistas
+node scripts/comparar_vistas.js antes despues                    # la resta imagen a imagen
 ```
 
 - **Gaia**: los 11 CSV pineados de `scripts/fixtures/gaia/` y los 5 de solo-mirar
@@ -37,8 +38,13 @@ node scripts/harness_vistas_np.js --etiqueta despues --fuente textura --dir .scr
 | `antes` | 26 de 26 | no |
 | `despues` | 24 de 26 | sí: las dos de NGC 1982, con motivo `ausencia-excesiva` |
 
-Ninguna vista falta por Gaia sin generar, que es lo que el criterio prohíbe. Las
-dos que faltan en `despues` faltan por un **veredicto del generador**: NGC 1982
+El criterio de #206 pide las 26 en las dos etiquetas, y **eso no se cumple**:
+en `despues` hay 24. Lo que sí se cumple es la parte que el criterio protege
+—ninguna falta por Gaia sin generar—, y las dos que faltan tienen causa. Que el
+criterio se dé por bueno con 24 no lo decide este informe: exige reabrir el
+veredicto de #229 o aceptar que un objeto sin imagen no tiene vista.
+
+Las dos que faltan en `despues` faltan por un **veredicto del generador**: NGC 1982
 no tiene imagen donde está el objeto (#229), así que no hay textura que leer y
 la capa difusa se apaga para él. Es la causa nombrada de esas dos filas.
 
@@ -51,8 +57,9 @@ maneras, porque ninguna basta sola: la resta píxel a píxel de las dos PNG (que
 caza lo que el ojo no ve), una hoja de contactos de las 24 con el contraste
 estirado al percentil 99,9 (que es donde un halo o una malla se delatan aunque
 vivan tres niveles por encima del fondo), y tres parejas a tamaño completo —M1,
-NGC 6888 y NGC 253, las tres que tienen bordes o rayas que mirar—. Más la línea
-de resumen del harness en las 26.
+NGC 6888 y NGC 253, las tres que tienen bordes o rayas que mirar, copiadas más
+abajo—. Más la línea de resumen del harness: las 26 de `antes` y las 24 de
+`despues`.
 
 - **Ni un halo, ni una zona negra, ni un borde recto, ni punteado NUEVOS.** El
   borde cuadrado del parche de M1, el redondeado de NGC 6888 y las rayas de
@@ -61,8 +68,10 @@ de resumen del harness en las 26.
 - **Sobrecontraste: ninguno.** El nivel máximo coincide en las 24 vistas y nadie
   llega a 255; el núcleo saturado de M87 pinta 110 y 96 en sus dos configuraciones,
   las mismas antes y después.
-- **Tamaño angular: idéntico.** `θint` coincide en las 26 vistas, así que a
-  igualdad de aumento el objeto ocupa lo mismo.
+- **Tamaño angular: idéntico.** `θint` coincide en las 24 parejas (de M43 no hay
+  línea de resumen por textura, así que ahí no hay nada que comparar), y con él
+  coinciden también el campo y el nivel de fondo que pide el paso 4 del
+  procedimiento: las tres cifras salen iguales en las 24, línea a línea.
 - **Las diferencias que hay son de un solo nivel y de un solo píxel suelto**: como
   mucho 14 píxeles de 518 400 en una vista (M101), siempre a ±1, y separados
   entre sí (la distancia mínima medida entre dos píxeles que difieren fue de 11
@@ -70,6 +79,24 @@ de resumen del harness en las 26.
   asinh16 de la textura, que es exactamente lo que mide y acota L1.1 en
   `dso_texturas_l1_equivalencia.md`; los ±1 y ±2 de la cuenta de «px con objeto»
   son la misma causa vista por el umbral `F > 0`.
+
+Los números de la tabla los da `node scripts/comparar_vistas.js antes despues`
+sobre los dos directorios de `.scratch/`, no un recuento a mano. Su resumen:
+**24 parejas, 63 píxeles distintos en total, |Δ| máximo 1 nivel, cero píxeles
+negros nuevos.**
+
+### Una descarga de FITS salió mal, y eso también es un dato
+
+Al repetir la corrida entera para comprobar que la tabla se reproducía, NGC 6888
+salió por el camino FITS con 14 639 px con objeto y nivel máximo 157, en vez de
+22 264 y 174. No lo movió el código: borrando esa entrada de la caché de
+`$PS1_HARNESS_DIR` y volviendo a pedir el parche tres veces seguidas, las tres
+dieron 22 264 y 174. Fue una descarga degradada —el mosaico de skycells volvió
+con menos cobertura— que se quedó cacheada.
+
+Se apunta porque es justo lo que la fase 1 viene a quitar: el «antes» depende de
+un servicio que puede contestar distinto la próxima vez, y el «después» depende
+de un fichero con su hash. La tabla es la de la entrada buena, y se reproduce.
 
 ## Tabla del veredicto
 
@@ -80,7 +107,7 @@ de resumen del harness en las 26.
 | `NGC5194_D457_M190_sqm21.2` | 12.92′ | 35621 → 35621 | 136 → 136 | 3 px a ±1 | igual · 3 px de 518 400 a ±1 nivel, cuantización asinh16 |
 | `NGC5457_D457_M190_sqm21.2` | 23.18′ | 60022 → 60022 | 151 → 151 | 14 px a ±1 | igual · 14 px de 518 400 a ±1 nivel, cuantización asinh16 |
 | `NGC4594_D457_M190_sqm21.2` | 8.52′ | 18503 → 18503 | 139 → 139 | 1 px a ±1 | igual · 1 px de 518 400 a ±1 nivel, cuantización asinh16 |
-| `NGC3031_D457_M190_sqm21.2` | 20.81′ | 47925 → 47924 | 163 → 163 | 6 px a ±1 | igual · 6 px de 518 400 a ±1 nivel, cuantización asinh16 |
+| `NGC3031_D457_M190_sqm21.2` | 20.81′ | 47925 → 47924 | 163 → 163 | 6 px a ±1 | igual · 6 px de 518 400 a ±1 nivel, cuantización asinh16 · la cuenta de px con objeto se mueve -1: el mismo redondeo, visto por el umbral `F > 0` |
 | `NGC6720_D457_M100_sqm21.2` | 1.27′ | 649 → 649 | 109 → 109 | ninguno | igual |
 | `NGC6720_D457_M190_sqm21.2` | 1.27′ | 2283 → 2283 | 99 → 99 | 1 px a ±1 | igual · 1 px de 518 400 a ±1 nivel, cuantización asinh16 |
 | `NGC6720_D457_M300_sqm21.2` | 1.27′ | 5589 → 5589 | 96 → 96 | ninguno | igual |
@@ -89,11 +116,11 @@ de resumen del harness en las 26.
 | `NGC2068_D457_M100_sqm21.2` | 5.05′ | 2232 → 2232 | 161 → 161 | 2 px a ±1 | igual · 2 px de 518 400 a ±1 nivel, cuantización asinh16 |
 | `NGC2068_D457_M190_sqm21.2` | 5.05′ | 7348 → 7348 | 160 → 160 | 7 px a ±1 | igual · 7 px de 518 400 a ±1 nivel, cuantización asinh16 |
 | `NGC7635_D457_M190_sqm21.2` | 6.24′ | 3624 → 3624 | 121 → 121 | ninguno | igual |
-| `NGC6888_D457_M100_sqm21.2` | 15.05′ | 22264 → 22266 | 174 → 174 | 6 px a ±1 | igual · 6 px de 518 400 a ±1 nivel, cuantización asinh16 |
+| `NGC6888_D457_M100_sqm21.2` | 15.05′ | 22264 → 22266 | 174 → 174 | 6 px a ±1 | igual · 6 px de 518 400 a ±1 nivel, cuantización asinh16 · la cuenta de px con objeto se mueve +2: el mismo redondeo, visto por el umbral `F > 0` |
 | `NGC1952_D457_M190_sqm21.2` | 5.66′ | 22587 → 22587 | 125 → 125 | 3 px a ±1 | igual · 3 px de 518 400 a ±1 nivel, cuantización asinh16 |
 | `NGC7008_D457_M190_sqm21.2` | 1.43′ | 2114 → 2114 | 126 → 126 | ninguno | igual |
 | `Abell12_D457_M190_sqm21.2` | 0.62′ | 333 → 333 | 64 → 64 | ninguno | igual |
-| `NGC4486_D457_M190_sqm21.2` | 6.41′ | 11628 → 11629 | 110 → 110 | ninguno | igual |
+| `NGC4486_D457_M190_sqm21.2` | 6.41′ | 11628 → 11629 | 110 → 110 | ninguno | igual · la cuenta de px con objeto se mueve +1: el mismo redondeo, visto por el umbral `F > 0` |
 | `NGC4826_D457_M190_sqm21.2` | 8.93′ | 16901 → 16901 | 128 → 128 | 2 px a ±1 | igual · 2 px de 518 400 a ±1 nivel, cuantización asinh16 |
 | `NGC253_D457_M190_sqm21.2` | 18.03′ | 47567 → 47567 | 150 → 150 | 8 px a ±1 | igual · 8 px de 518 400 a ±1 nivel, cuantización asinh16 |
 | `NGC1982_D457_M190_sqm21.2` | 11.88′ | 16623 → — | 147 → — | — | **cambia**: sin textura, `ausencia-excesiva` (#229) |
@@ -103,6 +130,18 @@ de resumen del harness en las 26.
 | `NGC4486_D203_M100_sqm20.5` | 6.41′ | 2242 → 2242 | 96 → 96 | ninguno | igual |
 | `NGC1982_D203_M100_sqm20.5` | 11.88′ | 2941 → — | 125 → — | — | **cambia**: sin textura, `ausencia-excesiva` (#229) |
 | `NGC205_D203_M100_sqm20.5` | 9.20′ | 6323 → 6323 | 136 → 136 | 1 px a ±1 | igual · 1 px de 518 400 a ±1 nivel, cuantización asinh16 |
+
+## Los bordes que ya estaban
+
+Las tres parejas que se miraron a tamaño completo, `antes` a la izquierda y
+`despues` a la derecha, con el contraste estirado al percentil 99,8 y γ 0,55
+—en crudo casi todo es fondo y no se vería nada—:
+
+![M1, NGC 6888 y NGC 253, antes y después](vistas_fase1/bordes_antes_despues.png)
+
+El borde cuadrado del parche de M1, el redondeado de NGC 6888 y las rayas de
+máscara de NGC 253 salen en las dos columnas. Se copian precisamente por eso:
+para que la próxima vez que alguien los vea no los apunte como estrenados.
 
 ## NGC 1982 (M43), la única fila que cambia
 

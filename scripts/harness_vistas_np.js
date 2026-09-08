@@ -35,6 +35,7 @@ require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
+require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js'));
 var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
 var B = require('./lib_bajar_parche.js')(R);
 var P = require('./lib_parche_produccion.js')(R);
@@ -54,9 +55,10 @@ var GAIA_CACHE = process.env.BITACORA_GAIA_DIR ||
   path.join(require('os').tmpdir(), 'bitacora-gaia-vistas');
 var SIZE = 720, AFOV = 70;
 var TEXTURA = arg.fuente === 'textura';
-/* Dónde vive la textura publicada. El manifiesto no decide aquí: la vista se
-   pinta con lo que hay en disco, igual que hace harness_l1_equivalencia.js, para
-   que mirar no dependa de que el manifiesto esté al día. */
+/* Dónde vive la textura: lo publicado y, para los de solo-mirar, el `--dir` de
+   la corrida. Quién manda sigue siendo el manifiesto (ver fuenteDe); esto es
+   solo el disco donde se busca el fichero, igual que en
+   harness_l1_equivalencia.js. */
 var DIRS = [path.resolve(RAIZ, arg.dir || path.join('simulador_ocular', 'dso')),
             path.join(__dirname, 'fixtures', 'dso')];
 
@@ -81,17 +83,31 @@ if (TEXTURA) {
   };
 }
 
-/* El sidecar del objeto en disco, con su versión: `<id>.<v>.json`. Si lo que hay
-   es `<id>.fila.json`, el generador ya dictó que ese objeto no tiene imagen y su
-   motivo es la respuesta. */
+/* El sidecar del objeto en disco. Solo se mira cuando el MANIFIESTO no conoce al
+   objeto: los de solo-mirar no están publicados y su textura vive en el `--dir`.
+   Dentro de un directorio manda la misma precedencia que el generador escribe en
+   `rangoSidecar`: una `fila` de `ausencia-excesiva` gana a un `<id>.<v>.json` en
+   disco, porque si mandara la textura un parche viejo resucitaría la imagen que
+   el veredicto acaba de rechazar. Dos versiones del mismo objeto en el mismo
+   directorio no se desempatan a ojo: se tira, que elegir por orden alfabético
+   del hash es pintar una textura vieja y llamarla «después». */
 function sidecarDe(nombre) {
   var id = window.BitacoraPS1.ps1IdTextura(nombre);
   for (var i = 0; i < DIRS.length; i++) {
     if (!fs.existsSync(DIRS[i])) continue;
-    var f = fs.readdirSync(DIRS[i]).filter(function (n) {
+    var hay = fs.readdirSync(DIRS[i]).filter(function (n) {
       return n.indexOf(id + '.') === 0 && /\.json$/.test(n);
-    }).sort()[0];
-    if (f) return JSON.parse(fs.readFileSync(path.join(DIRS[i], f), 'utf8'));
+    });
+    var leer = function (n) { return JSON.parse(fs.readFileSync(path.join(DIRS[i], n), 'utf8')); };
+    var filas = hay.filter(function (n) { return /\.fila\.json$/.test(n); });
+    for (var j = 0; j < filas.length; j++) {
+      var sc = leer(filas[j]);
+      if (sc.motivo === 'ausencia-excesiva') return sc;
+    }
+    var vers = hay.filter(function (n) { return !/\.fila\.json$/.test(n); });
+    if (vers.length > 1) throw new Error(id + ': ' + vers.length + ' versiones en ' + DIRS[i] + ', no se elige por hash');
+    if (vers.length) return leer(vers[0]);
+    if (filas.length) return leer(filas[0]);
   }
   return null;
 }
@@ -152,13 +168,26 @@ var VISTAS = [
    apagada para ese objeto, no un fallo de la corrida. */
 function fuenteDe(gal, notas) {
   if (!TEXTURA) return B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.salida);
-  var sc = sidecarDe(gal.nombre);
-  if (!sc) { notas.motivo = 'sin textura en disco'; return Promise.resolve(null); }
-  if (sc.modelo === 'fila' || !sc.version) {
-    notas.motivo = sc.motivo || 'fila';
+  /* Quién decide: el MANIFIESTO, como en producción (ps1FuenteParche). Solo
+     cuando no tiene fila del objeto —los de solo-mirar, que no se publican— se
+     mira el sidecar del disco. Al revés, el arnés informaría de una capa que
+     producción no pinta. */
+  var fila = window.BitacoraPS1.ps1FilaTextura(gal.nombre), version;
+  if (fila && fila[1] === 'imagen') {
+    version = fila[2];
+  } else if (fila) {
+    notas.motivo = fila[6] || 'fila';
     return Promise.resolve(null);
+  } else {
+    var sc = sidecarDe(gal.nombre);
+    if (!sc) { notas.motivo = 'sin-textura'; return Promise.resolve(null); }
+    if (sc.modelo === 'fila' || !sc.version) {
+      notas.motivo = sc.motivo || 'fila';
+      return Promise.resolve(null);
+    }
+    version = sc.version;
   }
-  var base = window.BitacoraPS1.texturasUrl + window.BitacoraPS1.ps1IdTextura(gal.nombre) + '.' + sc.version;
+  var base = window.BitacoraPS1.texturasUrl + window.BitacoraPS1.ps1IdTextura(gal.nombre) + '.' + version;
   return window.BitacoraPS1.ps1LeerTextura(base + '.png', base + '.json', notas).then(function (T) {
     if (!T) return null;
     return { ancho: T.ancho, alto: T.alto, escalaAs: T.escalaAs, wcs: T.wcs || null, datos: T.datos };
@@ -206,6 +235,7 @@ function vista(v) {
       rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = g;
     }
     var nombre = nombreVista(v);
+    pintadas++;
     png.escribir(path.join(OUT, nombre + '.png'), rgb, SIZE, SIZE);
     console.log(nombre + '.png  θint ' + parche.thetaIntArcmin.toFixed(2) + '′ · campo ' +
       o.arcmin.toFixed(1) + '′ · fondo nivel ' + Math.round(c.nivelFondo) + ' · px con objeto ' +
@@ -213,7 +243,7 @@ function vista(v) {
   });
 }
 
-var cola = Promise.resolve(), saltadas = [], sinImagen = [];
+var cola = Promise.resolve(), saltadas = [], sinImagen = [], pintadas = 0;
 VISTAS.filter(function (v) { return !arg.solo || v.obj === arg.solo; }).forEach(function (v) {
   cola = cola.then(function () {
     /* Sin Gaia no hay máscara de estrellas, así que la vista no sería la de
@@ -227,6 +257,13 @@ VISTAS.filter(function (v) { return !arg.solo || v.obj === arg.solo; }).forEach(
 });
 cola.then(function () {
   console.log('→ ' + path.relative(RAIZ, OUT) + '  (fuente: ' + (TEXTURA ? 'textura' : 'FITS') + ')');
+  /* Una corrida que no pinta NADA no es una corrida buena: sin este aviso, un
+     `--dir` equivocado sale con código 0 y con las 26 vistas en la lista de
+     saltadas, indistinguible de una validación pasada (ADR 0005). */
+  if (!pintadas) {
+    console.error('\nNi una sola vista pintada: revisa --dir, --fuente o los CSV de Gaia.');
+    process.exit(1);
+  }
   if (sinImagen.length) {
     console.log('\nSin imagen (' + sinImagen.length + '), con su motivo: ' + sinImagen.join(', '));
   }
