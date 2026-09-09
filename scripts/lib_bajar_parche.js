@@ -126,10 +126,10 @@ module.exports = function (R) {
     if (fs.existsSync(f)) {
       var g = JSON.parse(fs.readFileSync(f, 'utf8'));
       /* Una entrada anterior a la WCS no la trae: solo hay que volver a pedirla
-         si quien llama la ha pedido. */
-      /* Una entrada anterior a #259 tampoco trae la cuenta de celdas: se sirve
-         igual, pero sin `celdasPedidas` quien llama sabe que ese parche no se
-         puede auditar (y el barrido de bloques es lo que queda para mirarlo). */
+         si quien llama la ha pedido. Una anterior a #259 tampoco trae la cuenta
+         de celdas: se sirve igual, y la ausencia de `celdasPedidas` es lo que
+         dice que ese parche no se puede auditar —para esos queda el barrido de
+         bloques, `scripts/harness_bloques_ausencia.js`—. */
       if (!conWcs || 'wcs' in g) {
         g.datos = new Float32Array(Buffer.from(g.datos, 'base64').buffer.slice(0));
         if (!conWcs) delete g.wcs;

@@ -316,9 +316,8 @@ function escribirManifiesto(dir) {
     '   Regenerar: node scripts/gen_dso_texturas.js --banco (o --solo "<nombre>")\n' +
     '   Campos: [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo]\n' +
     '   modelo ∈ {imagen, fila}; motivo ∈ {"", sur, no-cabe, sin-cobertura,\n' +
-    '   pisada, ausencia-excesiva, celda-perdida}. Una fila que no está aquí\n' +
-    '   se pide al proxy\n' +
-    '   mientras BitacoraPS1.cfg.proxyRespaldo siga encendido. */\n' +
+    '   pisada, ausencia-excesiva, celda-perdida}. Una fila que no está aquí se\n' +
+    '   pide al proxy mientras BitacoraPS1.cfg.proxyRespaldo siga encendido. */\n' +
     'window.BITACORA_DSO_TEXTURAS = [\n' + cuerpo + '\n];\n');
   return filas.length;
 }
