@@ -43,6 +43,14 @@ module.exports = function (R) {
     });
   }
 
+  /* Un reintento y nada más. `fitscut` corta la conexión en recortes grandes con
+     facilidad —un `socket hang up` que la segunda petición no repite (#259)— y
+     la fase 0 midió 147 descargas seguidas sin estrangulamiento
+     (docs/validacion/dso_texturas_fase0.md §D): ni pausa ni espera creciente. */
+  function bajarReintentando(url) {
+    return bajar1(url).catch(function () { return bajar1(url); });
+  }
+
   function esquinas(ra, dec, lado) {
     var mitad = lado / 120;                                   // grados
     var dra = mitad / Math.max(0.02, Math.abs(Math.cos(dec * Math.PI / 180)));
@@ -59,17 +67,22 @@ module.exports = function (R) {
     return out;
   }
 
+  /* Devuelve también las esquinas cuyo nombre NO se pudo preguntar. No es lo
+     mismo que una esquina sin celdas: eso es cielo que PS1 no cubre, y esto es
+     una consulta que falló, así que el mosaico puede salir corto sin que la
+     cuenta de celdas se entere (#259). */
   function celdas(ra, dec, lado, banda) {
+    var fallidas = 0;
     return Promise.all(esquinas(ra, dec, lado).map(function (e) {
-      return bajar1(BASE + 'ps1filenames.py?ra=' + e[0] + '&dec=' + e[1] +
+      return bajarReintentando(BASE + 'ps1filenames.py?ra=' + e[0] + '&dec=' + e[1] +
         '&filters=' + banda).then(function (b) { return parseNombres(b.toString()); })
-        .catch(function () { return []; });
+        .catch(function () { fallidas++; return []; });
     })).then(function (listas) {
       var vistas = [];
       listas.forEach(function (l) {
         l.forEach(function (f) { if (vistas.indexOf(f) < 0) vistas.push(f); });
       });
-      return vistas.slice(0, MAX_CELDAS);
+      return { lista: vistas.slice(0, MAX_CELDAS), esquinasFallidas: fallidas };
     });
   }
 
@@ -113,41 +126,57 @@ module.exports = function (R) {
     if (fs.existsSync(f)) {
       var g = JSON.parse(fs.readFileSync(f, 'utf8'));
       /* Una entrada anterior a la WCS no la trae: solo hay que volver a pedirla
-         si quien llama la ha pedido. */
+         si quien llama la ha pedido. Una anterior a #259 tampoco trae la cuenta
+         de celdas: se sirve igual, y la ausencia de `celdasPedidas` es lo que
+         dice que ese parche no se puede auditar —para esos queda el barrido de
+         bloques, `scripts/harness_bloques_ausencia.js`—. */
       if (!conWcs || 'wcs' in g) {
         g.datos = new Float32Array(Buffer.from(g.datos, 'base64').buffer.slice(0));
         if (!conWcs) delete g.wcs;
         return Promise.resolve(g);
       }
     }
-    return celdas(ra, dec, lado, banda).then(function (cs) {
-      if (!cs.length) throw new Error('sin cobertura de PS1');
+    return celdas(ra, dec, lado, banda).then(function (c) {
+      var cs = c.lista;
+      if (!cs.length) {
+        if (c.esquinasFallidas) throw new Error('no se pudo preguntar por las celdas');
+        throw new Error('sin cobertura de PS1');
+      }
       var capas = [], cadena = Promise.resolve();
       cs.forEach(function (celda) {
         cadena = cadena.then(function () {
-          return bajar1(urlRecorte(celda, ra, dec, lado, salida)).then(function (b) {
+          return bajarReintentando(urlRecorte(celda, ra, dec, lado, salida)).then(function (b) {
             var ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
             var p = window.BitacoraPS1.parseFITS(ab);
             if (p && p.datos) capas.push(p);
-          }).catch(function () { /* una celda que falla no tumba el parche */ });
+          }).catch(function () { /* una celda que falla no tumba el parche, pero se cuenta */ });
         });
       });
       return cadena.then(function () {
         if (!capas.length) throw new Error('ninguna celda devolvió imagen');
         var p = coser(capas);
         var g = { ancho: p.ancho, alto: p.alto, escalaAs: p.escalaAs,
-                  datos: p.datos, ladoArcmin: lado, salida: salida };
+                  datos: p.datos, ladoArcmin: lado, salida: salida,
+                  /* Una esquina que no se pudo preguntar cuenta como celda que
+                     falta: el mosaico está corto y no se sabe de cuánto. */
+                  celdasPedidas: cs.length + c.esquinasFallidas,
+                  celdasCosidas: capas.length };
         if (conWcs) g.wcs = p.wcs || null;
         if (!(g.escalaAs > 0)) g.escalaAs = lado * 60 / p.ancho;
         var guardar = {
           ancho: g.ancho, alto: g.alto, escalaAs: g.escalaAs,
           ladoArcmin: lado, salida: salida,
+          celdasPedidas: g.celdasPedidas, celdasCosidas: g.celdasCosidas,
           datos: Buffer.from(new Float32Array(g.datos).buffer).toString('base64')
         };
         /* Solo se guarda la clave `wcs` si se pidió: su ausencia es lo que
            distingue una entrada que no la tiene de una que la tiene a null. */
         if (conWcs) guardar.wcs = g.wcs;
-        fs.writeFileSync(f, JSON.stringify(guardar));
+        /* Un mosaico al que le falta una celda NO se cachea: si se guardara, el
+           agujero se serviría igual en cada corrida y la única forma de
+           enterarse sería mirarlo a ojo (#259). Se devuelve —quien llama decide
+           qué hacer con él— pero la siguiente ejecución vuelve a pedirlo. */
+        if (g.celdasCosidas >= g.celdasPedidas) fs.writeFileSync(f, JSON.stringify(guardar));
         return g;
       });
     });

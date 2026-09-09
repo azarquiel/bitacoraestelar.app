@@ -41,6 +41,17 @@ de darlos por buenos (objetivo §5, fase 0). Lo que ya tiene veredicto
 
 Ninguno.
 
+## Bloques de ausencia
+
+Texturas cuya mayor componente conexa de ausencia pasa de 3 % del parche
+llenando más del 35 % de su caja envolvente: la firma de una skycell que no llegó
+(#259). No es un veredicto —una estrella muy brillante deja una máscara que también
+la dispara—, es la lista de lo que hay que mirar. Las texturas anteriores a #259
+no traen la medida en su sidecar y no salen aquí: para esas está
+`node scripts/harness_bloques_ausencia.js`, que la mide del PNG.
+
+Ninguna.
+
 ## Pendientes
 
 Objetos del banco sin textura ni veredicto: caen al proxy mientras

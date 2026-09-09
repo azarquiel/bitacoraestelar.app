@@ -111,8 +111,13 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   `ps1PsfParche`, H2c, la máscara difusa— puede saber de dónde vino el parche.
 - **La ausencia es un dato:** un objeto sin textura tiene igualmente su fila en el manifiesto,
   con `modelo = "fila"` y el motivo (`sur`, `no-cabe`, `sin-cobertura`, `pisada`,
-  `ausencia-excesiva`). No estar en el manifiesto es otra cosa: el catálogo va por delante de
-  la generación y ese objeto se pide al proxy mientras `cfg.proxyRespaldo` siga encendido.
+  `ausencia-excesiva`, `celda-perdida`). No estar en el manifiesto es otra cosa: el catálogo
+  va por delante de la generación y ese objeto se pide al proxy mientras `cfg.proxyRespaldo`
+  siga encendido.
+- **Media textura no se publica:** si al mosaico de PS1 le falta una skycell tras el
+  reintento, el objeto sale con motivo `celda-perdida` en vez de con una imagen agujereada
+  (#259). Es el único motivo que NO cierra el objeto —es una avería de red, no una propiedad
+  del cielo— y la generación siguiente lo vuelve a pedir.
 - **El aviso lee el manifiesto, no el resultado de una petición:** el motivo de la fila del
   objeto apuntado es el que se le enseña al observador (`ps1TextoAviso`), y por eso los del
   sur y los que no caben —de los que la capa ni siquiera pide parche— tienen causa. La

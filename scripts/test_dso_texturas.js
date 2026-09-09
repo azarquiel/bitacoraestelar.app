@@ -293,6 +293,58 @@ ok(Math.abs(sc.escalaAs - sc.ladoArcmin * 60 / sc.ancho) < 1e-3,
 ok(!!sc.wcs && isFinite(sc.wcs.ra0) && isFinite(sc.wcs.gx),
    'trae la WCS del recorte, no el supuesto de norte arriba');
 
+/* ── La firma de una celda perdida (#259) ────────────────────────────────────
+   Dos condiciones y las dos hacen falta: un bloque grande QUE ADEMÁS llene su
+   caja. La máscara de estrellas es muchas manchas pequeñas, y una ausencia
+   grande pero desperdigada no es una celda que falta. */
+console.log('\nLa firma de una celda perdida:');
+var LB = 64;
+function mascara(pinta) {
+  var m = new Uint8Array(LB * LB);
+  for (var y = 0; y < LB; y++) for (var x = 0; x < LB; x++) if (pinta(x, y)) m[y * LB + x] = 1;
+  return m;
+}
+var rect = G.bloqueDeAusencia(mascara(function (x, y) {
+  return x >= 10 && x < 30 && y >= 10 && y < 30;
+}), LB, LB);
+ok(rect.componentes === 1 && rect.mayorPx === 400 && Math.abs(rect.rellenoCaja - 1) < 1e-12,
+   'un bloque rectangular es UNA componente que llena su caja entera (' +
+   rect.componentes + ', ' + (100 * rect.rellenoCaja).toFixed(0) + ' %)');
+ok(G.bloqueSospechoso(rect), 'y dispara la firma (' + (100 * rect.mayorFrac).toFixed(1) + ' % del parche)');
+/* NGC 253: cientos de manchitas repartidas. Ausencia alta, ninguna componente
+   grande. */
+var motas = G.bloqueDeAusencia(mascara(function (x, y) {
+  return x % 4 === 0 && y % 4 === 0;
+}), LB, LB);
+ok(motas.componentes === 256 && !G.bloqueSospechoso(motas),
+   'una máscara de estrellas son muchas componentes diminutas y no la dispara (' +
+   motas.componentes + ' componentes, ' + (100 * motas.mayorFrac).toFixed(2) + ' %)');
+/* Y la otra mitad de la firma: una banda diagonal es una sola componente que
+   pasa del 3 % del parche, pero apenas llena su caja envolvente. */
+var banda = G.bloqueDeAusencia(mascara(function (x, y) {
+  return Math.abs(x - y) < 2;
+}), LB, LB);
+ok(banda.componentes === 1 && banda.mayorFrac > G.BLOQUE_FRAC && !G.bloqueSospechoso(banda),
+   'una componente grande que NO llena su caja tampoco la dispara (' +
+   (100 * banda.mayorFrac).toFixed(1) + ' % del parche, ' +
+   (100 * banda.rellenoCaja).toFixed(0) + ' % de caja)');
+var sinNada = G.bloqueDeAusencia(new Uint8Array(LB * LB), LB, LB);
+ok(sinNada.componentes === 0 && sinNada.mayorFrac === 0 && !G.bloqueSospechoso(sinNada),
+   'y un parche sin un solo hueco no tiene bloque ninguno');
+
+/* `celda-perdida` NO cierra el objeto: es una avería de red, no una propiedad
+   del cielo, así que la corrida siguiente lo vuelve a pedir. Los demás motivos
+   sí lo cierran —si no, se le volvería a pedir a STScI lo que ya se sabe. */
+console.log('\nEl veredicto de celda perdida caduca solo:');
+var tmpCP = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dso-259-'));
+G.escribirFila(tmpCP, 'NGC 9999', 'celda-perdida', 0, 0, { celdasPedidas: 4, celdasCosidas: 3 });
+ok(!G.yaResuelto(tmpCP, PS1.ps1IdTextura('NGC 9999'), v0),
+   'un objeto con fila `celda-perdida` sigue pendiente');
+G.escribirFila(tmpCP, 'NGC 9999', 'sin-cobertura', 0, 0);
+var resSC = G.yaResuelto(tmpCP, PS1.ps1IdTextura('NGC 9999'), v0);
+ok(!!resSC && resSC.estado === 'fila', 'y con `sin-cobertura` está resuelto');
+fs.rmSync(tmpCP, { recursive: true, force: true });
+
 var png = fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.png'));
 P16.leer(png).then(function (img) {
   ok(!!img && img.ancho === sc.ancho && img.alto === sc.alto,
@@ -350,7 +402,7 @@ P16.leer(png).then(function (img) {
          es justo lo que lo hace control. */
   /* Tres comprobaciones por objeto con veredicto y una sola —la de la textura
      rechazada que no resucita— para todos, que por eso no multiplica. */
-  var MINIMO = 32 + (excesivas.length ? 1 : 0) + b.controles.length + 3 * excesivas.length;
+  var MINIMO = 40 + (excesivas.length ? 1 : 0) + b.controles.length + 3 * excesivas.length;
   console.log('');
   ok(comprobaciones >= MINIMO,
      'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ ' + MINIMO + ')');

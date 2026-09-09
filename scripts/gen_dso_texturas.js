@@ -117,6 +117,49 @@ function ausenciaEnObjeto(datos, ancho, alto, afin, ext) {
    extensión medible en el catálogo, y eso no lo decide esta regla. */
 function ausenciaExcesiva(a) { return a.n > 0 && a.ausentes === a.n; }
 
+/* ── La firma de una celda perdida (#259) ─────────────────────────────────
+   La ausencia normal es la máscara de estrellas: cientos de manchas pequeñas
+   repartidas por el parche. La de una skycell que no llegó es UN bloque
+   rectangular, grande, que rellena su caja envolvente casi entera. Eso es lo
+   que se mide aquí: la mayor componente conexa de ausencia (4-vecinos), su
+   fracción del parche y cuánto de su caja envolvente ocupa.
+
+   Los cortes salen del barrido de las 72 texturas del banco del 2026-09-09:
+   NGC 4486 (33,8 % en un bloque, 100 % de su caja) contra NGC 253 (8,0 % en 339
+   componentes, 22 % de caja). No es un veredicto —Abell 12 lo dispara con la
+   máscara de μ Ori, que es ausencia legítima— sino la señal de que hay que
+   mirar: quien decide si se publica es la cuenta de celdas. */
+var BLOQUE_FRAC = 0.03, BLOQUE_RELLENO = 0.35;
+
+function bloqueDeAusencia(ausente, ancho, alto) {
+  var n = ancho * alto, visto = new Uint8Array(n), pila = new Int32Array(n);
+  var componentes = 0, mayor = 0, caja = null;
+  for (var s = 0; s < n; s++) {
+    if (!ausente[s] || visto[s]) continue;
+    componentes++;
+    var top = 0, px = 0, x0 = ancho, x1 = -1, y0 = alto, y1 = -1;
+    pila[top++] = s; visto[s] = 1;
+    while (top) {
+      var i = pila[--top], x = i % ancho, y = (i - x) / ancho;
+      px++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (x > 0 && ausente[i - 1] && !visto[i - 1]) { visto[i - 1] = 1; pila[top++] = i - 1; }
+      if (x < ancho - 1 && ausente[i + 1] && !visto[i + 1]) { visto[i + 1] = 1; pila[top++] = i + 1; }
+      if (y > 0 && ausente[i - ancho] && !visto[i - ancho]) { visto[i - ancho] = 1; pila[top++] = i - ancho; }
+      if (y < alto - 1 && ausente[i + ancho] && !visto[i + ancho]) { visto[i + ancho] = 1; pila[top++] = i + ancho; }
+    }
+    if (px > mayor) { mayor = px; caja = [x0, y0, x1, y1]; }
+  }
+  var areaCaja = caja ? (caja[2] - caja[0] + 1) * (caja[3] - caja[1] + 1) : 0;
+  return { componentes: componentes, mayorPx: mayor, mayorFrac: n ? mayor / n : 0,
+           rellenoCaja: areaCaja ? mayor / areaCaja : 0, caja: caja };
+}
+
+function bloqueSospechoso(b) {
+  return b.mayorFrac > BLOQUE_FRAC && b.rellenoCaja > BLOQUE_RELLENO;
+}
+
 function arg(n, pordefecto) {
   var i = process.argv.indexOf(n);
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : pordefecto;
@@ -124,7 +167,21 @@ function arg(n, pordefecto) {
 
 /* Hash de LO QUE DETERMINA LOS PÍXELES, y de nada más: ni la fecha ni el
    directorio de salida entran. Mismo stack y mismos parámetros, mismo nombre de
-   fichero, y por eso la URL puede ser inmutable. */
+   fichero, y por eso la URL puede ser inmutable.
+
+   De los PARÁMETROS, no de los píxeles, y es a propósito (#259): el nombre tiene
+   que conocerse ANTES de bajar nada, que es lo que hace `yaResuelto` reanudable
+   sin llevar estado aparte. Un hash del contenido obligaría a descargar el
+   parche entero para saber si ya estaba, y la tirada del banco dejaría de poder
+   continuar donde la dejaron.
+
+   El precio, explícito: dos contenidos distintos del mismo objeto comparten
+   nombre de fichero, y con la cabecera inmutable de #209 el navegador que se
+   guardó el primero no ve el segundo. REPUBLICAR UNA TEXTURA CORREGIDA EXIGE
+   CAMBIARLE EL NOMBRE A MANO: subir `GENERADOR` (renombra el banco entero, que
+   es lo correcto si la corrección es del generador) o, si es de un solo objeto,
+   borrar su PNG y su sidecar y publicar con `GENERADOR` nuevo. Lo que NO vale es
+   sobrescribir el fichero con el mismo nombre. */
 function version(gal, salida) {
   var semilla = [GENERADOR, SONDEO, PS1.cfg.banda, gal.nombre,
                  gal.ra.toFixed(5), gal.dec.toFixed(5),
@@ -189,7 +246,14 @@ function escribirFila(dir, nombre, motivo, ra, dec, auditoria) {
 function yaResuelto(dir, id, v) {
   var dirs = dir === FIXTURES ? [dir] : [dir, FIXTURES];
   for (var i = 0; i < dirs.length; i++) {
-    if (fs.existsSync(path.join(dirs[i], id + '.fila.json'))) return { dir: dirs[i], estado: 'fila' };
+    var fila = path.join(dirs[i], id + '.fila.json');
+    /* `celda-perdida` es la excepción: es una avería de red, no un veredicto
+       sobre el cielo, así que no resuelve nada y la corrida siguiente lo vuelve
+       a pedir (#259). Los demás motivos sí cierran el objeto. */
+    if (fs.existsSync(fila) &&
+        JSON.parse(fs.readFileSync(fila, 'utf8')).motivo !== 'celda-perdida') {
+      return { dir: dirs[i], estado: 'fila' };
+    }
     if (fs.existsSync(path.join(dirs[i], id + '.' + v + '.png')) &&
         fs.existsSync(path.join(dirs[i], id + '.' + v + '.json'))) return { dir: dirs[i], estado: 'ya' };
   }
@@ -252,8 +316,8 @@ function escribirManifiesto(dir) {
     '   Regenerar: node scripts/gen_dso_texturas.js --banco (o --solo "<nombre>")\n' +
     '   Campos: [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo]\n' +
     '   modelo ∈ {imagen, fila}; motivo ∈ {"", sur, no-cabe, sin-cobertura,\n' +
-    '   pisada, ausencia-excesiva}. Una fila que no está aquí se pide al proxy\n' +
-    '   mientras BitacoraPS1.cfg.proxyRespaldo siga encendido. */\n' +
+    '   pisada, ausencia-excesiva, celda-perdida}. Una fila que no está aquí se\n' +
+    '   pide al proxy mientras BitacoraPS1.cfg.proxyRespaldo siga encendido. */\n' +
     'window.BITACORA_DSO_TEXTURAS = [\n' + cuerpo + '\n];\n');
   return filas.length;
 }
@@ -285,6 +349,21 @@ function generar(nombre, dir) {
       throw new Error('la escala del recorte (' + p.escalaAs + '″/px) no es la pedida (' + esperada + ')');
     }
 
+    /* Un mosaico al que le falta una skycell no se publica (#259). Las celdas ya
+       se pidieron dos veces en `lib_bajar_parche.js`; si aún falta una, lo que
+       hay es un trozo de cielo sin medir con forma de bloque, y una textura
+       mutilada engaña más que la ausencia declarada. A diferencia de
+       `ausencia-excesiva`, este veredicto NO es permanente: `yaResuelto` lo
+       ignora y la siguiente ejecución lo vuelve a intentar, porque la causa es
+       una avería de red y no una propiedad del cielo. */
+    if (p.celdasPedidas > 0 && p.celdasCosidas < p.celdasPedidas) {
+      escribirFila(dir, gal.nombre, 'celda-perdida', gal.ra, gal.dec,
+        { celdasPedidas: p.celdasPedidas, celdasCosidas: p.celdasCosidas });
+      console.log(gal.nombre + ' → fila (celda-perdida): solo ' + p.celdasCosidas +
+        ' de ' + p.celdasPedidas + ' celdas entraron en la costura; se reintenta en la próxima corrida');
+      return 'fila';
+    }
+
     /* Auditoría con las funciones de producción, no con una copia: el runtime
        vuelve a calcular cielo y σ sobre los datos decodificados, y estos números
        están aquí para poder comparar y para la lista de revisión. */
@@ -295,16 +374,19 @@ function generar(nombre, dir) {
     var escena = PS1.ps1EscenaEnParche(fits, gal, [gal]);
 
     var nAus = 0, nAusEsc = 0, nEsc = 0, i, x, y;
+    var ausente = new Uint8Array(p.datos.length);
     for (y = 0; y < p.alto; y++) {
       for (x = 0; x < p.ancho; x++) {
         i = y * p.ancho + x;
         var dentro = PS1.ps1FuenteEnEscena(escena, fits.afin, x, y);
         if (dentro) nEsc++;
         if (p.datos[i] === p.datos[i]) continue;
+        ausente[i] = 1;
         nAus++;
         if (dentro) nAusEsc++;
       }
     }
+    var bloque = bloqueDeAusencia(ausente, p.ancho, p.alto);
 
     /* El veredicto de ausencia, con la textura YA DESCARGADA: la ausencia no se
        puede saber sin la imagen, así que esto no es un filtro previo como `sur`
@@ -342,6 +424,9 @@ function generar(nombre, dir) {
     }
 
     fs.mkdirSync(dir, { recursive: true });
+    /* Si venía de un `celda-perdida` de una corrida anterior, ese veredicto ya
+       no vale: la textura está escrita y su fila sobra. */
+    fs.rmSync(path.join(dir, id + '.fila.json'), { force: true });
     LIBPNG.escribirGris16(base + '.png', cod.u16, p.ancho, p.alto);
     var sidecar = {
       nombre: gal.nombre, version: v, generador: GENERADOR,
@@ -353,10 +438,18 @@ function generar(nombre, dir) {
          (ADR 0008). Así ps1LeerTextura la entrega sin tocarla. */
       wcs: p.wcs || null,
       codificacion: { tipo: 'asinh16', a: cod.a, uMin: cod.uMin, uMax: cod.uMax, centinela: 0 },
+      /* Cuántas celdas se pidieron y cuántas entraron en la costura: sin esto,
+         un mosaico mutilado no se puede auditar sin volver a la red (#259). Un
+         parche servido por una caché anterior a #259 no las trae, y `null` dice
+         exactamente eso —no se sabe—, que no es lo mismo que cero. */
+      celdas: { pedidas: p.celdasPedidas === undefined ? null : p.celdasPedidas,
+                cosidas: p.celdasCosidas === undefined ? null : p.celdasCosidas },
       auditoria: {
         cielo: cielo, sigma: sigma,
         fracAusencia: nAus / p.datos.length,
         fracAusenciaEscena: nEsc ? nAusEsc / nEsc : 0,
+        bloqueMayorFrac: bloque.mayorFrac, bloqueRellenoCaja: bloque.rellenoCaja,
+        bloqueComponentes: bloque.componentes,
         errCuantMaxSigma: errSigma, errCuantMaxRel: errRel
       }
       /* `fuentesConservadas` y `procedencia` los dibuja el §4.1 del objetivo,
@@ -373,6 +466,11 @@ function generar(nombre, dir) {
       ' (en escena ' + (100 * sidecar.auditoria.fracAusenciaEscena).toFixed(2) + ' %)');
     console.log('  error de cuantización: ' + errSigma.toExponential(2) + ' σ cerca del cielo, ' +
       errRel.toExponential(2) + ' relativo por encima de 5σ');
+    if (bloqueSospechoso(bloque)) {
+      console.log('  AVISO · la ausencia tiene forma de bloque: ' +
+        (100 * bloque.mayorFrac).toFixed(1) + ' % del parche en una sola componente que llena el ' +
+        (100 * bloque.rellenoCaja).toFixed(0) + ' % de su caja. Mirar antes de darla por buena (#259)');
+    }
     return 'nuevo';
   });
 }
@@ -536,6 +634,35 @@ function escribirInforme(dir) {
              ' % | ' + (100 * s.auditoria.fracAusencia).toFixed(1) + ' % |');
     });
   }
+  /* La firma de celda perdida sobre lo ESCRITO, que es lo que se publica. Los
+     sidecars anteriores a #259 no traen las tres cifras y no aparecen aquí: para
+     esos está `scripts/harness_bloques_ausencia.js`, que las mide del PNG. */
+  var bloques = imagenes.filter(function (s) {
+    return s.auditoria && bloqueSospechoso({ mayorFrac: s.auditoria.bloqueMayorFrac || 0,
+                                             rellenoCaja: s.auditoria.bloqueRellenoCaja || 0 });
+  }).sort(function (a, c) { return c.auditoria.bloqueMayorFrac - a.auditoria.bloqueMayorFrac; });
+  L.push('');
+  L.push('## Bloques de ausencia');
+  L.push('');
+  L.push('Texturas cuya mayor componente conexa de ausencia pasa de ' + (100 * BLOQUE_FRAC).toFixed(0) +
+         ' % del parche');
+  L.push('llenando más del ' + (100 * BLOQUE_RELLENO).toFixed(0) + ' % de su caja envolvente: la firma de una ' +
+         'skycell que no llegó');
+  L.push('(#259). No es un veredicto —una estrella muy brillante deja una máscara que también');
+  L.push('la dispara—, es la lista de lo que hay que mirar. Las texturas anteriores a #259');
+  L.push('no traen la medida en su sidecar y no salen aquí: para esas está');
+  L.push('`node scripts/harness_bloques_ausencia.js`, que la mide del PNG.');
+  L.push('');
+  if (!bloques.length) L.push('Ninguna.');
+  else {
+    L.push('| objeto | mayor bloque | relleno de su caja | componentes |');
+    L.push('|---|---|---|---|');
+    bloques.forEach(function (s) {
+      L.push('| ' + s.nombre + ' | ' + (100 * s.auditoria.bloqueMayorFrac).toFixed(2) +
+             ' % | ' + (100 * s.auditoria.bloqueRellenoCaja).toFixed(0) + ' % | ' +
+             s.auditoria.bloqueComponentes + ' |');
+    });
+  }
   if (pendientes.length) {
     L.push('');
     L.push('## Pendientes');
@@ -557,6 +684,9 @@ module.exports = { version: version, filaDe: filaDe, motivoAusencia: motivoAusen
                    radioObjetoAs: radioObjetoAs, extensionDelObjeto: extensionDelObjeto,
                    ausenciaEnObjeto: ausenciaEnObjeto,
                    ausenciaExcesiva: ausenciaExcesiva,
+                   bloqueDeAusencia: bloqueDeAusencia, bloqueSospechoso: bloqueSospechoso,
+                   yaResuelto: yaResuelto, escribirFila: escribirFila,
+                   BLOQUE_FRAC: BLOQUE_FRAC, BLOQUE_RELLENO: BLOQUE_RELLENO,
                    escribirManifiesto: escribirManifiesto, escribirInforme: escribirInforme,
                    filasControl: filasControl, generar: generar,
                    GENERADOR: GENERADOR, FIXTURES: FIXTURES, MANIFIESTO: MANIFIESTO,

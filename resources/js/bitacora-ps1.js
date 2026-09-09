@@ -2095,8 +2095,9 @@
      Por eso ningún texto de aquí habla de servicios: «el servicio de imágenes
      no responde» es exclusivo del respaldo al proxy, y vive en ps1CapaGalaxias.
      Motivos del manifiesto (los congela la cabecera de gen_dso_texturas.js):
-     sur, no-cabe, sin-cobertura, pisada, ausencia-excesiva. La frontera añade
-     los suyos —sin-textura, sidecar y los diez de BitacoraPNG16.MOTIVOS—, y
+     sur, no-cabe, sin-cobertura, pisada, ausencia-excesiva, celda-perdida. La
+     frontera añade los suyos —sin-textura, sidecar y los diez de
+     BitacoraPNG16.MOTIVOS—, y
      esos NO se enumeran aquí: un motivo con nombre nuevo no puede acabar
      diciendo que el servicio no responde, así que lo que no está en la tabla
      cae en ILEGIBLE, que es lo que tienen todos en común. */
@@ -2115,6 +2116,12 @@
        brillante para el stack— decirle al observador que hay una estrella
        tapando sería falso. */
     'ausencia-excesiva': 'el cartografiado no tiene imagen donde está este objeto; ' +
+      'se muestra el modelo del catálogo',
+    /* Ni el cielo ni el fichero: la descarga llegó a trozos y no se publicó una
+       imagen con un agujero rectangular dentro (#259). Es pasajero —la
+       siguiente generación lo vuelve a pedir—, y por eso no dice que no hay
+       imagen, sino que todavía no la hay. */
+    'celda-perdida': 'la imagen de este objeto llegó incompleta y no se ha publicado; ' +
       'se muestra el modelo del catálogo',
     'sin-textura': 'este objeto todavía no tiene imagen publicada; se muestra el modelo del catálogo',
     /* El único del códec que no habla del fichero sino del navegador
