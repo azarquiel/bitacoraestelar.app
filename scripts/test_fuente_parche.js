@@ -306,7 +306,7 @@ Promise.resolve().then(function () {
      hacen falta las texturas del banco: lo que se prueba es que cada motivo
      tiene SU texto, que ninguno habla de servicios (la causa no lo es) y que
      un objeto declarado `fila` no emite una sola petición. */
-  var MOTIVOS = ['sur', 'no-cabe', 'sin-cobertura', 'pisada', 'ausencia-excesiva'];
+  var MOTIVOS = ['sur', 'no-cabe', 'sin-cobertura', 'pisada', 'ausencia-excesiva', 'celda-perdida'];
   var vistos = {};
   return MOTIVOS.reduce(function (cadena, motivo) {
     return cadena.then(function () {
@@ -334,6 +334,12 @@ Promise.resolve().then(function () {
        'y el de ausencia-excesiva dice que no hay imagen, no que haya una estrella');
     ok(vistos['no-cabe'] !== vistos['sin-cobertura'],
        'no caber y no estar cubierto no dicen lo mismo');
+    /* `celda-perdida` (#259) es pasajero —la descarga llegó a trozos y la
+       siguiente generación lo vuelve a pedir—, así que no puede decir lo mismo
+       que los dos motivos que sí son del cielo. */
+    ok(vistos['celda-perdida'] !== vistos['sin-cobertura'] &&
+       vistos['celda-perdida'] !== vistos['ausencia-excesiva'],
+       'el de celda-perdida dice que la imagen llegó incompleta, no que no exista');
     /* Y quién manda cuando el manifiesto y la geometría no dicen lo mismo: el
        manifiesto. NGC 25 está a −57°, y de un objeto así la capa ni siquiera
        pide parche (ps1GalaxiasDelCampo lo descarta antes), así que su causa no
