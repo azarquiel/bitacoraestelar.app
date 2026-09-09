@@ -33,14 +33,20 @@ var dirs = [G.FIXTURES, path.resolve(RAIZ, arg('--dir', path.join('simulador_ocu
   .filter(function (d, i, t) { return fs.existsSync(d) && t.indexOf(d) === i; });
 
 /* Cada textura escrita: sidecar con su PNG al lado. Los `.fila.json` no tienen
-   píxeles que mirar. */
-var texturas = [];
+   píxeles que mirar.
+
+   Un objeto que esté en los dos directorios se mide una vez: mismo nombre y
+   misma versión son los mismos píxeles. */
+var texturas = [], vistas = {};
 dirs.forEach(function (d) {
   fs.readdirSync(d).filter(function (n) { return /\.json$/.test(n) && !/\.fila\.json$/.test(n); })
     .forEach(function (n) {
       var s = JSON.parse(fs.readFileSync(path.join(d, n), 'utf8'));
-      var png = path.join(d, PS1.ps1IdTextura(s.nombre) + '.' + s.version + '.png');
-      if (fs.existsSync(png)) texturas.push({ sidecar: s, png: png, dir: d });
+      var id = PS1.ps1IdTextura(s.nombre) + '.' + s.version;
+      var png = path.join(d, id + '.png');
+      if (!fs.existsSync(png) || vistas[id]) return;
+      vistas[id] = 1;
+      texturas.push({ sidecar: s, png: png, dir: d });
     });
 });
 
