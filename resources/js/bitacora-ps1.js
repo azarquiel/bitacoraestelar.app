@@ -2095,8 +2095,9 @@
      Por eso ningún texto de aquí habla de servicios: «el servicio de imágenes
      no responde» es exclusivo del respaldo al proxy, y vive en ps1CapaGalaxias.
      Motivos del manifiesto (los congela la cabecera de gen_dso_texturas.js):
-     sur, no-cabe, sin-cobertura, pisada, ausencia-excesiva, celda-perdida. La frontera añade
-     los suyos —sin-textura, sidecar y los diez de BitacoraPNG16.MOTIVOS—, y
+     sur, no-cabe, sin-cobertura, pisada, ausencia-excesiva, celda-perdida. La
+     frontera añade los suyos —sin-textura, sidecar y los diez de
+     BitacoraPNG16.MOTIVOS—, y
      esos NO se enumeran aquí: un motivo con nombre nuevo no puede acabar
      diciendo que el servicio no responde, así que lo que no está en la tabla
      cae en ILEGIBLE, que es lo que tienen todos en común. */
