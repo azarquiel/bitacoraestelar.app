@@ -67,17 +67,22 @@ module.exports = function (R) {
     return out;
   }
 
+  /* Devuelve también las esquinas cuyo nombre NO se pudo preguntar. No es lo
+     mismo que una esquina sin celdas: eso es cielo que PS1 no cubre, y esto es
+     una consulta que falló, así que el mosaico puede salir corto sin que la
+     cuenta de celdas se entere (#259). */
   function celdas(ra, dec, lado, banda) {
+    var fallidas = 0;
     return Promise.all(esquinas(ra, dec, lado).map(function (e) {
       return bajarReintentando(BASE + 'ps1filenames.py?ra=' + e[0] + '&dec=' + e[1] +
         '&filters=' + banda).then(function (b) { return parseNombres(b.toString()); })
-        .catch(function () { return []; });
+        .catch(function () { fallidas++; return []; });
     })).then(function (listas) {
       var vistas = [];
       listas.forEach(function (l) {
         l.forEach(function (f) { if (vistas.indexOf(f) < 0) vistas.push(f); });
       });
-      return vistas.slice(0, MAX_CELDAS);
+      return { lista: vistas.slice(0, MAX_CELDAS), esquinasFallidas: fallidas };
     });
   }
 
@@ -131,8 +136,12 @@ module.exports = function (R) {
         return Promise.resolve(g);
       }
     }
-    return celdas(ra, dec, lado, banda).then(function (cs) {
-      if (!cs.length) throw new Error('sin cobertura de PS1');
+    return celdas(ra, dec, lado, banda).then(function (c) {
+      var cs = c.lista;
+      if (!cs.length) {
+        if (c.esquinasFallidas) throw new Error('no se pudo preguntar por las celdas');
+        throw new Error('sin cobertura de PS1');
+      }
       var capas = [], cadena = Promise.resolve();
       cs.forEach(function (celda) {
         cadena = cadena.then(function () {
@@ -148,7 +157,10 @@ module.exports = function (R) {
         var p = coser(capas);
         var g = { ancho: p.ancho, alto: p.alto, escalaAs: p.escalaAs,
                   datos: p.datos, ladoArcmin: lado, salida: salida,
-                  celdasPedidas: cs.length, celdasCosidas: capas.length };
+                  /* Una esquina que no se pudo preguntar cuenta como celda que
+                     falta: el mosaico está corto y no se sabe de cuánto. */
+                  celdasPedidas: cs.length + c.esquinasFallidas,
+                  celdasCosidas: capas.length };
         if (conWcs) g.wcs = p.wcs || null;
         if (!(g.escalaAs > 0)) g.escalaAs = lado * 60 / p.ancho;
         var guardar = {
