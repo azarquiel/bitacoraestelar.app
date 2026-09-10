@@ -118,6 +118,11 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   reintento, el objeto sale con motivo `celda-perdida` en vez de con una imagen agujereada
   (#259). Es el único motivo que NO cierra el objeto —es una avería de red, no una propiedad
   del cielo— y la generación siguiente lo vuelve a pedir.
+- **El nombre de una textura sale de sus parámetros, no de sus píxeles (ADR 0026).** Es lo que
+  hace reanudable la tirada del banco —`yaResuelto` decide antes de pedir nada— y lo que
+  obliga a que republicar una textura corregida pase por cambiarle el nombre a mano (subir
+  `GENERADOR`). Lo que impide que el contenido cambie bajo un nombre fijo no es el hash: es
+  la puerta de `celda-perdida`.
 - **El aviso lee el manifiesto, no el resultado de una petición:** el motivo de la fila del
   objeto apuntado es el que se le enseña al observador (`ps1TextoAviso`), y por eso los del
   sur y los que no caben —de los que la capa ni siquiera pide parche— tienen causa. La
