@@ -169,19 +169,16 @@ function arg(n, pordefecto) {
    directorio de salida entran. Mismo stack y mismos parámetros, mismo nombre de
    fichero, y por eso la URL puede ser inmutable.
 
-   De los PARÁMETROS, no de los píxeles, y es a propósito (#259): el nombre tiene
-   que conocerse ANTES de bajar nada, que es lo que hace `yaResuelto` reanudable
-   sin llevar estado aparte. Un hash del contenido obligaría a descargar el
-   parche entero para saber si ya estaba, y la tirada del banco dejaría de poder
-   continuar donde la dejaron.
+   De los PARÁMETROS, no de los píxeles, y es a propósito: el nombre tiene que
+   conocerse ANTES de bajar nada, que es lo que hace `yaResuelto` reanudable sin
+   llevar estado aparte. El precio es que dos contenidos distintos del mismo
+   objeto comparten nombre de fichero, así que REPUBLICAR UNA TEXTURA CORREGIDA
+   EXIGE CAMBIARLE EL NOMBRE A MANO —subir `GENERADOR`, que renombra el banco
+   entero—; sobrescribir el fichero conservando el nombre no vale.
 
-   El precio, explícito: dos contenidos distintos del mismo objeto comparten
-   nombre de fichero, y con la cabecera inmutable de #209 el navegador que se
-   guardó el primero no ve el segundo. REPUBLICAR UNA TEXTURA CORREGIDA EXIGE
-   CAMBIARLE EL NOMBRE A MANO: subir `GENERADOR` (renombra el banco entero, que
-   es lo correcto si la corrección es del generador) o, si es de un solo objeto,
-   borrar su PNG y su sidecar y publicar con `GENERADOR` nuevo. Lo que NO vale es
-   sobrescribir el fichero con el mismo nombre. */
+   La decisión, con lo que se midió y lo que se exige a cambio, en el ADR 0026
+   (docs/adr/0026-el-nombre-de-una-textura-sale-de-sus-parametros.md). De ella
+   depende la cabecera inmutable de #209. */
 function version(gal, salida) {
   var semilla = [GENERADOR, SONDEO, PS1.cfg.banda, gal.nombre,
                  gal.ra.toFixed(5), gal.dec.toFixed(5),
