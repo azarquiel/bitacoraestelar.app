@@ -37,14 +37,14 @@ ok(/id="sim-cruceta"[^>]*role="group"[^>]*aria-label=/.test(HTML),
 });
 ok(/aria-label="recentrar en el objeto"/.test(HTML),
    'el hueco central de la cruz recentra');
-ok(/data-x="1" data-y="0" aria-label="desplazar al este"/.test(HTML) &&
-   /data-x="-1" data-y="0" aria-label="desplazar al oeste"/.test(HTML),
+ok(/<button[^>]*data-x="1"[^>]*aria-label="desplazar al este"/.test(HTML) &&
+   /<button[^>]*data-x="-1"[^>]*aria-label="desplazar al oeste"/.test(HTML),
    'el Este suma RA y el Oeste la resta');
 ok(!/<button[^>]*class="paso[^>]*disabled/.test(HTML),
    'ningún botón nace deshabilitado: encadenar clics es el uso real');
 ok(/id="sim-desplazado"[^>]*role="status"/.test(HTML),
    'el rótulo del desplazamiento se anuncia solo al cambiar');
-ok(/id="sim-lienzo" tabindex="0"/.test(HTML),
+ok(/<canvas[^>]*id="sim-lienzo"[^>]*tabindex="0"/.test(HTML),
    'el lienzo es alcanzable por teclado');
 
 console.log('Estilos (WCAG 2.2: tamaño del objetivo y foco visible):');
@@ -109,15 +109,26 @@ ok(/if \(!conservar\) \{ ctx\.fillStyle = colorFondo; ctx\.fillRect/.test(JS),
 ok(/cargando\.classList\.toggle\('suave', conservar\)/.test(JS) &&
    /#mw-obs-form \.vista \.cargando\.suave \{/.test(CSS),
    'el aviso de carga no tapa el círculo mientras se desplaza');
-ok(/\$\('sim-vista'\)\.setAttribute\('aria-busy', 'true'\)/.test(JS) &&
-   /\$\('sim-vista'\)\.setAttribute\('aria-busy', 'false'\)/.test(JS),
+ok(/elVista\.setAttribute\('aria-busy', 'true'\)/.test(JS) &&
+   /elVista\.setAttribute\('aria-busy', 'false'\)/.test(JS),
    'aria-busy en el contenedor del lienzo mientras hay consulta en vuelo');
+// Las dos salidas por fallo (HiPS mudo, placas nulas) tienen que apagarlo: si no,
+// el lienzo se queda anunciando para siempre una carga que ya terminó.
+ok((JS.match(/elVista\.setAttribute\('aria-busy', 'false'\)/g) || []).length >= 3,
+   'los caminos de fallo también apagan aria-busy');
 
 console.log('Teclado:');
 ok(/ArrowUp: \[0, 1\], ArrowDown: \[0, -1\], ArrowLeft: \[1, 0\], ArrowRight: \[-1, 0\]/.test(JS),
    'las flechas desplazan, y la izquierda va al Este como el botón');
 ok(/if \(ev\.key === 'Home'\) \{ ev\.preventDefault\(\); recentrar\(\); return; \}/.test(JS),
    'Home recentra');
+ok(/elLienzo\.addEventListener\('keydown', teclado\)/.test(JS) &&
+   /cruceta\.addEventListener\('keydown', teclado\)/.test(JS) &&
+   !/\$\('sim-zona'\)\.addEventListener\('keydown'/.test(JS),
+   'escucha en el lienzo y en la cruceta, no en toda la zona (ahí están también ' +
+   'pantalla completa y descarga)');
+ok(/if \(!arcminVista\(\)\) return;/.test(JS),
+   'sin equipo no se acumulan pasos: no hay campo dibujado del que tomar el 10 %');
 
 console.log('Despliegue (CLAUDE.md: subir el ?v= de lo que cambia):');
 ['bitacora-ocular.js', 'bitacora-ocular.css', 'bitacora-gaia-render.js'].forEach(function (f) {

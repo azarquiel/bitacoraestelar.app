@@ -192,6 +192,10 @@
          objeto original con centroDesplazado, nunca encadenando desplazamientos:
          el cos(dec) cambia con la declinación y encadenar haría que el encuadre
          dependiera del orden de los clics. */
+      /* Nodos de la vista, cacheados: deslizarVista() y finCarga() se ejecutan
+         en cada clic de la cruceta y no deben rehacer el getElementById. */
+      var elVista = $('sim-vista'), elLienzo = $('sim-lienzo'), elImg = $('sim-img');
+      var elCargando = $('sim-cargando'), elDesplazado = $('sim-desplazado');
       var PASO_TOPE = 20;        // ±2 campos por eje: solo acota las consultas
       var ANTIRREBOTE = 250;     // ms: varios clics seguidos = UNA consulta
       var pasoX = 0, pasoY = 0;
@@ -552,7 +556,7 @@
         cargando.classList.toggle('suave', conservar);
         cargando.style.display = 'flex';
         cargando.textContent = 'solicitando imagen…';
-        $('sim-vista').setAttribute('aria-busy', 'true');
+        elVista.setAttribute('aria-busy', 'true');
         var peticion = ++contadorPeticion;
 
         if (origen === 'canvas-2d') {
@@ -564,7 +568,7 @@
           var u = urlHips(centro.ra, centro.dec, arcmin);
           cargarPlaca(u).then(function (im) {
             if (peticion !== contadorPeticion) return;
-            if (!im) { cargando.textContent = 'hips2fits no respondió: prueba el origen DSS.'; return; }
+            if (!im) { cargando.textContent = 'hips2fits no respondió: prueba el origen DSS.'; elVista.setAttribute('aria-busy', 'false'); return; }
             finCarga();
             renderizar(im, null, u);
           });
@@ -576,8 +580,8 @@
       /* Quita el indicador de carga y con él el aria-busy del contenedor: los dos
          dicen lo mismo, uno para quien mira y otro para quien escucha. */
       function finCarga() {
-        $('sim-cargando').style.display = 'none';
-        $('sim-vista').setAttribute('aria-busy', 'false');
+        elCargando.style.display = 'none';
+        elVista.setAttribute('aria-busy', 'false');
       }
 
       // Carga y compone la placa DSS (fusión HDR: DSS2-red profunda + DSS1 corta).
@@ -612,6 +616,7 @@
                 return;
               }
               cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?';
+              elVista.setAttribute('aria-busy', 'false');
               return;
             }
             finCarga();
@@ -772,7 +777,7 @@
         // La placa que llega ya está centrada donde toca: fuera el deslizamiento
         // provisional que se aplicó al pulsar la cruceta.
         deslizImg.x = deslizImg.y = 0;
-        $('sim-img').style.transform = '';
+        elImg.style.transform = '';
         var pupila = datosOcular().pupila;
         var img = $('sim-img');
         var canvas = $('sim-lienzo');
@@ -885,9 +890,8 @@
 
       // Rótulo «desplazado 0,3° E, 0,1° N»: lo redacta el módulo compartido.
       function pintarRotuloDespl(arcmin) {
-        var el = $('sim-desplazado');
-        if (!el) return;
-        el.textContent = BitacoraGaiaRender.rotuloDesplazamiento({
+        if (!elDesplazado) return;
+        elDesplazado.textContent = BitacoraGaiaRender.rotuloDesplazamiento({
           pasoX: pasoX, pasoY: pasoY, arcmin: arcmin || arcminVista() || 0
         }) || 'centrado en el objeto';
       }
@@ -897,7 +901,7 @@
          al CONTRARIO que la ventana: un paso al norte sube el centro, así que lo
          que se ve baja. Solo queda vacía la franja que entra. */
       function deslizarVista(dx, dy) {
-        var canvas = $('sim-lienzo'), img = $('sim-img');
+        var canvas = elLienzo, img = elImg;
         // 'block' explícito, no "!== none": antes del primer render el lienzo
         // aún no tiene display en línea y se estaría dibujando a ciegas.
         if (canvas.style.display === 'block') {
@@ -920,6 +924,7 @@
          deslizamiento) se fija aquí mismo, nunca al terminar una animación: tres
          clics rápidos dejarían el centro a medias. */
       function desplazar(dx, dy) {
+        if (!arcminVista()) return;   // sin equipo no hay campo que desplazar
         var nx = Math.max(-PASO_TOPE, Math.min(PASO_TOPE, pasoX + dx));
         var ny = Math.max(-PASO_TOPE, Math.min(PASO_TOPE, pasoY + dy));
         if (nx === pasoX && ny === pasoY) return;   // en el tope: ni se mueve ni consulta
@@ -932,6 +937,8 @@
       function recentrar() {
         if (!pasoX && !pasoY) return;
         pasoX = pasoY = 0;
+        deslizImg.x = deslizImg.y = 0;
+        elImg.style.transform = '';
         programarDespl();   // sin deslizar: el salto puede ser de dos campos
       }
 
@@ -956,13 +963,15 @@
         var TECLAS = {
           ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [1, 0], ArrowRight: [-1, 0]
         };
-        $('sim-zona').addEventListener('keydown', function (ev) {
+        function teclado(ev) {
           if (ev.key === 'Home') { ev.preventDefault(); recentrar(); return; }
           var d = TECLAS[ev.key];
           if (!d) return;
           ev.preventDefault();
           desplazar(d[0], d[1]);
-        });
+        }
+        elLienzo.addEventListener('keydown', teclado);
+        cruceta.addEventListener('keydown', teclado);
         pintarRotuloDespl();
       }
 
