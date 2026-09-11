@@ -315,8 +315,39 @@ function medir(nombre, etiqueta, banda) {
       }
     }
 
+    /* La mediana del CUERPO en unidades de σ: dónde cae el objeto respecto de la
+       raya. El suelo está en 1,5σ, así que este número dice si el objeto vive
+       encima del filo (NGC 7293, 1,53) o lejos de él en un sentido o en el otro.
+       Es la cifra que ordena el banco por riesgo. */
+    var cuerpo = [];
+    for (y = 0; y < alto; y++) {
+      for (x = 0; x < ancho; x++) {
+        if (Math.hypot(x - fits.afin.cx, y - fits.afin.cy) * F.escalaAs > rObj / 2) continue;
+        var vc = datos[y * ancho + x];
+        if (vc === vc) cuerpo.push((vc - cielo) / sigma);
+      }
+    }
+    cuerpo.sort(function (a, b) { return a - b; });
+    var medCuerpo = percentil(cuerpo, 0.5);
+    /* El suelo de producción traducido a brillo superficial: 1,5σ repartidos
+       sobre el área del píxel. Con el MISMO k, este número varía entre objetos
+       porque varían σ y la escala, y la escala la elegimos nosotros al fijar el
+       lado del parche en 6·r_e. */
+    var sueloSb = PS1.cfg.kRuido * sigma / (F.escalaAs * F.escalaAs);
+
     var medidos = n - aus;
     var pct = function (k) { return (100 * k / (medidos || 1)).toFixed(1) + ' %'; };
+
+    if (breve) {
+      return console.log(
+        (f[0] + '            ').slice(0, 12) + ' ' +
+        ((f[12] || 'gal') + '    ').slice(0, 4) + ' ' +
+        F.escalaAs.toFixed(3).padStart(6) + '″/px ' +
+        sigma.toFixed(1).padStart(7) + ' DN ' +
+        sueloSb.toFixed(0).padStart(7) + ' DN/as² ' +
+        medCuerpo.toFixed(2).padStart(8) + 'σ ' +
+        (100 * apagados / (medidos || 1)).toFixed(1).padStart(5) + '% apagados');
+    }
     console.log('\n── ' + f[0] + (f[1] ? ' (' + f[1] + ')' : '') + ' · ' + etiqueta);
     console.log('   clase ' + (f[12] || '?') + ' · mag catálogo ' + gal.magV +
                 ' · r_objeto ' + rObj.toFixed(1) + '″ · escala ' + F.escalaAs.toFixed(3) + '″/px' +
@@ -419,6 +450,18 @@ function medir(nombre, etiqueta, banda) {
 
 var solo = arg('--solo', '');
 var bandas = arg('--bandas', '');           // p.ej. --bandas g,r,i (descarga; '' = solo lo publicado)
+/* `--todos`: el banco entero, una línea por objeto. La lista sale del
+   MANIFIESTO (las filas `imagen`), no de una lista escrita aquí: lo que se mide
+   es lo publicado. Las filas sin textura —sur, no-cabe, sin-cobertura— no
+   tienen píxeles que mirar. */
+var todos = process.argv.indexOf('--todos') > 0;
+var breve = todos;
+if (todos) {
+  require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js'));
+  OBJETOS = (window.BITACORA_DSO_TEXTURAS || [])
+    .filter(function (t) { return t[1] === 'imagen'; })
+    .map(function (t) { return [t[0], '']; });
+}
 var lista = solo ? OBJETOS.filter(function (o) { return BANCO.clave(o[0]) === BANCO.clave(solo); }) : OBJETOS;
 
 /* Un par (objeto, fuente) por medida. Sin `--bandas` la fuente es el PNG

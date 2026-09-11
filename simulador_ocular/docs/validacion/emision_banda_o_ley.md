@@ -135,3 +135,42 @@ nebulosa: en esa fila la columna que cuenta es la de anillos de arriba.
 NGC 7293 va sin máscara de estrellas —no hay fixture de Gaia para ella—, pero
 está a b = −57° y su cola de alta señal (p99 = 20σ contra 151σ en NGC 6888) dice
 que ahí las estrellas no mandan.
+
+## Línea base del banco entero (2026-09-12, para #273)
+
+`node scripts/harness_emision_banda.js --todos` mide los 68 objetos con textura
+de imagen del manifiesto, una línea por objeto: escala, σ, el suelo de
+producción traducido a brillo superficial (`kRuido·σ / escala²`), la mediana del
+cuerpo en unidades de σ y qué fracción del objeto apaga el suelo.
+
+| | |
+|---|---|
+| objetos medidos | 68 |
+| con la mediana del cuerpo por debajo de 3σ | 10 |
+| en el filo (1,0–2,5σ, donde está NGC 7293) | 5 |
+| con más del 40 % del área medida apagada | **9** |
+| dispersión del suelo efectivo | 23 a 166 187 DN/arcsec² = **9,65 mag** |
+
+Los nueve que pierden más del 40 %: IC 0059 (85,2 %), IC 0063 (89,7 %),
+IC 0359A (78,4 %), **NGC 1788 (100 %)**, NGC 2064 (68,5 %), IC 0444 (61,9 %),
+NGC 5457 (41,7 %), NGC 6888 (66,1 %), NGC 7293 (47,4 %).
+
+Cinco de los nueve son RfN, lo que enlaza con algo ya sabido: en esa clase la
+magnitud del OpenNGC es la de la estrella que ilumina, no la de la nebulosa, y
+12 de 13 acaban con μ asumida de 20,0. El perfil sale brillante y la imagen
+tenue, y el suelo se lleva la imagen.
+
+**NGC 1788 enseña el mecanismo en su forma extrema.** Su `r_e` de catálogo es
+18″, así que el parche mide 6·`r_e` = 1,8′ y el marco del 6 % del que `ps1Cielo`
+y `ps1SigmaCielo` sacan cielo y ruido **cae dentro de la nebulosa**. σ sale a
+796,9 DN y el suelo efectivo a 107 467 DN/arcsec²: el objeto se sube a sí mismo
+el umbral hasta que no pasa ninguno de sus píxeles, y en pantalla lo que se ve
+es el perfil sintético entero pese a haber imagen medida publicada. Es un lazo
+de realimentación con el signo equivocado —cuanto más brillante y extenso, más
+alto su propio listón— y es la misma raíz que el «el parche mide 0,9 ejes
+mayores» de arriba, llevada al extremo.
+
+**Aviso de sesgo, y va a favor:** esta corrida solo quita estrellas en los seis
+objetos que tienen fixture de Gaia; en el resto las estrellas siguen dentro y
+empujan la mediana del cuerpo hacia ARRIBA. O sea que 9 de 68 es un suelo, no un
+techo: quitando estrellas en todos, la lista puede crecer, no encoger.
