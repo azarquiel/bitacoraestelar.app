@@ -201,6 +201,28 @@
 .sim-gen-canvas {width:100%;height:100%;display:block;}
 .sim-gen-spin {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   text-align:center;padding:20px;font-size:13px;color:var(--tinta-tenue);background:rgba(4,7,14,0.65);}
+/* Al desplazar, el aviso de carga no tapa el campo ya pintado: se va al borde
+   inferior sobre un degradado. */
+.sim-gen-spin.suave {background:linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0) 40%);
+  align-items:flex-end;padding-bottom:16px;}
+/* Cruceta del encuadre, la misma que en el simulador: botones de 44 px (WCAG
+   2.2 pide 24 mínimo; en táctil, 44) con 8 px de separación, en ámbar porque
+   esto se mira de noche. El Este a la IZQUIERDA y el Oeste a la derecha: es el
+   cielo, no la pantalla. */
+.sim-gen-cruceta {display:grid;grid-template-columns:repeat(3, 44px);grid-template-rows:repeat(3, 44px);
+  gap:8px;justify-content:center;margin:0 18px;}
+.sim-gen-cruceta .paso {display:inline-flex;align-items:center;justify-content:center;padding:0;
+  border:1px solid var(--linea);border-radius:8px;background:transparent;
+  color:var(--ambar,#f4c76b);font-family:ui-monospace,Menlo,monospace;font-size:14px;
+  font-weight:600;cursor:pointer;}
+.sim-gen-cruceta .paso:hover {border-color:var(--ambar,#f4c76b);background:rgba(255,170,90,.10);}
+.sim-gen-cruceta .paso:focus-visible {outline:2px solid var(--ambar,#f4c76b);outline-offset:2px;}
+.sim-gen-cruceta .paso-n {grid-area:1 / 2;}
+.sim-gen-cruceta .paso-e {grid-area:2 / 1;}
+.sim-gen-cruceta .paso-centro {grid-area:2 / 2;font-size:10px;}
+.sim-gen-cruceta .paso-o {grid-area:2 / 3;}
+.sim-gen-cruceta .paso-s {grid-area:3 / 2;}
+.sim-gen-canvas:focus-visible {outline:2px solid var(--ambar,#f4c76b);outline-offset:-4px;}
 .sim-gen-foot {display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:14px 18px;border-top:1px solid var(--linea);}
 .sim-gen-badge {font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--azul);
