@@ -237,12 +237,14 @@ function campoVecino(f, gal, rObjMax) {
     if (!(c[1] > PS1.cfg.decMin) || Math.abs(c[1]) > 89) return;
     var cerca = Infinity;
     catalogo.forEach(function (g) {
+      if (PUB.clave(g[0]) === PUB.clave(f[0])) return;    // el propio objeto no cuenta como vecina
       var dra = ((((g[2] - c[0]) + 540) % 360) - 180) * Math.cos(c[1] * Math.PI / 180);
       var sep = Math.hypot(dra, g[3] - c[1]) * 60;                 // ′
       if (sep < cerca) cerca = sep;
     });
     if (!mejor || cerca > mejor.cerca) mejor = { ra: c[0], dec: c[1], dir: c[2], cerca: cerca };
   });
+  if (mejor) mejor.offsetArcmin = d * 60;
   return mejor;
 }
 
@@ -301,7 +303,7 @@ function patronDe(nombre) {
     var v = campoVecino(f, gal, rObjMax);
     if (!v) { out.vecinoMotivo = 'sin campo vecino: ninguna dirección cae en cobertura'; return out; }
     out.vecino = { ra: v.ra, dec: v.dec, dir: v.dir, vecinaMasCercaArcmin: v.cerca,
-                   ladoArcmin: gal.ladoArcmin };
+                   offsetArcmin: v.offsetArcmin, ladoArcmin: gal.ladoArcmin };
     return bajar(v.ra, v.dec, gal.ladoArcmin, PS1.cfg.salida, PS1.cfg.banda).then(function (q) {
       var todos = [];
       for (var i = 0; i < q.datos.length; i++) { if (q.datos[i] === q.datos[i]) todos.push(q.datos[i]); }
@@ -342,7 +344,8 @@ function patron() {
             return c.lim + ' ' + c.mediana.toFixed(1) + '/' + c.sigma.toFixed(1);
           }).join('  '));
         console.log('              campo vecino: ' + (r.vecino && r.vecino.sigma > 0
-          ? ('a ' + r.vecino.ladoArcmin.toFixed(1) + '′ hacia ' + r.vecino.dir +
+          ? ('a ' + r.vecino.offsetArcmin.toFixed(1) + '′ hacia ' + r.vecino.dir +
+             ', lado ' + r.vecino.ladoArcmin.toFixed(1) + '′' +
              ' (difusa más cerca: ' + r.vecino.vecinaMasCercaArcmin.toFixed(1) + '′) · ' +
              r.vecino.escalaAs.toFixed(3) + '″/px · cielo ' + r.vecino.cielo.toFixed(2) +
              ' DN · σ ' + r.vecino.sigma.toFixed(2) + ' DN')
