@@ -1221,7 +1221,16 @@
      El paso vale lo mismo EN CIELO en las dos direcciones, así que el de RA se
      divide por cos(dec): los meridianos se juntan hacia el polo y sin esa
      división el 10 % se encogería con la declinación. pasoX cuenta hacia RA
-     creciente (Este, la IZQUIERDA del lienzo) y pasoY hacia el norte. */
+     creciente (Este, la IZQUIERDA del lienzo) y pasoY hacia el norte.
+
+     El coseno es el de la declinación DE PARTIDA, no el de la ya desplazada:
+     así el paso en RA de un clic en diagonal vale lo mismo que el de un clic
+     al este puro desde el mismo centro.
+
+     Quien llama debe guardar los pasos ACUMULADOS y pedir el centro de una sola
+     vez desde el original, no encadenar llamadas sobre el centro ya movido: el
+     coseno cambia con la declinación, así que ir clic a clic hace que el
+     encuadre dependa del orden en que se pulsaron los botones. */
   function centroDesplazado(o) {
     var paso = 0.10 * (o.arcmin || 0) / 60;                        // grados
     var dec  = Math.max(-90, Math.min(90, o.dec + (o.pasoY || 0) * paso));

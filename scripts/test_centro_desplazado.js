@@ -58,7 +58,31 @@ ok(norte.dec <= 90, 'no se sale por el norte: ' + norte.dec);
 var sur = R.centroDesplazado({ ra: 10, dec: -89.99, arcmin: 600, pasoX: 0, pasoY: -5 });
 ok(sur.dec >= -90, 'no se sale por el sur: ' + sur.dec);
 
-console.log('5) Paso cero devuelve el centro exacto');
+console.log('5) En el polo el paso en RA no se dispara');
+// cos(90°) vale ~6e-17, así que sin suelo un paso al este mandaría el centro a
+// miles de vueltas. El suelo es el coseno de 89,9°, donde un campo ya abarca
+// todos los husos y da igual dónde caiga.
+var polo = R.centroDesplazado({ ra: 120, dec: 90, arcmin: ARCMIN, pasoX: 1, pasoY: 0 });
+ok(isFinite(polo.ra) && polo.ra >= 0 && polo.ra < 360, 'RA finita y en rango en el polo: ' + polo.ra);
+casi(polo.ra - 120, PASO / Math.cos(89.9 * Math.PI / 180), 1e-9, 'el paso en RA se queda en el suelo de 89,9°');
+
+console.log('6) El coseno es el de la declinación DE PARTIDA');
+// El paso en RA de un clic diagonal vale lo mismo que el de un clic al este
+// puro: no lo encoge la componente norte-sur del mismo clic.
+var este = R.centroDesplazado({ ra: 40, dec: 60, arcmin: ARCMIN, pasoX: 1, pasoY: 0 });
+var diagonal = R.centroDesplazado({ ra: 40, dec: 60, arcmin: ARCMIN, pasoX: 1, pasoY: 1 });
+casi(diagonal.ra, este.ra, 1e-12, 'la diagonal mueve en RA lo mismo que el este puro');
+casi(diagonal.ra - 40, PASO / Math.cos(60 * Math.PI / 180), 1e-12, 'y con cos(60°), no con cos(60°+paso)');
+// Corolario para quien llame: encadenar clic a clic NO da el mismo centro que
+// pedirlo con los pasos acumulados, porque el coseno cambia con la dec. El
+// contrato es acumular los pasos y llamar una sola vez desde el centro original.
+var encadenado = R.centroDesplazado({ ra: este.ra, dec: este.dec, arcmin: ARCMIN, pasoX: 0, pasoY: 1 });
+ok(Math.abs(encadenado.ra - diagonal.ra) < 1e-12, 'este + norte encadenados = diagonal acumulada (aquí sí, el este fue primero)');
+var alReves = R.centroDesplazado({ ra: 40, dec: 60, arcmin: ARCMIN, pasoX: 0, pasoY: 1 });
+alReves = R.centroDesplazado({ ra: alReves.ra, dec: alReves.dec, arcmin: ARCMIN, pasoX: 1, pasoY: 0 });
+ok(Math.abs(alReves.ra - diagonal.ra) > 1e-6, 'y norte + este encadenados se desvían: por eso se acumulan los pasos');
+
+console.log('7) Paso cero devuelve el centro exacto');
 var quieto = R.centroDesplazado({ ra: 83.822083, dec: -5.391111, arcmin: ARCMIN, pasoX: 0, pasoY: 0 });
 ok(quieto.ra === 83.822083, 'RA sin arrastre numérico');
 ok(quieto.dec === -5.391111, 'dec sin arrastre numérico');
