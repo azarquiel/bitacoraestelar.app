@@ -1275,8 +1275,11 @@
 
   function programarSim(conservar){
     // Deshabilitado desde el primer clic, no cuando sale la consulta: entre
-    // medias la vista ya no es la que se subiría.
+    // medias la vista ya no es la que se subiría. Y el rótulo, en el acto: el
+    // lienzo ya se ha deslizado, así que esperar al antirrebote dejaría el
+    // texto contando el encuadre anterior.
     _simNodos.usar.disabled=true;
+    pintarInfoSim();
     clearTimeout(_simPendiente);
     _simPendiente=setTimeout(function(){ if(_simEntrada) pintarSim(conservar); }, SIM_ANTIRREBOTE);
   }
@@ -1296,36 +1299,47 @@
     pintarSim();
   }
 
-  // Pinta (o repinta) la vista con la fuente elegida en el modal. La imagen que
-  // se sube es la que se está viendo: el observador decide DESPUÉS de verla.
-  function pintarSim(conservar){
-    var n=_simNodos, el=_simEntrada.el, d=_simEntrada.d;
+  /* La línea de información de la vista: objeto, equipo, aumentos, campo, SQM y
+     el desplazamiento. Va aparte de pintarSim porque la cruceta la repinta EN
+     EL ACTO, sin esperar al antirrebote: el lienzo ya se ha deslizado y el
+     texto tiene que contar el mismo encuadre. Devuelve lo que también necesita
+     el render (fuente, campo dibujado y SQM), que se calcula aquí una vez. */
+  function pintarInfoSim(){
+    var n=_simNodos, d=_simEntrada.d;
     var fuente=n.origen.value;
-    var canvas=n.canvas, ctx=canvas.getContext('2d');
-    var spin=n.spin, usar=n.usar;
     // El DSS no sirve más de 2°: con un campo mayor la placa se recorta, y hay
     // que decirlo porque la imagen ya no cubre todo lo que se ve por el ocular.
-    var maxDss=BitacoraGaiaRender.dssMaxArcmin;
-    var arcmin=(fuente==='dss') ? Math.min(d.arcmin, maxDss) : d.arcmin;
+    var arcmin=(fuente==='dss') ? Math.min(d.arcmin, BitacoraGaiaRender.dssMaxArcmin) : d.arcmin;
     // SQM de ESTA imagen: el del modal manda sobre el de la observación. Fuera
     // del rango de la escala (o en blanco) se vuelve al de partida, para no
     // pedirle al render un cielo imposible.
-    var sqmSim=parseFloat(n.sqm.value);
-    if(isNaN(sqmSim) || sqmSim<14 || sqmSim>22) sqmSim=d.sqm;
-    // El desplazamiento se cuenta contra el campo DIBUJADO (el recortado si es
-    // el DSS), que es del que se toma el 10 % por paso.
-    var centro=BitacoraGaiaRender.centroDesplazado({
-      ra:d.ra, dec:d.dec, arcmin:arcmin, pasoX:_simPasoX, pasoY:_simPasoY
-    });
+    var sqm=parseFloat(n.sqm.value);
+    if(isNaN(sqm) || sqm<14 || sqm>22) sqm=d.sqm;
     var rotDespl=BitacoraGaiaRender.rotuloDesplazamiento({
       pasoX:_simPasoX, pasoY:_simPasoY, arcmin:arcmin
     });
     n.info.innerHTML =
       BitacoraBase.esc(d.objeto)+' · '+BitacoraBase.esc(d.telescopio)+' · '+BitacoraBase.esc(d.ocular)+
       ' · '+d.aumentos+'× · campo '+fmtCampo(arcmin/60)+
-      ' · SQM '+String(sqmSim).replace('.', ',')+
+      ' · SQM '+String(sqm).replace('.', ',')+
       (arcmin<d.arcmin ? ' (recortado del máximo del DSS)' : '')+
       (rotDespl ? ' · '+rotDespl : '');
+    return { fuente:fuente, arcmin:arcmin, sqm:sqm };
+  }
+
+  // Pinta (o repinta) la vista con la fuente elegida en el modal. La imagen que
+  // se sube es la que se está viendo: el observador decide DESPUÉS de verla.
+  function pintarSim(conservar){
+    var n=_simNodos, el=_simEntrada.el, d=_simEntrada.d;
+    var vista=pintarInfoSim();
+    var fuente=vista.fuente, arcmin=vista.arcmin, sqmSim=vista.sqm;
+    var canvas=n.canvas, ctx=canvas.getContext('2d');
+    var spin=n.spin, usar=n.usar;
+    // El desplazamiento se cuenta contra el campo DIBUJADO (el recortado si es
+    // el DSS), que es del que se toma el 10 % por paso.
+    var centro=BitacoraGaiaRender.centroDesplazado({
+      ra:d.ra, dec:d.dec, arcmin:arcmin, pasoX:_simPasoX, pasoY:_simPasoY
+    });
     n.badge.textContent='simulada ('+etiquetaFuente(fuente)+')';
     usar.disabled=true; spin.style.display='flex';
     // Las flechas NO se deshabilitan mientras carga (encadenar es el uso real):

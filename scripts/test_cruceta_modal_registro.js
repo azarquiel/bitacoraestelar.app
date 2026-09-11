@@ -90,6 +90,11 @@ ok(/BitacoraGaiaRender\.rotuloDesplazamiento\(\{[\s\S]{0,120}arcmin:arcmin[\s\S]
    'el rótulo lo redacta el módulo compartido, con el campo dibujado');
 ok(/\(rotDespl \? ' · '\+rotDespl : ''\)/.test(JS),
    'va junto a aumentos, campo y SQM, y sin desplazamiento no deja hueco');
+ok(/function pintarInfoSim\(\)\{/.test(JS) &&
+   (JS.match(/pintarInfoSim\(\)/g) || []).length >= 3,
+   'la línea vive en pintarInfoSim(), que llaman el render Y la cruceta');
+ok(/_simNodos\.usar\.disabled=true;\s*pintarInfoSim\(\);/.test(JS),
+   'al pulsar, el rótulo se repinta EN EL ACTO: no espera al antirrebote');
 
 console.log('Repintado sin negro:');
 ok(/ctx\.globalCompositeOperation='copy';[\s\S]{0,120}ctx\.drawImage\(canvas, Math\.round\(0\.10\*D\*dx\)/.test(JS),
