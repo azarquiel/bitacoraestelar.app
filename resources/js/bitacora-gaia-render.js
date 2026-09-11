@@ -30,6 +30,8 @@
  *       La MISMA vista, pero con la placa fotográfica del DSS (vía dss-proxy.php)
  *       en vez del catálogo: mismas opts, más { dssProxy, fuente, conGaia }.
  *   BitacoraGaiaRender.urlPlaca({ base, survey, ra, dec, arcmin, fuente }) → URL del proxy
+ *   BitacoraGaiaRender.centroDesplazado({ ra, dec, arcmin, pasoX, pasoY }) → { ra, dec }
+ *       El centro movido pasos del 10 % del campo; el paso de RA lleva /cos(dec).
  *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
  *   BitacoraGaiaRender.precalentar(opts) → void   (la consulta de render(), disparada antes)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
@@ -1210,6 +1212,30 @@
     if (ss === 60) { ss = 0; mm++; } if (mm === 60) { mm = 0; dd++; }
     return sign + pad2(dd) + ' ' + pad2(mm) + ' ' + pad2(ss);
   }
+  /* Centro del campo movido un número entero de pasos, con un paso = 10 % del
+     campo real DIBUJADO (el `arcmin` que se le pasa al render, que en la placa
+     del DSS puede venir recortado). Fuente única del encuadre desplazado para
+     el simulador y para el formulario de registro, que son las dos páginas que
+     cargan este módulo.
+
+     El paso vale lo mismo EN CIELO en las dos direcciones, así que el de RA se
+     divide por cos(dec): los meridianos se juntan hacia el polo y sin esa
+     división el 10 % se encogería con la declinación. pasoX cuenta hacia RA
+     creciente (Este, la IZQUIERDA del lienzo) y pasoY hacia el norte. */
+  function centroDesplazado(o) {
+    var paso = 0.10 * (o.arcmin || 0) / 60;                        // grados
+    var dec  = Math.max(-90, Math.min(90, o.dec + (o.pasoY || 0) * paso));
+    // Junto al polo el coseno tiende a cero y el paso en RA se dispara; el
+    // suelo lo deja en el de 89,9°, donde un campo ya abarca todos los husos.
+    var cos  = Math.max(Math.cos(o.dec * Math.PI / 180), Math.cos(89.9 * Math.PI / 180));
+    var ra   = o.ra + (o.pasoX || 0) * paso / cos;
+    // La normalización solo cuando hace falta: el resto sobre 360 de una RA que
+    // ya está en rango le mete error de coma flotante, y con paso cero el
+    // centro tiene que volver idéntico.
+    if (ra < 0 || ra >= 360) { ra = ((ra % 360) + 360) % 360; }
+    return { ra: ra, dec: dec };
+  }
+
   function acotarPlaca(arcmin) {
     return Math.min(DSS_MAX_ARCMIN, Math.max(DSS_MIN_ARCMIN, arcmin || DSS_MIN_ARCMIN));
   }
@@ -2735,6 +2761,7 @@
     transmisionOptica: transmisionOptica,
     opticaTieneArana: opticaTieneArana,
     urlPlaca: urlPlaca,
+    centroDesplazado: centroDesplazado,
     cargarPlaca: cargarPlaca,
     renderPlaca: renderPlaca,
     sbUmbralContraste: sbUmbralContraste,
