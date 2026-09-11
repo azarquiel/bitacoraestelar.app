@@ -1124,15 +1124,24 @@ del golden): `docs/validacion/dso_texturas_fase1.md`.
    (el guardián suena a propósito, ADR 0020).
 2. **Texturas DSO** → los `dso/*.png` y `dso/*.json` a
    `/wp-content/uploads/bitacora/dso/`. Están en **dos** directorios y hay que
-   subir los dos: `simulador_ocular/dso/` (ignorado, no versionado) y
-   `scripts/fixtures/dso/` (las 11 del banco golden, versionadas porque son la
-   entrada de los tests). El manifiesto los cuenta a los dos, así que subir solo
-   uno deja filas `imagen` sin su PNG delante. El manifiesto de esa misma tirada
-   (`dso-texturas-datos.js`) va donde el resto del JS, por el paso 1 y con su
-   `?v=N`: es lo único que hay que sincronizar con esta carpeta. La URL de una
-   textura es inmutable (el hash va en el nombre), así que subir una nueva no
-   invalida nada; borrar las viejas es opcional y solo se hace cuando ningún
-   manifiesto desplegado las nombra.
+   subir los dos: `simulador_ocular/dso/` (de ahí solo se ignoran los PNG; los
+   sidecars van en git desde #258) y `scripts/fixtures/dso/` (las 11 del banco
+   golden, versionadas porque son la entrada de los tests). El manifiesto los
+   cuenta a los dos, así que subir solo uno deja filas `imagen` sin su PNG
+   delante. El manifiesto de esa misma tirada (`dso-texturas-datos.js`) va donde
+   el resto del JS, por el paso 1 y con su `?v=N`: es lo único que hay que
+   sincronizar con esta carpeta. La URL de una textura es inmutable (el hash va
+   en el nombre), así que subir una nueva no invalida nada; borrar las viejas es
+   opcional y solo se hace cuando ningún manifiesto desplegado las nombra.
+
+   **Desde que `dso/` se sirve con `Cache-Control: immutable` (#264), corregir
+   una textura exige cambiarle el nombre.** El `<v>` sale de los parámetros y no
+   de los píxeles (ADR 0026), así que sobrescribir el fichero conservando su
+   nombre no llega al navegador que ya se guardó el anterior: lo tiene cacheado
+   un año. La vía es subir `GENERADOR` en `scripts/gen_dso_texturas.js`, que
+   renombra el banco entero, y volver a publicar. Lo que sí sigue necesitando su
+   `?v=N` a mano es el manifiesto, que por eso vive fuera de `dso/` y no lleva
+   esa cabecera.
 3. **`dss-proxy.php`** y **`ps1-proxy.php`** → a esa misma carpeta, junto a
    `bitacora-cache-lru.php` (crean `cache-dss/` y `cache-ps1/` solos).
 4. **`ocular-wordpress.html`** → pégalo en un bloque "HTML personalizado" de la página.
