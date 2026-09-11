@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC 4406",
+ "version": "42635683",
+ "generador": "gen_dso_texturas 1",
+ "ra": 186.54917,
+ "dec": 12.94694,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 12.946,
+ "escalaAs": 0.758789072305146,
+ "bytes": 2002255,
+ "wcs": {
+  "ra0": 188.181808471694,
+  "dec0": 13.9999999999996,
+  "x0": -7040.66481566429,
+  "y0": 5483.89645832777,
+  "gx": -0.000210774742306985,
+  "gy": 0.000210774742306985
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 30.811353352975843,
+  "uMin": -3.476476199633195,
+  "uMax": 10.80659346191383,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": -0.8827531337738037,
+  "sigma": 30.811353352975843,
+  "fracAusencia": 0.00006771087646484375,
+  "fracAusenciaEscena": 0,
+  "bytes": 2002255,
+  "errCuantMaxSigma": 0.0005541653677243746,
+  "errCuantMaxRel": 0.00011086828178585861
+ }
+}

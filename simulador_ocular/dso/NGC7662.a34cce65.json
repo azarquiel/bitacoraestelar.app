@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC7662",
+ "version": "a34cce65",
+ "generador": "gen_dso_texturas 1",
+ "ra": 351.47458,
+ "dec": 42.53494,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 1.5,
+ "escalaAs": 0.08789062499999964,
+ "bytes": 361908,
+ "wcs": {
+  "ra0": 349.411743164088,
+  "dec0": 41.9999999999986,
+  "x0": 62784.9237425327,
+  "y0": -22157.3005365133,
+  "gx": -0.0000244140624999999,
+  "gy": 0.0000244140624999999
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 114.54447168159484,
+  "uMin": -2.2582380747713313,
+  "uMax": 9.713659915492759,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 106.51507568359375,
+  "sigma": 114.54447168159484,
+  "fracAusencia": 0,
+  "fracAusenciaEscena": 0,
+  "bytes": 361908,
+  "errCuantMaxSigma": 0.00046091626580642073,
+  "errCuantMaxRel": 0.000093058186717343
+ }
+}

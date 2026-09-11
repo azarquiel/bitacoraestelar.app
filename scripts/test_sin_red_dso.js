@@ -14,17 +14,15 @@
    la lista de peticiones.
 
    «Manifiesto completo» es el estado que tendrá el banco desplegado: TODO
-   objeto del campo con su fila. El commiteado solo trae las 11 fixtures y los
-   5 controles (decisión 9.1 del ADR 0024), así que el test lo completa para
-   estos dos campos con lo que haya en disco: `imagen` si la textura del objeto
-   está, `fila` si no. En el árbol limpio NGC 5195 sale `fila`; con el banco
-   generado (`node scripts/gen_dso_texturas.js --banco`) sale `imagen` y el
-   campo de M51 lee DOS texturas. El listón es el mismo en los dos modos, el
-   test dice en cuál corrió, y la comprobación de que se pidió cada textura va
-   objeto a objeto: por la cuenta total, la segunda podría no pedirse nunca y
-   el modo banco daría verde igual.
+   objeto del campo con su fila. Desde #258 el commiteado ya declara el banco
+   entero, pero el test sigue completándolo para estos dos campos con lo que
+   haya en disco —`imagen` si la textura del objeto está, `fila` si no— porque
+   el listón tiene que valer también en un árbol donde el banco no esté
+   generado. La comprobación de que se pidió cada textura va objeto a objeto:
+   por la cuenta total, la segunda podría no pedirse nunca y daría verde igual.
 
-   Y el régimen mixto, que es el de hoy: mientras el banco no cubra el catálogo
+   Y el régimen mixto, que ya no es el de hoy pero sigue siendo posible —el
+   catálogo puede volver a ir por delante del manifiesto—: mientras el banco no cubra el catálogo
    habrá objetos del campo sin fila (NGC 5195). Apagar el respaldo tiene que
    valer también para ellos, o no estaría apagando nada.
 
@@ -217,6 +215,15 @@ CAMPOS.reduce(function (cadena, c) {
   var P = fresco();
   P.cfg.proxyRespaldo = false;
   var f5194 = filaDe(P, 'NGC 5194');
+  /* Desde que el manifiesto declara el banco entero (#258), el campo de M51 lo
+     tiene todo cubierto y el régimen mixto hay que PROVOCARLO: se le quita la
+     fila al acompañante. Antes salía solo, porque NGC 5195 no tenía textura. El
+     listón no cambia —apagar el respaldo tiene que valer también para el objeto
+     sin fila—; lo que cambia es que ya no se puede contar con que el catálogo
+     vaya por delante del manifiesto para montar el caso. */
+  window.BITACORA_DSO_TEXTURAS = window.BITACORA_DSO_TEXTURAS.filter(function (t) {
+    return t[0] !== 'NGC 5195';
+  });
   var sinFila = P.ps1GalaxiasDelCampo(catalogoDe(P), f5194[2], f5194[3], 40)
     .filter(function (g) { return !P.ps1FilaTextura(g.nombre); });
   ok(sinFila.length > 0, 'el campo trae algún objeto que el manifiesto no menciona (' +
