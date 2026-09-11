@@ -295,7 +295,10 @@ function sidecarsUnicos(dir) {
   return Object.keys(porNombre).map(function (n) { return porNombre[n]; });
 }
 
-function escribirManifiesto(dir) {
+/* El texto, sin tocar el disco: es lo que compara el test. Escribir para volver
+   a leer y restaurar era inocuo con seis filas; con setenta y cuatro, un test
+   interrumpido deja el manifiesto bueno hecho un muñón (#258). */
+function textoManifiesto(dir) {
   var filas = sidecarsUnicos(dir)
     .map(function (s) {
       return { ra: s.ra, fila: s.modelo === 'fila'
@@ -308,15 +311,20 @@ function escribirManifiesto(dir) {
   var cuerpo = filas.map(function (f) {
     return '  ' + JSON.stringify(f).replace(/,/g, ', ') + ',';
   }).join('\n');
-  fs.writeFileSync(MANIFIESTO,
+  return { filas: filas.length, texto:
     '/* Texturas DSO — GENERADO, no editar a mano.\n' +
     '   Regenerar: node scripts/gen_dso_texturas.js --banco (o --solo "<nombre>")\n' +
     '   Campos: [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo]\n' +
     '   modelo ∈ {imagen, fila}; motivo ∈ {"", sur, no-cabe, sin-cobertura,\n' +
     '   pisada, ausencia-excesiva, celda-perdida}. Una fila que no está aquí se\n' +
     '   pide al proxy mientras BitacoraPS1.cfg.proxyRespaldo siga encendido. */\n' +
-    'window.BITACORA_DSO_TEXTURAS = [\n' + cuerpo + '\n];\n');
-  return filas.length;
+    'window.BITACORA_DSO_TEXTURAS = [\n' + cuerpo + '\n];\n' };
+}
+
+function escribirManifiesto(dir) {
+  var m = textoManifiesto(dir);
+  fs.writeFileSync(MANIFIESTO, m.texto);
+  return m.filas;
 }
 
 function generar(nombre, dir) {
@@ -425,6 +433,11 @@ function generar(nombre, dir) {
        no vale: la textura está escrita y su fila sobra. */
     fs.rmSync(path.join(dir, id + '.fila.json'), { force: true });
     LIBPNG.escribirGris16(base + '.png', cod.u16, p.ancho, p.alto);
+    /* El peso del PNG, leído del fichero recién escrito. Va al sidecar porque el
+       PNG no entra en git y el informe tiene que poder sumar el volumen del
+       banco sin tenerlos delante (#258). No entra en el hash de versión: no
+       determina píxeles. */
+    var bytesPng = fs.statSync(base + '.png').size;
     var sidecar = {
       nombre: gal.nombre, version: v, generador: GENERADOR,
       ra: gal.ra, dec: gal.dec,
@@ -447,6 +460,7 @@ function generar(nombre, dir) {
         fracAusenciaEscena: nEsc ? nAusEsc / nEsc : 0,
         bloqueMayorFrac: bloque.mayorFrac, bloqueRellenoCaja: bloque.rellenoCaja,
         bloqueComponentes: bloque.componentes,
+        bytes: bytesPng,
         errCuantMaxSigma: errSigma, errCuantMaxRel: errRel
       }
       /* `fuentesConservadas` y `procedencia` los dibuja el §4.1 del objetivo,
@@ -455,7 +469,7 @@ function generar(nombre, dir) {
     };
     fs.writeFileSync(base + '.json', JSON.stringify(sidecar, null, 1) + '\n');
 
-    var kb = Math.round(fs.statSync(base + '.png').size / 1024);
+    var kb = Math.round(bytesPng / 1024);
     console.log(gal.nombre + ' → ' + path.basename(base) + '.png  ' +
       p.ancho + '×' + p.alto + '  ' + p.escalaAs.toFixed(4) + '″/px  ' + kb + ' kB');
     console.log('  cielo ' + cielo.toFixed(4) + '  σ ' + sigma.toFixed(4) +
@@ -536,10 +550,10 @@ function correrBanco(dir, seco) {
 
 /* ── El informe ───────────────────────────────────────────────────────────
    Lo que hay ESCRITO, no lo que se pretendía escribir: sale de los sidecars y
-   del peso de los PNG en disco, igual que el manifiesto, y por eso una tirada a
+   del peso que ellos declaran, igual que el manifiesto, y por eso una tirada a
    medias se ve como lo que es. Sin fecha dentro, para que regenerarlo sin haber
    generado nada no ensucie el árbol: la fecha la lleva el commit. */
-function escribirInforme(dir) {
+function textoInforme(dir) {
   var todos = sidecarsUnicos(dir);
   var imagenes = todos.filter(function (s) { return s.modelo !== 'fila'; })
     .sort(function (a, b) { return a.ra - b.ra; });
@@ -555,15 +569,25 @@ function escribirInforme(dir) {
   todos.forEach(function (s) { resuelto[BANCO.clave(s.nombre)] = 1; });
   var pendientes = b.objetos.filter(function (o) { return !resuelto[BANCO.clave(o.nombre)]; });
 
-  /* Volumen: bytes en disco, y bytes/px, que es la cifra con la que la fase 0
-     corrigió el ×0,6 de la tabla 4.2 del objetivo. */
-  var bytes = 0, bpp = [];
+  /* Volumen: bytes del PNG, y bytes/px, que es la cifra con la que la fase 0
+     corrigió el ×0,6 de la tabla 4.2 del objetivo.
+
+     El peso lo declara el sidecar (`auditoria.bytes`) desde #258: los PNG del
+     banco no entran en git, así que medirlos con `statSync` daba el volumen de
+     los golden y solo de ellos —el corolario de la decisión 9.1 del ADR 0024—.
+     El disco sigue valiendo de respaldo para un sidecar anterior a #258, y el
+     que no tenga ninguna de las dos cosas SE CUENTA APARTE: el modo de fallo que
+     hay que evitar es que una textura desaparezca del volumen sin avisar. */
+  var bytes = 0, bpp = [], sinPeso = [];
   imagenes.forEach(function (s) {
-    var f = [dir, FIXTURES].map(function (d) {
-      return path.join(d, PS1.ps1IdTextura(s.nombre) + '.' + s.version + '.png');
-    }).filter(function (p) { return fs.existsSync(p); })[0];
-    if (!f) return;
-    var n = fs.statSync(f).size;
+    var n = (s.auditoria && s.auditoria.bytes) || 0;
+    if (!n) {
+      var f = [dir, FIXTURES].map(function (d) {
+        return path.join(d, PS1.ps1IdTextura(s.nombre) + '.' + s.version + '.png');
+      }).filter(function (p) { return fs.existsSync(p); })[0];
+      if (f) n = fs.statSync(f).size;
+    }
+    if (!n) { sinPeso.push(s.nombre); return; }
     bytes += n;
     bpp.push(n / (s.ancho * s.alto));
   });
@@ -603,8 +627,14 @@ function escribirInforme(dir) {
   L.push('| medida | valor |');
   L.push('|---|---|');
   L.push('| texturas escritas | ' + imagenes.length + ' |');
-  L.push('| total en disco | ' + (bytes / 1048576).toFixed(1) + ' MB |');
+  L.push('| total de los PNG | ' + (bytes / 1048576).toFixed(1) + ' MB |');
   L.push('| bytes/px (mediana) | ' + mediana.toFixed(2) + ' |');
+  /* La línea solo aparece cuando hay algo que decir, pero cuando lo hay no se
+     puede pasar por alto: sin ella, una textura sin peso se iría del total en
+     silencio (ADR 0024, corolario de la 9.1). */
+  if (sinPeso.length) {
+    L.push('| **sin peso declarado** | **' + sinPeso.length + '**: ' + sinPeso.join(', ') + ' |');
+  }
   L.push('');
   L.push('## Histograma de `escalaAs`');
   L.push('');
@@ -670,9 +700,15 @@ function escribirInforme(dir) {
     L.push(pendientes.map(function (o) { return o.nombre; }).join(', ') + '.');
   }
   L.push('');
-  fs.writeFileSync(INFORME, L.join('\n'));
   return { imagenes: imagenes.length, pendientes: pendientes.length,
-           revision: revision.length, bytes: bytes };
+           revision: revision.length, bytes: bytes, sinPeso: sinPeso.length,
+           texto: L.join('\n') };
+}
+
+function escribirInforme(dir) {
+  var inf = textoInforme(dir);
+  fs.writeFileSync(INFORME, inf.texto);
+  return inf;
 }
 
 /* Requerido como módulo (scripts/test_dso_texturas.js) no genera nada: expone
@@ -685,6 +721,8 @@ module.exports = { version: version, filaDe: filaDe, motivoAusencia: motivoAusen
                    yaResuelto: yaResuelto, escribirFila: escribirFila,
                    BLOQUE_FRAC: BLOQUE_FRAC, BLOQUE_RELLENO: BLOQUE_RELLENO,
                    escribirManifiesto: escribirManifiesto, escribirInforme: escribirInforme,
+                   textoManifiesto: textoManifiesto, textoInforme: textoInforme,
+                   DSO: path.join(RAIZ, 'simulador_ocular', 'dso'),
                    filasControl: filasControl, generar: generar,
                    GENERADOR: GENERADOR, FIXTURES: FIXTURES, MANIFIESTO: MANIFIESTO,
                    INFORME: INFORME };

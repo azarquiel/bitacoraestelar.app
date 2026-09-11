@@ -1,0 +1,41 @@
+{
+ "nombre": "IC0466",
+ "version": "f2190eae",
+ "generador": "gen_dso_texturas 1",
+ "ra": 107.16167,
+ "dec": -4.318,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 1.5,
+ "escalaAs": 0.08789062499999964,
+ "bytes": 361675,
+ "wcs": {
+  "ra0": 105.168540954596,
+  "dec0": -5.9999999999998,
+  "x0": 81987.7686519623,
+  "y0": -68294.1905425787,
+  "gx": -0.0000244140624999999,
+  "gy": 0.0000244140624999999
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 252.01191183471678,
+  "uMin": -1.4871421201861479,
+  "uMax": 9.190560919058704,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 218.63671875,
+  "sigma": 252.01191183471678,
+  "fracAusencia": 0.00012969970703125,
+  "fracAusenciaEscena": 0.00029400637734421445,
+  "bytes": 361675,
+  "errCuantMaxSigma": 0.00040542865937825414,
+  "errCuantMaxRel": 0.00008280667615623294
+ }
+}

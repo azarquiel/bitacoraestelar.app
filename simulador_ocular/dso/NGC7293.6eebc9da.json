@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC7293",
+ "version": "6eebc9da",
+ "generador": "gen_dso_texturas 1",
+ "ra": 337.41071,
+ "dec": -20.83733,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 20,
+ "escalaAs": 1.1718749999999953,
+ "bytes": 2001864,
+ "wcs": {
+  "ra0": 338.571411132788,
+  "dec0": -21.9999999999992,
+  "x0": -2821.94006831944,
+  "y0": -3048.50007380545,
+  "gx": -0.000325520833333332,
+  "gy": 0.000325520833333332
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 25.425765120506284,
+  "uMin": -4.664276451134668,
+  "uMax": 11.181890502650617,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": -0.46924877166748047,
+  "sigma": 25.425765120506284,
+  "fracAusencia": 0.00005626678466796875,
+  "fracAusenciaEscena": 0.000036385600034930174,
+  "bytes": 2001864,
+  "errCuantMaxSigma": 0.0006151342433525582,
+  "errCuantMaxRel": 0.00012321020804306748
+ }
+}

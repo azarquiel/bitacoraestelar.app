@@ -1,0 +1,41 @@
+{
+ "nombre": "IC2177",
+ "version": "f5ffe2bd",
+ "generador": "gen_dso_texturas 1",
+ "ra": 106.15379,
+ "dec": -10.47106,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 18,
+ "escalaAs": 1.0546875442014372,
+ "bytes": 2007721,
+ "wcs": {
+  "ra0": 105.168540954596,
+  "dec0": -9.99999999999966,
+  "x0": 3818.99622870982,
+  "y0": 2124.65551795065,
+  "gx": -0.000292968762278177,
+  "gy": 0.000292968762278177
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 40.07698158273697,
+  "uMin": -3.3397795181727874,
+  "uMax": 10.65399429428958,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": -4.883670330047607,
+  "sigma": 40.07698158273697,
+  "fracAusencia": 0.000179290771484375,
+  "fracAusenciaEscena": 0.00018462324092350903,
+  "bytes": 2007721,
+  "errCuantMaxSigma": 0.0005425502010218394,
+  "errCuantMaxRel": 0.00010888906332073844
+ }
+}

@@ -82,15 +82,43 @@ ok(!!m31 && G.motivoAusencia(m31) === 'no-cabe', 'M31 no cabe en el parche');
 ok(!!ngc55 && G.motivoAusencia(ngc55) === 'sur', 'NGC 55 está por debajo de −30° (' +
    (ngc55 ? G.motivoAusencia(ngc55) : '—') + ')');
 
+/* Sobre el DIRECTORIO DE SALIDA, no solo sobre las fixtures (#258): desde que
+   los sidecars del banco van en git —solo se ignoran los PNG—, las filas del
+   manifiesto vuelven a tener todas su origen en el repositorio, y regenerar
+   mirando solo `scripts/fixtures/dso/` declararía de menos. `sidecarsUnicos` ya
+   junta los dos directorios, así que esto los cubre a la vez.
+
+   Y se compara la CADENA, sin escribir: el fichero de producción no se toca.
+   Sobreescribirlo para releerlo y restaurarlo era inocuo con seis filas; con
+   setenta y cuatro, un test interrumpido deja el manifiesto hecho un muñón. */
 console.log('\nEl manifiesto commiteado sale de los sidecars commiteados:');
 var antes = fs.readFileSync(G.MANIFIESTO, 'utf8');
-var n = G.escribirManifiesto(G.FIXTURES);
-var despues = fs.readFileSync(G.MANIFIESTO, 'utf8');
-if (antes !== despues) fs.writeFileSync(G.MANIFIESTO, antes);   // el test no deja rastro
+var m = G.textoManifiesto(G.DSO), n = m.filas;
+var despues = m.texto;
 ok(antes === despues, 'regenerarlo no cambia un byte (' + n + ' fila(s))');
-var json = fs.readdirSync(G.FIXTURES).filter(function (f) { return /\.json$/.test(f); });
-var sidecars = json.filter(function (f) { return !/\.fila\.json$/.test(f); }).length;
-ok(n === json.length + G.filasControl().length,
+function sidecarsDe(d) {
+  return fs.existsSync(d) ? fs.readdirSync(d).filter(function (f) { return /\.json$/.test(f); }) : [];
+}
+/* Uno por objeto, no uno por fichero: un objeto que esté en los dos directorios
+   —las fixtures y la salida— aporta una sola fila. */
+/* Con la MISMA prioridad que el generador (veredicto medido > textura > el resto
+   de veredictos): si un objeto tuviera las dos cosas, aquí y allí tiene que
+   contar igual, o la cuenta discreparía por un empate mal resuelto. */
+function rango(s) { return s.modelo !== 'fila' ? 1 : (s.motivo === 'ausencia-excesiva' ? 2 : 0); }
+var mandaPorNombre = {};
+[G.FIXTURES, G.DSO].forEach(function (d) {
+  sidecarsDe(d).forEach(function (f) {
+    var s = JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')), v = mandaPorNombre[s.nombre];
+    if (!v || rango(s) >= rango(v)) mandaPorNombre[s.nombre] = s;
+  });
+});
+var modeloPorNombre = {};
+Object.keys(mandaPorNombre).forEach(function (nom) {
+  modeloPorNombre[nom] = mandaPorNombre[nom].modelo !== 'fila' ? 'imagen' : 'fila';
+});
+var nombresSidecar = Object.keys(modeloPorNombre);
+var sidecars = nombresSidecar.filter(function (x) { return modeloPorNombre[x] === 'imagen'; }).length;
+ok(n === nombresSidecar.length + G.filasControl().length,
    'una fila por sidecar y una por control, ni más ni menos');
 
 /* El banco lo fija el ADR 0024 y lo devuelve lib_banco_dso.js: ni la lista ni su
@@ -138,8 +166,12 @@ var enManifiesto = 0, alProxy = 0, resueltos = 0, malos = [];
 b.objetos.forEach(function (o) {
   var f = filaMan(o.nombre);
   var id = window.BitacoraPS1.ps1IdTextura(o.nombre);
-  var hay = fs.readdirSync(G.FIXTURES).some(function (x) {
-    return x.indexOf(id + '.') === 0 && /\.json$/.test(x);
+  /* En los dos directorios (#258): el sidecar de un objeto del banco vive en
+     `simulador_ocular/dso/` y el de los golden en las fixtures, y los dos están
+     en git. Mirar solo las fixtures haría «está en el manifiesto sin sidecar»
+     de las 57 filas legítimas de la tirada. */
+  var hay = [G.FIXTURES, G.DSO].some(function (d) {
+    return sidecarsDe(d).some(function (x) { return x.indexOf(id + '.') === 0; });
   });
   if (hay) resueltos++;
   if (!f) { alProxy++; if (hay) malos.push(o.nombre + ' tiene sidecar y no está en el manifiesto'); return; }
@@ -260,9 +292,7 @@ if (excesivas.length) {
     JSON.stringify({ nombre: viejo.nombre, version: 'deadbeef', ra: viejo.ra, dec: viejo.dec,
                      ancho: 1024, alto: 1024, escalaAs: 0.5,
                      auditoria: { fracAusencia: viejo.auditoria.fracAusencia } }));
-  G.escribirManifiesto(tmpDir);
-  var conVieja = fs.readFileSync(G.MANIFIESTO, 'utf8');
-  fs.writeFileSync(G.MANIFIESTO, antes);
+  var conVieja = G.textoManifiesto(tmpDir).texto;
   fs.rmSync(tmpDir, { recursive: true, force: true });
   var fv = (new Function('window', conVieja + ';return window.BITACORA_DSO_TEXTURAS;'))({})
     .filter(function (f) { return f[0] === viejo.nombre; })[0];
@@ -273,10 +303,13 @@ if (excesivas.length) {
 
 console.log('\nEl informe sale de lo escrito:');
 var infAntes = fs.readFileSync(G.INFORME, 'utf8');
-var inf = G.escribirInforme(G.FIXTURES);
-var infDespues = fs.readFileSync(G.INFORME, 'utf8');
-if (infAntes !== infDespues) fs.writeFileSync(G.INFORME, infAntes);
-ok(infAntes === infDespues, 'regenerarlo no cambia un byte');
+var inf = G.textoInforme(G.DSO);
+ok(infAntes === inf.texto, 'regenerarlo no cambia un byte');
+/* El volumen sale del peso que declara cada sidecar (#258), no de los PNG, que
+   no están en git: si alguno se quedara sin declararlo, el informe lo diría en
+   su propia línea en vez de restarlo del total en silencio. */
+ok(inf.sinPeso === 0, 'todas las texturas declaran su peso' +
+   (inf.sinPeso ? ' — ' + inf.sinPeso + ' sin `auditoria.bytes` y sin PNG a mano' : ''));
 ok(inf.imagenes === sidecars && inf.pendientes === b.objetos.length - resueltos,
    'cuenta las ' + inf.imagenes + ' texturas escritas y las ' + inf.pendientes + ' pendientes');
 ok(/fracAusenciaEscena/.test(infAntes) && /Volumen/.test(infAntes),

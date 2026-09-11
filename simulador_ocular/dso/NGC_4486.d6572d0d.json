@@ -1,0 +1,47 @@
+{
+ "nombre": "NGC 4486",
+ "version": "d6572d0d",
+ "generador": "gen_dso_texturas 1",
+ "ra": 187.70708,
+ "dec": 12.39,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-09"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 10.644,
+ "escalaAs": 0.6240234590758259,
+ "wcs": {
+  "ra0": 188.181808471694,
+  "dec0": 13.9999999999996,
+  "x0": -2164.68151122332,
+  "y0": 9799.61257451773,
+  "gx": -0.000173339849743285,
+  "gy": 0.000173339849743285
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 46.14416325874328,
+  "uMin": -3.009495066591142,
+  "uMax": 9.900859637011253,
+  "centinela": 0
+ },
+ "celdas": {
+  "pedidas": 4,
+  "cosidas": 4
+ },
+ "auditoria": {
+  "cielo": -5.616600036621094,
+  "sigma": 46.14416325874328,
+  "fracAusencia": 0.0000362396240234375,
+  "fracAusenciaEscena": 0.000023430883913359286,
+  "bloqueMayorFrac": 0.0000286102294921875,
+  "bloqueRellenoCaja": 0.8333333333333334,
+  "bloqueComponentes": 3,
+  "bytes": 2009323,
+  "errCuantMaxSigma": 0.0005006441770562982,
+  "errCuantMaxRel": 0.00010029945892431336
+ }
+}

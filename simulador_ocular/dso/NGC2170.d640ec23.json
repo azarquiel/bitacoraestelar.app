@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC2170",
+ "version": "d640ec23",
+ "generador": "gen_dso_texturas 1",
+ "ra": 91.88258,
+ "dec": -6.39931,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 1.8,
+ "escalaAs": 0.1054687517680572,
+ "bytes": 579406,
+ "wcs": {
+  "ra0": 93.0337066649968,
+  "dec0": -5.9999999999998,
+  "x0": -38540.3521389961,
+  "y0": 14187.3519575596,
+  "gx": -0.000029296875491127,
+  "gy": 0.000029296875491127
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 363.6176492248535,
+  "uMin": -0.4249020108031052,
+  "uMax": 8.568196424554628,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 741.894775390625,
+  "sigma": 363.6176492248535,
+  "fracAusencia": 0.00139617919921875,
+  "fracAusenciaEscena": 0.0014376648551827622,
+  "bytes": 579406,
+  "errCuantMaxSigma": 0.00034578195569723216,
+  "errCuantMaxRel": 0.00006979870278844835
+ }
+}

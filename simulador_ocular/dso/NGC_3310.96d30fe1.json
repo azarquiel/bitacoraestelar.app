@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC 3310",
+ "version": "96d30fe1",
+ "generador": "gen_dso_texturas 1",
+ "ra": 159.69208,
+ "dec": 53.50222,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 1.5710000000000002,
+ "escalaAs": 0.092041019439534,
+ "bytes": 420206,
+ "wcs": {
+  "ra0": 157.090911865194,
+  "dec0": 53.9999999999982,
+  "x0": 61027.9976222515,
+  "y0": 18878.3113458157,
+  "gx": -0.000025566949844315,
+  "gy": 0.000025566949844315
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 96.43769376983641,
+  "uMin": -1.4793970650410133,
+  "uMax": 7.815129171081167,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 138.26449584960938,
+  "sigma": 96.43769376983641,
+  "fracAusencia": 0,
+  "fracAusenciaEscena": 0,
+  "bytes": 420206,
+  "errCuantMaxSigma": 0.00034714417044257555,
+  "errCuantMaxRel": 0.00007202622587876295
+ }
+}

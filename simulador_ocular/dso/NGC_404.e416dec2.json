@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC 404",
+ "version": "e416dec2",
+ "generador": "gen_dso_texturas 1",
+ "ra": 17.3625,
+ "dec": 35.71778,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 2.8,
+ "escalaAs": 0.16406250091677002,
+ "bytes": 1239175,
+ "wcs": {
+  "ra0": 18.9473686217994,
+  "dec0": 33.9999999999988,
+  "x0": -27739.9290881157,
+  "y0": -37420.6911731958,
+  "gx": -0.000045572916921325,
+  "gy": 0.000045572916921325
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 109.33736968345642,
+  "uMin": -2.0898349891088848,
+  "uMax": 9.400119444985217,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 53.893131256103516,
+  "sigma": 109.33736968345642,
+  "fracAusencia": 0,
+  "fracAusenciaEscena": 0,
+  "bytes": 1239175,
+  "errCuantMaxSigma": 0.00043932525638595106,
+  "errCuantMaxRel": 0.00008935161328627039
+ }
+}

@@ -267,14 +267,16 @@ rellenan en las fases 3 y 4.
 >    tiene 6 filas y no 74: el criterio «una fila por objeto del banco» se cumple
 >    cuando la tirada completa haya corrido, y hasta entonces lo que falta es un
 >    pendiente declarado en el informe, no una fila muda.
-> 4. **Trampa conocida de la tirada completa** (heredada de #200, sin resolver):
->    el manifiesto y el informe commiteados son la regeneración sobre
->    `scripts/fixtures/dso/`, que es lo único que va en git, y `test_dso_texturas.js`
->    los compara byte a byte contra ella. En cuanto `--banco` escriba en
->    `simulador_ocular/dso/` —ignorado por git— los dos ficheros commiteados serán
->    un superconjunto y ese guardián se pondrá rojo. Hay que decidir entonces qué
->    compara el test: hoy no se toca porque la generación completa espera al PASA
->    de la fase 2.
+> 4. ~~**Trampa conocida de la tirada completa**~~ **RESUELTA en T12 (#258,
+>    2026-09-11).** Era esto: el manifiesto y el informe commiteados eran la
+>    regeneración sobre `scripts/fixtures/dso/`, lo único que iba en git, y en
+>    cuanto `--banco` escribiera en `simulador_ocular/dso/` —ignorado— el
+>    guardián byte a byte se pondría rojo sin que hubiera fallo de código. La
+>    salida no fue decidir qué compara el test, sino devolverle lo que le
+>    faltaba: **los sidecars entran en git** y solo se ignoran los PNG, así que
+>    todas las filas vuelven a tener origen en el repositorio y el test regenera
+>    sobre el directorio de salida —que ya incluye las fixtures— y compara la
+>    cadena sin escribir el fichero de producción. Ver §4.5.
 
 **Codificación `asinh16`** (declarada, invertible, sin ley de display):
 
@@ -424,8 +426,19 @@ difusa, `ps1CabeEnParche`, `PS1_CLASES_DIFUSAS`.
 - Comprobar en el hosting: cuota de disco (hoy `cache-ps1/` ocupa 150 MB) y que el
   servidor no reescriba PNG (algunos plugins de WordPress «optimizan» imágenes en
   `uploads/`: hay que excluir `dso/`, o un PNG-16 pasaría a 8 bits en silencio).
-- Local: el generador deja las texturas en `simulador_ocular/dso/` (gitignorado,
-  junto a `cache-ps1/`). En git solo van el manifiesto y las fixtures del banco.
+- Local: el generador deja las texturas en `simulador_ocular/dso/`. **De ahí solo
+  se ignoran los PNG (`simulador_ocular/dso/*.png`): los sidecars van en git**
+  (enmienda T12, #258, 2026-09-11; revierte lo decidido el 2026-09-06, que en git
+  fueran solo el manifiesto y las fixtures). El motivo es el guardián: el
+  manifiesto y el informe se declaran derivados de los sidecars y
+  `test_dso_texturas.js` los regenera y los compara byte a byte, así que con los
+  sidecars del banco fuera del repositorio, un manifiesto de 74 filas no se puede
+  verificar con lo que hay en git —y el test se pondría rojo por un motivo que no
+  es un fallo del código—. El PNG pesa ≈ 2 MB y el sidecar 892 bytes: el banco
+  entero son 268 KB de JSON. Y para que el volumen del informe se pueda
+  recalcular sin los PNG delante, cada sidecar declara el peso del suyo en
+  `auditoria.bytes`, que no entra en el hash de versión porque no determina
+  píxeles.
 
 ### 4.6 Guardianes y tests
 

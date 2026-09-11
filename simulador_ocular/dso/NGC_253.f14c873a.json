@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC 253",
+ "version": "f14c873a",
+ "generador": "gen_dso_texturas 1",
+ "ra": 11.88792,
+ "dec": -25.28833,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 20,
+ "escalaAs": 1.1718749999999953,
+ "bytes": 1855780,
+ "wcs": {
+  "ra0": 13.1707324981996,
+  "dec0": -25.9999999999992,
+  "x0": -3052.23340722919,
+  "y0": -1657.67337346077,
+  "gx": -0.000325520833333332,
+  "gy": 0.000325520833333332
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 29.303089689159393,
+  "uMin": -4.805183381649071,
+  "uMax": 10.633387568156005,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": -1.5169615745544434,
+  "sigma": 29.303089689159393,
+  "fracAusencia": 0.08413887023925781,
+  "fracAusenciaEscena": 0.1448895452353926,
+  "bytes": 1855780,
+  "errCuantMaxSigma": 0.0005977898586656685,
+  "errCuantMaxRel": 0.00012000617877971909
+ }
+}

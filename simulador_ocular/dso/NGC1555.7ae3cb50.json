@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC1555",
+ "version": "7ae3cb50",
+ "generador": "gen_dso_texturas 1",
+ "ra": 65.49762,
+ "dec": 19.53517,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 1.6380000000000001,
+ "escalaAs": 0.09594726763555116,
+ "bytes": 479066,
+ "wcs": {
+  "ra0": 66.9767456054978,
+  "dec0": 17.9999999999994,
+  "x0": -51820.632484436,
+  "y0": -57327.5638000965,
+  "gx": -0.0000266520187876531,
+  "gy": 0.0000266520187876531
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 95.9056875,
+  "uMin": -2.5113497157929405,
+  "uMax": 9.32425010356174,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 19.879791259765625,
+  "sigma": 95.9056875,
+  "fracAusencia": 0.0016155242919921875,
+  "fracAusenciaEscena": 0.001959779403343194,
+  "bytes": 479066,
+  "errCuantMaxSigma": 0.0004524861582765881,
+  "errCuantMaxRel": 0.0000917766596985059
+ }
+}

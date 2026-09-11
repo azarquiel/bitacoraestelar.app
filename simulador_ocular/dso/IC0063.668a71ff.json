@@ -1,0 +1,41 @@
+{
+ "nombre": "IC0063",
+ "version": "668a71ff",
+ "generador": "gen_dso_texturas 1",
+ "ra": 14.87017,
+ "dec": 60.91169,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 4.929999999999999,
+ "escalaAs": 0.2888183682850626,
+ "bytes": 2005239,
+ "wcs": {
+  "ra0": 15.9999999999994,
+  "dec0": 61.9999999999979,
+  "x0": -6336.22945922613,
+  "y0": 14019.1245899796,
+  "gx": -0.0000802273245236285,
+  "gy": 0.0000802273245236285
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 101.26158876628875,
+  "uMin": -2.6022931133856937,
+  "uMax": 8.960283742444185,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 6.968823432922363,
+  "sigma": 101.26158876628875,
+  "fracAusencia": 0.0008707046508789062,
+  "fracAusenciaEscena": 0,
+  "bytes": 2005239,
+  "errCuantMaxSigma": 0.0004384987112374573,
+  "errCuantMaxRel": 0.00008977560107570337
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "nombre": "IC0359A",
+ "version": "bff046b9",
+ "generador": "gen_dso_texturas 1",
+ "ra": 64.67083,
+ "dec": 28.29,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 11.023,
+ "escalaAs": 0.645996100518342,
+ "bytes": 1990240,
+ "wcs": {
+  "ra0": 63.7974700927978,
+  "dec0": 29.999999999999,
+  "x0": 4799.45169103146,
+  "y0": 10028.5855497122,
+  "gx": -0.000179443361255095,
+  "gy": 0.000179443361255095
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 39.983689889431,
+  "uMin": -2.9514009732761304,
+  "uMax": 10.149292667586803,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 1.8984084129333496,
+  "sigma": 39.983689889431,
+  "fracAusencia": 0,
+  "fracAusenciaEscena": 0,
+  "bytes": 1990240,
+  "errCuantMaxSigma": 0.0005052719440006016,
+  "errCuantMaxRel": 0.00010162254640100343
+ }
+}

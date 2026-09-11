@@ -1,0 +1,41 @@
+{
+ "nombre": "NGC6720",
+ "version": "cdb381a6",
+ "generador": "gen_dso_texturas 1",
+ "ra": 283.39587,
+ "dec": 33.02858,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 2.286,
+ "escalaAs": 0.13403320719751763,
+ "bytes": 950273,
+ "wcs": {
+  "ra0": 284.21054077149,
+  "dec0": 33.9999999999988,
+  "x0": -17837.4980684519,
+  "y0": 26533.9697816372,
+  "gx": -0.0000372314464437549,
+  "gy": 0.0000372314464437549
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 98.31767812271117,
+  "uMin": -2.0935760054589685,
+  "uMax": 9.746731333106615,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 43.47555160522461,
+  "sigma": 98.31767812271117,
+  "fracAusencia": 0,
+  "fracAusenciaEscena": 0,
+  "bytes": 950273,
+  "errCuantMaxSigma": 0.0004519390062745586,
+  "errCuantMaxRel": 0.00009155728017118392
+ }
+}

@@ -24,6 +24,8 @@ mapa/datos/cumulos_abiertos.xlsx
 simulador_ocular/cache-ps1/
 simulador_ocular/cache_gaia/
 
-# Ignorar las texturas DSO que genera scripts/gen_dso_texturas.js (se publican
-# por FTP en uploads/bitacora/dso/; en git solo van el manifiesto y las fixtures)
-simulador_ocular/dso/
+# Las texturas DSO que genera scripts/gen_dso_texturas.js: los PNG se publican
+# por FTP en uploads/bitacora/dso/ y no entran en git (2 MB cada uno). Los
+# sidecars SÍ entran (892 bytes): son el origen de las filas del manifiesto, y
+# sin ellos el guardián byte a byte no puede verificar lo que declara (#258).
+simulador_ocular/dso/*.png

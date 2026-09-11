@@ -373,7 +373,18 @@ tres previstas —fase 1, fase 2 por resolución y fase 3 por máscara— el his
 crece entre 55 y 75 MB. Se acepta. Si alguna vez deja de aceptarse, la salida es
 Git LFS, no descargar de producción.
 
-**Corolario: la tabla de Volumen del informe es la de los golden, no la de la
+> **Enmienda (2026-09-11, T12 / #258).** El corolario de abajo **ya no vale**, y
+> la condición 1 sigue valiendo con un matiz. Los **sidecars** del banco entran
+> en git —se ignoran solo los PNG (`simulador_ocular/dso/*.png`)—, porque sin
+> ellos un manifiesto de 74 filas no se puede verificar con lo que hay en el
+> repositorio. La condición 1 se mantiene donde importa: **las texturas** (los
+> PNG) siguen siendo solo las once golden; 268 KB de JSON no son 97,4 MB de
+> imagen. Y con `auditoria.bytes` escrito en cada sidecar, la tabla de Volumen
+> pasa a dar **el total de la tirada** sin tener los PNG delante. El modo de
+> fallo mudo que se temía —un sidecar sin `bytes` desaparecido del total— tiene
+> ahora su propia línea en el informe y su comprobación en el test.
+
+**Corolario ~~vigente~~ SUPERADO por #258: la tabla de Volumen del informe es la de los golden, no la de la
 tirada.** `escribirInforme` mide los PNG del disco con `statSync`, así que suma
 los once que están en git y nada más: 17,5 MB, reproducibles en cualquier máquina
 justo porque esas fixtures van versionadas. La tirada completa del banco son

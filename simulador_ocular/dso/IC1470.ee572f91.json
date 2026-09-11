@@ -1,0 +1,41 @@
+{
+ "nombre": "IC1470",
+ "version": "ee572f91",
+ "generador": "gen_dso_texturas 1",
+ "ra": 346.29254,
+ "dec": 60.24408,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-07"
+ },
+ "ancho": 1024,
+ "alto": 1024,
+ "ladoArcmin": 1.6199999999999999,
+ "escalaAs": 0.09497070571211425,
+ "bytes": 462845,
+ "wcs": {
+  "ra0": 343.999999999988,
+  "dec0": 61.9999999999979,
+  "x0": 43659.016577363,
+  "y0": 66342.3275626898,
+  "gx": -0.0000263807515866984,
+  "gy": 0.0000263807515866984
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 150.7579285308838,
+  "uMin": -1.6337229361986272,
+  "uMax": 9.331327720989478,
+  "centinela": 0
+ },
+ "auditoria": {
+  "cielo": 71.44218444824219,
+  "sigma": 150.7579285308838,
+  "fracAusencia": 0,
+  "fracAusenciaEscena": 0,
+  "bytes": 462845,
+  "errCuantMaxSigma": 0.00041862044787628806,
+  "errCuantMaxRel": 0.00008489979614634269
+ }
+}
