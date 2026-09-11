@@ -628,7 +628,6 @@ function informeOpciones(todos) {
 
   console.log('\n── el metro: log₂(σ_opción / σ_patrón). 0 = clavado; 1 = el doble.');
   console.log('objeto        cl        L0      E2      E3   · cielo: (c_opción − c_patrón)/σ_patrón');
-  var err = { L0: [], E2: [], E3: [] }, errCielo = { L0: [], E2: [], E3: [] };
   todos.forEach(function (r) {
     if (r.motivo || !r.patron) return;
     var l = (r.nombre + '            ').slice(0, 13) + ' ' + (r.clase + '    ').slice(0, 5) + ' ';
@@ -639,7 +638,6 @@ function informeOpciones(todos) {
       var d = log2(o.sigma / r.patron.sigma), dc = (o.cielo - r.patron.cielo) / r.patron.sigma;
       l += (d >= 0 ? '+' : '') + d.toFixed(2).padStart(6) + '  ';
       c += ' ' + op + ' ' + (dc >= 0 ? '+' : '') + dc.toFixed(2);
-      if (r.afectado !== false) { err[op].push(Math.abs(d)); errCielo[op].push(Math.abs(dc)); }
     });
     console.log(l + ' ·' + c);
   });
