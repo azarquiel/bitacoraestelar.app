@@ -32,6 +32,7 @@
  *   BitacoraGaiaRender.urlPlaca({ base, survey, ra, dec, arcmin, fuente }) → URL del proxy
  *   BitacoraGaiaRender.centroDesplazado({ ra, dec, arcmin, pasoX, pasoY }) → { ra, dec }
  *       El centro movido pasos del 10 % del campo; el paso de RA lleva /cos(dec).
+ *   BitacoraGaiaRender.rotuloDesplazamiento({ pasoX, pasoY, arcmin }) → 'desplazado 0,3° E, 0,1° N'
  *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
  *   BitacoraGaiaRender.precalentar(opts) → void   (la consulta de render(), disparada antes)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
@@ -1243,6 +1244,21 @@
     // centro tiene que volver idéntico.
     if (ra < 0 || ra >= 360) { ra = ((ra % 360) + 360) % 360; }
     return { ra: ra, dec: dec };
+  }
+
+  /* Rótulo del desplazamiento, en el idioma del observador: «desplazado 0,3° E,
+     0,1° N». Los pasos son los ACUMULADOS y el campo, el realmente dibujado (el
+     mismo `arcmin` que come centroDesplazado), así que el grado que sale es el
+     que se ve. pasoX cuenta hacia el Este (izquierda del lienzo) y pasoY hacia
+     el norte. Sin desplazamiento devuelve cadena vacía: quien llama decide si
+     eso es un hueco o un «centrado en el objeto». */
+  function rotuloDesplazamiento(o) {
+    var paso = 0.10 * (o.arcmin || 0) / 60;
+    function grados(n) { return (Math.abs(n) * paso).toFixed(1).replace('.', ',') + '\u00b0'; }
+    var partes = [];
+    if (o.pasoX) partes.push(grados(o.pasoX) + ' ' + (o.pasoX > 0 ? 'E' : 'O'));
+    if (o.pasoY) partes.push(grados(o.pasoY) + ' ' + (o.pasoY > 0 ? 'N' : 'S'));
+    return partes.length ? 'desplazado ' + partes.join(', ') : '';
   }
 
   function acotarPlaca(arcmin) {
@@ -2771,6 +2787,7 @@
     opticaTieneArana: opticaTieneArana,
     urlPlaca: urlPlaca,
     centroDesplazado: centroDesplazado,
+    rotuloDesplazamiento: rotuloDesplazamiento,
     cargarPlaca: cargarPlaca,
     renderPlaca: renderPlaca,
     sbUmbralContraste: sbUmbralContraste,

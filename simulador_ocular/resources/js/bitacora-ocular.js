@@ -186,6 +186,27 @@
       var corsFallo = false;
       var contadorPeticion = 0;
 
+      /* ── Encuadre: el campo se puede mover en pasos del 10 % (épica #265) ──
+         `pasoX` cuenta hacia el Este (la IZQUIERDA del lienzo) y `pasoY` hacia
+         el norte. Los pasos son ACUMULADOS y el centro se pide SIEMPRE desde el
+         objeto original con centroDesplazado, nunca encadenando desplazamientos:
+         el cos(dec) cambia con la declinación y encadenar haría que el encuadre
+         dependiera del orden de los clics. */
+      /* Nodos de la vista, cacheados: deslizarVista() y finCarga() se ejecutan
+         en cada clic de la cruceta y no deben rehacer el getElementById. */
+      var elVista = $('sim-vista'), elLienzo = $('sim-lienzo'), elImg = $('sim-img');
+      var elCargando = $('sim-cargando'), elDesplazado = $('sim-desplazado');
+      var PASO_TOPE = 20;        // ±2 campos por eje: solo acota las consultas
+      var ANTIRREBOTE = 250;     // ms: varios clics seguidos = UNA consulta
+      var pasoX = 0, pasoY = 0;
+      var pendienteDespl = null;
+      // Deslizamiento ya aplicado al <img> (vista HiPS sin modo fotométrico),
+      // en píxeles CSS; el lienzo se desplaza en sus propios píxeles.
+      var deslizImg = { x: 0, y: 0 };
+      // Lo pone desplazar(): el render que viene NO debe tapar de negro lo ya
+      // pintado, solo deslizarlo (se lee y se apaga al entrar en actualizar).
+      var conservarVista = false;
+
       /* Las curvas de la fotometría (BitacoraGaiaRender.fot) ya no se leen desde
          aquí: la última regla que las usaba —luma de la placa → flujo— se fue con
          la cadena al módulo compartido. */
@@ -522,27 +543,45 @@
         if (d.pupila > pOjo && !aviso.textContent) {
           aviso.textContent = 'Pupila de salida (' + d.pupila.toFixed(1) + ' mm) mayor que la del ojo (' + pOjo + ' mm): parte de la luz se desperdicia.';
         }
-        var ra = objetoSel.ra, dec = objetoSel.dec;
+        /* Las TRES fuentes (Gaia, DSS y HiPS) piden este mismo centro: si una se
+           quedara con el del objeto, el desplazamiento pintaría un campo y
+           consultaría otro. */
+        var centro = centroVista(arcmin);
+        pintarRotuloDespl(arcmin);
+        /* Un desplazamiento no tapa de negro lo ya pintado (el círculo entero es
+           el fondo de .cargando): el aviso se queda en una franja tenue encima
+           del campo deslizado. */
+        var conservar = conservarVista;
+        conservarVista = false;
+        cargando.classList.toggle('suave', conservar);
         cargando.style.display = 'flex';
         cargando.textContent = 'solicitando imagen…';
+        elVista.setAttribute('aria-busy', 'true');
         var peticion = ++contadorPeticion;
 
         if (origen === 'canvas-2d') {
-          renderGaia2D(arcmin, peticion);
+          renderGaia2D(arcmin, peticion, centro, conservar);
           return;
         }
 
         if (origen === 'hips') {
-          var u = urlHips(ra, dec, arcmin);
+          var u = urlHips(centro.ra, centro.dec, arcmin);
           cargarPlaca(u).then(function (im) {
             if (peticion !== contadorPeticion) return;
-            if (!im) { cargando.textContent = 'hips2fits no respondió: prueba el origen DSS.'; return; }
-            cargando.style.display = 'none';
+            if (!im) { cargando.textContent = 'hips2fits no respondió: prueba el origen DSS.'; elVista.setAttribute('aria-busy', 'false'); return; }
+            finCarga();
             renderizar(im, null, u);
           });
         } else {
-          renderDSS(arcmin, peticion);
+          renderDSS(arcmin, peticion, centro);
         }
+      }
+
+      /* Quita el indicador de carga y con él el aria-busy del contenedor: los dos
+         dicen lo mismo, uno para quien mira y otro para quien escucha. */
+      function finCarga() {
+        elCargando.style.display = 'none';
+        elVista.setAttribute('aria-busy', 'false');
       }
 
       // Carga y compone la placa DSS (fusión HDR: DSS2-red profunda + DSS1 corta).
@@ -553,14 +592,16 @@
          la misma placa, girada respecto al norte (ver README, "Orientación del
          campo"), pero antes eso que un círculo negro. Se avisa, porque el campo
          girado no casa con la superposición de Gaia. */
-      function renderDSS(arcmin, peticion, fuente) {
+      function renderDSS(arcmin, peticion, centro, fuente) {
         fuente = fuente || 'skyview';
         // Techo de placa aunque se llegue aquí de respaldo desde Gaia, que tiene
         // el suyo más alto: ampliar una placa de 1059 px cuesta CPU y no añade
         // detalle.
         PROC = tamRender('dss');
         var cargando = $('sim-cargando');
-        var ra = objetoSel.ra, dec = objetoSel.dec;
+        // Grados, no sexagesimal: urlPlaca del módulo acepta las dos formas, y
+        // el centro desplazado llega ya en grados.
+        var ra = centro.ra, dec = centro.dec;
         var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin, fuente);
         var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin, fuente);
         Promise.all([cargarPlaca(urlProfunda), cargarPlaca(urlCorta)])
@@ -571,13 +612,14 @@
               if (fuente === 'skyview') {
                 cargando.textContent = 'SkyView no responde: probando con el archivo del ESO…';
                 $('sim-aviso').textContent = 'SkyView no responde: se muestra la placa del archivo del ESO, que llega ligeramente girada respecto al norte.';
-                renderDSS(arcmin, peticion, 'eso');
+                renderDSS(arcmin, peticion, centro, 'eso');
                 return;
               }
               cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?';
+              elVista.setAttribute('aria-busy', 'false');
               return;
             }
-            cargando.style.display = 'none';
+            finCarga();
             renderizar(profunda || corta, profunda ? corta : null, urlProfunda);
           });
       }
@@ -597,15 +639,18 @@
          fotométrico), con la misma consulta y proyección (dibujarGaia) que la
          superposición de Gaia sobre DSS/PanSTARRS, así el fondo y las posiciones
          se parecen lo máximo posible a esas vistas. */
-      function renderGaia2D(arcmin, peticion) {
+      function renderGaia2D(arcmin, peticion, centro, conservar) {
         var img = $('sim-img'), canvas = $('sim-lienzo'), cargando = $('sim-cargando');
         img.style.display = 'none';
         canvas.style.display = 'block';
-        canvas.width = canvas.height = PROC;
+        /* Fijar canvas.width BORRA el lienzo, así que en un desplazamiento no se
+           toca: el campo ya deslizado se queda a la vista hasta que llegue el
+           render nuevo, que lo sustituye entero. */
+        if (!conservar || canvas.width !== PROC) canvas.width = canvas.height = PROC;
         var ctx = canvas.getContext('2d');
         var fondo = nivelFondoCielo(datosOcular().pupila);
         var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
-        ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC);
+        if (!conservar) { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC); }
         cargando.style.display = 'flex'; cargando.textContent = 'consultando estrellas de Gaia DR3…';
         /* La primera consulta de un campo muy rico tarda hasta un minuto en el
            servidor (luego queda cacheada). Un contador de segundos dice que el
@@ -622,7 +667,7 @@
           setTimeout(tic, 1000);
         })();
 
-        var ra0 = sexToDeg(objetoSel.ra, true), dec0 = sexToDeg(objetoSel.dec, false);
+        var ra0 = centro.ra, dec0 = centro.dec;
         var eq = datosOcular();
         // Galaxias + nebulosas cuya clase ya trata el pipeline (v1: planetarias).
         var catDifuso = BitacoraPS1.ps1CatalogoDifuso(
@@ -655,7 +700,7 @@
           vivo: function () { return peticion === contadorPeticion; }
         }).then(function (r) {
           if (peticion !== contadorPeticion || r.cancelada) return;
-          cargando.style.display = 'none';
+          finCarga();
           // El aviso del campo (catálogo agotado / resplandor de fondo) lo
           // redacta el módulo; aquí solo se decide dónde pintarlo.
           if (r.avisoCampo) $('sim-aviso').textContent = r.avisoCampo;
@@ -679,7 +724,7 @@
           // canvas en negro, mostramos la placa DSS del mismo campo como respaldo.
           cargando.style.display = 'flex';
           cargando.textContent = 'Gaia DR3 no responde (CDS/GAVO); mostrando placa DSS…';
-          renderDSS(arcmin, peticion);
+          renderDSS(arcmin, peticion, centro);
         });
       }
 
@@ -692,7 +737,8 @@
         return BitacoraGaiaRender.urlPlaca({ base: DSS_BASE, survey: survey, ra: ra, dec: dec, arcmin: arcmin, fuente: fuente || 'eso' });
       }
       function sexToDeg(s, esRA) { var sig = /^\s*-/.test(s) ? -1 : 1; var p = s.trim().replace(/[+\-]/g, '').replace(/:/g, ' ').split(/\s+/).map(Number); var abs = (p[0] || 0) + (p[1] || 0) / 60 + (p[2] || 0) / 3600; return sig * abs * (esRA ? 15 : 1); }
-      function urlHips(ra, dec, arcmin) { return 'https://alasky.cds.unistra.fr/hips-image-services/hips2fits?hips=' + encodeURIComponent('CDS/P/PanSTARRS/DR1/color-z-zg-g') + '&ra=' + sexToDeg(ra, true).toFixed(5) + '&dec=' + sexToDeg(dec, false).toFixed(5) + '&fov=' + (arcmin / 60).toFixed(4) + '&width=' + PROC + '&height=' + PROC + '&projection=TAN&format=jpg'; }
+      // ra/dec en GRADOS: el centro lo calcula centroVista() y puede venir desplazado.
+      function urlHips(ra, dec, arcmin) { return 'https://alasky.cds.unistra.fr/hips-image-services/hips2fits?hips=' + encodeURIComponent('CDS/P/PanSTARRS/DR1/color-z-zg-g') + '&ra=' + ra.toFixed(5) + '&dec=' + dec.toFixed(5) + '&fov=' + (arcmin / 60).toFixed(4) + '&width=' + PROC + '&height=' + PROC + '&projection=TAN&format=jpg'; }
       // La carga (resolver null si falla, nunca rechazar) vive en el módulo
       // compartido, fuente única con el formulario de registro (como urlPlaca).
       function cargarPlaca(url) { return BitacoraGaiaRender.cargarPlaca(url); }
@@ -728,6 +774,10 @@
 
       function renderizar(profunda, corta, urlRespaldo) {
         if (!ocularSel) return;
+        // La placa que llega ya está centrada donde toca: fuera el deslizamiento
+        // provisional que se aplicó al pulsar la cruceta.
+        deslizImg.x = deslizImg.y = 0;
+        elImg.style.transform = '';
         var pupila = datosOcular().pupila;
         var img = $('sim-img');
         var canvas = $('sim-lienzo');
@@ -778,6 +828,16 @@
          actualizar() para el render (campo real del ocular, acotado por el tope
          del origen). Sin equipo elegido devuelve undefined y la consulta usa su
          radio por defecto, como antes. */
+      /* Centro que se va a pedir: el del objeto movido los pasos acumulados. La
+         trigonometría (incluido el /cos(dec)) vive en el módulo compartido, que
+         es el que también usa el formulario de registro. */
+      function centroVista(arcmin) {
+        return BitacoraGaiaRender.centroDesplazado({
+          ra: sexToDeg(objetoSel.ra, true), dec: sexToDeg(objetoSel.dec, false),
+          arcmin: arcmin, pasoX: pasoX, pasoY: pasoY
+        });
+      }
+
       function arcminVista() {
         if (!teleSel || !teleFocal() || !teleApertura() || !ocularSel) return undefined;
         var max = ($('sim-origen').value === 'canvas-2d') ? GAIA_MAX_ARCMIN : DSS_MAX_ARCMIN;
@@ -817,8 +877,102 @@
         // de Gaia son lo único que se pinta—. Si se usara aquí la mag. límite
         // plena, el DSS se llenaría de las mismas estrellas que el Canvas 2D y
         // ambas vistas quedarían casi idénticas.
-        var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var ra0 = sexToDeg(objetoSel.ra, true); var dec0 = sexToDeg(objetoSel.dec, false); var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
+        var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var centro = centroVista(arcmin); var ra0 = centro.ra; var dec0 = centro.dec; var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
         consultarGaia(ra0, dec0, arcmin).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3: se muestra solo la imagen.'; });
+      }
+
+      /* ══════════════════ CRUCETA: DESPLAZAR EL CAMPO ══════════════════
+         Un clic = 10 % del campo real DIBUJADO. Los botones dicen N/S/E/O y no
+         flechas: «llévame al norte» no tiene la doble lectura de «flecha arriba»
+         (¿muevo el campo o empujo el cielo?), y el observador piensa en cielo.
+         Las flechas NO se deshabilitan mientras carga —encadenar clics es el uso
+         real—: los pasos se acumulan y sale una sola consulta. */
+
+      // Rótulo «desplazado 0,3° E, 0,1° N»: lo redacta el módulo compartido.
+      function pintarRotuloDespl(arcmin) {
+        if (!elDesplazado) return;
+        elDesplazado.textContent = BitacoraGaiaRender.rotuloDesplazamiento({
+          pasoX: pasoX, pasoY: pasoY, arcmin: arcmin || arcminVista() || 0
+        }) || 'centrado en el objeto';
+      }
+
+      /* Desliza lo YA pintado el 10 % del lado por paso, para que el campo no
+         parpadee en negro mientras llega el render nuevo. El contenido se mueve
+         al CONTRARIO que la ventana: un paso al norte sube el centro, así que lo
+         que se ve baja. Solo queda vacía la franja que entra. */
+      function deslizarVista(dx, dy) {
+        var canvas = elLienzo, img = elImg;
+        // 'block' explícito, no "!== none": antes del primer render el lienzo
+        // aún no tiene display en línea y se estaría dibujando a ciegas.
+        if (canvas.style.display === 'block') {
+          var px = Math.round(0.10 * canvas.width * dx);
+          var py = Math.round(0.10 * canvas.height * dy);
+          var ctx = canvas.getContext('2d');
+          // 'copy' para que la franja que entra quede vacía (el círculo es negro)
+          // en vez de repetir la orilla del campo anterior.
+          ctx.globalCompositeOperation = 'copy';
+          ctx.drawImage(canvas, px, py);
+          ctx.globalCompositeOperation = 'source-over';
+        } else if (img.style.display === 'block') {
+          deslizImg.x += 0.10 * img.clientWidth * dx;
+          deslizImg.y += 0.10 * img.clientHeight * dy;
+          img.style.transform = 'translate(' + deslizImg.x.toFixed(1) + 'px,' + deslizImg.y.toFixed(1) + 'px)';
+        }
+      }
+
+      /* Acumula pasos y programa UNA consulta. El estado (pasos, rótulo,
+         deslizamiento) se fija aquí mismo, nunca al terminar una animación: tres
+         clics rápidos dejarían el centro a medias. */
+      function desplazar(dx, dy) {
+        if (!arcminVista()) return;   // sin equipo no hay campo que desplazar
+        var nx = Math.max(-PASO_TOPE, Math.min(PASO_TOPE, pasoX + dx));
+        var ny = Math.max(-PASO_TOPE, Math.min(PASO_TOPE, pasoY + dy));
+        if (nx === pasoX && ny === pasoY) return;   // en el tope: ni se mueve ni consulta
+        deslizarVista(nx - pasoX, ny - pasoY);
+        pasoX = nx; pasoY = ny;
+        conservarVista = true;
+        programarDespl();
+      }
+
+      function recentrar() {
+        if (!pasoX && !pasoY) return;
+        pasoX = pasoY = 0;
+        deslizImg.x = deslizImg.y = 0;
+        elImg.style.transform = '';
+        programarDespl();   // sin deslizar: el salto puede ser de dos campos
+      }
+
+      function programarDespl() {
+        pintarRotuloDespl();
+        clearTimeout(pendienteDespl);
+        pendienteDespl = setTimeout(actualizar, ANTIRREBOTE);
+      }
+
+      function montarCruceta() {
+        var cruceta = $('sim-cruceta');
+        if (!cruceta) return;
+        cruceta.addEventListener('click', function (ev) {
+          var b = ev.target.closest('button[data-x]');
+          if (!b) return;
+          var dx = Number(b.getAttribute('data-x')), dy = Number(b.getAttribute('data-y'));
+          if (!dx && !dy) recentrar(); else desplazar(dx, dy);
+        });
+        /* Teclado: con el foco en el lienzo o en la cruceta, las flechas mueven y
+           Home recentra. La flecha IZQUIERDA va al Este, como el botón que tiene
+           debajo: en el cielo el Este cae a la izquierda. */
+        var TECLAS = {
+          ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [1, 0], ArrowRight: [-1, 0]
+        };
+        function teclado(ev) {
+          if (ev.key === 'Home') { ev.preventDefault(); recentrar(); return; }
+          var d = TECLAS[ev.key];
+          if (!d) return;
+          ev.preventDefault();
+          desplazar(d[0], d[1]);
+        }
+        elLienzo.addEventListener('keydown', teclado);
+        cruceta.addEventListener('keydown', teclado);
+        pintarRotuloDespl();
       }
 
       /* ══════════════════ ACCIONES SOBRE LA IMAGEN DEL OCULAR ══════════════════
@@ -1058,6 +1212,8 @@
       function elegirObjeto(o) {
         if (!o) return;
         objetoSel = o;
+        // Objeto nuevo, encuadre nuevo: el desplazamiento era del anterior.
+        pasoX = pasoY = 0;
         pintarObjeto();
         actualizar();
         precalentarGaia(o);
@@ -1235,6 +1391,7 @@
       montarTeleManual();
       montarSelectorObjeto();
       montarAccionesVista();
+      montarCruceta();
       pintarObjeto();
 
       /* ══════════════════ ARRANQUE ══════════════════ */

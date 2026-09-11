@@ -167,6 +167,46 @@
   stroke-linecap:round;stroke-linejoin:round;
 }
 
+/* ── Cruceta de encuadre (desplazar el campo en pasos del 10 %) ──
+   Se mira de noche con el ojo adaptado: ámbar tenue sobre negro, nunca blanco
+   puro. Cada botón es de 44 px (objetivo táctil; muy por encima del mínimo de
+   24×24 de la WCAG 2.2) con 8 px de separación. El hueco central de la cruz lo
+   ocupa el botón de recentrar: un control menos que colocar. */
+#mw-obs-form .cruceta {
+  display:grid;grid-template-columns:repeat(3, 44px);grid-template-rows:repeat(3, 44px);
+  gap:8px;margin-top:12px;
+}
+#mw-obs-form .cruceta .paso {
+  display:inline-flex;align-items:center;justify-content:center;padding:0;
+  border:1px solid var(--linea);border-radius:8px;background:transparent;
+  color:var(--ambar);font-size:14px;font-weight:600;cursor:pointer;
+  transition:color .18s, border-color .18s, background .18s;
+}
+#mw-obs-form .cruceta .paso:hover, #mw-obs-form .cruceta .paso:focus-visible {
+  border-color:var(--ambar);background:rgba(255,170,90,.10);
+}
+#mw-obs-form .cruceta .paso-n {grid-area:1 / 2;}
+/* El Este a la IZQUIERDA y el Oeste a la derecha: es el cielo, no la pantalla. */
+#mw-obs-form .cruceta .paso-e {grid-area:2 / 1;}
+#mw-obs-form .cruceta .paso-centro {grid-area:2 / 2;font-size:10px;}
+#mw-obs-form .cruceta .paso-o {grid-area:2 / 3;}
+#mw-obs-form .cruceta .paso-s {grid-area:3 / 2;}
+#mw-obs-form .desplazamiento {
+  margin:8px 0 0;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;
+  color:var(--ambar);text-align:center;min-height:1em;
+}
+
+/* El lienzo es alcanzable por teclado (las flechas desplazan el campo): su
+   anillo de foco va por dentro, que el círculo recorta el de fuera. */
+#mw-obs-form .vista canvas:focus-visible {outline:2px solid var(--ambar);outline-offset:-4px;}
+
+/* Aviso de carga que NO tapa el campo: mientras se desplaza, lo ya pintado se
+   queda a la vista y el texto baja a una franja tenue (ver conservarVista). */
+#mw-obs-form .vista .cargando.suave {
+  background:linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0) 40%);
+  align-items:flex-end;padding-bottom:18px;
+}
+
 /* Pantalla completa: el círculo pasa a ocupar el lado corto de la pantalla. El
    !important pisa el width/height EN LÍNEA que actualizar() fija en cada
    render. La clase la pone el JS al entrar/salir (evita duplicar todo con el
@@ -257,7 +297,8 @@
 
 /* ── Foco visible: mismo anillo ámbar que los campos, sobre fondo oscuro ── */
 #mw-obs-form .obj-tab:focus-visible, #mw-obs-form .link-manual:focus-visible,
-#mw-obs-form .accion-vista:focus-visible, #mw-obs-form label.capa input:focus-visible {
+#mw-obs-form .accion-vista:focus-visible, #mw-obs-form label.capa input:focus-visible,
+#mw-obs-form .cruceta .paso:focus-visible {
   outline:2px solid var(--ambar);outline-offset:2px;
 }
 
