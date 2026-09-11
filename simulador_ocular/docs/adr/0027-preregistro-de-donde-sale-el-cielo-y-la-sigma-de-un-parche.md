@@ -45,6 +45,48 @@ base de #263 da con más del 40 % del área apagada —IC 0059, IC 0063, IC 0359
 NGC 1788, NGC 2064, IC 0444, NGC 5457, NGC 6888, NGC 7293— más cuatro controles
 de parche holgado —NGC 5194, NGC 3031, NGC 4594, NGC 4486—. Trece objetos.
 
+## Enmienda del 2026-09-12: la σ del patrón se mide en un campo vecino
+
+Comprometida **antes** de comparar ninguna opción con el patrón a escala
+igualada, y forzada por un confundido de medida, no por un veredicto que no
+gustara: con el patrón tal como se escribió arriba, la única opción que pasaba
+era E4, y pasaba por construcción —E4 *es* el patrón—.
+
+**El confundido.** σ es por PÍXEL, y el parche del patrón tiene el píxel 2–4
+veces más grande que el de producción: los dos salen a 1024 px, pero sobre
+campos distintos. Un píxel más grande promedia más ruido, así que la σ del
+patrón sale más baja sin que nada esté mal medido. Comprobado agrupando el
+parche publicado k×k hasta el paso del patrón y volviendo a medir con las
+funciones de producción (`--escala`):
+
+| objeto | ″/px producción | ″/px patrón | σ cruda | σ agrupada | σ patrón |
+|---|---|---|---|---|---|
+| IC 0059 | 0,373 | 1,492 | 85,9 | 44,6 | 25,5 |
+| IC 0359A | 0,646 | 2,344 | 40,0 | 13,4 | 11,6 |
+| IC 0444 | 0,298 | 1,193 | 59,2 | 20,2 | 25,4 |
+| NGC 1788 | 0,105 | 0,703 | 796,9 | **789,5** | 49,4 |
+
+Agrupar se lleva la mitad o más de la diferencia en casi todos —o sea que buena
+parte de lo que parecía error de la ley era el tamaño del píxel—, y en NGC 1788
+no se lleva nada: 796,9 contra 789,5. Ahí lo que la MAD del marco está midiendo
+no es ruido sino el gradiente de la nebulosa, que no baja al promediar.
+
+**La enmienda.** El patrón pasa a tener dos piezas, cada una donde vale:
+
+- **Cielo** — el anillo lejano del parche grande, tal como estaba escrito. La
+  mediana en DN no depende del tamaño del píxel (el remuestreo del mosaico
+  conserva brillo superficial, no flujo por píxel), así que el listón 2 sigue
+  siendo el mismo número.
+- **σ** — un **campo vecino**: mismo lado, misma resolución y por tanto el mismo
+  ″/px que el parche de producción, centrado a `max(1,5·lado, 2·r_obj)` del
+  objeto en la dirección (N, S, E u O) cuyo centro queda más lejos de cualquier
+  otra fila del catálogo difuso. Esa distancia a la difusa más cercana se publica
+  con cada medida: un campo vecino con otro objeto dentro no es cielo.
+
+Los cuatro listones no se tocan; lo que cambia es de dónde sale el σ_patrón con
+el que se evalúan. Un objeto sin campo vecino utilizable se declara `sin patrón`
+igual que antes.
+
 ## Las cuatro opciones, tal como se van a medir
 
 - **E1 — agrandar el parche.** Subir `ladoFactor`, o cambiar la ley de `r_e`.
@@ -102,7 +144,8 @@ que es lo que discute #273 y depende de que este metro esté bien.
 
 ```
 node scripts/harness_suelo_cielo.js --marco            # criterio: el marco del 6 % en los 68
-node scripts/harness_suelo_cielo.js --patron           # el cielo lejano de los trece (red)
+node scripts/harness_suelo_cielo.js --patron           # cielo lejano y campo vecino de los trece (red)
+node scripts/harness_suelo_cielo.js --escala           # el confundido de la enmienda
 node scripts/harness_suelo_cielo.js --opciones         # E1–E4 contra el patrón
 node scripts/harness_suelo_cielo.js --hash             # el coste de E1 y E4 contra version()
 ```

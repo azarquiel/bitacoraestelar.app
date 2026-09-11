@@ -70,64 +70,12 @@ function arg(n, pordefecto) {
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : pordefecto;
 }
 
-/* De dónde salen los PNG. Por defecto el banco publicado; los PNG no entran en
-   git (2 MB cada uno) así que en un árbol recién clonado no están, y entonces
-   valen los de `scripts/fixtures/dso/`, que son los mismos bytes para los siete
-   objetos que llevan fixture. */
-var DIRS = [arg('--dir', path.join(RAIZ, 'simulador_ocular', 'dso')),
-            path.join(RAIZ, 'scripts', 'fixtures', 'dso')];
-
-function filaDe(nombre) {
-  var todas = PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
-  var k = BANCO.clave(nombre);
-  for (var i = 0; i < todas.length; i++) {
-    if (BANCO.clave(todas[i][0]) === k || (todas[i][1] && BANCO.clave(todas[i][1]) === k)) return todas[i];
-  }
-  return null;
-}
-
-/* El par (sidecar, PNG) del objeto, mirando los directorios en orden. El nombre
-   de fichero lleva la versión, y la versión sale del manifiesto: si el PNG de
-   disco no es el que el manifiesto declara, esto no lo encuentra, que es lo que
-   queremos —medir lo publicado, no lo que haya por ahí—. */
-function parcheDe(nombre) {
-  var id = PS1.ps1IdTextura(nombre);
-  for (var i = 0; i < DIRS.length; i++) {
-    var js = path.join(DIRS[i], id + '.json');
-    /* El sidecar trae la versión en el nombre, así que hay que buscarlo por
-       prefijo: `NGC6888.1aa86769.json`. */
-    var dir = DIRS[i];
-    if (!fs.existsSync(dir)) continue;
-    var cand = fs.readdirSync(dir).filter(function (f) {
-      return f.indexOf(id + '.') === 0 && /\.json$/.test(f) && f.indexOf('.fila.') < 0;
-    });
-    for (var j = 0; j < cand.length; j++) {
-      var png = path.join(dir, cand[j].replace(/\.json$/, '.png'));
-      if (fs.existsSync(png)) return { json: path.join(dir, cand[j]), png: png, dir: dir };
-    }
-    void js;
-  }
-  return null;
-}
-
-/* Las estrellas de Gaia del campo, de los fixtures que ya existen: en Cygnus,
-   NGC 6888 tiene tantas que «píxeles por encima del cielo» sin quitarlas mide
-   sobre todo el campo estelar, no la nebulosa. Sin fixture no se inventa: se
-   dice que la cuenta va con estrellas dentro. */
-var FIXTURES = {
-  NGC6888: 'gaia_ngc6888.csv', NGC6720: 'gaia_ngc6720.csv', NGC7008: 'gaia_ngc7008.csv',
-  NGC7635: 'gaia_ngc7635.csv', NGC1952: 'gaia_ngc1952.csv', 'NGC 5194': 'gaia_ngc5194.csv'
-};
-function estrellasDe(nombre) {
-  var csv = FIXTURES[nombre];
-  if (!csv) return null;
-  var ruta = path.join(RAIZ, 'scripts', 'fixtures', 'gaia', csv);
-  if (!fs.existsSync(ruta)) return null;
-  return fs.readFileSync(ruta, 'utf8').trim().split('\n').slice(1).map(function (l) {
-    var t = l.split(',');
-    return [parseFloat(t[0]), parseFloat(t[1]), parseFloat(t[2])];
-  });
-}
+/* De dónde salen los PNG, la fila del catálogo y los fixtures de Gaia: en
+   `lib_parche_publicado.js`, compartidos con el arnés de #274. Por defecto el
+   banco publicado; `--dir` manda sobre él. */
+var PUB = require('./lib_parche_publicado.js')(RAIZ, PS1, P16,
+  [arg('--dir', path.join(RAIZ, 'simulador_ocular', 'dso'))]);
+var filaDe = PUB.fila, estrellasDe = PUB.estrellas;
 
 function percentil(v, p) {
   if (!v.length) return NaN;
@@ -138,18 +86,7 @@ function percentil(v, p) {
 function mag(f) { return f > 0 ? -2.5 * Math.log10(f) : Infinity; }
 
 /* El parche publicado: PNG del banco + su sidecar, decodificado a DN. */
-function fuentePublicada(f) {
-  var p = parcheDe(f[0]);
-  if (!p) return Promise.resolve(null);
-  var side = JSON.parse(fs.readFileSync(p.json, 'utf8'));
-  return P16.leer(fs.readFileSync(p.png)).then(function (img) {
-    if (!img) throw new Error(f[0] + ': el PNG no se deja leer');
-    return { datos: P16.decodificar(img.u16, side.codificacion),
-             ancho: img.ancho, alto: img.alto, escalaAs: side.escalaAs,
-             wcs: side.wcs || null, side: side,
-             etiqueta: 'banda ' + side.fuente.banda + ' · ' + path.basename(p.png) };
-  });
-}
+var fuentePublicada = PUB.fuente;
 
 /* El MISMO campo en otra banda. Es la única forma de responder «¿está el Hα en
    los píxeles?»: g no lo lleva (656 nm cae fuera) y r sí. Misma geometría,
