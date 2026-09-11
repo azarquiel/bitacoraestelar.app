@@ -1095,8 +1095,9 @@
   // _simPasoY hacia el norte. El centro se pide siempre desde el del objeto con
   // centroDesplazado, nunca encadenando: el cos(dec) cambia con la declinación.
   // Son de ESTA imagen: abrir el modal los vuelve a poner a cero.
-  var SIM_PASO_TOPE = 20;   // ±2 campos por eje: solo acota las consultas
-  var _simPasoX = 0, _simPasoY = 0;
+  var SIM_PASO_TOPE = 20;      // ±2 campos por eje: solo acota las consultas
+  var SIM_ANTIRREBOTE = 250;   // ms: varios clics (o una flecha mantenida) = UNA consulta
+  var _simPasoX = 0, _simPasoY = 0, _simPendiente = null, _simNodos = null;
 
   // Rótulo de la fuente de una imagen simulada. Sin fuente conocida (una imagen
   // ya guardada: la base solo distingue 'simulada' de 'subida') se queda en
@@ -1173,7 +1174,10 @@
     ($('mw-obs-form') || document.body).appendChild(ov);
     // Cerrar invalida lo que esté en vuelo (_simPeticion): una placa que llegue
     // tarde no debe reactivar "Usar esta imagen" con el modal ya cerrado.
-    function cerrar(){ ov.style.display='none'; _simUsar=null; _simEntrada=null; _simPeticion++; }
+    function cerrar(){
+      ov.style.display='none'; _simUsar=null; _simEntrada=null; _simPeticion++;
+      clearTimeout(_simPendiente);   // un desplazamiento a medias no repinta un modal cerrado
+    }
     ov.querySelector('.sim-gen-x').addEventListener('click', cerrar);
     ov.querySelector('.sim-gen-cancel').addEventListener('click', cerrar);
     ov.addEventListener('click', function(e){ if(e.target===ov) cerrar(); });
@@ -1203,7 +1207,9 @@
        izquierda. */
     var TECLAS_SIM={ ArrowUp:[0,1], ArrowDown:[0,-1], ArrowLeft:[1,0], ArrowRight:[-1,0] };
     function teclado(ev){
-      if(!_simEntrada) return;
+      // Con modificador no es un desplazamiento: son atajos del navegador
+      // (Ctrl/⌘+flecha, Alt+flecha para atrás…) que no hay que robar.
+      if(!_simEntrada || ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return;
       if(ev.key==='Home'){ ev.preventDefault(); recentrarSim(); return; }
       var d=TECLAS_SIM[ev.key];
       if(!d) return;
@@ -1212,6 +1218,14 @@
     }
     ov.querySelector('.sim-gen-canvas').addEventListener('keydown', teclado);
     cruceta.addEventListener('keydown', teclado);
+    // Nodos cacheados: deslizarSim y desplazarSim corren en CADA clic de la
+    // cruceta y no deben rehacer el querySelector (igual que el simulador).
+    _simNodos={
+      vista:ov.querySelector('.sim-gen-vista'), canvas:ov.querySelector('.sim-gen-canvas'),
+      spin:ov.querySelector('.sim-gen-spin'), usar:ov.querySelector('.sim-gen-usar'),
+      info:ov.querySelector('.sim-gen-info'), badge:ov.querySelector('.sim-gen-badge'),
+      origen:ov.querySelector('.sim-gen-origen'), sqm:ov.querySelector('.sim-gen-sqm')
+    };
     _simModal=ov; return ov;
   }
 
@@ -1225,30 +1239,46 @@
      CONTRARIO que la ventana: un paso al norte sube el centro, así que lo que
      se ve baja. */
   function deslizarSim(dx, dy){
-    var canvas=_simModal.querySelector('.sim-gen-canvas'), ctx=canvas.getContext('2d');
+    var canvas=_simNodos.canvas, ctx=canvas.getContext('2d');
     var D=diametroSim(_simEntrada.d);
     // 'copy' para que la franja que entra quede vacía en vez de repetir la
     // orilla del campo anterior.
     ctx.globalCompositeOperation='copy';
     ctx.drawImage(canvas, Math.round(0.10*D*dx), Math.round(0.10*D*dy));
+    // El campo es un círculo de diámetro D dentro de un lienzo de 900: sin este
+    // recorte, lo que se desplazaría es el diafragma entero, y con un ocular de
+    // campo estrecho (D < 900) el círculo se vería descentrado mientras carga.
+    ctx.globalCompositeOperation='destination-in';
+    ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.fill();
     ctx.globalCompositeOperation='source-over';
   }
 
-  // Acumula pasos (tres clics = 30 %) y repinta. El tope no se pasa: ni se
-  // mueve ni se lanza consulta.
+  /* Acumula pasos (tres clics = 30 %) y programa UNA consulta: encadenar clics
+     —o mantener pulsada una flecha, que autorepite— es el uso real, y sin
+     antirrebote saldría una consulta a Gaia o al DSS por pulsación. El estado
+     (pasos, deslizamiento, botón deshabilitado) se fija aquí mismo. El tope no
+     se pasa: ni se mueve ni se consulta. */
   function desplazarSim(dx, dy){
     var nx=Math.max(-SIM_PASO_TOPE, Math.min(SIM_PASO_TOPE, _simPasoX+dx));
     var ny=Math.max(-SIM_PASO_TOPE, Math.min(SIM_PASO_TOPE, _simPasoY+dy));
     if(nx===_simPasoX && ny===_simPasoY) return;
     deslizarSim(nx-_simPasoX, ny-_simPasoY);
     _simPasoX=nx; _simPasoY=ny;
-    pintarSim(true);
+    programarSim(true);
   }
 
   function recentrarSim(){
     if(!_simPasoX && !_simPasoY) return;
     _simPasoX=_simPasoY=0;
-    pintarSim();   // sin deslizar: el salto puede ser de dos campos
+    programarSim(false);   // sin deslizar: el salto puede ser de dos campos
+  }
+
+  function programarSim(conservar){
+    // Deshabilitado desde el primer clic, no cuando sale la consulta: entre
+    // medias la vista ya no es la que se subiría.
+    _simNodos.usar.disabled=true;
+    clearTimeout(_simPendiente);
+    _simPendiente=setTimeout(function(){ if(_simEntrada) pintarSim(conservar); }, SIM_ANTIRREBOTE);
   }
 
   function abrirModalGenerar(el){
@@ -1269,10 +1299,10 @@
   // Pinta (o repinta) la vista con la fuente elegida en el modal. La imagen que
   // se sube es la que se está viendo: el observador decide DESPUÉS de verla.
   function pintarSim(conservar){
-    var ov=_simModal, el=_simEntrada.el, d=_simEntrada.d;
-    var fuente=ov.querySelector('.sim-gen-origen').value;
-    var canvas=ov.querySelector('.sim-gen-canvas'), ctx=canvas.getContext('2d');
-    var spin=ov.querySelector('.sim-gen-spin'), usar=ov.querySelector('.sim-gen-usar');
+    var n=_simNodos, el=_simEntrada.el, d=_simEntrada.d;
+    var fuente=n.origen.value;
+    var canvas=n.canvas, ctx=canvas.getContext('2d');
+    var spin=n.spin, usar=n.usar;
     // El DSS no sirve más de 2°: con un campo mayor la placa se recorta, y hay
     // que decirlo porque la imagen ya no cubre todo lo que se ve por el ocular.
     var maxDss=BitacoraGaiaRender.dssMaxArcmin;
@@ -1280,7 +1310,7 @@
     // SQM de ESTA imagen: el del modal manda sobre el de la observación. Fuera
     // del rango de la escala (o en blanco) se vuelve al de partida, para no
     // pedirle al render un cielo imposible.
-    var sqmSim=parseFloat(ov.querySelector('.sim-gen-sqm').value);
+    var sqmSim=parseFloat(n.sqm.value);
     if(isNaN(sqmSim) || sqmSim<14 || sqmSim>22) sqmSim=d.sqm;
     // El desplazamiento se cuenta contra el campo DIBUJADO (el recortado si es
     // el DSS), que es del que se toma el 10 % por paso.
@@ -1290,14 +1320,17 @@
     var rotDespl=BitacoraGaiaRender.rotuloDesplazamiento({
       pasoX:_simPasoX, pasoY:_simPasoY, arcmin:arcmin
     });
-    ov.querySelector('.sim-gen-info').innerHTML =
+    n.info.innerHTML =
       BitacoraBase.esc(d.objeto)+' · '+BitacoraBase.esc(d.telescopio)+' · '+BitacoraBase.esc(d.ocular)+
       ' · '+d.aumentos+'× · campo '+fmtCampo(arcmin/60)+
       ' · SQM '+String(sqmSim).replace('.', ',')+
       (arcmin<d.arcmin ? ' (recortado del máximo del DSS)' : '')+
       (rotDespl ? ' · '+rotDespl : '');
-    ov.querySelector('.sim-gen-badge').textContent='simulada ('+etiquetaFuente(fuente)+')';
+    n.badge.textContent='simulada ('+etiquetaFuente(fuente)+')';
     usar.disabled=true; spin.style.display='flex';
+    // Las flechas NO se deshabilitan mientras carga (encadenar es el uso real):
+    // quien no ve el aviso se entera por aria-busy.
+    n.vista.setAttribute('aria-busy', 'true');
     spin.textContent=(fuente==='dss') ? 'descargando la placa del DSS…' : 'consultando estrellas de Gaia DR3…';
     // Al desplazar NO se borra el lienzo: deslizarSim ya movió lo pintado y el
     // aviso de carga se aparta al borde para no tapar el campo.
@@ -1323,10 +1356,12 @@
       ctx.drawImage(off, 450-D/2, 450-D/2);
       ctx.restore();
       spin.style.display='none'; usar.disabled=false;
+      n.vista.setAttribute('aria-busy', 'false');
       _simUsar=function(){ usarImagenGenerada(canvas, el, d, fuente); };
     }).catch(function(){
       if(pet!==_simPeticion) return;
       spin.style.display='flex';
+      n.vista.setAttribute('aria-busy', 'false');
       spin.textContent=(fuente==='dss')
         ? 'No se pudo cargar la placa del DSS. Prueba con las estrellas de Gaia.'
         : 'Gaia DR3 no respondió. Prueba con el DSS o inténtalo de nuevo.';

@@ -96,16 +96,34 @@ ok(/ctx\.globalCompositeOperation='copy';[\s\S]{0,120}ctx\.drawImage\(canvas, Ma
    'el lienzo se desplaza con su propio contenido (drawImage de sí mismo)');
 ok(/if\(!conservar\)\{ ctx\.fillStyle='#000'; ctx\.fillRect\(0,0,900,900\); \}/.test(JS),
    'al desplazar NO se repinta el fondo negro encima de lo deslizado');
-ok(/pintarSim\(true\);/.test(JS), 'el repintado del desplazamiento conserva la vista');
+ok(/programarSim\(true\);/.test(JS), 'el repintado del desplazamiento conserva la vista');
+ok(/ctx\.globalCompositeOperation='destination-in';[\s\S]{0,80}ctx\.arc\(450,450,D\/2,0,7\)/.test(JS),
+   'lo que se desliza es el CAMPO, no el diafragma: se recorta al círculo de diámetro D');
 ok(/spin\.classList\.toggle\('suave', !!conservar\)/.test(JS) &&
    /\.sim-gen-spin\.suave \{/.test(CSS),
    'el aviso de carga no tapa el campo mientras se desplaza');
+
+console.log('Economía de consultas y estado de carga:');
+ok(/var SIM_ANTIRREBOTE = 250;/.test(JS) &&
+   /clearTimeout\(_simPendiente\);[\s\S]{0,140}SIM_ANTIRREBOTE\)/.test(JS),
+   'clics encadenados —o una flecha mantenida, que autorepite— salen como UNA consulta');
+ok(/_simNodos\.usar\.disabled=true;[\s\S]{0,80}clearTimeout\(_simPendiente\)/.test(JS),
+   '«Usar esta imagen» se deshabilita desde el primer clic, no cuando sale la consulta');
+ok(/function cerrar\(\)\{[\s\S]{0,200}clearTimeout\(_simPendiente\)/.test(JS),
+   'cerrar el modal cancela el repintado pendiente');
+ok(/n\.vista\.setAttribute\('aria-busy', 'true'\)/.test(JS) &&
+   (JS.match(/n\.vista\.setAttribute\('aria-busy', 'false'\)/g) || []).length >= 2,
+   'aria-busy en el contenedor del lienzo, y los caminos de fallo también lo apagan');
+ok(/_simNodos=\{/.test(JS) && !/ov\.querySelector\('\.sim-gen-canvas'\), ctx=/.test(JS),
+   'los nodos del modal se cachean: la cruceta corre en cada clic (CLAUDE.md, «cachea selectores»)');
 
 console.log('Teclado sin choques:');
 ok(/ArrowUp:\[0,1\], ArrowDown:\[0,-1\], ArrowLeft:\[1,0\], ArrowRight:\[-1,0\]/.test(JS),
    'las flechas desplazan, y la izquierda va al Este como el botón');
 ok(/if\(ev\.key==='Home'\)\{ ev\.preventDefault\(\); recentrarSim\(\); return; \}/.test(JS),
    'Home recentra');
+ok(/ev\.ctrlKey \|\| ev\.metaKey \|\| ev\.altKey \|\| ev\.shiftKey\) return;/.test(JS),
+   'con modificador no se desplaza: Ctrl\/⌘\/Alt+flecha son atajos del navegador');
 ok(/ov\.querySelector\('\.sim-gen-canvas'\)\.addEventListener\('keydown', teclado\)/.test(JS) &&
    /cruceta\.addEventListener\('keydown', teclado\)/.test(JS) &&
    !/ov\.addEventListener\('keydown'/.test(JS),
@@ -119,7 +137,7 @@ ok(/canvas\.toBlob\(function\(b\)\{/.test(JS) &&
    'el desplazamiento va horneado en el píxel: no viaja como dato aparte');
 
 console.log('Despliegue (CLAUDE.md: subir el ?v= de lo que cambia):');
-['bitacora-formulario.js', 'bitacora-formulario.css', 'bitacora-gaia-render.js'].forEach(function (f) {
+['bitacora-formulario.js', 'bitacora-formulario.css'].forEach(function (f) {
   var m = HTML.match(new RegExp(f.replace(/\./g, '\\.') + '\\?v=(\\d{8})'));
   ok(!!m && m[1] >= '20260912', f + ' con ?v= al día');
 });
