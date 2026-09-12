@@ -128,8 +128,16 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   dos o no va ninguno; un parche que llega sin ellos —el del proxy, o una textura anterior
   a la republicación del banco— se rige por el marco del 6 % (`ps1Cielo`, `ps1SigmaCielo`),
   que sigue siendo la ley del régimen mixto y no una copia de aquella. Un campo vecino que
-  no valió deja su `motivo` en el sidecar (`sin-cobertura`, `otra-escala`, `celda-perdida`,
-  `descarga-fallida`) y NO publica cielo.
+  no valió deja su `motivo` en el sidecar (`sin-cobertura`, `vecina-dentro`, `otra-escala`,
+  `celda-perdida`, `descarga-fallida`) y NO publica cielo. Quién tiene cielo y quién no lo
+  decide `ps1CieloDeSidecar` y solo ella: la lee el runtime al montar el parche y el informe
+  del generador al listar, que si no acabaría listando menos de lo que la pantalla marca.
+  Su comodín `sin-medir` nombra el sidecar que trae `vecino` sin motivo y sin los dos
+  números —medio par no es una medida—: no debería existir, y por eso se nombra. Ese objeto **queda marcado**
+  (#287): `ps1LeerTextura` deja el motivo en `notas.cieloMotivo` —otra nota que
+  `notas.motivo`, que significa «no hay imagen»— y la capa lo convierte en aviso, porque
+  pintar con el marco es pintar con un cielo que nadie midió. Una textura anterior a #285,
+  sin `vecino` ninguno, no se marca: ahí no falló nada, es el régimen mixto.
 - **La ausencia es un dato:** un objeto sin textura tiene igualmente su fila en el manifiesto,
   con `modelo = "fila"` y el motivo (`sur`, `no-cabe`, `sin-cobertura`, `pisada`,
   `ausencia-excesiva`, `celda-perdida`). No estar en el manifiesto es otra cosa: el catálogo

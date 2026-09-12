@@ -308,7 +308,7 @@ Promise.resolve().then(function () {
   var bueno = fs.readFileSync(path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.png'));
   var base = JSON.parse(fs.readFileSync(
     path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.json'), 'utf8'));
-  function conSidecar(vecino) {
+  function conSidecar(vecino, notas) {
     var sc = JSON.parse(JSON.stringify(base));
     if (vecino) sc.vecino = vecino;
     var P = fresco();
@@ -322,7 +322,7 @@ Promise.resolve().then(function () {
       });
     };
     window.BITACORA_DSO_TEXTURAS = MANIFIESTO;
-    return P.ps1FuenteParche(galDe(P, 'NGC 5194')).then(function (f) {
+    return P.ps1FuenteParche(galDe(P, 'NGC 5194'), notas).then(function (f) {
       global.fetch = previo;
       return f;
     }, function (e) { global.fetch = previo; throw e; });
@@ -341,6 +341,21 @@ Promise.resolve().then(function () {
     }).then(function (f) {
       ok(f && f.cieloVecino === null && f.sigmaVecino === null,
          'y medio par tampoco: los dos números van juntos o no va ninguno');
+      /* Y el objeto QUEDA MARCADO (#287): un parche que se pinta con la ley del
+         marco no se calla, dice por qué su cielo no se pudo medir. El motivo va
+         aparte de `notas.motivo` —que significa «no hay imagen»— porque aquí la
+         imagen es buena: lo único que falta es su cielo. */
+      var n = {};
+      return conSidecar({ motivo: 'vecina-dentro', difusaDentro: 'NGC 5195' }, n)
+        .then(function (g) { return [g, n]; });
+    }).then(function (par) {
+      ok(par[0] && par[1].cieloMotivo === 'vecina-dentro',
+         'el sidecar sin cielo marca el objeto con su motivo (' + par[1].cieloMotivo + ')');
+      ok(!par[1].motivo, 'y no lo disfraza de imagen ilegible (' + (par[1].motivo || 'sin motivo') + ')');
+      var n2 = {};
+      return conSidecar({ direccion: 'N', cielo: 1, sigma: 2 }, n2).then(function () { return n2; });
+    }).then(function (n2) {
+      ok(!n2.cieloMotivo, 'con el cielo medido no marca nada (' + (n2.cieloMotivo || 'nada') + ')');
     });
 
 }).then(function () {
@@ -457,6 +472,42 @@ Promise.resolve().then(function () {
        que decir lo mismo: si la causa se perdiera, caería al comodín del proxy. */
     return capaDe(P, 'NGC 5194').then(function (r2) {
       ok(r2.aviso === r.aviso, 'el repintado conserva la causa («' + (r2.aviso || '') + '»)');
+      global.fetch = previo;
+    });
+  }, function (e) { global.fetch = previo; ok(false, 'lanzó: ' + e.message); });
+
+}).then(function () {
+  /* ── El objeto pintado con un cielo que no se pudo medir (#287) ──────────── */
+  console.log('\nUna textura buena cuyo campo vecino no valió como cielo:');
+  /* El PNG y el sidecar son los del banco; lo único que cambia es que su
+     `vecino` trae motivo y no trae cielo. El parche se pinta —la imagen está
+     bien— y el observador tiene que enterarse de que el suelo sale del marco,
+     que es lo que el ADR 0028 quitó de en medio. */
+  var P = fresco();
+  var buenoPng = fs.readFileSync(path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.png'));
+  var scSinCielo = JSON.parse(fs.readFileSync(
+    path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.json'), 'utf8'));
+  scSinCielo.vecino = { direccion: 'N', offsetArcmin: 15, motivo: 'vecina-dentro',
+                        difusaDentro: 'NGC 5195' };
+  var previo = global.fetch;
+  global.fetch = function (u) {
+    u = String(u);
+    pedidos.push(u);
+    if (/\.json$/.test(u)) return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(scSinCielo); } });
+    return Promise.resolve({
+      ok: true, status: 200,
+      arrayBuffer: function () { return Promise.resolve(buenoPng.buffer.slice(buenoPng.byteOffset, buenoPng.byteOffset + buenoPng.byteLength)); }
+    });
+  };
+  window.BITACORA_DSO_TEXTURAS = MANIFIESTO;
+  return capaDe(P, 'NGC 5194').then(function (r) {
+    ok(/cielo de esta imagen no se pudo medir/.test(r.aviso || ''),
+       'el objeto queda marcado («' + (r.aviso || '') + '»)');
+    ok(!/no se pudo leer|servici/i.test(r.aviso || ''),
+       'y no se confunde con una imagen que falta: la imagen está y se pinta');
+    // Segundo repintado, parche en caché: la causa no se pierde por el camino.
+    return capaDe(P, 'NGC 5194').then(function (r2) {
+      ok(r2.aviso === r.aviso, 'el repintado la conserva («' + (r2.aviso || '') + '»)');
       global.fetch = previo;
     });
   }, function (e) { global.fetch = previo; ok(false, 'lanzó: ' + e.message); });
