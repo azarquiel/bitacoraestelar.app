@@ -1647,8 +1647,11 @@
   function ps1CampoVecino(gal, rObjMaxAs, catalogo) {
     var d = Math.max(1.5 * gal.ladoArcmin, 2 * rObjMaxAs / 60) / 60;   // grados
     var cd = Math.cos(gal.dec * Math.PI / 180) || 1;
+    /* La AR se envuelve: un objeto cerca de 0h da un centro negativo o mayor que
+       360 que el recorte no sabe pedir. */
+    function ar(x) { return ((x % 360) + 360) % 360; }
     var cand = [[gal.ra, gal.dec + d, 'N'], [gal.ra, gal.dec - d, 'S'],
-                [gal.ra + d / cd, gal.dec, 'E'], [gal.ra - d / cd, gal.dec, 'O']];
+                [ar(gal.ra + d / cd), gal.dec, 'E'], [ar(gal.ra - d / cd), gal.dec, 'O']];
     var mejor = null;
     cand.forEach(function (c) {
       if (!(c[1] > PS1.decMin) || Math.abs(c[1]) > 89) return;

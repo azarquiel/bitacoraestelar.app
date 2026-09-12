@@ -461,6 +461,36 @@ var resSC = G.yaResuelto(tmpCP, PS1.ps1IdTextura('NGC 9999'), v0);
 ok(!!resSC && resSC.estado === 'fila', 'y con `sin-cobertura` está resuelto');
 fs.rmSync(tmpCP, { recursive: true, force: true });
 
+/* La misma puerta, del lado del campo vecino (#285): una textura buena cuyo
+   cielo se quedó sin medir por una avería de red se vuelve a pedir, porque el
+   nombre de fichero no cambia y esa es la única corrida que puede completar el
+   sidecar. Lo que el CIELO decide —sin cobertura, otra escala— no se reintenta:
+   saldría igual. */
+console.log('\nUn campo vecino caído por red tampoco cierra el objeto:');
+var tmpCV = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dso-285-'));
+var idCV = PS1.ps1IdTextura('NGC 9998');
+function textuaConVecino(motivo) {
+  fs.writeFileSync(path.join(tmpCV, idCV + '.' + v0 + '.png'), 'no es un PNG, y da igual');
+  fs.writeFileSync(path.join(tmpCV, idCV + '.' + v0 + '.json'),
+    JSON.stringify({ nombre: 'NGC 9998', version: v0, vecino: motivo ? { motivo: motivo } : { cielo: 0, sigma: 1 } }));
+  return G.yaResuelto(tmpCV, idCV, v0);
+}
+ok(!textuaConVecino('descarga-fallida'), 'con el vecino caído (`descarga-fallida`) sigue pendiente');
+ok(!textuaConVecino('celda-perdida'), 'y con una celda perdida en el vecino, también');
+ok(!!textuaConVecino('sin-cobertura'), 'pero sin cobertura de PS1 ahí fuera está resuelto: saldría igual');
+ok(!!textuaConVecino(''), 'y con su cielo medido, resuelto');
+fs.rmSync(tmpCV, { recursive: true, force: true });
+
+/* La AR se envuelve: un objeto a 0h manda su campo vecino al oeste y el centro
+   saldría negativo, que es una AR que no se puede pedir. Tres difusas de
+   mentira tapan el norte, el sur y el este para que gane el oeste. */
+function fal(nombre, ra, dec) { return [nombre, '', ra, dec, 60, 1, 0, 10, 1, 10, 0, 0, 'HII']; }
+var a0h = { nombre: 'X', ra: 0.1, dec: 0, ladoArcmin: 10 };
+var v0h = PS1.ps1CampoVecino(a0h, 60, [fal('N', 0.1, 0.25), fal('S', 0.1, -0.25), fal('E', 0.35, 0)]);
+ok(v0h.dir === 'O', 'con el norte, el sur y el este ocupados, el campo vecino se va al oeste');
+ok(v0h.ra >= 0 && v0h.ra < 360, 'y su AR sale en [0, 360) aunque el objeto esté a 0h (' +
+   v0h.ra.toFixed(3) + '°)');
+
 var png = fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.png'));
 P16.leer(png).then(function (img) {
   ok(!!img && img.ancho === sc.ancho && img.alto === sc.alto,
@@ -518,7 +548,7 @@ P16.leer(png).then(function (img) {
          es justo lo que lo hace control. */
   /* Tres comprobaciones por objeto con veredicto y una sola —la de la textura
      rechazada que no resucita— para todos, que por eso no multiplica. */
-  var MINIMO = 53 + (excesivas.length ? 1 : 0) + b.controles.length + 3 * excesivas.length;
+  var MINIMO = 59 + (excesivas.length ? 1 : 0) + b.controles.length + 3 * excesivas.length;
   console.log('');
   ok(comprobaciones >= MINIMO,
      'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ ' + MINIMO + ')');

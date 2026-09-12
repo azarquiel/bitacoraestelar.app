@@ -168,6 +168,13 @@ function celdaPerdida(p) {
   return p.celdasPedidas > 0 && p.celdasCosidas < p.celdasPedidas;
 }
 
+/* Las celdas tal cual van al sidecar. `null` es un parche servido por una caché
+   anterior a #259 —no se sabe—, que no es lo mismo que cero. */
+function celdasDe(p) {
+  return { pedidas: p.celdasPedidas === undefined ? null : p.celdasPedidas,
+           cosidas: p.celdasCosidas === undefined ? null : p.celdasCosidas };
+}
+
 function bloqueSospechoso(b) {
   return b.mayorFrac > BLOQUE_FRAC && b.rellenoCaja > BLOQUE_RELLENO;
 }
@@ -263,8 +270,17 @@ function yaResuelto(dir, id, v) {
         JSON.parse(fs.readFileSync(fila, 'utf8')).motivo !== 'celda-perdida') {
       return { dir: dirs[i], estado: 'fila' };
     }
-    if (fs.existsSync(path.join(dirs[i], id + '.' + v + '.png')) &&
-        fs.existsSync(path.join(dirs[i], id + '.' + v + '.json'))) return { dir: dirs[i], estado: 'ya' };
+    var sc = path.join(dirs[i], id + '.' + v + '.json');
+    if (fs.existsSync(path.join(dirs[i], id + '.' + v + '.png')) && fs.existsSync(sc)) {
+      /* Misma puerta que arriba, ahora del lado del CAMPO VECINO (#285): si su
+         cielo se quedó sin medir por una avería de red, la textura está bien
+         pero el sidecar está incompleto, y esa es la única corrida que lo puede
+         arreglar —el nombre de fichero no cambia—. Lo que NO se reintenta es lo
+         que el cielo decide: sin cobertura y otra escala saldrían igual. */
+      var motivo = (JSON.parse(fs.readFileSync(sc, 'utf8')).vecino || {}).motivo;
+      if (motivo === 'celda-perdida' || motivo === 'descarga-fallida') continue;
+      return { dir: dirs[i], estado: 'ya' };
+    }
   }
   return null;
 }
@@ -366,17 +382,31 @@ function auditarCampoVecino(f, gal, fits, salida) {
     PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS));
   if (!v) return Promise.resolve({ motivo: 'sin-cobertura' });
   var out = { ra: v.ra, dec: v.dec, direccion: v.dir, offsetArcmin: v.offsetArcmin,
-              ladoArcmin: v.ladoArcmin, difusaMasCercaArcmin: v.cerca };
+              ladoArcmin: v.ladoArcmin,
+              /* `null` aquí es «no hay ninguna difusa catalogada», no «no se
+                 midió»: la distancia se calcula siempre, y sale infinita solo
+                 con el catálogo vacío. */
+              difusaMasCercaArcmin: isFinite(v.cerca) ? v.cerca : null };
   return bajar(v.ra, v.dec, v.ladoArcmin, salida).then(function (q) {
     out.escalaAs = q.escalaAs;
-    out.celdas = { pedidas: q.celdasPedidas === undefined ? null : q.celdasPedidas,
-                   cosidas: q.celdasCosidas === undefined ? null : q.celdasCosidas };
+    out.celdas = celdasDe(q);
     if (celdaPerdida(q)) {
       out.motivo = 'celda-perdida';
       return out;
     }
+    /* El recorte entero sin un píxel medido es cielo que PS1 no cubre, no una
+       descarga caída: se arreglan de forma distinta y el sidecar es lo único
+       que va a leer quien lo audite. */
     var c = PS1.ps1CieloCampo(q.datos);
-    if (!c.n) { out.motivo = 'descarga-fallida'; return out; }
+    if (!c.n) { out.motivo = 'sin-cobertura'; return out; }
+    /* La σ es POR PÍXEL (ADR 0028, punto 2): si el vecino no viene al mismo
+       ″/px que el parche, su σ no es comparable y no se publica. Sin esta
+       comprobación la ley entera se cae en silencio. */
+    if (Math.abs(q.escalaAs - fits.escalaAs) > 1e-3) {
+      out.motivo = 'otra-escala';
+      out.escalaParcheAs = fits.escalaAs;
+      return out;
+    }
     out.cielo = c.cielo; out.sigma = c.sigma; out.px = c.n;
     return out;
   }).catch(function (e) {
@@ -515,8 +545,7 @@ function generar(nombre, dir) {
            un mosaico mutilado no se puede auditar sin volver a la red (#259). Un
            parche servido por una caché anterior a #259 no las trae, y `null` dice
            exactamente eso —no se sabe—, que no es lo mismo que cero. */
-        celdas: { pedidas: p.celdasPedidas === undefined ? null : p.celdasPedidas,
-                  cosidas: p.celdasCosidas === undefined ? null : p.celdasCosidas },
+        celdas: celdasDe(p),
         /* De dónde salen el cielo y la σ de verdad (ADR 0028): dirección,
            desplazamiento, ″/px y la distancia a la difusa más cercana, que es lo
            que dice si ese recorte es cielo o tiene otro objeto dentro. Sin
