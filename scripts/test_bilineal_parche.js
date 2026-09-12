@@ -65,8 +65,15 @@ function parcheNuevo(conNaN) {
     ra: 180, dec: 30, ladoArcmin: LADO_ARCMIN, ancho: AN, alto: AN,
     afin: { cx: 60, cy: 60, xe: -1, xn: 0, ye: 0, yn: 1 },
     comps: comps, pa: 25,
+    /* Halo activo a propósito, y por el único camino que hoy lo activa: la
+       MORDIDA. El interruptor maestro `haloExtrapolado` se apagó de forma
+       permanente el 2026-08-15 (59cf1a3), así que un halo montado solo con
+       `bArcmin`/`muProm` ya no enciende nada y este parche dejaba de probar la
+       rama del perfil sin que el test se enterara. `mordida` va por encima del
+       interruptor porque no es el halo voluntario: es el relleno obligatorio de
+       lo que una máscara ancha borró (ps1HaloActivo). */
     halo: { aArcmin: PS1.haloMenorMin + 1, bArcmin: PS1.haloMenorMin + 1,
-            n: 1, muProm: PS1.haloMuFijo + 1 },     // halo activo a propósito
+            n: 1, muProm: PS1.haloMuFijo + 1, mordida: true },
     peso: window.BitacoraPS1.ps1PesoImagen(datos, AN, AN, 1),
     escalaMezcla: 0.95,
     datos: datos
