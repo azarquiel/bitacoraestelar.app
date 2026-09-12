@@ -215,8 +215,8 @@ que pinta salen de `vecino.cielo` y `vecino.sigma` —medidos fuera del objeto, 
 el campo vecino (#285, #286, ADR 0028)—, y solo cuando el sidecar no los trae
 vuelve a calcularlos con `ps1Cielo`/`ps1SigmaCielo` sobre los datos
 decodificados. La ley sigue viviendo en un solo sitio (ADR 0008): las dos
-funciones del marco son el respaldo del parche sin sidecar, no una segunda copia. `fuentesConservadas` y `procedencia` se
-rellenan en las fases 3 y 4.
+funciones del marco son el respaldo del parche sin sidecar, no una segunda copia.
+`fuentesConservadas` y `procedencia` se rellenan en las fases 3 y 4.
 
 > **Enmienda (2026-09-06, al implementar T3 / #200).** Tres cosas de este boceto
 > no sobrevivieron al código, y se anotan aquí porque el boceto es anterior:
