@@ -8,6 +8,14 @@ Este ADR **decide la ley; no la implementa**. El código sigue como está hasta
 que se haga el ticket de implementación, que arrastra la recaptura de golden y
 una republicación del banco.
 
+> **Enmienda (2026-09-12, #286).** Ya está implementada, así que el párrafo de
+> arriba vale como historia y no como estado: el generador baja y audita el
+> campo vecino en #285, y el runtime usa sus dos números en vez del marco en
+> #286. Lo que falta es la republicación del banco (#288): hasta que se haga,
+> ningún sidecar publicado trae `vecino`, así que en producción sigue mandando
+> el marco —el régimen mixto que este ADR previó— y el cambio de suelo no se ve
+> todavía en pantalla.
+
 ## El problema, en una línea
 
 `ps1Cielo` y `ps1SigmaCielo` leen el marco exterior del 6 % del parche y dan por

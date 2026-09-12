@@ -121,6 +121,15 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
 - **Invariante:** lo que devuelve `ps1LeerTextura` es indistinguible en forma de lo que
   devuelve `parseFITS`. Nada aguas abajo de esa frontera —`ps1AnclarACatalogo`, la mezcla,
   `ps1PsfParche`, H2c, la máscara difusa— puede saber de dónde vino el parche.
+- **El cielo medido fuera del objeto (`vecino`)** es la única excepción a ese invariante, y
+  es un DATO, no un origen: el sidecar publica el cielo y la σ de un segundo recorte
+  apuntado fuera del objeto (#285, ADR 0028) y `ps1LeerTextura` los entrega como
+  `cieloVecino`/`sigmaVecino`, que es de donde `ps1AnclarACatalogo` saca su suelo. Van los
+  dos o no va ninguno; un parche que llega sin ellos —el del proxy, o una textura anterior
+  a la republicación del banco— se rige por el marco del 6 % (`ps1Cielo`, `ps1SigmaCielo`),
+  que sigue siendo la ley del régimen mixto y no una copia de aquella. Un campo vecino que
+  no valió deja su `motivo` en el sidecar (`sin-cobertura`, `otra-escala`, `celda-perdida`,
+  `descarga-fallida`) y NO publica cielo.
 - **La ausencia es un dato:** un objeto sin textura tiene igualmente su fila en el manifiesto,
   con `modelo = "fila"` y el motivo (`sur`, `no-cabe`, `sin-cobertura`, `pisada`,
   `ausencia-excesiva`, `celda-perdida`). No estar en el manifiesto es otra cosa: el catálogo

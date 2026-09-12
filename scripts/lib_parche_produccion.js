@@ -35,7 +35,13 @@ module.exports = function (R) {
     var comps = window.BitacoraPS1.ps1ComponentesSersic(gal);
     var datos = window.BitacoraPS1.ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
       magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
-      ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs
+      ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs,
+      /* Cielo y σ medidos fuera del objeto (#286). `F` viene de
+         lib_bajar_parche, que baja el FITS y no lee sidecar, así que hoy son
+         undefined y manda el marco —igual que el parche del proxy—. Van aquí de
+         todas formas: en cuanto un harness monte desde textura publicada, esta
+         réplica mide la misma ley que producción y no otra (ADR 0008). */
+      cielo: F.cieloVecino, sigma: F.sigmaVecino
     });
     var peso = window.BitacoraPS1.ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
     var perfil = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.afin);
