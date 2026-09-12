@@ -7,6 +7,7 @@
 node scripts/harness_suelo_cielo.js --marco     # el marco del 6 % dentro del objeto
 node scripts/harness_suelo_cielo.js --patron    # cielo lejano y campo vecino (red)
 node scripts/harness_suelo_cielo.js --escala    # el confundido de escala
+node scripts/harness_suelo_cielo.js --e3nativo  # POST HOC: E3 al paso nativo
 node scripts/harness_suelo_cielo.js --opciones  # E1-E4 contra el patrón
 node scripts/harness_suelo_cielo.js --hash      # el coste contra version()
 ```
@@ -74,4 +75,153 @@ el nombre y se sirve como inmutable, así que reescribirlo con cielo y σ nuevos
 es contenido distinto bajo un nombre declarado inmutable, justo lo que el punto 3
 del ADR 0026 no admite. Y exige una tirada del banco con red.
 
-<!-- SECCIONES 3 A 6 PENDIENTES DE LAS MEDIDAS DEL PATRÓN -->
+## 3. El patrón, y el confundido que casi lo estropea
+
+El patrón se mide en dos piezas (ADR 0027 + enmienda): el **cielo** en un anillo
+lejano de un parche grande —la mediana no depende del tamaño del píxel— y la
+**σ** en un **campo vecino** con el mismo lado y la misma resolución que el
+parche de producción, o sea al mismo ″/px.
+
+La enmienda no es cosmética. Con la σ del anillo del parche grande, la ley de
+hoy salía errando ×3,4 en IC 0059; con la σ del campo vecino, a la misma escala,
+yerra ×1,09. Lo que sobraba era el tamaño del píxel, no la ley. Las cifras del
+confundido están en el ADR 0027.
+
+| objeto | clase | cielo patrón | σ patrón (vecino) | campo vecino |
+|---|---|---|---|---|
+| IC 0059 | RfN | −3,4 | 79,0 | 9,5′ O, difusa más cerca a 27,8′ |
+| IC 0063 | HII | −6,1 | 82,6 | 7,4′ E, difusa más cerca a 26,0′ |
+| IC 0359A | RfN | +1,4 | 45,9 | 16,5′ S |
+| NGC 1788 | RfN | −1,5 | 144,7 | 2,7′ E |
+| NGC 2064 | RfN | +0,9 | 38,5 | 13,5′ S |
+| IC 0444 | RfN | −1,5 | 70,2 | 7,6′ N |
+| NGC 5457 | gal | +1,1 | 20,6 | 30,0′ O |
+| NGC 6888 | HII | −11,9 | 57,9 | 19,1′ N |
+| NGC 7293 | PN | +1,6 | 41,1 | 32,7′ N |
+| NGC 5194 | gal | +1,6 | 24,8 | 27,1′ O |
+
+El cielo lejano de NGC 6888 sale a −11,9 DN, contra los −13 DN que midió #263 con
+otro recorrido: la medida se replica.
+
+## 4. Las opciones contra el patrón
+
+`log₂(σ_opción/σ_patrón)`: 0 es clavado, ±0,32 es el listón (×1,25), ±1 es el
+doble. Y el cielo en unidades de σ_patrón.
+
+| objeto | L0 (hoy) | E2 | E3 | Δcielo L0 | Δcielo E2 |
+|---|---|---|---|---|---|
+| IC 0059 | +0,12 | −0,10 | −0,18 | −0,02 | −0,12 |
+| IC 0063 | +0,29 | +0,40 | −0,26 | +0,16 | +0,36 |
+| IC 0359A | −0,20 | −0,17 | −0,28 | +0,01 | +0,03 |
+| **NGC 1788** | **+2,46** | **+2,61** | sin σ | **+5,22** | **+3,25** |
+| NGC 2064 | +0,42 | +0,47 | +0,14 | +0,16 | +0,14 |
+| IC 0444 | −0,25 | −0,29 | −0,41 | −0,04 | −0,08 |
+| NGC 5457 | +0,60 | +0,56 | +0,61 | −0,23 | −0,09 |
+| NGC 6888 | +0,76 | −0,26 | +0,12 | +0,40 | +0,32 |
+| NGC 7293 | −0,69 | −0,62 | −0,68 | −0,05 | −0,12 |
+
+**Veredicto de los listones 1 y 2, sobre los nueve afectados:**
+
+| opción | mediana \|log₂\| (≤0,32) | máx (≤1,00) | máx \|Δcielo\|/σ (≤0,50) | |
+|---|---|---|---|---|
+| L0 (la ley de hoy) | 0,42 | 2,46 | 5,22 | **NO PASA** |
+| E2 | 0,40 | 2,61 | 3,25 | **NO PASA** |
+| E3 | 0,28 | 0,68 | 0,36 | **NO PASA** (sin σ en 1) |
+| E4 | 0,00 | 0,00 | 0,00 | PASA, pero por construcción: E4 *es* el patrón |
+
+Tres cosas que la tabla enseña y que no estaban en la hipótesis del ticket:
+
+**1. Fuera de NGC 1788, la ley de hoy no está rota: está torcida.** Con el metro
+a la escala correcta, L0 yerra ×1,09 en IC 0059, ×1,22 en IC 0063 y ×0,87 en
+IC 0359A. Los desvíos grandes son NGC 7293 (×0,62, o sea σ demasiado BAJA),
+NGC 5457 (×1,5) y NGC 6888 (×1,7). El 9,65 mag de dispersión del suelo efectivo
+que midió #263 no es, en su mayor parte, error de la σ: es que el suelo se divide
+por `escala²`, y la escala del banco va de 0,088 a 1,172 ″/px, o sea 13 veces
+—5,6 mag solo por ahí—.
+
+**2. En NGC 1788 no hay cielo dentro del parche, y eso ninguna opción interna lo
+arregla.** Su cielo de producción está en 754 DN y el de verdad en −1,5: son
+5,2 σ de pedestal. E2 —medir fuera de la escena, dentro del mismo parche— baja a
+468 DN, que sigue siendo 3,25 σ. No es que el estimador sea malo: es que ahí
+dentro no hay ni un píxel de cielo.
+
+**3. El parche de los objetos pequeños está sobremuestreado, y por eso E3 no da
+σ.** NGC 1788 se publica a 0,105″/px cuando el stack de PS1 es de 0,25″: el
+**58 % de sus píxeles vecinos son idénticos**, así que la MAD de las diferencias
+entre vecinos vale 0. Es también la razón de que agrupar no le bajara la σ en la
+prueba de escala: no hay ruido independiente que promediar, hay píxeles
+repetidos.
+
+## 5. Listones 3 y 4
+
+**Listón 3 (no regresión).** Los controles de parche holgado no se mueven con
+ninguna opción: en los cuatro, Δ del suelo efectivo ≤ 0,12 mag y Δ de apagados
+≤ 1,2 puntos, contra los márgenes de 0,20 mag y 5 puntos.
+
+| control | suelo L0 | apagados L0 | E2 | E3 |
+|---|---|---|---|---|
+| NGC 5194 | 37 DN/as² | 25,0 % | Δ0,02 mag / 0,0 pt | Δ0,01 / 0,1 |
+| NGC 3031 | 29 | 23,5 % | Δ0,12 / 1,2 | Δ0,08 / 0,9 |
+| NGC 4594 | 97 | 0,8 % | Δ0,03 / 0,0 | Δ0,03 / 0,0 |
+| NGC 4486 | 178 | 0,1 % | Δ0,02 / 0,0 | Δ0,04 / 0,0 |
+
+**Listón 4 (control negativo) estaba mal escrito, y se dice con la medida
+delante.** Pedía que la razón entre el máximo de los anillos interiores
+(0–3 `r_e`) y el exterior (3–4) se quedara en ≤ 2,0. Falla para TODAS las
+opciones… incluida la ley de hoy, que da 4,44. Un listón que suspende la ley de
+referencia no discrimina nada (ADR 0005): el culpable es el anillo 0–0,5 `r_e`,
+que en NGC 6888 contiene la estrella Wolf-Rayet central, cosa que #263 ya había
+dicho por escrito.
+
+Excluyendo ese anillo —el control negativo tal como #263 lo formuló— ninguna
+opción saca estructura donde no la hay:
+
+| opción | anillos 0,5–1 / 1–1,5 / 1,5–2 / 2–3 / 3–4 | razón interior/exterior |
+|---|---|---|
+| L0 | 13 / 12 / 18 / 13 / 10 % | 1,80 |
+| E2 | 23 / 21 / 26 / 21 / 19 % | 1,37 |
+| E3 | 19 / 18 / 23 / 18 / 15 % | 1,53 |
+| E4 | 21 / 20 / 25 / 21 / 18 % | 1,39 |
+
+El control negativo se mantiene: la Creciente sigue sin estructura con cualquiera
+de las σ. Esta corrección es post hoc y se marca como tal; lo que la justifica no
+es que convenga, sino que la versión escrita suspende a la ley que sirve de
+referencia.
+
+## 6. Veredicto
+
+**Gana E4: el cielo y la σ salen de una petición aparte, fuera del objeto, a la
+misma escala del parche.** Es la única opción que puede acertar donde el parche
+no contiene cielo, y ese es exactamente el caso que rompe el banco hoy.
+
+Las otras tres se descartan con la medida delante:
+
+- **E1 (agrandar el parche)** no llega. Cinco objetos piden más de `ladoMax` y se
+  quedan como están. Y en NGC 1788 el lado que pide la fórmula —2,6′, calculado
+  sobre el semieje de catálogo— **sigue dejando nebulosa en el marco**: el perfil
+  del parche de 12′ da 205 DN de mediana entre 72 y 108″, o sea que el objeto es
+  más grande que su fila. Agrandar con la talla del catálogo no garantiza cielo.
+- **E2 (fuera de la escena, dentro del parche)** no arregla el caso que importa:
+  3,25 σ de error en el cielo de NGC 1788, porque ahí dentro no hay cielo.
+- **E3 (σ ciega a la estructura)** no da σ en los parches sobremuestreados y, sobre
+  todo, **no produce cielo**, que es donde está el error grande.
+
+**El precio de E4, medido:** el hash de `version()` no se mueve —ninguno de sus
+parámetros entra en la semilla— pero el sidecar lleva la versión en el nombre y
+se sirve como inmutable, así que reescribirlo con cielo y σ nuevos es contenido
+distinto bajo un nombre inmutable, que el punto 3 del ADR 0026 no admite. La vía
+legal es subir `GENERADOR`, y eso republica el banco entero. **E4 cuesta lo mismo
+que E1 y, a diferencia de E1, no tiene techo.**
+
+### Lo que queda para el ticket de implementación
+
+- La σ de E4 hay que medirla **a la escala del parche de producción**: la del
+  anillo de un parche grande está en otro píxel y no vale (§3).
+- **E3 al paso nativo es un buen estimador de σ y no cuesta nada.** Agrupando
+  hasta 0,25″/px antes de mirar vecinos, sobre los nueve afectados: mediana
+  \|log₂\| 0,28 y máximo 0,68, NGC 1788 incluido (102,9 contra 144,7). Es una
+  medida **post hoc y exploratoria**, fuera del prerregistro: si se quiere usar,
+  necesita el suyo. No sustituye a E4, porque el cielo lo sigue poniendo otro.
+- El sobremuestreo de los parches pequeños (0,105″/px contra 0,25″ nativos) es un
+  hallazgo lateral con consecuencias propias: bytes de más y σ por píxel que no
+  es ruido independiente. No es de este ticket.

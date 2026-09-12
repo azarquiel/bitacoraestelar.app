@@ -11,7 +11,7 @@
    aquí no se decide ninguno y no se define ninguna ley (ADR 0008): cielo, σ,
    extensión, escena y anclaje son las funciones de `resources/js/bitacora-ps1.js`.
 
-   Cuatro modos, en el orden en que se usan:
+   Seis modos, en el orden en que se usan:
 
      --marco     la medida que falta: qué fracción del marco del 6 % cae dentro
                  de la extensión, para los objetos `imagen` del manifiesto.
@@ -19,6 +19,9 @@
      --patron    el cielo «de verdad»: un parche grande del mismo campo y la
                  mediana/MAD de un anillo lejano. TOCA LA RED (con caché en el
                  temporal). Escribe scripts/salida_suelo_patron.json.
+     --escala    el confundido que obligó a enmendar el prerregistro: la sigma
+                 del parche grande está medida sobre otro tamaño de pixel.
+     --e3nativo  POST HOC: E3 medida al paso nativo de PS1 (0,25″/px).
      --opciones  E1–E4 contra ese patrón, sobre los parches publicados, con los
                  cuatro listones del prerregistro.
      --hash      el coste: `version()` de gen_dso_texturas.js con los parámetros
@@ -27,6 +30,8 @@
    Uso:
      node scripts/harness_suelo_cielo.js --marco [--dir <ruta a dso/>]
      node scripts/harness_suelo_cielo.js --patron [--solo NGC6888]
+     node scripts/harness_suelo_cielo.js --escala
+     node scripts/harness_suelo_cielo.js --e3nativo
      node scripts/harness_suelo_cielo.js --opciones
      node scripts/harness_suelo_cielo.js --hash
 
@@ -55,6 +60,7 @@ function tiene(n) { return process.argv.indexOf(n) > 0; }
 var DIR_DSO = arg('--dir', path.join(RAIZ, 'simulador_ocular', 'dso'));
 var PUB = require('./lib_parche_publicado.js')(RAIZ, PS1, P16, [DIR_DSO]);
 var SALIDA_PATRON = path.join(__dirname, 'salida_suelo_patron.json');
+var ESCALA_NATIVA_AS = 0.25;      // ″/px del stack de PS1 (lib_bajar_parche.ESCALA_NATIVA)
 
 /* El banco del prerregistro (ADR 0027 §El patrón): los nueve que la línea base
    de #263 da con más del 40 % del área apagada, más cuatro controles de parche
@@ -411,6 +417,67 @@ function escala() {
       });
     });
   }, Promise.resolve());
+}
+
+/* ───────────────────────── --e3nativo ───────────────────────── */
+
+/* POST HOC, y fuera del prerregistro: E3 medida al paso NATIVO del stack.
+
+   E3 se quedó sin σ en NGC 1788 porque su parche se publica a 0,105″/px cuando
+   PS1 es de 0,25″: el 58 % de los píxeles vecinos son idénticos y la MAD de sus
+   diferencias vale 0. Agrupando hasta 0,25″ antes de mirar vecinos hay ruido que
+   medir otra vez. La σ se devuelve a la escala del parche multiplicando por k
+   (agrupar k×k baja el ruido como k si es independiente).
+
+   Esto NO es un veredicto: es material para el ticket de implementación, y si
+   se quiere usar como ley necesita su propio prerregistro. */
+function e3nativo() {
+  if (!fs.existsSync(SALIDA_PATRON)) {
+    console.error('falta ' + path.basename(SALIDA_PATRON) + ': pasa antes --patron');
+    process.exit(2);
+  }
+  var pat = JSON.parse(fs.readFileSync(SALIDA_PATRON, 'utf8'));
+  console.log('POST HOC (fuera del prerregistro): E3 al paso nativo de PS1 (0,25″/px)\n');
+  console.log('objeto        ″/px    vecinos iguales   k   σ E3 nativo   σ patrón   log₂');
+  var ds = [];
+  return BANCO_PATRON.reduce(function (cad, n) {
+    return cad.then(function () {
+      var p = patronUtil(pat[PUB.clave(n)]);
+      if (!p) return;
+      return PUB.fuente(PUB.fila(n)).then(function (F) {
+        if (!F) return;
+        var d = F.datos, W = F.ancho, H = F.alto, x, y, iguales = 0, tot = 0;
+        for (y = 0; y < H; y++) {
+          for (x = 1; x < W; x++) {
+            var a = d[y * W + x - 1], b = d[y * W + x];
+            if (a !== a || b !== b) continue;
+            tot++; if (a === b) iguales++;
+          }
+        }
+        var k = Math.max(1, Math.round(ESCALA_NATIVA_AS / F.escalaAs));
+        var g = agrupar(d, W, H, k), dif = [];
+        for (y = 0; y < g.alto; y++) {
+          for (x = 1; x < g.ancho; x++) {
+            var u = g.datos[y * g.ancho + x - 1], v = g.datos[y * g.ancho + x];
+            if (u !== u || v !== v) continue;
+            dif.push(Math.abs(v - u));
+          }
+        }
+        var s = 1.4826 * mediana(dif) / Math.SQRT2 * k;
+        var l = log2(s / p.sigma);
+        ds.push(Math.abs(l));
+        console.log((n + '            ').slice(0, 13) + ' ' + F.escalaAs.toFixed(3).padStart(6) +
+          ' ' + (100 * iguales / (tot || 1)).toFixed(0).padStart(14) + ' % ' +
+          String(k).padStart(3) + ' ' + s.toFixed(1).padStart(12) + ' ' +
+          p.sigma.toFixed(1).padStart(10) + ' ' + (l >= 0 ? '+' : '') + l.toFixed(2).padStart(6));
+      });
+    });
+  }, Promise.resolve()).then(function () {
+    if (!ds.length) return;
+    console.log('\nmediana |log₂| ' + mediana(ds.slice()).toFixed(2) +
+                ' · máx ' + Math.max.apply(null, ds).toFixed(2) +
+                '  (los listones del prerregistro eran 0,32 y 1,00, pero esta medida es post hoc)');
+  });
 }
 
 /* ───────────────────────── --opciones ───────────────────────── */
@@ -781,10 +848,10 @@ function hash() {
 /* ───────────────────────── despacho ───────────────────────── */
 
 var modo = tiene('--marco') ? marco : tiene('--patron') ? patron
-         : tiene('--escala') ? escala
+         : tiene('--escala') ? escala : tiene('--e3nativo') ? e3nativo
          : tiene('--opciones') ? opciones : tiene('--hash') ? hash : null;
 if (!modo) {
-  console.error('uso: node scripts/harness_suelo_cielo.js --marco | --patron | --escala | --opciones | --hash');
+  console.error('uso: node scripts/harness_suelo_cielo.js --marco | --patron | --escala | --e3nativo | --opciones | --hash');
   process.exit(2);
 }
 Promise.resolve().then(modo).catch(function (e) {
