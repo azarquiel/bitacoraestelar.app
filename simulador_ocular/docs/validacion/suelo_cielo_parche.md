@@ -25,28 +25,32 @@ que contestarla con DOS metros, porque dan números distintos y los dos importan
   si no la isofota μ25 (`ps1EscenaEnParche`). En una galaxia ese radio *es* el
   semieje de catálogo, porque `gen_galaxias.py` resuelve `r_e` para que la
   isofota de 25 caiga en D25/2.
-- **catálogo** — el tamaño que trae el catálogo. En las nebulosas es
-  `r_e / 0,30` (`RE_SOBRE_SEMIEJE`), y de ahí sale que un parche de 6·`r_e` mida
-  0,9 ejes mayores.
+- **catálogo** — el tamaño que trae el catálogo. En las clases **difusas** (HII,
+  RfN, Cl+N) es `r_e / 0,30` (`RE_SOBRE_SEMIEJE` de `gen_nebulosas.py`), y de ahí
+  sale que un parche de 6·`r_e` mida 0,9 ejes mayores. En las **compactas** (PN,
+  SNR) el generador usa 0,60 y no 0,30, así que ahí el tamaño de catálogo es el
+  borde real y los dos metros coinciden: `ps1RadioBordeAs` ya lo calcula.
 
 Con `r_e` a secas —la extensión que usa el veredicto de ausencia— el marco no
 cae dentro de nadie: el parche llega a 3,00 `r_e` y el marco empieza en 2,64.
 Por eso la contaminación no se ve mirando `r_e`, y es lo que hacía falta medir.
 
-**Resultado sobre las 68 texturas de imagen del manifiesto:** 51 tienen el marco
-contaminado en algo, y **43 pasan del 20 %** (la regla de afectado del
-prerregistro): 25 RfN, 7 PN, 5 galaxias, 5 HII y 1 SNR. En casi todas las
-nebulosas la cifra es la misma —62,6 %— porque la geometría es la misma:
-lado = 6·`r_e` = 1,8·semieje para todas.
+**Resultado sobre las 68 texturas de imagen del manifiesto:** 43 tienen el marco
+contaminado en algo, y **35 pasan del 20 %** (la regla de afectado del
+prerregistro): **25 RfN, 5 HII y 5 galaxias**. Ninguna PN y ninguna SNR: en esas
+clases el parche sí contiene al objeto, porque su `r_e` sale de 0,60·semieje y no
+de 0,30. En casi todas las difusas la cifra es la misma —62,6 %— porque la
+geometría es la misma: lado = 6·`r_e` = 1,8·semieje para todas.
 
 | objeto | clase | lado | escena″ | catálogo″ | marco en escena | marco en catálogo |
 |---|---|---|---|---|---|---|
-| NGC 7293 | PN | 20,0′ | 489,9 | 979,8 | 0,0 % | **100,0 %** |
 | NGC 3310 | gal | 1,6′ | 67,7 | 67,7 | 85,5 % | 85,5 % |
 | NGC 5457 | gal | 20,0′ | 719,9 | 719,9 | 71,3 % | 71,3 % |
 | NGC 1788 | RfN | 1,8′ | 67,4 | 60,0 | 87,2 % | 62,7 % |
 | NGC 6888 | HII | 12,7′ | 451,6 | 424,3 | 76,0 % | 62,6 % |
+| NGC 7635 | HII | 9,9′ | 187,2 | 328,6 | 0,0 % | 62,6 % |
 | NGC 5194 | gal | 18,0′ | 493,5 | 493,5 | 0,2 % | 0,2 % |
+| NGC 7293 | PN | 20,0′ | 489,9 | 489,9 | 0,0 % | 0,0 % |
 | NGC 4486 | gal | 10,6′ | 215,8 | 215,8 | 0,0 % | 0,0 % |
 
 Las cinco galaxias afectadas (NGC 3310, NGC 5457, NGC 1068, NGC 3031, NGC 253)
@@ -59,16 +63,16 @@ opción (ADR 0026), objeto a objeto, no por lectura del código:
 
 | opción | ¿mueve el hash? | qué republica |
 |---|---|---|
-| **E1** agrandar el parche | **sí, en 48 de 68** | el banco entero: nombres nuevos y descarga nueva |
+| **E1** agrandar el parche | **sí, en 41 de 68** | el banco entero: nombres nuevos y descarga nueva |
 | E2 fuera de la escena | no | nada |
 | E3 σ ciega a la estructura | no | nada |
 | E4 cielo y σ al sidecar | no | el sidecar de cada objeto, bajo el MISMO nombre |
 
 Y E1 tiene un techo propio que no se arregla pagando: para dejar el marco fuera
 del objeto hace falta un lado de `2·r_obj/0,88`, y **5 de los 68 piden más de
-`ladoMax` = 20′** (NGC 253 pide 41,4′, NGC 7293 37,1′, NGC 3031 32,6′,
-IC 2177 25,5′ y NGC 5457 27,3′). A esos E1 no les arregla el marco ni
-republicando el banco entero.
+`ladoMax` = 20′** (NGC 253 pide 41,4′, NGC 3031 32,6′, NGC 5457 27,3′ e
+IC 2177 25,5′). A esos E1 no les arregla el marco ni republicando el banco
+entero.
 
 Lo de E4 no es gratis aunque el hash no se mueva: el sidecar lleva la versión en
 el nombre y se sirve como inmutable, así que reescribirlo con cielo y σ nuevos
@@ -152,6 +156,42 @@ entre vecinos vale 0. Es también la razón de que agrupar no le bajara la σ en
 prueba de escala: no hay ruido independiente que promediar, hay píxeles
 repetidos.
 
+## 4 bis. E1 medida, no argumentada
+
+E1 no se puede juzgar sobre el parche publicado: hay que bajar el parche con el
+lado que E1 pediría y aplicarle la ley de hoy encima (`--e1`). Se juzga el
+**cielo**, que es la mitad del patrón que no depende del tamaño del píxel, y se
+acompaña de la geometría: qué fracción del marco nuevo sigue cayendo dentro del
+objeto.
+
+| objeto | lado hoy → E1 | marco dentro | cielo E1 | cielo patrón | Δ/σ_patrón | |
+|---|---|---|---|---|---|---|
+| IC 0059 | 6,4′→9,0′ | 0,0 % | −2,4 | −3,4 | +0,01 | ok |
+| IC 0063 | 4,9′→6,2′ | 0,0 % | +1,8 | −6,1 | +0,10 | ok |
+| IC 0359A | 11,0′→15,6′ | 0,0 % | +2,2 | +1,4 | +0,02 | ok |
+| **NGC 1788** | 1,8′→2,6′ | **0,0 %** | **326,3** | −1,5 | **+2,27** | **FUERA** |
+| NGC 2064 | 9,0′→12,8′ | 0,0 % | +7,2 | +0,9 | +0,16 | ok |
+| NGC 6888 | 12,7′→17,1′ | 0,0 % | −4,7 | −11,9 | +0,12 | ok |
+| NGC 5457 | 20,0′→20,0′ | 71,3 % | −3,7 | +1,1 | −0,23 | ok |
+| NGC 7293 | 20,0′→20,0′ | 0,0 % | −0,5 | +1,6 | −0,05 | ok |
+
+(IC 0444 no entra: la descarga de su parche agrandado no devolvió ninguna celda.)
+
+**E1 funciona en 7 de 8, y eso hay que decirlo**: agrandar el parche sí arregla
+el cielo donde el objeto acaba dentro del campo nuevo. Dos cosas la hunden:
+
+1. **NGC 1788, con el marco geométricamente limpio, sigue dando 326 DN de cielo
+   contra −1,5.** El marco ya no toca la extensión de catálogo —0,0 %— y aun así
+   el pedestal es de 2,27 σ. La talla del catálogo se queda corta frente a la
+   nebulosa real, así que «agrandar hasta que el marco salga del objeto» no
+   garantiza cielo: agranda hasta donde dice una fila que ya sabemos que miente
+   en esta clase (ADR 0024).
+2. **Cuatro objetos piden más de `ladoMax` y no lo pueden pedir.** NGC 5457 es el
+   caso curioso: se queda con su 71,3 % de marco dentro y aun así acierta el
+   cielo (−0,23 σ), porque a 10′ del centro lo que hay de M101 ya es más débil
+   que el ruido. O sea que el marco contaminado no siempre estropea el cielo —y
+   por eso el criterio 1 mide exposición, no daño—.
+
 ## 5. Listones 3 y 4
 
 **Listón 3 (no regresión).** Los controles de parche holgado no se mueven con
@@ -188,6 +228,22 @@ de las σ. Esta corrección es post hoc y se marca como tal; lo que la justifica
 es que convenga, sino que la versión escrita suspende a la ley que sirve de
 referencia.
 
+## 5 bis. Lo que estas medidas NO cierran
+
+- **E4 pasa los listones 1 y 2 por construcción**: la opción y el patrón son el
+  mismo número. Ninguna opción independiente los pasó. Lo que decide a favor de
+  E4 son §4 (en NGC 1788 no hay cielo dentro del parche) y §4 bis (E1 acierta en
+  7 de 8 y falla justo ahí).
+- **El listón 3 le falta a E4 en tres controles**: solo hay columna en NGC 5194
+  (Δ 0,12 mag / 0,1 pt). Los parches grandes de NGC 3031, NGC 4594 y NGC 4486 no
+  se pudieron bajar —STScI devolvió «no se pudo preguntar por las celdas»—, y E1
+  no tiene columna de no regresión en ninguno.
+- **El conjunto evaluado son los 9 del banco del ADR 0027, no los 35 afectados**.
+  Es el banco que se fijó antes de medir, pero cubre una cuarta parte.
+- **«E3 no produce σ» se contó como fallo**, y el prerregistro no decía qué hacer
+  con una opción que no devuelve valor: solo preveía «sin patrón». Sus otras tres
+  cifras (0,28 / 0,68 / 0,36) están dentro de los listones.
+
 ## 6. Veredicto
 
 **Gana E4: el cielo y la σ salen de una petición aparte, fuera del objeto, a la
@@ -196,11 +252,12 @@ no contiene cielo, y ese es exactamente el caso que rompe el banco hoy.
 
 Las otras tres se descartan con la medida delante:
 
-- **E1 (agrandar el parche)** no llega. Cinco objetos piden más de `ladoMax` y se
-  quedan como están. Y en NGC 1788 el lado que pide la fórmula —2,6′, calculado
-  sobre el semieje de catálogo— **sigue dejando nebulosa en el marco**: el perfil
-  del parche de 12′ da 205 DN de mediana entre 72 y 108″, o sea que el objeto es
-  más grande que su fila. Agrandar con la talla del catálogo no garantiza cielo.
+- **E1 (agrandar el parche)** acierta el cielo en 7 de los 8 que se pudieron
+  medir (§4 bis), así que no se descarta por inútil. Se descarta porque **falla
+  justo donde el banco se rompe** —NGC 1788, 2,27 σ de pedestal con el marco ya
+  fuera de la extensión de catálogo— y porque 4 objetos piden más de `ladoMax` y
+  no lo pueden pedir. Encima cuesta lo mismo que E4: republica el banco. Se paga
+  una republicación y queda el caso peor sin arreglar.
 - **E2 (fuera de la escena, dentro del parche)** no arregla el caso que importa:
   3,25 σ de error en el cielo de NGC 1788, porque ahí dentro no hay cielo.
 - **E3 (σ ciega a la estructura)** no da σ en los parches sobremuestreados y, sobre

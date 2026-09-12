@@ -51,6 +51,25 @@ module.exports = function (RAIZ, PS1, P16, dirs) {
     return null;
   }
 
+  /* Solo el sidecar, para lo que es geometría —lado, escala, WCS— y no necesita
+     abrir el PNG. Si el par completo está a mano se lee de ahí, para que sea el
+     MISMO fichero que se mediría; y si no, vale el sidecar suelto, porque los
+     sidecars sí entran en git y los PNG no. Así una medida de geometría cubre el
+     banco entero en un árbol recién clonado. */
+  function sidecar(nombre) {
+    var p = parche(nombre);
+    if (p) return JSON.parse(fs.readFileSync(p.json, 'utf8'));
+    var id = PS1.ps1IdTextura(nombre);
+    for (var i = 0; i < DIRS.length; i++) {
+      if (!fs.existsSync(DIRS[i])) continue;
+      var cand = fs.readdirSync(DIRS[i]).filter(function (f) {
+        return f.indexOf(id + '.') === 0 && /\.json$/.test(f) && f.indexOf('.fila.') < 0;
+      });
+      if (cand.length) return JSON.parse(fs.readFileSync(path.join(DIRS[i], cand[0]), 'utf8'));
+    }
+    return null;
+  }
+
   function fuente(f) {
     var p = parche(f[0]);
     if (!p) return Promise.resolve(null);
@@ -83,6 +102,6 @@ module.exports = function (RAIZ, PS1, P16, dirs) {
     });
   }
 
-  return { fila: fila, parche: parche, fuente: fuente, estrellas: estrellas,
+  return { fila: fila, parche: parche, sidecar: sidecar, fuente: fuente, estrellas: estrellas,
            clave: BANCO.clave, FIXTURES: FIXTURES, DIRS: DIRS };
 };

@@ -612,7 +612,54 @@
  },
  "NGC3031": {
   "nombre": "NGC 3031",
-  "motivo": "sin patrón: la descarga falló (no se pudo preguntar por las celdas)"
+  "clase": "gal",
+  "ladoPatron": 40,
+  "ladoProd": 20,
+  "escalaPatron": 2.344482499405212,
+  "rObj": 336.33,
+  "rMinAs": 1008.99,
+  "nAnillo": 220078,
+  "cielo": 1.5954118967056274,
+  "sigma": 15.419042792487144,
+  "perfil": [
+   {
+    "lim": 2,
+    "n": 5390,
+    "mediana": -1.8493443727493286,
+    "sigma": 15.315314266848564
+   },
+   {
+    "lim": 3,
+    "n": 51842,
+    "mediana": 1.2959743738174438,
+    "sigma": 15.570923340439796
+   },
+   {
+    "lim": 4,
+    "n": 147486,
+    "mediana": 1.5114400386810303,
+    "sigma": 15.557717527341842
+   },
+   {
+    "lim": 6,
+    "n": 72592,
+    "mediana": 1.7497830390930176,
+    "sigma": 15.12967343301773
+   }
+  ],
+  "rObjMax": 861.4735170746544,
+  "vecino": {
+   "ra": 147.49012280969023,
+   "dec": 69.06667,
+   "dir": "O",
+   "vecinaMasCercaArcmin": 48.76996105148196,
+   "offsetArcmin": 30,
+   "ladoArcmin": 20,
+   "escalaAs": 1.1718749999999953,
+   "n": 1048558,
+   "cielo": 1.5962412357330322,
+   "sigma": 26.14489878172874
+  }
  },
  "NGC4594": {
   "nombre": "NGC 4594",

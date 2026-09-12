@@ -11,8 +11,9 @@ una republicación del banco.
 ## El problema, en una línea
 
 `ps1Cielo` y `ps1SigmaCielo` leen el marco exterior del 6 % del parche y dan por
-supuesto que es cielo. En **43 de las 68 texturas del banco** ese marco cae
-dentro del objeto en más del 20 % de sus píxeles, así que el suelo de
+supuesto que es cielo. En **35 de las 68 texturas del banco** ese marco cae
+dentro del objeto en más del 20 % de sus píxeles —25 RfN, 5 HII y 5 galaxias;
+ninguna PN ni SNR—, así que el suelo de
 `cielo + 1,5·σ` sube con el propio objeto y lo apaga. En el caso extremo
 —NGC 1788— el parche entero es nebulosa y no queda ni un píxel de cielo dentro.
 
@@ -36,11 +37,13 @@ dentro del objeto en más del 20 % de sus píxeles, así que el suelo de
 
 ## Lo que se descarta, y con qué medida
 
-- **E1, agrandar el parche.** Tiene un techo que no se arregla pagando: 5 de los
-  68 piden un lado por encima de `ladoMax` = 20′. Y en NGC 1788 el lado que pide
-  la fórmula —calculado sobre el semieje de catálogo— sigue dejando nebulosa en
-  el marco, porque el objeto real es mayor que su fila: el perfil del parche de
-  12′ da 205 DN de mediana entre 72 y 108″.
+- **E1, agrandar el parche.** Medida bajando el parche con el lado que E1 pediría
+  y aplicándole la ley de hoy: **acierta el cielo en 7 de los 8 objetos que se
+  pudieron medir** (|Δ| ≤ 0,23 σ). No se descarta por inútil. Se descarta por
+  dos cosas: falla justo en el caso que rompe el banco —NGC 1788, 2,27 σ de
+  pedestal con el marco ya geométricamente fuera del objeto, porque la talla de
+  catálogo se queda corta frente a la nebulosa real—, y 4 de los 68 piden un lado
+  por encima de `ladoMax` = 20′. Y cuesta lo mismo que E4: republica el banco.
 - **E2, medir fuera de la escena dentro del mismo parche.** No arregla el caso
   que importa: deja el cielo de NGC 1788 a 3,25 σ del verdadero, porque ahí
   dentro no hay cielo que medir. Sobre los nueve afectados: mediana
@@ -51,6 +54,24 @@ dentro del objeto en más del 20 % de sus píxeles, así que el suelo de
   son idénticos, así que la MAD de sus diferencias vale 0.
 - **La ley de hoy (L0)** tampoco pasa: mediana 0,42, máximo 2,46 y hasta 5,22 σ
   de error en el cielo.
+
+## Lo que la medida no llegó a cerrar, y se dice
+
+- **El listón 1/2 no discrimina a favor de E4: E4 *es* el patrón.** Ninguna
+  opción independiente lo pasó. Lo que decide a favor de E4 no es ese empate
+  trivial, sino dos medidas: que en NGC 1788 no hay cielo dentro del parche
+  (§4 del informe) y que E1, que sí acierta en 7 de 8, falla justo ahí y además
+  no alcanza a 4 objetos.
+- **El listón 4 estaba mal escrito** y lo suspendía hasta la ley de referencia,
+  porque el anillo interior de NGC 6888 contiene su estrella Wolf-Rayet. La
+  versión corregida —sin ese anillo— la pasan todas las opciones, con razones de
+  1,37 a 1,80 contra la de L0, 1,80. Corrección post hoc, marcada como tal.
+- **El listón 3 se midió para E2 y E3 en los cuatro controles y para E4 solo en
+  NGC 5194** (Δ 0,12 mag / 0,1 pt): los parches grandes de NGC 3031, NGC 4594 y
+  NGC 4486 no se pudieron bajar. E1 no tiene columna de no regresión.
+- **Los listones se evaluaron sobre los 9 objetos del banco del prerregistro**,
+  no sobre los 35 que la regla de afectado señala. Es el banco fijado en el
+  ADR 0027, pero cubre una cuarta parte de los afectados.
 
 ## Lo que este ADR NO decide
 

@@ -19,6 +19,8 @@
      --patron    el cielo «de verdad»: un parche grande del mismo campo y la
                  mediana/MAD de un anillo lejano. TOCA LA RED (con caché en el
                  temporal). Escribe scripts/salida_suelo_patron.json.
+     --e1        E1 medida: se baja el parche con el lado que E1 pediría y se le
+                 aplica la ley de hoy encima. TOCA LA RED.
      --escala    el confundido que obligó a enmendar el prerregistro: la sigma
                  del parche grande está medida sobre otro tamaño de pixel.
      --e3nativo  POST HOC: E3 medida al paso nativo de PS1 (0,25″/px).
@@ -30,6 +32,7 @@
    Uso:
      node scripts/harness_suelo_cielo.js --marco [--dir <ruta a dso/>]
      node scripts/harness_suelo_cielo.js --patron [--solo NGC6888]
+     node scripts/harness_suelo_cielo.js --e1 [--solo NGC1788]
      node scripts/harness_suelo_cielo.js --escala
      node scripts/harness_suelo_cielo.js --e3nativo
      node scripts/harness_suelo_cielo.js --opciones
@@ -60,7 +63,8 @@ function tiene(n) { return process.argv.indexOf(n) > 0; }
 var DIR_DSO = arg('--dir', path.join(RAIZ, 'simulador_ocular', 'dso'));
 var PUB = require('./lib_parche_publicado.js')(RAIZ, PS1, P16, [DIR_DSO]);
 var SALIDA_PATRON = path.join(__dirname, 'salida_suelo_patron.json');
-var ESCALA_NATIVA_AS = 0.25;      // ″/px del stack de PS1 (lib_bajar_parche.ESCALA_NATIVA)
+/* ″/px del stack, leída de donde ya está escrita en vez de copiada. */
+var ESCALA_NATIVA_AS = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender).ESCALA_NATIVA;
 
 /* El banco del prerregistro (ADR 0027 §El patrón): los nueve que la línea base
    de #263 da con más del 40 % del área apagada, más cuatro controles de parche
@@ -97,12 +101,31 @@ function extensionDe(gal, afin, radioAs) {
      tiene, y si no la isofota μ25 del modelo (`ps1EscenaEnParche`). Para una
      galaxia ese radio ES el semieje de catálogo, porque `gen_galaxias.py`
      resuelve `r_e` justo para que la isofota de 25 caiga en D25/2.
-   · `catálogo` — el tamaño que trae el catálogo. Para las nebulosas es
-     `r_e / 0,30` (`RE_SOBRE_SEMIEJE` de `gen_nebulosas.py`), y NO coincide con
-     la isofota: es de ahí de donde sale que el parche de 6·r_e mida 0,9 ejes
-     mayores. Para las galaxias los dos metros son el mismo número. */
+   · `catálogo` — el tamaño que trae el catálogo. En las clases COMPACTAS (PN,
+     SNR) lo sabe producción: `ps1RadioBordeAs` es `r_e / 0,60`, y ahí los dos
+     metros coinciden. En las DIFUSAS (HII, RfN, Cl+N) es `r_e / 0,30`, y NO
+     coincide con la isofota: de ahí sale que el parche de 6·r_e mida 0,9 ejes
+     mayores. Para las galaxias los dos metros son el mismo número.
+
+   El 0,30 es la ÚNICA constante que este arnés copia de otro sitio
+   (`RE_SOBRE_SEMIEJE`, `gen_nebulosas.py:93`), y se copia porque el runtime no
+   la conoce: al catálogo llega ya aplicada. Queda declarado como contraste
+   deliberado (ADR 0008) y con un guardián: si `gen_nebulosas.py` deja de
+   escribir ese número, esto se para en vez de medir con el viejo. */
 var RE_SOBRE_SEMIEJE = 0.30;
+(function comprobarReSobreSemieje() {
+  var py = path.join(__dirname, 'gen_nebulosas.py');
+  if (!fs.existsSync(py)) return;
+  var m = /^RE_SOBRE_SEMIEJE\s*=\s*([0-9.]+)/m.exec(fs.readFileSync(py, 'utf8'));
+  if (!m || parseFloat(m[1]) !== RE_SOBRE_SEMIEJE) {
+    throw new Error('gen_nebulosas.py ya no dice RE_SOBRE_SEMIEJE = ' + RE_SOBRE_SEMIEJE +
+                    ': este arnés mide con una constante que caducó (ADR 0008)');
+  }
+})();
 function radioCatalogoAs(f, gal, rEscena) {
+  /* Compactas: el borde real de producción, que ya es `r_e / 0,60`. */
+  var rb = PS1.ps1RadioBordeAs(gal);
+  if (rb > 0) return rb;
   return (f[12] ? gal.reArcsec / RE_SOBRE_SEMIEJE : rEscena);
 }
 
@@ -121,10 +144,45 @@ function radioEscenaAs(fits, gal) {
   return mejor || radioObjetoAs(gal);
 }
 
-/* El marco del 6 %, exactamente el que recorren ps1Cielo y ps1SigmaCielo. */
+/* El marco del 6 %: el MISMO recorrido de `ps1Cielo` (bitacora-ps1.js:310) y
+   `ps1SigmaCielo` (:330), reescrito aquí a propósito. Es la excepción que el
+   ADR 0008 admite —declarada por escrito— porque el marco no es una ley que
+   este arnés use, es el OBJETO que mide: hace falta poder preguntar «¿qué
+   píxeles mira la ley?», y producción no lo expone. Si el 0,06 de allí cambia,
+   este número hay que cambiarlo a mano. */
+var GROSOR_MARCO = 0.06;
 function enMarco(x, y, ancho, alto) {
-  var grosor = Math.max(1, Math.round(Math.min(ancho, alto) * 0.06));
+  var grosor = Math.max(1, Math.round(Math.min(ancho, alto) * GROSOR_MARCO));
   return (y < grosor || y >= alto - grosor || x < grosor || x >= ancho - grosor);
+}
+/* Dónde empieza el marco, en fracción del medio lado: 1 − 2·grosor. Sale del
+   mismo número de arriba en vez de ir escrito como 0,88 por tercera vez. */
+var INICIO_MARCO = 1 - 2 * GROSOR_MARCO;
+
+/* Mediana y σ robusta. El 1,4826 es el mismo de `ps1SigmaCielo`, y aquí se
+   reescribe porque hace falta aplicarlo a listas de píxeles que producción no
+   sabe recorrer (un anillo, un campo vecino, las diferencias entre vecinos).
+   Declarado, como pide el ADR 0008: lo que NO se reimplementa es la ley que se
+   juzga —el marco— , que se llama siempre con `ps1Cielo`/`ps1SigmaCielo`. */
+/* σ a partir de la diferencia entre píxeles vecinos de la misma fila: la MAD de
+   esas diferencias, dividida por √2 porque la diferencia de dos medidas con el
+   mismo ruido tiene √2 veces su σ. Un gradiente suave no la mueve —la diferencia
+   entre vecinos es el gradiente por píxel, mucho menor que el objeto— y el ruido
+   sí. Es E3, y la usan también --e3nativo (sobre el parche agrupado) y nadie
+   más. NaN si la mediana sale 0, que es lo que pasa en un parche sobremuestreado
+   donde los vecinos son literalmente el mismo píxel repetido. */
+function sigmaVecinos(datos, ancho, alto) {
+  var dif = [], x, y;
+  for (y = 0; y < alto; y++) {
+    for (x = 1; x < ancho; x++) {
+      var a = datos[y * ancho + x - 1], b = datos[y * ancho + x];
+      if (a !== a || b !== b) continue;
+      dif.push(Math.abs(b - a));
+    }
+  }
+  if (!dif.length) return NaN;
+  var m = 1.4826 * mediana(dif) / Math.SQRT2;
+  return m > 0 ? m : NaN;
 }
 
 function mediana(v) {
@@ -149,27 +207,10 @@ function objetosPublicados() {
     .map(function (t) { return t[0]; });
 }
 
-/* El sidecar, y solo el sidecar: el marco es geometría y no hace falta abrir
-   ningún PNG. Se busca por los mismos directorios que el parche —los golden de
-   `scripts/fixtures/dso/` incluidos—, por prefijo, porque el nombre lleva la
-   versión dentro. */
-function sidecarDe(nombre) {
-  var id = PS1.ps1IdTextura(nombre);
-  for (var i = 0; i < PUB.DIRS.length; i++) {
-    var dir = PUB.DIRS[i];
-    if (!fs.existsSync(dir)) continue;
-    var cand = fs.readdirSync(dir).filter(function (f) {
-      return f.indexOf(id + '.') === 0 && /\.json$/.test(f) && f.indexOf('.fila.') < 0;
-    });
-    if (cand.length) return JSON.parse(fs.readFileSync(path.join(dir, cand[0]), 'utf8'));
-  }
-  return null;
-}
-
 function marco() {
   var filas = [];
   objetosPublicados().forEach(function (nombre) {
-    var f = PUB.fila(nombre), s = sidecarDe(nombre);
+    var f = PUB.fila(nombre), s = PUB.sidecar(nombre);
     if (!f || !s) return;
     var gal = galDe(f);
     var fits = { ancho: s.ancho, alto: s.alto, escalaAs: s.escalaAs, wcs: s.wcs || null };
@@ -192,6 +233,12 @@ function marco() {
   });
   filas.sort(function (a, b) { return b.frac - a.frac; });
 
+  if (filas.length < objetosPublicados().length) {
+    console.log('AVISO: ' + (objetosPublicados().length - filas.length) + ' de ' +
+                objetosPublicados().length + ' objetos del manifiesto no tienen parche a mano' +
+                (filas.length ? '' : ' — ¿falta --dir?'));
+    if (!filas.length) process.exit(1);
+  }
   console.log('El marco del 6 % dentro de la extensión del objeto — ' + filas.length +
               ' texturas de imagen del manifiesto (#274, criterio 1)\n');
   console.log('objeto        clase   lado′   escena″   catálogo″   el parche llega a   marco en escena   marco en catálogo');
@@ -297,7 +344,7 @@ function patronDe(nombre) {
     /* El campo vecino, a la MISMA escala que producción: de aquí sale la σ del
        patrón (la del anillo de arriba vale para el cielo, que no depende del
        tamaño del píxel, pero no para σ). */
-    var s = sidecarDe(f[0]);
+    var s = PUB.sidecar(f[0]);
     var rObjMax = rObj;
     if (s) {
       var fits = { ancho: s.ancho, alto: s.alto, escalaAs: s.escalaAs, wcs: s.wcs || null };
@@ -326,6 +373,68 @@ function patronDe(nombre) {
   }).catch(function (e) {
     return { nombre: f[0], motivo: 'sin patrón: la descarga falló (' + (e && e.message || e) + ')' };
   });
+}
+
+/* ───────────────────────── --e1 ───────────────────────── */
+
+/* E1 medida, no argumentada: se BAJA el parche con el lado que E1 pediría y se
+   le aplica la ley de hoy —el marco del 6 %, `ps1Cielo`— para ver si con ese
+   lado el marco ya es cielo.
+
+   Solo se juzga el CIELO, y a propósito: la mediana no depende del tamaño del
+   píxel (ver la enmienda del ADR 0027), mientras que la σ de un parche más
+   grande está medida sobre otro píxel y no se puede comparar con la del campo
+   vecino sin bajar un vecino más por objeto. El cielo basta para decidir E1,
+   porque el fallo que rompe el banco es un pedestal de 5,2 σ, no la σ.
+
+   Se acompaña de la geometría: qué fracción del marco del parche agrandado
+   sigue cayendo dentro del objeto. Eso no cuesta red y dice si E1 resuelve el
+   problema que dice resolver. */
+function e1() {
+  if (!fs.existsSync(SALIDA_PATRON)) {
+    console.error('falta ' + path.basename(SALIDA_PATRON) + ': pasa antes --patron');
+    process.exit(2);
+  }
+  var pat = JSON.parse(fs.readFileSync(SALIDA_PATRON, 'utf8'));
+  var solo = arg('--solo', '');
+  var lista = solo ? [solo] : AFECTADOS;
+  var bajar = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender).bajar;
+  console.log('E1 medida: el parche con el lado que E1 pediría, con la ley de hoy encima\n');
+  console.log('objeto        lado hoy → E1   marco dentro   cielo E1   cielo patrón   Δ/σ_patrón');
+  return lista.reduce(function (cad, n) {
+    return cad.then(function () {
+      var p = patronUtil(pat[PUB.clave(n)]);
+      var f = PUB.fila(n), s = PUB.sidecar(n);
+      if (!p || !f || !s) return;
+      var gal = galDe(f);
+      var fits0 = { ancho: s.ancho, alto: s.alto, escalaAs: s.escalaAs, wcs: s.wcs || null };
+      fits0.afin = PS1.ps1AfinParche(fits0, gal);
+      var rEsc = radioEscenaAs(fits0, gal);
+      var rObj = Math.max(rEsc, radioCatalogoAs(f, gal, rEsc));
+      var lado = Math.min(PS1.cfg.ladoMax, Math.max(gal.ladoArcmin, 2 * rObj / INICIO_MARCO / 60));
+      return bajar(gal.ra, gal.dec, lado, PS1.cfg.salida, PS1.cfg.banda).then(function (q) {
+        var fits = { ancho: q.ancho, alto: q.alto, escalaAs: q.escalaAs, wcs: q.wcs || null };
+        fits.afin = PS1.ps1AfinParche(fits, gal);
+        var ext = extensionDe(gal, fits.afin, rObj), dentro = 0, total = 0;
+        for (var y = 0; y < q.alto; y++) {
+          for (var x = 0; x < q.ancho; x++) {
+            if (!enMarco(x, y, q.ancho, q.alto)) continue;
+            total++;
+            if (PS1.ps1FuenteEnEscena(ext, fits.afin, x, y)) dentro++;
+          }
+        }
+        var c = PS1.ps1Cielo(q.datos, q.ancho, q.alto);
+        console.log((f[0] + '            ').slice(0, 13) + ' ' +
+          (gal.ladoArcmin.toFixed(1) + '′→' + lado.toFixed(1) + '′').padStart(13) + ' ' +
+          ((100 * dentro / (total || 1)).toFixed(1) + ' %').padStart(14) + ' ' +
+          c.toFixed(1).padStart(10) + ' ' + p.cielo.toFixed(1).padStart(14) + ' ' +
+          ((c - p.cielo) / p.sigma).toFixed(2).padStart(12) +
+          (Math.abs((c - p.cielo) / p.sigma) <= 0.5 ? '  ok' : '  FUERA'));
+      }).catch(function (e) {
+        console.log((f[0] + '            ').slice(0, 13) + ' la descarga falló: ' + (e && e.message || e));
+      });
+    });
+  }, Promise.resolve());
 }
 
 function patron() {
@@ -455,15 +564,8 @@ function e3nativo() {
           }
         }
         var k = Math.max(1, Math.round(ESCALA_NATIVA_AS / F.escalaAs));
-        var g = agrupar(d, W, H, k), dif = [];
-        for (y = 0; y < g.alto; y++) {
-          for (x = 1; x < g.ancho; x++) {
-            var u = g.datos[y * g.ancho + x - 1], v = g.datos[y * g.ancho + x];
-            if (u !== u || v !== v) continue;
-            dif.push(Math.abs(v - u));
-          }
-        }
-        var s = 1.4826 * mediana(dif) / Math.SQRT2 * k;
+        var g = agrupar(d, W, H, k);
+        var s = sigmaVecinos(g.datos, g.ancho, g.alto) * k;
         var l = log2(s / p.sigma);
         ds.push(Math.abs(l));
         console.log((n + '            ').slice(0, 13) + ' ' + F.escalaAs.toFixed(3).padStart(6) +
@@ -729,7 +831,9 @@ function informeOpciones(todos) {
     console.log('  ' + op + ': mediana |log₂| ' + med.toFixed(2) + ' (listón ≤0,32) · máx ' +
       max.toFixed(2) + ' (≤1,00) · máx |Δcielo|/σ ' + maxC.toFixed(2) + ' (≤0,50) · ' +
       (falta ? 'sin sitio en ' + falta + ' · ' : '') +
-      ((med <= 0.32 && max <= 1.0 && maxC <= 0.5 && !falta) ? 'PASA' : 'NO PASA'));
+      ((med <= 0.32 && max <= 1.0 && maxC <= 0.5 && !falta)
+        ? ('PASA' + (op === 'E4' ? ' — pero por construcción: E4 ES el patrón' : ''))
+        : 'NO PASA'));
   });
 
   /* Listón 3: no regresión en los parches holgados. */
@@ -794,7 +898,7 @@ function hash() {
   var objetos = objetosPublicados();
   var cambia = 0, medidos = 0, noCabe = 0, lineas = [];
   objetos.forEach(function (nombre) {
-    var f = PUB.fila(nombre), s = sidecarDe(nombre);
+    var f = PUB.fila(nombre), s = PUB.sidecar(nombre);
     if (!f || !s) return;
     var gal = galDe(f);
     var fits = { ancho: s.ancho, alto: s.alto, escalaAs: s.escalaAs, wcs: s.wcs || null };
@@ -809,7 +913,7 @@ function hash() {
     /* E1 con el lado que haría falta para que el marco del 6 % quede FUERA del
        objeto: el marco empieza en 0,88 del medio lado, así que
        lado ≥ 2·r_obj/0,88, y el tope `ladoMax` sigue mandando. */
-    var ladoE1 = Math.max(PS1.cfg.ladoMin, 2 * rObj / 0.88 / 60);
+    var ladoE1 = Math.max(PS1.cfg.ladoMin, 2 * rObj / INICIO_MARCO / 60);
     /* E1 solo AGRANDA: donde el parche de hoy ya deja el marco fuera, no se
        toca. Y `ladoMax` sigue mandando, así que un objeto que pida más de 20′
        se queda con el marco contaminado aunque se republique el banco. */
@@ -849,9 +953,10 @@ function hash() {
 
 var modo = tiene('--marco') ? marco : tiene('--patron') ? patron
          : tiene('--escala') ? escala : tiene('--e3nativo') ? e3nativo
+         : tiene('--e1') ? e1
          : tiene('--opciones') ? opciones : tiene('--hash') ? hash : null;
 if (!modo) {
-  console.error('uso: node scripts/harness_suelo_cielo.js --marco | --patron | --escala | --e3nativo | --opciones | --hash');
+  console.error('uso: node scripts/harness_suelo_cielo.js --marco | --patron | --e1 | --escala | --e3nativo | --opciones | --hash');
   process.exit(2);
 }
 Promise.resolve().then(modo).catch(function (e) {
