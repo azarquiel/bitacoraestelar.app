@@ -54,6 +54,18 @@ El pipeline completo del modo Canvas-2D — fondo → consulta de Gaia → velo 
 - **Test de contrato:** `scripts/test_vista_gaia.js` — entra por la interfaz (fetch de mentira, ctx falso), y debe sobrevivir a cualquier refactor interno del pipeline.
 - _Evitar_: «escena» (ocupado por la escena difusa de PS1), «pipeline del render» sin nombre.
 
+## Desplazamiento del campo
+
+**Centro del campo** es el par `ra`/`dec` que se le pasa al render, y no tiene por qué ser el del objeto: el observador encuadra un campo rico poniendo el centro a medio camino entre dos objetos, o sacando del campo la estrella que deslumbra. **Desplazamiento del campo** es lo que separa ese centro del objeto elegido, contado en **pasos** enteros.
+
+- **Un paso = 10 % del campo real DIBUJADO.** El `arcmin` que come el render, no el que pide el ocular: en la placa del DSS viene recortado a 2° y el paso tiene que valer lo que se ve. `Δ = 0,10 · arcmin / 60` grados.
+- **El paso de RA se divide por `cos(dec)`** porque el paso vale lo mismo EN CIELO en los dos ejes: los meridianos se juntan hacia el polo y sin esa división el 10 % se encogería con la declinación. El coseno es el de la declinación DE PARTIDA, así que un clic en diagonal mueve en RA lo mismo que un clic al este puro desde el mismo centro.
+- **Fuente única:** `BitacoraGaiaRender.centroDesplazado({ra, dec, arcmin, pasoX, pasoY})`. Quien llama guarda los pasos ACUMULADOS y pide el centro de una sola vez desde el original; encadenar llamadas sobre el centro ya movido haría que el encuadre dependiera del orden de los clics. Hermanos del mismo idioma: `rotuloDesplazamiento` (el rótulo «desplazado 0,3° E, 0,1° N») y `marcaBorde` (dónde quedó el objeto cuando sale del campo).
+- **Vive en los LLAMADORES, no en `vistaGaia`.** El motor de render ya recibía `ra`/`dec`: un campo desplazado es otro centro, no otro motor, y por eso no se tocan ni `vistaGaia` ni `renderPlaca` ni las dos armadoras de URL que también reciben el centro (`urlPlaca` en el render, `urlHips` dentro de `bitacora-ocular.js`). El estado de los pasos y el tope (±2 campos por eje, 20 pasos, que solo acota el número de consultas) son de `bitacora-ocular.js` y de `bitacora-formulario.js`.
+- **Orientación en pantalla: Este a la IZQUIERDA, Norte arriba** (`resources/js/bitacora-gaia-render.js:1053`, la proyección resta la RA). `pasoX` cuenta hacia RA creciente —el Este— y `pasoY` hacia el norte.
+- **Por qué los botones dicen N/S/E/O y no llevan triángulos:** «flecha arriba» tiene doble lectura (¿muevo el campo o empujo el cielo?) y además el Este a la izquierda contradice el reflejo de pantalla. «Llévame al norte» no se puede leer de dos maneras, y el observador piensa en cielo.
+- _Evitar_: «desplazamiento» a secas cuando se habla del movimiento propio de una estrella, y «paso» para el píxel (eso es la escala de placa).
+
 ## Cadena de la placa (luma → flujo)
 
 Cómo una placa fotográfica (DSS o PanSTARRS) se convierte en el **flujo de objeto por píxel** que come `pintarFot`. Es el otro motor que produce un `Fobj`, en paralelo a las capas difusas sintéticas del Canvas-2D.
