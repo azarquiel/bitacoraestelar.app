@@ -368,6 +368,89 @@ ok(sinNada.componentes === 0 && sinNada.mayorFrac === 0 && !G.bloqueSospechoso(s
 /* `celda-perdida` NO cierra el objeto: es una avería de red, no una propiedad
    del cielo, así que la corrida siguiente lo vuelve a pedir. Los demás motivos
    sí lo cierran —si no, se le volvería a pedir a STScI lo que ya se sabe. */
+/* ── El campo vecino (#285, ADR 0028) ─────────────────────────────────────
+   El cielo y la σ de un parche salen de un recorte apuntado FUERA del objeto.
+   Aquí se comprueba la geometría —dirección, desplazamiento y distancia a la
+   difusa más cercana— y la ley del cielo, las dos sin red: la geometría sale
+   del catálogo y la ley, de un campo sintético.
+
+   La σ de verdad de IC 0059 (≈79 DN) no se comprueba aquí porque exige bajar el
+   recorte; lo que se fija es lo que decide DÓNDE se baja. */
+console.log('\nEl campo vecino:');
+var catDif = PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
+var RADT = require('./lib_radio_objeto.js')(PS1);
+
+function campoVecinoDe(nombre) {
+  var f = G.filaDe(nombre);
+  var gal = PS1.ps1GalaxiasDelCampo([f], f[2], f[3], PS1.ps1LadoArcmin(f[4]))[0];
+  /* El parche, con su geometría y sin sus píxeles: el radio de escena sale del
+     modelo —la isofota μ25—, no de la imagen, así que no hace falta el PNG. */
+  var fits = { ancho: 1024, alto: 1024, escalaAs: gal.ladoArcmin * 60 / 1024, wcs: null };
+  fits.afin = PS1.ps1AfinParche(fits, gal);
+  return { gal: gal, rObj: RADT.rObjMaxAs(fits, f, gal),
+           v: PS1.ps1CampoVecino(gal, RADT.rObjMaxAs(fits, f, gal), catDif) };
+}
+
+/* IC 0059, que es el que midió #274: 9,5′ hacia el oeste con la difusa más
+   cercana a 27,8′. */
+var ic59 = campoVecinoDe('IC0059');
+ok(ic59.v.dir === 'O', 'IC 0059 manda su campo vecino al oeste (' + ic59.v.dir + ')');
+ok(Math.abs(ic59.v.offsetArcmin - 9.5) < 0.1,
+   'a 9,5′ del objeto (' + ic59.v.offsetArcmin.toFixed(2) + '′)');
+ok(Math.abs(ic59.v.cerca - 27.8) < 0.1,
+   'y con la difusa más cercana a 27,8′ (' + ic59.v.cerca.toFixed(1) + '′)');
+ok(Math.abs(ic59.v.ladoArcmin - ic59.gal.ladoArcmin) < 1e-12,
+   'con el MISMO lado que el parche de producción, que es lo que hace comparable la σ');
+
+/* El desplazamiento es `max(1,5·lado, 2·r_obj)`, y las dos ramas mandan en
+   objetos distintos: en IC 0059 el parche ya es holgado y manda el lado; en
+   NGC 253 la escena μ25 se sale del parche y manda el objeto. Si una de las dos
+   ramas desapareciera, uno de los dos campos vecinos caería sobre su objeto. */
+ok(Math.abs(ic59.v.offsetArcmin - 1.5 * ic59.gal.ladoArcmin) < 1e-9,
+   'en IC 0059 el desplazamiento lo pone el lado del parche (1,5·lado = ' +
+   (1.5 * ic59.gal.ladoArcmin).toFixed(2) + '′, 2·r_obj = ' + (2 * ic59.rObj / 60).toFixed(2) + '′)');
+var n253 = campoVecinoDe('NGC 253');
+ok(Math.abs(n253.v.offsetArcmin - 2 * n253.rObj / 60) < 1e-9 &&
+   2 * n253.rObj / 60 > 1.5 * n253.gal.ladoArcmin,
+   'y en NGC 253 lo pone el objeto, que se sale del parche (2·r_obj = ' +
+   (2 * n253.rObj / 60).toFixed(2) + '′ > 1,5·lado = ' + (1.5 * n253.gal.ladoArcmin).toFixed(2) + '′)');
+
+/* La ley del cielo del campo vecino NO es la del marco: el recorte entero es
+   cielo, así que mira todos los píxeles medidos. Campo sintético: cielo 100 con
+   un cuadrado brillante en el centro que ocupa menos de la mitad. */
+var LV = 64, campo = new Float32Array(LV * LV);
+for (var yv = 0; yv < LV; yv++) {
+  for (var xv = 0; xv < LV; xv++) {
+    var borde = (xv % 2 ? 1 : -1);                    // ±1 DN de ruido
+    campo[yv * LV + xv] = (xv > 20 && xv < 44 && yv > 20 && yv < 44) ? 900 : 100 + borde;
+  }
+}
+campo[0] = NaN;
+var cc = PS1.ps1CieloCampo(campo);
+ok(cc.n === LV * LV - 1, 'el NaN no entra en la muestra (' + cc.n + ' de ' + (LV * LV) + ')');
+ok(Math.abs(cc.cielo - 100) <= 1, 'el cielo es la mediana de TODO el campo (' + cc.cielo + ')');
+ok(Math.abs(cc.sigma - 1.4826 * 2) < 1e-3,
+   'y la σ, la MAD robusta (×1,4826) de esa misma muestra (' + cc.sigma.toFixed(4) + ')');
+/* Y no es la ley del marco, que es justo lo que decidió el ADR 0028: en un
+   campo cuyo BORDE es objeto —los 35 del banco— `ps1Cielo` devuelve el objeto y
+   `ps1CieloCampo`, el cielo. */
+var borde = new Float32Array(LV * LV);
+for (var yb = 0; yb < LV; yb++) {
+  for (var xb = 0; xb < LV; xb++) {
+    var fuera = (xb < 8 || xb >= LV - 8 || yb < 8 || yb >= LV - 8);
+    borde[yb * LV + xb] = fuera ? 900 : 100;
+  }
+}
+ok(PS1.ps1Cielo(borde, LV, LV) === 900 && PS1.ps1CieloCampo(borde).cielo === 100,
+   'con el objeto en el marco, la ley vieja devuelve el objeto (' +
+   PS1.ps1Cielo(borde, LV, LV) + ') y esta, el cielo (' + PS1.ps1CieloCampo(borde).cielo + ')');
+
+/* La puerta de la celda perdida es la MISMA para el parche y para su campo
+   vecino (ADR 0026, punto 2): un mosaico mutilado no es cielo. */
+ok(G.celdaPerdida({ celdasPedidas: 4, celdasCosidas: 3 }), 'un mosaico al que le falta una celda se detecta');
+ok(!G.celdaPerdida({ celdasPedidas: 4, celdasCosidas: 4 }), 'uno completo, no');
+ok(!G.celdaPerdida({}), 'y un parche de una caché anterior a #259 no se sabe, que no es lo mismo que faltar');
+
 console.log('\nEl veredicto de celda perdida caduca solo:');
 var tmpCP = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dso-259-'));
 G.escribirFila(tmpCP, 'NGC 9999', 'celda-perdida', 0, 0, { celdasPedidas: 4, celdasCosidas: 3 });
@@ -435,7 +518,7 @@ P16.leer(png).then(function (img) {
          es justo lo que lo hace control. */
   /* Tres comprobaciones por objeto con veredicto y una sola —la de la textura
      rechazada que no resucita— para todos, que por eso no multiplica. */
-  var MINIMO = 40 + (excesivas.length ? 1 : 0) + b.controles.length + 3 * excesivas.length;
+  var MINIMO = 53 + (excesivas.length ? 1 : 0) + b.controles.length + 3 * excesivas.length;
   console.log('');
   ok(comprobaciones >= MINIMO,
      'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ ' + MINIMO + ')');

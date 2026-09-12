@@ -16,6 +16,18 @@ ve como lo que es. El banco lo fija el ADR 0024 y lo devuelve
 | pendientes del banco | 0 |
 | **banco (ADR 0024)** | **69 + 5 controles** |
 
+## Coste de la tirada
+
+Cada objeto cuesta **2 parches**: el suyo y su campo vecino, que es de
+donde salen el cielo y la σ (ADR 0028). La caché del proxy sirve los dos igual,
+así que un objeto ya bajado no vuelve a la red.
+
+| medida | valor |
+|---|---|
+| parches por objeto | 2 |
+| objetos pendientes | 0 |
+| parches que costaría acabar | 0 |
+
 ## Volumen
 
 | medida | valor |

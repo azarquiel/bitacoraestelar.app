@@ -13,7 +13,10 @@
    Reanudable: lo que ya tiene su `<v>` en disco no se vuelve a pedir ni a
    escribir, así que una ejecución interrumpida continúa donde estaba.
 
-   El parche viene de lib_bajar_parche.js, con su caché en $PS1_HARNESS_DIR: si
+   Dos parches por objeto (#285, ADR 0028): el suyo y su CAMPO VECINO, apuntado
+   fuera del objeto, que es de donde salen el cielo y la σ que van al sidecar —el
+   marco del 6 % del parche cae dentro del objeto en la mitad del banco—. Los dos
+   vienen de lib_bajar_parche.js, con su caché en $PS1_HARNESS_DIR: si
    el objeto ya está bajado, esto no toca la red. Un objeto sin cobertura de PS1
    no se reintenta para siempre: deja su fila de manifiesto (`sin-cobertura`) y
    la siguiente ejecución lo salta. Lo mismo el que sí tiene parche pero no tiene
@@ -77,10 +80,11 @@ var REVISION = 0.2;
    brillante para el stack 3π y PS1 no tiene datos ahí; da 100 % y no se arregla
    regenerando. NGC 253, el segundo peor del banco, tiene su interior medido y
    sigue siendo `imagen`. */
-function radioObjetoAs(gal) {
-  var rb = PS1.ps1RadioBordeAs(gal);
-  return rb > 0 ? rb : gal.reArcsec;
-}
+/* Los tres radios del objeto —el suyo, el de la escena μ25 y el de catálogo—
+   viven en `lib_radio_objeto.js` desde #285: los comparte con el arnés que los
+   midió (#274), y tenerlos dos veces sería la deriva del ADR 0008. */
+var RAD = require('./lib_radio_objeto.js')(PS1);
+var radioObjetoAs = RAD.radioObjetoAs;
 
 /* La extensión, con la MISMA forma que un componente de escena: así la
    pertenencia la decide `ps1FuenteEnEscena` —la elipse de producción, con `ba` y
@@ -154,6 +158,14 @@ function bloqueDeAusencia(ausente, ancho, alto) {
   var areaCaja = caja ? (caja[2] - caja[0] + 1) * (caja[3] - caja[1] + 1) : 0;
   return { componentes: componentes, mayorPx: mayor, mayorFrac: n ? mayor / n : 0,
            rellenoCaja: areaCaja ? mayor / areaCaja : 0, caja: caja };
+}
+
+/* Al mosaico le falta una celda: lo que hay es un trozo de cielo sin medir con
+   forma de bloque. Vale para el parche del objeto (#259) y para su campo vecino
+   (#285): ninguno de los dos se publica así. `undefined` es un parche servido
+   por una caché anterior a #259 —no se sabe— y eso no es una celda perdida. */
+function celdaPerdida(p) {
+  return p.celdasPedidas > 0 && p.celdasCosidas < p.celdasPedidas;
 }
 
 function bloqueSospechoso(b) {
@@ -327,6 +339,53 @@ function escribirManifiesto(dir) {
   return m.filas;
 }
 
+/* ── El campo vecino (#285, ADR 0028) ─────────────────────────────────────
+   El cielo y la σ de un parche no salen de su marco: en 35 de las 68 texturas
+   del banco ese marco cae DENTRO del objeto y el suelo sube con el objeto
+   mismo. Salen de un segundo recorte apuntado fuera, con el mismo lado y la
+   misma resolución —σ es por píxel—, que es lo que decidió el ADR 0028.
+
+   Por eso cada objeto cuesta DOS parches, y la caché del proxy sirve los dos
+   igual (misma `bajar`, misma clave de campo). La cuenta va al informe para que
+   el coste de una tirada se vea antes de lanzarla.
+
+   Aquí no se decide ninguna ley: la geometría es `ps1CampoVecino` y el cielo,
+   `ps1CieloCampo`; los radios, `lib_radio_objeto.js`. Lo único que se decide es
+   CUÁNDO no vale: sin dirección en cobertura, con una celda del mosaico
+   perdida —misma puerta que `celda-perdida` (ADR 0026, punto 2, #259): un
+   mosaico mutilado no es cielo— o con la descarga caída. Los tres motivos van
+   al sidecar por separado porque se arreglan de forma distinta; qué hace el
+   runtime con ellos es #287.
+
+   Nunca tira: un campo vecino que falla marca el sidecar, no tumba la textura,
+   que es buena y ya está medida. */
+var PARCHES_POR_OBJETO = 2;
+
+function auditarCampoVecino(f, gal, fits, salida) {
+  var v = PS1.ps1CampoVecino(gal, RAD.rObjMaxAs(fits, f, gal),
+    PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS));
+  if (!v) return Promise.resolve({ motivo: 'sin-cobertura' });
+  var out = { ra: v.ra, dec: v.dec, direccion: v.dir, offsetArcmin: v.offsetArcmin,
+              ladoArcmin: v.ladoArcmin, difusaMasCercaArcmin: v.cerca };
+  return bajar(v.ra, v.dec, v.ladoArcmin, salida).then(function (q) {
+    out.escalaAs = q.escalaAs;
+    out.celdas = { pedidas: q.celdasPedidas === undefined ? null : q.celdasPedidas,
+                   cosidas: q.celdasCosidas === undefined ? null : q.celdasCosidas };
+    if (celdaPerdida(q)) {
+      out.motivo = 'celda-perdida';
+      return out;
+    }
+    var c = PS1.ps1CieloCampo(q.datos);
+    if (!c.n) { out.motivo = 'descarga-fallida'; return out; }
+    out.cielo = c.cielo; out.sigma = c.sigma; out.px = c.n;
+    return out;
+  }).catch(function (e) {
+    out.motivo = 'descarga-fallida';
+    out.error = (e && e.message) || String(e);
+    return out;
+  });
+}
+
 function generar(nombre, dir) {
   var f = filaDe(nombre);
   if (!f) throw new Error('no está en el catálogo difuso: ' + nombre);
@@ -361,7 +420,7 @@ function generar(nombre, dir) {
        `ausencia-excesiva`, este veredicto NO es permanente: `yaResuelto` lo
        ignora y la siguiente ejecución lo vuelve a intentar, porque la causa es
        una avería de red y no una propiedad del cielo. */
-    if (p.celdasPedidas > 0 && p.celdasCosidas < p.celdasPedidas) {
+    if (celdaPerdida(p)) {
       escribirFila(dir, gal.nombre, 'celda-perdida', gal.ra, gal.dec,
         { celdasPedidas: p.celdasPedidas, celdasCosidas: p.celdasCosidas });
       console.log(gal.nombre + ' → fila (celda-perdida): solo ' + p.celdasCosidas +
@@ -428,61 +487,81 @@ function generar(nombre, dir) {
       else errRel = Math.max(errRel, Math.abs(b / a - 1));
     }
 
-    fs.mkdirSync(dir, { recursive: true });
-    /* Si venía de un `celda-perdida` de una corrida anterior, ese veredicto ya
-       no vale: la textura está escrita y su fila sobra. */
-    fs.rmSync(path.join(dir, id + '.fila.json'), { force: true });
-    LIBPNG.escribirGris16(base + '.png', cod.u16, p.ancho, p.alto);
-    /* El peso del PNG, leído del fichero recién escrito. Va al sidecar porque el
-       PNG no entra en git y el informe tiene que poder sumar el volumen del
-       banco sin tenerlos delante (#258). No entra en el hash de versión: no
-       determina píxeles. */
-    var bytesPng = fs.statSync(base + '.png').size;
-    var sidecar = {
-      nombre: gal.nombre, version: v, generador: GENERADOR,
-      ra: gal.ra, dec: gal.dec,
-      fuente: { sondeo: SONDEO, banda: PS1.cfg.banda, descargado: new Date().toISOString().slice(0, 10) },
-      ancho: p.ancho, alto: p.alto, ladoArcmin: gal.ladoArcmin, escalaAs: p.escalaAs,
-      /* La WCS tal cual la deja parseFITS, no en tarjetas FITS: pasar de
-         CRPIX/CDELT/PC a esto es una ley, y esa ley ya vive en parseFITS
-         (ADR 0008). Así ps1LeerTextura la entrega sin tocarla. */
-      wcs: p.wcs || null,
-      codificacion: { tipo: 'asinh16', a: cod.a, uMin: cod.uMin, uMax: cod.uMax, centinela: 0 },
-      /* Cuántas celdas se pidieron y cuántas entraron en la costura: sin esto,
-         un mosaico mutilado no se puede auditar sin volver a la red (#259). Un
-         parche servido por una caché anterior a #259 no las trae, y `null` dice
-         exactamente eso —no se sabe—, que no es lo mismo que cero. */
-      celdas: { pedidas: p.celdasPedidas === undefined ? null : p.celdasPedidas,
-                cosidas: p.celdasCosidas === undefined ? null : p.celdasCosidas },
-      auditoria: {
-        cielo: cielo, sigma: sigma,
-        fracAusencia: nAus / p.datos.length,
-        fracAusenciaEscena: nEsc ? nAusEsc / nEsc : 0,
-        bloqueMayorFrac: bloque.mayorFrac, bloqueRellenoCaja: bloque.rellenoCaja,
-        bloqueComponentes: bloque.componentes,
-        bytes: bytesPng,
-        errCuantMaxSigma: errSigma, errCuantMaxRel: errRel
-      }
-      /* `fuentesConservadas` y `procedencia` los dibuja el §4.1 del objetivo,
-         pero son de las fases 3 y 4: escribirlos vacíos hoy no dice nada y el
-         hash de versión no los cubre. Nacen cuando haya algo que poner. */
-    };
-    fs.writeFileSync(base + '.json', JSON.stringify(sidecar, null, 1) + '\n');
+    /* El campo vecino ANTES de escribir: cielo y σ son parte del sidecar, y un
+       sidecar se sirve como inmutable (ADR 0026, punto 3), así que no se puede
+       completar después. */
+    return auditarCampoVecino(f, gal, fits, salida).then(function (vecino) {
+      fs.mkdirSync(dir, { recursive: true });
+      /* Si venía de un `celda-perdida` de una corrida anterior, ese veredicto ya
+         no vale: la textura está escrita y su fila sobra. */
+      fs.rmSync(path.join(dir, id + '.fila.json'), { force: true });
+      LIBPNG.escribirGris16(base + '.png', cod.u16, p.ancho, p.alto);
+      /* El peso del PNG, leído del fichero recién escrito. Va al sidecar porque el
+         PNG no entra en git y el informe tiene que poder sumar el volumen del
+         banco sin tenerlos delante (#258). No entra en el hash de versión: no
+         determina píxeles. */
+      var bytesPng = fs.statSync(base + '.png').size;
+      var sidecar = {
+        nombre: gal.nombre, version: v, generador: GENERADOR,
+        ra: gal.ra, dec: gal.dec,
+        fuente: { sondeo: SONDEO, banda: PS1.cfg.banda, descargado: new Date().toISOString().slice(0, 10) },
+        ancho: p.ancho, alto: p.alto, ladoArcmin: gal.ladoArcmin, escalaAs: p.escalaAs,
+        /* La WCS tal cual la deja parseFITS, no en tarjetas FITS: pasar de
+           CRPIX/CDELT/PC a esto es una ley, y esa ley ya vive en parseFITS
+           (ADR 0008). Así ps1LeerTextura la entrega sin tocarla. */
+        wcs: p.wcs || null,
+        codificacion: { tipo: 'asinh16', a: cod.a, uMin: cod.uMin, uMax: cod.uMax, centinela: 0 },
+        /* Cuántas celdas se pidieron y cuántas entraron en la costura: sin esto,
+           un mosaico mutilado no se puede auditar sin volver a la red (#259). Un
+           parche servido por una caché anterior a #259 no las trae, y `null` dice
+           exactamente eso —no se sabe—, que no es lo mismo que cero. */
+        celdas: { pedidas: p.celdasPedidas === undefined ? null : p.celdasPedidas,
+                  cosidas: p.celdasCosidas === undefined ? null : p.celdasCosidas },
+        /* De dónde salen el cielo y la σ de verdad (ADR 0028): dirección,
+           desplazamiento, ″/px y la distancia a la difusa más cercana, que es lo
+           que dice si ese recorte es cielo o tiene otro objeto dentro. Sin
+           `cielo`, lleva `motivo` y el objeto queda marcado. */
+        vecino: vecino,
+        auditoria: {
+          cielo: cielo, sigma: sigma,
+          fracAusencia: nAus / p.datos.length,
+          fracAusenciaEscena: nEsc ? nAusEsc / nEsc : 0,
+          bloqueMayorFrac: bloque.mayorFrac, bloqueRellenoCaja: bloque.rellenoCaja,
+          bloqueComponentes: bloque.componentes,
+          bytes: bytesPng,
+          errCuantMaxSigma: errSigma, errCuantMaxRel: errRel
+        }
+        /* `fuentesConservadas` y `procedencia` los dibuja el §4.1 del objetivo,
+           pero son de las fases 3 y 4: escribirlos vacíos hoy no dice nada y el
+           hash de versión no los cubre. Nacen cuando haya algo que poner. */
+      };
+      fs.writeFileSync(base + '.json', JSON.stringify(sidecar, null, 1) + '\n');
 
-    var kb = Math.round(bytesPng / 1024);
-    console.log(gal.nombre + ' → ' + path.basename(base) + '.png  ' +
-      p.ancho + '×' + p.alto + '  ' + p.escalaAs.toFixed(4) + '″/px  ' + kb + ' kB');
-    console.log('  cielo ' + cielo.toFixed(4) + '  σ ' + sigma.toFixed(4) +
-      '  ausencia ' + (100 * sidecar.auditoria.fracAusencia).toFixed(2) + ' %' +
-      ' (en escena ' + (100 * sidecar.auditoria.fracAusenciaEscena).toFixed(2) + ' %)');
-    console.log('  error de cuantización: ' + errSigma.toExponential(2) + ' σ cerca del cielo, ' +
-      errRel.toExponential(2) + ' relativo por encima de 5σ');
-    if (bloqueSospechoso(bloque)) {
-      console.log('  AVISO · la ausencia tiene forma de bloque: ' +
-        (100 * bloque.mayorFrac).toFixed(1) + ' % del parche en una sola componente que llena el ' +
-        (100 * bloque.rellenoCaja).toFixed(0) + ' % de su caja. Mirar antes de darla por buena (#259)');
-    }
-    return 'nuevo';
+      var kb = Math.round(bytesPng / 1024);
+      console.log(gal.nombre + ' → ' + path.basename(base) + '.png  ' +
+        p.ancho + '×' + p.alto + '  ' + p.escalaAs.toFixed(4) + '″/px  ' + kb + ' kB');
+      console.log('  cielo ' + cielo.toFixed(4) + '  σ ' + sigma.toFixed(4) +
+        '  ausencia ' + (100 * sidecar.auditoria.fracAusencia).toFixed(2) + ' %' +
+        ' (en escena ' + (100 * sidecar.auditoria.fracAusenciaEscena).toFixed(2) + ' %)');
+      console.log('  error de cuantización: ' + errSigma.toExponential(2) + ' σ cerca del cielo, ' +
+        errRel.toExponential(2) + ' relativo por encima de 5σ');
+      if (bloqueSospechoso(bloque)) {
+        console.log('  AVISO · la ausencia tiene forma de bloque: ' +
+          (100 * bloque.mayorFrac).toFixed(1) + ' % del parche en una sola componente que llena el ' +
+          (100 * bloque.rellenoCaja).toFixed(0) + ' % de su caja. Mirar antes de darla por buena (#259)');
+      }
+      if (vecino.motivo) {
+        console.log('  AVISO · sin cielo medido fuera del objeto (' + vecino.motivo +
+          '): el runtime cae a la ley del marco y el objeto queda marcado (#287)');
+      } else {
+        console.log('  campo vecino: ' + vecino.direccion + ' a ' +
+          vecino.offsetArcmin.toFixed(1) + '′, difusa más cerca a ' +
+          (vecino.difusaMasCercaArcmin === Infinity ? '∞' : vecino.difusaMasCercaArcmin.toFixed(1)) +
+          '′ · cielo ' + vecino.cielo.toFixed(4) + '  σ ' + vecino.sigma.toFixed(4) +
+          '  ' + vecino.escalaAs.toFixed(4) + '″/px');
+      }
+      return 'nuevo';
+    });
   });
 }
 
@@ -622,6 +701,18 @@ function textoInforme(dir) {
   L.push('| **banco (ADR 0024)** | **' + b.objetos.length + ' + ' + b.controles.length + ' controles** |');
   b.avisos.forEach(function (a) { L.push(''); L.push('> AVISO · ' + a); });
   L.push('');
+  L.push('## Coste de la tirada');
+  L.push('');
+  L.push('Cada objeto cuesta **' + PARCHES_POR_OBJETO + ' parches**: el suyo y su campo vecino, que es de');
+  L.push('donde salen el cielo y la σ (ADR 0028). La caché del proxy sirve los dos igual,');
+  L.push('así que un objeto ya bajado no vuelve a la red.');
+  L.push('');
+  L.push('| medida | valor |');
+  L.push('|---|---|');
+  L.push('| parches por objeto | ' + PARCHES_POR_OBJETO + ' |');
+  L.push('| objetos pendientes | ' + pendientes.length + ' |');
+  L.push('| parches que costaría acabar | ' + PARCHES_POR_OBJETO * pendientes.length + ' |');
+  L.push('');
   L.push('## Volumen');
   L.push('');
   L.push('| medida | valor |');
@@ -714,6 +805,8 @@ function escribirInforme(dir) {
 /* Requerido como módulo (scripts/test_dso_texturas.js) no genera nada: expone
    lo que se puede probar sin red ni disco. */
 module.exports = { version: version, filaDe: filaDe, motivoAusencia: motivoAusencia,
+                   auditarCampoVecino: auditarCampoVecino, celdaPerdida: celdaPerdida,
+                   PARCHES_POR_OBJETO: PARCHES_POR_OBJETO,
                    radioObjetoAs: radioObjetoAs, extensionDelObjeto: extensionDelObjeto,
                    ausenciaEnObjeto: ausenciaEnObjeto,
                    ausenciaExcesiva: ausenciaExcesiva,
@@ -745,7 +838,8 @@ function cerrar(estado) {
      pasar por mirar. */
   if (estado && estado.seco) {
     console.log('\nen seco: ' + estado.ya + ' ya está(n), ' + estado.pendientes +
-      ' pendiente(s)' + (estado.fallos.length ? ', ' + estado.fallos.length + ' fallo(s)' : '') +
+      ' pendiente(s) · ' + PARCHES_POR_OBJETO * estado.pendientes + ' parches (' +
+      PARCHES_POR_OBJETO + ' por objeto: el suyo y su campo vecino)' + (estado.fallos.length ? ', ' + estado.fallos.length + ' fallo(s)' : '') +
       '. Ni manifiesto ni informe tocados.');
     if (estado.fallos.length) { console.error('  ' + estado.fallos.join('\n  ')); process.exit(1); }
     return;

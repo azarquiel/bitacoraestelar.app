@@ -82,10 +82,12 @@ function galDe(f) {
 
 /* La extensión del OBJETO, la misma que usa el generador para el veredicto de
    ausencia: el borde real si su clase lo tiene, y si no `r_e`. */
-function radioObjetoAs(gal) {
-  var rb = PS1.ps1RadioBordeAs(gal);
-  return rb > 0 ? rb : gal.reArcsec;
-}
+/* Los radios del objeto —escena μ25 y tamaño de catálogo— salen de
+   `lib_radio_objeto.js`, que es donde viven desde #285: el generador aplica los
+   mismos y tenerlos dos veces sería la deriva que prohíbe el ADR 0008. */
+var RAD = require('./lib_radio_objeto.js')(PS1);
+var radioObjetoAs = RAD.radioObjetoAs, radioCatalogoAs = RAD.radioCatalogoAs;
+var radioEscenaAs = RAD.radioEscenaAs;
 
 function extensionDe(gal, afin, radioAs) {
   var paR = (gal.pa || 0) * Math.PI / 180;
@@ -94,55 +96,6 @@ function extensionDe(gal, afin, radioAs) {
             r25As: radioAs > 0 ? radioAs : radioObjetoAs(gal) }];
 }
 
-/* Los DOS metros con los que se juzga si el marco cae dentro del objeto, y son
-   distintos a propósito:
-
-   · `escena` — lo que producción misma protege: borde real donde la clase lo
-     tiene, y si no la isofota μ25 del modelo (`ps1EscenaEnParche`). Para una
-     galaxia ese radio ES el semieje de catálogo, porque `gen_galaxias.py`
-     resuelve `r_e` justo para que la isofota de 25 caiga en D25/2.
-   · `catálogo` — el tamaño que trae el catálogo. En las clases COMPACTAS (PN,
-     SNR) lo sabe producción: `ps1RadioBordeAs` es `r_e / 0,60`, y ahí los dos
-     metros coinciden. En las DIFUSAS (HII, RfN, Cl+N) es `r_e / 0,30`, y NO
-     coincide con la isofota: de ahí sale que el parche de 6·r_e mida 0,9 ejes
-     mayores. Para las galaxias los dos metros son el mismo número.
-
-   El 0,30 es la ÚNICA constante que este arnés copia de otro sitio
-   (`RE_SOBRE_SEMIEJE`, `gen_nebulosas.py:93`), y se copia porque el runtime no
-   la conoce: al catálogo llega ya aplicada. Queda declarado como contraste
-   deliberado (ADR 0008) y con un guardián: si `gen_nebulosas.py` deja de
-   escribir ese número, esto se para en vez de medir con el viejo. */
-var RE_SOBRE_SEMIEJE = 0.30;
-(function comprobarReSobreSemieje() {
-  var py = path.join(__dirname, 'gen_nebulosas.py');
-  if (!fs.existsSync(py)) return;
-  var m = /^RE_SOBRE_SEMIEJE\s*=\s*([0-9.]+)/m.exec(fs.readFileSync(py, 'utf8'));
-  if (!m || parseFloat(m[1]) !== RE_SOBRE_SEMIEJE) {
-    throw new Error('gen_nebulosas.py ya no dice RE_SOBRE_SEMIEJE = ' + RE_SOBRE_SEMIEJE +
-                    ': este arnés mide con una constante que caducó (ADR 0008)');
-  }
-})();
-function radioCatalogoAs(f, gal, rEscena) {
-  /* Compactas: el borde real de producción, que ya es `r_e / 0,60`. */
-  var rb = PS1.ps1RadioBordeAs(gal);
-  if (rb > 0) return rb;
-  return (f[12] ? gal.reArcsec / RE_SOBRE_SEMIEJE : rEscena);
-}
-
-/* El radio con el que la escena protege a ESTE objeto: el componente de la
-   escena centrado en él (los demás son compañeras del campo). */
-function radioEscenaAs(fits, gal) {
-  var escena = PS1.ps1EscenaEnParche(fits, gal, PS1.ps1GalaxiasDelCampo(
-    PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS),
-    gal.ra, gal.dec, gal.ladoArcmin));
-  var mejor = 0;
-  escena.forEach(function (c) {
-    if (Math.hypot(c.cx - fits.afin.cx, c.cy - fits.afin.cy) * fits.escalaAs < 5 && c.r25As > mejor) {
-      mejor = c.r25As;
-    }
-  });
-  return mejor || radioObjetoAs(gal);
-}
 
 /* El marco del 6 %: el MISMO recorrido de `ps1Cielo` (bitacora-ps1.js:310) y
    `ps1SigmaCielo` (:330), reescrito aquí a propósito. Es la excepción que el
@@ -271,34 +224,13 @@ function ladoPatron(gal) {
   return Math.min(40, Math.max(12, 4 * gal.ladoArcmin));
 }
 
-/* El CAMPO VECINO: mismo lado, misma resolución y por tanto el mismo ″/px que
-   el parche de producción, centrado lo bastante lejos del objeto para que sea
-   cielo. Es el patrón de σ (enmienda del prerregistro, 2026-09-12: la σ es por
-   píxel y el parche grande la mide sobre un píxel 2–4 veces mayor, ver --escala).
-
-   El desplazamiento va en la dirección —N, S, E u O— cuyo centro queda más lejos
-   de cualquier otra fila del catálogo difuso, y esa distancia se publica: un
-   campo vecino con una galaxia dentro no es cielo. */
+/* El CAMPO VECINO es la LEY de producción desde #285 (`ps1CampoVecino`, ADR
+   0028): el arnés la llama, no la copia (ADR 0008). Aquí solo se le pasa el
+   catálogo difuso, que es el que dice a qué distancia queda la difusa más
+   cercana. */
 function campoVecino(f, gal, rObjMax) {
-  var d = Math.max(1.5 * gal.ladoArcmin, 2 * rObjMax / 60) / 60;   // grados
-  var cd = Math.cos(gal.dec * Math.PI / 180) || 1;
-  var cand = [[gal.ra, gal.dec + d, 'N'], [gal.ra, gal.dec - d, 'S'],
-              [gal.ra + d / cd, gal.dec, 'E'], [gal.ra - d / cd, gal.dec, 'O']];
-  var catalogo = PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
-  var mejor = null;
-  cand.forEach(function (c) {
-    if (!(c[1] > PS1.cfg.decMin) || Math.abs(c[1]) > 89) return;
-    var cerca = Infinity;
-    catalogo.forEach(function (g) {
-      if (PUB.clave(g[0]) === PUB.clave(f[0])) return;    // el propio objeto no cuenta como vecina
-      var dra = ((((g[2] - c[0]) + 540) % 360) - 180) * Math.cos(c[1] * Math.PI / 180);
-      var sep = Math.hypot(dra, g[3] - c[1]) * 60;                 // ′
-      if (sep < cerca) cerca = sep;
-    });
-    if (!mejor || cerca > mejor.cerca) mejor = { ra: c[0], dec: c[1], dir: c[2], cerca: cerca };
-  });
-  if (mejor) mejor.offsetArcmin = d * 60;
-  return mejor;
+  return PS1.ps1CampoVecino(gal, rObjMax,
+    PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS));
 }
 
 function patronDe(nombre) {

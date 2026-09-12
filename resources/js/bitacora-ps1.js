@@ -1627,6 +1627,64 @@
     return out;
   }
 
+  /* El CAMPO VECINO de un objeto: dónde se mide su cielo y su σ (ADR 0028). El
+     marco del 6 % del parche no es cielo en 35 de las 68 texturas del banco
+     —cae dentro del objeto— y entonces el suelo sube con el propio objeto y lo
+     apaga.
+
+     Mismo lado y misma resolución que el parche de producción, o sea el mismo
+     ″/px: σ es POR PÍXEL, y medirla sobre un recorte mayor al mismo número de
+     píxeles la subestima por el tamaño del píxel (×3,4 en IC 0059, #274).
+
+     Desplazamiento `max(1,5·lado, 2·r_obj)`, donde `r_obj` es el mayor de la
+     escena μ25 y el tamaño de catálogo, en la dirección —N, S, E u O— cuyo
+     centro queda más lejos de cualquier OTRA fila del catálogo difuso. Esa
+     distancia se devuelve y se publica: un campo vecino con otra difusa dentro
+     no es cielo, y quien lo audita tiene que poder verlo sin volver a medir.
+
+     Geometría y nada más: no baja nada ni decide si el campo vale. Devuelve
+     null si ninguna de las cuatro direcciones cae en cobertura. */
+  function ps1CampoVecino(gal, rObjMaxAs, catalogo) {
+    var d = Math.max(1.5 * gal.ladoArcmin, 2 * rObjMaxAs / 60) / 60;   // grados
+    var cd = Math.cos(gal.dec * Math.PI / 180) || 1;
+    var cand = [[gal.ra, gal.dec + d, 'N'], [gal.ra, gal.dec - d, 'S'],
+                [gal.ra + d / cd, gal.dec, 'E'], [gal.ra - d / cd, gal.dec, 'O']];
+    var mejor = null;
+    cand.forEach(function (c) {
+      if (!(c[1] > PS1.decMin) || Math.abs(c[1]) > 89) return;
+      var cerca = Infinity;
+      (catalogo || []).forEach(function (g) {
+        if (ps1NombreFila(g) === gal.nombre) return;      // el propio objeto no es vecina
+        var dra = ((((g[2] - c[0]) + 540) % 360) - 180) * Math.cos(c[1] * Math.PI / 180);
+        var sep = Math.hypot(dra, g[3] - c[1]) * 60;                   // ′
+        if (sep < cerca) cerca = sep;
+      });
+      if (!mejor || cerca > mejor.cerca) {
+        mejor = { ra: c[0], dec: c[1], dir: c[2], cerca: cerca };
+      }
+    });
+    if (mejor) {
+      mejor.offsetArcmin = d * 60;
+      mejor.ladoArcmin = gal.ladoArcmin;
+    }
+    return mejor;
+  }
+
+  /* Cielo y σ de un campo que ES cielo: mediana y MAD·1,4826 de TODOS sus
+     píxeles medidos, no del marco. La ley del marco (`ps1Cielo`) supone que el
+     centro es objeto; aquí el recorte entero está apuntado fuera de él, así que
+     recortarse al borde tiraría el 88 % de la muestra sin ganar nada. */
+  function ps1CieloCampo(datos) {
+    var m = [], i;
+    for (i = 0; i < datos.length; i++) { if (datos[i] === datos[i]) m.push(datos[i]); }
+    if (!m.length) return { cielo: 0, sigma: 0, n: 0 };
+    m.sort(function (a, b) { return a - b; });
+    var cielo = m[m.length >> 1], d = [];
+    for (i = 0; i < m.length; i++) d.push(Math.abs(m[i] - cielo));
+    d.sort(function (a, b) { return a - b; });
+    return { cielo: cielo, sigma: 1.4826 * d[d.length >> 1], n: m.length };
+  }
+
   /* ── Origen del parche (efectos) ─────────────────────────────────────────────
      Dos orígenes posibles y un solo resultado: el objeto que devuelve parseFITS.
      El de casa es la TEXTURA (dso/), un dato del proyecto generado offline por
@@ -2300,6 +2358,8 @@
     ps1RadioBordeAs: ps1RadioBordeAs,
     ps1ThetaIntDeGal: ps1ThetaIntDeGal,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
+    ps1CampoVecino: ps1CampoVecino,
+    ps1CieloCampo: ps1CieloCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
     ps1EscenaEnParche: ps1EscenaEnParche,
     ps1FuenteEnEscena: ps1FuenteEnEscena,
