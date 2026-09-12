@@ -176,6 +176,13 @@
   display:grid;grid-template-columns:repeat(3, 44px);grid-template-rows:repeat(3, 44px);
   gap:8px;margin-top:12px;
 }
+/* Nace oculta (#281) y se saca con el control de encuadre: display:grid gana a
+   [hidden] por sí solo, así que hay que decirlo. Lo mismo el rótulo, que es
+   block. */
+#mw-obs-form .cruceta[hidden], #mw-obs-form .desplazamiento[hidden] {display:none;}
+/* Campo desplazado con la cruceta cerrada: el control se queda encendido, que
+   cerrarla no significa haber recentrado. */
+#mw-obs-form .accion-vista.activo {border-color:var(--ambar);color:var(--ambar);}
 #mw-obs-form .cruceta .paso {
   display:inline-flex;align-items:center;justify-content:center;padding:0;
   border:1px solid var(--linea);border-radius:8px;background:transparent;
