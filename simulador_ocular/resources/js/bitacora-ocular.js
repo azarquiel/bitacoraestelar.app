@@ -908,20 +908,26 @@
       }
 
       /* Marca de borde (#269): mientras el objeto se vea no hay nada que pintar;
-         cuando el desplazamiento lo saca del campo, una punta en el borde apunta
-         hacia él y dice a cuánto quedó del centro. Va al 40 % del lado (el 80 %
-         del radio), que deja sitio al rótulo sin que el círculo lo recorte. */
+         cuando el desplazamiento lo saca del campo, una punta apunta hacia él y
+         dice a cuánto quedó del centro. Se pone tan al borde como quepa entera:
+         el círculo recorta (overflow:hidden) y encoge con el campo aparente del
+         ocular, así que un radio fijo se comería el número justo con los
+         oculares de campo estrecho. El texto va en el aria-label y no en un
+         title: la marca es pointer-events:none, así que ese title no se ve. */
       function pintarMarcaFuera(arcmin) {
         if (!elMarca) return;
         var m = BitacoraGaiaRender.marcaBorde({ pasoX: pasoX, pasoY: pasoY, arcmin: arcmin });
         elMarca.hidden = !m;
         if (!m) return;
-        var rad = m.angulo * Math.PI / 180;
-        elMarca.style.left = (50 + 40 * Math.cos(rad)).toFixed(1) + '%';
-        elMarca.style.top  = (50 + 40 * Math.sin(rad)).toFixed(1) + '%';
-        elMarcaPunta.style.transform = 'rotate(' + m.angulo.toFixed(1) + 'deg)';
         elMarcaSep.textContent = m.texto;
-        elMarca.title = 'El objeto quedó fuera del campo, a ' + m.texto + ' del centro';
+        elMarcaPunta.style.transform = 'rotate(' + m.angulo.toFixed(1) + 'deg)';
+        elMarca.setAttribute('aria-label', 'El objeto quedó fuera del campo, a ' + m.texto + ' del centro');
+        var rad = m.angulo * Math.PI / 180;
+        var r = BitacoraGaiaRender.radioMarca({
+          ancho: elMarca.offsetWidth, alto: elMarca.offsetHeight, circulo: elVista.clientWidth
+        });
+        elMarca.style.left = (50 + r * Math.cos(rad)).toFixed(1) + '%';
+        elMarca.style.top  = (50 + r * Math.sin(rad)).toFixed(1) + '%';
       }
 
       /* Desliza lo YA pintado el 10 % del lado por paso, para que el campo no

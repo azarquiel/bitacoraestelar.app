@@ -34,6 +34,7 @@
  *       El centro movido pasos del 10 % del campo; el paso de RA lleva /cos(dec).
  *   BitacoraGaiaRender.rotuloDesplazamiento({ pasoX, pasoY, arcmin }) → 'desplazado 0,3° E, 0,1° N'
  *   BitacoraGaiaRender.marcaBorde({ pasoX, pasoY, arcmin }) → null | { angulo, grados, texto }
+ *   BitacoraGaiaRender.radioMarca({ ancho, alto, circulo, caja }) → % del lado donde cabe la marca
  *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
  *   BitacoraGaiaRender.precalentar(opts) → void   (la consulta de render(), disparada antes)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
@@ -1288,6 +1289,23 @@
       texto: Math.round(grados * 60) < 60 ? Math.round(grados * 60) + '\u2032'
                                           : grados.toFixed(1).replace('.', ',') + '\u00b0'
     };
+  }
+
+  /* A qué distancia del centro va la marca, en % del lado de la CAJA que la
+     contiene (el % que se le pone a left/top). Tan cerca del borde del círculo
+     como quepa ENTERA: el círculo recorta lo que se salga y encoge con el campo
+     aparente del ocular, así que un radio fijo se comería el número justo con
+     los oculares estrechos. Se mide por la diagonal porque en las diagonales lo
+     primero que toca el borde es la esquina de la marca.
+
+     `circulo` es el lado del campo dibujado y `caja` el del elemento sobre el
+     que se posiciona; en el simulador son el mismo (el círculo ES la vista), y
+     en el modal del registro el círculo es solo una parte del lienzo. */
+  function radioMarca(o) {
+    var caja = o.caja || o.circulo;
+    if (!(caja > 0)) return 0;
+    var media = Math.sqrt(o.ancho * o.ancho + o.alto * o.alto) / 2 + 4;   // +4: sin pegarse al filo
+    return Math.max(0, 50 * (o.circulo / caja) - 100 * media / caja);
   }
 
   function acotarPlaca(arcmin) {
@@ -2817,6 +2835,7 @@
     urlPlaca: urlPlaca,
     centroDesplazado: centroDesplazado,
     marcaBorde: marcaBorde,
+    radioMarca: radioMarca,
     rotuloDesplazamiento: rotuloDesplazamiento,
     cargarPlaca: cargarPlaca,
     renderPlaca: renderPlaca,

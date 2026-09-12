@@ -1157,7 +1157,8 @@
           // Marca de borde (#269): cuando el desplazamiento saca el objeto del
           // campo, una punta apunta hacia él y dice a cuánto quedó del centro.
           // Es DOM, no píxel: lo que se sube sigue siendo solo el cielo.
-          '<div class="sim-gen-marca" hidden><span class="punta" aria-hidden="true">&#10148;</span>'+
+          '<div class="sim-gen-marca" role="img" aria-label="" hidden>'+
+          '<span class="punta" aria-hidden="true">&#10148;</span>'+
           '<span class="sep"></span></div></div>'+
         // Cruceta N/S/E/O, la misma del simulador: la imagen que se sube es el
         // campo que se vio, y ese campo casi nunca tiene el objeto en el centro.
@@ -1338,20 +1339,25 @@
 
   /* Marca de borde (#269): mientras el objeto se vea no hay nada que pintar.
      El círculo no llena el lienzo —su diámetro es D dentro de los 900 px—, así
-     que el radio en el que va la marca se cuenta contra D, no contra la vista:
-     con un ocular de campo estrecho, si no, la marca se iría fuera del campo. */
+     que el ayudante recibe las dos medidas: el campo dibujado y la caja sobre
+     la que se posiciona. El texto va en el aria-label y no en un title: la
+     marca es pointer-events:none y ese title no llegaría a verse. */
   function pintarMarcaSim(arcmin, D){
     var n=_simNodos;
     if(!n || !n.marca) return;
     var m=BitacoraGaiaRender.marcaBorde({ pasoX:_simPasoX, pasoY:_simPasoY, arcmin:arcmin });
     n.marca.hidden=!m;
     if(!m) return;
-    var rad=m.angulo*Math.PI/180, radio=40*(D/900);   // 80 % del radio del círculo
+    n.marcaSep.textContent=m.texto;
+    n.marcaPunta.style.transform='rotate('+m.angulo.toFixed(1)+'deg)';
+    n.marca.setAttribute('aria-label', 'El objeto quedó fuera del campo, a '+m.texto+' del centro');
+    var caja=n.vista.clientWidth;
+    var radio=BitacoraGaiaRender.radioMarca({
+      ancho:n.marca.offsetWidth, alto:n.marca.offsetHeight, circulo:caja*(D/900), caja:caja
+    });
+    var rad=m.angulo*Math.PI/180;
     n.marca.style.left=(50+radio*Math.cos(rad)).toFixed(1)+'%';
     n.marca.style.top =(50+radio*Math.sin(rad)).toFixed(1)+'%';
-    n.marcaPunta.style.transform='rotate('+m.angulo.toFixed(1)+'deg)';
-    n.marcaSep.textContent=m.texto;
-    n.marca.title='El objeto quedó fuera del campo, a '+m.texto+' del centro';
   }
 
   // Pinta (o repinta) la vista con la fuente elegida en el modal. La imagen que

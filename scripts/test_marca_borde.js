@@ -68,7 +68,21 @@ ok(R.marcaBorde({ pasoX: 6, pasoY: 0, arcmin: 99.6 }).texto === '1,0°',
    'y 0,996° se redondean a 1,0°, no a los 60′ que nadie escribe');
 casi(marca(20, 20, 60).grados, Math.hypot(2, 2), 1e-12, 'la separación es la distancia, no la suma de ejes');
 
-console.log('5) La marca en el simulador:');
+console.log('5) Dónde cabe la marca (`radioMarca`):');
+// Círculo de 400 px y una marca de 60x22: la diagonal media son 32, +4 de aire.
+var r = R.radioMarca({ ancho: 60, alto: 22, circulo: 400 });
+casi(r, 50 - 100 * (Math.sqrt(60 * 60 + 22 * 22) / 2 + 4) / 400, 1e-12,
+     'va tan al borde como quepa entera, medida por la diagonal');
+ok(r * 4 + Math.sqrt(60 * 60 + 22 * 22) / 2 <= 200, 'y la esquina no se sale del círculo');
+ok(R.radioMarca({ ancho: 60, alto: 22, circulo: 60 }) === 0,
+   'en un círculo más pequeño que la marca se queda en el centro, no en negativo');
+ok(R.radioMarca({ ancho: 60, alto: 22, circulo: 0 }) === 0, 'sin círculo no hay radio');
+// El modal posiciona sobre el lienzo entero, con el campo dibujado dentro.
+casi(R.radioMarca({ ancho: 60, alto: 22, circulo: 200, caja: 400 }),
+     25 - 100 * (Math.sqrt(60 * 60 + 22 * 22) / 2 + 4) / 400, 1e-12,
+     'con caja mayor que el círculo, el % se cuenta contra la caja');
+
+console.log('6) La marca en el simulador:');
 ok(/id="sim-marca"/.test(HTML_SIM), 'el simulador tiene su nodo de marca');
 ok(/id="sim-marca"[^>]*\shidden/.test(HTML_SIM), 'y nace oculta: sin desplazamiento nada cambia (CA 4)');
 ok(/<div class="vista" id="sim-vista">[\s\S]*?id="sim-marca"[\s\S]*?<\/div>\s*<\/div>/.test(HTML_SIM),
@@ -81,7 +95,7 @@ ok(/#mw-obs-form \.marca-fuera\[hidden\][^{]*\{display:none;\}/.test(CSS_SIM),
 ok(/#mw-obs-form \.marca-fuera \{[^}]*pointer-events:none/.test(CSS_SIM),
    'no se come los clics del lienzo');
 
-console.log('6) La misma marca en el modal del registro:');
+console.log('7) La misma marca en el modal del registro:');
 ok(/class="sim-gen-marca"/.test(JS_REG), 'el modal tiene su nodo de marca');
 ok(/sim-gen-vista[\s\S]{0,400}sim-gen-marca/.test(JS_REG), 'dentro de la vista, no fuera');
 ok(/function pintarInfoSim[\s\S]{0,1500}pintarMarcaSim\(/.test(JS_REG) &&
@@ -90,19 +104,27 @@ ok(/function pintarInfoSim[\s\S]{0,1500}pintarMarcaSim\(/.test(JS_REG) &&
 ok(/\.sim-gen-marca \{[^}]*position:absolute/.test(CSS_REG), 'posicionada sobre la vista');
 ok(/\.sim-gen-marca\[hidden\][^{]*\{display:none;\}/.test(CSS_REG), 'y oculta mientras el objeto se vea');
 
-console.log('7) La marca no se sube con la imagen:');
+console.log('8) La marca no se sube con la imagen:');
 var usar = JS_REG.slice(JS_REG.indexOf('function usarImagenGenerada'), JS_REG.indexOf('// ── Una fila de imagen'));
 ok(!/marca/i.test(usar), 'la marca es DOM, no píxel: lo que se sube es el cielo, no el indicador');
 
-console.log('8) Contraste y forma (CA 3: no se apoya solo en el color):');
+console.log('9) Contraste y forma (CA 3: no se apoya solo en el color):');
 ok(/#mw-obs-form \.marca-fuera \{[^}]*color:var\(--ambar/.test(CSS_SIM) &&
    /#mw-obs-form \.marca-fuera \{[^}]*background:rgba\(0,0,0/.test(CSS_SIM),
    'ámbar sobre negro, el color del ojo adaptado, con fondo propio para el contraste');
 ok(/class="punta"/.test(HTML_SIM) && /class="sep"/.test(HTML_SIM),
    'lleva forma (la punta que apunta) Y texto (la separación)');
 ok(/punta[\s\S]{0,200}aria-hidden="true"/.test(HTML_SIM), 'la punta es decorativa para quien escucha');
+ok(/id="sim-marca"[^>]*role="img"[^>]*aria-label=/.test(HTML_SIM) &&
+   /class="sim-gen-marca" role="img" aria-label=/.test(JS_REG),
+   'y la marca entera se anuncia con su frase: un div a secas no la diría');
+ok(/setAttribute\('aria-label', 'El objeto quedó fuera del campo/.test(JS_SIM) &&
+   /setAttribute\('aria-label', 'El objeto quedó fuera del campo/.test(JS_REG),
+   'la frase se actualiza con la separación');
+ok(!/marca\.title\s*=/.test(JS_SIM) && !/marca\.title=/.test(JS_REG),
+   'nada de title: con pointer-events:none no hay quien lo vea');
 
-console.log('9) Despliegue (CLAUDE.md: subir el ?v= de lo que cambia):');
+console.log('10) Despliegue (CLAUDE.md: subir el ?v= de lo que cambia):');
 var HTML_REG = fs.readFileSync(path.join(RAIZ, 'registro/registrar-observacion-wordpress.html'), 'utf8');
 [[HTML_SIM, 'bitacora-ocular.js'], [HTML_SIM, 'bitacora-ocular.css'], [HTML_SIM, 'bitacora-gaia-render.js'],
  [HTML_REG, 'bitacora-formulario.js'], [HTML_REG, 'bitacora-formulario.css'], [HTML_REG, 'bitacora-gaia-render.js']
