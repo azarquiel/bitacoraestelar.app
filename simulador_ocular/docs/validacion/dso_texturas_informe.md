@@ -71,6 +71,8 @@ del marco —lo único que queda— y el runtime las marca (#287, ADR 0028). Los
 motivos: `sin-cobertura` (PS1 no llega ahí fuera), `vecina-dentro` (otra difusa
 catalogada cae en el campo), `otra-escala` (su ″/px no es el del parche, así que
 su σ no es comparable) y `descarga-fallida` o `celda-perdida`, que se reintentan
-solos en la corrida siguiente.
+solos en la corrida siguiente. `sin-medir` es el comodín de un sidecar que trae
+`vecino` sin motivo y sin los dos números: no debería salir nunca, y si sale es
+que el generador escribió medio par.
 
 Ninguna.

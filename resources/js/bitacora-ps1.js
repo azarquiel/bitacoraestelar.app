@@ -179,9 +179,11 @@
   /* Lado del parche en minutos de arco. `r_e` viene en segundos (columna 4 del
      catálogo). El tope de 20′ lo tocan 200 de las 1295 filas: en esas, parte de la
      luz del catálogo cae fuera del parche y la corrige ps1FraccionLuz. */
+  function ps1LadoSinRecorte(reArcsec) {
+    return PS1.ladoFactor * (reArcsec > 0 ? reArcsec : 0) / 60;
+  }
   function ps1LadoArcmin(reArcsec) {
-    var lado = PS1.ladoFactor * (reArcsec > 0 ? reArcsec : 0) / 60;
-    return Math.max(PS1.ladoMin, Math.min(PS1.ladoMax, lado));
+    return Math.max(PS1.ladoMin, Math.min(PS1.ladoMax, ps1LadoSinRecorte(reArcsec)));
   }
 
   /* URL del parche en el proxy. El parche NO depende del ocular ni del aumento
@@ -1563,8 +1565,7 @@
        Velo (SNR, 6·r_e de 22′ a 330′) llegan igual de recortados. Solo las
        planetarias caben por construcción (su mayor 6·r_e es 11,6′). */
     var clase = g[12] || '';
-    if (clase && clase !== 'PN' &&
-        PS1.ladoFactor * g[4] / 60 > PS1.ladoMax) return false;
+    if (clase && clase !== 'PN' && ps1LadoSinRecorte(g[4]) > PS1.ladoMax) return false;
     var lado = ps1LadoArcmin(g[4]);
     return ps1FraccionLuz(g[8], (lado * 60 / 2) / (g[4] > 0 ? g[4] : 1e9)) >= PS1.fracMin;
   }
@@ -1657,10 +1658,17 @@
      Esa distancia es de CENTRO a centro, así que por sí sola no dice si la
      difusa cae dentro: una grande a 12′ mete su disco en un campo de 10′ de
      lado y una pequeña a la misma distancia no lo toca. El veredicto va aparte,
-     en `dentro` —el nombre de la difusa que se mete, o null—, y se decide con
+     en `difusaDentro` —el nombre de la que se mete, o null— y se decide con
      el tamaño de catálogo: entra si su radio supuesto (medio lado de SU parche,
      sin recortar por ladoMin/ladoMax: aquí el recorte no se pide) alcanza el
-     borde del campo. Qué motivo le pone el sidecar es del generador (#287).
+     borde del campo. El campo es un CUADRADO, así que la comparación es por
+     ejes y no radial: una difusa que entra por una esquina está a ×√2 del
+     centro y una prueba radial la dejaría pasar. Qué motivo le pone el sidecar
+     es del generador (#287).
+
+     Lo que este veredicto NO hace es cambiar de dirección: la elige el ADR 0028
+     por distancia de centros, y puede ganar una con difusa dentro habiendo otra
+     limpia. Preferir la limpia sería otra ley y pide su propio ADR.
 
      Geometría y nada más: no baja nada ni decide si el campo vale. Devuelve
      null si ninguna de las cuatro direcciones cae en cobertura. */
@@ -1675,19 +1683,23 @@
     var mejor = null;
     cand.forEach(function (c) {
       if (!(c[1] > PS1.decMin) || Math.abs(c[1]) > 89) return;
-      var cerca = Infinity, dentro = null, margen = Infinity;
+      var cerca = Infinity, difusaDentro = null, margen = Infinity;
       (catalogo || []).forEach(function (g) {
         if (ps1NombreFila(g) === gal.nombre) return;      // el propio objeto no es vecina
         var dra = ((((g[2] - c[0]) + 540) % 360) - 180) * Math.cos(c[1] * Math.PI / 180);
-        var sep = Math.hypot(dra, g[3] - c[1]) * 60;                   // ′
+        var ddec = g[3] - c[1];
+        var sep = Math.hypot(dra, ddec) * 60;                          // ′
         if (sep < cerca) cerca = sep;
-        var rg = PS1.ladoFactor * (g[4] > 0 ? g[4] : 0) / 120;         // ′, radio supuesto
-        // La que MÁS se mete, no la última del catálogo: el nombre se publica.
-        if (sep - rg < margen) { margen = sep - rg; dentro = ps1NombreFila(g); }
+        var rg = ps1LadoSinRecorte(g[4]) / 2;                          // ′, radio supuesto
+        /* Distancia al centro POR EJES (la mayor de las dos), que es la que
+           compara contra el medio lado del cuadrado. La que MÁS se mete, no la
+           última del catálogo: su nombre se publica. */
+        var caja = Math.max(Math.abs(dra), Math.abs(ddec)) * 60 - rg;
+        if (caja < margen) { margen = caja; difusaDentro = ps1NombreFila(g); }
       });
       if (!mejor || cerca > mejor.cerca) {
         mejor = { ra: c[0], dec: c[1], dir: c[2], cerca: cerca,
-                  dentro: margen < gal.ladoArcmin / 2 ? dentro : null };
+                  difusaDentro: margen < gal.ladoArcmin / 2 ? difusaDentro : null };
       }
     });
     if (mejor) {
@@ -1695,6 +1707,27 @@
       mejor.ladoArcmin = gal.ladoArcmin;
     }
     return mejor;
+  }
+
+  /* Qué cielo publica un sidecar, en UN solo sitio: lo leen el runtime al montar
+     el parche y el informe del generador al listar los objetos que se pintan sin
+     él, y si cada uno tuviera su versión acabarían discrepando —el informe
+     listando menos de lo que la pantalla marca (ADR 0008)—.
+
+     Tres respuestas, no dos: `null` es el sidecar anterior a #285, que no trae
+     `vecino` ninguno y no falló nada —régimen mixto del ADR 0028—; con `motivo`,
+     el campo vecino que no valió; y sin motivo, el par medido. `sin-medir` es el
+     comodín del sidecar que trae `vecino` sin motivo y sin par completo: no
+     debería existir, y por eso se nombra en vez de colarse como cielo bueno.
+
+     Los dos números van juntos o no va ninguno: medio par no es una medida. */
+  function ps1CieloDeSidecar(sc) {
+    var vec = sc && sc.vecino;
+    if (!vec) return null;
+    if (typeof vec.cielo === 'number' && isFinite(vec.cielo) && vec.sigma > 0) {
+      return { cielo: vec.cielo, sigma: vec.sigma, motivo: '' };
+    }
+    return { cielo: null, sigma: null, motivo: vec.motivo || 'sin-medir' };
   }
 
   /* Cielo y σ de un campo que ES cielo: mediana y MAD·1,4826 de TODOS sus
@@ -1814,15 +1847,14 @@
            `vecino` ninguno— NO se marca: ahí nadie midió ni falló nada, es el
            régimen mixto que el ADR 0028 previó, y marcarlas sería marcar todo
            lo publicado hasta la republicación del banco (#288). */
-        var vec = sc.vecino || {};
-        var hayCielo = typeof vec.cielo === 'number' && isFinite(vec.cielo) && vec.sigma > 0;
-        if (!hayCielo && sc.vecino) notas.cieloMotivo = vec.motivo || 'sin-medir';
+        var vec = ps1CieloDeSidecar(sc);
+        if (vec && vec.motivo) notas.cieloMotivo = vec.motivo;
         return {
           ancho: img.ancho, alto: img.alto,
           datos: png.decodificar(img.u16, cod),
           escalaAs: sc.escalaAs, wcs: sc.wcs || null,
-          cieloVecino: hayCielo ? vec.cielo : null,
-          sigmaVecino: hayCielo ? vec.sigma : null,
+          cieloVecino: vec ? vec.cielo : null,
+          sigmaVecino: vec ? vec.sigma : null,
           // parseFITS lo lee de ZPT_0000 y no lo usa nadie: el nivel absoluto lo
           // pone el catálogo (ps1AnclarACatalogo). Mismo valor que allí sin la
           // tarjeta, para que la forma del objeto sea la misma.
@@ -2380,6 +2412,7 @@
   window.BitacoraPS1 = {
     cfg: PS1,
     ps1LadoArcmin: ps1LadoArcmin,
+    ps1LadoSinRecorte: ps1LadoSinRecorte,
     ps1UrlParche: ps1UrlParche,
     ps1IdTextura: ps1IdTextura,
     ps1FilaTextura: ps1FilaTextura,
@@ -2422,6 +2455,7 @@
     ps1ThetaIntDeGal: ps1ThetaIntDeGal,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
     ps1CampoVecino: ps1CampoVecino,
+    ps1CieloDeSidecar: ps1CieloDeSidecar,
     ps1CieloCampo: ps1CieloCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
     ps1EscenaEnParche: ps1EscenaEnParche,

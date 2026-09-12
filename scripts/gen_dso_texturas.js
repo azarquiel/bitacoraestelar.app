@@ -372,7 +372,9 @@ function escribirManifiesto(dir) {
    (ADR 0026, punto 2, #259): un mosaico mutilado no es cielo— o con la descarga
    caída. Los motivos van al sidecar por separado porque se arreglan de forma
    distinta: sin cobertura no tiene arreglo, una vecina dentro lo tendría con
-   otra geometría y una descarga caída se reintenta sola.
+   otra geometría y una descarga caída se reintenta sola. Qué cuenta como cielo
+   publicado lo dice `ps1CieloDeSidecar`, que es la misma ley que lee el runtime:
+   el informe no puede listar menos objetos de los que la pantalla marca.
 
    `vecina-dentro` se decide ANTES de pedir nada: la geometría ya sabe que ese
    campo no es cielo, así que bajarlo sería gastar una petición en un recorte
@@ -392,9 +394,9 @@ function auditarCampoVecino(f, gal, fits, salida) {
                  midió»: la distancia se calcula siempre, y sale infinita solo
                  con el catálogo vacío. */
               difusaMasCercaArcmin: isFinite(v.cerca) ? v.cerca : null };
-  if (v.dentro) {
+  if (v.difusaDentro) {
     out.motivo = 'vecina-dentro';
-    out.difusaDentro = v.dentro;
+    out.difusaDentro = v.difusaDentro;
     return Promise.resolve(out);
   }
   return bajar(v.ra, v.dec, v.ladoArcmin, salida).then(function (q) {
@@ -826,8 +828,10 @@ function textoInforme(dir) {
      escrito, así que un sidecar anterior a #285 —sin `vecino`— no aparece:
      ninguno de los publicados lo trae hasta que se republique el banco (#288),
      y esa es justo la línea que esta tabla tiene que hacer visible. */
-  var sinCielo = imagenes.filter(function (s) { return s.vecino && s.vecino.motivo; })
-    .sort(function (a, c) { return a.vecino.motivo < c.vecino.motivo ? -1 : 1; });
+  var sinCielo = imagenes.map(function (s) {
+    var v = PS1.ps1CieloDeSidecar(s);
+    return (v && v.motivo) ? { nombre: s.nombre, motivo: v.motivo, vecino: s.vecino } : null;
+  }).filter(Boolean).sort(function (a, c) { return a.motivo < c.motivo ? -1 : 1; });
   L.push('');
   L.push('## Texturas sin cielo medido');
   L.push('');
@@ -836,7 +840,9 @@ function textoInforme(dir) {
   L.push('motivos: `sin-cobertura` (PS1 no llega ahí fuera), `vecina-dentro` (otra difusa');
   L.push('catalogada cae en el campo), `otra-escala` (su ″/px no es el del parche, así que');
   L.push('su σ no es comparable) y `descarga-fallida` o `celda-perdida`, que se reintentan');
-  L.push('solos en la corrida siguiente.');
+  L.push('solos en la corrida siguiente. `sin-medir` es el comodín de un sidecar que trae');
+  L.push('`vecino` sin motivo y sin los dos números: no debería salir nunca, y si sale es');
+  L.push('que el generador escribió medio par.');
   L.push('');
   if (!sinCielo.length) L.push('Ninguna.');
   else {
@@ -844,7 +850,7 @@ function textoInforme(dir) {
     L.push('|---|---|---|---|');
     sinCielo.forEach(function (s) {
       var v = s.vecino;
-      L.push('| ' + s.nombre + ' | `' + v.motivo + '` | ' + (v.direccion || '—') + ' | ' +
+      L.push('| ' + s.nombre + ' | `' + s.motivo + '` | ' + (v.direccion || '—') + ' | ' +
              (v.difusaDentro ? v.difusaDentro + ' (dentro)'
                : (v.difusaMasCercaArcmin != null ? v.difusaMasCercaArcmin.toFixed(1) + '′' : '—')) + ' |');
     });

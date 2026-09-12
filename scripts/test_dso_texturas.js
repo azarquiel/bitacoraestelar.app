@@ -329,12 +329,21 @@ fs.writeFileSync(path.join(tmpSC, PS1.ps1IdTextura('NGC 9997') + '.' + v0 + '.js
   JSON.stringify({ nombre: 'NGC 9997', modelo: 'imagen', version: v0, ancho: 8, alto: 8,
                    ra: 0, dec: 0, escalaAs: 1, auditoria: { bytes: 64 },
                    vecino: { direccion: 'N', motivo: 'vecina-dentro', difusaDentro: 'NGC 9996' } }));
+/* El informe y la pantalla miran la MISMA ley (`ps1CieloDeSidecar`): un sidecar
+   con `vecino` a medias —sin motivo y sin los dos números— sale marcado en
+   pantalla, así que tiene que salir también en la lista, con el comodín. */
+fs.writeFileSync(path.join(tmpSC, PS1.ps1IdTextura('NGC 9995') + '.' + v0 + '.json'),
+  JSON.stringify({ nombre: 'NGC 9995', modelo: 'imagen', version: v0, ancho: 8, alto: 8,
+                   ra: 1, dec: 0, escalaAs: 1, auditoria: { bytes: 64 },
+                   vecino: { direccion: 'S', cielo: 3 } }));
 var infSC = G.textoInforme(tmpSC);
-fs.rmSync(tmpSC, { recursive: true, force: true });
+ok(infSC.sinCielo.indexOf('NGC 9995') >= 0 && /NGC 9995 \| `sin-medir`/.test(infSC.texto),
+   'un sidecar con medio par sale con el comodín (' + infSC.sinCielo.join(', ') + ')');
 ok(infSC.sinCielo.indexOf('NGC 9997') >= 0,
    'una textura con el campo vecino inservible sale en la lista (' + infSC.sinCielo.join(', ') + ')');
 ok(/NGC 9997 \| `vecina-dentro` \| N \| NGC 9996 \(dentro\)/.test(infSC.texto),
    'con su motivo, su dirección y la difusa que se metió dentro');
+fs.rmSync(tmpSC, { recursive: true, force: true });
 
 console.log('\nLos bits publicados son los que dice el sidecar:');
 var sc = JSON.parse(fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.json'), 'utf8'));
@@ -524,25 +533,44 @@ ok(v0h.ra >= 0 && v0h.ra < 360, 'y su AR sale en [0, 360) aunque el objeto esté
    centro del campo; al sur, al este y al oeste, tres pequeñas a 5′. Gana el
    norte porque su difusa está MÁS LEJOS en distancia de centros, que es la ley
    del ADR 0028, y aun así su disco cae dentro. */
-function difusaRe(nombre, ra, dec, ladoArcmin) {
-  // `re` tal que ps1LadoArcmin(re) = ladoArcmin: el lado es ladoFactor·re.
-  return [nombre, '', ra, dec, ladoArcmin * 60 / PS1.cfg.ladoFactor, 1, 0, 10, 1, 10, 0, 0, 'HII'];
+function difusaRe(nombre, ra, dec, reArcsec) {
+  return [nombre, '', ra, dec, reArcsec, 1, 0, 10, 1, 10, 0, 0, 'HII'];
 }
+/* El radio supuesto de una difusa es medio lado de SU parche, y ese lado lo da
+   la ley de producción: no se invierte a mano aquí (ADR 0008). Con estas dos
+   `re` sale una difusa de 20′ de lado —10′ de radio— y tres de 1′. */
+var RE_GRANDE = 200, RE_CHICA = 10;
+ok(Math.abs(PS1.ps1LadoSinRecorte(RE_GRANDE) - 20) < 1e-9 &&
+   Math.abs(PS1.ps1LadoSinRecorte(RE_CHICA) - 1) < 1e-9,
+   'las dos difusas de mentira miden lo que dice el montaje (' +
+   PS1.ps1LadoSinRecorte(RE_GRANDE).toFixed(1) + '′ y ' +
+   PS1.ps1LadoSinRecorte(RE_CHICA).toFixed(1) + '′)');
 var centro = { nombre: 'X', ra: 10, dec: 0, ladoArcmin: 10 };
-var dentroCat = [difusaRe('grande', 10, 0.25 + 12 / 60, 20),
-                 difusaRe('sur', 10, -0.25 + 5 / 60, 1),
-                 difusaRe('este', 10 + 0.25 - 5 / 60, 0, 1),
-                 difusaRe('oeste', 10 - 0.25 + 5 / 60, 0, 1)];
+var dentroCat = [difusaRe('grande', 10, 0.25 + 12 / 60, RE_GRANDE),
+                 difusaRe('sur', 10, -0.25 + 5 / 60, RE_CHICA),
+                 difusaRe('este', 10 + 0.25 - 5 / 60, 0, RE_CHICA),
+                 difusaRe('oeste', 10 - 0.25 + 5 / 60, 0, RE_CHICA)];
 var vDentro = PS1.ps1CampoVecino(centro, 60, dentroCat);
 ok(vDentro.dir === 'N' && Math.abs(vDentro.cerca - 12) < 0.1,
    'gana la dirección cuya difusa está más lejos en distancia de centros (' +
    vDentro.dir + ', ' + vDentro.cerca.toFixed(1) + '′)');
-ok(vDentro.dentro === 'grande',
-   'y aun así el campo NO es cielo: la difusa de 20′ cae dentro (' + vDentro.dentro + ')');
-var vFuera = PS1.ps1CampoVecino(centro, 60, [difusaRe('lejos', 10, 0.25 + 12 / 60, 1)]);
-ok(vFuera.dentro === null,
-   'una difusa pequeña a esa misma distancia no toca el campo (' + vFuera.dentro + ')');
-ok(ic59.v.dentro === null,
+ok(vDentro.difusaDentro === 'grande',
+   'y aun así el campo NO es cielo: la difusa de 20′ cae dentro (' + vDentro.difusaDentro + ')');
+var vFuera = PS1.ps1CampoVecino(centro, 60, [difusaRe('lejos', 10, 0.25 + 12 / 60, RE_CHICA)]);
+/* Y el campo es un CUADRADO: una difusa que entra por la esquina está a ×√2 del
+   centro, así que una prueba radial la dejaría pasar. Aquí el norte queda a
+   5,0′ en AR y 5,0′ en declinación del centro del campo —dentro de un campo de
+   10′ de lado por los pelos— con las otras tres direcciones ocupadas más cerca. */
+var esq = PS1.ps1CampoVecino(centro, 60, [difusaRe('esquina', 10 + 4.9 / 60, 0.25 + 4.9 / 60, RE_CHICA),
+                                          difusaRe('sur', 10, -0.25 + 5 / 60, RE_CHICA),
+                                          difusaRe('este', 10 + 0.25 - 5 / 60, 0, RE_CHICA),
+                                          difusaRe('oeste', 10 - 0.25 + 5 / 60, 0, RE_CHICA)]);
+ok(esq.dir === 'N' && esq.difusaDentro === 'esquina',
+   'la difusa que entra por una esquina también cuenta (' + esq.dir + ', ' + esq.difusaDentro + ')');
+
+ok(vFuera.difusaDentro === null,
+   'una difusa pequeña a esa misma distancia no toca el campo (' + vFuera.difusaDentro + ')');
+ok(ic59.v.difusaDentro === null,
    'y el campo vecino de IC 0059, el que midió #274, sigue siendo cielo');
 
 var png = fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.png'));

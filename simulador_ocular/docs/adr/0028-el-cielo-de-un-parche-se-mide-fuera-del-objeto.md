@@ -101,8 +101,9 @@ ninguna PN ni SNR—, así que el suelo de
   dentro— tiene que decirlo en el sidecar, no callarlo: sin cielo medido, la ley
   vieja es lo único que queda y el objeto queda marcado. **Hecho en #287:** el
   motivo va al sidecar (`sin-cobertura`, `vecina-dentro`, `otra-escala`,
-  `celda-perdida`, `descarga-fallida`), el informe del generador los lista por
-  nombre y la capa avisa al observador de que ese objeto se pinta con el marco.
+  `celda-perdida`, `descarga-fallida`, más el comodín `sin-medir` para el
+  sidecar que trae `vecino` sin motivo y sin los dos números), el informe del
+  generador los lista por nombre y la capa avisa al observador de que ese objeto se pinta con el marco.
   «Otra difusa dentro» se decide con la distancia a la difusa más cercana y su
   tamaño de catálogo, no a ojo, y se decide antes de bajar nada.
 - El ticket de implementación decide qué hacer con los parches ya publicados

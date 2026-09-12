@@ -129,7 +129,11 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   a la republicación del banco— se rige por el marco del 6 % (`ps1Cielo`, `ps1SigmaCielo`),
   que sigue siendo la ley del régimen mixto y no una copia de aquella. Un campo vecino que
   no valió deja su `motivo` en el sidecar (`sin-cobertura`, `vecina-dentro`, `otra-escala`,
-  `celda-perdida`, `descarga-fallida`) y NO publica cielo. Ese objeto **queda marcado**
+  `celda-perdida`, `descarga-fallida`) y NO publica cielo. Quién tiene cielo y quién no lo
+  decide `ps1CieloDeSidecar` y solo ella: la lee el runtime al montar el parche y el informe
+  del generador al listar, que si no acabaría listando menos de lo que la pantalla marca.
+  Su comodín `sin-medir` nombra el sidecar que trae `vecino` sin motivo y sin los dos
+  números —medio par no es una medida—: no debería existir, y por eso se nombra. Ese objeto **queda marcado**
   (#287): `ps1LeerTextura` deja el motivo en `notas.cieloMotivo` —otra nota que
   `notas.motivo`, que significa «no hay imagen»— y la capa lo convierte en aviso, porque
   pintar con el marco es pintar con un cielo que nadie midió. Una textura anterior a #285,
