@@ -593,6 +593,55 @@ casi(-2.5 * Math.log10(totalAnclado(0) / frac), magV, 1e-6,
 casi(totalAnclado(400) / totalAnclado(0), 1, 0.02,
   'un pedestal de cielo de 400 DN no mueve el nivel ni un 2 %');
 
+/* El cielo y la σ del parche salen de FUERA del objeto cuando el sidecar los
+   trae (#286, ADR 0028), no del marco del 6 %. El caso que lo obliga es una
+   nebulosa que llena su propio parche —NGC 1788—: ahí el marco ES objeto, el
+   suelo cielo+kRuido·σ sube con la nebulosa y la apaga entera.
+
+   MUTACIÓN QUE LO PONE ROJO: volver a `ps1Cielo`/`ps1SigmaCielo` en
+   ps1AnclarACatalogo habiendo `o.cielo` y `o.sigma`. La primera comprobación
+   —la del marco— es la que impide arreglar esto bajando kRuido: el marco no se
+   toca y sigue apagando. */
+var CIELO_V = 500, SIGMA_V = 10;                 // DN: lo que mide el campo vecino
+var ANCHO_V = 64, ESCALA_V = 2.8125, LADO_V = ANCHO_V * ESCALA_V / 60;
+function parcheQueLoLlena() {
+  var d = new Float32Array(ANCHO_V * ANCHO_V), c = (ANCHO_V - 1) / 2, semilla = 999;
+  function rnd() { semilla = (semilla * 1103515245 + 12345) & 0x7fffffff; return semilla / 0x7fffffff; }
+  for (var y = 0; y < ANCHO_V; y++) {
+    for (var x = 0; x < ANCHO_V; x++) {
+      var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c)) * ESCALA_V;
+      var g = 0; for (var k = 0; k < 12; k++) g += rnd();
+      // Sin un solo píxel de cielo: apenas decae dentro del parche, así que
+      //  el marco está a ~26 σ por encima del cielo de verdad.
+      d[y * ANCHO_V + x] = CIELO_V + 300 * Math.exp(-r / 1000) + (g - 6) * SIGMA_V;
+    }
+  }
+  return d;
+}
+function fracApagada(extra) {
+  var o = { magV: 9, n: 1, reArcsec: 60, ladoArcmin: LADO_V, escalaAs: ESCALA_V };
+  for (var k in extra) o[k] = extra[k];
+  var a = window.BitacoraPS1.ps1AnclarACatalogo(parcheQueLoLlena(), ANCHO_V, ANCHO_V, o);
+  var n = 0;
+  for (var i = 0; i < a.length; i++) if (!(a[i] > 0)) n++;
+  return n / a.length;
+}
+var apagadoMarco = fracApagada(null);
+ok(apagadoMarco > 0.5,
+  'con la ley del marco, una nebulosa que llena su parche se apaga a sí misma (' +
+  (100 * apagadoMarco).toFixed(1) + '% apagado)');
+var apagadoVecino = fracApagada({ cielo: CIELO_V, sigma: SIGMA_V });
+ok(apagadoVecino < 0.01,
+  'con el cielo y la σ del sidecar, medidos fuera del objeto, no se apaga (' +
+  (100 * apagadoVecino).toFixed(1) + '% apagado)');
+/* Los dos números van juntos o no va ninguno: medio sidecar no es una medida
+   del cielo, y un parche que llegue del proxy sin ellos (cfg.proxyRespaldo)
+   sigue rigiéndose por el marco, sin cambio de comportamiento. */
+ok(fracApagada({ cielo: CIELO_V }) === apagadoMarco &&
+   fracApagada({ sigma: SIGMA_V }) === apagadoMarco &&
+   fracApagada({ cielo: null, sigma: null }) === apagadoMarco,
+  'sin los dos números manda el marco, como siempre');
+
 /* El ruido del stack no puede hacerse pasar por galaxia. Recortar en cero lo que
    está por debajo del cielo conserva solo el ruido POSITIVO, así que un parche
    grande acaba con un pedestal falso repartido por todas partes: medido sobre

@@ -1109,9 +1109,21 @@
      del catálogo. Orden obligatorio: cielo restado y estrellas quitadas ANTES de
      integrar; anclar antes metería la luz de las estrellas en el total y apagaría
      la galaxia.
-     o: {magV, n, reArcsec, ladoArcmin, escalaAs}. Devuelve Float32Array. */
+     o: {magV, n, reArcsec, ladoArcmin, escalaAs, [cielo], [sigma]}; `cielo` y
+     `sigma` son los del campo vecino, medidos fuera del objeto (#286), y van
+     juntos o no va ninguno. Devuelve Float32Array. */
   function ps1AnclarACatalogo(datos, ancho, alto, o) {
-    var cielo = ps1Cielo(datos, ancho, alto);
+    /* El cielo y la σ se miden FUERA del objeto cuando el sidecar los trae
+       (#286, ADR 0028): el marco del 6 % que lee ps1Cielo supone que el borde
+       del parche es cielo, y en 35 de las 68 texturas del banco cae DENTRO del
+       objeto, así que el suelo sube con el objeto mismo y lo apaga —NGC 1788,
+       cuyo parche entero es nebulosa, se borraba del todo—.
+       Las dos funciones del marco NO se van: son la ley de cualquier parche que
+       llegue sin esos dos números —el proxy en caliente (cfg.proxyRespaldo), o
+       una textura anterior a la republicación del banco—, y ahí no hay nada
+       mejor que el borde. */
+    var fuera = (o.sigma > 0 && typeof o.cielo === 'number' && isFinite(o.cielo));
+    var cielo = fuera ? o.cielo : ps1Cielo(datos, ancho, alto);
     /* El corte va en cielo + k·σ, no en el cielo pelado. Recortando en el cielo
        solo sobrevive el ruido POSITIVO, y en un parche grande eso es un pedestal
        falso repartido por todo el campo: en M51, el 21 % del flujo integrado
@@ -1122,7 +1134,7 @@
        20 %) por un 3 % de galaxia real, que además el anclaje devuelve al
        reescalar. Por encima de k=2 ya no queda pedestal que quitar y solo se
        come disco externo. */
-    var sigma = ps1SigmaCielo(datos, ancho, alto, cielo);
+    var sigma = fuera ? o.sigma : ps1SigmaCielo(datos, ancho, alto, cielo);
     var suelo = cielo + PS1.kRuido * sigma;
     var corte = cielo - PS1.kAusencia * sigma;
     var neto = new Float32Array(datos.length), suma = 0, i;
@@ -1776,10 +1788,20 @@
           notas.motivo = 'sidecar';
           return null;
         }
+        /* Cielo y σ medidos en el campo VECINO al publicar (#285, ADR 0028):
+           el parche los lleva puestos y el runtime no los recalcula de su marco
+           (ps1AnclarACatalogo). Un sidecar que no los publica —campo vecino sin
+           cobertura, a otra escala o con la descarga caída— los deja en null y
+           el parche vuelve a la ley del marco: son dos números medidos, no una
+           promesa, y la mitad de ellos no sirve. */
+        var vec = sc.vecino || {};
+        var hayCielo = typeof vec.cielo === 'number' && isFinite(vec.cielo) && vec.sigma > 0;
         return {
           ancho: img.ancho, alto: img.alto,
           datos: png.decodificar(img.u16, cod),
           escalaAs: sc.escalaAs, wcs: sc.wcs || null,
+          cieloVecino: hayCielo ? vec.cielo : null,
+          sigmaVecino: hayCielo ? vec.sigma : null,
           // parseFITS lo lee de ZPT_0000 y no lo usa nadie: el nivel absoluto lo
           // pone el catálogo (ps1AnclarACatalogo). Mismo valor que allí sin la
           // tarjeta, para que la forma del objeto sea la misma.
@@ -2098,7 +2120,9 @@
       var comps = ps1ComponentesSersic(gal);
       var datos = ps1AnclarACatalogo(limpio, f.ancho, f.alto, {
         magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
-        ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs
+        ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs,
+        // Cielo y σ medidos fuera del objeto, si la textura los publica (#286).
+        cielo: f.cieloVecino, sigma: f.sigmaVecino
       });
       /* Peso y reanclaje de la mezcla: una vez por galaxia, no por fotograma ni
          por píxel. Dependen solo del parche y del catálogo, no de la escena. */

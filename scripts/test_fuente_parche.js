@@ -151,11 +151,19 @@ Promise.resolve().then(function () {
        pedidos.some(function (u) { return /\.json$/.test(u); }), 'pidió la textura y su sidecar');
     /* ps1FuenteParche añade ra/dec/ladoArcmin a los dos caminos por igual; lo
        que tiene que coincidir es lo que produce el lector. */
-    var suyas = {}; ['ra', 'dec', 'ladoArcmin'].forEach(function (k) { suyas[k] = 1; });
+    /* Y `cieloVecino`/`sigmaVecino` son lo ÚNICO que la textura puede traer de
+       más (#286, ADR 0028): el cielo medido fuera del objeto se publica al
+       generar, y un parche cosido en caliente por el proxy no tiene sidecar
+       donde llevarlo. Por eso ps1AnclarACatalogo los trata como opcionales y
+       sin ellos manda el marco; el resto de la forma no se mueve. */
+    var suyas = {};
+    ['ra', 'dec', 'ladoArcmin', 'cieloVecino', 'sigmaVecino'].forEach(function (k) { suyas[k] = 1; });
     var soloLector = {};
     Object.keys(f).forEach(function (k) { if (!suyas[k]) soloLector[k] = f[k]; });
     ok(claves(soloLector) === claves(patron),
        'mismas claves que parseFITS (' + claves(soloLector) + ')');
+    ok('cieloVecino' in f && 'sigmaVecino' in f,
+       'y además el cielo medido fuera del objeto, que el FITS del proxy no trae');
     ok(f.datos instanceof Float32Array && f.datos.length === f.ancho * f.alto,
        'datos es un Float32Array de ancho·alto (' + f.ancho + '×' + f.alto + ')');
     ok(typeof f.escalaAs === 'number' && f.escalaAs > 0, 'escalaAs en ″/px (' + f.escalaAs.toFixed(4) + ')');
@@ -288,6 +296,52 @@ Promise.resolve().then(function () {
       ok(n2.motivo === 'sidecar', 'y se distingue del fallo de red (' + n2.motivo + ')');
     }, function (e) { global.fetch = previo; ok(false, 'lanzó en vez de devolver null: ' + e.message); });
   });
+
+}).then(function () {
+  /* ── El cielo y la σ del campo vecino llegan al runtime (#286) ───────────── */
+  console.log('\nEl cielo medido fuera del objeto viaja en el sidecar:');
+  /* Lo que se vigila es el CANAL, no la ley del anclaje (esa la mide
+     scripts/test_difuso.js): que los dos números del campo vecino salgan del
+     sidecar tal cual, y que medio par no cuente como medida. Sin esto,
+     ps1AnclarACatalogo volvería al marco del 6 % sin que nada se pusiera rojo.
+     El sidecar se sirve a mano porque el del banco es anterior a #285. */
+  var bueno = fs.readFileSync(path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.png'));
+  var base = JSON.parse(fs.readFileSync(
+    path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.json'), 'utf8'));
+  function conSidecar(vecino) {
+    var sc = JSON.parse(JSON.stringify(base));
+    if (vecino) sc.vecino = vecino;
+    var P = fresco();
+    var previo = global.fetch;
+    global.fetch = function (u) {
+      pedidos.push(String(u));
+      return Promise.resolve({
+        ok: true, status: 200,
+        arrayBuffer: function () { return Promise.resolve(bueno.buffer.slice(bueno.byteOffset, bueno.byteOffset + bueno.byteLength)); },
+        json: function () { return Promise.resolve(sc); }
+      });
+    };
+    window.BITACORA_DSO_TEXTURAS = MANIFIESTO;
+    return P.ps1FuenteParche(galDe(P, 'NGC 5194')).then(function (f) {
+      global.fetch = previo;
+      return f;
+    }, function (e) { global.fetch = previo; throw e; });
+  }
+  return conSidecar({ direccion: 'N', offsetArcmin: 15, cielo: 123.5, sigma: 7.25, escalaAs: base.escalaAs })
+    .then(function (f) {
+      ok(f && f.cieloVecino === 123.5 && f.sigmaVecino === 7.25,
+         'los dos números salen del sidecar sin tocarlos (' + (f && f.cieloVecino) + ', ' + (f && f.sigmaVecino) + ')');
+      /* Un campo vecino que falló publica su motivo y NO publica cielo: ahí el
+         parche vuelve al marco, que es el régimen mixto del ADR 0028. */
+      return conSidecar({ motivo: 'sin-cobertura' });
+    }).then(function (f) {
+      ok(f && f.cieloVecino === null && f.sigmaVecino === null,
+         'un campo vecino con motivo y sin cielo no inventa ninguno');
+      return conSidecar({ cielo: 123.5 });
+    }).then(function (f) {
+      ok(f && f.cieloVecino === null && f.sigmaVecino === null,
+         'y medio par tampoco: los dos números van juntos o no va ninguno');
+    });
 
 }).then(function () {
   /* ── Las URL son configurables ───────────────────────────────────────────── */
