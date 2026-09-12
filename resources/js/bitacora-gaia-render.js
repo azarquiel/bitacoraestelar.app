@@ -33,6 +33,8 @@
  *   BitacoraGaiaRender.centroDesplazado({ ra, dec, arcmin, pasoX, pasoY }) → { ra, dec }
  *       El centro movido pasos del 10 % del campo; el paso de RA lleva /cos(dec).
  *   BitacoraGaiaRender.rotuloDesplazamiento({ pasoX, pasoY, arcmin }) → 'desplazado 0,3° E, 0,1° N'
+ *   BitacoraGaiaRender.marcaBorde({ pasoX, pasoY, arcmin }) → null | { angulo, grados, texto }
+ *   BitacoraGaiaRender.radioMarca({ ancho, alto, circulo, caja }) → % del lado donde cabe la marca
  *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
  *   BitacoraGaiaRender.precalentar(opts) → void   (la consulta de render(), disparada antes)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
@@ -1259,6 +1261,51 @@
     if (o.pasoX) partes.push(grados(o.pasoX) + ' ' + (o.pasoX > 0 ? 'E' : 'O'));
     if (o.pasoY) partes.push(grados(o.pasoY) + ' ' + (o.pasoY > 0 ? 'N' : 'S'));
     return partes.length ? 'desplazado ' + partes.join(', ') : '';
+  }
+
+  /* Dónde quedó el objeto cuando el desplazamiento lo saca del campo (#269).
+     Devuelve null mientras se vea —el campo es el DIÁMETRO, así que el radio son
+     5 pasos del 10 %— y, cuando no, el ángulo EN PANTALLA hacia él y su
+     separación al centro, ya redactada.
+
+     El ángulo se mide como los de CSS (0° a la derecha, creciendo hacia abajo) y
+     sale directamente de los pasos: mover el campo al Este deja el objeto a la
+     derecha y moverlo al Norte lo deja abajo, porque lo que se ve corre al revés
+     que la ventana. Ese mismo número vale para un rotate().
+
+     Quien llama pinta la marca donde tenga el borde (el círculo del simulador o
+     la vista del modal): aquí solo está la regla, que es la que no puede
+     divergir entre las dos páginas. */
+  function marcaBorde(o) {
+    var px = o.pasoX || 0, py = o.pasoY || 0;
+    var pasos = Math.sqrt(px * px + py * py);
+    if (pasos <= 5 || !(o.arcmin > 0)) return null;
+    var grados = pasos * 0.10 * o.arcmin / 60;
+    return {
+      angulo: Math.atan2(py, px) * 180 / Math.PI,
+      grados: grados,
+      // El redondeo decide la unidad, no el valor crudo: 0,996° son 60\u2032, que
+      // en minutos no se escribe.
+      texto: Math.round(grados * 60) < 60 ? Math.round(grados * 60) + '\u2032'
+                                          : grados.toFixed(1).replace('.', ',') + '\u00b0'
+    };
+  }
+
+  /* A qué distancia del centro va la marca, en % del lado de la CAJA que la
+     contiene (el % que se le pone a left/top). Tan cerca del borde del círculo
+     como quepa ENTERA: el círculo recorta lo que se salga y encoge con el campo
+     aparente del ocular, así que un radio fijo se comería el número justo con
+     los oculares estrechos. Se mide por la diagonal porque en las diagonales lo
+     primero que toca el borde es la esquina de la marca.
+
+     `circulo` es el lado del campo dibujado y `caja` el del elemento sobre el
+     que se posiciona; en el simulador son el mismo (el círculo ES la vista), y
+     en el modal del registro el círculo es solo una parte del lienzo. */
+  function radioMarca(o) {
+    var caja = o.caja || o.circulo;
+    if (!(caja > 0)) return 0;
+    var media = Math.sqrt(o.ancho * o.ancho + o.alto * o.alto) / 2 + 4;   // +4: sin pegarse al filo
+    return Math.max(0, 50 * (o.circulo / caja) - 100 * media / caja);
   }
 
   function acotarPlaca(arcmin) {
@@ -2787,6 +2834,8 @@
     opticaTieneArana: opticaTieneArana,
     urlPlaca: urlPlaca,
     centroDesplazado: centroDesplazado,
+    marcaBorde: marcaBorde,
+    radioMarca: radioMarca,
     rotuloDesplazamiento: rotuloDesplazamiento,
     cargarPlaca: cargarPlaca,
     renderPlaca: renderPlaca,

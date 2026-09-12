@@ -223,6 +223,17 @@
 .sim-gen-cruceta .paso-o {grid-area:2 / 3;}
 .sim-gen-cruceta .paso-s {grid-area:3 / 2;}
 .sim-gen-canvas:focus-visible {outline:2px solid var(--ambar,#f4c76b);outline-offset:-4px;}
+/* Marca de borde (#269): la misma del simulador, dentro de la vista del modal.
+   No se apoya solo en el color (punta que apunta + separación escrita) y no se
+   come los clics del lienzo, que es quien escucha las flechas del teclado. */
+.sim-gen-marca {position:absolute;transform:translate(-50%, -50%);
+  display:flex;align-items:center;gap:6px;padding:3px 9px;
+  border:1px solid var(--ambar,#f4c76b);border-radius:999px;
+  background:rgba(0,0,0,.72);color:var(--ambar,#f4c76b);
+  font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:nowrap;
+  pointer-events:none;}
+.sim-gen-marca[hidden] {display:none;}
+.sim-gen-marca .punta {display:inline-block;font-size:13px;line-height:1;}
 .sim-gen-foot {display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:14px 18px;border-top:1px solid var(--linea);}
 .sim-gen-badge {font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--azul);

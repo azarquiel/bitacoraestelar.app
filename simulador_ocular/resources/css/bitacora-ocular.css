@@ -143,6 +143,22 @@
 }
 #mw-obs-form .vista .procesando[hidden] {display:none;}
 
+/* ── Marca de borde: dónde quedó el objeto al desplazar el campo (#269) ──
+   Se posiciona sobre el círculo (el JS le pone left/top sobre el radio) y no se
+   apoya solo en el color: lleva la punta que apunta y la separación escrita.
+   Ámbar sobre negro, como el resto de los mandos que se miran de noche, con
+   fondo propio para que el texto conserve el contraste sobre un campo claro. */
+#mw-obs-form .marca-fuera {
+  position:absolute;transform:translate(-50%, -50%);
+  display:flex;align-items:center;gap:6px;padding:3px 9px;
+  border:1px solid var(--ambar);border-radius:999px;
+  background:rgba(0,0,0,.72);color:var(--ambar);
+  font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:nowrap;
+  pointer-events:none;
+}
+#mw-obs-form .marca-fuera[hidden] {display:none;}
+#mw-obs-form .marca-fuera .punta {display:inline-block;font-size:13px;line-height:1;}
+
 /* ── Acciones sobre la imagen del ocular (pantalla completa y descarga) ──
    Discretas a propósito: solo el icono, tenue, y se encienden al pasar el ratón.
    Van pegadas al círculo, dentro de la misma zona que se pone a pantalla

@@ -197,6 +197,9 @@
       var elVista = $('sim-vista'), elLienzo = $('sim-lienzo'), elImg = $('sim-img');
       var elCargando = $('sim-cargando'), elDesplazado = $('sim-desplazado');
       var elCruceta = $('sim-cruceta'), elEncuadre = $('sim-encuadre');
+      var elMarca = $('sim-marca');
+      var elMarcaPunta = elMarca && elMarca.querySelector('.punta');
+      var elMarcaSep = elMarca && elMarca.querySelector('.sep');
       var PASO_TOPE = 20;        // ±2 campos por eje: solo acota las consultas
       var ANTIRREBOTE = 250;     // ms: varios clics seguidos = UNA consulta
       var pasoX = 0, pasoY = 0;
@@ -901,6 +904,30 @@
         var movido = !!(pasoX || pasoY);
         if (elCruceta) elDesplazado.hidden = elCruceta.hidden && !movido;
         if (elEncuadre) elEncuadre.classList.toggle('activo', movido);
+        pintarMarcaFuera(arcmin || arcminVista() || 0);
+      }
+
+      /* Marca de borde (#269): mientras el objeto se vea no hay nada que pintar;
+         cuando el desplazamiento lo saca del campo, una punta apunta hacia él y
+         dice a cuánto quedó del centro. Se pone tan al borde como quepa entera:
+         el círculo recorta (overflow:hidden) y encoge con el campo aparente del
+         ocular, así que un radio fijo se comería el número justo con los
+         oculares de campo estrecho. El texto va en el aria-label y no en un
+         title: la marca es pointer-events:none, así que ese title no se ve. */
+      function pintarMarcaFuera(arcmin) {
+        if (!elMarca) return;
+        var m = BitacoraGaiaRender.marcaBorde({ pasoX: pasoX, pasoY: pasoY, arcmin: arcmin });
+        elMarca.hidden = !m;
+        if (!m) return;
+        elMarcaSep.textContent = m.texto;
+        elMarcaPunta.style.transform = 'rotate(' + m.angulo.toFixed(1) + 'deg)';
+        elMarca.setAttribute('aria-label', 'El objeto quedó fuera del campo, a ' + m.texto + ' del centro');
+        var rad = m.angulo * Math.PI / 180;
+        var r = BitacoraGaiaRender.radioMarca({
+          ancho: elMarca.offsetWidth, alto: elMarca.offsetHeight, circulo: elVista.clientWidth
+        });
+        elMarca.style.left = (50 + r * Math.cos(rad)).toFixed(1) + '%';
+        elMarca.style.top  = (50 + r * Math.sin(rad)).toFixed(1) + '%';
       }
 
       /* Desliza lo YA pintado el 10 % del lado por paso, para que el campo no
