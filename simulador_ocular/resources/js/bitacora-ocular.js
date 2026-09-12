@@ -196,6 +196,7 @@
          en cada clic de la cruceta y no deben rehacer el getElementById. */
       var elVista = $('sim-vista'), elLienzo = $('sim-lienzo'), elImg = $('sim-img');
       var elCargando = $('sim-cargando'), elDesplazado = $('sim-desplazado');
+      var elCruceta = $('sim-cruceta'), elEncuadre = $('sim-encuadre');
       var PASO_TOPE = 20;        // ±2 campos por eje: solo acota las consultas
       var ANTIRREBOTE = 250;     // ms: varios clics seguidos = UNA consulta
       var pasoX = 0, pasoY = 0;
@@ -894,6 +895,12 @@
         elDesplazado.textContent = BitacoraGaiaRender.rotuloDesplazamiento({
           pasoX: pasoX, pasoY: pasoY, arcmin: arcmin || arcminVista() || 0
         }) || 'centrado en el objeto';
+        /* Cerrada NO significa centrada: si el campo está movido, el rótulo se
+           queda a la vista aunque la cruceta esté guardada, y el control que la
+           saca se marca. Solo desaparece todo cuando además está centrado. */
+        var movido = !!(pasoX || pasoY);
+        if (elCruceta) elDesplazado.hidden = elCruceta.hidden && !movido;
+        if (elEncuadre) elEncuadre.classList.toggle('activo', movido);
       }
 
       /* Desliza lo YA pintado el 10 % del lado por paso, para que el campo no
@@ -949,8 +956,30 @@
       }
 
       function montarCruceta() {
-        var cruceta = $('sim-cruceta');
+        var cruceta = elCruceta, encuadre = elEncuadre;
         if (!cruceta) return;
+
+        /* La cruceta se SACA, no está puesta (#281): son ~160 px bajo el círculo
+           que solo debería pagar quien encuadra. Abrir y cerrar no toca el
+           desplazamiento aplicado; el campo se queda donde está. */
+        function abrirCruceta() {
+          if (!cruceta.hidden) return;
+          cruceta.hidden = false;
+          if (encuadre) encuadre.setAttribute('aria-expanded', 'true');
+          pintarRotuloDespl();
+        }
+        if (encuadre) encuadre.addEventListener('click', function () {
+          if (cruceta.hidden) {
+            abrirCruceta();
+            var primero = cruceta.querySelector('button');
+            if (primero) primero.focus();
+          } else {
+            cruceta.hidden = true;
+            encuadre.setAttribute('aria-expanded', 'false');
+            encuadre.focus();   // el foco no se queda en un botón ya oculto
+            pintarRotuloDespl();
+          }
+        });
         cruceta.addEventListener('click', function (ev) {
           var b = ev.target.closest('button[data-x]');
           if (!b) return;
@@ -968,6 +997,7 @@
           var d = TECLAS[ev.key];
           if (!d) return;
           ev.preventDefault();
+          abrirCruceta();   // el mando nunca contradice lo que está pasando
           desplazar(d[0], d[1]);
         }
         elLienzo.addEventListener('keydown', teclado);

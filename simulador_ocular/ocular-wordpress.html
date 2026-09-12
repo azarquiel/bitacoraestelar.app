@@ -29,7 +29,7 @@
      ============================================================ -->
 
 <link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-base.css?v=20260831_1200" />
-<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260912_1200" />
+<link rel="stylesheet" href="/wp-content/uploads/bitacora/bitacora-ocular.css?v=20260912_1800" />
 
 <!-- Filtro de respuesta del ojo según la pupila de salida (modo de reserva
      sin canvas): y = pendiente·x + desplazamiento. -->
@@ -186,6 +186,9 @@
           <button type="button" class="accion-vista" id="sim-descargar" title="Descargar la imagen" aria-label="Descargar la imagen">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>
           </button>
+          <button type="button" class="accion-vista" id="sim-encuadre" title="Encuadrar el campo" aria-label="Encuadrar el campo" aria-expanded="false" aria-controls="sim-cruceta">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9.5 3.5h5v6h6v5h-6v6h-5v-6h-6v-5h6z"/></svg>
+          </button>
         </div>
 
         <!-- Cruceta de encuadre: mueve el campo en pasos del 10 % del campo real
@@ -193,15 +196,19 @@
              mismo campo, o una estrella deslumbrante fuera de él).
              N/S/E/O y no triángulos: «llévame al norte» no tiene la doble lectura
              de «flecha arriba». El ESTE va a la IZQUIERDA, igual que en el cielo,
-             y el hueco central recentra. -->
-        <div class="cruceta" id="sim-cruceta" role="group" aria-label="Desplazar el campo">
+             y el hueco central recentra.
+             NACE OCULTA (#281): son ~160 px bajo el círculo que solo paga quien
+             encuadra. Se saca con el control de encuadre de la barra de acciones,
+             como se coge el mando del telescopio; las flechas del teclado sobre el
+             lienzo siguen desplazando con la cruceta cerrada, y la abren. -->
+        <div class="cruceta" id="sim-cruceta" role="group" aria-label="Desplazar el campo" hidden>
           <button type="button" class="paso paso-n" data-x="0" data-y="1" aria-label="desplazar al norte">N</button>
           <button type="button" class="paso paso-e" data-x="1" data-y="0" aria-label="desplazar al este">E</button>
           <button type="button" class="paso paso-centro" data-x="0" data-y="0" aria-label="recentrar en el objeto" title="Recentrar en el objeto">&#9679;</button>
           <button type="button" class="paso paso-o" data-x="-1" data-y="0" aria-label="desplazar al oeste">O</button>
           <button type="button" class="paso paso-s" data-x="0" data-y="-1" aria-label="desplazar al sur">S</button>
         </div>
-        <p class="desplazamiento" id="sim-desplazado" role="status">centrado en el objeto</p>
+        <p class="desplazamiento" id="sim-desplazado" role="status" hidden>centrado en el objeto</p>
       </div>
 
       <!-- Barra "Capas y vista": va aquí, pegada a la imagen, y no en el lateral,
@@ -274,4 +281,4 @@
 <script src="/wp-content/uploads/bitacora/dso-texturas-datos.js?v=20260911_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-ps1.js?v=20260911_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260807_1200" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260912_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ocular.js?v=20260912_1800" defer></script>

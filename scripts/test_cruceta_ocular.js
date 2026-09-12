@@ -130,6 +130,31 @@ ok(/elLienzo\.addEventListener\('keydown', teclado\)/.test(JS) &&
 ok(/if \(!arcminVista\(\)\) return;/.test(JS),
    'sin equipo no se acumulan pasos: no hay campo dibujado del que tomar el 10 %');
 
+console.log('La cruceta se saca, no está puesta (#281):');
+ok(/<div class="cruceta" id="sim-cruceta"[^>]*\shidden>/.test(HTML) &&
+   /<p class="desplazamiento" id="sim-desplazado"[^>]*\shidden>/.test(HTML),
+   'nace oculta: coste cero bajo el círculo para quien no encuadra');
+ok(/#mw-obs-form \.cruceta\[hidden\][^{]*\{display:none;\}/.test(CSS),
+   '[hidden] gana a display:grid, que por sí solo no lo hace');
+ok(/id="sim-encuadre"[\s\S]{0,200}aria-expanded="false"[\s\S]{0,80}aria-controls="sim-cruceta"/.test(HTML) &&
+   /class="accion-vista" id="sim-encuadre"/.test(HTML),
+   'el control que la saca va en la barra de acciones de la imagen, con su estado anunciado');
+ok(/aria-label="Encuadrar el campo"/.test(HTML),
+   'el control tiene nombre accesible (es solo icono)');
+ok(/function abrirCruceta\(\) \{[\s\S]{0,200}cruceta\.hidden = false;[\s\S]{0,200}setAttribute\('aria-expanded', 'true'\)/.test(JS),
+   'abrir refleja el estado en aria-expanded');
+ok(/cruceta\.hidden = true;[\s\S]{0,160}encuadre\.focus\(\);/.test(JS),
+   'al cerrar, el foco vuelve al control: no se queda en un botón oculto');
+ok(!/cruceta\.hidden = true;[\s\S]{0,160}pasoX = pasoY = 0/.test(JS),
+   'cerrar NO recentra: el desplazamiento aplicado sobrevive');
+ok(/var movido = !!\(pasoX \|\| pasoY\);[\s\S]{0,200}elDesplazado\.hidden = elCruceta\.hidden && !movido/.test(JS),
+   'cerrada no significa centrada: con el campo movido el rótulo sigue a la vista');
+ok(/elEncuadre\.classList\.toggle\('activo', movido\)/.test(JS) &&
+   /#mw-obs-form \.accion-vista\.activo \{[^}]*var\(--ambar\)/.test(CSS),
+   'y el control se queda encendido mientras el campo esté desplazado');
+ok(/abrirCruceta\(\);   \/\/ el mando nunca contradice[\s\S]{0,80}desplazar\(d\[0\], d\[1\]\);/.test(JS),
+   'las flechas del teclado desplazan con la cruceta cerrada, y la abren');
+
 console.log('Despliegue (CLAUDE.md: subir el ?v= de lo que cambia):');
 ['bitacora-ocular.js', 'bitacora-ocular.css', 'bitacora-gaia-render.js'].forEach(function (f) {
   var m = HTML.match(new RegExp(f.replace('.', '\\.') + '\\?v=(\\d{8})'));
