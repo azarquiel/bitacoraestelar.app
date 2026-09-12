@@ -63,3 +63,14 @@ no traen la medida en su sidecar y no salen aquí: para esas está
 `node scripts/harness_bloques_ausencia.js`, que la mide del PNG.
 
 Ninguna.
+
+## Texturas sin cielo medido
+
+Texturas buenas cuyo campo vecino no valió como cielo: se pintan con la ley
+del marco —lo único que queda— y el runtime las marca (#287, ADR 0028). Los
+motivos: `sin-cobertura` (PS1 no llega ahí fuera), `vecina-dentro` (otra difusa
+catalogada cae en el campo), `otra-escala` (su ″/px no es el del parche, así que
+su σ no es comparable) y `descarga-fallida` o `celda-perdida`, que se reintentan
+solos en la corrida siguiente.
+
+Ninguna.

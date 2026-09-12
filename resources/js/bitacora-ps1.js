@@ -1654,6 +1654,14 @@
      distancia se devuelve y se publica: un campo vecino con otra difusa dentro
      no es cielo, y quien lo audita tiene que poder verlo sin volver a medir.
 
+     Esa distancia es de CENTRO a centro, así que por sí sola no dice si la
+     difusa cae dentro: una grande a 12′ mete su disco en un campo de 10′ de
+     lado y una pequeña a la misma distancia no lo toca. El veredicto va aparte,
+     en `dentro` —el nombre de la difusa que se mete, o null—, y se decide con
+     el tamaño de catálogo: entra si su radio supuesto (medio lado de SU parche,
+     sin recortar por ladoMin/ladoMax: aquí el recorte no se pide) alcanza el
+     borde del campo. Qué motivo le pone el sidecar es del generador (#287).
+
      Geometría y nada más: no baja nada ni decide si el campo vale. Devuelve
      null si ninguna de las cuatro direcciones cae en cobertura. */
   function ps1CampoVecino(gal, rObjMaxAs, catalogo) {
@@ -1667,15 +1675,19 @@
     var mejor = null;
     cand.forEach(function (c) {
       if (!(c[1] > PS1.decMin) || Math.abs(c[1]) > 89) return;
-      var cerca = Infinity;
+      var cerca = Infinity, dentro = null, margen = Infinity;
       (catalogo || []).forEach(function (g) {
         if (ps1NombreFila(g) === gal.nombre) return;      // el propio objeto no es vecina
         var dra = ((((g[2] - c[0]) + 540) % 360) - 180) * Math.cos(c[1] * Math.PI / 180);
         var sep = Math.hypot(dra, g[3] - c[1]) * 60;                   // ′
         if (sep < cerca) cerca = sep;
+        var rg = PS1.ladoFactor * (g[4] > 0 ? g[4] : 0) / 120;         // ′, radio supuesto
+        // La que MÁS se mete, no la última del catálogo: el nombre se publica.
+        if (sep - rg < margen) { margen = sep - rg; dentro = ps1NombreFila(g); }
       });
       if (!mejor || cerca > mejor.cerca) {
-        mejor = { ra: c[0], dec: c[1], dir: c[2], cerca: cerca };
+        mejor = { ra: c[0], dec: c[1], dir: c[2], cerca: cerca,
+                  dentro: margen < gal.ladoArcmin / 2 ? dentro : null };
       }
     });
     if (mejor) {
@@ -1793,9 +1805,18 @@
            (ps1AnclarACatalogo). Un sidecar que no los publica —campo vecino sin
            cobertura, a otra escala o con la descarga caída— los deja en null y
            el parche vuelve a la ley del marco: son dos números medidos, no una
-           promesa, y la mitad de ellos no sirve. */
+           promesa, y la mitad de ellos no sirve.
+
+           Y eso CONSTA (#287): el motivo del sidecar va a `notas.cieloMotivo`,
+           que es otra nota que `notas.motivo` —esta imagen es buena, lo único
+           que le falta es su cielo, y decir «no se pudo leer» sería mentir—.
+           Quien pinta la traduce en aviso. Una textura anterior a #285 —sin
+           `vecino` ninguno— NO se marca: ahí nadie midió ni falló nada, es el
+           régimen mixto que el ADR 0028 previó, y marcarlas sería marcar todo
+           lo publicado hasta la republicación del banco (#288). */
         var vec = sc.vecino || {};
         var hayCielo = typeof vec.cielo === 'number' && isFinite(vec.cielo) && vec.sigma > 0;
+        if (!hayCielo && sc.vecino) notas.cieloMotivo = vec.motivo || 'sin-medir';
         return {
           ancho: img.ancho, alto: img.alto,
           datos: png.decodificar(img.u16, cod),
@@ -1829,6 +1850,8 @@
       var previas = notasPS1[clave];
       return cachePS1[clave].then(function (f) {
         if (!f && previas && previas.motivo) notas.motivo = previas.motivo;
+        // Y la del cielo sin medir, que sí viaja con un parche bueno (#287).
+        if (f && previas && previas.cieloMotivo) notas.cieloMotivo = previas.cieloMotivo;
         return f;
       });
     }
@@ -2189,6 +2212,11 @@
   var TAPADA = 'la imagen está tapada por una estrella brillante; ' +
     'se muestra el modelo del catálogo';
   var ILEGIBLE = 'la imagen de este objeto no se pudo leer; se muestra el modelo del catálogo';
+  /* No es un fallo de imagen: la imagen está. Es que su cielo no se pudo medir
+     fuera del objeto y el suelo sale del borde del recorte, que en un objeto
+     que llena su parche va alto y apaga lo más tenue (#287, ADR 0028). */
+  var CIELO_SIN_MEDIR = 'el cielo de esta imagen no se pudo medir fuera del objeto: ' +
+    'el suelo sale del borde del recorte y puede apagar lo más tenue';
   var TEXTO_AVISO = {
     'sur': 'sin imagen de cartografiado: PanSTARRS no cubre por debajo de −30° de declinación',
     'no-cabe': 'sin imagen de cartografiado: esta galaxia es mayor que el recorte que sirve PanSTARRS, ' +
@@ -2336,6 +2364,14 @@
         aviso = TEXTO_AVISO['no-cabe'];
       } else if (!aviso && apuntadaSinParche) {
         aviso = 'el servicio de imágenes no responde; se muestra el campo sin la galaxia';
+      } else if (!aviso && notasApuntada.cieloMotivo) {
+        /* El último de todos, y solo si no hay ninguno: aquí la imagen SÍ está
+           y se pinta. Lo que falta es el cielo medido fuera del objeto, así que
+           el suelo sale del marco del recorte —la ley vieja, que es lo único
+           que queda— y eso se dice en vez de callarse (#287, ADR 0028). Todos
+           los motivos comparten texto: al observador le cambia lo mismo, y el
+           motivo exacto vive en el sidecar, que es quien lo va a arreglar. */
+        aviso = CIELO_SIN_MEDIR;
       }
       return { aviso: aviso };
     });
