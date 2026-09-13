@@ -45,6 +45,21 @@ var LENTOS = [
   'test_harness_halo_v7.js',           //  33 s
   'test_grano_malla.js'                //  31 s
 ];
+/* Fallos ESPERADOS: rojos conocidos, cada uno con su ticket. No es una tapadera
+   —el test sigue corriendo y su salida sigue saliendo— es la LÍNEA BASE: sin
+   ella, cuatro rojos de fondo hacen que el quinto, el que sí acaba de romper
+   algo, no se distinga de los otros. La batería solo se pone roja cuando
+   aparece uno NUEVO.
+
+   Dos reglas para que la lista no se pudra:
+   - Cada entrada lleva su número de issue. Sin ticket no entra: un rojo sin
+     ticket es un rojo olvidado, no uno conocido.
+   - Cuando un esperado se pone verde, el resumen lo dice y pide quitarlo. No
+     rompe la batería por eso —ponerse verde es la buena noticia— pero se ve. */
+var ESPERADOS = {
+  'test_halo_v7_e5.js': '#294 · E5.4 sobre matriz_v7.json, archivada el 2026-08-17'
+};
+
 var args = process.argv.slice(2);
 function opcion(nombre) {
   var i = args.indexOf(nombre);
@@ -103,9 +118,31 @@ function resumen() {
   var total = Math.round((Date.now() - arranque) / 1000);
   console.log('\n' + ficheros.length + ' tests en ' + Math.floor(total / 60)
     + ' min ' + (total % 60) + ' s');
-  if (!fallos.length) { console.log('Todo OK'); process.exit(0); }
-  console.log('\n' + fallos.length + ' FALLOS:');
-  fallos.forEach(function (f) {
+
+  var nuevos = fallos.filter(function (f) { return !ESPERADOS[f]; });
+  var conocidos = fallos.filter(function (f) { return ESPERADOS[f]; });
+  /* Un esperado que ya no falla: se corrió y salió verde. Solo se puede decir de
+     los que se corrieron —con --rapida o --solo la mitad no se lanza y callar es
+     lo correcto, no dar por arreglado lo que nadie ha probado. */
+  var arreglados = Object.keys(ESPERADOS).filter(function (f) {
+    return ficheros.indexOf(f) >= 0 && fallos.indexOf(f) < 0;
+  });
+
+  if (conocidos.length) {
+    console.log('\n' + conocidos.length + ' fallo(s) ESPERADO(S), con ticket:');
+    conocidos.forEach(function (f) { console.log('  ' + f + '  ' + ESPERADOS[f]); });
+  }
+  if (arreglados.length) {
+    console.log('\nya no falla(n) — quítalo(s) de ESPERADOS en ' + path.basename(__filename) + ':');
+    arreglados.forEach(function (f) { console.log('  ' + f + '  ' + ESPERADOS[f]); });
+  }
+
+  if (!nuevos.length) {
+    console.log(conocidos.length ? '\nSin fallos nuevos' : '\nTodo OK');
+    process.exit(0);
+  }
+  console.log('\n' + nuevos.length + ' FALLOS NUEVOS:');
+  nuevos.forEach(function (f) {
     console.log('\n───── ' + f + ' ─────');
     // Solo la cola: lo que interesa de un test propio es el veredicto final.
     console.log(salidas[f].trim().split('\n').slice(-15).join('\n'));

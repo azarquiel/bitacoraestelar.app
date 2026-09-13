@@ -64,6 +64,10 @@
 #mw-obs-form .salud-tip {position:absolute;transform:translate(-50%,-100%);pointer-events:none;z-index:5;
     background:var(--noche);border:1px solid var(--linea);border-radius:9px;padding:7px 10px;
     font-size:12.5px;line-height:1.35;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.45);}
+/* Oculto de verdad: el globo nace con [hidden] y la regla del navegador es
+   `display:none` sin más peso, así que basta con que una regla de tema le ponga
+   un display para que se quede pintado en una esquina. Se blinda aquí. */
+#mw-obs-form .salud-tip[hidden] {display:none;}
 #mw-obs-form .salud-tip-cuando {font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--tinta-tenue);}
 #mw-obs-form .salud-tip-valor {font-weight:600;}
 #mw-obs-form table.salud-tabla {width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
