@@ -15,7 +15,10 @@ global.OBSERVADORES = {
 };
 
 global.OBJECTS = [
-  { id: 'proxima', label: 'Próxima', dist: 4.2 },       // vecindario (y galaxia)
+  { id: 'proxima', label: 'Próxima', dist: 4.2, tipo: 'estrella', l: 313.9, b: -0.1 },  // vecindario (y galaxia)
+  // Espacio profundo DENTRO del radio del vecindario: la vista del vecindario
+  // solo pinta estrellas, así que su escala es la galaxia (#bug capaInicial).
+  { id: 'ngc2024', label: 'NGC 2024', dist: 400, tipo: 'emision', l: 206.5, b: -16.4 },
   { id: 'm13',     label: 'M13',     dist: 22000 },     // galaxia
   { id: 'm92',     label: 'M92',     dist: 26700 },     // galaxia
   { id: 'm57',     label: 'M57' },                      // galaxia (sin distancia)
@@ -30,7 +33,9 @@ global.VIAJES = {
   '9': { nombre: 'Noche de Ana', noche: '2026-07-01', observador: 'ana', objetos: ['m13'] },
   // Una sola estrella cercana: está en el tramo del vecindario y en el de la
   // galaxia, pero es UNA escala; el mapa no debe avisar de ningún cruce.
-  '12': { nombre: 'Solo Próxima', noche: '2026-05-01', observador: 'carmen', objetos: ['proxima'] }
+  '12': { nombre: 'Solo Próxima', noche: '2026-05-01', observador: 'carmen', objetos: ['proxima'] },
+  // Arranca con una nebulosa cercana: cerca del Sol, pero NO es estrella.
+  '13': { nombre: 'Orión cercano', noche: '2026-04-01', observador: 'carmen', objetos: ['ngc2024', 'proxima'] }
 };
 
 global.OBSERVACIONES = {
@@ -46,6 +51,9 @@ global.OBSERVACIONES = {
   ],
   m57: [ { observador: 'israel', viaje: 8 } ]   // una sola observación
 };
+
+// Quién entra en la vista del vecindario lo decide esa capa, no el viaje.
+global.VLVecindarioCatalogo = require('../mapa/js/via-lactea-vecindario-catalogo.js');
 
 var VLV = require('../mapa/js/via-lactea-viaje.js');
 
@@ -103,6 +111,10 @@ eq(VLV.capaInicial('7').capa, 'vecindario', 'el primer objeto manda: una estrell
 eq(VLV.capaInicial('8').capa, 'galaxia', 'un Messier abre la vista de la galaxia');
 eq(VLV.capaInicial('8').objeto.id, 'm57', 'devuelve también el objeto que hay que encuadrar');
 eq(VLV.capaInicial('404'), null, 'viaje inexistente -> sin capa');
+eq(VLV.capaInicial('13').capa, 'galaxia', 'espacio profundo cercano abre la galaxia, no el vecindario (allí no se pinta)');
+eq(ids(VLV.rutaDe('13').vecindario), ['proxima'], 'la nebulosa cercana no entra en el tramo del vecindario');
+eq(ids(VLV.rutaDe('13').galaxia), ['ngc2024', 'proxima'], 'la nebulosa viaja en el tramo de la galaxia');
+eq(VLV.escalasDe('13'), ['vecindario', 'galaxia'], 'nebulosa cercana + estrella cercana SÍ son dos escalas');
 
 console.log('otrasObservaciones (pantalla "← Descubrir"):');
 var otras = VLV.otrasObservaciones('m13', 0);
