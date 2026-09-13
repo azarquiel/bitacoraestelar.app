@@ -42,7 +42,11 @@ PAGINAS.forEach(function (p) {
 /* Servidor de desarrollo: un php -S efímero sobre una copia de la fixture en
    simulador_ocular/dso/ (ignorado en git), que se borra al acabar. */
 var DSO = path.join(RAIZ, 'simulador_ocular/dso');
-var FIX = path.join(RAIZ, 'scripts/fixtures/dso/NGC_5194.a4ddf9db');
+/* El hash sale del directorio, no cableado: subir `GENERADOR` renombra el banco
+   entero (ADR 0026) y este test no tiene por qué enterarse. */
+var FIX = path.join(RAIZ, 'scripts/fixtures/dso',
+  fs.readdirSync(path.join(RAIZ, 'scripts/fixtures/dso'))
+    .filter(function (n) { return /^NGC_5194\..*\.png$/.test(n); })[0].replace(/\.png$/, ''));
 var NOMBRE = '_test_consumidores.' + process.pid;
 var creado = !fs.existsSync(DSO);
 fs.mkdirSync(DSO, { recursive: true });   // dos copias a la vez (bateria -j 2) no chocan
