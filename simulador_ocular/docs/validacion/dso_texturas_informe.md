@@ -62,7 +62,9 @@ la dispara—, es la lista de lo que hay que mirar. Las texturas anteriores a #2
 no traen la medida en su sidecar y no salen aquí: para esas está
 `node scripts/harness_bloques_ausencia.js`, que la mide del PNG.
 
-Ninguna.
+| objeto | mayor bloque | relleno de su caja | componentes |
+|---|---|---|---|
+| Abell 12 | 3.58 % | 60 % | 6 |
 
 ## Texturas sin cielo medido
 
@@ -75,4 +77,9 @@ solos en la corrida siguiente. `sin-medir` es el comodín de un sidecar que trae
 `vecino` sin motivo y sin los dos números: no debería salir nunca, y si sale es
 que el generador escribió medio par.
 
-Ninguna.
+| objeto | motivo | dirección | difusa más cercana |
+|---|---|---|---|
+| NGC 205 | `vecina-dentro` | O | NGC 224 (dentro) |
+| IC0131 | `vecina-dentro` | O | NGC 598 (dentro) |
+| IC0143 | `vecina-dentro` | N | NGC 598 (dentro) |
+| NGC2023 | `vecina-dentro` | N | IC0434 (dentro) |

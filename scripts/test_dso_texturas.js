@@ -319,11 +319,15 @@ ok(new RegExp('\\| ausencia-excesiva \\| ' + excesivas.length + ' \\|').test(inf
 
 /* Las texturas que se pintan con un cielo sin medir van POR NOMBRE al informe,
    no solo contadas (#287): con la cuenta sola no se sabe a cuál volver, y los
-   motivos se arreglan de forma distinta. Hoy no hay ninguna —ningún sidecar
-   publicado trae `vecino` hasta la republicación del banco (#288)—, así que el
-   caso se monta a mano en un directorio aparte. */
-ok(inf.sinCielo.length === 0 && /Texturas sin cielo medido/.test(infAntes),
-   'el informe trae la sección del cielo sin medir, hoy vacía (#288 sin hacer)');
+   motivos se arreglan de forma distinta. Desde la republicación del banco (#288)
+   los sidecars traen `vecino`, así que la lista sale de lo publicado: cada
+   nombre que declara el informe tiene que estar también en su tabla. Los motivos
+   que hoy no aparecen —el par a medias, el vecino inservible por otras razones—
+   se montan a mano en un directorio aparte, debajo. */
+ok(/Texturas sin cielo medido/.test(infAntes) &&
+   inf.sinCielo.every(function (n) { return infAntes.indexOf('| ' + n + ' | `') >= 0; }),
+   'el informe lista por nombre las ' + inf.sinCielo.length +
+   ' textura(s) sin cielo medido: ' + (inf.sinCielo.join(', ') || 'ninguna'));
 var tmpSC = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dso-287-'));
 fs.writeFileSync(path.join(tmpSC, PS1.ps1IdTextura('NGC 9997') + '.' + v0 + '.json'),
   JSON.stringify({ nombre: 'NGC 9997', modelo: 'imagen', version: v0, ancho: 8, alto: 8,

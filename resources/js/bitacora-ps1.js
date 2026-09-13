@@ -1845,8 +1845,9 @@
            que le falta es su cielo, y decir «no se pudo leer» sería mentir—.
            Quien pinta la traduce en aviso. Una textura anterior a #285 —sin
            `vecino` ninguno— NO se marca: ahí nadie midió ni falló nada, es el
-           régimen mixto que el ADR 0028 previó, y marcarlas sería marcar todo
-           lo publicado hasta la republicación del banco (#288). */
+           régimen mixto que el ADR 0028 previó. Tras la republicación del banco
+           (#288) ya no queda ninguna publicada, pero la caché de un navegador
+           puede seguir sirviendo una vieja. */
         var vec = ps1CieloDeSidecar(sc);
         if (vec && vec.motivo) notas.cieloMotivo = vec.motivo;
         return {

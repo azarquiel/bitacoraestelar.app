@@ -11,10 +11,16 @@ una republicación del banco.
 > **Enmienda (2026-09-12, #286).** Ya está implementada, así que el párrafo de
 > arriba vale como historia y no como estado: el generador baja y audita el
 > campo vecino en #285, y el runtime usa sus dos números en vez del marco en
-> #286. Lo que falta es la republicación del banco (#288): hasta que se haga,
-> ningún sidecar publicado trae `vecino`, así que en producción sigue mandando
-> el marco —el régimen mixto que este ADR previó— y el cambio de suelo no se ve
-> todavía en pantalla.
+> #286.
+>
+> **Enmienda (2026-09-13, #288).** El banco está republicado con `GENERADOR`
+> subido a `gen_dso_texturas 2`: las 68 texturas cambiaron de nombre y sus
+> sidecars traen `vecino`, así que en producción manda ya el cielo medido fuera
+> del objeto y no el marco. Los píxeles no se movieron —los PNG salen byte a
+> byte iguales—: lo que cambia es el suelo con el que se pintan. Cuatro objetos
+> se quedan con la ley del marco porque otra difusa catalogada cae en su campo
+> vecino (`vecina-dentro`): NGC 205, IC0131, IC0143 y NGC2023; el runtime los
+> marca (#287) y salen por nombre en el informe.
 
 ## El problema, en una línea
 
