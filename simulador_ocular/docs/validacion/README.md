@@ -18,3 +18,4 @@ Orden cronológico de ejecución:
 12. `dso_texturas_fase1.md` (2026-09-08) — informe de cierre de la fase 1: veredicto de L1.1 a L1.4 y las tablas de deltas de R1 y R2
 13. `emision_banda_o_ley.md` (2026-09-12) — #263: por qué NGC 6888 y NGC 7293 salen recortadas; g, r e i medidas, y la causa es distinta en cada una
 14. `suelo_cielo_parche.md` (2026-09-12) — #274: de dónde salen el cielo y la σ de un parche; E1–E4 medidas contra un patrón de cielo lejano y campo vecino
+15. `recaptura_r5_cielo_vecino.md` (2026-09-13) — deltas de la recaptura R5 del golden difuso (el cielo del parche sale del campo vecino), con la línea base de la batería y el arnés de #274 re-corrido como testigo
