@@ -26,7 +26,10 @@ var GrupoLocal = (function () {
     S0:  '#c8b6ff', // lenticular
     S:   '#7ec8ff', // espiral
     SB:  '#5fe0c8', // espiral barrada
-    Irr: '#ff8a80'  // irregular
+    Irr: '#ff8a80', // irregular
+    // Galaxia sin clase deducible: SIMBAD la da por galaxia (otype extragaláctico)
+    // pero no manda morfología legible. Debe coincidir con bitacora_color_por_clase.
+    galaxia: '#9fb6c9'
   };
 
   // A partir de esta distancia al Sol (años luz) un objeto se considera

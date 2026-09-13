@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.34.0
+ * Version:     1.35.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.34.0' );
+define( 'BITACORA_VERSION', '1.35.1' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -2871,11 +2871,38 @@ function bitacora_posiciones_mapa( $l, $b, $d ) {
  * clase de la secuencia de Hubble para la leyenda del Grupo Local:
  * E (elíptica), S0 (lenticular), SB (espiral barrada), S (espiral), Irr (irregular).
  * Devuelve '' si no se reconoce (o el objeto no es una galaxia).
+ *
+ * SIMBAD sirve la morfología en DOS escalas, y la numérica es tan frecuente como
+ * la de letras: la etapa T de de Vaucouleurs (NGC 593 responde "5", NGC 3115
+ * responde "-1"). Es el mismo dato en otra notación, así que se traduce igual:
+ * T ≤ −4 elíptica, −3…0 lenticular, 1…8 espiral, 9…10 irregular. La etapa NO
+ * dice si hay barra (eso es la familia SA/SB, que va aparte en la clasificación
+ * de de Vaucouleurs y SIMBAD no manda en este campo), así que una espiral por
+ * etapa es 'S' y nunca 'SB': inventar la barra sería teñir el marcador con un
+ * dato que no existe.
  */
 function bitacora_clase_hubble( $morph ) {
     $m = trim( (string) $morph );
     if ( '' === $m ) {
         return '';
+    }
+    if ( preg_match( '/^[+-]?\d+(\.\d+)?$/', $m ) ) {
+        $t = floatval( $m );
+        // La escala de de Vaucouleurs va de -6 a 11 y fuera de ahí el número no es
+        // una etapa: sin este corte un "99" salía 'Irr' por el camino de siempre.
+        if ( $t < -6 || $t > 11 ) {
+            return '';
+        }
+        if ( $t <= -4 ) {
+            return 'E';
+        }
+        if ( $t <= 0 ) {
+            return 'S0';
+        }
+        if ( $t <= 8 ) {
+            return 'S';
+        }
+        return 'Irr';
     }
     if ( preg_match( '/^S0|^L[^y]?/i', $m ) ) {
         return 'S0';
@@ -2906,8 +2933,32 @@ function bitacora_color_por_clase( $clase ) {
         'S'   => '#7ec8ff',
         'SB'  => '#5fe0c8',
         'Irr' => '#ff8a80',
+        // Galaxia de la que solo se sabe que es una galaxia: SIMBAD da el otype
+        // extragaláctico pero no una morfología legible. Color propio y no el de
+        // 'S': una espiral sin serlo es peor que no decir nada, y el default de
+        // antes era #7ec8ff, que en la leyenda del mapa MW es "Resto de supernova".
+        'galaxia' => '#9fb6c9',
     );
-    return isset( $colores[ $clase ] ) ? $colores[ $clase ] : '#7ec8ff';
+    return isset( $colores[ $clase ] ) ? $colores[ $clase ] : '#9fb6c9';
+}
+
+/**
+ * ¿El otype de SIMBAD dice que el objeto es una GALAXIA? Los códigos
+ * extragalácticos no llevan '*' y no están en la tabla de categorías del mapa MW
+ * (que es de objetos de la Vía Láctea), así que sin esto caían en 'desconocido'
+ * salvo que la morfología trajera una clase de Hubble legible.
+ *
+ * Es una lista y no una regla porque no hay una: 'GiG', 'Sy2', 'AGN' y 'LSB' no
+ * comparten ninguna forma. Fuera quedan a propósito los códigos de CONJUNTO de
+ * galaxias ('GrG' grupo, 'ClG' cúmulo, 'PaG' par): son varias galaxias, igual que
+ * 'As*' son varias estrellas.
+ */
+function bitacora_es_otype_galaxia( $codigo ) {
+    $galacticos = array(
+        'G', 'G?', 'GIG', 'IG', 'EMG', 'RG', 'LSB', 'SBG', 'H2G',
+        'GIC', 'GIP', 'BIC', 'AGN', 'SY1', 'SY2', 'SYG', 'LIN',
+    );
+    return in_array( strtoupper( trim( (string) $codigo ) ), $galacticos, true );
 }
 
 /**
@@ -2945,6 +2996,16 @@ function bitacora_categorias_mapa() {
         // y 'Cld' es tan ancho que se tragaría objetos que no son esto.
         array( 'oscura',     array( 'DNE', 'GLB', 'CGB' ), '#b08968' ),
         array( 'snr',        array( 'SNR' ),         '#7ec8ff' ),
+        // Protoplanetaria: la fase entre la AGB y la planetaria. La central todavía
+        // no ioniza la envoltura, así que lo que se ve es luz REFLEJADA en el polvo,
+        // bipolar y de altísimo contraste (Frosty Leo, el Huevo, el Rectángulo Rojo).
+        // No es una estrella aunque su otype lleve '*': 'pA*' (post-AGB) entra aquí,
+        // antes que la regla estelar, porque en el ocular es un objeto extenso.
+        // FUERA 'PN?' (planetaria dudosa), que el ticket daba por candidata: la duda
+        // de SIMBAD es «puede que no sea una planetaria», no «es la fase de antes»,
+        // y muchas lo son de verdad. Meterla aquí cambiaría planetarias buenas por
+        // protoplanetarias inventadas; se queda en 'desconocido', que es la verdad.
+        array( 'protoplanetaria', array( 'PA*' ), '#ffc4e1' ),
     );
 }
 
@@ -2997,9 +3058,19 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
     }
 
     // Galaxia (extragaláctica): la clase de Hubble tiñe el marcador en grupo-local.
-    $clase = bitacora_clase_hubble( $morph );
-    if ( '' !== $clase ) {
-        return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
+    // Son dos preguntas distintas y el bug era mezclarlas: «¿es una galaxia?» la
+    // contesta el OTYPE, y «¿de qué clase?» la morfología. Sin la primera, una
+    // galaxia cuya morfología no se entendía acababa en 'desconocido'; y la
+    // morfología sola tampoco vale para la primera, porque no es exclusiva de las
+    // galaxias (un tipo espectral guardado en `morph` empieza por 'B' o por 'K',
+    // pero una etapa numérica o una 'E' sueltas colarían una estrella como
+    // elíptica). Sin otype se acepta la morfología: es lo que hay guardado de las
+    // filas viejas, cuando SIMBAD no responde.
+    if ( bitacora_es_otype_galaxia( $codigo ) ) {
+        $clase = bitacora_clase_hubble( $morph );
+        return ( '' !== $clase )
+            ? array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) )
+            : array( 'tipo' => 'galaxia', 'color' => bitacora_color_por_clase( 'galaxia' ) );
     }
 
     // Estrella normal / doble / variable: los otypes estelares de SIMBAD llevan '*'
@@ -3010,6 +3081,16 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
     // tabla de treinta códigos que siempre se queda corta.
     if ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) {
         return array( 'tipo' => 'estrella', 'color' => '#dfe7f5' );
+    }
+
+    // Última oportunidad para una galaxia: otype que nadie reconoce (o que SIMBAD no
+    // dio) con una morfología legible. La lista de otypes galácticos es una lista y
+    // se queda corta por definición, así que lo que antes clasificaba por morfología
+    // sola sigue clasificando. Va DESPUÉS de la regla estelar y no antes: por delante,
+    // una estrella con un número o una 'E' en `morph` salía elíptica.
+    $clase = bitacora_clase_hubble( $morph );
+    if ( '' !== $clase ) {
+        return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
     }
 
     // Sin otype, o con uno que nadie encajó: 'desconocido' NO es un tipo de objeto,
@@ -3727,7 +3808,7 @@ function bitacora_objetos_reclasificar() {
     global $wpdb;
     $t_obj = bitacora_nombre_tabla_objetos();
     $filas = $wpdb->get_results(
-        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '', 'desconocido') ORDER BY id ASC"
+        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '', 'desconocido', 'estrella') ORDER BY id ASC"
     );
     $hechos = 0;
     foreach ( (array) $filas as $o ) {
@@ -3738,6 +3819,15 @@ function bitacora_objetos_reclasificar() {
         $morph = ( $sim && '' !== (string) $sim['morph'] ) ? (string) $sim['morph'] : (string) $o->morph;
 
         $c = bitacora_clasificar_objeto( $otype, $morph );
+        // Una reclasificación NUNCA empeora una fila: si SIMBAD no contesta, el
+        // clasificador devuelve 'desconocido' y reescribirlo borraría lo que ya se
+        // sabía. Importa desde que entran aquí las filas en 'estrella' —una
+        // protoplanetaria guardada antes de que existiera su categoría está ahí, y
+        // sin esta pasada no había botón que la rescatara—: esas sí tienen algo que
+        // perder ante un fallo de red.
+        if ( 'desconocido' === $c['tipo'] && 'desconocido' !== $o->tipo && '' !== $o->tipo && 'otro' !== $o->tipo ) {
+            continue;
+        }
         $wpdb->update(
             $t_obj,
             array( 'tipo' => $c['tipo'], 'color' => $c['color'], 'actualizado_en' => current_time( 'mysql' ) ),
@@ -4311,9 +4401,14 @@ function bitacora_panel_objetos() {
         $n = bitacora_objetos_reclasificar();
         echo '<div class="notice notice-success"><p>Reclasificados: <strong>' . intval( $n ) . '</strong> objeto(s).</p></div>';
     }
-    // El MISMO conjunto que reclasifica bitacora_objetos_reclasificar(): si el
-    // contador y la consulta se separan, el panel promete cero pendientes con
-    // objetos sin clasificar dentro (o al revés).
+    // Lo que el contador cuenta es lo que el rótulo promete: objetos SIN clasificar.
+    // La consulta de bitacora_objetos_reclasificar() es más ancha —entran también las
+    // filas en 'estrella', por las protoplanetarias guardadas antes de que existiera
+    // su categoría—, y la diferencia es a propósito: una estrella bien clasificada no
+    // es un pendiente, es trabajo extra que el botón hace de paso. Lo que no puede
+    // pasar es lo contrario, que el contador sea más ancho que la consulta: entonces
+    // el panel enseñaría pendientes que el botón no toca. Si algún día se estrecha la
+    // consulta, se estrecha este COUNT con ella.
     $sin_clasificar = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $tabla WHERE tipo IN ('otro', '', 'desconocido')" ) );
     echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
     wp_nonce_field( 'bitacora_reclasificar_objetos' );

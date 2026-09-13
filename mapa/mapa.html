@@ -1090,6 +1090,13 @@
       <span style="width:9px;height:9px;border-radius:50%;background:#5fe0c8;box-shadow:0 0 4px 1px rgba(95,224,200,0.9);flex:none;"></span>
       <span class="mw-legend-text">Nebulosa planetaria</span>
     </button>
+    <!-- Protoplanetaria: la fase anterior a la planetaria, cuando la central aún no
+         ioniza la envoltura y lo que se ve es luz reflejada en el polvo. Cajón
+         propio porque en el ocular no es ni una estrella ni una planetaria. -->
+    <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#ffc4e1" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#ffc4e1;box-shadow:0 0 4px 1px rgba(255,196,225,0.9);flex:none;"></span>
+      <span class="mw-legend-text">Nebulosa protoplanetaria</span>
+    </button>
     <button type="button" class="mw-legend-item" aria-pressed="false" data-color="#b08968" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#b08968;box-shadow:0 0 4px 1px rgba(176,137,104,0.9);flex:none;"></span>
       <span class="mw-legend-text">Nebulosa oscura</span>
@@ -1150,6 +1157,12 @@
     <button type="button" class="gl-legend-item" aria-pressed="false" data-tipo="Irr" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
       <span style="width:9px;height:9px;border-radius:50%;background:#ff8a80;box-shadow:0 0 4px 1px rgba(255,138,128,0.9);flex:none;"></span>
       <span class="gl-legend-text">Irregular (Irr)</span>
+    </button>
+    <!-- Galaxia sin clase: SIMBAD la da por galaxia pero no manda una morfología
+         legible. Se dice eso y no se le inventa una clase de Hubble. -->
+    <button type="button" class="gl-legend-item" aria-pressed="false" data-tipo="galaxia" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#9fb6c9;box-shadow:0 0 4px 1px rgba(159,182,201,0.9);flex:none;"></span>
+      <span class="gl-legend-text">Galaxia (sin clase)</span>
     </button>
   </div>
 
