@@ -454,6 +454,78 @@ window.BitacoraBase = (function () {
     };
   }
 
+  /* Qué se conserva al encadenar el objeto SIGUIENTE de la misma noche.
+
+     Hay dos vías y solo se diferencian en eso. En campo amplio, M42 y M43 caen
+     en el mismo campo del mismo ocular: se ven en el mismo instante y se
+     describen en el mismo párrafo, así que la vía «mismo campo» conserva la
+     descripción y no toca la hora. La vía «más tarde» es otra observación:
+     conserva la óptica, porque no se ha tocado el tubo, y nada de lo visto.
+
+     Las dos vacían siempre objeto, coordenadas y estado de resolución. Son tres
+     observaciones distintas aunque compartan instante: OAL admite un solo
+     <target> por observación y la identidad es usuario + noche + objeto.
+
+     Aquí vive la regla entera para que los dos botones no la copien en dos
+     ramas del manejador. El cableado es de otra historia: hasta que llegue, esta
+     función no tiene todavía ningún consumidor y el botón de hoy sigue con lo
+     suyo en `bitacora-formulario.js`.
+
+     Sin DOM. Toma las entradas como las da `recogerEntradas()` del formulario
+     (`campoReal`, `ocularId`, `imagenId`) y las devuelve como las come
+     `crearEntrada(datos)` (`campo_real`, `ocular_id`, `imagen_id`): traducir
+     entre esas dos formas es media función. La imagen se reapunta por id, sin
+     resubir: un dibujo de campo amplio es el mismo dibujo para los tres objetos,
+     y la tabla admite el mismo adjunto en dos entradas.
+
+     La sección «Exploración» entra y sale como el texto pelado que es en
+     pantalla (`explDesc.innerHTML`), sin título: el suyo lo rehace el formulario
+     al guardar con el objeto del momento, que al encadenar todavía no se conoce.
+     Arrastrarlo dejaría "M42. Exploración" colgando de la ficha de M43. */
+  var MINUTOS_OBJETO_SIGUIENTE = 20;
+
+  function siguienteObjeto(estado, opciones) {
+    estado = estado || {};
+    var mismoCampo = !!(opciones && opciones.mismoCampo);
+    var t = mismoCampo
+      ? { fecha: estado.fecha || '', hora: estado.hora || '' }
+      : sumarMinutos(estado.fecha || '', estado.hora || '', MINUTOS_OBJETO_SIGUIENTE);
+
+    var entradas = (estado.entradas || []).map(function (e) {
+      return {
+        aumento: e.aumento,
+        campo_real: e.campoReal,
+        pupila_salida: e.pupilaSalida,
+        ocular_id: e.ocularId,
+        auxiliar_id: e.auxiliarId,
+        auxiliar2_id: e.auxiliar2Id,
+        titulo: mismoCampo ? (e.titulo || '') : '',
+        descripcion: mismoCampo ? (e.descripcion || '') : '',
+        imagenes: mismoCampo ? (e.imagenes || []).map(function (i) {
+          return {
+            tipo: i.tipo || 'principal',
+            imagen_id: i.imagenId,
+            imagen_url: i.imagenUrl || '',
+            etiqueta: i.etiqueta || '',
+            pos: i.pos || '',
+            origen: i.origen || 'subida'
+          };
+        }) : []
+      };
+    });
+
+    return {
+      fecha: t.fecha,
+      hora: t.hora,
+      objeto: '',
+      ra: '',
+      dec: '',
+      resuelto: null,
+      entradas: entradas,
+      exploracion: mismoCampo ? (estado.exploracion || '') : ''
+    };
+  }
+
   // ── Parsers/formatos de coordenadas ecuatoriales (RA/Dec) ──
   // Fuente única, compartida por el registro y el simulador de ocular. RA en
   // grados internamente. Aceptan sexagesimal ("21h 40m 22s" / "21 40 22" /
@@ -692,6 +764,7 @@ window.BitacoraBase = (function () {
     mensajeViaje: mensajeViaje,
     lugarDeObservacion: lugarDeObservacion,
     sumarMinutos: sumarMinutos,
+    siguienteObjeto: siguienteObjeto,
     parseRA: parseRA,
     parseDec: parseDec,
     formatRA: formatRA,
