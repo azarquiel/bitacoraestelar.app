@@ -107,3 +107,117 @@ Los dos objetos cuyo campo vecino confirma el marco —M104 (σv/σm = 0,97) y M
 (0,97)— se mueven menos del 0,6 %. Esa correlación es el argumento: el delta no
 es ruido de recaptura, es la corrección del suelo, y donde no había nada que
 corregir no corrige nada.
+
+## 5 · El arnés de #274 como testigo: L0 no se ha movido (#289)
+
+La recaptura cambia la ley de producción, no la medida de #274. Para que se vea,
+se vuelve a correr el arnés sobre el banco republicado y se comprueba que las
+cifras de **L0 —la ley vieja, la del marco del 6 %—** salen las mismas que
+publica `suelo_cielo_parche.md`. Si se hubieran movido, el arnés habría dejado de
+medir lo publicado y ya no serviría de testigo de nada.
+
+```
+node scripts/harness_suelo_cielo.js --opciones --dir <banco>
+```
+
+`scripts/salida_suelo_patron.json` —el patrón contra el que se juzga— está
+commiteado desde #274, así que la comparación es contra el mismo patrón y no
+contra uno nuevo.
+
+**El banco con el que se corrió.** Los PNG no entran en git y la tirada de #288
+los dejó bajo nombres nuevos, así que se montó un directorio pareando cada
+sidecar republicado con el PNG de la tirada anterior. Eso vale porque los píxeles
+no cambiaron, y aquí está comprobado y no supuesto: de los once objetos que
+llevan fixture en `scripts/fixtures/dso/` —recapturados con el nombre nuevo—
+**los diez que tienen pareja en el banco viejo dan el mismo sha256**. El
+undécimo, NGC 5194, no está en la copia vieja y se leyó directamente de su
+fixture.
+
+| magnitud (los nueve afectados con patrón) | publicado en #274 | re-corrido hoy |
+|---|---|---|
+| L0 · mediana \|log₂(σ/σ_patrón)\| | 0,42 | 0,42 |
+| L0 · máx \|log₂\| | 2,46 (NGC 1788) | 2,46 (NGC 1788) |
+| L0 · máx \|Δcielo\|/σ_patrón | 5,22 (NGC 1788) | 5,22 (NGC 1788) |
+| E2 / E3 · mediana \|log₂\| | 0,40 / 0,28 | 0,40 / 0,28 |
+| Listón 3 · suelo L0 de los cuatro controles | 37 / 29 / 97 / 178 DN/as² | 37 / 29 / 97 / 178 |
+| Listón 3 · apagados L0 | 25,0 / 23,5 / 0,8 / 0,1 % | 25,0 / 23,5 / 0,8 / 0,1 % |
+| Listón 4 · anillos de NGC 6888 con L0 | 13 / 12 / 18 / 13 / 10 % → 1,80 | 13 / 12 / 18 / 13 / 10 % → 1,80 |
+
+Objeto a objeto, la columna L0 de `log₂(σ/σ_patrón)` sale idéntica en los nueve
+(+0,12 · +0,29 · −0,20 · +2,46 · +0,42 · −0,25 · +0,60 · +0,76 · −0,69), y la de
+Δcielo también. **El veredicto de #274 no se toca**: L0, E2 y E3 siguen sin pasar
+los listones 1 y 2, y E4 —la opción que se implementó— sigue pasándolos por
+construcción.
+
+Dos filas nuevas aparecen y no estaban en el informe: NGC 5194 y NGC 3031 ahora
+sí tienen patrón (L0 +0,16 y +0,04), porque el fichero de patrón commiteado trae
+sus medidas. No cambian ningún veredicto: los dos son controles de parche
+holgado, y ahí la ley vieja ya acertaba.
+
+## 6 · Quién sigue pintándose con el cielo del marco (#287)
+
+Cuatro texturas buenas del banco no tienen campo vecino utilizable y se quedan
+con la ley del marco, que es lo único que les queda. El runtime las marca y el
+informe del generador las lista por nombre:
+
+| objeto | motivo | dirección | difusa que lo invalida |
+|---|---|---|---|
+| NGC 205 | `vecina-dentro` | O | NGC 224 (dentro del campo) |
+| IC0131 | `vecina-dentro` | O | NGC 598 (dentro) |
+| IC0143 | `vecina-dentro` | N | NGC 598 (dentro) |
+| NGC2023 | `vecina-dentro` | N | IC0434 (dentro) |
+
+Ninguno de los cuatro es de los cuatro objetos del golden, así que **la recaptura
+no los cubre**: lo que se sabe de ellos es que siguen con la ley vieja y que se
+dice, no que su suelo sea correcto.
+
+Un caso aparte, que conviene no leer como resuelto: **NGC 1788 sí tiene campo
+vecino** —a 2,7′ al E, una celda cosida— y su sidecar trae cielo 163,8 DN y
+σ 144,7. La σ coincide con la del patrón de #274 (144,7), pero el cielo sigue muy
+por encima del −1,5 DN del anillo lejano: a 2,7′ la nebulosa todavía llega. El
+objeto deja de leerse con los 754 DN del marco, que era lo que lo apagaba entero,
+pero su pedestal no es cero y esto no lo mide esta recaptura.
+
+## 7 · La batería, antes y después (#289)
+
+La línea base se mide antes de culpar al diff, y aquí existe fechada porque se
+fijó a propósito para esta épica.
+
+**Antes** (#295, mergeado en `2e88ff2`, o sea antes de que entrara el banco
+republicado): batería completa, **104 tests, un solo rojo**, y ese rojo
+**declarado con ticket** en el mapa `ESPERADOS` de `scripts/bateria.js` —
+`test_halo_v7_e5.js` (#294), que no mide el código sino que lee `matriz_v7.json`,
+archivada el 2026-08-17. Los otros tres rojos de fondo que había se arreglaron
+allí, no se taparon.
+
+**Después** (esta rama, sobre `1d737f7`, con el banco republicado y el golden ya
+recapturado):
+
+```
+node scripts/bateria.js
+```
+
+> 104 tests en 61 min 23 s · 1 fallo esperado, con ticket: `test_halo_v7_e5.js`
+> (#294) · **«Sin fallos nuevos»**
+
+**El delta de la batería es cero.** Ni un guardián de imagen nuevo en rojo:
+`test_golden_difusas`, `test_dso_texturas`, `test_consumidores_dso`,
+`test_fuente_parche`, `test_sin_red_dso`, `test_ps1_nan_ausencia`,
+`test_psf_produccion`, `test_psf_parche`, `test_nebulosa_planetaria`,
+`test_nebulosas_emision_reflexion`, `test_resto_supernova`, `test_umbral_textura`
+y `test_bilineal_parche` salen todos verdes. La razón es que la rotura que esta
+épica causaba **ya se cobró dentro de #288**: el golden se recapturó allí con su
+tabla de deltas (§2 de este mismo documento) y los demás guardianes leen las
+fixtures de `scripts/fixtures/dso/`, que se republicaron con el banco. Lo que
+queda escrito aquí es que después de todo eso la batería vuelve a su línea base
+conocida, y no a una nueva.
+
+El golden, además, se corrió suelto en esta máquina y salió **«GOLDEN: todo bit a
+bit»**: la línea base capturada en R5 se reproduce aquí, así que la comparación
+de la §2 es entre dos ejecuciones de la misma máquina y no entre máquinas.
+
+**Dos salvedades sobre el reloj, que no afectan al veredicto.** Los 61 min de
+esta corrida contra los 13 de la de #295 no dicen nada del código: la batería
+compartió la máquina —8 GB con el swap lleno— con otra sesión que corría su
+propia batería `--rapida`, y en este equipo el mismo test verde ya se ha medido
+en 251 s y en 444 s. Ninguna afirmación de este documento se apoya en un tiempo.
