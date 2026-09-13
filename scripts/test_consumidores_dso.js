@@ -42,7 +42,28 @@ PAGINAS.forEach(function (p) {
 /* Servidor de desarrollo: un php -S efímero sobre una copia de la fixture en
    simulador_ocular/dso/ (ignorado en git), que se borra al acabar. */
 var DSO = path.join(RAIZ, 'simulador_ocular/dso');
-var FIX = path.join(RAIZ, 'scripts/fixtures/dso/NGC_5194.a4ddf9db');
+/* El hash sale del directorio, no cableado: subir `GENERADOR` renombra el banco
+   entero (ADR 0026) y este test no tiene por qué enterarse. El id sí va a mano
+   —'NGC_5194' es lo que devuelve ps1IdTextura('NGC 5194')— porque este test no
+   arranca `window` ni PS1 a propósito: mide el orden de los `<script>` y el tipo
+   que sirve el servidor, no la ley.
+
+   Exactamente una, y con su PNG al lado, como `lib_parche_publicado.js`: dos
+   versiones del mismo objeto en el directorio —un renombrado a medias— cogerían
+   la que dijese el orden de `readdirSync`, y ninguna cogería un `undefined` que
+   revienta tres líneas más abajo sin decir por qué. */
+var FIXDIR = path.join(RAIZ, 'scripts/fixtures/dso'), FIXID = 'NGC_5194';
+var pares = fs.readdirSync(FIXDIR).filter(function (n) {
+  return n.indexOf(FIXID + '.') === 0 && /\.json$/.test(n) && n.indexOf('.fila.') < 0 &&
+    fs.existsSync(path.join(FIXDIR, n.replace(/\.json$/, '.png')));
+});
+if (pares.length !== 1) {
+  console.log('  FALLA la fixture de ' + FIXID + ' en ' + path.relative(RAIZ, FIXDIR) + ': ' +
+    (pares.length ? 'hay ' + pares.length + ' (' + pares.join(', ') + ')'
+                  : 'no hay ninguna con su PNG'));
+  process.exit(1);
+}
+var FIX = path.join(FIXDIR, pares[0].replace(/\.json$/, ''));
 var NOMBRE = '_test_consumidores.' + process.pid;
 var creado = !fs.existsSync(DSO);
 fs.mkdirSync(DSO, { recursive: true });   // dos copias a la vez (bateria -j 2) no chocan

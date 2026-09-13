@@ -26,6 +26,7 @@ En este orden, cada una con su commit, su tabla y su invariante propio:
 | R2 | **La fuente pasa a ser la textura** (fase 1, `asinh16` a `salida = 1024`) | `parche.datos` y los `difuso`, dentro de L1.1 | `thetaIntArcmin`; los **NaN heredados del stack** (0 píxeles de diferencia); la cuenta total de NaN solo puede moverse por la frontera de ausencia y dentro del tope de L1.1 |
 | R3 | **Resolución por objeto** (fase 2, regla C) | todo, incluidos `ancho`/`alto` | `thetaIntArcmin`; el flujo total por objeto, dentro del ±2e-3 de L2.3 |
 | R4 | **Máscara offline** (fase 3) | nada, si la ley se movió de sitio sin cambiar | L3.1 pide **bit a bit idéntico**: si el hash cambia, la fase 3 falló, y no se recaptura |
+| R5 | **El cielo sale del campo vecino** (ADR 0028, #288): el sidecar publicado trae `vecino`, así que el corte de ausencia deja de medirse en el marco | `parche.datos` y los dos `difuso` de los cuatro objetos | `thetaIntArcmin`; la **suma** de `parche.datos` (el anclaje la fija al catálogo); los píxeles del PNG |
 
 **R1 está hecha** (2026-09-06): la WCS es el defecto en `lib_bajar_parche.js` y
 la tabla de deltas vive en `simulador_ocular/docs/validacion/recaptura_r1_wcs.md`.
@@ -41,6 +42,11 @@ R2 se paró una vez en el paso 5 —L1.1 no cerraba por la condición de posici�
 los NaN de ausencia— y no se capturó hasta que el ADR 0024 corrigió esa
 condición con su medida delante («Segunda corrección de L1.1», 2026-09-07). Ese
 orden es el que vale: primero juzgar, después capturar.
+
+**R5 está hecha** (2026-09-13): la tabla de deltas vive en
+`simulador_ocular/docs/validacion/recaptura_r5_cielo_vecino.md`. No estaba
+prevista —cuando se escribió esta lista el cielo del campo vecino aún no era una
+ley— y va después de R2 y antes de R3 y R4, que siguen pendientes.
 
 R1 no estaba prevista en el objetivo: apareció al medir la fase 0
 (`docs/validacion/dso_texturas_fase0.md`, discrepancia 6). Va **antes** que R2 y

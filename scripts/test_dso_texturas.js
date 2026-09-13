@@ -319,11 +319,23 @@ ok(new RegExp('\\| ausencia-excesiva \\| ' + excesivas.length + ' \\|').test(inf
 
 /* Las texturas que se pintan con un cielo sin medir van POR NOMBRE al informe,
    no solo contadas (#287): con la cuenta sola no se sabe a cuál volver, y los
-   motivos se arreglan de forma distinta. Hoy no hay ninguna —ningún sidecar
-   publicado trae `vecino` hasta la republicación del banco (#288)—, así que el
-   caso se monta a mano en un directorio aparte. */
-ok(inf.sinCielo.length === 0 && /Texturas sin cielo medido/.test(infAntes),
-   'el informe trae la sección del cielo sin medir, hoy vacía (#288 sin hacer)');
+   motivos se arreglan de forma distinta. Desde la republicación del banco (#288)
+   los sidecars traen `vecino`, así que la lista sale de lo publicado: cada
+   nombre que declara el informe tiene que estar también en su tabla. Los motivos
+   que hoy no aparecen —el par a medias, el vecino inservible por otras razones—
+   se montan a mano en un directorio aparte, debajo. */
+/* Los DOS sentidos, que `every` sobre una lista vacía es cierto por vacuidad y
+   entonces esto no pinzaría nada: cada nombre que declara el informe tiene su
+   fila, y la tabla no trae más filas que nombres. Si el generador dejara de
+   emitirlas, las cuentas dejan de cuadrar y se ve. */
+var filasSC = (infAntes.match(/^\| [^|]+ \| `[a-z-]+` \|/gm) || [])
+  .map(function (f) { return f.slice(2, f.indexOf(' | `')); });
+ok(/Texturas sin cielo medido/.test(infAntes) &&
+   filasSC.length === inf.sinCielo.length &&
+   inf.sinCielo.every(function (n) { return filasSC.indexOf(n) >= 0; }),
+   'el informe lista por nombre las ' + inf.sinCielo.length +
+   ' textura(s) sin cielo medido, y la tabla trae esas mismas ' + filasSC.length +
+   ': ' + (inf.sinCielo.join(', ') || 'ninguna'));
 var tmpSC = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dso-287-'));
 fs.writeFileSync(path.join(tmpSC, PS1.ps1IdTextura('NGC 9997') + '.' + v0 + '.json'),
   JSON.stringify({ nombre: 'NGC 9997', modelo: 'imagen', version: v0, ancho: 8, alto: 8,

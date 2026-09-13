@@ -56,7 +56,7 @@ var BANCO = require('./lib_banco_dso.js')(window.BitacoraGaiaRender);
 /* Versión del generador. Súbela cuando cambie lo que determina los píxeles: el
    nombre de fichero lleva el hash, así que subirla republica todas las
    texturas y deja las viejas huérfanas (la URL es inmutable a propósito). */
-var GENERADOR = 'gen_dso_texturas 1';
+var GENERADOR = 'gen_dso_texturas 2';
 var SONDEO = 'PS1 DR2 3π stack';
 var MANIFIESTO = path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js');
 var FIXTURES = path.join(RAIZ, 'scripts', 'fixtures', 'dso');
@@ -825,9 +825,9 @@ function textoInforme(dir) {
   /* Los objetos que se pintan con un cielo que NO se pudo medir. Por nombre y
      no solo contados (#287, misma pega que #252): con la cuenta sola no se sabe
      a cuál volver, y los motivos se arreglan de forma distinta. Sale de lo
-     escrito, así que un sidecar anterior a #285 —sin `vecino`— no aparece:
-     ninguno de los publicados lo trae hasta que se republique el banco (#288),
-     y esa es justo la línea que esta tabla tiene que hacer visible. */
+     escrito, así que un sidecar anterior a #285 —sin `vecino`— no aparece: tras
+     la republicación del banco (#288) todo lo publicado lo trae, y el que no
+     aparezca aquí es que su cielo se midió. */
   var sinCielo = imagenes.map(function (s) {
     var v = PS1.ps1CieloDeSidecar(s);
     return (v && v.motivo) ? { nombre: s.nombre, motivo: v.motivo, vecino: s.vecino } : null;
