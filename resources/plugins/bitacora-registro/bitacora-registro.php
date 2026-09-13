@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.35.0
+ * Version:     1.35.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.35.0' );
+define( 'BITACORA_VERSION', '1.35.1' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -3066,14 +3066,11 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
     // pero una etapa numérica o una 'E' sueltas colarían una estrella como
     // elíptica). Sin otype se acepta la morfología: es lo que hay guardado de las
     // filas viejas, cuando SIMBAD no responde.
-    if ( bitacora_es_otype_galaxia( $codigo ) || '' === $codigo ) {
+    if ( bitacora_es_otype_galaxia( $codigo ) ) {
         $clase = bitacora_clase_hubble( $morph );
-        if ( '' !== $clase ) {
-            return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
-        }
-        if ( bitacora_es_otype_galaxia( $codigo ) ) {
-            return array( 'tipo' => 'galaxia', 'color' => bitacora_color_por_clase( 'galaxia' ) );
-        }
+        return ( '' !== $clase )
+            ? array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) )
+            : array( 'tipo' => 'galaxia', 'color' => bitacora_color_por_clase( 'galaxia' ) );
     }
 
     // Estrella normal / doble / variable: los otypes estelares de SIMBAD llevan '*'
@@ -3084,6 +3081,16 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
     // tabla de treinta códigos que siempre se queda corta.
     if ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) {
         return array( 'tipo' => 'estrella', 'color' => '#dfe7f5' );
+    }
+
+    // Última oportunidad para una galaxia: otype que nadie reconoce (o que SIMBAD no
+    // dio) con una morfología legible. La lista de otypes galácticos es una lista y
+    // se queda corta por definición, así que lo que antes clasificaba por morfología
+    // sola sigue clasificando. Va DESPUÉS de la regla estelar y no antes: por delante,
+    // una estrella con un número o una 'E' en `morph` salía elíptica.
+    $clase = bitacora_clase_hubble( $morph );
+    if ( '' !== $clase ) {
+        return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
     }
 
     // Sin otype, o con uno que nadie encajó: 'desconocido' NO es un tipo de objeto,
@@ -4394,9 +4401,14 @@ function bitacora_panel_objetos() {
         $n = bitacora_objetos_reclasificar();
         echo '<div class="notice notice-success"><p>Reclasificados: <strong>' . intval( $n ) . '</strong> objeto(s).</p></div>';
     }
-    // El MISMO conjunto que reclasifica bitacora_objetos_reclasificar(): si el
-    // contador y la consulta se separan, el panel promete cero pendientes con
-    // objetos sin clasificar dentro (o al revés).
+    // Lo que el contador cuenta es lo que el rótulo promete: objetos SIN clasificar.
+    // La consulta de bitacora_objetos_reclasificar() es más ancha —entran también las
+    // filas en 'estrella', por las protoplanetarias guardadas antes de que existiera
+    // su categoría—, y la diferencia es a propósito: una estrella bien clasificada no
+    // es un pendiente, es trabajo extra que el botón hace de paso. Lo que no puede
+    // pasar es lo contrario, que el contador sea más ancho que la consulta: entonces
+    // el panel enseñaría pendientes que el botón no toca. Si algún día se estrecha la
+    // consulta, se estrecha este COUNT con ella.
     $sin_clasificar = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $tabla WHERE tipo IN ('otro', '', 'desconocido')" ) );
     echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
     wp_nonce_field( 'bitacora_reclasificar_objetos' );

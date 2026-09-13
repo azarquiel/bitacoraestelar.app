@@ -99,14 +99,14 @@ def clasificar_mw(otype, tipo_obs="", morph=""):
     for tipo, codes, color in reglas:
         if tob == tipo or cod in codes:
             return tipo, color
-    if cod in OTYPES_GALAXIA or cod == "":
+    if cod in OTYPES_GALAXIA:
         clase = clase_hubble(morph)
-        if clase:
-            return clase, COLOR_CLASE[clase]
-        if cod in OTYPES_GALAXIA:
-            return "galaxia", COLOR_CLASE["galaxia"]
+        return (clase, COLOR_CLASE[clase]) if clase else ("galaxia", COLOR_CLASE["galaxia"])
     if "*" in cod and cod != "AS*":
         return "estrella", color_estrella
+    clase = clase_hubble(morph)
+    if clase:
+        return clase, COLOR_CLASE[clase]
     return "desconocido", color_desconocido
 
 # ── 1) Mapeos dorados (otype real de SIMBAD, ver consulta en vivo) ────────────
@@ -170,7 +170,8 @@ DORADOS_GALAXIA = [
     ("*",   "",     "estrella"), # una estrella con morph vacío sigue siendo estrella
     ("*",   "5",    "estrella"), # y con un número en morph TAMBIÉN: la morfología no
     ("V*",  "E",    "estrella"), # clasifica sola, solo matiza a la que ya es galaxia
-    ("GrG", "5",    "desconocido"), # grupo de galaxias: ni con morfología entra
+    ("GrG", "",     "desconocido"), # grupo de galaxias: son varias, no entra por otype
+    ("PGC", "SB(s)bc", "SB"),    # otype que la lista no conoce: la morfología entra
     ("",    "-1",   "S0"),       # sin otype (fila vieja) se acepta lo guardado
     ("G",   "99",   "galaxia"),  # 99 no es una etapa T: galaxia sin clase, no Irr
     ("",    "99",   "desconocido"),
