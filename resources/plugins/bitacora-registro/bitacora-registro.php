@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.34.0
+ * Version:     1.35.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.34.0' );
+define( 'BITACORA_VERSION', '1.35.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -2871,11 +2871,33 @@ function bitacora_posiciones_mapa( $l, $b, $d ) {
  * clase de la secuencia de Hubble para la leyenda del Grupo Local:
  * E (elíptica), S0 (lenticular), SB (espiral barrada), S (espiral), Irr (irregular).
  * Devuelve '' si no se reconoce (o el objeto no es una galaxia).
+ *
+ * SIMBAD sirve la morfología en DOS escalas, y la numérica es tan frecuente como
+ * la de letras: la etapa T de de Vaucouleurs (NGC 593 responde "5", NGC 3115
+ * responde "-1"). Es el mismo dato en otra notación, así que se traduce igual:
+ * T ≤ −4 elíptica, −3…0 lenticular, 1…8 espiral, 9…10 irregular. La etapa NO
+ * dice si hay barra (eso es la familia SA/SB, que va aparte en la clasificación
+ * de de Vaucouleurs y SIMBAD no manda en este campo), así que una espiral por
+ * etapa es 'S' y nunca 'SB': inventar la barra sería teñir el marcador con un
+ * dato que no existe.
  */
 function bitacora_clase_hubble( $morph ) {
     $m = trim( (string) $morph );
     if ( '' === $m ) {
         return '';
+    }
+    if ( preg_match( '/^[+-]?\d+(\.\d+)?$/', $m ) ) {
+        $t = floatval( $m );
+        if ( $t <= -4 ) {
+            return 'E';
+        }
+        if ( $t <= 0 ) {
+            return 'S0';
+        }
+        if ( $t <= 8 ) {
+            return 'S';
+        }
+        return 'Irr';
     }
     if ( preg_match( '/^S0|^L[^y]?/i', $m ) ) {
         return 'S0';
@@ -2906,8 +2928,32 @@ function bitacora_color_por_clase( $clase ) {
         'S'   => '#7ec8ff',
         'SB'  => '#5fe0c8',
         'Irr' => '#ff8a80',
+        // Galaxia de la que solo se sabe que es una galaxia: SIMBAD da el otype
+        // extragaláctico pero no una morfología legible. Color propio y no el de
+        // 'S': una espiral sin serlo es peor que no decir nada, y el default de
+        // antes era #7ec8ff, que en la leyenda del mapa MW es "Resto de supernova".
+        'galaxia' => '#9fb6c9',
     );
-    return isset( $colores[ $clase ] ) ? $colores[ $clase ] : '#7ec8ff';
+    return isset( $colores[ $clase ] ) ? $colores[ $clase ] : '#9fb6c9';
+}
+
+/**
+ * ¿El otype de SIMBAD dice que el objeto es una GALAXIA? Los códigos
+ * extragalácticos no llevan '*' y no están en la tabla de categorías del mapa MW
+ * (que es de objetos de la Vía Láctea), así que sin esto caían en 'desconocido'
+ * salvo que la morfología trajera una clase de Hubble legible.
+ *
+ * Es una lista y no una regla porque no hay una: 'GiG', 'Sy2', 'AGN' y 'LSB' no
+ * comparten ninguna forma. Fuera quedan a propósito los códigos de CONJUNTO de
+ * galaxias ('GrG' grupo, 'ClG' cúmulo, 'PaG' par): son varias galaxias, igual que
+ * 'As*' son varias estrellas.
+ */
+function bitacora_es_otype_galaxia( $codigo ) {
+    $galacticos = array(
+        'G', 'G?', 'GIG', 'IG', 'EMG', 'RG', 'LSB', 'SBG', 'H2G',
+        'GIC', 'GIP', 'BIC', 'AGN', 'AG?', 'SY1', 'SY2', 'SYG', 'LIN', 'BLL', 'QSO',
+    );
+    return in_array( strtoupper( trim( (string) $codigo ) ), $galacticos, true );
 }
 
 /**
@@ -2945,6 +2991,13 @@ function bitacora_categorias_mapa() {
         // y 'Cld' es tan ancho que se tragaría objetos que no son esto.
         array( 'oscura',     array( 'DNE', 'GLB', 'CGB' ), '#b08968' ),
         array( 'snr',        array( 'SNR' ),         '#7ec8ff' ),
+        // Protoplanetaria: la fase entre la AGB y la planetaria. La central todavía
+        // no ioniza la envoltura, así que lo que se ve es luz REFLEJADA en el polvo,
+        // bipolar y de altísimo contraste (Frosty Leo, el Huevo, el Rectángulo Rojo).
+        // No es una estrella aunque su otype lleve '*': 'pA*' (post-AGB) entra aquí,
+        // antes que la regla estelar, porque en el ocular es un objeto extenso.
+        // 'PN?' es la planetaria dudosa, y buena parte de ellas son esto mismo.
+        array( 'protoplanetaria', array( 'PA*', 'PN?' ), '#ffc4e1' ),
     );
 }
 
@@ -2997,9 +3050,15 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
     }
 
     // Galaxia (extragaláctica): la clase de Hubble tiñe el marcador en grupo-local.
+    // Son dos preguntas distintas y el bug era mezclarlas: «¿es una galaxia?» la
+    // contesta el otype, y «¿de qué clase?» la morfología. Sin la primera, una
+    // galaxia cuya morfología no se entendía acababa en 'desconocido'.
     $clase = bitacora_clase_hubble( $morph );
     if ( '' !== $clase ) {
         return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
+    }
+    if ( bitacora_es_otype_galaxia( $codigo ) ) {
+        return array( 'tipo' => 'galaxia', 'color' => bitacora_color_por_clase( 'galaxia' ) );
     }
 
     // Estrella normal / doble / variable: los otypes estelares de SIMBAD llevan '*'

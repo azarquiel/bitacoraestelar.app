@@ -54,13 +54,52 @@ check(color_estrella != color_desconocido,
 check("strpos( $codigo, '*' )" in cuerpo and "'AS*'" in cuerpo,
       "la regla estelar es «el otype lleva '*', menos As*»")
 
-# ── Réplica del match (misma prioridad que el PHP; sin rama galaxia/Hubble) ───
-def clasificar_mw(otype, tipo_obs=""):
+# ── Galaxias: lista de otypes extragalácticos y colores por clase, del PHP ───
+# «¿es una galaxia?» lo contesta el otype y «¿de qué clase?» la morfología: son
+# dos preguntas, y mezclarlas era el bug (una galaxia con la morfología en etapa
+# numérica de de Vaucouleurs acababa en 'desconocido').
+galax = PHP[PHP.index("function bitacora_es_otype_galaxia"):]
+galax = galax[:galax.index("\n}\n")]
+OTYPES_GALAXIA = set(re.findall(r"'([A-Z0-9?*]+)'", galax))
+check(len(OTYPES_GALAXIA) >= 8, f"otypes de galaxia parseados ({len(OTYPES_GALAXIA)})")
+
+clases = PHP[PHP.index("function bitacora_color_por_clase"):]
+clases = clases[:clases.index("\n}\n")]
+COLOR_CLASE = {m.group(1): m.group(2).lower()
+               for m in re.finditer(r"'?([A-Za-z0-9]+)'?\s*=>\s*'(#[0-9a-fA-F]{6})'", clases)}
+check(set(COLOR_CLASE) >= {"E", "S0", "S", "SB", "Irr", "galaxia"},
+      f"colores por clase de Hubble parseados ({sorted(COLOR_CLASE)})")
+
+# Réplica de bitacora_clase_hubble: letras de Hubble o etapa T de de Vaucouleurs.
+def clase_hubble(morph):
+    m = (morph or "").strip()
+    if not m:
+        return ""
+    if re.fullmatch(r"[+-]?\d+(\.\d+)?", m):
+        t = float(m)
+        if t <= -4: return "E"
+        if t <= 0:  return "S0"
+        if t <= 8:  return "S"
+        return "Irr"
+    if re.match(r"S0|L[^y]?", m, re.I): return "S0"
+    if re.match(r"E", m, re.I):  return "E"
+    if re.match(r"SB", m, re.I): return "SB"
+    if re.match(r"(SA|S)", m, re.I): return "S"
+    if re.match(r"I", m, re.I) or re.search(r"Irr", m, re.I): return "Irr"
+    return ""
+
+# ── Réplica del match (misma prioridad que el PHP) ───────────────────────────
+def clasificar_mw(otype, tipo_obs="", morph=""):
     cod = otype.strip().upper()
     tob = tipo_obs.strip().lower()
     for tipo, codes, color in reglas:
         if tob == tipo or cod in codes:
             return tipo, color
+    clase = clase_hubble(morph)
+    if clase:
+        return clase, COLOR_CLASE[clase]
+    if cod in OTYPES_GALAXIA:
+        return "galaxia", COLOR_CLASE["galaxia"]
     if "*" in cod and cod != "AS*":
         return "estrella", color_estrella
     return "desconocido", color_desconocido
@@ -80,7 +119,10 @@ DORADOS = [
     ("PM*", "", "estrella"),      # movimiento propio alto: la estrella de Barnard
     ("WD*", "", "estrella"),      # enana blanca: Sirio B
     ("As*", "", "desconocido"),   # asterismo: lleva '*' pero son VARIAS estrellas
-    ("G",   "", "desconocido"),   # galaxia sin morph (Hubble lo cubre aparte)
+    ("G",   "", "galaxia"),       # galaxia sin morph: galaxia, NO 'desconocido'
+    ("pA*", "", "protoplanetaria"),  # Frosty Leo: lleva '*' pero es objeto extenso
+    ("PN?", "", "protoplanetaria"),  # planetaria dudosa: casi siempre es esto
+    ("GrG", "", "desconocido"),   # grupo de galaxias: son VARIAS, fuera a propósito
     ("DNe", "", "oscura"),        # nebulosa oscura: Barnard 33
     ("glb", "", "oscura"),        # glóbulo de Bok (B68), case-insensitive
     ("CGb", "", "oscura"),        # glóbulo cometario
@@ -106,6 +148,42 @@ for otype in ("GlC", "OpC", "PN", "HII", "C*", "*", "RNe"):
 # podría apagar una sin apagar la otra.
 check(clasificar_mw("RNe")[1] != clasificar_mw("HII")[1],
       "'reflexion' y 'emision' NO comparten color")
+
+# ── 1 bis) Galaxias: otype + morfología (las dos escalas de SIMBAD) ──────────
+# La morfología viene tanto en letras de Hubble ("SB(s)bc") como en etapa T de de
+# Vaucouleurs ("5", "-1"), y el otype extragaláctico ('GiG', 'Sy2', 'AGN') no está
+# en ninguna tabla ni lleva '*': sin la rama de galaxia caían todas en gris.
+DORADOS_GALAXIA = [
+    ("Sy2", "5",    "S"),        # NGC 593: espiral por etapa T=5
+    ("GiG", "-1",   "S0"),       # NGC 3115: lenticular por etapa T=-1
+    ("G",   "-5",   "E"),        # elíptica por etapa T=-5
+    ("G",   "10",   "Irr"),      # irregular por etapa T=10
+    ("G",   "SB(s)bc", "SB"),    # letras de Hubble: sigue igual que antes
+    ("G",   "",     "galaxia"),  # sin morfología: galaxia, no 'desconocido'
+    ("AGN", "???",  "galaxia"),  # morfología ilegible: galaxia igual
+    ("LSB", "",     "galaxia"),
+    ("*",   "",     "estrella"), # una estrella con morph vacío sigue siendo estrella
+]
+print("Galaxias otype+morph -> tipo:")
+for otype, morph, esperado in DORADOS_GALAXIA:
+    tipo, color = clasificar_mw(otype, "", morph)
+    check(tipo == esperado, f"otype={otype!r} morph={morph!r} -> {tipo!r} (esperado {esperado!r})")
+    check(color != color_desconocido or esperado == "desconocido",
+          f"otype={otype!r} morph={morph!r} NO se pinta del gris de 'sin clasificar'")
+
+# Los colores de galaxia son los de la leyenda del Grupo Local, y esa leyenda es
+# otra: #mw-legend-hubble en el HTML y HUBBLE_COLORS en grupo-local.js.
+GL_JS = (RAIZ / "mapa/js/grupo-local.js").read_text(encoding="utf-8")
+bloque_gl = GL_JS[GL_JS.index("var HUBBLE_COLORS"):]
+bloque_gl = bloque_gl[:bloque_gl.index("};")]
+hubble_js = {m.group(1): m.group(2).lower()
+             for m in re.finditer(r"([A-Za-z0-9]+):\s*'(#[0-9a-fA-F]{6})'", bloque_gl)}
+leyenda_gl = set(c.lower() for c in re.findall(
+    r'class="gl-legend-item"[^>]*data-tipo="[^"]+"[^>]*>\s*<span[^>]*background:(#[0-9a-fA-F]{6})', HTML))
+print("Sincronía clases de galaxia -> grupo-local.js y #mw-legend-hubble:")
+for clase, color in COLOR_CLASE.items():
+    check(hubble_js.get(clase) == color, f"HUBBLE_COLORS.{clase} = {hubble_js.get(clase)} (PHP: {color})")
+    check(color in leyenda_gl, f"color de '{clase}' ({color}) presente en #mw-legend-hubble")
 
 # ── 2) Sincronía con la leyenda #mw-legend ───────────────────────────────────
 # Colores data-color de los mw-legend-item (leyenda del mapa MW).
