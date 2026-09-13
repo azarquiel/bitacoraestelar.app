@@ -2888,6 +2888,11 @@ function bitacora_clase_hubble( $morph ) {
     }
     if ( preg_match( '/^[+-]?\d+(\.\d+)?$/', $m ) ) {
         $t = floatval( $m );
+        // La escala de de Vaucouleurs va de -6 a 11 y fuera de ahí el número no es
+        // una etapa: sin este corte un "99" salía 'Irr' por el camino de siempre.
+        if ( $t < -6 || $t > 11 ) {
+            return '';
+        }
         if ( $t <= -4 ) {
             return 'E';
         }
@@ -2951,7 +2956,7 @@ function bitacora_color_por_clase( $clase ) {
 function bitacora_es_otype_galaxia( $codigo ) {
     $galacticos = array(
         'G', 'G?', 'GIG', 'IG', 'EMG', 'RG', 'LSB', 'SBG', 'H2G',
-        'GIC', 'GIP', 'BIC', 'AGN', 'AG?', 'SY1', 'SY2', 'SYG', 'LIN', 'BLL', 'QSO',
+        'GIC', 'GIP', 'BIC', 'AGN', 'SY1', 'SY2', 'SYG', 'LIN',
     );
     return in_array( strtoupper( trim( (string) $codigo ) ), $galacticos, true );
 }
@@ -2996,8 +3001,11 @@ function bitacora_categorias_mapa() {
         // bipolar y de altísimo contraste (Frosty Leo, el Huevo, el Rectángulo Rojo).
         // No es una estrella aunque su otype lleve '*': 'pA*' (post-AGB) entra aquí,
         // antes que la regla estelar, porque en el ocular es un objeto extenso.
-        // 'PN?' es la planetaria dudosa, y buena parte de ellas son esto mismo.
-        array( 'protoplanetaria', array( 'PA*', 'PN?' ), '#ffc4e1' ),
+        // FUERA 'PN?' (planetaria dudosa), que el ticket daba por candidata: la duda
+        // de SIMBAD es «puede que no sea una planetaria», no «es la fase de antes»,
+        // y muchas lo son de verdad. Meterla aquí cambiaría planetarias buenas por
+        // protoplanetarias inventadas; se queda en 'desconocido', que es la verdad.
+        array( 'protoplanetaria', array( 'PA*' ), '#ffc4e1' ),
     );
 }
 
@@ -3051,14 +3059,21 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
 
     // Galaxia (extragaláctica): la clase de Hubble tiñe el marcador en grupo-local.
     // Son dos preguntas distintas y el bug era mezclarlas: «¿es una galaxia?» la
-    // contesta el otype, y «¿de qué clase?» la morfología. Sin la primera, una
-    // galaxia cuya morfología no se entendía acababa en 'desconocido'.
-    $clase = bitacora_clase_hubble( $morph );
-    if ( '' !== $clase ) {
-        return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
-    }
-    if ( bitacora_es_otype_galaxia( $codigo ) ) {
-        return array( 'tipo' => 'galaxia', 'color' => bitacora_color_por_clase( 'galaxia' ) );
+    // contesta el OTYPE, y «¿de qué clase?» la morfología. Sin la primera, una
+    // galaxia cuya morfología no se entendía acababa en 'desconocido'; y la
+    // morfología sola tampoco vale para la primera, porque no es exclusiva de las
+    // galaxias (un tipo espectral guardado en `morph` empieza por 'B' o por 'K',
+    // pero una etapa numérica o una 'E' sueltas colarían una estrella como
+    // elíptica). Sin otype se acepta la morfología: es lo que hay guardado de las
+    // filas viejas, cuando SIMBAD no responde.
+    if ( bitacora_es_otype_galaxia( $codigo ) || '' === $codigo ) {
+        $clase = bitacora_clase_hubble( $morph );
+        if ( '' !== $clase ) {
+            return array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) );
+        }
+        if ( bitacora_es_otype_galaxia( $codigo ) ) {
+            return array( 'tipo' => 'galaxia', 'color' => bitacora_color_por_clase( 'galaxia' ) );
+        }
     }
 
     // Estrella normal / doble / variable: los otypes estelares de SIMBAD llevan '*'
@@ -3786,7 +3801,7 @@ function bitacora_objetos_reclasificar() {
     global $wpdb;
     $t_obj = bitacora_nombre_tabla_objetos();
     $filas = $wpdb->get_results(
-        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '', 'desconocido') ORDER BY id ASC"
+        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '', 'desconocido', 'estrella') ORDER BY id ASC"
     );
     $hechos = 0;
     foreach ( (array) $filas as $o ) {
@@ -3797,6 +3812,15 @@ function bitacora_objetos_reclasificar() {
         $morph = ( $sim && '' !== (string) $sim['morph'] ) ? (string) $sim['morph'] : (string) $o->morph;
 
         $c = bitacora_clasificar_objeto( $otype, $morph );
+        // Una reclasificación NUNCA empeora una fila: si SIMBAD no contesta, el
+        // clasificador devuelve 'desconocido' y reescribirlo borraría lo que ya se
+        // sabía. Importa desde que entran aquí las filas en 'estrella' —una
+        // protoplanetaria guardada antes de que existiera su categoría está ahí, y
+        // sin esta pasada no había botón que la rescatara—: esas sí tienen algo que
+        // perder ante un fallo de red.
+        if ( 'desconocido' === $c['tipo'] && 'desconocido' !== $o->tipo && '' !== $o->tipo && 'otro' !== $o->tipo ) {
+            continue;
+        }
         $wpdb->update(
             $t_obj,
             array( 'tipo' => $c['tipo'], 'color' => $c['color'], 'actualizado_en' => current_time( 'mysql' ) ),

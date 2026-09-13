@@ -71,12 +71,16 @@ check(set(COLOR_CLASE) >= {"E", "S0", "S", "SB", "Irr", "galaxia"},
       f"colores por clase de Hubble parseados ({sorted(COLOR_CLASE)})")
 
 # Réplica de bitacora_clase_hubble: letras de Hubble o etapa T de de Vaucouleurs.
+# Los CORTES de la etapa T sí se copian del PHP a mano, a diferencia de la tabla de
+# categorías y de los colores: son el dato que este test fija (T=-1 es lenticular y
+# T=5 es espiral), y parsearlos de la función sería preguntarle al acusado.
 def clase_hubble(morph):
     m = (morph or "").strip()
     if not m:
         return ""
     if re.fullmatch(r"[+-]?\d+(\.\d+)?", m):
         t = float(m)
+        if t < -6 or t > 11: return ""
         if t <= -4: return "E"
         if t <= 0:  return "S0"
         if t <= 8:  return "S"
@@ -95,11 +99,12 @@ def clasificar_mw(otype, tipo_obs="", morph=""):
     for tipo, codes, color in reglas:
         if tob == tipo or cod in codes:
             return tipo, color
-    clase = clase_hubble(morph)
-    if clase:
-        return clase, COLOR_CLASE[clase]
-    if cod in OTYPES_GALAXIA:
-        return "galaxia", COLOR_CLASE["galaxia"]
+    if cod in OTYPES_GALAXIA or cod == "":
+        clase = clase_hubble(morph)
+        if clase:
+            return clase, COLOR_CLASE[clase]
+        if cod in OTYPES_GALAXIA:
+            return "galaxia", COLOR_CLASE["galaxia"]
     if "*" in cod and cod != "AS*":
         return "estrella", color_estrella
     return "desconocido", color_desconocido
@@ -121,7 +126,7 @@ DORADOS = [
     ("As*", "", "desconocido"),   # asterismo: lleva '*' pero son VARIAS estrellas
     ("G",   "", "galaxia"),       # galaxia sin morph: galaxia, NO 'desconocido'
     ("pA*", "", "protoplanetaria"),  # Frosty Leo: lleva '*' pero es objeto extenso
-    ("PN?", "", "protoplanetaria"),  # planetaria dudosa: casi siempre es esto
+    ("PN?", "", "desconocido"),   # planetaria DUDOSA: la duda no la hace protoplanetaria
     ("GrG", "", "desconocido"),   # grupo de galaxias: son VARIAS, fuera a propósito
     ("DNe", "", "oscura"),        # nebulosa oscura: Barnard 33
     ("glb", "", "oscura"),        # glóbulo de Bok (B68), case-insensitive
@@ -163,6 +168,12 @@ DORADOS_GALAXIA = [
     ("AGN", "???",  "galaxia"),  # morfología ilegible: galaxia igual
     ("LSB", "",     "galaxia"),
     ("*",   "",     "estrella"), # una estrella con morph vacío sigue siendo estrella
+    ("*",   "5",    "estrella"), # y con un número en morph TAMBIÉN: la morfología no
+    ("V*",  "E",    "estrella"), # clasifica sola, solo matiza a la que ya es galaxia
+    ("GrG", "5",    "desconocido"), # grupo de galaxias: ni con morfología entra
+    ("",    "-1",   "S0"),       # sin otype (fila vieja) se acepta lo guardado
+    ("G",   "99",   "galaxia"),  # 99 no es una etapa T: galaxia sin clase, no Irr
+    ("",    "99",   "desconocido"),
 ]
 print("Galaxias otype+morph -> tipo:")
 for otype, morph, esperado in DORADOS_GALAXIA:
