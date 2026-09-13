@@ -14,7 +14,7 @@
    La ruta se parte en TRES TRAMOS porque el visor tiene tres escalas con
    proyecciones distintas, y cada una dibuja la suya con su propio origen:
 
-     vecindario  (≤ CONFIG.vecindario.distMaxAl)  Sol -> estrella -> estrella
+     vecindario  (estrellas ≤ CONFIG.vecindario.distMaxAl)  Sol -> estrella -> …
      galaxia     (el resto de la Vía Láctea)      Sol -> M13 -> M92
      grupoLocal  (≥ 200.000 al, extragaláctico)   Vía Láctea -> M31 -> M51
 
@@ -50,6 +50,17 @@
     var c = tabla('CONFIG');
     return (c && c.vecindario && typeof c.vecindario.distMaxAl === 'number')
       ? c.vecindario.distMaxAl : DIST_VECINDARIO_POR_DEFECTO;
+  }
+
+  // ¿Lo enseña la vista del vecindario? Lo decide ESA capa y nadie más
+  // (VLVecindarioCatalogo.enVecindario: estrella, con coordenadas y dentro del
+  // radio). Repartir aquí por distancia sola mandaba el viaje que empieza con
+  // espacio profundo cercano —NGC 2024, Barnard 33— a una escena que solo pinta
+  // estrellas: el mapa aterrizaba en un vecindario donde ese objeto no existe.
+  // Se lee en tiempo de llamada porque este módulo se carga antes que esa capa.
+  function enVecindario(o) {
+    var V = tabla('VLVecindarioCatalogo');
+    return !!V && V.enVecindario(o, radioVecindario());
   }
 
   // Índice slug -> objeto del mapa, reconstruido en cada llamada (OBJECTS se
@@ -149,7 +160,6 @@
     if (!v || !v.objetos) return ruta;
 
     var idx = porId();
-    var rVec = radioVecindario();
     for (var i = 0; i < v.objetos.length; i++) {
       var o = idx[v.objetos[i]];
       if (!o) continue;                        // visitado pero sin marcador
@@ -159,7 +169,7 @@
         continue;                              // fuera de la galaxia: solo el atlas
       }
       ruta.galaxia.push(o);
-      if (d !== null && d > 0 && d <= rVec) ruta.vecindario.push(o);
+      if (enVecindario(o)) ruta.vecindario.push(o);
     }
     return ruta;
   }
@@ -182,13 +192,13 @@
   function capaInicial(id) {
     var v = viajeDe(id);
     if (!v || !v.objetos || !v.objetos.length) return null;
-    var idx = porId(), rVec = radioVecindario();
+    var idx = porId();
     for (var i = 0; i < v.objetos.length; i++) {
       var o = idx[v.objetos[i]];
       if (!o) continue;
       var d = (typeof o.dist === 'number') ? o.dist : null;
       if (d !== null && d >= DIST_MIN_EXTRAGALACTICA) return { capa: 'grupoLocal', objeto: o };
-      if (d !== null && d > 0 && d <= rVec) return { capa: 'vecindario', objeto: o };
+      if (enVecindario(o)) return { capa: 'vecindario', objeto: o };
       return { capa: 'galaxia', objeto: o };
     }
     return null;
