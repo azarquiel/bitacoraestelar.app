@@ -25,7 +25,10 @@
                  del parche grande está medida sobre otro tamaño de pixel.
      --e3nativo  POST HOC: E3 medida al paso nativo de PS1 (0,25″/px).
      --opciones  E1–E4 contra ese patrón, sobre los parches publicados, con los
-                 cuatro listones del prerregistro.
+                 cuatro listones del prerregistro. Trae además la columna SC:
+                 el par (cielo, σ) que el sidecar PUBLICA, o sea la ley que ve
+                 el usuario desde #286. Es contra ella, y no contra el patrón,
+                 como se juzgan los criterios de éxito de la épica #284 (#308).
      --hash      el coste: `version()` de gen_dso_texturas.js con los parámetros
                  de hoy y con los de cada opción (ADR 0026).
 
@@ -635,10 +638,18 @@ function medirOpciones(nombre, patronDelObjeto) {
                 opciones: {} };
 
     /* El contraste de la cuenta de apagados contra el anclaje de producción: la
-       misma condición, calculada por la función de producción, con la ley de hoy. */
+       misma condición, calculada por la función de producción, con la ley que se
+       SIRVE. Desde #286 esa ley es el par (cielo, σ) del campo vecino que publica
+       el sidecar, y `ps1AnclarACatalogo` lo usa cuando se le pasa; sin pasárselo
+       cae al marco del 6 % y esta columna medía la ley VIEJA creyendo medir la
+       nueva (#308). Pasar el par no define ninguna ley (ADR 0008): la lee
+       `ps1CieloDeSidecar`, que es la misma que mira el runtime. */
+    var sc = PS1.ps1CieloDeSidecar(F.side);
+    var parSC = (sc && sc.sigma > 0) ? sc : null;
     var anclado = PS1.ps1AnclarACatalogo(datos, ancho, alto, {
       magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
-      ladoArcmin: gal.ladoArcmin, escalaAs: F.escalaAs
+      ladoArcmin: gal.ladoArcmin, escalaAs: F.escalaAs,
+      cielo: parSC ? parSC.cielo : null, sigma: parSC ? parSC.sigma : 0
     });
     var nProd = 0, apProd = 0;
     for (var y = 0; y < alto; y++) {
@@ -674,6 +685,19 @@ function medirOpciones(nombre, patronDelObjeto) {
                                patronDelObjeto.cielo, patronDelObjeto.sigma)
       };
     }
+    /* SC — el par que el sidecar PUBLICA, o sea la ley que ve el usuario (#286,
+       ADR 0028). No es una opción a elegir entre otras: es lo que se sirve, y
+       está aquí porque los criterios de éxito de #284 hay que juzgarlos contra
+       ella y no contra el patrón, que es un número que nadie lee en pantalla.
+       Sin par utilizable va el motivo, que es justo lo que #287 hace constar. */
+    res.cieloSidecar = sc;
+    res.opciones.SC = parSC ? {
+      cielo: parSC.cielo, sigma: parSC.sigma,
+      sueloSb: PS1.cfg.kRuido * parSC.sigma / (F.escalaAs * F.escalaAs),
+      apagados: apagados(datos, ancho, alto, fits.afin, ext, parSC.cielo, parSC.sigma),
+      anillos: anillos3sigma(datos, ancho, alto, fits.afin, F.escalaAs, rObj,
+                             parSC.cielo, parSC.sigma)
+    } : { motivo: sc ? (sc.motivo || 'sin-medir') : 'sidecar sin vecino' };
     return res;
   });
 }
@@ -708,11 +732,11 @@ function opciones() {
 }
 
 function informeOpciones(todos) {
-  var OPS = ['L0', 'E2', 'E3', 'E4'];
+  var OPS = ['L0', 'E2', 'E3', 'E4', 'SC'];
   console.log('E1–E4 contra el patrón de cielo lejano (#274, ADR 0027)\n');
 
   console.log('── cielo y σ, objeto a objeto (DN). «patrón» es el anillo lejano del parche grande.');
-  console.log('objeto        cl    patrón cielo/σ       L0 cielo/σ          E2 cielo/σ          E3 σ');
+  console.log('objeto        cl    patrón cielo/σ       L0 cielo/σ          E2 cielo/σ          E3 σ   SC (publicado) cielo/σ');
   todos.forEach(function (r) {
     if (r.motivo) return console.log((r.nombre + '            ').slice(0, 13) + ' ' + r.motivo);
     var p = r.patron;
@@ -724,7 +748,9 @@ function informeOpciones(todos) {
       (p ? cel(p) : 'sin patrón').padStart(18) + '  ' +
       cel(r.opciones.L0).padStart(18) + '  ' +
       cel(r.opciones.E2).padStart(18) + '  ' +
-      (r.opciones.E3 && r.opciones.E3.sigma > 0 ? r.opciones.E3.sigma.toFixed(1) : '—').padStart(8));
+      (r.opciones.E3 && r.opciones.E3.sigma > 0 ? r.opciones.E3.sigma.toFixed(1) : '—').padStart(8) +
+      '  ' + (r.opciones.SC && r.opciones.SC.sigma > 0
+              ? cel(r.opciones.SC) : (r.opciones.SC.motivo || '—')).padStart(20));
   });
 
   console.log('\n── el metro: log₂(σ_opción / σ_patrón). 0 = clavado; 1 = el doble.');
@@ -750,7 +776,7 @@ function informeOpciones(todos) {
       return PUB.clave(n) === PUB.clave(r.nombre);
     });
   });
-  ['L0', 'E2', 'E3', 'E4'].forEach(function (op) {
+  ['L0', 'E2', 'E3', 'E4', 'SC'].forEach(function (op) {
     var ds = [], dcs = [], falta = 0;
     afect.forEach(function (r) {
       var o = r.opciones[op];
@@ -777,7 +803,7 @@ function informeOpciones(todos) {
     var l = '  ' + (r.nombre + '          ').slice(0, 11) + ' L0 suelo ' +
             base.sueloSb.toFixed(0).padStart(6) + ' DN/as² apagados ' +
             (100 * base.apagados).toFixed(1) + ' % · ';
-    ['E2', 'E3', 'E4'].forEach(function (op) {
+    ['E2', 'E3', 'E4', 'SC'].forEach(function (op) {
       var o = r.opciones[op];
       if (!o || !(o.sigma > 0)) { l += op + ' — · '; return; }
       var dmag = Math.abs(2.5 * Math.log10(o.sueloSb / base.sueloSb));
@@ -798,16 +824,32 @@ function informeOpciones(todos) {
       var ext = o.anillos[o.anillos.length - 1].pct;
       var dentro = o.anillos.slice(0, -1).map(function (a) { return a.pct; });
       var max = Math.max.apply(null, dentro.filter(function (v) { return v === v; }));
+      /* La razón CRUDA incluye el anillo 0–0,5 `r_e`, donde está la Wolf-Rayet
+         central: suspende a todas las opciones, incluida la ley de referencia
+         (L0 da 4,44), y un listón que suspende a su propia referencia no
+         discrimina nada (ADR 0005). La corregida —el control negativo tal como
+         lo formuló #263— excluye ese anillo. Su raya es el 1,80 que publicó
+         #274; ojo, que ESE número es `18/10` con los porcentajes de la tabla ya
+         redondeados: la razón que da L0 de verdad es 1,85. */
+      var dentroSinNucleo = dentro.slice(1).filter(function (v) { return v === v; });
+      var maxSin = dentroSinNucleo.length ? Math.max.apply(null, dentroSinNucleo) : NaN;
+      var razonSin = maxSin / (ext || 1e-9);
+      /* Un decimal, no cero: la razón se calcula con los porcentajes CRUDOS, y
+         con los redondeados a entero sale otra —18/10 = 1,80 contra el 1,85 de
+         verdad—. Publicar la tabla en enteros invitaba a rehacer la división a
+         mano y a dar por bueno un número que el código no calcula. */
       console.log('  ' + op + ': anillos ' + o.anillos.map(function (a) {
-        return a.pct.toFixed(0);
+        return a.pct.toFixed(1);
       }).join('/') + ' % · razón ' + (max / (ext || 1e-9)).toFixed(2) +
-        ' · ' + ((max / (ext || 1e-9)) <= 2.0 ? 'ok' : 'FUERA'));
+        ' · ' + ((max / (ext || 1e-9)) <= 2.0 ? 'ok' : 'FUERA') +
+        ' · sin el anillo 0–0,5 r_e: ' + razonSin.toFixed(2) +
+        ' · ' + (razonSin <= 1.8 ? 'ok (≤1,80 publicado en #274)' : 'FUERA de 1,80 publicado'));
     });
   });
 
   /* Lo que cada opción le hace al objeto: cuánto de su extensión deja de apagar. */
   console.log('\n── qué deja de apagar cada opción (fracción de la extensión apagada)');
-  console.log('objeto        producción      L0      E2      E3      E4');
+  console.log('objeto        producción      L0      E2      E3      E4      SC');
   todos.forEach(function (r) {
     if (r.motivo) return;
     var l = (r.nombre + '            ').slice(0, 13) + ' ' +
@@ -818,6 +860,38 @@ function informeOpciones(todos) {
     });
     console.log(l + (r.conFixture ? '' : '   (sin fixture de Gaia: estrellas dentro)'));
   });
+
+  cieloPublicadoDelBanco();
+}
+
+/* Quién se pinta con cielo medido y quién con la ley del marco, sobre el BANCO
+   ENTERO y no sobre los trece de la muestra (criterio 4 de #308). Es geometría
+   de sidecar: no abre ningún PNG y no toca la red, así que cubre los 68 objetos
+   aunque solo haya parches a mano para unos pocos.
+
+   Los que no tienen par se nombran uno a uno y no solo se cuentan, que es la
+   pega que #252 dejó abierta y que #287 vino a cerrar: un objeto pintado con un
+   cielo que nadie pudo medir tiene que poder leerse por su nombre. */
+function cieloPublicadoDelBanco() {
+  var conPar = [], sinPar = [], sinVecino = [];
+  objetosPublicados().forEach(function (nombre) {
+    var s = PUB.sidecar(nombre);
+    if (!s) return;
+    var v = PS1.ps1CieloDeSidecar(s);
+    if (!v) return sinVecino.push(nombre);
+    if (v.sigma > 0) return conPar.push(nombre);
+    sinPar.push({ nombre: nombre, motivo: v.motivo || 'sin-medir' });
+  });
+  console.log('\n── de dónde sale el cielo en el banco publicado (#287, ADR 0028)');
+  console.log('  con cielo medido fuera del objeto: ' + conPar.length);
+  console.log('  con la ley del marco, por no tener campo vecino utilizable: ' + sinPar.length);
+  sinPar.forEach(function (o) {
+    console.log('    ' + (o.nombre + '            ').slice(0, 13) + ' ' + o.motivo);
+  });
+  if (sinVecino.length) {
+    console.log('  sidecar anterior a #285, sin campo `vecino` (régimen mixto): ' +
+                sinVecino.length + ' · ' + sinVecino.join(', '));
+  }
 }
 
 /* ───────────────────────── --hash ───────────────────────── */

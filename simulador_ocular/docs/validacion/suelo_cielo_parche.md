@@ -218,10 +218,17 @@ opción saca estructura donde no la hay:
 
 | opción | anillos 0,5–1 / 1–1,5 / 1,5–2 / 2–3 / 3–4 | razón interior/exterior |
 |---|---|---|
-| L0 | 13 / 12 / 18 / 13 / 10 % | 1,80 |
-| E2 | 23 / 21 / 26 / 21 / 19 % | 1,37 |
-| E3 | 19 / 18 / 23 / 18 / 15 % | 1,53 |
-| E4 | 21 / 20 / 25 / 21 / 18 % | 1,39 |
+| L0 | 12,9 / 12,4 / 17,8 / 13,1 / 9,7 % | 1,85 |
+| E2 | 22,5 / 21,4 / 25,5 / 21,4 / 18,7 % | 1,36 |
+| E3 | 18,7 / 17,9 / 22,6 / 18,1 / 15,2 % | 1,49 |
+| E4 | 21,4 / 20,4 / 24,7 / 20,5 / 17,8 % | 1,39 |
+
+> **Enmienda del 2026-09-13 (#308).** Esta tabla salió publicada con los
+> porcentajes redondeados a entero y con razones que no eran las del código:
+> 1,80 · 1,37 · 1,53 · 1,39, o sea las divisiones hechas sobre los enteros de la
+> tabla. Las de arriba son las que calcula el arnés con los porcentajes crudos.
+> No mueven ningún veredicto —ninguna opción saca estructura— pero el 1,80 de L0
+> llegó a usarse como listón en otro ticket, así que la tabla va con un decimal.
 
 El control negativo se mantiene: la Creciente sigue sin estructura con cualquiera
 de las σ. Esta corrección es post hoc y se marca como tal; lo que la justifica no
