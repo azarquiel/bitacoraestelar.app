@@ -71,9 +71,31 @@ ok(!/otraBtn\.hidden = false/.test(js) && !/mismoCampoBtn\.hidden = false/.test(
    'y nadie los destapa por su cuenta');
 var envio = js.slice(js.indexOf("$('obsForm').addEventListener('submit'"), js.indexOf('DISTANCIA A MANO'));
 ok(/mostrarEncadenar\(false\)/.test(envio), 'el envío los tapa antes de salir: si falla, no quedan los de antes');
-ok(/if\(!editando\) mostrarEncadenar\(true\)/.test(envio), 'y solo los destapa un guardado que no es edición');
+ok(/if\(!editando\) mostrarEncadenar\(true\)/.test(envio),
+   'en la vía de creación, solo los destapa un guardado que ha ido bien');
 ok(envio.indexOf('mostrarEncadenar(false)') < envio.indexOf('mostrarEncadenar(true)'),
    'en ese orden: primero tapar, luego el éxito');
+
+/* #317: desde una observación ya guardada (?editar=12) también se encadena, y
+   eso NO es editarla: se deriva una hermana. Los botones los destapa la carga
+   (la observación ya existe, no hay nada que guardar antes) y solo la carga que
+   ha ido bien; y encadenar suelta el modo edición, así que lo que se guarde
+   después sale por POST y la nº 12 se queda como estaba. */
+seccion('Derivar desde una observación guardada');
+var carga = js.slice(js.indexOf('function cargarParaEditar('), js.indexOf('cargarFlota();'));
+ok(/mostrarEncadenar\(true\)/.test(carga), 'cargar la observación destapa las dos vías');
+ok(carga.indexOf('precargar(res.data)') < carga.indexOf('mostrarEncadenar(true)'),
+   'después de precargar, no antes: primero está lo que se copia');
+var fallo = carga.slice(0, carga.indexOf('precargar(res.data)'));
+ok(!/mostrarEncadenar\(true\)/.test(fallo), 'si la carga falla no se destapan: no hay de dónde derivar');
+
+var enc317 = js.slice(js.indexOf('function encadenar('));
+enc317 = enc317.slice(0, enc317.indexOf('resolveObject()'));
+ok(/salirModoEdicion\(\)/.test(enc317), 'encadenar suelta el modo edición antes de copiar nada');
+ok(/function salirModoEdicion\(/.test(js) && /editandoId = null/.test(js),
+   'y hay un sitio único que lo suelta: olvida el id que se estaba editando');
+ok(/rotulosCrear/.test(js), 'los rótulos de crear se guardan para poder devolverlos');
+ok(/se queda como estaba guardada/.test(enc317), 'se avisa de que la de origen no se modifica');
 
 seccion('La distancia pendiente es del objeto anterior');
 var enc = js.slice(js.indexOf('function encadenar('));
