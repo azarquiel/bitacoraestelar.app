@@ -104,6 +104,25 @@ ok(total === filas.length, 'ninguna observación se queda fuera del reparto');
 ok(L.repartirPorViaje([]).sin.length === 0, 'lista vacía: reparto vacío, sin reventar');
 
 // ═══════════════════════════════════════════════════════════════════════════
+/* #318: la tarjeta de una observación propia ofrece empezar el objeto que
+   compartía campo, sin pasar por «Editar». Las acciones se pintan como texto y
+   no hay DOM aquí, así que se lee el fuente: lo que se comprueba es de qué rama
+   cuelga el enlace, que es justo lo que decide quién lo ve. */
+seccion('Derivar el objeto del mismo campo desde la tarjeta');
+
+var src = require('fs').readFileSync(__dirname + '/../registro/resources/js/bitacora-listado.js', 'utf8');
+var acciones = src.slice(src.indexOf('function accionesDe('), src.indexOf('function conectarAcciones('));
+var corte = acciones.indexOf('if (obs.mia) {');
+var papelera = acciones.slice(0, corte);
+var propias = acciones.slice(corte, acciones.lastIndexOf('not-mine'));
+
+ok(/\?derivar=/.test(propias), 'la acción abre el formulario con su URL propia (?derivar=)');
+ok(/\?editar=/.test(propias) && /data-accion="borrar"/.test(propias), 'y está junto a «Editar» y «Borrar»');
+ok(!/derivar/.test(papelera), 'en la papelera no se ofrece: lo borrado no se deriva');
+ok((src.match(/\?derivar=/g) || []).length === 1,
+   'cuelga solo de la rama de obs.mia: de otro observador no aparece');
+
+// ═══════════════════════════════════════════════════════════════════════════
 console.log('');
 if (fallos) { console.error(fallos + ' FALLO(S)'); process.exit(1); }
 console.log('Todo en orden.');
