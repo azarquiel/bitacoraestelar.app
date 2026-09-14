@@ -856,10 +856,15 @@
   // Si la URL trae ?editar=12, cargamos esa observación y el formulario
   // pasa a modificarla (PUT) en lugar de crear una nueva (POST).
   // ═══════════════════════════════════════════════════════════════════════
-  var editandoId = null;
+  // Con ?derivar=12 se carga la nº 12 por el mismo camino (de ahí el id común),
+  // pero no para modificarla: es la puerta desde la tarjeta del listado (#318)
+  // para empezar el objeto que compartía campo con ella.
+  var editandoId = null, derivandoId = null;
   (function detectarEdicion(){
     var m = window.location.search.match(/[?&]editar=(\d+)/);
     if(m) editandoId = parseInt(m[1],10);
+    var d = window.location.search.match(/[?&]derivar=(\d+)/);
+    if(d){ derivandoId = parseInt(d[1],10); editandoId = derivandoId; }
   })();
 
   // Los rótulos de crear, tal como venían en el fragmento: derivar (#317) los
@@ -867,7 +872,9 @@
   var rotulosCrear = null;
 
   function aplicarModoEdicion(){
-    if(!editandoId) return;
+    // Quien viene a derivar (#318) no ve nunca «Editar observación nº 12»: está
+    // creando desde el primer momento, aunque se cargue la nº 12 para copiar.
+    if(!editandoId || derivandoId) return;
     var titulo = document.querySelector('#mw-obs-form h1');
     var sub = titulo ? titulo.querySelector('.sub') : null;
     rotulosCrear = {
@@ -987,6 +994,10 @@
         return;
       }
       precargar(res.data);
+      // ?derivar=12 (#318): ya está en pantalla lo que se copia, así que se
+      // encadena sola por la vía del mismo campo. encadenar() suelta el modo
+      // edición, vacía objeto y coordenadas y avisa de que la nº 12 no se toca.
+      if(derivandoId){ encadenar(true); return; }
       // Esta observación ya existe: se puede derivar de ella el objeto que
       // compartía campo sin guardar nada antes (#317). Si la carga falla no se
       // destapan: no habría de dónde derivar.

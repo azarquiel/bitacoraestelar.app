@@ -97,6 +97,24 @@ ok(/function salirModoEdicion\(/.test(js) && /editandoId = null/.test(js),
 ok(/rotulosCrear/.test(js), 'los rótulos de crear se guardan para poder devolverlos');
 ok(/se queda como estaba guardada/.test(enc317), 'se avisa de que la de origen no se modifica');
 
+/* #318: la otra puerta de entrada. ?derivar=12 carga la nº 12 igual que ?editar=,
+   pero no para modificarla: en cuanto está cargada encadena por la vía del mismo
+   campo, así que el formulario nunca se rotula como edición y lo que se guarde
+   sale por POST. */
+seccion('Derivar desde la tarjeta del listado');
+ok(/[?&]derivar=/.test(js), 'la URL propia ?derivar= se reconoce');
+var deteccion = js.slice(js.indexOf('function detectarEdicion('), js.indexOf('function aplicarModoEdicion('));
+ok(/derivandoId/.test(deteccion), 'y deja constancia de que se viene a derivar, no a editar');
+ok(/editandoId = /.test(deteccion.slice(deteccion.indexOf('derivar'))),
+   'carga la observación por el mismo camino: el id es el que se va a cargar');
+var aplicar = js.slice(js.indexOf('function aplicarModoEdicion('), js.indexOf('function salirModoEdicion('));
+ok(/derivandoId/.test(aplicar), 'al derivar no se ponen los rótulos de edición: es creación desde el principio');
+var carga318 = js.slice(js.indexOf('function cargarParaEditar('), js.indexOf('cargarFlota();'));
+ok(/derivandoId/.test(carga318) && /encadenar\(true\)/.test(carga318),
+   'cargada la observación, se encadena sola por la vía del mismo campo');
+ok(carga318.indexOf('precargar(res.data)') < carga318.indexOf('encadenar(true)'),
+   'después de precargar: lo que se copia tiene que estar ya en pantalla');
+
 seccion('La distancia pendiente es del objeto anterior');
 var enc = js.slice(js.indexOf('function encadenar('));
 ok(/distCaja\.hidden = true/.test(enc.slice(0, enc.indexOf('resolveObject()'))),
