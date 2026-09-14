@@ -1723,6 +1723,10 @@
 
     submitBtn.disabled=true;
     $('outNote').textContent = editando ? 'Guardando cambios…' : 'Guardando…';
+    // Mientras se guarda no hay nada que encadenar, y si este envío falla tampoco:
+    // los botones se tapan aquí para que no queden en pantalla los del guardado
+    // anterior. Solo el éxito vuelve a destaparlos, y una vez.
+    mostrarEncadenar(false);
 
     fetch(url,{
       method:metodo,
@@ -1760,10 +1764,9 @@
         // Una noche se pasa saltando de objeto en objeto: al guardar uno se
         // ofrece encadenar el siguiente. En edición no: allí se modifica una
         // observación vieja, no se está observando.
-        if(!editando){
-          if(otraBtn) otraBtn.hidden = false;
-          if(mismoCampoBtn) mismoCampoBtn.hidden = false;
-        }
+        // El aviso de «no se ha podido situar en el mapa» no es un fallo del
+        // guardado: la observación está en la base de datos y la noche sigue.
+        if(!editando) mostrarEncadenar(true);
         return;
       }
       var msg=(res.data && res.data.message) ? res.data.message : 'Error '+res.status;
@@ -1853,6 +1856,14 @@
   // noche, no del minuto.
   var otraBtn = $('otraBtn'), mismoCampoBtn = $('mismoCampoBtn');
 
+  // Un solo sitio decide si se ofrece encadenar, para que no dependa de por dónde
+  // haya salido el envío: se tapan al enviar y al encadenar, y solo los destapa
+  // un guardado que ha ido bien y no es una edición.
+  function mostrarEncadenar(visible){
+    if(otraBtn) otraBtn.hidden = !visible;
+    if(mismoCampoBtn) mismoCampoBtn.hidden = !visible;
+  }
+
   function encadenar(mismoCampo){
     var sig = BitacoraBase.siguienteObjeto({
       fecha: $('fechaObs').value,
@@ -1880,8 +1891,11 @@
         crearEntrada(datos);
       });
     }
-    if(otraBtn) otraBtn.hidden = true;
-    if(mismoCampoBtn) mismoCampoBtn.hidden = true;
+    mostrarEncadenar(false);
+    // La distancia pendiente es del objeto que se acaba de guardar, no del que
+    // viene: arrastrar la caja abierta la dejaría situando el objeto equivocado.
+    if(distCaja) distCaja.hidden = true;
+    objetoSinSituar = '';
 
     // Copiar no crea vínculo: lo que se edite a partir de aquí es de esta
     // observación y no toca la que ya se guardó. Por eso se avisa de qué ha
