@@ -9,7 +9,7 @@ conclusiones —implementar o descartar— son válidas de antemano.
 Fuente: `simulador_ocular/docs/especificaciones/catalogo_dso_texturas_objetivo.md`
 (objetivo del 2026-09-04). Este ADR no lo repite: fija lo que no puede moverse.
 
-Tres enmiendas, todas firmadas:
+Cuatro enmiendas, todas firmadas:
 
 1. **La redacción de L1.1** (2026-09-04, antes de la fase 1), con lo que midió la
    fase 0. El apartado «Corrección de la redacción de L1.1» dice qué cambió, por
@@ -24,6 +24,11 @@ Tres enmiendas, todas firmadas:
    corrección de L1.1: el corte también se mueve» trae la medida, las dos vías
    de escape ya descartadas con cifras, y las tres condiciones bajo las que se
    hace.
+4. **El segundo motivo de la fase 2** (2026-09-13, #311, **antes** de ejecutarla):
+   la regla de resolución por objeto estaba justificada solo por el extremo alto
+   y arregla además un problema del extremo bajo que nadie había escrito. No
+   toca ni la regla ni ningún listón: añade motivo, cuenta y consecuencias. Está
+   en el apartado «Fase 2».
 
 Ningún otro listón se ha tocado.
 
@@ -270,6 +275,66 @@ decidido para este caso.
 
 `salida(lado) = clamp(ceil(lado·60 / 0,5), 128, 2048)`; `escalaAs = lado·60/salida`.
 42 objetos del catálogo quedan en el tope (lado ≥ 17,07′).
+
+> **Enmienda (2026-09-13, #311).** Esta fase tenía un solo motivo escrito —el
+> extremo alto: que la apertura se note en las galaxias grandes, donde 1024 px
+> fijos dejan la PSF del telescopio en 0,54–0,72 px— y tiene un segundo, medido
+> en #274 y aparcado allí por el ADR 0028 («la escala del parche no se toca
+> aquí»). **La regla no cambia y ningún listón se mueve**: lo que faltaba era el
+> porqué del otro extremo, y sin él la fase se lee como una mejora opcional de
+> las galaxias grandes cuando también repara algo que hoy está roto.
+>
+> **El extremo bajo: se piden píxeles que no existen.** El lado es
+> `clamp(6·r_e/60, 1,5′, 20′)` y la salida son 1024 px fijos, así que un objeto
+> con `r_e` pequeño acaba con un píxel **más fino que el stack de PS1**, que es
+> de 0,25″/px. Quien interpola es el proxy: `ps1-proxy.php` pide `size` en
+> píxeles nativos y deja que `output_size` remuestree, de modo que un lado de
+> 1,5′ pide **360 px nativos y devuelve 1024**. No es un recorte más fino: son
+> los mismos píxeles repetidos. **31 de los 69 objetos del banco** están por
+> debajo de 0,25″/px; el peor caso es 0,088″/px (2,84×), diez objetos clavados en
+> `ladoMin` y todos PN, HII o RfN —ninguna galaxia—, y en NGC 1788 el **58 % de
+> los píxeles vecinos son idénticos** (`suelo_cielo_parche.md` §3).
+>
+> **Por qué 0,5″/px sigue siendo el paso correcto, y no 0,25.** La tentación al
+> ver el extremo bajo es bajar al nativo «para no tirar resolución». No hay
+> resolución que tirar: el stack está limitado por su **seeing de 1,1″ de FWHM**,
+> no por su píxel. A 0,5″/px son 2,2 px por FWHM, Nyquist justo; a 0,25 serían
+> 4,4 px, que es copiar el sobremuestreo que PanSTARRS ya trae, por 4× los bytes
+> y sin una sola medida nueva. El píxel nativo de PS1 no es su resolución.
+> `ladoMin` tampoco se toca: tiene motivo propio —por debajo no queda parche que
+> mirar— y la regla lo vuelve inocuo por sí sola, porque a 0,5″/px un lado de
+> 1,5′ son 180 px, no 1024.
+>
+> **La fase tiene una mitad barata y una cara, y conviene no presupuestarla como
+> un bloque.** `PS1_SALIDA_MAX` = 1024 (`ps1-proxy.php:46`) solo estorba al
+> extremo alto, que es el que pide 2048 o 1794; en el extremo bajo la regla
+> únicamente **baja** píxeles, así que no toca el proxy ni un byte. Por el mismo
+> motivo el extremo bajo **abarata**: bajo 0,15″/px el PNG-16 comprime a ×0,22
+> del crudo contra ×0,95 en cuanto el píxel lleva información real, y por eso la
+> fase 1 a 1024 fijo pesa **1,70 GB, más que la regla C de esta fase (1,51 GB)**
+> —a las filas grandes les sobra tope y a las pequeñas les sobran píxeles—.
+>
+> **Lo que esto arrastra y no se puede presentar como gratis.** `salida` entra en
+> `version()` (ADR 0026), así que esta fase **republica el banco**. Son **dos
+> republicaciones, no una**: la de #288 (cielo y σ de E4 en el sidecar) y la de
+> esta fase. Se aceptan separadas a propósito: fusionarlas acoplaría una épica ya
+> troceada y en marcha con una fase que ni siquiera puede arrancar —no arranca
+> sin el PASA completo de la fase 1, hoy con cuatro tests en rojo—, y #288
+> esperaría indefinidamente.
+>
+> **Una vecina, para que nadie la mida antes de tiempo.** De los 9,65 mag de
+> dispersión del suelo efectivo que midió #263, **5,6 son escala** (el suelo se
+> divide por `escala²` y el banco va de 0,088 a 1,172 ″/px, 13×). Esta fase
+> comprime ese rango a ≈2,3×, así que buena parte de lo que discute #273 se
+> evapora al aplicarla.
+>
+> **Lo que NO dice esta enmienda.** Que el sobremuestreo estropee la σ de E4: no
+> lo hace. Con píxeles replicados la muestra se duplica y los valores no cambian,
+> así que la σ **por píxel** se conserva; lo que muere es E3 —la MAD de
+> diferencias entre vecinos vale 0 cuando el 58 % de los vecinos son idénticos—,
+> que es exactamente por lo que el ADR 0028 ya lo había descartado. Y que la ley
+> de PSF esté mal en el extremo bajo: declarar 0,088″/px en vez de los 0,25″
+> reales mueve `θ_parche` **0,011″**, porque el seeing domina.
 
 | # | Comprobación | Umbral | Qué falsea |
 |---|---|---|---|
