@@ -862,15 +862,44 @@
     if(m) editandoId = parseInt(m[1],10);
   })();
 
+  // Los rótulos de crear, tal como venían en el fragmento: derivar (#317) los
+  // devuelve a su sitio, así que hay que quedárselos antes de pisarlos.
+  var rotulosCrear = null;
+
   function aplicarModoEdicion(){
     if(!editandoId) return;
-    submitBtn.textContent = 'Guardar cambios';
     var titulo = document.querySelector('#mw-obs-form h1');
+    var sub = titulo ? titulo.querySelector('.sub') : null;
+    rotulosCrear = {
+      boton:  submitBtn.textContent,
+      titulo: titulo ? titulo.childNodes[0].nodeValue : '',
+      sub:    sub ? sub.textContent : ''
+    };
+    submitBtn.textContent = 'Guardar cambios';
     if(titulo){
-      var sub = titulo.querySelector('.sub');
       titulo.childNodes[0].nodeValue = 'Editar observación nº ' + editandoId + ' ';
       if(sub) sub.textContent = 'Modifica lo que necesites. El cielo se recalcula solo.';
     }
+  }
+
+  // Derivar NO es editar (#317): encadenar desde una observación guardada crea
+  // una hermana, así que el formulario suelta el modo edición y vuelve a crear
+  // (POST). La observación de origen se queda exactamente como estaba guardada.
+  // Devuelve el número que se acaba de soltar, o 0 si no se estaba editando.
+  function salirModoEdicion(){
+    if(!editandoId) return 0;
+    var origen = editandoId;
+    editandoId = null;
+    if(rotulosCrear){
+      submitBtn.textContent = rotulosCrear.boton;
+      var titulo = document.querySelector('#mw-obs-form h1');
+      if(titulo){
+        titulo.childNodes[0].nodeValue = rotulosCrear.titulo;
+        var sub = titulo.querySelector('.sub');
+        if(sub) sub.textContent = rotulosCrear.sub;
+      }
+    }
+    return origen;
   }
 
   // Vuelca una observación del servidor en los campos del formulario.
@@ -958,7 +987,12 @@
         return;
       }
       precargar(res.data);
-      $('outNote').textContent = 'Observación cargada. Modifica lo que necesites.';
+      // Esta observación ya existe: se puede derivar de ella el objeto que
+      // compartía campo sin guardar nada antes (#317). Si la carga falla no se
+      // destapan: no habría de dónde derivar.
+      mostrarEncadenar(true);
+      $('outNote').textContent = 'Observación cargada. Modifica lo que necesites, '
+        + 'o encadena desde ella el siguiente objeto de esa noche.';
     })
     .catch(function(){
       $('outNote').innerHTML = '<span style="color:var(--rojo)">✗ No se pudo contactar con el servidor.</span>';
@@ -1858,13 +1892,18 @@
 
   // Un solo sitio decide si se ofrece encadenar, para que no dependa de por dónde
   // haya salido el envío: se tapan al enviar y al encadenar, y solo los destapa
-  // un guardado que ha ido bien y no es una edición.
+  // o un guardado que ha ido bien y no es una edición, o la carga de una
+  // observación que ya existe (#317), que es de donde se deriva la hermana.
   function mostrarEncadenar(visible){
     if(otraBtn) otraBtn.hidden = !visible;
     if(mismoCampoBtn) mismoCampoBtn.hidden = !visible;
   }
 
   function encadenar(mismoCampo){
+    // Lo primero: si se venía de ?editar=12, el formulario deja de modificar esa
+    // observación y pasa a crear una nueva. Se lee lo que hay en pantalla —lo
+    // copiado viaja— pero la nº 12 no se toca.
+    var origen = salirModoEdicion();
     var sig = BitacoraBase.siguienteObjeto({
       fecha: $('fechaObs').value,
       hora:  $('horaObs').value,
@@ -1904,6 +1943,12 @@
     if(mismoCampo){
       aviso = 'Se ha copiado la descripción del objeto anterior; edítala si quieres.';
       if(conImagen) aviso += ' El dibujo es el mismo adjunto, no hace falta volver a subirlo.';
+    }
+    // Al derivar hay que decirlo aún más claro: si había cambios escritos sin
+    // guardar en la de origen, se quedan sin guardar allí.
+    if(origen){
+      aviso += ' La observación nº ' + origen + ' se queda como estaba guardada: '
+             + 'lo que se guarde ahora será una observación nueva.';
     }
     $('outNote').textContent = aviso;
 
