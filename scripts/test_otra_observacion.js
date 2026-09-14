@@ -49,22 +49,42 @@ ok(e.fecha === '2026-08-05' && e.hora === '', 'la hora es opcional: se queda vac
 var f = B.sumarMinutos('', '', 20);
 ok(f.fecha === '' && f.hora === '', 'sin fecha ni hora, nada que sumar');
 
-seccion('El botón existe y está cableado');
+seccion('Los dos botones existen y están cableados');
 var RAIZ = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(RAIZ, 'registro/registrar-observacion-wordpress.html'), 'utf8');
 var js = fs.readFileSync(path.join(RAIZ, 'registro/resources/js/bitacora-formulario.js'), 'utf8');
 
-ok(/id="otraBtn"[^>]*hidden/.test(html), 'el fragmento trae el botón, oculto de salida');
-ok(/\$\('otraBtn'\)/.test(js), 'el formulario lo busca por su id');
-ok(/otraBtn\.hidden = false/.test(js), 'se enseña al guardar');
+ok(/id="otraBtn"[^>]*hidden/.test(html), 'el fragmento trae el botón «más tarde», oculto de salida');
+ok(/id="mismoCampoBtn"[^>]*hidden/.test(html), 'y el del mismo campo, también oculto de salida');
+ok(/\$\('otraBtn'\)/.test(js) && /\$\('mismoCampoBtn'\)/.test(js), 'el formulario los busca por su id');
+ok(/otraBtn\.hidden = false/.test(js) && /mismoCampoBtn\.hidden = false/.test(js),
+   'los dos se enseñan al guardar');
+
+/* Criterio 9 de #298: los dos tienen que distinguirse a simple vista del
+   «+ Añadir ocular» del bloque de entradas, que añade un aumento MÁS al mismo
+   objeto. «Añadir otra» era homónimo suyo y se confundían. */
+seccion('Los rótulos dicen cuál es cuál');
+ok(!/>Añadir otra</.test(html), 'ya no queda el rótulo homónimo del bloque de oculares');
+ok(/id="mismoCampoBtn"[^>]*>Otro objeto del mismo campo</.test(html), 'mismo campo, dicho en claro');
+ok(/id="otraBtn"[^>]*>Otro objeto, más tarde</.test(html), 'y la otra vía dice que es más tarde');
 
 /* El salto de 20 minutos ya no lo hace el manejador: lo hace siguienteObjeto(),
    que es donde vive la regla entera de qué se conserva al encadenar (#300). El
-   manejador solo le pasa lo que hay en pantalla y pinta lo que devuelve. */
+   manejador solo le pasa lo que hay en pantalla y pinta lo que devuelve, y las
+   dos vías comparten ese manejador: la única diferencia es la opción que le
+   pasan, no dos copias del mismo cableado. */
 seccion('El manejador delega la regla en siguienteObjeto()');
 ok(/BitacoraBase\.siguienteObjeto\(/.test(js), 'encadena con la fuente única de la regla');
-ok(/mismoCampo\s*:\s*false/.test(js), 'por la vía «más tarde»: otro objeto, otro rato');
+ok(/mismoCampo\s*:\s*mismoCampo/.test(js), 'la vía es un parámetro del manejador, no una rama copiada');
+ok(/encadenar\(true\)/.test(js) && /encadenar\(false\)/.test(js), 'un botón por vía');
 ok(!/sumarMinutos\([^)]*20\)/.test(js), 'y no se copia el salto de hora por su cuenta');
+
+/* Criterio 3 de #298: el texto copiado se avisa, y el foco NO se va a él: lo
+   primero que hay que teclear sigue siendo el nombre del objeto. */
+seccion('Se avisa de lo que se ha copiado, y el foco sigue en el objeto');
+ok(/copiado la descripción del objeto anterior/.test(js), 'avisa de la descripción copiada');
+ok(/objInput\.focus\(\)/.test(js) && !/explDesc\.focus\(\)/.test(js.slice(js.indexOf('function encadenar'))),
+   'el foco va al nombre del objeto, no al texto');
 
 /* El ocular no se toca de un objeto al siguiente, así que la entrada nueva tiene
    que nacer con la óptica ya declarada. Sin esto hay que reelegir ocular y
@@ -85,6 +105,18 @@ ok(sig.entradas[0].ocular_id === 3 && sig.entradas[0].aumento === 48 && sig.entr
    'conserva ocular, aumento y campo real');
 ok(sig.objeto === '' && sig.ra === '' && sig.dec === '', 'y vacía objeto y coordenadas');
 ok(sig.entradas[0].descripcion === '', 'la descripción se vacía: es otro objeto');
+
+/* Y la vía del mismo campo, que es la de #298: el texto habla de los dos objetos
+   a la vez, así que viaja con la entrada y la hora no se mueve. */
+var mismo = B.siguienteObjeto({
+  fecha: '2026-08-05', hora: '23:50', objeto: 'M42', ra: '05 35 17', dec: '-05 23 28',
+  entradas: [{ aumento: 48, campoReal: 1.2, pupilaSalida: 6.6, ocularId: 3,
+               titulo: 'Nagler 31mm', descripcion: '<p>M42 domina el campo, con M43 al norte.</p>',
+               imagenes: [{ tipo: 'principal', imagenId: 512, imagenUrl: 'https://x/m42.jpg' }] }]
+}, { mismoCampo: true });
+ok(/M43 al norte/.test(mismo.entradas[0].descripcion), 'mismo campo: la descripción viaja');
+ok(mismo.fecha === '2026-08-05' && mismo.hora === '23:50', 'y la hora no avanza');
+ok(mismo.entradas[0].imagenes[0].imagen_id === 512, 'la imagen se reapunta por id, sin resubir');
 
 console.log('');
 if (fallos) { console.error(fallos + ' comprobación(es) fallan.'); process.exit(1); }

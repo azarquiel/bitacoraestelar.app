@@ -1760,7 +1760,10 @@
         // Una noche se pasa saltando de objeto en objeto: al guardar uno se
         // ofrece encadenar el siguiente. En edición no: allí se modifica una
         // observación vieja, no se está observando.
-        if(otraBtn && !editando) otraBtn.hidden = false;
+        if(!editando){
+          if(otraBtn) otraBtn.hidden = false;
+          if(mismoCampoBtn) mismoCampoBtn.hidden = false;
+        }
         return;
       }
       var msg=(res.data && res.data.message) ? res.data.message : 'Error '+res.status;
@@ -1830,46 +1833,75 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // AÑADIR OTRA: el siguiente objeto de la misma noche
+  // ENCADENAR: el siguiente objeto de la misma noche, por dos vías
   // Lo que no cambia de un objeto al siguiente —viaje, fecha, telescopio,
   // observador, base y cielo— se queda tal cual; y tampoco cambia el ocular, que
   // una noche entera se pasa con el mismo tubo: la entrada nueva nace con la
-  // óptica que ya se declaró (ocular, aumento, pupila y campo real) y sin nada de
-  // lo que se vio, que es de otro objeto. Qué se conserva y qué no lo decide
-  // BitacoraBase.siguienteObjeto(), que es la fuente única de la regla; aquí solo
-  // se le da lo que hay en pantalla y se pinta lo que devuelve. La hora avanza 20
-  // minutos: el viaje sale de la fecha y la hora, así que la observación cae sola
-  // en la misma sesión.
-  var otraBtn = $('otraBtn');
-  if(otraBtn){
-    otraBtn.addEventListener('click', function(){
-      var sig = BitacoraBase.siguienteObjeto({
-        fecha: $('fechaObs').value,
-        hora:  $('horaObs').value,
-        entradas: entradasBox ? recogerEntradas() : [],
-        exploracion: explDesc ? explDesc.innerHTML : ''
-      }, { mismoCampo:false });
+  // óptica que ya se declaró (ocular, aumento, pupila y campo real).
+  //
+  // Lo que separa las dos vías es SOLO qué más se conserva, y eso lo decide
+  // BitacoraBase.siguienteObjeto(), que es la fuente única de la regla; aquí se
+  // le da lo que hay en pantalla y se pinta lo que devuelve. De ahí que los dos
+  // botones compartan manejador y se diferencien en un parámetro:
+  //   - mismo campo: M42 y M43 caen en el mismo campo del mismo ocular, se ven en
+  //     el mismo instante y se describen en el mismo párrafo. Viaja la descripción
+  //     (que es obligatoria por entrada), viajan las imágenes reapuntadas al mismo
+  //     adjunto, viaja la exploración, y la hora NO avanza.
+  //   - más tarde: otra observación. Solo la óptica, y la hora +20 minutos.
+  // En las dos, el viaje sale de la fecha y la hora, así que la observación cae
+  // sola en la misma sesión aunque dos compartan instante: el viaje es de la
+  // noche, no del minuto.
+  var otraBtn = $('otraBtn'), mismoCampoBtn = $('mismoCampoBtn');
 
-      $('fechaObs').value = sig.fecha;
-      $('horaObs').value  = sig.hora;
+  function encadenar(mismoCampo){
+    var sig = BitacoraBase.siguienteObjeto({
+      fecha: $('fechaObs').value,
+      hora:  $('horaObs').value,
+      entradas: entradasBox ? recogerEntradas() : [],
+      exploracion: explDesc ? explDesc.innerHTML : ''
+    }, { mismoCampo:mismoCampo });
 
-      objInput.value=sig.objeto; raManual.value=sig.ra; decManual.value=sig.dec; coordsAuto=false;
-      if(explDesc) explDesc.innerHTML=sig.exploracion;
-      if(entradasBox){
-        entradasBox.innerHTML='';
-        // Sin entradas que heredar (se guardó y se vació todo a mano) sigue
-        // haciendo falta una vacía: el formulario nunca se queda sin ninguna.
-        if(!sig.entradas.length) crearEntrada();
-        else sig.entradas.forEach(function(datos){ crearEntrada(datos); });
-      }
-      otraBtn.hidden = true;
-      $('outNote').textContent = 'Listo para el siguiente objeto de la misma noche.';
+    $('fechaObs').value = sig.fecha;
+    $('horaObs').value  = sig.hora;
 
-      resolveObject();   // objeto vacío: rearma el estado y llama a recompute()
-      objInput.focus();
-      objInput.scrollIntoView({behavior:'smooth',block:'center'});
-    });
+    objInput.value=sig.objeto; raManual.value=sig.ra; decManual.value=sig.dec; coordsAuto=false;
+    // La exploración viaja como texto pelado: su título lo rehace recogerExploracion()
+    // con el objeto del momento, y arrastrarlo dejaría «M42. Exploración» colgando
+    // de la ficha de M43.
+    if(explDesc) explDesc.innerHTML=sig.exploracion;
+    var conImagen = false;
+    if(entradasBox){
+      entradasBox.innerHTML='';
+      // Sin entradas que heredar (se guardó y se vació todo a mano) sigue
+      // haciendo falta una vacía: el formulario nunca se queda sin ninguna.
+      if(!sig.entradas.length) crearEntrada();
+      else sig.entradas.forEach(function(datos){
+        if(datos.imagenes && datos.imagenes.length) conImagen = true;
+        crearEntrada(datos);
+      });
+    }
+    if(otraBtn) otraBtn.hidden = true;
+    if(mismoCampoBtn) mismoCampoBtn.hidden = true;
+
+    // Copiar no crea vínculo: lo que se edite a partir de aquí es de esta
+    // observación y no toca la que ya se guardó. Por eso se avisa de qué ha
+    // llegado copiado, en vez de dejar que parezca escrito de nuevo.
+    var aviso = 'Listo para el siguiente objeto de la misma noche.';
+    if(mismoCampo){
+      aviso = 'Se ha copiado la descripción del objeto anterior; edítala si quieres.';
+      if(conImagen) aviso += ' El dibujo es el mismo adjunto, no hace falta volver a subirlo.';
+    }
+    $('outNote').textContent = aviso;
+
+    resolveObject();   // objeto vacío: rearma el estado y llama a recompute()
+    // El foco va al nombre del objeto, nunca al texto copiado: lo primero que hay
+    // que teclear sigue siendo de qué objeto se habla.
+    objInput.focus();
+    objInput.scrollIntoView({behavior:'smooth',block:'center'});
   }
+
+  if(otraBtn){ otraBtn.addEventListener('click', function(){ encadenar(false); }); }
+  if(mismoCampoBtn){ mismoCampoBtn.addEventListener('click', function(){ encadenar(true); }); }
 
    }catch(err){
      // Si algo falla, lo decimos en la página en vez de morir en silencio.

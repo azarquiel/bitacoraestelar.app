@@ -167,10 +167,16 @@
 
     <div class="actions">
       <button type="submit" class="primary" id="submitBtn" disabled>Preparar registro</button>
-      <!-- Encadenar objetos de la misma noche: aparece al guardar y deja el
+      <!-- Encadenar objetos de la misma noche: aparecen al guardar y dejan el
            formulario listo para el siguiente, con el mismo viaje y el mismo
-           ocular ya puesto. -->
-      <button type="button" class="add-entry" id="otraBtn" hidden>Añadir otra</button>
+           ocular ya puesto. Son DOS vías, y lo único que las diferencia es qué se
+           conserva: el mismo campo mantiene lo escrito y la hora (M42 y M43 se
+           ven de una vez, en el mismo párrafo); más tarde conserva solo la óptica
+           y adelanta veinte minutos. Los rótulos dicen cuál es cuál para que no se
+           confundan con el «+ Añadir ocular» de arriba, que es otro aumento del
+           MISMO objeto. -->
+      <button type="button" class="add-entry" id="mismoCampoBtn" hidden>Otro objeto del mismo campo</button>
+      <button type="button" class="add-entry" id="otraBtn" hidden>Otro objeto, más tarde</button>
       <span class="out-note" id="outNote" role="status">Se generará el bloque de datos de la observación.</span>
     </div>
 
@@ -204,4 +210,4 @@
 <script src="/wp-content/uploads/bitacora/bitacora-ps1.js?v=20260913_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-astro.js?v=20260729_1900" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260829_1200" defer></script>
-<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=20260914_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-formulario.js?v=20260914_1830" defer></script>
