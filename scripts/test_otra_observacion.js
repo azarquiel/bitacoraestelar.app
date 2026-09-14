@@ -57,8 +57,30 @@ var js = fs.readFileSync(path.join(RAIZ, 'registro/resources/js/bitacora-formula
 ok(/id="otraBtn"[^>]*hidden/.test(html), 'el fragmento trae el botón «más tarde», oculto de salida');
 ok(/id="mismoCampoBtn"[^>]*hidden/.test(html), 'y el del mismo campo, también oculto de salida');
 ok(/\$\('otraBtn'\)/.test(js) && /\$\('mismoCampoBtn'\)/.test(js), 'el formulario los busca por su id');
-ok(/otraBtn\.hidden = false/.test(js) && /mismoCampoBtn\.hidden = false/.test(js),
-   'los dos se enseñan al guardar');
+ok(/mostrarEncadenar\(true\)/.test(js), 'los dos se enseñan al guardar');
+
+/* #299: que el botón esté o no en pantalla no puede depender de por dónde haya
+   salido el envío. Un solo sitio lo decide, se tapa al enviar (así un guardado
+   que falla no deja en pantalla los botones del anterior) y solo lo destapa el
+   éxito. El aviso de «no se ha podido situar en el mapa» NO es un fallo: la
+   observación está guardada, y la caja de distancia que abre es del objeto
+   anterior, así que encadenar la cierra. */
+seccion('Enseñar el botón lo decide un solo sitio');
+ok(/function mostrarEncadenar\(/.test(js), 'hay una función única que los tapa y destapa');
+ok(!/otraBtn\.hidden = false/.test(js) && !/mismoCampoBtn\.hidden = false/.test(js),
+   'y nadie los destapa por su cuenta');
+var envio = js.slice(js.indexOf("$('obsForm').addEventListener('submit'"), js.indexOf('DISTANCIA A MANO'));
+ok(/mostrarEncadenar\(false\)/.test(envio), 'el envío los tapa antes de salir: si falla, no quedan los de antes');
+ok(/if\(!editando\) mostrarEncadenar\(true\)/.test(envio), 'y solo los destapa un guardado que no es edición');
+ok(envio.indexOf('mostrarEncadenar(false)') < envio.indexOf('mostrarEncadenar(true)'),
+   'en ese orden: primero tapar, luego el éxito');
+
+seccion('La distancia pendiente es del objeto anterior');
+var enc = js.slice(js.indexOf('function encadenar('));
+ok(/distCaja\.hidden = true/.test(enc.slice(0, enc.indexOf('resolveObject()'))),
+   'encadenar cierra la caja de distancia');
+ok(/objetoSinSituar = ''/.test(enc.slice(0, enc.indexOf('resolveObject()'))),
+   'y olvida el objeto que quedaba por situar');
 
 /* Criterio 9 de #298: los dos tienen que distinguirse a simple vista del
    «+ Añadir ocular» del bloque de entradas, que añade un aumento MÁS al mismo
