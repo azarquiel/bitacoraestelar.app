@@ -1832,19 +1832,36 @@
   // ═══════════════════════════════════════════════════════════════════════
   // AÑADIR OTRA: el siguiente objeto de la misma noche
   // Lo que no cambia de un objeto al siguiente —viaje, fecha, telescopio,
-  // observador, base y cielo— se queda tal cual; solo se borra el objeto y lo
-  // que se vio de él. La hora avanza 20 minutos: el viaje sale de la fecha y la
-  // hora, así que la observación cae sola en la misma sesión.
+  // observador, base y cielo— se queda tal cual; y tampoco cambia el ocular, que
+  // una noche entera se pasa con el mismo tubo: la entrada nueva nace con la
+  // óptica que ya se declaró (ocular, aumento, pupila y campo real) y sin nada de
+  // lo que se vio, que es de otro objeto. Qué se conserva y qué no lo decide
+  // BitacoraBase.siguienteObjeto(), que es la fuente única de la regla; aquí solo
+  // se le da lo que hay en pantalla y se pinta lo que devuelve. La hora avanza 20
+  // minutos: el viaje sale de la fecha y la hora, así que la observación cae sola
+  // en la misma sesión.
   var otraBtn = $('otraBtn');
   if(otraBtn){
     otraBtn.addEventListener('click', function(){
-      var t = BitacoraBase.sumarMinutos($('fechaObs').value, $('horaObs').value, 20);
-      $('fechaObs').value = t.fecha;
-      $('horaObs').value  = t.hora;
+      var sig = BitacoraBase.siguienteObjeto({
+        fecha: $('fechaObs').value,
+        hora:  $('horaObs').value,
+        entradas: entradasBox ? recogerEntradas() : [],
+        exploracion: explDesc ? explDesc.innerHTML : ''
+      }, { mismoCampo:false });
 
-      objInput.value=''; raManual.value=''; decManual.value=''; coordsAuto=false;
-      if(explDesc) explDesc.innerHTML='';
-      if(entradasBox){ entradasBox.innerHTML=''; crearEntrada(); }
+      $('fechaObs').value = sig.fecha;
+      $('horaObs').value  = sig.hora;
+
+      objInput.value=sig.objeto; raManual.value=sig.ra; decManual.value=sig.dec; coordsAuto=false;
+      if(explDesc) explDesc.innerHTML=sig.exploracion;
+      if(entradasBox){
+        entradasBox.innerHTML='';
+        // Sin entradas que heredar (se guardó y se vació todo a mano) sigue
+        // haciendo falta una vacía: el formulario nunca se queda sin ninguna.
+        if(!sig.entradas.length) crearEntrada();
+        else sig.entradas.forEach(function(datos){ crearEntrada(datos); });
+      }
       otraBtn.hidden = true;
       $('outNote').textContent = 'Listo para el siguiente objeto de la misma noche.';
 

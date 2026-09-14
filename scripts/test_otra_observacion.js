@@ -57,7 +57,34 @@ var js = fs.readFileSync(path.join(RAIZ, 'registro/resources/js/bitacora-formula
 ok(/id="otraBtn"[^>]*hidden/.test(html), 'el fragmento trae el botón, oculto de salida');
 ok(/\$\('otraBtn'\)/.test(js), 'el formulario lo busca por su id');
 ok(/otraBtn\.hidden = false/.test(js), 'se enseña al guardar');
-ok(/sumarMinutos\(.*, 20\)/.test(js), 'salta 20 minutos con el helper compartido');
+
+/* El salto de 20 minutos ya no lo hace el manejador: lo hace siguienteObjeto(),
+   que es donde vive la regla entera de qué se conserva al encadenar (#300). El
+   manejador solo le pasa lo que hay en pantalla y pinta lo que devuelve. */
+seccion('El manejador delega la regla en siguienteObjeto()');
+ok(/BitacoraBase\.siguienteObjeto\(/.test(js), 'encadena con la fuente única de la regla');
+ok(/mismoCampo\s*:\s*false/.test(js), 'por la vía «más tarde»: otro objeto, otro rato');
+ok(!/sumarMinutos\([^)]*20\)/.test(js), 'y no se copia el salto de hora por su cuenta');
+
+/* El ocular no se toca de un objeto al siguiente, así que la entrada nueva tiene
+   que nacer con la óptica ya declarada. Sin esto hay que reelegir ocular y
+   recalcular el campo real objeto tras objeto (#297). */
+seccion('La óptica se hereda: la entrada nueva nace con el ocular puesto');
+ok(/entradas\s*:\s*(entradasBox \?\s*)?recogerEntradas\(\)/.test(js),
+   'le da las entradas que hay en pantalla, no una lista vacía');
+ok(/crearEntrada\(datos\)/.test(js), 'y repinta cada una con lo que devuelve');
+
+/* Lo que sí se vacía, por las dos vías: el objeto y sus coordenadas. Heredarlos
+   guardaría M42 en la ficha de M43. */
+var sig = B.siguienteObjeto({
+  fecha: '2026-08-05', hora: '23:50', objeto: 'M42', ra: '05 35 17', dec: '-05 23 28',
+  entradas: [{ aumento: 48, campoReal: 1.2, pupilaSalida: 6.6, ocularId: 3,
+               titulo: 'Nagler 31mm', descripcion: '<p>Lo visto en M42.</p>', imagenes: [] }]
+}, { mismoCampo: false });
+ok(sig.entradas[0].ocular_id === 3 && sig.entradas[0].aumento === 48 && sig.entradas[0].campo_real === 1.2,
+   'conserva ocular, aumento y campo real');
+ok(sig.objeto === '' && sig.ra === '' && sig.dec === '', 'y vacía objeto y coordenadas');
+ok(sig.entradas[0].descripcion === '', 'la descripción se vacía: es otro objeto');
 
 console.log('');
 if (fallos) { console.error(fallos + ' comprobación(es) fallan.'); process.exit(1); }
