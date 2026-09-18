@@ -57,12 +57,19 @@
        entre esos dos ya aparece a 1–3 σ del ruido de cielo, 213× el suelo de
        sensibilidad del método; la regla la sube otro tanto sin tocar el lado. */
     escalaObjetivoAs: 0.5, // ″/px a los que se guarda un objeto: Nyquist del seeing del stack (1,1″)
-    salidaMax: 2048,       // px: tope duro, y el tope del proxy (PS1_SALIDA_MAX, ps1-proxy.php:46)
+    /* Tope duro de la regla Y tope del proxy (PS1_SALIDA_MAX, ps1-proxy.php:46):
+       son el mismo número escrito dos veces porque viven en lenguajes distintos,
+       y la vía de escape del ADR 0024 —bajar a 1794 px si L2.4 no cierra— los
+       baja LOS DOS o no baja ninguno. */
+    salidaMax: 2048,
     salidaMin: 128,        // px
     /* La constante de la fase 1 —1024 px para todo el mundo—, que ya no manda en
        producción. Sigue aquí porque los arneses de las investigaciones anteriores
-       midieron con ella y la pinan para volver a su parche exacto: cambiársela
-       sería reescribir lo que midieron, no actualizarlos. */
+       la pinan para volver a su parche exacto, y con ellos cuatro tests que miden
+       otras leyes sobre un FITS ya descargado (`test_psf_produccion`,
+       `test_ps1_nan_ausencia`, `test_nebulosa_planetaria`, `test_resto_supernova`,
+       `test_nebulosas_emision_reflexion`): cambiársela sería reescribir lo que
+       midieron y mandarlos otra vez a la red, no actualizarlos. */
     salida: 1024,
     ladoFactor: 6,         // lado del parche = 6·r_e → radio 3·r_e ≈ 94 % de la luz de un disco
     ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
@@ -209,10 +216,13 @@
      PanSTARRS por 4× los bytes. El tope de 2048 px lo tocan los objetos de
      ≥ 17,07′, que quedan a 0,50–0,59″/px.
 
-     `salidaMin` no es un tope que se alcance: a 0,5″/px el lado mínimo de 1,5′
-     son 180 px. Está por si `ladoMin` se moviera algún día. */
+     `salidaMin` no es un tope que se alcance con un lado real: a 0,5″/px el lado
+     mínimo de 1,5′ son 180 px. Es el suelo de la regla prerregistrada, y aquí
+     hace además de red: un lado ausente o absurdo cae en él en vez de salir NaN.
+     La fórmula es la del §4.2 tal cual, sin sustituir el lado por `ladoMin`:
+     desviarse de una regla prerregistrada, aunque sea a mejor, va al ADR. */
   function ps1SalidaParche(ladoArcmin) {
-    var lado = (ladoArcmin > 0) ? ladoArcmin : PS1.ladoMin;
+    var lado = (ladoArcmin > 0) ? ladoArcmin : 0;
     return Math.max(PS1.salidaMin,
       Math.min(PS1.salidaMax, Math.ceil(lado * 60 / PS1.escalaObjetivoAs)));
   }

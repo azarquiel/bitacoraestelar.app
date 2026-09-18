@@ -392,6 +392,19 @@ gaussiano sale `[8e-12, 1, 8e-12]`, de modo que un 457 y un 914 mm daban la
 **misma imagen bit a bit**. Cualquier intento de que la apertura se notara en la
 estructura de una galaxia chocaba antes con el muestreo que con la física.
 
+**El tamaño del recorte lo decide el objeto desde la fase 2 del ADR 0024**
+(regla C, `ps1SalidaParche`): `clamp(ceil(lado·60/0,5), 128, 2048)` px, con el
+tope del proxy subido a 2048. Los 0,5″/px son el Nyquist del seeing de 1,1″ del
+stack, no su píxel nativo de 0,25″: a 0,25 se copiaría el sobremuestreo que
+PanSTARRS ya trae, por 4× los bytes. A 20′ la escala pasa de 1,17 a 0,586″/px y
+la PSF del 914 mm, de σ = 0,54 px a **1,20**: representable en las cuatro
+aperturas y en los 69 objetos del banco (bandas de diagnóstico: <0,5 subpíxel ·
+0,5–1 marginal · ≥1 representable). Lo mide `node scripts/test_resolucion_ps1.js`,
+§11 y §12. El extremo pequeño se arregla en el mismo movimiento y en sentido
+contrario: un objeto de 1,5′ pedía 1024 px a 0,088″/px —tres veces por debajo de
+la nativa de PS1, píxeles interpolados que solo pesan— y ahora pide 180. El
+respaldo por proxy pide el mismo tamaño que la textura: una sola ley (ADR 0008).
+
 A `salida = 1024` (1,17″/px en 20′) esos dos se separan entre **1,0 y 3,3 σ del
 ruido de cielo** en M51/M81/M101/NGC 205, unas **213 veces el suelo de
 sensibilidad** del método —medido comparando 914 contra 920 mm, dos aperturas
@@ -565,16 +578,6 @@ modelo, no el entorno. El guardián de todo esto es
   baja a 0,774 en M81. Es el peor caso medido y ningún cambio reciente lo toca.
 - **Un detector de estrellas residuales queda descartado**: se probó y empeoraba
   el resultado. Lo que fallaba era la WCS, no la falta de un segundo detector.
-- ~~**1024 px no llega a la resolución ideal en las galaxias grandes.**~~
-  **Resuelto en la fase 2 del ADR 0024** (regla C, `ps1SalidaParche`): el tamaño
-  del parche lo decide el objeto, `clamp(ceil(lado·60/0,5), 128, 2048)` px, y el
-  tope del proxy subió a 2048. A 20′ la escala pasa de 1,17 a 0,586″/px y la PSF
-  del 914 mm, de σ = 0,54 px a 1,20: **representable** en las cuatro aperturas y
-  en los 69 objetos del banco (bandas de diagnóstico: <0,5 subpíxel · 0,5–1
-  marginal · ≥1 representable). Lo mide `node scripts/test_resolucion_ps1.js`,
-  §11 y §12. El extremo pequeño se arregla en el mismo movimiento y en sentido
-  contrario: un objeto de 1,5′ pedía 1024 px a 0,088″/px —tres veces por debajo
-  de la nativa de PS1, bytes de píxeles interpolados— y ahora pide 180.
 - **Estelas de sangrado y huecos**: la máscara conservada deja los huecos como
   huecos, que es lo correcto, pero no los *rellena* con nada plausible. Ahí la
   mezcla E pone `(1-w)·perfil`.
@@ -901,7 +904,7 @@ la lógica:
 | Bloque | Controla |
 |---|---|
 | `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo de estrella** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **halo de cúmulo globular** (`globular.rangoMag` = margen de la amortiguación cerca de estrellas resueltas, `globular.magResta`/`globular.restaMaxFrac` = profundidad fija y tope de la resta de luz ya resuelta — ver *Halo de los cúmulos globulares* más arriba); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo` = rango de la cadena, `magBlanco` = pendiente del pintado, ADR 0019); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
-| `PS1` (= `BitacoraGaiaRender.ps1`) | Capa de galaxias desde imagen: **adquisición** (`escalaObjetivoAs` = 0,5″/px, `salidaMin`/`salidaMax` = 128/2048 px: los parámetros de `ps1SalidaParche(lado)`, que decide el tamaño del recorte objeto a objeto — leer antes *La resolución del recorte*; `salida` = los 1024 px fijos de la fase 1, que ya no mandan y solo pinan los arneses viejos; `banda`, `seeingAs` = 1,1″ del stack, `ladoFactor`/`ladoMin`/`ladoMax` = campo del parche, `fracMin` = puerta de cobertura); **máscara de estrellas** (`mascaraMaxAs` = 60″, `rellenoPlanoMaxAs` = 40″ — **si tocas estos, mide antes**); **mezcla E** (`mezclaCajaAs`, `mezclaW0`); **halo** (`haloMenorMin`, `haloMuFijo`, `muHalo`, `deltaPlena`, `realceMax`). |
+| `PS1` (= `BitacoraGaiaRender.ps1`) | Capa de galaxias desde imagen: **adquisición** (`escalaObjetivoAs` = 0,5″/px, `salidaMin`/`salidaMax` = 128/2048 px: los parámetros de `ps1SalidaParche(lado)`, que decide el tamaño del recorte objeto a objeto — leer antes *La resolución del recorte*; `salida` = los 1024 px fijos de la fase 1, que ya no mandan en producción y solo pinan los arneses y los cinco tests que miden otras leyes sobre un FITS ya descargado; `banda`, `seeingAs` = 1,1″ del stack, `ladoFactor`/`ladoMin`/`ladoMax` = campo del parche, `fracMin` = puerta de cobertura); **máscara de estrellas** (`mascaraMaxAs` = 60″, `rellenoPlanoMaxAs` = 40″ — **si tocas estos, mide antes**); **mezcla E** (`mezclaCajaAs`, `mezclaW0`); **halo** (`haloMenorMin`, `haloMuFijo`, `muHalo`, `deltaPlena`, `realceMax`). |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longRef`/`longMax` (longitud, ley √flujo), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |

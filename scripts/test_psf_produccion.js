@@ -43,7 +43,13 @@ var LADO = 20.03;
 
 function correr(parches) {
 
-  console.log('\n— 1. PS1.salida está en 1024, y es lo único que se movió de la config —');
+  /* `PS1.salida` es la constante de la fase 1 del ADR 0024, con la que se bajaron
+     los parches que este test mide. Desde la fase 2 ya NO es lo que pide
+     producción —el tamaño lo decide `ps1SalidaParche(lado)`, y a 20,03′ son
+     2048 px—: aquí se pina a propósito, para no volver a la red por un cambio
+     de resolución que este test no estudia. Quien mide la resolución es
+     `scripts/test_resolucion_ps1.js`. */
+  console.log('\n— 1. El parche medido es el de la fase 1, PS1.salida = 1024 —');
   casi(PS1.salida, 1024, 0, 'PS1.salida');
   casi(PS1.ladoMax, 20, 1e-12, 'ladoMax (sin tocar)');
   casi(PS1.ladoMin, 1.5, 1e-12, 'ladoMin (sin tocar)');

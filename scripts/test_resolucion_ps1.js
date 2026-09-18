@@ -74,7 +74,15 @@ casi(escalaAs(20, 512), 2.34375, 1e-9, 'y la peor de hoy: 20′ a 512 px');
 console.log('\n— 2. Más resolución NO cambia el flujo —');
 /* fitscut remuestrea conservando BRILLO SUPERFICIAL (flujo por ″²), que es justo
    lo que consume el render: ps1PintarParche trabaja con areaPx = escalaAs².
-   Medido: la media por píxel no se mueve en un factor 3,75 de escala. */
+   Medido: la media por píxel no se mueve en un factor 3,75 de escala.
+
+   ALCANCE, para no cobrarse L2.3 entero con esto: la sonda va de 0,94 a 0,25″/px
+   sobre M51, o sea de la escala de la fase 2 HACIA la nativa. NO cubre el régimen
+   sobremuestreado —por debajo de 0,25″/px— donde vivían 31 de los 69 objetos de
+   la fase 1, y la fila que sí lo pisa (2054 px, 0,2337″/px) queda fuera a mano
+   porque ahí fitscut ya solo interpola. La comparación objeto a objeto de fase 2
+   contra fase 1 se mide sobre el banco regenerado; aquí está el listón, no la
+   medida de los 69. */
 var m0 = SONDA[0].media;
 SONDA.slice(0, 3).forEach(function (s) {
   casi(s.media / m0, 1, 2e-3, s.salida + ' px: brillo superficial respecto a 512 px');
@@ -185,8 +193,8 @@ for (var lc = PS1.ladoMin; lc <= PS1.ladoMax + 1e-9; lc += 0.05) {
   if (escalaAs(lc, API.ps1SalidaParche(lc)) < 0.25) masFina++;
 }
 ok(masFina === 0, 'ningún lado del rango pide una escala más fina que la nativa de PS1');
-ok(API.ps1SalidaParche(0) === Math.max(PS1.salidaMin, Math.ceil(PS1.ladoMin * 60 / PS1.escalaObjetivoAs)),
-  'un lado ausente cae a ladoMin, no a cero px');
+casi(API.ps1SalidaParche(0), PS1.salidaMin, 1e-12,
+  'un lado ausente cae al suelo de 128 px, no a NaN ni a cero');
 
 console.log('\n— 12. L2.1: ningún objeto del banco queda «subpíxel» —');
 /* El listón de la fase 2 (ADR 0024): σ de la PSF del telescopio ≥ 1 px en los
@@ -201,11 +209,14 @@ var peor = { s: Infinity }, enTope = 0, subpixel = 0;
     var sg = sigmaPxProd(D, e);
     if (sg < peor.s) peor = { s: sg, D: D, nombre: o.nombre, lado: o.gal.ladoArcmin, esc: e, px: px };
     if (px >= PS1.salidaMax && D === 80) enTope++;
-    var listón = (o.gal.ladoArcmin < 17) ? 1 : 0.85;
-    if (sg < listón) {
+    /* El listón laxo es el del TOPE, y el tope entra a los 17,07′, no a los 17:
+       un objeto entre medias no está en el tope y le toca el estricto. Por eso
+       la pregunta es por los píxeles, no por el lado. */
+    var liston = (px >= PS1.salidaMax) ? 0.85 : 1;
+    if (sg < liston) {
       subpixel++;
       console.error('  FALLA L2.1 ' + o.nombre + ' (' + o.gal.ladoArcmin.toFixed(2) + '′, ' +
-        e.toFixed(3) + '″/px) con ' + D + ' mm: σ = ' + sg.toFixed(3) + ' px < ' + listón);
+        e.toFixed(3) + '″/px) con ' + D + ' mm: σ = ' + sg.toFixed(3) + ' px < ' + liston);
     }
   });
 });
