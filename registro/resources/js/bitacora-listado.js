@@ -233,7 +233,11 @@
         //   '<a class="act" href="' + esc(URL_FICHA) + '?ficha=' + esc(obs.id) + '">Datos ficha</a>'
         //   '<button type="button" class="act ficha" data-accion="ficha">Ficha</button>'
         if (obs.mia) {
+          // "Otro del mismo campo" (#318) abre el formulario ya en creación, con
+          // lo de esa noche copiado: entrar por "Editar" para eso obligaría a
+          // pasar por un modo cuyo propósito es modificar lo que no se quiere tocar.
           return '<a class="act" href="' + esc(URL_FORM) + '?editar=' + esc(obs.id) + '">Editar</a>' +
+                 '<a class="act" href="' + esc(URL_FORM) + '?derivar=' + esc(obs.id) + '">Otro del mismo campo</a>' +
                  '<button type="button" class="act danger" data-accion="borrar">Borrar</button>';
         }
         return '<span class="not-mine">de otro observador</span>';

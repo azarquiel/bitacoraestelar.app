@@ -856,10 +856,16 @@
   // Si la URL trae ?editar=12, cargamos esa observación y el formulario
   // pasa a modificarla (PUT) en lugar de crear una nueva (POST).
   // ═══════════════════════════════════════════════════════════════════════
-  var editandoId = null;
+  // Con ?derivar=12 se carga la nº 12 para copiar lo del mismo campo (#318),
+  // pero editandoId se queda a null a propósito: mientras llega esa carga el
+  // formulario ya se puede rellenar y enviar, y si eso saliera como edición
+  // machacaría la observación de origen, que es justo la que no se toca.
+  var editandoId = null, derivandoId = null;
   (function detectarEdicion(){
     var m = window.location.search.match(/[?&]editar=(\d+)/);
     if(m) editandoId = parseInt(m[1],10);
+    var d = window.location.search.match(/[?&]derivar=(\d+)/);
+    if(d) derivandoId = parseInt(d[1],10);
   })();
 
   // Los rótulos de crear, tal como venían en el fragmento: derivar (#317) los
@@ -973,20 +979,27 @@
   }
 
   function cargarParaEditar(){
-    if(!editandoId || !WP) return;
-    $('outNote').textContent = 'Cargando la observación nº ' + editandoId + '…';
-    fetch(WP.endpoint + '/' + editandoId, {
+    // Las dos puertas cargan la misma observación: ?editar= para modificarla y
+    // ?derivar= para copiar de ella sin tocarla (#318).
+    var id = editandoId || derivandoId;
+    if(!id || !WP) return;
+    $('outNote').textContent = 'Cargando la observación nº ' + id + '…';
+    fetch(WP.endpoint + '/' + id, {
       credentials:'same-origin',
       headers:{ 'X-WP-Nonce': WP.nonce }
     })
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, status:r.status, data:d}; }); })
     .then(function(res){
       if(!res.ok){
-        $('outNote').innerHTML = '<span style="color:var(--rojo)">✗ No se pudo cargar la observación nº ' + editandoId + '.</span>';
+        $('outNote').innerHTML = '<span style="color:var(--rojo)">✗ No se pudo cargar la observación nº ' + id + '.</span>';
         editandoId = null;
         return;
       }
       precargar(res.data);
+      // ?derivar=12 (#318): ya está en pantalla lo que se copia, así que se
+      // encadena sola por la vía del mismo campo. encadenar() suelta el modo
+      // edición, vacía objeto y coordenadas y avisa de que la nº 12 no se toca.
+      if(derivandoId){ encadenar(true); return; }
       // Esta observación ya existe: se puede derivar de ella el objeto que
       // compartía campo sin guardar nada antes (#317). Si la carga falla no se
       // destapan: no habría de dónde derivar.

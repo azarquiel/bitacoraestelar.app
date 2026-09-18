@@ -97,6 +97,31 @@ ok(/function salirModoEdicion\(/.test(js) && /editandoId = null/.test(js),
 ok(/rotulosCrear/.test(js), 'los rótulos de crear se guardan para poder devolverlos');
 ok(/se queda como estaba guardada/.test(enc317), 'se avisa de que la de origen no se modifica');
 
+/* #318: la otra puerta de entrada. ?derivar=12 carga la nº 12 igual que ?editar=,
+   pero no para modificarla: en cuanto está cargada encadena por la vía del mismo
+   campo, así que el formulario nunca se rotula como edición y lo que se guarde
+   sale por POST. */
+seccion('Derivar desde la tarjeta del listado');
+ok(/[?&]derivar=/.test(js), 'la URL propia ?derivar= se reconoce');
+var deteccion = js.slice(js.indexOf('function detectarEdicion('), js.indexOf('function aplicarModoEdicion('));
+ok(/derivandoId/.test(deteccion), 'y deja constancia de que se viene a derivar, no a editar');
+/* La nº 12 tarda en llegar, y mientras tanto el formulario ya se puede rellenar
+   y enviar. Si derivar dejase puesto editandoId, ese envío saldría como PUT y
+   machacaría la observación de origen, que es justo la que no se toca. */
+ok(!/editandoId = /.test(deteccion.slice(deteccion.indexOf('derivar='))),
+   'derivar NO pone editandoId: guardar antes de que llegue la carga no puede pisar la de origen');
+var aplicar = js.slice(js.indexOf('function aplicarModoEdicion('), js.indexOf('function salirModoEdicion('));
+ok(!/derivandoId/.test(aplicar),
+   'y por eso los rótulos de edición no necesitan excepción: al derivar no hay id que editar');
+var envio318 = js.slice(js.indexOf("$('obsForm').addEventListener('submit'"), js.indexOf('DISTANCIA A MANO'));
+ok(/var editando = !!editandoId/.test(envio318), 'el envío decide POST o PUT solo por editandoId');
+var carga318 = js.slice(js.indexOf('function cargarParaEditar('), js.indexOf('cargarFlota();'));
+ok(/editandoId \|\| derivandoId/.test(carga318), 'la carga sirve a las dos puertas con el id que venga');
+ok(/derivandoId/.test(carga318) && /encadenar\(true\)/.test(carga318),
+   'cargada la observación, se encadena sola por la vía del mismo campo');
+ok(carga318.indexOf('precargar(res.data)') < carga318.indexOf('encadenar(true)'),
+   'después de precargar: lo que se copia tiene que estar ya en pantalla');
+
 seccion('La distancia pendiente es del objeto anterior');
 var enc = js.slice(js.indexOf('function encadenar('));
 ok(/distCaja\.hidden = true/.test(enc.slice(0, enc.indexOf('resolveObject()'))),
