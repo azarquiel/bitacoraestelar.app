@@ -118,6 +118,14 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   cronometrarlos. La regla no es «solo tres los leen»: es que **en el camino del
   render solo `ps1LeerTextura` los convierte en parche**, y quien decodifica lo hace
   siempre con la ley de `bitacora-png16.js`, nunca con una copia suya.
+- **Resolución por objeto (regla C):** el tamaño del parche lo decide el objeto, no una
+  constante: `ps1SalidaParche(lado) = clamp(ceil(lado·60/0,5), 128, 2048)` px, a 0,5″/px
+  —Nyquist del seeing de 1,1″ del stack, no su píxel nativo de 0,25″— y con el tope a
+  2048 px, que tocan los objetos de ≥ 17,07′. Arregla los dos extremos a la vez: los
+  pequeños dejaban de pedir píxeles interpolados y los grandes dejan de tener la PSF del
+  telescopio por debajo del píxel. `salida` entra en `version()` (ADR 0026), así que
+  cambiar la regla **republica el banco entero**. _Evitar_: «`PS1.salida`» como el tamaño
+  del parche; es la constante de la fase 1 y ya no manda.
 - **Invariante:** lo que devuelve `ps1LeerTextura` es indistinguible en forma de lo que
   devuelve `parseFITS`. Nada aguas abajo de esa frontera —`ps1AnclarACatalogo`, la mezcla,
   `ps1PsfParche`, H2c, la máscara difusa— puede saber de dónde vino el parche.

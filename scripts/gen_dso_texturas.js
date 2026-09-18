@@ -439,7 +439,10 @@ function generar(nombre, dir) {
   var lado = PS1.ps1LadoArcmin(f[4]);
   var campo = PS1.ps1GalaxiasDelCampo([f], f[2], f[3], lado);
   if (!campo.length) throw new Error(nombre + ': ps1GalaxiasDelCampo no lo devuelve');
-  var gal = campo[0], salida = PS1.cfg.salida, v = version(gal, salida);
+  /* La resolución la decide el objeto, no una constante (regla C del §4.2 del
+     objetivo, fase 2 del ADR 0024). Entra en `version()`, así que cambiarla
+     renombra la textura: republicar es parte del trato, no un efecto secundario. */
+  var gal = campo[0], salida = PS1.ps1SalidaParche(gal.ladoArcmin), v = version(gal, salida);
 
   var id = PS1.ps1IdTextura(gal.nombre), base = path.join(dir, id + '.' + v);
   var y = yaResuelto(dir, id, v);
@@ -628,11 +631,13 @@ function correrBanco(dir, seco) {
         console.log('  FALLO: el banco no lo resuelve a campo');
         return;
       }
-      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, PS1.cfg.salida);
+      var salidaSeca = PS1.ps1SalidaParche(o.gal.ladoArcmin);
+      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, salidaSeca);
       if (seco) {
         var y = yaResuelto(dir, id, v);
         console.log('  ' + (y ? 'ya está (' + y.estado + ')' : 'pediría') + '  ' + id + '.' + v +
-          '  ' + o.gal.ladoArcmin.toFixed(2) + '′ → ' + PS1.cfg.salida + ' px');
+          '  ' + o.gal.ladoArcmin.toFixed(2) + '′ → ' + salidaSeca + ' px (' +
+          (o.gal.ladoArcmin * 60 / salidaSeca).toFixed(3) + '″/px)');
         if (y) estado.ya++; else estado.pendientes++;
         return;
       }

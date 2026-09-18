@@ -565,13 +565,16 @@ modelo, no el entorno. El guardián de todo esto es
   baja a 0,774 en M81. Es el peor caso medido y ningún cambio reciente lo toca.
 - **Un detector de estrellas residuales queda descartado**: se probó y empeoraba
   el resultado. Lo que fallaba era la WCS, no la falta de un segundo detector.
-- **1024 px no llega a la resolución ideal en las galaxias grandes.** A 20′ da
-  1,17″/px, con la PSF en σ = 0,54–0,72 px: representable, pero **marginal**
-  (bandas de diagnóstico: <0,5 subpíxel · 0,5–1 marginal · ≥1 representable).
-  Llegar a 0,67″/px pediría 1794 px, por encima de `PS1_SALIDA_MAX` = 1024 del
-  proxy, y cuadruplicaría otra vez el peso. En las galaxias pequeñas (parche de
-  1,5–8′) la escala ya es holgada. Subir el tope del proxy es una decisión de
-  ancho de banda, no de física.
+- ~~**1024 px no llega a la resolución ideal en las galaxias grandes.**~~
+  **Resuelto en la fase 2 del ADR 0024** (regla C, `ps1SalidaParche`): el tamaño
+  del parche lo decide el objeto, `clamp(ceil(lado·60/0,5), 128, 2048)` px, y el
+  tope del proxy subió a 2048. A 20′ la escala pasa de 1,17 a 0,586″/px y la PSF
+  del 914 mm, de σ = 0,54 px a 1,20: **representable** en las cuatro aperturas y
+  en los 69 objetos del banco (bandas de diagnóstico: <0,5 subpíxel · 0,5–1
+  marginal · ≥1 representable). Lo mide `node scripts/test_resolucion_ps1.js`,
+  §11 y §12. El extremo pequeño se arregla en el mismo movimiento y en sentido
+  contrario: un objeto de 1,5′ pedía 1024 px a 0,088″/px —tres veces por debajo
+  de la nativa de PS1, bytes de píxeles interpolados— y ahora pide 180.
 - **Estelas de sangrado y huecos**: la máscara conservada deja los huecos como
   huecos, que es lo correcto, pero no los *rellena* con nada plausible. Ahí la
   mezcla E pone `(1-w)·perfil`.
@@ -898,7 +901,7 @@ la lógica:
 | Bloque | Controla |
 |---|---|
 | `GAIA_CFG` (= `BitacoraGaiaRender.config`) | Render de Gaia: **halo de estrella** (`blur` = tope para estrellas brillantes, `blurMin` = suelo al límite de detección — ver `blurEstrella(g, apertura)`); **halo de cúmulo globular** (`globular.rangoMag` = margen de la amortiguación cerca de estrellas resueltas, `globular.magResta`/`globular.restaMaxFrac` = profundidad fija y tope de la resta de luz ya resuelta — ver *Halo de los cúmulos globulares* más arriba); **color** (`margenColorMag` = margen bajo `mlim` al que aparece el color — ver `magColorEfectivo`; `tinteNucleo`; `carbono` con `bprpOffset`/`bprpMin` del realce rojo del objeto de carbono; `gamma` con `global` on/off y `hasta`/`desvanece`, la banda donde la gamma se desvanece hacia el rojo); **tamaño** (`radioSuelo`/`radioSueloMag`/`radioSueloExp`/`radioSueloMax`, más `margenSuelo`/`radioSueloMin` para el recorte del suelo en dobles — ver `radioEstrella()`); **brillo/alpha, relativo al equipo** (`brillo`, `alfaMin` — ver el techo conocido en *Glow de estrellas no resueltas* —, `rangoBrillo` = rango de la cadena, `magBlanco` = pendiente del pintado, ADR 0019); **escala con el aumento** (`escalaMagAfov`, `escalaMagMax`); **aureola** (`aureolaRadio`, `aureolaAlfaK`, `aureolaAlfaMax`, `aureolaAperturaRef` — ver `alfaAureola()`); y el **glow** de no resueltas (`glowIntensidad`, `glowRadio`). Todo probado sin navegador en `scripts/test_estrella_fisica.js` y `scripts/test_blur_color_absoluto.js`. |
-| `PS1` (= `BitacoraGaiaRender.ps1`) | Capa de galaxias desde imagen: **adquisición** (`salida` = px del recorte que se pide al proxy, hoy 1024 y tope del proxy — leer antes *La resolución del recorte*; `banda`, `seeingAs` = 1,1″ del stack, `ladoFactor`/`ladoMin`/`ladoMax` = campo del parche, `fracMin` = puerta de cobertura); **máscara de estrellas** (`mascaraMaxAs` = 60″, `rellenoPlanoMaxAs` = 40″ — **si tocas estos, mide antes**); **mezcla E** (`mezclaCajaAs`, `mezclaW0`); **halo** (`haloMenorMin`, `haloMuFijo`, `muHalo`, `deltaPlena`, `realceMax`). |
+| `PS1` (= `BitacoraGaiaRender.ps1`) | Capa de galaxias desde imagen: **adquisición** (`escalaObjetivoAs` = 0,5″/px, `salidaMin`/`salidaMax` = 128/2048 px: los parámetros de `ps1SalidaParche(lado)`, que decide el tamaño del recorte objeto a objeto — leer antes *La resolución del recorte*; `salida` = los 1024 px fijos de la fase 1, que ya no mandan y solo pinan los arneses viejos; `banda`, `seeingAs` = 1,1″ del stack, `ladoFactor`/`ladoMin`/`ladoMax` = campo del parche, `fracMin` = puerta de cobertura); **máscara de estrellas** (`mascaraMaxAs` = 60″, `rellenoPlanoMaxAs` = 40″ — **si tocas estos, mide antes**); **mezcla E** (`mezclaCajaAs`, `mezclaW0`); **halo** (`haloMenorMin`, `haloMuFijo`, `muHalo`, `deltaPlena`, `realceMax`). |
 | `GAIA_COLOR` | Tabla `[BP–RP, R, G, B]` que fija el color por índice. Nodos anclados a los códigos físicos de Harre &amp; Heller (spec2col); el extremo rojo, a un espectro de estrella de carbono. |
 | `GAIA_CFG.spikes` | Cruz de difracción: `magMax` (umbral de brillo), `brazos` (nº de puntas), `angulo` (`0` = `+`, `45` = `×`), `longRef`/`longMax` (longitud, ley √flujo), `grosor`, `lobulos` (lóbulos sinc²), `intensidad`. |
 | `OPTICA_ARANA` | Qué tipos ópticos tienen araña (→ muestran spikes). El telescopio manual lo hereda de la opción "Reflector / Newton" (`data-arana` en el HTML). |
@@ -1100,7 +1103,15 @@ también arranca `scripts/dev_servidor_ocular.php` y comprueba que sirve
 `dso/*.png` y `dso/*.json` con su tipo. En producción, hasta que el T12 (#209)
 suba las texturas por FTP, el manifiesto declara filas y el proxy sigue en pie.
 
-**Publicarlas** es copiar los dos ficheros de cada objeto a
+**Publicarlas son DOS publicaciones, no una, y en este orden: primero los PNG
+por FTP, y solo después el manifiesto a `main`.** El manifiesto es lo que le dice
+al navegador que un objeto tiene textura; si entra antes que su PNG, el objeto se
+queda sin parche —y con `proxyRespaldo` apagado, sin imagen ninguna— durante todo
+el hueco entre las dos. Al revés no pasa nada: un PNG que nadie declara solo ocupa
+disco. Vale para cada republicación del banco (#258, #288 y la de la fase 2, que
+renombra las texturas enteras porque `salida` entra en `version()`).
+
+En detalle, es copiar los dos ficheros de cada objeto a
 `/wp-content/uploads/bitacora/dso/` y subir el manifiesto regenerado con ellos:
 el nombre lleva el hash, así que no hay `?v=` que tocar y una textura vieja
 puede convivir con la nueva. El manifiesto sí es un `.js` normal y necesita su
@@ -1122,7 +1133,8 @@ del golden): `docs/validacion/dso_texturas_fase1.md`.
    `bitacora-png16.js` y `dso-texturas-datos.js`. Sin el manifiesto, todo va al
    proxy como antes; sin el códec, `bitacora-ps1.js` lanza al pedir una textura
    (el guardián suena a propósito, ADR 0020).
-2. **Texturas DSO** → los `dso/*.png` y `dso/*.json` a
+2. **Texturas DSO** → **antes que el paso 1**, y son su propia publicación:
+   los `dso/*.png` y `dso/*.json` a
    `/wp-content/uploads/bitacora/dso/`. Están en **dos** directorios y hay que
    subir los dos: `simulador_ocular/dso/` (de ahí solo se ignoran los PNG; los
    sidecars van en git desde #258) y `scripts/fixtures/dso/` (las 11 del banco
