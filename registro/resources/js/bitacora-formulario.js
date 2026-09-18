@@ -856,15 +856,16 @@
   // Si la URL trae ?editar=12, cargamos esa observación y el formulario
   // pasa a modificarla (PUT) en lugar de crear una nueva (POST).
   // ═══════════════════════════════════════════════════════════════════════
-  // Con ?derivar=12 se carga la nº 12 por el mismo camino (de ahí el id común),
-  // pero no para modificarla: es la puerta desde la tarjeta del listado (#318)
-  // para empezar el objeto que compartía campo con ella.
+  // Con ?derivar=12 se carga la nº 12 para copiar lo del mismo campo (#318),
+  // pero editandoId se queda a null a propósito: mientras llega esa carga el
+  // formulario ya se puede rellenar y enviar, y si eso saliera como edición
+  // machacaría la observación de origen, que es justo la que no se toca.
   var editandoId = null, derivandoId = null;
   (function detectarEdicion(){
     var m = window.location.search.match(/[?&]editar=(\d+)/);
     if(m) editandoId = parseInt(m[1],10);
     var d = window.location.search.match(/[?&]derivar=(\d+)/);
-    if(d){ derivandoId = parseInt(d[1],10); editandoId = derivandoId; }
+    if(d) derivandoId = parseInt(d[1],10);
   })();
 
   // Los rótulos de crear, tal como venían en el fragmento: derivar (#317) los
@@ -872,9 +873,7 @@
   var rotulosCrear = null;
 
   function aplicarModoEdicion(){
-    // Quien viene a derivar (#318) no ve nunca «Editar observación nº 12»: está
-    // creando desde el primer momento, aunque se cargue la nº 12 para copiar.
-    if(!editandoId || derivandoId) return;
+    if(!editandoId) return;
     var titulo = document.querySelector('#mw-obs-form h1');
     var sub = titulo ? titulo.querySelector('.sub') : null;
     rotulosCrear = {
@@ -980,16 +979,19 @@
   }
 
   function cargarParaEditar(){
-    if(!editandoId || !WP) return;
-    $('outNote').textContent = 'Cargando la observación nº ' + editandoId + '…';
-    fetch(WP.endpoint + '/' + editandoId, {
+    // Las dos puertas cargan la misma observación: ?editar= para modificarla y
+    // ?derivar= para copiar de ella sin tocarla (#318).
+    var id = editandoId || derivandoId;
+    if(!id || !WP) return;
+    $('outNote').textContent = 'Cargando la observación nº ' + id + '…';
+    fetch(WP.endpoint + '/' + id, {
       credentials:'same-origin',
       headers:{ 'X-WP-Nonce': WP.nonce }
     })
     .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, status:r.status, data:d}; }); })
     .then(function(res){
       if(!res.ok){
-        $('outNote').innerHTML = '<span style="color:var(--rojo)">✗ No se pudo cargar la observación nº ' + editandoId + '.</span>';
+        $('outNote').innerHTML = '<span style="color:var(--rojo)">✗ No se pudo cargar la observación nº ' + id + '.</span>';
         editandoId = null;
         return;
       }
