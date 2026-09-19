@@ -719,6 +719,24 @@
     return -2.5 * Math.log10(fondo.flujo / (Math.PI * Math.pow(fondo.rad * 3600, 2)));
   }
 
+  /* Varianza SBF del velo (flujo²/arcsec⁴) a partir de los momentos del TAP:
+     m2 = Σf² sobre el cono; la varianza del brillo superficial medio es
+     m2/área². Hoy veloSB solo lee `flujo` (media) e ignora `m2` (hallazgo Q2 de
+     la Fase A): esta función expone el segundo momento que ya trae el proxy. */
+  function veloVar(fondo) {
+    if (!fondo || !(fondo.m2 > 0) || !(fondo.rad > 0)) return null;
+    var area = Math.PI * Math.pow(fondo.rad * 3600, 2);
+    return fondo.m2 / (area * area);
+  }
+
+  /* N_eff = ⟨I⟩²/σ² = (Σf)²/Σf² — estrellas efectivas por beam (Tonry &
+     Schneider 1988). Mismo número para una capa discreta o para el velo
+     (flujo²/m2). Fuente única de la fórmula, para que niebla y velo no la
+     reimplementen (ADR 0008). */
+  function nefSbf(sumaF, sumaF2) {
+    return (sumaF > 0 && sumaF2 > 0) ? (sumaF * sumaF) / sumaF2 : 0;
+  }
+
   // Suma fotométrica de dos brillos superficiales: los FLUJOS se suman.
   function sumaSB(sb, velo) {
     if (velo == null) return sb;
@@ -1039,7 +1057,7 @@
     var asPorPx = (o.arcmin * 60) / SIZE;
     var areaPxAs2 = asPorPx * asPorPx;
     var wx = new Float64Array(2 * Math.ceil(hPx) + 1), wy = new Float64Array(wx.length);
-    var total = 0;
+    var total = 0, total2 = 0;   // Σf y Σf² (segundo momento SBF, épica #330)
     /* Momento de segundo orden de la niebla, para su ESCALA DE JUICIO (R50,
        ADR 0023 v2). Se acumula en la misma pasada: Σf, Σfx, Σfy y Σf(x²+y²),
        que dan ⟨r²⟩ sin necesitar el centroide de antemano ni una segunda
@@ -1055,6 +1073,7 @@
       if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) continue;
       var f = Math.pow(10, -0.4 * g);
       total += f;                           // el total devuelto es el flujo REAL
+      total2 += f * f;                      // Σf²: varianza SBF (Q2), real sin parche
       mx += f * x; my += f * y; mr2 += f * (x * x + y * y);
       f *= gananciaNiebla();                // ...y lo pintado lleva el parche
       /* Reparto en tienda separable de semiancho hPx: los pesos se normalizan
@@ -1075,6 +1094,7 @@
       }
     }
     o.thetaJuicioArcmin = thetaJuicioNiebla(thSkyArcmin, total, mx, my, mr2, asPorPx);
+    o.sumaF2 = total2;                      // Σf², para N_eff y la coherencia Q2/Q3
     return total;
   }
 
@@ -2841,6 +2861,8 @@
     render: render,
     magLimite: magLimite,
     veloSB: veloSB,
+    veloVar: veloVar,
+    nefSbf: nefSbf,
     nieblaCampo: nieblaCampo,
     sbNiebla: sbNiebla,
     mlimNiebla: mlimNiebla,
