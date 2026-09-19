@@ -53,6 +53,10 @@ const GAIA_MAX_ROWS        = 40000;              // TOP N de la consulta SEGURA 
    límite físico es el `mag` que manda el cliente (magConsultaGaia). Referencia
    medida (2026-08): ~199 000 filas sin ORDER BY llegan en ~2 s del TAP de CDS. */
 const GAIA_TECHO_FILAS     = 200000;
+/* Granularidad del agregado ESPACIAL del velo (ADR 0029): celdas de 1/N grados.
+   0,125° (N=8) fijada por el barrido previo — la más gruesa que conserva el
+   perfil radial de la niebla (coincide con 0,0625°, con 3,4× menos celdas). */
+const GAIA_ESPACIAL_N      = 8;
 const GAIA_MAX_RAD         = 4.5;                // ° : radio máximo aceptado (6° de lado + margen)
 const GAIA_MAX_MAG         = 20.0;               // mag: límite máximo aceptado (= GAIA_MAG_TOPE en bitacora-gaia-render.js)
 const GAIA_CLEANUP_EVERY   = 300;                // s: limpieza como mucho cada 5 min
@@ -189,6 +193,67 @@ function gaia_mezclar_fondo(string $json, ?array $fila, float $corte, float $rad
     return json_encode($j);
 }
 
+/* ═══════════ Velo espacial por celdas (ADR 0029) ═══════════
+   El velo de campo denso (ADR 0014) es uniforme porque el fondo escalar no
+   lleva estructura. Aquí se piden los MISMOS momentos (n, Σf, Σf²) agrupados
+   por celda de la rejilla RA×Dec (1/N grados), sin ORDER BY: agrega el servidor
+   por celda, no viaja una fila por estrella. El cliente mapea cada celda a
+   flujo/arcsec² local y el velo deja de ser uniforme (bifurcación velo↔niebla). */
+
+/**
+ * Pareja de consultas ADQL [CDS, GAVO] del agregado espacial de la banda
+ * truncada (corte, mag], agrupado por celda. Mismo WHERE que el fondo escalar:
+ * el conjunto físico es idéntico, solo cambia el agrupamiento (Σ celdas ==
+ * fondo.flujo, listón L1 del prerregistro).
+ */
+function gaia_espacial_consultas(float $ra, float $dec, float $rad, float $mag, float $corte, int $N): array {
+    $cds = 'SELECT FLOOR(RA_ICRS*' . $N . ') AS rx, FLOOR(DE_ICRS*' . $N . ') AS dy,'
+        . ' COUNT(*) AS n, SUM(POWER(10,-0.4*Gmag)) AS flujo, SUM(POWER(10,-0.8*Gmag)) AS m2'
+        . ' FROM "I/355/gaiadr3" WHERE Gmag>' . $corte . ' AND Gmag<=' . $mag
+        . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
+        . ' GROUP BY rx, dy';
+    $gavo = 'SELECT FLOOR(ra*' . $N . ') AS rx, FLOOR(dec*' . $N . ') AS dy,'
+        . ' COUNT(*) AS n, SUM(POWER(10,-0.4*phot_g_mean_mag)) AS flujo, SUM(POWER(10,-0.8*phot_g_mean_mag)) AS m2'
+        . ' FROM gaia.dr3lite WHERE phot_g_mean_mag>' . $corte . ' AND phot_g_mean_mag<=' . $mag
+        . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
+        . ' GROUP BY rx, dy';
+    return [$cds, $gavo];
+}
+
+/** URLs de proveedores del agregado espacial (failover), en orden de preferencia. */
+function gaia_espacial_urls(float $ra, float $dec, float $rad, float $mag, float $corte, int $N): array {
+    [$cds, $gavo] = gaia_espacial_consultas($ra, $dec, $rad, $mag, $corte, $N);
+    return [
+        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
+        'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' . rawurlencode($gavo),
+    ];
+}
+
+/**
+ * Inyecta las celdas del agregado espacial bajo `fondo.espacial` (hermana de
+ * los momentos escalares). Pura: sin celdas o sin `fondo`, devuelve la
+ * respuesta intacta — degradación, no bloqueo (misma regla que el fondo).
+ */
+function gaia_mezclar_espacial(string $json, ?string $esp_json, int $N): string {
+    if ($esp_json === null) {
+        return $json;
+    }
+    $e = json_decode($esp_json, true);
+    if (!is_array($e) || empty($e['data']) || !is_array($e['data'])) {
+        return $json;
+    }
+    $j = json_decode($json, true);
+    if (!is_array($j) || !isset($j['fondo'])) {
+        return $json;
+    }
+    $celdas = [];
+    foreach ($e['data'] as $f) {
+        $celdas[] = [(int) $f[0], (int) $f[1], (int) $f[2], (float) $f[3], (float) ($f[4] ?? 0)];
+    }
+    $j['fondo']['espacial'] = ['N' => $N, 'celdas' => $celdas];
+    return json_encode($j);
+}
+
 /** ¿La sonda pudo quedar truncada? Tocar el techo = no hay garantía de conjunto completo. */
 function gaia_truncada(int $filas): bool {
     return $filas >= GAIA_TECHO_FILAS;
@@ -242,7 +307,11 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag): ?string {
     }
     $agg = gaia_fetch_urls(gaia_fondo_urls($ra, $dec, $rad, $mag, $corte));
     $fila = ($agg !== null) ? (json_decode($agg, true)['data'][0] ?? null) : null;
-    return gaia_mezclar_fondo($json, is_array($fila) ? $fila : null, $corte, $rad, $mag);
+    $json = gaia_mezclar_fondo($json, is_array($fila) ? $fila : null, $corte, $rad, $mag);
+    /* ADR 0029: velo espacial por celdas. Un fallo aquí degrada a velo uniforme
+       (el escalar ya está servido), nunca bloquea los datos. */
+    $esp = gaia_fetch_urls(gaia_espacial_urls($ra, $dec, $rad, $mag, $corte, GAIA_ESPACIAL_N));
+    return gaia_mezclar_espacial($json, $esp, GAIA_ESPACIAL_N);
 }
 
 /**

@@ -227,27 +227,21 @@
        cuña negra en vez de una línea. Aquí barre ~5 magnitudes y no deja borde.
        Las placas conservan el desvanecido original. */
     UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4,
-    /* PARCHE ESTÉTICO, y se llama así a propósito. Multiplica el flujo que la
-       niebla sub-mlim de los cúmulos abiertos deposita en el campo difuso
-       (nieblaCampo, ADR 0022) ANTES de que la cadena lo juzgue.
+    /* GANANCIA de la niebla, antes PARCHE ESTÉTICO (épica #330, US-4). Multiplica
+       el flujo que la niebla deposita ANTES de visibilidadDifusa.
 
-       Contradice de frente el ADR 0004 («no se introduce ningún parámetro cuyo
-       único criterio de ajuste sea el aspecto de la imagen»). Se introduce a
-       sabiendas: la niebla vive justo en la zona de umbral, sale a unos +24 DN
-       sobre el fondo en el caso nominal (M11 nuclear, 200 mm/61×, sqm 21,5) y
-       eso se percibe flojo. No hay medida detrás de 1,5: es un mando de gusto.
-
-       OJO, no es solo brillo: el factor entra antes de visibilidadDifusa, así
-       que también BAJA el umbral efectivo de detección. Sube el riesgo de que
-       pinte niebla en cúmulos pobres donde nadie la reporta (el listón P3 del
-       ADR 0022 ya sale marginal a sqm 22). No es un realce neutro.
+       Por defecto es 1 (fotometría limpia): la conservación del ADR 0003 es
+       exacta y no se introduce ningún parámetro cuyo único criterio sea el
+       aspecto (ADR 0004). El valor histórico 1,5 se percibía "flojo" en el
+       caso nominal y bajaba el umbral efectivo 0,44 mag rompiendo la ley
+       perceptual compartida (Q4). Si la niebla necesita más presencia, la vía
+       correcta es GAMMA_PERCEPTUAL (perceptual, no flujo) con prerregistro —
+       no resubir este mando.
 
        Ajustable en caliente desde la consola del navegador, sin recompilar:
-         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 2.0;   // más niebla
-         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 1.0;   // fotometría limpia
-       y volver a renderizar. Con 1 la cadena es exactamente la de antes del
-       parche y la conservación del ADR 0003 vuelve a ser exacta. */
-    NIEBLA_GANANCIA_ESTETICA: 1.5,
+         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 1.5;  // A/B del viejo aspecto
+         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 1.0;  // fotometría limpia */
+    NIEBLA_GANANCIA_ESTETICA: 1.0,
     /* El recorte a cero de `pintarCumulo` (el campo no puede quitar luz) manda a
        negro el 50-70 % del campo cuando el grano se enciende y regala al cúmulo
        un 2-7 % de flujo que crece con el aumento (issue #98, medido en
@@ -719,6 +713,24 @@
     return -2.5 * Math.log10(fondo.flujo / (Math.PI * Math.pow(fondo.rad * 3600, 2)));
   }
 
+  /* Varianza SBF del velo (flujo²/arcsec⁴) a partir de los momentos del TAP:
+     m2 = Σf² sobre el cono; la varianza del brillo superficial medio es
+     m2/área². Hoy veloSB solo lee `flujo` (media) e ignora `m2` (hallazgo Q2 de
+     la Fase A): esta función expone el segundo momento que ya trae el proxy. */
+  function veloVar(fondo) {
+    if (!fondo || !(fondo.m2 > 0) || !(fondo.rad > 0)) return null;
+    var area = Math.PI * Math.pow(fondo.rad * 3600, 2);
+    return fondo.m2 / (area * area);
+  }
+
+  /* N_eff = ⟨I⟩²/σ² = (Σf)²/Σf² — estrellas efectivas por beam (Tonry &
+     Schneider 1988). Mismo número para una capa discreta o para el velo
+     (flujo²/m2). Fuente única de la fórmula, para que niebla y velo no la
+     reimplementen (ADR 0008). */
+  function nefSbf(sumaF, sumaF2) {
+    return (sumaF > 0 && sumaF2 > 0) ? (sumaF * sumaF) / sumaF2 : 0;
+  }
+
   // Suma fotométrica de dos brillos superficiales: los FLUJOS se suman.
   function sumaSB(sb, velo) {
     if (velo == null) return sb;
@@ -1039,7 +1051,7 @@
     var asPorPx = (o.arcmin * 60) / SIZE;
     var areaPxAs2 = asPorPx * asPorPx;
     var wx = new Float64Array(2 * Math.ceil(hPx) + 1), wy = new Float64Array(wx.length);
-    var total = 0;
+    var total = 0, total2 = 0;   // Σf y Σf² (segundo momento SBF, épica #330)
     /* Momento de segundo orden de la niebla, para su ESCALA DE JUICIO (R50,
        ADR 0023 v2). Se acumula en la misma pasada: Σf, Σfx, Σfy y Σf(x²+y²),
        que dan ⟨r²⟩ sin necesitar el centroide de antemano ni una segunda
@@ -1055,6 +1067,7 @@
       if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) continue;
       var f = Math.pow(10, -0.4 * g);
       total += f;                           // el total devuelto es el flujo REAL
+      total2 += f * f;                      // Σf²: varianza SBF (Q2), real sin parche
       mx += f * x; my += f * y; mr2 += f * (x * x + y * y);
       f *= gananciaNiebla();                // ...y lo pintado lleva el parche
       /* Reparto en tienda separable de semiancho hPx: los pesos se normalizan
@@ -1066,15 +1079,16 @@
       var sx = 0, sy = 0, px, py;
       for (px = x0; px <= x1; px++) { var w = 1 - Math.abs(px + 0.5 - x) / hPx; if (w < 0) w = 0; wx[px - x0] = w; sx += w; }
       for (py = y0; py <= y1; py++) { var v = 1 - Math.abs(py + 0.5 - y) / hPx; if (v < 0) v = 0; wy[py - y0] = v; sy += v; }
-      if (!(sx > 0) || !(sy > 0)) { difuso[Math.floor(y) * SIZE + Math.floor(x)] += f / areaPxAs2; continue; }
+      if (!(sx > 0) || !(sy > 0)) { if (difuso) difuso[Math.floor(y) * SIZE + Math.floor(x)] += f / areaPxAs2; continue; }
       var k = f / (sx * sy * areaPxAs2);
       for (py = y0; py <= y1; py++) {
         var fila = py * SIZE, ky = wy[py - y0] * k;
         if (ky <= 0) continue;
-        for (px = x0; px <= x1; px++) difuso[fila + px] += wx[px - x0] * ky;
+        for (px = x0; px <= x1; px++) { if (difuso) difuso[fila + px] += wx[px - x0] * ky; }
       }
     }
     o.thetaJuicioArcmin = thetaJuicioNiebla(thSkyArcmin, total, mx, my, mr2, asPorPx);
+    o.sumaF2 = total2;                      // Σf², para N_eff y la coherencia Q2/Q3
     return total;
   }
 
@@ -1092,6 +1106,101 @@
     if (!(r2 > 0)) return thSkyArcmin;
     var r50 = 0.832 * Math.sqrt(r2) * asPorPx / 60;   // px → arcsec → arcmin
     return Math.max(thSkyArcmin, r50);
+  }
+
+  /* ── Realimentación de la niebla al cielo (H2, épica #330) ──
+     La niebla de un campo ordinario es la misma luz física que el velo de un
+     campo denso (ADR 0014), pero hoy no entra en `cieloEfectivo`: el `total`
+     que nieblaCampo devuelve se descarta en vistaGaia. Aquí se cierra la
+     asimetría con la opción (a) del #186 —el escalar de campo—: el flujo de la
+     banda perdida se reparte sobre el campo del ocular y entra por sumaSB como
+     un `veloSB` más, con punto fijo porque la banda crece cuando mlim baja. */
+
+  /* SB media de la niebla (mag/arcsec²): flujo total repartido sobre el campo
+     cuadrado del ocular (arcmin × arcmin). Es una aproximación uniforme de una
+     capa en realidad concentrada; subestima el brillo local, que es justo lo
+     que el techo espacial (opción b del #186) acotaría por arriba. */
+  function sbNiebla(total, arcmin) {
+    if (!(total > 0) || !(arcmin > 0)) return null;
+    return -2.5 * Math.log10(total / Math.pow(arcmin * 60, 2));
+  }
+
+  /* Punto fijo niebla→mlim→niebla. `o` = { ra0, dec0, arcmin, size, mlim,
+     cielo, apertura }. Mide con nieblaCampo(null, …) —la misma ley de
+     producción, sin pintar—, suma el escalar al `cielo.veloSB` y rehace mlim.
+     El lazo es contractivo (cada vuelta añade una banda cada vez más débil),
+     medido en harness_h2_realimentacion.js; `tol`/`maxIt` acotan la parada.
+     Devuelve el mlim final y deja `o.cielo.veloSB` actualizado para que
+     pintarFot vea el cielo más brillante. */
+  function mlimNiebla(estrellas, o, tol, maxIt) {
+    if (!FOT.H2C) return o.mlim;
+    var mlim = o.mlim, veloBase = o.cielo.veloSB || null, veloFinal = veloBase;
+    for (var it = 0; it < (maxIt || 8); it++) {
+      var op = { ra0: o.ra0, dec0: o.dec0, arcmin: o.arcmin, size: o.size, mlim: mlim, cielo: o.cielo };
+      var total = nieblaCampo(null, estrellas, op);
+      var sb = sbNiebla(total, o.arcmin);
+      if (sb == null) break;
+      // El velo base (TAP) es fijo: cada vuelta suma SOLO la niebla de ESTA
+      // vuelta. sumaSB no admite primer argumento null, de ahí el ternario.
+      var nuevoVelo = (veloBase == null) ? sb : sumaSB(veloBase, sb);
+      var nuevo = magLimite({
+        apertura: o.apertura, aumentos: o.cielo.aumentos, transmision: o.cielo.transmision,
+        sqm: o.cielo.sqm, pupilaOjo: o.cielo.pupilaOjo, veloSB: nuevoVelo
+      });
+      if (Math.abs(nuevo - mlim) < (tol || 0.001)) { mlim = nuevo; veloFinal = nuevoVelo; break; }
+      mlim = nuevo; veloFinal = nuevoVelo;
+    }
+    o.cielo.veloSB = veloFinal;
+    return mlim;
+  }
+
+  /* ── Velo espacial por celdas (U3-full, ADR 0029) ──
+     El velo de campo denso (ADR 0014) es uniforme porque el proxy solo traía
+     los momentos escalares. Ahora `fondo.espacial` trae esos momentos POR
+     CELDA (0,125°). Aquí se pinta el EXCESO POSITIVO de cada celda sobre la
+     media escalar (veloSB): la media queda en el cielo (nivelFondo, vía
+     cielo.veloSB) y el exceso es la estructura espacial que se suma al difuso,
+     con el mismo núcleo tienda que la niebla. Lo negativo (celdas más dispersas
+     que la media) se queda en la media: es la misma aproximación uniforme del
+     ADR 0014, pero con el positivo resuelto. Devuelve lo depositado y la θ de
+     juicio (tamaño de celda); null si no hay celdas. */
+  function veloEspacial(difuso, espacial, o) {
+    if (!espacial || !(espacial.N > 0) || !espacial.celdas || !espacial.celdas.length) return null;
+    if (!(o.veloSB != null)) return null;
+    var N = espacial.N, SIZE = o.size;
+    var escv = SIZE / (o.arcmin / 60);
+    var cos0 = Math.cos(o.dec0 * Math.PI / 180);
+    var cellDeg = 1 / N, cellPx = cellDeg * escv, hPx = cellPx;
+    var meanAs2 = Math.pow(10, -0.4 * o.veloSB);         // flujo/arcsec² de la media
+    var asPorPx = (o.arcmin * 60) / SIZE, areaPxAs2 = asPorPx * asPorPx;
+    var wx = new Float64Array(2 * Math.ceil(hPx) + 1), wy = new Float64Array(wx.length);
+    var depositado = 0, excesoTotal = 0;
+    for (var i = 0; i < espacial.celdas.length; i++) {
+      var c = espacial.celdas[i];
+      var raC = (c[0] + 0.5) / N, decC = (c[1] + 0.5) / N;
+      var x = SIZE / 2 - (((raC - o.ra0 + 540) % 360) - 180) * cos0 * escv;
+      var y = SIZE / 2 - (decC - o.dec0) * escv;
+      if (x < -hPx || y < -hPx || x >= SIZE + hPx || y >= SIZE + hPx) continue;
+      var cellAreaAs2 = Math.pow(cellDeg * 3600, 2) * Math.cos(decC * Math.PI / 180);
+      var exceso = c[3] / cellAreaAs2 - meanAs2;          // SB local − media
+      if (!(exceso > 0)) continue;
+      var fExceso = exceso * cellAreaAs2;                 // flujo del exceso (G=0)
+      excesoTotal += fExceso;
+      var x0 = Math.max(0, Math.ceil(x - hPx)), x1 = Math.min(SIZE - 1, Math.floor(x + hPx));
+      var y0 = Math.max(0, Math.ceil(y - hPx)), y1 = Math.min(SIZE - 1, Math.floor(y + hPx));
+      var sx = 0, sy = 0, px, py;
+      for (px = x0; px <= x1; px++) { var w = 1 - Math.abs(px + 0.5 - x) / hPx; if (w < 0) w = 0; wx[px - x0] = w; sx += w; }
+      for (py = y0; py <= y1; py++) { var v = 1 - Math.abs(py + 0.5 - y) / hPx; if (v < 0) v = 0; wy[py - y0] = v; sy += v; }
+      if (!(sx > 0) || !(sy > 0)) continue;
+      var k = fExceso / (sx * sy * areaPxAs2);
+      for (py = y0; py <= y1; py++) {
+        var fila = py * SIZE, ky = wy[py - y0] * k;
+        if (ky <= 0) continue;
+        for (px = x0; px <= x1; px++) difuso[fila + px] += wx[px - x0] * ky;
+      }
+      depositado += fExceso;
+    }
+    return { depositado: depositado, exceso: excesoTotal, thetaArcmin: cellDeg * 60 };
   }
 
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio+profundidad) ── */
@@ -2659,8 +2768,14 @@
       var thNiebla = 0;
       if (!cum) {
         var opNiebla = {
-          ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, mlim: mlim, cielo: cielo
+          ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, mlim: mlim, cielo: cielo,
+          apertura: o.apertura
         };
+        /* H2 (épica #330): la niebla realimenta el cielo como el velo (ADR
+           0014). Punto fijo niebla→mlim→niebla; deja `cielo.veloSB` actualizado
+           y rehace mlim antes de pintar, igual que hace el velo en :2622-2625. */
+        mlim = mlimNiebla(estrellas, opNiebla);
+        opNiebla.mlim = mlim;
         nieblaCampo(difuso, estrellas, opNiebla);
         /* La niebla es la única capa difusa sin máscara propia, así que su
            escala tiene que viajar hasta pintarFot o su umbral cae en C_MAG
@@ -2668,6 +2783,16 @@
            deposita el flujo. Con cúmulo se queda en 0: el halo trae su
            desvanecido hecho y marca difusoMask. */
         thNiebla = opNiebla.thetaJuicioArcmin || 0;
+      }
+      /* Velo espacial (U3-full, ADR 0029): en campo denso, el exceso positivo de
+         cada celda sobre la media se pinta como capa difusa; la media queda en
+         el cielo (cielo.veloSB). Mutuamente excluyente con la niebla (un campo
+         denso no tiene estrellas en la banda de niebla). */
+      if (velo != null && estrellas.fondo && estrellas.fondo.espacial) {
+        var rVelo = veloEspacial(difuso, estrellas.fondo.espacial, {
+          ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, veloSB: velo
+        });
+        if (rVelo && !(thNiebla > 0)) thNiebla = rVelo.thetaArcmin;
       }
       var opEst = {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
@@ -2789,7 +2914,12 @@
     render: render,
     magLimite: magLimite,
     veloSB: veloSB,
+    veloVar: veloVar,
+    nefSbf: nefSbf,
     nieblaCampo: nieblaCampo,
+    sbNiebla: sbNiebla,
+    mlimNiebla: mlimNiebla,
+    veloEspacial: veloEspacial,
     sumaSB: sumaSB,
     magConsultaGaia: magConsultaGaia,
     nivelFondo: nivelFondo,
