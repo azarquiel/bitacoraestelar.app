@@ -1066,12 +1066,12 @@
       var sx = 0, sy = 0, px, py;
       for (px = x0; px <= x1; px++) { var w = 1 - Math.abs(px + 0.5 - x) / hPx; if (w < 0) w = 0; wx[px - x0] = w; sx += w; }
       for (py = y0; py <= y1; py++) { var v = 1 - Math.abs(py + 0.5 - y) / hPx; if (v < 0) v = 0; wy[py - y0] = v; sy += v; }
-      if (!(sx > 0) || !(sy > 0)) { difuso[Math.floor(y) * SIZE + Math.floor(x)] += f / areaPxAs2; continue; }
+      if (!(sx > 0) || !(sy > 0)) { if (difuso) difuso[Math.floor(y) * SIZE + Math.floor(x)] += f / areaPxAs2; continue; }
       var k = f / (sx * sy * areaPxAs2);
       for (py = y0; py <= y1; py++) {
         var fila = py * SIZE, ky = wy[py - y0] * k;
         if (ky <= 0) continue;
-        for (px = x0; px <= x1; px++) difuso[fila + px] += wx[px - x0] * ky;
+        for (px = x0; px <= x1; px++) { if (difuso) difuso[fila + px] += wx[px - x0] * ky; }
       }
     }
     o.thetaJuicioArcmin = thetaJuicioNiebla(thSkyArcmin, total, mx, my, mr2, asPorPx);
@@ -1092,6 +1092,52 @@
     if (!(r2 > 0)) return thSkyArcmin;
     var r50 = 0.832 * Math.sqrt(r2) * asPorPx / 60;   // px → arcsec → arcmin
     return Math.max(thSkyArcmin, r50);
+  }
+
+  /* ── Realimentación de la niebla al cielo (H2, épica #330) ──
+     La niebla de un campo ordinario es la misma luz física que el velo de un
+     campo denso (ADR 0014), pero hoy no entra en `cieloEfectivo`: el `total`
+     que nieblaCampo devuelve se descarta en vistaGaia. Aquí se cierra la
+     asimetría con la opción (a) del #186 —el escalar de campo—: el flujo de la
+     banda perdida se reparte sobre el campo del ocular y entra por sumaSB como
+     un `veloSB` más, con punto fijo porque la banda crece cuando mlim baja. */
+
+  /* SB media de la niebla (mag/arcsec²): flujo total repartido sobre el campo
+     cuadrado del ocular (arcmin × arcmin). Es una aproximación uniforme de una
+     capa en realidad concentrada; subestima el brillo local, que es justo lo
+     que el techo espacial (opción b del #186) acotaría por arriba. */
+  function sbNiebla(total, arcmin) {
+    if (!(total > 0) || !(arcmin > 0)) return null;
+    return -2.5 * Math.log10(total / Math.pow(arcmin * 60, 2));
+  }
+
+  /* Punto fijo niebla→mlim→niebla. `o` = { ra0, dec0, arcmin, size, mlim,
+     cielo, apertura }. Mide con nieblaCampo(null, …) —la misma ley de
+     producción, sin pintar—, suma el escalar al `cielo.veloSB` y rehace mlim.
+     El lazo es contractivo (cada vuelta añade una banda cada vez más débil),
+     medido en harness_h2_realimentacion.js; `tol`/`maxIt` acotan la parada.
+     Devuelve el mlim final y deja `o.cielo.veloSB` actualizado para que
+     pintarFot vea el cielo más brillante. */
+  function mlimNiebla(estrellas, o, tol, maxIt) {
+    if (!FOT.H2C) return o.mlim;
+    var mlim = o.mlim, veloBase = o.cielo.veloSB || null, veloFinal = veloBase;
+    for (var it = 0; it < (maxIt || 8); it++) {
+      var op = { ra0: o.ra0, dec0: o.dec0, arcmin: o.arcmin, size: o.size, mlim: mlim, cielo: o.cielo };
+      var total = nieblaCampo(null, estrellas, op);
+      var sb = sbNiebla(total, o.arcmin);
+      if (sb == null) break;
+      // El velo base (TAP) es fijo: cada vuelta suma SOLO la niebla de ESTA
+      // vuelta. sumaSB no admite primer argumento null, de ahí el ternario.
+      var nuevoVelo = (veloBase == null) ? sb : sumaSB(veloBase, sb);
+      var nuevo = magLimite({
+        apertura: o.apertura, aumentos: o.cielo.aumentos, transmision: o.cielo.transmision,
+        sqm: o.cielo.sqm, pupilaOjo: o.cielo.pupilaOjo, veloSB: nuevoVelo
+      });
+      if (Math.abs(nuevo - mlim) < (tol || 0.001)) { mlim = nuevo; veloFinal = nuevoVelo; break; }
+      mlim = nuevo; veloFinal = nuevoVelo;
+    }
+    o.cielo.veloSB = veloFinal;
+    return mlim;
   }
 
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio+profundidad) ── */
@@ -2659,8 +2705,14 @@
       var thNiebla = 0;
       if (!cum) {
         var opNiebla = {
-          ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, mlim: mlim, cielo: cielo
+          ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, mlim: mlim, cielo: cielo,
+          apertura: o.apertura
         };
+        /* H2 (épica #330): la niebla realimenta el cielo como el velo (ADR
+           0014). Punto fijo niebla→mlim→niebla; deja `cielo.veloSB` actualizado
+           y rehace mlim antes de pintar, igual que hace el velo en :2622-2625. */
+        mlim = mlimNiebla(estrellas, opNiebla);
+        opNiebla.mlim = mlim;
         nieblaCampo(difuso, estrellas, opNiebla);
         /* La niebla es la única capa difusa sin máscara propia, así que su
            escala tiene que viajar hasta pintarFot o su umbral cae en C_MAG
@@ -2790,6 +2842,8 @@
     magLimite: magLimite,
     veloSB: veloSB,
     nieblaCampo: nieblaCampo,
+    sbNiebla: sbNiebla,
+    mlimNiebla: mlimNiebla,
     sumaSB: sumaSB,
     magConsultaGaia: magConsultaGaia,
     nivelFondo: nivelFondo,
