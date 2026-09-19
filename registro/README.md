@@ -120,19 +120,35 @@ Una **síntesis de la observación o los retos** a los que se enfrenta el
 observador, **sin datos de ocular**. En la ficha del mapa aparece como
 «M30. Exploración».
 
-### Añadir otra (encadenar objetos de la misma noche)
+### Encadenar el objeto siguiente (dos vías)
 
-Una noche se pasa saltando de objeto en objeto, así que al guardar aparece el
-botón **«Añadir otra»**. Vacía el objeto, sus coordenadas y todo lo que se vio
-de él, y **conserva lo que no cambia de un objeto al siguiente**: viaje, fecha,
-telescopio, observador, base y cielo. La hora avanza **20 minutos**, de modo
-que la siguiente observación cae sola en la misma sesión (el viaje se deduce de
-la fecha y la hora). Si el salto cruza la medianoche, la fecha avanza con ella:
-23:50 + 20 min es el día siguiente. Prueba:
-`node scripts/test_otra_observacion.js`.
+Una noche se pasa saltando de objeto en objeto, y a veces ni eso: en **campo
+amplio** caen varios objetos dentro del mismo ocular, vistos en el mismo
+instante. Por eso, al guardar, aparecen dos botones.
 
-En modo edición el botón no aparece: allí se modifica una observación vieja, no
-se está observando.
+**«Otro objeto, más tarde»** es el salto de siempre: vacía el objeto, sus
+coordenadas y todo lo que se vio de él, **conserva lo que no cambia de un objeto
+al siguiente** —viaje, fecha, telescopio, observador, base y cielo— y adelanta
+la hora **20 minutos**, de modo que la siguiente observación cae sola en la
+misma sesión (el viaje se deduce de la fecha y la hora). Si el salto cruza la
+medianoche, la fecha avanza con ella: 23:50 + 20 min es el día siguiente.
+
+**«Otro objeto del mismo campo»** es para los que se vieron a la vez: **no
+adelanta la hora** —fue el mismo instante— y, además de lo anterior, **conserva
+lo que ya escribiste**: ocular, aumento, campo real, la descripción y las
+imágenes, que se reapuntan por su id sin volver a subirlas. Solo se vacían el
+objeto y sus coordenadas.
+
+Lo escrito se **copia, no se comparte**, y se avisa en pantalla al copiarlo: si
+luego matizas la descripción de un objeto, la del otro no cambia. Tres objetos
+del mismo campo siguen siendo **tres observaciones** con la misma hora, y eso es
+justo lo que permite al mapa contestar «¿he visto esto?» objeto a objeto.
+
+Los dos botones aparecen también **al abrir una observación ya guardada**, que
+es la otra puerta: desde ahí se **deriva** una hermana en vez de modificarla. Al
+pulsarlos el formulario deja de editar y vuelve a crear, así que lo que se
+guarde después es una observación nueva y la de origen se queda como estaba.
+Prueba: `node scripts/test_otra_observacion.js`.
 
 ### El cielo de esa noche (paso aparte)
 
@@ -222,6 +238,10 @@ tocar la página para poder probarlas sin navegador:
 `node scripts/test_listado_unificado.js`.
 - **Editar** lleva al formulario, precargado con esa observación. Si se cambia
   la fecha o el lugar, el cielo se recalcula solo.
+- **Otro del mismo campo** abre el formulario listo para el objeto que compartía
+  campo con esa observación: en modo creación, con lo de esa noche ya copiado y
+  el objeto vacío, para no tener que entrar a editar algo que no se quiere
+  editar. Como «Editar» y «Borrar», solo sale en las observaciones propias.
 - **Borrar** es un **borrado suave**: la fila se marca con la fecha de borrado,
   pero los datos siguen íntegros en la base de datos. Se puede restaurar desde
   la papelera.
