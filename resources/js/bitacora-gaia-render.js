@@ -1154,6 +1154,55 @@
     return mlim;
   }
 
+  /* ── Velo espacial por celdas (U3-full, ADR 0029) ──
+     El velo de campo denso (ADR 0014) es uniforme porque el proxy solo traía
+     los momentos escalares. Ahora `fondo.espacial` trae esos momentos POR
+     CELDA (0,125°). Aquí se pinta el EXCESO POSITIVO de cada celda sobre la
+     media escalar (veloSB): la media queda en el cielo (nivelFondo, vía
+     cielo.veloSB) y el exceso es la estructura espacial que se suma al difuso,
+     con el mismo núcleo tienda que la niebla. Lo negativo (celdas más dispersas
+     que la media) se queda en la media: es la misma aproximación uniforme del
+     ADR 0014, pero con el positivo resuelto. Devuelve lo depositado y la θ de
+     juicio (tamaño de celda); null si no hay celdas. */
+  function veloEspacial(difuso, espacial, o) {
+    if (!espacial || !(espacial.N > 0) || !espacial.celdas || !espacial.celdas.length) return null;
+    if (!(o.veloSB != null)) return null;
+    var N = espacial.N, SIZE = o.size;
+    var escv = SIZE / (o.arcmin / 60);
+    var cos0 = Math.cos(o.dec0 * Math.PI / 180);
+    var cellDeg = 1 / N, cellPx = cellDeg * escv, hPx = cellPx;
+    var meanAs2 = Math.pow(10, -0.4 * o.veloSB);         // flujo/arcsec² de la media
+    var asPorPx = (o.arcmin * 60) / SIZE, areaPxAs2 = asPorPx * asPorPx;
+    var wx = new Float64Array(2 * Math.ceil(hPx) + 1), wy = new Float64Array(wx.length);
+    var depositado = 0, excesoTotal = 0;
+    for (var i = 0; i < espacial.celdas.length; i++) {
+      var c = espacial.celdas[i];
+      var raC = (c[0] + 0.5) / N, decC = (c[1] + 0.5) / N;
+      var x = SIZE / 2 - (((raC - o.ra0 + 540) % 360) - 180) * cos0 * escv;
+      var y = SIZE / 2 - (decC - o.dec0) * escv;
+      if (x < -hPx || y < -hPx || x >= SIZE + hPx || y >= SIZE + hPx) continue;
+      var cellAreaAs2 = Math.pow(cellDeg * 3600, 2) * Math.cos(decC * Math.PI / 180);
+      var exceso = c[3] / cellAreaAs2 - meanAs2;          // SB local − media
+      if (!(exceso > 0)) continue;
+      var fExceso = exceso * cellAreaAs2;                 // flujo del exceso (G=0)
+      excesoTotal += fExceso;
+      var x0 = Math.max(0, Math.ceil(x - hPx)), x1 = Math.min(SIZE - 1, Math.floor(x + hPx));
+      var y0 = Math.max(0, Math.ceil(y - hPx)), y1 = Math.min(SIZE - 1, Math.floor(y + hPx));
+      var sx = 0, sy = 0, px, py;
+      for (px = x0; px <= x1; px++) { var w = 1 - Math.abs(px + 0.5 - x) / hPx; if (w < 0) w = 0; wx[px - x0] = w; sx += w; }
+      for (py = y0; py <= y1; py++) { var v = 1 - Math.abs(py + 0.5 - y) / hPx; if (v < 0) v = 0; wy[py - y0] = v; sy += v; }
+      if (!(sx > 0) || !(sy > 0)) continue;
+      var k = fExceso / (sx * sy * areaPxAs2);
+      for (py = y0; py <= y1; py++) {
+        var fila = py * SIZE, ky = wy[py - y0] * k;
+        if (ky <= 0) continue;
+        for (px = x0; px <= x1; px++) difuso[fila + px] += wx[px - x0] * ky;
+      }
+      depositado += fExceso;
+    }
+    return { depositado: depositado, exceso: excesoTotal, thetaArcmin: cellDeg * 60 };
+  }
+
   /* ── Consulta a Gaia DR3 vía proxy (cache por coord+radio+profundidad) ── */
   var cacheGaia = {};
   function radioConsulta(arcmin) {
@@ -2735,6 +2784,16 @@
            desvanecido hecho y marca difusoMask. */
         thNiebla = opNiebla.thetaJuicioArcmin || 0;
       }
+      /* Velo espacial (U3-full, ADR 0029): en campo denso, el exceso positivo de
+         cada celda sobre la media se pinta como capa difusa; la media queda en
+         el cielo (cielo.veloSB). Mutuamente excluyente con la niebla (un campo
+         denso no tiene estrellas en la banda de niebla). */
+      if (velo != null && estrellas.fondo && estrellas.fondo.espacial) {
+        var rVelo = veloEspacial(difuso, estrellas.fondo.espacial, {
+          ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, veloSB: velo
+        });
+        if (rVelo && !(thNiebla > 0)) thNiebla = rVelo.thetaArcmin;
+      }
       var opEst = {
         ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
         apertura: o.apertura,   // el disco de Airy va como 1/D
@@ -2860,6 +2919,7 @@
     nieblaCampo: nieblaCampo,
     sbNiebla: sbNiebla,
     mlimNiebla: mlimNiebla,
+    veloEspacial: veloEspacial,
     sumaSB: sumaSB,
     magConsultaGaia: magConsultaGaia,
     nivelFondo: nivelFondo,
