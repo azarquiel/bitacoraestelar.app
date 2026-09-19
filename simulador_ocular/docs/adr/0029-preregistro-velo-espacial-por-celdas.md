@@ -77,6 +77,22 @@ radial de la niebla sin sobrecoste de consulta. No se retoca tras ver los
 listones. La sonda midió 0,125° como referencia (80 celdas, 18 s); el barrido
 decide si basta o hace falta más fina.
 
+### Resultado del barrido (2026-09-20) — fijada 0,125° (N=8)
+
+Medido sobre M7 a 100× (rad 0,49°, banda 16,3–20), perfil radial de flujo por
+anillos de 5′:
+
+| Granularidad | Celdas | Tiempo | Perfil radial (flujo relativo por anillo) |
+|---|---|---|---|
+| 0,25° (N=4) | 25 | 20,0 s | 5′:12 % · 10′:14 % · 15′:16 % · 20′:24 % · 25′:24 % · 30′:10 % |
+| **0,125° (N=8)** | **80** | **18,6 s** | 0′:1 % · 5′:11 % · 10′:14 % · 15′:20 % · 20′:27 % · 25′:22 % · 30′:4 % |
+| 0,0625° (N=16) | 272 | 19,1 s | 0′:2 % · 5′:8 % · 10′:14 % · 15′:22 % · 20′:26 % · 25′:27 % · 30′:1 % |
+
+0,25° (N=4) pierde el centro (sin anillo 0–5′) y es demasiado grueso. 0,125° y
+0,0625° dan el mismo perfil radial (pico 20–25′, caída al borde); 0,125° lo
+conserva con 3,4× menos celdas. **Fijada 0,125° (N=8)**, constante
+`GAIA_ESPACIAL_N` del proxy.
+
 ## Vía de escape
 
 Si L1 o L5 fallan: el mapeo pierde/crea luz → se corrige el mapeo (es un bug de
