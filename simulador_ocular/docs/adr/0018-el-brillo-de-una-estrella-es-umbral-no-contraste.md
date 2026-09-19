@@ -56,6 +56,11 @@ Con la ley de flujo el 18" pinta la estrella **más apagada** que el 8".
 `CFG.alfaPorFlujo` queda en `false` (rama A en producción). La rama B se
 conserva como banco de comparación, no como candidata.
 
+La FORMA de la rampa (recta de Fechner vs potencia de Stevens) queda
+parametrizada en `CFG.alfaBeta` — ver ADR 0019 §«La forma de la rampa»—, con
+β=0 = producción actual y β≈0,5 como objetivo físico (Stevens 1957/1961,
+Naka-Rushton 1966, Crumey 2014).
+
 Guardián: `scripts/test_alfa_apertura.js` — invariante I1, más apertura pinta la
 estrella más brillante. Falla con la rama B
 (`BITACORA_ALFA_FLUJO=1 node scripts/test_alfa_apertura.js`), que es la prueba de

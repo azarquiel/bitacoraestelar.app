@@ -70,6 +70,30 @@ NGC 1664, Ethos 13 mm, sqm 21,5, estrella más brillante (g 7,46):
 Por debajo de 9 el 18" empieza a quemar el pico, y bajo 8 se quema el orden de
 brillos del cúmulo entero. Igual en NGC 1245.
 
+## La forma de la rampa: Fechner (recta) vs Stevens (potencia)
+
+`magBlanco` fija la PENDIENTE global, pero la rampa sigue siendo una recta en
+magnitud: `alpha ∝ (mlim − g)`, que es el **límite logarítmico de Fechner**. La
+psicofísica mide otra cosa: el brillo percibido sigue una **ley de potencia** de
+Stevens, `B ∝ I^β`, con β ≈ 0,33 para fuentes extensas y **β ≈ 0,5 para fuentes
+puntuales** (Stevens 1957, 1961). En margen `x = mlim − g`:
+
+`B(x) ∝ I^β = 10^(0,4·β·x)`  →  **exponencial en x, no recta**.
+
+Eso es convexo (el gráfico se hunde por debajo de la recta): comprime el extremo
+tenue y expande el contraste con las brillantes, exactamente lo contrario del
+campo "apagado" que motivó el ADR 0018. El sustrato mecánico es la respuesta
+transductora de Naka-Rushton (1966), compresiva, y la función de visibilidad de
+fuentes puntuales de Crumey (2014, MNRAS), que reexamina los umbrales de
+Blackwell/Knoll.
+
+Implementado en `CFG.alfaBeta` con la forma unificada
+`(10^(0,4·β·x) − 1)/(10^(0,4·β·magBlanco) − 1)`, que en β→0 tiende exactamente a
+`x/magBlanco` (la recta actual): **β=0 es producción, bit a bit**. β≈0,5 es el
+objetivo físico. La calibración del valor concreto sigue el mismo procedimiento
+que `magBlanco`: `node scripts/harness_alfa_estrellas.js <objeto> ... --beta`
+contra las notas de NGC 1245 / NGC 1664 / NGC 2266.
+
 ## Estado
 
 `magBlanco = 9,5`, elegido por el observador en el A/B contra sus notas (el
@@ -77,6 +101,10 @@ valor es una calibración perceptual, no una constante física; el barrido de
 arriba fue la entrada de esa decisión, no su sustituto). Queda justo por encima
 del margen `mlim − g` de la más brillante con el 18", que es donde empieza a
 quemarse el pico.
+
+`alfaBeta = 0` por defecto (Fechner, producción bit a bit); el objetivo físico es
+β ≈ 0,5 (Stevens, fuente puntual), pendiente de la misma calibración A/B contra
+notas que fijó `magBlanco`.
 
 El estirado que introduce es `rangoBrillo/magBlanco = 1,211` magnitudes
 codificadas por magnitud real. `test_difuso.js` §17 lo mide explícitamente: lo

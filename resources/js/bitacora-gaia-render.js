@@ -878,6 +878,17 @@
        (mlim − g) de la más brillante con el 18", que es donde empieza a quemar
        el pico y a perderse el orden de brillos del cúmulo. */
     magBlanco: 9.5,
+    /* Exponente β de la ley de potencia de Stevens para el brillo PERCIBIDO de
+       una fuente puntual (ver rampaEstrella y ADR 0019). La rampa del disco es
+       (10^(0,4·β·(mlim−g)) − 1)/(10^(0,4·β·magBlanco) − 1):
+         β=0   → límite lineal de Fechner, (mlim−g)/magBlanco (producción actual);
+         β≈0,5 → exponente clásico de Stevens para fuente PUNTUAL (0,33 extensa),
+                 hunde el extremo tenue y expande el contraste con las brillantes.
+       Base física (Stevens 1957/1961; Naka-Rushton 1966; Crumey 2014 MNRAS para
+       la visibilidad de puntuales), no un número estético: el valor de producción
+       se decide con el A/B de harness_alfa_estrellas.js --beta contra las notas,
+       igual que magBlanco. β=0 deja el render bit a bit como estaba. */
+    alfaBeta: 0,
     /* El glow de las estrellas por debajo de la magnitud límite es lo que da
        textura al halo de un globular, así que va calibrado en las mismas unidades
        aparentes: ~1,4 px de radio en pantalla. Su intensidad en g=mlim ANCLA a
@@ -1733,10 +1744,22 @@
      ponytail: el sprite tiene perfil radial, no es un disco plano, así que esto
      es el techo de brillo, no el flujo integrado exacto; si hiciera falta
      conservar flujo al píxel, el factor perfil/plano entra aquí. */
+  /* Curva de la rampa del disco resuelto (ADR 0019). x = mlim − g, margen en
+     magnitudes. (10^(0,4·β·x) − 1)/(10^(0,4·β·magBlanco) − 1):
+       · β=0   → x/magBlanco, el límite lineal de Fechner (producción);
+       · β≈0,5 → ley de potencia de Stevens para fuente PUNTUAL: comprime el
+         extremo tenue y expande el contraste frente a las brillantes.
+     Normalizada a 1 en x = magBlanco; el recorte a 1 lo hace alfaEstrella. */
+  function rampaEstrella(x) {
+    if (x <= 0) return 0;
+    var b = CFG.alfaBeta;
+    if (!b) return x / CFG.magBlanco;
+    return (Math.pow(10, 0.4 * b * x) - 1) / (Math.pow(10, 0.4 * b * CFG.magBlanco) - 1);
+  }
   function alfaEstrella(g, mlim, radioArcsec, dilucion) {
     var d = (dilucion > 0) ? dilucion : 1;
     if (!CFG.alfaPorFlujo) {
-      return Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * Math.min(1, (mlim - g) / CFG.magBlanco))) * d;
+      return Math.min(1, Math.max(CFG.alfaMin, CFG.brillo * rampaEstrella(mlim - g))) * d;
     }
     var area = Math.PI * radioArcsec * radioArcsec;
     if (!(area > 0)) return CFG.alfaMin;
@@ -2932,6 +2955,7 @@
     sueloEstrella: sueloEstrella,
     factorDilucion: factorDilucion,
     alfaEstrella: alfaEstrella,
+    rampaEstrella: rampaEstrella,
     alfaAureola: alfaAureola,
     blurEstrella: blurEstrella,
     colorEstrella: colorEstrella,
