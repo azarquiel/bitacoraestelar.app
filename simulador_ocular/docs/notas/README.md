@@ -13,3 +13,4 @@ Orden cronológico de ejecución:
 7. `recaptura-golden-difusas.md` (2026-09-05) — procedimiento para recapturar el golden bit a bit sin perder la atribución
 8. `validacion-visual-difusas.md` (2026-09-05) — qué se mira, de dónde sale su Gaia y cómo se guarda el «antes»
 9. `costura-parche-nebulosas.md` (2026-09-06) — medida de la costura del parche en NGC 6888 y por qué el grano se recorta a la mlim del equipo (#210)
+10. `luz-sub-mlim-tres-canales.md` (2026-09-19) — mapa de los tres canales que conservan la luz por debajo de la magnitud límite (niebla, velo, halo del globular): qué hace cada uno, desde dónde se ejecuta, qué implica tocarlo, y de dónde sale el halo de M13 a mucho aumento
