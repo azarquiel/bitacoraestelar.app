@@ -120,15 +120,16 @@ if (process.argv.indexOf('--saturacion') >= 0) {
   });
 }
 
-/* --blanco: barrido de CFG.magBlanco (rama C, ADR 0019). Imprime el NIVEL EN
-   PANTALLA de cada estrella, no el alpha: el alpha es solo la codificación con
-   la que pintarFot vuelve a leer la capa (flujoDeValor contra Fref, y de ahí
-   valorDeFlujo contra el cielo de la escena). Es ese nivel el que hay que
-   comparar contra las notas de observación.
+/* --blanco / --beta: barridos del NIVEL EN PANTALLA (0-255) de cada estrella,
+   no del alpha: el alpha es solo la codificación que pintarFot vuelve a leer
+   (flujoDeValor contra Fref, y de ahí valorDeFlujo contra el cielo de la
+   escena). Ese nivel es lo que se compara contra las notas de observación.
    La columna `sat` cuenta las estrellas recortadas a blanco: en cuanto la más
    brillante entra ahí, deja de responder a la apertura y el guardián
    test_alfa_apertura.js falla. Ese es el suelo útil del barrido. */
-if (process.argv.indexOf('--blanco') >= 0) {
+var pideBlanco = process.argv.indexOf('--blanco') >= 0;
+var pideBeta = process.argv.indexOf('--beta') >= 0;
+if (pideBlanco || pideBeta) {
   var c = R.ctxFotometrico({
     pupilaSalida: D / MAG, pupilaOjo: POJO, sqm: SQM, transmision: T, aumentos: MAG
   });
@@ -139,17 +140,33 @@ if (process.argv.indexOf('--blanco') >= 0) {
     var F = R.flujoDeValor(255 * desglose(g, mlim).A, c.Fref, c.rango);
     return c.nivelFondo + R.valorDeFlujo(F, c.FcieloPintado, c.rango);
   };
-  console.log('\nBarrido de magBlanco (nivel 0-255 en pantalla, fondo='
-    + c.nivelFondo.toFixed(1) + '):');
-  console.log('magBlanco   sat' + muestra.map(function (g) {
-    return ('        g' + g.toFixed(1)).slice(-8);
-  }).join(''));
-  var mbAntes = CFG.magBlanco;
-  [11.5, 10, 9, 8, 7, 6, 5].forEach(function (mb) {
-    CFG.magBlanco = mb;
-    var sat = resueltas.filter(function (g) { return desglose(g, mlim).A >= 1 - 1e-9; }).length;
-    console.log(f(mb, 1) + ('      ' + sat).slice(-6)
-      + muestra.map(function (g) { return f(Math.min(255, nivelDe(g)), 1); }).join(''));
-  });
-  CFG.magBlanco = mbAntes;
+  var cabecera = function (etiqueta) {
+    console.log('\nBarrido de ' + etiqueta + ' (nivel 0-255 en pantalla, fondo='
+      + c.nivelFondo.toFixed(1) + '):');
+    console.log(etiqueta + '   sat' + muestra.map(function (g) {
+      return ('        g' + g.toFixed(1)).slice(-8);
+    }).join(''));
+  };
+  if (pideBlanco) {
+    cabecera('magBlanco');
+    var mbAntes = CFG.magBlanco;
+    [11.5, 10, 9, 8, 7, 6, 5].forEach(function (mb) {
+      CFG.magBlanco = mb;
+      var sat = resueltas.filter(function (g) { return desglose(g, mlim).A >= 1 - 1e-9; }).length;
+      console.log(f(mb, 1) + ('      ' + sat).slice(-6)
+        + muestra.map(function (g) { return f(Math.min(255, nivelDe(g)), 1); }).join(''));
+    });
+    CFG.magBlanco = mbAntes;
+  }
+  if (pideBeta) {
+    cabecera('alfaBeta');
+    var bAntes = CFG.alfaBeta;
+    [0, 0.15, 0.25, 0.35, 0.5, 0.7].forEach(function (b) {
+      CFG.alfaBeta = b;
+      var sat = resueltas.filter(function (g) { return desglose(g, mlim).A >= 1 - 1e-9; }).length;
+      console.log(f(b, 2) + ('      ' + sat).slice(-6)
+        + muestra.map(function (g) { return f(Math.min(255, nivelDe(g)), 1); }).join(''));
+    });
+    CFG.alfaBeta = bAntes;
+  }
 }

@@ -194,6 +194,18 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   **halo** y el **color** — ver el punto siguiente —, porque esos dependen del
   flujo de fotones absoluto (∝ D²), no de lo cerca que esté la estrella del límite
   de detección de ese equipo concreto.
+- **Forma de la rampa del disco (Fechner vs Stevens)**: el alpha sube como
+  `(mlim − g)/magBlanco`, una recta en magnitud = brillo **logarítmico** (Fechner).
+  El ojo, sin embargo, sigue una **ley de potencia** (Stevens): brillo percibido
+  ∝ I^β, con β ≈ 0,33 para fuentes extensas y **β ≈ 0,5 para fuentes puntuales**.
+  En margen `x = mlim − g` eso es exponencial, no recta, y **hunde el extremo
+  tenue** respecto a las brillantes — más contraste, que es la contraparte de la
+  sensación de campo "apagado" del ADR 0018. Implementado en `CFG.alfaBeta`
+  (ver *Referencias* y ADR 0019): la rampa es
+  `(10^(0,4·β·x) − 1)/(10^(0,4·β·magBlanco) − 1)`, con β=0 = producción actual
+  (bit a bit) y β≈0,5 = objetivo físico. El valor de producción se decide con el
+  A/B `node scripts/harness_alfa_estrellas.js <objeto> ... --beta` contra las
+  notas, igual que `magBlanco`.
 - **Halo del sprite (blur) por brillo ABSOLUTO**: cada estrella se dibuja con un
   borde más o menos difuso según `blurEstrella(g, apertura)`, que reutiliza la
   misma escala de flujo que la aureola (`alfaAureola`, ver abajo): al límite de
@@ -1177,6 +1189,16 @@ desplegado con el permiso público.
 - **Colores estelares**: J.-V. Harre &amp; R. Heller (2021), *«Digital color codes of
   stars»*, Astron. Nachr. ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254);
   código [spec2col](https://github.com/janvincentharre/spec2col)).
+- **Percepción del brillo estelar** (forma de la rampa del disco, ADR 0019):
+  S. S. Stevens (1957), *«On the psychophysical law»*, Psychological Review 64(3),
+  153–181; S. S. Stevens (1961), *«To honor Fechner and repeal his law»*, Science
+  133, 80–86 ([PubMed 17769332](https://pubmed.ncbi.nlm.nih.gov/17769332/));
+  K. I. Naka &amp; W. A. H. Rushton (1966), *«S-potentials from colour units in the
+  retina of fish (Cyprinidae)»*, J. Physiol. 185, 536–555
+  ([PubMed 5918058](https://pubmed.ncbi.nlm.nih.gov/5918058/));
+  A. Crumey (2014), *«Human contrast threshold and astronomical visibility»*,
+  MNRAS 442(3), 2600–2619
+  ([ADS 2014MNRAS.442.2600C](https://ui.adsabs.harvard.edu/abs/2014MNRAS.442.2600C/abstract)).
 - **PanSTARRS DR1** vía [hips2fits](https://alasky.cds.unistra.fr/) (CDS/alasky).
 - **DSS** (Digitized Sky Survey) desde el [archivo de ESO](https://archive.eso.org/),
   servido por `dss-proxy.php`.
