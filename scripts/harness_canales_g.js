@@ -119,6 +119,15 @@ function medir(c, eq) {
       mlim = R.magLimite({ apertura: APERTURA, aumentos: eq.MAG, transmision: T, sqm: SQM,
                            pupilaOjo: POJO, veloSB: velo });
     }
+    /* H2 (épica #330): en campo ordinario la niebla realimenta el cielo y
+       rehace mlim antes de pintar. Se llama a la misma `mlimNiebla` de
+       producción (ADR 0008) para que el reparto que mide este arnés sea el que
+       el observador recibe, no el de antes de la épica. */
+    if (velo == null) {
+      var opH2 = { ra0: c[1], dec0: c[2], arcmin: campoArcmin, size: 720,
+                   mlim: mlim, cielo: cielo, apertura: APERTURA };
+      mlim = R.mlimNiebla(estrellas, opH2);
+    }
     var corte = mlim + COLA_GLOW;
 
     /* Región de medida: el disco del objeto, recortado al campo del ocular —un
