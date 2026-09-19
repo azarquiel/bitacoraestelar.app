@@ -97,6 +97,33 @@ eq(gaia_mezclar_fondo($json_seguro, $fila, 19.5, 0.89, 19.5), $json_seguro, 'cor
 eq(gaia_mezclar_fondo($json_seguro, null, 15.2, 0.89, 19.5), $json_seguro, 'agregado fallido → respuesta intacta');
 eq(gaia_mezclar_fondo($json_seguro, [0, 0.0, 0.0], 15.2, 0.89, 19.5), $json_seguro, 'banda vacía → sin fondo');
 
+echo "velo espacial por celdas (ADR 0029):\n";
+// La consulta agrupa por celda, sin ORDER BY, misma banda que el escalar.
+[$esp_cds, $esp_gavo] = gaia_espacial_consultas(268.447, -34.841, 0.89, 19.5, 15.175478, 8);
+ok(stripos($esp_cds, 'ORDER BY') === false, 'espacial CDS sin ORDER BY');
+ok(stripos($esp_cds, 'GROUP BY rx, dy') !== false, 'espacial CDS agrupa por celda');
+ok(strpos($esp_cds, 'FLOOR(RA_ICRS*8)') !== false, 'espacial CDS granularidad N=8');
+ok(strpos($esp_cds, 'Gmag>15.175478') !== false && strpos($esp_cds, 'Gmag<=19.5') !== false,
+    'espacial CDS acota la banda (corte, mag] — misma que el escalar');
+ok(strpos($esp_gavo, 'FLOOR(ra*8)') !== false, 'espacial GAVO granularidad N=8');
+
+// gaia_mezclar_espacial: inyección pura + listón L1 con datos sintéticos.
+// Celdas que suman exactamente el flujo escalar de `$con` (0,1300).
+$esp_json = '{"metadata":[],"data":[[2142,-280,2,0.08,0.004],[2143,-280,3,0.05,0.002]]}';
+$con_esp = gaia_mezclar_espacial($con, $esp_json, 8);
+$dec_esp = json_decode($con_esp, true);
+ok(isset($dec_esp['fondo']['espacial']), 'añade fondo.espacial');
+eq($dec_esp['fondo']['espacial']['N'], 8, 'granularidad N=8');
+eq(count($dec_esp['fondo']['espacial']['celdas']), 2, 'celdas inyectadas');
+eq($dec_esp['fondo']['espacial']['celdas'][0], [2142, -280, 2, 0.08, 0.004], 'celda intacta (rx,dy,n,flujo,m2)');
+$suma = 0.0;
+foreach ($dec_esp['fondo']['espacial']['celdas'] as $c) { $suma += $c[3]; }
+ok(abs($suma - $dec_esp['fondo']['flujo']) < 1e-12, 'L1: Σ flujo(celdas) == flujo escalar (' . $suma . ')');
+// Guardas: sin espacial / sin celdas / sin fondo → intacta.
+eq(gaia_mezclar_espacial($json_seguro, null, 8), $json_seguro, 'sin espacial → intacta');
+eq(gaia_mezclar_espacial($json_seguro, '{"data":[]}', 8), $json_seguro, 'sin celdas → intacta');
+eq(gaia_mezclar_espacial('{"data":[[1,2,15.2]]}', $esp_json, 8), '{"data":[[1,2,15.2]]}', 'sin fondo → intacta');
+
 // La expulsión LRU y la limpieza ya no son de este proxy: son la política
 // compartida con el del DSS. Su test es scripts/test_cache_lru.php.
 
