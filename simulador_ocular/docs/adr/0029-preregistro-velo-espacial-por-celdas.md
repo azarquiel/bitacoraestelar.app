@@ -107,3 +107,28 @@ realimentación no es equivalente → se investiga como bug antes de decidir nad
   parche estético NO sobra"; se trata en su propia sesión, no aquí.
 - El binning de magnitud (traer las 835k filas) queda descartado por la sonda
   (41 MB al navegador): este prerregistro no lo reabre.
+
+## Resultado (2026-09-20) — PASA L1-L4
+
+Ejecutado con `scripts/harness_velo_espacial.js` contra el TAP (CDS) y las
+fixtures, granularidad 0,125°, banda `(corte, 20]`, perfil por anillos de 3′.
+
+| Listón | M7 | M11 | Umbral | Veredicto |
+|---|---|---|---|---|
+| L1 Σ celdas == escalar | 0,000 % | 0,000 % | < 0,1 % | **PASA** |
+| L2/L3 forma radial (dmax) | 8,9 % | 16,5 % | < 20 % | **PASA** |
+| L4 mlim | — | — | por construcción | **PASA** (cliente sigue realimentando el escalar) |
+| L5 mapeo | — | — | < 0,1 % | **PASA** (`test_velo_espacial.js`) |
+
+Perfiles normalizados (fracción de flujo por anillo):
+
+- M7: velo `0′:7 % · 3′:9 % · 6′:35 % · 9′:39 % · 12′:10 %` vs discreto
+  `0′:5 % · 3′:14 % · 6′:26 % · 9′:41 % · 12′:14 %`.
+- M11: velo `3′:30 % · 6′:11 % · 9′:40 % · 12′:19 %` vs discreto
+  `0′:6 % · 3′:16 % · 6′:27 % · 9′:38 % · 12′:13 %`.
+
+Misma forma (pico en el anillo exterior del cúmulo, caída al borde). La
+diferencia residual (M11 a 3–6′: el velo a 0,125° es más grueso que el catálogo)
+es la granularidad de celda, no un salto de régimen: la bifurcación velo↔niebla
+por el techo de filas queda eliminada en la forma radial. El velo espacial se
+implementa (proxy `fondo.espacial` + cliente `veloEspacial`).
