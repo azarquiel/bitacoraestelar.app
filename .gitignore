@@ -29,3 +29,6 @@ simulador_ocular/cache_gaia/
 # sidecars SÍ entran (892 bytes): son el origen de las filas del manifiesto, y
 # sin ellos el guardián byte a byte no puede verificar lo que declara (#258).
 simulador_ocular/dso/*.png
+
+# Caché local del arnés de canales (harness_canales_g.js / harness_auditoria_canales.js)
+scripts/fixtures/gaia/canales_*.json
