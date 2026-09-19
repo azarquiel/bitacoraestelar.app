@@ -30,5 +30,7 @@ simulador_ocular/cache_gaia/
 # sin ellos el guardián byte a byte no puede verificar lo que declara (#258).
 simulador_ocular/dso/*.png
 
-# Caché local del arnés de canales (harness_canales_g.js / harness_auditoria_canales.js)
+# Caché local de los arneses de canales (harness_canales_g.js /
+# harness_auditoria_canales.js): son respuestas del proxy de producción, 30 MB
+# en el banco actual. No son fixtures pineadas — se vuelven a bajar solas.
 scripts/fixtures/gaia/canales_*.json
