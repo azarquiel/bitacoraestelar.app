@@ -227,27 +227,21 @@
        cuña negra en vez de una línea. Aquí barre ~5 magnitudes y no deja borde.
        Las placas conservan el desvanecido original. */
     UMBRAL_MARGEN: 0.4, UMBRAL_ANCHURA: 1.4,
-    /* PARCHE ESTÉTICO, y se llama así a propósito. Multiplica el flujo que la
-       niebla sub-mlim de los cúmulos abiertos deposita en el campo difuso
-       (nieblaCampo, ADR 0022) ANTES de que la cadena lo juzgue.
+    /* GANANCIA de la niebla, antes PARCHE ESTÉTICO (épica #330, US-4). Multiplica
+       el flujo que la niebla deposita ANTES de visibilidadDifusa.
 
-       Contradice de frente el ADR 0004 («no se introduce ningún parámetro cuyo
-       único criterio de ajuste sea el aspecto de la imagen»). Se introduce a
-       sabiendas: la niebla vive justo en la zona de umbral, sale a unos +24 DN
-       sobre el fondo en el caso nominal (M11 nuclear, 200 mm/61×, sqm 21,5) y
-       eso se percibe flojo. No hay medida detrás de 1,5: es un mando de gusto.
-
-       OJO, no es solo brillo: el factor entra antes de visibilidadDifusa, así
-       que también BAJA el umbral efectivo de detección. Sube el riesgo de que
-       pinte niebla en cúmulos pobres donde nadie la reporta (el listón P3 del
-       ADR 0022 ya sale marginal a sqm 22). No es un realce neutro.
+       Por defecto es 1 (fotometría limpia): la conservación del ADR 0003 es
+       exacta y no se introduce ningún parámetro cuyo único criterio sea el
+       aspecto (ADR 0004). El valor histórico 1,5 se percibía "flojo" en el
+       caso nominal y bajaba el umbral efectivo 0,44 mag rompiendo la ley
+       perceptual compartida (Q4). Si la niebla necesita más presencia, la vía
+       correcta es GAMMA_PERCEPTUAL (perceptual, no flujo) con prerregistro —
+       no resubir este mando.
 
        Ajustable en caliente desde la consola del navegador, sin recompilar:
-         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 2.0;   // más niebla
-         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 1.0;   // fotometría limpia
-       y volver a renderizar. Con 1 la cadena es exactamente la de antes del
-       parche y la conservación del ADR 0003 vuelve a ser exacta. */
-    NIEBLA_GANANCIA_ESTETICA: 1.5,
+         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 1.5;  // A/B del viejo aspecto
+         BitacoraGaiaRender.fot.NIEBLA_GANANCIA_ESTETICA = 1.0;  // fotometría limpia */
+    NIEBLA_GANANCIA_ESTETICA: 1.0,
     /* El recorte a cero de `pintarCumulo` (el campo no puede quitar luz) manda a
        negro el 50-70 % del campo cuando el grano se enciende y regala al cúmulo
        un 2-7 % de flujo que crece con el aumento (issue #98, medido en
