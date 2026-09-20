@@ -21,6 +21,7 @@
      recuento(ids)                -> cuántos de esos ids deja a la vista la regla
      getFicha(id)                 -> la ficha visible del objeto, o null
      observacionesAjenasActivo()  -> ¿está activo el "descubrir observaciones"?
+     blogDe(clave)                -> URL del blog propio del observador, o ''
      fichaDeObservador(id, clave) -> la observación de 'clave' sobre 'id', o null
      observadoresDe(id, excluir)  -> [{clave, nombre}] que observaron 'id'
      estadoObservador(id)         -> 'propia' | 'ajena' | 'ninguna'
@@ -84,6 +85,15 @@
     if (!clave) return '';
     return (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].nombre)
       ? OBSERVADORES[clave].nombre : clave;
+  }
+
+  // Blog propio de un observador (su "planeta de origen"), o '' si no tiene.
+  // Es un dato del OBSERVADOR, no de la observación: vale igual para todas las
+  // suyas, incluidas las que no llevan crónica enlazada.
+  function blogDe(clave) {
+    if (!clave) return '';
+    return (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].blog)
+      ? OBSERVADORES[clave].blog : '';
   }
 
   // Devuelve la observación concreta que 'clave' hizo del objeto 'id', o null.
@@ -200,6 +210,7 @@
     getFicha: getFicha,
     observacionesAjenasActivo: observacionesAjenasActivo,
     nombreObservador: nombreObservador,
+    blogDe: blogDe,
     fichaDeObservador: fichaDeObservador,
     observadoresDe: observadoresDe,
     estadoObservador: estadoObservador

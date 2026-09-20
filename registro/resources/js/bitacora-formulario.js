@@ -434,7 +434,9 @@
       audioUrl: $('audioUrl') ? $('audioUrl').value.trim() : '',
       audioEpisodioUrl: $('audioEpisodioUrl') ? $('audioEpisodioUrl').value.trim() : '',
       audioInicio: $('audioInicio') ? audioHhmmssASegundos($('audioInicio').value) : null,
-      audioFin: $('audioFin') ? audioHhmmssASegundos($('audioFin').value) : null
+      audioFin: $('audioFin') ? audioHhmmssASegundos($('audioFin').value) : null,
+      blogPostUrl: $('blogPostUrl') ? $('blogPostUrl').value.trim() : '',
+      blogPostTitulo: $('blogPostTitulo') ? $('blogPostTitulo').value.trim() : ''
     };
     // Astrometría (solo si hay base): el servidor la usa para sembrar la ficha.
     if(astro){
@@ -448,7 +450,7 @@
   $('observer').addEventListener('input',recompute);
   if($('fechaObs')) $('fechaObs').addEventListener('change',recompute);
   if($('horaObs')) $('horaObs').addEventListener('change',recompute);
-  ['audioUrl','audioEpisodioUrl','audioInicio','audioFin'].forEach(function(id){
+  ['audioUrl','audioEpisodioUrl','audioInicio','audioFin','blogPostUrl','blogPostTitulo'].forEach(function(id){
     if($(id)) $(id).addEventListener('input',recompute);
   });
 
@@ -938,6 +940,11 @@
       if($('audioInicio') && obs.audio_inicio != null) $('audioInicio').value = audioSegundosAHhmmss(obs.audio_inicio);
       if($('audioFin') && obs.audio_fin != null) $('audioFin').value = audioSegundosAHhmmss(obs.audio_fin);
       if($('audioDetails')) $('audioDetails').open = true;
+    }
+    if(obs.blog_post_url) {
+      if($('blogPostUrl')) $('blogPostUrl').value = obs.blog_post_url;
+      if($('blogPostTitulo') && obs.blog_post_titulo) $('blogPostTitulo').value = obs.blog_post_titulo;
+      if($('blogDetails')) $('blogDetails').open = true;
     }
     // Base: se preselecciona al cargar la lista de bases (basePendiente).
     if(obs.base_id){ basePendiente = obs.base_id; if(basesCargadas){ baseSel = basePorId(obs.base_id); if(baseSelect) baseSelect.value=String(obs.base_id); } }

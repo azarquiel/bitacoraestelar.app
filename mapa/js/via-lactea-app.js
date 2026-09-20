@@ -1850,6 +1850,7 @@
   var fichaBackBtn = document.getElementById('ficha-back');
  var fichaAudio = document.getElementById('ficha-audio');
  var fichaAudioEl = null; // el <audio> del tramo actualmente montado, para poder pararlo al cerrar/cambiar de ficha
+  var fichaBlog = document.getElementById('ficha-blog'); // pie: la crónica en el blog del observador
   var fichaCurrent = -1;
   // A dónde lleva "← Descubrir" desde la ficha que se está viendo: la pantalla
   // de descubrimiento de este objeto, con la observación actual excluida. null
@@ -2280,6 +2281,40 @@
     btnAdelante.addEventListener('click', function () { saltar(30); });
   }
 
+  // El "planeta de origen" en SVG: el mismo dibujo del icono de la consola, para
+  // que el visitante reconozca el símbolo dentro de la ficha y en la lista.
+  var SVG_PLANETA = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" ' +
+    'style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;' +
+    'stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;">' +
+    '<circle cx="7" cy="8.2" r="4.1"/>' +
+    '<ellipse cx="7" cy="8.2" rx="6.4" ry="2.2" transform="rotate(-25 7 8.2)"/>' +
+    '<circle cx="13.3" cy="3.4" r="1.1" style="fill:currentColor;stroke:none;"/></svg>';
+
+  // Pie de la ficha: la crónica que el observador escribió en su blog. Dos
+  // niveles, y en este orden: la entrada concreta sobre ESTE objeto si la hay
+  // (f.blog) y, si no, su blog a secas (el "planeta de origen" del observador),
+  // para que el compañero que escribe fuera no quede sin referencia en ninguna
+  // de sus observaciones.
+  function renderFichaBlog(f) {
+    if (!fichaBlog) return;
+    var post = (f && f.blog && f.blog.url) ? f.blog : null;
+    var casa = (f && f.observador) ? VLO.blogDe(f.observador) : '';
+    if (!post && !casa) { fichaBlog.style.display = 'none'; fichaBlog.innerHTML = ''; return; }
+    var nombre = VLO.nombreObservador(f.observador);
+    var url = post ? post.url : casa;
+    var texto = post
+      ? (post.titulo ? post.titulo : 'Leer la crónica en el blog' + (nombre ? ' de ' + nombre : ''))
+      : 'Más observaciones en el blog' + (nombre ? ' de ' + nombre : '');
+    fichaBlog.innerHTML =
+      '<a href="' + escHtml(url) + '" target="_blank" rel="noopener" ' +
+        'style="display:inline-flex;align-items:center;gap:8px;color:#f4c76b;text-decoration:none;">' +
+        SVG_PLANETA + '<span style="text-decoration:underline;">' + escHtml(texto) + '</span></a>' +
+      (post && post.titulo && nombre
+        ? '<div style="margin-top:4px;color:#9fb6c9;font-size:12px;">Crónica de ' + escHtml(nombre) + '</div>'
+        : '');
+    fichaBlog.style.display = 'block';
+  }
+
   function buildFichaButtons(f) {
     fichaButtons.innerHTML = '';
     f.entries.forEach(function (entry, idx) {
@@ -2322,6 +2357,7 @@
 
     buildFichaButtons(f);
     renderFichaAudio(f);
+    renderFichaBlog(f);
     fichaOverlay.style.display = 'flex';
     isDragging = false;
     isPinching = false;
@@ -2379,9 +2415,10 @@
     fichaAnexos.style.display = 'none';
     fichaAnexosRight.style.display = 'none';
     fichaImgTitle.style.display = 'none';
-    // El faldón del audio es de UNA observación: la lista no lo lleva (venía
-    // puesto de la ficha anterior al volver con «← Descubrir»).
+    // El faldón del audio y el pie del blog son de UNA observación: la lista no
+    // los lleva (venían puestos de la ficha anterior al volver con «← Descubrir»).
     renderFichaAudio({});
+    renderFichaBlog({});
 
     fichaTitle.textContent = (info && info.title) || '';
     fichaCoords.textContent = (info && info.coords) || '';
@@ -2407,6 +2444,11 @@
         'padding:10px 14px;margin:6px 0;font-family:sans-serif;font-size:14px;">' +
         '✦ ' + escHtml(o.etiqueta) +
         (o.audio ? ' <span title="Tiene tramo de audio">🎧</span>' : '') +
+        // El planeta de origen: este compañero escribe en su propio blog. Aquí
+        // es señal, no enlace: el ítem entero es un botón y un <a> dentro no es
+        // HTML válido; a su blog se va desde el pie de la ficha que abre.
+        (VLO.blogDe(o.clave)
+          ? ' <span title="Tiene blog propio" style="color:#f4c76b;">' + SVG_PLANETA + '</span>' : '') +
         cuando + '</button></li>';
     }).join('');
 
@@ -2731,6 +2773,36 @@
   // ===========================================================================
   // ── SELECTOR DE OBSERVADOR ──
   var observadorSelect = document.getElementById('mw-observador');
+
+  // "Planeta de origen": el icono junto al selector, que es el enlace al blog
+  // propio del compañero elegido. Un <option> no admite icono ni clic propio,
+  // así que hay UNO al lado y refleja al seleccionado: encendido y enlazado si
+  // tiene blog, apagado si no, y fuera de la vista en "Todas las
+  // observaciones", donde no hay a quién apuntar.
+  var planetaOrigen = document.getElementById('mw-planeta');
+  function pintarPlanetaOrigen(clave) {
+    if (!planetaOrigen) return;
+    if (!clave) { planetaOrigen.hidden = true; planetaOrigen.style.display = 'none'; return; }
+    var nombre = VLO.nombreObservador(clave);
+    var url = VLO.blogDe(clave);
+    planetaOrigen.hidden = false;
+    planetaOrigen.style.display = 'inline-flex';
+    if (url) {
+      planetaOrigen.setAttribute('href', url);
+      planetaOrigen.style.opacity = '1';
+      planetaOrigen.style.cursor = 'pointer';
+      planetaOrigen.setAttribute('aria-label', 'Blog de ' + nombre);
+      planetaOrigen.setAttribute('title', 'Planeta de origen: el blog de ' + nombre);
+    } else {
+      // Sin blog el planeta sigue a la vista, apagado: que se vea el hueco.
+      planetaOrigen.removeAttribute('href');
+      planetaOrigen.style.opacity = '0.35';
+      planetaOrigen.style.cursor = 'default';
+      planetaOrigen.setAttribute('aria-label', nombre + ' no tiene blog registrado');
+      planetaOrigen.setAttribute('title', nombre + ' no tiene blog registrado');
+    }
+  }
+
   if (observadorSelect && typeof OBSERVADORES !== 'undefined' && typeof OBSERVACIONES !== 'undefined') {
     var conObs = {};
     for (var _slug in OBSERVACIONES) {
@@ -2766,8 +2838,11 @@
     // pinta al final del arranque, con el estado de la URL.
     VLO.setActivo(observadorSelect.value);
 
+    pintarPlanetaOrigen(observadorSelect.value);
+
     observadorSelect.addEventListener('change', function () {
       VLO.setActivo(observadorSelect.value);
+      pintarPlanetaOrigen(observadorSelect.value);
       // Elegir a un compañero es pedir ver SUS exploraciones, y volver a
       // "Todas" es pedir el catálogo entero; mientras el usuario no toque el
       // eje ESTADO, lo lleva el observador.

@@ -76,6 +76,14 @@ _Evitar_: catálogo, lista de observación, colección.
 
 Resolución **clave → nombre legible** de un observador, sobre el catálogo `OBSERVADORES`. Vive en `VLObservadores` (`mapa/js/via-lactea-observadores.js`) como `nombreObservador(clave)` (clave desconocida → la propia clave; vacía → `''` para no pintar etiqueta). La ficha del mapa la usa para mostrar «Observación de {nombre}» de forma discreta, igual en el flujo normal y en el de descubrimiento. Test: `scripts/test_observadores.js`.
 
+## Planeta de origen (el blog del compañero)
+
+**Planeta de origen** es el blog propio de un observador: el sitio donde escribe sus crónicas largas, fuera de la bitácora. Vive en `OBSERVADORES[clave].blog` (columna `blog_url` del observador, que se rellena en el panel del admin) y se resuelve con `VLObservadores.blogDe(clave)`. Es dato del **observador**, no de la observación: vale para todas las suyas.
+
+Una observación puede además enlazar **la crónica concreta** sobre ese objeto (`blog` = `{url, titulo}`, columnas `blog_post_url` / `blog_post_titulo`, que rellena el observador en el formulario de registro). El pie de la ficha (`#ficha-blog`) prefiere la crónica y cae al blog a secas si no la hay, para que quien escribe fuera no quede sin referencia en ninguna de sus observaciones.
+
+El símbolo es siempre el mismo —disco con anillo inclinado y satélite— y aparece en tres sitios: junto al selector de observador (`#mw-planeta`, enlace al blog del seleccionado; apagado sin blog, oculto en «Todas las observaciones», porque un `<option>` no admite icono propio), en cada fila de la pantalla «NO VISITADO» como señal (no enlace: el ítem ya es un botón) y en el pie de la ficha. Enlaces salientes con `target="_blank" rel="noopener"` y **sin** `nofollow`: dirigir lectores y autoridad al compañero es justo el propósito. Tests: `scripts/test_blog_companeros.php` y `scripts/test_observadores.js`.
+
 ## Vecindario solar (estrellas cercanas)
 
 Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (1500 al) del Sol, que aparece al hacer zoom máximo sobre el Sol en la vista cenital. Se puebla desde los **objetos del mapa** que tengan coordenadas galácticas y esa distancia.

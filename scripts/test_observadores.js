@@ -1,13 +1,13 @@
 /* Test del resolvedor de nombre de observador del mapa
-   (mapa/js/via-lactea-observadores.js). Cubre nombreObservador: clave conocida,
-   desconocida y vacía.
+   (mapa/js/via-lactea-observadores.js). Cubre nombreObservador y blogDe: clave
+   conocida, desconocida y vacía.
    Sin framework:  node scripts/test_observadores.js */
 
 'use strict';
 
 // El módulo lee OBSERVADORES como global en tiempo de llamada; lo inyectamos.
 global.OBSERVADORES = {
-  israel: { nombre: 'Israel Pérez de Tudela' },
+  israel: { nombre: 'Israel Pérez de Tudela', blog: 'https://elcielodeisra.example' },
   ana:    { nombre: 'Ana' },
   sinnombre: {}
 };
@@ -27,6 +27,13 @@ eq(VLO.nombreObservador('desconocido'), 'desconocido', 'clave desconocida -> la 
 eq(VLO.nombreObservador('sinnombre'), 'sinnombre', 'catalogado sin nombre -> la propia clave');
 eq(VLO.nombreObservador(''), '', 'clave vacía -> "" (sin etiqueta)');
 eq(VLO.nombreObservador(null), '', 'clave nula -> ""');
+
+console.log('blogDe (el "planeta de origen": el blog propio del observador):');
+eq(VLO.blogDe('israel'), 'https://elcielodeisra.example', 'observador con blog -> su URL');
+eq(VLO.blogDe('ana'), '', 'observador sin blog -> "" (el planeta se pinta apagado)');
+eq(VLO.blogDe('desconocido'), '', 'clave desconocida -> ""');
+eq(VLO.blogDe(''), '', 'clave vacía -> "" (en "Todas" no hay a quién apuntar)');
+eq(VLO.blogDe(null), '', 'clave nula -> ""');
 
 console.log('observadoresDe (usa nombreObservador para el nombre):');
 global.OBSERVACIONES = { m13: [{ observador: 'israel' }, { observador: 'ana' }] };

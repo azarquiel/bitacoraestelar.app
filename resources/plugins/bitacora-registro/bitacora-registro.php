@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.35.1
+ * Version:     1.36.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.35.1' );
+define( 'BITACORA_VERSION', '1.36.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -526,6 +526,13 @@ function bitacora_crear_tabla() {
     // Feed RSS del podcast del observador (issue #178): con ella, el fieldset de
     // audio ofrece un desplegable de episodios en vez de pegar las URLs a mano.
     bitacora_asegurar_columna( $tabla_observadores, 'feed_rss_url', "varchar(255) NOT NULL DEFAULT ''" );
+    // Blog propio del observador: su "planeta de origen". Con ella, el mapa
+    // enciende el icono del planeta junto a su nombre y enlaza a su casa.
+    bitacora_asegurar_columna( $tabla_observadores, 'blog_url', "varchar(255) NOT NULL DEFAULT ''" );
+    // La crónica concreta que el observador escribió en su blog sobre ESTA
+    // observación, con su título si lo da (si no, la ficha pone un texto fijo).
+    bitacora_asegurar_columna( $tabla, 'blog_post_url', "varchar(255) NOT NULL DEFAULT ''" );
+    bitacora_asegurar_columna( $tabla, 'blog_post_titulo', "varchar(160) NOT NULL DEFAULT ''" );
 
     // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
     // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
@@ -1512,6 +1519,17 @@ function bitacora_validar_datos( $d ) {
         }
     }
 
+    // --- Crónica en el blog del observador (opcional): igual que el audio, sin
+    //     URL no hay crónica, y el título suelto se descarta con ella. ---
+    $blog_post_url = isset( $d['blogPostUrl'] ) ? bitacora_sanitizar_url_https( $d['blogPostUrl'] ) : '';
+    if ( isset( $d['blogPostUrl'] ) && '' !== trim( (string) $d['blogPostUrl'] ) && '' === $blog_post_url ) {
+        return new WP_Error( 'campo_invalido', 'La URL de la crónica debe ser una URL https válida.', array( 'status' => 400 ) );
+    }
+    $blog_post_titulo = '';
+    if ( '' !== $blog_post_url && isset( $d['blogPostTitulo'] ) ) {
+        $blog_post_titulo = mb_substr( sanitize_text_field( $d['blogPostTitulo'] ), 0, 160 );
+    }
+
     return array(
         'objeto'          => bitacora_identificador_objeto( $etiqueta, $tipo, $num ),
         'objeto_etiqueta' => $etiqueta,
@@ -1533,6 +1551,8 @@ function bitacora_validar_datos( $d ) {
         'audio_inicio'       => $audio_inicio,
         'audio_fin'          => $audio_fin,
         'audio_episodio_url' => $audio_episodio_url,
+        'blog_post_url'      => $blog_post_url,
+        'blog_post_titulo'   => $blog_post_titulo,
     );
 }
 
@@ -2580,6 +2600,11 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
     $clave_por_id = array();
     foreach ( $wpdb->get_results( "SELECT * FROM $t_obs" ) as $o ) {
         $observadores[ $o->clave ] = array( 'nombre' => $o->nombre, 'equipo' => $o->equipo );
+        // El blog del observador (su "planeta de origen") solo viaja si lo tiene:
+        // así el mapa distingue "sin blog" de "blog vacío" sin comprobar cadenas.
+        if ( ! empty( $o->blog_url ) ) {
+            $observadores[ $o->clave ]['blog'] = $o->blog_url;
+        }
         $clave_por_id[ (int) $o->id ] = $o->clave;
     }
 
@@ -2697,6 +2722,14 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
                 'inicio'   => ( isset( $ob->audio_inicio ) && null !== $ob->audio_inicio ) ? (int) $ob->audio_inicio : 0,
                 'fin'      => ( isset( $ob->audio_fin ) && null !== $ob->audio_fin ) ? (int) $ob->audio_fin : null,
                 'episodio' => isset( $ob->audio_episodio_url ) ? $ob->audio_episodio_url : '',
+            );
+        }
+        // Crónica en el blog: solo se emite si hay URL; el título es opcional y
+        // la ficha pone un texto fijo cuando falta.
+        if ( ! empty( $ob->blog_post_url ) ) {
+            $registro['blog'] = array(
+                'url'    => $ob->blog_post_url,
+                'titulo' => isset( $ob->blog_post_titulo ) ? $ob->blog_post_titulo : '',
             );
         }
 
@@ -4302,14 +4335,24 @@ function bitacora_panel_observadores() {
     global $wpdb;
     $t = bitacora_nombre_tabla_observadores();
 
-    // Feed RSS del podcast de un observador (issue #178): de aquí lee el
-    // fieldset de audio del formulario para ofrecer el desplegable de episodios.
+    // Canales propios del observador: el feed RSS de su podcast (issue #178), de
+    // donde el fieldset de audio saca el desplegable de episodios, y su blog, el
+    // "planeta de origen" que el mapa enciende junto a su nombre. Un solo
+    // formulario por fila guarda los dos.
     if ( isset( $_POST['bitacora_guardar_feed'] ) && check_admin_referer( 'bitacora_guardar_feed' ) ) {
         $obs_id   = intval( $_POST['bitacora_observador_id'] ?? 0 );
         $feed_url = esc_url_raw( trim( $_POST['bitacora_feed_rss_url'] ?? '' ) );
+        // https obligado: un blog en http avisa de inseguro al visitante que llega.
+        $blog_url = bitacora_sanitizar_url_https( $_POST['bitacora_blog_url'] ?? '' );
         if ( $obs_id ) {
-            $wpdb->update( $t, array( 'feed_rss_url' => $feed_url ), array( 'id' => $obs_id ), array( '%s' ), array( '%d' ) );
-            echo '<div class="notice notice-success"><p>Feed RSS actualizado.</p></div>';
+            $wpdb->update(
+                $t,
+                array( 'feed_rss_url' => $feed_url, 'blog_url' => $blog_url ),
+                array( 'id' => $obs_id ),
+                array( '%s', '%s' ),
+                array( '%d' )
+            );
+            echo '<div class="notice notice-success"><p>Canales del observador actualizados.</p></div>';
         }
     }
 
@@ -4323,18 +4366,20 @@ function bitacora_panel_observadores() {
         return;
     }
     echo '<p>Disponibles en <code>/wp-json/bitacora/v1/observadores</code>. Filtra observaciones con <code>?observador=ID</code>.</p>';
-    echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Nombre</th><th>Clave</th><th>Observaciones</th><th>Feed RSS (podcast)</th></tr></thead><tbody>';
+    echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Nombre</th><th>Clave</th><th>Observaciones</th><th>Canales propios (podcast y blog)</th></tr></thead><tbody>';
     foreach ( $obs as $o ) {
         printf(
             '<tr><td>%d</td><td><strong>%s</strong></td><td>%s</td><td>%d</td><td>' .
-            '<form method="post" style="display:flex;gap:6px">%s' .
+            '<form method="post" style="display:flex;gap:6px;flex-wrap:wrap">%s' .
             '<input type="hidden" name="bitacora_observador_id" value="%d">' .
-            '<input type="url" name="bitacora_feed_rss_url" value="%s" placeholder="https://…/feed.xml" style="flex:1">' .
+            '<input type="url" name="bitacora_feed_rss_url" value="%s" placeholder="https://…/feed.xml" style="flex:1 1 220px">' .
+            '<input type="url" name="bitacora_blog_url" value="%s" placeholder="https://… (blog)" style="flex:1 1 220px">' .
             '<button type="submit" name="bitacora_guardar_feed" value="1" class="button">Guardar</button>' .
             '</form></td></tr>',
             intval( $o->id ), esc_html( $o->nombre ), esc_html( $o->clave ), intval( $o->num ),
             wp_nonce_field( 'bitacora_guardar_feed', '_wpnonce', true, false ),
-            intval( $o->id ), esc_attr( $o->feed_rss_url )
+            intval( $o->id ), esc_attr( $o->feed_rss_url ),
+            esc_attr( isset( $o->blog_url ) ? $o->blog_url : '' )
         );
     }
     echo '</tbody></table></div>';

@@ -165,6 +165,21 @@
       </details>
     </fieldset>
 
+    <!-- 5 · CRÓNICA EN EL BLOG (opcional, plegado por defecto) -->
+    <fieldset>
+      <details id="blogDetails">
+        <summary><div class="leg"><span class="num">5</span>
+          <div><h2>Crónica en tu blog (opcional) <small style="font-weight:400;color:var(--tinta-tenue);font-size:12px;">— toca para desplegar</small></h2><p>Si has escrito sobre este objeto en tu blog, la ficha del mapa enlazará allí para que quien quiera más detalle te lea a ti.</p></div></div></summary>
+
+        <div class="field"><span class="lab">URL de la entrada</span>
+          <input type="url" id="blogPostUrl" placeholder="https://…" />
+        </div>
+        <div class="field"><span class="lab">Título de la entrada (opcional)</span>
+          <input type="text" id="blogPostTitulo" maxlength="160" placeholder="Tal como se titula en tu blog" />
+        </div>
+      </details>
+    </fieldset>
+
     <div class="actions">
       <button type="submit" class="primary" id="submitBtn" disabled>Preparar registro</button>
       <!-- Encadenar objetos de la misma noche: aparecen al guardar y dejan el
