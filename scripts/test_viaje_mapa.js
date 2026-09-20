@@ -151,6 +151,8 @@ eq(/Explorado en la fecha estelar/.test(app), false, 'la fecha va sola, sin la p
 // Y el clic en el marcador la usa para ELEGIR cuando hay más de una: sin esto,
 // el mapa abre una observación cualquiera por el usuario.
 eq(/VLViaje\.hayQueElegir\(/.test(app), true, 'el clic en el objeto consulta si hay que elegir');
+// Con observador activo, en cambio, NO se elige: se abre su observación directa.
+eq(/VLViaje\.observacionDe\(/.test(app), true, 'el clic abre la observación del compañero, no la lista');
 
 // La nave vive en la ruta, que va en píxeles de PANTALLA, así que sin pedirlo se
 // quedaría del mismo tamaño mientras el mapa se aleja. Encoge con la misma ley
@@ -164,6 +166,23 @@ console.log('hayQueElegir (con varias observaciones se elige, no se abre una):')
 eq(VLV.hayQueElegir('m13'), true, 'cinco observaciones -> el mapa enseña la lista');
 eq(VLV.hayQueElegir('m57'), false, 'una sola observación -> se abre directamente');
 eq(VLV.hayQueElegir('m92'), false, 'objeto sin observaciones -> nada que elegir');
+
+console.log('observacionDe (el compañero del cuadro de mando abre su ficha, no la lista):');
+eq(VLV.observacionDe('m13', 'israel', '7') === global.OBSERVACIONES.m13[0], true,
+   'con viaje: la observación de ESA salida');
+eq(VLV.observacionDe('m13', 'israel', '8') === global.OBSERVACIONES.m13[2], true,
+   'otra salida del mismo observador, por su viaje');
+eq(VLV.observacionDe('m13', 'israel', null) === global.OBSERVACIONES.m13[2], true,
+   'sin viaje: la más reciente en tiempo (noche 2026-08-12 gana)');
+eq(VLV.observacionDe('m13', 'ana', null) === global.OBSERVACIONES.m13[1], true,
+   'de otra observadora, la suya más reciente (la sin fecha va al final)');
+eq(VLV.observacionDe('m13', 'ana', '9') === global.OBSERVACIONES.m13[1], true,
+   'el viaje de la otra observadora');
+eq(VLV.observacionDe('m13', 'carmen', null), null, 'clave sin observación del objeto -> null');
+eq(VLV.observacionDe('m13', '', null), null, 'sin clave -> null');
+eq(VLV.observacionDe('m42', 'israel', null), null, 'objeto sin observaciones -> null');
+eq(VLV.observacionDe('m57', 'israel', null) === global.OBSERVACIONES.m57[0], true,
+   'una sola observación: se abre esa misma');
 
 console.log('tramoEncendido (la nave avanza a velocidad constante):');
 // La nave hace PX_POR_SEGUNDO_LUZ píxeles por segundo, así que un tramo de dos
