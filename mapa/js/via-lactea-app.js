@@ -2370,10 +2370,18 @@
       title:  dot.getAttribute('data-title') || '',
       coords: dot.getAttribute('data-coords') || ''
     };
-    // Con más de una observación se elige: abrir una cualquiera sería elegir por
-    // el usuario.
+    // Si el observador activo (el compañero del cuadro de mando) tiene ficha, se
+    // abre directamente la suya —la del viaje seleccionado o la más reciente—
+    // sin pasar por la lista de elegir. Sin observador activo ("Todas las
+    // observaciones"), la regla de siempre: con varias se elige.
+    var f = VLO.getActivo() ? VLViaje.observacionDe(id, VLO.getActivo(), viajeActivo) : null;
+    if (f) {
+      f._id = id;
+      renderFichaNormal(f, info, { observadorNombre: VLO.nombreObservador(f.observador) });
+      return;
+    }
     if (VLViaje.hayQueElegir(id)) { abrirFichaDescubrimiento(id, info, { elegir: true }); return; }
-    var f = VLO.getFicha(id);
+    f = VLO.getFicha(id);
     f._id = id;
     renderFichaNormal(f, info, { observadorNombre: VLO.nombreObservador(f.observador) });
   }
@@ -2508,12 +2516,20 @@
     if (!desc) return;
     var fichaId = desc.ficha;
     var info = { title: desc.title || '', coords: desc.coords || '', pdf: desc.pdf };
+    // Igual que openFicha: si el observador activo tiene ficha, se abre la suya
+    // (viaje → más reciente) sin la lista de elegir.
+    var f = (fichaId && VLO.getActivo()) ? VLViaje.observacionDe(fichaId, VLO.getActivo(), viajeActivo) : null;
+    if (f) {
+      f._id = fichaId;
+      renderFichaNormal(f, info, { observadorNombre: VLO.nombreObservador(f.observador) });
+      return;
+    }
     if (fichaId && VLViaje.hayQueElegir(fichaId)) {
       abrirFichaDescubrimiento(fichaId, info, { elegir: true });
       return;
     }
     if (fichaId && VLO.getFicha(fichaId)) {
-      var f = VLO.getFicha(fichaId);
+      f = VLO.getFicha(fichaId);
       f._id = fichaId;
       renderFichaNormal(f, info, { observadorNombre: VLO.nombreObservador(f.observador) });
       return;

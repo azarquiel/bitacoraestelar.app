@@ -288,6 +288,12 @@ se enseña esa misma lista con el rótulo **OBSERVACIONES** para que el usuario
 elija cuál mirar (`VLViaje.hayQueElegir`). Con una sola, la ficha se abre sin
 rodeos.
 
+Si el **observador seleccionado** en el cuadro de mando tiene observación del
+objeto, en cambio, se abre directamente **la suya** sin pasar por la lista: la del
+**viaje** en curso o, sin viaje, la **más reciente** en el tiempo
+(`VLViaje.observacionDe`). La lista queda para «Todas las observaciones», donde no
+hay un observador al que atribuir la elección.
+
 El botón **← Descubrir** lleva a esa misma lista, y no solo se usa para volver:
 aparece en **cualquier** ficha cuyo objeto tenga más observaciones que la que se
 está viendo (entonces el rótulo del panel es **OTRAS OBSERVACIONES**). Cada

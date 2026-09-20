@@ -219,6 +219,16 @@
    * llamaba la salida. Van de la más reciente a la más antigua, y las que no
    * tienen fecha al final, en el orden en que estaban.
    */
+  // Fecha efectiva de una observación para ordenarla en el tiempo: la de la
+  // observación y, si no la trae, la noche de su viaje. Es el MISMO criterio con
+  // que se ordena "← Descubrir", para que "la más reciente" coincida en la lista
+  // y al abrir la ficha directa del observador.
+  function fechaEfectiva(o) {
+    if (o && o.fecha) return o.fecha;
+    var v = (o && o.viaje) ? viajeDe(o.viaje) : null;
+    return (v && v.noche) ? v.noche : '';
+  }
+
   function otrasObservaciones(objetoId, excluir) {
     var obs = tabla('OBSERVACIONES');
     var lista = (obs && obs[objetoId]) ? obs[objetoId] : null;
@@ -229,12 +239,11 @@
       if (excluir != null && i === excluir) continue;
       var clave = lista[i].observador;
       var nombre = (observadores[clave] && observadores[clave].nombre) ? observadores[clave].nombre : (clave || '');
-      var v = lista[i].viaje ? viajeDe(lista[i].viaje) : null;
       out.push({
         indice: i,
         clave: clave,
         observadorNombre: nombre,
-        fecha: lista[i].fecha || (v && v.noche ? v.noche : ''),
+        fecha: fechaEfectiva(lista[i]),
         nave: lista[i].nave || null,
         instrumento: lista[i].instrumento || '',
         // Si lleva tramo de audio (ADR 0005), la lista lo señala con el 🎧.
@@ -260,6 +269,41 @@
     var obs = tabla('OBSERVACIONES');
     var lista = (obs && obs[objetoId]) ? obs[objetoId] : null;
     return !!(lista && lista.length > 1);
+  }
+
+  /**
+   * La observación que debe abrirse al pulsar un objeto: la del viaje
+   * seleccionado o, sin viaje, la más reciente en tiempo de 'clave'. Devuelve la
+   * observación de OBSERVACIONES[objetoId] (la MISMA referencia, para que su
+   * índice siga siendo su identidad) o null si 'clave' no lo observó.
+   *
+   * Es la otra cara de hayQueElegir(): cuando el observador activo SÍ tiene ficha
+   * del objeto, no se enseña la lista de todas —se abre directamente la suya—, y
+   * con varias suyas se resuelve por viaje y, si no, por la más reciente (el
+   * mismo criterio de fecha que "← Descubrir").
+   */
+  function observacionDe(objetoId, clave, viajeId) {
+    var obs = tabla('OBSERVACIONES');
+    var lista = (obs && obs[objetoId]) ? obs[objetoId] : null;
+    if (!lista || !lista.length || !clave) return null;
+    var suyas = [];
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].observador === clave) suyas.push(lista[i]);
+    }
+    if (!suyas.length) return null;
+    if (viajeId) {
+      for (var j = 0; j < suyas.length; j++) {
+        if (String(suyas[j].viaje) === String(viajeId)) return suyas[j];
+      }
+    }
+    // Sin viaje (o sin coincidencia en él): la más reciente en tiempo. Las fechas
+    // son ISO, así que ordenan como texto; sin fecha, al final y en su orden.
+    return suyas.slice().sort(function (a, b) {
+      var fa = fechaEfectiva(a), fb = fechaEfectiva(b);
+      if (!fa || !fb) return (fa ? 0 : 1) - (fb ? 0 : 1);
+      if (fa === fb) return 0;
+      return fa < fb ? 1 : -1;
+    })[0];
   }
 
   // ---------------------------------------------------------------------------
@@ -591,6 +635,7 @@
     capaInicial: capaInicial,
     otrasObservaciones: otrasObservaciones,
     hayQueElegir: hayQueElegir,
+    observacionDe: observacionDe,
     movimientoReducido: movimientoReducido,
     reiniciar: reiniciar,
     tramoEncendido: tramoEncendido,
