@@ -1,0 +1,63 @@
+{
+ "nombre": "Abell 12",
+ "version": "08739bd6",
+ "generador": "gen_dso_texturas 2",
+ "ra": 90.58354,
+ "dec": 9.65391,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-20"
+ },
+ "ancho": 180,
+ "alto": 180,
+ "ladoArcmin": 1.5,
+ "escalaAs": 0.5000000121071928,
+ "wcs": {
+  "ra0": 88.988761901897,
+  "dec0": 9.99999999999966,
+  "x0": 11412.75,
+  "y0": 2555.25,
+  "gx": -0.000138888892251998,
+  "gy": 0.000138888892251998
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 839.0808362548828,
+  "uMin": -0.42709872832012624,
+  "uMax": 6.846081799990825,
+  "centinela": 0
+ },
+ "celdas": {
+  "pedidas": 1,
+  "cosidas": 1
+ },
+ "vecino": {
+  "ra": 90.6215786776292,
+  "dec": 9.65391,
+  "direccion": "E",
+  "offsetArcmin": 2.25,
+  "ladoArcmin": 1.5,
+  "difusaMasCercaArcmin": 303.3285919722987,
+  "escalaAs": 0.5000000121071928,
+  "celdas": {
+   "pedidas": 2,
+   "cosidas": 2
+  },
+  "cielo": 425.1252746582031,
+  "sigma": 321.6192760070801,
+  "px": 32400
+ },
+ "auditoria": {
+  "cielo": 992.020751953125,
+  "sigma": 839.0808362548828,
+  "fracAusencia": 0.03506172839506173,
+  "fracAusenciaEscena": 0,
+  "bloqueMayorFrac": 0.03459876543209876,
+  "bloqueRellenoCaja": 0.5924947145877378,
+  "bloqueComponentes": 3,
+  "bytes": 60887,
+  "errCuantMaxSigma": 0.0002781596568713695,
+  "errCuantMaxRel": 0.00005636437096634417
+ }
+}

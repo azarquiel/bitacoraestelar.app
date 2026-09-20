@@ -1,0 +1,63 @@
+{
+ "nombre": "NGC6914",
+ "version": "86c82926",
+ "generador": "gen_dso_texturas 2",
+ "ra": 306.18042,
+ "dec": 42.48264,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-09-20"
+ },
+ "ancho": 324,
+ "alto": 324,
+ "ladoArcmin": 2.7,
+ "escalaAs": 0.5000000121071928,
+ "wcs": {
+  "ra0": 307.05880737299,
+  "dec0": 41.9999999999986,
+  "x0": -4502.5,
+  "y0": -3337.25,
+  "gx": -0.000138888892251998,
+  "gy": 0.000138888892251998
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 111.47931619491577,
+  "uMin": -1.7972135999059509,
+  "uMax": 8.964562506680522,
+  "centinela": 0
+ },
+ "celdas": {
+  "pedidas": 1,
+  "cosidas": 1
+ },
+ "vecino": {
+  "ra": 306.27194765768957,
+  "dec": 42.48264,
+  "direccion": "E",
+  "offsetArcmin": 4.050000000000001,
+  "ladoArcmin": 2.7,
+  "difusaMasCercaArcmin": 286.26833017128536,
+  "escalaAs": 0.5000000121071928,
+  "celdas": {
+   "pedidas": 1,
+   "cosidas": 1
+  },
+  "cielo": -10.166881561279297,
+  "sigma": 61.99053381958007,
+  "px": 104976
+ },
+ "auditoria": {
+  "cielo": 62.13957977294922,
+  "sigma": 111.47931619491577,
+  "fracAusencia": 0.001066910531931108,
+  "fracAusenciaEscena": 0.001098782509736979,
+  "bloqueMayorFrac": 0.0005906111873190062,
+  "bloqueRellenoCaja": 0.96875,
+  "bloqueComponentes": 2,
+  "bytes": 201879,
+  "errCuantMaxSigma": 0.00041445906611469873,
+  "errCuantMaxRel": 0.00008365970643431364
+ }
+}
