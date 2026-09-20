@@ -4343,16 +4343,30 @@ function bitacora_panel_observadores() {
         $obs_id   = intval( $_POST['bitacora_observador_id'] ?? 0 );
         $feed_url = esc_url_raw( trim( $_POST['bitacora_feed_rss_url'] ?? '' ) );
         // https obligado: un blog en http avisa de inseguro al visitante que llega.
-        $blog_url = bitacora_sanitizar_url_https( $_POST['bitacora_blog_url'] ?? '' );
+        // Una URL que no lo cumple NO se guarda como vacía: eso borraría en
+        // silencio el blog que ya tenía el observador (y apagaría su planeta)
+        // por una errata al teclear. Se deja como estaba y se dice por qué, que
+        // es lo mismo que hace el REST devolviendo un 400.
+        $blog_crudo = trim( (string) ( $_POST['bitacora_blog_url'] ?? '' ) );
+        $blog_url   = bitacora_sanitizar_url_https( $blog_crudo );
+        $campos     = array( 'feed_rss_url' => $feed_url );
+        $blog_malo  = ( '' !== $blog_crudo && '' === $blog_url );
+        if ( ! $blog_malo ) {
+            $campos['blog_url'] = $blog_url;
+        }
         if ( $obs_id ) {
             $wpdb->update(
                 $t,
-                array( 'feed_rss_url' => $feed_url, 'blog_url' => $blog_url ),
+                $campos,
                 array( 'id' => $obs_id ),
-                array( '%s', '%s' ),
+                array_fill( 0, count( $campos ), '%s' ),
                 array( '%d' )
             );
-            echo '<div class="notice notice-success"><p>Canales del observador actualizados.</p></div>';
+            if ( $blog_malo ) {
+                echo '<div class="notice notice-error"><p>La URL del blog debe empezar por <code>https://</code>. El blog se ha dejado como estaba; el feed sí se ha guardado.</p></div>';
+            } else {
+                echo '<div class="notice notice-success"><p>Canales del observador actualizados.</p></div>';
+            }
         }
     }
 

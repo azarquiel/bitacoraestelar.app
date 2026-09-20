@@ -88,10 +88,15 @@ ok( false !== strpos( $datos_js, "if ( ! empty( \$ob->blog_post_url ) )" ),
 
 $panel = substr( $fuente, strpos( $fuente, 'function bitacora_panel_observadores(' ) );
 $panel = substr( $panel, 0, strpos( $panel, "\n}\n" ) );
-ok( false !== strpos( $panel, "bitacora_sanitizar_url_https( \$_POST['bitacora_blog_url']" ),
+ok( false !== strpos( $panel, "\$_POST['bitacora_blog_url']" ) &&
+    false !== strpos( $panel, 'bitacora_sanitizar_url_https( $blog_crudo )' ),
     'el admin guarda el blog del observador con el mismo saneado estricto' );
-ok( false !== strpos( $panel, "'blog_url' => \$blog_url" ),
+ok( false !== strpos( $panel, "\$campos['blog_url'] = \$blog_url;" ),
     'el admin escribe la columna blog_url' );
+ok( false !== strpos( $panel, "'' !== \$blog_crudo && '' === \$blog_url" ),
+    'una URL que no pasa el saneado NO se guarda vacía: borraría el blog que ya tenía' );
+ok( false !== strpos( $panel, 'notice-error' ),
+    'y se dice por qué, en vez de dejar el planeta apagado sin explicación' );
 
 echo "\nel mapa pinta el planeta y el pie de la ficha:\n";
 $app = (string) file_get_contents( __DIR__ . '/../mapa/js/via-lactea-app.js' );
