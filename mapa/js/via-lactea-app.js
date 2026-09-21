@@ -2799,31 +2799,36 @@
   // tiene blog, apagado si no, y fuera de la vista en "Todas las
   // observaciones", donde no hay a quién apuntar.
   var planetaOrigen = document.getElementById('mw-planeta');
-  var planetaTexto = document.getElementById('mw-planeta-texto');
   function pintarPlanetaOrigen(clave) {
     if (!planetaOrigen) return;
-    if (!clave) { planetaOrigen.hidden = true; planetaOrigen.style.display = 'none'; return; }
+    // Sin observador el planeta se apaga pero conserva su sitio: si lo quitara
+    // del flujo, el combo daría un salto a la izquierda en cada cambio.
+    if (!clave) {
+      planetaOrigen.removeAttribute('href');
+      planetaOrigen.style.visibility = 'hidden';
+      planetaOrigen.removeAttribute('aria-label');
+      planetaOrigen.removeAttribute('title');
+      return;
+    }
     var nombre = VLO.nombreObservador(clave);
     var url = VLO.blogDe(clave);
-    planetaOrigen.hidden = false;
-    planetaOrigen.style.display = 'flex';
+    planetaOrigen.style.visibility = 'visible';
     if (url) {
       planetaOrigen.setAttribute('href', url);
       planetaOrigen.style.opacity = '1';
       planetaOrigen.style.cursor = 'pointer';
-      if (planetaTexto) planetaTexto.textContent = 'El blog de ' + nombre;
-      planetaOrigen.setAttribute('aria-label', 'Blog de ' + nombre + ' (se abre en otra pestaña)');
+      planetaOrigen.setAttribute('aria-label', 'Planeta de origen: el blog de ' + nombre);
       planetaOrigen.setAttribute('title', 'Planeta de origen: el blog de ' + nombre);
     } else {
       // Sin blog el planeta sigue a la vista, apagado: que se vea el hueco.
       planetaOrigen.removeAttribute('href');
-      planetaOrigen.style.opacity = '0.45';
+      planetaOrigen.style.opacity = '0.35';
       planetaOrigen.style.cursor = 'default';
-      if (planetaTexto) planetaTexto.textContent = nombre + ' no tiene blog registrado';
       planetaOrigen.removeAttribute('aria-label');
       planetaOrigen.setAttribute('title', nombre + ' no tiene blog registrado');
     }
   }
+
 
   if (observadorSelect && typeof OBSERVADORES !== 'undefined' && typeof OBSERVACIONES !== 'undefined') {
     var conObs = {};
