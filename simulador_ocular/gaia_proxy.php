@@ -26,9 +26,12 @@ declare(strict_types=1);
      · Bloqueo de concurrencia (flock) para evitar estampidas y escrituras a medias.
      · Limpieza LRU incremental (no en cada petición; acotada por pasada).
      · Creación automática del directorio de caché.
+     · Log de una línea JSON por petición (hit/miss/304) con rotación por tamaño,
+       y endpoint ?stats=1 de solo lectura para leerlo agregado.
 
    Endpoints:
      GET ?ra=..&dec=..&rad=..&mag=..   → datos Gaia (JSON)
+     GET ?stats=1                      → estado de la caché y agregado del log
    ════════════════════════════════════════════════════════════════════════════ */
 
 // ───────────────────────────── CONFIGURACIÓN ─────────────────────────────────
@@ -63,6 +66,8 @@ const GAIA_CLEANUP_EVERY   = 300;                // s: limpieza como mucho cada 
 const GAIA_CLEANUP_MAX_DEL = 300;                // nº máx. de entradas a borrar por pasada (incremental)
 const GAIA_CLIENT_MAXAGE   = 86400;              // s: Cache-Control max-age que se anuncia al navegador
 const GAIA_ORPHAN_TTL      = 3600;               // s: edad mínima de un .lock/.tmp huérfano para retirarlo
+const GAIA_LOG_FILE        = GAIA_CACHE_DIR . '/.hits.log';   // log de aciertos (US-1: medir antes de tocar)
+const GAIA_LOG_MAX_BYTES   = 5 * 1024 * 1024;    // bytes: al superarlo se rota a .hits.log.1 (un solo nivel)
 
 // ───────────────────────── FUNCIONES PURAS (testables) ───────────────────────
 
@@ -254,6 +259,69 @@ function gaia_mezclar_espacial(string $json, ?string $esp_json, int $N): string 
     return json_encode($j);
 }
 
+/**
+ * Línea del log de aciertos: un JSON por petición, con salto de línea final.
+ * Pura — el instante y el tiempo entran como parámetros, así el test no depende
+ * del reloj. `etapa` solo tiene sentido en un fallo (`sonda` | `densa`).
+ */
+function gaia_log_linea(float $t, string $clave, string $estado, ?string $etapa, int $bytes, float $ms): string {
+    return json_encode([
+        't'      => round($t, 3),
+        'clave'  => $clave,
+        'estado' => $estado,
+        'etapa'  => $etapa,
+        'bytes'  => $bytes,
+        'ms'     => round($ms, 1),
+    ], JSON_UNESCAPED_SLASHES) . "\n";
+}
+
+/** Mediana de una lista de números (0.0 si está vacía). */
+function gaia_mediana(array $v): float {
+    sort($v);
+    $n = count($v);
+    if ($n === 0) {
+        return 0.0;
+    }
+    $m = ($n % 2) ? $v[intdiv($n, 2)] : ($v[intdiv($n, 2) - 1] + $v[intdiv($n, 2)]) / 2;
+    return round((float) $m, 1);
+}
+
+/**
+ * Agregado de un log de aciertos ya leído (una línea JSON por petición).
+ * Puro. Las líneas ilegibles se IGNORAN: el fichero se rota por tamaño y un
+ * corte a mitad de línea no puede tumbar `?stats=1`. El ratio se calcula sobre
+ * las peticiones que sirvieron cuerpo (hit+miss): un 304 no es ni acierto ni
+ * fallo de la caché de disco, solo del navegador.
+ */
+function gaia_log_agregado(string $texto): array {
+    $r  = ['peticiones' => 0, 'hit' => 0, 'miss' => 0, '304' => 0, 'ratio' => null, 'bytes' => 0];
+    $ms = [];
+    foreach (explode("\n", $texto) as $linea) {
+        if ($linea === '') {
+            continue;
+        }
+        $e = json_decode($linea, true);
+        if (!is_array($e) || !isset($e['estado']) || !isset($r[(string) $e['estado']])) {
+            continue;
+        }
+        $estado = (string) $e['estado'];
+        $r['peticiones']++;
+        $r[$estado]++;
+        $r['bytes'] += (int) ($e['bytes'] ?? 0);
+        $etapa = ($estado === 'miss') ? (string) ($e['etapa'] ?? 'desconocida') : $estado;
+        $ms[$etapa][] = (float) ($e['ms'] ?? 0);
+    }
+    $servidas = $r['hit'] + $r['miss'];
+    if ($servidas > 0) {
+        $r['ratio'] = round($r['hit'] / $servidas, 4);
+    }
+    $r['ms_mediano'] = [];
+    foreach ($ms as $etapa => $v) {
+        $r['ms_mediano'][$etapa] = gaia_mediana($v);
+    }
+    return $r;
+}
+
 /** ¿La sonda pudo quedar truncada? Tocar el techo = no hay garantía de conjunto completo. */
 function gaia_truncada(int $filas): bool {
     return $filas >= GAIA_TECHO_FILAS;
@@ -266,6 +334,46 @@ function gaia_num_filas(string $json): ?int {
 }
 
 // ───────────────────────── EFECTOS (disco / red) ─────────────────────────────
+
+/**
+ * Añade una línea al log de aciertos, rotando a `.hits.log.1` cuando el activo
+ * supera el tope (un solo nivel: la rotación previa se pisa). Best-effort de
+ * arriba abajo: si el disco falla (permisos, lleno), se calla. Medir nunca
+ * puede romper el servicio.
+ */
+function gaia_log_escribir(string $ruta, string $linea, int $max_bytes): void {
+    $tam = @filesize($ruta);
+    if ($tam !== false && $tam >= $max_bytes) {
+        @rename($ruta, $ruta . '.1');
+    }
+    @file_put_contents($ruta, $linea, FILE_APPEND | LOCK_EX);
+}
+
+/**
+ * Registra la petición en curso. El reloj de partida es el del SAPI
+ * (`REQUEST_TIME_FLOAT`), así que mide la petición entera sin plumbing.
+ */
+function gaia_log_registrar(string $clave, string $estado, ?string $etapa, int $bytes): void {
+    $ahora = microtime(true);
+    $ms = ($ahora - (float) ($_SERVER['REQUEST_TIME_FLOAT'] ?? $ahora)) * 1000;
+    gaia_log_escribir(GAIA_LOG_FILE, gaia_log_linea($ahora, $clave, $estado, $etapa, $bytes, $ms), GAIA_LOG_MAX_BYTES);
+}
+
+/** Estado del directorio de caché: entradas, bytes y antigüedad. Solo lectura. */
+function gaia_cache_estado(string $dir, string $patron): array {
+    $n = 0; $bytes = 0; $min = null; $max = null;
+    foreach (glob($dir . '/' . $patron) ?: [] as $f) {
+        $n++;
+        $bytes += (int) @filesize($f);
+        $m = @filemtime($f);
+        if ($m === false) {
+            continue;
+        }
+        if ($min === null || $m < $min) { $min = $m; }
+        if ($max === null || $m > $max) { $max = $m; }
+    }
+    return ['entradas' => $n, 'bytes' => $bytes, 'mtime_min' => $min, 'mtime_max' => $max];
+}
 
 /** Cabeceras comunes de una respuesta JSON del proxy (incl. CORS). */
 function gaia_json_headers(): void {
@@ -284,11 +392,13 @@ function gaia_json_headers(): void {
  *      consulta ordenada que igualmente había que pagar.
  * Devuelve null si todos los proveedores fallan.
  */
-function gaia_fetch(float $ra, float $dec, float $rad, float $mag): ?string {
+function gaia_fetch(float $ra, float $dec, float $rad, float $mag, ?string &$etapa = null): ?string {
+    $etapa = 'densa';
     $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, false));
     if ($json !== null) {
         $filas = gaia_num_filas($json);
         if ($filas !== null && !gaia_truncada($filas)) {
+            $etapa = 'sonda';
             return $json;
         }
         unset($json);   // libera el cuerpo de la sonda (~14 MB) antes de la 2ª pasada
@@ -348,7 +458,7 @@ function gaia_cliente_acepta_gzip(): bool {
  * negociación de Accept-Encoding. Responde 304 si el ETag del cliente coincide.
  * Termina la ejecución.
  */
-function gaia_servir(string $ruta_gz, string $clave): void {
+function gaia_servir(string $ruta_gz, string $clave, string $estado = 'hit', ?string $etapa = null): void {
     // ETag = la clave. El acierto de caché hace touch() (para el LRU), que cambia
     // mtime; por eso el ETag NO puede depender de mtime o nunca habría 304. El
     // contenido de una región es inmutable (Gaia DR3 es un catálogo fijo y la
@@ -363,6 +473,7 @@ function gaia_servir(string $ruta_gz, string $clave): void {
 
     if (($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag) {
         http_response_code(304);
+        gaia_log_registrar($clave, '304', null, 0);
         exit;
     }
 
@@ -375,6 +486,7 @@ function gaia_servir(string $ruta_gz, string $clave): void {
         header('Content-Encoding: gzip');
         header('Content-Length: ' . strlen($gz));
         echo $gz;
+        $bytes = strlen($gz);
     } else {
         $plano = gzdecode($gz);
         if ($plano === false) {
@@ -383,7 +495,9 @@ function gaia_servir(string $ruta_gz, string $clave): void {
         }
         header('Content-Length: ' . strlen($plano));
         echo $plano;
+        $bytes = strlen($plano);
     }
+    gaia_log_registrar($clave, $estado, $etapa, $bytes);
     exit;
 }
 
@@ -408,6 +522,22 @@ if (PHP_SAPI === 'cli') {
 
 if (!is_dir(GAIA_CACHE_DIR)) {
     @mkdir(GAIA_CACHE_DIR, 0775, true);
+}
+
+/* ── ?stats=1 ── Solo lectura: mira el directorio y agrega el log. No toca la
+   política de caché, no escribe y NO consulta al TAP. Es la cifra sobre la que
+   se decide si hay que partir la caché o colapsar `mag` (épica de la caché). */
+if (isset($_GET['stats'])) {
+    $cache = gaia_cache_estado(GAIA_CACHE_DIR, '*.json.gz');
+    $cache['max_bytes'] = GAIA_CACHE_MAX_BYTES;
+    $cache['ocupacion'] = round($cache['bytes'] / GAIA_CACHE_MAX_BYTES, 4);
+    // Se agregan el log activo y su rotación: si no, rotar borraría la historia.
+    $log = gaia_log_agregado((string) @file_get_contents(GAIA_LOG_FILE . '.1')
+        . (string) @file_get_contents(GAIA_LOG_FILE));
+    $log['bytes_log'] = (int) @filesize(GAIA_LOG_FILE) + (int) @filesize(GAIA_LOG_FILE . '.1');
+    $log['ms_mediano'] = (object) $log['ms_mediano'];   // objeto también cuando está vacío
+    gaia_json_headers();
+    exit(json_encode(['cache' => $cache, 'log' => $log], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 }
 
 $ra  = $_GET['ra']  ?? null;
@@ -452,7 +582,8 @@ if ($lock && flock($lock, LOCK_EX)) {
         gaia_servir($ruta, $clave);      // termina
     }
 
-    $json = gaia_fetch($qra, $qdec, $qrad, $qmag);
+    $etapa = null;
+    $json = gaia_fetch($qra, $qdec, $qrad, $qmag, $etapa);
 
     if ($json === null) {
         flock($lock, LOCK_UN);
@@ -484,11 +615,12 @@ if ($lock && flock($lock, LOCK_EX)) {
     ]);
 
     if (is_file($ruta)) {
-        gaia_servir($ruta, $clave);      // termina
+        gaia_servir($ruta, $clave, 'miss', $etapa);   // termina
     }
     // Si por lo que sea no se escribió la caché, servimos el JSON directo.
     gaia_json_headers();
     echo $json;
+    gaia_log_registrar($clave, 'miss', $etapa, strlen($json));
     exit;
 }
 
@@ -496,10 +628,12 @@ if ($lock && flock($lock, LOCK_EX)) {
 if ($lock) {
     fclose($lock);
 }
-$json = gaia_fetch($qra, $qdec, $qrad, $qmag);
+$etapa = null;
+$json = gaia_fetch($qra, $qdec, $qrad, $qmag, $etapa);
 if ($json !== null) {
     gaia_json_headers();
     echo $json;
+    gaia_log_registrar($clave, 'miss', $etapa, strlen($json));
     exit;
 }
 http_response_code(502);

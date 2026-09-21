@@ -124,6 +124,82 @@ eq(gaia_mezclar_espacial($json_seguro, null, 8), $json_seguro, 'sin espacial →
 eq(gaia_mezclar_espacial($json_seguro, '{"data":[]}', 8), $json_seguro, 'sin celdas → intacta');
 eq(gaia_mezclar_espacial('{"data":[[1,2,15.2]]}', $esp_json, 8), '{"data":[[1,2,15.2]]}', 'sin fondo → intacta');
 
+echo "log de aciertos — línea (pura):\n";
+$l = gaia_log_linea(1758412345.6789, 'abc123', 'hit', null, 8192, 3.14159);
+ok(substr($l, -1) === "\n", 'la línea acaba en salto (append de una línea por petición)');
+$d = json_decode(trim($l), true);
+eq($d['estado'], 'hit', 'estado en la línea');
+eq($d['clave'], 'abc123', 'clave en la línea');
+eq($d['bytes'], 8192, 'bytes servidos');
+eq($d['ms'], 3.1, 'ms redondeados a una décima');
+eq($d['etapa'], null, 'sin etapa en un acierto');
+eq($d['t'], 1758412345.679, 't redondeado a ms');
+// Un 304 no sirve cuerpo.
+$d304 = json_decode(trim(gaia_log_linea(1.0, 'k', '304', null, 0, 0.4)), true);
+eq($d304['estado'], '304', 'estado 304');
+eq($d304['bytes'], 0, '304 → bytes 0');
+// Un fallo lleva la etapa de adquisición.
+eq(json_decode(trim(gaia_log_linea(1.0, 'k', 'miss', 'sonda', 10, 900.0)), true)['etapa'], 'sonda', 'fallo resuelto por la sonda');
+eq(json_decode(trim(gaia_log_linea(1.0, 'k', 'miss', 'densa', 10, 900.0)), true)['etapa'], 'densa', 'fallo que tuvo que ir a la segura');
+
+echo "gaia_mediana:\n";
+eq(gaia_mediana([]), 0.0, 'lista vacía → 0');
+eq(gaia_mediana([5.0]), 5.0, 'un elemento');
+eq(gaia_mediana([3.0, 1.0, 2.0]), 2.0, 'impar (y ordena por su cuenta)');
+eq(gaia_mediana([1.0, 2.0, 3.0, 10.0]), 2.5, 'par → media de los centrales');
+
+echo "gaia_log_agregado (puro sobre el texto del log):\n";
+$texto = gaia_log_linea(1.0, 'a', 'hit', null, 100, 5.0)
+       . gaia_log_linea(2.0, 'b', 'hit', null, 200, 7.0)
+       . gaia_log_linea(3.0, 'c', 'hit', null, 300, 9.0)
+       . gaia_log_linea(4.0, 'd', 'miss', 'sonda', 1000, 2000.0)
+       . gaia_log_linea(5.0, 'e', 'miss', 'densa', 2000, 40000.0)
+       . gaia_log_linea(6.0, 'f', '304', null, 0, 1.0);
+$ag = gaia_log_agregado($texto);
+eq($ag['peticiones'], 6, 'cuenta todas las peticiones');
+eq($ag['hit'], 3, 'aciertos');
+eq($ag['miss'], 2, 'fallos');
+eq($ag['304'], 1, '304');
+eq($ag['ratio'], 0.6, 'ratio = hit / (hit+miss), el 304 no cuenta');
+eq($ag['bytes'], 3600, 'bytes servidos');
+eq($ag['ms_mediano']['hit'], 7.0, 'ms mediano de los aciertos');
+eq($ag['ms_mediano']['sonda'], 2000.0, 'ms mediano de la sonda');
+eq($ag['ms_mediano']['densa'], 40000.0, 'ms mediano de la consulta densa');
+// Robustez: el log se rota por tamaño, así que puede haber basura o líneas a medias.
+$roto = gaia_log_agregado("no es json\n" . $texto . '{"estado":"hit","bytes":1');
+eq($roto['peticiones'], 6, 'ignora líneas ilegibles (rotación a mitad de línea)');
+eq(gaia_log_agregado('')['peticiones'], 0, 'log vacío → 0 peticiones');
+eq(gaia_log_agregado('')['ratio'], null, 'sin peticiones no hay ratio (no divide por cero)');
+eq(gaia_log_agregado(gaia_log_linea(1.0, 'x', 'inventado', null, 9, 1.0))['peticiones'], 0, 'estado desconocido → no cuenta');
+
+echo "gaia_log_escribir (append, rotación y fallo de disco):\n";
+$dir = sys_get_temp_dir() . '/test_gaia_log_' . getmypid();
+@mkdir($dir, 0775, true);
+$log = $dir . '/.hits.log';
+gaia_log_escribir($log, gaia_log_linea(1.0, 'a', 'hit', null, 10, 1.0), 1024);
+gaia_log_escribir($log, gaia_log_linea(2.0, 'b', 'hit', null, 20, 2.0), 1024);
+eq(count(file($log)), 2, 'dos peticiones → dos líneas (append, no sobrescribe)');
+eq(gaia_log_agregado(file_get_contents($log))['hit'], 2, 'el fichero se relee agregado');
+ok(!is_file($log . '.1'), 'bajo el tope no rota');
+// Rotación: con el tope por debajo del tamaño actual, la siguiente petición rota.
+gaia_log_escribir($log, gaia_log_linea(3.0, 'c', 'miss', 'sonda', 30, 3.0), 10);
+ok(is_file($log . '.1'), 'superado el tope → rota a .hits.log.1');
+eq(count(file($log)), 1, 'el log activo empieza de cero...');
+eq(gaia_log_agregado(file_get_contents($log))['miss'], 1, '...sin perder la petición en curso');
+eq(gaia_log_agregado(file_get_contents($log . '.1'))['hit'], 2, 'la rotación conserva lo anterior');
+// Disco que falla: escribir en una ruta imposible no puede lanzar ni matar el servicio.
+gaia_log_escribir($dir . '/no/existe/.hits.log', "x\n", 1024);
+ok(true, 'ruta inescribible → no rompe (la medición nunca tumba el servicio)');
+array_map('unlink', glob($dir . '/.hits.log*') ?: []);
+@rmdir($dir);
+
+echo "el log queda fuera del barrido LRU y de git:\n";
+// cache_lru_limpieza filtra por '*.json.gz' (entradas) y retira '*.lock'/'*.tmp*'.
+ok(!fnmatch('*.json.gz', '.hits.log') && !fnmatch('*.json.gz', '.hits.log.1'), 'el log no es una entrada de caché');
+ok(!fnmatch('*.lock', '.hits.log') && !fnmatch('*.tmp*', '.hits.log'), 'el log no es un huérfano .lock/.tmp');
+ok(in_array('simulador_ocular/cache_gaia/', array_map('trim', file(dirname(__DIR__) . '/.gitignore')), true),
+    'cache_gaia/ (y con él el log) está en .gitignore');
+
 // La expulsión LRU y la limpieza ya no son de este proxy: son la política
 // compartida con el del DSS. Su test es scripts/test_cache_lru.php.
 
