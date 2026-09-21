@@ -82,6 +82,14 @@
     pointer-events: none;
   }
   .mw-icono .mw-icono-lleno { fill: currentColor; stroke: none; }
+  /* El planeta de origen es el único icono con rótulo propio y enlace: a 14 px
+     el anillo y el asteroide se perdían. */
+  .mw-icono-planeta { width: 18px; height: 18px; }
+  #mw-planeta[href]:hover, #mw-planeta[href]:focus-visible {
+    background: rgba(244,199,107,0.18);
+    border-color: rgba(244,199,107,0.45);
+  }
+  #mw-planeta[href] span { text-decoration: underline; }
   /* Los botones de volver son ahora un icono suelto: hay que centrarlo en el
      objetivo de 24 px que pide la regla de tamaño. */
   #mw-tilt-reset, #mw-rotate-edge-reset, #mw-rotate-plane-reset {
@@ -988,22 +996,31 @@
       ">
         <option value="">Todas las observaciones</option>
       </select>
-      <!-- "Planeta de origen": el blog propio del compañero seleccionado.
-           Encendido y enlazado si lo tiene, apagado si no, y oculto en "Todas
-           las observaciones", donde no hay a quién apuntar. El <select> nativo
-           no admite un icono por opción, así que el planeta vive al lado y
-           refleja al seleccionado. Lo gobierna via-lactea-app.js. -->
-      <a id="mw-planeta" target="_blank" rel="noopener" hidden style="
-        display:none;align-items:center;justify-content:center;
-        min-width:24px;min-height:24px;color:#f4c76b;text-decoration:none;
-      ">
-        <svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <circle cx="7" cy="8.2" r="4.1"/>
-          <ellipse cx="7" cy="8.2" rx="6.4" ry="2.2" transform="rotate(-25 7 8.2)"/>
-          <circle cx="13.3" cy="3.4" r="1.1" class="mw-icono-lleno"/>
-        </svg>
-      </a>
     </div>
+
+    <!-- "Planeta de origen": el blog propio del compañero seleccionado. Fila
+         entera bajo el selector, no un icono a su derecha: así la consola no
+         crece a lo ancho para hacerle sitio, el planeta se dibuja a 18 px (a
+         14 el anillo y el asteroide eran un garabato) y lleva su rótulo al
+         lado, que un enlace solo de icono obliga a adivinar. Encendido y
+         enlazado si lo tiene, apagado si no, y fuera de la vista en "Todas las
+         observaciones", donde no hay a quién apuntar. Lo gobierna
+         via-lactea-app.js. -->
+    <a id="mw-planeta" target="_blank" rel="noopener" hidden style="
+      display:none;align-items:center;gap:9px;align-self:stretch;
+      box-sizing:border-box;min-height:40px;padding:8px 12px;
+      border-radius:20px;background:rgba(244,199,107,0.10);
+      border:1px solid rgba(244,199,107,0.22);
+      font-family:sans-serif;font-size:12px;line-height:1.3;
+      color:#f4c76b;text-decoration:none;
+    ">
+      <svg class="mw-icono mw-icono-planeta" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <circle cx="7" cy="9.4" r="3.6" stroke-width="0.8"/>
+        <ellipse cx="7" cy="9.4" rx="6.3" ry="1.9" transform="rotate(-22 7 9.4)" stroke-width="1.5"/>
+        <circle cx="13.4" cy="2.9" r="1.35" class="mw-icono-lleno"/>
+      </svg>
+      <span id="mw-planeta-texto"></span>
+    </a>
 
     <!-- Fila 6: eje CONJUNTO (#233): todo el catálogo del observador o uno de
          sus viajes (mañana, un catálogo). Los viajes son de cada observador, así
@@ -1568,5 +1585,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260921_0100"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260921_1200"></script>
 </li>
