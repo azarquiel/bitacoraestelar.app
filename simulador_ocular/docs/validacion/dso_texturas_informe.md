@@ -33,17 +33,17 @@ así que un objeto ya bajado no vuelve a la red.
 | medida | valor |
 |---|---|
 | texturas escritas | 68 |
-| total de los PNG | 111.5 MB |
-| bytes/px (mediana) | 1.91 |
+| total de los PNG | 137.7 MB |
+| bytes/px (mediana) | 1.92 |
 
 ## Histograma de `escalaAs`
 
 | ″/px | texturas |
 |---|---|
-| < 0,15 | 13 |
-| 0,15 – 0,25 | 5 |
-| 0,25 – 0,5 | 20 |
-| ≥ 0,5 | 30 |
+| < 0,15 | 0 |
+| 0,15 – 0,25 | 0 |
+| 0,25 – 0,5 | 29 |
+| ≥ 0,5 | 39 |
 
 ## Lista de revisión
 
@@ -64,7 +64,7 @@ no traen la medida en su sidecar y no salen aquí: para esas está
 
 | objeto | mayor bloque | relleno de su caja | componentes |
 |---|---|---|---|
-| Abell 12 | 3.58 % | 60 % | 6 |
+| Abell 12 | 3.46 % | 59 % | 3 |
 
 ## Texturas sin cielo medido
 

@@ -234,7 +234,13 @@ function motivoAusencia(f) {
 function sidecars(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir).filter(function (n) { return /\.json$/.test(n); })
-    .map(function (n) { return JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8')); });
+    .map(function (n) {
+      var s = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8'));
+      /* Cuándo se escribió, que es lo que desempata dos sidecars del mismo
+         objeto. No va al manifiesto: las filas se construyen campo a campo. */
+      s._mtime = fs.statSync(path.join(dir, n)).mtimeMs;
+      return s;
+    });
 }
 
 /* Un objeto que no puede tener textura deja su propio sidecar (`<id>.fila.json`,
@@ -313,12 +319,28 @@ function rangoSidecar(s) {
   return s.motivo === 'ausencia-excesiva' ? 2 : 0;
 }
 
+/* ¿Manda `s` sobre `v`, siendo los dos sidecars del mismo objeto? */
+function mandaSobre(s, v) {
+  if (rangoSidecar(s) !== rangoSidecar(v)) return rangoSidecar(s) > rangoSidecar(v);
+  if (s._prio !== v._prio) return s._prio > v._prio;
+  return s._mtime >= v._mtime;
+}
+
 function sidecarsUnicos(dir) {
   var porNombre = {};
-  sidecars(FIXTURES).concat(dir === FIXTURES ? [] : sidecars(dir))
+  var deFixtures = sidecars(FIXTURES).map(function (s) { s._prio = 0; return s; });
+  var deSalida = (dir === FIXTURES ? [] : sidecars(dir)).map(function (s) { s._prio = 1; return s; });
+  /* Tres criterios, en este orden: el rango (una fila `ausencia-excesiva` manda
+     sobre una imagen), el directorio (salida sobre fixtures) y la FECHA. La
+     fecha no estaba y hacía falta: una republicación deja en disco el sidecar
+     viejo y el nuevo del mismo objeto, los dos de rango 1, y el desempate era
+     «el último que devuelva readdir», o sea el orden alfabético del hash de la
+     versión. Con eso el manifiesto salía a medias —30 filas nuevas y 38 viejas
+     en la tirada de la fase 2— declarando versiones cuyo PNG ya nadie publica. */
+  deFixtures.concat(deSalida)
     .forEach(function (s) {
       var v = porNombre[s.nombre];
-      if (!v || rangoSidecar(s) >= rangoSidecar(v)) porNombre[s.nombre] = s;
+      if (!v || mandaSobre(s, v)) porNombre[s.nombre] = s;
     });
   return Object.keys(porNombre).map(function (n) { return porNombre[n]; });
 }
