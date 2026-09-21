@@ -43,7 +43,7 @@ const PS1_ESCALA_NATIVA   = 0.25;                // ″/px del stack: el `size` 
 const PS1_LADO_MIN        = 1.5;                 // ′  (mismos topes que la capa del render)
 const PS1_LADO_MAX        = 20.0;                // ′
 const PS1_SALIDA_MIN      = 64;                  // px
-const PS1_SALIDA_MAX      = 1024;                // px
+const PS1_SALIDA_MAX      = 2048;                // px: tope de la regla de resolución por objeto (ADR 0024, fase 2)
 const PS1_BANDAS          = ['g', 'r', 'i', 'z', 'y'];
 const PS1_MAX_CELDAS      = 4;                   // un parche de ≤20′ no puede tocar más de cuatro skycells
 

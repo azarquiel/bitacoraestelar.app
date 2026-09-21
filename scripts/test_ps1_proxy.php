@@ -56,7 +56,7 @@ eq(ps1_acotar_lado(8.5),   8.5,  'dentro de rango sin cambios');
 eq(ps1_acotar_lado(999.0), 20.0, 'por encima → 20′ (el parche se saldría de la skycell)');
 eq(ps1_acotar_lado(0.1),   1.5,  'por debajo → 1,5′');
 eq(ps1_acotar_salida(512),   512,  'salida normal sin cambios');
-eq(ps1_acotar_salida(99999), 1024, 'salida enorme acotada');
+eq(ps1_acotar_salida(99999), 2048, 'salida enorme acotada al tope de la regla C (ADR 0024, fase 2)');
 eq(ps1_acotar_salida(1),     64,   'salida ridícula acotada');
 
 echo "ps1_clave (determinista, y sin ocular ni aumento):\n";

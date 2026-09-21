@@ -6,8 +6,10 @@
    M51, 13-ago-2026). Si el servicio cambia de comportamiento, la sonda lo
    enseña y estos valores dejan de cuadrar.
 
-   Producción sin tocar: esto fija lo que tendría que seguir siendo cierto el día
-   que se suba PS1.salida. Hoy no se sube.
+   Desde la fase 2 del ADR 0024 fija además la REGLA C, la que decide el tamaño
+   del parche de cada objeto (`ps1SalidaParche`, §4.2 del objetivo), y el listón
+   L2.1: ningún objeto del banco queda «subpíxel» para ninguna de las cuatro
+   aperturas. La regla se lee de producción, no se reescribe aquí (ADR 0008).
 
    Sin dependencias:  node scripts/test_resolucion_ps1.js */
 'use strict';
@@ -35,8 +37,19 @@ function ok(cond, etiqueta) {
 }
 
 var SQM = 21.3, T = 0.82, POJO = 7;
-var OBJETIVO = 0.67;                 // ″/px que se propone como techo de escalaAs
-var SALIDA_MAX_PROXY = 1024;         // ps1-proxy.php:46, PS1_SALIDA_MAX
+var OBJETIVO = 0.67;                 // ″/px del README: el techo que la regla C alcanza salvo en el tope
+var SALIDA_MAX_PROXY = 2048;         // ps1-proxy.php:46, PS1_SALIDA_MAX
+var API = window.BitacoraPS1;
+require('../simulador_ocular/resources/js/galaxias-datos.js');
+require('../simulador_ocular/resources/js/nebulosas-datos.js');
+var BANCO = require('./lib_banco_dso.js')(R);
+var FWHM_A_SIGMA = 2 * Math.sqrt(2 * Math.LN2);
+
+/* σ de la PSF del telescopio en PÍXELES del parche, con la θ_add de producción
+   (`ps1ThetaAdd`) y la misma división que hace `ps1PsfParche`. */
+function sigmaPxProd(D, escalaAs) {
+  return API.ps1ThetaAdd(D, escalaAs) / FWHM_A_SIGMA / escalaAs;
+}
 
 /* Lo medido de verdad contra STScI, campo de 8′ = 1920 px nativos. */
 var SONDA = [
@@ -61,7 +74,15 @@ casi(escalaAs(20, 512), 2.34375, 1e-9, 'y la peor de hoy: 20′ a 512 px');
 console.log('\n— 2. Más resolución NO cambia el flujo —');
 /* fitscut remuestrea conservando BRILLO SUPERFICIAL (flujo por ″²), que es justo
    lo que consume el render: ps1PintarParche trabaja con areaPx = escalaAs².
-   Medido: la media por píxel no se mueve en un factor 3,75 de escala. */
+   Medido: la media por píxel no se mueve en un factor 3,75 de escala.
+
+   ALCANCE, para no cobrarse L2.3 entero con esto: la sonda va de 0,94 a 0,25″/px
+   sobre M51, o sea de la escala de la fase 2 HACIA la nativa. NO cubre el régimen
+   sobremuestreado —por debajo de 0,25″/px— donde vivían 31 de los 69 objetos de
+   la fase 1, y la fila que sí lo pisa (2054 px, 0,2337″/px) queda fuera a mano
+   porque ahí fitscut ya solo interpola. La comparación objeto a objeto de fase 2
+   contra fase 1 se mide sobre el banco regenerado; aquí está el listón, no la
+   medida de los 69. */
 var m0 = SONDA[0].media;
 SONDA.slice(0, 3).forEach(function (s) {
   casi(s.media / m0, 1, 2e-3, s.salida + ' px: brillo superficial respecto a 512 px');
@@ -116,11 +137,11 @@ casi(w[32 * 64 + 32], 100, 1e-3, 'y el hueco se rellena con el entorno, no con u
 console.log('\n— 7. Nada de esto depende de los aumentos —');
 casi(escalaAs(8, 1024), escalaAs(8, 1024), 1e-15, 'escalaAs no recibe MAG');
 casi(P.thetaAdd(457, OBJETIVO), P.thetaAdd(457, OBJETIVO), 1e-15, 'θ_add tampoco');
-/* Lo que importa no es su valor, sino que sea de ADQUISICIÓN y no de render:
-   que no la mueva ni el lienzo ni los aumentos. Subió a 1024 el 13-ago-2026. */
-ok(PS1.salida === 1024, 'PS1.salida es una constante de ADQUISICIÓN, no de render (hoy ' +
-  PS1.salida + ')');
-ok(PS1.salida <= SALIDA_MAX_PROXY, 'y cabe en el tope del proxy sin tocarlo');
+/* Lo que importa no es su valor, sino que la resolución sea de ADQUISICIÓN y no
+   de render: que no la mueva ni el lienzo ni los aumentos. La regla C recibe el
+   lado del objeto y nada más. */
+ok(API.ps1SalidaParche.length === 1, 'ps1SalidaParche toma el lado y nada más: sin hueco para MAG ni SIZE');
+ok(API.ps1SalidaParche(20) <= SALIDA_MAX_PROXY, 'y el peor caso cabe en el tope del proxy');
 
 console.log('\n— 8. Ni se introduce dependencia nueva del lienzo —');
 /* El lienzo entra en ps1PintarParche por pxPorAs, que sale de SIZE y del campo
@@ -154,6 +175,61 @@ ok(Math.abs(d457 - d914) / OBJETIVO > 0.05, 'y su θ_add se separa ' +
 ok(P.sigmaPx(457, 2.35, null) < 0.5 && P.sigmaPx(914, 2.35, null) < 0.5,
   'mientras que a 2,35″/px las dos son subpíxel: por eso hoy salen iguales');
 
+console.log('\n— 11. La regla C decide el tamaño, y lo decide el objeto —');
+/* §4.2 del objetivo: salida(lado) = clamp(ceil(lado·60/0,5), 128, 2048). Los tres
+   lados son los del ADR: el mínimo, la mediana del catálogo y el tope. */
+[[1.5, 180], [4.6, 552], [20, 2048]].forEach(function (par) {
+  casi(API.ps1SalidaParche(par[0]), par[1], 1e-12, 'lado ' + par[0] + '′ → px');
+  var e = escalaAs(par[0], API.ps1SalidaParche(par[0]));
+  ok(e <= OBJETIVO, '  y su escala, ' + e.toFixed(3) + '″/px, llega al objetivo de ' + OBJETIVO);
+});
+/* El tope de 2048 es lo ÚNICO que impide los 0,5″/px, y entra a los 17,07′. */
+casi(escalaAs(17.06, API.ps1SalidaParche(17.06)), 0.5, 2e-3, 'justo por debajo del tope, 0,5″/px clavados');
+ok(escalaAs(20, API.ps1SalidaParche(20)) > 0.5, 'y en el tope la escala se afloja a ' +
+  escalaAs(20, API.ps1SalidaParche(20)).toFixed(3) + '″/px: el tope manda, no la regla');
+/* Nunca más fina que la nativa de PS1 (0,25″/px): pedir más sería interpolar. */
+var masFina = 0;
+for (var lc = PS1.ladoMin; lc <= PS1.ladoMax + 1e-9; lc += 0.05) {
+  if (escalaAs(lc, API.ps1SalidaParche(lc)) < 0.25) masFina++;
+}
+ok(masFina === 0, 'ningún lado del rango pide una escala más fina que la nativa de PS1');
+casi(API.ps1SalidaParche(0), PS1.salidaMin, 1e-12,
+  'un lado ausente cae al suelo de 128 px, no a NaN ni a cero');
+
+console.log('\n— 12. L2.1: ningún objeto del banco queda «subpíxel» —');
+/* El listón de la fase 2 (ADR 0024): σ de la PSF del telescopio ≥ 1 px en los
+   objetos por debajo de 17′ y ≥ 0,85 px en los que llegan al tope de 2048. Es
+   sobre TODO el banco y con la θ_add de producción, no con una copia. */
+var banco = BANCO.banco().objetos.filter(function (o) { return o.gal; });
+ok(banco.length > 0, 'el banco resuelve ' + banco.length + ' objetos contra los catálogos de este árbol');
+var peor = { s: Infinity }, enTope = 0, subpixel = 0;
+[80, 203, 457, 914].forEach(function (D) {
+  banco.forEach(function (o) {
+    var px = API.ps1SalidaParche(o.gal.ladoArcmin), e = escalaAs(o.gal.ladoArcmin, px);
+    var sg = sigmaPxProd(D, e);
+    if (sg < peor.s) peor = { s: sg, D: D, nombre: o.nombre, lado: o.gal.ladoArcmin, esc: e, px: px };
+    if (px >= PS1.salidaMax && D === 80) enTope++;
+    /* El listón laxo es el del TOPE, y el tope entra a los 17,07′, no a los 17:
+       un objeto entre medias no está en el tope y le toca el estricto. Por eso
+       la pregunta es por los píxeles, no por el lado. */
+    var liston = (px >= PS1.salidaMax) ? 0.85 : 1;
+    if (sg < liston) {
+      subpixel++;
+      console.error('  FALLA L2.1 ' + o.nombre + ' (' + o.gal.ladoArcmin.toFixed(2) + '′, ' +
+        e.toFixed(3) + '″/px) con ' + D + ' mm: σ = ' + sg.toFixed(3) + ' px < ' + liston);
+    }
+  });
+});
+ok(subpixel === 0, 'L2.1: σ ≥ 1 px (o ≥ 0,85 en el tope) en ' + banco.length + ' objetos × 4 aperturas');
+console.log('       el peor: ' + peor.nombre + ' (' + peor.lado.toFixed(2) + '′ → ' + peor.px +
+  ' px, ' + peor.esc.toFixed(3) + '″/px) con ' + peor.D + ' mm → σ = ' + peor.s.toFixed(3) + ' px');
+console.log('       ' + enTope + ' de ' + banco.length + ' objetos del banco llegan al tope de ' + PS1.salidaMax + ' px');
+/* Y la comparación que separa la fase 2 de la 1: a 1024 px fijos los grandes SÍ
+   caían por debajo del píxel, que es el motivo escrito del extremo alto. */
+var sFase1 = sigmaPxProd(914, escalaAs(20, PS1.salida));
+ok(sFase1 < 1, 'a la resolución de la fase 1 (' + escalaAs(20, PS1.salida).toFixed(3) +
+  '″/px en 20′) un 914 mm daba σ = ' + sFase1.toFixed(3) + ' px: el listón no se cumplía');
+
 console.log('\n— Lo que NO se toca —');
 casi(PS1.ladoMax, 20, 1e-12, 'PS1.ladoMax');
 casi(PS1.seeingAs, 1.1, 1e-12, 'PS1.seeingAs');
@@ -162,7 +238,9 @@ casi(CFG.seeingArcsec, 2.0, 1e-12, 'seeingArcsec');
 casi(FOT.C_MAG_MIN, 0.45, 1e-12, 'C_MAG_MIN');
 casi(FOT.C_MAG_MAX, 2.0, 1e-12, 'C_MAG_MAX');
 casi(FOT.C_MAG_EXP, 1.0, 1e-12, 'C_MAG_EXP');
-ok(SALIDA_MAX_PROXY === 1024, 'y el tope del proxy sigue en 1024: la propuesta cabe sin tocarlo');
+casi(PS1.escalaObjetivoAs, 0.5, 1e-12, 'PS1.escalaObjetivoAs (regla C)');
+casi(PS1.salidaMax, SALIDA_MAX_PROXY, 1e-12, 'PS1.salidaMax = el tope del proxy: la regla cabe en él');
+casi(PS1.salidaMin, 128, 1e-12, 'PS1.salidaMin');
 
 console.log(fallos ? '\n' + fallos + ' FALLOS\n' : '\nTodo ok\n');
 process.exit(fallos ? 1 : 0);

@@ -47,14 +47,29 @@
         otro sitio, sin error y sin aviso. */
   var PS1 = {
     banda: 'g',            // la más cercana al pico escotópico (507 nm) y la más profunda del 3π
-    /* px del parche que se pide al proxy (él remuestrea y corrige la WCS). A 512
-       la escala salía a lado/512 —2,35″/px en una galaxia de 20′— y a esa escala
-       la PSF del telescopio (ps1PsfParche) es literalmente la identidad: con
+    /* px del parche que se pide al proxy (él remuestrea y corrige la WCS). Desde
+       la fase 2 del ADR 0024 NO es una constante única: el tamaño lo decide
+       `ps1SalidaParche(lado)`, y estos tres valores son sus parámetros. A 512 la
+       escala salía a lado/512 —2,35″/px en una galaxia de 20′— y a esa escala la
+       PSF del telescopio (ps1PsfParche) es literalmente la identidad: con
        σ = 0,14 px el kernel gaussiano en float32 sale [8e-12, 1, 8e-12], así que
        un 457 y un 914 mm daban la MISMA imagen, bit a bit. A 1024 la diferencia
-       entre esos dos aparece a 1–3 σ del ruido de cielo, 213× el suelo de
-       sensibilidad del método. Es el tope del proxy (PS1_SALIDA_MAX, ps1-proxy.php:46);
-       llegar a 0,67″/px en una galaxia de 20′ pediría 1794 px, y son otros 12 MB. */
+       entre esos dos ya aparece a 1–3 σ del ruido de cielo, 213× el suelo de
+       sensibilidad del método; la regla la sube otro tanto sin tocar el lado. */
+    escalaObjetivoAs: 0.5, // ″/px a los que se guarda un objeto: Nyquist del seeing del stack (1,1″)
+    /* Tope duro de la regla Y tope del proxy (PS1_SALIDA_MAX, ps1-proxy.php:46):
+       son el mismo número escrito dos veces porque viven en lenguajes distintos,
+       y la vía de escape del ADR 0024 —bajar a 1794 px si L2.4 no cierra— los
+       baja LOS DOS o no baja ninguno. */
+    salidaMax: 2048,
+    salidaMin: 128,        // px
+    /* La constante de la fase 1 —1024 px para todo el mundo—, que ya no manda en
+       producción. Sigue aquí porque los arneses de las investigaciones anteriores
+       la pinan para volver a su parche exacto, y con ellos cuatro tests que miden
+       otras leyes sobre un FITS ya descargado (`test_psf_produccion`,
+       `test_ps1_nan_ausencia`, `test_nebulosa_planetaria`, `test_resto_supernova`,
+       `test_nebulosas_emision_reflexion`): cambiársela sería reescribir lo que
+       midieron y mandarlos otra vez a la red, no actualizarlos. */
     salida: 1024,
     ladoFactor: 6,         // lado del parche = 6·r_e → radio 3·r_e ≈ 94 % de la luz de un disco
     ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
@@ -186,6 +201,32 @@
     return Math.max(PS1.ladoMin, Math.min(PS1.ladoMax, ps1LadoSinRecorte(reArcsec)));
   }
 
+  /* Píxeles de lado del parche de un objeto: la regla C del objetivo (§4.2) y de
+     la fase 2 del ADR 0024. Cada objeto se guarda a la resolución que necesita,
+     no a `PS1.salida` fijo, porque el lado va de 1,5′ a 20′ y un tamaño único
+     rompe los dos extremos: a 1024 px un objeto de 1,5′ pide 0,088″/px —tres
+     veces por debajo de la nativa de PS1, píxeles interpolados que no traen
+     información y sí bytes (31 de los 69 del banco)— y uno de 20′ se queda en
+     1,17″/px, donde la PSF del telescopio cae a 0,54–0,72 px y un 457 y un
+     914 mm dan casi la misma imagen.
+
+     El objetivo son 0,5″/px, no la nativa de 0,25: el stack está limitado por su
+     seeing de 1,1″ de FWHM, no por su píxel, así que a 0,5″/px hay 2,2 px por
+     FWHM —Nyquist justo— y bajar a 0,25 sería copiar el sobremuestreo de
+     PanSTARRS por 4× los bytes. El tope de 2048 px lo tocan los objetos de
+     ≥ 17,07′, que quedan a 0,50–0,59″/px.
+
+     `salidaMin` no es un tope que se alcance con un lado real: a 0,5″/px el lado
+     mínimo de 1,5′ son 180 px. Es el suelo de la regla prerregistrada, y aquí
+     hace además de red: un lado ausente o absurdo cae en él en vez de salir NaN.
+     La fórmula es la del §4.2 tal cual, sin sustituir el lado por `ladoMin`:
+     desviarse de una regla prerregistrada, aunque sea a mejor, va al ADR. */
+  function ps1SalidaParche(ladoArcmin) {
+    var lado = (ladoArcmin > 0) ? ladoArcmin : 0;
+    return Math.max(PS1.salidaMin,
+      Math.min(PS1.salidaMax, Math.ceil(lado * 60 / PS1.escalaObjetivoAs)));
+  }
+
   /* URL del parche en el proxy. El parche NO depende del ocular ni del aumento
      (ficha 10), así que la petición solo lleva objeto, lado y banda: por eso el
      proxy puede cachearlo para siempre.
@@ -203,7 +244,7 @@
     return PS1_PROXY_URL +
       '?ra=' + Number(gal.ra).toFixed(5) + '&dec=' + Number(gal.dec).toFixed(5) +
       '&lado=' + Number(gal.ladoArcmin).toFixed(2) +
-      '&salida=' + (salida || PS1.salida) + '&banda=' + PS1.banda;
+      '&salida=' + (salida || ps1SalidaParche(gal.ladoArcmin)) + '&banda=' + PS1.banda;
   }
 
   /* Lector de FITS mínimo: cabecera de tarjetas de 80 caracteres en bloques de
@@ -2414,6 +2455,7 @@
     cfg: PS1,
     ps1LadoArcmin: ps1LadoArcmin,
     ps1LadoSinRecorte: ps1LadoSinRecorte,
+    ps1SalidaParche: ps1SalidaParche,
     ps1UrlParche: ps1UrlParche,
     ps1IdTextura: ps1IdTextura,
     ps1FilaTextura: ps1FilaTextura,

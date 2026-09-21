@@ -925,12 +925,16 @@ function hash() {
        se queda con el marco contaminado aunque se republique el banco. */
     var recortado = Math.max(gal.ladoArcmin, ladoE1) > PS1.cfg.ladoMax;
     var ladoReal = Math.min(PS1.cfg.ladoMax, Math.max(gal.ladoArcmin, ladoE1));
-    var hoy = GEN.version(gal, PS1.cfg.salida);
+    /* La `salida` sale de la regla de resolución, igual que en el generador
+       (ADR 0024, fase 2): pinar los 1024 de la fase 1 aquí haría que estos
+       hashes no fuesen los del banco, que es justo lo que el arnés compara.
+       Y E1 cambia el LADO, así que también le cambia la salida. */
+    var hoy = GEN.version(gal, PS1.ps1SalidaParche(gal.ladoArcmin));
     var conE1 = GEN.version({ nombre: gal.nombre, ra: gal.ra, dec: gal.dec,
-                              ladoArcmin: ladoReal }, PS1.cfg.salida);
+                              ladoArcmin: ladoReal }, PS1.ps1SalidaParche(ladoReal));
     /* E2, E3 y E4 no tocan ninguno de los parámetros de la semilla: se recalcula
        con los mismos y se comprueba que sale la MISMA cadena. */
-    var conE4 = GEN.version(gal, PS1.cfg.salida);
+    var conE4 = GEN.version(gal, PS1.ps1SalidaParche(gal.ladoArcmin));
     if (hoy !== conE1) cambia++;
     if (recortado) noCabe++;
     lineas.push({ nombre: f[0], lado: gal.ladoArcmin, ladoE1: ladoE1, recortado: recortado,

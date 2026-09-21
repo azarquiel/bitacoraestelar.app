@@ -46,7 +46,8 @@ b.objetos.filter(function (o) { return o.gal; }).reduce(function (cadena, o, i) 
   return cadena.then(function () {
     var p = png(o.nombre);
     if (!p) { console.log('[' + (i + 1) + '] ' + o.nombre + ': sin PNG en disco'); return; }
-    return B.bajar(o.gal.ra, o.gal.dec, o.gal.ladoArcmin, CFG.salida).then(function (F) {
+    /* Regla C: el float32 se mide al MISMO tamaño al que está el PNG. */
+    return B.bajar(o.gal.ra, o.gal.dec, o.gal.ladoArcmin, PS1.ps1SalidaParche(o.gal.ladoArcmin)).then(function (F) {
       var g = zlib.gzipSync(Buffer.from(F.datos.buffer, F.datos.byteOffset, F.datos.byteLength)).length;
       tp += p; tg += g;
       filas.push({ nombre: o.nombre, px: F.datos.length, png: p, gz: g });

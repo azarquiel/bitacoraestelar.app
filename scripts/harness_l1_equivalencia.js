@@ -190,7 +190,9 @@ function comparar(o) {
 
   var base = BASE + PS1.ps1IdTextura(o.nombre) + '.' + sc.version;
   var notas = {};
-  return B.bajar(gal.ra, gal.dec, gal.ladoArcmin, CFG.salida).then(function (F) {
+  /* A la resolución QUE LE TOCA al objeto (regla C), no a la constante de la
+     fase 1: si no, el parche del FITS y la textura no tienen ni el mismo tamaño. */
+  return B.bajar(gal.ra, gal.dec, gal.ladoArcmin, PS1.ps1SalidaParche(gal.ladoArcmin)).then(function (F) {
     if (!SONDA) return PS1.ps1LeerTextura(base + '.png', base + '.json', notas).then(function (T) { return [F, T, sc.codificacion]; });
     /* La sonda repite lo que hace el generador —cielo y σ del parche crudo con
        las funciones de producción, `a = f·σ`— y se queda en memoria. */

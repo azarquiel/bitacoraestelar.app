@@ -234,7 +234,13 @@ function motivoAusencia(f) {
 function sidecars(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir).filter(function (n) { return /\.json$/.test(n); })
-    .map(function (n) { return JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8')); });
+    .map(function (n) {
+      var s = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8'));
+      /* Cuándo se escribió, que es lo que desempata dos sidecars del mismo
+         objeto. No va al manifiesto: las filas se construyen campo a campo. */
+      s._mtime = fs.statSync(path.join(dir, n)).mtimeMs;
+      return s;
+    });
 }
 
 /* Un objeto que no puede tener textura deja su propio sidecar (`<id>.fila.json`,
@@ -313,12 +319,28 @@ function rangoSidecar(s) {
   return s.motivo === 'ausencia-excesiva' ? 2 : 0;
 }
 
+/* ¿Manda `s` sobre `v`, siendo los dos sidecars del mismo objeto? */
+function mandaSobre(s, v) {
+  if (rangoSidecar(s) !== rangoSidecar(v)) return rangoSidecar(s) > rangoSidecar(v);
+  if (s._prio !== v._prio) return s._prio > v._prio;
+  return s._mtime >= v._mtime;
+}
+
 function sidecarsUnicos(dir) {
   var porNombre = {};
-  sidecars(FIXTURES).concat(dir === FIXTURES ? [] : sidecars(dir))
+  var deFixtures = sidecars(FIXTURES).map(function (s) { s._prio = 0; return s; });
+  var deSalida = (dir === FIXTURES ? [] : sidecars(dir)).map(function (s) { s._prio = 1; return s; });
+  /* Tres criterios, en este orden: el rango (una fila `ausencia-excesiva` manda
+     sobre una imagen), el directorio (salida sobre fixtures) y la FECHA. La
+     fecha no estaba y hacía falta: una republicación deja en disco el sidecar
+     viejo y el nuevo del mismo objeto, los dos de rango 1, y el desempate era
+     «el último que devuelva readdir», o sea el orden alfabético del hash de la
+     versión. Con eso el manifiesto salía a medias —30 filas nuevas y 38 viejas
+     en la tirada de la fase 2— declarando versiones cuyo PNG ya nadie publica. */
+  deFixtures.concat(deSalida)
     .forEach(function (s) {
       var v = porNombre[s.nombre];
-      if (!v || rangoSidecar(s) >= rangoSidecar(v)) porNombre[s.nombre] = s;
+      if (!v || mandaSobre(s, v)) porNombre[s.nombre] = s;
     });
   return Object.keys(porNombre).map(function (n) { return porNombre[n]; });
 }
@@ -439,7 +461,10 @@ function generar(nombre, dir) {
   var lado = PS1.ps1LadoArcmin(f[4]);
   var campo = PS1.ps1GalaxiasDelCampo([f], f[2], f[3], lado);
   if (!campo.length) throw new Error(nombre + ': ps1GalaxiasDelCampo no lo devuelve');
-  var gal = campo[0], salida = PS1.cfg.salida, v = version(gal, salida);
+  /* La resolución la decide el objeto, no una constante (regla C del §4.2 del
+     objetivo, fase 2 del ADR 0024). Entra en `version()`, así que cambiarla
+     renombra la textura: republicar es parte del trato, no un efecto secundario. */
+  var gal = campo[0], salida = PS1.ps1SalidaParche(gal.ladoArcmin), v = version(gal, salida);
 
   var id = PS1.ps1IdTextura(gal.nombre), base = path.join(dir, id + '.' + v);
   var y = yaResuelto(dir, id, v);
@@ -628,11 +653,13 @@ function correrBanco(dir, seco) {
         console.log('  FALLO: el banco no lo resuelve a campo');
         return;
       }
-      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, PS1.cfg.salida);
+      var salidaSeca = PS1.ps1SalidaParche(o.gal.ladoArcmin);
+      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, salidaSeca);
       if (seco) {
         var y = yaResuelto(dir, id, v);
         console.log('  ' + (y ? 'ya está (' + y.estado + ')' : 'pediría') + '  ' + id + '.' + v +
-          '  ' + o.gal.ladoArcmin.toFixed(2) + '′ → ' + PS1.cfg.salida + ' px');
+          '  ' + o.gal.ladoArcmin.toFixed(2) + '′ → ' + salidaSeca + ' px (' +
+          (o.gal.ladoArcmin * 60 / salidaSeca).toFixed(3) + '″/px)');
         if (y) estado.ya++; else estado.pendientes++;
         return;
       }
