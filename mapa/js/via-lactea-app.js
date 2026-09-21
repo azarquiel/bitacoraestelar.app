@@ -2286,9 +2286,12 @@
   var SVG_PLANETA = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" ' +
     'style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;' +
     'stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;">' +
-    '<circle cx="7" cy="8.2" r="4.1"/>' +
-    '<ellipse cx="7" cy="8.2" rx="6.4" ry="2.2" transform="rotate(-25 7 8.2)"/>' +
-    '<circle cx="13.3" cy="3.4" r="1.1" style="fill:currentColor;stroke:none;"/></svg>';
+    '<g transform="rotate(-22 7 9.4)" stroke-width="1.5">' +
+    '<path d="M0.7 9.4A6.3 1.9 0 0 1 2.84 7.97"/>' +
+    '<path d="M11.16 7.97A6.3 1.9 0 0 1 13.3 9.4"/>' +
+    '<path d="M0.7 9.4A6.3 1.9 0 0 0 13.3 9.4"/></g>' +
+    '<circle cx="7" cy="9.4" r="3.6" stroke-width="0.8"/>' +
+    '<circle cx="13.4" cy="2.9" r="1.35" style="fill:currentColor;stroke:none;"/></svg>';
 
   // Pie de la ficha: la crónica que el observador escribió en su blog. Dos
   // niveles, y en este orden: la entrada concreta sobre ESTE objeto si la hay
@@ -2798,26 +2801,34 @@
   var planetaOrigen = document.getElementById('mw-planeta');
   function pintarPlanetaOrigen(clave) {
     if (!planetaOrigen) return;
-    if (!clave) { planetaOrigen.hidden = true; planetaOrigen.style.display = 'none'; return; }
+    // Sin observador el planeta se apaga pero conserva su sitio: si lo quitara
+    // del flujo, el combo daría un salto a la izquierda en cada cambio.
+    if (!clave) {
+      planetaOrigen.removeAttribute('href');
+      planetaOrigen.style.visibility = 'hidden';
+      planetaOrigen.removeAttribute('aria-label');
+      planetaOrigen.removeAttribute('title');
+      return;
+    }
     var nombre = VLO.nombreObservador(clave);
     var url = VLO.blogDe(clave);
-    planetaOrigen.hidden = false;
-    planetaOrigen.style.display = 'inline-flex';
+    planetaOrigen.style.visibility = 'visible';
     if (url) {
       planetaOrigen.setAttribute('href', url);
       planetaOrigen.style.opacity = '1';
       planetaOrigen.style.cursor = 'pointer';
-      planetaOrigen.setAttribute('aria-label', 'Blog de ' + nombre);
+      planetaOrigen.setAttribute('aria-label', 'Planeta de origen: el blog de ' + nombre);
       planetaOrigen.setAttribute('title', 'Planeta de origen: el blog de ' + nombre);
     } else {
       // Sin blog el planeta sigue a la vista, apagado: que se vea el hueco.
       planetaOrigen.removeAttribute('href');
       planetaOrigen.style.opacity = '0.35';
       planetaOrigen.style.cursor = 'default';
-      planetaOrigen.setAttribute('aria-label', nombre + ' no tiene blog registrado');
+      planetaOrigen.removeAttribute('aria-label');
       planetaOrigen.setAttribute('title', nombre + ' no tiene blog registrado');
     }
   }
+
 
   if (observadorSelect && typeof OBSERVADORES !== 'undefined' && typeof OBSERVACIONES !== 'undefined') {
     var conObs = {};

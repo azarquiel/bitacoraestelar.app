@@ -82,6 +82,9 @@
     pointer-events: none;
   }
   .mw-icono .mw-icono-lleno { fill: currentColor; stroke: none; }
+  /* El planeta es el único icono que además es enlace: a 14 px el anillo y el
+     asteroide se perdían. */
+  .mw-icono-planeta { width: 18px; height: 18px; }
   /* Los botones de volver son ahora un icono suelto: hay que centrarlo en el
      objetivo de 24 px que pide la regla de tamaño. */
   #mw-tilt-reset, #mw-rotate-edge-reset, #mw-rotate-plane-reset {
@@ -90,7 +93,22 @@
     justify-content: center;
   }
 
-  #mw-observador { min-width: min(244px, calc(100vw - 24px)) !important; box-sizing: border-box; }
+  /* La fila del observador manda en el ancho del panel, así que se le fija:
+     el planeta ocupa su sitio a la izquierda y el combo se queda con el resto.
+     Con planeta o sin él, la fila mide lo mismo. */
+  #mw-observador-fila {
+    display: flex; align-items: center; gap: 8px;
+    width: min(252px, calc(100vw - 24px)); box-sizing: border-box;
+  }
+  #mw-observador { flex: 1; min-width: 0 !important; box-sizing: border-box; }
+  #mw-planeta {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none; min-width: 26px; min-height: 40px;
+    color: #f4c76b; text-decoration: none; border-radius: 13px;
+  }
+  #mw-planeta[href]:hover, #mw-planeta[href]:focus-visible {
+    background: rgba(244,199,107,0.16);
+  }
 
   /* Eje ESTADO (#233): segmentado de tres radios nativos. El input queda
      visualmente oculto y la etiqueta hace de segmento; :focus-visible del
@@ -977,32 +995,40 @@
     </div>
     
     <div class="mw-consola-rotulo">Tripulación</div>
-    <!-- Fila 5: quién observa -->
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <!-- Fila 5: quién observa, y a su izquierda el "planeta de origen": el
+         blog propio del compañero elegido. El planeta abre la fila y el combo
+         va sangrado a su derecha, así la fila mide lo mismo con planeta y sin
+         él y la consola no crece a lo ancho para hacerle sitio. Enlazado si
+         tiene blog, apagado si no, y sin dibujo en "Todas las observaciones",
+         donde no hay a quién apuntar (el hueco se queda, para que el combo no
+         baile). El nombre ya lo dice el combo: el planeta no lo repite, lo
+         lleva en su nombre accesible. Lo gobierna via-lactea-app.js. -->
+    <div id="mw-observador-fila">
+      <a id="mw-planeta" target="_blank" rel="noopener">
+        <svg class="mw-icono mw-icono-planeta" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <!-- El anillo va en tres trazos, no en una elipse entera: el tramo
+               trasero se corta donde toca el disco (los extremos salen de cruzar
+               la elipse con un círculo de radio 4,4) y el delantero pasa por
+               delante, como se ve Saturno por el telescopio. Cortado a mano y no
+               con <mask> porque este mismo dibujo se repite en la lista de la
+               ficha, y dos id iguales en la página no son HTML válido. -->
+          <g transform="rotate(-22 7 9.4)" stroke-width="1.5">
+            <path d="M0.7 9.4A6.3 1.9 0 0 1 2.84 7.97"/>
+            <path d="M11.16 7.97A6.3 1.9 0 0 1 13.3 9.4"/>
+            <path d="M0.7 9.4A6.3 1.9 0 0 0 13.3 9.4"/>
+          </g>
+          <circle cx="7" cy="9.4" r="3.6" stroke-width="0.8"/>
+          <circle cx="13.4" cy="2.9" r="1.35" class="mw-icono-lleno"/>
+        </svg>
+      </a>
       <select id="mw-observador" title="Filtrar por observador" aria-label="Observador" autocomplete="off" style="
         border:none;border-radius:20px;background:transparent;
         font-size:13px;padding:8px 12px;
-        width:auto;min-width:186px;max-width:min(320px,60vw);
         font-family:sans-serif;outline:none;color:#eaf1fb;cursor:pointer;
         color-scheme:dark;
       ">
         <option value="">Todas las observaciones</option>
       </select>
-      <!-- "Planeta de origen": el blog propio del compañero seleccionado.
-           Encendido y enlazado si lo tiene, apagado si no, y oculto en "Todas
-           las observaciones", donde no hay a quién apuntar. El <select> nativo
-           no admite un icono por opción, así que el planeta vive al lado y
-           refleja al seleccionado. Lo gobierna via-lactea-app.js. -->
-      <a id="mw-planeta" target="_blank" rel="noopener" hidden style="
-        display:none;align-items:center;justify-content:center;
-        min-width:24px;min-height:24px;color:#f4c76b;text-decoration:none;
-      ">
-        <svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <circle cx="7" cy="8.2" r="4.1"/>
-          <ellipse cx="7" cy="8.2" rx="6.4" ry="2.2" transform="rotate(-25 7 8.2)"/>
-          <circle cx="13.3" cy="3.4" r="1.1" class="mw-icono-lleno"/>
-        </svg>
-      </a>
     </div>
 
     <!-- Fila 6: eje CONJUNTO (#233): todo el catálogo del observador o uno de
@@ -1568,5 +1594,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260921_0100"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260921_1200"></script>
 </li>
