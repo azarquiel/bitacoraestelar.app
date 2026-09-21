@@ -1015,8 +1015,18 @@
       color:#f4c76b;text-decoration:none;
     ">
       <svg class="mw-icono mw-icono-planeta" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <!-- El anillo va en tres trazos, no en una elipse entera: el tramo
+             trasero se corta donde toca el disco (los extremos salen de cruzar
+             la elipse con un círculo de radio 4,4) y el delantero pasa por
+             delante, como se ve Saturno por el telescopio. Cortado a mano y no
+             con <mask> porque este mismo dibujo se repite en la lista de la
+             ficha, y dos id iguales en la página no son HTML válido. -->
+        <g transform="rotate(-22 7 9.4)" stroke-width="1.5">
+          <path d="M0.7 9.4A6.3 1.9 0 0 1 2.84 7.97"/>
+          <path d="M11.16 7.97A6.3 1.9 0 0 1 13.3 9.4"/>
+          <path d="M0.7 9.4A6.3 1.9 0 0 0 13.3 9.4"/>
+        </g>
         <circle cx="7" cy="9.4" r="3.6" stroke-width="0.8"/>
-        <ellipse cx="7" cy="9.4" rx="6.3" ry="1.9" transform="rotate(-22 7 9.4)" stroke-width="1.5"/>
         <circle cx="13.4" cy="2.9" r="1.35" class="mw-icono-lleno"/>
       </svg>
       <span id="mw-planeta-texto"></span>

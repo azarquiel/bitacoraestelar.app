@@ -2286,8 +2286,11 @@
   var SVG_PLANETA = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" ' +
     'style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;' +
     'stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;">' +
+    '<g transform="rotate(-22 7 9.4)" stroke-width="1.5">' +
+    '<path d="M0.7 9.4A6.3 1.9 0 0 1 2.84 7.97"/>' +
+    '<path d="M11.16 7.97A6.3 1.9 0 0 1 13.3 9.4"/>' +
+    '<path d="M0.7 9.4A6.3 1.9 0 0 0 13.3 9.4"/></g>' +
     '<circle cx="7" cy="9.4" r="3.6" stroke-width="0.8"/>' +
-    '<ellipse cx="7" cy="9.4" rx="6.3" ry="1.9" transform="rotate(-22 7 9.4)" stroke-width="1.5"/>' +
     '<circle cx="13.4" cy="2.9" r="1.35" style="fill:currentColor;stroke:none;"/></svg>';
 
   // Pie de la ficha: la crónica que el observador escribió en su blog. Dos
