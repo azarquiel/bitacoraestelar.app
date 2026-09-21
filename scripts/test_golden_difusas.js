@@ -70,10 +70,11 @@ function texturaDe(gal) {
     return Promise.reject(new Error('el manifiesto no declara textura de ' + gal.nombre));
   }
   var base = BASE + API.ps1IdTextura(gal.nombre) + '.' + fila[2], notas = {};
+  var esperado = API.ps1SalidaParche(gal.ladoArcmin); // regla C: resolución por objeto
   return API.ps1LeerTextura(base + '.png', base + '.json', notas).then(function (F) {
     if (!F) throw new Error('textura ilegible (' + (notas.motivo || '?') + '): ' + gal.nombre);
-    if (F.ancho !== PS1.salida) {
-      throw new Error(gal.nombre + ': la textura mide ' + F.ancho + ' px y PS1.salida es ' + PS1.salida);
+    if (F.ancho !== esperado) {
+      throw new Error(gal.nombre + ': la textura mide ' + F.ancho + ' px y la regla C pide ' + esperado);
     }
     return F;
   });
