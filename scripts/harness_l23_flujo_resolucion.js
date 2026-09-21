@@ -2,6 +2,12 @@
 /* L2.3 / AC3 de #322: ¿coincide el flujo del objeto montado a la resolución de
    la fase 2 con el de la fase 1 (1024 px fijos) dentro de ±2e-3?
 
+   DIAGNÓSTICO, no guardián (#366): el control nulo de abajo rompe el mismo
+   listón sin cruzar de fase, y en σ/px sale indistinguible del caso real
+   (ADR 0024, «Corrección de la redacción de L2.3»). L2.3 no aplica entre
+   resoluciones distintas; este harness se conserva para medir el sesgo de
+   `fitscut`, no para dar un veredicto ✅/❌.
+
    Tres medidas, y la segunda es la que da sentido a la primera:
 
      1 · la razón de flujos, que es el listón tal cual está escrito. fitscut

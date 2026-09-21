@@ -595,7 +595,10 @@ Listones:
   y en los seis representantes de cuantil de lado el signo es el correcto (más
   apertura, menos `θ_add`).
 - **L2.3** Flujo total por objeto invariante con la resolución (±2e-3), como fija
-  `test_resolucion_ps1.js`.
+  `test_resolucion_ps1.js`, **dentro de una misma resolución**. Entre
+  resoluciones distintas (fase 1 vs fase 2) no aplica: el control nulo de
+  #366 mide el mismo sesgo de `fitscut` incluso sin cruzar de fase (ver
+  «Corrección de la redacción de L2.3» en el ADR 0024).
 - **L2.4** Volumen total ≤ 1,5 GB en PNG; memoria por parche decodificado ≤ 16 MB
   (2048² float32) y el campo de Virgo (≥ 6 parches) no supera 150 MB en el navegador.
 
