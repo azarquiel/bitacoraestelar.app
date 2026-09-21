@@ -6,10 +6,12 @@ planetarias que no son objetos NGC/IC, así que no tienen fila y la capa
 difusa no las pinta (PN A66 12 fue el caso que lo destapó; PN M 1-79
 —Minkowski— el que sumó el segundo catálogo).
 
-Cubre dos catálogos (tabla CATALOGOS), cada uno con su propio identificador
+Cubre cuatro catálogos (tabla CATALOGOS), cada uno con su propio identificador
 en SIMBAD y en V/84:
-  · Abell   — "PN A66 NN"  en SIMBAD, "A NN"   en V/84/main.
-  · Minkowski — "PN M  N-NN" en SIMBAD, "M N-NN" en V/84/main.
+  · Abell          — "PN A66 NN"    en SIMBAD, "A NN"    en V/84/main.
+  · Minkowski      — "PN M  N-NN"   en SIMBAD, "M N-NN"  en V/84/main.
+  · Jones          — "PN Jn    N"   en SIMBAD, "Jn N"    en V/84/main.
+  · Jones-Emberson — "PN JnEr    N" en SIMBAD, "JnEr N"  en V/84/main.
 Añadir un catálogo nuevo es una entrada más en CATALOGOS, no un script nuevo:
 el nombre del fichero se quedó en "abell_pn" por no mover SRC_ABELL de
 gen_nebulosas.py para dos filas de docstring.
@@ -77,6 +79,17 @@ CATALOGOS = (
     dict(like='M ', v84=re.compile(r'^M\s*([\d-]+)$'),
          nombre=lambda i: 'M %s' % i, common=lambda i: 'PN M %s' % i,
          clave=lambda i: tuple(int(x) for x in i.split('-'))),
+    # Jones (Jn) y Jones-Emberson (JnEr) son catálogos distintos que comparten
+    # prefijo: 'JnEr' empieza por 'Jn', así que 'like' lleva el espacio literal
+    # que solo sigue a "Jn" en solitario, no a "JnEr". Sin ese espacio, 'PN Jn%'
+    # también engancharía JnEr 1. Solo 2 objetos en total (V/84), ambos fuera
+    # de NGC/IC.
+    dict(like='Jn ', v84=re.compile(r'^Jn\s+(\d+)$'),
+         nombre=lambda i: 'Jn %s' % i, common=lambda i: 'PN Jn %s' % i,
+         clave=lambda i: int(i)),
+    dict(like='JnEr', v84=re.compile(r'^JnEr\s+(\d+)$'),
+         nombre=lambda i: 'JnEr %s' % i, common=lambda i: 'PN JnEr %s' % i,
+         clave=lambda i: int(i)),
 )
 
 
@@ -203,6 +216,14 @@ def main():
     # como en Abell 21/35, donde la V cruda y la m5007 ya difieren 4 mag.
     m179 = [c for c in filas if c['Name'] == 'M 1-79'][0]
     assert m179['V-Mag'] and 8.0 < float(m179['V-Mag']) < 20.0, m179
+    # Jn 1 y JnEr 1: el prefijo compartido no debe cruzar los dos catálogos.
+    # Igual que M 1-79, si hay flujo Acker manda sobre la V cruda de SIMBAD
+    # (aquí Jn 1 sale 13,24 contra los 15,62 de SIMBAD): no se fija la
+    # aserción a la V cruda, solo a que exista y sea de PN, no de estelar.
+    jn1 = [c for c in filas if c['Name'] == 'Jn 1'][0]
+    assert jn1['V-Mag'] and 8.0 < float(jn1['V-Mag']) < 20.0, jn1
+    jner1 = [c for c in filas if c['Name'] == 'JnEr 1'][0]
+    assert jner1['V-Mag'] and 8.0 < float(jner1['V-Mag']) < 20.0, jner1
     con_mag = sum(1 for c in filas if c['V-Mag'] or c['B-Mag'])
     print('suplemento PN: %d filas (%d con magnitud, %d ya en NGC/IC saltadas)'
           % (len(filas), con_mag, saltados_ngc))

@@ -1,6 +1,6 @@
 /* Nebulosas — GENERADO, no editar a mano.
    Regenerar con: python3 scripts/gen_nebulosas.py
-   Fuente: Verga, OpenNGC (NGC + IC) · https://github.com/mattiaverga/OpenNGC · + suplemento Abell/Minkowski (gen_abell_pn.py: SIMBAD + Acker V/84)
+   Fuente: Verga, OpenNGC (NGC + IC) · https://github.com/mattiaverga/OpenNGC · + suplemento Abell/Minkowski/Jones (gen_abell_pn.py: SIMBAD + Acker V/84)
    Campos: [nombre, alt, RA°, Dec°, r_e("), b/a, PA°, mag V, n, B/T, polvo,
             0, clase, log F(Hβ), I5007, I6563, I4686, I5007-es-4959]
    Los TRECE primeros son el mismo esquema que las galaxias: las pinta la
@@ -364,4 +364,5 @@ window.BITACORA_NEBULOSAS = [
   ["IC1470","",346.29254,60.24408,16.2,1.0,90,11.26,1.0,0,0,0,"HII",null,null,null,null,null],
   ["NGC7635","Bubble Nebula",350.19,61.21236,98.59,1.0,0,10.7,1.0,0,0,0,"HII",null,null,null,null,null],
   ["NGC7662","Copeland's Blue Snowball",351.47458,42.53494,5.04,1.0,0,11.29,1.0,0,0,0,"PN",-9.99,425,282,17,1],
+  ["Jn 1","PN Jn 1",353.97217,30.46843,99.54,1.0,0,13.24,1.0,0,0,0,"PN",-11.48,488,132,44,null],
 ];
