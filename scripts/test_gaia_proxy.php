@@ -147,6 +147,7 @@ eq(gaia_mediana([]), 0.0, 'lista vacía → 0');
 eq(gaia_mediana([5.0]), 5.0, 'un elemento');
 eq(gaia_mediana([3.0, 1.0, 2.0]), 2.0, 'impar (y ordena por su cuenta)');
 eq(gaia_mediana([1.0, 2.0, 3.0, 10.0]), 2.5, 'par → media de los centrales');
+eq(gaia_mediana([1.0, 2.0, 3.0, 1.55]), 1.775, 'no redondea: el redondeo es del que presenta');
 
 echo "gaia_log_agregado (puro sobre el texto del log):\n";
 $texto = gaia_log_linea(1.0, 'a', 'hit', null, 100, 5.0)
@@ -171,6 +172,11 @@ eq($roto['peticiones'], 6, 'ignora líneas ilegibles (rotación a mitad de líne
 eq(gaia_log_agregado('')['peticiones'], 0, 'log vacío → 0 peticiones');
 eq(gaia_log_agregado('')['ratio'], null, 'sin peticiones no hay ratio (no divide por cero)');
 eq(gaia_log_agregado(gaia_log_linea(1.0, 'x', 'inventado', null, 9, 1.0))['peticiones'], 0, 'estado desconocido → no cuenta');
+// Una línea corrupta cuyo estado coincide con el nombre de un acumulador no
+// debe sumar en él (por eso la lista blanca es explícita, no las claves de $r).
+$veneno = gaia_log_agregado('{"estado":"bytes","bytes":6}' . "\n");
+eq($veneno['peticiones'], 0, 'estado que se llama como un acumulador → no cuenta');
+eq($veneno['bytes'], 0, '...y no corrompe los bytes');
 
 echo "gaia_log_escribir (append, rotación y fallo de disco):\n";
 $dir = sys_get_temp_dir() . '/test_gaia_log_' . getmypid();
@@ -187,18 +193,59 @@ ok(is_file($log . '.1'), 'superado el tope → rota a .hits.log.1');
 eq(count(file($log)), 1, 'el log activo empieza de cero...');
 eq(gaia_log_agregado(file_get_contents($log))['miss'], 1, '...sin perder la petición en curso');
 eq(gaia_log_agregado(file_get_contents($log . '.1'))['hit'], 2, 'la rotación conserva lo anterior');
-// Disco que falla: escribir en una ruta imposible no puede lanzar ni matar el servicio.
-gaia_log_escribir($dir . '/no/existe/.hits.log', "x\n", 1024);
-ok(true, 'ruta inescribible → no rompe (la medición nunca tumba el servicio)');
+// Disco que falla: escribir en una ruta imposible no puede lanzar, ni emitir
+// warning, ni crear nada. Medir nunca puede tumbar el servicio (AC6).
+$imposible = $dir . '/no/existe/.hits.log';
+$lanzo = false;
+ob_start();
+try { gaia_log_escribir($imposible, "x\n", 1024); } catch (Throwable $e) { $lanzo = true; }
+$ruido = ob_get_clean();
+ok(!$lanzo, 'ruta inescribible → no lanza');
+eq($ruido, '', 'ruta inescribible → ni un warning que se cuele en la respuesta JSON');
+ok(!is_file($imposible), 'ruta inescribible → no crea nada');
 array_map('unlink', glob($dir . '/.hits.log*') ?: []);
 @rmdir($dir);
 
-echo "el log queda fuera del barrido LRU y de git:\n";
-// cache_lru_limpieza filtra por '*.json.gz' (entradas) y retira '*.lock'/'*.tmp*'.
-ok(!fnmatch('*.json.gz', '.hits.log') && !fnmatch('*.json.gz', '.hits.log.1'), 'el log no es una entrada de caché');
-ok(!fnmatch('*.lock', '.hits.log') && !fnmatch('*.tmp*', '.hits.log'), 'el log no es un huérfano .lock/.tmp');
+echo "el log sobrevive al barrido LRU real y no entra en git:\n";
+/* Se ejecuta la política COMPARTIDA de verdad (no se reimplementa su patrón:
+   si mañana cambia en bitacora-cache-lru.php, este test tiene que enterarse),
+   con un tope de 0 bytes: barre todo lo que considere suyo. */
+$dl = sys_get_temp_dir() . '/test_gaia_lru_' . getmypid();
+@mkdir($dl, 0775, true);
+file_put_contents($dl . '/aaa.json.gz', 'entrada');
+file_put_contents($dl . '/aaa.json.gz.lock', '');
+gaia_log_escribir($dl . '/.hits.log', gaia_log_linea(1.0, 'a', 'hit', null, 10, 1.0), 1024);
+@rename($dl . '/.hits.log', $dl . '/.hits.log.1');
+gaia_log_escribir($dl . '/.hits.log', gaia_log_linea(2.0, 'b', 'hit', null, 10, 1.0), 1024);
+cache_lru_limpieza([
+    'dir' => $dl, 'patron' => '*.json.gz', 'max_bytes' => 0, 'lowwater' => 0.9,
+    'max_del' => 100, 'cada' => 0, 'huerfano_ttl' => 0,
+]);
+ok(!is_file($dl . '/aaa.json.gz'), 'el LRU sí barre las entradas de caché (el test no es vacuo)');
+ok(!is_file($dl . '/aaa.json.gz.lock'), 'el LRU sí retira los huérfanos .lock');
+ok(is_file($dl . '/.hits.log'), 'el log activo sobrevive al barrido');
+ok(is_file($dl . '/.hits.log.1'), 'la rotación sobrevive al barrido');
+array_map('unlink', array_merge(glob($dl . '/*') ?: [], glob($dl . '/.*[a-z]*') ?: []));
+@rmdir($dl);
 ok(in_array('simulador_ocular/cache_gaia/', array_map('trim', file(dirname(__DIR__) . '/.gitignore')), true),
     'cache_gaia/ (y con él el log) está en .gitignore');
+
+echo "coste de medir (AC7: despreciable frente al servicio):\n";
+$db = sys_get_temp_dir() . '/test_gaia_coste_' . getmypid();
+@mkdir($db, 0775, true);
+$fb = $db . '/.hits.log';
+$n = 500;
+$t0 = microtime(true);
+for ($i = 0; $i < $n; $i++) {
+    gaia_log_escribir($fb, gaia_log_linea(microtime(true), str_repeat('a', 40), 'hit', null, 120000, 1.5), 5 * 1024 * 1024);
+}
+$coste = (microtime(true) - $t0) * 1000 / $n;
+/* Listón contra el SERVICIO, no contra la medida anterior: el acierto de caché
+   más barato medido en este proxy está en el milisegundo largo, así que 1 ms de
+   coste de log ya sería la mitad de la petición. Medido aquí: ~0,03 ms. */
+ok($coste < 1.0, sprintf('append + rotación cuesta %.4f ms por petición (listón: < 1 ms)', $coste));
+array_map('unlink', glob($db . '/.hits.log*') ?: []);
+@rmdir($db);
 
 // La expulsión LRU y la limpieza ya no son de este proxy: son la política
 // compartida con el del DSS. Su test es scripts/test_cache_lru.php.

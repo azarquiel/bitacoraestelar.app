@@ -283,7 +283,7 @@ function gaia_mediana(array $v): float {
         return 0.0;
     }
     $m = ($n % 2) ? $v[intdiv($n, 2)] : ($v[intdiv($n, 2) - 1] + $v[intdiv($n, 2)]) / 2;
-    return round((float) $m, 1);
+    return (float) $m;
 }
 
 /**
@@ -294,6 +294,7 @@ function gaia_mediana(array $v): float {
  * fallo de la caché de disco, solo del navegador.
  */
 function gaia_log_agregado(string $texto): array {
+    $estados = ['hit', 'miss', '304'];
     $r  = ['peticiones' => 0, 'hit' => 0, 'miss' => 0, '304' => 0, 'ratio' => null, 'bytes' => 0];
     $ms = [];
     foreach (explode("\n", $texto) as $linea) {
@@ -301,7 +302,10 @@ function gaia_log_agregado(string $texto): array {
             continue;
         }
         $e = json_decode($linea, true);
-        if (!is_array($e) || !isset($e['estado']) || !isset($r[(string) $e['estado']])) {
+        /* Lista blanca EXPLÍCITA, no las claves de $r: si se valida contra el
+           acumulador, una línea corrupta con estado "bytes" suma en el contador
+           de bytes. El log se rota por tamaño, así que la basura no es teórica. */
+        if (!is_array($e) || !isset($e['estado']) || !in_array((string) $e['estado'], $estados, true)) {
             continue;
         }
         $estado = (string) $e['estado'];
@@ -317,7 +321,7 @@ function gaia_log_agregado(string $texto): array {
     }
     $r['ms_mediano'] = [];
     foreach ($ms as $etapa => $v) {
-        $r['ms_mediano'][$etapa] = gaia_mediana($v);
+        $r['ms_mediano'][$etapa] = round(gaia_mediana($v), 1);
     }
     return $r;
 }
@@ -342,6 +346,10 @@ function gaia_num_filas(string $json): ?int {
  * puede romper el servicio.
  */
 function gaia_log_escribir(string $ruta, string $linea, int $max_bytes): void {
+    /* El filesize+rename va fuera del lock: dos peticiones que crucen el tope a
+       la vez rotan las dos y la segunda pisa la .1 anterior. La ventana son
+       microsegundos cada 5 MB y lo que se pierde es historia ya agregada, nunca
+       la petición en curso; un lock propio costaría más que el dato. */
     $tam = @filesize($ruta);
     if ($tam !== false && $tam >= $max_bytes) {
         @rename($ruta, $ruta . '.1');
@@ -473,7 +481,10 @@ function gaia_servir(string $ruta_gz, string $clave, string $estado = 'hit', ?st
 
     if (($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag) {
         http_response_code(304);
-        gaia_log_registrar($clave, '304', null, 0);
+        /* El estado es 304 (AC3) pero la etapa se CONSERVA: un fallo que acaba
+           en 304 -entrada evictada y el cliente todavía con su ETag- es justo
+           la adquisición cara que no se puede perder de vista. */
+        gaia_log_registrar($clave, '304', $etapa, 0);
         exit;
     }
 
@@ -520,13 +531,10 @@ if (PHP_SAPI === 'cli') {
    del rename() y el objeto quedaba roto para siempre, por caro que fuera. */
 @ignore_user_abort(true);
 
-if (!is_dir(GAIA_CACHE_DIR)) {
-    @mkdir(GAIA_CACHE_DIR, 0775, true);
-}
-
 /* ── ?stats=1 ── Solo lectura: mira el directorio y agrega el log. No toca la
    política de caché, no escribe y NO consulta al TAP. Es la cifra sobre la que
-   se decide si hay que partir la caché o colapsar `mag` (épica de la caché). */
+   se decide si hay que partir la caché o colapsar `mag` (épica de la caché).
+   Va ANTES del mkdir del directorio: pedir la cifra no puede crear nada. */
 if (isset($_GET['stats'])) {
     $cache = gaia_cache_estado(GAIA_CACHE_DIR, '*.json.gz');
     $cache['max_bytes'] = GAIA_CACHE_MAX_BYTES;
@@ -539,6 +547,11 @@ if (isset($_GET['stats'])) {
     gaia_json_headers();
     exit(json_encode(['cache' => $cache, 'log' => $log], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 }
+
+if (!is_dir(GAIA_CACHE_DIR)) {
+    @mkdir(GAIA_CACHE_DIR, 0775, true);
+}
+
 
 $ra  = $_GET['ra']  ?? null;
 $dec = $_GET['dec'] ?? null;
