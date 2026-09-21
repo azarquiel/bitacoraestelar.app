@@ -358,8 +358,12 @@ ok(/NGC 9997 \| `vecina-dentro` \| N \| NGC 9996 \(dentro\)/.test(infSC.texto),
 fs.rmSync(tmpSC, { recursive: true, force: true });
 
 console.log('\nLos bits publicados son los que dice el sidecar:');
-var sc = JSON.parse(fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.json'), 'utf8'));
-ok(sc.version === v0, 'el sidecar del banco lleva el hash que este generador calcula hoy');
+/* La versión REAL de M51 en el banco, con la resolución que le pone la regla C.
+   No vale `v0`: ese lleva 1024 px a propósito —es el de las pruebas del hash de
+   arriba, donde el tamaño da igual— y desde la fase 2 ya no es el de nadie. */
+var vBanco = G.version(M51, PS1.ps1SalidaParche(M51.ladoArcmin));
+var sc = JSON.parse(fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + vBanco + '.json'), 'utf8'));
+ok(sc.version === vBanco, 'el sidecar del banco lleva el hash que este generador calcula hoy');
 ok(sc.generador === G.GENERADOR, 'y la versión del generador que lo escribió (' + sc.generador + ')');
 ok(Math.abs(sc.escalaAs - sc.ladoArcmin * 60 / sc.ancho) < 1e-3,
    'la escala declarada es el lado entre los píxeles (' + sc.escalaAs.toFixed(4) + '″/px)');
@@ -585,7 +589,7 @@ ok(vFuera.difusaDentro === null,
 ok(ic59.v.difusaDentro === null,
    'y el campo vecino de IC 0059, el que midió #274, sigue siendo cielo');
 
-var png = fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + v0 + '.png'));
+var png = fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + vBanco + '.png'));
 P16.leer(png).then(function (img) {
   ok(!!img && img.ancho === sc.ancho && img.alto === sc.alto,
      'el PNG se lee y mide lo que declara el sidecar');
