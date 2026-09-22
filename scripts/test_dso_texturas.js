@@ -263,7 +263,7 @@ var excesivas = fs.readdirSync(G.FIXTURES).filter(function (f) { return /\.fila\
 ok(excesivas.length > 0, 'hay ' + excesivas.length + ' objeto(s) con veredicto de ausencia excesiva');
 excesivas.forEach(function (s) {
   var f = filaMan(s.nombre);
-  ok(!!f && f[1] === 'fila' && f[6] === 'ausencia-excesiva' && f[2] === '',
+  ok(!!f && f[1] === 'fila' && f[6] === 'ausencia-excesiva' && f[2] === s.version,
      s.nombre + ' viaja al runtime como «fila» con motivo «ausencia-excesiva»' +
      (f ? '' : ' — y no está en el manifiesto'));
   /* Reanudable y auditable: el veredicto conserva con qué se midió, para poder
@@ -497,10 +497,10 @@ ok(!G.celdaPerdida({}), 'y un parche de una caché anterior a #259 no se sabe, q
 
 console.log('\nEl veredicto de celda perdida caduca solo:');
 var tmpCP = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dso-259-'));
-G.escribirFila(tmpCP, 'NGC 9999', 'celda-perdida', 0, 0, { celdasPedidas: 4, celdasCosidas: 3 });
+G.escribirFila(tmpCP, 'NGC 9999', 'celda-perdida', 0, 0, v0, { celdasPedidas: 4, celdasCosidas: 3 });
 ok(!G.yaResuelto(tmpCP, PS1.ps1IdTextura('NGC 9999'), v0),
    'un objeto con fila `celda-perdida` sigue pendiente');
-G.escribirFila(tmpCP, 'NGC 9999', 'sin-cobertura', 0, 0);
+G.escribirFila(tmpCP, 'NGC 9999', 'sin-cobertura', 0, 0, v0);
 var resSC = G.yaResuelto(tmpCP, PS1.ps1IdTextura('NGC 9999'), v0);
 ok(!!resSC && resSC.estado === 'fila', 'y con `sin-cobertura` está resuelto');
 fs.rmSync(tmpCP, { recursive: true, force: true });

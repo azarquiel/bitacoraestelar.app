@@ -2,6 +2,7 @@
  "nombre": "NGC1982",
  "modelo": "fila",
  "motivo": "ausencia-excesiva",
+ "version": "34a04dca",
  "generador": "gen_dso_texturas 2",
  "ra": 83.88075,
  "dec": -5.26747,
