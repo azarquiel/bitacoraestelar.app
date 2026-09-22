@@ -33,15 +33,17 @@ alguna se desvía más que la precisión con que el paper la da:
 | m0 = 6,93 (F = 1, B = 2×10⁻⁴ cd m⁻²) | §2.3, Ec. 53 | 6,934 | 0,005 |
 | m0 = 6,18 (F = 2) | §2.3 | 6,181 | 0,005 |
 | µ∞ = 24,94 (µsky 21,83) | §2.3, Ec. 56 | 24,937 | 0,005 |
-| Tabla 1, 12 columnas de `sup` y `pen` | Tabla 1 | residuo máx. 0,008 | 0,01 |
+| Tabla 1, `sup` = 18,06 (µsky 22) y 17,90 (µsky 21,5) | Tabla 1 | 18,056 / 17,901 | 0,005 |
+| Tabla 1, resto de columnas de `sup` y `pen` | Tabla 1 | residuo máx. 0,008 | 0,01 |
 | Constante 8,45 del corte | Ec. 73 | 8,450 | 0,005 |
 | Corte a D = 100 mm: 12,7 mag | Fig. 13 | 12,70 | 0,05 |
 | Rectas del 6 pulgadas de Bowen a 8, 2,5 y 0,5 mm | Ec. 74 | −0,007 / −0,016 / +0,031 | 0,1 |
 | d0 de Bowen = 1,0 mm | §3.2, Ec. 70 | 1,001 | 0,05 |
 | Tres tramos de Bowen 5 / 2,131 / 0 con codos en p y d0 | §3.2 | 5,00 / 2,18 / 0,00; codos en 5,26 y 1,00 mm | ver harness |
 
-La Tabla 1 lleva una unidad del último decimal de tolerancia, no media: el
-residuo de las ecuaciones exactas cambia de signo sin tendencia, que es el
+Las dos columnas de `sup` que el ticket cita van a la precisión publicada,
+0,005. El resto de la Tabla 1 lleva una unidad del último decimal, no media:
+el residuo de las ecuaciones exactas cambia de signo sin tendencia, que es el
 redondeo del autor. Las aproximaciones lineales (Ecs. 54 y 57) derivan hasta
 0,075 mag con tendencia, así que la tabla sale de las ecuaciones exactas. Las
 rectas de Bowen llevan 0,1 mag porque son un ajuste a datos, y el paper da
@@ -108,6 +110,26 @@ que el autotest valida sobre Bowen.
 | 2,131 | 2,09 | 6,93 → 1,70 mm | 29× → 117× | 13,62 → 14,90 |
 | otra | 1,32 | 1,70 → 0,63 mm | 117× → 316× | 14,90 → 15,46 |
 | 0 | 0,01 | 0,63 → 0,20 mm | 316× → 1000× | 15,46 → 15,47 |
+
+**Qué depende de la tolerancia del detector.** El detector asigna cada
+pendiente local a la de Crumey más cercana si está a menos de 0,5, y si no la
+llama «otra». Ese 0,5 es una elección del harness, no sale del paper. Se
+repitió la medida con tolerancias de 0,2 a 0,7:
+
+| tolerancia | Bowen | tramo «2,131» del repo | inicio del plano del repo |
+|---:|---|---|---|
+| 0,2 | 5 → 2,131 → 0 | 5,02 → 2,70 mm | 0,62 mm |
+| 0,3 | 5 → 2,131 → 0 | 5,90 → 2,30 mm | 0,62 mm |
+| 0,4 | 5 → 2,131 → 0 | 6,93 → 1,95 mm | 0,63 mm |
+| 0,5 | 5 → 2,131 → 0 | 6,93 → 1,70 mm | 0,63 mm |
+| 0,7 | 5 → 2,131 → 0 | 6,93 → 1,23 mm | 0,63 mm |
+
+El veredicto no cambia en ese rango: Bowen siempre da sus tres tramos, el
+repo siempre tiene los tres, y su plano siempre empieza en 0,62–0,63 mm. Lo
+que sí cambia es dónde acaba el tramo intermedio del repo, de 2,70 a
+1,23 mm. Esa cifra no es una medida, es un efecto del umbral: el tramo es
+curvo y su pendiente baja poco a poco. Por eso en la tabla de arriba su
+extensión solo vale como ilustración.
 
 ## Veredicto
 

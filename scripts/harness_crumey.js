@@ -124,13 +124,15 @@ function autotest() {
   cerca(crumeyM0(mu2e4, 2), 6.18, 0.005, 'Ec. 53, m0 con F=2');
   // §2.3, tras la Ec. 56: «with µsky = 21.83 … µ∞ = 24.94 − 2.5 log F».
   cerca(crumeyMuInf(21.83, 1), 24.94, 0.005, 'Ec. 56, µ∞ con F=1');
-  /* Tabla 1, dos decimales. Tolerancia de una unidad del último dígito, no de
-     media: con las Ecs. 53/56 exactas el residuo llega a 0,008 (µsky 19,75) con
-     signo alterno y sin tendencia, o sea el redondeo del autor. Las
-     aproximaciones lineales (Ecs. 54, 57) derivan hasta 0,075 con tendencia:
-     la tabla sale de las exactas. */
+  /* Tabla 1, dos decimales. Las dos columnas que cita el paper en el texto
+     (sup 18,06 a µsky 22 y 17,90 a 21,5) van a la precisión publicada, 0,005.
+     El resto lleva una unidad del último dígito: con las Ecs. 53/56 exactas el
+     residuo llega a 0,008 (µsky 19,75) con signo alterno y sin tendencia, o
+     sea el redondeo del autor. Las aproximaciones lineales (Ecs. 54, 57)
+     derivan hasta 0,075 con tendencia: la tabla sale de las exactas. */
   TABLA1.forEach(function (fila) {
-    cerca(crumeySup(fila[0]), fila[2], 0.01, 'Tabla 1, sup a µsky ' + fila[0]);
+    var tolSup = (fila[0] === 22 || fila[0] === 21.5) ? 0.005 : 0.01;
+    cerca(crumeySup(fila[0]), fila[2], tolSup, 'Tabla 1, sup a µsky ' + fila[0]);
     cerca(crumeyPen(fila[0]), fila[1], 0.01, 'Tabla 1, pen a µsky ' + fila[0]);
   });
   /* Ley telescópica. Ec. 73: con FM=1, FT=√2, p=7 mm y Ft=1,33,
