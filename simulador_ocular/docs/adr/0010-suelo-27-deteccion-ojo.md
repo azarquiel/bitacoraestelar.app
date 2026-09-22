@@ -3,6 +3,10 @@
 - Estado: aceptada
 - Fecha: 2026-08-17
 - Relacionada: [ADR-0009](0009-fondo-cielo-luminancia.md)
+- Enmendada por: [ADR-0030](0030-el-27-de-adr-0010-eran-dos-cantidades.md). El
+  «suelo de detección del ojo» de este ADR son en realidad dos cosas: el corte
+  de fondo cero de `magLimite` y una guarda numérica del pintado sin física
+  propia. Las decisiones A y B de este ADR siguen vigentes.
 
 ## Contexto
 

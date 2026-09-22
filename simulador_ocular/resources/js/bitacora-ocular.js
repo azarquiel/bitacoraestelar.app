@@ -433,11 +433,15 @@
                 SB0T = SB0 + 5·log10(7,5·MAG / (D·√t))
               donde SB0 = SQM (brillo del cielo a ojo desnudo, mag/arcsec²). Se
               acota entre SB0 (con pupilas de salida grandes el fondo no se
-              oscurece por debajo del de ojo desnudo) y 27 mag/arcsec² (umbral de
-              detección del ojo: no cabe oscurecer más).
+              oscurece por debajo del de ojo desnudo) y el corte de fondo cero,
+              27 mag/arcsec²: pasado ese fondo, oscurecer más el cielo ya no sube
+              el límite. El 27 es el suelo de detección del ojo del autor (LM 8,5
+              a ojo desnudo), que él identifica con el corte sin medirlo; Crumey
+              2014 mide el corte en 25,08. Ver ADR-0030.
            2) Estrella más débil visible sobre ese fondo oscurecido (Ec. 6):
                 TLM = -22,81 + 1,792·SB0T - 0,02949·SB0T² + 2,5·log10(D²·t)
-         El máximo posible (SB0T = 27) coincide con la Ec. 7:
+         El máximo posible (SB0T = 27) coincide con la Ec. 7 a 0,04 mag (la Ec. 6
+         da 4,076; el autor redondea a 4,12):
                 TLM_máx = 4,12 + 2,5·log10(D²·t). */
       // Transmisión del tubo, por orden de preferencia: la fijada a mano
       // (teleSel.transmision, telescopio manual con tipo elegido), luego la
