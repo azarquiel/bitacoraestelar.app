@@ -20,3 +20,4 @@ Orden cronológico de ejecución:
 14. `suelo_cielo_parche.md` (2026-09-12) — #274: de dónde salen el cielo y la σ de un parche; E1–E4 medidas contra un patrón de cielo lejano y campo vecino
 16. `cierre_284_cielo_publicado.md` (2026-09-13) — #308: los cinco criterios de éxito de la épica #284, medidos contra el cielo que publica el sidecar (columna SC) y no contra el patrón
 15. `recaptura_r5_cielo_vecino.md` (2026-09-13) — deltas de la recaptura R5 del golden difuso (el cielo del parche sale del campo vecino), con la línea base de la batería y el arnés de #274 re-corrido como testigo
+17. `dso_texturas_l2_2_apertura.md` (2026-09-22) — #323 (US-7): L2.2, la apertura en el objeto difuso; 457 vs 914 mm en las cuatro golden sobre texturas de fase 2, el signo de `θ_add` en los seis cuantiles y la causa de que el listón no se cumpla en nativo
