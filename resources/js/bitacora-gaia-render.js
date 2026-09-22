@@ -200,10 +200,10 @@
        con el que se pinta. valorDeFlujo divide por Fcielo, así que con un
        cielo irreal (SQM 30) el divisor tiende a cero y el contraste de
        cualquier objeto explota: la escena sale blanca. No es una cantidad
-       física propia: por diseño lleva el mismo valor que el corte de fondo
-       cero de `:757` (ADR-0010, enmendado por ADR-0030), para que "fondo en
-       ocular" y "magnitud límite" cuenten la misma historia en la UI. Si
-       `:757` cambia, esta constante cambia con él. null = comportamiento
+       física: comparte valor con el corte de fondo cero de magLimite para que
+       "fondo en ocular" y "magnitud límite" cuenten la misma historia en la
+       UI (ADR-0010, enmendado por ADR-0030). Son dos literales separados: si
+       cambia uno, hay que cambiar el otro a mano. null = comportamiento
        histórico (para el A/B). No toca Cmin, ni H2c, ni magLimite. */
     SB_SUELO_PINTADO: 27,
     // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el lado
@@ -750,11 +750,12 @@
     var sqm = sumaSB((o.sqm != null) ? o.sqm : 21, o.veloSB);
     var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
     /* Suelo = SB0 (el ocular no oscurece el fondo por debajo del de ojo
-       desnudo) y techo = 27 (corte de fondo cero, ADR-0010 enmendado por
-       ADR-0030: el punto en que oscurecer más el cielo deja de mejorar
-       magLimite, no "el ojo ya no distingue el fondo del negro" — Crumey 2014
-       da 25,08 para esta misma cantidad, ver crumey-2014-umbral-de-contraste.md
-       §3.2b). Con sqm > 27 los dos se contradicen y gana el TECHO. El orden
+       desnudo) y techo = corte de fondo cero: el fondo pasado el cual un cielo
+       más oscuro ya no sube el límite. El 27 es el suelo de detección del ojo
+       de Torres Lapasió (LM 8,5), que él identifica con este corte sin medirlo;
+       Crumey 2014 lo mide en 25,08 (ADR-0030; valor pendiente de #342). La
+       guarda FOT.SB_SUELO_PINTADO comparte este valor a mano: si cambia uno,
+       cambia el otro. Con sqm > 27 los dos se contradicen y gana el TECHO. El orden
        importa —`max(sqm, min(27, …))` deja que el max deshaga el min— y con él
        SB0T se salía del dominio del ajuste de Torres Lapasió: la parábola de la
        Ec. 6 tiene el vértice en 30,4, así que con sqm 40 el límite caía a 14,5,
