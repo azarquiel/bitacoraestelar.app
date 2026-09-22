@@ -11,7 +11,7 @@ Arranque: `node scripts/harness_l22_apertura_dso.js`.
 
 **Veredicto: AC2 y AC3 se cumplen. AC1 no llega a 1σ en tres de los cuatro en la
 escala nativa de la textura; la causa es la escala del píxel, no la pérdida de
-separación. Se documenta y NO se ajusta el umbral (AC4, ADR `0012-dos-ejes-gaia`).**
+separación. Se documenta y NO se ajusta el umbral (AC4, ADR `0030-dos-ejes-gaia`).**
 
 | Criterio | Umbral | Medido | Veredicto |
 |---|---|---|---|
@@ -132,7 +132,7 @@ infravalora una separación que físicamente sigue ahí —la tercera columna de
 demuestra: la misma textura de fase 2, a 1024 px, da 1,08–3,06 σ, igual que la
 fase 1—. Bajar el umbral a 0,5 σ para que cuadre, o subirlo, sería ajustar un
 listón después de ver la medida, justo lo que prohíbe el preregistro
-`0012-dos-ejes-gaia-preregistro-de-listones.md`. Lo que se
+`0030-dos-ejes-gaia-preregistro-de-listones.md`. Lo que se
 hace es dejar la cifra escrita y el umbral como está.
 
 La lectura correcta para la épica: la fase 2 **no pierde** la separación de
