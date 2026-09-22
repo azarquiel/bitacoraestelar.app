@@ -348,6 +348,23 @@ decidido para este caso.
 cierra y el catálogo queda a `salida = 1024` (fase 1), que ya es lo que hay hoy
 sin la dependencia externa.
 
+### L2.4 medida (memoria) (2026-09-22, #324)
+
+Medida en Chrome, con las dos condiciones de memoria del listón —el resto de
+L2.4 (volumen en disco) queda fuera de este informe—. **Parche del tope
+(2048², real, la textura de M51): 16,00 MB exactos** (`Float32Array.byteLength`,
+igual criterio que usó L1.3 para esta misma condición). **Campo de Virgo (14
+parches a la resolución por objeto de la regla C, 329–1854 px): 50,5–102,0 MB
+medidos en el montón en tres pasadas, mediana 60,8 MB**, muy por debajo del
+tope de 150. Detalle, tabla por objeto y método en
+`docs/validacion/dso_texturas_l2_4_memoria.md`.
+
+La advertencia de la enmienda de arriba («escalando por el mismo factor,
+serían ~224 MB») asumía los 14 parches al tope de 2048 px, que es lo que pasa
+en fase 1 con `cfg.salida` fijo. La regla C no lo hace: sube cada objeto a
+**su** resolución, y ninguno de los 14 del campo de Virgo llega a 2048.
+**No hace falta la vía de escape de esta parte del listón.**
+
 ### Corrección de la redacción de L2.3 (2026-09-22)
 
 La recaptura R3 (`docs/validacion/recaptura_r3_resolucion.md`) midió L2.3 con

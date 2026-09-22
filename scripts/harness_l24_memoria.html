@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>L2.4 · memoria en el navegador (#324)</title>
+<!--
+  L2.4 del ADR 0024 §Fase 2, la parte de MEMORIA (#324): dos de sus tres
+  condiciones, medidas en el navegador como pide `dso_texturas_l1_coste.md`
+  (performance.memory, montón medido, no multiplicado). El volumen en disco
+  (la tercera condición) no se mide aquí: eso es harness_dso_volumen.js.
+
+  Umbrales:
+    · parche del tope (2048²) decodificado ≤ 16 MB;
+    · campo de Virgo (NGC 4374/4406 y vecinas, 120′) ≤ 150 MB en el montón.
+
+  Por qué en fase 2 esto ya no es "un parche vale por otro": la resolución es
+  por objeto (regla C, `ps1SalidaParche`), así que el campo de Virgo no se
+  puede pesar repitiendo un único parche de referencia como hacía L1.3 en
+  fase 1 (`cfg.salida` fijo). Los 14 parches del campo se leen de fixtures
+  SINTÉTICAS del tamaño REAL que cada objeto tendría (regla C aplicada con la
+  función de producción, `scripts/gen_fixtures_l24_virgo.js`): el contenido
+  es ruido, pero el ancho y el alto —lo único que pesa memoria— son los que
+  el objeto tendría en producción. El parche del tope SÍ es real: la textura
+  golden de M51, ya a 2048 px tras la recaptura R3.
+
+  Uso:
+    node scripts/gen_fixtures_l24_virgo.js
+    php -S localhost:8080 scripts/dev_servidor_ocular.php
+    abrir http://localhost:8080/scripts/harness_l24_memoria.html
+    node scripts/limpiar_fixtures_l24_virgo.js     (al terminar)
+
+  Resultado en la página y en `window.L24` (JSON).
+-->
+<body style="font:13px/1.5 ui-monospace,monospace;padding:1rem;background:#111;color:#ddd">
+<pre id="salida">midiendo…</pre>
+<script src="/wp-content/uploads/bitacora/bitacora-gaia-render.js"></script>
+<script src="/wp-content/uploads/bitacora/bitacora-png16.js"></script>
+<script src="/wp-content/uploads/bitacora/galaxias-datos.js"></script>
+<script src="/wp-content/uploads/bitacora/nebulosas-datos.js"></script>
+<script src="/wp-content/uploads/bitacora/dso-texturas-datos.js"></script>
+<script src="/wp-content/uploads/bitacora/bitacora-ps1.js"></script>
+<script>
+'use strict';
+var PS1 = window.BitacoraPS1;
+var BASE = '/wp-content/uploads/bitacora/dso/';
+
+function leerTextura(base) {
+  var sello = Date.now() + '-' + Math.random();
+  return PS1.ps1LeerTextura(base + '.png?cb=' + sello, base + '.json?cb=' + sello, {});
+}
+
+/* El campo de Virgo del listón: mismo centro que harness_l1_coste.html y que
+   gen_fixtures_l24_virgo.js — punto medio de NGC 4374/4406, lado 120′. Lo
+   decide ps1GalaxiasDelCampo, no una lista escrita aquí. */
+function campoVirgo() {
+  var cat = window.BITACORA_GALAXIAS, a = null, b = null, i;
+  for (i = 0; i < cat.length; i++) {
+    if (cat[i][0] === 'NGC 4374') a = cat[i];
+    if (cat[i][0] === 'NGC 4406') b = cat[i];
+  }
+  if (!a || !b) throw new Error('el catálogo no trae NGC 4374 y NGC 4406');
+  return PS1.ps1GalaxiasDelCampo(cat, (a[2] + b[2]) / 2, (a[3] + b[3]) / 2, 120);
+}
+
+function idSintetico(nombre) { return 'L24SINT_' + nombre.replace(/[^A-Za-z0-9]/g, '_') + '.sint'; }
+
+/* Memoria MEDIDA: se decodifican los N parches, se conservan vivos y se mira
+   el pico de performance.memory.usedJSHeapSize. Igual que memoriaDelCampo en
+   harness_l1_coste.html, pero cada parche va a SU propio tamaño (regla C),
+   no al de un único golden repetido. */
+function memoriaDe(bases) {
+  if (!performance.memory) return Promise.resolve(null);
+  var vivos = [], pico = 0, antes = performance.memory.usedJSHeapSize, i = 0;
+  function paso() {
+    if (i >= bases.length) {
+      return { objetos: bases.length, bytes: pico - antes, parches: vivos.length,
+               antes: antes, despues: performance.memory.usedJSHeapSize,
+               anchos: vivos.map(function (F) { return F.ancho; }) };
+    }
+    return leerTextura(bases[i]).then(function (F) {
+      if (!F) throw new Error('textura ilegible: ' + bases[i]);
+      vivos.push(F);
+      var u = performance.memory.usedJSHeapSize;
+      if (u > pico) pico = u;
+      i++;
+      return paso();
+    });
+  }
+  return Promise.resolve().then(paso);
+}
+
+function fmt(n, d) { return Number(n).toFixed(d == null ? 2 : d).replace('.', ','); }
+
+(function () {
+  if (!performance.memory) {
+    document.getElementById('salida').textContent =
+      'ERROR: este navegador no expone performance.memory (Chrome sí; ábrelo en Chrome).';
+    return;
+  }
+  var virgo = campoVirgo();
+  var basesVirgo = virgo.map(function (g) { return BASE + idSintetico(g.nombre); });
+  var baseTope = BASE + 'NGC_5194.69218f92';
+
+  /* El criterio 2 de L2.4 («ocupa ≤ 16 MB en float32») es el tamaño del
+     Float32Array decodificado, no el crecimiento del montón: igual que
+     `medida()` en harness_l1_coste.html usaba `F.datos.byteLength`, no
+     performance.memory, para esta misma condición. El montón (con los
+     temporales del inflado y el Uint16 intermedio todavía sin recoger) es
+     otra cosa, y ese es justo el que sí se mide —por definición del listón—
+     en el campo de Virgo de abajo. */
+  leerTextura(baseTope).then(function (Ftope) {
+    return memoriaDe(basesVirgo).then(function (mVirgo) {
+      var mTope = { bytes: Ftope.datos.byteLength, ancho: Ftope.ancho };
+      var veredicto = {
+        parcheTope: mTope.bytes <= 16 * 1024 * 1024,
+        virgo: mVirgo.bytes <= 150 * 1024 * 1024
+      };
+      veredicto.pasa = veredicto.parcheTope && veredicto.virgo;
+      var salida = {
+        fecha: new Date().toISOString(), agente: navigator.userAgent,
+        parcheTope: mTope, virgo: { objetos: virgo.map(function (g) { return g.nombre; }), medida: mVirgo },
+        veredicto: veredicto
+      };
+      window.L24 = salida;
+      document.getElementById('salida').textContent =
+        'Parche del tope (' + mTope.ancho + '² real, M51, Float32Array.byteLength): ' +
+        fmt(mTope.bytes / 1048576) + ' MB (tope 16) — ' + (veredicto.parcheTope ? 'PASA' : 'NO PASA') +
+        '\n\nCampo de Virgo (' + virgo.length + ' parches, regla C por objeto):\n' +
+        virgo.map(function (g, i) { return '  ' + g.nombre + '\t' + mVirgo.anchos[i] + ' px'; }).join('\n') +
+        '\ntotal: ' + fmt(mVirgo.bytes / 1048576) + ' MB medidos en el montón (tope 150) — ' +
+        (veredicto.virgo ? 'PASA' : 'NO PASA') +
+        '\n\nL2.4 memoria: ' + (veredicto.pasa ? 'PASA' : 'NO PASA') +
+        '\n\n' + JSON.stringify(salida);
+    });
+  }).catch(function (e) {
+    window.L24 = { error: String((e && e.message) || e) };
+    document.getElementById('salida').textContent = 'ERROR: ' + ((e && e.stack) || e);
+  });
+}());
+</script>
