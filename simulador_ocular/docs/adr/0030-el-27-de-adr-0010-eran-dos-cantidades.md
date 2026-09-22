@@ -1,6 +1,6 @@
 # 30. El 27 de ADR-0010 eran dos cantidades físicas y una guarda
 
-- Estado: propuesta
+- Estado: aceptada
 - Fecha: 2026-09-22
 - Enmienda a: [ADR-0010](0010-suelo-27-deteccion-ojo.md)
 - Relacionada: `simulador_ocular/docs/referencias/crumey-2014-umbral-de-contraste.md` §3.2b, P2
