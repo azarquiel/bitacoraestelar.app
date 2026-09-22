@@ -387,6 +387,32 @@ igual sin ella. `scripts/harness_l23_flujo_resolucion.js` se conserva como
 medida diagnóstica (documenta la magnitud del sesgo de `fitscut`), no como
 guardián con veredicto ✅/❌.
 
+**Confirmación de la causa (2026-09-22, tras cerrar la decisión).** Lo de
+arriba se midió por comparación estadística (nulo vs real, indistinguibles);
+lo que sigue confirma el mecanismo, con una llamada directa a `fitscut.cgi`
+que no pasa por el proxy ni por caché. `ps1_url_recorte()` (`ps1-proxy.php:107`)
+ya documentaba que `size` va en píxeles nativos (0,25″) y `output_size`
+remuestrea; la comprobación fue pedir NGC7293 (el peor caso, 20′, RA
+337,41071 Dec −20,83733) a 1024 y a 2048 px de salida y medir con las
+funciones de producción (`parseFITS`, `ps1Cielo`, `ps1SigmaCielo`, sin
+reimplementar nada):
+
+```
+1024 px (1,172″/px): media 84,52 · σ 26,43 · n 661.204   flujo 7,674e7
+2048 px (0,586″/px): media 76,02 · σ 49,98 · n 2.643.624  flujo 6,899e7
+razón 2048/1024 = 0,899 → 10,1 % de flujo perdido · 0,32 σ/px
+```
+
+Y pidiendo el mismo recorte con `size=200` sin `output_size`: `fitscut`
+devuelve `NAXIS1=NAXIS2=200`, exactamente `size`, sin remuestrear. Confirmado:
+`output_size` no es un parámetro cosmético, cambia el flujo total de verdad,
+y omitirlo (pedir solo `size`, resolución nativa) evita el efecto por
+completo. Esto no cambia el veredicto de L2.3 —el remuestreo de fitscut ya
+estaba descartado como causa de fase 2 antes de esto—, pero convierte «lo
+causa el remuestreo» de inferencia estadística a mecanismo verificado.
+Implicación de arquitectura (pedir siempre resolución nativa en vez de
+`output_size`): fuera del alcance de #366, se discute aparte.
+
 ## Fase 3 — Máscara y fuentes conservadas offline
 
 `ps1EstrellasEnPixeles` + `ps1EscenaEnParche` + `ps1QuitarEstrellas` corren en
