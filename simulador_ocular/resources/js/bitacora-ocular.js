@@ -433,8 +433,11 @@
                 SB0T = SB0 + 5·log10(7,5·MAG / (D·√t))
               donde SB0 = SQM (brillo del cielo a ojo desnudo, mag/arcsec²). Se
               acota entre SB0 (con pupilas de salida grandes el fondo no se
-              oscurece por debajo del de ojo desnudo) y 27 mag/arcsec² (umbral de
-              detección del ojo: no cabe oscurecer más).
+              oscurece por debajo del de ojo desnudo) y 27 mag/arcsec² (corte de
+              fondo cero: pasado ese punto, oscurecer más el cielo ya no sube el
+              límite. ADR-0010, enmendado por ADR-0030 — no es "el ojo ya no
+              distingue el fondo del negro", que es una cantidad distinta con
+              otro valor en Crumey 2014).
            2) Estrella más débil visible sobre ese fondo oscurecido (Ec. 6):
                 TLM = -22,81 + 1,792·SB0T - 0,02949·SB0T² + 2,5·log10(D²·t)
          El máximo posible (SB0T = 27) coincide con la Ec. 7:

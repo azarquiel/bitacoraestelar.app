@@ -196,12 +196,15 @@
        la luz ambiente de quien mire la pantalla—, pero ahora es un anclaje, no
        una forma: subirlo o bajarlo desplaza toda la curva sin deformarla. */
     SB_CIELO_BLANCO: 16.5,
-    /* Suelo de detección del ojo (mag/arcsec²) aplicado SOLO al Fcielo con el
-       que se pinta. valorDeFlujo divide por Fcielo, así que con un cielo
-       irreal (SQM 30) el divisor tiende a cero y el contraste de cualquier
-       objeto explota: la escena sale blanca. magLimite ya usa este mismo 27
-       como suelo; el pintado no lo conocía. null = comportamiento histórico
-       (para el A/B). No toca Cmin, ni H2c, ni magLimite. */
+    /* Guarda de saturación del pintado (mag/arcsec²), aplicada SOLO al Fcielo
+       con el que se pinta. valorDeFlujo divide por Fcielo, así que con un
+       cielo irreal (SQM 30) el divisor tiende a cero y el contraste de
+       cualquier objeto explota: la escena sale blanca. No es una cantidad
+       física propia: por diseño lleva el mismo valor que el corte de fondo
+       cero de `:757` (ADR-0010, enmendado por ADR-0030), para que "fondo en
+       ocular" y "magnitud límite" cuenten la misma historia en la UI. Si
+       `:757` cambia, esta constante cambia con él. null = comportamiento
+       histórico (para el A/B). No toca Cmin, ni H2c, ni magLimite. */
     SB_SUELO_PINTADO: 27,
     // Ganancia del lado OSCURO en la adaptación local (relativa a REALCE, el lado
     // brillante). 1 = simétrico → las siluetas oscuras recortan contra el fondo.
@@ -747,13 +750,15 @@
     var sqm = sumaSB((o.sqm != null) ? o.sqm : 21, o.veloSB);
     var SB0T = sqm + 5 * Math.log10(7.5 * MAG / (D * Math.sqrt(t)));
     /* Suelo = SB0 (el ocular no oscurece el fondo por debajo del de ojo
-       desnudo) y techo = 27 (suelo de detección del ojo). Con sqm > 27 los dos
-       se contradicen y gana el TECHO: un cielo que el ojo ya no distingue del
-       negro no puede seguir mejorando nada. El orden importa —`max(sqm, min(27,
-       …))` deja que el max deshaga el min— y con él SB0T se salía del dominio
-       del ajuste de Torres Lapasió: la parábola de la Ec. 6 tiene el vértice en
-       30,4, así que con sqm 40 el límite caía a 14,5, por debajo del de un
-       cielo de sqm 21. Ver test_difuso.js §9b. */
+       desnudo) y techo = 27 (corte de fondo cero, ADR-0010 enmendado por
+       ADR-0030: el punto en que oscurecer más el cielo deja de mejorar
+       magLimite, no "el ojo ya no distingue el fondo del negro" — Crumey 2014
+       da 25,08 para esta misma cantidad, ver crumey-2014-umbral-de-contraste.md
+       §3.2b). Con sqm > 27 los dos se contradicen y gana el TECHO. El orden
+       importa —`max(sqm, min(27, …))` deja que el max deshaga el min— y con él
+       SB0T se salía del dominio del ajuste de Torres Lapasió: la parábola de la
+       Ec. 6 tiene el vértice en 30,4, así que con sqm 40 el límite caía a 14,5,
+       por debajo del de un cielo de sqm 21. Ver test_difuso.js §9b. */
     SB0T = Math.min(27, Math.max(sqm, SB0T));
     // Apertura efectiva: si la pupila de salida (d_ep = D/MAG) supera la del ojo,
     // el ojo recorta el haz y se desperdicia apertura → D_eff = D·min(1, d_eye/d_ep).
