@@ -243,20 +243,27 @@ function sidecars(dir) {
     });
 }
 
-/* Un objeto que no puede tener textura deja su propio sidecar (`<id>.fila.json`,
-   sin PNG): así el veredicto es reanudable —no se vuelve a pedir a STScI lo que
-   ya se sabe que no está— y el manifiesto se sigue reconstruyendo del disco.
-   Los cinco controles de exclusión NO pasan por aquí: su veredicto es el del
-   banco y se calcula sin tocar la red ni el disco. */
-function escribirFila(dir, nombre, motivo, ra, dec, auditoria) {
+/* Un objeto que no puede tener textura deja su propio sidecar
+   (`<id>.<v>.fila.json`, sin PNG): así el veredicto es reanudable —no se
+   vuelve a pedir a STScI lo que ya se sabe que no está— y el manifiesto se
+   sigue reconstruyendo del disco. Los cinco controles de exclusión NO pasan
+   por aquí: su veredicto es el del banco y se calcula sin tocar la red ni el
+   disco.
+
+   Lleva el mismo `v` que una textura (#305): el fichero se publica bajo
+   `dso/`, que el `.htaccess` sirve entero con `Cache-Control: immutable`, así
+   que un nombre sin versión reescrito en su sitio por la siguiente subida de
+   `GENERADOR` incumpliría la misma promesa del ADR 0026 aunque el runtime no
+   pida hoy este JSON por URL (lee `motivo` del manifiesto, ADR 0013). */
+function escribirFila(dir, nombre, motivo, ra, dec, v, auditoria) {
   fs.mkdirSync(dir, { recursive: true });
   var s = { nombre: nombre, modelo: 'fila', motivo: motivo,
-            generador: GENERADOR, ra: ra, dec: dec };
+            version: v, generador: GENERADOR, ra: ra, dec: dec };
   /* `ausencia-excesiva` es el único motivo que se mide sobre píxeles: su
      auditoría va al sidecar para que el veredicto se pueda revisar sin volver a
      bajar el parche. Los demás motivos no la tienen y no la escriben. */
   if (auditoria) s.auditoria = auditoria;
-  fs.writeFileSync(path.join(dir, PS1.ps1IdTextura(nombre) + '.fila.json'),
+  fs.writeFileSync(path.join(dir, PS1.ps1IdTextura(nombre) + '.' + v + '.fila.json'),
     JSON.stringify(s, null, 1) + '\n');
 }
 
@@ -268,7 +275,7 @@ function escribirFila(dir, nombre, motivo, ra, dec, auditoria) {
 function yaResuelto(dir, id, v) {
   var dirs = dir === FIXTURES ? [dir] : [dir, FIXTURES];
   for (var i = 0; i < dirs.length; i++) {
-    var fila = path.join(dirs[i], id + '.fila.json');
+    var fila = path.join(dirs[i], id + '.' + v + '.fila.json');
     /* `celda-perdida` es la excepción: es una avería de red, no un veredicto
        sobre el cielo, así que no resuelve nada y la corrida siguiente lo vuelve
        a pedir (#259). Los demás motivos sí cierran el objeto. */
@@ -352,7 +359,7 @@ function textoManifiesto(dir) {
   var filas = sidecarsUnicos(dir)
     .map(function (s) {
       return { ra: s.ra, fila: s.modelo === 'fila'
-        ? [s.nombre, 'fila', '', 0, 0, 0, s.motivo]
+        ? [s.nombre, 'fila', s.version || '', 0, 0, 0, s.motivo]
         : [s.nombre, 'imagen', s.version, s.ancho, s.escalaAs, s.auditoria.fracAusencia, ''] };
     })
     .concat(filasControl())
@@ -488,7 +495,7 @@ function generar(nombre, dir) {
        ignora y la siguiente ejecución lo vuelve a intentar, porque la causa es
        una avería de red y no una propiedad del cielo. */
     if (celdaPerdida(p)) {
-      escribirFila(dir, gal.nombre, 'celda-perdida', gal.ra, gal.dec,
+      escribirFila(dir, gal.nombre, 'celda-perdida', gal.ra, gal.dec, v,
         { celdasPedidas: p.celdasPedidas, celdasCosidas: p.celdasCosidas });
       console.log(gal.nombre + ' → fila (celda-perdida): solo ' + p.celdasCosidas +
         ' de ' + p.celdasPedidas + ' celdas entraron en la costura; se reintenta en la próxima corrida');
@@ -528,7 +535,7 @@ function generar(nombre, dir) {
     var enObjeto = ausenciaEnObjeto(p.datos, p.ancho, p.alto, fits.afin,
                                     extensionDelObjeto(gal, fits.afin));
     if (ausenciaExcesiva(enObjeto)) {
-      escribirFila(dir, gal.nombre, 'ausencia-excesiva', gal.ra, gal.dec, {
+      escribirFila(dir, gal.nombre, 'ausencia-excesiva', gal.ra, gal.dec, v, {
         cielo: cielo, sigma: sigma,
         fracAusencia: nAus / p.datos.length,
         fracAusenciaEscena: nEsc ? nAusEsc / nEsc : 0,
@@ -561,7 +568,7 @@ function generar(nombre, dir) {
       fs.mkdirSync(dir, { recursive: true });
       /* Si venía de un `celda-perdida` de una corrida anterior, ese veredicto ya
          no vale: la textura está escrita y su fila sobra. */
-      fs.rmSync(path.join(dir, id + '.fila.json'), { force: true });
+      fs.rmSync(path.join(dir, id + '.' + v + '.fila.json'), { force: true });
       LIBPNG.escribirGris16(base + '.png', cod.u16, p.ancho, p.alto);
       /* El peso del PNG, leído del fichero recién escrito. Va al sidecar porque el
          PNG no entra en git y el informe tiene que poder sumar el volumen del
@@ -683,7 +690,7 @@ function correrBanco(dir, seco) {
           /* Sin cobertura de PS1 es un veredicto, no una avería: se anota como
              fila de manifiesto y no se vuelve a pedir nunca más. */
           if (/sin cobertura|ninguna celda/.test(e.message)) {
-            escribirFila(dir, o.nombre, 'sin-cobertura', o.gal.ra, o.gal.dec);
+            escribirFila(dir, o.nombre, 'sin-cobertura', o.gal.ra, o.gal.dec, v);
             estado.filas++;
             console.log('  sin cobertura de PS1 → fila de manifiesto');
           } else {

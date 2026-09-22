@@ -52,6 +52,29 @@ resuelto costaría su descarga igual.
    #209 sirva la cabecera inmutable, deja de valer: a partir de ahí manda el
    punto 3.
 
+## La fila también lleva versión (#305)
+
+Un objeto que no puede tener textura deja su propio sidecar
+(`<id>.fila.json`, sin PNG). Hasta #305 se servía sin hash de versión, porque
+el runtime no lo pide por URL: lee el motivo directamente del manifiesto
+(`ps1FuenteParche`, ADR 0013) y nunca hace `fetch` del JSON. Con ese dato
+solo, parecía que la promesa de este ADR no le alcanzaba.
+
+Pero el `.htaccess` de `dso/` sirve el directorio ENTERO con
+`Cache-Control: immutable` (`AddType application/json .json` incluido, no solo
+`.png`): la cabecera no distingue qué fichero pide realmente el navegador, así
+que un nombre sin versión queda bajo la misma promesa de inmutabilidad que una
+textura aunque hoy nadie lo pida. Subir `GENERADOR` sin renombrar la fila
+habría sido sobrescribir un nombre servido como inmutable, que es justo la
+operación que el punto 3 prohíbe.
+
+**Decidido:** la fila lleva el mismo `<v>` que una textura, calculado con la
+misma `version()` y pasado por el mismo `generar()`/`correrBanco()` que ya lo
+tenían en el ámbito. El nombre pasa a `<id>.<v>.fila.json` y el manifiesto
+deja de forzar `version: ""` en las filas con sidecar en disco. Las filas de los
+controles de exclusión (`filasControl()`, sur/no-cabe del ADR 0024) siguen sin
+versión: no tienen fichero en disco, así que no hay nada que inmutabilizar.
+
 ## Consecuencias
 
 - La cabecera inmutable de #209 puede ir adelante: el riesgo que la amenazaba
