@@ -340,13 +340,78 @@ decidido para este caso.
 |---|---|---|---|
 | L2.1 | σ de la PSF del telescopio en píxeles del parche (`ps1ThetaAdd`), D ∈ {80, 203, 457, 914}, en todo el banco | ≥ 1 px para lado < 17′; ≥ 0,85 px en el tope de 2048 | que quede algún objeto «subpíxel» (la apertura no se nota) |
 | L2.2 | 457 frente a 914 mm en NGC 5194, 3031, 5457, 205 (`harness_decision_psf_resolucion.js`) | separación ≥ 1σ del ruido de cielo, con el signo correcto; en los 6 representantes de cuantil, `θ_add` decrece con D | que subir la resolución no haga visible la apertura, que es su único motivo |
-| L2.3 | Flujo total por objeto, textura de fase 2 frente a textura de fase 1 | `|ΔF|/F ≤ 2e-3` en todo el banco | que el remuestreo de `fitscut` deje de conservar brillo superficial |
+| L2.3 | Flujo total por objeto, textura de fase 2 frente a textura de fase 1 | **no aplica entre resoluciones distintas** (redacción del 2026-09-22, ver «Corrección de la redacción de L2.3»); dentro de una misma resolución sigue vigente `|ΔF|/F ≤ 2e-3`, la condición que ya fija `test_resolucion_ps1.js` | que el remuestreo de `fitscut` deje de conservar brillo superficial |
 | L2.4 | Volumen y memoria | PNG del banco + muestra aleatoria de 50 (semilla fija) extrapolados a las filas aptas ≤ 1,5 GB; ≤ 16 MB por parche decodificado; campo de Virgo (NGC 4374/4406 y vecinas) ≤ 150 MB en el navegador | que el coste supere lo que el hosting y el navegador aguantan |
 
 **Vía de escape única**: si L2.4 falla, tope 1794 px (el número del README para
 0,67 ″/px) en vez de 2048. **Tope duro**: si con 1794 sigue fallando, la fase 2 se
 cierra y el catálogo queda a `salida = 1024` (fase 1), que ya es lo que hay hoy
 sin la dependencia externa.
+
+### Corrección de la redacción de L2.3 (2026-09-22)
+
+La recaptura R3 (`docs/validacion/recaptura_r3_resolucion.md`) midió L2.3 con
+`scripts/harness_l23_flujo_resolucion.js` sobre los 69 objetos del banco y el
+listón lo rompen 60 de 69, peor caso 1,26e-1 — 63 veces el listón de 2e-3. Antes
+de tocar el listón, el mismo harness mide su **control nulo**: la misma razón
+de flujos entre 1024 y 1000 px, dos resoluciones que solo se diferencian un
+2,4 % y no cruzan de fase. El nulo también rompe el listón, en 3 de 6 objetos.
+
+Eso ya bastaría para descartar el listón tal como está escrito, pero la prueba
+decisiva es más fuerte: leído en σ del cielo por píxel (la unidad que separa
+señal de grano), la comparación real y el nulo salen **estadísticamente
+indistinguibles**.
+
+| comparación | mediana σ/px | peor σ/px |
+|---|---|---|
+| control nulo, 1024 vs 1000 px (6 objetos) | 0,05 | 0,36 |
+| real, fase 2 (regla C) vs fase 1 (69 objetos) | 4,94e-2 | 3,56e-1 |
+
+No hay margen entre las dos filas. El desplazamiento que L2.3 mide no lo causa
+la fase 2 ni ningún cambio de resolución en particular: lo causa que `fitscut`
+remuestrea, y lo hace igual la fase 1 contra sí misma. Medir en σ/px (opción 1
+de #366) no da un listón nuevo que separar de esto, porque el nulo ocupa el
+mismo rango que el caso real — no hay ningún umbral en σ/px que distinga
+«remuestreo ordinario» de «fase 2 rompió algo». Medir con una apertura en vez
+del parche entero (opción 2) tampoco tiene ancla: no hay una medida previa de
+ese flujo con la que compararlo, y fijar un número sin ancla es exactamente lo
+que la disciplina de listones (ADR 0012 bis) prohíbe.
+
+**La lectura corregida (opción 3)**: L2.3 no aplica entre resoluciones
+distintas. Sigue vigente, sin cambios, para lo que sí mide algo —el flujo
+antes y después de remuestrear *a la misma* resolución, que es lo que ya
+comprueba `test_resolucion_ps1.js` y que sigue en verde—; pero comparar la
+textura de fase 1 contra la de fase 2 por flujo total ya no es un
+falsacionista de la fase 2, porque el control nulo demuestra que rompe
+igual sin ella. `scripts/harness_l23_flujo_resolucion.js` se conserva como
+medida diagnóstica (documenta la magnitud del sesgo de `fitscut`), no como
+guardián con veredicto ✅/❌.
+
+**Confirmación de la causa (2026-09-22, tras cerrar la decisión).** Lo de
+arriba se midió por comparación estadística (nulo vs real, indistinguibles);
+lo que sigue confirma el mecanismo, con una llamada directa a `fitscut.cgi`
+que no pasa por el proxy ni por caché. `ps1_url_recorte()` (`ps1-proxy.php:107`)
+ya documentaba que `size` va en píxeles nativos (0,25″) y `output_size`
+remuestrea; la comprobación fue pedir NGC7293 (el peor caso, 20′, RA
+337,41071 Dec −20,83733) a 1024 y a 2048 px de salida y medir con las
+funciones de producción (`parseFITS`, `ps1Cielo`, `ps1SigmaCielo`, sin
+reimplementar nada):
+
+```
+1024 px (1,172″/px): media 84,52 · σ 26,43 · n 661.204   flujo 7,674e7
+2048 px (0,586″/px): media 76,02 · σ 49,98 · n 2.643.624  flujo 6,899e7
+razón 2048/1024 = 0,899 → 10,1 % de flujo perdido · 0,32 σ/px
+```
+
+Y pidiendo el mismo recorte con `size=200` sin `output_size`: `fitscut`
+devuelve `NAXIS1=NAXIS2=200`, exactamente `size`, sin remuestrear. Confirmado:
+`output_size` no es un parámetro cosmético, cambia el flujo total de verdad,
+y omitirlo (pedir solo `size`, resolución nativa) evita el efecto por
+completo. Esto no cambia el veredicto de L2.3 —el remuestreo de fitscut ya
+estaba descartado como causa de fase 2 antes de esto—, pero convierte «lo
+causa el remuestreo» de inferencia estadística a mecanismo verificado.
+Implicación de arquitectura (pedir siempre resolución nativa en vez de
+`output_size`): fuera del alcance de #366, se discute aparte.
 
 ## Fase 3 — Máscara y fuentes conservadas offline
 

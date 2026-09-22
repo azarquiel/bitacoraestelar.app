@@ -82,23 +82,27 @@ menor que los puntos porcentuales de R1.
   bit antes y después: 12,92118488928559 · 23,17892750096088 ·
   8,521997910915951 · 20,806562154656127. Sale de la fila de catálogo, no del
   parche — la regla C no lo toca.
-- **El flujo total por objeto, dentro de ±2e-3 de L2.3: no evaluable — listón
-  mal leído → #366** (el control nulo ya lo rompe en 3 de 6 casos, así que el
-  listón en su lectura actual no distingue "rompe por fase 2" de "rompe por
-  cualquier remuestreo"). Medido igualmente, sin fingir un veredicto:
+- **El flujo total por objeto, L2.3: no aplica entre resoluciones distintas
+  — decidido en #366.** El control nulo (1024 vs 1000 px, mismo lado de
+  fase, 2,4 % de diferencia) ya rompe el listón de ±2e-3 en 3 de 6 objetos;
+  leído en σ del cielo por píxel, el nulo y la comparación real salen
+  indistinguibles (mediana 0,05 vs 4,94e-2 σ/px; peor 0,36 vs 3,56e-1 σ/px).
+  L2.3 no separa "rompe por fase 2" de "rompe por cualquier remuestreo de
+  `fitscut`", así que medir contra él no falsea nada de esta recaptura:
 
   ```
   node scripts/harness_l23_flujo_resolucion.js
   L2.3 / AC3 sobre 69 objetos, listón ±0,002
     |Δflujo|      mediana 9,74e-3 · peor 1,26e-1 (63× el listón)
+    en σ/px       mediana 4,94e-2 · peor 3,56e-1
     fuera del listón: 60 de 69
   ```
 
-  El peor caso mide 63 veces el listón, no 126 — corregido aquí tras un
-  primer cálculo erróneo. El veredicto de si el listón está mal planteado, y
-  cómo leerlo bien, vive en #366, no en este documento: aquí solo se declara
-  que **no se puede evaluar** con el listón tal como está escrito hoy, y por
-  qué.
+  Detalle de la decisión y de por qué las otras dos opciones (medir en σ/px
+  con un listón nuevo, o medir con una apertura) no tienen ancla: ADR 0024,
+  «Corrección de la redacción de L2.3». R3 queda sin invariante de flujo que
+  comprobar entre fases; el invariante que sí sigue vigente,
+  `test_resolucion_ps1.js` dentro de una misma resolución, sigue en verde.
 
 ## Qué gana el golden con esto
 
@@ -133,9 +137,6 @@ para que AC4 no le atribuya el rojo a esta recaptura.
 
 ## Qué queda pendiente
 
-- **#366** decide cómo se lee L2.3 entre resoluciones distintas (o si aplica).
-  Sin esa decisión, la columna de flujo de esta tabla no puede cerrarse con un
-  veredicto ✅/❌, solo con la medida cruda de arriba.
 - El aviso de versión de Node (R5 en `v26.3.1`, esta recaptura en `v26.9.0`)
   significa que la próxima comparación limpia contra esta línea base necesita
   la misma máquina y versión, o repetir el aviso.
