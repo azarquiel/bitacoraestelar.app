@@ -774,6 +774,11 @@ limpio porque `µ∞` sí sale de la ley de producción.
 
 ### P1 · Banco externo Crumey junto al de Schaefer — ALTO valor, coste bajo, riesgo CERO
 
+**Hecho (#339):** `node scripts/harness_crumey.js`. Resultados y veredicto en
+[`../experimentos/maglimite_vs_crumey.md`](../experimentos/maglimite_vs_crumey.md):
+los tres tramos existen, pero el plano empieza en 316× y no en 141×, y el
+tramo intermedio es curvo.
+
 **Qué tocar.** Un `scripts/harness_crumey.js` nuevo, hermano de
 `scripts/harness_maglimite_schaefer.js`, más un documento en
 `simulador_ocular/docs/experimentos/`. **Ni una línea de producción.**
