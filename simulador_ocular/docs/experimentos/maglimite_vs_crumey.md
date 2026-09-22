@@ -31,8 +31,8 @@ alguna se desvía más que la precisión con que el paper la da:
 | Cifra del paper | Dónde | Reproducida | Tolerancia |
 |---|---|---:|---:|
 | m0 = 6,93 (F = 1, B = 2×10⁻⁴ cd m⁻²) | §2.3, Ec. 53 | 6,934 | 0,005 |
-| m0 = 6,18 (F = 2) | §2.3 | 6,181 | 0,005 |
-| µ∞ = 24,94 (µsky 21,83) | §2.3, Ec. 56 | 24,937 | 0,005 |
+| m0 = 6,18 (F = 2) | §2.3 | 6,182 | 0,005 |
+| µ∞ = 24,94 (µsky 21,83) | §2.3, Ec. 56 | 24,939 | 0,005 |
 | Tabla 1, `sup` = 18,06 (µsky 22) y 17,90 (µsky 21,5) | Tabla 1 | 18,056 / 17,901 | 0,005 |
 | Tabla 1, resto de columnas de `sup` y `pen` | Tabla 1 | residuo máx. 0,008 | 0,01 |
 | Constante 8,45 del corte | Ec. 73 | 8,450 | 0,005 |
