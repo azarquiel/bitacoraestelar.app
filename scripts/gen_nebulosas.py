@@ -74,7 +74,7 @@ OUT_JS = os.path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-da
 
 FUENTE = ('Verga, OpenNGC (NGC + IC) · '
           'https://github.com/mattiaverga/OpenNGC · '
-          '+ suplemento Abell (gen_abell_pn.py: SIMBAD + Acker V/84)')
+          '+ suplemento Abell/Minkowski/Jones (gen_abell_pn.py: SIMBAD + Acker V/84)')
 
 TIPOS = ('Neb', 'HII', 'Cl+N', 'RfN', 'EmN', 'PN', 'SNR')
 
@@ -194,13 +194,26 @@ def mag_desde_mu(mu, re_arcsec, q, n):
 
 def nombre_catalogo(nombre_v84):
     """Nombre de V/84 -> nombre de nuestro catálogo. 'NGC  40' -> 'NGC0040',
-    'A 12' -> 'Abell 12'. Devuelve None para los que no son NGC/IC/Abell."""
+    'A 12' -> 'Abell 12', 'M 1-79' -> 'M 1-79', 'JnEr 1' -> 'JnEr 1' (espejo
+    de gen_abell_pn.py). El ancla de fin de cadena ($) en el regex de Jn ya
+    basta para no colar 'JnEr 1' (después de 'Jn' vendría 'Er', ni espacio ni
+    dígito): el orden de los dos `if` no importa.
+    Devuelve None para los que no son NGC/IC/Abell/Minkowski/Jones."""
     s = (nombre_v84 or '').strip()
     m = re.match(r'^(NGC|IC)\s*(\d+)$', s)
     if m:
         return '%s%04d' % (m.group(1), int(m.group(2)))
     m = re.match(r'^A\s*(\d+)$', s)
-    return ('Abell %d' % int(m.group(1))) if m else None
+    if m:
+        return 'Abell %d' % int(m.group(1))
+    m = re.match(r'^M\s*([\d-]+)$', s)
+    if m:
+        return 'M %s' % m.group(1)
+    m = re.match(r'^JnEr\s*(\d+)$', s)
+    if m:
+        return 'JnEr %s' % m.group(1)
+    m = re.match(r'^Jn\s*(\d+)$', s)
+    return ('Jn %s' % m.group(1)) if m else None
 
 
 def vizier(tabla):
@@ -229,7 +242,7 @@ def vizier(tabla):
 
 
 def descarga_v84():
-    """Cruza V/84 con los nombres NGC/IC/Abell y escribe la caché SRC_V84."""
+    """Cruza V/84 con los nombres NGC/IC/Abell/Minkowski/Jones y escribe la caché SRC_V84."""
     png_de = {}
     for f in vizier('V/84/main'):
         n = nombre_catalogo(f.get('Name'))
@@ -269,7 +282,7 @@ def descarga_v84():
         w.writeheader()
         for f in filas:
             w.writerow({k: ('' if v is None else v) for k, v in f.items()})
-    print('V/84: %d planetarias NGC/IC/Abell -> %s' % (len(filas), SRC_V84))
+    print('V/84: %d planetarias NGC/IC/Abell/Minkowski/Jones -> %s' % (len(filas), SRC_V84))
 
 
 def lineas_v84(refrescar=False):
@@ -307,6 +320,9 @@ def autocomprobacion():
     assert nombre_catalogo('NGC  40') == 'NGC0040'
     assert nombre_catalogo('IC 289') == 'IC0289'
     assert nombre_catalogo('A 12') == 'Abell 12'
+    assert nombre_catalogo('M  1-79') == 'M 1-79'
+    assert nombre_catalogo('Jn    1') == 'Jn 1'
+    assert nombre_catalogo('JnEr    1') == 'JnEr 1'
     assert nombre_catalogo('H 1-62') is None
 
 
