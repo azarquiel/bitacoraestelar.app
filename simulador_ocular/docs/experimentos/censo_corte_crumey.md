@@ -82,12 +82,12 @@ realización 0.
 
 Diferencias (Crumey − actual):
 
-| equipo | Δmlim | Δcenso | Δdibujadas | en σ del sorteo | en √N | Δf_res(núc) | r_50 | Δcorte niebla |
-|---|---:|---:|---:|---:|---:|---:|---|---:|
-| 200 mm 250× | −0,26 | −173 | −38 | 16,6 | 1,6 | 0,00 pt | ∞ → ∞ | −0,26 |
-| 200 mm 350× | −0,43 | −350 | −107 | 33,9 | 4,1 | 0,00 pt | ∞ → ∞ | −0,43 |
-| 450 mm 250× | 0 | 0 | 0 | 0 | 0 | 0,00 pt | 0,85 → 0,85 | 0 |
-| 450 mm 350× | 0 | 0 | 0 | 0 | 0 | 0,00 pt | 0,63 → 0,63 | 0 |
+| fecha | equipo | Δmlim | Δcenso | Δdibujadas | en σ del sorteo | en √N | Δf_res(núc) | r_50 | Δcorte niebla |
+|---|---|---:|---:|---:|---:|---:|---:|---|---:|
+| 2026-09-23 | 200 mm 250× | −0,26 | −173 | −38 | 16,6 | 1,6 | 0,00 pt | ∞ → ∞ | −0,26 |
+| 2026-09-23 | 200 mm 350× | −0,43 | −350 | −107 | 33,9 | 4,1 | 0,00 pt | ∞ → ∞ | −0,43 |
+| 2026-09-23 | 450 mm 250× | 0 | 0 | 0 | 0 | 0 | 0,00 pt | 0,85 → 0,85 | 0 |
+| 2026-09-23 | 450 mm 350× | 0 | 0 | 0 | 0 | 0 | 0,00 pt | 0,63 → 0,63 | 0 |
 
 **Lectura.**
 
@@ -123,11 +123,11 @@ pequeña porque casi todas las candidatas tienen a ≈ 1. Como vara más generos
 se usa también el ruido de conteo √N de las dibujadas (23 y 26). El veredicto
 exige que el cambio supere las dos varas.
 
-| equipo | Δdibujadas | σ sorteo | √N | ¿dentro del ruido? |
-|---|---:|---:|---:|---|
-| 200 mm 250× | −38 | 2,3 | 23,4 | no: 16,6 σ y 1,6 √N |
-| 200 mm 350× | −107 | 3,2 | 26,3 | no: 33,9 σ y 4,1 √N |
-| 450 mm 250× y 350× | 0 | 5,0 / 6,5 | 37 / 41 | sí: no cambia |
+| fecha | equipo | Δdibujadas | σ sorteo | √N | ¿dentro del ruido? |
+|---|---|---:|---:|---:|---|
+| 2026-09-23 | 200 mm 250× | −38 | 2,3 | 23,4 | no: 16,6 σ y 1,6 √N |
+| 2026-09-23 | 200 mm 350× | −107 | 3,2 | 26,3 | no: 33,9 σ y 4,1 √N |
+| 2026-09-23 | 450 mm 250× y 350× | 0 | 5,0 / 6,5 | 37 / 41 | sí: no cambia |
 
 ## Veredicto
 
