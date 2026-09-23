@@ -117,6 +117,17 @@
   var FOT = {
     SB_OBJ_MAX: 14.0, SB_OBJ_MIN: 24.0, SB_NEGRO: 25.5, SB_BLANCO: 14.0,
     C_MIN: 0.08, C_EXP: 0.35, GAMMA_HIPS: 2.0,
+    /* C_EXP = 0,35 es un ANCLAJE EMPÍRICO, no la pendiente de Crumey 2014. Su
+       meseta tiene pendiente −0,289 y su rama puntual −0,616: 0,35 no es ninguna
+       de las dos. Consecuencia medida: el factor de campo implícito (Cmin/C∞)
+       deriva de 1,60 a 2,30 entre SBe 19 y 25, cuando por construcción debería
+       ser constante. NO se corrige: C_MIN y C_EXP forman un par anclado a SBe 21
+       (K = 2,005); re-anclar es re-calibrar, y ADR 0001:37 congela H2c (la deriva
+       además es invisible en el rango calibrado: 12 obs < 1 mag de SBe).
+       Predicción falsable: con observaciones de rango amplio de SBe, el desajuste
+       de H2c debería crecer con el fondo — repo demasiado estricto en cielo malo,
+       demasiado laxo en cielo bueno.
+       Ver simulador_ocular/docs/referencias/crumey-2014-umbral-de-contraste.md. */
     /* LEY HISTÓRICA C_MAG — hoy VÍA MUERTA: solo corre si H2C se apaga a mano
        (H2C = null), y se conserva únicamente como regresión histórica. En
        producción manda H2c (ver H2C más abajo). El razonamiento original:
