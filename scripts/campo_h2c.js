@@ -109,6 +109,9 @@ function predicciones() {
   console.log('\nESTADO: PENDIENTE DE CAMPO');
 }
 
+module.exports = { CSV: CSV, galDe: galDe, margenDe: margenDe };
+if (require.main !== module) return;
+
 if (!fs.existsSync(CSV)) {
   console.log('Sin datos de campo aún: ' + path.relative(RAIZ, CSV) + ' no existe. Plantilla escrita.\n');
   fs.mkdirSync(DIR, { recursive: true });
