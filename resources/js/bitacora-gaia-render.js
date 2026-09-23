@@ -742,6 +742,22 @@
 
   /* ── Magnitud límite (método del umbral, Torres Lapasió) ── */
   function magLimite(o) {
+    var SB0T = fondoMagLimite(o);
+    if (SB0T == null) return null;
+    var D = o.apertura, MAG = o.aumentos;
+    var t = (o.transmision > 0) ? o.transmision : TRANSMISION_DEFECTO;
+    // Apertura efectiva: si la pupila de salida (d_ep = D/MAG) supera la del ojo,
+    // el ojo recorta el haz y se desperdicia apertura → D_eff = D·min(1, d_eye/d_ep).
+    // Solo en la captación de luz (D²); el término de cielo SB0T conserva su propio
+    // clamp (min(1,dim)) en el render, sin doble recorte.
+    var dEye = o.pupilaOjo || 7;
+    var Deff = D * Math.min(1, dEye / (D / MAG));
+    return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(Deff * Deff * t);
+  }
+
+  // SB0T de magLimite: fondo tras el ocular (Ec. 5 de Torres Lapasió) con su
+  // suelo y su techo. Aparte para que los harness lo lean sin copiar la ley.
+  function fondoMagLimite(o) {
     var D = o.apertura, MAG = o.aumentos;
     var t = (o.transmision > 0) ? o.transmision : TRANSMISION_DEFECTO;
     if (!(D > 0) || !(MAG > 0)) return null;
@@ -761,13 +777,7 @@
        Ec. 6 tiene el vértice en 30,4, así que con sqm 40 el límite caía a 14,5,
        por debajo del de un cielo de sqm 21. Ver test_difuso.js §9b. */
     SB0T = Math.min(27, Math.max(sqm, SB0T));
-    // Apertura efectiva: si la pupila de salida (d_ep = D/MAG) supera la del ojo,
-    // el ojo recorta el haz y se desperdicia apertura → D_eff = D·min(1, d_eye/d_ep).
-    // Solo en la captación de luz (D²); el término de cielo SB0T conserva su propio
-    // clamp (min(1,dim)) en el render, sin doble recorte.
-    var dEye = o.pupilaOjo || 7;
-    var Deff = D * Math.min(1, dEye / (D / MAG));
-    return -22.81 + 1.792 * SB0T - 0.02949 * SB0T * SB0T + 2.5 * Math.log10(Deff * Deff * t);
+    return SB0T;
   }
 
   /* ── Ajustes del render (idénticos a GAIA_CFG del simulador) ── */
@@ -2941,7 +2951,7 @@
     dibujar: dibujar,
     vistaGaia: vistaGaia,
     render: render,
-    magLimite: magLimite,
+    magLimite: magLimite, fondoMagLimite: fondoMagLimite,
     veloSB: veloSB,
     veloVar: veloVar,
     nefSbf: nefSbf,

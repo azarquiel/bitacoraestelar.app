@@ -40,7 +40,8 @@ porque la Ec. 5 usa 7,5 mm de pupila. L1 las distingue.
 
 - **d**: pupila de salida, D/M.
 - **SBe**: cielo en el ojo según `ctxFotometrico` de producción.
-- **SB0T**: el fondo que usa `magLimite` hoy (Ec. 5 con su techo de 27).
+- **SB0T**: el fondo que usa `magLimite` hoy, leído de `fondoMagLimite` de
+  producción (Ec. 5 con su techo de 27). Es el valor sin el corte.
 - **d0**: Ec. 70 de Crumey con el cielo y la transmisión de la fila.
 - **¿bajo el corte?**: `d < d0`.
 - **margen**: log10(C_obj/Cmin) de H2c, con seis decimales. Es la foto que
@@ -76,7 +77,8 @@ porque la Ec. 5 usa 7,5 mm de pupila. L1 las distingue.
   equivale a `SBe > 25,08`. `ctxFotometrico` calcula SBe con la misma
   transformación de pupila que la Ec. 66 de Crumey, así que las dos
   condiciones son la misma. El script sale con código 1 si alguna fila lo
-  contradice.
+  contradice. Se probó rompiéndolo a propósito (p = 5 mm en vez de 7): sale
+  con código 1 y señala las cinco filas (ADR 0005).
 
 **Qué significa «bajo el corte» para H2c.** El margen de H2c no lee `SB0T` ni
 la guarda del pintado. Solo lee `Cmin`, que se calcula en `ctxFotometrico` a
@@ -94,17 +96,20 @@ el detector, ni el muestreo, ni el equipo se cambian después de ver la
 salida.
 
 1. **L1 — el plano empieza en d0 (física).** El tramo de pendiente 0 de
-   `magLimite` con la variante debe empezar en la pupila `d_plano`. Se mide con
-   cielo 21,5, t 0,9 y ojo 7 mm, en **dos** equipos: 200 mm y 450 mm. Para ese
-   cielo, d0 = 1,42 mm en los dos; en aumentos son 141× y 317×.
-   - PASA si |d_plano − d0| ≤ 0,05 mm en los dos equipos. Es la tolerancia con
-     que el autotest de `harness_crumey.js` reproduce el d0 de Bowen.
-   - FALLA si |d_plano − d0| > 0,10 mm en cualquiera de los dos. 0,10 mm es la
-     distancia de la variante P2a (1,52 mm) a d0: una implementación que caiga
-     ahí ha puesto el corte en la Ec. 5 y no en la Ec. 70.
-   - NO CONCLUYENTE entre 0,05 y 0,10 mm.
+   `magLimite` con la variante empieza en la pupila `d_plano`. Se mide con
+   200 mm, cielo 21,5, t 0,9 y ojo 7 mm; ahí d0 = 1,42 mm, es decir 141×. Un
+   segundo equipo no añade nada: `SB0T` depende solo de d = D/M, y la apertura
+   solo desplaza la curva en vertical.
+   - PASA si |d_plano − d0| ≤ 0,05 mm. Es la tolerancia con que el autotest de
+     `harness_crumey.js` reproduce el d0 de Bowen.
+   - FALLA si |d_plano − d0| > 0,07 mm. La variante P2a cae a 0,10 mm de d0,
+     pero en esta rejilla (paso de 0,03 mm hacia 1,4 mm) el detector la ve a
+     0,098. 0,07 deja P2a del lado de FALLA con un paso de rejilla de margen:
+     una implementación que caiga ahí ha puesto el corte en la Ec. 5 y no en
+     la Ec. 70.
+   - NO CONCLUYENTE entre 0,05 y 0,07 mm.
 
-2. **L2 — el plano es plano.** Con la variante y en los dos equipos de L1,
+2. **L2 — el plano es plano.** Con la variante y el equipo de L1,
    `magLimite` varía como mucho 0,01 mag entre d0 y 0,2 mm. Es la variación del
    plano actual en `maglimite_vs_crumey.md` (15,46 → 15,47).
    - PASA si varía ≤ 0,01 mag.
@@ -117,13 +122,15 @@ salida.
    - PASA si se cumplen las dos cosas en todos los puntos.
    - FALLA con un solo punto que no las cumpla.
 
-   Este listón no juzga la corrección de la ley nueva contra la vieja. Vigila
+   La segunda condición se sigue de la definición de la variante; solo la
+   primera puede fallar con una implementación que cumpla L1. Este listón no
+   juzga la corrección de la ley nueva contra la vieja. Vigila
    que #342 no toque la curva fuera del régimen de Crumey: ni la Ec. 5, ni la
    pupila de 7,5 mm, ni el codo de 25×–29×. Contra la ley que se sustituye
    solo se vigila el alcance, no los valores.
 
-4. **L4 — H2c intacta.** Con la bandera de #342 activa, `node
-   scripts/tabla_corte_h2c.js` debe reproducir la columna **margen** de la
+4. **L4 — H2c intacta.** #342 añade a `scripts/tabla_corte_h2c.js` la forma
+   de activar su bandera. Con la bandera activa, el script debe reproducir la columna **margen** de la
    tabla de arriba a seis decimales, en las 12 filas.
    - PASA si reproduce las 12.
    - FALLA con una sola diferencia. Además es conflicto de ADR 0001: se aplica
@@ -132,12 +139,17 @@ salida.
    Así los 12 veredictos de campo (10/12 acordes) quedan fijos por
    construcción, que es más estricto que el criterio 4 de #342.
 
-5. **L5 — la guarda del pintado cambia solo donde debe.** Con la guarda
-   movida a 25,08, `FcieloPintado` de `ctxFotometrico` cambia en las filas 3,
-   5, 6, 11 y 12, y es idéntico al actual en las otras siete.
-   - PASA si el conjunto de filas que cambian es exactamente ese.
-   - FALLA con cualquier otro conjunto. En particular, si la fila 11 no
-     cambia, el valor de la guarda se ha desplazado 0,02 mag o más.
+5. **L5 — la guarda del pintado se mueve con el corte.** `FOT.SB_SUELO_PINTADO`
+   vale 25,08 a 0,005, la precisión con que Crumey da el fondo nulo. Además,
+   `FcieloPintado` de `ctxFotometrico` cambia en las filas 3, 5, 6, 11 y 12, y
+   es idéntico al actual en las otras siete.
+   - PASA si se cumplen las dos cosas.
+   - FALLA en otro caso. El conjunto de filas solo no basta: cualquier guarda
+     entre 24,62 y 25,10 da ese mismo conjunto.
+
+L2, L3 (su primera mitad), L4 y L5 vigilan la implementación, no la física:
+fallan si #342 hace algo distinto de la variante fijada. El único listón que
+contrasta con Crumey es L1.
 
 **Informativo, sin listón:** el censo de M13 por objeto observado (criterio 6
 de #342) en las escenas de `censo_corte_crumey.md`. #340 ya midió que el
@@ -160,7 +172,7 @@ informa para saber qué se gana y qué se pierde, no como condición.
 |---|---|---|
 | **ADELANTE** | L1, L2, L3, L4 y L5 PASAN | implementa en producción tras la bandera, con los criterios 2–7 de #342 |
 | **NO ADELANTE** | cualquier listón FALLA | se cierra sin tocar producción y registra qué listón falló y con qué cifra |
-| **NO CONCLUYENTE** | L1 NO CONCLUYENTE en algún equipo y ningún listón FALLA | igual que NO ADELANTE (criterio 1 de #342) |
+| **NO CONCLUYENTE** | L1 NO CONCLUYENTE y ningún listón FALLA | igual que NO ADELANTE (criterio 1 de #342) |
 
 ## Criterio de parada
 
