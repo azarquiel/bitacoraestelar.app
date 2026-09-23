@@ -12,3 +12,5 @@ Orden cronológico de ejecución:
 6. `velo_granularidad.md` (2026-08-20)
 7. `escala_grano.md` (2026-08-20)
 8. `experimento_sgrano.md` + `experimento_sgrano/` (2026-08-20)
+9. `maglimite_vs_crumey.md` (2026-09-22)
+10. `censo_corte_crumey.md` (2026-09-23)
