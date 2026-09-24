@@ -65,6 +65,7 @@ def cargar_catalogos():
 # ── Texto del correo ─────────────────────────────────────────────────────────
 MARCA_REENVIO = re.compile(r'^-{3,}\s*(Forwarded message|Mensaje reenviado)\s*-{3,}\s*$', re.I | re.M)
 CORTE_CITA = re.compile(r'^(El|On)\b.{0,250}(escribió|wrote)\s*:\s*$|^-{3,}\s*(Original Message|Mensaje original)', re.I | re.M)
+MAX_LINEAS_FIRMA = 8
 FIRMA = re.compile(r'^(--\s*$|un saludo|saludos|un abrazo|abrazos|enviado desde|sent from)', re.I | re.M)
 
 
@@ -110,13 +111,21 @@ def autor_y_cuerpo(msg):
     return autor, reenviado, texto.strip()
 
 
+def telefono(m):
+    """Solo 9 cifras o más: una fecha (14-08-2021, 2021 08 14) tiene 8."""
+    return '[teléfono]' if sum(c.isdigit() for c in m.group(0)) >= 9 else m.group(0)
+
+
 def anonimizar(texto):
-    f = FIRMA.search(texto)
-    if f:
-        texto = texto[:f.start()]
+    # La firma es la ÚLTIMA despedida con poco detrás. Cortar en la primera
+    # borraba crónicas enteras que empiezan por «Saludos a todos».
+    for f in reversed(list(FIRMA.finditer(texto))):
+        if len([l for l in texto[f.start():].splitlines() if l.strip()]) <= MAX_LINEAS_FIRMA:
+            texto = texto[:f.start()]
+            break
     texto = re.sub(r'[\w.+-]+@[\w-]+\.[\w.-]+', '[correo]', texto)
     texto = re.sub(r'https?://\S+|www\.\S+', '[url]', texto)
-    texto = re.sub(r'(?<!\d)(\+?\d[\d \-]{7,}\d)(?!\d)', '[teléfono]', texto)
+    texto = re.sub(r'(?<!\d)\+?\d[\d \-]{7,}\d(?!\d)', telefono, texto)
     return re.sub(r'\n{3,}', '\n\n', texto).strip()
 
 
@@ -187,7 +196,18 @@ def puntuar(d, ajeno):
 # ── Proceso ──────────────────────────────────────────────────────────────────
 COMUNES = ['id', 'p379', 'p342', 'p113', 'desglose', 'objetos', 'galaxias_catalogo',
            'aperturas_mm', 'aumentos', 'sqm', 'pupila_mm', 'no_visto', 'lateral',
-           'limite_estelar', 'globular']
+           'limite_estelar', 'globular', 'copias']
+# Un reenvío con una línea añadida o un párrafo retocado es la misma crónica.
+UMBRAL_COPIA = 0.6
+
+
+def tejas(texto):
+    p = re.findall(r'\w+', texto.lower())
+    return {tuple(p[i:i + 5]) for i in range(max(1, len(p) - 4))}
+
+
+def parecido(a, b):
+    return len(a & b) / len(a | b) if a and b else 0.0
 
 
 def criba(ruta_mbox, yo, dir_salida):
@@ -198,7 +218,7 @@ def criba(ruta_mbox, yo, dir_salida):
     caja = mailbox.mbox(ruta_mbox, factory=lambda f: email.message_from_binary_file(f, policy=email.policy.default),
                         create=False)
     filas, vistos, seudonimo = [], set(), {}
-    total = sin_objeto = duplicados = 0
+    total = sin_objeto = duplicados = casi = 0
     for msg in caja:
         total += 1
         autor, reenviado, cuerpo = autor_y_cuerpo(msg)
@@ -227,21 +247,35 @@ def criba(ruta_mbox, yo, dir_salida):
         filas.append((comun,
                       {'remitente': autor, 'reenviado': int(reenviado), 'asunto': str(msg.get('Subject', '')),
                        'fecha': fecha},
-                      {'observador': seudonimo[autor], 'texto': anonimizar(cuerpo)}))
-    filas.sort(key=lambda f: (-f[0]['p379'], -f[0]['p342'], -f[0]['p113']))
+                      {'observador': seudonimo[autor], 'texto': anonimizar(cuerpo)},
+                      tejas(cuerpo)))
+    # La copia que más puntúa primero: es la que se queda al fundir las casi iguales.
+    filas.sort(key=lambda f: (-f[0]['p379'], -f[0]['p342'], -f[0]['p113'], -len(f[2]['texto'])))
+    unicas = []
+    for f in filas:
+        orig = next((u for u in unicas if parecido(u[3], f[3]) >= UMBRAL_COPIA), None)
+        if orig:
+            orig[0]['copias'] += 1
+            casi += 1
+        else:
+            f[0]['copias'] = 0
+            unicas.append(f)
+    filas = unicas
 
     privado = os.path.join(dir_salida, 'reportes_privado.csv')
     anonimo = os.path.join(dir_salida, 'reportes_anonimo.csv')
     for ruta, extra, campos in ((privado, 1, COMUNES + ['remitente', 'reenviado', 'asunto', 'fecha']),
                                 (anonimo, 2, COMUNES + ['observador', 'texto'])):
-        with open(ruta, 'w', newline='', encoding='utf-8') as f:
-            w = csv.DictWriter(f, fieldnames=campos)
+        # «;» y BOM: Excel en español lo abre en columnas sin asistente.
+        with open(ruta, 'w', newline='', encoding='utf-8-sig') as f:
+            w = csv.DictWriter(f, fieldnames=campos, delimiter=';')
             w.writeheader()
             for fila in filas:
                 w.writerow({**fila[0], **fila[extra]})
     completos = sum(1 for f in filas if 'completo' in f[0]['desglose'])
-    print('%d correos · %d duplicados · %d sin objeto · %d reportes (%d con apertura+aumentos+SQM) · %d observadores'
-          % (total, duplicados, sin_objeto, len(filas), completos, len(seudonimo)))
+    print('%d correos · %d duplicados · %d casi duplicados · %d sin objeto · %d reportes '
+          '(%d con apertura+aumentos+SQM) · %d observadores'
+          % (total, duplicados, casi, sin_objeto, len(filas), completos, len({f[1]['remitente'] for f in filas})))
     print(privado)
     print(anonimo)
     return filas
@@ -277,10 +311,16 @@ def autotest():
         caja.add(correo('Luis <luis@ejemplo.es>', 'Re: M33',
                         'M33 se veía bien con 450 mm.\n\nEl lun, 2 ago 2021, Pepe <pepe@ejemplo.es> escribió:\n'
                         'M101 no lo vi\n'))
+        cronica_eva = ('Saludos a todos\n\nNoche del 14-08-2021 con el refractor de 130 mm.\n'
+                       'NGC 2683 a 215x con visión lateral, SQM 21,2. Después NGC 2903 a 150x.\n'
+                       'Seeing regular, algo de viento hacia la una.\n\nUn abrazo\nEva\n')
+        caja.add(correo('Eva <eva@ejemplo.es>', 'Crónica NGC 2683', cronica_eva))
+        caja.add(correo('Eva <eva@ejemplo.es>', 'Crónica NGC 2683 (corregida)',
+                        cronica_eva.replace('Seeing regular', 'Seeing regular, 3/5')))    # casi duplicado
         caja.close()
         filas = criba(os.path.join(tmp, 'p.mbox'), 'yo@ejemplo.es', tmp)
         por_rem = {f[1]['remitente']: f for f in filas}
-        ok(len(filas) == 3, 'deduplica y descarta el correo sin objeto (3 reportes)')
+        ok(len(filas) == 4, 'deduplica, funde la casi copia y descarta el correo sin objeto (4 reportes)')
         ok(filas[0][1]['remitente'] == 'pepe@ejemplo.es', 'el reporte completo con «no lo vi» va primero')
         p = por_rem['pepe@ejemplo.es'][0]
         ok(p['aperturas_mm'] == '300' and p['aumentos'] == '180' and p['sqm'] == '21.85',
@@ -300,6 +340,12 @@ def autotest():
         ok('@' not in anon and 'Crónica' not in anon and '600 123 456' not in anon and 'Pepe' not in anon,
            'el anónimo no lleva correos, asuntos, teléfonos ni firma')
         ok('obs-01' in anon, 'seudónimo de observador')
+        e = por_rem.get('eva@ejemplo.es')
+        ok(e is not None and e[0]['copias'] == 1, 'la versión corregida se funde con la original (copias = 1)')
+        ok(e and 'NGC 2683 a 215x' in e[2]['texto'] and 'Eva' not in e[2]['texto'],
+           'una crónica que empieza por «Saludos» no se pierde; la firma final sí se corta')
+        ok(e and '14-08-2021' in e[2]['texto'], 'una fecha no se toma por teléfono')
+        ok(anon.splitlines()[0].count(';') > 5, 'separador «;» para Excel en español')
         with open(os.path.join(tmp, 'reportes_privado.csv'), encoding='utf-8') as f:
             priv = f.read()
         ok('pepe@ejemplo.es' in priv and 'Crónica sábado' in priv and '2021-08-14 23:40' in priv,
