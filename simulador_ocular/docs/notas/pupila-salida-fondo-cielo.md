@@ -88,7 +88,7 @@ oscuros en un gris franco: ver `simulador_ocular/docs/adr/0009-fondo-cielo-lumin
 Método del umbral de Torres Lapasió — `magLimiteTelescopio()`, `bitacora-ocular.js:341-357`
 (réplica `bitacora-gaia-render.js:86-94`):
 ```
-SB0T = SQM + 5*log10(7.5*MAG / (D*√t))     acotado a [SQM, 27]
+SB0T = SQM + 5*log10(7.5*MAG / (D*√t))     acotado a [SQM, 27]; congelado en d0 (Ec. 70 de Crumey, ADR-0030)
 TLM  = −22.81 + 1.792*SB0T − 0.02949*SB0T² + 2.5*log10(D²*t)
 ```
 Usa **siempre la apertura completa `D²`**. Cuando `d_ep > d_eye` el ojo recorta el haz y

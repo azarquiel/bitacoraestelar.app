@@ -15,3 +15,4 @@ Orden cronológico de ejecución:
 9. `maglimite_vs_crumey.md` (2026-09-22)
 10. `censo_corte_crumey.md` (2026-09-23)
 11. `prerregistro_corte_crumey.md` (2026-09-23) — prerregistro de #342, sin medida.
+12. `medida_corte_crumey.md` (2026-09-26) — su medida: L1–L5 PASAN, ADELANTE.

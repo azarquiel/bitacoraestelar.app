@@ -112,7 +112,7 @@ REFS.forEach(function (id) {
   // bin de la LF a un paso distinto, que es justo donde nacían los anillos.
   [146, 300, 514].forEach(function (MAG) {
     var m = H.medir(H.cumulo(id), { D: 200, MAG: MAG, sqm: 21.5, realization: 0 });
-    var t = m.tabla, peor = 0, peorR = 0, peorD = 0, nodos = 0, juzgados = 0;
+    var t = m.tabla, peor = 0, peorR = 0, peorD = 0, nodos = 0, juzgados = 0, planos = 0;
     for (var i = 1; i < t.r.length; i++) {
       // Los últimos nodos rozan r_t, donde el truncamiento de King lleva Σ a
       // cero: ahí el cociente I/Σ es 0/0 numérico y no dice nada de S1.
@@ -122,15 +122,22 @@ REFS.forEach(function (id) {
       nodos++;
       var d = Math.abs(-2.5 * Math.log10((t.I[i] / s1) / (t.I[i - 1] / s0)));
       if (d < SALTO_VISIBLE) continue;         // no hay escalón que medir
-      juzgados++;
       var dm = Math.abs(t.mRes[i] - t.mRes[i - 1]);
+      /* Con m_res idéntica en los dos nodos no hay borde de bin que cruzar: el
+         salto es la dependencia radial de S1campo (la mezcla), no la LF. Pasa
+         desde #342 en el plano del corte de fondo cero, donde magLimite ya no
+         depende del velo y m_res limitada por el cielo sale exactamente plana
+         (a 514× eso da saltos de 1,4e-3 mag sobre Δm = 0). */
+      if (dm < 1e-9) { planos++; continue; }
+      juzgados++;
       var q = d / Math.max(dm, 1e-6);
       if (q > peor) { peor = q; peorR = t.r[i]; peorD = d; }
     }
-    ok(nodos > 100 && peor < TOL_Q,
+    ok(nodos > 100 && juzgados > 0 && peor < TOL_Q,
       id + ' ' + MAG + 'x: mayor cociente entre nodos ' + peor.toFixed(3) +
       ' (salto de ' + peorD.toFixed(4) + ' mag en r = ' + peorR.toFixed(1) +
-      '", ' + juzgados + ' de ' + nodos + ' nodos con salto visible, paso ' +
+      '", ' + juzgados + ' de ' + nodos + ' nodos con salto visible, ' + planos +
+      ' con m_res plana, paso ' +
       t.paso.toFixed(2) + '")');
   });
 });

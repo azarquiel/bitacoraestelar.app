@@ -114,7 +114,7 @@ oscurece el fondo del cielo), la **transmisión** del tubo y el **brillo del cie
 
 1. Fondo del cielo visto por el ocular, oscurecido por el aumento:
 
-   `SB0T = SQM + 5·log10(7,5·MAG / (D·√t))`, acotado a `[SQM, 27]`
+   `SB0T = SQM + 5·log10(7,5·MAG / (D·√t))`, acotado a `[SQM, 27]`; con pupila de salida por debajo del d0 de Crumey (Ec. 70) se congela en su valor en d0 (ADR-0030, #342)
 
 2. Estrella más débil visible sobre ese fondo:
 
