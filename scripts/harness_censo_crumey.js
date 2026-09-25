@@ -36,6 +36,8 @@ function cargarRender(techo) {
     }
     vm.runInContext(src, ctx, { filename: f });
   });
+  // #342 activó el corte por la Ec. 70; este harness mide el del techo de SB0T.
+  ctx.window.BitacoraGaiaRender.fot.SB_FONDO_NULO = null;
   return { techo: techo, R: ctx.window.BitacoraGaiaRender, C: ctx.window.BitacoraCumulos,
            GLOBULARES: ctx.window.BITACORA_GLOBULARES };
 }

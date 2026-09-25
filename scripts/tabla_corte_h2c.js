@@ -13,11 +13,16 @@
    el ojo (SBe) pase del fondo nulo. Si alguna fila lo contradice, o no hay 12
    filas con transmisión, el script sale con código 1.
 
-   node scripts/tabla_corte_h2c.js */
+   Sin argumentos corre con la ley histórica (FOT.SB_FONDO_NULO = null, guarda
+   del pintado en 27): es la tabla del prerregistro. `--corte` deja las
+   banderas de producción de #342 y el SB0T sale ya cortado (listón L4).
+
+   node scripts/tabla_corte_h2c.js [--corte] */
 'use strict';
 var campo = require('./campo_h2c.js');
 var crumey = require('./harness_crumey.js');
 var R = global.window.BitacoraGaiaRender;
+if (process.argv.indexOf('--corte') < 0) { R.fot.SB_FONDO_NULO = null; R.fot.SB_SUELO_PINTADO = 27; }
 
 function coma(x, n) { return x.toFixed(n).replace('.', ','); }
 function c2(x) { return coma(x, 2); }
