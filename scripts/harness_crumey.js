@@ -172,7 +172,7 @@ function autotest() {
 
 module.exports = {
   crumeyM0: crumeyM0, crumeyMuInf: crumeyMuInf, crumeySup: crumeySup, crumeyPen: crumeyPen,
-  crumeyM0Telescopio: crumeyM0Telescopio, crumeyD0: crumeyD0,
+  crumeyM0Telescopio: crumeyM0Telescopio, crumeyD0: crumeyD0, luminanciaDeMu: luminanciaDeMu, B_NULO: B_NULO,
   curvaPorPupila: curvaPorPupila, tramos: tramos, autotest: autotest
 };
 if (require.main !== module) return;
