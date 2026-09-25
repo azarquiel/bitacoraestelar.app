@@ -145,3 +145,26 @@ No se encontró ningún consumidor en `mapa/`, `registro/` ni en el plugin PHP.
 
 - `git diff main` no toca ninguna línea ejecutable.
 - `node scripts/test_difuso.js` pasa sin regresiones nuevas.
+
+## Enmienda de #342 (2026-09-26): el valor de Q2 es 25,08
+
+El corte congela solo el fondo, no la apertura efectiva. Con d0 > p (cielos
+de sqm > ~24,97) eso se aparta de la variante literal del prerregistro, y el
+veredicto no cubre ese régimen (`medida_corte_crumey.md`, «Desviación»).
+
+- **Decisión.** El corte de fondo cero de `magLimite` deja de ser el techo de
+  27 de la Ec. 5. Ahora lo fija la Ec. 70 de Crumey,
+  `d0 = p·√(10⁻⁵·F_t / B)`, con `FOT.SB_FONDO_NULO = 25.08`. Con d < d0,
+  el fondo de `magLimite` se congela en el que hay en d0.
+- **La guarda del pintado.** `FOT.SB_SUELO_PINTADO` baja a 25,08 con el
+  corte, por la regla de la Decisión 3. Siguen siendo dos claves separadas. La
+  ley histórica vuelve con `SB_FONDO_NULO = null` y `SB_SUELO_PINTADO = 27`.
+- **Q1 no cambia.** El 27 de Torres Lapasió sigue en `fondoMagLimite` como
+  techo. Con el corte activo solo actúa con cielos de sqm > 27.
+- **Medida.** El prerregistro `simulador_ocular/docs/experimentos/prerregistro_corte_crumey.md`
+  dio ADELANTE: L1–L5 PASAN (`medida_corte_crumey.md`, commit `ed19ff7`).
+  H2c no se toca: Cmin, SBe y los 12 márgenes de campo quedan idénticos
+  (ADR 0001).
+- **Consecuencia aceptada.** Las estrellas dejan de mejorar por debajo de
+  25,08 en el ojo y los extensos no. La asimetría entre `magLimite` y `Cmin`
+  es la que el prerregistro dejó escrita.
