@@ -109,6 +109,19 @@ function predicciones() {
   console.log('\nESTADO: PENDIENTE DE CAMPO');
 }
 
+// Filas del CSV: [objeto, D, M, sqm, seeing, T, resultado]; 0 = vacío.
+function leerFilas() {
+  return fs.readFileSync(CSV, 'utf8').trim().split('\n').slice(1)
+    .filter(function (l) { return l.trim(); })
+    .map(function (l) {
+      var c = l.split(/[;,]/);
+      return [c[0], +c[1], +c[2], +c[3], +c[4] || 0, +c[5] || 0, (c[6] || '').trim()];
+    });
+}
+
+module.exports = { galDe: galDe, margenDe: margenDe, leerFilas: leerFilas };
+if (require.main !== module) return;
+
 if (!fs.existsSync(CSV)) {
   console.log('Sin datos de campo aún: ' + path.relative(RAIZ, CSV) + ' no existe. Plantilla escrita.\n');
   fs.mkdirSync(DIR, { recursive: true });
@@ -117,8 +130,7 @@ if (!fs.existsSync(CSV)) {
   process.exit(0);
 }
 
-var lineas = fs.readFileSync(CSV, 'utf8').trim().split('\n').slice(1)
-  .filter(function (l) { return l.trim(); });
+var lineas = leerFilas();
 if (!lineas.length) {
   console.log('El CSV existe pero está vacío: sin veredicto de campo.\n');
   predicciones();
@@ -126,9 +138,8 @@ if (!lineas.length) {
 }
 console.log('═══ Campo H2c: ' + lineas.length + ' observaciones ═══');
 var casos = [];
-lineas.forEach(function (l) {
-  var c = l.split(/[;,]/);
-  var r = fila(c[0], +c[1], +c[2], +c[3], +c[4] || 0, +c[5] || 0, (c[6] || '').trim());
+lineas.forEach(function (c) {
+  var r = fila(c[0], c[1], c[2], c[3], c[4], c[5], c[6]);
   if (r) casos.push(r);
 });
 var des = casos.filter(function (c) { return c.acorde === false; });

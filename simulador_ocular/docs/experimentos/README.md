@@ -14,4 +14,5 @@ Orden cronológico de ejecución:
 8. `experimento_sgrano.md` + `experimento_sgrano/` (2026-08-20)
 9. `maglimite_vs_crumey.md` (2026-09-22)
 10. `censo_corte_crumey.md` (2026-09-23)
-11. `prerregistro_validacion_h2c.md` (2026-09-24) — prerregistro de #379, sin medida; corte de datos el 2026-10-15.
+11. `prerregistro_corte_crumey.md` (2026-09-23) — prerregistro de #342, sin medida.
+12. `prerregistro_validacion_h2c.md` (2026-09-24) — prerregistro de #379, sin medida; corte de datos el 2026-10-15.

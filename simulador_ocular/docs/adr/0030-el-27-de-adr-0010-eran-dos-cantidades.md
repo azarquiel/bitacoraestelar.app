@@ -99,7 +99,7 @@ tienen relación con el fondo y no se listan.
 
 | Sitio | Clasificación |
 |---|---|
-| `bitacora-gaia-render.js`, `magLimite`: `SB0T = Math.min(27, Math.max(sqm, SB0T))` | **Q2**, corte de fondo cero, con valor de Q1 |
+| `bitacora-gaia-render.js`, `fondoMagLimite` (el `SB0T` de `magLimite`): `SB0T = Math.min(27, Math.max(sqm, SB0T))` | **Q2**, corte de fondo cero, con valor de Q1 |
 | `bitacora-gaia-render.js`, `FOT.SB_SUELO_PINTADO: 27`, consumido en `ctxFotometrico` para construir `FcieloPintado` y leído en `pintarFot` a través de `valorDeFlujo` | **Guarda** de saturación del pintado, sin física propia |
 
 ### Documentación en comentarios de código
