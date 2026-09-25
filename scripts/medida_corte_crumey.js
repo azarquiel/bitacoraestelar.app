@@ -5,10 +5,12 @@
    veredicto lo da la tabla del prerregistro con las cifras que salen aquí.
 
    Sin ley propia (ADR 0008): magLimite, ctxFotometrico y fot salen del render
-   de producción; d0, el detector de tramos y el muestreo, de harness_crumey.js
+   de producción; el detector de tramos y el muestreo, de harness_crumey.js
    tal cual; las 12 filas, de campo_h2c.js; la escena de M13, de
    harness_censo_crumey.js. La ley histórica se alcanza con las banderas de FOT
    (SB_FONDO_NULO = null, SB_SUELO_PINTADO = 27), no con una copia.
+   Contraste declarado: d0 sale de crumeyD0 de harness_crumey.js, una Ec. 70
+   independiente de la de producción; L1 es justo esa comparación.
 
    Ejecución vacua (criterio de parada): si el autotest del harness no pasa,
    el prerregistro no tiene tabla o el script lanza una excepción, sale con

@@ -57,3 +57,32 @@ estrella (ra, dec, m).
   que la escena no cambia.
 - Con 200 mm, 250× y 350× dan ahora el mismo límite, 15,02, que es el plano.
   Es lo que pedía #342: pasado d0, subir aumentos deja de prometer estrellas.
+
+## Desviación de la variante prerregistrada
+
+El prerregistro fija que «con `d < d0`, la curva vale lo que vale en `d0`».
+La implementación congela solo el **fondo** (`SB0T`), no la apertura
+efectiva de `magLimite`.
+
+- Con `d0 < p`, que es todo el dominio de L1–L5 (sqm ≤ 22), la apertura
+  efectiva es `D` a los dos lados de d0 y las dos formulaciones coinciden.
+- Con `d0 > p` difieren. Eso pasa con cielos más oscuros que ~24,97 a t 0,9.
+  Congelar también la apertura haría que un cielo más oscuro enseñase menos
+  estrellas, y `test_corte_fondo_nulo.js` lo prohíbe.
+- Consecuencia: el veredicto ADELANTE no cubre ese régimen. L1–L5 no lo miden.
+
+## Batería antes y después
+
+- **Línea base**, en `553f568` (main, antes del diff), 110 tests: 3 rojos.
+  - `test_halo_v7_e5`: esperado, #294.
+  - `test_consumidores_dso`: `spawn php ENOENT`, no hay php en la máquina.
+  - `test_dso_texturas`.
+- **Después**, en `ed19ff7`, 111 tests: los mismos 3, con secciones de fallo
+  idénticas, más `test_halo_v7_e4` (E4.2 a 514× en los tres cúmulos).
+- **Causa de E4.2.** En el plano del corte `magLimite` ya no depende del velo.
+  Donde el cielo limita `m_res`, esta sale exactamente constante. El cociente
+  q = salto/Δm_res dividía saltos de 1,1–1,5·10⁻³ mag de `S1campo` (la
+  mezcla) por Δm_res = 0.
+- **Arreglo, en `2abacba`.** E4.2 no juzga los nodos con Δm_res < 10⁻⁹, los
+  cuenta y exige al menos un nodo juzgado. A 514× salta de 2 a 6 nodos de 501.
+  El peor q queda entre 0,65 y 0,90, bajo el listón de 1,5.

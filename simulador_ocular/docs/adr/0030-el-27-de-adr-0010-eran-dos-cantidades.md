@@ -148,6 +148,10 @@ No se encontró ningún consumidor en `mapa/`, `registro/` ni en el plugin PHP.
 
 ## Enmienda de #342 (2026-09-26): el valor de Q2 es 25,08
 
+El corte congela solo el fondo, no la apertura efectiva. Con d0 > p (cielos
+de sqm > ~24,97) eso se aparta de la variante literal del prerregistro, y el
+veredicto no cubre ese régimen (`medida_corte_crumey.md`, «Desviación»).
+
 - **Decisión.** El corte de fondo cero de `magLimite` deja de ser el techo de
   27 de la Ec. 5. Ahora lo fija la Ec. 70 de Crumey,
   `d0 = p·√(10⁻⁵·F_t / B)`, con `FOT.SB_FONDO_NULO = 25.08`. Con d < d0,
