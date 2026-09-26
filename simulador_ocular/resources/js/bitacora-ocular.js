@@ -627,7 +627,7 @@
               if (fuente === 'skyview') {
                 cargando.textContent = 'SkyView no responde: probando con el archivo del ESO…';
                 $('sim-aviso').textContent = 'SkyView no responde: se muestra la placa del archivo del ESO, que llega ligeramente girada respecto al norte.' +
-                  (pedido > BitacoraGaiaRender.esoMaxArcmin ? ' El ESO no sirve más de 2°: la imagen se recorta.' : '');
+                  (pedido > BitacoraGaiaRender.esoMaxArcmin ? ' El ESO no sirve más de ' + (BitacoraGaiaRender.esoMaxArcmin / 60) + '°: la imagen se recorta.' : '');
                 renderDSS(pedido, peticion, centro, 'eso');
                 return;
               }

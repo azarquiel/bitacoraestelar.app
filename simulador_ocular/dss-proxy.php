@@ -24,7 +24,7 @@ const DSS_CACHE_MAX_BYTES = 150 * 1024 * 1024;   // objetivo de tamaño de la ca
 const DSS_CACHE_LOWWATER  = 0.80;                // tras evict, bajar hasta el 80% del tope
 const DSS_CONNECT_TIMEOUT = 8;                   // s: timeout de CONEXIÓN al archivo del ESO
 const DSS_REQUEST_TIMEOUT = 40;                  // s: timeout TOTAL de la petición
-const DSS_MAX_ARCMIN      = 120;                 // ' : campo máximo que sirve el ESO (por encima devuelve HTML de error)
+const DSS_ESO_MAX_ARCMIN  = 120;                 // ' : campo máximo que sirve el ESO (por encima devuelve HTML de error)
 const DSS_SKYVIEW_MAX_ARCMIN = 180;              // ' : SkyView une placas y sirve 3° limpios; a 4° ya se ve la costura (#383)
 const DSS_MIN_BYTES       = 200;                 // bytes: por debajo se considera respuesta inválida
 const DSS_CLEANUP_EVERY   = 300;                 // s: limpieza como mucho cada 5 min
@@ -57,7 +57,7 @@ function dss_survey_valido(string $sv): string {
 
 /** Acota el campo (x o y) al rango que sirve la fuente: [1, 180] SkyView, [1, 120] ESO. */
 function dss_acotar_campo(float $v, string $fuente): float {
-    $max = ($fuente === 'skyview') ? DSS_SKYVIEW_MAX_ARCMIN : DSS_MAX_ARCMIN;
+    $max = ($fuente === 'skyview') ? DSS_SKYVIEW_MAX_ARCMIN : DSS_ESO_MAX_ARCMIN;
     return min((float) $max, max(1.0, $v));
 }
 
