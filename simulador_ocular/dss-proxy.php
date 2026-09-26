@@ -24,7 +24,8 @@ const DSS_CACHE_MAX_BYTES = 150 * 1024 * 1024;   // objetivo de tamaño de la ca
 const DSS_CACHE_LOWWATER  = 0.80;                // tras evict, bajar hasta el 80% del tope
 const DSS_CONNECT_TIMEOUT = 8;                   // s: timeout de CONEXIÓN al archivo del ESO
 const DSS_REQUEST_TIMEOUT = 40;                  // s: timeout TOTAL de la petición
-const DSS_MAX_ARCMIN      = 120;                 // ' : campo máximo que admite el DSS
+const DSS_MAX_ARCMIN      = 120;                 // ' : campo máximo que sirve el ESO (por encima devuelve HTML de error)
+const DSS_SKYVIEW_MAX_ARCMIN = 180;              // ' : SkyView une placas y sirve 3° limpios; a 4° ya se ve la costura (#383)
 const DSS_MIN_BYTES       = 200;                 // bytes: por debajo se considera respuesta inválida
 const DSS_CLEANUP_EVERY   = 300;                 // s: limpieza como mucho cada 5 min
 const DSS_CLEANUP_MAX_DEL = 300;                 // nº máx. de entradas a borrar por pasada (incremental)
@@ -54,9 +55,10 @@ function dss_survey_valido(string $sv): string {
     return in_array($sv, DSS_SURVEYS, true) ? $sv : 'DSS1';
 }
 
-/** Acota el campo (x o y) al rango admitido por el DSS: [1, DSS_MAX_ARCMIN]. */
-function dss_acotar_campo(float $v): float {
-    return min((float) DSS_MAX_ARCMIN, max(1.0, $v));
+/** Acota el campo (x o y) al rango que sirve la fuente: [1, 180] SkyView, [1, 120] ESO. */
+function dss_acotar_campo(float $v, string $fuente): float {
+    $max = ($fuente === 'skyview') ? DSS_SKYVIEW_MAX_ARCMIN : DSS_MAX_ARCMIN;
+    return min((float) $max, max(1.0, $v));
 }
 
 /** Normaliza la fuente a la lista blanca; por defecto el archivo del ESO. */
@@ -78,7 +80,7 @@ function dss_ruta(string $clave): string {
  * Lado en píxeles que se le pide a SkyView. El ESO devuelve la placa a su escala
  * nativa (~1,7"/px en el DSS1) y el tamaño le sale solo; a SkyView hay que
  * decírselo, así que se le pide ese mismo detalle, acotado para no pedir un
- * sello de correos en campos diminutos ni un mural en los de 2°.
+ * sello de correos en campos diminutos ni un mural en los de 3°.
  */
 function dss_pixels(float $arcmin): int {
     return (int) min(1200, max(300, round($arcmin * 60 / 1.7)));
@@ -211,10 +213,10 @@ if (!is_dir(DSS_CACHE_DIR)) {
 
 $ra  = $_GET['ra']  ?? '';
 $dec = $_GET['dec'] ?? '';
-$x   = dss_acotar_campo(floatval($_GET['x'] ?? 30));
-$y   = dss_acotar_campo(floatval($_GET['y'] ?? 30));
-$sv  = dss_survey_valido($_GET['Sky-Survey'] ?? 'DSS1');
 $fte = dss_fuente_valida((string) ($_GET['fuente'] ?? 'eso'));
+$x   = dss_acotar_campo(floatval($_GET['x'] ?? 30), $fte);
+$y   = dss_acotar_campo(floatval($_GET['y'] ?? 30), $fte);
+$sv  = dss_survey_valido($_GET['Sky-Survey'] ?? 'DSS1');
 
 if (!dss_validar_coord($ra) || !dss_validar_coord($dec)) {
     http_response_code(400);

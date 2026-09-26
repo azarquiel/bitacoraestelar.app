@@ -4,8 +4,8 @@
    Es la puerta por la que el simulador Y el formulario de registro piden una
    placa a dss-proxy.php. Lo que se fija aquí es lo que el proxy exige al otro
    lado: coordenadas que pasen su validador (solo dígitos, espacios, signos,
-   puntos y dos puntos: ni "h" ni "°"), el campo acotado a los 2° que el DSS
-   sirve, y los parámetros con los nombres que lee.
+   puntos y dos puntos: ni "h" ni "°"), el campo acotado al tope de cada
+   fuente (3° SkyView, 2° el ESO), y los parámetros con los nombres que lee.
 
    Sin dependencias: node scripts/test_url_placa.js */
 'use strict';
@@ -50,11 +50,19 @@ var texto = R.urlPlaca({ ra: '06 08 54', dec: '+24 20 00', arcmin: 30 });
 ok(param(texto, 'ra') === '06 08 54' && param(texto, 'dec') === '+24 20 00',
    'una coordenada ya en texto no se toca');
 
-/* ── 2. Campo acotado al que sirve el DSS ──────────────────────────────────── */
+/* ── 2. Campo acotado al tope de la fuente (#383) ─────────────────────────── */
 console.log('Campo:');
+ok(R.dssMaxArcmin === 180 && R.esoMaxArcmin === 120, 'topes: SkyView 180′, ESO 120′');
 var ancho = R.urlPlaca({ ra: 0, dec: 0, arcmin: 400 });
-ok(parseFloat(param(ancho, 'x')) === 120 && parseFloat(param(ancho, 'y')) === 120,
-   'un campo mayor de 2° se recorta a 120′');
+ok(parseFloat(param(ancho, 'x')) === 180 && parseFloat(param(ancho, 'y')) === 180,
+   'un campo mayor de 3° se recorta a 180′');
+ok(parseFloat(param(R.urlPlaca({ ra: 0, dec: 0, arcmin: 150 }), 'x')) === 150,
+   'SkyView sirve 150′ sin recortar');
+var eso = R.urlPlaca({ ra: 0, dec: 0, arcmin: 150, fuente: 'eso' });
+ok(parseFloat(param(eso, 'x')) === 120 && parseFloat(param(eso, 'y')) === 120,
+   'al ESO nunca se le pide más de 120′');
+ok(R.ladoPlaca(150, 'eso') === 120 && R.ladoPlaca(150, 'skyview') === 150 && R.ladoPlaca(150) === 150,
+   'ladoPlaca: el campo que de verdad cubre la placa de cada fuente');
 var mini = R.urlPlaca({ ra: 0, dec: 0, arcmin: 0.2 });
 ok(parseFloat(param(mini, 'x')) >= 1, 'un campo diminuto sube al mínimo de 1′');
 ok(parseFloat(param(u, 'x')) === 84 && parseFloat(param(u, 'y')) === 84,

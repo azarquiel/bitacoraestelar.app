@@ -115,7 +115,8 @@
         { id: '_o5',  vendor: '', modelo: '5 mm (ejemplo)',    focal_mm: 5,    campo_aparente: 60 }
       ];
 
-      var DSS_MAX_ARCMIN = 120;
+      // Tope de SkyView (3°): vive en el módulo compartido, con el del ESO (#383).
+      var DSS_MAX_ARCMIN = window.BitacoraGaiaRender.dssMaxArcmin;
       // Tope del Canvas-2D de Gaia: 6° de lado. No lo fija ningún servidor de
       // placas, sino el radio de consulta del módulo compartido; cubre oculares de
       // campo ancho y binoculares.
@@ -537,7 +538,7 @@
         if (grupoCapa) grupoCapa.classList.toggle('esta-off', origen !== 'canvas-2d');
 
         /* Recorte del cielo: lado = campo real, limitado por el origen. El tope de
-           2° es de las PLACAS (el servidor del DSS no sirve más); el Canvas-2D de
+           3° es de las PLACAS (SkyView ya enseña la costura a 4°); el Canvas-2D de
            Gaia es un catálogo y llega mucho más lejos, así que no tiene por qué
            heredarlo. */
         var maxArcmin = (origen === 'canvas-2d') ? GAIA_MAX_ARCMIN : DSS_MAX_ARCMIN;
@@ -579,7 +580,7 @@
             if (peticion !== contadorPeticion) return;
             if (!im) { cargando.textContent = 'hips2fits no respondió: prueba el origen DSS.'; elVista.setAttribute('aria-busy', 'false'); return; }
             finCarga();
-            renderizar(im, null, u);
+            renderizar(im, null, u, arcmin, centro);
           });
         } else {
           renderDSS(arcmin, peticion, centro);
@@ -603,6 +604,11 @@
          girado no casa con la superposición de Gaia. */
       function renderDSS(arcmin, peticion, centro, fuente) {
         fuente = fuente || 'skyview';
+        /* Lado que cubre de verdad la placa: el respaldo desde Gaia llega con
+           su tope de 6° y el ESO no sirve más de 2°. La superposición de Gaia
+           tiene que dibujarse a este lado, no al pedido. */
+        var pedido = arcmin;
+        arcmin = BitacoraGaiaRender.ladoPlaca(arcmin, fuente);
         // Techo de placa aunque se llegue aquí de respaldo desde Gaia, que tiene
         // el suyo más alto: ampliar una placa de 1059 px cuesta CPU y no añade
         // detalle.
@@ -620,8 +626,9 @@
             if (!profunda && !corta) {
               if (fuente === 'skyview') {
                 cargando.textContent = 'SkyView no responde: probando con el archivo del ESO…';
-                $('sim-aviso').textContent = 'SkyView no responde: se muestra la placa del archivo del ESO, que llega ligeramente girada respecto al norte.';
-                renderDSS(arcmin, peticion, centro, 'eso');
+                $('sim-aviso').textContent = 'SkyView no responde: se muestra la placa del archivo del ESO, que llega ligeramente girada respecto al norte.' +
+                  (pedido > BitacoraGaiaRender.esoMaxArcmin ? ' El ESO no sirve más de 2°: la imagen se recorta.' : '');
+                renderDSS(pedido, peticion, centro, 'eso');
                 return;
               }
               cargando.textContent = 'No se pudo cargar la placa del DSS. ¿Está dss-proxy.php accesible?';
@@ -629,7 +636,7 @@
               return;
             }
             finCarga();
-            renderizar(profunda || corta, profunda ? corta : null, urlProfunda);
+            renderizar(profunda || corta, profunda ? corta : null, urlProfunda, arcmin, centro);
           });
       }
 
@@ -781,7 +788,7 @@
         return pintarFot(BitacoraGaiaRender.flujoDePlaca(v, esHips), canvas, p);
       }
 
-      function renderizar(profunda, corta, urlRespaldo) {
+      function renderizar(profunda, corta, urlRespaldo, arcmin, centro) {
         if (!ocularSel) return;
         // La placa que llega ya está centrada donde toca: fuera el deslizamiento
         // provisional que se aplicó al pulsar la cruceta.
@@ -796,7 +803,7 @@
         if (!corsFallo) {
           if (procesarFotometrico(profunda, corta, canvas, pupila)) {
             canvas.style.display = 'block'; img.style.display = 'none';
-            superponerGaia(canvas);
+            superponerGaia(canvas, arcmin, centro);
             return;
           }
           corsFallo = true;
@@ -877,7 +884,9 @@
         });
       }
 
-      function superponerGaia(canvas) {
+      /* `arcmin` y `centro`, los de la placa ya pintada: la superposición cae
+         sobre ella, no sobre el campo que pide el ocular. */
+      function superponerGaia(canvas, arcmin, centro) {
         // En las vistas DSS/PanSTARRS la PLACA fotográfica ya contiene el campo de
         // estrellas hasta muy débil; el overlay de Gaia solo REALZA las estrellas
         // brillantes (núcleo nítido y color, que la placa quema). Por eso aquí el
@@ -886,7 +895,7 @@
         // de Gaia son lo único que se pinta—. Si se usara aquí la mag. límite
         // plena, el DSS se llenaría de las mismas estrellas que el Canvas 2D y
         // ambas vistas quedarían casi idénticas.
-        var arcmin = Math.min(datosOcular().campoReal * 60, DSS_MAX_ARCMIN); var centro = centroVista(arcmin); var ra0 = centro.ra; var dec0 = centro.dec; var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
+        var ra0 = centro.ra; var dec0 = centro.dec; var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
         consultarGaia(ra0, dec0, arcmin).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3: se muestra solo la imagen.'; });
       }
 

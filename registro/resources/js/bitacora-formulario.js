@@ -1370,7 +1370,7 @@
   function pintarInfoSim(){
     var n=_simNodos, d=_simEntrada.d;
     var fuente=n.origen.value;
-    // El DSS no sirve más de 2°: con un campo mayor la placa se recorta, y hay
+    // SkyView no sirve más de 3°: con un campo mayor la placa se recorta, y hay
     // que decirlo porque la imagen ya no cubre todo lo que se ve por el ocular.
     var arcmin=(fuente==='dss') ? Math.min(d.arcmin, BitacoraGaiaRender.dssMaxArcmin) : d.arcmin;
     // SQM de ESTA imagen: el del modal manda sobre el de la observación. Fuera
@@ -1450,8 +1450,10 @@
     var promesa=(fuente==='dss')
       ? BitacoraGaiaRender.renderPlaca(off, opciones)
       : BitacoraGaiaRender.render(off, opciones);
-    promesa.then(function(){
+    promesa.then(function(r){
       if(pet!==_simPeticion) return;   // el observador ya cambió de fuente
+      // SkyView caído: el respaldo del ESO no pasa de 2° y hay que decirlo.
+      if(fuente==='dss' && r.arcmin<arcmin) n.info.innerHTML+=' · placa del ESO recortada a '+fmtCampo(r.arcmin/60);
       ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
       ctx.save(); ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.clip();
       ctx.drawImage(off, 450-D/2, 450-D/2);

@@ -1367,7 +1367,12 @@
      escriben en sexagesimal llano. Una coordenada que ya viene en texto (el
      catálogo del simulador) pasa tal cual. */
   var DSS_PROXY_URL   = '/wp-content/uploads/bitacora/dss-proxy.php';
-  var DSS_MAX_ARCMIN  = 120;   // el servidor del DSS no sirve más de 2°
+  /* Tope de campo por fuente, medido sobre M42 el 2026-09-26 (#383). SkyView
+     une las placas en su servidor y sirve 3° de cielo limpio; a 4° ya se ve la
+     costura. El ESO, que es el respaldo, devuelve HTML de error por encima de
+     120′. El proxy repite los dos topes del lado del servidor. */
+  var DSS_MAX_ARCMIN  = 180;
+  var ESO_MAX_ARCMIN  = 120;
   var DSS_MIN_ARCMIN  = 1;
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -1474,13 +1479,15 @@
     return Math.max(0, 50 * (o.circulo / caja) - 100 * media / caja);
   }
 
-  function acotarPlaca(arcmin) {
-    return Math.min(DSS_MAX_ARCMIN, Math.max(DSS_MIN_ARCMIN, arcmin || DSS_MIN_ARCMIN));
+  /* Lado que de verdad cubre la placa de `fuente` (SkyView por defecto). */
+  function ladoPlaca(arcmin, fuente) {
+    var max = (fuente === 'eso') ? ESO_MAX_ARCMIN : DSS_MAX_ARCMIN;
+    return Math.min(max, Math.max(DSS_MIN_ARCMIN, arcmin || DSS_MIN_ARCMIN));
   }
   function urlPlaca(o) {
     var ra  = (typeof o.ra === 'number')  ? gradosAHms(o.ra)  : String(o.ra);
     var dec = (typeof o.dec === 'number') ? gradosADms(o.dec) : String(o.dec);
-    var lado = acotarPlaca(o.arcmin).toFixed(1);
+    var lado = ladoPlaca(o.arcmin, o.fuente).toFixed(1);
     return (o.base || DSS_PROXY_URL) +
       '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) +
       '&equinox=J2000&name=' +
@@ -2913,20 +2920,22 @@
      simulador. Las nebulosas oscuras (los Barnard) y la nebulosidad tenue salen
      mucho mejor así: es una foto de verdad, no un catálogo de puntos.
 
-     Devuelve Promise<{fuente}>: 'skyview' (norte arriba) o 'eso' (la misma
-     placa, algo girada) si SkyView no respondió. Rechaza si no hay placa o si
-     el navegador bloquea la lectura de píxeles. */
+     Devuelve Promise<{fuente, arcmin}>: 'skyview' (norte arriba) o 'eso' (la
+     misma placa, algo girada) si SkyView no respondió, y el lado que cubre la
+     placa (el ESO no pasa de 2°). Rechaza si no hay placa o si el navegador
+     bloquea la lectura de píxeles. */
   function renderPlaca(canvas, o) {
     var SIZE = canvas.width;
     var ctx = canvas.getContext('2d');
     var t = (o.transmision > 0) ? o.transmision : (transmisionOptica(o.optica) || TRANSMISION_DEFECTO);
     var arana = (typeof o.arana === 'boolean') ? o.arana : opticaTieneArana(o.optica);
-    var arcmin = acotarPlaca(o.arcmin);
+    var arcmin;
     var cielo = {
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, sqm: o.sqm,
       transmision: t, aumentos: o.aumentos
     };
     function pedir(fuente) {
+      arcmin = ladoPlaca(o.arcmin, fuente);
       function url(survey) {
         return urlPlaca({ base: o.dssProxy, survey: survey, ra: o.ra, dec: o.dec, arcmin: arcmin, fuente: fuente });
       }
@@ -2945,7 +2954,7 @@
           if (vs) v = fusionarPlacas(v, vs);
         }
         pintarFot(flujoDePlaca(v, false), ctx, cielo);
-        return { fuente: fuente };
+        return { fuente: fuente, arcmin: arcmin };
       });
     }
     return pedir(o.fuente || 'skyview').then(function (r) {
@@ -3041,6 +3050,8 @@
     renderPlaca: renderPlaca,
     sbUmbralContraste: sbUmbralContraste,
     dssMaxArcmin: DSS_MAX_ARCMIN,
+    esoMaxArcmin: ESO_MAX_ARCMIN,
+    ladoPlaca: ladoPlaca,
     set dssProxyUrl(u) { DSS_PROXY_URL = u; },
     get dssProxyUrl() { return DSS_PROXY_URL; }
   };

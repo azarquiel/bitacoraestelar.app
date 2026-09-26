@@ -89,8 +89,9 @@ ok(/renderDSS\(arcmin, peticion, centro\)/.test(JS),
    'DSS recibe el centro');
 ok(/var ra0 = centro\.ra, dec0 = centro\.dec;/.test(JS),
    'la vista de Gaia ya no parte de las coordenadas del objeto');
-ok(/var centro = centroVista\(arcmin\); var ra0 = centro\.ra;/.test(JS),
-   'la superposición de Gaia sobre las placas sigue al mismo centro');
+ok(/function superponerGaia\(canvas, arcmin, centro\)[\s\S]{0,1200}var ra0 = centro\.ra;/.test(JS) &&
+   /superponerGaia\(canvas, arcmin, centro\);/.test(JS),
+   'la superposición de Gaia sobre las placas sigue al centro de la placa');
 ok(/'&ra=' \+ ra\.toFixed\(5\)/.test(JS),
    'urlHips toma grados: el centro desplazado no es sexagesimal');
 ok(!/function renderDSS\(arcmin, peticion, fuente\)/.test(JS) &&

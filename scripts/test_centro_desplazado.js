@@ -38,6 +38,10 @@ var c2 = R.centroDesplazado({ ra: 100, dec: 20, arcmin: ARCMIN, pasoX: -3, pasoY
 casi(c2.dec - 20, -2 * PASO, 1e-12, 'los pasos negativos y múltiples escalan');
 casi(c2.ra - 100, -3 * PASO / Math.cos(20 * Math.PI / 180), 1e-12, 'idem en RA');
 
+console.log('1b) A 3° (tope de SkyView, #383) el paso es de 18′');
+var tres = R.centroDesplazado({ ra: 100, dec: 0, arcmin: R.ladoPlaca(240), pasoX: 0, pasoY: 1 });
+casi(tres.dec * 60, 18, 1e-9, 'un campo de 4° se dibuja a 3° y el paso vale el 10 % de eso');
+
 console.log('2) Cerca del polo (dec 80°) el paso en cielo es el mismo');
 var p = R.centroDesplazado({ ra: 50, dec: 80, arcmin: ARCMIN, pasoX: 1, pasoY: 0 });
 var dRa = p.ra - 50;

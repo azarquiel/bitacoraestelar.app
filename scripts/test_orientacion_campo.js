@@ -68,12 +68,12 @@ var SIZE = 720;
 var TAM = 30;            // lado del campo, en minutos de arco
 /* Núcleos de estrella que pinta dibujar(): el gradiente de 5 paradas de
    dibujarEstrellaColor (la aureola tiene 4; el glow no crea gradiente). */
-function nucleos(estrellas, ra0, dec0) {
+function nucleos(estrellas, ra0, dec0, tam) {
   gradientes = [];
   var el = { width: SIZE, height: SIZE };
   var ctx = fakeCtx(el);
   R.dibujar(ctx, estrellas, {
-    ra: ra0, dec: dec0, arcmin: TAM, mlim: 12, afov: 82,
+    ra: ra0, dec: dec0, arcmin: tam || TAM, mlim: 12, afov: 82,
     apertura: 200, conGlow: false, carbono: false, arana: false
   });
   return gradientes.filter(function (g) { return g.stops.length === 5; });
@@ -160,21 +160,28 @@ var SKYVIEW = {
      independientes —la rejilla que pide el proxy y la proyección que dibuja el
      render de Gaia—, tiene que caer en el mismo sitio del campo. Se compara la
      distancia al centro en fracción del lado, que es lo único que comparten
-     (600 px de SkyView contra 720 del lienzo). */
-  var ra0 = 322.95, dec0 = 48.448, d = 0.1;
-  function fraccionSkyview(dra, ddec) {       // dra ya en grados de arco (este +)
-    return {
-      x: ((s.crpix + dra / s.cdelt1) - s.crpix) / s.lado,
-      y: ((s.crpix + ddec / s.cdelt2) - s.crpix) / s.lado
-    };
-  }
-  var n = nucleos([[ra0, dec0 + d, 8, 0.5]], ra0, dec0);
-  var e = nucleos([[ra0 + d / Math.cos(dec0 * Math.PI / 180), dec0, 8, 0.5]], ra0, dec0);
-  var fN = fraccionSkyview(0, d), fE = fraccionSkyview(d, 0);
-  // En el lienzo la y crece hacia abajo; en la rejilla FITS, hacia arriba.
-  cerca((SIZE / 2 - n[0].y) / SIZE, fN.y, 1e-6, 'la estrella del norte, a la misma altura en las dos rejillas');
-  cerca((e[0].x - SIZE / 2) / SIZE, fE.x, 1e-6, 'la estrella del este, en la misma columna en las dos rejillas');
-  ok(fE.x < 0 && fN.y > 0, 'este a la izquierda y norte arriba en SkyView');
+     (600 px de SkyView contra 720 del lienzo). A 3° (#383, tope de SkyView)
+     la rejilla es la que arma dss_url con dss_pixels(180) = 1200 px: 9"/px. */
+  var ra0 = 322.95, dec0 = 48.448;
+  [
+    { tam: TAM, rejilla: s, d: 0.1 },
+    { tam: 180, rejilla: { cdelt1: -0.0025, cdelt2: 0.0025, crpix: 600.5, lado: 1200 }, d: 0.6 }
+  ].forEach(function (c) {
+    var g = c.rejilla, d = c.d, rot = ' (' + (c.tam / 60) + '°)';
+    function fraccionSkyview(dra, ddec) {     // dra ya en grados de arco (este +)
+      return {
+        x: ((g.crpix + dra / g.cdelt1) - g.crpix) / g.lado,
+        y: ((g.crpix + ddec / g.cdelt2) - g.crpix) / g.lado
+      };
+    }
+    var n = nucleos([[ra0, dec0 + d, 8, 0.5]], ra0, dec0, c.tam);
+    var e = nucleos([[ra0 + d / Math.cos(dec0 * Math.PI / 180), dec0, 8, 0.5]], ra0, dec0, c.tam);
+    var fN = fraccionSkyview(0, d), fE = fraccionSkyview(d, 0);
+    // En el lienzo la y crece hacia abajo; en la rejilla FITS, hacia arriba.
+    cerca((SIZE / 2 - n[0].y) / SIZE, fN.y, 1e-6, 'la estrella del norte, a la misma altura en las dos rejillas' + rot);
+    cerca((e[0].x - SIZE / 2) / SIZE, fE.x, 1e-6, 'la estrella del este, en la misma columna en las dos rejillas' + rot);
+    ok(fE.x < 0 && fN.y > 0, 'este a la izquierda y norte arriba en SkyView' + rot);
+  });
 })();
 
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
