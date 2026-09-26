@@ -108,8 +108,10 @@ el mismo campo para poder compararlas **antes** de decidir:
   fotométrica del simulador (`BitacoraGaiaRender.renderPlaca`), con las
   brillantes realzadas con Gaia encima. Manda en nebulosidad y, sobre todo, en
   las **nebulosas oscuras** (los Barnard), que un catálogo de puntos no cuenta.
-  El DSS no sirve más de **2°**: con un campo mayor la placa se recorta y el
-  modal lo avisa.
+  SkyView sirve hasta **3°**: con un campo mayor la placa se recorta y el
+  modal lo avisa. Si SkyView cae, el respaldo del ESO no pasa de **2°** (por
+  encima devuelve un error, no una imagen), y el modal avisa también de ese
+  recorte.
 
 La base solo distingue `simulada` de `subida`, así que al reabrir una
 observación guardada la insignia vuelve a ser *«simulada»* a secas.

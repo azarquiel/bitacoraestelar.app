@@ -34,10 +34,13 @@ eq(dss_survey_valido('DSS1'),     'DSS1',     'DSS1 válido');
 eq(dss_survey_valido('malicioso'), 'DSS1',    'desconocido → DSS1');
 eq(dss_survey_valido(''),          'DSS1',    'vacío → DSS1');
 
-echo "dss_acotar_campo (rango [1, 120]):\n";
-eq(dss_acotar_campo(84.0),  84.0,  'dentro de rango sin cambios');
-eq(dss_acotar_campo(999.0), 120.0, 'por encima → 120');
-eq(dss_acotar_campo(0.0),   1.0,   'por debajo → 1');
+echo "dss_acotar_campo (SkyView [1, 180], ESO [1, 120]):\n";
+eq(dss_acotar_campo(84.0, 'eso'),      84.0,  'dentro de rango sin cambios');
+eq(dss_acotar_campo(999.0, 'eso'),     120.0, 'ESO por encima → 120');
+eq(dss_acotar_campo(150.0, 'eso'),     120.0, 'ESO no sirve 150′ → 120');
+eq(dss_acotar_campo(150.0, 'skyview'), 150.0, 'SkyView sirve 150′');
+eq(dss_acotar_campo(999.0, 'skyview'), 180.0, 'SkyView por encima → 180');
+eq(dss_acotar_campo(0.0, 'skyview'),   1.0,   'por debajo → 1');
 
 echo "dss_clave (determinista y sensible):\n";
 eq(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso'),
@@ -80,7 +83,8 @@ echo "dss_pixels (lado en píxeles que se le pide a SkyView):\n";
 // La escala de la placa del DSS ronda 1,7"/px: se pide ese detalle, sin pasarse.
 eq(dss_pixels(30.0),  1059, '30\' a 1,7"/px');
 eq(dss_pixels(1.0),   300,  'campo diminuto → suelo de 300 px');
-eq(dss_pixels(120.0), 1200, 'campo máximo → techo de 1200 px');
+eq(dss_pixels(120.0), 1200, '2° → techo de 1200 px');
+eq(dss_pixels(180.0), 1200, '3° → el mismo techo (9"/px, #383)');
 
 echo "dss_clave (la fuente forma parte de la clave):\n";
 ok(dss_clave('05 35 17', '-05 23 28', 84.0, 84.0, 'DSS1', 'eso')
