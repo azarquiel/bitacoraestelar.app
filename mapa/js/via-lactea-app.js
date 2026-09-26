@@ -2837,10 +2837,18 @@
       OBSERVACIONES[_slug].forEach(function (o) { if (o.observador) conObs[o.observador] = true; });
     }
     var opts = '<option value="">Todas las observaciones</option>';
-    Object.keys(OBSERVADORES).forEach(function (clave) {
+    function nombreDe(clave) {
+      return (OBSERVADORES[clave] && OBSERVADORES[clave].nombre) ? String(OBSERVADORES[clave].nombre) : clave;
+    }
+    // La tripulación va por orden alfabético, no por alta de cuenta. El nombre
+    // llega como "Nombre Apellidos" en una sola cadena, así que ordenarla ya es
+    // ordenar por nombre y, a igual nombre, por apellido.
+    Object.keys(OBSERVADORES).sort(function (a, b) {
+      return nombreDe(a).localeCompare(nombreDe(b), 'es', { sensitivity: 'base' });
+    }).forEach(function (clave) {
       if (!conObs[clave]) return;
-      var nom = (OBSERVADORES[clave] && OBSERVADORES[clave].nombre) ? OBSERVADORES[clave].nombre : clave;
-      opts += '<option value="' + clave + '">' + String(nom).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
+      var nom = nombreDe(clave);
+      opts +='<option value="' + clave + '">' + String(nom).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
     });
     observadorSelect.innerHTML = opts;
 
