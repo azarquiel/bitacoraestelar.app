@@ -609,6 +609,12 @@
            tiene que dibujarse a este lado, no al pedido. */
         var pedido = arcmin;
         arcmin = BitacoraGaiaRender.ladoPlaca(arcmin, fuente);
+        // Solo pasa en el respaldo desde Gaia: la placa se estira a todo el
+        // círculo y hay que decirlo. El caso del ESO lo avisa su propia rama.
+        if (fuente === 'skyview' && pedido > arcmin) {
+          $('sim-aviso').textContent = 'Gaia no responde y la placa del DSS no pasa de ' +
+            (arcmin / 60).toFixed(0) + '°: la imagen se recorta.';
+        }
         // Techo de placa aunque se llegue aquí de respaldo desde Gaia, que tiene
         // el suyo más alto: ampliar una placa de 1059 px cuesta CPU y no añade
         // detalle.

@@ -97,6 +97,10 @@ ok(/'&ra=' \+ ra\.toFixed\(5\)/.test(JS),
 ok(!/function renderDSS\(arcmin, peticion, fuente\)/.test(JS) &&
    /function renderDSS\(arcmin, peticion, centro, fuente\)/.test(JS),
    'renderDSS ya no lee objetoSel para el centro');
+/* El respaldo desde Gaia llega con su tope de 6°: si SkyView se queda en 3°,
+   la placa se estira a todo el círculo y el observador tiene que saberlo (#383). */
+ok(/fuente === 'skyview' && pedido > arcmin\)[\s\S]{0,200}la imagen se recorta/.test(JS),
+   'el respaldo DSS de Gaia avisa cuando la placa no cubre el campo');
 
 console.log('Repintado sin negro y estado de carga:');
 ok(/ctx\.globalCompositeOperation = 'copy';[\s\S]{0,80}ctx\.drawImage\(canvas, px, py\)/.test(JS),
