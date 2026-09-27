@@ -708,44 +708,161 @@
     return '';
   }
 
+  /* Las etiquetas del cielo, en minúscula dentro del paréntesis. Son copia de
+     las de la app (el motor no puede cargar BitacoraBase): las bandas de
+     BitacoraBase.TRANSPARENCIA y las <option> de los <select> de seeing.
+     scripts/test_oal_exportar.js falla si una copia cambia sin la otra. */
+  var ANTONIADI = ['excelente', 'bueno', 'regular', 'malo', 'pésimo'];
+  var TRANSPARENCIA = [
+    { ir: -30, etiqueta: 'Extremadamente transparente' },
+    { ir: -20, etiqueta: 'Transparente' },
+    { ir: -15, etiqueta: 'Mayoritariamente transparente' },
+    { ir: -5,  etiqueta: 'Algo transparente' },
+    { ir: 0,   etiqueta: 'Pobre' }
+  ];
+
+  function banda(ir) {
+    for (var i = 0; i < TRANSPARENCIA.length; i++) { if (ir <= TRANSPARENCIA[i].ir) { return TRANSPARENCIA[i]; } }
+    return TRANSPARENCIA[TRANSPARENCIA.length - 1];
+  }
+
+  /* Texto del observador en HTML: una línea en blanco abre párrafo y un salto
+     simple es un <br>. Se escapa antes de meter ninguna etiqueta. Con `em`, cada
+     párrafo va en cursiva, que es como se distingue la descripción de sus datos.
+     Las líneas que empiezan por «• » son los <li> de la descripción (así los deja
+     bitacora_oal_texto_plano): van en una sublista colgada de la línea anterior,
+     que el navegador y Gmail pintan con otra viñeta sin necesidad de estilos. */
+  function parrafos(t, em) {
+    function envolver(h) { return em ? '<em>' + h + '</em>' : h; }
+    var out = [];
+    String(t == null ? '' : t).replace(/\r\n?/g, '\n').split(/\n[ \t]*\n/).forEach(function (bloque) {
+      var lineas = bloque.split('\n').map(function (x) { return x.trim(); }).filter(function (x) { return x; });
+      var texto = [];
+      function cerrar() {
+        if (texto.length) { out.push('<p>' + envolver(texto.map(escapar).join('<br>')) + '</p>'); }
+        texto = [];
+      }
+      for (var i = 0; i < lineas.length; i++) {
+        if (!/^•\s/.test(lineas[i])) { texto.push(lineas[i]); continue; }
+        var rasgos = [];
+        for (; i < lineas.length && /^•\s/.test(lineas[i]); i++) { rasgos.push(envolver(escapar(lineas[i].replace(/^•\s*/, '')))); }
+        i--;
+        var padre = texto.pop();
+        cerrar();
+        out.push(padre == null ? lista(rasgos)
+          : '<ul>\n<li>' + envolver(escapar(padre)) + '\n' + lista(rasgos) + '\n</li>\n</ul>');
+      }
+      cerrar();
+    });
+    return out;
+  }
+
+  /* La hora de pared en UT, con el mismo instante() que el <begin> del XML.
+     Sin huso no hay UT que contar: se devuelve la de pared y ut=false. */
+  function horaUT(noche, hora, tz) {
+    var iso = vacio(tz) ? '' : instante(noche, hora, tz);
+    var t = iso ? Date.parse(iso) : NaN;
+    if (!isFinite(t)) { return { t: String(hora || ''), ut: false }; }
+    var d = new Date(t);
+    return { t: dos(d.getUTCHours()) + ':' + dos(d.getUTCMinutes()), ut: true };
+  }
+
+  /* Clave de orden con el convenio de mediodía; '' si no hay hora legible. */
+  function ordenDe(noche, hora) {
+    return /^([01]\d|2[0-3]):[0-5]\d/.test(String(hora || '')) ? fechaDeReloj(noche, hora) + ' ' + hora : '';
+  }
+
+  /* Una lista con viñetas: así la escriben a mano en la lista de correo, y Gmail
+     la sangra sin necesidad de estilos. */
+  function lista(items) {
+    return '<ul>\n' + items.map(function (x) { return '<li>' + x + '</li>'; }).join('\n') + '\n</ul>';
+  }
+
   function textoDe(estado) {
     var e = estado || {};
     var lugares = indice(e.lugares);
     var tel = indice(e.telescopios), ocu = indice(e.oculares), aux = indice(e.auxiliares);
+    var yo = e.observador || {};
+    var mio = (String(yo.nombre || '') + ' ' + String(yo.apellidos || '')).trim();
     var s = [];
 
     (e.noches || []).forEach(function (n) {
       var mias = (e.observaciones || []).filter(function (o) { return o.nocheId === n.id; });
       var l = lugares[n.lugarId] || {};
+      var tz = husoDe(n, l);
+      function hora(h) { var u = horaUT(n.fecha, h, tz); return u.t + (u.ut ? ' UT' : ''); }
+
+      // Una ficha por objeto: noche + objeto es la misma observación (ADR 0002).
+      var fichas = [], porClave = {};
+      mias.forEach(function (o) {
+        var k = clave(o.objeto);
+        if (!porClave[k]) { porClave[k] = { entradas: [], i: fichas.length }; fichas.push(porClave[k]); }
+        porClave[k].entradas.push(o);
+      });
+      fichas.forEach(function (f) { f.orden = ordenDe(n.fecha, f.entradas[0].hora); });
+      fichas.sort(function (a, b) {
+        if (a.orden !== b.orden) { return !a.orden ? 1 : !b.orden ? -1 : (a.orden < b.orden ? -1 : 1); }
+        return a.i - b.i;
+      });
+
+      var tubos = {};
+      mias.forEach(function (o) { if (o.telescopioId) { tubos[o.telescopioId] = 1; } });
+      var unTubo = Object.keys(tubos).length === 1;
+      function tubo(id) { return tel[id] && tel[id].modelo ? tel[id].modelo : ''; }
+
       // El cielo cuelga de la observación (ADR 0001), así que la cabecera enseña
       // el primero que haya de la noche: es un resumen, no una medida.
       var conCielo = [n].concat(mias);
-      var sitio = [];
-      if (l.nombre) { sitio.push(l.nombre); }
-      if (n.comienzo || n.fin) { sitio.push((n.comienzo || '?') + '–' + (n.fin || '?')); }
+      var sqm = primero(conCielo, 'sqm'), bortle = primero(conCielo, 'bortle');
+      var seeing = primero(conCielo, 'seeing'), ir = primero(conCielo, 'ir');
       var cielo = [];
-      if (!vacio(primero(conCielo, 'sqm'))) { cielo.push('SQM ' + primero(conCielo, 'sqm') + ' mag/arcsec²'); }
-      if (!vacio(primero(conCielo, 'bortle'))) { cielo.push('Bortle ' + primero(conCielo, 'bortle')); }
-      if (!vacio(primero(conCielo, 'seeing'))) { cielo.push('seeing ' + antoniadi(primero(conCielo, 'seeing'))); }
-      if (!vacio(primero(conCielo, 'ir'))) { cielo.push('IR ' + primero(conCielo, 'ir')); }
-      if (n.meteo) { cielo.push(n.meteo); }
+      if (!vacio(sqm)) { cielo.push('SQM ' + sqm + ' mag/arcsec²'); }
+      if (!vacio(bortle)) { cielo.push('Bortle ' + bortle); }
+
+      var cab = [];
+      if (mio) { cab.push('Observador: ' + mio); }
+      cab.push('Fecha: ' + fechaLarga(n.fecha));
+      if (l.nombre) { cab.push('Lugar: ' + l.nombre); }
+      if (n.comienzo || n.fin) {
+        var a = horaUT(n.fecha, n.comienzo, tz), z = horaUT(n.fecha, n.fin, tz);
+        cab.push('Ventana: ' + (n.comienzo ? a.t : '?') + '–' + (n.fin ? z.t : '?') +
+                 ((!n.comienzo || a.ut) && (!n.fin || z.ut) ? ' UT' : ''));
+      }
+      if (!vacio(seeing)) { cab.push('Seeing: ' + antoniadi(seeing) + ' (Antoniadi, ' + ANTONIADI[antoniadi(seeing) - 1] + ')'); }
+      if (!vacio(ir)) { cab.push('Transparencia: ' + banda(Number(ir)).etiqueta + ' (IR ' + ir + ')'); }
+      if (cielo.length) { cab.push('Cielo: ' + cielo.join(' · ')); }
+      if (n.meteo) { cab.push('Meteo: ' + n.meteo); }
+      if (n.tripulacion) { cab.push('Tripulación: ' + n.tripulacion); }
+      if (unTubo && tubo(Object.keys(tubos)[0])) { cab.push('Telescopio: ' + tubo(Object.keys(tubos)[0])); }
 
       s.push('<h2>Salida del ' + escapar(fechaLarga(n.fecha)) + '</h2>');
-      if (sitio.length) { s.push('<p>' + escapar(sitio.join(' · ')) + '</p>'); }
-      if (cielo.length) { s.push('<p>' + escapar(cielo.join(' · ')) + '</p>'); }
-      if (n.tripulacion) { s.push('<p>Tripulación: ' + escapar(n.tripulacion) + '</p>'); }
-      if (n.cronica) { s.push('<p>' + escapar(n.cronica) + '</p>'); }
+      s.push.apply(s, parrafos(n.cronica));
+      s.push(lista(cab.map(escapar)));
 
-      s.push('<table border="1" cellpadding="6" cellspacing="0">');
-      s.push('<tr><th>Hora</th><th>Objeto</th><th>Aumento</th><th>Lo que se vio</th></tr>');
-      mias.forEach(function (o) {
-        var a = !vacio(o.aumentos) ? o.aumentos
-          : aumentos(tel[o.telescopioId], ocu[o.ocularId], aux[o.auxiliarId]);
-        s.push('<tr><td>' + escapar(o.hora) + '</td><td>' + escapar(o.objeto) + '</td>' +
-               '<td>' + (vacio(a) ? '' : escapar(a) + '×') + '</td>' +
-               '<td>' + escapar(o.texto) + '</td></tr>');
+      fichas.forEach(function (f) {
+        s.push('<h3>' + escapar(f.entradas[0].objeto) + '</h3>');
+        f.entradas.forEach(function (o, i) {
+          var equipo = [];
+          var oc = ocu[o.ocularId];
+          if (oc && oc.modelo) {
+            equipo.push('Ocular: ' + oc.modelo + (aux[o.auxiliarId] && aux[o.auxiliarId].modelo ? ' + ' + aux[o.auxiliarId].modelo : ''));
+          }
+          var x = !vacio(o.aumentos) ? o.aumentos : aumentos(tel[o.telescopioId], oc, aux[o.auxiliarId]);
+          if (!vacio(x) && isFinite(Number(x))) { equipo.push('Aumentos: ' + Math.round(Number(x)) + 'x'); }
+          var lineas = [];
+          if (equipo.length) { lineas.push(equipo.join(' · ')); }
+          // La hora va en el primer subbloque; en otro, solo si no tiene con qué
+          // separarse del anterior.
+          if (o.hora && (i === 0 || !lineas.length)) { lineas.push('Hora: ' + hora(o.hora)); }
+          if (i === 0) {
+            if (!unTubo && tubo(o.telescopioId)) { lineas.push('Telescopio: ' + tubo(o.telescopioId)); }
+            if (o.observador && clave(o.observador) !== clave(mio)) { lineas.push('Observador: ' + o.observador); }
+          }
+          var items = lineas.map(escapar);
+          if (items.length) { s.push(lista(items)); }
+          s.push.apply(s, parrafos(o.texto, true));
+        });
       });
-      s.push('</table>');
     });
     return s.join('\n') + '\n';
   }
@@ -970,7 +1087,7 @@
               nocheDe: nocheDe, fechaDeReloj: fechaDeReloj, instante: instante, desfase: desfase,
               tipoOal: tipoOal, aumentos: aumentos, problemas: problemas, clave: clave,
               CIELO: CIELO, sembrarCielo: sembrarCielo, repartirCielo: repartirCielo,
-              antoniadi: antoniadi,
+              antoniadi: antoniadi, ANTONIADI: ANTONIADI, TRANSPARENCIA: TRANSPARENCIA,
               xmlDe: xmlDe, textoDe: textoDe, fechaLarga: fechaLarga,
               leer: leer, arbol: arbol, estadoVacio: estadoVacio,
               pegar: pegar, ESQUEMA: ESQUEMA };

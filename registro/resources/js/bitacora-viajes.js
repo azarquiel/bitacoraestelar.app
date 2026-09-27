@@ -368,17 +368,22 @@
 
     // El correo se abre en una pestaña ya compuesto: se selecciona todo y se
     // pega en el mensaje, con su formato. Nada de lo que sale de aquí lo ha
-    // redactado una máquina (ADR 0004).
-    function correo(v) {
+    // redactado una máquina (ADR 0004). La pestaña se abre EN el clic (si no,
+    // Safari la bloquea al volver la petición), y sin tipografía propia: lo que
+    // se copia de ella llega a Gmail con la letra del mensaje (ADR 0006).
+    function correo(v, btn) {
+      var w = window.open('', '_blank');
+      if (!w) { flash('El navegador ha bloqueado la ventana del correo.', true); return; }
+      btn.disabled = true;
       estadoDe(v).then(function (estado) {
-        var cuerpo = window.PlantillaOAL.textoDe(estado);
         var doc = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
-          + '<title>Correo de la salida del ' + esc(v.noche || '') + '</title></head>'
-          + '<body style="font:15px/1.5 system-ui,sans-serif;max-width:800px;margin:24px auto;padding:0 16px">'
-          + cuerpo + '</body></html>';
-        var w = window.open(URL.createObjectURL(new Blob([doc], { type: 'text/html;charset=utf-8' })), '_blank');
-        if (!w) { flash('El navegador ha bloqueado la ventana del correo.', true); }
-      }).catch(fallo);
+          + '<title>Correo de la salida del ' + esc(v.noche || '') + '</title>'
+          + '<style>body{max-width:800px;margin:24px auto;padding:0 16px}</style></head>'
+          + '<body>' + window.PlantillaOAL.textoDe(estado) + '</body></html>';
+        w.location.href = URL.createObjectURL(new Blob([doc], { type: 'text/html;charset=utf-8' }));
+        flash('Correo abierto en otra pestaña: selecciónalo todo (Cmd/Ctrl+A), cópialo y pégalo en el mensaje.');
+      }).catch(function (err) { w.close(); fallo(err); })
+        .then(function () { btn.disabled = false; });
     }
 
     // ── Acciones de la lista ───────────────────────────────────────────────
@@ -394,7 +399,7 @@
         var accion = btn.getAttribute('data-accion');
         if (accion === 'editar') { editar(v); return; }
         if (accion === 'exportar') { exportar(v); return; }
-        if (accion === 'correo') { correo(v); return; }
+        if (accion === 'correo') { correo(v, btn); return; }
         if (!window.confirm('¿Borrar la salida del ' + v.noche + '? No se puede deshacer.')) return;
         api(API_VIAJES + '/' + v.id, { method: 'DELETE' }).then(function (r) {
           if (!r.ok) { flash(errorDe(r, 'No se pudo borrar'), true); return; }

@@ -170,27 +170,121 @@ eq(hermanas.map(function (o) { return OAL.clave(o.objeto); }).filter(function (x
   return a.indexOf(x) === i;
 }).length, 1, 'y un solo objeto: por ahí las funde el importador');
 
-/* ── El correo ────────────────────────────────────────────────────────────── */
+/* ── El correo (ADR 0006: una ficha por objeto) ───────────────────────────── */
 
-console.log('el correo sale del mismo estado que el XML:');
+console.log('el correo sale del mismo estado que el XML, una ficha por objeto:');
 var correo = OAL.textoDe(e);
 ok(correo.indexOf('<h2>Salida del 5 de agosto de 2026</h2>') > -1, 'cabecera con la fecha de la noche');
-ok(correo.indexOf('El Culebrín II') > -1, 'la base');
-ok(correo.indexOf('22:30–03:00') > -1, 'las horas de la salida');
-ok(correo.indexOf('SQM 21.42') > -1, 'el cielo');
-ok(correo.indexOf('Tripulación: Ángel L. Huelmo, Víctor') > -1, 'y la tripulación');
-eq((correo.match(/<tr>/g) || []).length, 5, 'una fila por observación, más la cabecera de la tabla');
-ok(correo.indexOf('<td>23:40</td><td>M13</td><td>67.9×</td><td>Enorme y granulado</td>') > -1,
-   'cada fila con su hora, su objeto, su aumento y lo que se vio');
-ok(correo.indexOf('Salida larga &amp; sin luna') > -1, 'el ampersand va escapado, como en el XML');
+eq(cuantas(correo, /<h3>/g), 2, 'una <h3> por objeto: las tres entradas de M13 son una ficha');
+ok(!/<table|<tr|<td/.test(correo), 'sin tabla');
+ok(!/\sstyle=/.test(correo), 'sin estilos en línea');
+ok(correo.indexOf('<ul>\n<li>Observador: Israel Pérez de Tudela</li>\n<li>Fecha: 5 de agosto de 2026</li>\n<li>Lugar: El Culebrín II</li>') > -1,
+   'la cabecera es una lista y empieza como la plantilla: observador, fecha, lugar');
+ok(correo.indexOf('Ventana: 20:30–01:00 UT') > -1, 'la ventana va en UT (tz +120)');
+ok(correo.indexOf('Seeing: 3 (Antoniadi, regular)') > -1, 'el seeing con su escala a la vista');
+ok(correo.indexOf('Transparencia: Mayoritariamente transparente (IR -18)') > -1, 'la transparencia con su banda');
+ok(correo.indexOf('Cielo: SQM 21.42 mag/arcsec² · Bortle 4') > -1, 'el brillo del cielo');
+ok(correo.indexOf('/5') === -1, 'ninguna escala x/5');
+ok(correo.indexOf('Tripulación: Ángel L. Huelmo, Víctor') > -1, 'la tripulación');
+eq(cuantas(correo, /Telescopio: /g), 1, 'un solo telescopio: una sola línea…');
+ok(correo.indexOf('<li>Telescopio: El Dobson</li>\n</ul>\n<h3>') > -1, '…y en la cabecera');
+ok(correo.indexOf('<p>Salida larga &amp; sin luna</p>') < correo.indexOf('Observador: '),
+   'la crónica va antes del bloque de datos, y escapada');
+ok(correo.indexOf('<h3>M13</h3>\n<ul>\n<li>Ocular: Nagler 22mm · Aumentos: 68x</li>\n<li>Hora: 21:40 UT</li>\n</ul>\n' +
+   '<p><em>Enorme y granulado</em></p>\n' +
+   '<ul>\n<li>Ocular: Nagler 7mm · Aumentos: 214x</li>\n</ul>\n<p><em>Se resuelve entera</em></p>\n' +
+   '<ul>\n<li>Ocular: Nagler 7mm + Barlow 2x · Aumentos: 427x</li>\n</ul>\n<p><em>Al límite del seeing</em></p>') > -1,
+   'M13: un subbloque por entrada, en su orden, con la hora en UT solo en el primero');
+ok(correo.indexOf('<h3>NGC 6826</h3>\n<ul>\n<li>Ocular: Nagler 7mm · Aumentos: 214x</li>\n<li>Hora: 00:15 UT</li>\n<li>Observador: Ángel L. Huelmo</li>') > -1,
+   'la madrugada pasa de día en UT, y la firma ajena lleva su línea');
+eq(cuantas(correo, /Observador: /g), 2, 'el dueño solo firma en la cabecera');
 eq(OAL.textoDe(e), correo, 'y es determinista: el mismo estado da el mismo correo');
 // ADR 0004: aquí no se redacta nada. Todo lo que sale del correo estaba en el
-// estado, así que quitar los textos del observador deja la tabla vacía de prosa.
+// estado, así que quitar los textos del observador deja las fichas sin prosa.
 var mudo = estado();
 mudo.observaciones.forEach(function (o) { o.texto = ''; });
 mudo.noches[0].cronica = '';
 ok(OAL.textoDe(mudo).indexOf('Enorme') === -1, 'sin descripciones no aparece ninguna frase');
+ok(OAL.textoDe(mudo).indexOf('<h3>M13</h3>\n<ul>\n<li>Ocular: Nagler 22mm') > -1, 'y la ficha sale igual, sin descripción');
 
+console.log('la descripción conserva sus párrafos:');
+var parrafos = estado();
+parrafos.observaciones = [parrafos.observaciones[0]];
+parrafos.observaciones[0].texto = 'Línea corta.\n\nPárrafo largo\ncon salto.\r\n\r\n<script>x</script>';
+parrafos.noches[0].cronica = 'Llegamos tarde.\n\nPero despejó.';
+var cp = OAL.textoDe(parrafos);
+ok(cp.indexOf('<p><em>Línea corta.</em></p>\n<p><em>Párrafo largo<br>con salto.</em></p>\n<p><em>&lt;script&gt;x&lt;/script&gt;</em></p>') > -1,
+   'línea en blanco = <p>, salto simple = <br>, en cursiva y escapado');
+var sintesis = estado();
+sintesis.observaciones = [sintesis.observaciones[0]];
+sintesis.observaciones[0].texto = 'Rasgos:\n• Forma romboidal\n• Bahía <oscura>\nOrientación dobson.';
+ok(OAL.textoDe(sintesis).indexOf('<ul>\n<li><em>Rasgos:</em>\n<ul>\n<li><em>Forma romboidal</em></li>\n' +
+   '<li><em>Bahía &lt;oscura&gt;</em></li>\n</ul>\n</li>\n</ul>\n<p><em>Orientación dobson.</em></p>') > -1,
+   'las líneas «• » de una síntesis son una sublista colgada de la línea anterior, en una columna');
+ok(cp.indexOf('<p>Llegamos tarde.</p>\n<p>Pero despejó.</p>') > -1, 'la crónica, igual pero en redonda');
+
+console.log('se agrupa por noche + objeto, venga de donde venga el estado:');
+var pegado = estado();
+pegado.observaciones = [
+  { id: 'a', nocheId: 'n42', objeto: 'M 13', hora: '23:40', telescopioId: 'te3', ocularId: 'oc2', aumentos: 58, texto: 'uno' },
+  { id: 'b', nocheId: 'n42', objeto: 'm-13', hora: '23:40', telescopioId: 'te3', ocularId: 'oc5', aumentos: 225, texto: 'dos' }
+];
+var cg = OAL.textoDe(pegado);
+eq(cuantas(cg, /<h3>/g), 1, 'ids sin obsN- y nombres «M 13» / «m-13»: una sola ficha');
+ok(cg.indexOf('<h3>M 13</h3>') > -1, 'con el nombre de la primera entrada');
+ok(cg.indexOf('Aumentos: 58x') < cg.indexOf('Aumentos: 225x'), 'y las entradas en el orden en que llegan');
+
+console.log('orden cronológico real, con el convenio de mediodía:');
+var orden = estado();
+orden.observaciones = [
+  { id: 'a', nocheId: 'n42', objeto: 'M 1', hora: '01:15' },
+  { id: 'b', nocheId: 'n42', objeto: 'M 2', hora: '' },
+  { id: 'c', nocheId: 'n42', objeto: 'M 3', hora: '22:40' },
+  { id: 'd', nocheId: 'n42', objeto: 'M 4', hora: '23:50' }
+];
+eq((OAL.textoDe(orden).match(/<h3>[^<]*<\/h3>/g) || []), ['<h3>M 3</h3>', '<h3>M 4</h3>', '<h3>M 1</h3>', '<h3>M 2</h3>'],
+   '22:40 → 23:50 → 01:15 → sin hora');
+
+console.log('dos telescopios: cada ficha lleva el suyo:');
+var dos = estado();
+dos.observaciones[3].telescopioId = 'te4';
+var cd = OAL.textoDe(dos);
+eq(cuantas(cd, /Telescopio: /g), 2, 'una línea por ficha');
+ok(cd.indexOf('<li>Tripulación: Ángel L. Huelmo, Víctor</li>\n</ul>') > -1, 'ninguna en la cabecera');
+ok(cd.indexOf('<li>Hora: 00:15 UT</li>\n<li>Telescopio: Refractor que se quedó en casa</li>') > -1, 'la de NGC 6826, con el suyo');
+
+console.log('sin huso no se escribe UT:');
+var sinTz = estado();
+sinTz.lugares.forEach(function (l) { l.tz = ''; });
+var cs = OAL.textoDe(sinTz);
+ok(cs.indexOf(' UT') === -1, 'ninguna hora dice UT');
+ok(cs.indexOf('Ventana: 22:30–03:00') > -1 && cs.indexOf('Hora: 23:40') > -1, 'se queda la hora de pared');
+
+console.log('una línea sin dato no se pinta:');
+var pobre = estado();
+pobre.observaciones = [];
+pobre.noches[0].tripulacion = '';
+pobre.noches[0].fin = '';
+var cpo = OAL.textoDe(pobre);
+ok(!/Seeing|Transparencia|Cielo:|Tripulación|Telescopio|<h3>/.test(cpo), 'ni cielo, ni tripulación, ni telescopio, ni fichas');
+ok(cpo.indexOf('Ventana: 20:30–? UT') > -1, 'una ventana a medias conserva su ?');
+ok(cpo.indexOf('—') === -1, 'y nada de rayas');
+
+console.log('las etiquetas del cielo son las de la app:');
+global.window = {};
+require('../resources/js/bitacora-base.js');
+var B = global.window.BitacoraBase;
+eq(OAL.TRANSPARENCIA, B.TRANSPARENCIA, 'las bandas de transparencia, las de BitacoraBase');
+var fs = require('fs');
+['registro/mis-viajes-wordpress.html', 'registro/registrar-observacion-wordpress.html'].forEach(function (f) {
+  var html = fs.readFileSync(require('path').join(__dirname, '..', f), 'utf8');
+  var sel = /<select id="v?[sS]eeing">([\s\S]*?)<\/select>/.exec(html)[1];
+  var opts = [];
+  sel.replace(/<option value="(\d)">\d · ([^<]+)<\/option>/g, function (_, v, t) { opts.push(t.toLowerCase()); });
+  eq(opts, OAL.ANTONIADI, 'las etiquetas de seeing, las del <select> de ' + f);
+});
+ok(B.montarTransparencia.toString().indexOf("' · IR ' + t.ir") > -1,
+   'el <select> pinta el IR con el guion de siempre, el mismo que el correo');
 /* ── Lo que no está en el fichero, no se referencia ───────────────────────── */
 
 console.log('una referencia a lo que no viaja en el fichero no se escribe:');
