@@ -10,7 +10,7 @@ Parsea la tabla de reglas REAL de bitacora_clasificar_objeto() en el plugin PHP
 
 Sin dependencias:  python3 scripts/test_clasificacion_objeto.py
 """
-import re, sys, pathlib
+import json, re, sys, pathlib
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 PHP = (RAIZ / "resources/plugins/bitacora-registro/bitacora-registro.php").read_text(encoding="utf-8")
@@ -70,6 +70,19 @@ COLOR_CLASE = {m.group(1): m.group(2).lower()
 check(set(COLOR_CLASE) >= {"E", "S0", "S", "SB", "Irr", "galaxia"},
       f"colores por clase de Hubble parseados ({sorted(COLOR_CLASE)})")
 
+# ── OpenNGC: segunda fuente del clasificador (ADR 0002) ──────────────────────
+# bitacora_categorias_ongc(): qué Type del OpenNGC pisa a SIMBAD y a qué categoría
+# va. 'GALAXIA' es un centinela que deriva a la rama de galaxia (clase de Hubble);
+# lo demás son categorías MW ya existentes.
+ongc_fn = PHP[PHP.index("function bitacora_categorias_ongc"):]
+ongc_fn = ongc_fn[:ongc_fn.index("\n}\n")]
+ONG_CATEGORIAS = {m.group(1).upper(): m.group(2)
+                  for m in re.finditer(r"'([A-Za-z*+]+)'\s*=>\s*'([A-Za-z]+)'", ongc_fn)}
+check(len(ONG_CATEGORIAS) >= 9, f"categorías del OpenNGC parseadas ({sorted(ONG_CATEGORIAS)})")
+tipos_mw = {t for t, _c, _col in reglas}
+check(all(v == "GALAXIA" or v in tipos_mw for v in ONG_CATEGORIAS.values()),
+      f"todo Type del OpenNGC va a 'GALAXIA' o a una categoría MW existente ({ONG_CATEGORIAS})")
+
 # Réplica de bitacora_clase_hubble: letras de Hubble o etapa T de de Vaucouleurs.
 # Los CORTES de la etapa T sí se copian del PHP a mano, a diferencia de la tabla de
 # categorías y de los colores: son el dato que este test fija (T=-1 es lenticular y
@@ -93,13 +106,26 @@ def clase_hubble(morph):
     return ""
 
 # ── Réplica del match (misma prioridad que el PHP) ───────────────────────────
-def clasificar_mw(otype, tipo_obs="", morph=""):
+def clasificar_mw(otype, tipo_obs="", morph="", ongc=""):
     cod = otype.strip().upper()
     tob = tipo_obs.strip().lower()
+    ongc = ongc.strip().upper()
+    # 1) El tipo del registro gana.
     for tipo, codes, color in reglas:
-        if tob == tipo or cod in codes:
+        if tob == tipo:
             return tipo, color
-    if cod in OTYPES_GALAXIA:
+    # 2) OpenNGC (catálogo DSO) para designaciones NGC/IC: solo tipos específicos.
+    cat_ongc = ONG_CATEGORIAS.get(ongc, "")
+    if cat_ongc and cat_ongc != "GALAXIA":
+        for tipo, codes, color in reglas:
+            if tipo == cat_ongc:
+                return tipo, color
+    # 3) Tabla de categorías MW por otype SIMBAD.
+    for tipo, codes, color in reglas:
+        if cod in codes:
+            return tipo, color
+    # 4) Galaxia: otype SIMBAD extragaláctico, o el 'G' del OpenNGC.
+    if cod in OTYPES_GALAXIA or cat_ongc == "GALAXIA":
         clase = clase_hubble(morph)
         return (clase, COLOR_CLASE[clase]) if clase else ("galaxia", COLOR_CLASE["galaxia"])
     if "*" in cod and cod != "AS*":
@@ -182,6 +208,51 @@ for otype, morph, esperado in DORADOS_GALAXIA:
     check(tipo == esperado, f"otype={otype!r} morph={morph!r} -> {tipo!r} (esperado {esperado!r})")
     check(color != color_desconocido or esperado == "desconocido",
           f"otype={otype!r} morph={morph!r} NO se pinta del gris de 'sin clasificar'")
+
+# ── 1 ter) OpenNGC, segunda fuente (ADR 0002): ongc pisa o no a SIMBAD ───────
+DORADOS_ONG = [
+    # Los cuatro del bug: SIMBAD resuelve mal el número NGC/IC, OpenNGC lo corrige.
+    ("WR*", "", "", "HII",  "emision"),   # NGC 6888 -> HD 192163 (estrella WR central)
+    ("ISM", "", "", "SNR",  "snr"),       # NGC 6960, Velo oeste
+    ("sh",  "", "", "SNR",  "snr"),       # NGC 6992, Velo este
+    ("OpC", "", "", "CL+N", "emision"),   # IC 5146, Cocoon (SIMBAD lo tipa cúmulo)
+    # OpenNGC gana sobre un otype estelar: si hay catálogo, no se adivina "estrella".
+    ("*",   "", "", "HII",  "emision"),
+    # OpenNGC solo, sin SIMBAD: ya clasifica.
+    ("",    "", "", "SNR",  "snr"),
+    # Type 'G' deriva a la rama de galaxia y la morfología da la clase de Hubble.
+    ("",    "", "SB(s)bc", "G", "SB"),
+    ("G",   "", "", "G",    "galaxia"),
+    # OpenNGC genérico NO pisa un otype específico de SIMBAD.
+    ("PN",  "", "", "Neb",  "planetaria"),
+    ("OpC", "", "", "",     "abierto"),
+    # El tipo del registro sigue ganando sobre el OpenNGC.
+    ("OpC", "carbono", "", "CL+N", "carbono"),
+]
+print("OpenNGC ongc+otype -> tipo:")
+for otype, tob, morph, ongc, esperado in DORADOS_ONG:
+    tipo, color = clasificar_mw(otype, tob, morph, ongc)
+    check(tipo == esperado, f"otype={otype!r} ongc={ongc!r} -> {tipo!r} (esperado {esperado!r})")
+    check(color != color_desconocido or esperado == "desconocido",
+          f"otype={otype!r} ongc={ongc!r} NO se pinta del gris de 'sin clasificar'")
+
+# ── 1 quater) El dato real: datos/ongc-tipo.json trae los anclas ─────────────
+ONG_TIPO = json.loads((RAIZ / "resources/plugins/bitacora-registro/datos/ongc-tipo.json").read_text(encoding="utf-8"))
+ANCLAS_ONG = {"NGC6888": "HII", "NGC6960": "SNR", "NGC6992": "SNR", "IC5146": "Cl+N"}
+for nombre, esperado in ANCLAS_ONG.items():
+    check(ONG_TIPO.get(nombre) == esperado, f"{nombre} -> {ONG_TIPO.get(nombre)!r} (esperado {esperado!r})")
+
+
+def clave_ongc(s):
+    """Normaliza 'NGC 6888' / 'ngc6888' -> 'NGC6888' (ceros a la izquierda)."""
+    m = re.fullmatch(r"(NGC|IC)\s*(\d+)", (s or "").strip(), re.I)
+    return (m.group(1).upper() + str(int(m.group(2))).zfill(4)) if m else None
+
+
+check(clave_ongc("NGC 6888") == "NGC6888", "normaliza 'NGC 6888' -> NGC6888")
+check(clave_ongc("ngc6888") == "NGC6888", "normaliza 'ngc6888' -> NGC6888")
+check(clave_ongc("NGC 40") == "NGC0040", "normaliza 'NGC 40' -> NGC0040")
+check(ONG_TIPO.get(clave_ongc("NGC 40")) == "PN", "NGC0040 -> PN en el catálogo")
 
 # Los colores de galaxia son los de la leyenda del Grupo Local, y esa leyenda es
 # otra: #mw-legend-hubble en el HTML y HUBBLE_COLORS en grupo-local.js.
