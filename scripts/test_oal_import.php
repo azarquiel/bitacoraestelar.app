@@ -386,6 +386,7 @@ eq(bitacora_oal_texto_plano('Una l&iacute;nea'), 'Una línea', 'las entidades vu
 eq(bitacora_oal_texto_plano('Sol &amp; Luna'), 'Sol & Luna', 'y el ampersand, un ampersand');
 eq(bitacora_oal_texto_plano('&amp;nbsp;Impresionante.'), 'Impresionante.', 'ni con el & ya escapado en la base');
 eq(bitacora_oal_texto_plano('<p>Dos</p><p>párrafos</p>'), "Dos\npárrafos", 'los párrafos se vuelven saltos de línea');
+eq(bitacora_oal_texto_plano('<p>Rasgos:</p><ul style="margin:0"><li>Forma</li><li>Bahía</li></ul><p>Fin</p>'), "Rasgos:\n• Forma\n• Bahía\nFin", 'cada <li> sale con su viñeta');
 eq(bitacora_oal_texto_plano('&lt;script&gt;alert(1)&lt;/script&gt;'), '<script>alert(1)</script>',
    'una etiqueta escrita como texto sigue siendo texto: se escapa al pintarla');
 

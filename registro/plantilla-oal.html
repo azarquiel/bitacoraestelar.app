@@ -728,15 +728,33 @@
 
   /* Texto del observador en HTML: una línea en blanco abre párrafo y un salto
      simple es un <br>. Se escapa antes de meter ninguna etiqueta. Con `em`, cada
-     párrafo va en cursiva, que es como se distingue la descripción de sus datos. */
+     párrafo va en cursiva, que es como se distingue la descripción de sus datos.
+     Las líneas que empiezan por «• » son los <li> de la descripción (así los deja
+     bitacora_oal_texto_plano): van en una sublista colgada de la línea anterior,
+     que el navegador y Gmail pintan con otra viñeta sin necesidad de estilos. */
   function parrafos(t, em) {
-    return String(t == null ? '' : t).replace(/\r\n?/g, '\n').split(/\n[ \t]*\n/)
-      .map(function (p) { return p.trim(); })
-      .filter(function (p) { return p; })
-      .map(function (p) {
-        var h = escapar(p).replace(/\n/g, '<br>');
-        return '<p>' + (em ? '<em>' + h + '</em>' : h) + '</p>';
-      });
+    function envolver(h) { return em ? '<em>' + h + '</em>' : h; }
+    var out = [];
+    String(t == null ? '' : t).replace(/\r\n?/g, '\n').split(/\n[ \t]*\n/).forEach(function (bloque) {
+      var lineas = bloque.split('\n').map(function (x) { return x.trim(); }).filter(function (x) { return x; });
+      var texto = [];
+      function cerrar() {
+        if (texto.length) { out.push('<p>' + envolver(texto.map(escapar).join('<br>')) + '</p>'); }
+        texto = [];
+      }
+      for (var i = 0; i < lineas.length; i++) {
+        if (!/^•\s/.test(lineas[i])) { texto.push(lineas[i]); continue; }
+        var rasgos = [];
+        for (; i < lineas.length && /^•\s/.test(lineas[i]); i++) { rasgos.push(envolver(escapar(lineas[i].replace(/^•\s*/, '')))); }
+        i--;
+        var padre = texto.pop();
+        cerrar();
+        out.push(padre == null ? lista(rasgos)
+          : '<ul>\n<li>' + envolver(escapar(padre)) + '\n' + lista(rasgos) + '\n</li>\n</ul>');
+      }
+      cerrar();
+    });
+    return out;
   }
 
   /* La hora de pared en UT, con el mismo instante() que el <begin> del XML.

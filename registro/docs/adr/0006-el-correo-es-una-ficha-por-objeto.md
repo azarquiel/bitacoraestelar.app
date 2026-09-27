@@ -56,7 +56,12 @@ las ADR 0003 y 0004 no cambian.
    servidor, un XML reimportado o la caja de pegar.
 7. **La descripción conserva sus párrafos:** línea en blanco = `<p>`, salto
    simple = `<br>`, escapando antes. El título-ocular de la entrada no se
-   pinta.
+   pinta. Los rasgos de una síntesis (los `<li>` de la entrada
+   *Exploración*) llegan como líneas «• », porque `bitacora_oal_texto_plano`
+   marca así cada `<li>`, y se pintan como sublista de la línea anterior, en
+   una columna: la sublista anidada lleva otra viñeta sin estilos. Dos columnas
+   se descartaron: exigían una tabla, y Gmail no respeta las columnas CSS.
+   Esto cambia la descripción del XML exportado, que gana esas viñetas.
 8. **Observador** en la cabecera; una ficha firmada por otro lleva su línea.
 9. **La crónica va primero**, con sus párrafos. No se genera saludo,
    despedida ni firma (ADR 0004).

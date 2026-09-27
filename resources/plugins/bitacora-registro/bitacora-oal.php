@@ -1445,6 +1445,9 @@ function bitacora_oal_otype( $tipo ) {
 /** La descripción, que se guarda en HTML, como el texto plano que OAL espera. */
 function bitacora_oal_texto_plano( $html ) {
     $con_saltos = preg_replace( '#<(br|/p|/div|/li)\s*/?>#i', "\n", (string) $html );
+    // Cada <li> empieza con «• »: sin la viñeta, los rasgos de una síntesis se
+    // leen como una línea más, y el correo no puede pintarlos como lista.
+    $con_saltos = preg_replace( '#<li\b[^>]*>#i', '• ', $con_saltos );
     $plano      = wp_strip_all_tags( $con_saltos );
     // Las entidades se deshacen DESPUÉS de quitar las etiquetas: un &lt;script&gt;
     // guardado como texto tiene que seguir siendo texto. Lo que sale de aquí se

@@ -215,6 +215,12 @@ parrafos.noches[0].cronica = 'Llegamos tarde.\n\nPero despejó.';
 var cp = OAL.textoDe(parrafos);
 ok(cp.indexOf('<p><em>Línea corta.</em></p>\n<p><em>Párrafo largo<br>con salto.</em></p>\n<p><em>&lt;script&gt;x&lt;/script&gt;</em></p>') > -1,
    'línea en blanco = <p>, salto simple = <br>, en cursiva y escapado');
+var sintesis = estado();
+sintesis.observaciones = [sintesis.observaciones[0]];
+sintesis.observaciones[0].texto = 'Rasgos:\n• Forma romboidal\n• Bahía <oscura>\nOrientación dobson.';
+ok(OAL.textoDe(sintesis).indexOf('<ul>\n<li><em>Rasgos:</em>\n<ul>\n<li><em>Forma romboidal</em></li>\n' +
+   '<li><em>Bahía &lt;oscura&gt;</em></li>\n</ul>\n</li>\n</ul>\n<p><em>Orientación dobson.</em></p>') > -1,
+   'las líneas «• » de una síntesis son una sublista colgada de la línea anterior, en una columna');
 ok(cp.indexOf('<p>Llegamos tarde.</p>\n<p>Pero despejó.</p>') > -1, 'la crónica, igual pero en redonda');
 
 console.log('se agrupa por noche + objeto, venga de donde venga el estado:');
