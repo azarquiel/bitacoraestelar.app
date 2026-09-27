@@ -822,6 +822,7 @@
       s.push(lista(cab.map(escapar)));
 
       fichas.forEach(function (f) {
+        s.push('<h3>' + escapar(f.entradas[0].objeto) + '</h3>');
         f.entradas.forEach(function (o, i) {
           var equipo = [];
           var oc = ocu[o.ocularId];
@@ -840,7 +841,6 @@
             if (o.observador && clave(o.observador) !== clave(mio)) { lineas.push('Observador: ' + o.observador); }
           }
           var items = lineas.map(escapar);
-          if (i === 0) { items.unshift('<strong><u>' + escapar(f.entradas[0].objeto) + '</u></strong>'); }
           if (items.length) { s.push(lista(items)); }
           s.push.apply(s, parrafos(o.texto, true));
         });

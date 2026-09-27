@@ -62,7 +62,7 @@ las ADR 0003 y 0004 no cambian.
    despedida ni firma (ADR 0004).
 10. **HTML mínimo, con el formato de la lista:** `h2` para la salida; la
     cabecera y los datos de cada ficha en `<ul>` con viñetas; el nombre del
-    objeto como primera viñeta, en `<strong><u>`; la descripción en `<em>`, la
+    objeto como título `h3`, fuera de la lista; la descripción en `<em>`, la
     crónica en redonda. Así lo escriben a mano en la lista, y Gmail lo sangra
     sin estilos. Sin `<table>` ni estilos en línea. La pestaña que lo envuelve
     no declara tipografía, para que lo copiado llegue a Gmail con la letra del
@@ -81,5 +81,3 @@ ata las dos copias.
 - Quien pegaba la tabla cambia de costumbre. Se acepta: la tabla era un
   subconjunto peor de la ficha.
 - El correo y el XML cuentan la misma hora, porque salen de la misma función.
-- El objeto no va en un encabezado (`h3`, primera versión): se leía peor que
-  la viñeta subrayada de los correos de la lista.
