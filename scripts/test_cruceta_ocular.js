@@ -101,6 +101,13 @@ ok(!/function renderDSS\(arcmin, peticion, fuente\)/.test(JS) &&
    la placa se estira a todo el círculo y el observador tiene que saberlo (#383). */
 ok(/fuente === 'skyview' && pedido > arcmin\)[\s\S]{0,200}la imagen se recorta/.test(JS),
    'el respaldo DSS de Gaia avisa cuando la placa no cubre el campo');
+/* Una placa de 3° tarda ~13 s y el ESO hasta 25 s: el mismo contador de
+   segundos que Gaia dice que la petición sigue viva. */
+ok(/function contarSegundos\(peticion, porque\)/.test(JS) &&
+   (JS.match(/contarSegundos\(peticion, /g) || []).length >= 4,
+   'Gaia, DSS, ESO y HiPS comparten el contador de segundos');
+ok(/getAttribute\('aria-busy'\) !== 'true'/.test(JS),
+   'el contador muere con aria-busy: no pisa el mensaje de error');
 
 console.log('Repintado sin negro y estado de carga:');
 ok(/ctx\.globalCompositeOperation = 'copy';[\s\S]{0,80}ctx\.drawImage\(canvas, px, py\)/.test(JS),

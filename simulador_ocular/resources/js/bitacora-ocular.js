@@ -576,6 +576,7 @@
 
         if (origen === 'hips') {
           var u = urlHips(centro.ra, centro.dec, arcmin);
+          contarSegundos(peticion, null);
           cargarPlaca(u).then(function (im) {
             if (peticion !== contadorPeticion) return;
             if (!im) { cargando.textContent = 'hips2fits no respondió: prueba el origen DSS.'; elVista.setAttribute('aria-busy', 'false'); return; }
@@ -592,6 +593,23 @@
       function finCarga() {
         elCargando.style.display = 'none';
         elVista.setAttribute('aria-busy', 'false');
+      }
+
+      /* Contador de segundos del indicador de carga: dice que la petición sigue
+         viva y, a partir de 8 s, el porqué de la espera. Parte del texto que ya
+         enseña el indicador. Muere solo: al acabar la carga (aria-busy, que
+         también apagan los errores, así no pisa su mensaje), al llegar otra
+         petición o al arrancar otro contador (el reintento con el ESO). */
+      var relojCarga = 0;
+      function contarSegundos(peticion, porque) {
+        var reloj = ++relojCarga, base = elCargando.textContent, t0 = Date.now();
+        (function tic() {
+          if (reloj !== relojCarga || peticion !== contadorPeticion ||
+              elVista.getAttribute('aria-busy') !== 'true') return;
+          var s = Math.round((Date.now() - t0) / 1000);
+          if (s > 0) elCargando.textContent = base + ' (' + s + ' s)' + (s >= 8 && porque ? ' — ' + porque : '');
+          setTimeout(tic, 1000);
+        })();
       }
 
       // Carga y compone la placa DSS (fusión HDR: DSS2-red profunda + DSS1 corta).
@@ -625,6 +643,10 @@
         var ra = centro.ra, dec = centro.dec;
         var urlProfunda = urlPlaca('DSS2-red', ra, dec, arcmin, fuente);
         var urlCorta    = urlPlaca('DSS1', ra, dec, arcmin, fuente);
+        // Medido en #383: SkyView tarda ~13 s a 3° y el ESO ~25 s a 2°.
+        contarSegundos(peticion, fuente === 'eso'
+          ? 'el archivo del ESO sirve la placa entera: puede tardar medio minuto'
+          : 'SkyView une las placas del campo en su servidor: un campo ancho tarda unos 15 s');
         Promise.all([cargarPlaca(urlProfunda), cargarPlaca(urlCorta)])
           .then(function (res) {
             var profunda = res[0], corta = res[1];
@@ -674,20 +696,9 @@
         var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
         if (!conservar) { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC); }
         cargando.style.display = 'flex'; cargando.textContent = 'consultando estrellas de Gaia DR3…';
-        /* La primera consulta de un campo muy rico tarda hasta un minuto en el
-           servidor (luego queda cacheada). Un contador de segundos dice que el
-           proceso sigue vivo; a partir de 8 s se explica el porqué. Muere solo:
-           al ocultarse el indicador o al llegar otra petición. */
-        var tGaia0 = Date.now();
-        (function tic() {
-          if (peticion !== contadorPeticion || cargando.style.display === 'none') return;
-          var s = Math.round((Date.now() - tGaia0) / 1000);
-          if (s > 0) {
-            cargando.textContent = 'consultando estrellas de Gaia DR3… (' + s + ' s)' +
-              (s >= 8 ? ' — campo muy rico: la primera vez tarda hasta un minuto y queda guardado para siempre' : '');
-          }
-          setTimeout(tic, 1000);
-        })();
+        // La primera consulta de un campo muy rico tarda hasta un minuto en el
+        // servidor (luego queda cacheada).
+        contarSegundos(peticion, 'campo muy rico: la primera vez tarda hasta un minuto y queda guardado para siempre');
 
         var ra0 = centro.ra, dec0 = centro.dec;
         var eq = datosOcular();
