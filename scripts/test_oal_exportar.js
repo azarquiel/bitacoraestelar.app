@@ -175,11 +175,12 @@ eq(hermanas.map(function (o) { return OAL.clave(o.objeto); }).filter(function (x
 console.log('el correo sale del mismo estado que el XML, una ficha por objeto:');
 var correo = OAL.textoDe(e);
 ok(correo.indexOf('<h2>Salida del 5 de agosto de 2026</h2>') > -1, 'cabecera con la fecha de la noche');
-eq(cuantas(correo, /<h3>/g), 2, 'una <h3> por objeto: las tres entradas de M13 son una ficha');
+eq(cuantas(correo, /<strong><u>/g), 2, 'un nombre destacado por objeto: las tres entradas de M13 son una ficha');
+ok(!/<h3/.test(correo), 'el objeto va en la lista, no en un encabezado');
 ok(!/<table|<tr|<td/.test(correo), 'sin tabla');
 ok(!/\sstyle=/.test(correo), 'sin estilos en línea');
-ok(correo.indexOf('Observador: Israel Pérez de Tudela<br>Fecha: 5 de agosto de 2026<br>Lugar: El Culebrín II') > -1,
-   'la cabecera empieza como la plantilla: observador, fecha, lugar');
+ok(correo.indexOf('<ul>\n<li>Observador: Israel Pérez de Tudela</li>\n<li>Fecha: 5 de agosto de 2026</li>\n<li>Lugar: El Culebrín II</li>') > -1,
+   'la cabecera es una lista y empieza como la plantilla: observador, fecha, lugar');
 ok(correo.indexOf('Ventana: 20:30–01:00 UT') > -1, 'la ventana va en UT (tz +120)');
 ok(correo.indexOf('Seeing: 3 (Antoniadi, regular)') > -1, 'el seeing con su escala a la vista');
 ok(correo.indexOf('Transparencia: Mayoritariamente transparente (IR -18)') > -1, 'la transparencia con su banda');
@@ -187,14 +188,15 @@ ok(correo.indexOf('Cielo: SQM 21.42 mag/arcsec² · Bortle 4') > -1, 'el brillo 
 ok(correo.indexOf('/5') === -1, 'ninguna escala x/5');
 ok(correo.indexOf('Tripulación: Ángel L. Huelmo, Víctor') > -1, 'la tripulación');
 eq(cuantas(correo, /Telescopio: /g), 1, 'un solo telescopio: una sola línea…');
-ok(correo.indexOf('Telescopio: El Dobson</p>') > -1, '…y en la cabecera');
+ok(correo.indexOf('<li>Telescopio: El Dobson</li>\n</ul>\n<ul>') > -1, '…y en la cabecera');
 ok(correo.indexOf('<p>Salida larga &amp; sin luna</p>') < correo.indexOf('Observador: '),
    'la crónica va antes del bloque de datos, y escapada');
-ok(correo.indexOf('<h3>M13</h3>\n<p>Ocular: Nagler 22mm · Aumentos: 68x<br>Hora: 21:40 UT</p>\n<p>Enorme y granulado</p>\n' +
-   '<p>Ocular: Nagler 7mm · Aumentos: 214x</p>\n<p>Se resuelve entera</p>\n' +
-   '<p>Ocular: Nagler 7mm + Barlow 2x · Aumentos: 427x</p>\n<p>Al límite del seeing</p>') > -1,
+ok(correo.indexOf('<ul>\n<li><strong><u>M13</u></strong></li>\n<li>Ocular: Nagler 22mm · Aumentos: 68x</li>\n<li>Hora: 21:40 UT</li>\n</ul>\n' +
+   '<p><em>Enorme y granulado</em></p>\n' +
+   '<ul>\n<li>Ocular: Nagler 7mm · Aumentos: 214x</li>\n</ul>\n<p><em>Se resuelve entera</em></p>\n' +
+   '<ul>\n<li>Ocular: Nagler 7mm + Barlow 2x · Aumentos: 427x</li>\n</ul>\n<p><em>Al límite del seeing</em></p>') > -1,
    'M13: un subbloque por entrada, en su orden, con la hora en UT solo en el primero');
-ok(correo.indexOf('<h3>NGC 6826</h3>\n<p>Ocular: Nagler 7mm · Aumentos: 214x<br>Hora: 00:15 UT<br>Observador: Ángel L. Huelmo</p>') > -1,
+ok(correo.indexOf('<li><strong><u>NGC 6826</u></strong></li>\n<li>Ocular: Nagler 7mm · Aumentos: 214x</li>\n<li>Hora: 00:15 UT</li>\n<li>Observador: Ángel L. Huelmo</li>') > -1,
    'la madrugada pasa de día en UT, y la firma ajena lleva su línea');
 eq(cuantas(correo, /Observador: /g), 2, 'el dueño solo firma en la cabecera');
 eq(OAL.textoDe(e), correo, 'y es determinista: el mismo estado da el mismo correo');
@@ -204,7 +206,7 @@ var mudo = estado();
 mudo.observaciones.forEach(function (o) { o.texto = ''; });
 mudo.noches[0].cronica = '';
 ok(OAL.textoDe(mudo).indexOf('Enorme') === -1, 'sin descripciones no aparece ninguna frase');
-ok(OAL.textoDe(mudo).indexOf('<h3>M13</h3>\n<p>Ocular: Nagler 22mm') > -1, 'y la ficha sale igual, sin descripción');
+ok(OAL.textoDe(mudo).indexOf('<li><strong><u>M13</u></strong></li>\n<li>Ocular: Nagler 22mm') > -1, 'y la ficha sale igual, sin descripción');
 
 console.log('la descripción conserva sus párrafos:');
 var parrafos = estado();
@@ -212,9 +214,9 @@ parrafos.observaciones = [parrafos.observaciones[0]];
 parrafos.observaciones[0].texto = 'Línea corta.\n\nPárrafo largo\ncon salto.\r\n\r\n<script>x</script>';
 parrafos.noches[0].cronica = 'Llegamos tarde.\n\nPero despejó.';
 var cp = OAL.textoDe(parrafos);
-ok(cp.indexOf('<p>Línea corta.</p>\n<p>Párrafo largo<br>con salto.</p>\n<p>&lt;script&gt;x&lt;/script&gt;</p>') > -1,
-   'línea en blanco = <p>, salto simple = <br>, y escapado');
-ok(cp.indexOf('<p>Llegamos tarde.</p>\n<p>Pero despejó.</p>') > -1, 'la crónica, igual');
+ok(cp.indexOf('<p><em>Línea corta.</em></p>\n<p><em>Párrafo largo<br>con salto.</em></p>\n<p><em>&lt;script&gt;x&lt;/script&gt;</em></p>') > -1,
+   'línea en blanco = <p>, salto simple = <br>, en cursiva y escapado');
+ok(cp.indexOf('<p>Llegamos tarde.</p>\n<p>Pero despejó.</p>') > -1, 'la crónica, igual pero en redonda');
 
 console.log('se agrupa por noche + objeto, venga de donde venga el estado:');
 var pegado = estado();
@@ -223,8 +225,8 @@ pegado.observaciones = [
   { id: 'b', nocheId: 'n42', objeto: 'm-13', hora: '23:40', telescopioId: 'te3', ocularId: 'oc5', aumentos: 225, texto: 'dos' }
 ];
 var cg = OAL.textoDe(pegado);
-eq(cuantas(cg, /<h3>/g), 1, 'ids sin obsN- y nombres «M 13» / «m-13»: una sola ficha');
-ok(cg.indexOf('<h3>M 13</h3>') > -1, 'con el nombre de la primera entrada');
+eq(cuantas(cg, /<strong><u>/g), 1, 'ids sin obsN- y nombres «M 13» / «m-13»: una sola ficha');
+ok(cg.indexOf('<strong><u>M 13</u></strong>') > -1, 'con el nombre de la primera entrada');
 ok(cg.indexOf('Aumentos: 58x') < cg.indexOf('Aumentos: 225x'), 'y las entradas en el orden en que llegan');
 
 console.log('orden cronológico real, con el convenio de mediodía:');
@@ -235,7 +237,7 @@ orden.observaciones = [
   { id: 'c', nocheId: 'n42', objeto: 'M 3', hora: '22:40' },
   { id: 'd', nocheId: 'n42', objeto: 'M 4', hora: '23:50' }
 ];
-eq((OAL.textoDe(orden).match(/<h3>[^<]*<\/h3>/g) || []), ['<h3>M 3</h3>', '<h3>M 4</h3>', '<h3>M 1</h3>', '<h3>M 2</h3>'],
+eq((OAL.textoDe(orden).match(/<u>[^<]*<\/u>/g) || []), ['<u>M 3</u>', '<u>M 4</u>', '<u>M 1</u>', '<u>M 2</u>'],
    '22:40 → 23:50 → 01:15 → sin hora');
 
 console.log('dos telescopios: cada ficha lleva el suyo:');
@@ -243,8 +245,8 @@ var dos = estado();
 dos.observaciones[3].telescopioId = 'te4';
 var cd = OAL.textoDe(dos);
 eq(cuantas(cd, /Telescopio: /g), 2, 'una línea por ficha');
-ok(cd.indexOf('Telescopio: El Dobson</p>\n<h3>') === -1, 'ninguna en la cabecera');
-ok(cd.indexOf('Hora: 00:15 UT<br>Telescopio: Refractor que se quedó en casa') > -1, 'la de NGC 6826, con el suyo');
+ok(cd.indexOf('<li>Tripulación: Ángel L. Huelmo, Víctor</li>\n</ul>') > -1, 'ninguna en la cabecera');
+ok(cd.indexOf('<li>Hora: 00:15 UT</li>\n<li>Telescopio: Refractor que se quedó en casa</li>') > -1, 'la de NGC 6826, con el suyo');
 
 console.log('sin huso no se escribe UT:');
 var sinTz = estado();
@@ -259,7 +261,7 @@ pobre.observaciones = [];
 pobre.noches[0].tripulacion = '';
 pobre.noches[0].fin = '';
 var cpo = OAL.textoDe(pobre);
-ok(!/Seeing|Transparencia|Cielo:|Tripulación|Telescopio|<h3>/.test(cpo), 'ni cielo, ni tripulación, ni telescopio, ni fichas');
+ok(!/Seeing|Transparencia|Cielo:|Tripulación|Telescopio|<u>/.test(cpo), 'ni cielo, ni tripulación, ni telescopio, ni fichas');
 ok(cpo.indexOf('Ventana: 20:30–? UT') > -1, 'una ventana a medias conserva su ?');
 ok(cpo.indexOf('—') === -1, 'y nada de rayas');
 

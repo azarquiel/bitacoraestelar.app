@@ -589,12 +589,16 @@
   }
 
   /* Texto del observador en HTML: una línea en blanco abre párrafo y un salto
-     simple es un <br>. Se escapa antes de meter ninguna etiqueta. */
-  function parrafos(t) {
+     simple es un <br>. Se escapa antes de meter ninguna etiqueta. Con `em`, cada
+     párrafo va en cursiva, que es como se distingue la descripción de sus datos. */
+  function parrafos(t, em) {
     return String(t == null ? '' : t).replace(/\r\n?/g, '\n').split(/\n[ \t]*\n/)
       .map(function (p) { return p.trim(); })
       .filter(function (p) { return p; })
-      .map(function (p) { return '<p>' + escapar(p).replace(/\n/g, '<br>') + '</p>'; });
+      .map(function (p) {
+        var h = escapar(p).replace(/\n/g, '<br>');
+        return '<p>' + (em ? '<em>' + h + '</em>' : h) + '</p>';
+      });
   }
 
   /* La hora de pared en UT, con el mismo instante() que el <begin> del XML.
@@ -610,6 +614,12 @@
   /* Clave de orden con el convenio de mediodía; '' si no hay hora legible. */
   function ordenDe(noche, hora) {
     return /^([01]\d|2[0-3]):[0-5]\d/.test(String(hora || '')) ? fechaDeReloj(noche, hora) + ' ' + hora : '';
+  }
+
+  /* Una lista con viñetas: así la escriben a mano en la lista de correo, y Gmail
+     la sangra sin necesidad de estilos. */
+  function lista(items) {
+    return '<ul>\n' + items.map(function (x) { return '<li>' + x + '</li>'; }).join('\n') + '\n</ul>';
   }
 
   function textoDe(estado) {
@@ -671,10 +681,9 @@
 
       s.push('<h2>Salida del ' + escapar(fechaLarga(n.fecha)) + '</h2>');
       s.push.apply(s, parrafos(n.cronica));
-      s.push('<p>' + cab.map(escapar).join('<br>') + '</p>');
+      s.push(lista(cab.map(escapar)));
 
       fichas.forEach(function (f) {
-        s.push('<h3>' + escapar(f.entradas[0].objeto) + '</h3>');
         f.entradas.forEach(function (o, i) {
           var equipo = [];
           var oc = ocu[o.ocularId];
@@ -692,8 +701,10 @@
             if (!unTubo && tubo(o.telescopioId)) { lineas.push('Telescopio: ' + tubo(o.telescopioId)); }
             if (o.observador && clave(o.observador) !== clave(mio)) { lineas.push('Observador: ' + o.observador); }
           }
-          if (lineas.length) { s.push('<p>' + lineas.map(escapar).join('<br>') + '</p>'); }
-          s.push.apply(s, parrafos(o.texto));
+          var items = lineas.map(escapar);
+          if (i === 0) { items.unshift('<strong><u>' + escapar(f.entradas[0].objeto) + '</u></strong>'); }
+          if (items.length) { s.push(lista(items)); }
+          s.push.apply(s, parrafos(o.texto, true));
         });
       });
     });

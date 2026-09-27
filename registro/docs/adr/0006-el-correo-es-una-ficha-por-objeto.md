@@ -60,9 +60,13 @@ las ADR 0003 y 0004 no cambian.
 8. **Observador** en la cabecera; una ficha firmada por otro lleva su línea.
 9. **La crónica va primero**, con sus párrafos. No se genera saludo,
    despedida ni firma (ADR 0004).
-10. **HTML mínimo y semántico:** `h2`, `h3`, `p`. Sin `<table>`, sin estilos
-    en línea. La pestaña que lo envuelve no declara tipografía, para que lo
-    copiado llegue a Gmail con la letra del mensaje.
+10. **HTML mínimo, con el formato de la lista:** `h2` para la salida; la
+    cabecera y los datos de cada ficha en `<ul>` con viñetas; el nombre del
+    objeto como primera viñeta, en `<strong><u>`; la descripción en `<em>`, la
+    crónica en redonda. Así lo escriben a mano en la lista, y Gmail lo sangra
+    sin estilos. Sin `<table>` ni estilos en línea. La pestaña que lo envuelve
+    no declara tipografía, para que lo copiado llegue a Gmail con la letra del
+    mensaje.
 11. **Orden cronológico real** con el convenio de mediodía; sin hora, al
     final; orden estable.
 12. **Las campañas quedan fuera:** son capa de datos del mapa
@@ -77,3 +81,5 @@ ata las dos copias.
 - Quien pegaba la tabla cambia de costumbre. Se acepta: la tabla era un
   subconjunto peor de la ficha.
 - El correo y el XML cuentan la misma hora, porque salen de la misma función.
+- El objeto no va en un encabezado (`h3`, primera versión): se leía peor que
+  la viñeta subrayada de los correos de la lista.
