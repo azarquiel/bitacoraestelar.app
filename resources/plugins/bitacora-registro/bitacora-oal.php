@@ -1444,7 +1444,10 @@ function bitacora_oal_otype( $tipo ) {
 
 /** La descripción, que se guarda en HTML, como el texto plano que OAL espera. */
 function bitacora_oal_texto_plano( $html ) {
-    $con_saltos = preg_replace( '#<(br|/p|/div|/li)\s*/?>#i', "\n", (string) $html );
+    // Un </p> cierra párrafo: línea en blanco, que es lo que el correo lee como
+    // párrafo nuevo. El resto de cierres son un salto simple.
+    $con_saltos = preg_replace( '#</p\s*>#i', "\n\n", (string) $html );
+    $con_saltos = preg_replace( '#<(br|/div|/li)\s*/?>#i', "\n", $con_saltos );
     // Cada <li> empieza con «• »: sin la viñeta, los rasgos de una síntesis se
     // leen como una línea más, y el correo no puede pintarlos como lista.
     $con_saltos = preg_replace( '#<li\b[^>]*>#i', '• ', $con_saltos );
@@ -1465,6 +1468,10 @@ function bitacora_oal_texto_plano( $html ) {
     // El espacio duro del editor no es un espacio para nadie más: en el correo
     // se veía «&nbsp;» tal cual, porque volvía a escaparse el & de la entidad.
     $plano = str_replace( array( "\xC2\xA0", "\xE2\x80\x8B" ), array( ' ', '' ), $plano );
+    // Nunca más de una línea en blanco seguida; y la lista va pegada a la frase
+    // que la presenta («Rasgos:</p><ul>»), que es de la que cuelga en el correo.
+    $plano = preg_replace( "/\n[ \t]*(\n[ \t]*)+/", "\n\n", $plano );
+    $plano = preg_replace( "/\n\n(?=• )/u", "\n", $plano );
     return trim( $plano );
 }
 

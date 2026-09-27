@@ -385,7 +385,8 @@ eq(bitacora_oal_texto_plano('&nbsp;Impresionante.'), 'Impresionante.', 'el espac
 eq(bitacora_oal_texto_plano('Una l&iacute;nea'), 'Una línea', 'las entidades vuelven a ser letras');
 eq(bitacora_oal_texto_plano('Sol &amp; Luna'), 'Sol & Luna', 'y el ampersand, un ampersand');
 eq(bitacora_oal_texto_plano('&amp;nbsp;Impresionante.'), 'Impresionante.', 'ni con el & ya escapado en la base');
-eq(bitacora_oal_texto_plano('<p>Dos</p><p>párrafos</p>'), "Dos\npárrafos", 'los párrafos se vuelven saltos de línea');
+eq(bitacora_oal_texto_plano('<p>Dos</p><p>párrafos</p>'), "Dos\n\npárrafos", 'cada párrafo se separa con una línea en blanco');
+eq(bitacora_oal_texto_plano("<p>Uno</p>\n\n<p></p><p>dos<br>y tres</p>"), "Uno\n\ndos\ny tres", 'nunca más de una línea en blanco, y el <br> es salto simple');
 eq(bitacora_oal_texto_plano('<p>Rasgos:</p><ul style="margin:0"><li>Forma</li><li>Bahía</li></ul><p>Fin</p>'), "Rasgos:\n• Forma\n• Bahía\nFin", 'cada <li> sale con su viñeta');
 eq(bitacora_oal_texto_plano('&lt;script&gt;alert(1)&lt;/script&gt;'), '<script>alert(1)</script>',
    'una etiqueta escrita como texto sigue siendo texto: se escapa al pintarla');
