@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.36.0
+ * Version:     1.37.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.36.0' );
+define( 'BITACORA_VERSION', '1.37.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -3058,6 +3058,59 @@ function bitacora_tipo_por_color( $color ) {
 }
 
 /**
+ * Categorías del mapa MW que aporta el OpenNGC (catálogo DSO), por su código
+ * `Type`. Es la SEGUNDA fuente del clasificador, consultada antes que el otype
+ * de SIMBAD para las designaciones NGC/IC (ver ADR 0002 de mapa). Solo entran
+ * tipos DSO específicos: `G` deriva a la rama de galaxia (la clase la decide la
+ * morfología, como siempre), y el resto del vocabulario OpenNGC (`Neb`, `Dup`,
+ * `NonEx`, `Other`, `*`, `**`, `*Ass`, `GPair`, `GTrpl`, `GGroup`, `Nova`, o la
+ * ausencia de fila) NO pisa a SIMBAD: un código genérico o de "varias" no debe
+ * tapar el dato bueno del otro catálogo.
+ */
+function bitacora_categorias_ongc() {
+    return array(
+        'G'    => 'GALAXIA',
+        'OCL'  => 'abierto',
+        'GCL'  => 'globular',
+        'PN'   => 'planetaria',
+        'HII'  => 'emision',
+        'EMN'  => 'emision',
+        'RFN'  => 'reflexion',
+        'SNR'  => 'snr',
+        // Cúmulo CON nebulosidad: lo que domina al ocular es la nebulosa (M42,
+        // IC 5146), no el cúmulo embebido. M42 ya era 'emision' por su otype
+        // SIMBAD 'HII', así que esta regla no lo mueve; IC 5146 sí deja de
+        // salir 'abierto'.
+        'CL+N' => 'emision',
+    );
+}
+
+/**
+ * Type del OpenNGC para una designación NGC/IC, o '' si no está en el catálogo.
+ * Normaliza lo que escribe el observador ("NGC 6888", "ngc6888") a la clave del
+ * catálogo ("NGC6888", ceros a la izquierda). El mapa {clave: Type} lo genera
+ * scripts/gen_ongc_tipo.py y se carga una sola vez (static).
+ */
+function bitacora_ongc_tipo( $identificador ) {
+    static $mapa = null;
+    if ( null === $mapa ) {
+        $archivo = __DIR__ . '/datos/ongc-tipo.json';
+        $mapa = file_exists( $archivo )
+            ? json_decode( (string) file_get_contents( $archivo ), true )
+            : array();
+        if ( ! is_array( $mapa ) ) {
+            $mapa = array();
+        }
+    }
+    $identificador = trim( (string) $identificador );
+    if ( ! preg_match( '/^(NGC|IC)\s*(\d+)$/i', $identificador, $m ) ) {
+        return '';
+    }
+    $clave = strtoupper( $m[1] ) . str_pad( intval( $m[2] ), 4, '0', STR_PAD_LEFT );
+    return isset( $mapa[ $clave ] ) ? (string) $mapa[ $clave ] : '';
+}
+
+/**
  * CLASIFICACIÓN DE OBJETO DEL MAPA — decide (tipo, color) de un objeto a partir de
  * su otype de SIMBAD, su morfología y el tipo declarado en la observación. Único
  * punto donde se decide categoría Y color juntos (antes estaban repartidos y el
@@ -3065,11 +3118,12 @@ function bitacora_tipo_por_color( $color ) {
  * color por defecto #7ec8ff, que en la leyenda es "Resto de supernova").
  *
  * Prioridad:
- *   1. tipo declarado en el registro (p. ej. 'carbono' del selector) o el otype MW.
- *   2. Tabla de categorías del mapa MW por código otype de SIMBAD.
- *   3. Galaxia: clase de Hubble por morfología (para la vista extragaláctica).
- *   4. Estelar (el otype lleva '*') → 'estrella'.
- *   5. Nada reconocido → 'desconocido' (NO reutiliza un color de la leyenda, para
+ *   1. Tipo declarado en el registro (p. ej. 'carbono' del selector).
+ *   2. OpenNGC (catálogo DSO) para designaciones NGC/IC — ver ADR 0002.
+ *   3. Tabla de categorías del mapa MW por código otype de SIMBAD.
+ *   4. Galaxia: clase de Hubble por morfología (para la vista extragaláctica).
+ *   5. Estelar (el otype lleva '*') → 'estrella'.
+ *   6. Nada reconocido → 'desconocido' (NO reutiliza un color de la leyenda, para
  *      no disfrazarse de otra categoría).
  *
  * "Es una estrella" y "no sé qué es" son hechos DISTINTOS y por eso son dos tipos:
@@ -3079,27 +3133,49 @@ function bitacora_tipo_por_color( $color ) {
  *
  * Devuelve array( 'tipo' => string, 'color' => '#rrggbb' ).
  */
-function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '' ) {
+function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '', $ongc = '' ) {
     $codigo   = strtoupper( trim( (string) $otype ) );
     $tipo_obs = strtolower( trim( (string) $tipo_obs ) );
+    $ongc     = strtoupper( trim( (string) $ongc ) );
 
-    // La primera categoría que venga en $tipo_obs, o cuyo código case con $otype, gana.
+    // 1) El tipo declarado en el registro gana sobre cualquier fuente: es el
+    // override manual que ya existía.
     foreach ( bitacora_categorias_mapa() as $r ) {
-        if ( $tipo_obs === $r[0] || in_array( $codigo, $r[1], true ) ) {
+        if ( $tipo_obs === $r[0] ) {
+            return array( 'tipo' => $r[0], 'color' => $r[2] );
+        }
+    }
+
+    // 2) OpenNGC para NGC/IC: un catálogo DSO dedicado, más fiable que el otype
+    // de SIMBAD para "qué es este número". 'GALAXIA' deriva a la rama de abajo;
+    // '' significa "no pisa, cae a SIMBAD".
+    $ongc_a_categoria = bitacora_categorias_ongc();
+    $cat_ongc = isset( $ongc_a_categoria[ $ongc ] ) ? $ongc_a_categoria[ $ongc ] : '';
+    if ( '' !== $cat_ongc && 'GALAXIA' !== $cat_ongc ) {
+        foreach ( bitacora_categorias_mapa() as $r ) {
+            if ( $r[0] === $cat_ongc ) {
+                return array( 'tipo' => $r[0], 'color' => $r[2] );
+            }
+        }
+    }
+
+    // 3) Tabla de categorías del mapa MW por código otype de SIMBAD.
+    foreach ( bitacora_categorias_mapa() as $r ) {
+        if ( in_array( $codigo, $r[1], true ) ) {
             return array( 'tipo' => $r[0], 'color' => $r[2] );
         }
     }
 
     // Galaxia (extragaláctica): la clase de Hubble tiñe el marcador en grupo-local.
     // Son dos preguntas distintas y el bug era mezclarlas: «¿es una galaxia?» la
-    // contesta el OTYPE, y «¿de qué clase?» la morfología. Sin la primera, una
-    // galaxia cuya morfología no se entendía acababa en 'desconocido'; y la
-    // morfología sola tampoco vale para la primera, porque no es exclusiva de las
-    // galaxias (un tipo espectral guardado en `morph` empieza por 'B' o por 'K',
-    // pero una etapa numérica o una 'E' sueltas colarían una estrella como
-    // elíptica). Sin otype se acepta la morfología: es lo que hay guardado de las
+    // contesta el OTYPE (de SIMBAD, o el 'G' del OpenNGC), y «¿de qué clase?» la
+    // morfología. Sin la primera, una galaxia cuya morfología no se entendía acababa
+    // en 'desconocido'; y la morfología sola tampoco vale para la primera, porque no
+    // es exclusiva de las galaxias (un tipo espectral guardado en `morph` empieza por
+    // 'B' o por 'K', pero una etapa numérica o una 'E' sueltas colarían una estrella
+    // como elíptica). Sin otype se acepta la morfología: es lo que hay guardado de las
     // filas viejas, cuando SIMBAD no responde.
-    if ( bitacora_es_otype_galaxia( $codigo ) ) {
+    if ( bitacora_es_otype_galaxia( $codigo ) || 'GALAXIA' === $cat_ongc ) {
         $clase = bitacora_clase_hubble( $morph );
         return ( '' !== $clase )
             ? array( 'tipo' => $clase, 'color' => bitacora_color_por_clase( $clase ) )
@@ -3575,10 +3651,11 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
     $morph   = $sim ? $sim['morph'] : '';
     $otype   = $sim ? (string) $sim['otype'] : '';
     $sp_type = $sim ? (string) $sim['sp_type'] : '';
+    $ongc    = bitacora_ongc_tipo( $identificador );
 
-    // Un solo sitio decide categoría Y color (otype SIMBAD + morfología + tipo del
-    // registro). Cierra el hueco donde los objetos MW caían en el default azul.
-    $clasificacion = bitacora_clasificar_objeto( $otype, $morph, $tipo_obs );
+    // Un solo sitio decide categoría Y color (otype SIMBAD + OpenNGC + morfología
+    // + tipo del registro). Cierra el hueco donde los objetos MW caían en el default azul.
+    $clasificacion = bitacora_clasificar_objeto( $otype, $morph, $tipo_obs, $ongc );
     $tipo  = $clasificacion['tipo'];
     $color = $clasificacion['color'];
 
@@ -3823,15 +3900,20 @@ function bitacora_objetos_backfill() {
  * otype: era a la vez "es una estrella" y "no sé qué es". Mientras un objeto siga
  * siendo 'otro' no es estrella para nadie y no sale en el vecindario solar.
  *
- * Entra TAMBIÉN 'desconocido', y no es lo mismo que 'otro': 'desconocido' es la
- * ausencia de clasificación, así que un objeto que cayó ahí cuando se registró
- * merece que se le vuelva a preguntar cada vez que el clasificador aprende un
- * otype nuevo. Es el caso real: al abrir 'RNe' (nebulosa de reflexión), M78,
- * NGC 1788, NGC 1999 y NGC 2023 seguían grises porque nadie los revisitaba.
- * Con el WHERE limitado a 'otro' no había ningún botón capaz de rescatarlos —el
- * de «Colocar en el mapa los objetos que falten» solo INSERTA los que no existen,
- * nunca reescribe una fila—. Idempotente: si SIMBAD sigue sin decir nada, se
- * reescriben los mismos valores.
+ * Entran TAMBIÉN 'desconocido' y 'estrella', y no es lo mismo que 'otro':
+ * 'desconocido' es la ausencia de clasificación, así que un objeto que cayó ahí
+ * cuando se registró merece que se le vuelva a preguntar cada vez que el
+ * clasificador aprende una fuente nueva. Es el caso real: al abrir 'RNe'
+ * (nebulosa de reflexión), M78, NGC 1788, NGC 1999 y NGC 2023 seguían grises
+ * porque nadie los revisitaba. Con el WHERE limitado a 'otro' no había ningún
+ * botón capaz de rescatarlos —el de «Colocar en el mapa los objetos que falten»
+ * solo INSERTA los que no existen, nunca reescribe una fila—. Idempotente: si
+ * SIMBAD sigue sin decir nada, se reescriben los mismos valores.
+ *
+ * 'estrella' entró para rescatar las protoplanetarias guardadas antes de que
+ * existiera su categoría. 'abierto' entra por lo mismo pero con el OpenNGC (ADR
+ * 0002): un cúmulo con nebulosidad (Cl+N) como IC 5146 se guardó 'abierto'
+ * porque SIMBAD lo tipa OpC, y solo esta pasada puede reescribirlo a 'emision'.
  *
  * Solo toca esas dos columnas: la posición y la distancia ya guardadas se quedan
  * como están, para que una reclasificación no pueda estropear datos buenos.
@@ -3841,17 +3923,19 @@ function bitacora_objetos_reclasificar() {
     global $wpdb;
     $t_obj = bitacora_nombre_tabla_objetos();
     $filas = $wpdb->get_results(
-        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '', 'desconocido', 'estrella') ORDER BY id ASC"
+        "SELECT id, slug, etiqueta, tipo, morph FROM $t_obj WHERE tipo IN ('otro', '', 'desconocido', 'estrella', 'abierto') ORDER BY id ASC"
     );
     $hechos = 0;
     foreach ( (array) $filas as $o ) {
-        $sim   = bitacora_simbad( '' !== $o->etiqueta ? $o->etiqueta : $o->slug );
+        $ident = '' !== $o->etiqueta ? $o->etiqueta : $o->slug;
+        $sim   = bitacora_simbad( $ident );
         $otype = $sim ? (string) $sim['otype'] : '';
         // Sin respuesta de SIMBAD se conserva la morfología guardada: puede venir de
         // una consulta anterior que sí funcionó.
         $morph = ( $sim && '' !== (string) $sim['morph'] ) ? (string) $sim['morph'] : (string) $o->morph;
+        $ongc  = bitacora_ongc_tipo( $ident );
 
-        $c = bitacora_clasificar_objeto( $otype, $morph );
+        $c = bitacora_clasificar_objeto( $otype, $morph, '', $ongc );
         // Una reclasificación NUNCA empeora una fila: si SIMBAD no contesta, el
         // clasificador devuelve 'desconocido' y reescribirlo borraría lo que ya se
         // sabía. Importa desde que entran aquí las filas en 'estrella' —una
@@ -4462,12 +4546,13 @@ function bitacora_panel_objetos() {
     }
     // Lo que el contador cuenta es lo que el rótulo promete: objetos SIN clasificar.
     // La consulta de bitacora_objetos_reclasificar() es más ancha —entran también las
-    // filas en 'estrella', por las protoplanetarias guardadas antes de que existiera
-    // su categoría—, y la diferencia es a propósito: una estrella bien clasificada no
-    // es un pendiente, es trabajo extra que el botón hace de paso. Lo que no puede
-    // pasar es lo contrario, que el contador sea más ancho que la consulta: entonces
-    // el panel enseñaría pendientes que el botón no toca. Si algún día se estrecha la
-    // consulta, se estrecha este COUNT con ella.
+    // filas en 'estrella' (protoplanetarias guardadas antes de que existiera su
+    // categoría) y en 'abierto' (cúmulos con nebulosidad que el OpenNGC reescribe a
+    // 'emision', ADR 0002)—, y la diferencia es a propósito: una estrella o un cúmulo
+    // bien clasificado no es un pendiente, es trabajo extra que el botón hace de paso.
+    // Lo que no puede pasar es lo contrario, que el contador sea más ancho que la
+    // consulta: entonces el panel enseñaría pendientes que el botón no toca. Si algún
+    // día se estrecha la consulta, se estrecha este COUNT con ella.
     $sin_clasificar = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $tabla WHERE tipo IN ('otro', '', 'desconocido')" ) );
     echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
     wp_nonce_field( 'bitacora_reclasificar_objetos' );
