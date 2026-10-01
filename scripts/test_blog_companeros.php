@@ -7,9 +7,9 @@ declare(strict_types=1);
       una URL rota no se guarda a medias. Es la misma función que ya vigila el
       audio, así que aquí se comprueba que el blog pasa por ella y no por un
       esc_url_raw() suelto que dejaría entrar http.
-   2. El cableado: la migración crea las columnas, el validador devuelve sus dos
-      campos, datos.js las emite al mapa y el panel del admin guarda la del
-      observador con el saneado estricto.
+   2. El cableado: la migración crea la columna del observador, datos.js la
+      emite al mapa y el panel del admin la guarda con el saneado estricto. La
+      crónica por objeto se quitó y aquí se vigila que no vuelva a medias.
 
    No hay WordPress: se le ponen postizos a las dos funciones que usa.
 
@@ -87,7 +87,7 @@ $app = (string) file_get_contents( __DIR__ . '/../mapa/js/via-lactea-app.js' );
 ok( false !== strpos( $app, 'function pintarPlanetaOrigen(' ),
     'el mapa enciende/apaga el planeta junto al selector de observador' );
 ok( false !== strpos( $app, 'function renderFichaBlog(' ),
-    'la ficha tiene pie de crónica' );
+    'la ficha tiene pie con el blog del observador' );
 ok( false !== strpos( $app, 'renderFichaBlog({});' ),
     'la pantalla de descubrimiento limpia el pie (es de UNA observación)' );
 $html = (string) file_get_contents( __DIR__ . '/../mapa/mapa.html' );
@@ -99,7 +99,7 @@ $form = (string) file_get_contents( __DIR__ . '/../registro/resources/js/bitacor
 $form_html = (string) file_get_contents( __DIR__ . '/../registro/registrar-observacion-wordpress.html' );
 ok( false === strpos( $form . $form_html, 'blogPost' ),
     'el formulario ya no pide ni manda la crónica por objeto' );
-ok( false === strpos( $app, 'f.blog' ),
+ok( ! preg_match( '/\bf\.blog\b/', $app ),
     'la ficha solo enlaza el blog del observador' );
 
 if ( $fallos ) { echo "\n$fallos fallo(s).\n"; exit( 1 ); }
