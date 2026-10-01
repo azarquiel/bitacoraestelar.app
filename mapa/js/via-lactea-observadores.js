@@ -89,7 +89,7 @@
 
   // Blog propio de un observador (su "planeta de origen"), o '' si no tiene.
   // Es un dato del OBSERVADOR, no de la observación: vale igual para todas las
-  // suyas, incluidas las que no llevan crónica enlazada.
+  // suyas.
   function blogDe(clave) {
     if (!clave) return '';
     return (typeof OBSERVADORES !== 'undefined' && OBSERVADORES[clave] && OBSERVADORES[clave].blog)

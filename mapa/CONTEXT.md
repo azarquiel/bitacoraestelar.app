@@ -82,7 +82,7 @@ Resolución **clave → nombre legible** de un observador, sobre el catálogo `O
 
 **Planeta de origen** es el blog propio de un observador: el sitio donde escribe sus crónicas largas, fuera de la bitácora. Vive en `OBSERVADORES[clave].blog` (columna `blog_url` del observador, que se rellena en el panel del admin) y se resuelve con `VLObservadores.blogDe(clave)`. Es dato del **observador**, no de la observación: vale para todas las suyas.
 
-Una observación puede además enlazar **la crónica concreta** sobre ese objeto (`blog` = `{url, titulo}`, columnas `blog_post_url` / `blog_post_titulo`, que rellena el observador en el formulario de registro). El pie de la ficha (`#ficha-blog`) prefiere la crónica y cae al blog a secas si no la hay, para que quien escribe fuera no quede sin referencia en ninguna de sus observaciones.
+El pie de la ficha (`#ficha-blog`) enlaza ese blog en todas sus observaciones. No hay enlace a la entrada concreta sobre cada objeto: existió (columnas `blog_post_url` / `blog_post_titulo`, que siguen en la tabla sin uso) y se quitó porque nadie la rellenaba y costaba mantenerla; la referencia general al blog basta.
 
 El símbolo es siempre el mismo —disco con anillo inclinado y satélite— y aparece en tres sitios: junto al selector de observador (`#mw-planeta`, enlace al blog del seleccionado; apagado sin blog, oculto en «Todas las observaciones», porque un `<option>` no admite icono propio), en cada fila de la pantalla «NO VISITADO» como señal (no enlace: el ítem ya es un botón) y en el pie de la ficha. Enlaces salientes con `target="_blank" rel="noopener"` y **sin** `nofollow`: dirigir lectores y autoridad al compañero es justo el propósito. Tests: `scripts/test_blog_companeros.php` y `scripts/test_observadores.js`.
 

@@ -1,7 +1,6 @@
 <?php
 declare(strict_types=1);
-/* Test del BLOG DEL COMPAÑERO: el "planeta de origen" del observador y la
-   crónica que escribe en él sobre una observación concreta.
+/* Test del BLOG DEL COMPAÑERO: el "planeta de origen" del observador.
 
    Dos mitades:
    1. El saneado real de las URLs (bitacora_sanitizar_url_https): solo https, y
@@ -61,30 +60,15 @@ $esquema = substr( $fuente, strpos( $fuente, 'function bitacora_crear_tabla(' ) 
 $esquema = substr( $esquema, 0, strpos( $esquema, "\nfunction " ) );
 ok( false !== strpos( $esquema, "\$tabla_observadores, 'blog_url'" ),
     'la migración añade blog_url al observador (su planeta de origen)' );
-ok( false !== strpos( $esquema, "\$tabla, 'blog_post_url'" ),
-    'la migración añade blog_post_url a la observación' );
-ok( false !== strpos( $esquema, "\$tabla, 'blog_post_titulo'" ),
-    'la migración añade blog_post_titulo a la observación' );
-
-$validar = substr( $fuente, strpos( $fuente, 'function bitacora_validar_datos(' ) );
-$validar = substr( $validar, 0, strpos( $validar, "\n}\n" ) );
-ok( false !== strpos( $validar, "bitacora_sanitizar_url_https( \$d['blogPostUrl'] )" ),
-    'la URL de la crónica pasa por el saneado estricto' );
-ok( false !== strpos( $validar, "'blog_post_url'      => \$blog_post_url," ),
-    'el validador devuelve blog_post_url (lo que se inserta en la tabla)' );
-ok( false !== strpos( $validar, "'blog_post_titulo'   => \$blog_post_titulo," ),
-    'el validador devuelve blog_post_titulo' );
-ok( false !== strpos( $validar, "'' !== \$blog_post_url && isset( \$d['blogPostTitulo'] )" ),
-    'sin URL no hay crónica: el título suelto se descarta con ella' );
+// La crónica por objeto (blog_post_url/titulo) se quitó: nadie la rellenaba.
+// Las columnas siguen en la tabla, pero nada las escribe ni las lee.
+ok( false === strpos( $fuente, 'blog_post_' ) && false === strpos( $fuente, 'blogPost' ),
+    'el plugin ya no toca la crónica por objeto' );
 
 $datos_js = substr( $fuente, strpos( $fuente, 'function bitacora_datos_js(' ) );
 $datos_js = substr( $datos_js, 0, strpos( $datos_js, "\n}\n" ) );
 ok( false !== strpos( $datos_js, "\$observadores[ \$o->clave ]['blog'] = \$o->blog_url;" ),
     'datos.js emite el blog del observador en OBSERVADORES' );
-ok( false !== strpos( $datos_js, "\$registro['blog'] = array(" ),
-    'datos.js emite la crónica de la observación' );
-ok( false !== strpos( $datos_js, "if ( ! empty( \$ob->blog_post_url ) )" ),
-    'sin URL no se emite nada: el mapa distingue "sin crónica" sin mirar cadenas' );
 
 $panel = substr( $fuente, strpos( $fuente, 'function bitacora_panel_observadores(' ) );
 $panel = substr( $panel, 0, strpos( $panel, "\n}\n" ) );
@@ -112,8 +96,11 @@ ok( false !== strpos( $html, 'id="ficha-blog"' ), 'mapa.html trae el pie de la f
 ok( false !== strpos( $html, 'rel="noopener"' ), 'los enlaces salientes llevan noopener' );
 
 $form = (string) file_get_contents( __DIR__ . '/../registro/resources/js/bitacora-formulario.js' );
-ok( false !== strpos( $form, 'blogPostUrl:' ) && false !== strpos( $form, 'blogPostTitulo:' ),
-    'el formulario manda los dos campos al servidor' );
+$form_html = (string) file_get_contents( __DIR__ . '/../registro/registrar-observacion-wordpress.html' );
+ok( false === strpos( $form . $form_html, 'blogPost' ),
+    'el formulario ya no pide ni manda la crónica por objeto' );
+ok( false === strpos( $app, 'f.blog' ),
+    'la ficha solo enlaza el blog del observador' );
 
 if ( $fallos ) { echo "\n$fallos fallo(s).\n"; exit( 1 ); }
 echo "\nTodo verde.\n";

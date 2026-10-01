@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.37.0
+ * Version:     1.37.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.37.0' );
+define( 'BITACORA_VERSION', '1.37.1' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -529,10 +529,6 @@ function bitacora_crear_tabla() {
     // Blog propio del observador: su "planeta de origen". Con ella, el mapa
     // enciende el icono del planeta junto a su nombre y enlaza a su casa.
     bitacora_asegurar_columna( $tabla_observadores, 'blog_url', "varchar(255) NOT NULL DEFAULT ''" );
-    // La crónica concreta que el observador escribió en su blog sobre ESTA
-    // observación, con su título si lo da (si no, la ficha pone un texto fijo).
-    bitacora_asegurar_columna( $tabla, 'blog_post_url', "varchar(255) NOT NULL DEFAULT ''" );
-    bitacora_asegurar_columna( $tabla, 'blog_post_titulo', "varchar(160) NOT NULL DEFAULT ''" );
 
     // Importa el catálogo global de equipo (telescopios/oculares/auxiliares) desde
     // los CSV incluidos en el plugin. Idempotente (upsert por vendor+modelo), pero
@@ -1519,17 +1515,6 @@ function bitacora_validar_datos( $d ) {
         }
     }
 
-    // --- Crónica en el blog del observador (opcional): igual que el audio, sin
-    //     URL no hay crónica, y el título suelto se descarta con ella. ---
-    $blog_post_url = isset( $d['blogPostUrl'] ) ? bitacora_sanitizar_url_https( $d['blogPostUrl'] ) : '';
-    if ( isset( $d['blogPostUrl'] ) && '' !== trim( (string) $d['blogPostUrl'] ) && '' === $blog_post_url ) {
-        return new WP_Error( 'campo_invalido', 'La URL de la crónica debe ser una URL https válida.', array( 'status' => 400 ) );
-    }
-    $blog_post_titulo = '';
-    if ( '' !== $blog_post_url && isset( $d['blogPostTitulo'] ) ) {
-        $blog_post_titulo = mb_substr( sanitize_text_field( $d['blogPostTitulo'] ), 0, 160 );
-    }
-
     return array(
         'objeto'          => bitacora_identificador_objeto( $etiqueta, $tipo, $num ),
         'objeto_etiqueta' => $etiqueta,
@@ -1551,8 +1536,6 @@ function bitacora_validar_datos( $d ) {
         'audio_inicio'       => $audio_inicio,
         'audio_fin'          => $audio_fin,
         'audio_episodio_url' => $audio_episodio_url,
-        'blog_post_url'      => $blog_post_url,
-        'blog_post_titulo'   => $blog_post_titulo,
     );
 }
 
@@ -2722,14 +2705,6 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
                 'inicio'   => ( isset( $ob->audio_inicio ) && null !== $ob->audio_inicio ) ? (int) $ob->audio_inicio : 0,
                 'fin'      => ( isset( $ob->audio_fin ) && null !== $ob->audio_fin ) ? (int) $ob->audio_fin : null,
                 'episodio' => isset( $ob->audio_episodio_url ) ? $ob->audio_episodio_url : '',
-            );
-        }
-        // Crónica en el blog: solo se emite si hay URL; el título es opcional y
-        // la ficha pone un texto fijo cuando falta.
-        if ( ! empty( $ob->blog_post_url ) ) {
-            $registro['blog'] = array(
-                'url'    => $ob->blog_post_url,
-                'titulo' => isset( $ob->blog_post_titulo ) ? $ob->blog_post_titulo : '',
             );
         }
 
