@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.37.1
+ * Version:     1.37.2
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.37.1' );
+define( 'BITACORA_VERSION', '1.37.2' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -5763,6 +5763,21 @@ function bitacora_inyectar_publico() {
     );
 }
 add_action( 'wp_head', 'bitacora_inyectar_publico' );
+
+/**
+ * Hover y foco del botón "Entrar con Google" (Nextend Social Login) en wp-login.php.
+ * El aspecto base va en línea en la plantilla del botón de Nextend; un `style` en
+ * línea no admite :hover, y solo un !important de hoja gana a ese `style`. La paleta
+ * de bitacora-base.css no llega a wp-login.php: colores en literal (--ambar, --noche-2; el hover es --ambar-suave ya mezclado sobre --noche-2, opaco para no dejar ver el fondo claro de wp-login).
+ */
+function bitacora_login_boton_google() {
+    wp_add_inline_style( 'login',
+        '.nsl-button-google[data-skin="dark"]{transition:background-color .15s,filter .15s;}'
+        . '.nsl-button-google[data-skin="dark"]:hover{background-color:#31302f!important;filter:brightness(1.08);}'
+        . 'a:focus-visible .nsl-button-google[data-skin="dark"]{outline:2px solid #f4c76b;outline-offset:2px;}'
+    );
+}
+add_action( 'login_enqueue_scripts', 'bitacora_login_boton_google' );
 
 /**
  * Lanzador del reproductor de música en el menú del sitio.
