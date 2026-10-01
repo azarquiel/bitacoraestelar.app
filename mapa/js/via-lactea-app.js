@@ -1850,7 +1850,7 @@
   var fichaBackBtn = document.getElementById('ficha-back');
  var fichaAudio = document.getElementById('ficha-audio');
  var fichaAudioEl = null; // el <audio> del tramo actualmente montado, para poder pararlo al cerrar/cambiar de ficha
-  var fichaBlog = document.getElementById('ficha-blog'); // pie: la crónica en el blog del observador
+  var fichaBlog = document.getElementById('ficha-blog'); // pie: el blog del observador
   var fichaCurrent = -1;
   // A dónde lleva "← Descubrir" desde la ficha que se está viendo: la pantalla
   // de descubrimiento de este objeto, con la observación actual excluida. null
@@ -2293,28 +2293,19 @@
     '<circle cx="7" cy="9.4" r="3.6" stroke-width="0.8"/>' +
     '<circle cx="13.4" cy="2.9" r="1.35" style="fill:currentColor;stroke:none;"/></svg>';
 
-  // Pie de la ficha: la crónica que el observador escribió en su blog. Dos
-  // niveles, y en este orden: la entrada concreta sobre ESTE objeto si la hay
-  // (f.blog) y, si no, su blog a secas (el "planeta de origen" del observador),
-  // para que el compañero que escribe fuera no quede sin referencia en ninguna
-  // de sus observaciones.
+  // Pie de la ficha: el blog del observador (su "planeta de origen"), para que
+  // el compañero que escribe fuera no quede sin referencia en ninguna de sus
+  // observaciones.
   function renderFichaBlog(f) {
     if (!fichaBlog) return;
-    var post = (f && f.blog && f.blog.url) ? f.blog : null;
     var casa = (f && f.observador) ? VLO.blogDe(f.observador) : '';
-    if (!post && !casa) { fichaBlog.style.display = 'none'; fichaBlog.innerHTML = ''; return; }
+    if (!casa) { fichaBlog.style.display = 'none'; fichaBlog.innerHTML = ''; return; }
     var nombre = VLO.nombreObservador(f.observador);
-    var url = post ? post.url : casa;
-    var texto = post
-      ? (post.titulo ? post.titulo : 'Leer la crónica en el blog' + (nombre ? ' de ' + nombre : ''))
-      : 'Más observaciones en el blog' + (nombre ? ' de ' + nombre : '');
+    var texto = 'Más observaciones en el blog' + (nombre ? ' de ' + nombre : '');
     fichaBlog.innerHTML =
-      '<a href="' + escHtml(url) + '" target="_blank" rel="noopener" ' +
+      '<a href="' + escHtml(casa) + '" target="_blank" rel="noopener" ' +
         'style="display:inline-flex;align-items:center;gap:8px;color:#f4c76b;text-decoration:none;">' +
-        SVG_PLANETA + '<span style="text-decoration:underline;">' + escHtml(texto) + '</span></a>' +
-      (post && post.titulo && nombre
-        ? '<div style="margin-top:4px;color:#9fb6c9;font-size:12px;">Crónica de ' + escHtml(nombre) + '</div>'
-        : '');
+        SVG_PLANETA + '<span style="text-decoration:underline;">' + escHtml(texto) + '</span></a>';
     fichaBlog.style.display = 'block';
   }
 
