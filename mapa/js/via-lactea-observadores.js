@@ -154,7 +154,7 @@
   //   'ninguna' -> nadie relevante lo observó: se oculta.
   function estadoObservador(id) {
     if (!observadorActivo) return 'propia';       // modo "todas": todo a color
-    if (resultadoDe(id) === 'visto') return 'propia';   // el observador activo lo vio
+    if (resultadoDe(id) !== 'no_visitado') return 'propia';   // el activo lo vio o lo intentó: 'todo' = suma de los tres
     if (observacionesAjenasActivo() && observadoresDe(id, observadorActivo).length) return 'ajena';
     return 'ninguna';
   }

@@ -758,6 +758,7 @@
   var estadoCuentas = document.querySelectorAll('#mw-estado .mw-estado-n');
   var estadoNoConf = document.querySelector('#mw-estado input[value="noconfirmados"]');
   var estadoAviso = document.getElementById('mw-estado-aviso');
+  var avisoNoConf = '';   // el aviso de «No confirmados» con 0; el del viaje manda sobre él
   function pintarRecuentoEstado() {
     if (!estadoRadios.length) return;
     var c = VLO.recuentos(IDS_CATALOGO);
@@ -766,8 +767,13 @@
     }
     var sinNoConf = !c.noconfirmados;
     if (estadoNoConf) estadoNoConf.disabled = sinNoConf;
-    if (estadoAviso && !viajeActivo) {
-      estadoAviso.textContent = sinNoConf ? 'Nadie ha registrado exploraciones no confirmadas en este conjunto' : '';
+    avisoNoConf = sinNoConf ? 'Nadie ha registrado exploraciones no confirmadas en este conjunto' : '';
+    if (estadoAviso) estadoAviso.textContent = viajeActivo ? 'Durante un viaje se ven todas sus escalas' : avisoNoConf;
+    // Un radio marcado no puede quedar deshabilitado: cae a Todo.
+    if (sinNoConf && VLO.getEstado() === 'noconfirmados') {
+      estadoElegido = 'todo';
+      aplicarEstado('todo');
+      refreshAnchors();
     }
     if (VLO.getEstado() !== 'todo' && !c[VLO.getEstado()]) {
       showToast('Nada que enseñar con este filtro: prueba otro estado o conjunto.');
@@ -3083,7 +3089,7 @@
     // El motivo de estar deshabilitado se lee, no solo se adivina.
     var motivo = viajeActivo ? 'Durante un viaje se ven todas sus escalas' : '';
     estadoFieldset.title = motivo;
-    if (estadoAviso) estadoAviso.textContent = motivo;
+    if (estadoAviso) estadoAviso.textContent = motivo || avisoNoConf;
   }
 
   if (estadoFieldset) {
