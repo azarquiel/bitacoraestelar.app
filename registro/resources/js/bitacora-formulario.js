@@ -453,6 +453,7 @@
   // animación ni foco movido, y siguen en el DOM: volver a «Visto» y de nuevo a
   // «No visto» no pierde lo marcado, y al guardar solo viaja lo que diga el estado.
   var resultadoBloque=$('resultadoBloque'), noVistoCampos=$('noVistoCampos');
+  var tituloOculares=$('tituloOculares'), ayudaExploracion=$('ayudaExploracion');
   var resultadoEstado=BitacoraBase.resultadoInicial();
   function radioResultado(nombre,valor){
     return resultadoBloque.querySelector('input[name="'+nombre+'"][value="'+valor+'"]');
@@ -468,8 +469,8 @@
     noVistoCampos.hidden=est.visto;
     radioResultado('resultado','no_visto').setAttribute('aria-expanded', String(!est.visto));
     submitBtn.textContent=t.boton;
-    if($('tituloOculares')) $('tituloOculares').textContent=t.tituloOculares;
-    if($('ayudaExploracion')) $('ayudaExploracion').textContent=t.ayudaExploracion;
+    if(tituloOculares) tituloOculares.textContent=t.tituloOculares;
+    if(ayudaExploracion) ayudaExploracion.textContent=t.ayudaExploracion;
   }
   function aplicarResultado(est){ resultadoEstado=est; pintarResultado(); recompute(); }
   if(resultadoBloque){
@@ -1837,9 +1838,7 @@
       submitBtn.disabled=false;
       if(res.ok && res.data && res.data.ok){
         var txt = '✓ ' + BitacoraBase.avisoGuardado(payload.resultado==='visto', res.data.id, editando);
-        if(payload.resultado!=='visto'){
-          txt += ' <a href="' + BitacoraBase.urlMapa(res.data.objeto || payload.objeto) + '">Ver en el mapa</a>';
-        }
+        txt += ' <a href="' + BitacoraBase.urlMapa(res.data.objeto || payload.objeto) + '">Ver en el mapa</a>';
         // Si el objeto no se pudo colocar en el mapa (p. ej. ninguna base de datos
         // tiene su distancia), se guarda igual, se avisa y se ofrece escribir a
         // mano lo que falta, que es lo único que separa al objeto del mapa.
