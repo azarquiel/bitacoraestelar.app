@@ -193,5 +193,29 @@ eq(VLO.recuento(ids), 1, 'recuento por explorar: e');
 VLO.setEstado('todo');
 VLO.setActivo('');
 
+console.log('simboloDe (punto / anillo / triángulo hueco, #397):');
+VLO.setActivo('israel');
+VLO.setConjunto(null);
+VLO.setEstado('todo');
+eq(VLO.simboloDe('b'), 'punto', 'visto: punto lleno');
+eq(VLO.simboloDe('a'), 'triangulo', 'fallo propio + éxito ajeno: triángulo');
+eq(VLO.simboloDe('c'), 'triangulo', 'solo fallos: triángulo');
+VLO.setEstado('porvisitar');
+eq(VLO.simboloDe('e'), 'anillo', 'por explorar: anillo hueco');
+VLO.setActivo('');
+VLO.setEstado('todo');
+eq(VLO.simboloDe('c'), 'triangulo', 'todas, solo fallos: triángulo');
+eq(VLO.simboloDe('a'), 'punto', 'todas, alguien lo vio: punto');
+var trazos = [];
+var ctxFalso = { beginPath: function () { trazos.push('b'); }, moveTo: function () { trazos.push('m'); },
+  lineTo: function () { trazos.push('l'); }, closePath: function () { trazos.push('c'); }, arc: function () { trazos.push('a'); } };
+VLO.trazarSimbolo(ctxFalso, 0, 0, 4, 'triangulo');
+eq(trazos.join(''), 'bmllc', 'trazarSimbolo triángulo: tres vértices cerrados');
+trazos = [];
+VLO.trazarSimbolo(ctxFalso, 0, 0, 4, 'anillo');
+eq(trazos.join(''), 'ba', 'trazarSimbolo anillo: un arco');
+VLO.setActivo('');
+VLO.setEstado('visitados');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

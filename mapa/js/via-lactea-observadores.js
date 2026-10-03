@@ -35,6 +35,8 @@
      grisNoVisitado(r, g, b)      -> [r,g,b] del color apagado de "por visitar"
      OPACIDAD_NO_VISITADO         -> multiplicador de opacidad del rótulo
      MEZCLA_NO_VISITADO           -> proporción de gris (para el filtro CSS)
+     simboloDe(id)                -> 'punto' | 'anillo' | 'triangulo' (LA regla del símbolo)
+     trazarSimbolo(ctx,x,y,r,s)   -> traza el contorno del símbolo en un lienzo
      ANILLO_NO_VISITADO           -> {escala, grosor} del anillo de "por visitar"
    ============================================================================ */
 
@@ -174,6 +176,9 @@
   // Anillo hueco: 1,6 veces el radio del punto lleno, para que se distinga de
   // un vistazo. Son los mismos números que .mw-no-visitado en mapa.html.
   var ANILLO = { escala: 1.6, grosor: 1.4 };
+  // Triángulo hueco (explorado y no confirmado): su radio circunscrito, para
+  // que pese lo que el anillo. Mismo grosor de trazo.
+  var TRIANGULO_ESCALA = 1.9;
 
   // ¿Se dibuja el objeto con el filtro actual? Primero el conjunto (fuera de
   // la lista no hay nada que ver); luego el estado:
@@ -226,6 +231,31 @@
     return c;
   }
 
+  // Símbolo de un objeto en las tres vistas: punto lleno con halo (visto),
+  // anillo hueco (por explorar) o triángulo hueco (explorado y no confirmado:
+  // se intentó y no se vio). Los dos huecos van sin halo; el triángulo conserva
+  // el color entero del objeto para que destaque entre los anillos.
+  function simboloDe(id) {
+    if (resultadoDe(id) === 'explorado') return 'triangulo';
+    return atenuadoPorObservador(id) ? 'anillo' : 'punto';
+  }
+
+  // Contorno del símbolo en un lienzo 2D (beginPath incluido). 'r' es el radio
+  // del punto lleno; anillo y triángulo lo escalan para leerse de un vistazo.
+  // Quien llama rellena el punto y traza (stroke) los dos huecos.
+  function trazarSimbolo(ctx, x, y, r, simbolo) {
+    ctx.beginPath();
+    if (simbolo === 'triangulo') {
+      var R = r * TRIANGULO_ESCALA;
+      ctx.moveTo(x, y - R);
+      ctx.lineTo(x + R * 0.866, y + R * 0.5);
+      ctx.lineTo(x - R * 0.866, y + R * 0.5);
+      ctx.closePath();
+    } else {
+      ctx.arc(x, y, simbolo === 'anillo' ? r * ANILLO.escala : r, 0, Math.PI * 2);
+    }
+  }
+
   // Color de un objeto no visitado: su RGB mezclado con el gris clarito.
   function grisNoVisitado(r, g, b) {
     return [
@@ -250,6 +280,8 @@
     recuento: recuento,
     recuentos: recuentos,
     resultadoDe: resultadoDe,
+    simboloDe: simboloDe,
+    trazarSimbolo: trazarSimbolo,
     getFicha: getFicha,
     observacionesAjenasActivo: observacionesAjenasActivo,
     nombreObservador: nombreObservador,

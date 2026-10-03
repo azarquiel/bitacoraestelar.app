@@ -759,12 +759,29 @@
   var estadoNoConf = document.querySelector('#mw-estado input[value="noconfirmados"]');
   var estadoAviso = document.getElementById('mw-estado-aviso');
   var avisoNoConf = '';   // el aviso de «No confirmados» con 0; el del viaje manda sobre él
+  // Resumen del filtro para cuando la sección está plegada: «Néstor G.M. ·
+  // Confirmados · 58». Lee lo que los propios mandos dicen, no su estado.
+  var filtroResumen = document.getElementById('mw-filtro-resumen');
+  function pintarResumenFiltro(c) {
+    if (!filtroResumen) return;
+    var partes = [];
+    var obs = document.getElementById('mw-observador');
+    if (obs && obs.selectedIndex >= 0) partes.push(obs.options[obs.selectedIndex].text);
+    var via = document.getElementById('mw-viaje');
+    if (via && via.value) partes.push(via.options[via.selectedIndex].text);
+    var marcado = document.querySelector('#mw-estado input:checked');
+    if (marcado) {
+      partes.push(marcado.parentNode.querySelector('.mw-estado-t').textContent.trim() + ' · ' + c[marcado.value]);
+    }
+    filtroResumen.textContent = partes.join(' · ');
+  }
   function pintarRecuentoEstado() {
     if (!estadoRadios.length) return;
     var c = VLO.recuentos(IDS_CATALOGO);
     for (var i = 0; i < estadoRadios.length; i++) {
-      estadoCuentas[i].textContent = ' · ' + String(c[estadoRadios[i].value]).replace(/\B(?=(\d{3})+$)/g, '\u202f');  // 1 248
+      estadoCuentas[i].textContent = String(c[estadoRadios[i].value]).replace(/\B(?=(\d{3})+$)/g, '\u202f');  // 1 248
     }
+    pintarResumenFiltro(c);
     var sinNoConf = !c.noconfirmados;
     if (estadoNoConf) estadoNoConf.disabled = sinNoConf;
     avisoNoConf = sinNoConf ? 'Nadie ha registrado exploraciones no confirmadas en este conjunto' : '';
@@ -1691,6 +1708,8 @@
       consola.classList.toggle('mw-consola-fija', !abierta);
       consola.classList.toggle('mw-consola-cerrada', abierta);
       consolaTirador.setAttribute('aria-expanded', abierta ? 'false' : 'true');
+      // Se recuerda entre visitas: quien la deja fijada la encuentra fijada.
+      try { localStorage.setItem('mw-consola-fija', abierta ? '0' : '1'); } catch (e) { /* sin almacenamiento */ }
     });
 
     // Volver a entrar con el ratón la despierta: el cierre a mano solo vale
@@ -1703,7 +1722,12 @@
     // repliega, que es como se descubre que el tirador existe. Si en ese rato
     // el usuario la fija con un clic (aria-expanded='true') se queda abierta, y
     // si está encima con el ratón la mantiene abierta el :hover del CSS.
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    var fijadaAntes = false;
+    try { fijadaAntes = localStorage.getItem('mw-consola-fija') === '1'; } catch (e) { /* sin almacenamiento */ }
+    if (fijadaAntes) {
+      consola.classList.add('mw-consola-fija');
+      consolaTirador.setAttribute('aria-expanded', 'true');
+    } else if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       consola.classList.add('mw-consola-fija');
       setTimeout(function () {
         if (consolaTirador.getAttribute('aria-expanded') !== 'true') {
@@ -1712,6 +1736,20 @@
       }, 2200);
     }
   }
+
+  // El botón de volver de cada mando solo se ve si hay algo a lo que volver
+  // (valor ≠ 0). Se lee del propio texto del valor, que escriben todas las vías
+  // (deslizador, reinicio, doble clic), así no hay que tocar cada una. Oculto
+  // con visibility, para que la píldora no baile al aparecer.
+  [['mw-tilt-value', 'mw-tilt-reset'], ['mw-rotate-edge-value', 'mw-rotate-edge-reset'],
+   ['mw-rotate-plane-value', 'mw-rotate-plane-reset']].forEach(function (par) {
+    var valor = document.getElementById(par[0]);
+    var volver = document.getElementById(par[1]);
+    if (!valor || !volver) return;
+    function sincronizar() { volver.style.visibility = parseFloat(valor.textContent) ? 'visible' : 'hidden'; }
+    new MutationObserver(sincronizar).observe(valor, { childList: true, characterData: true, subtree: true });
+    sincronizar();
+  });
 
   // El zoom se hace con la rueda y con el pellizco, que es lo que ya usa todo
   // el mundo: los botones + y − no añadían un gesto que no existiera. Volver a
@@ -1827,6 +1865,15 @@
   });
 
   document.addEventListener('keydown', function (e) {
+    // «/» lleva al buscador, como en cualquier sitio con buscador. Con el foco
+    // ya en un campo, o con una ficha abierta, se deja escribir.
+    if (e.key === '/' && searchInput && !e.ctrlKey && !e.metaKey && !e.altKey &&
+        !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') &&
+        !(e.target && e.target.isContentEditable) && !overlayOpen()) {
+      e.preventDefault();
+      searchInput.focus();
+      return;
+    }
     if (e.key === 'Escape') {
       if (pdfOverlay.style.display === 'flex') closeObjectPdf();
       if (fichaOverlay.style.display === 'flex') closeFicha();
@@ -2670,6 +2717,9 @@
       // visitados: son las escalas de la travesía, no observaciones ajenas.
       a.classList.toggle('mw-no-visitado',
         VLO.atenuadoPorObservador(id) && !viajeActivo);
+      // Explorado y no confirmado: triángulo hueco, a color entero.
+      a.classList.toggle('mw-explorado',
+        VLO.simboloDe(id) === 'triangulo' && !viajeActivo);
     }
   }
 
