@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.0
+ * Version:     1.38.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.0' );
+define( 'BITACORA_VERSION', '1.38.1' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -2736,6 +2736,12 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
             'defaultIndex' => (int) $ob->default_index,
             'entries'      => $entries,
         );
+        // Resultado (#394): las filas previas son 'visto'. El motivo solo
+        // existe en un no visto.
+        $registro['resultado'] = ! empty( $ob->resultado ) ? $ob->resultado : 'visto';
+        if ( 'visto' !== $registro['resultado'] && ! empty( $ob->motivo_no_visto ) ) {
+            $registro['motivo'] = $ob->motivo_no_visto;
+        }
         // Tramo de audio (ADR 0005): solo se emite si hay audio_url, la única
         // condición de existencia del tramo.
         if ( ! empty( $ob->audio_url ) ) {

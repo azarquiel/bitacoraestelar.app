@@ -745,22 +745,54 @@
     pintarRecuentoEstado();
   }
 
-  // El estado activo lleva el recuento de lo que deja a la vista (#233): en la
+  // Cada opción lleva el recuento de lo que deja a la vista (#233, #397): en la
   // vista de canto un cambio de estado puede no notarse, y el número confirma
-  // que el control hizo algo. Si no queda nada, se avisa: una pantalla vacía
-  // no debe parecer un fallo.
+  // que el control hizo algo. Confirmados + No confirmados + Por explorar suman
+  // Todo. «No confirmados» no desaparece con 0: se deshabilita y se explica. Si
+  // el estado activo no deja nada, se avisa: una pantalla vacía no debe parecer
+  // un fallo.
   // OBJECTS es el catálogo de las tres capas (los dos lienzos también se
   // construyen desde él), así que el recuento es el de las tres vistas.
   var IDS_CATALOGO = OBJECTS.map(function (o) { return o.id; });
   var estadoRadios = document.querySelectorAll('#mw-estado input[type=radio]');
   var estadoCuentas = document.querySelectorAll('#mw-estado .mw-estado-n');
+  var estadoNoConf = document.querySelector('#mw-estado input[value="noconfirmados"]');
+  var estadoAviso = document.getElementById('mw-estado-aviso');
+  var avisoNoConf = '';   // el aviso de «No confirmados» con 0; el del viaje manda sobre él
+  // Resumen del filtro para cuando la sección está plegada: «Néstor G.M. ·
+  // Confirmados · 58». Lee lo que los propios mandos dicen, no su estado.
+  var filtroResumen = document.getElementById('mw-filtro-resumen');
+  function pintarResumenFiltro(c) {
+    if (!filtroResumen) return;
+    var partes = [];
+    var obs = document.getElementById('mw-observador');
+    if (obs && obs.selectedIndex >= 0) partes.push(obs.options[obs.selectedIndex].text);
+    var via = document.getElementById('mw-viaje');
+    if (via && via.value) partes.push(via.options[via.selectedIndex].text);
+    var marcado = document.querySelector('#mw-estado input:checked');
+    if (marcado) {
+      partes.push(marcado.parentNode.querySelector('.mw-estado-t').textContent.trim() + ' · ' + c[marcado.value]);
+    }
+    filtroResumen.textContent = partes.join(' · ');
+  }
   function pintarRecuentoEstado() {
     if (!estadoRadios.length) return;
-    var n = String(VLO.recuento(IDS_CATALOGO)).replace(/\B(?=(\d{3})+$)/g, '\u202f');  // 1 248
+    var c = VLO.recuentos(IDS_CATALOGO);
     for (var i = 0; i < estadoRadios.length; i++) {
-      estadoCuentas[i].textContent = estadoRadios[i].checked ? ' · ' + n : '';
+      estadoCuentas[i].textContent = String(c[estadoRadios[i].value]).replace(/\B(?=(\d{3})+$)/g, '\u202f');  // 1 248
     }
-    if (VLO.getEstado() !== 'todo' && !n) {
+    pintarResumenFiltro(c);
+    var sinNoConf = !c.noconfirmados;
+    if (estadoNoConf) estadoNoConf.disabled = sinNoConf;
+    avisoNoConf = sinNoConf ? 'Nadie ha registrado exploraciones no confirmadas en este conjunto' : '';
+    if (estadoAviso) estadoAviso.textContent = viajeActivo ? 'Durante un viaje se ven todas sus escalas' : avisoNoConf;
+    // Un radio marcado no puede quedar deshabilitado: cae a Todo.
+    if (sinNoConf && VLO.getEstado() === 'noconfirmados') {
+      estadoElegido = 'todo';
+      aplicarEstado('todo');
+      refreshAnchors();
+    }
+    if (VLO.getEstado() !== 'todo' && !c[VLO.getEstado()]) {
       showToast('Nada que enseñar con este filtro: prueba otro estado o conjunto.');
     }
   }
@@ -1676,6 +1708,8 @@
       consola.classList.toggle('mw-consola-fija', !abierta);
       consola.classList.toggle('mw-consola-cerrada', abierta);
       consolaTirador.setAttribute('aria-expanded', abierta ? 'false' : 'true');
+      // Se recuerda entre visitas: quien la deja fijada la encuentra fijada.
+      try { localStorage.setItem('mw-consola-fija', abierta ? '0' : '1'); } catch (e) { /* sin almacenamiento */ }
     });
 
     // Volver a entrar con el ratón la despierta: el cierre a mano solo vale
@@ -1688,7 +1722,12 @@
     // repliega, que es como se descubre que el tirador existe. Si en ese rato
     // el usuario la fija con un clic (aria-expanded='true') se queda abierta, y
     // si está encima con el ratón la mantiene abierta el :hover del CSS.
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    var fijadaAntes = false;
+    try { fijadaAntes = localStorage.getItem('mw-consola-fija') === '1'; } catch (e) { /* sin almacenamiento */ }
+    if (fijadaAntes) {
+      consola.classList.add('mw-consola-fija');
+      consolaTirador.setAttribute('aria-expanded', 'true');
+    } else if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       consola.classList.add('mw-consola-fija');
       setTimeout(function () {
         if (consolaTirador.getAttribute('aria-expanded') !== 'true') {
@@ -1697,6 +1736,20 @@
       }, 2200);
     }
   }
+
+  // El botón de volver de cada mando solo se ve si hay algo a lo que volver
+  // (valor ≠ 0). Se lee del propio texto del valor, que escriben todas las vías
+  // (deslizador, reinicio, doble clic), así no hay que tocar cada una. Oculto
+  // con visibility, para que la píldora no baile al aparecer.
+  [['mw-tilt-value', 'mw-tilt-reset'], ['mw-rotate-edge-value', 'mw-rotate-edge-reset'],
+   ['mw-rotate-plane-value', 'mw-rotate-plane-reset']].forEach(function (par) {
+    var valor = document.getElementById(par[0]);
+    var volver = document.getElementById(par[1]);
+    if (!valor || !volver) return;
+    function sincronizar() { volver.style.visibility = parseFloat(valor.textContent) ? 'visible' : 'hidden'; }
+    new MutationObserver(sincronizar).observe(valor, { childList: true, characterData: true, subtree: true });
+    sincronizar();
+  });
 
   // El zoom se hace con la rueda y con el pellizco, que es lo que ya usa todo
   // el mundo: los botones + y − no añadían un gesto que no existiera. Volver a
@@ -1812,6 +1865,15 @@
   });
 
   document.addEventListener('keydown', function (e) {
+    // «/» lleva al buscador, como en cualquier sitio con buscador. Con el foco
+    // ya en un campo, o con una ficha abierta, se deja escribir.
+    if (e.key === '/' && searchInput && !e.ctrlKey && !e.metaKey && !e.altKey &&
+        !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') &&
+        !(e.target && e.target.isContentEditable) && !overlayOpen()) {
+      e.preventDefault();
+      searchInput.focus();
+      return;
+    }
     if (e.key === 'Escape') {
       if (pdfOverlay.style.display === 'flex') closeObjectPdf();
       if (fichaOverlay.style.display === 'flex') closeFicha();
@@ -2655,6 +2717,11 @@
       // visitados: son las escalas de la travesía, no observaciones ajenas.
       a.classList.toggle('mw-no-visitado',
         VLO.atenuadoPorObservador(id) && !viajeActivo);
+      // Explorado y no confirmado: triángulo hueco, a color entero. También en
+      // un viaje (como en los lienzos): es un hecho de la observación, no la
+      // atenuación de lo ajeno. Nunca coincide con mw-no-visitado: simboloDe
+      // solo da anillo si el resultado es no_visitado.
+      a.classList.toggle('mw-explorado', VLO.simboloDe(id) === 'triangulo');
     }
   }
 
@@ -3050,13 +3117,12 @@
     }
   }
 
-  // ---- Eje ESTADO (#233): Todo · Visitados · Por visitar -------------------
+  // ---- Eje ESTADO (#233): Todo · Confirmados · No confirmados · Por explorar -------------------
   // Los dos ejes son independientes: elegir un viaje no pierde el estado que
   // eligió el usuario (estadoElegido); solo lo fija en 'todo' mientras dura.
   var estadoFieldset = document.getElementById('mw-estado');
-  var estadoAviso = document.getElementById('mw-estado-aviso');
   // El estado de arranque depende de a quién se está mirando: con observador
-  // (sesión iniciada o elegido a mano) se abre por SUS explorados; sin
+  // (sesión iniciada o elegido a mano) se abre por SUS confirmados; sin
   // observador, "Todas las observaciones" enseña el catálogo entero, así que el
   // control tiene que decir 'todo' o mentiría sobre lo que se ve.
   function estadoPorDefecto() { return VLO.getActivo() ? 'visitados' : 'todo'; }
@@ -3068,14 +3134,14 @@
     if (!estadoFieldset) return;
     var radio = estadoFieldset.querySelector('input[value="' + VLO.getEstado() + '"]');
     if (radio) radio.checked = true;
-    // Sin observador el eje sigue mandando: 'explorado' pasa a significar
-    // "lo ha explorado alguien", que es justo lo que puede mirar un visitante
+    // Sin observador el eje sigue mandando: 'confirmado' pasa a significar
+    // "lo ha visto alguien", que es justo lo que puede mirar un visitante
     // anónimo. Lo único que lo deshabilita es el viaje.
     estadoFieldset.disabled = !!viajeActivo;
     // El motivo de estar deshabilitado se lee, no solo se adivina.
     var motivo = viajeActivo ? 'Durante un viaje se ven todas sus escalas' : '';
     estadoFieldset.title = motivo;
-    if (estadoAviso) estadoAviso.textContent = motivo;
+    if (estadoAviso) estadoAviso.textContent = motivo || avisoNoConf;
   }
 
   if (estadoFieldset) {
@@ -3600,7 +3666,7 @@
     catch (e) { return { get: function () { return ''; } }; }
   })();
   var viajePedido = params.get('viaje') || '';
-  // ?estado=todo|visitados|porvisitar acompaña al viaje en la URL (#233).
+  // ?estado=todo|visitados|noconfirmados|porvisitar acompaña al viaje en la URL (#233).
   var estadoPedido = params.get('estado') || '';
   aplicarEstado(estadoPedido || estadoPorDefecto());
   estadoElegido = VLO.getEstado();   // un valor desconocido cae a 'visitados'

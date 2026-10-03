@@ -98,7 +98,7 @@
      Con planeta o sin él, la fila mide lo mismo. */
   #mw-observador-fila {
     display: flex; align-items: center; gap: 8px;
-    width: min(252px, calc(100vw - 24px)); box-sizing: border-box;
+    width: min(244px, calc(100vw - 24px)); box-sizing: border-box;
   }
   #mw-observador { flex: 1; min-width: 0 !important; box-sizing: border-box; }
   #mw-planeta {
@@ -110,20 +110,21 @@
     background: rgba(244,199,107,0.16);
   }
 
-  /* Eje ESTADO (#233): segmentado de tres radios nativos. El input queda
+  /* Eje ESTADO (#233, #397): segmentado de cuatro radios nativos, en rejilla 2×2
+     para que mida lo mismo que el resto de mandos. El input queda
      visualmente oculto y la etiqueta hace de segmento; :focus-visible del
      input se lleva al segmento para que el teclado se vea. 44 px de alto,
      el objetivo táctil. */
   #mw-estado {
-    display: flex; margin: 0; padding: 2px; border: none;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin: 0; padding: 2px; border: none;
     border-radius: 20px; background: rgba(12,16,28,0.32);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 1px 6px rgba(0,0,0,0.28);
     width: min(244px, calc(100vw - 24px)); box-sizing: border-box;
   }
   #mw-estado label {
-    flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
-    min-height: 44px; padding: 0 8px; border-radius: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 48px; padding: 4px 6px; border-radius: 18px; cursor: pointer;
     font-family: sans-serif; font-size: 12px; color: #eaf1fb; white-space: nowrap;
     transition: background .15s ease;
   }
@@ -131,17 +132,44 @@
   #mw-estado input:checked + span { color: #f4c76b; font-weight: 600; }
   #mw-estado:not(:disabled) label:hover { background: rgba(244,199,107,0.08); }
   #mw-estado label:has(input:checked) { background: rgba(244,199,107,0.16); }
+  #mw-estado .mw-estado-txt { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  #mw-estado .mw-estado-t { display: inline-flex; align-items: center; gap: 5px; }
+  #mw-estado .mw-estado-ico { width: 12px; height: 12px; }
+  /* El símbolo de cada opción es el del mapa: punto lleno, triángulo hueco y
+     anillo hueco, así el selector hace de leyenda. */
+  #mw-estado input:disabled + .mw-estado-txt { opacity: 0.45; }
+  #mw-estado label:has(input:disabled) { cursor: not-allowed; }
   .mw-estado-aviso {
-    font-family: sans-serif; font-size: 11px; color: rgba(234,241,251,0.55);
+    font-family: sans-serif; font-size: 11px; color: rgba(234,241,251,0.75);
     padding: 0 12px; max-width: min(244px, calc(100vw - 24px));
   }
   .mw-estado-aviso:empty { display: none; }
   @media (prefers-reduced-motion: reduce) { #mw-estado label { transition: none; } }
   #mw-estado label:has(input:focus-visible) { outline: 2px solid #f4c76b; outline-offset: -2px; }
-  #mw-estado .mw-estado-n { opacity: 0.75; font-variant-numeric: tabular-nums; }
+  #mw-estado .mw-estado-n { font-size: 11px; color: rgba(234,241,251,0.78); font-variant-numeric: tabular-nums; }
+  #mw-estado input:checked + .mw-estado-txt .mw-estado-n { color: rgba(244,199,107,0.9); }
   #mw-viaje:disabled, #mw-estado:disabled { opacity: 0.5; cursor: not-allowed; }
   #mw-estado:disabled label { cursor: not-allowed; }
   #mw-estado legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  /* Cada mando de giro lleva su nombre en una línea propia: el icono solo no
+     decía qué hace. */
+  #mw-tilt-control, #mw-rotate-edge-control, #mw-rotate-plane-control { flex-wrap: wrap; row-gap: 2px; }
+  .mw-ctl-nombre {
+    flex: 0 0 100%; order: -1; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(244,199,107,0.9); font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  /* Buscador: la lupa heredaba el color del tema (negro sobre negro) y el
+     campo es de tipo search para limpiarlo con la x nativa. */
+  #mw-search-lupa { color: #eaf1fb; }
+  #mw-search::-webkit-search-cancel-button {
+    -webkit-appearance: none; appearance: none; width: 14px; height: 14px; cursor: pointer;
+    background: center / 14px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23eaf1fb' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M4 4l8 8M12 4l-8 8'/%3E%3C/svg%3E");
+  }
+  #mw-search-atajo {
+    position: absolute; right: 12px; font: 11px ui-monospace, Menlo, monospace; color: rgba(234,241,251,0.6);
+    border: 1px solid rgba(234,241,251,0.3); border-radius: 4px; padding: 0 5px; pointer-events: none;
+  }
+  #mw-search:focus ~ #mw-search-atajo, #mw-search:not(:placeholder-shown) ~ #mw-search-atajo { display: none; }
   /* El deslizador cede su ancho fijo y se queda con lo que sobre en la píldora. */
   #mw-tilt, #mw-rotate-edge, #mw-rotate-plane { width: auto !important; flex: 1; min-width: 0; }
 
@@ -233,6 +261,10 @@
      el mapa que hay debajo se arrastra con normalidad. */
   #mw-consola-panel {
     order: 1;
+    /* Ancho propio: los mandos miden 244-252 px y el panel mide lo que ellos más
+       el relleno; antes lo estiraba la fila de estado (cuatro rótulos sin
+       partir) y dejaba una columna vacía a la derecha. */
+    width: min(284px, calc(100vw - 70px)); box-sizing: border-box;
     pointer-events: none;
     display: flex;
     flex-direction: column;
@@ -272,9 +304,27 @@
     font-size: 9px;
     letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: rgba(244,199,107,0.62);
+    color: rgba(244,199,107,0.9);   /* 10,4:1 sobre el panel (con .62 eran 5,2:1 a 9 px) */
     user-select: none;
   }
+  /* El rótulo del filtro es el <summary> de un <details>: pliega observador,
+     conjunto y estado, y plegado dice lo que está filtrando. */
+  #mw-consola summary.mw-consola-rotulo { cursor: pointer; list-style: none; }
+  #mw-consola summary.mw-consola-rotulo::-webkit-details-marker { display: none; }
+  #mw-consola summary.mw-consola-rotulo::before {
+    content: ''; width: 5px; height: 5px; flex: none;
+    border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+    transform: translateY(-1px) rotate(45deg); transition: transform .15s ease;
+  }
+  #mw-filtro:not([open]) > summary.mw-consola-rotulo::before { transform: rotate(-45deg); }
+  #mw-filtro { align-self: stretch; }
+  #mw-filtro-cuerpo { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: 8px; }
+  #mw-filtro-resumen {
+    order: 1; flex: none; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    letter-spacing: 0.04em; text-transform: none; font-size: 11px; color: #eaf1fb;
+  }
+  #mw-filtro[open] #mw-filtro-resumen { display: none; }
+  #mw-consola .mw-consola-rotulo::after { order: 0; }
   #mw-consola .mw-consola-rotulo::after {
     content: '';
     flex: 1;
@@ -547,6 +597,17 @@
   }
   #mw-content .mw-object-anchor.mw-no-visitado .mw-label {
     filter: grayscale(0.35) opacity(0.8);
+  }
+  /* EXPLORADO Y NO CONFIRMADO: triángulo hueco del color del objeto. Se intentó
+     y no se vio; destaca entre los anillos de «por explorar» sin llenarse como
+     lo visto. El contorno es una máscara SVG (un borde no sigue un triángulo y
+     un clip-path se comía la base). */
+  #mw-content .mw-object-anchor.mw-explorado .mw-punto {
+    background: var(--mw-color, #9aa4b2) !important;
+    box-shadow: none !important;
+    transform: scale(1.9);
+    -webkit-mask: center / 100% 100% no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 2 14.4 13.4H1.6Z' fill='none' stroke='%23000' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
+    mask: center / 100% 100% no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 2 14.4 13.4H1.6Z' fill='none' stroke='%23000' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
   }
 
   /* Anillos de distancia desde el Sol (ver dibujarAnillos en via-lactea-app.js):
@@ -914,7 +975,7 @@
   <aside id="mw-consola" aria-label="Consola de navegación">
     <button id="mw-consola-tirador" class="mw-ui-control" type="button"
       aria-expanded="false" aria-controls="mw-consola-panel"
-      title="Mostrar u ocultar la consola"><span>CONSOLA</span></button>
+      aria-label="Mostrar u ocultar la consola"><span>CONSOLA</span></button>
 
     <div id="mw-consola-panel">
     <div class="mw-consola-rotulo">Bitácora</div>
@@ -931,14 +992,14 @@
     <!-- Fila 2: buscar objeto (debajo de registrar observación) -->
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div style="position:relative;display:flex;align-items:center;">
-        <span style="position:absolute;left:10px;display:flex;pointer-events:none;opacity:0.6;"><svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14"/></svg></span>
-        <input id="mw-search" type="text" autocomplete="off" spellcheck="false"
-          placeholder="Buscar objeto…" aria-label="Buscar objeto en el mapa"
+        <span id="mw-search-lupa" style="position:absolute;left:10px;display:flex;pointer-events:none;opacity:0.7;"><svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14"/></svg></span>
+        <input id="mw-search" type="search" autocomplete="off" spellcheck="false"
+          placeholder="Buscar objeto…" aria-label="Buscar objeto en el mapa" aria-keyshortcuts="/"
           style="
             border:none;border-radius:20px;background:rgba(12,16,28,0.32);
             font-size:13px;padding:8px 12px 8px 30px;width:186px;
             font-family:sans-serif;outline:none;color:#eaf1fb;
-          " />
+          " /><kbd id="mw-search-atajo" aria-hidden="true">/</kbd>
       </div>
     </div>
 
@@ -953,6 +1014,7 @@
         background:rgba(12,16,28,0.32);border-radius:20px;
         padding:6px 12px;font-family:sans-serif;font-size:12px;color:#eaf1fb;
       ">
+        <span class="mw-ctl-nombre">Inclinación</span>
         <svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><ellipse cx="8" cy="9.4" rx="6.2" ry="2.6"/><path d="M8 9.4V2.2"/><circle cx="8" cy="9.4" r="1" class="mw-icono-lleno"/></svg>
         <input id="mw-tilt" class="mw-ui-control" type="range" min="0" max="90" step="0.5" value="0"
           aria-label="Punto de vista: 0 grados desde arriba, 90 grados de canto"
@@ -968,6 +1030,7 @@
         background:rgba(12,16,28,0.32);border-radius:20px;
         padding:6px 12px;font-family:sans-serif;font-size:12px;color:#eaf1fb;
       ">
+        <span class="mw-ctl-nombre">Giro de la vista</span>
         <svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1.7" class="mw-icono-lleno"/><circle cx="14" cy="8" r="1.3" class="mw-icono-lleno"/></svg>
         <input id="mw-rotate-edge" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
           aria-label="Girar el punto de vista alrededor de la galaxia"
@@ -983,6 +1046,7 @@
         background:rgba(12,16,28,0.32);border-radius:20px;
         padding:6px 12px;font-family:sans-serif;font-size:12px;color:#eaf1fb;
       ">
+        <span class="mw-ctl-nombre">Giro de la imagen</span>
         <svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13 8a5 5 0 1 1-1.6-3.7"/><path d="M13 2.4V4.9h-2.5"/></svg>
         <input id="mw-rotate-plane" class="mw-ui-control" type="range" min="0" max="360" step="1" value="0"
           aria-label="Girar la imagen en el plano de la pantalla"
@@ -994,7 +1058,12 @@
       </div>
     </div>
     
-    <div class="mw-consola-rotulo">Tripulación</div>
+    <!-- El filtro: quién (observador), qué conjunto y en qué estado. Plegable;
+         plegado, el resumen dice lo que está filtrando (lo escribe
+         via-lactea-app.js). -->
+    <details id="mw-filtro" open>
+    <summary class="mw-consola-rotulo">Filtro<span id="mw-filtro-resumen"></span></summary>
+    <div id="mw-filtro-cuerpo">
     <!-- Fila 5: quién observa, y a su izquierda el "planeta de origen": el
          blog propio del compañero elegido. El planeta abre la fila y el combo
          va sangrado a su derecha, así la fila mide lo mismo con planeta y sin
@@ -1048,23 +1117,26 @@
 
     <!-- Fila 7: eje ESTADO (#233): cómo están los objetos del conjunto respecto
          al observador; sin observador ("Todas las observaciones"), respecto a
-         cualquiera: explorado = lo ha explorado alguien. Radios nativos (grupo,
+         cualquiera: confirmado = lo ha visto alguien. Radios nativos (grupo,
          teclado y nombre accesible gratis); el recuento del activo lo pinta
          via-lactea-app.js, que también lo habilita en cuanto arranca. Con
          viaje, fijado en Todo.
          Marcado 'todo' de salida: es lo que se ve mientras el JS no ha
          arrancado (y lo que se queda si no arranca). Con observador, el propio
-         via-lactea-app.js lo mueve a Explorados. -->
+         via-lactea-app.js lo mueve a Confirmados. -->
     <fieldset id="mw-estado" disabled>
       <legend>Estado de exploración de los objetos</legend>
-      <label><input type="radio" name="mw-estado" value="todo" checked><span>Todo<span class="mw-estado-n"></span></span></label>
-      <label><input type="radio" name="mw-estado" value="visitados"><span>Explorados<span class="mw-estado-n"></span></span></label>
-      <label><input type="radio" name="mw-estado" value="porvisitar"><span>Por explorar<span class="mw-estado-n"></span></span></label>
+      <label><input type="radio" name="mw-estado" value="todo" checked><span class="mw-estado-txt"><span class="mw-estado-t">Todo</span><span class="mw-estado-n"></span></span></label>
+      <label><input type="radio" name="mw-estado" value="visitados"><span class="mw-estado-txt"><span class="mw-estado-t"><svg class="mw-icono mw-estado-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="3.4" class="mw-icono-lleno"/></svg>Confirmados</span><span class="mw-estado-n"></span></span></label>
+      <label><input type="radio" name="mw-estado" value="noconfirmados"><span class="mw-estado-txt"><span class="mw-estado-t"><svg class="mw-icono mw-estado-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.6 13.6 12.6H2.4Z"/></svg>No confirmados</span><span class="mw-estado-n"></span></span></label>
+      <label><input type="radio" name="mw-estado" value="porvisitar"><span class="mw-estado-txt"><span class="mw-estado-t"><svg class="mw-icono mw-estado-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="4.6"/></svg>Por explorar</span><span class="mw-estado-n"></span></span></label>
     </fieldset>
     <!-- Por qué el control está deshabilitado, visible y no solo en el title
          (el mismo trato que da #mw-viaje en su opción). Lo escribe
          via-lactea-app.js; vacío cuando el control está activo. -->
     <div id="mw-estado-aviso" class="mw-estado-aviso" aria-live="polite"></div>
+    </div><!-- /#mw-filtro-cuerpo -->
+    </details><!-- /#mw-filtro -->
     </div><!-- /#mw-consola-panel -->
   </aside>
   <div id="mw-search-toast" role="status" aria-atomic="true" style="
@@ -1572,19 +1644,19 @@
 <script src="/bitacora-mapa/js/via-lactea-marcador-estilo.js?v=20260823_1200"></script>
 <!-- OBSERVADORES: regla única de "visitado / no visitado". Lo consultan las tres
      capas del mapa al dibujar, así que va ANTES que todas ellas. -->
-<script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20260920_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20261003_1200"></script>
 <!-- QUÉ ESCALA MANDA y qué controles son suyos: lo consultan la app y el
      cambio de vista. Pura, sin DOM. -->
 <script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260828_2000"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20260829_2000"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20261003_1200"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260902_1200"></script>
 <!-- Selección pura de estrellas del vecindario: ANTES de vecindario-solar.js y
      DESPUÉS de bitacora-gaia-color.js (necesita claseEspectral). -->
 <script src="/bitacora-mapa/js/via-lactea-vecindario-catalogo.js?v=20260810_1600"></script>
-<script src="/bitacora-mapa/js/vecindario-solar.js?v=20260829_2000"></script>
+<script src="/bitacora-mapa/js/vecindario-solar.js?v=20261003_1200"></script>
 <!-- EQUIPO (fuente única con el simulador y Mi flota). El mapa solo usa
      rotuloNave(): el telescopio con el que se hizo cada viaje, en la ficha. -->
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260810_1700"></script>
@@ -1593,5 +1665,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20260921_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261003_1200"></script>
 </li>

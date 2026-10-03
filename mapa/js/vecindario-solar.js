@@ -324,7 +324,8 @@ var VecindarioSolar = (function () {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      if (!aten) {
+      var simbolo = window.VLObservadores.simboloDe(o.id);
+      if (simbolo === 'punto') {
         var halo = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 3.5);
         halo.addColorStop(0, rgbaDe(o.bprp, 0.55, false));
         halo.addColorStop(1, rgbaDe(o.bprp, 0, false));
@@ -336,12 +337,12 @@ var VecindarioSolar = (function () {
       // objeto que el observador activo aún no ha observado se dibuja como
       // anillo hueco de su propio color (sin halo); el visitado, como punto
       // lleno con halo. Misma ley en las tres vistas del mapa.
-      var anillo = window.VLObservadores.ANILLO_NO_VISITADO;
-      ctx.beginPath();
-      ctx.arc(p.sx, p.sy, aten ? r * anillo.escala : r, 0, Math.PI * 2);
-      if (aten) {
+      // El explorado y no confirmado es un triángulo hueco (simboloDe).
+      window.VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo);
+      if (simbolo !== 'punto') {
         ctx.strokeStyle = rgbaDe(o.bprp, 0.95, false);
-        ctx.lineWidth = anillo.grosor;
+        ctx.lineWidth = window.VLObservadores.ANILLO_NO_VISITADO.grosor;
+        ctx.lineJoin = 'round';
         ctx.stroke();
       } else {
         ctx.fillStyle = '#fff9ef'; ctx.fill();
