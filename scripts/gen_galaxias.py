@@ -5,6 +5,11 @@ Fuente: G. de Vaucouleurs et al. (1991), «Third Reference Catalogue of Bright
 Galaxies», vía VizieR VII/155/rc3. El fichero de partida
 (mapa/datos/rc3_brillantes.tsv) es la consulta ya filtrada a BT < 13,5.
 
+El RC3 deja sin BT a muchas galaxias brillantes —las Antennae (NGC 4038/4039),
+IC 5332, NGC 4696…—, y filtrar por BT las tiraba sin aviso: el render de Gaia
+no las pintaba. Para esas filas se usa mB, la magnitud fotográfica del mismo
+RC3 (mapa/datos/rc3_mb.tsv, la consulta filtrada a mB < 13,5).
+
 Para qué: el perfil de SÉRSIC de esta fila es el PRESUPUESTO DE LUZ de la galaxia.
 Desde la capa de imagen difusa, quien manda en la morfología es la imagen
 profunda: el parche de PanSTARRS, que llega por el proxy y, según se vayan
@@ -45,6 +50,7 @@ import os
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(RAIZ, 'mapa', 'datos', 'rc3_brillantes.tsv')
+SRC_MB = os.path.join(RAIZ, 'mapa', 'datos', 'rc3_mb.tsv')
 SRC_N = os.path.join(RAIZ, 'mapa', 'datos', 'sersic_s4g.tsv')
 OUT_CSV = os.path.join(RAIZ, 'mapa', 'datos', 'galaxias.csv')
 OUT_JS = os.path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js')
@@ -252,17 +258,23 @@ def limpia_nombre(texto):
     return ' '.join((texto or '').split())
 
 
-def main():
-    with open(SRC, encoding='latin-1') as fh:
+def lee_tsv(ruta):
+    with open(ruta, encoding='latin-1') as fh:
         lineas = fh.read().splitlines()
     inicio = next(k for k, l in enumerate(lineas) if l.startswith('---'))
+    return [l.split('\t') for l in lineas[inicio + 1:] if l.strip()]
+
+
+def main():
+    # Las mismas 11 columnas en las dos consultas; rc3_mb.tsv añade mB al final
+    # y solo aporta las filas sin BT (las que tienen ya vienen de SRC).
+    rc3 = lee_tsv(SRC)
+    con_mb = [c[:8] + [c[11]] + c[9:11] for c in lee_tsv(SRC_MB)
+              if len(c) >= 12 and numero(c[8]) is None]
 
     medidos = lee_sersic_medido()
     filas, sin_datos, de_d25, con_n = [], 0, 0, 0
-    for linea in lineas[inicio + 1:]:
-        if not linea.strip():
-            continue
-        c = linea.split('\t')
+    for c in rc3 + con_mb:
         if len(c) < 11:
             continue
         bt = numero(c[8])
