@@ -265,6 +265,28 @@
   outline:2px solid var(--ambar);outline-offset:2px;
 }
 
+/* ── Resultado: Visto / No visto (#395) ──
+   Radios nativos (teclado y lector de pantalla gratis) escondidos a la vista pero
+   no del foco; lo que se pinta es el <span> que los acompaña. Cada opción mide
+   al menos 44×44 px y se separan 8 px; las que no caben saltan de línea. */
+#mw-obs-form #resultadoBloque {margin:0 0 18px;}
+#mw-obs-form #resultadoBloque fieldset.sub-grupo {border:none;margin:0 0 14px;padding:0;min-width:0;}
+#mw-obs-form #resultadoBloque .sub-leyenda {font-size:13px;color:var(--tinta-tenue);margin:0 0 6px;padding:0;}
+#mw-obs-form #resultadoBloque .sub-leyenda small {font-size:12px;}
+#mw-obs-form #resultadoBloque .seg, #mw-obs-form #resultadoBloque .chips {display:flex;flex-wrap:wrap;gap:8px;}
+#mw-obs-form #resultadoBloque .seg-op, #mw-obs-form #resultadoBloque .chip {display:block;margin:0;position:relative;cursor:pointer;}
+#mw-obs-form #resultadoBloque input[type=radio] {position:absolute;opacity:0;width:1px;height:1px;margin:0;}
+#mw-obs-form #resultadoBloque .seg-op > span, #mw-obs-form #resultadoBloque .chip > span {
+  display:flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:8px 16px;
+  border:1px solid var(--linea);border-radius:8px;background:var(--noche-2);color:var(--tinta);
+  font-size:15px;transition:border-color .15s,background-color .15s;
+}
+#mw-obs-form #resultadoBloque .chip > span {border-radius:22px;font-size:14px;}
+#mw-obs-form #resultadoBloque input:checked + span {border-color:var(--ambar);background:var(--ambar-suave);}
+#mw-obs-form #resultadoBloque input:focus-visible + span {outline:2px solid var(--ambar);outline-offset:2px;}
+#mw-obs-form #resultadoBloque .hint {margin:8px 0 0;}
+#mw-obs-form #resultadoBloque [hidden] {display:none;}
+
 /* ── Movimiento reducido: sin transiciones para quien lo pide ── */
 @media (prefers-reduced-motion:reduce) {
   #mw-obs-form *, #mw-obs-form *::before, #mw-obs-form *::after,
