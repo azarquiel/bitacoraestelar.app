@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.3
+ * Version:     1.38.4
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.3' );
+define( 'BITACORA_VERSION', '1.38.4' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -2763,6 +2763,25 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
         $registro['resultado'] = ! empty( $ob->resultado ) ? $ob->resultado : 'visto';
         if ( 'visto' !== $registro['resultado'] && ! empty( $ob->motivo_no_visto ) ) {
             $registro['motivo'] = $ob->motivo_no_visto;
+        }
+        // Para comparar sin abrir (#399): el cielo de la observación y la
+        // horquilla de aumentos probados (las entradas de "Exploración" no
+        // llevan aumento). El id permite «Reintentar» desde la ficha propia.
+        $registro['id'] = (int) $ob->id;
+        if ( ! empty( $ob->cielo_bortle ) ) {
+            $registro['bortle'] = (int) $ob->cielo_bortle;
+        }
+        if ( isset( $ob->cielo_sqm ) && null !== $ob->cielo_sqm ) {
+            $registro['sqm'] = (float) $ob->cielo_sqm;
+        }
+        $aumentos = array();
+        foreach ( $entradas as $e ) {
+            if ( isset( $e->aumento ) && null !== $e->aumento && $e->aumento > 0 ) {
+                $aumentos[] = (float) $e->aumento;
+            }
+        }
+        if ( $aumentos ) {
+            $registro['aumentos'] = array( min( $aumentos ), max( $aumentos ) );
         }
         // Tramo de audio (ADR 0005): solo se emite si hay audio_url, la única
         // condición de existencia del tramo.

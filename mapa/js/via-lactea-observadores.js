@@ -40,6 +40,7 @@
      ANILLO_NO_VISITADO           -> {escala, grosor} del anillo de "por visitar"
      TRIANGULO_NO_CONFIRMADO      -> {escala, grosor} del triángulo (junto al anillo)
      resumenDe(id)                -> línea de hover/foco de lo intentado, o ''
+     motivoDe(clave)              -> rótulo del motivo de un no visto, o ''
    ============================================================================ */
 
 (function () {
@@ -315,6 +316,7 @@
     ANILLO_NO_VISITADO: ANILLO,
     TRIANGULO_NO_CONFIRMADO: TRIANGULO,
     resumenDe: resumenDe,
+    motivoDe: function (k) { return MOTIVOS[k] || ''; },
     getActivo: getActivo,
     setActivo: setActivo,
     getEstado: getEstado,
