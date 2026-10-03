@@ -143,5 +143,51 @@ var gris = VLO.grisNoVisitado(255, 0, 0);
 eq(gris.join(','), '218,53,53', 'rojo mezclado al 35% con el gris 150');
 eq(VLO.grisNoVisitado(150, 150, 150).join(','), '150,150,150', 'el propio gris no cambia');
 
+console.log('resultadoDe (tres estados, #397):');
+var F = 'no_visto';
+global.OBSERVACIONES = {
+  a: [{ observador: 'israel', resultado: F }, { observador: 'ana', resultado: 'visto' }],   // fallo propio + éxito ajeno
+  b: [{ observador: 'israel', resultado: F, motivo: 'nubes' }, { observador: 'israel', resultado: 'visto' }], // fallo propio + éxito propio posterior
+  c: [{ observador: 'israel', resultado: F }, { observador: 'ana', resultado: 'detectado_no_visto' }],       // solo fallos de varios
+  d: [{ observador: 'israel' }],                                                              // sin campo resultado (caché vieja)
+  e: []
+};
+VLO.setConjunto(null);
+VLO.setActivo('israel');
+eq(VLO.resultadoDe('a'), 'explorado', 'fallo propio + éxito ajeno: explorado para el propio');
+eq(VLO.resultadoDe('a', 'ana'), 'visto', 'resultadoDe con observador explícito');
+eq(VLO.resultadoDe('b'), 'visto', 'fallo propio + éxito propio posterior: visto');
+eq(VLO.resultadoDe('c'), 'explorado', 'solo fallos: explorado');
+eq(VLO.resultadoDe('d'), 'visto', 'sin campo resultado: visto');
+eq(VLO.resultadoDe('e'), 'no_visitado', 'sin filas: no_visitado');
+eq(VLO.resultadoDe('c', 'otro'), 'no_visitado', 'observador sin filas: no_visitado');
+VLO.setActivo('');
+eq(VLO.resultadoDe('a'), 'visto', 'todas: alguien lo vio');
+eq(VLO.resultadoDe('c'), 'explorado', 'todas, solo fallos de varios observadores: explorado');
+eq(VLO.resultadoDe('d'), 'visto', 'todas, sin campo resultado: visto');
+eq(VLO.getFicha('c').resultado, F, 'getFicha sigue devolviendo la fila fallida');
+
+console.log('estado noconfirmados y recuentos (suman Todo):');
+var ids = ['a', 'b', 'c', 'd', 'e'];
+['israel', ''].forEach(function (quien) {
+  VLO.setActivo(quien);
+  var r = VLO.recuentos(ids);
+  eq(r.visitados + r.noconfirmados + r.porvisitar, r.todo, 'suman todo (' + (quien || 'todas') + ')');
+});
+VLO.setActivo('israel');
+VLO.setEstado('noconfirmados');
+eq(VLO.visiblePorObservador('a'), true, 'noconfirmados: fallo propio visible');
+eq(VLO.visiblePorObservador('b'), false, 'noconfirmados: lo visto, no');
+eq(VLO.visiblePorObservador('e'), false, 'noconfirmados: lo no visitado, no');
+eq(VLO.atenuadoPorObservador('a'), false, 'noconfirmados: sin anillo');
+eq(VLO.recuento(ids), 2, 'recuento noconfirmados: a y c');
+VLO.setEstado('visitados');
+eq(VLO.recuento(ids), 2, 'recuento confirmados: b y d');
+VLO.setEstado('porvisitar');
+eq(VLO.visiblePorObservador('a'), false, 'porvisitar: un fallo propio ya no es por visitar');
+eq(VLO.recuento(ids), 1, 'recuento por explorar: e');
+VLO.setEstado('todo');
+VLO.setActivo('');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

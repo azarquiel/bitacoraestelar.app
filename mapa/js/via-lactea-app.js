@@ -745,22 +745,31 @@
     pintarRecuentoEstado();
   }
 
-  // El estado activo lleva el recuento de lo que deja a la vista (#233): en la
+  // Cada opción lleva el recuento de lo que deja a la vista (#233, #397): en la
   // vista de canto un cambio de estado puede no notarse, y el número confirma
-  // que el control hizo algo. Si no queda nada, se avisa: una pantalla vacía
-  // no debe parecer un fallo.
+  // que el control hizo algo. Confirmados + No confirmados + Por explorar suman
+  // Todo. «No confirmados» no desaparece con 0: se deshabilita y se explica. Si
+  // el estado activo no deja nada, se avisa: una pantalla vacía no debe parecer
+  // un fallo.
   // OBJECTS es el catálogo de las tres capas (los dos lienzos también se
   // construyen desde él), así que el recuento es el de las tres vistas.
   var IDS_CATALOGO = OBJECTS.map(function (o) { return o.id; });
   var estadoRadios = document.querySelectorAll('#mw-estado input[type=radio]');
   var estadoCuentas = document.querySelectorAll('#mw-estado .mw-estado-n');
+  var estadoNoConf = document.querySelector('#mw-estado input[value="noconfirmados"]');
+  var estadoAviso = document.getElementById('mw-estado-aviso');
   function pintarRecuentoEstado() {
     if (!estadoRadios.length) return;
-    var n = String(VLO.recuento(IDS_CATALOGO)).replace(/\B(?=(\d{3})+$)/g, '\u202f');  // 1 248
+    var c = VLO.recuentos(IDS_CATALOGO);
     for (var i = 0; i < estadoRadios.length; i++) {
-      estadoCuentas[i].textContent = estadoRadios[i].checked ? ' · ' + n : '';
+      estadoCuentas[i].textContent = ' · ' + String(c[estadoRadios[i].value]).replace(/\B(?=(\d{3})+$)/g, '\u202f');  // 1 248
     }
-    if (VLO.getEstado() !== 'todo' && !n) {
+    var sinNoConf = !c.noconfirmados;
+    if (estadoNoConf) estadoNoConf.disabled = sinNoConf;
+    if (estadoAviso && !viajeActivo) {
+      estadoAviso.textContent = sinNoConf ? 'Nadie ha registrado exploraciones no confirmadas en este conjunto' : '';
+    }
+    if (VLO.getEstado() !== 'todo' && !c[VLO.getEstado()]) {
       showToast('Nada que enseñar con este filtro: prueba otro estado o conjunto.');
     }
   }
@@ -3050,13 +3059,12 @@
     }
   }
 
-  // ---- Eje ESTADO (#233): Todo · Visitados · Por visitar -------------------
+  // ---- Eje ESTADO (#233): Todo · Confirmados · No confirmados · Por explorar -------------------
   // Los dos ejes son independientes: elegir un viaje no pierde el estado que
   // eligió el usuario (estadoElegido); solo lo fija en 'todo' mientras dura.
   var estadoFieldset = document.getElementById('mw-estado');
-  var estadoAviso = document.getElementById('mw-estado-aviso');
   // El estado de arranque depende de a quién se está mirando: con observador
-  // (sesión iniciada o elegido a mano) se abre por SUS explorados; sin
+  // (sesión iniciada o elegido a mano) se abre por SUS confirmados; sin
   // observador, "Todas las observaciones" enseña el catálogo entero, así que el
   // control tiene que decir 'todo' o mentiría sobre lo que se ve.
   function estadoPorDefecto() { return VLO.getActivo() ? 'visitados' : 'todo'; }
@@ -3068,8 +3076,8 @@
     if (!estadoFieldset) return;
     var radio = estadoFieldset.querySelector('input[value="' + VLO.getEstado() + '"]');
     if (radio) radio.checked = true;
-    // Sin observador el eje sigue mandando: 'explorado' pasa a significar
-    // "lo ha explorado alguien", que es justo lo que puede mirar un visitante
+    // Sin observador el eje sigue mandando: 'confirmado' pasa a significar
+    // "lo ha visto alguien", que es justo lo que puede mirar un visitante
     // anónimo. Lo único que lo deshabilita es el viaje.
     estadoFieldset.disabled = !!viajeActivo;
     // El motivo de estar deshabilitado se lee, no solo se adivina.
@@ -3600,7 +3608,7 @@
     catch (e) { return { get: function () { return ''; } }; }
   })();
   var viajePedido = params.get('viaje') || '';
-  // ?estado=todo|visitados|porvisitar acompaña al viaje en la URL (#233).
+  // ?estado=todo|visitados|noconfirmados|porvisitar acompaña al viaje en la URL (#233).
   var estadoPedido = params.get('estado') || '';
   aplicarEstado(estadoPedido || estadoPorDefecto());
   estadoElegido = VLO.getEstado();   // un valor desconocido cae a 'visitados'

@@ -1048,17 +1048,18 @@
 
     <!-- Fila 7: eje ESTADO (#233): cómo están los objetos del conjunto respecto
          al observador; sin observador ("Todas las observaciones"), respecto a
-         cualquiera: explorado = lo ha explorado alguien. Radios nativos (grupo,
+         cualquiera: confirmado = lo ha visto alguien. Radios nativos (grupo,
          teclado y nombre accesible gratis); el recuento del activo lo pinta
          via-lactea-app.js, que también lo habilita en cuanto arranca. Con
          viaje, fijado en Todo.
          Marcado 'todo' de salida: es lo que se ve mientras el JS no ha
          arrancado (y lo que se queda si no arranca). Con observador, el propio
-         via-lactea-app.js lo mueve a Explorados. -->
+         via-lactea-app.js lo mueve a Confirmados. -->
     <fieldset id="mw-estado" disabled>
       <legend>Estado de exploración de los objetos</legend>
       <label><input type="radio" name="mw-estado" value="todo" checked><span>Todo<span class="mw-estado-n"></span></span></label>
-      <label><input type="radio" name="mw-estado" value="visitados"><span>Explorados<span class="mw-estado-n"></span></span></label>
+      <label><input type="radio" name="mw-estado" value="visitados"><span>Confirmados<span class="mw-estado-n"></span></span></label>
+      <label><input type="radio" name="mw-estado" value="noconfirmados"><span>No confirmados<span class="mw-estado-n"></span></span></label>
       <label><input type="radio" name="mw-estado" value="porvisitar"><span>Por explorar<span class="mw-estado-n"></span></span></label>
     </fieldset>
     <!-- Por qué el control está deshabilitado, visible y no solo en el title

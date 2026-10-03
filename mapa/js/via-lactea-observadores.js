@@ -16,10 +16,15 @@
    Interfaz (window.VLObservadores):
      getActivo()                  -> clave del observador activo ('' = todas)
      setActivo(clave)             -> fija el observador activo del filtro
-     getEstado() / setEstado(e)   -> eje ESTADO: 'todo' | 'visitados' | 'porvisitar'
+     getEstado() / setEstado(e)   -> eje ESTADO: 'todo' | 'visitados' (Confirmados) |
+                                     'noconfirmados' | 'porvisitar' (Por explorar)
+     resultadoDe(id, observador?) -> 'visto' | 'explorado' | 'no_visitado' (LA regla)
+     recuentos(ids)               -> {todo, visitados, noconfirmados, porvisitar}
      setConjunto(l)               -> eje CONJUNTO: null (todos) o lista de ids
      recuento(ids)                -> cuántos de esos ids deja a la vista la regla
-     getFicha(id)                 -> la ficha visible del objeto, o null
+     getFicha(id)                 -> la ficha visible del objeto (cualquier fila, fallida
+                                     o no), o null. NO responde «¿se ha visto?»: eso es
+                                     resultadoDe
      observacionesAjenasActivo()  -> ¿está activo el "descubrir observaciones"?
      blogDe(clave)                -> URL del blog propio del observador, o ''
      fichaDeObservador(id, clave) -> la observación de 'clave' sobre 'id', o null
@@ -45,10 +50,12 @@
   // Los dos ejes del filtro (#233). CONJUNTO: qué objetos entran (null = todos;
   // una lista de ids = un viaje o, mañana, un catálogo). ESTADO: cómo están
   // respecto al observador activo... y sin observador ("Todas las
-  // observaciones"), respecto a CUALQUIERA: explorado = lo ha observado
-  // alguien. Así el eje también sirve al visitante anónimo, que no tiene
-  // observador propio pero sí catálogo que mirar.
-  var ESTADOS = { todo: 1, visitados: 1, porvisitar: 1 };
+  // observaciones"), respecto a CUALQUIERA. Así el eje también sirve al
+  // visitante anónimo, que no tiene observador propio pero sí catálogo que
+  // mirar. Los tres estados de un objeto (resultadoDe) reparten el conjunto
+  // sin solaparse: visitados = visto (rótulo «Confirmados»), noconfirmados =
+  // explorado (hay intentos pero ninguno visto), porvisitar = no_visitado.
+  var ESTADOS = { todo: 1, visitados: 1, noconfirmados: 1, porvisitar: 1 };
   var estado = 'visitados';
   var conjunto = null;      // {id: true} o null
 
@@ -70,6 +77,24 @@
       return null; // ese observador no tiene ficha de este objeto
     }
     return lista[0];
+  }
+
+  // LA regla de «¿se ha visto?» de las tres vistas. Con observador (el activo,
+  // o el que se pase), el mejor resultado de SUS filas; sin observador, el de
+  // todas. 'visto' si alguna fila lo es (una fila sin resultado, de caché
+  // vieja, cuenta como visto); 'explorado' si hay filas pero ninguna vista;
+  // 'no_visitado' si no hay filas.
+  function resultadoDe(id, observador) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
+    if (!lista || !lista.length) return 'no_visitado';
+    var quien = (observador === undefined) ? observadorActivo : observador;
+    var hay = false;
+    for (var i = 0; i < lista.length; i++) {
+      if (quien && lista[i].observador !== quien) continue;
+      if (!lista[i].resultado || lista[i].resultado === 'visto') return 'visto';
+      hay = true;
+    }
+    return hay ? 'explorado' : 'no_visitado';
   }
 
   // ¿Está activada la funcionalidad de "descubrir observaciones de otros"?
@@ -129,7 +154,7 @@
   //   'ninguna' -> nadie relevante lo observó: se oculta.
   function estadoObservador(id) {
     if (!observadorActivo) return 'propia';       // modo "todas": todo a color
-    if (getFicha(id)) return 'propia';            // el observador activo lo observó
+    if (resultadoDe(id) === 'visto') return 'propia';   // el observador activo lo vio
     if (observacionesAjenasActivo() && observadoresDe(id, observadorActivo).length) return 'ajena';
     return 'ninguna';
   }
@@ -152,28 +177,31 @@
 
   // ¿Se dibuja el objeto con el filtro actual? Primero el conjunto (fuera de
   // la lista no hay nada que ver); luego el estado:
-  //   visitados  -> solo con observación propia (sin observador activo, de
-  //                 cualquiera: el visitante anónimo ve lo ya explorado).
-  //   porvisitar -> todo lo del conjunto SIN observación propia, lo haya
+  //   visitados  -> solo lo visto por el activo (sin observador activo, por
+  //                 cualquiera: el visitante anónimo ve lo ya confirmado).
+  //   noconfirmados -> lo intentado y no visto (mismas lecturas).
+  //   porvisitar -> todo lo del conjunto SIN intento propio, lo haya
   //                 observado otro o nadie; ignora CONFIG.observacionesAjenas,
   //                 que gobierna "descubrir a otros", no "qué me falta".
   //   todo       -> la regla de siempre: propias y, si el descubrimiento está
   //                 activo, ajenas atenuadas; las de nadie se ocultan.
   function visiblePorObservador(id) {
     if (conjunto && !conjunto[id]) return false;
-    // getFicha() ya resuelve las dos lecturas de "explorado": con observador
-    // activo, la ficha suya; sin observador, la de cualquiera.
-    if (estado === 'visitados') return !!getFicha(id);
-    if (estado === 'porvisitar') return !getFicha(id);
+    // resultadoDe() ya resuelve las dos lecturas: con observador activo, sus
+    // filas; sin observador, las de cualquiera.
+    if (estado === 'visitados') return resultadoDe(id) === 'visto';
+    if (estado === 'noconfirmados') return resultadoDe(id) === 'explorado';
+    if (estado === 'porvisitar') return resultadoDe(id) === 'no_visitado';
     if (!observadorActivo) return true;
     return estadoObservador(id) !== 'ninguna';
   }
 
-  // ¿Se dibuja como "por visitar" (anillo hueco)? En 'visitados' nunca; en
-  // 'porvisitar' todo lo visible lo es; en 'todo' solo lo observado por otros.
+  // ¿Se dibuja como "por visitar" (anillo hueco)? En 'visitados' y
+  // 'noconfirmados' nunca; en 'porvisitar' todo lo visible lo es; en 'todo'
+  // solo lo observado por otros.
   function atenuadoPorObservador(id) {
-    if (estado === 'visitados') return false;
-    if (estado === 'porvisitar') return !getFicha(id);
+    if (estado === 'visitados' || estado === 'noconfirmados') return false;
+    if (estado === 'porvisitar') return resultadoDe(id) === 'no_visitado';
     if (!observadorActivo) return false;
     return estadoObservador(id) === 'ajena';
   }
@@ -183,6 +211,19 @@
     var n = 0;
     for (var i = 0; i < ids.length; i++) if (visiblePorObservador(ids[i])) n++;
     return n;
+  }
+
+  // Recuento de cada opción del eje sobre el conjunto vigente. Las tres
+  // últimas reparten 'todo' (cada objeto cae en una sola), con o sin observador.
+  function recuentos(ids) {
+    var c = { todo: 0, visitados: 0, noconfirmados: 0, porvisitar: 0 };
+    var clave = { visto: 'visitados', explorado: 'noconfirmados', no_visitado: 'porvisitar' };
+    for (var i = 0; i < ids.length; i++) {
+      if (conjunto && !conjunto[ids[i]]) continue;
+      c.todo++;
+      c[clave[resultadoDe(ids[i])]]++;
+    }
+    return c;
   }
 
   // Color de un objeto no visitado: su RGB mezclado con el gris clarito.
@@ -207,6 +248,8 @@
     setEstado: setEstado,
     setConjunto: setConjunto,
     recuento: recuento,
+    recuentos: recuentos,
+    resultadoDe: resultadoDe,
     getFicha: getFicha,
     observacionesAjenasActivo: observacionesAjenasActivo,
     nombreObservador: nombreObservador,
