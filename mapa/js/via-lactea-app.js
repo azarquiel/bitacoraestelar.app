@@ -408,7 +408,7 @@
     // atributos con el punto para disparar el mismo manejador; al posarse el
     // cursor también activa el :hover del ancla, que devuelve el estilo completo.
     var pad = document.createElement('div');
-    pad.className = 'mw-pdf-dot';
+    pad.className = 'mw-pdf-dot mw-pad';
     pad.title = dot.title;
     pad.setAttribute('data-pdf', obj.pdf);
     pad.setAttribute('data-title', obj.name);
@@ -417,6 +417,12 @@
     pad.style.cssText = 'position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;' +
       'border-radius:50%;background:transparent;pointer-events:auto;cursor:pointer;';
     content.appendChild(pad);
+    // Resumen de lo intentado (#398): vacío salvo en objetos con fallos; se
+    // rellena en refreshAnchors y solo se enseña con hover o foco (mapa.html).
+    var resumen = document.createElement('div');
+    resumen.className = 'mw-resumen';
+    resumen.setAttribute('role', 'tooltip');
+    content.appendChild(resumen);
     scaleEl.appendChild(connector);
     scaleEl.appendChild(content);
     anchor.appendChild(scaleEl);
@@ -1854,6 +1860,15 @@
     });
   }
 
+  // El pad enfocable (objetos con resumen, #398) se abre con Enter o Espacio.
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('mw-pad') &&
+        e.target.hasAttribute('tabindex')) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
+
   pdfCloseBtn.addEventListener('click', closeObjectPdf);
 
   pdfOverlay.addEventListener('mousedown', function (e) {
@@ -2718,6 +2733,13 @@
       // atenuación de lo ajeno. Nunca coincide con mw-no-visitado: simboloDe
       // solo da anillo si el resultado es no_visitado.
       a.classList.toggle('mw-explorado', VLO.simboloDe(id) === 'triangulo');
+      // Resumen de una línea al pasar el ratón o llegar con el tabulador. El
+      // pad es lo único enfocable: Enter lo abre como un clic (ver más abajo).
+      var txt = VLO.resumenDe(id);
+      var pad = a.querySelector('.mw-pad');
+      a.querySelector('.mw-resumen').textContent = txt;
+      if (txt) { pad.setAttribute('tabindex', '0'); pad.setAttribute('role', 'button'); pad.setAttribute('aria-label', a.getAttribute('data-id').toUpperCase() + '. ' + txt); }
+      else { pad.removeAttribute('tabindex'); pad.removeAttribute('role'); pad.removeAttribute('aria-label'); }
     }
   }
 
@@ -3136,7 +3158,51 @@
     estadoFieldset.disabled = !!viajeActivo;
     // Con viaje el eje no aporta (se ven todas las escalas): se oculta, no se explica.
     estadoFieldset.hidden = !!viajeActivo;
+    sincronizarLeyendaEstado();
   }
+
+  // Sección «Estado» de las tres leyendas (#398): ● Confirmado, ▲ No confirmado,
+  // ○ Por explorar. Cada entrada es un <button aria-pressed> que manda sobre
+  // #mw-estado (las mismas opciones, así que el selector y la leyenda no
+  // divergen); pulsarla estando activa vuelve a Todo.
+  var LEYENDA_ESTADO = [
+    ['visitados', 'Confirmado', '<circle cx="8" cy="8" r="3.4" class="mw-icono-lleno"/>'],
+    ['noconfirmados', 'No confirmado', '<path d="M8 2.6 13.6 12.6H2.4Z"/>'],
+    ['porvisitar', 'Por explorar', '<circle cx="8" cy="8" r="4.6"/>']
+  ];
+  function sincronizarLeyendaEstado() {
+    var botones = document.querySelectorAll('.mw-legend-estado, .mw-legend-estado-t');
+    for (var i = 0; i < botones.length; i++) {
+      botones[i].hidden = !!viajeActivo;   // con viaje el eje se oculta: la leyenda también
+      if (botones[i].dataset.estado) botones[i].setAttribute('aria-pressed', String(botones[i].dataset.estado === VLO.getEstado()));
+    }
+  }
+  ['mw-legend', 'mw-legend-hubble', 'mw-legend-espectral'].forEach(function (id) {
+    var leyenda = document.getElementById(id);
+    if (!leyenda || !estadoFieldset) return;
+    var t = document.createElement('div');
+    t.className = 'mw-legend-estado-t';
+    t.textContent = 'Estado';
+    leyenda.appendChild(t);
+    LEYENDA_ESTADO.forEach(function (e) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mw-legend-estado';
+      b.dataset.estado = e[0];
+      b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = '<svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' + e[2] + '</svg><span>' + e[1] + '</span>';
+      leyenda.appendChild(b);
+    });
+  });
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('.mw-legend-estado');
+    if (!b || estadoFieldset.disabled) return;
+    var radio = estadoFieldset.querySelector('input[value="' + (VLO.getEstado() === b.dataset.estado ? 'todo' : b.dataset.estado) + '"]');
+    if (radio && !radio.disabled) {
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
 
   if (estadoFieldset) {
     estadoFieldset.addEventListener('change', function (ev) {

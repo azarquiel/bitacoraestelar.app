@@ -232,5 +232,27 @@ console.log('triángulo y atenuado nunca coinciden (#397):');
 VLO.setActivo('');
 VLO.setEstado('visitados');
 
+console.log('resumenDe y constantes del triángulo (#398):');
+global.OBSERVACIONES = {
+  t: [{ observador: 'israel', resultado: 'no_visto', motivo: 'nubes', fecha: '2026-07-01' },
+      { observador: 'israel', resultado: 'no_visto', motivo: 'luna', fecha: '2026-08-12' },
+      { observador: 'israel', resultado: 'detectado_no_visto', fecha: '2026-06-02' },
+      { observador: 'ana', resultado: 'no_visto', fecha: '2026-05-01' }],
+  u: [{ observador: 'israel', resultado: 'no_visto', fecha: '2026-08-12' }, { observador: 'ana', resultado: 'visto' }, { observador: 'luis', resultado: 'visto' }],
+  v: [{ observador: 'israel', resultado: 'visto' }],
+  w: [{ observador: 'israel', resultado: 'no_visto', motivo: 'luna' }]
+};
+VLO.setActivo('israel');
+eq(VLO.resumenDe('u'), '▲ No confirmado · 1 intento · último 12 ago 2026', 'propio: fallo propio manda aunque otros lo vieran');
+eq(VLO.resumenDe('v'), '', 'sin fallos: sin resumen');
+eq(VLO.resumenDe('zz'), '', 'sin filas: sin resumen');
+eq(VLO.resumenDe('w'), '▲ No confirmado · 1 intento · Luna', 'un intento sin fecha: sin "último"');
+eq(VLO.resumenDe('t'), '▲ No confirmado · 3 intentos · último 12 ago 2026 · Luna', 'propio: solo sus filas');
+VLO.setActivo('');
+eq(VLO.resumenDe('u'), '● Confirmado por 2 · 1 no confirmado', 'todas: confirmado por 2 y uno sin confirmar');
+eq(VLO.resumenDe('t'), '▲ No confirmado · 4 intentos · último 12 ago 2026 · Luna', 'todas: cuenta todo, último con motivo');
+eq(typeof VLO.TRIANGULO_NO_CONFIRMADO.escala, 'number', 'constantes del triángulo junto a ANILLO_NO_VISITADO');
+eq(VLO.TRIANGULO_NO_CONFIRMADO.grosor, VLO.ANILLO_NO_VISITADO.grosor, 'mismo grosor de trazo que el anillo');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

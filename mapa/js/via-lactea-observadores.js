@@ -38,6 +38,8 @@
      simboloDe(id)                -> 'punto' | 'anillo' | 'triangulo' (LA regla del símbolo)
      trazarSimbolo(ctx,x,y,r,s)   -> traza el contorno del símbolo en un lienzo
      ANILLO_NO_VISITADO           -> {escala, grosor} del anillo de "por visitar"
+     TRIANGULO_NO_CONFIRMADO      -> {escala, grosor} del triángulo (junto al anillo)
+     resumenDe(id)                -> línea de hover/foco de lo intentado, o ''
    ============================================================================ */
 
 (function () {
@@ -178,7 +180,7 @@
   var ANILLO = { escala: 1.6, grosor: 1.4 };
   // Triángulo hueco (explorado y no confirmado): su radio circunscrito, para
   // que pese lo que el anillo. Mismo grosor de trazo.
-  var TRIANGULO_ESCALA = 1.9;
+  var TRIANGULO = { escala: 1.9, grosor: ANILLO.grosor };
 
   // ¿Se dibuja el objeto con el filtro actual? Primero el conjunto (fuera de
   // la lista no hay nada que ver); luego el estado:
@@ -246,7 +248,7 @@
   function trazarSimbolo(ctx, x, y, r, simbolo) {
     ctx.beginPath();
     if (simbolo === 'triangulo') {
-      var R = r * TRIANGULO_ESCALA;
+      var R = r * TRIANGULO.escala;
       ctx.moveTo(x, y - R);
       ctx.lineTo(x + R * 0.866, y + R * 0.5);
       ctx.lineTo(x - R * 0.866, y + R * 0.5);
@@ -254,6 +256,45 @@
     } else {
       ctx.arc(x, y, simbolo === 'anillo' ? r * ANILLO.escala : r, 0, Math.PI * 2);
     }
+  }
+
+  // Resumen de una línea de lo intentado, para el hover y el foco (#398):
+  // «▲ No confirmado · 3 intentos · último 12 ago 2026 · Luna» si el símbolo es
+  // el triángulo; «● Confirmado por 2 · 1 no confirmado» si alguien lo vio pero
+  // otro observador no. '' si no hay fallos que contar.
+  var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  var MOTIVOS = { nubes: 'Nubes o transparencia', contaminacion: 'Contaminación lumínica', luna: 'Luna',
+    bajo: 'Objeto bajo u obstáculo', seeing: 'Seeing', apertura: 'Apertura insuficiente',
+    no_localizado: 'No localizado', otro: 'Otro' };
+  function fechaCorta(f) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(f || '');
+    return m ? (+m[3]) + ' ' + MESES[+m[2] - 1] + ' ' + m[1] : '';
+  }
+  function resumenDe(id) {
+    var lista = (typeof OBSERVACIONES !== 'undefined') ? OBSERVACIONES[id] : null;
+    if (!lista || !lista.length) return '';
+    var res = resultadoDe(id), i;
+    if (res === 'explorado') {
+      var filas = [], ult = null;
+      for (i = 0; i < lista.length; i++) {
+        if (observadorActivo && lista[i].observador !== observadorActivo) continue;
+        filas.push(lista[i]);
+        if (!ult || (lista[i].fecha || '') >= (ult.fecha || '')) ult = lista[i];
+      }
+      var partes = ['▲ No confirmado', filas.length + (filas.length === 1 ? ' intento' : ' intentos')];
+      if (fechaCorta(ult.fecha)) partes.push('último ' + fechaCorta(ult.fecha));
+      if (MOTIVOS[ult.motivo]) partes.push(MOTIVOS[ult.motivo]);
+      return partes.join(' · ');
+    }
+    if (res !== 'visto') return '';
+    var vio = {}, fallo = {}, nv = 0, nf = 0;
+    for (i = 0; i < lista.length; i++) {
+      var q = lista[i].observador || '';
+      if (!lista[i].resultado || lista[i].resultado === 'visto') vio[q] = 1; else fallo[q] = 1;
+    }
+    for (var k in vio) nv++;
+    for (k in fallo) if (!vio[k]) nf++;
+    return nf ? '● Confirmado por ' + nv + ' · ' + nf + ' no confirmado' : '';
   }
 
   // Color de un objeto no visitado: su RGB mezclado con el gris clarito.
@@ -272,6 +313,8 @@
     OPACIDAD_NO_VISITADO: OPACIDAD,
     MEZCLA_NO_VISITADO: MEZCLA,
     ANILLO_NO_VISITADO: ANILLO,
+    TRIANGULO_NO_CONFIRMADO: TRIANGULO,
+    resumenDe: resumenDe,
     getActivo: getActivo,
     setActivo: setActivo,
     getEstado: getEstado,
