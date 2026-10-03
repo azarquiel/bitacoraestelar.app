@@ -391,5 +391,38 @@ eq(bitacora_oal_texto_plano('<p>Rasgos:</p><ul style="margin:0"><li>Forma</li><l
 eq(bitacora_oal_texto_plano('&lt;script&gt;alert(1)&lt;/script&gt;'), '<script>alert(1)</script>',
    'una etiqueta escrita como texto sigue siendo texto: se escapa al pintarla');
 
+echo "el resultado viaja en <rating> (#401):\n";
+$res = function (string $rating, string $desc = 'x'): array {
+    $r = '<result xsi:type="oal:findingsDeepSkyType"><description>' . $desc . '</description>' . ($rating === '' ? '' : "<rating>$rating</rating>") . '</result>';
+    $d = bitacora_oal_leer(preg_replace('#<result .*?</result>#s', $r, ejemplo('noche-simple'), 1));
+    return $d['observaciones'][0];
+};
+eq($res('7')['resultado'], 'no_visto', '7 es no_visto');
+eq($res('6')['resultado'], 'detectado_no_visto', '6 es detectado_no_visto');
+foreach (array('1', '3', '5', '99', '') as $r) { eq($res($r)['resultado'], 'visto', "rating '$r' es visto"); }
+$f = $res('6', "Explorado – no confirmado · detectado · Luna\nSe intuye.");
+eq(array($f['motivo'], $f['descripcion']), array('luna', 'Se intuye.'), 'el motivo se lee y se quita de la descripción');
+eq($res('99', 'Explorado – no confirmado')['descripcion'], 'Explorado – no confirmado', 'en un visto la descripción no se toca');
+
+// Ida y vuelta con el escritor de verdad (el motor JS): exportar, leer y agrupar.
+$estado = array(
+    'observador' => array('nombre' => 'A', 'apellidos' => 'B', 'correo' => ''),
+    'lugares' => array(array('id' => 'lu1', 'nombre' => 'Base', 'lat' => 40, 'lon' => -3, 'altitud' => 600, 'tz' => 120)),
+    'telescopios' => array(), 'oculares' => array(), 'auxiliares' => array(),
+    'noches' => array(array('id' => 'n1', 'fecha' => '2026-08-05', 'lugarId' => 'lu1', 'comienzo' => '22:00', 'fin' => '', 'tripulacion' => '')),
+    'observaciones' => array(
+        array('id' => 'o1', 'nocheId' => 'n1', 'objeto' => 'M13', 'hora' => '22:10', 'observador' => 'A B', 'texto' => 'Nada.', 'resultado' => 'no_visto', 'motivo' => 'nubes'),
+        array('id' => 'o2', 'nocheId' => 'n1', 'objeto' => 'M92', 'hora' => '22:20', 'observador' => 'A B', 'texto' => 'Algo.', 'resultado' => 'detectado_no_visto', 'motivo' => 'luna'),
+        array('id' => 'o3', 'nocheId' => 'n1', 'objeto' => 'M57', 'hora' => '22:30', 'observador' => 'A B', 'texto' => 'Se ve.'),
+    ),
+);
+$js = "var m=require('./scripts/lib_motor_oal.js').cargar();process.stdout.write(m.xmlDe(JSON.parse(process.argv[1])));";
+$xml = (string) shell_exec('cd ' . escapeshellarg(__DIR__ . '/..') . ' && node -e ' . escapeshellarg($js) . ' ' . escapeshellarg(json_encode($estado)));
+$ida = array();
+foreach (bitacora_oal_agrupar(bitacora_oal_leer($xml)) as $g) { $ida[$g['objeto']] = array($g['resultado'], $g['motivo'], $g['entradas'][0]['descripcion']); }
+eq($ida['M13'], array('no_visto', 'nubes', 'Nada.'), 'ida y vuelta de un no_visto: resultado, motivo y texto');
+eq($ida['M92'], array('detectado_no_visto', 'luna', 'Algo.'), 'ida y vuelta de un detectado_no_visto');
+eq($ida['M57'], array('visto', '', 'Se ve.'), 'y lo visto sigue visto');
+
 echo $fallos ? "\n$fallos fallo(s)\n" : "\nok · el importador entiende lo que escribe la plantilla\n";
 exit($fallos ? 1 : 0);

@@ -95,9 +95,11 @@ Reglas que lo gobiernan:
 
 - **Orden de la secuencia del esquema**, no el nuestro ni el de AstroPlanner.
   `xsd:sequence` es ordenado y emitirlo bien no cuesta nada.
-- **`xsi:type` y `<rating>99</rating>` en cada `<result>`.** `resultType` es
+- **`xsi:type` y `<rating>` en cada `<result>`.** `resultType` es
   abstracto y `rating` es obligatorio en `findingsDeepSkyType`; 99 es
-  «desconocido», que es la verdad. AstroPlanner no los emite y los ignora.
+  «desconocido», que es la verdad de lo visto (no registramos la escala 1–5).
+  AstroPlanner no los emite y los ignora. El resultado de un intento fallido
+  viaja en el mismo `rating` (#401, tabla de abajo).
 - **`<session>` en cada observación, siempre.** El estándar la deja opcional y
   AstroPlanner no la escribe nunca —aunque su importador sí la lee—. La noche es
   la unidad del modelo: perderla es perder el concepto central de la bitácora.
@@ -129,6 +131,27 @@ observadores es por nombre normalizado.
 una observación es un objeto con un tubo y un ocular—, todas de la misma noche y
 el mismo objeto. Al volver, el importador las funde otra vez en una. El atributo
 `id` de cada elemento tiene que ser único dentro del fichero.
+
+### El resultado en `<rating>` (#401)
+
+El XSD 2.1 restringe `rating` al enumerado 1–7 y 99 «según la escala de la Deep
+Sky Liste» y no trae rótulos. Verificados en la fuente primaria (Deep Sky Liste,
+VdS Fachgruppe Deep-Sky, <https://deepsky.vdsastro.de/en/project-deep-sky-list.php>,
+escala de objetos difusos): 1 «very easy, obvious» · 2 «easily visible direct
+vision» · 3 «barely seen direct vision» · 4 «averted vision needed» · 5 «barely
+visible averted vision» · **6 «visibility doubtful»** · **7 «not seen»**. Esa
+página no define el 99; lo define el XSD («unknown»).
+
+| `resultado` | `<rating>` | Al importar |
+|---|---|---|
+| `visto` | 99 | 1–5, 99 o sin `rating` → `visto` |
+| `detectado_no_visto` | 6 | 6 → `detectado_no_visto` |
+| `no_visto` | 7 | 7 → `no_visto` |
+
+El motivo abre `<description>`: «Explorado – no confirmado · detectado · Luna»,
+una línea, y el texto del observador debajo. Al importar, esa primera línea se
+lee (da el `motivo_no_visto`) y se quita de la descripción, para que reexportar
+no la duplique. Lo escribe solo el motor (ADR 0003).
 
 ## Cerrar el ciclo
 
