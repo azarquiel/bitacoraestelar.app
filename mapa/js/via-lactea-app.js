@@ -2717,9 +2717,11 @@
       // visitados: son las escalas de la travesía, no observaciones ajenas.
       a.classList.toggle('mw-no-visitado',
         VLO.atenuadoPorObservador(id) && !viajeActivo);
-      // Explorado y no confirmado: triángulo hueco, a color entero.
-      a.classList.toggle('mw-explorado',
-        VLO.simboloDe(id) === 'triangulo' && !viajeActivo);
+      // Explorado y no confirmado: triángulo hueco, a color entero. También en
+      // un viaje (como en los lienzos): es un hecho de la observación, no la
+      // atenuación de lo ajeno. Nunca coincide con mw-no-visitado: simboloDe
+      // solo da anillo si el resultado es no_visitado.
+      a.classList.toggle('mw-explorado', VLO.simboloDe(id) === 'triangulo');
     }
   }
 

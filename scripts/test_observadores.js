@@ -217,5 +217,20 @@ eq(trazos.join(''), 'ba', 'trazarSimbolo anillo: un arco');
 VLO.setActivo('');
 VLO.setEstado('visitados');
 
+console.log('triángulo y atenuado nunca coinciden (#397):');
+['israel', 'ana', ''].forEach(function (quien) {
+  ['todo', 'visitados', 'noconfirmados', 'porvisitar'].forEach(function (est) {
+    VLO.setActivo(quien);
+    VLO.setEstado(est);
+    ['a', 'b', 'c', 'd', 'e'].forEach(function (id) {
+      if (VLO.simboloDe(id) === 'triangulo') {
+        eq(VLO.atenuadoPorObservador(id), false, 'triángulo sin atenuar (' + id + ', ' + (quien || 'todas') + ', ' + est + ')');
+      }
+    });
+  });
+});
+VLO.setActivo('');
+VLO.setEstado('visitados');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');
