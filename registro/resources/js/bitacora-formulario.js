@@ -443,7 +443,47 @@
       lastComputed.sunAlt=astro.sunAlt; lastComputed.moonAlt=astro.moonAlt;
       lastComputed.fechaHoraLocal=astro.fechaHoraLocal; lastComputed.fechaHoraUTC=astro.fechaHoraUTC;
     }
+    Object.assign(lastComputed, BitacoraBase.serializarResultado(resultadoEstado));
     submitBtn.disabled=false;
+  }
+
+  // ── Resultado: Visto / No visto (#395) ──
+  // El estado vive en resultadoEstado (la lógica, en BitacoraBase) y los radios
+  // solo lo pintan. Los campos de «No visto» se ocultan con `hidden`, sin
+  // animación ni foco movido, y siguen en el DOM: volver a «Visto» y de nuevo a
+  // «No visto» no pierde lo marcado, y al guardar solo viaja lo que diga el estado.
+  var resultadoBloque=$('resultadoBloque'), noVistoCampos=$('noVistoCampos');
+  var resultadoEstado=BitacoraBase.resultadoInicial();
+  function radioResultado(nombre,valor){
+    return resultadoBloque.querySelector('input[name="'+nombre+'"][value="'+valor+'"]');
+  }
+  function pintarResultado(){
+    if(!resultadoBloque) return;
+    var est=resultadoEstado, t=BitacoraBase.textosResultado(est.visto, !!editandoId);
+    radioResultado('resultado', est.visto?'visto':'no_visto').checked=true;
+    radioResultado('subtipo', est.subtipo).checked=true;
+    var marcado=resultadoBloque.querySelector('input[name="motivo"]:checked');
+    if(marcado) marcado.checked=false;
+    if(est.motivo) radioResultado('motivo', est.motivo).checked=true;
+    noVistoCampos.hidden=est.visto;
+    radioResultado('resultado','no_visto').setAttribute('aria-expanded', String(!est.visto));
+    submitBtn.textContent=t.boton;
+    if($('tituloOculares')) $('tituloOculares').textContent=t.tituloOculares;
+    if($('ayudaExploracion')) $('ayudaExploracion').textContent=t.ayudaExploracion;
+  }
+  function aplicarResultado(est){ resultadoEstado=est; pintarResultado(); recompute(); }
+  if(resultadoBloque){
+    resultadoBloque.addEventListener('click',function(e){
+      var i=e.target;
+      if(!i || i.tagName!=='INPUT') return;
+      if(i.name==='motivo'){
+        // Un radio no se desmarca solo: otro clic sobre el marcado lo quita.
+        resultadoEstado.motivo = (resultadoEstado.motivo===i.value) ? null : i.value;
+      } else if(i.name==='subtipo'){ resultadoEstado.subtipo=i.value; }
+      else if(i.name==='resultado'){ resultadoEstado.visto=(i.value==='visto'); }
+      else return;
+      pintarResultado(); recompute();
+    });
   }
   $('observer').addEventListener('input',recompute);
   if($('fechaObs')) $('fechaObs').addEventListener('change',recompute);
@@ -905,6 +945,7 @@
         if(sub) sub.textContent = rotulosCrear.sub;
       }
     }
+    pintarResultado();   // el botón de crear depende del resultado, no del que había
     return origen;
   }
 
@@ -973,7 +1014,9 @@
       }
     }
 
-    recompute();
+    // Resultado: al editar, el guardado; al derivar de un fallo (reintentarlo),
+    // de vuelta a «Visto» y sin motivo.
+    aplicarResultado(BitacoraBase.resultadoDeObservacion(obs, !!derivandoId));
     // Si la flota ya está cargada, preselecciona telescopio/oculares/auxiliares.
     sincronizarFlota();
   }
@@ -1014,6 +1057,7 @@
   }
 
   aplicarModoEdicion();
+  pintarResultado();
   cargarParaEditar();
   cargarFlota();   // carga el equipo del observador y puebla los selectores
   cargarBases();   // carga las bases (mías + públicas + compartidas) del selector
@@ -1792,9 +1836,10 @@
     .then(function(res){
       submitBtn.disabled=false;
       if(res.ok && res.data && res.data.ok){
-        var txt = editando
-          ? '✓ Cambios guardados en la observación nº ' + res.data.id + '.'
-          : '✓ Observación guardada (registro nº ' + res.data.id + ').';
+        var txt = '✓ ' + BitacoraBase.avisoGuardado(payload.resultado==='visto', res.data.id, editando);
+        if(payload.resultado!=='visto'){
+          txt += ' <a href="' + BitacoraBase.urlMapa(res.data.objeto || payload.objeto) + '">Ver en el mapa</a>';
+        }
         // Si el objeto no se pudo colocar en el mapa (p. ej. ninguna base de datos
         // tiene su distancia), se guarda igual, se avisa y se ofrece escribir a
         // mano lo que falta, que es lo único que separa al objeto del mapa.
@@ -1946,6 +1991,10 @@
       });
     }
     mostrarEncadenar(false);
+    // Otro objeto, otro resultado: nace «Visto» y sin motivo (también al derivar
+    // de un fallo, que es el flujo de reintentarlo).
+    resultadoEstado = BitacoraBase.resultadoInicial();
+    pintarResultado();
     // La distancia pendiente es del objeto que se acaba de guardar, no del que
     // viene: arrastrar la caja abierta la dejaría situando el objeto equivocado.
     if(distCaja) distCaja.hidden = true;

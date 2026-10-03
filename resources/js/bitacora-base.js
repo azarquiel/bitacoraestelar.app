@@ -526,6 +526,65 @@ window.BitacoraBase = (function () {
     };
   }
 
+  // ── Resultado de la observación: «Visto» o «Explorado – no confirmado» (#395) ──
+  // Fuente única de la serialización, el reseteo y los textos del formulario. Los
+  // valores y los ocho motivos son los de la lista cerrada del servidor
+  // (bitacora_validar_resultado); scripts/test_resultado_formulario.js los compara.
+  // El estado es { visto, subtipo, motivo }: subtipo y motivo se conservan aunque
+  // visto sea true (volver a «Visto» por error no los pierde) y es la serialización
+  // la que decide qué viaja.
+  var MOTIVOS_NO_VISTO = [
+    { valor: 'nubes', etiqueta: 'Nubes o transparencia' },
+    { valor: 'contaminacion', etiqueta: 'Contaminación lumínica' },
+    { valor: 'luna', etiqueta: 'Luna' },
+    { valor: 'bajo', etiqueta: 'Objeto bajo u obstáculo' },
+    { valor: 'seeing', etiqueta: 'Seeing' },
+    { valor: 'apertura', etiqueta: 'Apertura insuficiente' },
+    { valor: 'no_localizado', etiqueta: 'No localizado' },
+    { valor: 'otro', etiqueta: 'Otro' }
+  ];
+
+  function resultadoInicial() {
+    return { visto: true, subtipo: 'no_visto', motivo: null };
+  }
+
+  // derivando: copiar de un fallo no hereda el resultado ni el motivo.
+  function resultadoDeObservacion(obs, derivando) {
+    var r = obs && obs.resultado;
+    if (derivando || (r !== 'no_visto' && r !== 'detectado_no_visto')) return resultadoInicial();
+    return { visto: false, subtipo: r, motivo: obs.motivo_no_visto || null };
+  }
+
+  function serializarResultado(est) {
+    est = est || resultadoInicial();
+    if (est.visto) return { resultado: 'visto', motivo_no_visto: null };
+    return {
+      resultado: est.subtipo === 'detectado_no_visto' ? 'detectado_no_visto' : 'no_visto',
+      motivo_no_visto: est.motivo || null
+    };
+  }
+
+  function textosResultado(visto, editando) {
+    return {
+      boton: editando ? 'Guardar cambios'
+        : (visto ? 'Guardar observación' : 'Guardar exploración no confirmada'),
+      tituloOculares: visto ? 'Lo que viste, por ocular' : 'Qué probaste (opcional)',
+      ayudaExploracion: visto
+        ? 'Síntesis de la observación o los retos a los que se enfrenta el observador. No lleva datos de ocular.'
+        : 'Cuenta qué probaste: aumentos, filtros y método de búsqueda (cartas, salto de estrellas…). No lleva datos de ocular.'
+    };
+  }
+
+  function avisoGuardado(visto, id, editando) {
+    if (editando) return 'Cambios guardados en la observación nº ' + id + '.';
+    return (visto ? 'Observación guardada' : 'Exploración no confirmada guardada') + ' (registro nº ' + id + ').';
+  }
+
+  // ponytail: el mapa aún no lee ?objeto= (lo traen #397/#398); hasta entonces el enlace abre el mapa a secas.
+  function urlMapa(objeto) {
+    return '/mapa.html?objeto=' + encodeURIComponent(objeto || '');
+  }
+
   // ── Parsers/formatos de coordenadas ecuatoriales (RA/Dec) ──
   // Fuente única, compartida por el registro y el simulador de ocular. RA en
   // grados internamente. Aceptan sexagesimal ("21h 40m 22s" / "21 40 22" /
@@ -765,6 +824,13 @@ window.BitacoraBase = (function () {
     lugarDeObservacion: lugarDeObservacion,
     sumarMinutos: sumarMinutos,
     siguienteObjeto: siguienteObjeto,
+    MOTIVOS_NO_VISTO: MOTIVOS_NO_VISTO,
+    resultadoInicial: resultadoInicial,
+    resultadoDeObservacion: resultadoDeObservacion,
+    serializarResultado: serializarResultado,
+    textosResultado: textosResultado,
+    avisoGuardado: avisoGuardado,
+    urlMapa: urlMapa,
     parseRA: parseRA,
     parseDec: parseDec,
     formatRA: formatRA,
