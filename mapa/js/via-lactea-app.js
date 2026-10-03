@@ -2176,6 +2176,7 @@
   function selectFichaEntry(f, idx) {
     fichaCurrent = idx;
     var entry = f.entries[idx];
+    if (!entry) { fichaImgTitle.style.display = 'none'; fichaText.innerHTML = barraEstelar(f); return; }
     if (entry.img) {
       fichaImgTitle.textContent = entry.titulo + ' (' + entry.boton + ')';
       fichaImgTitle.style.display = '';
@@ -2441,7 +2442,14 @@
     isDragging = false;
     isPinching = false;
     hideHint();
-    selectFichaEntry(f, f.defaultIndex || 0);
+    // Un intento no confirmado se abre en su nota de «Exploración» (#399).
+    var abrir = f.defaultIndex || 0;
+    if (f.resultado && f.resultado !== 'visto') {
+      for (var k = 0; k < f.entries.length; k++) {
+        if (f.entries[k].boton === 'Exploración') { abrir = k; break; }
+      }
+    }
+    selectFichaEntry(f, abrir);
   }
 
   function openFicha(id, dot) {
@@ -2516,9 +2524,11 @@
     // La nave se rotula con el mismo BitacoraEquipo que la ficha, así que dice lo
     // mismo aquí y dentro. El nombre del viaje no pinta nada aquí.
     var otras = ctx.sinOtras ? [] : VLViaje.otrasObservaciones(id, ctx.excluir);
+    // El balance cuenta TODOS los intentos, también el de la fila de la que se viene.
+    var todas = ctx.sinOtras ? [] : VLViaje.otrasObservaciones(id, null);
     var nConf = 0;
-    otras.forEach(function (o) { if (o.visto) nConf++; });
-    var nFallos = otras.length - nConf;
+    todas.forEach(function (o) { if (o.visto) nConf++; });
+    var nFallos = todas.length - nConf;
     var items = otras.map(function (o) {
       var nave = rotuloNave(o);
       var cielo = o.bortle ? 'Bortle ' + o.bortle
