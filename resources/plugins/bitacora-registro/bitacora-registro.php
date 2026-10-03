@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.2
+ * Version:     1.38.3
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.2' );
+define( 'BITACORA_VERSION', '1.38.3' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -5691,6 +5691,9 @@ function bitacora_generar_ficha_interno( WP_REST_Request $peticion ) {
 /**
  * Lista las observaciones. Por defecto excluye las borradas.
  * Acepta ?borradas=1 para ver la papelera, y ?mias=1 para filtrar por autor.
+ * ?resultado=no_confirmado trae los intentos fallidos (detectado_no_visto y
+ * no_visto) y marca en cada uno "confirmado_despues" si el mismo observador vio
+ * ese objeto más tarde; con ?solo_pendientes=1 se omiten los ya confirmados (#400).
  *
  * Añade a cada fila el campo "mia": si el usuario actual puede editarla/borrarla.
  * La interfaz lo usa para mostrar u ocultar botones, pero el permiso REAL
@@ -5722,6 +5725,22 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
         $params[] = $filtro_observador;
     }
 
+    // Misma regla que el recuento del viaje (#396): un intento sin confirmar es
+    // 'detectado_no_visto' o 'no_visto'. Lo "pendiente de verdad" es lo que ese
+    // observador no ha visto después: se resuelve en SQL para que el límite de
+    // 200 cuente filas ya filtradas.
+    $extra = '0 AS confirmado_despues';
+    if ( 'no_confirmado' === (string) $peticion->get_param( 'resultado' ) ) {
+        $where .= " AND o.resultado IN ('detectado_no_visto','no_visto')";
+        $existe = "EXISTS ( SELECT 1 FROM $tabla v WHERE v.objeto = o.objeto AND v.observador_id = o.observador_id
+                   AND v.resultado = 'visto' AND v.borrada_en IS NULL
+                   AND v.fecha_observacion > o.fecha_observacion )";
+        $extra  = "$existe AS confirmado_despues";
+        if ( '1' === (string) $peticion->get_param( 'solo_pendientes' ) ) {
+            $where .= " AND NOT $existe";
+        }
+    }
+
     // Los objetos de un viaje concreto, para la ficha del viaje y para llegar
     // desde una observación al resto de su noche.
     $filtro_viaje = intval( $peticion->get_param( 'viaje' ) );
@@ -5737,7 +5756,7 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
     // solo viajan los datos. LEFT JOIN: observación sin telescopio de flota (las
     // viejas, escritas a mano) sigue listándose con su texto libre.
     $t_tel = bitacora_nombre_tabla_telescopios();
-    $sql = "SELECT o.*, t.nombre AS tel_nombre, t.vendor AS tel_vendor, t.modelo AS tel_modelo
+    $sql = "SELECT o.*, t.nombre AS tel_nombre, t.vendor AS tel_vendor, t.modelo AS tel_modelo, $extra
             FROM $tabla o LEFT JOIN $t_tel t ON t.id = o.telescopio_id
             WHERE $where ORDER BY o.creado_en DESC, o.id DESC LIMIT 200";
     if ( $params ) {
@@ -5747,6 +5766,7 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
 
     foreach ( $filas as $f ) {
         $f->mia = ( intval( $f->usuario_id ) === $usuario );
+        $f->confirmado_despues = (bool) intval( $f->confirmado_despues );
     }
 
     return new WP_REST_Response( $filas, 200 );

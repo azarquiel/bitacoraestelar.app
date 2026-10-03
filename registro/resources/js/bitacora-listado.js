@@ -41,12 +41,25 @@
     return { porViaje: porViaje, sin: sin };
   }
 
+  // Detalle de un intento fallido (#400): cielo, subtipo y motivo, en una línea.
+  // `motivos` es BitacoraBase.MOTIVOS_NO_VISTO; sin él se queda el valor crudo.
+  function detalleNoConfirmado(obs, motivos) {
+    var p = [];
+    if (obs.cielo_bortle) p.push('Bortle ' + obs.cielo_bortle);
+    else if (obs.cielo_sqm) p.push('SQM ' + obs.cielo_sqm);
+    if (obs.resultado === 'detectado_no_visto') p.push('detectado');
+    var m = (motivos || []).filter(function (x) { return x.valor === obs.motivo_no_visto; })[0];
+    if (obs.motivo_no_visto) p.push(m ? m.etiqueta : obs.motivo_no_visto);
+    return p.join(' · ');
+  }
+
   // Las funciones puras se publican ANTES de tocar el DOM: así las puede cargar
   // un test de Node (scripts/test_listado_unificado.js) con un `window` de
   // mentira y sin navegador. arrancar() le añade luego el resto del módulo.
   window.BitacoraListado = {
     filtrarPorNombre: filtrarPorNombre,
-    repartirPorViaje: repartirPorViaje
+    repartirPorViaje: repartirPorViaje,
+    detalleNoConfirmado: detalleNoConfirmado
   };
 
   if (typeof document === 'undefined') { return; }   // corriendo bajo Node
@@ -68,6 +81,9 @@
       var tabActivas = $('tabActivas');
       var tabPapelera = $('tabPapelera');
       var tabViajes = $('tabViajes');
+      var tabNoConf = $('tabNoConf');
+      var barraNoConf = $('barraNoConf');
+      var ncPendientes = $('ncPendientes');
       var buscador = $('buscador');
       var buscadorCaja = $('buscadorCaja');
 
@@ -78,6 +94,8 @@
       var URL_FICHA = (contenedor && contenedor.getAttribute('data-ficha')) || '/datos-de-ficha/';
 
       var viendoPapelera = false;
+      var viendoNoConf = false;
+      var alcanceNoConf = 'mias';   // 'mias' | 'todos'
       // Lo último pintado en la pestaña plana, para poder refiltrarlo al
       // teclear en el buscador sin volver a pedirlo al servidor.
       var ultimasFilas = [];
@@ -159,6 +177,7 @@
           if (q.trim()) {
             mostrarMensaje('Ningún objeto coincide con «' + q.trim() + '».');
           } else {
+            if (viendoNoConf) { mensajeVacioNoConf(); return; }
             mostrarMensaje(viendoPapelera
               ? 'La papelera está vacía.'
               : 'Todavía no hay observaciones registradas.');
@@ -170,6 +189,13 @@
         vistas.forEach(function (obs) {
           cards.appendChild(crearTarjeta(obs));
         });
+      }
+
+      // Vacío útil: dice qué falta y ofrece el otro alcance con un clic.
+      function mensajeVacioNoConf() {
+        if (alcanceNoConf === 'todos') { mostrarMensaje('Nadie tiene exploraciones no confirmadas.'); return; }
+        cards.innerHTML = '<div class="msg">No tienes exploraciones no confirmadas. ' +
+          '<button type="button" class="act" data-nc-alcance="todos">Ver las de todos</button></div>';
       }
 
       // Cabecera de un grupo sin viaje propio ("Sin viaje", "Sin viaje
@@ -215,11 +241,21 @@
           '<div class="meta">' +
             '<div class="who">' + esc(obs.observador) + telescopioDe(obs) + '</div>' +
             '<div class="when">' + fmtFecha(obs.fecha_observacion) + '</div>' +
+            lineaNoConfirmado(obs) +
           '</div>' +
           '<div class="acts">' + acciones + '</div>';
 
         conectarAcciones(card, obs);
         return card;
+      }
+
+      // Solo en el filtro «no confirmados»: cielo, subtipo, motivo y, si el mismo
+      // observador lo vio después, la marca «confirmado después».
+      function lineaNoConfirmado(obs) {
+        if (!viendoNoConf) return '';
+        var t = detalleNoConfirmado(obs, window.BitacoraBase && BitacoraBase.MOTIVOS_NO_VISTO);
+        if (obs.confirmado_despues) t += (t ? ' · ' : '') + 'confirmado después';
+        return t ? '<div class="when">' + esc(t) + '</div>' : '';
       }
 
       function accionesDe(obs, enPapelera) {
@@ -425,7 +461,13 @@
         mostrarMensaje('Cargando observaciones…');
         // La papelera es otra consulta (solo las borradas) y no se cachea: se
         // visita poco y su contenido cambia justo cuando se restaura algo.
-        var filas = viendoPapelera
+        var filas = viendoNoConf
+          ? api(WP.endpoint + '?resultado=no_confirmado' + (alcanceNoConf === 'mias' ? '&mias=1' : '') +
+                (ncPendientes && ncPendientes.checked ? '&solo_pendientes=1' : '')).then(function (res) {
+              if (!res.ok) { throw mensajeError(res, 'No se pudieron cargar las observaciones'); }
+              return Array.isArray(res.data) ? res.data : [];
+            })
+          : viendoPapelera
           ? api(WP.endpoint + '?mias=1&borradas=1').then(function (res) {
               if (!res.ok) { throw mensajeError(res, 'No se pudieron cargar las observaciones'); }
               return Array.isArray(res.data) ? res.data : [];
@@ -442,6 +484,9 @@
       // de salidas. Cada uno escucha los mismos botones y hace su mitad.
       function cambiarPestana(cual) {
         viendoPapelera = (cual === 'papelera');
+        viendoNoConf = (cual === 'noconf');
+        if (tabNoConf) tabNoConf.classList.toggle('active', viendoNoConf);
+        if (barraNoConf) barraNoConf.hidden = !viendoNoConf;
         tabActivas.classList.toggle('active', cual === 'activas');
         tabPapelera.classList.toggle('active', cual === 'papelera');
         if (tabViajes) tabViajes.classList.toggle('active', cual === 'viajes');
@@ -457,6 +502,23 @@
 
       tabActivas.addEventListener('click', function () { cambiarPestana('activas'); });
       tabPapelera.addEventListener('click', function () { cambiarPestana('papelera'); });
+      if (tabNoConf) {
+        tabNoConf.addEventListener('click', function () { cambiarPestana('noconf'); });
+      }
+      // Alcance «míos / de todos» y «solo pendientes»: delegado en la barra y en
+      // el aviso de vacío, que se repinta.
+      function elegirAlcance(a) {
+        alcanceNoConf = a;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-nc-alcance]'), function (b) {
+          b.classList.toggle('active', b.getAttribute('data-nc-alcance') === a);
+        });
+        cargar();
+      }
+      document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-nc-alcance]');
+        if (b && viendoNoConf) elegirAlcance(b.getAttribute('data-nc-alcance'));
+      });
+      if (ncPendientes) ncPendientes.addEventListener('change', cargar);
       if (tabViajes) {
         tabViajes.addEventListener('click', function () { cambiarPestana('viajes'); });
       }
