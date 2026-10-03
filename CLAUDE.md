@@ -40,8 +40,9 @@
 
 En este proyecto, usar en cada sesión:
 
-- skill `caveman` en modo **ultra** (`/caveman ultra`)
+- skill `caveman` en modo **full** (`/caveman full`)
 - skill `ponytail` en modo **ultra** (`/ponytail ultra`)
+- skill `i-have-adhd:i-have-adhd` activa (`/i-have-adhd:i-have-adhd`)
 
 ## Agent skills
 
