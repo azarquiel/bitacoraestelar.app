@@ -31,6 +31,37 @@ define( 'BITACORA_OAL_MAX_BYTES', 8 * 1024 * 1024 );
 define( 'BITACORA_OAL_NS_BIT', 'https://bitacoraestelar.es/oal-ext/1' );
 
 /**
+ * El resultado de una observación según su <rating> (#401): 7 «not seen» y 6
+ * «visibility doubtful» de la Deep Sky Liste son un fallo; 1–5, 99 o nada, visto.
+ * Si es un fallo, la primera línea de la descripción es el motivo que escribió
+ * el motor («Explorado – no confirmado · detectado · Luna»): se lee y se quita,
+ * para que reexportar no la ponga dos veces.
+ *
+ * @return array{resultado:string,motivo:string,descripcion:string}
+ */
+function bitacora_oal_fallo( $rating, $descripcion ) {
+    $resultado = array( '7' => 'no_visto', '6' => 'detectado_no_visto' );
+    $r = isset( $resultado[ trim( $rating ) ] ) ? $resultado[ trim( $rating ) ] : 'visto';
+    $motivo = '';
+    if ( 'visto' !== $r
+        && preg_match( '/^Explorado \x{2013} no confirmado([^\n]*)\n?/u', $descripcion, $m ) ) {
+        // Las etiquetas son las de BitacoraBase.MOTIVOS_NO_VISTO (y del motor).
+        $etiquetas = array(
+            'Nubes o transparencia' => 'nubes', 'Contaminación lumínica' => 'contaminacion',
+            'Luna' => 'luna', 'Objeto bajo u obstáculo' => 'bajo', 'Seeing' => 'seeing',
+            'Apertura insuficiente' => 'apertura', 'No localizado' => 'no_localizado', 'Otro' => 'otro',
+        );
+        foreach ( explode( ' · ', $m[1] ) as $trozo ) {
+            if ( isset( $etiquetas[ trim( $trozo ) ] ) ) {
+                $motivo = $etiquetas[ trim( $trozo ) ];
+            }
+        }
+        $descripcion = substr( $descripcion, strlen( $m[0] ) );
+    }
+    return array( 'resultado' => $r, 'motivo' => $motivo, 'descripcion' => $descripcion );
+}
+
+/**
  * Lee el XML de la plantilla y devuelve su contenido ya normalizado.
  *
  * @param string $xml El fichero entero.
@@ -171,6 +202,8 @@ function bitacora_oal_leer( $xml ) {
         }
         $inst   = bitacora_oal_instante( bitacora_oal_texto( $n, 'begin' ) );
         $result = bitacora_oal_hijo( $n, 'result' );
+        $fallo  = bitacora_oal_fallo( $result ? bitacora_oal_texto( $result, 'rating' ) : '',
+                                      $result ? bitacora_oal_texto( $result, 'description' ) : '' );
         // Quién firma ESTA observación: en una salida con tripulación no tiene
         // por qué ser el dueño del fichero, y perderlo atribuiría al dueño lo
         // que vio otro.
@@ -193,7 +226,9 @@ function bitacora_oal_leer( $xml ) {
             'ir'          => bitacora_oal_numero( $n, 'ir' ),
             'seeing'      => bitacora_oal_numero( $n, 'seeing' ),
             'bortle'      => bitacora_oal_numero( $n, 'bortle' ),
-            'descripcion' => $result ? bitacora_oal_texto( $result, 'description' ) : '',
+            'descripcion' => $fallo['descripcion'],
+            'resultado'   => $fallo['resultado'],
+            'motivo'      => $fallo['motivo'],
         );
     }
 
@@ -534,7 +569,14 @@ function bitacora_oal_agrupar( $datos ) {
                 'seeing'   => null,
                 'bortle'   => null,
                 'entradas' => array(),
+                'resultado' => isset( $o['resultado'] ) ? $o['resultado'] : 'visto',
+                'motivo'   => isset( $o['motivo'] ) ? $o['motivo'] : '',
             );
+        }
+        // Basta una entrada vista para que la observación lo esté.
+        if ( ! isset( $o['resultado'] ) || 'visto' === $o['resultado'] ) {
+            $grupos[ $clave ]['resultado'] = 'visto';
+            $grupos[ $clave ]['motivo']    = '';
         }
         // El cielo de la observación es el de la primera hermana que lo midió:
         // son el mismo objeto la misma noche, así que miran al mismo sitio.
@@ -892,6 +934,8 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
             'cielo_ir'          => $g['ir'],
             'cielo_bortle'      => ( null === $g['bortle'] ) ? null : intval( $g['bortle'] ),
             'seeing'            => ( null === $g['seeing'] ) ? null : intval( $g['seeing'] ),
+            'resultado'         => $g['resultado'],
+            'motivo_no_visto'   => '' !== $g['motivo'] ? $g['motivo'] : null,
             'origen'            => 'oal',
             'oal_id'            => $g['oal_id'],
             'usuario_id'        => $usuario_id,

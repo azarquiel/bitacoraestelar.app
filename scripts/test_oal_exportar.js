@@ -131,6 +131,16 @@ eq(cuantas(xml, /<session>n42<\/session>/g), 4, 'todas dicen de qué noche son')
 console.log('el <result> se puede instanciar y la noche no se pierde:');
 eq(cuantas(xml, /<result xsi:type="oal:findingsDeepSkyType">/g), 4, 'cada result con su xsi:type');
 eq(cuantas(xml, /<rating>99<\/rating>/g), 4, 'y su rating 99 («desconocido», que es la verdad)');
+// #401: un fallo sale con la escala de la Deep Sky Liste y el motivo al frente.
+var fx = estado();
+fx.observaciones[0].resultado = 'detectado_no_visto'; fx.observaciones[0].motivo = 'luna';
+fx.observaciones[1].resultado = 'no_visto'; fx.observaciones[1].texto = '';
+var xf = OAL.xmlDe(fx);
+eq(cuantas(xf, /<rating>6<\/rating>/g), 1, 'detectado_no_visto sale con rating 6');
+eq(cuantas(xf, /<rating>7<\/rating>/g), 1, 'no_visto sale con rating 7');
+eq(cuantas(xf, /<rating>99<\/rating>/g), 2, 'y lo visto sigue en 99');
+ok(xf.indexOf('<description>Explorado – no confirmado · detectado · Luna\n') > -1, 'el motivo abre la descripción, antes del texto');
+ok(xf.indexOf('<description>Explorado – no confirmado</description><rating>7') > -1, 'sin texto, la descripción es solo el estado');
 ok(xml.indexOf('<begin>2026-08-06T02:15:00+02:00</begin>') > -1,
    'los instantes llevan el desfase local, no Z, y la madrugada su fecha de reloj');
 var orden = /<observation id="obs11-1">([\s\S]*?)<\/observation>/.exec(xml)[1];

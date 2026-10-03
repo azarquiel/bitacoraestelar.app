@@ -530,11 +530,16 @@
       s.push('    ' + etiqueta('magnification', aum));
       // resultType es ABSTRACTO: sin xsi:type el elemento no se puede instanciar.
       // Se emite siempre el de cielo profundo —también para una variable, que es
-      // el único otro target que sale de aquí— porque es el que lleva <rating>, y
-      // 99 es «desconocido», que es la verdad: aquí nadie puntúa lo que ve.
+      // el único otro target que sale de aquí— porque es el que lleva <rating>.
+      // 99 es «desconocido», que es la verdad de lo visto: aquí nadie puntúa lo
+      // que ve. Un fallo usa la escala de la Deep Sky Liste: 6 «visibility
+      // doubtful» (detectado) y 7 «not seen» (#401). El motivo abre la descripción.
       // AstroPlanner no emite ninguno de los dos y los ignora al leer.
+      var rating = o.resultado === 'no_visto' ? 7 : o.resultado === 'detectado_no_visto' ? 6 : 99;
+      var porque = fallo(o);
       s.push('    <result xsi:type="oal:findingsDeepSkyType">' +
-             etiqueta('description', o.texto) + '<rating>99</rating></result>');
+             etiqueta('description', porque && o.texto ? porque + '\n' + o.texto : porque || o.texto) +
+             '<rating>' + rating + '</rating></result>');
       s.push('    ' + etiqueta('bit:ir', o.ir));
       s.push('    ' + etiqueta('bit:bortle', o.bortle));
       s.push('  </observation>');
