@@ -17,6 +17,12 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 - **De dónde vino:** `origen` distingue `formulario` (normal), `oal` (importada) y `legacy` (migrada). No cambia el significado, solo las garantías.
 - **Apunta a otras entradas del glosario:** objeto mirado tiene o debería tener su [[objeto del mapa]]; el sitio, su [[base]] (vía el viaje); alturas y azimuts calculados, su [[astrometría de la sesión]]. Campo `tipo` de aquí es TIPO DE LA OBSERVACIÓN (cómo se identificó el objeto: `messier`, `carbono`, `otro`), homónimo peligroso del tipo del objeto del mapa: ver aviso en [[clasificación de objeto del mapa]].
 
+## Resultado de la observación
+
+**Explorado – no confirmado**: estado de un objeto que alguien ha intentado observar y no ha visto (épica #393). Cada observación guarda UN `resultado` (`{prefix}bitacora`): `visto` (defecto, y lo que leen todas las filas previas), `detectado_no_visto` (detectado pero no visto) o `no_visto` (claramente no visto). `motivo_no_visto` (`nubes`, `contaminacion`, `luna`, `bajo`, `seeing`, `apertura`, `no_localizado`, `otro`) es opcional y solo existe en un no visto. **Terminología heredada:** en el código previo, «explorado» a secas significaba «observado», porque toda fila contaba como vista (el eje «Explorados / Por explorar»); la épica lo renombra a «Confirmados».
+
+- **Lo valida el servidor, no el formulario.** `bitacora_validar_resultado()` rechaza con 400 un valor fuera de lista; sin `resultado` se guarda `visto`; pasar un fallo a `visto` pone `motivo_no_visto` a NULL aunque llegue informado; un no visto sin motivo se acepta (registro hecho deprisa).
+
 ## Tramo de audio
 
 **El trozo de un reportaje sonoro ajeno en que se habla del objeto de esta observación**: dónde está el audio, dónde empieza y dónde acaba. Cuelga de la [[observación]], no de la entrada: es de lo mirado, no de un ocular.

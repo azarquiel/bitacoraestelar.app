@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.37.2
+ * Version:     1.38.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.37.2' );
+define( 'BITACORA_VERSION', '1.38.0' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -523,6 +523,10 @@ function bitacora_crear_tabla() {
     bitacora_asegurar_columna( $tabla, 'audio_inicio', "int unsigned DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla, 'audio_fin', "int unsigned DEFAULT NULL" );
     bitacora_asegurar_columna( $tabla, 'audio_episodio_url', "varchar(255) NOT NULL DEFAULT ''" );
+    // Resultado de la observación (épica #393): hasta ahora cada fila contaba como
+    // vista. El DEFAULT hace que las previas lean 'visto' sin recorrer la tabla.
+    bitacora_asegurar_columna( $tabla, 'resultado', "varchar(24) NOT NULL DEFAULT 'visto'" );
+    bitacora_asegurar_columna( $tabla, 'motivo_no_visto', "varchar(24) DEFAULT NULL" );
     // Feed RSS del podcast del observador (issue #178): con ella, el fieldset de
     // audio ofrece un desplegable de episodios en vez de pegar las URLs a mano.
     bitacora_asegurar_columna( $tabla_observadores, 'feed_rss_url', "varchar(255) NOT NULL DEFAULT ''" );
@@ -1347,6 +1351,34 @@ function bitacora_validar_num( $valor, $min, $max, $campo ) {
 }
 
 /**
+ * Resultado de la observación y, si falló, su motivo. Sin resultado se guarda
+ * 'visto'; el motivo es opcional y solo existe en un no visto (pasar un fallo a
+ * visto lo borra aunque llegue informado).
+ *
+ * @return array|WP_Error array( 'resultado' => ..., 'motivo_no_visto' => ... )
+ */
+function bitacora_validar_resultado( $d ) {
+    $resultado = $d['resultado'] ?? 'visto';
+    if ( null === $resultado || '' === $resultado ) {
+        $resultado = 'visto';
+    }
+    if ( ! is_string( $resultado ) || ! in_array( $resultado, array( 'visto', 'detectado_no_visto', 'no_visto' ), true ) ) {
+        return new WP_Error( 'campo_invalido', "El resultado debe ser 'visto', 'detectado_no_visto' o 'no_visto'.", array( 'status' => 400 ) );
+    }
+    $motivo = $d['motivo_no_visto'] ?? null;
+    if ( '' === $motivo ) {
+        $motivo = null;
+    }
+    if ( null !== $motivo && ( ! is_string( $motivo ) || ! in_array( $motivo, array( 'nubes', 'contaminacion', 'luna', 'bajo', 'seeing', 'apertura', 'no_localizado', 'otro' ), true ) ) ) {
+        return new WP_Error( 'campo_invalido', 'El motivo del no visto no es uno de la lista.', array( 'status' => 400 ) );
+    }
+    return array(
+        'resultado'       => $resultado,
+        'motivo_no_visto' => 'visto' === $resultado ? null : $motivo,
+    );
+}
+
+/**
  * Valida y normaliza los datos de una observación recibidos del navegador.
  * La usan tanto la creación como la edición: una sola fuente de verdad.
  *
@@ -1484,6 +1516,11 @@ function bitacora_validar_datos( $d ) {
         }
     }
 
+    $res = bitacora_validar_resultado( $d );
+    if ( is_wp_error( $res ) ) {
+        return $res;
+    }
+
     // --- Tramo de audio (opcional): ADR 0005. Sin audio_url no hay tramo, aunque
     //     lleguen inicio/fin/episodio sueltos: se descartan junto con ella. ---
     $audio_url = isset( $d['audioUrl'] ) ? bitacora_sanitizar_url_https( $d['audioUrl'] ) : '';
@@ -1536,6 +1573,8 @@ function bitacora_validar_datos( $d ) {
         'audio_inicio'       => $audio_inicio,
         'audio_fin'          => $audio_fin,
         'audio_episodio_url' => $audio_episodio_url,
+        'resultado'          => $res['resultado'],
+        'motivo_no_visto'    => $res['motivo_no_visto'],
     );
 }
 
