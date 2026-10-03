@@ -134,6 +134,7 @@ ok( ids( $mios ) === array( 10, 12 ), 'combinado con mias deja los míos' );
 ok( ids( nc( array( 'resultado' => 'no_confirmado', 'observador' => '6' ) ) ) === array( 13 ), 'combinado con observador' );
 $por = array(); foreach ( $mios as $f ) { $por[ (int) $f->id ] = $f; }
 ok( true === $por[10]->confirmado_despues && false === $por[12]->confirmado_despues, 'el intento de marzo se marca confirmado después; el pendiente no' );
+ok( 11 === $por[10]->confirmado_id && '2026-05-01' === $por[10]->confirmado_fecha, 'lleva el id y la fecha de la confirmación' );
 ok( ids( nc( array( 'resultado' => 'no_confirmado', 'mias' => '1', 'solo_pendientes' => '1' ) ) ) === array( 12 ), 'solo_pendientes oculta el ya confirmado' );
 ok( 'luna' === $por[12]->motivo_no_visto && 'detectado_no_visto' === $por[12]->resultado, 'la fila lleva subtipo y motivo' );
 ok( count( nc( array() ) ) === 6, 'sin el filtro, el listado normal no cambia' );

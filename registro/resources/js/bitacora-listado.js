@@ -174,7 +174,7 @@
         var vistas = filtrarPorNombre(filas, q);
 
         if (!vistas.length) {
-          if (q.trim()) {
+          if (q.trim() && !(viendoNoConf && !filas.length)) {
             mostrarMensaje('Ningún objeto coincide con «' + q.trim() + '».');
           } else {
             if (viendoNoConf) { mensajeVacioNoConf(); return; }
@@ -249,13 +249,23 @@
         return card;
       }
 
+      // ▲ del mapa, decorativo: el texto «No confirmado» va al lado.
+      var TRIANGULO = '<svg aria-hidden="true" focusable="false" viewBox="0 0 10 10" width="10" height="10"' +
+        ' style="vertical-align:baseline;margin-right:3px"><path d="M5 1L9.3 8.5H.7Z" fill="none"' +
+        ' stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+
       // Solo en el filtro «no confirmados»: cielo, subtipo, motivo y, si el mismo
       // observador lo vio después, la marca «confirmado después».
       function lineaNoConfirmado(obs) {
         if (!viendoNoConf) return '';
         var t = detalleNoConfirmado(obs, window.BitacoraBase && BitacoraBase.MOTIVOS_NO_VISTO);
-        if (obs.confirmado_despues) t += (t ? ' · ' : '') + 'confirmado después';
-        return t ? '<div class="when">' + esc(t) + '</div>' : '';
+        var h = '<div class="when">' + TRIANGULO + 'No confirmado' + (t ? ' · ' + esc(t) : '') + '</div>';
+        if (obs.confirmado_despues) {
+          var url = obs.confirmado_id ? URL_FORM + '?editar=' + encodeURIComponent(obs.confirmado_id) : '';
+          var txt = '● Confirmado después' + (obs.confirmado_fecha ? ' · ' + fmtFecha(obs.confirmado_fecha) : '');
+          h += '<div class="when">' + (url ? '<a href="' + esc(url) + '">' + txt + '</a>' : txt) + '</div>';
+        }
+        return h;
       }
 
       function accionesDe(obs, enPapelera) {
@@ -502,13 +512,41 @@
 
       tabActivas.addEventListener('click', function () { cambiarPestana('activas'); });
       tabPapelera.addEventListener('click', function () { cambiarPestana('papelera'); });
+      // Enlace compartible: ?resultado=no_confirmado&alcance=todos. replaceState,
+      // para no llenar el historial de cada clic.
+      function sincronizarUrl() {
+        if (!window.history || !history.replaceState) return;
+        var u = new URL(location.href);
+        if (viendoNoConf) {
+          u.searchParams.set('resultado', 'no_confirmado');
+          u.searchParams.set('alcance', alcanceNoConf);
+        } else {
+          u.searchParams.delete('resultado');
+          u.searchParams.delete('alcance');
+        }
+        history.replaceState(null, '', u.toString());
+      }
+      // Recuento de los míos junto a la pestaña (una petición, al arrancar).
+      function contarNoConf() {
+        if (!tabNoConf) return;
+        api(WP.endpoint + '?resultado=no_confirmado&mias=1&solo_pendientes=1').then(function (res) {
+          if (res.ok && Array.isArray(res.data)) {
+            tabNoConf.textContent = 'Explorado – no confirmado (' + res.data.length + ')';
+          }
+        });
+      }
+      contarNoConf();
       if (tabNoConf) {
-        tabNoConf.addEventListener('click', function () { cambiarPestana('noconf'); });
+        tabNoConf.addEventListener('click', function () { cambiarPestana('noconf'); sincronizarUrl(); });
+        tabActivas.addEventListener('click', sincronizarUrl);
+        tabPapelera.addEventListener('click', sincronizarUrl);
+        if (tabViajes) tabViajes.addEventListener('click', sincronizarUrl);
       }
       // Alcance «míos / de todos» y «solo pendientes»: delegado en la barra y en
       // el aviso de vacío, que se repinta.
       function elegirAlcance(a) {
         alcanceNoConf = a;
+        sincronizarUrl();
         Array.prototype.forEach.call(document.querySelectorAll('[data-nc-alcance]'), function (b) {
           b.classList.toggle('active', b.getAttribute('data-nc-alcance') === a);
         });
@@ -545,8 +583,18 @@
 
       // La página abre por la pestaña de viajes, así que aquí no se carga nada
       // todavía: la lista plana se pide la primera vez que se entra en ella.
-      cards.hidden = !!tabViajes;
-      if (!tabViajes) cargar();
+      var qs = new URLSearchParams(location.search);
+      var entraNoConf = tabNoConf && qs.get('resultado') === 'no_confirmado';
+      if (entraNoConf) {
+        alcanceNoConf = qs.get('alcance') === 'todos' ? 'todos' : 'mias';
+        Array.prototype.forEach.call(document.querySelectorAll('[data-nc-alcance]'), function (b) {
+          b.classList.toggle('active', b.getAttribute('data-nc-alcance') === alcanceNoConf);
+        });
+        cambiarPestana('noconf');
+      } else {
+        cards.hidden = !!tabViajes;
+        if (!tabViajes) cargar();
+      }
 
     } catch (err) {
       console.error('[Bitácora] Error al iniciar el listado:', err);

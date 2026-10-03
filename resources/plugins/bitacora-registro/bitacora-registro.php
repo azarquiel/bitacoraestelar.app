@@ -5732,10 +5732,13 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
     $extra = '0 AS confirmado_despues';
     if ( 'no_confirmado' === (string) $peticion->get_param( 'resultado' ) ) {
         $where .= " AND o.resultado IN ('detectado_no_visto','no_visto')";
-        $existe = "EXISTS ( SELECT 1 FROM $tabla v WHERE v.objeto = o.objeto AND v.observador_id = o.observador_id
+        $conf   = "FROM $tabla v WHERE v.objeto = o.objeto AND v.observador_id = o.observador_id
                    AND v.resultado = 'visto' AND v.borrada_en IS NULL
-                   AND v.fecha_observacion > o.fecha_observacion )";
-        $extra  = "$existe AS confirmado_despues";
+                   AND v.fecha_observacion >= o.fecha_observacion";
+        $existe = "EXISTS ( SELECT 1 $conf )";
+        $extra  = "$existe AS confirmado_despues,
+                   ( SELECT v.id $conf ORDER BY v.fecha_observacion ASC, v.id ASC LIMIT 1 ) AS confirmado_id,
+                   ( SELECT v.fecha_observacion $conf ORDER BY v.fecha_observacion ASC, v.id ASC LIMIT 1 ) AS confirmado_fecha";
         if ( '1' === (string) $peticion->get_param( 'solo_pendientes' ) ) {
             $where .= " AND NOT $existe";
         }
