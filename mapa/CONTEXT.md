@@ -88,9 +88,7 @@ El símbolo es siempre el mismo —disco con anillo inclinado y satélite— y a
 
 ## Explorado – no confirmado
 
-**Explorado – no confirmado**: objeto que el observador buscó y no pudo confirmar (`resultado` = `detectado_no_visto` o `no_visto`), frente a lo **visto** (`resultado` = `visto`). Los tres valores de `resultado` viven en la [[observación]] (`{prefix}bitacora`): `visto` (confirmado; es el defecto y lo que leen todas las filas previas), `detectado_no_visto` (se intuyó o se detectó sin llegar a verlo con claridad) y `no_visto` (no se localizó). `motivo_no_visto` (`nubes`, `contaminacion`, `luna`, `bajo`, `seeing`, `apertura`, `no_localizado`, `otro`) es opcional y solo existe en un no visto. **Terminología heredada:** en el código previo a #393, «explorado» a secas significaba «observado», porque toda fila contaba como vista; ahora «explorado» abarca los tres resultados y «visto» es solo el confirmado. Épica #393.
-
-Hasta que el mapa lea `resultado`, el eje «Explorados / Por explorar» sigue contando toda observación como vista.
+**Explorado – no confirmado**: estado de un objeto que alguien ha intentado observar y no ha visto (épica #393). Cada observación guarda UN `resultado` (`{prefix}bitacora`): `visto` (defecto, y lo que leen todas las filas previas), `detectado_no_visto` (detectado pero no visto) o `no_visto` (claramente no visto). `motivo_no_visto` (`nubes`, `contaminacion`, `luna`, `bajo`, `seeing`, `apertura`, `no_localizado`, `otro`) es opcional y solo existe en un no visto. **Terminología heredada:** en el código previo, «explorado» a secas significaba «observado», porque toda fila contaba como vista (el eje «Explorados / Por explorar»); la épica lo renombra a «Confirmados».
 
 ## Vecindario solar (estrellas cercanas)
 
