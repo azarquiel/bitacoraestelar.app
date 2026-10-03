@@ -207,6 +207,15 @@ mudo.noches[0].cronica = '';
 ok(OAL.textoDe(mudo).indexOf('Enorme') === -1, 'sin descripciones no aparece ninguna frase');
 ok(OAL.textoDe(mudo).indexOf('<h3>M13</h3>\n<ul>\n<li>Ocular: Nagler 22mm') > -1, 'y la ficha sale igual, sin descripción');
 
+// #396: un intento fallido lleva su estado bajo el nombre; un visto no cambia.
+var fallido = estado();
+fallido.observaciones[0].resultado = 'detectado_no_visto';
+fallido.observaciones[0].motivo = 'luna';
+var cf = OAL.textoDe(fallido);
+ok(cf.indexOf('</h3>\n<p>Explorado – no confirmado · detectado · Luna</p>') > -1, 'el correo de un fallo dice «Explorado – no confirmado · detectado · Luna»');
+eq(cuantas(cf, /Explorado – no confirmado/g), 1, 'y solo el fallo lo lleva');
+ok(correo.indexOf('Explorado') === -1, 'el correo de lo visto no cambia');
+
 console.log('la descripción conserva sus párrafos:');
 var parrafos = estado();
 parrafos.observaciones = [parrafos.observaciones[0]];

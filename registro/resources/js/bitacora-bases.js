@@ -162,7 +162,7 @@
       if (b.lat != null && b.lon != null) specs.push(Number(b.lat).toFixed(4) + ', ' + Number(b.lon).toFixed(4));
       if (b.altitud_m != null && b.altitud_m !== '') specs.push(Math.round(b.altitud_m) + ' m');
       if (b.tz) specs.push(b.tz);
-      var meta = etiquetaVis(b.visibilidad) + ' · ' + b.n_observaciones + ' observación(es)';
+      var meta = etiquetaVis(b.visibilidad) + ' · ' + b.n_observaciones + ' observación(es)';  // solo las vistas (#396)
       if (!propia && b.dueno) meta += ' · de ' + esc(b.dueno);
       el.innerHTML =
         '<div class="bi-main">' +
@@ -177,7 +177,8 @@
       if (propia) {
         var bEd = boton('Editar', false); bEd.addEventListener('click', function () { editar(b); }); acts.appendChild(bEd);
         var bDel = boton('Borrar', true);
-        if (b.n_observaciones > 0) { bDel.disabled = true; bDel.title = 'Tiene observaciones asociadas: no se puede borrar.'; }
+        // El guardián cuenta TODAS las filas (n_filas): un intento fallido también bloquea.
+        if ((b.n_filas != null ? b.n_filas : b.n_observaciones) > 0) { bDel.disabled = true; bDel.title = 'Tiene observaciones asociadas: no se puede borrar.'; }
         else { bDel.addEventListener('click', function () { borrar(b); }); }
         acts.appendChild(bDel);
       }

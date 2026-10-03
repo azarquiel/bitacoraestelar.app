@@ -27,6 +27,17 @@
    try {
     var $ = function (id) { return document.getElementById(id); };
     var WP = window.BITACORA_WP || null;
+    // «5 confirmados · 2 no confirmados»; la segunda parte solo si hay fallos
+    // (#396). Con `conIcono` lleva el ▲ del mapa, decorativo (el texto va al lado).
+    var TRIANGULO = '<svg aria-hidden="true" focusable="false" viewBox="0 0 10 10" width="10" height="10"'
+      + ' style="vertical-align:baseline;margin-right:3px"><path d="M5 1L9.3 8.5H.7Z" fill="none"'
+      + ' stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+    function recuento(v, conIcono) {
+      var m = v.num_no_confirmados || 0;
+      var t = v.num_objetos + (v.num_objetos === 1 ? ' confirmado' : ' confirmados');
+      if (m) { t += ' · ' + (conIcono ? TRIANGULO : '') + m + (m === 1 ? ' no confirmado' : ' no confirmados'); }
+      return t;
+    }
     var esc = (window.BitacoraBase && BitacoraBase.esc)
       ? BitacoraBase.esc
       : function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
@@ -83,6 +94,9 @@
         return;
       }
       cont.innerHTML = viajes.map(function (v) {
+        // Con filas (vistas o no) hay algo que abrir, exportar o proteger del
+        // borrado; num_objetos cuenta solo lo visto (#396).
+        var filas = v.num_filas != null ? v.num_filas : v.num_objetos;
         var lugar = v.base_nombre ? esc(v.base_nombre) : 'sin lugar registrado';
         var horas = (v.comienzo || v.fin) ? (esc(v.comienzo || '?') + '–' + esc(v.fin || '?')) : '';
         // La ruta: los objetos visitados en el orden en que se observaron (lo
@@ -97,28 +111,28 @@
           + '<div class="vi-main">'
           + '<div class="vi-nom">' + esc(v.nombre || ('Viaje del ' + v.noche)) + '</div>'
           + '<div class="vi-specs">' + esc(v.noche) + ' · ' + lugar + (horas ? ' · ' + horas : '') + '</div>'
-          + '<div class="vi-meta">' + (v.num_objetos ? v.num_objetos + (v.num_objetos === 1 ? ' objeto' : ' objetos') : 'todavía sin objetos')
+          + '<div class="vi-meta">' + (filas ? recuento(v, true) : 'todavía sin objetos')
           + (v.meteo ? ' · ' + esc(v.meteo) : '') + '</div>'
           + ruta
           + '</div>'
           + '<div class="vi-acts">'
-          + (v.num_objetos
+          + (filas
               ? '<a class="vi-btn mapa" target="_blank" rel="noopener"'
                 + ' href="' + MAPA_URL + '?viaje=' + v.id + '">Ver en el mapa</a>'
               : '')
-          + (v.num_objetos
+          + (filas
               ? '<button type="button" class="vi-btn" data-accion="exportar"'
                 + ' title="Bajar esta salida en XML (OAL)">Exportar</button>'
                 + '<button type="button" class="vi-btn" data-accion="correo"'
                 + ' title="Abrir el correo de esta salida, ya compuesto">Correo</button>'
               : '')
           + '<button type="button" class="vi-btn" data-accion="editar">Editar</button>'
-          + '<button type="button" class="vi-btn danger" data-accion="borrar"' + (v.num_objetos ? ' disabled title="Tiene observaciones dentro"' : '') + '>Borrar</button>'
+          + '<button type="button" class="vi-btn danger" data-accion="borrar"' + (filas ? ' disabled title="Tiene observaciones dentro"' : '') + '>Borrar</button>'
           + '</div>'
           // Los objetos de la salida, plegados. La ficha de arriba no cambia:
           // el <details> va debajo, así que ninguno de sus botones queda dentro
           // de un <summary> (donde el clic los pisaría).
-          + (v.num_objetos
+          + (filas
               ? '<details class="vi-objetos" data-viaje="' + v.id + '">'
                 + '<summary>Objetos de la salida</summary>'
                 + '<div class="cards"></div></details>'
