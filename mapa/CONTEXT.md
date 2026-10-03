@@ -86,6 +86,12 @@ El pie de la ficha (`#ficha-blog`) enlaza ese blog en todas sus observaciones. N
 
 El símbolo es siempre el mismo —disco con anillo inclinado y satélite— y aparece en tres sitios: junto al selector de observador (`#mw-planeta`, enlace al blog del seleccionado; apagado sin blog, oculto en «Todas las observaciones», porque un `<option>` no admite icono propio), en cada fila de la pantalla «NO VISITADO» como señal (no enlace: el ítem ya es un botón) y en el pie de la ficha. Enlaces salientes con `target="_blank" rel="noopener"` y **sin** `nofollow`: dirigir lectores y autoridad al compañero es justo el propósito. Tests: `scripts/test_blog_companeros.php` y `scripts/test_observadores.js`.
 
+## Explorado – no confirmado
+
+**Explorado – no confirmado**: objeto que el observador buscó y no pudo confirmar (`resultado` = `detectado_no_visto` o `no_visto`), frente a lo **visto** (`resultado` = `visto`). Los tres valores de `resultado` viven en la [[observación]] (`{prefix}bitacora`): `visto` (confirmado; es el defecto y lo que leen todas las filas previas), `detectado_no_visto` (se intuyó o se detectó sin llegar a verlo con claridad) y `no_visto` (no se localizó). `motivo_no_visto` (`nubes`, `contaminacion`, `luna`, `bajo`, `seeing`, `apertura`, `no_localizado`, `otro`) es opcional y solo existe en un no visto. **Terminología heredada:** en el código previo a #393, «explorado» a secas significaba «observado», porque toda fila contaba como vista; ahora «explorado» abarca los tres resultados y «visto» es solo el confirmado. Épica #393.
+
+Hasta que el mapa lea `resultado`, el eje «Explorados / Por explorar» sigue contando toda observación como vista.
+
 ## Vecindario solar (estrellas cercanas)
 
 Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (1500 al) del Sol, que aparece al hacer zoom máximo sobre el Sol en la vista cenital. Se puebla desde los **objetos del mapa** que tengan coordenadas galácticas y esa distancia.
