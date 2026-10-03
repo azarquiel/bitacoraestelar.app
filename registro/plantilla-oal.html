@@ -778,6 +778,24 @@
     return '<ul>\n' + items.map(function (x) { return '<li>' + x + '</li>'; }).join('\n') + '\n</ul>';
   }
 
+  /* Los motivos de un no visto: copia de BitacoraBase.MOTIVOS_NO_VISTO (el motor
+     no puede cargar BitacoraBase). */
+  var MOTIVOS = {
+    nubes: 'Nubes o transparencia', contaminacion: 'Contaminación lumínica', luna: 'Luna',
+    bajo: 'Objeto bajo u obstáculo', seeing: 'Seeing', apertura: 'Apertura insuficiente',
+    no_localizado: 'No localizado', otro: 'Otro'
+  };
+
+  /* «Explorado – no confirmado · detectado · Luna» de un intento fallido, o ''
+     si se vio (#396). Mismo texto que la ficha .docx del servidor. */
+  function fallo(o) {
+    if (o.resultado !== 'no_visto' && o.resultado !== 'detectado_no_visto') { return ''; }
+    var p = ['Explorado – no confirmado'];
+    if (o.resultado === 'detectado_no_visto') { p.push('detectado'); }
+    if (MOTIVOS[o.motivo]) { p.push(MOTIVOS[o.motivo]); }
+    return p.join(' · ');
+  }
+
   function textoDe(estado) {
     var e = estado || {};
     var lugares = indice(e.lugares);
@@ -841,6 +859,8 @@
 
       fichas.forEach(function (f) {
         s.push('<h3>' + escapar(f.entradas[0].objeto) + '</h3>');
+        var estadoLinea = fallo(f.entradas[0]);
+        if (estadoLinea) { s.push('<p>' + escapar(estadoLinea) + '</p>'); }
         f.entradas.forEach(function (o, i) {
           var equipo = [];
           var oc = ocu[o.ocularId];

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.1
+ * Version:     1.38.2
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.1' );
+define( 'BITACORA_VERSION', '1.38.2' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -895,7 +895,9 @@ function bitacora_viaje_adornar( $viaje ) {
         ) )
         : null;
     $viaje->base_nombre = $viaje->base ? $viaje->base->nombre : '';
-    $viaje->num_objetos = bitacora_viaje_num_objetos( $viaje->id );
+    $viaje->num_filas = bitacora_viaje_num_objetos( $viaje->id );
+    $viaje->num_objetos = bitacora_viaje_num_vistos( $viaje->id );
+    $viaje->num_no_confirmados = $viaje->num_filas - $viaje->num_objetos;
     return $viaje;
 }
 
@@ -905,12 +907,24 @@ function bitacora_viaje_pedido( $params ) {
         ? intval( $params['viajeId'] ) : 0;
 }
 
-/** Cuántas observaciones vivas tiene un viaje (la papelera no cuenta). */
+/**
+ * Cuántas observaciones vivas tiene un viaje (la papelera no cuenta), vistas o
+ * no. Es el recuento de los GUARDIANES de borrado: protege datos, no estadísticas.
+ */
 function bitacora_viaje_num_objetos( $viaje_id ) {
     global $wpdb;
     $tabla = bitacora_nombre_tabla();
     return intval( $wpdb->get_var( $wpdb->prepare(
         "SELECT COUNT(*) FROM $tabla WHERE viaje_id = %d AND borrada_en IS NULL", $viaje_id
+    ) ) );
+}
+
+/** Cuántas de las observaciones vivas de un viaje se vieron (#396): el total que se enseña. */
+function bitacora_viaje_num_vistos( $viaje_id ) {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla();
+    return intval( $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM $tabla WHERE viaje_id = %d AND borrada_en IS NULL AND resultado = 'visto'", $viaje_id
     ) ) );
 }
 
@@ -966,6 +980,8 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
         }
     }
 
+    // num_objetos cuenta solo lo visto (#396); num_filas, todo: es lo que mira el
+    // guardián de borrado y lo que decide si hay algo que abrir o exportar.
     // El recuento de objetos se calcula, no se guarda: guardarlo obligaría a
     // mantenerlo al día en cada borrado y cada mudanza de observación.
     $orden = ( 'objetos' === $peticion->get_param( 'orden' ) )
@@ -984,7 +1000,8 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
     // con SET SESSION antes de la consulta.
     $sql = "SELECT v.*, b.nombre AS base_nombre,
                    b.lat AS base_lat, b.lon AS base_lon, b.tz AS base_tz, b.altitud_m AS base_altitud_m,
-                   ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_objetos,
+                   ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL AND o.resultado = 'visto' ) AS num_objetos,
+                   ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_filas,
                    ( SELECT GROUP_CONCAT( COALESCE( NULLIF( o.objeto_etiqueta, '' ), o.objeto )
                                           ORDER BY ( o.hora_observacion = '' ) ASC, o.fecha_observacion ASC, o.hora_observacion ASC, o.id ASC
                                           SEPARATOR '|' )
@@ -1000,7 +1017,9 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
     $filas = $wpdb->get_results( $sql );
     $uid   = get_current_user_id();
     foreach ( $filas as $f ) {
-        $f->num_objetos = intval( $f->num_objetos );
+        $f->num_objetos        = intval( $f->num_objetos );
+        $f->num_filas          = intval( $f->num_filas );
+        $f->num_no_confirmados = $f->num_filas - $f->num_objetos;
         $f->mio         = ( intval( $f->usuario_id ) === $uid );
         $f->objetos     = $f->objetos_ruta ? explode( '|', $f->objetos_ruta ) : array();
         unset( $f->objetos_ruta );
@@ -1114,7 +1133,7 @@ function bitacora_viaje_leer( WP_REST_Request $peticion ) {
     // Por hora de observación: es el orden en que ocurrió la salida. Las que no
     // la registraron van detrás, por id.
     $viaje->objetos = $wpdb->get_results( $wpdb->prepare(
-        "SELECT id, objeto, objeto_etiqueta, tipo, num, fecha_observacion, hora_observacion, telescopio
+        "SELECT id, objeto, objeto_etiqueta, tipo, num, fecha_observacion, hora_observacion, telescopio, resultado
          FROM $t_obs WHERE viaje_id = %d AND borrada_en IS NULL
          ORDER BY ( hora_observacion = '' ) ASC, fecha_observacion ASC, hora_observacion ASC, id ASC", $viaje->id
     ) );
@@ -1142,13 +1161,16 @@ function bitacora_viaje_leer( WP_REST_Request $peticion ) {
     // Viajes hermanos: la misma noche y la misma base, de otro observador.
     $viaje->hermanos = $viaje->base_id ? $wpdb->get_results( $wpdb->prepare(
         "SELECT v.id, v.nombre, v.usuario_id,
-                ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_objetos
+                ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL AND o.resultado = 'visto' ) AS num_objetos,
+                ( SELECT COUNT(*) FROM $t_obs o WHERE o.viaje_id = v.id AND o.borrada_en IS NULL ) AS num_filas
          FROM $t_via v
          WHERE v.noche = %s AND v.base_id = %d AND v.id <> %d",
         $viaje->noche, $viaje->base_id, $viaje->id
     ) ) : array();
 
-    $viaje->num_objetos = count( $viaje->objetos );
+    $viaje->num_filas          = count( $viaje->objetos );
+    $viaje->num_objetos        = count( array_filter( $viaje->objetos, function ( $o ) { return 'visto' === $o->resultado; } ) );
+    $viaje->num_no_confirmados = $viaje->num_filas - $viaje->num_objetos;
     $viaje->mio         = ( intval( $viaje->usuario_id ) === get_current_user_id() );
     return new WP_REST_Response( $viaje, 200 );
 }
@@ -2287,7 +2309,7 @@ function bitacora_listar_observadores( WP_REST_Request $peticion ) {
     global $wpdb;
     $t_obs = bitacora_nombre_tabla_observadores();
     $t_ob  = bitacora_nombre_tabla();
-    $sql = "SELECT o.*, ( SELECT COUNT(*) FROM $t_ob b WHERE b.observador_id = o.id AND b.borrada_en IS NULL ) AS num_observaciones
+    $sql = "SELECT o.*, ( SELECT COUNT(*) FROM $t_ob b WHERE b.observador_id = o.id AND b.borrada_en IS NULL AND b.resultado = 'visto' ) AS num_observaciones
             FROM $t_obs o ORDER BY o.nombre ASC";
     $filas = $wpdb->get_results( $sql );
     return new WP_REST_Response( $filas ? $filas : array(), 200 );
@@ -4475,7 +4497,7 @@ function bitacora_panel_observadores() {
     }
 
     $obs = $wpdb->get_results(
-        "SELECT o.*, ( SELECT COUNT(*) FROM " . bitacora_nombre_tabla() . " b WHERE b.observador_id = o.id AND b.borrada_en IS NULL ) AS num FROM $t o ORDER BY o.nombre ASC"
+        "SELECT o.*, ( SELECT COUNT(*) FROM " . bitacora_nombre_tabla() . " b WHERE b.observador_id = o.id AND b.borrada_en IS NULL AND b.resultado = 'visto' ) AS num FROM $t o ORDER BY o.nombre ASC"
     );
     echo '<div style="margin:22px 0;padding:2px 18px 14px;border:1px solid #c3c4c7;border-left:4px solid #2271b1;background:#fff;max-width:820px">';
     echo '<h2 style="margin-top:14px">Observadores</h2>';
@@ -4876,8 +4898,13 @@ function bitacora_bases_listar( WP_REST_Request $peticion ) {
     foreach ( $filas as $b ) {
         $es_mia = intval( $b->usuario_id ) === intval( $uid );
         $b->es_mia = $es_mia;
-        $b->n_observaciones = intval( $wpdb->get_var( $wpdb->prepare(
+        // n_observaciones cuenta solo lo visto (ranking y medalla, #396); n_filas
+        // cuenta todo, porque es lo que protege el borrado (bitacora_base_borrar).
+        $b->n_filas         = intval( $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM $obs WHERE base_id = %d AND borrada_en IS NULL", $b->id
+        ) ) );
+        $b->n_observaciones = intval( $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $obs WHERE base_id = %d AND borrada_en IS NULL AND resultado = 'visto'", $b->id
         ) ) );
         $b->compartidos = $es_mia ? bitacora_base_compartidos( $b->id ) : array();
         if ( ! $es_mia ) {
@@ -5374,7 +5401,9 @@ function bitacora_docx_reconstruir( $xml, $runs, $nuevo ) {
     $cursor = 0;
     foreach ( $runs as $idx => $r ) {
         $salida .= substr( $xml, $cursor, $r['ini'] - $cursor );
-        $salida .= $r['apertura'] . bitacora_docx_encode( $nuevo[ $idx ] ) . $r['cierre'];
+        // Un «\n» del valor es un salto de línea del documento (#396).
+        $texto   = str_replace( "\n", '</w:t><w:br/><w:t xml:space="preserve">', bitacora_docx_encode( $nuevo[ $idx ] ) );
+        $salida .= $r['apertura'] . $texto . $r['cierre'];
         $cursor = $r['fin'];
     }
     return $salida . substr( $xml, $cursor );
@@ -5476,6 +5505,39 @@ function bitacora_ficha_nombre_largo( $obs ) {
     $partes = preg_split( '/\s+[·(]/u', trim( $etiqueta ) );
     return trim( $partes[0] );
 }
+/** Motivos de un no visto, tal como los rotula la app (BitacoraBase.MOTIVOS_NO_VISTO). */
+function bitacora_ficha_motivo_etiqueta( $motivo ) {
+    $m = array(
+        'nubes'         => 'Nubes o transparencia',
+        'contaminacion' => 'Contaminación lumínica',
+        'luna'          => 'Luna',
+        'bajo'          => 'Objeto bajo u obstáculo',
+        'seeing'        => 'Seeing',
+        'apertura'      => 'Apertura insuficiente',
+        'no_localizado' => 'No localizado',
+        'otro'          => 'Otro',
+    );
+    return isset( $m[ $motivo ] ) ? $m[ $motivo ] : '';
+}
+/**
+ * La línea de estado de un intento fallido («Explorado – no confirmado ·
+ * detectado · Luna»), o '' si la observación se vio (#396).
+ */
+function bitacora_ficha_estado_linea( $obs ) {
+    $res = isset( $obs->resultado ) ? $obs->resultado : 'visto';
+    if ( 'detectado_no_visto' !== $res && 'no_visto' !== $res ) {
+        return '';
+    }
+    $p = array( "Explorado \xe2\x80\x93 no confirmado" );
+    if ( 'detectado_no_visto' === $res ) {
+        $p[] = 'detectado';
+    }
+    $motivo = bitacora_ficha_motivo_etiqueta( isset( $obs->motivo_no_visto ) ? $obs->motivo_no_visto : '' );
+    if ( '' !== $motivo ) {
+        $p[] = $motivo;
+    }
+    return implode( ' · ', $p );
+}
 function bitacora_ficha_constelacion_coords( $obs ) {
     $partes = array();
     $cons = bitacora_constelacion_de( $obs );
@@ -5539,7 +5601,8 @@ function bitacora_generar_ficha_interno( WP_REST_Request $peticion ) {
     // Marcas [entre corchetes] de la plantilla -> valores de la observación.
     $valores = array(
         'Nombre_observador' => $obs->observador ? $obs->observador : '',
-        'Nombre_objeto'     => bitacora_ficha_nombre_largo( $obs ),
+        // El estado va en la primera línea, bajo el nombre (#396).
+        'Nombre_objeto'     => trim( bitacora_ficha_nombre_largo( $obs ) . "\n" . bitacora_ficha_estado_linea( $obs ) ),
         'Catálogo'          => bitacora_catalogo_de( $obs ),
         'Datos_del_dielo'   => bitacora_ficha_datos_cielo( $fuente ),  // errata original de la plantilla
         'Datos_del_cielo'   => bitacora_ficha_datos_cielo( $fuente ),  // por si algún día la corriges

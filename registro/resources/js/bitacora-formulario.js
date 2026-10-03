@@ -598,7 +598,8 @@
     var nombre = v.nombre || ('Viaje del '+(v.noche||''));
     var partes = [];
     if(v.base_nombre) partes.push(v.base_nombre);
-    partes.push(v.num_objetos ? v.num_objetos+(v.num_objetos===1?' objeto':' objetos') : 'todavía sin objetos');
+    var m=v.num_no_confirmados||0;   // solo lo visto cuenta como objeto (#396)
+    partes.push(v.num_objetos||m ? v.num_objetos+(v.num_objetos===1?' confirmado':' confirmados')+(m?' · '+m+(m===1?' no confirmado':' no confirmados'):'') : 'todavía sin objetos');
     return nombre+' — '+partes.join(' · ');
   }
   // La salida no se elige: el servidor manda la que contiene la hora, así que

@@ -1663,7 +1663,7 @@ function bitacora_oal_estado_viajes( $viajes, $usuario_id ) {
                 if ( ! empty( $e->auxiliar_id ) ) {
                     $equipo['auxiliares'][ intval( $e->auxiliar_id ) ] = 1;
                 }
-                $estado['observaciones'][] = array(
+                $fila_estado = array(
                     // Único dentro del fichero y estable: la misma entrada da siempre
                     // el mismo id.
                     'id'           => 'obs' . intval( $o->id ) . '-' . ( $i + 1 ),
@@ -1686,6 +1686,12 @@ function bitacora_oal_estado_viajes( $viajes, $usuario_id ) {
                     'texto'        => bitacora_oal_texto_plano( $e->descripcion ),
                     'observador'   => $firma,
                 );
+                // Solo un fallo lo lleva (#396): el estado de lo visto no cambia.
+                if ( ! empty( $o->resultado ) && 'visto' !== $o->resultado ) {
+                    $fila_estado['resultado'] = $o->resultado;
+                    $fila_estado['motivo']    = (string) $o->motivo_no_visto;
+                }
+                $estado['observaciones'][] = $fila_estado;
             }
         }
     }
