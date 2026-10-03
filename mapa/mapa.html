@@ -56,7 +56,7 @@
      hasta 320 px si el nombre del compañero lo pide (ver arriba). */
   #mw-nuevo, #mw-search, #mw-viaje, #mw-tilt-control,
   #mw-rotate-edge-control, #mw-rotate-plane-control {
-    width: min(244px, calc(100vw - 24px)) !important;
+    width: min(288px, calc(100vw - 24px)) !important;
     box-sizing: border-box;
   }
   #mw-nuevo {
@@ -98,7 +98,7 @@
      Con planeta o sin él, la fila mide lo mismo. */
   #mw-observador-fila {
     display: flex; align-items: center; gap: 8px;
-    width: min(244px, calc(100vw - 24px)); box-sizing: border-box;
+    width: min(288px, calc(100vw - 24px)); box-sizing: border-box;
   }
   #mw-observador { flex: 1; min-width: 0 !important; box-sizing: border-box; }
   #mw-planeta {
@@ -120,8 +120,9 @@
     border-radius: 20px; background: rgba(12,16,28,0.32);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 1px 6px rgba(0,0,0,0.28);
-    width: min(244px, calc(100vw - 24px)); box-sizing: border-box;
+    width: min(288px, calc(100vw - 24px)); box-sizing: border-box;
   }
+  #mw-estado[hidden] { display: none; }   /* con viaje no aporta: se oculta entero */
   #mw-estado label {
     display: flex; align-items: center; justify-content: center;
     min-height: 48px; padding: 4px 6px; border-radius: 18px; cursor: pointer;
@@ -139,11 +140,6 @@
      anillo hueco, así el selector hace de leyenda. */
   #mw-estado input:disabled + .mw-estado-txt { opacity: 0.45; }
   #mw-estado label:has(input:disabled) { cursor: not-allowed; }
-  .mw-estado-aviso {
-    font-family: sans-serif; font-size: 11px; color: rgba(234,241,251,0.75);
-    padding: 0 12px; max-width: min(244px, calc(100vw - 24px));
-  }
-  .mw-estado-aviso:empty { display: none; }
   @media (prefers-reduced-motion: reduce) { #mw-estado label { transition: none; } }
   #mw-estado label:has(input:focus-visible) { outline: 2px solid #f4c76b; outline-offset: -2px; }
   #mw-estado .mw-estado-n { font-size: 11px; color: rgba(234,241,251,0.78); font-variant-numeric: tabular-nums; }
@@ -169,7 +165,7 @@
     position: absolute; right: 12px; font: 11px ui-monospace, Menlo, monospace; color: rgba(234,241,251,0.6);
     border: 1px solid rgba(234,241,251,0.3); border-radius: 4px; padding: 0 5px; pointer-events: none;
   }
-  #mw-search:focus ~ #mw-search-atajo, #mw-search:not(:placeholder-shown) ~ #mw-search-atajo { display: none; }
+  #mw-search:disabled ~ #mw-search-atajo, #mw-search:focus ~ #mw-search-atajo, #mw-search:not(:placeholder-shown) ~ #mw-search-atajo { display: none; }
   /* El deslizador cede su ancho fijo y se queda con lo que sobre en la píldora. */
   #mw-tilt, #mw-rotate-edge, #mw-rotate-plane { width: auto !important; flex: 1; min-width: 0; }
 
@@ -264,7 +260,7 @@
     /* Ancho propio: los mandos miden 244-252 px y el panel mide lo que ellos más
        el relleno; antes lo estiraba la fila de estado (cuatro rótulos sin
        partir) y dejaba una columna vacía a la derecha. */
-    width: min(284px, calc(100vw - 70px)); box-sizing: border-box;
+    width: min(328px, calc(100vw - 70px)); box-sizing: border-box;
     pointer-events: none;
     display: flex;
     flex-direction: column;
@@ -387,7 +383,7 @@
 
   /* ═══ PANTALLAS ESTRECHAS Y BAJAS ════════════════════════════════════════
      Los anchos de la columna de mandos ya se adaptan solos (arriba:
-     min(244px, 100vw - 24px)); lo que faltaba era el resto de la pantalla. La
+     min(288px, 100vw - 24px)); lo que faltaba era el resto de la pantalla. La
      ayuda de abajo llevaba nowrap con tres frases y se salía de cualquier
      teléfono, y la leyenda quedaba justo debajo de ella. */
   @media (max-width: 640px) {
@@ -1131,10 +1127,6 @@
       <label><input type="radio" name="mw-estado" value="noconfirmados"><span class="mw-estado-txt"><span class="mw-estado-t"><svg class="mw-icono mw-estado-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.6 13.6 12.6H2.4Z"/></svg>No confirmados</span><span class="mw-estado-n"></span></span></label>
       <label><input type="radio" name="mw-estado" value="porvisitar"><span class="mw-estado-txt"><span class="mw-estado-t"><svg class="mw-icono mw-estado-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="4.6"/></svg>Por explorar</span><span class="mw-estado-n"></span></span></label>
     </fieldset>
-    <!-- Por qué el control está deshabilitado, visible y no solo en el title
-         (el mismo trato que da #mw-viaje en su opción). Lo escribe
-         via-lactea-app.js; vacío cuando el control está activo. -->
-    <div id="mw-estado-aviso" class="mw-estado-aviso" aria-live="polite"></div>
     </div><!-- /#mw-filtro-cuerpo -->
     </details><!-- /#mw-filtro -->
     </div><!-- /#mw-consola-panel -->
@@ -1665,5 +1657,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261003_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261003_1300"></script>
 </li>
