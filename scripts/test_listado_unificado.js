@@ -123,6 +123,16 @@ ok((src.match(/\?derivar=/g) || []).length === 1,
    'cuelga solo de la rama de obs.mia: de otro observador no aparece');
 
 // ═══════════════════════════════════════════════════════════════════════════
+seccion('El detalle de un no confirmado (#400)');
+
+var MOT = [{ valor: 'luna', etiqueta: 'Luna' }];
+ok(L.detalleNoConfirmado({ cielo_bortle: 4, resultado: 'detectado_no_visto', motivo_no_visto: 'luna' }, MOT) === 'Bortle 4 · detectado · Luna',
+   'Bortle, subtipo «detectado» y motivo rotulado');
+ok(L.detalleNoConfirmado({ cielo_sqm: 21.1, resultado: 'no_visto', motivo_no_visto: 'luna' }, MOT) === 'SQM 21.1 · Luna',
+   'sin Bortle cae al SQM; «no visto» no añade subtipo');
+ok(L.detalleNoConfirmado({ resultado: 'no_visto' }, MOT) === '', 'sin datos no inventa nada');
+
+// ═══════════════════════════════════════════════════════════════════════════
 console.log('');
 if (fallos) { console.error(fallos + ' FALLO(S)'); process.exit(1); }
 console.log('Todo en orden.');

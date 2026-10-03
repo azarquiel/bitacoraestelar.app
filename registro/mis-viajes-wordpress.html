@@ -94,6 +94,12 @@
         <button type="button" class="tab active" id="tabViajes">Viajes</button>
         <button type="button" class="tab" id="tabActivas">Todas</button>
         <button type="button" class="tab" id="tabPapelera">Papelera</button>
+        <button type="button" class="tab" id="tabNoConf">Explorado – no confirmado</button>
+      </div>
+      <div class="tabs" id="barraNoConf" hidden>
+        <button type="button" class="tab active" data-nc-alcance="mias">Míos</button>
+        <button type="button" class="tab" data-nc-alcance="todos">De todos</button>
+        <label class="field"><input type="checkbox" id="ncPendientes" /> Solo pendientes</label>
       </div>
       <div class="buscador" id="buscadorCaja" hidden>
         <input type="search" id="buscador" autocomplete="off"
@@ -195,5 +201,5 @@
 <script src="/wp-content/uploads/bitacora/bitacora-oal-motor.js?v=20261003_1500" defer></script>
 <!-- Orden importante: listado.js publica window.BitacoraListado (las tarjetas y
      la caché de observaciones) y viajes.js lo consume para llenar sus desplegables. -->
-<script src="/wp-content/uploads/bitacora/bitacora-listado.js?v=20260902_1200" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-listado.js?v=20261003_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-viajes.js?v=20261003_1500" defer></script>
