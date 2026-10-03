@@ -378,6 +378,8 @@ var VecindarioSolar = (function () {
         var claseTxt = hovered.o.clase ? (' · tipo ' + hovered.o.clase) : '';
         tip.innerHTML = '<b>' + hovered.o.name + '</b> — ' + fmtDist(hovered.o.d) + ' al' + claseTxt +
           '<br><span class="sub">' + hovered.o.desc + ' · l ' + hovered.o.l + '° b ' + hovered.o.b + '°</span>';
+        var resumen = window.VLObservadores.resumenDe(hovered.o.id);
+        if (resumen) tip.innerHTML += '<br><span class="sub">' + resumen + '</span>';
       } else {
         tip.style.opacity = 0;
       }

@@ -457,6 +457,8 @@ var GrupoLocal = (function () {
         tip.style.top = hovered.p.sy + 'px';
         tip.innerHTML = '<b>' + hovered.o.name + '</b> — ' + fmtDist(hovered.o.d) + ' al' +
           '<br><span class="sub">' + hovered.o.desc + ' · l ' + hovered.o.l + '° b ' + hovered.o.b + '°</span>';
+        var resumen = VLObservadores.resumenDe(hovered.o.id);
+        if (resumen) tip.innerHTML += '<br><span class="sub">' + resumen + '</span>';
       } else {
         tip.style.opacity = 0;
       }
