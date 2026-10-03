@@ -748,7 +748,7 @@
   // Cada opción lleva el recuento de lo que deja a la vista (#233, #397): en la
   // vista de canto un cambio de estado puede no notarse, y el número confirma
   // que el control hizo algo. Confirmados + No confirmados + Por explorar suman
-  // Todo. «No confirmados» no desaparece con 0: se deshabilita y se explica. Si
+  // Todo. «No confirmados» no desaparece con 0: se deshabilita. Si
   // el estado activo no deja nada, se avisa: una pantalla vacía no debe parecer
   // un fallo.
   // OBJECTS es el catálogo de las tres capas (los dos lienzos también se
@@ -757,8 +757,6 @@
   var estadoRadios = document.querySelectorAll('#mw-estado input[type=radio]');
   var estadoCuentas = document.querySelectorAll('#mw-estado .mw-estado-n');
   var estadoNoConf = document.querySelector('#mw-estado input[value="noconfirmados"]');
-  var estadoAviso = document.getElementById('mw-estado-aviso');
-  var avisoNoConf = '';   // el aviso de «No confirmados» con 0; el del viaje manda sobre él
   // Resumen del filtro para cuando la sección está plegada: «Néstor G.M. ·
   // Confirmados · 58». Lee lo que los propios mandos dicen, no su estado.
   var filtroResumen = document.getElementById('mw-filtro-resumen');
@@ -784,8 +782,6 @@
     pintarResumenFiltro(c);
     var sinNoConf = !c.noconfirmados;
     if (estadoNoConf) estadoNoConf.disabled = sinNoConf;
-    avisoNoConf = sinNoConf ? 'Nadie ha registrado exploraciones no confirmadas en este conjunto' : '';
-    if (estadoAviso) estadoAviso.textContent = viajeActivo ? 'Durante un viaje se ven todas sus escalas' : avisoNoConf;
     // Un radio marcado no puede quedar deshabilitado: cae a Todo.
     if (sinNoConf && VLO.getEstado() === 'noconfirmados') {
       estadoElegido = 'todo';
@@ -3138,10 +3134,8 @@
     // "lo ha visto alguien", que es justo lo que puede mirar un visitante
     // anónimo. Lo único que lo deshabilita es el viaje.
     estadoFieldset.disabled = !!viajeActivo;
-    // El motivo de estar deshabilitado se lee, no solo se adivina.
-    var motivo = viajeActivo ? 'Durante un viaje se ven todas sus escalas' : '';
-    estadoFieldset.title = motivo;
-    if (estadoAviso) estadoAviso.textContent = motivo || avisoNoConf;
+    // Con viaje el eje no aporta (se ven todas las escalas): se oculta, no se explica.
+    estadoFieldset.hidden = !!viajeActivo;
   }
 
   if (estadoFieldset) {
