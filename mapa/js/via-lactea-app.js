@@ -408,7 +408,7 @@
     // atributos con el punto para disparar el mismo manejador; al posarse el
     // cursor también activa el :hover del ancla, que devuelve el estilo completo.
     var pad = document.createElement('div');
-    pad.className = 'mw-pdf-dot';
+    pad.className = 'mw-pdf-dot mw-pad';
     pad.title = dot.title;
     pad.setAttribute('data-pdf', obj.pdf);
     pad.setAttribute('data-title', obj.name);
@@ -417,6 +417,12 @@
     pad.style.cssText = 'position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;' +
       'border-radius:50%;background:transparent;pointer-events:auto;cursor:pointer;';
     content.appendChild(pad);
+    // Resumen de lo intentado (#398): vacío salvo en objetos con fallos; se
+    // rellena en refreshAnchors y solo se enseña con hover o foco (mapa.html).
+    var resumen = document.createElement('div');
+    resumen.className = 'mw-resumen';
+    resumen.setAttribute('role', 'tooltip');
+    content.appendChild(resumen);
     scaleEl.appendChild(connector);
     scaleEl.appendChild(content);
     anchor.appendChild(scaleEl);
@@ -1854,6 +1860,15 @@
     });
   }
 
+  // El pad enfocable (objetos con resumen, #398) se abre con Enter o Espacio.
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('mw-pad') &&
+        e.target.hasAttribute('tabindex')) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
+
   pdfCloseBtn.addEventListener('click', closeObjectPdf);
 
   pdfOverlay.addEventListener('mousedown', function (e) {
@@ -2161,6 +2176,7 @@
   function selectFichaEntry(f, idx) {
     fichaCurrent = idx;
     var entry = f.entries[idx];
+    if (!entry) { fichaImgTitle.style.display = 'none'; fichaText.innerHTML = barraEstelar(f); return; }
     if (entry.img) {
       fichaImgTitle.textContent = entry.titulo + ' (' + entry.boton + ')';
       fichaImgTitle.style.display = '';
@@ -2351,19 +2367,31 @@
     '<circle cx="7" cy="9.4" r="3.6" stroke-width="0.8"/>' +
     '<circle cx="13.4" cy="2.9" r="1.35" style="fill:currentColor;stroke:none;"/></svg>';
 
+  // El ▲ del mapa (explorado, no confirmado) en SVG, de contorno y del color del texto.
+  var SVG_TRIANGULO = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" ' +
+    'style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5;' +
+    'stroke-linejoin:round;vertical-align:-1px;"><path d="M8 2.2 14.2 13.5H1.8Z"/></svg>';
+  var URL_REGISTRO = 'https://bitacoraestelar.app/registro-de-observacion/';
+
   // Pie de la ficha: el blog del observador (su "planeta de origen"), para que
   // el compañero que escribe fuera no quede sin referencia en ninguna de sus
   // observaciones.
   function renderFichaBlog(f) {
     if (!fichaBlog) return;
     var casa = (f && f.observador) ? VLO.blogDe(f.observador) : '';
-    if (!casa) { fichaBlog.style.display = 'none'; fichaBlog.innerHTML = ''; return; }
+    // «Reintentar» (#399): solo en un intento PROPIO no confirmado. Abre el
+    // formulario con ?derivar=N (objeto, nave y base; resultado vuelto a «Visto»).
+    var reintentar = (f && f.id && f.resultado && f.resultado !== 'visto' &&
+      VLO.getActivo() && f.observador === VLO.getActivo())
+      ? '<a href="' + URL_REGISTRO + '?derivar=' + encodeURIComponent(f.id) + '" ' +
+        'style="display:inline-block;margin-right:16px;color:#f4c76b;">Reintentar</a>' : '';
+    if (!casa && !reintentar) { fichaBlog.style.display = 'none'; fichaBlog.innerHTML = ''; return; }
     var nombre = VLO.nombreObservador(f.observador);
     var texto = 'Más observaciones en el blog' + (nombre ? ' de ' + nombre : '');
-    fichaBlog.innerHTML =
-      '<a href="' + escHtml(casa) + '" target="_blank" rel="noopener" ' +
+    fichaBlog.innerHTML = reintentar + (casa
+      ? '<a href="' + escHtml(casa) + '" target="_blank" rel="noopener" ' +
         'style="display:inline-flex;align-items:center;gap:8px;color:#f4c76b;text-decoration:none;">' +
-        SVG_PLANETA + '<span style="text-decoration:underline;">' + escHtml(texto) + '</span></a>';
+        SVG_PLANETA + '<span style="text-decoration:underline;">' + escHtml(texto) + '</span></a>' : '');
     fichaBlog.style.display = 'block';
   }
 
@@ -2414,7 +2442,14 @@
     isDragging = false;
     isPinching = false;
     hideHint();
-    selectFichaEntry(f, f.defaultIndex || 0);
+    // Un intento no confirmado se abre en su nota de «Exploración» (#399).
+    var abrir = f.defaultIndex || 0;
+    if (f.resultado && f.resultado !== 'visto') {
+      for (var k = 0; k < f.entries.length; k++) {
+        if (f.entries[k].boton === 'Exploración') { abrir = k; break; }
+      }
+    }
+    selectFichaEntry(f, abrir);
   }
 
   function openFicha(id, dot) {
@@ -2426,6 +2461,7 @@
     // abre directamente la suya —la del viaje seleccionado o la más reciente—
     // sin pasar por la lista de elegir. Sin observador activo ("Todas las
     // observaciones"), la regla de siempre: con varias se elige.
+    if (VLO.resultadoDe(id) === 'explorado') { abrirFichaDescubrimiento(id, info, { explorado: true }); return; }
     var f = VLO.getActivo() ? VLViaje.observacionDe(id, VLO.getActivo(), viajeActivo) : null;
     if (f) {
       f._id = id;
@@ -2488,37 +2524,77 @@
     // La nave se rotula con el mismo BitacoraEquipo que la ficha, así que dice lo
     // mismo aquí y dentro. El nombre del viaje no pinta nada aquí.
     var otras = ctx.sinOtras ? [] : VLViaje.otrasObservaciones(id, ctx.excluir);
+    // El balance cuenta TODOS los intentos, también el de la fila de la que se viene.
+    var todas = ctx.sinOtras ? [] : VLViaje.otrasObservaciones(id, null);
+    var nConf = 0;
+    todas.forEach(function (o) { if (o.visto) nConf++; });
+    var nFallos = todas.length - nConf;
     var items = otras.map(function (o) {
       var nave = rotuloNave(o);
+      var cielo = o.bortle ? 'Bortle ' + o.bortle
+        : (o.sqm != null ? 'SQM ' + String(o.sqm).replace('.', ',') : '');
+      var aum = o.aumentos
+        ? (o.aumentos[0] === o.aumentos[1] ? o.aumentos[0] + '×' : o.aumentos[0] + '×–' + o.aumentos[1] + '×') : '';
       var linea = [
         o.fecha ? fmtFechaEstelar(o.fecha) : '',
-        nave ? 'Nave ' + escHtml(nave) : ''
+        nave ? 'Nave ' + escHtml(nave) : '',
+        cielo, aum
       ].filter(function (t) { return t; }).join(' · ');
       var cuando = linea
         ? '<span style="display:block;margin-top:3px;font-size:12px;color:#8fb2cf;">' +
           linea + '</span>' : '';
+      // El porqué sin abrir: motivo y arranque de la nota de «Exploración».
+      var porque = '';
+      if (!o.visto) {
+        var motivo = VLO.motivoDe(o.motivo);
+        porque = '<span style="display:block;margin-top:3px;font-size:12px;color:#cfe6f7;">' +
+          'Explorado – no confirmado' + (motivo ? ' · ' + escHtml(motivo) : '') +
+          (o.resultado === 'detectado_no_visto' ? ' · detectado' : '') +
+          (o.nota ? '<br>' + escHtml(o.nota) : '') + '</span>';
+      }
+      // Lo no confirmado: borde discontinuo y el símbolo del mapa, con el mismo
+      // color de texto y de fondo, para que no pierda contraste.
+      var marca = o.visto ? '✦ ' : SVG_TRIANGULO + ' <span style="font-size:12px;">No confirmado</span> · ';
+      var nombre = (VLO.getActivo() && o.clave === VLO.getActivo()) ? 'Tú' : o.etiqueta;
       return '<li><button type="button" class="ficha-descubrir-item" data-indice="' + o.indice + '" style="' +
         'display:block;width:100%;text-align:left;cursor:pointer;' +
         'background:rgba(126,200,255,0.10);color:#cfe6f7;' +
-        'border:1px solid rgba(126,200,255,0.35);border-radius:10px;' +
+        'border:1px ' + (o.visto ? 'solid' : 'dashed') + ' rgba(126,200,255,0.35);border-radius:10px;' +
         'padding:10px 14px;margin:6px 0;font-family:sans-serif;font-size:14px;">' +
-        '✦ ' + escHtml(o.etiqueta) +
+        marca + escHtml(nombre) +
         (o.audio ? ' <span title="Tiene tramo de audio">🎧</span>' : '') +
         // El planeta de origen: este compañero escribe en su propio blog. Aquí
         // es señal, no enlace: el ítem entero es un botón y un <a> dentro no es
         // HTML válido; a su blog se va desde el pie de la ficha que abre.
         (VLO.blogDe(o.clave)
           ? ' <span title="Tiene blog propio" style="color:#f4c76b;">' + SVG_PLANETA + '</span>' : '') +
-        cuando + '</button></li>';
+        cuando + porque + '</button></li>';
     }).join('');
 
+    // Resumen antes de la lista: el balance, o el aliciente si nadie lo vio.
+    var resumen = '';
+    if (nFallos) {
+      resumen = nConf
+        ? '<div style="font-family:sans-serif;font-size:13px;color:#cfe6f7;margin:0 0 8px;">' +
+          nConf + (nConf === 1 ? ' lo confirmó' : ' lo confirmaron') + ' · ' +
+          nFallos + (nFallos === 1 ? ' no lo confirmó' : ' no lo confirmaron') + '</div>'
+        : '<div style="font-family:sans-serif;font-size:14px;font-weight:600;color:#f4c76b;margin:0 0 8px;">' +
+          'Nadie lo ha confirmado todavía · ' + nFallos + (nFallos === 1 ? ' intento' : ' intentos') + '</div>';
+    }
+    // Con más de 8 filas la cabecera se queda fija al hacer scroll.
+    var fija = otras.length > 8
+      ? 'position:sticky;top:0;z-index:1;background:#05080d;padding-top:2px;' : '';
+
     fichaText.innerHTML =
+      '<div style="' + fija + '">' +
       '<div style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;font-size:12px;' +
         'letter-spacing:.18em;text-transform:uppercase;color:#f4c76b;' +
         'border:1px solid rgba(244,199,107,.35);border-radius:8px;' +
-        'padding:8px 12px;text-align:center;margin:0 0 18px;">' +
-        (ctx.elegir ? 'OBSERVACIONES'
+        'padding:8px 12px;text-align:center;margin:0 0 ' + (resumen ? '10' : '18') + 'px;">' +
+        (ctx.explorado ? 'EXPLORADO – NO CONFIRMADO'
+          : ctx.elegir ? 'OBSERVACIONES'
           : (ctx.desdeFicha ? 'OTRAS OBSERVACIONES' : 'NO VISITADO')) + '</div>' +
+      resumen + '</div>' +
       '<div style="font-family:sans-serif;font-size:13px;color:#9fb6c9;margin:0 0 6px;">' +
         (ctx.elegir ? 'Elige qué observación quieres ver' : 'Otras observaciones') + '</div>' +
       (otras.length
@@ -2551,7 +2627,8 @@
     f._id = id;
     renderFichaNormal(f, info, {
       volverA: { id: id, info: info, excluir: ctx && ctx.excluir,
-                 desdeFicha: ctx && ctx.desdeFicha, elegir: ctx && ctx.elegir },
+                 desdeFicha: ctx && ctx.desdeFicha, elegir: ctx && ctx.elegir,
+                 explorado: ctx && ctx.explorado },
       observadorNombre: VLO.nombreObservador(f.observador)
     });
   }
@@ -2570,6 +2647,10 @@
     var info = { title: desc.title || '', coords: desc.coords || '', pdf: desc.pdf };
     // Igual que openFicha: si el observador activo tiene ficha, se abre la suya
     // (viaje → más reciente) sin la lista de elegir.
+    if (fichaId && VLO.resultadoDe(fichaId) === 'explorado') {
+      abrirFichaDescubrimiento(fichaId, info, { explorado: true });
+      return;
+    }
     var f = (fichaId && VLO.getActivo()) ? VLViaje.observacionDe(fichaId, VLO.getActivo(), viajeActivo) : null;
     if (f) {
       f._id = fichaId;
@@ -2718,6 +2799,13 @@
       // atenuación de lo ajeno. Nunca coincide con mw-no-visitado: simboloDe
       // solo da anillo si el resultado es no_visitado.
       a.classList.toggle('mw-explorado', VLO.simboloDe(id) === 'triangulo');
+      // Resumen de una línea al pasar el ratón o llegar con el tabulador. El
+      // pad es lo único enfocable: Enter lo abre como un clic (ver más abajo).
+      var txt = VLO.resumenDe(id);
+      var pad = a.querySelector('.mw-pad');
+      a.querySelector('.mw-resumen').textContent = txt;
+      if (txt) { pad.setAttribute('tabindex', '0'); pad.setAttribute('role', 'button'); pad.setAttribute('aria-label', a.getAttribute('data-id').toUpperCase() + '. ' + txt); }
+      else { pad.removeAttribute('tabindex'); pad.removeAttribute('role'); pad.removeAttribute('aria-label'); }
     }
   }
 
@@ -3136,7 +3224,51 @@
     estadoFieldset.disabled = !!viajeActivo;
     // Con viaje el eje no aporta (se ven todas las escalas): se oculta, no se explica.
     estadoFieldset.hidden = !!viajeActivo;
+    sincronizarLeyendaEstado();
   }
+
+  // Sección «Estado» de las tres leyendas (#398): ● Confirmado, ▲ No confirmado,
+  // ○ Por explorar. Cada entrada es un <button aria-pressed> que manda sobre
+  // #mw-estado (las mismas opciones, así que el selector y la leyenda no
+  // divergen); pulsarla estando activa vuelve a Todo.
+  var LEYENDA_ESTADO = [
+    ['visitados', 'Confirmado', '<circle cx="8" cy="8" r="3.4" class="mw-icono-lleno"/>'],
+    ['noconfirmados', 'No confirmado', '<path d="M8 2.6 13.6 12.6H2.4Z"/>'],
+    ['porvisitar', 'Por explorar', '<circle cx="8" cy="8" r="4.6"/>']
+  ];
+  function sincronizarLeyendaEstado() {
+    var botones = document.querySelectorAll('.mw-legend-estado, .mw-legend-estado-t');
+    for (var i = 0; i < botones.length; i++) {
+      botones[i].hidden = !!viajeActivo;   // con viaje el eje se oculta: la leyenda también
+      if (botones[i].dataset.estado) botones[i].setAttribute('aria-pressed', String(botones[i].dataset.estado === VLO.getEstado()));
+    }
+  }
+  ['mw-legend', 'mw-legend-hubble', 'mw-legend-espectral'].forEach(function (id) {
+    var leyenda = document.getElementById(id);
+    if (!leyenda || !estadoFieldset) return;
+    var t = document.createElement('div');
+    t.className = 'mw-legend-estado-t';
+    t.textContent = 'Estado';
+    leyenda.appendChild(t);
+    LEYENDA_ESTADO.forEach(function (e) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mw-legend-estado';
+      b.dataset.estado = e[0];
+      b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = '<svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' + e[2] + '</svg><span>' + e[1] + '</span>';
+      leyenda.appendChild(b);
+    });
+  });
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('.mw-legend-estado');
+    if (!b || estadoFieldset.disabled) return;
+    var radio = estadoFieldset.querySelector('input[value="' + (VLO.getEstado() === b.dataset.estado ? 'todo' : b.dataset.estado) + '"]');
+    if (radio && !radio.disabled) {
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
 
   if (estadoFieldset) {
     estadoFieldset.addEventListener('change', function (ev) {
