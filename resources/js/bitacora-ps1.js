@@ -2120,9 +2120,11 @@
      nombre (ver ps1EscenaEnParche/NGC 5195): es dato astrométrico real de una
      fuente que el RC3 no cubre, igual que el propio RC3 es dato real de las
      que sí cubre. Cada fila: [nombre, RA°, Dec°, radio de protección ″ sobre
-     el semieje mayor, b/a, PA°]. Fuente: SIMBAD (query 15-ago-2026). */
+     el semieje mayor, b/a, PA°]. Fuente: SIMBAD (query 15-ago-2026; NGC 7337,
+     4-oct-2026, mB=15,24 en el RC3). */
   var PS1_PROTECCION_SIN_MODELO = [
-    ['NGC 7335', 339.33088, 34.44785, 43.3, 0.64, 150]
+    ['NGC 7335', 339.33088, 34.44785, 43.3, 0.64, 150],
+    ['NGC 7337', 339.36094, 34.37427, 21.4, 0.70, 0]
   ];
 
   /* Proyección cielo→píxel del parche: WCS del recorte si la hay, afín si no.

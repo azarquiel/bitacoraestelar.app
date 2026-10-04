@@ -28,7 +28,7 @@ f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
 f.afin = window.BitacoraPS1.ps1AfinParche(f, gal);
 
 var escena = window.BitacoraPS1.ps1EscenaEnParche(f, gal, []);   // campo vacío: sin catálogo
-ok(escena.length === 1, 'NGC 7335 entra en la escena sin fila de catálogo');
+ok(escena.length === 2, 'NGC 7335 y NGC 7337 entran en la escena sin fila de catálogo');
 
 if (escena.length) {
   var c = escena[0];
@@ -36,6 +36,12 @@ if (escena.length) {
   // El punto proyectado debe caer fuera del centro del parche (no es la propia NGC 7331).
   var dist = Math.hypot(c.cx - f.ancho / 2, c.cy - f.alto / 2) * f.escalaAs;
   ok(dist > 150 && dist < 250, 'centro proyectado a la distancia real de NGC 7335 (″): ' + dist.toFixed(1));
+}
+if (escena.length > 1) {
+  var c2 = escena[1];
+  ok(c2.r25As > 20 && c2.r25As < 23, 'NGC 7337 con su radio dado (~21″): ' + c2.r25As);
+  var dist2 = Math.hypot(c2.cx - f.ancho / 2, c2.cy - f.alto / 2) * f.escalaAs;
+  ok(dist2 > 290 && dist2 < 340, 'centro proyectado a la distancia real de NGC 7337 (″): ' + dist2.toFixed(1));
 }
 
 // Fuera de rango: parche lejano no la ve.
