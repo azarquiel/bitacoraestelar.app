@@ -10,6 +10,12 @@ IC 5332, NGC 4696…—, y filtrar por BT las tiraba sin aviso: el render de Gai
 no las pintaba. Para esas filas se usa mB, la magnitud fotográfica del mismo
 RC3 (mapa/datos/rc3_mb.tsv, la consulta filtrada a mB < 13,5).
 
+Compañeras demasiado débiles para el corte pero que se ven junto a su galaxia
+brillante con equipo real: entran sin tope de magnitud desde
+mapa/datos/rc3_incluidas.tsv, la misma consulta que rc3_mb.tsv en un cono de
+10′ alrededor de NGC 7331 (NGC 7335, 7337 y 7340). Con BT si lo hay; si no, mB.
+Las que ya estén en el catálogo (la propia NGC 7331) no se repiten.
+
 Para qué: el perfil de SÉRSIC de esta fila es el PRESUPUESTO DE LUZ de la galaxia.
 Desde la capa de imagen difusa, quien manda en la morfología es la imagen
 profunda: el parche de PanSTARRS, que llega por el proxy y, según se vayan
@@ -51,6 +57,7 @@ import os
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(RAIZ, 'mapa', 'datos', 'rc3_brillantes.tsv')
 SRC_MB = os.path.join(RAIZ, 'mapa', 'datos', 'rc3_mb.tsv')
+SRC_INCLUIDAS = os.path.join(RAIZ, 'mapa', 'datos', 'rc3_incluidas.tsv')
 SRC_N = os.path.join(RAIZ, 'mapa', 'datos', 'sersic_s4g.tsv')
 OUT_CSV = os.path.join(RAIZ, 'mapa', 'datos', 'galaxias.csv')
 OUT_JS = os.path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js')
@@ -271,17 +278,22 @@ def main():
     rc3 = lee_tsv(SRC)
     con_mb = [c[:8] + [c[11]] + c[9:11] for c in lee_tsv(SRC_MB)
               if len(c) >= 12 and numero(c[8]) is None]
+    # Las compañeras, sin tope: BT, o mB si no hay.
+    incluidas = [c[:8] + [c[8] if numero(c[8]) is not None else c[11]] + c[9:11]
+                 for c in lee_tsv(SRC_INCLUIDAS) if len(c) >= 12]
 
     medidos = lee_sersic_medido()
     filas, sin_datos, de_d25, con_n = [], 0, 0, 0
-    for c in rc3 + con_mb:
+    for c, tope in [(c, BT_MAX) for c in rc3 + con_mb] + [(c, math.inf) for c in incluidas]:
         if len(c) < 11:
+            continue
+        if tope == math.inf and any(f['nombre'] == limpia_nombre(c[0]) for f in filas):
             continue
         bt = numero(c[8])
         ra = sex_a_grados(c[2], True)
         dec = sex_a_grados(c[3], False)
         log_d25 = numero(c[5])
-        if bt is None or bt > BT_MAX or ra is None or dec is None or log_d25 is None:
+        if bt is None or bt > tope or ra is None or dec is None or log_d25 is None:
             sin_datos += 1
             continue
 

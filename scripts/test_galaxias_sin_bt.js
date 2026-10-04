@@ -25,5 +25,12 @@ var catalogo = P.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEB
 var nombres = P.ps1GalaxiasDelCampo(catalogo, 180.47, -18.87, 30).map(function (g) { return g.nombre; });
 ok(nombres.indexOf('NGC 4038') >= 0, 'NGC 4038 entra en el campo de las Antennae (' + nombres.join(', ') + ')');
 ok(nombres.indexOf('NGC 4039') >= 0, 'NGC 4039 también');
+
+// Las compañeras de NGC 7331 (mB 14,4–15,2) entran sin tope desde rc3_incluidas.tsv.
+var grupo = P.ps1GalaxiasDelCampo(catalogo, 339.267, 34.4156, 30).map(function (g) { return g.nombre; });
+['NGC 7335', 'NGC 7337', 'NGC 7340'].forEach(function (n) {
+  ok(grupo.indexOf(n) >= 0, n + ' entra en el campo de NGC 7331 (' + grupo.join(', ') + ')');
+});
+ok(grupo.filter(function (n) { return n === 'NGC 7331'; }).length === 1, 'y NGC 7331 no sale repetida');
 console.log(fallos ? '\n' + fallos + ' fallo(s).' : '\ntodo en orden.');
 process.exit(fallos ? 1 : 0);

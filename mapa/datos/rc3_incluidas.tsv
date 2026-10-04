@@ -1,0 +1,49 @@
+#
+#   VizieR Astronomical Server vizier.cds.unistra.fr
+#    Date: 2026-10-04T17:08:09 [V7.6]
+#   In case of problem, please report to:	cds-question@unistra.fr
+#
+#
+#Coosys	J2000:	eq_FK5 J2000
+#INFO	service_protocol=ASU	  IVOID of the protocol through which the data was retrieved
+#INFO	request_date=2026-10-04T17:08:09	  Query execution date
+#INFO	request=https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=VII/155/rc3&-out=name,altname,RA2000,DE2000,T,D25,R25,PA,BT,Ae,m%27e,Bmag&-out.max=unlimited&-c=339.267%2B34.4156&-c.rm=10&-sort=name	  Full request URL
+#INFO	contact=cds-question@unistra.fr	  Email or URL to contact publisher
+#INFO	server_software=VizieR/7.6	  Software version
+#INFO	publisher=CDS	  Data centre that produced the VOTable
+#INFO	-c=339.267000+34.415600,rm=10.	
+#Constraint -sort=name
+
+#RESOURCE=yCat_7155
+#Name: VII/155
+#Title: Third Reference Cat. of Bright Galaxies (RC3) (de Vaucouleurs+ 1991)
+#INFO	ivoid=ivo://cds.vizier/vii/155	    IVOID of underlying data collection
+#INFO	data_ivoid=ivo://cds.vizier/vii/155	    IVOID of underlying data collection
+#INFO	creator=de Vaucouleurs G.	    First author or institution
+#INFO	reference_url=https://cdsarc.cds.unistra.fr/viz-bin/cat/VII/155	    Dataset landing page
+#INFO	publication_date=2002-08-09	    Date of first publication in the data centre
+#INFO	rights_uri=https://cds.unistra.fr/vizier-org/licences_vizier.html	    Licence URI
+#Coosys	B2000:	eq_FK4 B2000
+#Table	VII_155_rc3:
+#Name: VII/155/rc3
+#Title: The revised RC3 catalog
+#Column	name	(a12)	Name	[ucd=meta.id]
+#Column	altname	(a15)	Alternate name	[ucd=meta.id]
+#Column	RA2000	(A10)	Right Ascension 2000 (hours)	[ucd=pos.eq.ra;meta.main]
+#Column	DE2000	(A9)	Declination 2000 (degrees)	[ucd=pos.eq.dec;meta.main]
+#Column	T	(F4.1)	? T (Hubble stage)	[ucd=src.morph.type]
+#Column	D25	(F5.2)	? Log D25	[ucd=phys.angSize;src]
+#Column	R25	(F5.2)	? Log R25 (isophotal diameter ratio)	[ucd=phys.size;arith.ratio]
+#Column	PA	(I3)	? Position angle of the major axis	[ucd=pos.posAng]
+#Column	BT	(F5.2)	? BT (total B magnitude)	[ucd=phot.mag;em.opt.B]
+#Column	Ae	(F5.2)	? Log Ae (effective aperture)	[ucd=instr.fov]
+#Column	m'e	(F5.2)	? m'e	[ucd=phot.mag.sb]
+#Column	Bmag	(F5.2)	? mB (photographic magnitude)	[ucd=phot.mag;em.opt.B]
+name	altname	RA2000	DE2000	T	D25	R25	PA	BT	Ae	m'e	Bmag
+ 	 	"h:m:s"	"d:m:s"	 	[0.1arcmin]	 	deg	mag	[0.1arcmin]	mag/arcmin2	mag
+------------	---------------	----------	---------	----	-----	-----	---	-----	-----	-----	-----
+NGC  7331   	 UGC 12113     	22 37 05.2	+34 25 10	 3.0	 2.02	 0.45	171	10.35	 1.37	12.62	10.34
+NGC  7335   	 UGC 12116     	22 37 19.3	+34 26 52	-1.0	 1.12	 0.35	151	14.44	 0.52	12.53	14.53
+NGC  7337   	 UGC 12120     	22 37 26.7	+34 22 24	 3.0	 1.06	 0.12	   	     	     	     	15.24
+NGC  7340   	 MCG  6-49- 52 	22 37 44.3	+34 24 36	    	 0.95	 0.17	   	     	     	     	14.68
+
