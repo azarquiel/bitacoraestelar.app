@@ -64,11 +64,16 @@ en `scripts/test_capas_controles.js`); el `display` lo aplica
 - **Fichas de observación** en una ventana superpuesta, con pestañas por
   aumento, zoom sobre los bocetos y anexos de detalle.
 - **Descubrir observaciones de otros observadores**: con un observador
-  seleccionado, los objetos que él no ha observado (pero sí otros) se muestran
-  atenuados en gris; al pulsarlos, la ficha lista las demás observaciones que hay
+  seleccionado, los objetos que no ha observado (pero sí otros) se dibujan como
+  un anillo hueco; al pulsarlos, la ficha lista las demás observaciones que hay
   de ese objeto, cada una con el viaje en el que se registró. El botón
   **← Descubrir** lleva a esa lista desde cualquier ficha. Es configurable
   (`observacionesAjenas.activo`).
+- **Explorado – no confirmado**: los intentos fallidos también se ven. Un objeto
+  que alguien intentó y nadie (o el observador seleccionado) ha visto se dibuja
+  como un **triángulo hueco**, y el selector de estado reparte el catálogo en
+  **Confirmados · No confirmados · Por explorar**. Ver
+  [más abajo](#explorado--no-confirmado).
 - **Recorrer un viaje interestelar**: una sesión de observación (la salida de un
   observador una noche) se puede ver dibujada. Quedan solo los objetos de esa
   salida, unidos por una **línea dorada** que va de uno a otro en el orden en que
@@ -306,6 +311,47 @@ observación y, si no la tiene, la noche de su viaje. Se identifican por índice
 no por observador: uno mismo puede haber visitado el objeto en dos salidas
 distintas, y las dos se pueden abrir.
 
+### Explorado – no confirmado
+
+Cada observación lleva un `resultado`: `visto`, `detectado_no_visto` o
+`no_visto` (épica #393; el glosario está en `CONTEXT.md`). Las tres vistas se
+preguntan lo mismo, y lo contesta una sola regla,
+`VLObservadores.resultadoDe(id)`: **`visto`** si alguna fila lo es,
+**`explorado`** si hay filas pero ninguna vista, y **`no_visitado`** si no hay
+ninguna. Con observador seleccionado mira solo sus filas; con «Todas las
+observaciones», las de cualquiera. Una fila sin `resultado` (caché antigua)
+cuenta como vista.
+
+> «Tener ficha» **ya no** quiere decir «visto»: `getFicha(id)` devuelve
+> también un intento fallido. Lo que decide el símbolo, el filtro y los
+> recuentos es `resultadoDe`. Lo vigila `node scripts/test_observadores.js`.
+
+- **Símbolo** (`VLObservadores.simboloDe`): punto lleno con halo si se vio,
+  **triángulo hueco** del color del tipo si se intentó y no se vio, y anillo
+  hueco si está por explorar. El triángulo no distingue los dos subtipos de no
+  visto. Su tamaño está en `TRIANGULO_NO_CONFIRMADO`, junto al anillo, y su área
+  de clic es de 24 px.
+- **Selector de estado** (`#mw-estado`): cuatro opciones excluyentes,
+  **Todo · Confirmados · No confirmados · Por explorar**, cada una con su
+  recuento y con el mismo símbolo que en el mapa, así que el selector hace de
+  leyenda. Las tres últimas reparten el catálogo sin solaparse.
+- **Resumen sin abrir nada** (`VLObservadores.resumenDe`): al pasar el ratón o
+  enfocar un objeto sale una línea como «▲ No confirmado · 3 intentos · último
+  12 ago 2026 · Luna», o «● Confirmado por 2 · 1 no confirmado» si unos lo
+  vieron y otros no.
+- **La pantalla del objeto**: al pulsar un triángulo se abre con el rótulo
+  **EXPLORADO – NO CONFIRMADO**. Arriba va el balance («2 lo confirmaron · 1 no
+  lo confirmó») o, si nadie lo ha visto, «Nadie lo ha confirmado todavía · N
+  intentos». Después va la lista de todos los intentos, de éxito y de fallo.
+  Cada fila de fallo lleva ▲ y borde discontinuo, fecha, nave, cielo (Bortle o
+  SQM), aumentos, motivo, subtipo y el arranque de la nota de *Exploración*. Las
+  filas propias dicen «Tú». Con más de 8 filas la cabecera queda fija.
+- Abrir un intento fallido lo abre en su pestaña de **Exploración**, que es
+  donde se cuenta qué se probó.
+- **Reintentar**: en un intento **propio** no confirmado, la ficha ofrece el
+  enlace al formulario con `?derivar=<id>`. Copia objeto, nave y base, pero
+  **no** el resultado ni el motivo: el nuevo intento nace «Visto».
+
 > Solo se aprecia cuando hay **varios observadores** con observaciones en la base
 > de datos: con uno solo no hay nada "ajeno" que descubrir y el mapa se ve igual.
 
@@ -395,6 +441,8 @@ m30: [{
   lugar: 'SQM-L 21.40 · IR -1.3º · 18º amb.',
   instrumento: 'Stargate 18”',   // texto libre (observaciones escritas a mano)
   nave: { nombre: '', apertura_mm: 457, focal_mm: 2057, f_ratio: 4.5 },
+  resultado: 'visto',       // o 'detectado_no_visto' / 'no_visto'
+  // motivo: 'luna',        // solo en un no visto con motivo; si no, no viene
   pdf: 'https://…/m30_inv.pdf',
   defaultIndex: 1,          // qué pestaña se abre primero
   entries: [
@@ -408,7 +456,10 @@ m30: [{
 ```
 
 La lista permite **varias observaciones del mismo objeto** (distintas noches
-o distintos observadores), y se puede filtrar por observador.
+o distintos observadores), y se puede filtrar por observador. Cada intento es
+una fila propia: un fallo en marzo y un éxito en mayo son dos entradas, y la
+forma del objeto la decide el mejor resultado (ver
+[Explorado – no confirmado](#explorado--no-confirmado)).
 
 **La nave del viaje.** La ficha abre con una tira monoespaciada: a la izquierda
 la **fecha estelar** y a la derecha la **nave**, el telescopio con el que se
@@ -487,7 +538,8 @@ cambio ya está hecho y no se nota.
 | Abrir ficha | Clic en el punto | Toque |
 
 Y en pantalla, de arriba abajo: registrar observación, buscador, deslizadores de
-rotación y abatimiento, filtro de **observador** y combo de **viajes
+rotación y abatimiento, filtro de **observador**, selector de **estado**
+(Todo · Confirmados · No confirmados · Por explorar) y combo de **viajes
 interestelares**; a la derecha los botones de zoom, y abajo la leyenda.
 
 Mientras se recorre un viaje el **buscador queda en pausa**: navegar a otro

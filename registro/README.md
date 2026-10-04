@@ -79,6 +79,23 @@ secciones:
 - **Cielo de la sesión**: un **SQM** (mag/arcsec²) con un atajo por la **escala
   Bortle** (elegir «Clase 3 · Cielo rural» fija el SQM). Alimenta la magnitud
   límite al generar la imagen y queda registrado en la observación.
+- **Resultado**: **Visto** (por defecto) o **No visto**. Un intento fallido
+  también se registra: es lo que el mapa pinta como *Explorado – no
+  confirmado* (épica #393). Con «No visto» aparecen dos preguntas opcionales:
+  - el subtipo, «¿Claramente no visto o detectado pero no visto?», que viene
+    marcado en «Claramente no visto»;
+  - el **motivo**, con chips: nubes o transparencia, contaminación lumínica,
+    Luna, objeto bajo u obstáculo, seeing, apertura insuficiente, no localizado
+    u otro.
+
+  El detalle va en la nota de *Exploración*. Con «No visto», la sección 2 pasa
+  a «Qué probaste (opcional)» y el botón dice «Guardar exploración no
+  confirmada». Los campos se muestran y ocultan sin animación y sin mover el
+  foco; volver a «Visto» no borra lo marcado, pero al guardar solo viaja lo que
+  diga el estado (`BitacoraBase.serializarResultado`). Quien valida es el
+  servidor (`bitacora_validar_resultado`): un valor fuera de lista da `400`, y
+  sin `resultado` se guarda `visto`. Prueba:
+  `node scripts/test_resultado_formulario.js`.
 
 ### 2 · Lo que viste, por ocular
 
@@ -152,6 +169,10 @@ pulsarlos el formulario deja de editar y vuelve a crear, así que lo que se
 guarde después es una observación nueva y la de origen se queda como estaba.
 Prueba: `node scripts/test_otra_observacion.js`.
 
+El **resultado no se copia**. El objeto siguiente nace «Visto» y sin motivo, y
+lo mismo pasa al derivar de un intento fallido con `?derivar=<id>`, que es el
+**Reintentar** del mapa: la copia trae objeto, nave y base, pero no el fallo.
+
 ### El cielo de esa noche (paso aparte)
 
 La astrometría —fecha/hora exacta, lugar, altitud y azimut del objeto, altura
@@ -218,7 +239,8 @@ y aparece en el mapa (es el caso de las nebulosas difusas, como NGC 2024).
 ## El listado
 
 Vive dentro de **Mi bitácora** (`mis-viajes-wordpress.html`), que es una sola
-página con tres pestañas: **Viajes**, **Todas** y **Papelera**. Las tres enseñan
+página con cuatro pestañas: **Viajes**, **Todas**, **Papelera** y **Explorado –
+no confirmado**. Las tres primeras enseñan
 lo mismo repartido de otra forma, así que la lista de observaciones se pide una
 vez y se comparte; agrupar por salida no es otra consulta.
 
@@ -233,6 +255,14 @@ vez y se comparte; agrupar por salida no es otra consulta.
   papelera muestra, igualmente, solo las suyas ya borradas. Las observaciones de
   otros observadores no aparecen aquí (sí en el mapa, que es público).
 - La **papelera** no se agrupa ni se busca: son restos sueltos, no una salida.
+- **Explorado – no confirmado** lista los intentos fallidos
+  (`GET /observaciones?resultado=no_confirmado`), con el alcance **Míos** o **De
+  todos**. Cada tarjeta lleva ▲, el cielo, el subtipo y el motivo. Si el mismo
+  observador vio el objeto más tarde, añade «● Confirmado después», con la fecha
+  y un enlace a esa observación. **Solo pendientes** (`&solo_pendientes=1`)
+  oculta esos ya confirmados. El estado va en la URL
+  (`?resultado=no_confirmado&alcance=todos`), así que el enlace se puede
+  compartir. Si la lista sale vacía en «Míos», ofrece con un clic las de todos.
 
 El reparto por salida y el filtro por nombre son funciones puras
 (`BitacoraListado.repartirPorViaje` y `.filtrarPorNombre`), publicadas antes de
@@ -301,6 +331,13 @@ salida, no del objeto, y por eso vive aquí y no en el formulario de registro.
 
 La **noche** no se edita: es la identidad del viaje junto al observador y el
 lugar. Un viaje solo se puede borrar cuando ya no le cuelga ninguna observación.
+
+**Los recuentos solo cuentan lo visto** (#396). Un viaje dice «5 confirmados ·
+2 no confirmados», y la segunda parte solo aparece si hay alguno. El ranking y
+la medalla de las bases, y el total del observador, cuentan también solo lo
+visto. Los **guardianes de borrado**, en cambio, cuentan **todas** las filas,
+también las fallidas (`num_filas`, `n_filas`): protegen datos, no estadísticas.
+Prueba: `php scripts/test_recuentos_solo_vistos.php`.
 
 Un viaje se puede crear desde aquí, o desde el propio formulario de registro
 cuando esa noche todavía no tiene ninguno.
@@ -371,6 +408,12 @@ están mal— y solo el segundo botón escribe. Las reglas que deciden todo eso:
   fichero **actualiza** lo que ya entró.
 - **Lo que está mal se avisa, no aborta.** Un objeto sin nombre o una noche sin
   fecha se listan para repasarlos en la plantilla; el resto entra igual.
+- **El resultado viaja en `<rating>`** (#401), con la escala de la Deep Sky
+  Liste que usa OAL. Al exportar, `no_visto` sale como **7** y
+  `detectado_no_visto` como **6**, con el motivo al principio de
+  `<description>`; lo visto sale como 99. Al importar, 7 y 6 entran como fallo,
+  y 1–5, 99 o la ausencia de `rating` entran como visto. La línea del motivo se
+  quita de la descripción para que reexportar no la duplique.
 
 Desde la página del frontend las observaciones entran **siempre en la cuenta de
 quien sube el fichero**. Elegir destinatario es cosa del panel del escritorio,
@@ -453,6 +496,10 @@ altitud y el azimut, las condiciones del cielo (SQM-L, IR y temperatura, que
 captura el formulario) y la línea de constelación con sus coordenadas. La
 constelación no se guarda en la tabla: se deduce del número Messier. En objetos
 NGC/IC (coordenadas manuales) esa línea muestra solo la coordenada.
+
+Un intento fallido no se lee como una observación más: la ficha, igual que el
+correo del objeto, escribe bajo su nombre «Explorado – no confirmado», el
+subtipo («detectado») y el motivo.
 
 ### Dónde va la plantilla en el servidor
 
@@ -541,6 +588,8 @@ WordPress se usa solo para lo que hace bien: autenticar al usuario.
 | `hora_observacion` | `varchar(8)` | hora local `HH:MM` (opcional), para la posición futura |
 | `cielo_sqm` | `double` | brillo de cielo de la sesión, o `NULL` |
 | `cielo_bortle` | `tinyint` | clase Bortle 1–9 (etiqueta del SQM), o `NULL` |
+| `resultado` | `varchar(24)` | `visto` (defecto, y el de todas las filas previas), `detectado_no_visto` o `no_visto` |
+| `motivo_no_visto` | `varchar(24)` | motivo de un no visto (`nubes`, `luna`, `apertura`…), o `NULL`; siempre `NULL` si es `visto` |
 | `fecha_hora_local` | `varchar(32)` | tal como la escribió el observador |
 | `fecha_hora_utc` | `datetime` | normalizada |
 | `lat`, `lon` | `double` | lugar de observación |
@@ -610,8 +659,8 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 
 | Método | Ruta | Sesión | Qué hace |
 |---|---|---|---|
-| `POST` | `/observaciones` | Sí | Crea una observación. `viajeId` es **obligatorio**; `baseId` solo si ese viaje aún no tiene lugar, y entonces sube a él |
-| `GET` | `/observaciones` | Sí | Lista las activas. `?borradas=1` para la papelera, `?mias=1` para filtrar por autor |
+| `POST` | `/observaciones` | Sí | Crea una observación. `viajeId` es **obligatorio**; `baseId` solo si ese viaje aún no tiene lugar, y entonces sube a él. `resultado` y `motivo_no_visto` son opcionales (sin `resultado`, `visto`; fuera de lista, `400`) |
+| `GET` | `/observaciones` | Sí | Lista las activas. `?borradas=1` para la papelera, `?mias=1` para filtrar por autor, `?resultado=no_confirmado` para los intentos fallidos (cada uno con `confirmado_despues`) y `&solo_pendientes=1` para quitar los ya confirmados |
 | `GET` | `/observaciones/{id}` | Sí | Devuelve una, para precargar el formulario |
 | `PUT` | `/observaciones/{id}` | Sí | La modifica *(solo el autor)* |
 | `DELETE` | `/observaciones/{id}` | Sí | Borrado suave *(solo el autor)* |
