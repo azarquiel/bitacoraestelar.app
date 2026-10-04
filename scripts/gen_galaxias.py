@@ -10,6 +10,9 @@ IC 5332, NGC 4696…—, y filtrar por BT las tiraba sin aviso: el render de Gai
 no las pintaba. Para esas filas se usa mB, la magnitud fotográfica del mismo
 RC3 (mapa/datos/rc3_mb.tsv, la consulta filtrada a mB < 13,5).
 
+El corte (BT_MAX) va en B y coincide con el de los dos ficheros: 13,5, que en
+V es 12,6–12,95 según el tipo. Ver el comentario de BT_MAX.
+
 Para qué: el perfil de SÉRSIC de esta fila es el PRESUPUESTO DE LUZ de la galaxia.
 Desde la capa de imagen difusa, quien manda en la morfología es la imagen
 profunda: el parche de PanSTARRS, que llega por el proxy y, según se vayan
@@ -65,7 +68,12 @@ FUENTE_N = ('Salo+ (2015) S4G, ajuste de Sérsic único a 3,6 µm, vía VizieR '
 CRUCE_ARCSEC = 20.0
 
 MU_ISOFOTA = 25.0        # mag/arcsec² en B: la isofota que define D25
-BT_MAX = 13.0            # tope de magnitud; más débil no se ve por un ocular
+# Tope de magnitud, en B (BT, o mB si falta), porque es la banda del RC3 y la
+# de los dos TSV de partida, cortados ya en 13,5. Lo que cuenta en el ocular es
+# V: con el color de color_bv, 13,5 en B es V ≈ 12,6 (elípticas) a 12,95
+# (espirales tardías), lo que alcanza un 200 mm con cielo oscuro. Bajarlo a V
+# exige volver a bajar el RC3 hasta B ≈ 13,9 (#411).
+BT_MAX = 13.5
 
 # Color B−V típico por tipo morfológico, para pasar de la magnitud B del RC3 a
 # la banda visual. Aproximación deliberada: RC3 no trae V para todas.

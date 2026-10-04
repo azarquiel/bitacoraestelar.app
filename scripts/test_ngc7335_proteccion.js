@@ -2,7 +2,7 @@
 /* Test de PS1_PROTECCION_SIN_MODELO (resources/js/bitacora-gaia-render.js).
 
    NGC 7335 (B=14,44) queda fuera del RC3 que alimenta ps1GalaxiasDelCampo
-   (BT_MAX=13,0 de gen_galaxias.py): sin fila de catálogo, ps1EscenaEnParche
+   (BT_MAX=13,5 de gen_galaxias.py): sin fila de catálogo, ps1EscenaEnParche
    nunca la veía y su núcleo se borraba como estrella Gaia suelta. La lista
    de protección sin modelo la mete en la escena con radio dado, sin pasar
    por ps1ComponentesSersic ni por el catálogo.
