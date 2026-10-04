@@ -229,6 +229,22 @@
     return (v && v.noche) ? v.noche : '';
   }
 
+  // Primeros 'max' caracteres (cortados por palabra y terminados en «…») de la
+  // nota de «Exploración» de una observación, o ''. DOMParser y no innerHTML:
+  // el HTML de la nota no debe ejecutar nada al leerlo.
+  function notaExploracion(o, max) {
+    var es = (o && o.entries) || [];
+    for (var i = 0; i < es.length; i++) {
+      if (es[i].boton !== 'Exploración' || !es[i].html) continue;
+      var t = (new DOMParser().parseFromString(es[i].html, 'text/html').body.textContent || '')
+        .replace(/\s+/g, ' ').trim();
+      if (t.length <= max) return t;
+      var corte = t.lastIndexOf(' ', max);
+      return t.slice(0, corte > 0 ? corte : max).replace(/[\s.,;:]+$/, '') + '…';
+    }
+    return '';
+  }
+
   function otrasObservaciones(objetoId, excluir) {
     var obs = tabla('OBSERVACIONES');
     var lista = (obs && obs[objetoId]) ? obs[objetoId] : null;
@@ -248,7 +264,15 @@
         instrumento: lista[i].instrumento || '',
         // Si lleva tramo de audio (ADR 0005), la lista lo señala con el 🎧.
         audio: !!(lista[i].audio && lista[i].audio.url),
-        etiqueta: nombre
+        etiqueta: nombre,
+        // #399: lo que se compara sin abrir la ficha.
+        visto: !lista[i].resultado || lista[i].resultado === 'visto',
+        resultado: lista[i].resultado || 'visto',
+        motivo: lista[i].motivo || '',
+        bortle: lista[i].bortle || null,
+        sqm: lista[i].sqm != null ? lista[i].sqm : null,
+        aumentos: lista[i].aumentos || null,
+        nota: notaExploracion(lista[i], 120)
       });
     }
     // Las fechas son ISO (YYYY-MM-DD), así que ordenan como texto.
