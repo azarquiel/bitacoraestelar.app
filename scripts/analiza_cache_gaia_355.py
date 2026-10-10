@@ -41,7 +41,9 @@ def reconstruir(k, j):
 reg, params = {}, {}
 for k in ficheros:
     j = json.load(gzip.open(os.path.join(D, k + '.json.gz')))
-    reg[k] = 'densa' if 'fondo' in j else 'sonda'
+    # Densa sin `fondo` = el agregado falló y gaia_mezclar_fondo devolvió la lista intacta;
+    # se reconoce por el TOP de la segura (GAIA_MAX_ROWS).
+    reg[k] = 'densa' if 'fondo' in j or len(j['data']) == 40000 else 'sonda'
     params[k] = reconstruir(k, j)
 
 # ── punto 1 ──
@@ -80,4 +82,20 @@ print('P4 bytes sobrantes (todas menos la mas honda por campo)', sum(ficheros[k]
 print('P4 por regimen', Counter(reg[k] for v in red.values() for _, k in v))
 for g, v in sorted(red.items(), key=lambda x: -len(x[1]))[:10]:
     print('   ', g, sorted((m, reg[k], ficheros[k]) for m, k in v))
-json.dump({k: [reg[k], ficheros[k], params[k]] for k in ficheros}, open(os.path.join(os.path.dirname(__file__), 'entradas.json'), 'w'))
+json.dump({k: [reg[k], ficheros[k], params[k]] for k in ficheros}, open('entradas.json', 'w'))
+# ── reuso (valor de negocio) ──
+aciertos = [e for e in log if e['estado'] in ('hit', '304')]
+print('R aciertos por regimen', Counter(reg[e['clave']] for e in aciertos))
+previas = [e for e in aciertos if e['clave'] not in claves_miss]
+print('R aciertos sobre entradas previas al log', len(previas), 'claves distintas', len({e['clave'] for e in previas}),
+      'por regimen', Counter(reg[k] for k in {e['clave'] for e in previas}))
+print('R claves creadas en la ventana y luego acertadas', len({e['clave'] for e in aciertos if e['clave'] in claves_miss}), 'de', len(claves_miss))
+dom = Counter(tuple(params[e['clave']][:2]) for e in aciertos).most_common(1)[0]
+print('R campo dominante', dom)
+resto = [e for e in log if tuple(params[e['clave']][:2]) != dom[0]]
+h = sum(e['estado'] == 'hit' for e in resto); m = sum(e['estado'] == 'miss' for e in resto)
+print('R sin campo dominante: peticiones', len(resto), 'hit', h, 'miss', m, 'ratio %.3f' % (h / (h + m)))
+dias = (t1 - t0) / 86400
+for r in ('sonda', 'densa'):
+    print('R crecimiento %s %d B/dia' % (r, sum(ficheros[e['clave']] for e in miss if reg[e['clave']] == r) / dias))
+print('R margen hasta el tope %d B, dias %.1f' % (tope - total, (tope - total) / (crec / dias)))
