@@ -1,0 +1,9 @@
+# Caché y log del proxy de Gaia: solo los lee gaia_proxy.php desde disco.
+# Nada de aquí se sirve por HTTP (.hits.log incluido).
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
