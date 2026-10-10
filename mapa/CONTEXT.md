@@ -90,6 +90,20 @@ El símbolo es siempre el mismo —disco con anillo inclinado y satélite— y a
 
 **Explorado – no confirmado**: estado de un objeto que alguien ha intentado observar y no ha visto (épica #393). Cada observación guarda UN `resultado` (`{prefix}bitacora`): `visto` (defecto, y lo que leen todas las filas previas), `detectado_no_visto` (detectado pero no visto) o `no_visto` (claramente no visto). `motivo_no_visto` (`nubes`, `contaminacion`, `luna`, `bajo`, `seeing`, `apertura`, `no_localizado`, `otro`) es opcional y solo existe en un no visto. **Terminología heredada:** en el código previo, «explorado» a secas significaba «observado», porque toda fila contaba como vista (el eje «Explorados / Por explorar»); la épica lo renombra a «Confirmados».
 
+## Origen y centro de la escena
+
+Dos puntos distintos de cada escala: vecindario solar, Vía Láctea y Grupo Local.
+
+**Origen**: punto fijo desde el que se miden las coordenadas de una escena: el Sol en el vecindario y en el mapa de la galaxia, la Vía Láctea en el Grupo Local. Nunca cambia; las distancias que enseña el mapa son siempre al origen.
+_Evitar_: centro (para este sentido).
+
+**Centro de la escena**: objeto alrededor del cual gira la cámara y hacia el que va el zoom. Por defecto coincide con el origen; en las escenas 3D el usuario lo desplaza a una estrella o galaxia con «Centrar» o con la búsqueda; en el mapa de la galaxia, arrastrando.
+_Evitar_: foco, pivote, origen (para este sentido).
+
+- **Centrar no reubica nada:** solo mueve la cámara. Coordenadas, distancias y rótulos siguen referidos al origen.
+- **Solo se cambia de escala con el centro en el origen.** Rige al salir de una escena 3D y al entrar en el vecindario; del mapa de la galaxia al Grupo Local se pasa libre, porque alejarse ya enseña la galaxia entera y el Grupo Local se abre siempre en su origen. Con el centro desplazado, el zoom se para en el tope de la escena; para pasar a la escala vecina hay que «Volver al origen» primero (rotulado «Volver al Sol» o «Volver a la Vía Láctea»), visible en las tres escalas mientras el centro esté desplazado.
+- **El centro es volátil:** no sobrevive a recargar ni a cambiar de escala.
+
 ## Vecindario solar (estrellas cercanas)
 
 Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (1500 al) del Sol, que aparece al hacer zoom máximo sobre el Sol en la vista cenital. Se puebla desde los **objetos del mapa** que tengan coordenadas galácticas y esa distancia.
