@@ -1,0 +1,26 @@
+P1 bytes en disco 485790125 tope 524288000 ocupacion 0.9266 entradas 624
+P1 claves con miss en el log que ya no estan en disco: 0 Counter()
+P1 304: [('50a626e2', None, True), ('50a626e2', None, True)]
+P2 ventana dias 18.8 estados Counter({'miss': 184, 'hit': 43, '304': 2}) miss por etapa Counter({'sonda': 144, 'densa': 40})
+P2 claves distintas pedidas 191 claves miss distintas 184 miss repetidos 0
+P2 miss por dia [(0, 44), (2, 23), (4, 19), (5, 21), (6, 18), (10, 4), (12, 35), (13, 11), (18, 9)]
+P2 sonda n=144 ms mediana 1845 p90 17856 suma s 1175
+P2 densa n=40 ms mediana 39534 p90 121250 suma s 2327
+P3 sonda n=489 mediana 195831 B, media 756860 B, total 370105018 B (76.2 %)
+P3 densa n=135 mediana 853613 B, media 856926 B, total 115685107 B (23.8 %)
+P3 entradas en disco sin linea en el log (anteriores al 2026-09-21): 433
+P3 bytes en disco de las claves fallidas en la ventana: 140126430 (7.1 MB/dia)
+P4 parametros reconstruidos y validados por sha1: 624 de 624
+P4 campos (ra,dec,rad) distintos 587 con >1 bucket de mag 33 claves sobrantes 37
+P4 bytes sobrantes (todas menos la mas honda por campo) 38745884
+P4 por regimen Counter({'sonda': 48, 'densa': 22})
+    (262.433, -19.472, 0.72) [(17.0, 'sonda', 612143), (18.0, 'sonda', 1197066), (18.5, 'sonda', 1672619), (19.0, 'sonda', 2451190), (19.5, 'sonda', 3898213), (20.0, 'densa', 842958)]
+    (162.838, 32.768, 0.16) [(19.0, 'sonda', 2288), (20.0, 'sonda', 3135)]
+    (4.383, -15.262, 0.22) [(19.0, 'sonda', 4686), (20.0, 'sonda', 6780)]
+    (56.6, 24.114, 0.52) [(18.5, 'sonda', 57364), (20.0, 'sonda', 102512)]
+    (268.446, -34.841, 0.8) [(18.0, 'densa', 855539), (20.0, 'densa', 855646)]
+    (324.746, 57.33, 1.33) [(17.5, 'sonda', 1248180), (20.0, 'densa', 858599)]
+    (325.088, 58.066, 1.33) [(17.5, 'sonda', 1230605), (20.0, 'densa', 859282)]
+    (14.754, 60.888, 0.25) [(19.0, 'sonda', 128366), (20.0, 'sonda', 207014)]
+    (317.307, 56.484, 1.33) [(17.5, 'sonda', 1020157), (20.0, 'densa', 858133)]
+    (241.218, 17.839, 0.22) [(19.0, 'sonda', 11247), (20.0, 'sonda', 17341)]
