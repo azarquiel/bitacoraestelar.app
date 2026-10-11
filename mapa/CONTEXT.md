@@ -8,6 +8,8 @@ Entrada en tabla `{prefix}bitacora_objetos` que se pinta en el mapa de la Vía L
 
 Toda observación debería tener el suyo: lo asegura `bitacora_asegurar_objeto_mapa()` al registrar, editar e importar OAL. Como no bloquea el guardado (observación sin distancia se guarda igual, solo avisa), quedan objetos huérfanos: observación sí, marcador no. Se rescatan con `bitacora_objetos_backfill()`, botón «Colocar en el mapa los objetos observados que falten» del panel de administración. Síntoma del hueco: buscador del mapa SÍ encuentra el objeto —resuelve en SIMBAD al vuelo y dibuja punto de mira— pero no hay marcador. `scripts/test_oal_objeto_mapa.php` fija las dos vías.
 
+**Estrella duplicada**: la misma estrella registrada con dos nombres (Sheliak / HR 7106), cada uno con su fila en `{prefix}bitacora_objetos` y la misma posición. El mapa muestra UNA, la de nombre más común: nombre propio > Bayer/Flamsteed > HR > HD > SAO > resto. La fusión es de lectura (`via-lactea-duplicados.js`); la de la base de datos está pendiente. Detalle en `README.md`, «Una estrella, un marcador».
+
 ## Distancia al Sol de un objeto
 
 Lo que separa una dirección del cielo de un sitio en el mapa: sin distancia no se pinta y la observación queda guardada sin representación. **Escalera de fuentes**, de más directa a más indirecta:
