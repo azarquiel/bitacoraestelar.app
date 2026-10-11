@@ -1293,8 +1293,18 @@
     if (!fuera && document.activeElement === centroVolver) viewer.focus({ preventScroll: true });
     centroPastilla.classList.toggle('mw-centro-visible', fuera);
   }
-  // Vuelo del Sol al centro SIN tocar el zoom (posX/posY). Un gesto lo corta
-  // (todos cancelan animFrame) y deja el mapa donde esté.
+  // Vuelo del Sol al centro SIN tocar el zoom (posX/posY). Un gesto lo termina
+  // EN EL DESTINO (nunca a medio camino) y se aplica desde ahí.
+  var destinoSol = null;
+  function terminarVueloSol() {
+    if (!destinoSol) return;
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+    posX = destinoSol.x; posY = destinoSol.y; destinoSol = null;
+    applyTransform();
+  }
+  ['mousedown', 'wheel', 'touchstart'].forEach(function (ev) {
+    viewer.addEventListener(ev, terminarVueloSol, { capture: true, passive: true });
+  });
   function volverAlSol() {
     if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') return false;
     var sol = isEdgeView ? CONFIG.sol.canto : CONFIG.sol.cenital;
@@ -1305,6 +1315,7 @@
     var reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reducido || dist < 1) { pintarVolverSol(); return true; }
     posX = x0; posY = y0;
+    destinoSol = { x: x1, y: y1 };
     applyTransform();
     var t0 = performance.now();
     var dur = VLCentro.duracionVuelo(dist, Math.hypot(viewer.clientWidth, viewer.clientHeight));
@@ -1313,6 +1324,7 @@
       posX = x0 + (x1 - x0) * e; posY = y0 + (y1 - y0) * e;
       applyTransform();
       animFrame = t < 1 ? requestAnimationFrame(paso) : null;
+      if (t >= 1) destinoSol = null;
     })(t0);
     return true;
   }

@@ -156,6 +156,7 @@ ok(C.duracionVuelo(50, 1000) > 250 && C.duracionVuelo(50, 1000) < 500, 'recorrid
 ok(/setAttribute\('data-escala', 'galaxia'\)/.test(app), 'la app pone la pastilla en escala «galaxia»');
 ok(/'Volver al Sol, origen de la escena'/.test(app), 'rótulo accesible «Volver al Sol, origen de la escena»');
 ok(/reducido \|\| dist < 1/.test(app), 'movimiento reducido: el Sol se centra al instante');
+ok(/function terminarVueloSol/.test(app) && /'wheel', 'touchstart'/.test(app), 'un gesto durante el vuelo lo termina en el destino');
 ok(/centerOnAnchor\(sol\.x, sol\.y, scale\)/.test(app), 'el vuelo conserva la escala');
 ok(/if \(!isDragging\) ?|isDragging\) return;\s*var propia/.test(app), 'durante el arrastre no se reevalúa');
 ok(/data-escala="galaxia"\] > \.mw-icono/.test(html), 'en la galaxia la pastilla enseña solo el botón');
