@@ -141,6 +141,16 @@ eq($d304['bytes'], 0, '304 → bytes 0');
 // Un fallo lleva la etapa de adquisición.
 eq(json_decode(trim(gaia_log_linea(1.0, 'k', 'miss', 'sonda', 10, 900.0)), true)['etapa'], 'sonda', 'fallo resuelto por la sonda');
 eq(json_decode(trim(gaia_log_linea(1.0, 'k', 'miss', 'densa', 10, 900.0)), true)['etapa'], 'densa', 'fallo que tuvo que ir a la segura');
+// #429: la traza dice qué proveedor respondió y cuánto costó cada intento.
+eq($d['traza'], null, 'sin traza en un acierto (no fue al TAP)');
+$traza = [['sonda', 'cds', 0, 55012.3], ['sonda', 'gavo', 200, 702.1]];
+eq(json_decode(trim(gaia_log_linea(1.0, 'k', 'miss', 'sonda', 10, 55800.0, $traza)), true)['traza'], $traza,
+    'traza de un fallo: CDS agota el plazo, GAVO responde');
+
+echo "gaia_proveedor (por host):\n";
+foreach (gaia_proveedores(10.0, 20.0, 0.5, 16.0, false) as $u) { $provs[] = gaia_proveedor($u); }
+eq($provs, ['cds', 'gavo'], 'las URLs de la sonda son CDS y GAVO, en ese orden');
+eq(gaia_proveedor('https://otro.example.org/tap/sync'), 'otro.example.org', 'host desconocido → el host tal cual');
 
 echo "gaia_mediana:\n";
 eq(gaia_mediana([]), 0.0, 'lista vacía → 0');
@@ -155,9 +165,11 @@ $texto = gaia_log_linea(1.0, 'a', 'hit', null, 100, 5.0)
        . gaia_log_linea(3.0, 'c', 'hit', null, 300, 9.0)
        . gaia_log_linea(4.0, 'd', 'miss', 'sonda', 1000, 2000.0)
        . gaia_log_linea(5.0, 'e', 'miss', 'densa', 2000, 40000.0)
-       . gaia_log_linea(6.0, 'f', '304', null, 0, 1.0);
+       . gaia_log_linea(6.0, 'f', '304', null, 0, 1.0)
+       . gaia_log_linea(7.0, 'g', 'error', 'densa', 0, 110000.0);
 $ag = gaia_log_agregado($texto);
-eq($ag['peticiones'], 6, 'cuenta todas las peticiones');
+eq($ag['peticiones'], 7, 'cuenta todas las peticiones');
+eq($ag['error'], 1, '502 contados (#429)');
 eq($ag['hit'], 3, 'aciertos');
 eq($ag['miss'], 2, 'fallos');
 eq($ag['304'], 1, '304');
@@ -168,7 +180,7 @@ eq($ag['ms_mediano']['sonda'], 2000.0, 'ms mediano de la sonda');
 eq($ag['ms_mediano']['densa'], 40000.0, 'ms mediano de la consulta densa');
 // Robustez: el log se rota por tamaño, así que puede haber basura o líneas a medias.
 $roto = gaia_log_agregado("no es json\n" . $texto . '{"estado":"hit","bytes":1');
-eq($roto['peticiones'], 6, 'ignora líneas ilegibles (rotación a mitad de línea)');
+eq($roto['peticiones'], 7, 'ignora líneas ilegibles (rotación a mitad de línea)');
 eq(gaia_log_agregado('')['peticiones'], 0, 'log vacío → 0 peticiones');
 eq(gaia_log_agregado('')['ratio'], null, 'sin peticiones no hay ratio (no divide por cero)');
 eq(gaia_log_agregado(gaia_log_linea(1.0, 'x', 'inventado', null, 9, 1.0))['peticiones'], 0, 'estado desconocido → no cuenta');

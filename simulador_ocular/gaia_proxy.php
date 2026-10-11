@@ -26,8 +26,9 @@ declare(strict_types=1);
      · Bloqueo de concurrencia (flock) para evitar estampidas y escrituras a medias.
      · Limpieza LRU incremental (no en cada petición; acotada por pasada).
      · Creación automática del directorio de caché.
-     · Log de una línea JSON por petición (hit/miss/304) con rotación por tamaño,
-       y endpoint ?stats=1 de solo lectura para leerlo agregado.
+     · Log de una línea JSON por petición (hit/miss/304/error) con rotación por
+       tamaño, la traza de cada intento al TAP (etapa, proveedor, http, ms) y
+       endpoint ?stats=1 de solo lectura para leerlo agregado.
 
    Endpoints:
      GET ?ra=..&dec=..&rad=..&mag=..   → datos Gaia (JSON)
@@ -263,8 +264,10 @@ function gaia_mezclar_espacial(string $json, ?string $esp_json, int $N): string 
  * Línea del log de aciertos: un JSON por petición, con salto de línea final.
  * Pura — el instante y el tiempo entran como parámetros, así el test no depende
  * del reloj. `etapa` solo tiene sentido en un fallo (`sonda` | `densa`).
+ * `traza` (#429): un intento por proveedor TAP, [etapa, proveedor, http, ms];
+ * solo cuando la petición fue al TAP (null en un acierto).
  */
-function gaia_log_linea(float $t, string $clave, string $estado, ?string $etapa, int $bytes, float $ms): string {
+function gaia_log_linea(float $t, string $clave, string $estado, ?string $etapa, int $bytes, float $ms, ?array $traza = null): string {
     return json_encode([
         't'      => round($t, 3),
         'clave'  => $clave,
@@ -272,7 +275,17 @@ function gaia_log_linea(float $t, string $clave, string $estado, ?string $etapa,
         'etapa'  => $etapa,
         'bytes'  => $bytes,
         'ms'     => round($ms, 1),
+        'traza'  => $traza,
     ], JSON_UNESCAPED_SLASHES) . "\n";
+}
+
+/** Proveedor TAP de una URL, por su host: `cds`, `gavo` o el host tal cual. Puro. */
+function gaia_proveedor(string $url): string {
+    $host = (string) parse_url($url, PHP_URL_HOST);
+    if (str_contains($host, 'cds.unistra.fr')) {
+        return 'cds';
+    }
+    return str_contains($host, 'uni-heidelberg.de') ? 'gavo' : $host;
 }
 
 /** Mediana de una lista de números (0.0 si está vacía). */
@@ -294,8 +307,8 @@ function gaia_mediana(array $v): float {
  * fallo de la caché de disco, solo del navegador.
  */
 function gaia_log_agregado(string $texto): array {
-    $estados = ['hit', 'miss', '304'];
-    $r  = ['peticiones' => 0, 'hit' => 0, 'miss' => 0, '304' => 0, 'ratio' => null, 'bytes' => 0];
+    $estados = ['hit', 'miss', '304', 'error'];
+    $r  = ['peticiones' => 0, 'hit' => 0, 'miss' => 0, '304' => 0, 'error' => 0, 'ratio' => null, 'bytes' => 0];
     $ms = [];
     foreach (explode("\n", $texto) as $linea) {
         if ($linea === '') {
@@ -364,7 +377,8 @@ function gaia_log_escribir(string $ruta, string $linea, int $max_bytes): void {
 function gaia_log_registrar(string $clave, string $estado, ?string $etapa, int $bytes): void {
     $ahora = microtime(true);
     $ms = ($ahora - (float) ($_SERVER['REQUEST_TIME_FLOAT'] ?? $ahora)) * 1000;
-    gaia_log_escribir(GAIA_LOG_FILE, gaia_log_linea($ahora, $clave, $estado, $etapa, $bytes, $ms), GAIA_LOG_MAX_BYTES);
+    gaia_log_escribir(GAIA_LOG_FILE, gaia_log_linea($ahora, $clave, $estado, $etapa, $bytes, $ms,
+        $GLOBALS['gaia_traza'] ?? null), GAIA_LOG_MAX_BYTES);
 }
 
 /** Estado del directorio de caché: entradas, bytes y antigüedad. Solo lectura. */
@@ -402,7 +416,7 @@ function gaia_json_headers(): void {
  */
 function gaia_fetch(float $ra, float $dec, float $rad, float $mag, ?string &$etapa = null): ?string {
     $etapa = 'densa';
-    $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, false));
+    $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, false), 'sonda');
     if ($json !== null) {
         $filas = gaia_num_filas($json);
         if ($filas !== null && !gaia_truncada($filas)) {
@@ -411,7 +425,7 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, ?string &$eta
         }
         unset($json);   // libera el cuerpo de la sonda (~14 MB) antes de la 2ª pasada
     }
-    $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, true));
+    $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, true), 'segura');
     if ($json === null) {
         return null;
     }
@@ -423,21 +437,24 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, ?string &$eta
     if ($corte === null || $corte >= $mag) {
         return $json;
     }
-    $agg = gaia_fetch_urls(gaia_fondo_urls($ra, $dec, $rad, $mag, $corte));
+    $agg = gaia_fetch_urls(gaia_fondo_urls($ra, $dec, $rad, $mag, $corte), 'fondo');
     $fila = ($agg !== null) ? (json_decode($agg, true)['data'][0] ?? null) : null;
     $json = gaia_mezclar_fondo($json, is_array($fila) ? $fila : null, $corte, $rad, $mag);
     /* ADR 0029: velo espacial por celdas. Un fallo aquí degrada a velo uniforme
        (el escalar ya está servido), nunca bloquea los datos. */
-    $esp = gaia_fetch_urls(gaia_espacial_urls($ra, $dec, $rad, $mag, $corte, GAIA_ESPACIAL_N));
+    $esp = gaia_fetch_urls(gaia_espacial_urls($ra, $dec, $rad, $mag, $corte, GAIA_ESPACIAL_N), 'espacial');
     return gaia_mezclar_espacial($json, $esp, GAIA_ESPACIAL_N);
 }
 
 /**
  * Recorre URLs de TAP en orden (failover) con timeouts de conexión y de petición
  * separados. Devuelve el primer cuerpo de una respuesta 2xx no vacía, o null.
+ * Cada intento se anota en $GLOBALS['gaia_traza'] (#429): sin él, un CDS que
+ * agota los 55 s y un GAVO que responde en 1 s se ven como una sonda de 56 s.
  */
-function gaia_fetch_urls(array $urls): ?string {
+function gaia_fetch_urls(array $urls, string $etapa): ?string {
     foreach ($urls as $url) {
+        $t0 = microtime(true);
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -447,6 +464,7 @@ function gaia_fetch_urls(array $urls): ?string {
         ]);
         $body = curl_exec($ch);
         $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $GLOBALS['gaia_traza'][] = [$etapa, gaia_proveedor($url), $http, round((microtime(true) - $t0) * 1000, 1)];
         // Sin curl_close(): no-op desde PHP 8, y en PHP 8.5 emite un deprecation
         // notice que se cuela en la respuesta JSON si display_errors está On.
         if ($http >= 200 && $http < 300 && $body !== false && $body !== '') {
@@ -603,7 +621,9 @@ if ($lock && flock($lock, LOCK_EX)) {
         fclose($lock);
         http_response_code(502);
         gaia_json_headers();
-        exit(json_encode(['error' => 'No hay respuesta de Gaia (CDS/GAVO)']));
+        echo json_encode(['error' => 'No hay respuesta de Gaia (CDS/GAVO)']);
+        gaia_log_registrar($clave, 'error', $etapa, 0);
+        exit;
     }
 
     // Escritura ATÓMICA del gzip (temp + rename) para no dejar ficheros a medias.
@@ -651,4 +671,6 @@ if ($json !== null) {
 }
 http_response_code(502);
 gaia_json_headers();
-exit(json_encode(['error' => 'No hay respuesta de Gaia (CDS/GAVO)']));
+echo json_encode(['error' => 'No hay respuesta de Gaia (CDS/GAVO)']);
+gaia_log_registrar($clave, 'error', $etapa, 0);
+exit;
