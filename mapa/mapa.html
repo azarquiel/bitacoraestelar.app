@@ -374,7 +374,10 @@
     border-radius: 20px;
     color: #eaf1fb;
     font: 13px sans-serif;
-    /* Sin botón aún: #423 lo añade y tendrá que quitar esto. */
+    max-width: calc(100% - 20px);
+    box-sizing: border-box;
+    /* Solo el botón recibe el puntero, y solo con la pastilla visible: oculta
+       por opacidad, taparía la esquina del visor. */
     pointer-events: none;
     /* Oculta solo por opacidad: visibility o display sacarían la región
        role="status" del árbol de accesibilidad y no se anunciaría al
@@ -390,14 +393,54 @@
   }
   #mw-centro .mw-icono { color: #f4c76b; }
   #mw-centro-estado {
+    min-width: 0;      /* se recorta antes que el botón */
     max-width: 30ch;   /* «Centro: » + unos 22 caracteres de nombre */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Volver al origen (#423). Oculto, visibility lo saca del tabulador y del
+     árbol de accesibilidad; espera a que acabe el fundido de salida. */
+  #mw-centro-volver {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    min-height: 24px;
+    padding: 3px 10px;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.06);
+    color: #eaf1fb;
+    font: 13px sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+    visibility: hidden;
+    transition: visibility 0s linear 0.1s;
+  }
+  #mw-centro.mw-centro-visible #mw-centro-volver {
+    visibility: visible;
+    pointer-events: auto;
+    transition: none;
+  }
+  #mw-centro-volver:focus-visible { outline: 2px solid rgba(244,199,107,0.8); outline-offset: 2px; }
+  /* Icono por escala: espiral en el Grupo Local, el Sol en el vecindario. */
+  #mw-centro-ico-sol { display: none; }
+  #mw-centro[data-escala="vecindario"] #mw-centro-ico-sol { display: block; }
+  #mw-centro[data-escala="vecindario"] #mw-centro-ico-espiral { display: none; }
+  @media (hover: none) { #mw-centro-volver { min-height: 44px; } }
+  /* En estrecho la escala del centro se parte en dos líneas y llega hasta la
+     esquina: la pastilla baja debajo de ella. */
+  @media (max-width: 640px) {
+    #mw-centro { top: 64px; }
+    #mw-centro-volver-txt { display: none; }
+  }
+  /* El visor recibe el foco cuando desaparece el botón: sin anillo a pantalla
+     completa. */
+  #mw-viewer:focus { outline: none; }
 
   @media (prefers-reduced-motion: reduce) {
-    #mw-centro, #mw-centro.mw-centro-visible { transition: none; }
+    #mw-centro, #mw-centro.mw-centro-visible, #mw-centro-volver { transition: none; }
     #mw-consola-panel { transition: none; }
   }
 
@@ -832,7 +875,7 @@
   }
 </style>
 
-<div id="mw-viewer" style="
+<div id="mw-viewer" tabindex="-1" style="
   position: fixed;
   top: 0;
   left: 0;
@@ -1246,10 +1289,14 @@
   <!-- INDICADOR DE CENTRO (épica #420): qué objeto es el centro de la escena.
        La región role="status" existe desde la carga y grupo-local.js solo
        cambia su texto, para que el lector de pantalla oiga «Centro: M31». El
-       botón de volver al origen lo añade #423. -->
-  <div id="mw-centro">
+       botón de volver al origen (#423) va fuera de esa región: su rótulo no se
+       anuncia. data-escala elige el icono; el rótulo es el del Grupo Local, la
+       única escena que centra hoy: el vecindario (#422) pondrá el suyo. -->
+  <div id="mw-centro" data-escala="grupo-local">
     <svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="1.4" class="mw-icono-lleno"/></svg>
     <span id="mw-centro-estado" role="status" aria-atomic="true"></span>
+    <button id="mw-centro-volver" class="mw-ui-control" type="button" aria-keyshortcuts="Home"
+      aria-label="Volver a la Vía Láctea, origen de la escena" title="Devuelve la escena a su origen (Inicio)"><svg id="mw-centro-ico-espiral" class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 8c1.2-.9 2.9-.2 2.9 1.3 0 2.1-2.6 3.2-4.6 2.5C3.7 10.9 3 7.6 4.6 5.4 6.4 3 10.3 2.6 13 4.4M8 8c-1.2.9-2.9.2-2.9-1.3 0-2.1 2.6-3.2 4.6-2.5 2.6.9 3.3 4.2 1.7 6.4C9.6 13 5.7 13.4 3 11.6"/><circle cx="8" cy="8" r="1.1" class="mw-icono-lleno"/></svg><svg id="mw-centro-ico-sol" class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="2.8" class="mw-icono-lleno"/><path d="M8 1.4v2.2M8 12.4v2.2M1.4 8h2.2M12.4 8h2.2M3.3 3.3l1.6 1.6M11.1 11.1l1.6 1.6M3.3 12.7l1.6-1.6M11.1 4.9l1.6-1.6"/></svg><span id="mw-centro-volver-txt">Volver a la Vía Láctea</span></button>
   </div>
 
   <!-- LEYENDA DE COLORES POR TIPO DE OBJETO -->
@@ -1753,7 +1800,7 @@
 <!-- CENTRO DE LA ESCENA de las escenas 3D (#421): proyección y vuelo. Pura,
      sin DOM; ANTES de grupo-local.js. -->
 <script src="/bitacora-mapa/js/via-lactea-centro.js?v=20261011_1200"></script>
-<script src="/bitacora-mapa/js/grupo-local.js?v=20261011_1200"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20261011_1800"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260902_1200"></script>
@@ -1769,5 +1816,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261011_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261011_1800"></script>
 </li>

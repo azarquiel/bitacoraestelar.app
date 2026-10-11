@@ -89,5 +89,30 @@ var frac = (vMedio.x - desde.x) / (hasta.x - desde.x);
 ok(casi(frac, 0.875, 1e-12), 'ease-out cubic: a mitad de tiempo lleva 7/8 del camino (' + frac + ')');
 ok(v1 !== hasta, 'devuelve un punto nuevo, no el destino (no lo deja a merced del llamador)');
 
+// Volver al origen (#423): el botón vive en el DOM y su estado en el cierre de
+// grupo-local.js, sin seam puro; aquí se fija el cableado sobre el fuente.
+console.log('Volver al origen: cableado');
+var fs = require('fs'), path = require('path');
+function leer(rel) { return fs.readFileSync(path.join(__dirname, '..', rel), 'utf8'); }
+var html = leer('mapa/mapa.html');
+var gl = leer('mapa/js/grupo-local.js');
+var app = leer('mapa/js/via-lactea-app.js');
+var pastilla = (html.match(/<div id="mw-centro"[^>]*>([\s\S]*?)\n  <\/div>/) || [])[1] || '';
+var boton = (pastilla.match(/<button[^>]*id="mw-centro-volver"[^>]*>/) || [])[0] || '';
+var estado = (pastilla.match(/<span id="mw-centro-estado"[^>]*>[\s\S]*?<\/span>/) || [])[0] || '';
+ok(!!boton, 'el botón está dentro de la pastilla #mw-centro');
+ok(estado && estado.indexOf('mw-centro-volver') < 0, 'y fuera de la región role="status" (no se anuncia su rótulo)');
+ok(/aria-keyshortcuts="Home"/.test(boton), 'declara el atajo con aria-keyshortcuts="Home"');
+ok(/\bmw-ui-control\b/.test(boton), 'es .mw-ui-control: pulsarlo no arrastra el visor');
+ok(/id="mw-centro-ico-sol"/.test(pastilla) && /id="mw-centro-ico-espiral"/.test(pastilla),
+   'lleva los dos iconos: el Sol (vecindario) y la espiral (Grupo Local)');
+ok(/<div id="mw-viewer" tabindex="-1"/.test(html), '#mw-viewer admite el foco al desaparecer el botón');
+ok(/aria-label="Volver a la Vía Láctea, origen de la escena"/.test(boton), 'aria-label del Grupo Local con «origen de la escena»');
+ok(/volver:\s*volver/.test(gl), 'GrupoLocal expone volver()');
+ok(/closest\('\.mw-ui-control'\)/.test(gl), 'el arrastre del Grupo Local no empieza sobre un control');
+ok(/e\.key === 'Home'[\s\S]{0,400}GrupoLocal\.volver\(\)/.test(app), 'Inicio llama a GrupoLocal.volver()');
+ok(!/grupo-local\.js\?v=20261011_1200|via-lactea-app\.js\?v=20261011_1200/.test(html),
+   'las versiones de caché no repiten las de #421 (producción serviría los viejos)');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\nTodo bien');

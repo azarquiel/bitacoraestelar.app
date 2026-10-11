@@ -501,6 +501,9 @@ var GrupoLocal = (function () {
   var downX = 0, downY = 0, downMoved = false;
   function pointerDown(e) {
     if (!atlasInteractive) return;
+    // Los controles dentro del visor (el «Volver» de la pastilla) no arrastran
+    // ni abren la galaxia que tengan debajo.
+    if (e.target.closest && e.target.closest('.mw-ui-control')) return;
     terminarVuelo();
     dragging = true;
     var p = e.touches ? e.touches[0] : e;
@@ -640,11 +643,14 @@ var GrupoLocal = (function () {
   function centrar(o) {
     target = null;   // el anillo de una búsqueda anterior pararía el giro
     centro = o;
-    var hasta = { x: o.x, y: o.y, z: o.z };
+    volarA({ x: o.x, y: o.y, z: o.z });
+    pintarIndicador();
+  }
+  // El centro vuela hasta un punto (salta, con movimiento reducido).
+  function volarA(hasta) {
     vuelo = VLViaje.movimientoReducido() ? null
       : { desde: puntoCentro, hasta: hasta, t0: performance.now() };
     if (!vuelo) puntoCentro = hasta;
-    pintarIndicador();
   }
   // Un gesto durante el vuelo lo acaba EN EL DESTINO: nunca a medio camino.
   function terminarVuelo() {
@@ -660,16 +666,31 @@ var GrupoLocal = (function () {
     pintarIndicador();
   }
   function esCentro(o) { return !!o && o === centro; }
+  // «Volver» de la pastilla y la tecla Inicio (#423): el centro vuela de vuelta
+  // al origen con la misma curva y el mismo vuelo, que pausa el giro
+  // automático, así que giro y zoom quedan como estaban. Sin centro (tampoco a
+  // medio volver) no hace nada y devuelve false.
+  function volver() {
+    if (!centro) return false;
+    centro = null;
+    volarA(ORIGEN);
+    pintarIndicador();
+    return true;
+  }
 
   // Indicador de centro de la épica #420: pastilla arriba a la izquierda con
   // «Centro: …» en una región role="status" que existe desde la carga (un nodo
   // nuevo no se anuncia de fiar). Al volver se vacía: no anuncia nada.
   var indicador = document.getElementById('mw-centro');
   var indicadorEstado = document.getElementById('mw-centro-estado');
+  var indicadorVolver = document.getElementById('mw-centro-volver');
+  if (indicadorVolver) indicadorVolver.addEventListener('click', volver);
   function pintarIndicador() {
     if (!indicador || !indicadorEstado) return;
     indicadorEstado.textContent = centro ? 'Centro: ' + centro.name : '';
     indicadorEstado.title = indicadorEstado.textContent;
+    // El botón desaparece con el centro: su foco pasa al visor, no al body.
+    if (!centro && document.activeElement === indicadorVolver) stage.focus({ preventScroll: true });
     indicador.classList.toggle('mw-centro-visible', !!centro);
   }
 
@@ -721,6 +742,7 @@ var GrupoLocal = (function () {
   // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
   // encuadrar: mover la vista hasta un objeto SIN marcarlo como buscado.
   // centrar/esCentro: centrar la escena en una galaxia del atlas (#421).
+  // volver: devolver el centro al origen en vuelo (#423); false si no había.
   // onObjectClick: lo asigna via-lactea-app.js para abrir la ficha al hacer clic.
   // setViaje: el tramo extragaláctico de la salida que se está recorriendo, como
   // ids de objeto EN ORDEN. null (o nada) = se acabó el viaje y vuelve el atlas
@@ -733,7 +755,7 @@ var GrupoLocal = (function () {
     buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
     focusObject: focusObject, focus: focus, clearTarget: clearTarget,
     encuadrar: encuadrar,
-    centrar: centrar, esCentro: esCentro,
+    centrar: centrar, esCentro: esCentro, volver: volver,
     setViaje: setViaje,
     onObjectClick: null
   };
