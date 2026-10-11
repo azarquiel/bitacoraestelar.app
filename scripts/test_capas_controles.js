@@ -69,6 +69,7 @@ eq(C.limitarEscala('vecindario', true, 40, 50, TOPES), 50, 'vecindario: acercar 
 eq(C.limitarEscala('vecindario', true, 25, 20, TOPES), 25, 'vecindario: ya rebasado, no sigue alejando');
 eq(C.limitarEscala('vecindario', true, 25, 28, TOPES), 28, 'vecindario: ya rebasado, acercar es libre');
 eq(C.limitarEscala('vecindario', false, 40, 20, TOPES), 20, 'vecindario: en el origen, como hoy');
+eq(C.limitarEscala('vecindario', true, 40, 20, { vecindarioMin: Infinity }), 40, 'vecindario: sin datos del tope, no se aleja');
 eq(C.limitarEscala('grupoLocal', true, 0.01, 0.1, TOPES), 0.04, 'grupo local: acercar se para en el tope');
 eq(C.limitarEscala('grupoLocal', true, 0.01, 0.005, TOPES), 0.005, 'grupo local: alejar es libre');
 eq(C.limitarEscala('grupoLocal', true, 0.05, 0.1, TOPES), 0.05, 'grupo local: ya rebasado, no sigue acercando');

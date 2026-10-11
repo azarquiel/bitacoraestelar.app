@@ -1292,11 +1292,14 @@
     var salida = (cfgV.fovSalidaAl != null) ? cfgV.fovSalidaAl : cfgV.fovFinalAl;
     salida = Math.min(cfgV.fovInicioAl, Math.max(cfgV.fovFinalAl, salida));   // como fundidoVecindario
     var rw = galImg && galImg.naturalWidth ? getImgRect(galImg).width : 0;
+    var min = rw ? (Math.min(vr.width, vr.height) * 0.42 * CONFIG.fisica.anchoImagenAl) / (rw * salida) : NaN;
     var topes = {
       grupoLocalMax: umbralFinal,
-      vecindarioMin: rw ? (Math.min(vr.width, vr.height) * 0.42 * CONFIG.fisica.anchoImagenAl) / (rw * salida) : 0
+      // Sin datos para el tope, no se aleja: peor un zoom parado que cruzar de escala.
+      vecindarioMin: isFinite(min) ? min : Infinity
     };
-    return VLCapas.limitarEscala(VLCapas.capaActiva(alphaAtlas, alphaVecindario), desplazado, scale, pedida, topes);
+    var r = VLCapas.limitarEscala(VLCapas.capaActiva(alphaAtlas, alphaVecindario), desplazado, scale, pedida, topes);
+    return isFinite(r) ? r : scale;
   }
   // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro.
   function puntoDeZoom(x, y) {
