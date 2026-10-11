@@ -643,11 +643,14 @@ var GrupoLocal = (function () {
   function centrar(o) {
     target = null;   // el anillo de una búsqueda anterior pararía el giro
     centro = o;
-    var hasta = { x: o.x, y: o.y, z: o.z };
+    volarA({ x: o.x, y: o.y, z: o.z });
+    pintarIndicador();
+  }
+  // El centro vuela hasta un punto (salta, con movimiento reducido).
+  function volarA(hasta) {
     vuelo = VLViaje.movimientoReducido() ? null
       : { desde: puntoCentro, hasta: hasta, t0: performance.now() };
     if (!vuelo) puntoCentro = hasta;
-    pintarIndicador();
   }
   // Un gesto durante el vuelo lo acaba EN EL DESTINO: nunca a medio camino.
   function terminarVuelo() {
@@ -670,9 +673,7 @@ var GrupoLocal = (function () {
   function volver() {
     if (!centro) return false;
     centro = null;
-    vuelo = VLViaje.movimientoReducido() ? null
-      : { desde: puntoCentro, hasta: ORIGEN, t0: performance.now() };
-    if (!vuelo) puntoCentro = ORIGEN;
+    volarA(ORIGEN);
     pintarIndicador();
     return true;
   }
@@ -688,12 +689,6 @@ var GrupoLocal = (function () {
     if (!indicador || !indicadorEstado) return;
     indicadorEstado.textContent = centro ? 'Centro: ' + centro.name : '';
     indicadorEstado.title = indicadorEstado.textContent;
-    // La pastilla es de las dos escenas 3D: la que centra pone su rótulo.
-    if (centro && indicadorVolver) {
-      indicador.setAttribute('data-escala', 'grupo-local');
-      indicadorVolver.setAttribute('aria-label', 'Volver a la Vía Láctea, origen de la escena');
-      document.getElementById('mw-centro-volver-txt').textContent = 'Volver a la Vía Láctea';
-    }
     // El botón desaparece con el centro: su foco pasa al visor, no al body.
     if (!centro && document.activeElement === indicadorVolver) stage.focus({ preventScroll: true });
     indicador.classList.toggle('mw-centro-visible', !!centro);

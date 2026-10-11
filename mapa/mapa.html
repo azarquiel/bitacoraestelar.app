@@ -440,7 +440,7 @@
   #mw-viewer:focus { outline: none; }
 
   @media (prefers-reduced-motion: reduce) {
-    #mw-centro, #mw-centro.mw-centro-visible { transition: none; }
+    #mw-centro, #mw-centro.mw-centro-visible, #mw-centro-volver { transition: none; }
     #mw-consola-panel { transition: none; }
   }
 
@@ -1290,8 +1290,9 @@
        La región role="status" existe desde la carga y grupo-local.js solo
        cambia su texto, para que el lector de pantalla oiga «Centro: M31». El
        botón de volver al origen (#423) va fuera de esa región: su rótulo no se
-       anuncia. La escena pone su rótulo y data-escala elige el icono. -->
-  <div id="mw-centro">
+       anuncia. data-escala elige el icono; el rótulo es el del Grupo Local, la
+       única escena que centra hoy: el vecindario (#422) pondrá el suyo. -->
+  <div id="mw-centro" data-escala="grupo-local">
     <svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="1.4" class="mw-icono-lleno"/></svg>
     <span id="mw-centro-estado" role="status" aria-atomic="true"></span>
     <button id="mw-centro-volver" class="mw-ui-control" type="button" aria-keyshortcuts="Home"

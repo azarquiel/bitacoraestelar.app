@@ -107,7 +107,7 @@ ok(/\bmw-ui-control\b/.test(boton), 'es .mw-ui-control: pulsarlo no arrastra el 
 ok(/id="mw-centro-ico-sol"/.test(pastilla) && /id="mw-centro-ico-espiral"/.test(pastilla),
    'lleva los dos iconos: el Sol (vecindario) y la espiral (Grupo Local)');
 ok(/<div id="mw-viewer" tabindex="-1"/.test(html), '#mw-viewer admite el foco al desaparecer el botón');
-ok(/Volver a la Vía Láctea, origen de la escena/.test(gl), 'aria-label del Grupo Local con «origen de la escena»');
+ok(/aria-label="Volver a la Vía Láctea, origen de la escena"/.test(boton), 'aria-label del Grupo Local con «origen de la escena»');
 ok(/volver:\s*volver/.test(gl), 'GrupoLocal expone volver()');
 ok(/closest\('\.mw-ui-control'\)/.test(gl), 'el arrastre del Grupo Local no empieza sobre un control');
 ok(/e\.key === 'Home'[\s\S]{0,400}GrupoLocal\.volver\(\)/.test(app), 'Inicio llama a GrupoLocal.volver()');
