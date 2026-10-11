@@ -227,8 +227,8 @@ ok(is_file($dl . '/.hits.log'), 'el log activo sobrevive al barrido');
 ok(is_file($dl . '/.hits.log.1'), 'la rotación sobrevive al barrido');
 array_map('unlink', array_merge(glob($dl . '/*') ?: [], glob($dl . '/.*[a-z]*') ?: []));
 @rmdir($dl);
-ok(in_array('simulador_ocular/cache_gaia/', array_map('trim', file(dirname(__DIR__) . '/.gitignore')), true),
-    'cache_gaia/ (y con él el log) está en .gitignore');
+ok(in_array('simulador_ocular/cache_gaia/*', array_map('trim', file(dirname(__DIR__) . '/.gitignore')), true),
+    'cache_gaia/* (y con él el log) está en .gitignore');
 
 echo "coste de medir (AC7: despreciable frente al servicio):\n";
 $db = sys_get_temp_dir() . '/test_gaia_coste_' . getmypid();
@@ -246,6 +246,16 @@ $coste = (microtime(true) - $t0) * 1000 / $n;
 ok($coste < 1.0, sprintf('append + rotación cuesta %.4f ms por petición (listón: < 1 ms)', $coste));
 array_map('unlink', glob($db . '/.hits.log*') ?: []);
 @rmdir($db);
+
+echo "\ncache_gaia/.htaccess (el log no se sirve por HTTP):\n";
+$ht = (string) @file_get_contents(GAIA_CACHE_DIR . '/.htaccess');
+ok(strpos($ht, 'Require all denied') !== false && strpos($ht, 'Deny from all') !== false,
+    '.htaccess deniega en Apache 2.4 y 2.2');
+ok(!fnmatch('*.json.gz', '.htaccess') && !fnmatch('*.lock', '.htaccess') && !fnmatch('*.tmp*', '.htaccess'),
+    'la limpieza LRU no puede borrar el .htaccess');
+/* Lo que de verdad importa es el servidor; tras subirlo:
+   curl -s -o /dev/null -w '%{http_code}' -A Mozilla/5.0 \
+     https://bitacoraestelar.app/wp-content/uploads/bitacora/cache_gaia/.hits.log   → 403 */
 
 // La expulsión LRU y la limpieza ya no son de este proxy: son la política
 // compartida con el del DSS. Su test es scripts/test_cache_lru.php.

@@ -22,7 +22,10 @@ mapa/datos/cumulos_abiertos.xlsx
 # (las crean los .php solos en el servidor; en local son datos descargados, no fuente)
 .scratch/
 simulador_ocular/cache-ps1/
-simulador_ocular/cache_gaia/
+simulador_ocular/cache_gaia/*
+# …salvo su .htaccess: el directorio cuelga de la raíz web y sin él .hits.log
+# se descarga por URL (se sube por FTP a uploads/bitacora/cache_gaia/).
+!simulador_ocular/cache_gaia/.htaccess
 
 # Las texturas DSO que genera scripts/gen_dso_texturas.js: los PNG se publican
 # por FTP en uploads/bitacora/dso/ y no entran en git (2 MB cada uno). Los
