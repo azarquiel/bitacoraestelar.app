@@ -35,6 +35,8 @@
   // Punto del vuelo del centro en el instante t (0 = salida, 1 = llegada),
   // con ease-out cubic: arranca rápido y desacelera al llegar. Fuera de [0, 1]
   // se queda en el extremo: el vuelo nunca se pasa ni se queda a medias.
+  var REALCE_REJILLA = 1.8;
+
   function vuelo(desde, hasta, t) {
     if (t <= 0) return { x: desde.x, y: desde.y, z: desde.z };
     if (t >= 1) return { x: hasta.x, y: hasta.y, z: hasta.z };
@@ -53,8 +55,24 @@
     ctx.beginPath(); ctx.arc(p.sx, p.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
   }
 
-  // Los anillos de distancia suben de opacidad (x REALCE_REJILLA) a la vez que
-  // la plomada, mientras haya un objeto realzado: la plomada se lee contra ellos.
+  // Los anillos de distancia se intensifican con la plomada de un objeto
+  // realzado: el más próximo a su distancia al origen (rObj, la del pie de la
+  // plomada) sube x REALCE_REJILLA y los interiores bajan linealmente hasta x1 en
+  // el más interno; los exteriores quedan en x1. Devuelve un factor por radio;
+  // 'desde' es el primer índice dibujado (los menores no cuentan).
+  function realceAnillos(radios, rObj, desde) {
+    var f = [], cerca = -1, dmin = Infinity, i;
+    for (i = desde; i < radios.length; i++) {
+      var d = Math.abs(radios[i] - rObj);
+      if (d < dmin) { dmin = d; cerca = i; }
+    }
+    for (i = 0; i < radios.length; i++) {
+      f.push(cerca < 0 || i > cerca ? 1 :
+        cerca === desde ? REALCE_REJILLA :
+        1 + (REALCE_REJILLA - 1) * Math.max(0, i - desde) / (cerca - desde));
+    }
+    return f;
+  }
 
   // Plomada: vertical del objeto a su pie sobre el plano z=0, la misma en las
   // dos escenas. Continua si el objeto está sobre el plano, discontinua si
@@ -70,7 +88,7 @@
   }
 
   var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada,
-               REALCE_REJILLA: 1.8 };
+               realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLCentro = API; }

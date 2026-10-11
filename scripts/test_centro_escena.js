@@ -145,5 +145,16 @@ ok(/armarCentrar\(obj, VecindarioSolar\)/.test(app), 'la ficha de una estrella d
 ok(/VecindarioSolar\.volver\(\)/.test(app), 'Inicio también vuelve al Sol');
 ok(!/vecindario-solar\.js\?v=20261004_1200/.test(html), 'versión de caché nueva del vecindario');
 
+// Realce de los anillos de distancia con la plomada: el más próximo al pie x1,8,
+// los interiores bajan linealmente a x1 en el más interno, los exteriores x1.
+(function () {
+  var C = require('../mapa/js/via-lactea-centro.js');
+  var f = C.realceAnillos([1, 2, 3, 4, 5], 3.2, 0);
+  ok(Math.abs(f[2] - 1.8) < 1e-9 && f[0] === 1 && Math.abs(f[1] - 1.4) < 1e-9, 'cercano 1,8 e interiores en rampa');
+  ok(f[3] === 1 && f[4] === 1, 'exteriores en 1');
+  ok(C.realceAnillos([1, 2, 3], 1.1, 0)[0] === 1.8, 'un solo anillo hasta el cercano: entero');
+  ok(C.realceAnillos([1, 2, 3], 1.1, 1)[1] === 1.8, 'los no dibujados no cuentan');
+})();
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\nTodo bien');

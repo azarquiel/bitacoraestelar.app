@@ -188,8 +188,7 @@ var GrupoLocal = (function () {
   // ---- Rejilla de planos concéntricos --------------------------------------
   // Los planos son del origen: con el centro desplazado se van con la Vía
   // Láctea, por eso todo pasa por project().
-  function drawGrid(realce) {
-    var kr = realce ? VLCentro.REALCE_REJILLA : 1;
+  function drawGrid(oRealzado) {
     var rings = [];
     var base = Math.pow(10, Math.floor(Math.log10(fov)));
     for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
@@ -198,11 +197,18 @@ var GrupoLocal = (function () {
     var scale = Math.min(W, H) * 0.42 / fov;
     var o0 = project(ORIGEN);
 
+    // Realce con la plomada: ver VLCentro.realceAnillos.
+    var desde = 0;
+    while (desde < rings.length && rings[desde] * scale < 8) desde++;
+    var kr = oRealzado ? VLCentro.realceAnillos(rings, Math.hypot(oRealzado.x, oRealzado.y), desde)
+                       : rings.map(function () { return 1; });
+    var kEje = oRealzado ? 1 + (VLCentro.REALCE_REJILLA - 1) / 2 : 1;
+
     for (var ri = 0; ri < rings.length; ri++) {
       var radius = rings[ri];
       var px = radius * scale;
       if (px < 8 || px > Math.max(W, H) * 3) continue;
-      var alpha = Math.min(0.7, Math.max(0.05, 0.35 - px / (Math.max(W, H) * 2)) * kr);
+      var alpha = Math.min(0.7, Math.max(0.05, 0.35 - px / (Math.max(W, H) * 2)) * kr[ri]);
       ctx.beginPath();
       var N = 96;
       for (var i = 0; i <= N; i++) {
@@ -224,7 +230,7 @@ var GrupoLocal = (function () {
       ctx.beginPath();
       ctx.moveTo(o0.sx, o0.sy);
       ctx.lineTo(pa.sx, pa.sy);
-      ctx.strokeStyle = 'rgba(30,79,214,' + 0.18 * kr + ')';
+      ctx.strokeStyle = 'rgba(30,79,214,' + 0.18 * kEje + ')';
       ctx.stroke();
       if (Math.abs(pa.sx - cx) < W && Math.abs(pa.sy - cy) < H) {
         ctx.fillStyle = 'rgba(77,140,255,0.6)';
@@ -296,7 +302,7 @@ var GrupoLocal = (function () {
     ctx.fillRect(0, 0, W, H);
 
     drawStars();
-    drawGrid(!!(hovered || centro || (target && target.soloAnillo)));
+    drawGrid((hovered && hovered.o) || centro || (target && target.soloAnillo ? target : null));
     drawRutaViaje();
 
     // Se omiten los tipos de Hubble ocultados desde la leyenda; conjunto
