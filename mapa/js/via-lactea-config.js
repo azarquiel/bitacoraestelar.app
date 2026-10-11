@@ -128,6 +128,8 @@
       textoTamano:   '11px',   // CSS — p.ej. '10px', '12px', '0.8rem'
       atenuacionEscala: 0.82,  // factor de tamaño del estado base (1 = sin atenuar)
       atenuacionOpacidad: 0.55, // opacidad del estado base (1 = opaco)
+      atenuacionCanvas: 0.72,  // opacidad base del PUNTO en las tres vistas (1 = opaco);
+                                // entero con el cursor encima, realzado o en viaje
       etiquetaZoomMin: 3,      // scale mínimo (vista de la galaxia) para que las
                                 // etiquetas se lean solas (por debajo, se
                                 // amontonan: solo aparecen al pasar el cursor o

@@ -156,6 +156,11 @@ ok(!/vecindario-solar\.js\?v=20261004_1200/.test(html), 'versión de caché nuev
   ok(C.realceAnillos([1, 2, 3], 1.1, 1)[1] === 1.8, 'los no dibujados no cuentan');
 })();
 
+// Brillo base del punto: la galaxia lo publica por CSS y lo restituye al realzar.
+ok(/--mw-aten-op'?, VLMarcadorEstilo\.canvas/.test(app), 'la app publica --mw-aten-op desde VLMarcadorEstilo.canvas');
+ok(/\.mw-punto \{\s*opacity: var\(--mw-aten-op, 1\)/.test(html), 'el punto usa --mw-aten-op');
+ok(/mw-realzado \.mw-punto,\s*#mw-content\.mw-viaje \.mw-object-anchor \.mw-punto \{ opacity: 1; \}/.test(html), 'hover, realzado y viaje: opacidad entera');
+
 // «Volver al Sol» del mapa de la galaxia (#425).
 console.log('Volver al Sol (galaxia)');
 ok(C.solDescentrado(0, 0, 800, 600, 0.28) === false, 'el Sol en el centro no pide botón');

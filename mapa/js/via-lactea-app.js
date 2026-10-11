@@ -739,6 +739,8 @@
   if (typeof VLMarcadorEstilo !== 'undefined') {
     var estiloBase = VLMarcadorEstilo.de({}, CONFIG.marcadores);
     img.style.setProperty('--mw-aten-esc', estiloBase.escala);
+    // Brillo base del punto: el mismo de las vistas de canvas (ver mapa.html).
+    img.style.setProperty('--mw-aten-op', VLMarcadorEstilo.canvas({}, CONFIG.marcadores));
   }
 
   // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los

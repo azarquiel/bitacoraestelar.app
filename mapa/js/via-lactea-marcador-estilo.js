@@ -29,9 +29,10 @@
     };
   }
 
-  // Opacidad base de los marcadores de las vistas de canvas (vecindario solar y
-  // Grupo Local): tenue en reposo, entera si está realzado (hover, seleccionado
-  // o centrado) o hay viaje. Más suave que la atenuación de la galaxia (de).
+  // Opacidad base del PUNTO de los marcadores en las tres vistas (galaxia por
+  // CSS --mw-aten-op; vecindario solar y Grupo Local por canvas): tenue en
+  // reposo, entera si está realzado (hover, seleccionado o centrado) o hay
+  // viaje. Es independiente de de(), que atenúa la ETIQUETA de la galaxia.
   var ATEN_CANVAS = 0.72;
   function canvas(estado, cfg) {
     estado = estado || {};

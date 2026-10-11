@@ -674,6 +674,16 @@
   #mw-content.mw-viaje .mw-aten {
     transform: scale(1);
   }
+  /* Brillo base del PUNTO, el mismo que en el vecindario solar y el Grupo Local
+     (VLMarcadorEstilo.canvas, publicado como --mw-aten-op): tenue en reposo y
+     entero con el cursor encima, realzado o recorriendo un viaje. */
+  #mw-content .mw-object-anchor .mw-punto {
+    opacity: var(--mw-aten-op, 1);
+    transition: opacity .15s ease;
+  }
+  #mw-content .mw-object-anchor:hover .mw-punto,
+  #mw-content .mw-object-anchor.mw-realzado .mw-punto,
+  #mw-content.mw-viaje .mw-object-anchor .mw-punto { opacity: 1; }
   .mw-label {
     opacity: 0;
     pointer-events: none;
@@ -806,7 +816,7 @@
     /* Sin resplandor: lo que está detrás del cristal no ilumina hacia fuera.
        !important porque el halo va en estilo en línea (createMarker). */
     box-shadow: none !important;
-    opacity: 0.85;
+    opacity: calc(0.85 * var(--mw-aten-op, 1));
   }
   #mw-content .mw-object-anchor.mw-bajo-plano .mw-label { opacity: 0.75; }
   #mw-content .mw-object-anchor.mw-hundido .mw-connector {
@@ -1782,7 +1792,7 @@
      tratará como un archivo nuevo y lo descargará de nuevo.
      Truco: puedes usar la fecha, p. ej. ?v=20260704
      ============================================================ -->
-<script src="/bitacora-mapa/js/via-lactea-config.js?v=20260906_1300"></script>
+<script src="/bitacora-mapa/js/via-lactea-config.js?v=20261012_1200"></script>
 <!-- DATOS DEL VISOR: se leen de la base de datos (plugin Bitacora Registro).
      El endpoint emite OBSERVADORES/OBJECTS/OBSERVACIONES/VIAJES como JavaScript.
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
@@ -1797,7 +1807,7 @@
 <script src="/bitacora-mapa/js/via-lactea-viaje.js?v=20260921_0100"></script>
 <!-- LEY DE ATENUACIÓN DE MARCADORES (spec #102): la consultan las tres capas
      al dibujar, así que va ANTES que todas ellas. Pura, sin DOM. -->
-<script src="/bitacora-mapa/js/via-lactea-marcador-estilo.js?v=20261011_2300"></script>
+<script src="/bitacora-mapa/js/via-lactea-marcador-estilo.js?v=20261012_1200"></script>
 <!-- OBSERVADORES: regla única de "visitado / no visitado". Lo consultan las tres
      capas del mapa al dibujar, así que va ANTES que todas ellas. -->
 <script src="/bitacora-mapa/js/via-lactea-observadores.js?v=20261004_1200"></script>
@@ -1824,5 +1834,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20261012_1000"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261012_0900"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261012_1200"></script>
 </li>
