@@ -170,33 +170,32 @@ var GrupoLocal = (function () {
     return Math.round(ly).toString();
   }
 
+  // ---- Centro de la escena (#421) -------------------------------------------
+  // La cámara gira alrededor del CENTRO, no del origen (glosario: mapa/
+  // CONTEXT.md). centro es el objeto del atlas centrado (null = la Vía Láctea)
+  // y puntoCentro el punto en que está ahora la cámara, que durante el vuelo va
+  // de uno a otro. Las distancias siguen siendo al origen: solo cambia project.
+  var ORIGEN = { x: 0, y: 0, z: 0 };
+  var VUELO_MS = 500;
+  var centro = null, puntoCentro = ORIGEN, vuelo = null;
+
   // ---- Proyección 3D --------------------------------------------------------
   function project(o) {
-    var x = o.x, y = o.y, z = o.z;
-    var cyaw = Math.cos(yaw), syaw = Math.sin(yaw);
-    var x1 = x * cyaw - y * syaw;
-    var y1 = x * syaw + y * cyaw;
-    var z1 = z;
-    var cp = Math.cos(pitch), sp = Math.sin(pitch);
-    var y2 = y1 * cp - z1 * sp;
-    var z2 = y1 * sp + z1 * cp;
-    var R = Math.min(W, H) * 0.42;
-    var scale = R / fov;
-    var depth = 1 + (z2 / fov) * 0.12;
-    return { sx: cx + x1 * scale, sy: cy - y2 * scale, depth: z2, persp: depth };
+    return VLCentro.proyectar(o, puntoCentro,
+      { yaw: yaw, pitch: pitch, fov: fov, R: Math.min(W, H) * 0.42, cx: cx, cy: cy });
   }
 
   // ---- Rejilla de planos concéntricos --------------------------------------
+  // Los planos son del origen: con el centro desplazado se van con la Vía
+  // Láctea, por eso todo pasa por project().
   function drawGrid() {
     var rings = [];
     var base = Math.pow(10, Math.floor(Math.log10(fov)));
     for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
 
     ctx.lineWidth = 1;
-    var cyaw = Math.cos(yaw), syaw = Math.sin(yaw);
-    var cp = Math.cos(pitch), sp = Math.sin(pitch);
-    var R = Math.min(W, H) * 0.42;
-    var scale = R / fov;
+    var scale = Math.min(W, H) * 0.42 / fov;
+    var o0 = project(ORIGEN);
 
     for (var ri = 0; ri < rings.length; ri++) {
       var radius = rings[ri];
@@ -207,13 +206,8 @@ var GrupoLocal = (function () {
       var N = 96;
       for (var i = 0; i <= N; i++) {
         var a = (i / N) * Math.PI * 2;
-        var x = radius * Math.cos(a), y = radius * Math.sin(a);
-        var x1 = x * cyaw - y * syaw;
-        var y1 = x * syaw + y * cyaw;
-        var y2 = y1 * cp;
-        var sx = cx + x1 * scale;
-        var sy = cy - y2 * scale;
-        i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+        var pr = project({ x: radius * Math.cos(a), y: radius * Math.sin(a), z: 0 });
+        i === 0 ? ctx.moveTo(pr.sx, pr.sy) : ctx.lineTo(pr.sx, pr.sy);
       }
       ctx.strokeStyle = 'rgba(30,79,214,' + alpha + ')';
       ctx.stroke();
@@ -225,14 +219,10 @@ var GrupoLocal = (function () {
     for (var d = 0; d < axisDeg.length; d++) {
       var deg = axisDeg[d];
       var aa = deg * DEG;
-      var ax = outer * Math.cos(aa), ay = outer * Math.sin(aa);
-      var ax1 = ax * cyaw - ay * syaw;
-      var ay1 = ax * syaw + ay * cyaw;
-      var ay2 = ay1 * cp;
-      var asx = cx + ax1 * scale;
-      var asy = cy - ay2 * scale;
+      var pa = project({ x: outer * Math.cos(aa), y: outer * Math.sin(aa), z: 0 });
+      var asx = pa.sx, asy = pa.sy;
       ctx.beginPath();
-      ctx.moveTo(cx, cy);
+      ctx.moveTo(o0.sx, o0.sy);
       ctx.lineTo(asx, asy);
       ctx.strokeStyle = 'rgba(30,79,214,0.18)';
       ctx.stroke();
@@ -284,6 +274,15 @@ var GrupoLocal = (function () {
 
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
+
+  // Anillo de señalar (objeto buscado o centrado). Late; con movimiento
+  // reducido se queda fijo en su radio medio.
+  function anillo(p) {
+    var pulso = VLViaje.movimientoReducido() ? 6 : 6 + 3 * Math.sin(Date.now() / 300);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(p.sx, p.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
+  }
 
   // Rectángulos de las etiquetas dibujadas y visibles este fotograma, para que
   // hitTest() las trate como área pulsable igual que en la vista de la galaxia
@@ -337,7 +336,7 @@ var GrupoLocal = (function () {
     // este fotograma; se mueve al final del pintado para quedar por encima.
     var hovPrev = hovered && hovered.o;
     var realzadoDe = function (o) {
-      return !!(o === hovPrev ||
+      return !!(o === hovPrev || o === centro ||
                 (target && target.soloAnillo && target.name && target.name === o.name));
     };
     for (var ri = 0; ri < projected.length; ri++) {
@@ -423,14 +422,16 @@ var GrupoLocal = (function () {
       }
     }
 
+    // La galaxia centrada lleva el mismo anillo que el objeto buscado mientras
+    // sea el centro; su rótulo lo pone su marcador (realzadoDe). Es estado
+    // propio, no target: la búsqueda y los viajes limpian target a menudo.
+    if (centro) anillo(project(centro));
+
     // Objeto buscado (no registrado): se dibuja resaltado con un anillo pulsante
     // y su nombre, para señalar dónde está aunque no forme parte del catálogo.
     if (target) {
       var tp = project(target);
-      var pulso = 6 + 3 * Math.sin(Date.now() / 300);
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(tp.sx, tp.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
+      anillo(tp);
       // Si el objeto ya está en el catálogo (soloAnillo), el anillo lo resalta y
       // su propio marcador aporta punto y etiqueta: no se dibujan de nuevo.
       if (!target.soloAnillo) {
@@ -501,6 +502,7 @@ var GrupoLocal = (function () {
   var downX = 0, downY = 0, downMoved = false;
   function pointerDown(e) {
     if (!atlasInteractive) return;
+    terminarVuelo();
     dragging = true;
     var p = e.touches ? e.touches[0] : e;
     last = { x: p.clientX, y: p.clientY };
@@ -520,7 +522,9 @@ var GrupoLocal = (function () {
   function pointerUp(e) {
     // Un clic (sin apenas arrastre) sobre un objeto abre su ficha, como en la
     // galaxia. El manejador lo aporta via-lactea-app.js (API.onObjectClick).
-    var fueClick = atlasInteractive && !downMoved;
+    // Solo si el gesto empezó en el visor: el mouseup se oye en window, y el de
+    // un botón de la ficha («Centrar») abriría la galaxia que hubiera debajo.
+    var fueClick = dragging && atlasInteractive && !downMoved;
     dragging = false;
     if (fueClick && API.onObjectClick) {
       var p = (e && e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : (e || {});
@@ -537,14 +541,20 @@ var GrupoLocal = (function () {
   stage.addEventListener('touchstart', pointerDown, { passive: true });
   stage.addEventListener('touchmove', pointerMove, { passive: true });
   stage.addEventListener('touchend', pointerUp);
+  // La rueda la gobierna el visor principal; aquí solo acaba el vuelo.
+  stage.addEventListener('wheel', function () { if (atlasInteractive) terminarVuelo(); }, { passive: true });
 
   // ---- Bucle de animación ---------------------------------------------------
   function loop() {
     if (layerAlpha > 0.001) {
       // El giro ambiental se pausa mientras hay un objeto buscado enfocado (para
-      // que quede centrado) o mientras el cursor está sobre un objeto pulsable
-      // (para poder hacer clic sin que se escape).
-      if (!dragging && !target && !hovered) yaw += autoGiro;
+      // que quede centrado), mientras el cursor está sobre un objeto pulsable
+      // (para poder hacer clic sin que se escape) y durante el vuelo del centro.
+      if (vuelo) {
+        var t = (performance.now() - vuelo.t0) / VUELO_MS;
+        puntoCentro = VLCentro.vuelo(vuelo.desde, vuelo.hasta, t);
+        if (t >= 1) vuelo = null;
+      } else if (!dragging && !target && !hovered) yaw += autoGiro;
       render();
     }
     requestAnimationFrame(loop);
@@ -605,6 +615,7 @@ var GrupoLocal = (function () {
   // se busca ~0,45·R eligiendo y2 = frac. Cierre analítico: con el yaw que
   // anula la componente horizontal, y2 = cos(pitch + psi), psi = atan2(uz, h).
   function orientarHacia(l, b, d) {
+    volverAlOrigen();   // la cuenta de abajo da por hecho el origen en pantalla
     var margen = (window.CONFIG && CONFIG.busqueda && CONFIG.busqueda.margenExtragalactico) || 1.8;
     FOV_MAX = Math.max(FOV_MAX, d * (margen + 0.6));
     var u = galToXYZ(l, b, 1);
@@ -624,6 +635,44 @@ var GrupoLocal = (function () {
                soloAnillo: !!soloAnillo };
   }
   function clearTarget() { target = null; }
+
+  // Centra la escena en una galaxia del atlas: la cámara vuela ~0,5 s hasta
+  // ella (salto, con movimiento reducido) y desde ahí gira a su alrededor.
+  function centrar(o) {
+    target = null;   // el anillo de una búsqueda anterior pararía el giro
+    centro = o;
+    var hasta = { x: o.x, y: o.y, z: o.z };
+    vuelo = VLViaje.movimientoReducido() ? null
+      : { desde: puntoCentro, hasta: hasta, t0: performance.now() };
+    if (!vuelo) puntoCentro = hasta;
+    pintarIndicador();
+  }
+  // Un gesto durante el vuelo lo acaba EN EL DESTINO: nunca a medio camino.
+  function terminarVuelo() {
+    if (!vuelo) return;
+    puntoCentro = vuelo.hasta;
+    vuelo = null;
+  }
+  // El centro es volátil: lo devuelven al origen salir del Grupo Local y
+  // cualquier encuadre que cuente con el origen en pantalla (búsqueda, viajes).
+  function volverAlOrigen() {
+    if (!centro && !vuelo) return;
+    centro = null; vuelo = null; puntoCentro = ORIGEN;
+    pintarIndicador();
+  }
+  function esCentro(o) { return !!o && o === centro; }
+
+  // Indicador de centro de la épica #420: pastilla arriba a la izquierda con
+  // «Centro: …» en una región role="status" que existe desde la carga (un nodo
+  // nuevo no se anuncia de fiar). Al volver se vacía: no anuncia nada.
+  var indicador = document.getElementById('mw-centro');
+  var indicadorEstado = document.getElementById('mw-centro-estado');
+  function pintarIndicador() {
+    if (!indicador || !indicadorEstado) return;
+    indicadorEstado.textContent = centro ? 'Centro: ' + centro.name : '';
+    indicadorEstado.title = indicadorEstado.textContent;
+    indicador.classList.toggle('mw-centro-visible', !!centro);
+  }
 
   // Quién enseña su leyenda y quién la esconde lo decide la app con VLCapas
   // (aplicarControlesDeCapa): aquí solo se usa la propia, para escuchar clics.
@@ -657,6 +706,7 @@ var GrupoLocal = (function () {
     canvas.style.opacity = alpha;
     canvas.style.display = alpha > 0.001 ? 'block' : 'none';
     atlasInteractive = alpha > 0.5;
+    if (!atlasInteractive) volverAlOrigen();
     if (tip && !atlasInteractive) tip.style.opacity = 0;
     if (scaleTag) scaleTag.style.opacity = alpha > 0.5 ? 1 : 0;
     if (pxPerLy > 0) {
@@ -671,6 +721,7 @@ var GrupoLocal = (function () {
   // buscar/focusObject: localizar y enfocar un objeto YA presente en el atlas.
   // focus/clearTarget: enfocar/limpiar un objeto buscado no registrado.
   // encuadrar: mover la vista hasta un objeto SIN marcarlo como buscado.
+  // centrar/esCentro: centrar la escena en una galaxia del atlas (#421).
   // onObjectClick: lo asigna via-lactea-app.js para abrir la ficha al hacer clic.
   // setViaje: el tramo extragaláctico de la salida que se está recorriendo, como
   // ids de objeto EN ORDEN. null (o nada) = se acabó el viaje y vuelve el atlas
@@ -683,6 +734,7 @@ var GrupoLocal = (function () {
     buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
     focusObject: focusObject, focus: focus, clearTarget: clearTarget,
     encuadrar: encuadrar,
+    centrar: centrar, esCentro: esCentro,
     setViaje: setViaje,
     onObjectClick: null
   };

@@ -335,7 +335,67 @@
     outline-offset: 2px;
   }
 
+  /* «Centrar» de la ficha (#421): acción sobre el objeto, borde oro para que
+     no se confunda con las entradas azules de la bitácora. */
+  #ficha-centrar {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 5px 12px;
+    border: 1px solid #f4c76b;
+    border-radius: 14px;
+    background: transparent;
+    color: #f4c76b;
+    font: 12px sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  #ficha-centrar[hidden] { display: none; }
+  #ficha-centrar[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+  #ficha-centrar:focus-visible { outline: 2px solid rgba(244,199,107,0.8); outline-offset: 2px; }
+  @media (hover: none) { #ficha-centrar { min-height: 44px; } }
+
+  /* Indicador de centro (épica #420): pastilla de cristal arriba a la
+     izquierda, con el estilo de la CONSOLA. Entra en 150 ms y sale en 100. */
+  #mw-centro {
+    position: absolute;
+    top: 16px;
+    left: 10px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: rgba(12,16,28,0.32);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 20px;
+    color: #eaf1fb;
+    font: 13px sans-serif;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity 0.1s ease, transform 0.1s ease, visibility 0s linear 0.1s;
+  }
+  #mw-centro.mw-centro-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  #mw-centro .mw-icono { color: #f4c76b; }
+  #mw-centro-estado {
+    max-width: 30ch;   /* «Centro: » + unos 22 caracteres de nombre */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    #mw-centro, #mw-centro.mw-centro-visible { transition: none; }
     #mw-consola-panel { transition: none; }
   }
 
@@ -1181,6 +1241,15 @@
     transition:opacity 0.3s ease, transform 0.3s ease;
   "></div>
 
+  <!-- INDICADOR DE CENTRO (épica #420): qué objeto es el centro de la escena.
+       La región role="status" existe desde la carga y grupo-local.js solo
+       cambia su texto, para que el lector de pantalla oiga «Centro: M31». El
+       botón de volver al origen lo añade #423. -->
+  <div id="mw-centro">
+    <svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="1.4" class="mw-icono-lleno"/></svg>
+    <span id="mw-centro-estado" role="status" aria-atomic="true"></span>
+  </div>
+
   <!-- LEYENDA DE COLORES POR TIPO DE OBJETO -->
   <div id="mw-legend" style="
     position: absolute;
@@ -1506,6 +1575,10 @@
         white-space: nowrap;
         font-family: sans-serif;
       ">← Descubrir</button>
+      <!-- Centra la escena 3D en este objeto (#421). Solo en las fichas abiertas
+           desde el Grupo Local; con el objeto ya centrado dice «Centrado» y
+           lleva aria-disabled (no disabled: sigue recibiendo el foco). -->
+      <button id="ficha-centrar" type="button" hidden><svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="4.6"/><path d="M8 1v3.2M8 11.8V15M1 8h3.2M11.8 8H15"/></svg><span id="ficha-centrar-txt">Centrar</span></button>
       <button id="ficha-close" aria-label="Cerrar ficha" style="
         width: 30px;
         height: 30px;
@@ -1675,7 +1748,10 @@
      cambio de vista. Pura, sin DOM. -->
 <script src="/bitacora-mapa/js/via-lactea-capas.js?v=20260828_2000"></script>
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
-<script src="/bitacora-mapa/js/grupo-local.js?v=20261004_1200"></script>
+<!-- CENTRO DE LA ESCENA de las escenas 3D (#421): proyección y vuelo. Pura,
+     sin DOM; ANTES de grupo-local.js. -->
+<script src="/bitacora-mapa/js/via-lactea-centro.js?v=20261011_1200"></script>
+<script src="/bitacora-mapa/js/grupo-local.js?v=20261011_1200"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
 <script src="/wp-content/uploads/bitacora/bitacora-gaia-color.js?v=20260902_1200"></script>
@@ -1691,5 +1767,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261004_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261011_1200"></script>
 </li>
