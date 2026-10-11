@@ -9,7 +9,7 @@
    así que el objeto centrado cae en el centro de pantalla. Con el centro en el
    origen la proyección es exactamente la de siempre.
 
-   Se carga ANTES de grupo-local.js y expone window.VLCentro. También exporta
+   Se carga ANTES de grupo-local.js y vecindario-solar.js y expone window.VLCentro. También exporta
    por module.exports para el test de node (scripts/test_centro_escena.js).
    ============================================================================ */
 
@@ -44,7 +44,16 @@
              z: desde.z + (hasta.z - desde.z) * e };
   }
 
-  var API = { proyectar: proyectar, vuelo: vuelo };
+  // Anillo de señalar (objeto buscado o centrado), el mismo en las dos escenas.
+  // Late; con movimiento reducido se queda fijo en su radio medio.
+  function anillo(ctx, p, reducido) {
+    var pulso = reducido ? 6 : 6 + 3 * Math.sin(Date.now() / 300);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(p.sx, p.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLCentro = API; }

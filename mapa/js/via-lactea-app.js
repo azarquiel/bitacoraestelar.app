@@ -1929,7 +1929,8 @@
     // Inicio hace lo del «Volver» de la pastilla de centro (#423), con la misma
     // guarda. Sin centro desplazado no hace nada y la tecla sigue su curso.
     if (e.key === 'Home' && libre && !e.shiftKey &&
-        typeof GrupoLocal !== 'undefined' && GrupoLocal.volver && GrupoLocal.volver()) {
+        ((typeof GrupoLocal !== 'undefined' && GrupoLocal.volver && GrupoLocal.volver()) ||
+         (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.volver && VecindarioSolar.volver()))) {
       e.preventDefault();
       return;
     }
@@ -2738,25 +2739,28 @@
     hideHint();
   }
 
-  // «Centrar» de la ficha (#421): solo en las fichas abiertas desde el Grupo
-  // Local. Lo arma su clic y lo desarma closeFicha, el único cierre de la
-  // ficha; el resto de aperturas pasan con la ficha cerrada y no lo ven.
+  // «Centrar» de la ficha (#421, #422): solo en las fichas abiertas desde una
+  // escena 3D (Grupo Local o vecindario). Lo arma su clic y lo desarma
+  // closeFicha, el único cierre de la ficha; el resto de aperturas pasan con la
+  // ficha cerrada y no lo ven. escena es la que centra: GrupoLocal o VecindarioSolar.
   var fichaCentrarBtn = document.getElementById('ficha-centrar');
   var fichaCentrarTxt = document.getElementById('ficha-centrar-txt');
-  var fichaCentrarObj = null;
-  function armarCentrar(obj) {
+  var fichaCentrarObj = null, fichaCentrarEscena = null;
+  function armarCentrar(obj, escena) {
     fichaCentrarObj = obj;
+    fichaCentrarEscena = obj ? escena : null;
     fichaCentrarBtn.hidden = !obj;
-    var ya = !!obj && GrupoLocal.esCentro(obj);
+    var ya = !!obj && escena.esCentro(obj);
     fichaCentrarTxt.textContent = ya ? 'Centrado' : 'Centrar';
     if (ya) fichaCentrarBtn.setAttribute('aria-disabled', 'true');
     else fichaCentrarBtn.removeAttribute('aria-disabled');
   }
   fichaCentrarBtn.addEventListener('click', function () {
     var obj = fichaCentrarObj;
-    if (!obj || GrupoLocal.esCentro(obj)) return;   // aria-disabled no para el clic
+    var escena = fichaCentrarEscena;
+    if (!obj || escena.esCentro(obj)) return;   // aria-disabled no para el clic
     closeFicha();   // si no, la ficha taparía lo que se mueve
-    GrupoLocal.centrar(obj);
+    escena.centrar(obj);
   });
 
   // Clic en una galaxia del atlas del Grupo Local -> abre su ficha.
@@ -2770,7 +2774,7 @@
       });
       // La rama del PDF no abre la ficha: armar ahí dejaría el botón para la
       // siguiente ficha, aunque se abriera desde el mapa de la galaxia.
-      if (fichaOverlay.style.display === 'flex') armarCentrar(obj);
+      if (fichaOverlay.style.display === 'flex') armarCentrar(obj, GrupoLocal);
     };
   }
 
@@ -2785,6 +2789,7 @@
         title:  obj.title || obj.name,
         coords: obj.coords
       });
+      if (fichaOverlay.style.display === 'flex') armarCentrar(obj, VecindarioSolar);
     };
   }
 

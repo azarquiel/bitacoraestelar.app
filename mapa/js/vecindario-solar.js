@@ -112,33 +112,32 @@ var VecindarioSolar = (function () {
     return ly.toFixed(2);
   }
 
+  // ---- Centro de la escena (#422) -------------------------------------------
+  // La cámara gira alrededor del CENTRO, no del Sol (glosario: mapa/CONTEXT.md).
+  // centro es la estrella centrada (null = el Sol) y puntoCentro el punto en que
+  // está ahora la cámara, que durante el vuelo va de uno a otro. Las distancias
+  // siguen siendo al Sol: solo cambia project.
+  var ORIGEN = { x: 0, y: 0, z: 0 };
+  var VUELO_MS = 500;
+  var centro = null, puntoCentro = ORIGEN, vuelo = null;
+
   // ---- Proyección 3D --------------------------------------------------------
   function project(o) {
-    var x = o.x, y = o.y, z = o.z;
-    var cyaw = Math.cos(yaw), syaw = Math.sin(yaw);
-    var x1 = x * cyaw - y * syaw;
-    var y1 = x * syaw + y * cyaw;
-    var z1 = z;
-    var cp = Math.cos(pitch), sp = Math.sin(pitch);
-    var y2 = y1 * cp - z1 * sp;
-    var z2 = y1 * sp + z1 * cp;
-    var R = Math.min(W, H) * 0.42;
-    var scale = R / fov;
-    var depth = 1 + (z2 / fov) * 0.12;
-    return { sx: cx + x1 * scale, sy: cy - y2 * scale, depth: z2, persp: depth };
+    return VLCentro.proyectar(o, puntoCentro,
+      { yaw: yaw, pitch: pitch, fov: fov, R: Math.min(W, H) * 0.42, cx: cx, cy: cy });
   }
 
   // ---- Rejilla de planos concéntricos (dorada) ------------------------------
+  // Los planos son del Sol: con el centro desplazado se van con él, por eso
+  // todo pasa por project().
   function drawGrid() {
     var rings = [];
     var base = Math.pow(10, Math.floor(Math.log10(fov)));
     for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
 
     ctx.lineWidth = 1;
-    var cyaw = Math.cos(yaw), syaw = Math.sin(yaw);
-    var cp = Math.cos(pitch);
-    var R = Math.min(W, H) * 0.42;
-    var scale = R / fov;
+    var scale = Math.min(W, H) * 0.42 / fov;
+    var o0 = project(ORIGEN);
 
     for (var ri = 0; ri < rings.length; ri++) {
       var radius = rings[ri];
@@ -149,13 +148,8 @@ var VecindarioSolar = (function () {
       var N = 96;
       for (var i = 0; i <= N; i++) {
         var a = (i / N) * Math.PI * 2;
-        var x = radius * Math.cos(a), y = radius * Math.sin(a);
-        var x1 = x * cyaw - y * syaw;
-        var y1 = x * syaw + y * cyaw;
-        var y2 = y1 * cp;
-        var sx = cx + x1 * scale;
-        var sy = cy - y2 * scale;
-        i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+        var pr = project({ x: radius * Math.cos(a), y: radius * Math.sin(a), z: 0 });
+        i === 0 ? ctx.moveTo(pr.sx, pr.sy) : ctx.lineTo(pr.sx, pr.sy);
       }
       ctx.strokeStyle = 'rgba(214,164,74,' + alpha + ')';   // dorado
       ctx.stroke();
@@ -167,20 +161,15 @@ var VecindarioSolar = (function () {
     for (var d = 0; d < axisDeg.length; d++) {
       var deg = axisDeg[d];
       var aa = deg * DEG;
-      var ax = outer * Math.cos(aa), ay = outer * Math.sin(aa);
-      var ax1 = ax * cyaw - ay * syaw;
-      var ay1 = ax * syaw + ay * cyaw;
-      var ay2 = ay1 * cp;
-      var asx = cx + ax1 * scale;
-      var asy = cy - ay2 * scale;
+      var pa = project({ x: outer * Math.cos(aa), y: outer * Math.sin(aa), z: 0 });
       ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(asx, asy);
+      ctx.moveTo(o0.sx, o0.sy);
+      ctx.lineTo(pa.sx, pa.sy);
       ctx.strokeStyle = 'rgba(214,164,74,0.16)';
       ctx.stroke();
-      if (Math.abs(asx - cx) < W && Math.abs(asy - cy) < H) {
+      if (Math.abs(pa.sx - cx) < W && Math.abs(pa.sy - cy) < H) {
         ctx.fillStyle = 'rgba(255,208,120,0.6)';
-        ctx.fillText(deg + '°', asx + 4, asy - 4);
+        ctx.fillText(deg + '°', pa.sx + 4, pa.sy - 4);
       }
     }
   }
@@ -223,6 +212,9 @@ var VecindarioSolar = (function () {
 
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
+
+  // Anillo de la estrella centrada: el mismo que el del Grupo Local.
+  function anillo(p) { VLCentro.anillo(ctx, p, VLViaje.movimientoReducido()); }
 
   // Rectángulos de las etiquetas dibujadas y visibles este fotograma, para que
   // hitTest() las trate como área pulsable igual que en la vista de la galaxia
@@ -302,7 +294,7 @@ var VecindarioSolar = (function () {
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
-      var realzado = o === hovPrev;
+      var realzado = o === hovPrev || o === centro;
       var r = Math.max(2.4, 4 * p.persp);
 
       // Estrella observada solo por otros: es un destino POR VISITAR,
@@ -370,6 +362,10 @@ var VecindarioSolar = (function () {
       }
     }
 
+    // La estrella centrada lleva el anillo mientras sea el centro; su nombre lo
+    // pone el rótulo de arriba (realzado).
+    if (centro) anillo(project(centro));
+
     if (tip) {
       if (hovered) {
         tip.style.opacity = 1;
@@ -419,6 +415,10 @@ var VecindarioSolar = (function () {
   var downX = 0, downY = 0, downMoved = false;
   function pointerDown(e) {
     if (!interactive) return;
+    // Los controles dentro del visor (el «Volver» de la pastilla) no arrastran
+    // ni abren la estrella que tengan debajo.
+    if (e.target.closest && e.target.closest('.mw-ui-control')) return;
+    terminarVuelo();
     dragging = true;
     var p = e.touches ? e.touches[0] : e;
     last = { x: p.clientX, y: p.clientY };
@@ -436,7 +436,9 @@ var VecindarioSolar = (function () {
     }
   }
   function pointerUp(e) {
-    var fueClick = interactive && !downMoved;
+    // Solo si el gesto empezó en el visor: el mouseup se oye en window, y el de
+    // un botón de la ficha («Centrar») abriría la estrella que hubiera debajo.
+    var fueClick = dragging && interactive && !downMoved;
     dragging = false;
     if (fueClick && API.onObjectClick) {
       var p = (e && e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : (e || {});
@@ -453,11 +455,18 @@ var VecindarioSolar = (function () {
   stage.addEventListener('touchstart', pointerDown, { passive: true });
   stage.addEventListener('touchmove', pointerMove, { passive: true });
   stage.addEventListener('touchend', pointerUp);
+  // La rueda la gobierna el visor principal; aquí solo acaba el vuelo.
+  stage.addEventListener('wheel', function () { if (interactive) terminarVuelo(); }, { passive: true });
 
   // ---- Bucle de animación ---------------------------------------------------
   function loop() {
     if (layerAlpha > 0.001) {
-      if (!dragging && !hovered) yaw += autoGiro;
+      // El giro se pausa durante el vuelo del centro.
+      if (vuelo) {
+        var t = (performance.now() - vuelo.t0) / VUELO_MS;
+        puntoCentro = VLCentro.vuelo(vuelo.desde, vuelo.hasta, t);
+        if (t >= 1) vuelo = null;
+      } else if (!dragging && !hovered) yaw += autoGiro;
       render();
     }
     requestAnimationFrame(loop);
@@ -507,6 +516,7 @@ var VecindarioSolar = (function () {
     canvas.style.opacity = alpha;
     canvas.style.display = alpha > 0.001 ? 'block' : 'none';
     interactive = alpha > 0.5;
+    if (!interactive) volverAlOrigen();
     if (tip && !interactive) tip.style.opacity = 0;
     if (scaleTag) scaleTag.style.opacity = alpha > 0.5 ? 1 : 0;
     if (pxPerLy > 0) {
@@ -514,6 +524,63 @@ var VecindarioSolar = (function () {
       var f = R / pxPerLy;
       fov = Math.max(FOV_MIN, Math.min(FOV_MAX, f));
     }
+  }
+
+  // Centra la escena en una estrella: la cámara vuela ~0,5 s hasta ella (salta,
+  // con movimiento reducido) y desde ahí gira a su alrededor.
+  function centrar(o) {
+    centro = o;
+    volarA({ x: o.x, y: o.y, z: o.z });
+    rotularVolver();
+    pintarIndicador();
+  }
+  function volarA(hasta) {
+    vuelo = VLViaje.movimientoReducido() ? null
+      : { desde: puntoCentro, hasta: hasta, t0: performance.now() };
+    if (!vuelo) puntoCentro = hasta;
+  }
+  // Un gesto durante el vuelo lo acaba EN EL DESTINO: nunca a medio camino.
+  function terminarVuelo() {
+    if (!vuelo) return;
+    puntoCentro = vuelo.hasta;
+    vuelo = null;
+  }
+  // El centro es volátil: salir del vecindario lo devuelve al Sol.
+  function volverAlOrigen() {
+    if (!centro && !vuelo) return;
+    centro = null; vuelo = null; puntoCentro = ORIGEN;
+    pintarIndicador();
+  }
+  function esCentro(o) { return !!o && o === centro; }
+  // «Volver» de la pastilla y la tecla Inicio: el centro vuela de vuelta al Sol
+  // (giro y zoom no se tocan). Sin centro no hace nada y devuelve false.
+  function volver() {
+    if (!centro) return false;
+    centro = null;
+    volarA(ORIGEN);
+    pintarIndicador();
+    return true;
+  }
+
+  // Pastilla de centro de la épica #420, compartida con el Grupo Local: «Centro:
+  // …» en la región role="status" y el botón de volver con el rótulo del Sol.
+  var indicador = document.getElementById('mw-centro');
+  var indicadorEstado = document.getElementById('mw-centro-estado');
+  var indicadorVolver = document.getElementById('mw-centro-volver');
+  if (indicadorVolver) indicadorVolver.addEventListener('click', volver);
+  function rotularVolver() {
+    if (!indicador || !indicadorVolver) return;
+    indicador.setAttribute('data-escala', 'vecindario');
+    indicadorVolver.setAttribute('aria-label', 'Volver al Sol, origen de la escena');
+    document.getElementById('mw-centro-volver-txt').textContent = 'Volver al Sol';
+  }
+  function pintarIndicador() {
+    if (!indicador || !indicadorEstado) return;
+    indicadorEstado.textContent = centro ? 'Centro: ' + centro.name : '';
+    indicadorEstado.title = indicadorEstado.textContent;
+    // El botón desaparece con el centro: su foco pasa al visor, no al body.
+    if (!centro && document.activeElement === indicadorVolver) stage.focus({ preventScroll: true });
+    indicador.classList.toggle('mw-centro-visible', !!centro);
   }
 
   // setViaje: el tramo del vecindario de la salida que se está recorriendo, como
@@ -527,6 +594,7 @@ var VecindarioSolar = (function () {
     ready: true,
     sync: sync,
     setViaje: setViaje,
+    centrar: centrar, esCentro: esCentro, volver: volver,
     interactivo: function () { return interactive; },
     onObjectClick: null
   };

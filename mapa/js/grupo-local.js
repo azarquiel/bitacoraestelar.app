@@ -274,14 +274,8 @@ var GrupoLocal = (function () {
   // ---- Dibujo principal -----------------------------------------------------
   var hovered = null;
 
-  // Anillo de señalar (objeto buscado o centrado). Late; con movimiento
-  // reducido se queda fijo en su radio medio.
-  function anillo(p) {
-    var pulso = VLViaje.movimientoReducido() ? 6 : 6 + 3 * Math.sin(Date.now() / 300);
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(p.sx, p.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
-  }
+  // Anillo de señalar (objeto buscado o centrado): el de via-lactea-centro.js.
+  function anillo(p) { VLCentro.anillo(ctx, p, VLViaje.movimientoReducido()); }
 
   // Rectángulos de las etiquetas dibujadas y visibles este fotograma, para que
   // hitTest() las trate como área pulsable igual que en la vista de la galaxia
@@ -644,6 +638,7 @@ var GrupoLocal = (function () {
     target = null;   // el anillo de una búsqueda anterior pararía el giro
     centro = o;
     volarA({ x: o.x, y: o.y, z: o.z });
+    rotularVolver();
     pintarIndicador();
   }
   // El centro vuela hasta un punto (salta, con movimiento reducido).
@@ -685,6 +680,13 @@ var GrupoLocal = (function () {
   var indicadorEstado = document.getElementById('mw-centro-estado');
   var indicadorVolver = document.getElementById('mw-centro-volver');
   if (indicadorVolver) indicadorVolver.addEventListener('click', volver);
+  // La pastilla es de las dos escenas 3D: la que centra pone su rótulo e icono.
+  function rotularVolver() {
+    if (!indicador || !indicadorVolver) return;
+    indicador.setAttribute('data-escala', 'grupo-local');
+    indicadorVolver.setAttribute('aria-label', 'Volver a la Vía Láctea, origen de la escena');
+    document.getElementById('mw-centro-volver-txt').textContent = 'Volver a la Vía Láctea';
+  }
   function pintarIndicador() {
     if (!indicador || !indicadorEstado) return;
     indicadorEstado.textContent = centro ? 'Centro: ' + centro.name : '';

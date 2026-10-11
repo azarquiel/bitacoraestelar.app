@@ -76,6 +76,22 @@ var mwViejo = projectViejo({ x: -m31.x, y: -m31.y, z: -m31.z }, 0.6, -0.45, 3e6,
 ok(casi(mw.sx, mwViejo.sx, 1e-12) && casi(mw.sy, mwViejo.sy, 1e-12),
    'la Vía Láctea se ve donde caería el vector origen − centro');
 
+// Vecindario solar (#422): coordenadas en años luz con el Sol en el origen.
+console.log('Vecindario: coordenadas en años luz');
+var sirio = { x: -3.1, y: 7.6, z: -2.4 };           // ~8,6 al del Sol
+var camV = camara(0.6, -0.42, 20, 1280, 800);       // campo de 20 al
+var pS = C.proyectar(sirio, sirio, camV);
+ok(casi(pS.sx, 640, 1e-9) && casi(pS.sy, 400, 1e-9), 'Sirio centrada proyecta en (640, 400)');
+var solV = C.proyectar(origen, sirio, camV);
+var solVViejo = projectViejo({ x: -sirio.x, y: -sirio.y, z: -sirio.z }, 0.6, -0.42, 20, 1280, 800);
+ok(casi(solV.sx, solVViejo.sx, 1e-12) && casi(solV.sy, solVViejo.sy, 1e-12),
+   'el Sol se ve donde caería el vector origen − centro (sigue dibujado)');
+var vecino = { x: 4.2, y: -1.0, z: 0.9 };
+var pc = C.proyectar(vecino, origen, camV), pv = projectViejo(vecino, 0.6, -0.42, 20, 1280, 800);
+ok(casi(pc.sx, pv.sx, 1e-12) && casi(pc.sy, pv.sy, 1e-12), 'con el Sol de centro, una estrella proyecta como siempre');
+var vV = C.vuelo(origen, sirio, 1);
+ok(vV.x === sirio.x && vV.y === sirio.y && vV.z === sirio.z, 'el vuelo hasta la estrella llega exacto');
+
 console.log('Vuelo');
 var desde = { x: 10, y: -20, z: 30 }, hasta = { x: -1e6, y: 4e5, z: 2e5 };
 var v0 = C.vuelo(desde, hasta, 0), v1 = C.vuelo(desde, hasta, 1);
@@ -113,6 +129,21 @@ ok(/closest\('\.mw-ui-control'\)/.test(gl), 'el arrastre del Grupo Local no empi
 ok(/e\.key === 'Home'[\s\S]{0,400}GrupoLocal\.volver\(\)/.test(app), 'Inicio llama a GrupoLocal.volver()');
 ok(!/grupo-local\.js\?v=20261011_1200|via-lactea-app\.js\?v=20261011_1200/.test(html),
    'las versiones de caché no repiten las de #421 (producción serviría los viejos)');
+
+// Centrar en el vecindario (#422): mismo cableado, sobre el fuente.
+console.log('Vecindario: cableado');
+var vs = leer('mapa/js/vecindario-solar.js');
+ok(/centrar:\s*centrar[\s\S]{0,40}esCentro:\s*esCentro[\s\S]{0,40}volver:\s*volver/.test(vs),
+   'VecindarioSolar expone centrar, esCentro y volver');
+ok(/VLCentro\.proyectar/.test(vs) && !/var cyaw/.test(vs), 'el vecindario proyecta por VLCentro (sin copia de la cuenta)');
+ok(/if \(centro\) anillo\(project\(centro\)\)/.test(vs), 'la estrella centrada lleva el anillo');
+ok(/realzado = o === hovPrev \|\| o === centro/.test(vs), 'y su nombre siempre visible');
+ok(/if \(!interactive\) volverAlOrigen\(\)/.test(vs), 'salir del vecindario devuelve el centro al Sol');
+ok(/Volver al Sol, origen de la escena/.test(vs), 'el rótulo del botón es «Volver al Sol» con «origen de la escena»');
+ok(/closest\('\.mw-ui-control'\)/.test(vs), 'el arrastre del vecindario no empieza sobre un control');
+ok(/armarCentrar\(obj, VecindarioSolar\)/.test(app), 'la ficha de una estrella del vecindario arma «Centrar»');
+ok(/VecindarioSolar\.volver\(\)/.test(app), 'Inicio también vuelve al Sol');
+ok(!/vecindario-solar\.js\?v=20261004_1200/.test(html), 'versión de caché nueva del vecindario');
 
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\nTodo bien');
