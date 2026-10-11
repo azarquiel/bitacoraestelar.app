@@ -130,10 +130,11 @@ var VecindarioSolar = (function () {
   // ---- Rejilla de planos concéntricos (dorada) ------------------------------
   // Los planos son del Sol: con el centro desplazado se van con él, por eso
   // todo pasa por project().
-  function drawGrid() {
+  function drawGrid(realce) {
+    var kr = realce ? VLCentro.REALCE_REJILLA : 1;
     var rings = [];
     var base = Math.pow(10, Math.floor(Math.log10(fov)));
-    for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
+    for (var k = 0.5; k <= 30; k *= 2) rings.push(base * kr);
 
     ctx.lineWidth = 1;
     var scale = Math.min(W, H) * 0.42 / fov;
@@ -143,7 +144,7 @@ var VecindarioSolar = (function () {
       var radius = rings[ri];
       var px = radius * scale;
       if (px < 8 || px > Math.max(W, H) * 3) continue;
-      var alpha = Math.max(0.05, 0.32 - px / (Math.max(W, H) * 2));
+      var alpha = Math.min(0.7, Math.max(0.05, 0.32 - px / (Math.max(W, H) * 2)) * kr);
       ctx.beginPath();
       var N = 96;
       for (var i = 0; i <= N; i++) {
@@ -165,7 +166,7 @@ var VecindarioSolar = (function () {
       ctx.beginPath();
       ctx.moveTo(o0.sx, o0.sy);
       ctx.lineTo(pa.sx, pa.sy);
-      ctx.strokeStyle = 'rgba(214,164,74,0.16)';
+      ctx.strokeStyle = 'rgba(214,164,74,' + 0.16 * kr + ')';
       ctx.stroke();
       if (Math.abs(pa.sx - cx) < W && Math.abs(pa.sy - cy) < H) {
         ctx.fillStyle = 'rgba(255,208,120,0.6)';
@@ -233,7 +234,7 @@ var VecindarioSolar = (function () {
     ctx.fillRect(0, 0, W, H);
 
     drawStars();
-    drawGrid();
+    drawGrid(!!(hovered || centro));
     drawRutaViaje();
 
     var projected = objects

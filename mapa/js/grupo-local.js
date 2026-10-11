@@ -188,7 +188,8 @@ var GrupoLocal = (function () {
   // ---- Rejilla de planos concéntricos --------------------------------------
   // Los planos son del origen: con el centro desplazado se van con la Vía
   // Láctea, por eso todo pasa por project().
-  function drawGrid() {
+  function drawGrid(realce) {
+    var kr = realce ? VLCentro.REALCE_REJILLA : 1;
     var rings = [];
     var base = Math.pow(10, Math.floor(Math.log10(fov)));
     for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
@@ -201,7 +202,7 @@ var GrupoLocal = (function () {
       var radius = rings[ri];
       var px = radius * scale;
       if (px < 8 || px > Math.max(W, H) * 3) continue;
-      var alpha = Math.max(0.05, 0.35 - px / (Math.max(W, H) * 2));
+      var alpha = Math.min(0.7, Math.max(0.05, 0.35 - px / (Math.max(W, H) * 2)) * kr);
       ctx.beginPath();
       var N = 96;
       for (var i = 0; i <= N; i++) {
@@ -223,7 +224,7 @@ var GrupoLocal = (function () {
       ctx.beginPath();
       ctx.moveTo(o0.sx, o0.sy);
       ctx.lineTo(pa.sx, pa.sy);
-      ctx.strokeStyle = 'rgba(30,79,214,0.18)';
+      ctx.strokeStyle = 'rgba(30,79,214,' + 0.18 * kr + ')';
       ctx.stroke();
       if (Math.abs(pa.sx - cx) < W && Math.abs(pa.sy - cy) < H) {
         ctx.fillStyle = 'rgba(77,140,255,0.6)';
@@ -295,7 +296,7 @@ var GrupoLocal = (function () {
     ctx.fillRect(0, 0, W, H);
 
     drawStars();
-    drawGrid();
+    drawGrid(!!(hovered || centro || (target && target.soloAnillo)));
     drawRutaViaje();
 
     // Se omiten los tipos de Hubble ocultados desde la leyenda; conjunto

@@ -53,6 +53,9 @@
     ctx.beginPath(); ctx.arc(p.sx, p.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
   }
 
+  // Los anillos de distancia suben de opacidad (x REALCE_REJILLA) a la vez que
+  // la plomada, mientras haya un objeto realzado: la plomada se lee contra ellos.
+
   // Plomada: vertical del objeto a su pie sobre el plano z=0, la misma en las
   // dos escenas. Continua si el objeto está sobre el plano, discontinua si
   // está bajo él; el pie lleva un círculo pequeño para ver dónde cae.
@@ -66,7 +69,8 @@
     ctx.beginPath(); ctx.arc(pie.sx, pie.sy, 2, 0, Math.PI * 2); ctx.stroke();
   }
 
-  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada };
+  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada,
+               REALCE_REJILLA: 1.8 };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLCentro = API; }
