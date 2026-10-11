@@ -56,5 +56,25 @@ console.log('leyenda: cada escala enseña la suya y esconde las otras dos:');
   });
 });
 
+console.log('puedeCambiarDeEscala (#424): solo con el centro en el origen:');
+['galaxia', 'grupoLocal', 'vecindario'].forEach(function (capa) {
+  eq(C.puedeCambiarDeEscala(capa, false), true, capa + ': centro en el origen, se cambia');
+  eq(C.puedeCambiarDeEscala(capa, true), capa === 'galaxia', capa + ': centro desplazado, ' + (capa === 'galaxia' ? 'se pasa libre' : 'no se cambia'));
+});
+
+console.log('limitarEscala (#424): topes con el centro desplazado:');
+var TOPES = { vecindarioMin: 30, grupoLocalMax: 0.04 };
+eq(C.limitarEscala('vecindario', true, 40, 20, TOPES), 30, 'vecindario: alejar se para en el tope');
+eq(C.limitarEscala('vecindario', true, 40, 50, TOPES), 50, 'vecindario: acercar es libre');
+eq(C.limitarEscala('vecindario', true, 25, 20, TOPES), 25, 'vecindario: ya rebasado, no sigue alejando');
+eq(C.limitarEscala('vecindario', true, 25, 28, TOPES), 28, 'vecindario: ya rebasado, acercar es libre');
+eq(C.limitarEscala('vecindario', false, 40, 20, TOPES), 20, 'vecindario: en el origen, como hoy');
+eq(C.limitarEscala('grupoLocal', true, 0.01, 0.1, TOPES), 0.04, 'grupo local: acercar se para en el tope');
+eq(C.limitarEscala('grupoLocal', true, 0.01, 0.005, TOPES), 0.005, 'grupo local: alejar es libre');
+eq(C.limitarEscala('grupoLocal', true, 0.05, 0.1, TOPES), 0.05, 'grupo local: ya rebasado, no sigue acercando');
+eq(C.limitarEscala('grupoLocal', false, 0.01, 0.1, TOPES), 0.1, 'grupo local: en el origen, como hoy');
+eq(C.limitarEscala('galaxia', true, 1, 100, TOPES), 100, 'galaxia: libre aunque haya centro');
+eq(C.limitarEscala('galaxia', true, 1, 0.001, TOPES), 0.001, 'galaxia: libre alejando hacia el Grupo Local');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

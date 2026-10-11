@@ -1271,6 +1271,40 @@
       ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
   }
 
+  // Zoom de la rueda y del pellizco con el centro desplazado (#424): no cruza a
+  // otra escala (los topes son donde EMPIEZA el fundido de salida) y va hacia el
+  // objeto centrado, que cae en el centro del visor, no hacia el cursor.
+  // El vecindario aún no centra: VecindarioSolar.centroDesplazado es opcional.
+  function centroDesplazado() {
+    return (typeof GrupoLocal !== 'undefined' && !!GrupoLocal.centroDesplazado && GrupoLocal.centroDesplazado()) ||
+      (typeof VecindarioSolar !== 'undefined' && !!VecindarioSolar.centroDesplazado && VecindarioSolar.centroDesplazado());
+  }
+  function limitarZoom(pedida) {
+    var desplazado = centroDesplazado();
+    if (!desplazado) return pedida;
+    var galImg = document.getElementById('mw-image');
+    var vr = viewer.getBoundingClientRect();
+    var cfgV = (window.CONFIG && CONFIG.vecindario) || {};
+    var cfgG = (window.CONFIG && CONFIG.grupoLocal) || {};
+    var umbral = cfgG.umbral || 0.1;
+    var umbralFinal = (cfgG.umbralFinal != null) ? cfgG.umbralFinal : umbral * 0.4;
+    if (umbralFinal >= umbral) umbralFinal = umbral * 0.4;
+    var salida = (cfgV.fovSalidaAl != null) ? cfgV.fovSalidaAl : cfgV.fovFinalAl;
+    salida = Math.min(cfgV.fovInicioAl, Math.max(cfgV.fovFinalAl, salida));   // como fundidoVecindario
+    var rw = galImg && galImg.naturalWidth ? getImgRect(galImg).width : 0;
+    var topes = {
+      grupoLocalMax: umbralFinal,
+      vecindarioMin: rw ? (Math.min(vr.width, vr.height) * 0.42 * CONFIG.fisica.anchoImagenAl) / (rw * salida) : 0
+    };
+    return VLCapas.limitarEscala(VLCapas.capaActiva(alphaAtlas, alphaVecindario), desplazado, scale, pedida, topes);
+  }
+  // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro.
+  function puntoDeZoom(x, y) {
+    if (!centroDesplazado()) return { x: x, y: y };
+    var vr = viewer.getBoundingClientRect();
+    return { x: vr.left + vr.width / 2, y: vr.top + vr.height / 2 };
+  }
+
   function updateVecindario() {
     if (typeof VecindarioSolar === 'undefined' || !VecindarioSolar.ready) return;
     var cfg = (window.CONFIG && CONFIG.vecindario) || {};
@@ -1590,7 +1624,8 @@
       pinchPrevAngle = touchAngle(e.touches[0], e.touches[1]);
 
       var rect = viewer.getBoundingClientRect();
-      var mid = touchMidpoint(e.touches[0], e.touches[1]);
+      var mid0 = touchMidpoint(e.touches[0], e.touches[1]);
+      var mid = puntoDeZoom(mid0.x, mid0.y);
       // Punto del mapa que cae bajo el punto medio de los dedos.
       var anc = VLGeometria.planoDesdePantalla(
         mid.x - rect.left - posX, mid.y - rect.top - posY, vistaProyeccion());
@@ -1609,11 +1644,12 @@
       e.preventDefault();
       var dist = touchDistance(e.touches[0], e.touches[1]);
       if (pinchStartDist > 0) {
-        var targetScale = Math.min(effMaxScale(), Math.max(minScale,
-          pinchStartScale * (dist / pinchStartDist)));
+        var targetScale = limitarZoom(Math.min(effMaxScale(), Math.max(minScale,
+          pinchStartScale * (dist / pinchStartDist))));
 
         var rect = viewer.getBoundingClientRect();
-        var mid = touchMidpoint(e.touches[0], e.touches[1]);
+        var mid0 = touchMidpoint(e.touches[0], e.touches[1]);
+        var mid = puntoDeZoom(mid0.x, mid0.y);
 
         // Imponemos que el punto de mapa anclado (pinchAnchor) quede justo bajo
         // el punto medio actual de los dedos, a la nueva escala: se proyecta a
@@ -1672,8 +1708,9 @@
     e.preventDefault();
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     var factor = e.deltaY > 0 ? 0.85 : 1.18;
-    var newScale = Math.min(effMaxScale(), Math.max(minScale, scale * factor));
-    zoomAt(e.clientX, e.clientY, newScale);
+    var newScale = limitarZoom(Math.min(effMaxScale(), Math.max(minScale, scale * factor)));
+    var fijo = puntoDeZoom(e.clientX, e.clientY);
+    zoomAt(fijo.x, fijo.y, newScale);
     hideHint();
   }, { passive: false });
 
