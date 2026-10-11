@@ -1309,7 +1309,10 @@
     if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') return false;
     var sol = isEdgeView ? CONFIG.sol.canto : CONFIG.sol.cenital;
     var x0 = posX, y0 = posY;
+    sinClamp = true;
     centerOnAnchor(sol.x, sol.y, scale);   // calcula (y aplica) el destino
+    sinClamp = false;
+    holguraSol = { x: Math.abs(posX), y: Math.abs(posY), escala: scale };
     var x1 = posX, y1 = posY;
     var dist = Math.hypot(x1 - x0, y1 - y0);
     var reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1461,7 +1464,12 @@
     minScale = Math.min(base, necesaria);
   }
 
+  // «Volver al Sol» (#425): a escalas donde la imagen cabe en el visor el clamp
+  // dejaría el Sol sin centrar. holguraSol amplía el rango hasta ese encuadre
+  // mientras la escala sea la suya; sinClamp lo salta al calcularlo.
+  var holguraSol = null, sinClamp = false;
   function clampPosition() {
+    if (sinClamp) return;
     var viewerRect = viewer.getBoundingClientRect();
     var activeImg = isEdgeView
       ? document.getElementById('mw-image-edge')
@@ -1490,6 +1498,10 @@
       var h3 = VLGeometria.huellaInclinada(r, vistaProyeccion());
       anchoPant = Math.max(anchoPant, h3.w);
       altoPant = Math.max(altoPant, h3.h);
+    }
+    if (holguraSol && holguraSol.escala === scale) {
+      anchoPant = Math.max(anchoPant, viewerRect.width + 2 * holguraSol.x);
+      altoPant = Math.max(altoPant, viewerRect.height + 2 * holguraSol.y);
     }
     var pos = VLGeometria.clampDesplazamiento(
       posX, posY, anchoPant, altoPant, viewerRect.width, viewerRect.height);
