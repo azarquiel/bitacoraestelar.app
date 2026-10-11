@@ -1878,11 +1878,19 @@
   document.addEventListener('keydown', function (e) {
     // «/» lleva al buscador, como en cualquier sitio con buscador. Con el foco
     // ya en un campo, o con una ficha abierta, se deja escribir.
-    if (e.key === '/' && searchInput && !e.ctrlKey && !e.metaKey && !e.altKey &&
+    var libre = !e.ctrlKey && !e.metaKey && !e.altKey &&
         !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') &&
-        !(e.target && e.target.isContentEditable) && !overlayOpen()) {
+        !(e.target && e.target.isContentEditable) && !overlayOpen();
+    if (e.key === '/' && searchInput && libre) {
       e.preventDefault();
       searchInput.focus();
+      return;
+    }
+    // Inicio hace lo del «Volver» de la pastilla de centro (#423), con la misma
+    // guarda. Sin centro desplazado no hace nada y la tecla sigue su curso.
+    if (e.key === 'Home' && libre && !e.shiftKey &&
+        typeof GrupoLocal !== 'undefined' && GrupoLocal.volver && GrupoLocal.volver()) {
+      e.preventDefault();
       return;
     }
     if (e.key === 'Escape') {
