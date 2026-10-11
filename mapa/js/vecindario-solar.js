@@ -134,7 +134,7 @@ var VecindarioSolar = (function () {
     var kr = realce ? VLCentro.REALCE_REJILLA : 1;
     var rings = [];
     var base = Math.pow(10, Math.floor(Math.log10(fov)));
-    for (var k = 0.5; k <= 30; k *= 2) rings.push(base * kr);
+    for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
 
     ctx.lineWidth = 1;
     var scale = Math.min(W, H) * 0.42 / fov;
