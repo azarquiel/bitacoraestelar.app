@@ -13,6 +13,12 @@ function eq(a, b, et) {
   else { fallos++; console.log('  FALLA ' + et + '\n         esperado ' + JSON.stringify(b) + '\n         obtenido ' + JSON.stringify(a)); }
 }
 
+console.log('alias de una estrella fusionada:');
+(function () {
+  var sheliak = { id: 'sheliak', label: 'Sheliak', name: 'Sheliak', alias: ['HR 7106'] };
+  eq(VLB.construir([sheliak]).exacto('hr7106'), sheliak, '"HR 7106" encuentra a Sheliak');
+})();
+
 console.log('normalizar (minúsculas, sin acentos ni signos):');
 eq(VLB.normalizar('M 13'), 'm13', '"M 13" -> "m13"');
 eq(VLB.normalizar('m13'), 'm13', '"m13" -> "m13"');

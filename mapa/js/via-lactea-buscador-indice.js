@@ -49,7 +49,9 @@
     var indice = (objetos || []).map(function (o) {
       return {
         obj: o,
+        // alias: los otros nombres de una estrella fusionada (VLDuplicados).
         claves: [normalizar(o.id), normalizar(o.label), normalizar(o.name)]
+          .concat((o.alias || []).map(normalizar))
       };
     });
 

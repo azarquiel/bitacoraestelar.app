@@ -87,8 +87,23 @@
     ctx.beginPath(); ctx.arc(pie.sx, pie.sy, 2, 0, Math.PI * 2); ctx.stroke();
   }
 
+  // Mapa de la galaxia (#425): ¿cae el Sol (dx, dy px respecto al centro del
+  // visor) fuera de la zona que cuenta como centrada? Es la de cercaDelSol:
+  // frac × el lado menor del visor.
+  function solDescentrado(dx, dy, w, h, frac) {
+    return Math.sqrt(dx * dx + dy * dy) >= Math.min(w, h) * frac;
+  }
+
+  // Duración (ms) del vuelo del Sol al centro: 500 si el recorrido pasa de un
+  // cuarto de la diagonal, y baja hasta 250 cuando el Sol ya casi está.
+  function duracionVuelo(distPx, diagonalPx) {
+    var t = Math.min(1, distPx / (0.25 * diagonalPx));
+    return 250 + 250 * t;
+  }
+
   var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada,
-               realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA };
+              realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA,
+              solDescentrado: solDescentrado, duracionVuelo: duracionVuelo };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLCentro = API; }

@@ -156,5 +156,23 @@ ok(!/vecindario-solar\.js\?v=20261004_1200/.test(html), 'versión de caché nuev
   ok(C.realceAnillos([1, 2, 3], 1.1, 1)[1] === 1.8, 'los no dibujados no cuentan');
 })();
 
+// «Volver al Sol» del mapa de la galaxia (#425).
+console.log('Volver al Sol (galaxia)');
+ok(C.solDescentrado(0, 0, 800, 600, 0.28) === false, 'el Sol en el centro no pide botón');
+ok(C.solDescentrado(100, 100, 800, 600, 0.28) === false, 'dentro de la zona (141 < 168) no pide botón');
+ok(C.solDescentrado(200, 150, 800, 600, 0.28) === true, 'fuera de la zona (250 > 168) sí');
+ok(C.duracionVuelo(1000, 1000) === 500, 'recorrido largo: 500 ms');
+ok(C.duracionVuelo(0, 1000) === 250, 'Sol ya en el centro: mínimo de 250 ms');
+ok(C.duracionVuelo(50, 1000) > 250 && C.duracionVuelo(50, 1000) < 500, 'recorrido corto: entre 250 y 500 ms');
+ok(/setAttribute\('data-escala', 'galaxia'\)/.test(app), 'la app pone la pastilla en escala «galaxia»');
+ok(/'Volver al Sol, origen de la escena'/.test(app), 'rótulo accesible «Volver al Sol, origen de la escena»');
+ok(/reducido \|\| dist < 1/.test(app), 'movimiento reducido: el Sol se centra al instante');
+ok(/holguraSol/.test(app) && /sinClamp/.test(app), 'a escala 1 el clamp no impide centrar el Sol (holgura)');
+ok(/function terminarVueloSol/.test(app) && /'wheel', 'touchstart'/.test(app), 'un gesto durante el vuelo lo termina en el destino');
+ok(/centerOnAnchor\(sol\.x, sol\.y, scale\)/.test(app), 'el vuelo conserva la escala');
+ok(/if \(!isDragging\) ?|isDragging\) return;\s*var propia/.test(app), 'durante el arrastre no se reevalúa');
+ok(/data-escala="galaxia"\] > \.mw-icono/.test(html), 'en la galaxia la pastilla enseña solo el botón');
+ok(/centroPastilla\.getAttribute\('data-escala'\) === 'galaxia' && volverAlSol/.test(app), 'Inicio también vuelve al Sol en la galaxia');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\nTodo bien');
