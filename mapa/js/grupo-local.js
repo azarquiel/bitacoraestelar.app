@@ -758,6 +758,7 @@ var GrupoLocal = (function () {
     focusObject: focusObject, focus: focus, clearTarget: clearTarget,
     encuadrar: encuadrar,
     centrar: centrar, esCentro: esCentro, volver: volver,
+    centroDesplazado: function () { return !!centro; },
     setViaje: setViaje,
     onObjectClick: null
   };
