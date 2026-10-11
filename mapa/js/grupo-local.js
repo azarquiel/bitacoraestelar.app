@@ -220,15 +220,14 @@ var GrupoLocal = (function () {
       var deg = axisDeg[d];
       var aa = deg * DEG;
       var pa = project({ x: outer * Math.cos(aa), y: outer * Math.sin(aa), z: 0 });
-      var asx = pa.sx, asy = pa.sy;
       ctx.beginPath();
       ctx.moveTo(o0.sx, o0.sy);
-      ctx.lineTo(asx, asy);
+      ctx.lineTo(pa.sx, pa.sy);
       ctx.strokeStyle = 'rgba(30,79,214,0.18)';
       ctx.stroke();
-      if (Math.abs(asx - cx) < W && Math.abs(asy - cy) < H) {
+      if (Math.abs(pa.sx - cx) < W && Math.abs(pa.sy - cy) < H) {
         ctx.fillStyle = 'rgba(77,140,255,0.6)';
-        ctx.fillText(deg + '°', asx + 4, asy - 4);
+        ctx.fillText(deg + '°', pa.sx + 4, pa.sy - 4);
       }
     }
   }

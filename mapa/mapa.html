@@ -374,15 +374,17 @@
     border-radius: 20px;
     color: #eaf1fb;
     font: 13px sans-serif;
+    /* Sin botón aún: #423 lo añade y tendrá que quitar esto. */
     pointer-events: none;
+    /* Oculta solo por opacidad: visibility o display sacarían la región
+       role="status" del árbol de accesibilidad y no se anunciaría al
+       aparecer. Vacía, no lee nada. */
     opacity: 0;
-    visibility: hidden;
     transform: translateY(-4px);
-    transition: opacity 0.1s ease, transform 0.1s ease, visibility 0s linear 0.1s;
+    transition: opacity 0.1s ease, transform 0.1s ease;
   }
   #mw-centro.mw-centro-visible {
     opacity: 1;
-    visibility: visible;
     transform: none;
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
