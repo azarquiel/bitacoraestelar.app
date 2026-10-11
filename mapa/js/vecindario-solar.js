@@ -595,6 +595,7 @@ var VecindarioSolar = (function () {
     sync: sync,
     setViaje: setViaje,
     centrar: centrar, esCentro: esCentro, volver: volver,
+    centroDesplazado: function () { return !!centro; },
     interactivo: function () { return interactive; },
     onObjectClick: null
   };

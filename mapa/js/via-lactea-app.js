@@ -1274,7 +1274,6 @@
   // Zoom de la rueda y del pellizco con el centro desplazado (#424): no cruza a
   // otra escala (los topes son donde EMPIEZA el fundido de salida) y va hacia el
   // objeto centrado, que cae en el centro del visor, no hacia el cursor.
-  // El vecindario aún no centra: VecindarioSolar.centroDesplazado es opcional.
   function centroDesplazado() {
     return (typeof GrupoLocal !== 'undefined' && !!GrupoLocal.centroDesplazado && GrupoLocal.centroDesplazado()) ||
       (typeof VecindarioSolar !== 'undefined' && !!VecindarioSolar.centroDesplazado && VecindarioSolar.centroDesplazado());
