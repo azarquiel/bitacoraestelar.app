@@ -53,7 +53,20 @@
     ctx.beginPath(); ctx.arc(p.sx, p.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
   }
 
-  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo };
+  // Plomada: vertical del objeto a su pie sobre el plano z=0, la misma en las
+  // dos escenas. Continua si el objeto está sobre el plano, discontinua si
+  // está bajo él; el pie lleva un círculo pequeño para ver dónde cae.
+  //   pie, p: puntos proyectados ({sx, sy}) · bajo: z < 0 · color: 'rgba(...)'
+  function plomada(ctx, pie, p, bajo, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(bajo ? [2, 3] : []);
+    ctx.beginPath(); ctx.moveTo(pie.sx, pie.sy); ctx.lineTo(p.sx, p.sy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(pie.sx, pie.sy, 2, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLCentro = API; }

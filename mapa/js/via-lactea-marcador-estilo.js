@@ -29,7 +29,17 @@
     };
   }
 
-  var api = { de: de };
+  // Opacidad base de los marcadores de las vistas de canvas (vecindario solar y
+  // Grupo Local): tenue en reposo, entera si está realzado (hover, seleccionado
+  // o centrado) o hay viaje. Más suave que la atenuación de la galaxia (de).
+  var ATEN_CANVAS = 0.72;
+  function canvas(estado, cfg) {
+    estado = estado || {};
+    if (estado.viajeActivo || estado.realzado) return 1;
+    return (cfg && cfg.atenuacionCanvas != null) ? cfg.atenuacionCanvas : ATEN_CANVAS;
+  }
+
+  var api = { de: de, canvas: canvas };
   root.VLMarcadorEstilo = api;                                  // navegador
   if (typeof module !== 'undefined' && module.exports) module.exports = api; // Node (test)
 })(typeof window !== 'undefined' ? window : globalThis);

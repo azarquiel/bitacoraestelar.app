@@ -14,8 +14,8 @@
 
    Origen (0,0,0) = Sol. Posiciones en coordenadas galácticas (l, b) + distancia
    (años luz). El plano z=0 es el plano galáctico que pasa por el Sol: las
-   estrellas por DEBAJO (z<0) llevan línea de caída DISCONTINUA; las de ENCIMA
-   (z>0), CONTINUA.
+   estrellas por DEBAJO (z<0) llevan plomada DISCONTINUA; las de ENCIMA (z>0),
+   CONTINUA. La plomada solo se dibuja en la estrella realzada (hover o centro).
 
    El COLOR de las estrellas es EXACTAMENTE el del render de Gaia del simulador
    de ocular porque AMBOS usan el mismo módulo: BitacoraGaiaColor (fuente única,
@@ -303,18 +303,15 @@ var VecindarioSolar = (function () {
       var aten = window.VLObservadores.atenuadoPorObservador(o.id);
       var col = rgbaDe(o.bprp, 1, aten);   // COLOR EXACTO de Gaia (por BP–RP)
 
-      // Línea de caída al plano galáctico (z=0). DISCONTINUA si la estrella está
-      // por DEBAJO del Sol (z<0); CONTINUA si está por ENCIMA (z>0).
-      var foot = project({ x: o.x, y: o.y, z: 0 });
-      if (o.z < 0) ctx.setLineDash([2, 3]);
-      else ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(foot.sx, foot.sy);
-      ctx.lineTo(p.sx, p.sy);
-      ctx.strokeStyle = rgbaDe(o.bprp, 0.30, aten);
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Plomada al plano galáctico (z=0), solo del realzado (hover, centro).
+      // Misma ley y trazo que en el Grupo Local (VLCentro.plomada).
+      if (realzado) {
+        VLCentro.plomada(ctx, project({ x: o.x, y: o.y, z: 0 }), p, o.z < 0, rgbaDe(o.bprp, 0.6, aten));
+      }
+
+      // Brillo base tenue; entero si realzado o en viaje (VLMarcadorEstilo.canvas).
+      ctx.globalAlpha = VLMarcadorEstilo.canvas({ realzado: realzado, viajeActivo: !!rutaIds },
+        window.CONFIG && CONFIG.marcadores);
 
       var simbolo = window.VLObservadores.simboloDe(o.id);
       if (simbolo === 'punto') {
@@ -361,6 +358,7 @@ var VecindarioSolar = (function () {
         if (dx * dx + dy * dy < 160 || enEtiqueta) hovered = { o: o, p: p };
       }
     }
+    ctx.globalAlpha = 1;
 
     // La estrella centrada lleva el anillo mientras sea el centro; su nombre lo
     // pone el rótulo de arriba (realzado).

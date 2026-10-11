@@ -38,5 +38,11 @@ if (def.escala > 0 && def.escala < 1 && def.opacidad > 0 && def.opacidad < 1) {
 console.log('otros ajustes de CONFIG se respetan:');
 eq(E.de({}, { atenuacionEscala: 0.7, atenuacionOpacidad: 0.4 }), { escala: 0.7, opacidad: 0.4 }, 'cfg alternativo');
 
+console.log('opacidad base de las vistas de canvas:');
+eq(E.canvas({}, {}), 0.72, 'reposo tenue');
+eq(E.canvas({ realzado: true }, {}), 1, 'realzado entero');
+eq(E.canvas({ viajeActivo: true }, {}), 1, 'viaje entero');
+eq(E.canvas({}, { atenuacionCanvas: 0.6 }), 0.6, 'cfg alternativo');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo ok.');

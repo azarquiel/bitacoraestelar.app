@@ -357,16 +357,16 @@ var GrupoLocal = (function () {
       var aten = atenuadaPorObservador(o);
       var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // opacidad del rótulo
 
-      // línea guía hasta el plano galáctico
-      var foot = project({ x: o.x, y: o.y, z: 0 });
-      ctx.setLineDash([2, 3]);
-      ctx.beginPath();
-      ctx.moveTo(foot.sx, foot.sy);
-      ctx.lineTo(p.sx, p.sy);
-      ctx.strokeStyle = colorRgba(o.color || '#7ec8ff', 0.28 * am, aten);
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Plomada al plano galáctico (z=0), solo del realzado (hover, centro).
+      // Misma ley y trazo que en el vecindario solar (VLCentro.plomada).
+      if (realzado) {
+        VLCentro.plomada(ctx, project({ x: o.x, y: o.y, z: 0 }), p, o.z < 0,
+          colorRgba(o.color || '#7ec8ff', 0.6 * am, aten));
+      }
+
+      // Brillo base tenue; entero si realzado o en viaje (VLMarcadorEstilo.canvas).
+      ctx.globalAlpha = VLMarcadorEstilo.canvas({ realzado: realzado, viajeActivo: !!rutaIds },
+        window.CONFIG && CONFIG.marcadores);
 
       var col = o.color || '#7ec8ff';
       var simbolo = VLObservadores.simboloDe(o.id);
@@ -414,6 +414,7 @@ var GrupoLocal = (function () {
         if (dx * dx + dy * dy < 160 || enEtiqueta) hovered = { o: o, p: p };
       }
     }
+    ctx.globalAlpha = 1;
 
     // La galaxia centrada lleva el mismo anillo que el objeto buscado mientras
     // sea el centro; su rótulo lo pone su marcador (realzadoDe). Es estado
