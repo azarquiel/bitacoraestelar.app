@@ -426,8 +426,13 @@
   #mw-centro-volver:focus-visible { outline: 2px solid rgba(244,199,107,0.8); outline-offset: 2px; }
   /* Icono por escala: espiral en el Grupo Local, el Sol en el vecindario. */
   #mw-centro-ico-sol { display: none; }
-  #mw-centro[data-escala="vecindario"] #mw-centro-ico-sol { display: block; }
-  #mw-centro[data-escala="vecindario"] #mw-centro-ico-espiral { display: none; }
+  #mw-centro[data-escala="vecindario"] #mw-centro-ico-sol,
+  #mw-centro[data-escala="galaxia"] #mw-centro-ico-sol { display: block; }
+  #mw-centro[data-escala="vecindario"] #mw-centro-ico-espiral,
+  #mw-centro[data-escala="galaxia"] #mw-centro-ico-espiral { display: none; }
+  /* Mapa de la galaxia (#425): no hay objeto centrado, solo el botón. */
+  #mw-centro[data-escala="galaxia"] > .mw-icono,
+  #mw-centro[data-escala="galaxia"] #mw-centro-estado { display: none; }
   @media (hover: none) { #mw-centro-volver { min-height: 44px; } }
   /* En estrecho la escala del centro se parte en dos líneas y llega hasta la
      esquina: la pastilla baja debajo de ella. */
@@ -1799,7 +1804,7 @@
 <!-- CAPA DEL GRUPO LOCAL: debe cargarse ANTES que la app, que la controla. -->
 <!-- CENTRO DE LA ESCENA de las escenas 3D (#421): proyección y vuelo. Pura,
      sin DOM; ANTES de grupo-local.js. -->
-<script src="/bitacora-mapa/js/via-lactea-centro.js?v=20261011_2000"></script>
+<script src="/bitacora-mapa/js/via-lactea-centro.js?v=20261011_2300"></script>
 <script src="/bitacora-mapa/js/grupo-local.js?v=20261011_2200"></script>
 <!-- MODELO DE COLOR GAIA (fuente única con el simulador de oculares). URL canónica
      en /wp-content/uploads/bitacora/ — cargar ANTES de vecindario-solar.js. -->
@@ -1816,5 +1821,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261011_2200"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261011_2300"></script>
 </li>

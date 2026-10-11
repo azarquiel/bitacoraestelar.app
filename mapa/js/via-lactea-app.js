@@ -1151,6 +1151,7 @@
     // (zoom máximo sobre el Sol). Se recalculan en cada cambio de zoom.
     updateGrupoLocal();
     updateVecindario();
+    pintarVolverSol();
   }
 
   // --------------------------------------------------------------------------
@@ -1258,6 +1259,67 @@
     var dy = (r.top + r.height / 2) - (vr.top + vr.height / 2);
     var frac = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.proximidad) || 0.28;
     return Math.sqrt(dx * dx + dy * dy) < Math.min(vr.width, vr.height) * frac;
+  }
+
+  // «Volver al Sol» (#425): la pastilla #mw-centro con solo el botón. La
+  // decide la posición del Sol en pantalla (también inclinada o de canto), con
+  // la zona de cercaDelSol. Solo manda en el mapa de la galaxia; en las
+  // escenas 3D la pastilla es del centro de la escena. Durante el arrastre no
+  // se reevalúa (parpadearía cerca del Sol): se hace al soltar.
+  var centroPastilla = document.getElementById('mw-centro');
+  var centroVolver = document.getElementById('mw-centro-volver');
+  var solRafPendiente = false;
+  function pintarVolverSol() {
+    if (!centroPastilla || !centroVolver || isDragging) return;
+    var propia = centroPastilla.getAttribute('data-escala') === 'galaxia';
+    if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') {
+      if (propia) centroPastilla.classList.remove('mw-centro-visible');
+      return;
+    }
+    var el = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
+    if (!el || !el.style.left) return;
+    var r = el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
+    var frac = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.proximidad) || 0.28;
+    var fuera = VLCentro.solDescentrado(
+      (r.left + r.width / 2) - (vr.left + vr.width / 2),
+      (r.top + r.height / 2) - (vr.top + vr.height / 2), vr.width, vr.height, frac);
+    if (!fuera && !propia) return;   // la pastilla es de una escena 3D
+    if (fuera && !propia) {
+      centroPastilla.setAttribute('data-escala', 'galaxia');
+      centroVolver.setAttribute('aria-label', 'Volver al Sol, origen de la escena');
+      document.getElementById('mw-centro-volver-txt').textContent = 'Volver al Sol';
+    }
+    // El botón desaparece: su foco pasa al visor, no al body.
+    if (!fuera && document.activeElement === centroVolver) viewer.focus({ preventScroll: true });
+    centroPastilla.classList.toggle('mw-centro-visible', fuera);
+  }
+  // Vuelo del Sol al centro SIN tocar el zoom (posX/posY). Un gesto lo corta
+  // (todos cancelan animFrame) y deja el mapa donde esté.
+  function volverAlSol() {
+    if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') return false;
+    var sol = isEdgeView ? CONFIG.sol.canto : CONFIG.sol.cenital;
+    var x0 = posX, y0 = posY;
+    centerOnAnchor(sol.x, sol.y, scale);   // calcula (y aplica) el destino
+    var x1 = posX, y1 = posY;
+    var dist = Math.hypot(x1 - x0, y1 - y0);
+    var reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducido || dist < 1) { pintarVolverSol(); return true; }
+    posX = x0; posY = y0;
+    applyTransform();
+    var t0 = performance.now();
+    var dur = VLCentro.duracionVuelo(dist, Math.hypot(viewer.clientWidth, viewer.clientHeight));
+    (function paso(ahora) {
+      var t = Math.min(1, (ahora - t0) / dur), e = 1 - Math.pow(1 - t, 3);
+      posX = x0 + (x1 - x0) * e; posY = y0 + (y1 - y0) * e;
+      applyTransform();
+      animFrame = t < 1 ? requestAnimationFrame(paso) : null;
+    })(t0);
+    return true;
+  }
+  if (centroVolver) {
+    centroVolver.addEventListener('click', function () {
+      if (centroPastilla.getAttribute('data-escala') === 'galaxia') volverAlSol();
+    });
   }
 
   // Tope de zoom vigente: elevado SOLO al acercarse al Sol en la vista cenital
@@ -1533,6 +1595,7 @@
 
   window.addEventListener('mouseup', function () {
     isDragging = false;
+    pintarVolverSol();
     isRotateDragging = false;
     viewer.style.cursor = 'grab';
   });
@@ -1694,6 +1757,7 @@
       // Se han levantado todos los dedos
       isDragging = false;
       isPinching = false;
+      pintarVolverSol();
     } else if (e.touches.length === 1) {
       // Queda un dedo: pasamos de pinch a arrastre con ese dedo
       isPinching = false;
@@ -1929,7 +1993,9 @@
     // guarda. Sin centro desplazado no hace nada y la tecla sigue su curso.
     if (e.key === 'Home' && libre && !e.shiftKey &&
         ((typeof GrupoLocal !== 'undefined' && GrupoLocal.volver && GrupoLocal.volver()) ||
-         (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.volver && VecindarioSolar.volver()))) {
+         (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.volver && VecindarioSolar.volver()) ||
+         (centroPastilla.classList.contains('mw-centro-visible') &&
+          centroPastilla.getAttribute('data-escala') === 'galaxia' && volverAlSol()))) {
       e.preventDefault();
       return;
     }
