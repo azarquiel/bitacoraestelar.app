@@ -106,6 +106,7 @@ Bitácora Registro** desde la base de datos (ver la carpeta `registro/`).
 | `js/via-lactea-app.js` | La lógica del visor de la galaxia | Servidor (`/bitacora-mapa/js/`) |
 | `js/grupo-local.js` | La capa del atlas del Grupo Local | Servidor (`/bitacora-mapa/js/`) |
 | `js/vecindario-solar.js` | La capa de las estrellas cercanas al Sol (dibujo) | Servidor (`/bitacora-mapa/js/`) |
+| `js/via-lactea-duplicados.js` | Una estrella, un marcador: fusiona los nombres duplicados de `OBJECTS` al cargar | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-vecindario-catalogo.js` | Qué estrellas entran en esa escena y cómo funde | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-viaje.js` | La ruta de un viaje: orden, tramos y trazo dorado | Servidor (`/bitacora-mapa/js/`) |
 | `images/` | Imágenes del mapa (cenital, de canto y bocetos) | Servidor (`/bitacora-mapa/images/`) |
@@ -406,6 +407,9 @@ Los objetos **extragalácticos** llevan además `l`, `b`, `dist` (años luz) y
    - **galáctico** → zoom-in en el mapa, con un punto de mira temporal;
    - **extragaláctico** → zoom-out al atlas, enmarcándolo y resaltándolo.
 
+Una estrella fusionada (ver «Una estrella, un marcador») también se encuentra por
+cualquiera de sus nombres descartados, que viajan en `alias`.
+
 ---
 
 ## Estructura de los datos
@@ -427,6 +431,35 @@ Cuatro bloques que emite el plugin: `OBSERVADORES`, `OBJECTS`, `OBSERVACIONES` y
   // y, en objetos extragalácticos: l, b, dist, tipo (clase de Hubble)
 }
 ```
+
+### Una estrella, un marcador
+
+Una misma estrella puede estar registrada con varios nombres: cada observador
+escribe el suyo (Sheliak, HR 7106) y el registro crea una fila por nombre, todas
+con la misma posición. Los marcadores se solapaban y no se podían separar.
+`js/via-lactea-duplicados.js` lo arregla **al cargar**, justo después de
+`datos.js` y antes de lo que lee `OBJECTS`. No modifica la base de datos.
+
+- **Qué se fusiona:** estrellas (`tipo` estrella o carbono) con la misma `l`, `b`
+  y distancia. Objetos de otro tipo en el mismo sitio (IC 1396 y Tr 37) no se tocan.
+- **Qué nombre gana** (el más común, por esta prioridad; a igualdad, la fila con
+  más observaciones y después el id):
+  1. nombre propio (Sheliak)
+  2. Bayer o Flamsteed (Bet Lyr, 10 Lyr)
+  3. HR
+  4. HD
+  5. SAO
+  6. el resto de catálogos (HIP, BD, TYC…)
+- **Qué pasa con las demás:** salen de `OBJECTS`; sus observaciones se añaden **al
+  final** de las de la canónica (los índices que ya tenía no cambian); los viajes
+  que pasaban por ellas pasan por la canónica; y su nombre queda en
+  `alias: ['HR 7106']`, que el buscador usa para encontrarla.
+- **Límite:** dos estrellas distintas con coordenadas idénticas se fundirían
+  (también se verían como un solo punto). Hasta hoy no ha pasado.
+- **Pendiente:** esto es una fusión de lectura. Que el registro reutilice la fila
+  existente en vez de crear otra (y migrar las que ya hay) está en su propio ticket.
+
+Test: `node scripts/test_duplicados.js`.
 
 ### Su ficha
 

@@ -1788,6 +1788,9 @@
      Si el endpoint no respondiera, descomenta la linea del archivo estatico: es
      el mismo formato, pero sin VIAJES, y el mapa se queda sin rutas. -->
 <script src="/wp-json/bitacora/v1/datos.js?v=20260829_1500"></script>
+<!-- Una estrella, un marcador: fusiona los nombres duplicados de OBJECTS. Va
+     justo DESPUÉS de datos.js y ANTES de todo lo que lee OBJECTS. -->
+<script src="/bitacora-mapa/js/via-lactea-duplicados.js?v=20261012_1000"></script>
 <!-- <script src="/bitacora-mapa/js/via-lactea-datos.js?v=20260714_0053"></script> -->
 <!-- VIAJES INTERESTELARES: lo consultan las tres capas y la app, así que va
      ANTES que todas ellas (necesita VIAJES/OBSERVACIONES/OBJECTS de los datos). -->
@@ -1819,7 +1822,7 @@
 <!-- SUBMÓDULOS de la app (extraídos del módulo-dios): cargar ANTES de
      via-lactea-app.js. zoom-imagen necesita CONFIG. -->
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
-<script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20260722_1200"></script>
+<script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20261012_1000"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
 <script src="/bitacora-mapa/js/via-lactea-app.js?v=20261012_0900"></script>
 </li>
