@@ -174,6 +174,10 @@ ok(/mw-realzado \.mw-punto,\s*#mw-content\.mw-viaje \.mw-object-anchor \.mw-punt
 })();
 ok(/VLCentro\.puntoFijoZoom\(x, y, [\s\S]*?centroDesplazado\(\) \|\| dentroVecindario\)/.test(app), 'la app ancla al centro dentro del vecindario');
 
+// Sin abanico de solapados (M8/M20): ningún marcador se desplaza ni lleva línea-guía de grupo.
+ok(!/FAN_GROUPS|fanOutClusters|data-ox|data-oy/.test(app), 'ya no hay abanico de objetos solapados');
+ok(/mw-hundido \.mw-connector/.test(html) && /var screenPx = hundidoX/.test(app), 'el conector sigue siendo la plomada del hundido');
+
 // Etiquetas solo realzadas y tamaño base común a las tres vistas.
 var vecin = leer('mapa/js/vecindario-solar.js');
 var grupo = leer('mapa/js/grupo-local.js');

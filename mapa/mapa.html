@@ -653,7 +653,7 @@
   /* Atenuación de marcadores (spec #102), ahora solo de la ETIQUETA: el punto
      va siempre a color intenso (marca dónde está el objeto ya observado, y
      amontonarlo con la etiqueta lo apagaba sin motivo). El transform va en el
-     wrapper .mw-aten porque el de .mw-marker-content lo pisa el JS del abanico;
+     wrapper .mw-aten porque el de .mw-marker-content lo pisa el JS del hundimiento;
      el área de clic no cambia: cada marcador lleva un pad transparente SIN
      escalar (ver createMarker en via-lactea-app.js).
 
@@ -824,11 +824,10 @@
     opacity: calc(0.85 * var(--mw-aten-op, 1));
   }
   #mw-content .mw-object-anchor.mw-hundido .mw-connector {
-    /* Plomada hasta el plano, no línea-guía de abanico: !important porque el
-       color liso del conector va en estilo en línea (createMarker). Solo con el
-       cursor encima o en el objeto buscado; el cristal del punto se queda. */
+    /* Plomada hasta el plano. Solo con el cursor encima o en el objeto
+       buscado; el cristal del punto se queda. */
     background: linear-gradient(to right,
-      rgba(150, 200, 255, 0.10), rgba(150, 200, 255, 0.5)) !important;
+      rgba(150, 200, 255, 0.10), rgba(150, 200, 255, 0.5));
     opacity: 0;
     transition: opacity .15s ease;
   }
@@ -1841,5 +1840,5 @@
 <script src="/bitacora-mapa/js/via-lactea-zoom-imagen.js?v=20260722_1200"></script>
 <script src="/bitacora-mapa/js/via-lactea-buscador-indice.js?v=20261012_1000"></script>
 <script src="/bitacora-mapa/js/via-lactea-geometria.js?v=20260828_1400"></script>
-<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261012_1700"></script>
+<script src="/bitacora-mapa/js/via-lactea-app.js?v=20261012_1800"></script>
 </li>
