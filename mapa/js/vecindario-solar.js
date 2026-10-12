@@ -532,11 +532,11 @@ var VecindarioSolar = (function () {
 
   // Centra la escena en una estrella: la cámara vuela ~0,5 s hasta ella (salta,
   // con movimiento reducido) y desde ahí gira a su alrededor.
-  function centrar(o) {
+  function centrar(o, silencio) {
     centro = o;
     volarA({ x: o.x, y: o.y, z: o.z });
     rotularVolver();
-    pintarIndicador();
+    pintarIndicador(silencio);
   }
   function volarA(hasta) {
     vuelo = VLViaje.movimientoReducido() ? null
@@ -578,8 +578,14 @@ var VecindarioSolar = (function () {
     indicadorVolver.setAttribute('aria-label', 'Volver al Sol, origen de la escena');
     document.getElementById('mw-centro-volver-txt').textContent = 'Volver al Sol';
   }
-  function pintarIndicador() {
+  function pintarIndicador(silencio) {
     if (!indicador || !indicadorEstado) return;
+    // silencio (#426): la búsqueda ya anuncia con su aviso; dos regiones vivas
+    // seguidas se pisan, así que el cambio se pinta sin anunciarlo.
+    if (silencio) {
+      indicadorEstado.setAttribute('aria-live', 'off');
+      setTimeout(function () { indicadorEstado.removeAttribute('aria-live'); }, 500);
+    }
     indicadorEstado.textContent = centro ? 'Centro: ' + centro.name : '';
     indicadorEstado.title = indicadorEstado.textContent;
     // El botón desaparece con el centro: su foco pasa al visor, no al body.

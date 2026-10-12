@@ -640,12 +640,12 @@ var GrupoLocal = (function () {
 
   // Centra la escena en una galaxia del atlas: la cámara vuela ~0,5 s hasta
   // ella (salto, con movimiento reducido) y desde ahí gira a su alrededor.
-  function centrar(o) {
+  function centrar(o, silencio) {
     target = null;   // el anillo de una búsqueda anterior pararía el giro
     centro = o;
     volarA({ x: o.x, y: o.y, z: o.z });
     rotularVolver();
-    pintarIndicador();
+    pintarIndicador(silencio);
   }
   // El centro vuela hasta un punto (salta, con movimiento reducido).
   function volarA(hasta) {
@@ -693,8 +693,14 @@ var GrupoLocal = (function () {
     indicadorVolver.setAttribute('aria-label', 'Volver a la Vía Láctea, origen de la escena');
     document.getElementById('mw-centro-volver-txt').textContent = 'Volver a la Vía Láctea';
   }
-  function pintarIndicador() {
+  function pintarIndicador(silencio) {
     if (!indicador || !indicadorEstado) return;
+    // silencio (#426): la búsqueda ya anuncia con su aviso; dos regiones vivas
+    // seguidas se pisan, así que el cambio se pinta sin anunciarlo.
+    if (silencio) {
+      indicadorEstado.setAttribute('aria-live', 'off');
+      setTimeout(function () { indicadorEstado.removeAttribute('aria-live'); }, 500);
+    }
     indicadorEstado.textContent = centro ? 'Centro: ' + centro.name : '';
     indicadorEstado.title = indicadorEstado.textContent;
     // El botón desaparece con el centro: su foco pasa al visor, no al body.

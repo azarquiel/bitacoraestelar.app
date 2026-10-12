@@ -3564,7 +3564,7 @@
       irAlVecindario(obj);
       // La búsqueda deja la estrella como centro de la escena (#426), como «Centrar».
       var est = VecindarioSolar.porId && VecindarioSolar.porId(obj.id);
-      if (est) VecindarioSolar.centrar(est);
+      if (est) VecindarioSolar.centrar(est, true);
       return;
     }
 
@@ -3653,7 +3653,7 @@
     // Con la escala ya puesta (si no, el fundido devolvería el centro al origen):
     // la galaxia queda como centro de la escena (#426), como «Centrar». Las del
     // respaldo sin posición 3D solo llevan el anillo.
-    if (typeof o.x === 'number' && GrupoLocal.centrar) GrupoLocal.centrar(o);
+    if (typeof o.x === 'number' && GrupoLocal.centrar) GrupoLocal.centrar(o, true);
     showToast('«' + o.name + '» · localizado en el Grupo Local.');
   }
 
