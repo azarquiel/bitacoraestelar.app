@@ -54,5 +54,11 @@ console.log('el tamaño base es común: 0,82 en reposo, 1 al realzar:');
 eq(E.de({}, cfg).escala, 0.82, 'reposo');
 eq(E.de({ realzado: true }, cfg).escala, 1, 'realzado');
 
+console.log('radio del punto: el de la galaxia (puntoDiametro / 2) con perspectiva:');
+eq(E.radioPunto(1, { puntoDiametro: 5 }), 2.5, 'sin perspectiva = puntoDiametro / 2');
+eq(E.radioPunto(1.1, { puntoDiametro: 6 }), 3.3000000000000003, 'la perspectiva escala el radio');
+eq(E.radioPunto(0.1, { puntoDiametro: 5 }), 1.5, 'suelo del 60 %');
+eq(E.radioPunto(1, undefined), 2.5, 'sin CONFIG: 5 px');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo ok.');

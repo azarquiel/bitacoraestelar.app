@@ -177,6 +177,10 @@ ok(/mw-hundido \.mw-connector \{[^}]*opacity: 0;/.test(html), 'la plomada del hu
 ok(/mw-hundido\.mw-realzado \.mw-connector \{ opacity: 1; \}/.test(html), 'la plomada del hundido sale con cursor o búsqueda');
 ok(/mw-bajo-plano \.mw-punto::before \{/.test(html), 'el cristal del objeto bajo el plano se conserva');
 
+// El radio del punto en los lienzos sale de la misma medida que la galaxia.
+ok(/VLMarcadorEstilo\.radioPunto\(/.test(vecin) && /VLMarcadorEstilo\.radioPunto\(/.test(grupo), 'los lienzos usan radioPunto (puntoDiametro / 2)');
+ok(!/Math\.max\(2\.4, 4 \* p\.persp\)/.test(vecin + grupo), 'ya no hay radio fijo de 4 px en los lienzos');
+
 // «Volver al Sol» del mapa de la galaxia (#425).
 console.log('Volver al Sol (galaxia)');
 ok(C.solDescentrado(0, 0, 800, 600, 0.28) === false, 'el Sol en el centro no pide botón');

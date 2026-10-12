@@ -47,7 +47,17 @@
     return !!(estado.realzado || estado.viajeActivo);
   }
 
-  var api = { de: de, canvas: canvas, etiquetaVisible: etiquetaVisible };
+  // Radio (px) del punto lleno a tamaño pleno en los lienzos: el MISMO que el
+  // de la galaxia (CONFIG.marcadores.puntoDiametro / 2), con la perspectiva
+  // por encima. Suelo del 60 % para que un objeto muy al fondo no desaparezca.
+  // El tamaño en reposo (de().escala) se aplica aparte.
+  var PUNTO_DIAMETRO = 5;
+  function radioPunto(persp, cfg) {
+    var r0 = ((cfg && cfg.puntoDiametro != null) ? cfg.puntoDiametro : PUNTO_DIAMETRO) / 2;
+    return Math.max(0.6 * r0, r0 * persp);
+  }
+
+  var api = { de: de, canvas: canvas, etiquetaVisible: etiquetaVisible, radioPunto: radioPunto };
   root.VLMarcadorEstilo = api;                                  // navegador
   if (typeof module !== 'undefined' && module.exports) module.exports = api; // Node (test)
 })(typeof window !== 'undefined' ? window : globalThis);

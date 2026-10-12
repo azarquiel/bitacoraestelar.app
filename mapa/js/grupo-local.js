@@ -353,7 +353,7 @@ var GrupoLocal = (function () {
       var estiloM = { realzado: realzado, viajeActivo: !!rutaIds };
       var cfgM = window.CONFIG && CONFIG.marcadores;
       var escM = VLMarcadorEstilo.de(estiloM, cfgM).escala;
-      var r = Math.max(2.4, 4 * p.persp) * escM;
+      var r = VLMarcadorEstilo.radioPunto(p.persp, cfgM) * escM;
 
       // Galaxia observada solo por otros: es un destino POR VISITAR. Sigue
       // siendo pulsable para descubrir esas observaciones. Solo se apaga el
