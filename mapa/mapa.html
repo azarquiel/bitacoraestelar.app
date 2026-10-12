@@ -778,7 +778,9 @@
 
   /* Plomada del marcador al disco: sin ella un objeto de halo flota en el aire
      y no se sabe sobre qué punto del mapa está. Muy tenue: son decenas y no
-     deben competir con la galaxia. La pinta pintarTallo en via-lactea-app.js. */
+     deben competir con la galaxia. La pinta pintarTallo en via-lactea-app.js.
+     Como las plomadas de las otras dos vistas, solo se ve con el cursor encima
+     o en el objeto buscado (.mw-realzado). */
   .mw-tallo {
     position: absolute;
     left: 0;
@@ -787,7 +789,11 @@
     background: linear-gradient(to bottom,
       rgba(150, 200, 255, 0.55), rgba(150, 200, 255, 0));
     pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s ease;
   }
+  #mw-content .mw-object-anchor:hover .mw-tallo,
+  #mw-content .mw-object-anchor.mw-realzado .mw-tallo { opacity: 1; }
 
   /* BAJO EL PLANO GALÁCTICO. Al abatir el disco, los objetos con b negativa
      quedan al otro lado de la foto. Antes se los comía la imagen (y con ella el
@@ -817,13 +823,17 @@
     box-shadow: none !important;
     opacity: calc(0.85 * var(--mw-aten-op, 1));
   }
-  #mw-content .mw-object-anchor.mw-bajo-plano .mw-label { opacity: 0.75; }
   #mw-content .mw-object-anchor.mw-hundido .mw-connector {
     /* Plomada hasta el plano, no línea-guía de abanico: !important porque el
-       color liso del conector va en estilo en línea (createMarker). */
+       color liso del conector va en estilo en línea (createMarker). Solo con el
+       cursor encima o en el objeto buscado; el cristal del punto se queda. */
     background: linear-gradient(to right,
       rgba(150, 200, 255, 0.10), rgba(150, 200, 255, 0.5)) !important;
+    opacity: 0;
+    transition: opacity .15s ease;
   }
+  #mw-content .mw-object-anchor.mw-hundido:hover .mw-connector,
+  #mw-content .mw-object-anchor.mw-hundido.mw-realzado .mw-connector { opacity: 1; }
   #mw-content .mw-object-anchor.mw-bajo-plano:hover .mw-punto,
   #mw-content .mw-object-anchor.mw-bajo-plano.mw-realzado .mw-punto { opacity: 1; }
   #mw-content .mw-object-anchor.mw-bajo-plano:hover .mw-punto::before,
@@ -833,8 +843,6 @@
     background: transparent;
     border-color: transparent;
   }
-  #mw-content .mw-object-anchor.mw-bajo-plano:hover .mw-label,
-  #mw-content .mw-object-anchor.mw-bajo-plano.mw-realzado .mw-label { opacity: 1; }
 
   #mw-anillos {
     position: absolute;

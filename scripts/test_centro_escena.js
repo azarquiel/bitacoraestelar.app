@@ -169,6 +169,14 @@ ok(!/etiquetaZoomOk|etiquetaFovFraccion/.test(vecin + grupo), 'ya no hay etiquet
 ok(!/etiquetas-visibles|etiquetaZoomMin/.test(app + html), 'ni en la galaxia');
 ok(/scale: var\(--mw-aten-esc, 1\)/.test(html), 'el punto de la galaxia usa el tamaño base común');
 
+// Galaxia inclinada: etiquetas y plomadas solo con cursor o búsqueda; el cristal se queda.
+ok(!/mw-bajo-plano \.mw-label \{ opacity/.test(html), 'el objeto bajo el plano no fuerza su etiqueta');
+ok(/\.mw-tallo \{[^}]*opacity: 0;/.test(html), 'el tallo (plomada) nace oculto');
+ok(/mw-realzado \.mw-tallo \{ opacity: 1; \}/.test(html), 'el tallo sale con cursor o búsqueda');
+ok(/mw-hundido \.mw-connector \{[^}]*opacity: 0;/.test(html), 'la plomada del hundido nace oculta');
+ok(/mw-hundido\.mw-realzado \.mw-connector \{ opacity: 1; \}/.test(html), 'la plomada del hundido sale con cursor o búsqueda');
+ok(/mw-bajo-plano \.mw-punto::before \{/.test(html), 'el cristal del objeto bajo el plano se conserva');
+
 // «Volver al Sol» del mapa de la galaxia (#425).
 console.log('Volver al Sol (galaxia)');
 ok(C.solDescentrado(0, 0, 800, 600, 0.28) === false, 'el Sol en el centro no pide botón');
