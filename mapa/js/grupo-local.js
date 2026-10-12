@@ -352,7 +352,8 @@ var GrupoLocal = (function () {
       // de las tres vistas: VLMarcadorEstilo). El Sol no pasa por aquí.
       var estiloM = { realzado: realzado, viajeActivo: !!rutaIds };
       var cfgM = window.CONFIG && CONFIG.marcadores;
-      var r = Math.max(2.4, 4 * p.persp) * VLMarcadorEstilo.de(estiloM, cfgM).escala;
+      var escM = VLMarcadorEstilo.de(estiloM, cfgM).escala;
+      var r = Math.max(2.4, 4 * p.persp) * escM;
 
       // Galaxia observada solo por otros: es un destino POR VISITAR. Sigue
       // siendo pulsable para descubrir esas observaciones. Solo se apaga el
@@ -385,10 +386,12 @@ var GrupoLocal = (function () {
       // anillo hueco de su propio color (sin halo); el visitado, como punto
       // lleno con halo. Misma ley en las tres vistas del mapa.
       // El explorado y no confirmado es un triángulo hueco (simboloDe).
-      VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo);
+      // Trazo de los huecos: el de la ley, reducido como el punto (igual que la galaxia).
+      var grosorM = VLObservadores.ANILLO_NO_VISITADO.grosor * escM;
+      VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo, simbolo === 'punto' ? 0 : grosorM);
       if (simbolo !== 'punto') {
         ctx.strokeStyle = colorRgba(col, 0.95, false);
-        ctx.lineWidth = VLObservadores.ANILLO_NO_VISITADO.grosor;
+        ctx.lineWidth = grosorM;
         ctx.lineJoin = 'round';
         ctx.stroke();
       } else {

@@ -299,7 +299,8 @@ var VecindarioSolar = (function () {
       // de las tres vistas: VLMarcadorEstilo). El Sol no pasa por aquí.
       var estiloM = { realzado: realzado, viajeActivo: !!rutaIds };
       var cfgM = window.CONFIG && CONFIG.marcadores;
-      var r = Math.max(2.4, 4 * p.persp) * VLMarcadorEstilo.de(estiloM, cfgM).escala;
+      var escM = VLMarcadorEstilo.de(estiloM, cfgM).escala;
+      var r = Math.max(2.4, 4 * p.persp) * escM;
 
       // Estrella observada solo por otros: es un destino POR VISITAR,
       // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable. La
@@ -330,10 +331,12 @@ var VecindarioSolar = (function () {
       // anillo hueco de su propio color (sin halo); el visitado, como punto
       // lleno con halo. Misma ley en las tres vistas del mapa.
       // El explorado y no confirmado es un triángulo hueco (simboloDe).
-      window.VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo);
+      // Trazo de los huecos: el de la ley, reducido como el punto (igual que la galaxia).
+      var grosorM = window.VLObservadores.ANILLO_NO_VISITADO.grosor * escM;
+      window.VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo, simbolo === 'punto' ? 0 : grosorM);
       if (simbolo !== 'punto') {
         ctx.strokeStyle = rgbaDe(o.bprp, 0.95, false);
-        ctx.lineWidth = window.VLObservadores.ANILLO_NO_VISITADO.grosor;
+        ctx.lineWidth = grosorM;
         ctx.lineJoin = 'round';
         ctx.stroke();
       } else {

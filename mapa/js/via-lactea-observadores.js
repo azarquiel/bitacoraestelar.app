@@ -176,11 +176,15 @@
   var GRIS = 150;          // gris hacia el que se mezcla el color del rótulo
   var MEZCLA = 0.35;       // cuánto del gris (0 = color intacto, 1 = gris puro)
   var OPACIDAD = 0.8;      // multiplicador de opacidad del rótulo por visitar
-  // Anillo hueco: 1,6 veces el radio del punto lleno, para que se distinga de
-  // un vistazo. Son los mismos números que .mw-no-visitado en mapa.html.
-  var ANILLO = { escala: 1.6, grosor: 1.4 };
-  // Triángulo hueco (explorado y no confirmado): su radio circunscrito, para
-  // que pese lo que el anillo. Mismo grosor de trazo.
+  // Los huecos se miden por su EXTENSIÓN EXTERIOR (trazo incluido) en múltiplos
+  // del radio r del punto lleno, igual en las tres vistas. Son los números de
+  // .mw-no-visitado y .mw-explorado en mapa.html (scale + borde/trazo de la
+  // máscara); scripts/test_observadores.js comprueba que no se separen.
+  //   anillo   : radio exterior 1,6·r.
+  //   triángulo: radio circunscrito exterior 1,9·r, para que pese lo que el anillo.
+  // grosor: px del trazo con el punto a tamaño pleno; en reposo se reduce igual
+  // que el punto (atenuacionEscala), tanto aquí como en la galaxia.
+  var ANILLO = { escala: 1.6, grosor: 1.6 };
   var TRIANGULO = { escala: 1.9, grosor: ANILLO.grosor };
 
   // ¿Se dibuja el objeto con el filtro actual? Primero el conjunto (fuera de
@@ -245,17 +249,20 @@
 
   // Contorno del símbolo en un lienzo 2D (beginPath incluido). 'r' es el radio
   // del punto lleno; anillo y triángulo lo escalan para leerse de un vistazo.
+  // 'g' es el grosor del trazo YA escalado (0 en el punto lleno): el contorno
+  // se retira g/2 hacia dentro para que la extensión exterior sea la de la ley.
   // Quien llama rellena el punto y traza (stroke) los dos huecos.
-  function trazarSimbolo(ctx, x, y, r, simbolo) {
+  function trazarSimbolo(ctx, x, y, r, simbolo, g) {
+    g = g || 0;
     ctx.beginPath();
     if (simbolo === 'triangulo') {
-      var R = r * TRIANGULO.escala;
+      var R = r * TRIANGULO.escala - g / 2;
       ctx.moveTo(x, y - R);
       ctx.lineTo(x + R * 0.866, y + R * 0.5);
       ctx.lineTo(x - R * 0.866, y + R * 0.5);
       ctx.closePath();
     } else {
-      ctx.arc(x, y, simbolo === 'anillo' ? r * ANILLO.escala : r, 0, Math.PI * 2);
+      ctx.arc(x, y, simbolo === 'anillo' ? r * ANILLO.escala - g / 2 : r, 0, Math.PI * 2);
     }
   }
 
