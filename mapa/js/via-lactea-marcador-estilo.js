@@ -6,7 +6,7 @@
      - Grupo Local (grupo-local.js): escala/alpha en su bucle de canvas
      - vecindario solar (vecindario-solar.js): ídem
    Estados:
-     realzado    : hover o resultado de búsqueda → estilo completo.
+     realzado    : hover, resultado de búsqueda u objeto centrado → estilo completo.
      viajeActivo : recorriendo un viaje interestelar → sin atenuación (son
                    pocos objetos y la ruta manda).
      (resto)     : estado base atenuado, según CONFIG.marcadores.
@@ -40,7 +40,14 @@
     return (cfg && cfg.atenuacionCanvas != null) ? cfg.atenuacionCanvas : ATEN_CANVAS;
   }
 
-  var api = { de: de, canvas: canvas };
+  // ¿Se dibuja la etiqueta? Regla única de las tres vistas: nunca sola; solo con
+  // el cursor encima, un objeto realzado (buscado o centrado) o un viaje activo.
+  function etiquetaVisible(estado) {
+    estado = estado || {};
+    return !!(estado.realzado || estado.viajeActivo);
+  }
+
+  var api = { de: de, canvas: canvas, etiquetaVisible: etiquetaVisible };
   root.VLMarcadorEstilo = api;                                  // navegador
   if (typeof module !== 'undefined' && module.exports) module.exports = api; // Node (test)
 })(typeof window !== 'undefined' ? window : globalThis);

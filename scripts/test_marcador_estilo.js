@@ -44,5 +44,15 @@ eq(E.canvas({ realzado: true }, {}), 1, 'realzado entero');
 eq(E.canvas({ viajeActivo: true }, {}), 1, 'viaje entero');
 eq(E.canvas({}, { atenuacionCanvas: 0.6 }), 0.6, 'cfg alternativo');
 
+console.log('etiqueta: nunca sola, solo realzada o en viaje:');
+eq(E.etiquetaVisible({}), false, 'reposo: oculta');
+eq(E.etiquetaVisible(undefined), false, 'sin estado: oculta');
+eq(E.etiquetaVisible({ realzado: true }), true, 'realzado (cursor, búsqueda, centrado)');
+eq(E.etiquetaVisible({ viajeActivo: true }), true, 'viaje');
+
+console.log('el tamaño base es común: 0,82 en reposo, 1 al realzar:');
+eq(E.de({}, cfg).escala, 0.82, 'reposo');
+eq(E.de({ realzado: true }, cfg).escala, 1, 'realzado');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo ok.');

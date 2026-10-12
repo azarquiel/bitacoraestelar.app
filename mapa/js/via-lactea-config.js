@@ -117,7 +117,10 @@
     // TAMAÑO DE LOS MARCADORES DE OBJETOS EN EL MAPA
     //   puntoDiametro : diámetro del punto de color en píxeles
     //   textoTamano   : tamaño de la etiqueta junto al punto (CSS font-size)
-    //   atenuacionEscala / atenuacionOpacidad : estado base ATENUADO de los
+    //   atenuacionEscala : tamaño del PUNTO en reposo, común a las tres vistas.
+    //   atenuacionOpacidad : opacidad de la etiqueta de la galaxia.
+    //   atenuacionCanvas : opacidad del PUNTO en reposo, común a las tres vistas.
+    //     Estado base ATENUADO de los
     //     marcadores en las tres vistas (más pequeños y translúcidos para que
     //     las zonas densas no se saturen). El hover, la búsqueda o un viaje
     //     interestelar activo devuelven el marcador al estilo completo. La ley
@@ -128,17 +131,12 @@
       textoTamano:   '11px',   // CSS — p.ej. '10px', '12px', '0.8rem'
       atenuacionEscala: 0.82,  // factor de tamaño del estado base (1 = sin atenuar)
       atenuacionOpacidad: 0.55, // opacidad del estado base (1 = opaco)
-      atenuacionCanvas: 0.72,  // opacidad base del PUNTO en las tres vistas (1 = opaco);
+      atenuacionCanvas: 0.72   // opacidad base del PUNTO en las tres vistas (1 = opaco);
                                 // entero con el cursor encima, realzado o en viaje
-      etiquetaZoomMin: 3,      // scale mínimo (vista de la galaxia) para que las
-                                // etiquetas se lean solas (por debajo, se
-                                // amontonan: solo aparecen al pasar el cursor o
-                                // durante un viaje). minScale=1, maxScale=25.
-      etiquetaFovFraccion: 0.15 // misma idea para el Grupo Local y el vecindario
-                                // solar, que hacen zoom por FOV (campo de visión
-                                // en años luz) en vez de por escala: la etiqueta
-                                // se lee sola cuando fov <= FOV_MAX · esta fracción.
     },
+    // Las etiquetas no se leen solas en ninguna vista: solo con el cursor encima,
+    // la búsqueda, el centrado o un viaje (VLMarcadorEstilo.etiquetaVisible). El
+    // Sol queda fuera de todo esto: siempre a pleno brillo, con etiqueta y sin escala.
 
     // -------------------------------------------------------------------------
     // VELOCIDAD DEL FUNDIDO AL CAMBIAR DE IMAGEN EN LAS FICHAS

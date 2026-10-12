@@ -344,19 +344,15 @@ var GrupoLocal = (function () {
     }
     hovered = null;
 
-    // Etiquetas: por debajo de este zoom (fracción de FOV_MAX) se amontonan, así
-    // que solo se leen solas al pasar el cursor o recorriendo un viaje — igual
-    // que en la vista de la galaxia (etiquetaZoomMin), con la escala propia de
-    // este atlas (fov, logarítmico y de rango variable según los datos).
-    var fraccEtiqueta = (window.CONFIG && CONFIG.marcadores && CONFIG.marcadores.etiquetaFovFraccion != null)
-      ? CONFIG.marcadores.etiquetaFovFraccion : 0.15;
-    var etiquetaZoomOk = fov <= FOV_MAX * fraccEtiqueta;
-
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
       var realzado = realzadoDe(o);
-      var r = Math.max(2.4, 4 * p.persp);
+      // Brillo y tamaño base tenues; enteros si realzado o en viaje (la misma ley
+      // de las tres vistas: VLMarcadorEstilo). El Sol no pasa por aquí.
+      var estiloM = { realzado: realzado, viajeActivo: !!rutaIds };
+      var cfgM = window.CONFIG && CONFIG.marcadores;
+      var r = Math.max(2.4, 4 * p.persp) * VLMarcadorEstilo.de(estiloM, cfgM).escala;
 
       // Galaxia observada solo por otros: es un destino POR VISITAR. Sigue
       // siendo pulsable para descubrir esas observaciones. Solo se apaga el
@@ -372,8 +368,7 @@ var GrupoLocal = (function () {
       }
 
       // Brillo base tenue; entero si realzado o en viaje (VLMarcadorEstilo.canvas).
-      ctx.globalAlpha = VLMarcadorEstilo.canvas({ realzado: realzado, viajeActivo: !!rutaIds },
-        window.CONFIG && CONFIG.marcadores);
+      ctx.globalAlpha = VLMarcadorEstilo.canvas(estiloM, cfgM);
 
       var col = o.color || '#7ec8ff';
       var simbolo = VLObservadores.simboloDe(o.id);
@@ -401,7 +396,7 @@ var GrupoLocal = (function () {
       }
 
       var labelRect = null;
-      if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
+      if (onView && VLMarcadorEstilo.etiquetaVisible({ realzado: realzado, viajeActivo: !!rutaIds })) {
         ctx.fillStyle = colorRgba(col, 0.95 * am, aten);
         ctx.font = '500 12px Inter, sans-serif';
         var lx = p.sx + r + 6, ly = p.sy + 4;

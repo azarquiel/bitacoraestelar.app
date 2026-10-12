@@ -291,18 +291,15 @@ var VecindarioSolar = (function () {
     }
     hovered = null;
 
-    // Etiquetas: por debajo de este zoom (fracción de FOV_MAX) se amontonan, así
-    // que solo se leen solas al pasar el cursor o recorriendo un viaje — igual
-    // que en la vista de la galaxia (etiquetaZoomMin) y el Grupo Local.
-    var fraccEtiqueta = (window.CONFIG && CONFIG.marcadores && CONFIG.marcadores.etiquetaFovFraccion != null)
-      ? CONFIG.marcadores.etiquetaFovFraccion : 0.15;
-    var etiquetaZoomOk = fov <= FOV_MAX * fraccEtiqueta;
-
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
       var realzado = o === hovPrev || o === centro;
-      var r = Math.max(2.4, 4 * p.persp);
+      // Brillo y tamaño base tenues; enteros si realzado o en viaje (la misma ley
+      // de las tres vistas: VLMarcadorEstilo). El Sol no pasa por aquí.
+      var estiloM = { realzado: realzado, viajeActivo: !!rutaIds };
+      var cfgM = window.CONFIG && CONFIG.marcadores;
+      var r = Math.max(2.4, 4 * p.persp) * VLMarcadorEstilo.de(estiloM, cfgM).escala;
 
       // Estrella observada solo por otros: es un destino POR VISITAR,
       // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable. La
@@ -317,8 +314,7 @@ var VecindarioSolar = (function () {
       }
 
       // Brillo base tenue; entero si realzado o en viaje (VLMarcadorEstilo.canvas).
-      ctx.globalAlpha = VLMarcadorEstilo.canvas({ realzado: realzado, viajeActivo: !!rutaIds },
-        window.CONFIG && CONFIG.marcadores);
+      ctx.globalAlpha = VLMarcadorEstilo.canvas(estiloM, cfgM);
 
       var simbolo = window.VLObservadores.simboloDe(o.id);
       if (simbolo === 'punto') {
@@ -345,7 +341,7 @@ var VecindarioSolar = (function () {
       }
 
       var labelRect = null;
-      if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
+      if (onView && VLMarcadorEstilo.etiquetaVisible({ realzado: realzado, viajeActivo: !!rutaIds })) {
         ctx.fillStyle = col;
         ctx.font = '500 12px Inter, sans-serif';
         var lx = p.sx + r + 6, ly = p.sy + 4;

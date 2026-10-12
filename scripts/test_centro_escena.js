@@ -159,7 +159,15 @@ ok(!/vecindario-solar\.js\?v=20261004_1200/.test(html), 'versión de caché nuev
 // Brillo base del punto: la galaxia lo publica por CSS y lo restituye al realzar.
 ok(/--mw-aten-op'?, VLMarcadorEstilo\.canvas/.test(app), 'la app publica --mw-aten-op desde VLMarcadorEstilo.canvas');
 ok(/\.mw-punto \{\s*opacity: var\(--mw-aten-op, 1\)/.test(html), 'el punto usa --mw-aten-op');
-ok(/mw-realzado \.mw-punto,\s*#mw-content\.mw-viaje \.mw-object-anchor \.mw-punto \{ opacity: 1; \}/.test(html), 'hover, realzado y viaje: opacidad entera');
+ok(/mw-realzado \.mw-punto,\s*#mw-content\.mw-viaje \.mw-object-anchor \.mw-punto \{ opacity: 1; scale: 1; \}/.test(html), 'hover, realzado y viaje: opacidad y tamaño enteros');
+
+// Etiquetas solo realzadas y tamaño base común a las tres vistas.
+var vecin = leer('mapa/js/vecindario-solar.js');
+var grupo = leer('mapa/js/grupo-local.js');
+ok(/VLMarcadorEstilo\.etiquetaVisible\(/.test(vecin) && /VLMarcadorEstilo\.etiquetaVisible\(/.test(grupo), 'los dos lienzos deciden la etiqueta con la ley común');
+ok(!/etiquetaZoomOk|etiquetaFovFraccion/.test(vecin + grupo), 'ya no hay etiqueta por zoom en los lienzos');
+ok(!/etiquetas-visibles|etiquetaZoomMin/.test(app + html), 'ni en la galaxia');
+ok(/scale: var\(--mw-aten-esc, 1\)/.test(html), 'el punto de la galaxia usa el tamaño base común');
 
 // «Volver al Sol» del mapa de la galaxia (#425).
 console.log('Volver al Sol (galaxia)');

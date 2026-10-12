@@ -1005,12 +1005,6 @@
         'scale3d(' + counter + ',' + counter + ',' + counter + ')' + counterRot + counterTilt;
     }
 
-    // Etiquetas: por debajo del umbral de zoom se amontonan, así que solo se
-    // enseñan al pasar el cursor o durante un viaje (ver .mw-label en mapa.html).
-    var zoomMin = (CONFIG.marcadores && CONFIG.marcadores.etiquetaZoomMin != null)
-      ? CONFIG.marcadores.etiquetaZoomMin : 3;
-    img.classList.toggle('mw-etiquetas-visibles', scale >= zoomMin);
-
     // Posiciona el contenido abanicado y su línea-guía en cada marcador.
     var anchors = img.querySelectorAll('.mw-object-anchor');
     var rectAlturas = null;
