@@ -161,6 +161,19 @@ ok(/--mw-aten-op'?, VLMarcadorEstilo\.canvas/.test(app), 'la app publica --mw-at
 ok(/\.mw-punto \{\s*opacity: var\(--mw-aten-op, 1\)/.test(html), 'el punto usa --mw-aten-op');
 ok(/mw-realzado \.mw-punto,\s*#mw-content\.mw-viaje \.mw-object-anchor \.mw-punto \{ opacity: 1; scale: 1; \}/.test(html), 'hover, realzado y viaje: opacidad y tamaño enteros');
 
+// Punto fijo del zoom: con el centro de la escena a la vista (centro desplazado o
+// dentro del vecindario, cuya escena se pinta siempre en el centro del visor) el
+// zoom NO sigue al cursor. Si lo siguiera, la galaxia se movería bajo una escena
+// que no se mueve, y al volver el Sol quedaría descentrado.
+(function () {
+  var vr = { left: 10, top: 20, width: 800, height: 600 };
+  var p = C.puntoFijoZoom(500, 400, vr, false);
+  ok(p.x === 500 && p.y === 400, 'zoom normal: el punto del gesto');
+  p = C.puntoFijoZoom(500, 400, vr, true);
+  ok(p.x === 410 && p.y === 320, 'zoom con centro de escena: el centro del visor');
+})();
+ok(/VLCentro\.puntoFijoZoom\(x, y, [\s\S]*?centroDesplazado\(\) \|\| dentroVecindario\)/.test(app), 'la app ancla al centro dentro del vecindario');
+
 // Etiquetas solo realzadas y tamaño base común a las tres vistas.
 var vecin = leer('mapa/js/vecindario-solar.js');
 var grupo = leer('mapa/js/grupo-local.js');

@@ -101,7 +101,18 @@
     return 250 + 250 * t;
   }
 
-  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada,
+  // Punto fijo del zoom (px de pantalla): el del gesto, salvo que el centro de la
+  // escena esté a la vista, que entonces es el centro del visor. Vale para el
+  // centro desplazado a un objeto y para el vecindario solar, cuya escena se
+  // pinta siempre en el centro del visor: anclar al cursor movería la galaxia
+  // bajo una escena quieta y, al volver a ella, el Sol quedaría descentrado.
+  //   vr: rect del visor {left, top, width, height}
+  function puntoFijoZoom(x, y, vr, centroDeEscena) {
+    if (!centroDeEscena) return { x: x, y: y };
+    return { x: vr.left + vr.width / 2, y: vr.top + vr.height / 2 };
+  }
+
+  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada, puntoFijoZoom: puntoFijoZoom,
               realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA,
               solDescentrado: solDescentrado, duracionVuelo: duracionVuelo };
 

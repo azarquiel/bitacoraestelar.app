@@ -1373,11 +1373,10 @@
     var r = VLCapas.limitarEscala(VLCapas.capaActiva(alphaAtlas, alphaVecindario), desplazado, scale, pedida, topes);
     return isFinite(r) ? r : scale;
   }
-  // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro.
+  // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro
+  // desplazado o se está dentro del vecindario (VLCentro.puntoFijoZoom).
   function puntoDeZoom(x, y) {
-    if (!centroDesplazado()) return { x: x, y: y };
-    var vr = viewer.getBoundingClientRect();
-    return { x: vr.left + vr.width / 2, y: vr.top + vr.height / 2 };
+    return VLCentro.puntoFijoZoom(x, y, viewer.getBoundingClientRect(), centroDesplazado() || dentroVecindario);
   }
 
   function updateVecindario() {
