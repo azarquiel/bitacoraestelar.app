@@ -352,7 +352,9 @@
     cursor: pointer;
   }
   #ficha-centrar[hidden] { display: none; }
-  #ficha-centrar[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+  #ficha-centrar[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+  #ficha-centrar-aviso { color: #9fb6c9; font-size: 11px; }
+  #ficha-centrar-aviso[hidden] { display: none; }
   #ficha-centrar:focus-visible { outline: 2px solid rgba(244,199,107,0.8); outline-offset: 2px; }
   @media (hover: none) { #ficha-centrar { min-height: 44px; } }
 
@@ -1630,6 +1632,7 @@
       <div style="flex: 1; min-width: 0;">
         <div id="ficha-title" style="color: #7ec8ff; font-size: 14px; font-weight: 600;"></div>
         <div id="ficha-coords" style="color: #9fb6c9; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+        <div id="ficha-centrar-aviso" hidden>Termina el viaje para centrar</div>
       </div>
       <!-- Lleva a las DEMÁS observaciones de este objeto (las de otros y las de
            otras salidas del mismo observador). Solo se ve si hay alguna. -->
@@ -1648,7 +1651,7 @@
       <!-- Centra la escena 3D en este objeto (#421). Solo en las fichas abiertas
            desde el Grupo Local; con el objeto ya centrado dice «Centrado» y
            lleva aria-disabled (no disabled: sigue recibiendo el foco). -->
-      <button id="ficha-centrar" type="button" hidden><svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="4.6"/><path d="M8 1v3.2M8 11.8V15M1 8h3.2M11.8 8H15"/></svg><span id="ficha-centrar-txt">Centrar</span></button>
+      <button id="ficha-centrar" type="button" aria-describedby="ficha-centrar-aviso" hidden><svg class="mw-icono" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="4.6"/><path d="M8 1v3.2M8 11.8V15M1 8h3.2M11.8 8H15"/></svg><span id="ficha-centrar-txt">Centrar</span></button>
       <button id="ficha-close" aria-label="Cerrar ficha" style="
         width: 30px;
         height: 30px;

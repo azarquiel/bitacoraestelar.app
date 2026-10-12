@@ -216,5 +216,18 @@ ok(/if \(!isDragging\) ?|isDragging\) return;\s*var propia/.test(app), 'durante 
 ok(/data-escala="galaxia"\] > \.mw-icono/.test(html), 'en la galaxia la pastilla enseña solo el botón');
 ok(/centroPastilla\.getAttribute\('data-escala'\) === 'galaxia' && volverAlSol/.test(app), 'Inicio también vuelve al Sol en la galaxia');
 
+// ---- #427: los viajes se ven siempre desde el origen ----
+var sv = C.estadoCentrar(false, true), sn = C.estadoCentrar(false, false), sc = C.estadoCentrar(true, false);
+ok(sv.desactivado && sv.aviso && sv.texto === 'Centrar', 'viaje activo: «Centrar» desactivado con aviso');
+ok(!sn.desactivado && !sn.aviso, 'sin viaje: «Centrar» funciona');
+ok(sc.desactivado && !sc.aviso && sc.texto === 'Centrado', 'ya centrado: «Centrado» sin aviso de viaje');
+ok(/viajeActivo \|\| escena\.esCentro/.test(app), 'el clic no centra con viaje activo');
+ok(/GrupoLocal\.alOrigen\(\)/.test(app) && /VecindarioSolar\.alOrigen\(\)/.test(app), 'arrancar un viaje devuelve las dos escenas al origen');
+ok(app.indexOf('GrupoLocal.alOrigen()') < app.indexOf('encuadrarViaje(viajeActivo);'), 'el origen vuelve antes del encuadre');
+ok(/!viajeActivo && VLCentro\.solDescentrado/.test(app), 'con viaje no se enseña «Volver al Sol»');
+ok(/id="ficha-centrar-aviso"[^>]*>Termina el viaje para centrar/.test(html) && /aria-describedby="ficha-centrar-aviso"/.test(html), 'aviso visible y enlazado al botón');
+ok(/alOrigen: volverAlOrigen/.test(require('fs').readFileSync(__dirname + '/../mapa/js/grupo-local.js', 'utf8')) &&
+   /alOrigen: volverAlOrigen/.test(require('fs').readFileSync(__dirname + '/../mapa/js/vecindario-solar.js', 'utf8')), 'las dos escenas exponen alOrigen');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\nTodo bien');
