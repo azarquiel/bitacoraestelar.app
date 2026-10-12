@@ -3560,7 +3560,13 @@
     // Estrella del vecindario: su marcador ya no está en la galaxia (esa vista no
     // repite lo que enseña la de abajo), así que la búsqueda entra al vecindario,
     // igual que un objeto extragaláctico se busca en el atlas del Grupo Local.
-    if (EN_VECINDARIO[obj.id]) { irAlVecindario(obj); return; }
+    if (EN_VECINDARIO[obj.id]) {
+      irAlVecindario(obj);
+      // La búsqueda deja la estrella como centro de la escena (#426), como «Centrar».
+      var est = VecindarioSolar.porId && VecindarioSolar.porId(obj.id);
+      if (est) VecindarioSolar.centrar(est);
+      return;
+    }
 
     // Si el tipo de este objeto estaba oculto por el filtro de la leyenda,
     // lo reactivamos (si no, el objeto seguiría invisible) y avisamos.
@@ -3644,6 +3650,10 @@
     busquedaMaxDist = o.d;
     GrupoLocal.focusObject(o);
     irAlAtlasConDistancia(o.d);
+    // Con la escala ya puesta (si no, el fundido devolvería el centro al origen):
+    // la galaxia queda como centro de la escena (#426), como «Centrar». Las del
+    // respaldo sin posición 3D solo llevan el anillo.
+    if (typeof o.x === 'number' && GrupoLocal.centrar) GrupoLocal.centrar(o);
     showToast('«' + o.name + '» · localizado en el Grupo Local.');
   }
 
