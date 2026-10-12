@@ -2795,7 +2795,7 @@
     fichaCentrarTxt.textContent = st.texto;
     if (st.desactivado) fichaCentrarBtn.setAttribute('aria-disabled', 'true');
     else fichaCentrarBtn.removeAttribute('aria-disabled');
-    fichaCentrarAviso.hidden = !st.aviso;   // el motivo se lee, no solo se pasa el ratón (#427)
+    fichaCentrarAviso.hidden = !obj || !st.aviso;   // el motivo se lee, no solo se pasa el ratón (#427)
   }
   fichaCentrarBtn.addEventListener('click', function () {
     var obj = fichaCentrarObj;
