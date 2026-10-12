@@ -49,9 +49,19 @@ en `scripts/test_capas_controles.js`); el `display` lo aplica
   *zoom in* **sobre el Sol**. La galaxia funde hacia una escena 3D de las
   estrellas registradas a menos de **1500 años luz**, con el Sol en el origen y
   cada estrella en su color real de Gaia; al pulsar una se abre su ficha, igual
-  que en la galaxia. Entrar exige tener el Sol centrado;
-  una vez dentro, la escena se queda hasta que se aleja bastante (2500 al), para
+  que en la galaxia. Entrar exige tener el Sol centrado (el botón
+  **Volver al Sol** lo centra de un toque); una vez dentro, la escena se queda hasta que se aleja bastante (2500 al), para
   que el vaivén del zoom no mezcle las dos imágenes.
+- **Centrar la escena en un objeto** (épica #420): en el Grupo Local y en el
+  vecindario solar, el botón **Centrar** de la ficha pone una galaxia o una
+  estrella en el centro, y la cámara gira y se acerca alrededor de ella. Sirve
+  para estudiar un conjunto lejos del origen —el grupo de M81, el subgrupo de
+  M31, las estrellas que rodean a una dada— sin que el Sol o la Vía Láctea
+  manden en el encuadre. Centrar solo mueve la cámara: las distancias siguen
+  siendo al origen. Mientras el centro está desplazado, una pastilla arriba a
+  la izquierda dice qué está centrado y ofrece **Volver al Sol** o **Volver a
+  la Vía Láctea** (también con la tecla `Inicio`). Para no saltar de escala sin
+  querer, el zoom se queda dentro de la escena hasta que se vuelve al origen.
 - **Buscador** de objetos con autocompletado. Además de los objetos del
   registro, localiza **cualquier objeto** (también fuera de la Vía Láctea)
   resolviéndolo en SIMBAD; centra, amplía o aleja según convenga y lo resalta.
@@ -108,6 +118,7 @@ Bitácora Registro** desde la base de datos (ver la carpeta `registro/`).
 | `js/vecindario-solar.js` | La capa de las estrellas cercanas al Sol (dibujo) | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-duplicados.js` | Una estrella, un marcador: fusiona los nombres duplicados de `OBJECTS` al cargar | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-vecindario-catalogo.js` | Qué estrellas entran en esa escena y cómo funde | Servidor (`/bitacora-mapa/js/`) |
+| `js/via-lactea-centro.js` | Centro de la escena: proyección respecto al objeto centrado y vuelo de la cámara (pura) | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-viaje.js` | La ruta de un viaje: orden, tramos y trazo dorado | Servidor (`/bitacora-mapa/js/`) |
 | `images/` | Imágenes del mapa (cenital, de canto y bocetos) | Servidor (`/bitacora-mapa/images/`) |
 
@@ -399,7 +410,10 @@ Los objetos **extragalácticos** llevan además `l`, `b`, `dist` (años luz) y
 ## El buscador
 
 1. Si el objeto está en el **atlas del Grupo Local** (registrado o de respaldo),
-   se enfoca allí resaltando su marcador (sin duplicarlo).
+   la escena **se centra en él** y queda marcado con su anillo, igual que con
+   el botón «Centrar» de la ficha. Una estrella del vecindario solar se centra
+   de la misma forma en esa escena. Si el centro estaba desplazado en otra
+   escala, vuelve antes al origen: la búsqueda siempre puede saltar de escala.
 2. Si es un objeto **registrado de la Vía Láctea**, se centra en el mapa con
    zoom-in y parpadea unos segundos.
 3. Si **no está en el registro**, se resuelve en SIMBAD (endpoint `/resolver`)
@@ -569,6 +583,12 @@ cambio ya está hecho y no se nota.
 | Zoom | Rueda | Pellizco |
 | Rotar | `Ctrl` o `Mayús` + arrastrar | Girar dos dedos |
 | Abrir ficha | Clic en el punto | Toque |
+| Centrar la escena (Grupo Local y vecindario) | Botón «Centrar» de la ficha | Igual |
+| Volver al origen | Botón de la pastilla de arriba a la izquierda, o tecla `Inicio` | Botón |
+
+Con el centro desplazado, la rueda y el pellizco acercan hacia el objeto
+centrado y se paran antes de cambiar de escala. Para pasar a la escala vecina
+hay que volver al origen y seguir con el zoom.
 
 Y en pantalla, de arriba abajo: registrar observación, buscador, deslizadores de
 rotación y abatimiento, filtro de **observador**, selector de **estado**
@@ -576,7 +596,8 @@ rotación y abatimiento, filtro de **observador**, selector de **estado**
 interestelares**; a la derecha los botones de zoom, y abajo la leyenda.
 
 Mientras se recorre un viaje el **buscador queda en pausa**: navegar a otro
-objeto rompería el recorrido. Se sale eligiendo «— Todo el catálogo del
+objeto rompería el recorrido. Por lo mismo, «Centrar» queda desactivado y el
+viaje se ve siempre desde el origen. Se sale eligiendo «— Todo el catálogo del
 observador —» o cambiando de observador.
 
 ---
