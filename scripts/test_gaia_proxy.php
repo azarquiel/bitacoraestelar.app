@@ -152,6 +152,15 @@ foreach (gaia_proveedores(10.0, 20.0, 0.5, 16.0, false) as $u) { $provs[] = gaia
 eq($provs, ['cds', 'gavo'], 'las URLs de la sonda son CDS y GAVO, en ese orden');
 eq(gaia_proveedor('https://otro.example.org/tap/sync'), 'otro.example.org', 'host desconocido → el host tal cual');
 
+// #429: la sonda va GAVO primero, CDS de failover; no se quita ninguno.
+$provs = [];
+foreach (gaia_proveedores_sonda(10.0, 20.0, 0.5, 16.0) as $u) { $provs[] = gaia_proveedor($u); }
+eq($provs, ['gavo', 'cds'], 'sonda: GAVO primero, CDS de failover');
+// El cliente lee por posición: las dos consultas devuelven ra, dec, G, BP-RP en ese orden.
+[$cds_q, $gavo_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, false);
+ok(preg_match('/^SELECT TOP \d+ RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM/', $cds_q) === 1, 'columnas CDS: ra, dec, G, BP-RP');
+ok(preg_match('/^SELECT TOP \d+ ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM/', $gavo_q) === 1, 'columnas GAVO: ra, dec, G, BP-RP');
+
 echo "gaia_mediana:\n";
 eq(gaia_mediana([]), 0.0, 'lista vacía → 0');
 eq(gaia_mediana([5.0]), 5.0, 'un elemento');

@@ -139,6 +139,15 @@ function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $s
     ];
 }
 
+/* Sonda (#429): GAVO primero. CDS se cuelga de forma errática hasta el timeout
+   de 55 s con estas mismas consultas (4 de 6 campos el 2026-10-11) y GAVO
+   responde en ≤3,4 s. CDS sigue de failover con su plazo íntegro. Las densas
+   (segura/fondo/espacial) conservan CDS primero hasta desglosarlas (punto 3).
+   Ambas consultas devuelven las mismas 4 columnas en el mismo orden. */
+function gaia_proveedores_sonda(float $ra, float $dec, float $rad, float $mag): array {
+    return array_reverse(gaia_proveedores($ra, $dec, $rad, $mag, false));
+}
+
 /**
  * Momentos de la BANDA TRUNCADA (corte, mag] de un campo denso: número de
  * fuentes, flujo G total (en unidades de una estrella G=0) y segundo momento
@@ -416,7 +425,7 @@ function gaia_json_headers(): void {
  */
 function gaia_fetch(float $ra, float $dec, float $rad, float $mag, ?string &$etapa = null): ?string {
     $etapa = 'densa';
-    $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, false), 'sonda');
+    $json = gaia_fetch_urls(gaia_proveedores_sonda($ra, $dec, $rad, $mag), 'sonda');
     if ($json !== null) {
         $filas = gaia_num_filas($json);
         if ($filas !== null && !gaia_truncada($filas)) {
