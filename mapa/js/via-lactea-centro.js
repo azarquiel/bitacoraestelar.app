@@ -112,7 +112,17 @@
     return { x: vr.left + vr.width / 2, y: vr.top + vr.height / 2 };
   }
 
-  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada, puntoFijoZoom: puntoFijoZoom,
+  // Estado del botón «Centrar» de la ficha (#427): con un viaje activo el viaje
+  // se ve desde el origen, así que no centra y la ficha dice por qué.
+  function estadoCentrar(esCentro, viajeActivo) {
+    return {
+      texto: esCentro ? 'Centrado' : 'Centrar',
+      desactivado: !!(esCentro || viajeActivo),
+      aviso: !!viajeActivo && !esCentro
+    };
+  }
+
+  var API = { estadoCentrar: estadoCentrar, proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada, puntoFijoZoom: puntoFijoZoom,
               realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA,
               solDescentrado: solDescentrado, duracionVuelo: duracionVuelo };
 

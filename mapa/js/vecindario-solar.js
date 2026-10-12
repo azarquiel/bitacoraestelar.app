@@ -604,7 +604,7 @@ var VecindarioSolar = (function () {
     ready: true,
     sync: sync,
     setViaje: setViaje,
-    centrar: centrar, esCentro: esCentro, volver: volver,
+    centrar: centrar, esCentro: esCentro, volver: volver, alOrigen: volverAlOrigen,
     // La estrella de la escena por id de objeto registrado (la de OBJECTS no lleva x, y, z).
     porId: function (id) {
       for (var i = 0; i < objects.length; i++) if (objects[i].id === id) return objects[i];

@@ -1231,7 +1231,8 @@
     if (!el || !el.style.left) return;
     var r = el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
     var frac = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.proximidad) || 0.28;
-    var fuera = VLCentro.solDescentrado(
+    // Con viaje el encuadre descentra el Sol a propósito: nada que enseñar (#427).
+    var fuera = !viajeActivo && VLCentro.solDescentrado(
       (r.left + r.width / 2) - (vr.left + vr.width / 2),
       (r.top + r.height / 2) - (vr.top + vr.height / 2), vr.width, vr.height, frac);
     if (!fuera && !propia) return;   // la pastilla es de una escena 3D
@@ -2784,20 +2785,22 @@
   // ficha cerrada y no lo ven. escena es la que centra: GrupoLocal o VecindarioSolar.
   var fichaCentrarBtn = document.getElementById('ficha-centrar');
   var fichaCentrarTxt = document.getElementById('ficha-centrar-txt');
+  var fichaCentrarAviso = document.getElementById('ficha-centrar-aviso');
   var fichaCentrarObj = null, fichaCentrarEscena = null;
   function armarCentrar(obj, escena) {
     fichaCentrarObj = obj;
     fichaCentrarEscena = obj ? escena : null;
     fichaCentrarBtn.hidden = !obj;
-    var ya = !!obj && escena.esCentro(obj);
-    fichaCentrarTxt.textContent = ya ? 'Centrado' : 'Centrar';
-    if (ya) fichaCentrarBtn.setAttribute('aria-disabled', 'true');
+    var st = VLCentro.estadoCentrar(!!obj && escena.esCentro(obj), !!viajeActivo);
+    fichaCentrarTxt.textContent = st.texto;
+    if (st.desactivado) fichaCentrarBtn.setAttribute('aria-disabled', 'true');
     else fichaCentrarBtn.removeAttribute('aria-disabled');
+    fichaCentrarAviso.hidden = !obj || !st.aviso;   // el motivo se lee, no solo se pasa el ratón (#427)
   }
   fichaCentrarBtn.addEventListener('click', function () {
     var obj = fichaCentrarObj;
     var escena = fichaCentrarEscena;
-    if (!obj || escena.esCentro(obj)) return;   // aria-disabled no para el clic
+    if (!obj || viajeActivo || escena.esCentro(obj)) return;   // aria-disabled no para el clic
     closeFicha();   // si no, la ficha taparía lo que se mueve
     escena.centrar(obj);
   });
@@ -3450,6 +3453,12 @@
     repositionAnchors();
 
     reflejarEnUrl();
+    // El viaje se ve desde el origen: el centro vuelve antes del encuadre (#427).
+    if (viajeActivo) {
+      if (typeof GrupoLocal !== 'undefined' && GrupoLocal.alOrigen) GrupoLocal.alOrigen();
+      if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.alOrigen) VecindarioSolar.alOrigen();
+    }
+    pintarVolverSol();
     if (viajeActivo) { encuadrarViaje(viajeActivo); avisarCambioDeCapa(viajeActivo); }
   }
 

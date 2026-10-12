@@ -769,7 +769,7 @@ var GrupoLocal = (function () {
     buscar: buscar, buscarExacto: buscarExacto, buscarParcial: buscarParcial,
     focusObject: focusObject, focus: focus, clearTarget: clearTarget,
     encuadrar: encuadrar,
-    centrar: centrar, esCentro: esCentro, volver: volver,
+    centrar: centrar, esCentro: esCentro, volver: volver, alOrigen: volverAlOrigen,
     centroDesplazado: function () { return !!centro; },
     setViaje: setViaje,
     onObjectClick: null
