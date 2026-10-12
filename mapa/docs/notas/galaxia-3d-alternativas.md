@@ -9,6 +9,14 @@ inclinar la foto con transformaciones 3D del navegador.
 Fecha: 2026-08-27. Estado: **investigación, sin decidir**. No se ha medido
 nada; al final hay una lista de lo que habría que medir.
 
+> **Retirado (2026-10-12): el abanico de solapados.** Las menciones de esta nota
+> a `fanOutClusters`, `FAN_GROUPS`, `RADIUS_PX` y al desplazamiento de M8/M20
+> (§1, §4, §6 y el cierre del «Prototipo») describen código que **ya no existe**: se
+> quitó el tratamiento especial que separaba esos dos marcadores con una
+> línea-guía. Ninguna de sus objeciones sigue vigente. El conector sobrevive
+> solo como plomada de los objetos hundidos bajo el plano. El resto de la nota
+> queda como estaba, como registro del análisis de entonces.
+
 Toda afirmación sobre el proyecto va con `fichero:línea` de este repositorio.
 Toda afirmación sobre la plataforma va con enlace a la especificación del CSSWG
 o a MDN. Lo que no se ha podido verificar se dice con esas palabras.

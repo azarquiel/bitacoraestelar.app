@@ -6,7 +6,7 @@
      - Grupo Local (grupo-local.js): escala/alpha en su bucle de canvas
      - vecindario solar (vecindario-solar.js): ídem
    Estados:
-     realzado    : hover o resultado de búsqueda → estilo completo.
+     realzado    : hover, resultado de búsqueda u objeto centrado → estilo completo.
      viajeActivo : recorriendo un viaje interestelar → sin atenuación (son
                    pocos objetos y la ruta manda).
      (resto)     : estado base atenuado, según CONFIG.marcadores.
@@ -29,7 +29,35 @@
     };
   }
 
-  var api = { de: de };
+  // Opacidad base del PUNTO de los marcadores en las tres vistas (galaxia por
+  // CSS --mw-aten-op; vecindario solar y Grupo Local por canvas): tenue en
+  // reposo, entera si está realzado (hover, seleccionado o centrado) o hay
+  // viaje. Es independiente de de(), que atenúa la ETIQUETA de la galaxia.
+  var ATEN_CANVAS = 0.72;
+  function canvas(estado, cfg) {
+    estado = estado || {};
+    if (estado.viajeActivo || estado.realzado) return 1;
+    return (cfg && cfg.atenuacionCanvas != null) ? cfg.atenuacionCanvas : ATEN_CANVAS;
+  }
+
+  // ¿Se dibuja la etiqueta? Regla única de las tres vistas: nunca sola; solo con
+  // el cursor encima, un objeto realzado (buscado o centrado) o un viaje activo.
+  function etiquetaVisible(estado) {
+    estado = estado || {};
+    return !!(estado.realzado || estado.viajeActivo);
+  }
+
+  // Radio (px) del punto lleno a tamaño pleno en los lienzos: el MISMO que el
+  // de la galaxia (CONFIG.marcadores.puntoDiametro / 2), con la perspectiva
+  // por encima. Suelo del 60 % para que un objeto muy al fondo no desaparezca.
+  // El tamaño en reposo (de().escala) se aplica aparte.
+  var PUNTO_DIAMETRO = 5;
+  function radioPunto(persp, cfg) {
+    var r0 = ((cfg && cfg.puntoDiametro != null) ? cfg.puntoDiametro : PUNTO_DIAMETRO) / 2;
+    return Math.max(0.6 * r0, r0 * persp);
+  }
+
+  var api = { de: de, canvas: canvas, etiquetaVisible: etiquetaVisible, radioPunto: radioPunto };
   root.VLMarcadorEstilo = api;                                  // navegador
   if (typeof module !== 'undefined' && module.exports) module.exports = api; // Node (test)
 })(typeof window !== 'undefined' ? window : globalThis);

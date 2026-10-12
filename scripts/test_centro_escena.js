@@ -145,6 +145,59 @@ ok(/armarCentrar\(obj, VecindarioSolar\)/.test(app), 'la ficha de una estrella d
 ok(/VecindarioSolar\.volver\(\)/.test(app), 'Inicio también vuelve al Sol');
 ok(!/vecindario-solar\.js\?v=20261004_1200/.test(html), 'versión de caché nueva del vecindario');
 
+// Realce de los anillos de distancia con la plomada: el más próximo al pie x1,8,
+// los interiores bajan linealmente a x1 en el más interno, los exteriores x1.
+(function () {
+  var C = require('../mapa/js/via-lactea-centro.js');
+  var f = C.realceAnillos([1, 2, 3, 4, 5], 3.2, 0);
+  ok(Math.abs(f[2] - 1.8) < 1e-9 && f[0] === 1 && Math.abs(f[1] - 1.4) < 1e-9, 'cercano 1,8 e interiores en rampa');
+  ok(f[3] === 1 && f[4] === 1, 'exteriores en 1');
+  ok(C.realceAnillos([1, 2, 3], 1.1, 0)[0] === 1.8, 'un solo anillo hasta el cercano: entero');
+  ok(C.realceAnillos([1, 2, 3], 1.1, 1)[1] === 1.8, 'los no dibujados no cuentan');
+})();
+
+// Brillo base del punto: la galaxia lo publica por CSS y lo restituye al realzar.
+ok(/--mw-aten-op'?, VLMarcadorEstilo\.canvas/.test(app), 'la app publica --mw-aten-op desde VLMarcadorEstilo.canvas');
+ok(/\.mw-punto \{\s*opacity: var\(--mw-aten-op, 1\)/.test(html), 'el punto usa --mw-aten-op');
+ok(/mw-realzado \.mw-punto,\s*#mw-content\.mw-viaje \.mw-object-anchor \.mw-punto \{ opacity: 1; scale: 1; \}/.test(html), 'hover, realzado y viaje: opacidad y tamaño enteros');
+
+// Punto fijo del zoom: con el centro de la escena a la vista (centro desplazado o
+// dentro del vecindario, cuya escena se pinta siempre en el centro del visor) el
+// zoom NO sigue al cursor. Si lo siguiera, la galaxia se movería bajo una escena
+// que no se mueve, y al volver el Sol quedaría descentrado.
+(function () {
+  var vr = { left: 10, top: 20, width: 800, height: 600 };
+  var p = C.puntoFijoZoom(500, 400, vr, false);
+  ok(p.x === 500 && p.y === 400, 'zoom normal: el punto del gesto');
+  p = C.puntoFijoZoom(500, 400, vr, true);
+  ok(p.x === 410 && p.y === 320, 'zoom con centro de escena: el centro del visor');
+})();
+ok(/VLCentro\.puntoFijoZoom\(x, y, [\s\S]*?centroDesplazado\(\) \|\| dentroVecindario\)/.test(app), 'la app ancla al centro dentro del vecindario');
+
+// Sin abanico de solapados (M8/M20): ningún marcador se desplaza ni lleva línea-guía de grupo.
+ok(!/FAN_GROUPS|fanOutClusters|data-ox|data-oy/.test(app), 'ya no hay abanico de objetos solapados');
+ok(/mw-hundido \.mw-connector/.test(html) && /var screenPx = hundidoX/.test(app), 'el conector sigue siendo la plomada del hundido');
+
+// Etiquetas solo realzadas y tamaño base común a las tres vistas.
+var vecin = leer('mapa/js/vecindario-solar.js');
+var grupo = leer('mapa/js/grupo-local.js');
+ok(/VLMarcadorEstilo\.etiquetaVisible\(/.test(vecin) && /VLMarcadorEstilo\.etiquetaVisible\(/.test(grupo), 'los dos lienzos deciden la etiqueta con la ley común');
+ok(!/etiquetaZoomOk|etiquetaFovFraccion/.test(vecin + grupo), 'ya no hay etiqueta por zoom en los lienzos');
+ok(!/etiquetas-visibles|etiquetaZoomMin/.test(app + html), 'ni en la galaxia');
+ok(/scale: var\(--mw-aten-esc, 1\)/.test(html), 'el punto de la galaxia usa el tamaño base común');
+
+// Galaxia inclinada: etiquetas y plomadas solo con cursor o búsqueda; el cristal se queda.
+ok(!/mw-bajo-plano \.mw-label \{ opacity/.test(html), 'el objeto bajo el plano no fuerza su etiqueta');
+ok(/\.mw-tallo \{[^}]*opacity: 0;/.test(html), 'el tallo (plomada) nace oculto');
+ok(/mw-realzado \.mw-tallo \{ opacity: 1; \}/.test(html), 'el tallo sale con cursor o búsqueda');
+ok(/mw-hundido \.mw-connector \{[^}]*opacity: 0;/.test(html), 'la plomada del hundido nace oculta');
+ok(/mw-hundido\.mw-realzado \.mw-connector \{ opacity: 1; \}/.test(html), 'la plomada del hundido sale con cursor o búsqueda');
+ok(/mw-bajo-plano \.mw-punto::before \{/.test(html), 'el cristal del objeto bajo el plano se conserva');
+
+// El radio del punto en los lienzos sale de la misma medida que la galaxia.
+ok(/VLMarcadorEstilo\.radioPunto\(/.test(vecin) && /VLMarcadorEstilo\.radioPunto\(/.test(grupo), 'los lienzos usan radioPunto (puntoDiametro / 2)');
+ok(!/Math\.max\(2\.4, 4 \* p\.persp\)/.test(vecin + grupo), 'ya no hay radio fijo de 4 px en los lienzos');
+
 // «Volver al Sol» del mapa de la galaxia (#425).
 console.log('Volver al Sol (galaxia)');
 ok(C.solDescentrado(0, 0, 800, 600, 0.28) === false, 'el Sol en el centro no pide botón');

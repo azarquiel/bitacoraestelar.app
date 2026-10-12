@@ -254,5 +254,37 @@ eq(VLO.resumenDe('t'), '▲ No confirmado · 4 intentos · último 12 ago 2026 �
 eq(typeof VLO.TRIANGULO_NO_CONFIRMADO.escala, 'number', 'constantes del triángulo junto a ANILLO_NO_VISITADO');
 eq(VLO.TRIANGULO_NO_CONFIRMADO.grosor, VLO.ANILLO_NO_VISITADO.grosor, 'mismo grosor de trazo que el anillo');
 
+console.log('mismo tamaño relativo de los símbolos en las tres vistas:');
+(function () {
+  var fs = require('fs'), path = require('path');
+  var html = fs.readFileSync(path.join(__dirname, '../mapa/mapa.html'), 'utf8');
+  var A = VLO.ANILLO_NO_VISITADO, T = VLO.TRIANGULO_NO_CONFIRMADO;
+  function cerca(a, b, tol, et) { eq(Math.abs(a - b) <= tol, true, et + ' (' + a.toFixed(3) + ' ≈ ' + b.toFixed(3) + ')'); }
+
+  // Lienzos: la extensión exterior (trazo incluido) es la de la ley, a cualquier tamaño.
+  [{ r: 3, esc: 1 }, { r: 3.28, esc: 0.82 }].forEach(function (c) {
+    var g = A.grosor * c.esc, arco = null, vert = null;
+    var ctx = { beginPath: function () {}, closePath: function () {}, lineTo: function () {},
+      moveTo: function (x, y) { vert = y; }, arc: function (x, y, rad) { arco = rad; } };
+    VLO.trazarSimbolo(ctx, 0, 0, c.r, 'anillo', g);
+    cerca(arco + g / 2, A.escala * c.r, 1e-9, 'canvas, anillo r=' + c.r + ': radio exterior = ' + A.escala + '·r');
+    VLO.trazarSimbolo(ctx, 0, 0, c.r, 'triangulo', g);
+    cerca(-vert + g / 2, T.escala * c.r, 1e-9, 'canvas, triángulo r=' + c.r + ': vértice exterior = ' + T.escala + '·r');
+  });
+
+  // Galaxia (CSS): punto de 5 px; scale + borde/trazo de la máscara dan lo mismo.
+  var d = 5;
+  var anillo = /\.mw-no-visitado \.mw-punto \{[^}]*?border: ([\d.]+)px[^}]*?transform: scale\(([\d.]+)\)/.exec(html);
+  eq(!!anillo, true, 'galaxia: regla del anillo encontrada');
+  cerca(parseFloat(anillo[2]), A.escala, 1e-9, 'galaxia, anillo: scale = ley');
+  cerca(parseFloat(anillo[1]) * parseFloat(anillo[2]), A.grosor, 1e-9, 'galaxia, anillo: trazo = ley');
+  var tri = /\.mw-explorado \.mw-punto \{[^}]*?transform: scale\(([\d.]+)\)[^}]*?\-webkit-mask:[^}]*?d='M8 ([\d.]+) [^']*'[^}]*?stroke-width='([\d.]+)'/.exec(html);
+  eq(!!tri, true, 'galaxia: regla del triángulo encontrada');
+  var S = parseFloat(tri[1]), apice = parseFloat(tri[2]), sw = parseFloat(tri[3]);
+  cerca(S, T.escala, 1e-9, 'galaxia, triángulo: scale = ley');
+  cerca(sw * d * S / 16, T.grosor, 0.01, 'galaxia, triángulo: trazo = ley');
+  cerca((8 - apice) + sw / 2, 8, 0.02, 'galaxia, triángulo: el vértice exterior llena la caja (1,9·r)');
+})();
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');

@@ -35,6 +35,8 @@
   // Punto del vuelo del centro en el instante t (0 = salida, 1 = llegada),
   // con ease-out cubic: arranca rápido y desacelera al llegar. Fuera de [0, 1]
   // se queda en el extremo: el vuelo nunca se pasa ni se queda a medias.
+  var REALCE_REJILLA = 1.8;
+
   function vuelo(desde, hasta, t) {
     if (t <= 0) return { x: desde.x, y: desde.y, z: desde.z };
     if (t >= 1) return { x: hasta.x, y: hasta.y, z: hasta.z };
@@ -53,6 +55,38 @@
     ctx.beginPath(); ctx.arc(p.sx, p.sy, 7 + pulso, 0, Math.PI * 2); ctx.stroke();
   }
 
+  // Los anillos de distancia se intensifican con la plomada de un objeto
+  // realzado: el más próximo a su distancia al origen (rObj, la del pie de la
+  // plomada) sube x REALCE_REJILLA y los interiores bajan linealmente hasta x1 en
+  // el más interno; los exteriores quedan en x1. Devuelve un factor por radio;
+  // 'desde' es el primer índice dibujado (los menores no cuentan).
+  function realceAnillos(radios, rObj, desde) {
+    var f = [], cerca = -1, dmin = Infinity, i;
+    for (i = desde; i < radios.length; i++) {
+      var d = Math.abs(radios[i] - rObj);
+      if (d < dmin) { dmin = d; cerca = i; }
+    }
+    for (i = 0; i < radios.length; i++) {
+      f.push(cerca < 0 || i > cerca ? 1 :
+        cerca === desde ? REALCE_REJILLA :
+        1 + (REALCE_REJILLA - 1) * Math.max(0, i - desde) / (cerca - desde));
+    }
+    return f;
+  }
+
+  // Plomada: vertical del objeto a su pie sobre el plano z=0, la misma en las
+  // dos escenas. Continua si el objeto está sobre el plano, discontinua si
+  // está bajo él; el pie lleva un círculo pequeño para ver dónde cae.
+  //   pie, p: puntos proyectados ({sx, sy}) · bajo: z < 0 · color: 'rgba(...)'
+  function plomada(ctx, pie, p, bajo, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(bajo ? [2, 3] : []);
+    ctx.beginPath(); ctx.moveTo(pie.sx, pie.sy); ctx.lineTo(p.sx, p.sy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(pie.sx, pie.sy, 2, 0, Math.PI * 2); ctx.stroke();
+  }
+
   // Mapa de la galaxia (#425): ¿cae el Sol (dx, dy px respecto al centro del
   // visor) fuera de la zona que cuenta como centrada? Es la de cercaDelSol:
   // frac × el lado menor del visor.
@@ -67,7 +101,19 @@
     return 250 + 250 * t;
   }
 
-  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo,
+  // Punto fijo del zoom (px de pantalla): el del gesto, salvo que el centro de la
+  // escena esté a la vista, que entonces es el centro del visor. Vale para el
+  // centro desplazado a un objeto y para el vecindario solar, cuya escena se
+  // pinta siempre en el centro del visor: anclar al cursor movería la galaxia
+  // bajo una escena quieta y, al volver a ella, el Sol quedaría descentrado.
+  //   vr: rect del visor {left, top, width, height}
+  function puntoFijoZoom(x, y, vr, centroDeEscena) {
+    if (!centroDeEscena) return { x: x, y: y };
+    return { x: vr.left + vr.width / 2, y: vr.top + vr.height / 2 };
+  }
+
+  var API = { proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada, puntoFijoZoom: puntoFijoZoom,
+              realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA,
               solDescentrado: solDescentrado, duracionVuelo: duracionVuelo };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }

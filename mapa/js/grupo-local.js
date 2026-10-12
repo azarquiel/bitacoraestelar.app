@@ -188,7 +188,7 @@ var GrupoLocal = (function () {
   // ---- Rejilla de planos concéntricos --------------------------------------
   // Los planos son del origen: con el centro desplazado se van con la Vía
   // Láctea, por eso todo pasa por project().
-  function drawGrid() {
+  function drawGrid(oRealzado) {
     var rings = [];
     var base = Math.pow(10, Math.floor(Math.log10(fov)));
     for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
@@ -197,11 +197,18 @@ var GrupoLocal = (function () {
     var scale = Math.min(W, H) * 0.42 / fov;
     var o0 = project(ORIGEN);
 
+    // Realce con la plomada: ver VLCentro.realceAnillos.
+    var desde = 0;
+    while (desde < rings.length && rings[desde] * scale < 8) desde++;
+    var kr = oRealzado ? VLCentro.realceAnillos(rings, Math.hypot(oRealzado.x, oRealzado.y), desde)
+                       : rings.map(function () { return 1; });
+    var kEje = oRealzado ? 1 + (VLCentro.REALCE_REJILLA - 1) / 2 : 1;
+
     for (var ri = 0; ri < rings.length; ri++) {
       var radius = rings[ri];
       var px = radius * scale;
       if (px < 8 || px > Math.max(W, H) * 3) continue;
-      var alpha = Math.max(0.05, 0.35 - px / (Math.max(W, H) * 2));
+      var alpha = Math.min(0.7, Math.max(0.05, 0.35 - px / (Math.max(W, H) * 2)) * kr[ri]);
       ctx.beginPath();
       var N = 96;
       for (var i = 0; i <= N; i++) {
@@ -223,7 +230,7 @@ var GrupoLocal = (function () {
       ctx.beginPath();
       ctx.moveTo(o0.sx, o0.sy);
       ctx.lineTo(pa.sx, pa.sy);
-      ctx.strokeStyle = 'rgba(30,79,214,0.18)';
+      ctx.strokeStyle = 'rgba(30,79,214,' + 0.18 * kEje + ')';
       ctx.stroke();
       if (Math.abs(pa.sx - cx) < W && Math.abs(pa.sy - cy) < H) {
         ctx.fillStyle = 'rgba(77,140,255,0.6)';
@@ -295,7 +302,7 @@ var GrupoLocal = (function () {
     ctx.fillRect(0, 0, W, H);
 
     drawStars();
-    drawGrid();
+    drawGrid((hovered && hovered.o) || centro || (target && target.soloAnillo ? target : null));
     drawRutaViaje();
 
     // Se omiten los tipos de Hubble ocultados desde la leyenda; conjunto
@@ -337,19 +344,16 @@ var GrupoLocal = (function () {
     }
     hovered = null;
 
-    // Etiquetas: por debajo de este zoom (fracción de FOV_MAX) se amontonan, así
-    // que solo se leen solas al pasar el cursor o recorriendo un viaje — igual
-    // que en la vista de la galaxia (etiquetaZoomMin), con la escala propia de
-    // este atlas (fov, logarítmico y de rango variable según los datos).
-    var fraccEtiqueta = (window.CONFIG && CONFIG.marcadores && CONFIG.marcadores.etiquetaFovFraccion != null)
-      ? CONFIG.marcadores.etiquetaFovFraccion : 0.15;
-    var etiquetaZoomOk = fov <= FOV_MAX * fraccEtiqueta;
-
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
       var realzado = realzadoDe(o);
-      var r = Math.max(2.4, 4 * p.persp);
+      // Brillo y tamaño base tenues; enteros si realzado o en viaje (la misma ley
+      // de las tres vistas: VLMarcadorEstilo). El Sol no pasa por aquí.
+      var estiloM = { realzado: realzado, viajeActivo: !!rutaIds };
+      var cfgM = window.CONFIG && CONFIG.marcadores;
+      var escM = VLMarcadorEstilo.de(estiloM, cfgM).escala;
+      var r = VLMarcadorEstilo.radioPunto(p.persp, cfgM) * escM;
 
       // Galaxia observada solo por otros: es un destino POR VISITAR. Sigue
       // siendo pulsable para descubrir esas observaciones. Solo se apaga el
@@ -357,16 +361,15 @@ var GrupoLocal = (function () {
       var aten = atenuadaPorObservador(o);
       var am = aten ? VLObservadores.OPACIDAD_NO_VISITADO : 1; // opacidad del rótulo
 
-      // línea guía hasta el plano galáctico
-      var foot = project({ x: o.x, y: o.y, z: 0 });
-      ctx.setLineDash([2, 3]);
-      ctx.beginPath();
-      ctx.moveTo(foot.sx, foot.sy);
-      ctx.lineTo(p.sx, p.sy);
-      ctx.strokeStyle = colorRgba(o.color || '#7ec8ff', 0.28 * am, aten);
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Plomada al plano galáctico (z=0), solo del realzado (hover, centro).
+      // Misma ley y trazo que en el vecindario solar (VLCentro.plomada).
+      if (realzado) {
+        VLCentro.plomada(ctx, project({ x: o.x, y: o.y, z: 0 }), p, o.z < 0,
+          colorRgba(o.color || '#7ec8ff', 0.6 * am, aten));
+      }
+
+      // Brillo base tenue; entero si realzado o en viaje (VLMarcadorEstilo.canvas).
+      ctx.globalAlpha = VLMarcadorEstilo.canvas(estiloM, cfgM);
 
       var col = o.color || '#7ec8ff';
       var simbolo = VLObservadores.simboloDe(o.id);
@@ -383,10 +386,12 @@ var GrupoLocal = (function () {
       // anillo hueco de su propio color (sin halo); el visitado, como punto
       // lleno con halo. Misma ley en las tres vistas del mapa.
       // El explorado y no confirmado es un triángulo hueco (simboloDe).
-      VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo);
+      // Trazo de los huecos: el de la ley, reducido como el punto (igual que la galaxia).
+      var grosorM = VLObservadores.ANILLO_NO_VISITADO.grosor * escM;
+      VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo, simbolo === 'punto' ? 0 : grosorM);
       if (simbolo !== 'punto') {
         ctx.strokeStyle = colorRgba(col, 0.95, false);
-        ctx.lineWidth = VLObservadores.ANILLO_NO_VISITADO.grosor;
+        ctx.lineWidth = grosorM;
         ctx.lineJoin = 'round';
         ctx.stroke();
       } else {
@@ -394,7 +399,7 @@ var GrupoLocal = (function () {
       }
 
       var labelRect = null;
-      if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
+      if (onView && VLMarcadorEstilo.etiquetaVisible({ realzado: realzado, viajeActivo: !!rutaIds })) {
         ctx.fillStyle = colorRgba(col, 0.95 * am, aten);
         ctx.font = '500 12px Inter, sans-serif';
         var lx = p.sx + r + 6, ly = p.sy + 4;
@@ -414,6 +419,7 @@ var GrupoLocal = (function () {
         if (dx * dx + dy * dy < 160 || enEtiqueta) hovered = { o: o, p: p };
       }
     }
+    ctx.globalAlpha = 1;
 
     // La galaxia centrada lleva el mismo anillo que el objeto buscado mientras
     // sea el centro; su rótulo lo pone su marcador (realzadoDe). Es estado

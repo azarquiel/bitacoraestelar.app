@@ -349,16 +349,15 @@
     scaleEl.className = 'mw-counter-scale';
     scaleEl.style.cssText = 'position:absolute;top:0;left:0;transform:scale(1);transform-origin:0 0;';
 
-    // Conector (línea-guía) desde el punto real al marcador abanicado.
-    // Por defecto sin longitud; sólo se activa si el objeto pertenece a un
-    // grupo solapado (ver fanOutClusters más abajo).
+    // Conector: la plomada del objeto hundido bajo el plano, del punto real al
+    // marcador desplazado. Sin longitud y oculto salvo en un objeto hundido; su
+    // aspecto lo pone .mw-hundido .mw-connector en mapa.html.
     var connector = document.createElement('div');
     connector.className = 'mw-connector';
     connector.style.cssText = 'position:absolute;top:0;left:0;height:1px;width:0;' +
-      'background:' + hexToRgba(obj.color, 0.55) + ';transform-origin:0 0;' +
-      'pointer-events:none;display:none;';
+      'transform-origin:0 0;pointer-events:none;display:none;';
 
-    // Contenedor del punto+etiqueta, que es lo que se desplaza en abanico.
+    // Contenedor del punto+etiqueta, que es lo que se desplaza al hundirse.
     var content = document.createElement('div');
     content.className = 'mw-marker-content';
     content.style.cssText = 'position:absolute;top:0;left:0;';
@@ -739,6 +738,8 @@
   if (typeof VLMarcadorEstilo !== 'undefined') {
     var estiloBase = VLMarcadorEstilo.de({}, CONFIG.marcadores);
     img.style.setProperty('--mw-aten-esc', estiloBase.escala);
+    // Brillo base del punto: el mismo de las vistas de canvas (ver mapa.html).
+    img.style.setProperty('--mw-aten-op', VLMarcadorEstilo.canvas({}, CONFIG.marcadores));
   }
 
   // Aplica el filtro de observador. Delega en refreshAnchors(), que combina los
@@ -798,47 +799,6 @@
       showToast('Nada que enseñar con este filtro: prueba otro estado o conjunto.');
     }
   }
-
-  // --------------------------------------------------------------------------
-  // ABANICO DE OBJETOS SOLAPADOS
-  // Algunos objetos están casi en el mismo punto real (p. ej. M8 y M20, a la
-  // misma distancia y a ~1° de separación: en el mapa caen EXACTAMENTE encima).
-  // Para que ambos sean visibles y pulsables sin falsear su posición, esos
-  // grupos se "abren en abanico": el punto + etiqueta se desplazan un poco y se
-  // dibuja una fina línea-guía desde el punto real (que no se mueve) hasta el
-  // marcador desplazado. Así queda claro que comparten ubicación física.
-  //
-  // En vez de detectar los grupos por un umbral automático (que también
-  // agruparía pares simplemente "cercanos" pero distinguibles, como M11/M17 en
-  // la vista de canto), se listan AQUÍ los grupos concretos que deben
-  // abanicarse. Para añadir otro grupo en el futuro, basta con incluir un array
-  // con los id de los objetos que se solapan.
-  var FAN_GROUPS = [
-    ['m8', 'm20']
-  ];
-
-  function fanOutClusters(anchors, view) {
-    var RADIUS_PX = 15;     // desplazamiento del marcador en px de pantalla
-    FAN_GROUPS.forEach(function (ids) {
-      // marcadores de este grupo presentes en la vista actual
-      var members = anchors.filter(function (a) {
-        return a.getAttribute('data-view') === view &&
-               ids.indexOf(a.getAttribute('data-id')) >= 0;
-      });
-      if (members.length < 2) return;
-      members.forEach(function (a, idx) {
-        var ang = (-90 + (360 / members.length) * idx) * Math.PI / 180;
-        var ox = Math.cos(ang) * RADIUS_PX;
-        var oy = Math.sin(ang) * RADIUS_PX;
-        a.setAttribute('data-ox', ox);
-        a.setAttribute('data-oy', oy);
-      });
-    });
-  }
-
-  fanOutClusters(topAnchors, 'top');
-  fanOutClusters(edgeAnchors, 'edge');
-
 
   // --------------------------------------------------------------------------
   // NAVEGACIÓN: arrastre, zoom y reseteo
@@ -1003,13 +963,7 @@
         'scale3d(' + counter + ',' + counter + ',' + counter + ')' + counterRot + counterTilt;
     }
 
-    // Etiquetas: por debajo del umbral de zoom se amontonan, así que solo se
-    // enseñan al pasar el cursor o durante un viaje (ver .mw-label en mapa.html).
-    var zoomMin = (CONFIG.marcadores && CONFIG.marcadores.etiquetaZoomMin != null)
-      ? CONFIG.marcadores.etiquetaZoomMin : 3;
-    img.classList.toggle('mw-etiquetas-visibles', scale >= zoomMin);
-
-    // Posiciona el contenido abanicado y su línea-guía en cada marcador.
+    // Posiciona el contenido hundido y su plomada en cada marcador.
     var anchors = img.querySelectorAll('.mw-object-anchor');
     var rectAlturas = null;
     if (tilt) {
@@ -1110,10 +1064,8 @@
       var connector = a.querySelector('.mw-connector');
       if (!content) continue;
 
-      var oxPct = parseFloat(a.getAttribute('data-ox'));
-      var oyPct = parseFloat(a.getAttribute('data-oy'));
-      if (!oxPct && !oyPct && !hundidoX && !hundidoY) {
-        // Sin abanico ni hundimiento: contenido en el punto, sin línea.
+      if (!hundidoX && !hundidoY) {
+        // Sin hundimiento: contenido en el punto, sin línea.
         content.style.transform = 'translate(0px, 0px)';
         content.style.transformOrigin = '';
         if (connector) connector.style.display = 'none';
@@ -1125,11 +1077,10 @@
       // dentro de img (scale=scale del mapa). Para que en pantalla el marcador
       // se desplace 'screenPx' px, el translate local debe ser
       //   screenPx / (counter * scale).
-      // en data-ox guardamos ya el desplazamiento en px; el hundimiento del
-      // objeto bajo el plano se suma aquí, y así el conector le hace de plomada
-      // hasta su sitio en el disco sin geometría aparte.
-      var screenPx = (oxPct || 0) + hundidoX;
-      var screenPy = (oyPct || 0) + hundidoY;
+      // El hundimiento del objeto bajo el plano es ese desplazamiento, y así el
+      // conector le hace de plomada hasta su sitio en el disco sin geometría aparte.
+      var screenPx = hundidoX;
+      var screenPy = hundidoY;
       var oxPx = screenPx / (counter * scale);
       var oyPx = screenPy / (counter * scale);
       content.style.transform = 'translate(' + oxPx + 'px, ' + oyPx + 'px)';
@@ -1377,11 +1328,10 @@
     var r = VLCapas.limitarEscala(VLCapas.capaActiva(alphaAtlas, alphaVecindario), desplazado, scale, pedida, topes);
     return isFinite(r) ? r : scale;
   }
-  // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro.
+  // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro
+  // desplazado o se está dentro del vecindario (VLCentro.puntoFijoZoom).
   function puntoDeZoom(x, y) {
-    if (!centroDesplazado()) return { x: x, y: y };
-    var vr = viewer.getBoundingClientRect();
-    return { x: vr.left + vr.width / 2, y: vr.top + vr.height / 2 };
+    return VLCentro.puntoFijoZoom(x, y, viewer.getBoundingClientRect(), centroDesplazado() || dentroVecindario);
   }
 
   function updateVecindario() {

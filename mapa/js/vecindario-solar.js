@@ -14,8 +14,8 @@
 
    Origen (0,0,0) = Sol. Posiciones en coordenadas galácticas (l, b) + distancia
    (años luz). El plano z=0 es el plano galáctico que pasa por el Sol: las
-   estrellas por DEBAJO (z<0) llevan línea de caída DISCONTINUA; las de ENCIMA
-   (z>0), CONTINUA.
+   estrellas por DEBAJO (z<0) llevan plomada DISCONTINUA; las de ENCIMA (z>0),
+   CONTINUA. La plomada solo se dibuja en la estrella realzada (hover o centro).
 
    El COLOR de las estrellas es EXACTAMENTE el del render de Gaia del simulador
    de ocular porque AMBOS usan el mismo módulo: BitacoraGaiaColor (fuente única,
@@ -130,7 +130,7 @@ var VecindarioSolar = (function () {
   // ---- Rejilla de planos concéntricos (dorada) ------------------------------
   // Los planos son del Sol: con el centro desplazado se van con él, por eso
   // todo pasa por project().
-  function drawGrid() {
+  function drawGrid(oRealzado) {
     var rings = [];
     var base = Math.pow(10, Math.floor(Math.log10(fov)));
     for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
@@ -139,11 +139,18 @@ var VecindarioSolar = (function () {
     var scale = Math.min(W, H) * 0.42 / fov;
     var o0 = project(ORIGEN);
 
+    // Realce con la plomada: ver VLCentro.realceAnillos.
+    var desde = 0;
+    while (desde < rings.length && rings[desde] * scale < 8) desde++;
+    var kr = oRealzado ? VLCentro.realceAnillos(rings, Math.hypot(oRealzado.x, oRealzado.y), desde)
+                       : rings.map(function () { return 1; });
+    var kEje = oRealzado ? 1 + (VLCentro.REALCE_REJILLA - 1) / 2 : 1;
+
     for (var ri = 0; ri < rings.length; ri++) {
       var radius = rings[ri];
       var px = radius * scale;
       if (px < 8 || px > Math.max(W, H) * 3) continue;
-      var alpha = Math.max(0.05, 0.32 - px / (Math.max(W, H) * 2));
+      var alpha = Math.min(0.7, Math.max(0.05, 0.32 - px / (Math.max(W, H) * 2)) * kr[ri]);
       ctx.beginPath();
       var N = 96;
       for (var i = 0; i <= N; i++) {
@@ -165,7 +172,7 @@ var VecindarioSolar = (function () {
       ctx.beginPath();
       ctx.moveTo(o0.sx, o0.sy);
       ctx.lineTo(pa.sx, pa.sy);
-      ctx.strokeStyle = 'rgba(214,164,74,0.16)';
+      ctx.strokeStyle = 'rgba(214,164,74,' + 0.16 * kEje + ')';
       ctx.stroke();
       if (Math.abs(pa.sx - cx) < W && Math.abs(pa.sy - cy) < H) {
         ctx.fillStyle = 'rgba(255,208,120,0.6)';
@@ -233,7 +240,7 @@ var VecindarioSolar = (function () {
     ctx.fillRect(0, 0, W, H);
 
     drawStars();
-    drawGrid();
+    drawGrid((hovered && hovered.o) || centro);
     drawRutaViaje();
 
     var projected = objects
@@ -284,18 +291,16 @@ var VecindarioSolar = (function () {
     }
     hovered = null;
 
-    // Etiquetas: por debajo de este zoom (fracción de FOV_MAX) se amontonan, así
-    // que solo se leen solas al pasar el cursor o recorriendo un viaje — igual
-    // que en la vista de la galaxia (etiquetaZoomMin) y el Grupo Local.
-    var fraccEtiqueta = (window.CONFIG && CONFIG.marcadores && CONFIG.marcadores.etiquetaFovFraccion != null)
-      ? CONFIG.marcadores.etiquetaFovFraccion : 0.15;
-    var etiquetaZoomOk = fov <= FOV_MAX * fraccEtiqueta;
-
     for (var j = 0; j < projected.length; j++) {
       var o = projected[j].o, p = projected[j].p;
       var onView = p.sx > -60 && p.sx < W + 60 && p.sy > -60 && p.sy < H + 60;
       var realzado = o === hovPrev || o === centro;
-      var r = Math.max(2.4, 4 * p.persp);
+      // Brillo y tamaño base tenues; enteros si realzado o en viaje (la misma ley
+      // de las tres vistas: VLMarcadorEstilo). El Sol no pasa por aquí.
+      var estiloM = { realzado: realzado, viajeActivo: !!rutaIds };
+      var cfgM = window.CONFIG && CONFIG.marcadores;
+      var escM = VLMarcadorEstilo.de(estiloM, cfgM).escala;
+      var r = VLMarcadorEstilo.radioPunto(p.persp, cfgM) * escM;
 
       // Estrella observada solo por otros: es un destino POR VISITAR,
       // igual que en la Vía Láctea y el Grupo Local, y sigue siendo pulsable. La
@@ -303,18 +308,14 @@ var VecindarioSolar = (function () {
       var aten = window.VLObservadores.atenuadoPorObservador(o.id);
       var col = rgbaDe(o.bprp, 1, aten);   // COLOR EXACTO de Gaia (por BP–RP)
 
-      // Línea de caída al plano galáctico (z=0). DISCONTINUA si la estrella está
-      // por DEBAJO del Sol (z<0); CONTINUA si está por ENCIMA (z>0).
-      var foot = project({ x: o.x, y: o.y, z: 0 });
-      if (o.z < 0) ctx.setLineDash([2, 3]);
-      else ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(foot.sx, foot.sy);
-      ctx.lineTo(p.sx, p.sy);
-      ctx.strokeStyle = rgbaDe(o.bprp, 0.30, aten);
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Plomada al plano galáctico (z=0), solo del realzado (hover, centro).
+      // Misma ley y trazo que en el Grupo Local (VLCentro.plomada).
+      if (realzado) {
+        VLCentro.plomada(ctx, project({ x: o.x, y: o.y, z: 0 }), p, o.z < 0, rgbaDe(o.bprp, 0.6, aten));
+      }
+
+      // Brillo base tenue; entero si realzado o en viaje (VLMarcadorEstilo.canvas).
+      ctx.globalAlpha = VLMarcadorEstilo.canvas(estiloM, cfgM);
 
       var simbolo = window.VLObservadores.simboloDe(o.id);
       if (simbolo === 'punto') {
@@ -330,10 +331,12 @@ var VecindarioSolar = (function () {
       // anillo hueco de su propio color (sin halo); el visitado, como punto
       // lleno con halo. Misma ley en las tres vistas del mapa.
       // El explorado y no confirmado es un triángulo hueco (simboloDe).
-      window.VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo);
+      // Trazo de los huecos: el de la ley, reducido como el punto (igual que la galaxia).
+      var grosorM = window.VLObservadores.ANILLO_NO_VISITADO.grosor * escM;
+      window.VLObservadores.trazarSimbolo(ctx, p.sx, p.sy, r, simbolo, simbolo === 'punto' ? 0 : grosorM);
       if (simbolo !== 'punto') {
         ctx.strokeStyle = rgbaDe(o.bprp, 0.95, false);
-        ctx.lineWidth = window.VLObservadores.ANILLO_NO_VISITADO.grosor;
+        ctx.lineWidth = grosorM;
         ctx.lineJoin = 'round';
         ctx.stroke();
       } else {
@@ -341,7 +344,7 @@ var VecindarioSolar = (function () {
       }
 
       var labelRect = null;
-      if (onView && (etiquetaZoomOk || realzado || !!rutaIds)) {
+      if (onView && VLMarcadorEstilo.etiquetaVisible({ realzado: realzado, viajeActivo: !!rutaIds })) {
         ctx.fillStyle = col;
         ctx.font = '500 12px Inter, sans-serif';
         var lx = p.sx + r + 6, ly = p.sy + 4;
@@ -361,6 +364,7 @@ var VecindarioSolar = (function () {
         if (dx * dx + dy * dy < 160 || enEtiqueta) hovered = { o: o, p: p };
       }
     }
+    ctx.globalAlpha = 1;
 
     // La estrella centrada lleva el anillo mientras sea el centro; su nombre lo
     // pone el rótulo de arriba (realzado).
