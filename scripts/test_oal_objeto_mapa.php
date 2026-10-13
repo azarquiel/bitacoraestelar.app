@@ -82,6 +82,7 @@ function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = nu
     return true;
 }
 
+function bitacora_unificar_estrella( $datos ) { return $datos; }
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-viaje.php';
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-oal.php';
 

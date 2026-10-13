@@ -915,8 +915,10 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
                 $tel_id = $equipo['telescopios'][ $e['telescopio'] ];
             }
         }
+        // Una estrella ya registrada con otro nombre cuelga de su fila (#435).
+        $unif = bitacora_unificar_estrella( array( 'objeto' => sanitize_text_field( $g['objeto'] ), 'tipo' => $g['tipo'], 'ra' => $g['ra'], 'decl' => $g['dec'] ) );
         $fila = array(
-            'objeto'            => sanitize_text_field( $g['objeto'] ),
+            'objeto'            => $unif['objeto'],
             'objeto_etiqueta'   => sanitize_text_field( $g['objeto'] ),
             'tipo'              => $g['tipo'],
             'num'               => $g['num'],
@@ -979,7 +981,7 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
         // encuentra, así que el hueco no se nota hasta que se busca. Se hace
         // también en las actualizaciones: así una importación repetida coloca
         // los objetos de lo que se importó antes de que esto existiera.
-        $obj_res = bitacora_asegurar_objeto_mapa( $g['objeto'], $g['objeto'], $g['ra'], $g['dec'], $g['tipo'] );
+        $obj_res = bitacora_asegurar_objeto_mapa( $unif['objeto'], $g['objeto'], $g['ra'], $g['dec'], $g['tipo'] );
         if ( is_wp_error( $obj_res ) ) {
             $problemas[] = array(
                 'donde' => $g['objeto'],
