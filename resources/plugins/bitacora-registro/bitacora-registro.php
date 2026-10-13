@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.4
+ * Version:     1.38.5
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.4' );
+define( 'BITACORA_VERSION', '1.38.5' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -675,6 +675,12 @@ function bitacora_crear_tabla() {
     if ( ! get_option( 'bitacora_viajes_backfill_v2' ) ) {
         bitacora_viajes_backfill();
         update_option( 'bitacora_viajes_backfill_v2', 1 );
+    }
+
+    // Una fila por estrella (#435): fusiona las que ya estaban duplicadas.
+    if ( ! get_option( 'bitacora_estrellas_fusion_v1' ) ) {
+        bitacora_fusionar_estrellas_duplicadas();
+        update_option( 'bitacora_estrellas_fusion_v1', 1 );
     }
 
     update_option( 'bitacora_db_version', BITACORA_VERSION );
@@ -3744,6 +3750,150 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
 }
 
 /**
+ * UNA ESTRELLA, UNA FILA (#435). Una estrella escrita con otro nombre («HR 7106»
+ * y «Sheliak») resuelve en SIMBAD a la misma posición y antes creaba su propia
+ * fila. Mismo criterio que mapa/js/via-lactea-duplicados.js: tipo estrella o
+ * carbono y misma l, b (3 decimales) y distancia (al año luz). Posición exacta,
+ * sin tolerancia: IC 1396 y Tr 37 la comparten, pero no son estrellas.
+ */
+function bitacora_clave_posicion_estrella( $l, $b, $dist ) {
+    if ( null === $l || null === $b || null === $dist || '' === $l || '' === $b || '' === $dist ) {
+        return null;
+    }
+    return sprintf( '%.3f|%.3f|%d', $l, $b, round( (float) $dist ) );
+}
+
+/** Menor = mejor nombre: 0 propio, 1 Bayer/Flamsteed, 2 HR, 3 HD, 4 SAO, 5 el resto. */
+function bitacora_rango_nombre_estrella( $nombre ) {
+    $n = trim( (string) $nombre );
+    $griegas = 'alf|alpha|alfa|bet|beta|gam|gamma|del|delta|eps|epsilon|zet|zeta|eta|tet|theta|iot|iota|' .
+        'kap|kappa|lam|lambda|mu|nu|ksi|xi|omi|omicron|pi|rho|sig|sigma|tau|ups|upsilon|phi|chi|psi|ome|omega';
+    if ( preg_match( '/^(?:\d+|(?:' . $griegas . ')\d*)\s+[a-z][a-z ]{2,}$/i', $n ) ) {
+        return 1;
+    }
+    if ( preg_match( '/^([a-z]{1,5})\s*[-+]?\d/i', $n, $c ) ) {
+        $rangos = array( 'hr' => 2, 'hd' => 3, 'sao' => 4 );
+        return isset( $rangos[ strtolower( $c[1] ) ] ) ? $rangos[ strtolower( $c[1] ) ] : 5;
+    }
+    return 0;
+}
+
+/** Ordena filas (slug, etiqueta, n_obs) de la misma estrella: la primera es la canónica. */
+function bitacora_ordenar_canonica_estrella( array $filas ) {
+    usort( $filas, function ( $a, $b ) {
+        $c = bitacora_rango_nombre_estrella( $a['etiqueta'] ?: $a['slug'] ) - bitacora_rango_nombre_estrella( $b['etiqueta'] ?: $b['slug'] );
+        $c = $c ? $c : ( $b['n_obs'] - $a['n_obs'] );
+        return $c ? $c : strcmp( $a['slug'], $b['slug'] );
+    } );
+    return $filas;
+}
+
+/**
+ * Plan de fusión: de filas { slug, etiqueta, gal_l, gal_b, dist_al, n_obs } de
+ * estrellas saca array( slug_alias => fila_canónica ) para las duplicadas.
+ */
+function bitacora_plan_fusion_estrellas( array $filas ) {
+    $grupos = array();
+    foreach ( $filas as $f ) {
+        $k = bitacora_clave_posicion_estrella( $f['gal_l'], $f['gal_b'], $f['dist_al'] );
+        if ( null !== $k ) {
+            $grupos[ $k ][] = $f;
+        }
+    }
+    $plan = array();
+    foreach ( $grupos as $g ) {
+        if ( count( $g ) < 2 ) {
+            continue;
+        }
+        $g = bitacora_ordenar_canonica_estrella( $g );
+        foreach ( array_slice( $g, 1 ) as $alias ) {
+            $plan[ $alias['slug'] ] = $g[0];
+        }
+    }
+    return $plan;
+}
+
+/** El texto de `objeto` que agrupa bajo la fila canónica (su slug, mostrando su etiqueta si coincide). */
+function bitacora_objeto_de_fila_estrella( array $fila ) {
+    $e = (string) $fila['etiqueta'];
+    return ( '' !== $e && strtolower( preg_replace( '/[^A-Za-z0-9]/', '', $e ) ) === $fila['slug'] ) ? $e : $fila['slug'];
+}
+
+/** La fila de estrella ya registrada en la posición de $calc (de completar_objeto), o null. */
+function bitacora_estrella_existente( $calc ) {
+    global $wpdb;
+    if ( ! in_array( $calc['tipo'], array( 'estrella', 'carbono' ), true ) ) {
+        return null;
+    }
+    $t = bitacora_nombre_tabla_objetos();
+    $filas = (array) $wpdb->get_results( $wpdb->prepare(
+        "SELECT slug, etiqueta, gal_l, gal_b, dist_al FROM $t WHERE tipo IN ('estrella','carbono') AND ABS(gal_l - %f) < 0.0005 AND ABS(gal_b - %f) < 0.0005",
+        $calc['gal_l'], $calc['gal_b']
+    ), ARRAY_A );
+    $k = bitacora_clave_posicion_estrella( $calc['gal_l'], $calc['gal_b'], $calc['dist_al'] );
+    $mias = array();
+    foreach ( $filas as $f ) {
+        if ( bitacora_clave_posicion_estrella( $f['gal_l'], $f['gal_b'], $f['dist_al'] ) === $k ) {
+            $mias[] = $f + array( 'n_obs' => 0 );
+        }
+    }
+    return $mias ? bitacora_ordenar_canonica_estrella( $mias )[0] : null;
+}
+
+/**
+ * Antes de guardar una observación: si su objeto es una estrella que ya existe
+ * con otro nombre, `objeto` pasa a ser el de esa fila y la observación cuelga de
+ * ella. Lo escrito se conserva en `objeto_etiqueta`. Sin red si el slug ya está.
+ */
+function bitacora_unificar_estrella( $datos ) {
+    global $wpdb;
+    $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $datos['objeto'] ) );
+    if ( '' === $slug || $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . bitacora_nombre_tabla_objetos() . ' WHERE slug = %s', $slug ) ) ) {
+        return $datos;
+    }
+    $calc = bitacora_completar_objeto( $datos['objeto'], null, $datos['ra'], $datos['decl'], isset( $datos['tipo'] ) ? $datos['tipo'] : '' );
+    $canon = is_wp_error( $calc ) ? null : bitacora_estrella_existente( $calc );
+    if ( $canon ) {
+        $datos['objeto'] = bitacora_objeto_de_fila_estrella( $canon );
+    }
+    return $datos;
+}
+
+/**
+ * Migración: una fila por estrella. Las observaciones del alias (también las
+ * borradas) pasan a colgar de la canónica y se borra la fila sobrante. Los
+ * VIAJES salen de las observaciones, así que no hay nada más que reescribir.
+ * Idempotente. Devuelve cuántas filas se fusionaron.
+ */
+function bitacora_fusionar_estrellas_duplicadas() {
+    global $wpdb;
+    $t_obj = bitacora_nombre_tabla_objetos();
+    $t_ob  = bitacora_nombre_tabla();
+    $obs   = (array) $wpdb->get_results( "SELECT id, objeto FROM $t_ob WHERE objeto <> ''" );
+    $n = array();
+    foreach ( $obs as $o ) {
+        $s = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $o->objeto ) );
+        $n[ $s ] = ( isset( $n[ $s ] ) ? $n[ $s ] : 0 ) + 1;
+    }
+    $filas = (array) $wpdb->get_results( "SELECT slug, etiqueta, gal_l, gal_b, dist_al FROM $t_obj WHERE tipo IN ('estrella','carbono')", ARRAY_A );
+    foreach ( $filas as &$f ) {
+        $f['n_obs'] = isset( $n[ $f['slug'] ] ) ? $n[ $f['slug'] ] : 0;
+    }
+    unset( $f );
+    $plan = bitacora_plan_fusion_estrellas( $filas );
+    foreach ( $obs as $o ) {
+        $s = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $o->objeto ) );
+        if ( isset( $plan[ $s ] ) ) {
+            $wpdb->update( $t_ob, array( 'objeto' => bitacora_objeto_de_fila_estrella( $plan[ $s ] ) ), array( 'id' => intval( $o->id ) ), array( '%s' ), array( '%d' ) );
+        }
+    }
+    foreach ( array_keys( $plan ) as $alias ) {
+        $wpdb->delete( $t_obj, array( 'slug' => $alias ), array( '%s' ) );
+    }
+    return count( $plan );
+}
+
+/**
  * Se asegura de que un objeto del mapa exista en la tabla de objetos. Si ya
  * está (por slug), no lo toca. Si no, lo crea calculando su posición (galáctica,
  * top/edge) a partir de sus RA/Dec y de la distancia de SIMBAD. Se llama al
@@ -4059,6 +4209,15 @@ function bitacora_crear_objeto( WP_REST_Request $peticion ) {
     if ( is_wp_error( $calc ) ) {
         $calc->add_data( array( 'status' => 422 ) );
         return $calc;
+    }
+
+    // Una estrella ya registrada con otro nombre no crea fila nueva (#435).
+    $canon = bitacora_estrella_existente( $calc );
+    if ( $canon && $canon['slug'] !== $slug ) {
+        $fila_existente = $wpdb->get_row(
+            $wpdb->prepare( "SELECT * FROM " . bitacora_nombre_tabla_objetos() . " WHERE slug = %s", $canon['slug'] )
+        );
+        return new WP_REST_Response( array( 'resultado' => 'existente', 'objeto' => $fila_existente ), 200 );
     }
 
     $fila = array_merge(
@@ -5075,6 +5234,7 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     if ( is_wp_error( $datos ) ) {
         return $datos;
     }
+    $datos = bitacora_unificar_estrella( $datos );
 
     // Entradas por ocular (opcionales). Se validan ANTES de tocar la BD, para
     // no dejar una observación a medias si alguna entrada es incorrecta.
@@ -5164,6 +5324,7 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
     if ( is_wp_error( $datos ) ) {
         return $datos;
     }
+    $datos = bitacora_unificar_estrella( $datos );
 
     $entradas = bitacora_validar_entradas( isset( $params['entradas'] ) ? $params['entradas'] : array() );
     if ( is_wp_error( $entradas ) ) {

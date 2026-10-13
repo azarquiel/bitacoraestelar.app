@@ -470,8 +470,10 @@ con la misma posición. Los marcadores se solapaban y no se podían separar.
   `alias: ['HR 7106']`, que el buscador usa para encontrarla.
 - **Límite:** dos estrellas distintas con coordenadas idénticas se fundirían
   (también se verían como un solo punto). Hasta hoy no ha pasado.
-- **Pendiente:** esto es una fusión de lectura. Que el registro reutilice la fila
-  existente en vez de crear otra (y migrar las que ya hay) está en su propio ticket.
+- **De raíz (#435):** el registro ya no crea la fila: si la estrella existe con otro
+  nombre, la observación cuelga de la existente (lo escrito queda en su
+  `objeto_etiqueta`), y una migración única funde las filas que ya estaban
+  duplicadas. Esta fusión de lectura se queda como red de seguridad.
 
 Test: `node scripts/test_duplicados.js`.
 

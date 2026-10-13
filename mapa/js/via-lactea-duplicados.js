@@ -19,8 +19,8 @@
        alias pasan por la canónica y los nombres descartados quedan en
        canonica.alias para que el buscador los siga encontrando.
 
-   No toca la base de datos: la fusión es de lectura. El arreglo de raíz (que el
-   registro reutilice la fila existente) es otro ticket. Ver mapa/README.md.
+   No toca la base de datos: la fusión es de lectura. El registro ya reutiliza la
+   fila existente (#435); esto queda como red de seguridad. Ver mapa/README.md.
 
    Pura: se testea en Node (scripts/test_duplicados.js). En el navegador se
    ejecuta sola sobre OBJECTS, OBSERVACIONES y VIAJES si existen.

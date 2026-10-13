@@ -41,6 +41,7 @@ foreach ( array( '', '_entradas', '_imagenes', '_objetos', '_observadores', '_fi
 function bitacora_observador_id_desde_nombre( $nombre, $usuario_id ) { return 7; }
 function bitacora_viaje_asegurar( $usuario_id, $base_id, $fecha, $hora, $observador_id = null ) { return 11; }
 function bitacora_simbad( $id ) { return array( 'ra' => 250.4, 'dec' => 36.4, 'dist_al' => 22200.0, 'morph' => '', 'otype' => 'GlC' ); }
+function bitacora_unificar_estrella( $datos ) { return $datos; }
 function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = null, $dec = null, $tipo_obs = '' ) { return true; }
 
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-viaje.php';
