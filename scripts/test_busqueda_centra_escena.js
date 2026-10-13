@@ -26,7 +26,9 @@ ok(/porId: function \(id\)/.test(vs), 'VecindarioSolar expone porId');
 var viaje = app.slice(app.indexOf('function encuadrarViaje'), app.indexOf('function encuadrarViaje') + 900);
 ok(!/centrar\(/.test(viaje), 'el viaje no centra (solo la búsqueda)');
 var gl = fs.readFileSync(__dirname + '/../mapa/js/grupo-local.js', 'utf8');
-ok(/function centrar\(o, silencio\)[\s\S]*?pintarIndicador\(silencio\)/.test(gl) &&
-   /function centrar\(o, silencio\)[\s\S]*?pintarIndicador\(silencio\)/.test(vs) &&
-   /aria-live', 'off'/.test(gl) && /aria-live', 'off'/.test(vs), 'AC6: la búsqueda centra sin anunciar «Centro: …»');
+var esc = fs.readFileSync(__dirname + '/../mapa/js/via-lactea-escena3d.js', 'utf8');
+ok(/function centrar\(o, silencio\)[\s\S]*?escena\.centrar\(o, silencio\)/.test(gl) &&
+   /centrar: escena\.centrar/.test(vs) &&
+   /function centrar\(o, silencio\)[\s\S]*?pintarIndicador\(silencio\)/.test(esc) &&
+   /aria-live', 'off'/.test(esc), 'AC6: la búsqueda centra sin anunciar «Centro: …»');
 process.exit(fallos ? 1 : 0);

@@ -112,6 +112,7 @@ var fs = require('fs'), path = require('path');
 function leer(rel) { return fs.readFileSync(path.join(__dirname, '..', rel), 'utf8'); }
 var html = leer('mapa/mapa.html');
 var gl = leer('mapa/js/grupo-local.js');
+var esc = leer('mapa/js/via-lactea-escena3d.js');
 var app = leer('mapa/js/via-lactea-app.js');
 var pastilla = (html.match(/<div id="mw-centro"[^>]*>([\s\S]*?)\n  <\/div>/) || [])[1] || '';
 var boton = (pastilla.match(/<button[^>]*id="mw-centro-volver"[^>]*>/) || [])[0] || '';
@@ -124,8 +125,8 @@ ok(/id="mw-centro-ico-sol"/.test(pastilla) && /id="mw-centro-ico-espiral"/.test(
    'lleva los dos iconos: el Sol (vecindario) y la espiral (Grupo Local)');
 ok(/<div id="mw-viewer" tabindex="-1"/.test(html), '#mw-viewer admite el foco al desaparecer el botón');
 ok(/aria-label="Volver a la Vía Láctea, origen de la escena"/.test(boton), 'aria-label del Grupo Local con «origen de la escena»');
-ok(/volver:\s*volver/.test(gl), 'GrupoLocal expone volver()');
-ok(/closest\('\.mw-ui-control'\)/.test(gl), 'el arrastre del Grupo Local no empieza sobre un control');
+ok(/volver:\s*escena\.volver/.test(gl) && /volver:\s*volver/.test(esc), 'GrupoLocal expone volver()');
+ok(/closest\('\.mw-ui-control'\)/.test(esc) && /VLEscena3D\.crear\(/.test(gl), 'el arrastre del Grupo Local no empieza sobre un control');
 ok(/e\.key === 'Home'[\s\S]{0,400}GrupoLocal\.volver\(\)/.test(app), 'Inicio llama a GrupoLocal.volver()');
 ok(!/grupo-local\.js\?v=20261011_1200|via-lactea-app\.js\?v=20261011_1200/.test(html),
    'las versiones de caché no repiten las de #421 (producción serviría los viejos)');
@@ -133,14 +134,14 @@ ok(!/grupo-local\.js\?v=20261011_1200|via-lactea-app\.js\?v=20261011_1200/.test(
 // Centrar en el vecindario (#422): mismo cableado, sobre el fuente.
 console.log('Vecindario: cableado');
 var vs = leer('mapa/js/vecindario-solar.js');
-ok(/centrar:\s*centrar[\s\S]{0,40}esCentro:\s*esCentro[\s\S]{0,40}volver:\s*volver/.test(vs),
+ok(/centrar:\s*escena\.centrar[\s\S]{0,40}esCentro:\s*escena\.esCentro[\s\S]{0,40}volver:\s*escena\.volver/.test(vs),
    'VecindarioSolar expone centrar, esCentro y volver');
-ok(/VLCentro\.proyectar/.test(vs) && !/var cyaw/.test(vs), 'el vecindario proyecta por VLCentro (sin copia de la cuenta)');
-ok(/if \(centro\) anillo\(project\(centro\)\)/.test(vs), 'la estrella centrada lleva el anillo');
-ok(/realzado = o === hovPrev \|\| o === centro/.test(vs), 'y su nombre siempre visible');
-ok(/if \(!interactive\) volverAlOrigen\(\)/.test(vs), 'salir del vecindario devuelve el centro al Sol');
+ok(/VLCentro\.proyectar/.test(esc) && !/var cyaw/.test(vs + gl + esc) && /VLEscena3D\.crear\(/.test(vs), 'el vecindario proyecta por VLCentro (sin copia de la cuenta)');
+ok(/if \(centro\) anillo\(project\(centro\)\)/.test(esc), 'la estrella centrada lleva el anillo');
+ok(/realzado = !!\(o === hovPrev \|\| o === centro/.test(esc), 'y su nombre siempre visible');
+ok(/if \(!interactive\) volverAlOrigen\(\)/.test(esc), 'salir del vecindario devuelve el centro al Sol');
 ok(/Volver al Sol, origen de la escena/.test(vs), 'el rótulo del botón es «Volver al Sol» con «origen de la escena»');
-ok(/closest\('\.mw-ui-control'\)/.test(vs), 'el arrastre del vecindario no empieza sobre un control');
+ok(/closest\('\.mw-ui-control'\)/.test(esc), 'el arrastre del vecindario no empieza sobre un control');
 ok(/armarCentrar\(obj, VecindarioSolar\)/.test(app), 'la ficha de una estrella del vecindario arma «Centrar»');
 ok(/VecindarioSolar\.volver\(\)/.test(app), 'Inicio también vuelve al Sol');
 ok(!/vecindario-solar\.js\?v=20261004_1200/.test(html), 'versión de caché nueva del vecindario');
@@ -181,8 +182,8 @@ ok(/mw-hundido \.mw-connector/.test(html) && /var screenPx = hundidoX/.test(app)
 // Etiquetas solo realzadas y tamaño base común a las tres vistas.
 var vecin = leer('mapa/js/vecindario-solar.js');
 var grupo = leer('mapa/js/grupo-local.js');
-ok(/VLMarcadorEstilo\.etiquetaVisible\(/.test(vecin) && /VLMarcadorEstilo\.etiquetaVisible\(/.test(grupo), 'los dos lienzos deciden la etiqueta con la ley común');
-ok(!/etiquetaZoomOk|etiquetaFovFraccion/.test(vecin + grupo), 'ya no hay etiqueta por zoom en los lienzos');
+ok(/VLMarcadorEstilo\.etiquetaVisible\(/.test(esc) && !/VLMarcadorEstilo\.etiquetaVisible\(/.test(vecin + grupo), 'los dos lienzos deciden la etiqueta con la ley común');
+ok(!/etiquetaZoomOk|etiquetaFovFraccion/.test(vecin + grupo + esc), 'ya no hay etiqueta por zoom en los lienzos');
 ok(!/etiquetas-visibles|etiquetaZoomMin/.test(app + html), 'ni en la galaxia');
 ok(/scale: var\(--mw-aten-esc, 1\)/.test(html), 'el punto de la galaxia usa el tamaño base común');
 
@@ -195,8 +196,8 @@ ok(/mw-hundido\.mw-realzado \.mw-connector \{ opacity: 1; \}/.test(html), 'la pl
 ok(/mw-bajo-plano \.mw-punto::before \{/.test(html), 'el cristal del objeto bajo el plano se conserva');
 
 // El radio del punto en los lienzos sale de la misma medida que la galaxia.
-ok(/VLMarcadorEstilo\.radioPunto\(/.test(vecin) && /VLMarcadorEstilo\.radioPunto\(/.test(grupo), 'los lienzos usan radioPunto (puntoDiametro / 2)');
-ok(!/Math\.max\(2\.4, 4 \* p\.persp\)/.test(vecin + grupo), 'ya no hay radio fijo de 4 px en los lienzos');
+ok(/VLMarcadorEstilo\.radioPunto\(/.test(esc), 'los lienzos usan radioPunto (puntoDiametro / 2)');
+ok(!/Math\.max\(2\.4, 4 \* p\.persp\)/.test(vecin + grupo + esc), 'ya no hay radio fijo de 4 px en los lienzos');
 
 // «Volver al Sol» del mapa de la galaxia (#425).
 console.log('Volver al Sol (galaxia)');
@@ -226,8 +227,18 @@ ok(/GrupoLocal\.alOrigen\(\)/.test(app) && /VecindarioSolar\.alOrigen\(\)/.test(
 ok(app.indexOf('GrupoLocal.alOrigen()') < app.indexOf('encuadrarViaje(viajeActivo);'), 'el origen vuelve antes del encuadre');
 ok(/!viajeActivo && VLCentro\.solDescentrado/.test(app), 'con viaje no se enseña «Volver al Sol»');
 ok(/id="ficha-centrar-aviso"[^>]*>Termina el viaje para centrar/.test(html) && /aria-describedby="ficha-centrar-aviso"/.test(html), 'aviso visible y enlazado al botón');
-ok(/alOrigen: volverAlOrigen/.test(require('fs').readFileSync(__dirname + '/../mapa/js/grupo-local.js', 'utf8')) &&
-   /alOrigen: volverAlOrigen/.test(require('fs').readFileSync(__dirname + '/../mapa/js/vecindario-solar.js', 'utf8')), 'las dos escenas exponen alOrigen');
+ok(/alOrigen: escena\.alOrigen/.test(gl) && /alOrigen: escena\.alOrigen/.test(vs) && /alOrigen: volverAlOrigen/.test(esc), 'las dos escenas exponen alOrigen');
+
+// ---- #443: escena 3D compartida ----
+// Cámara, gestos, sync, bucle y rejilla viven una sola vez, en via-lactea-escena3d.js.
+ok(!/function (project|pointerDown|pointerMove|pointerUp|sync|loop|drawGrid|hitTest)\b/.test(vs + gl), 'las escenas ya no definen project, gestos, sync, loop ni drawGrid');
+ok(/function project\b/.test(esc) && /function pointerDown\b/.test(esc) && /function sync\b/.test(esc) &&
+   /function loop\b/.test(esc) && /function drawGrid\b/.test(esc), 'y la escena compartida sí');
+ok(/win\.requestAnimationFrame\(loop\)/.test(esc) && !/setInterval/.test(vs + gl + esc), 'el bucle va por requestAnimationFrame, sin setInterval');
+ok(html.indexOf('via-lactea-escena3d.js') > html.indexOf('via-lactea-centro.js') &&
+   html.indexOf('via-lactea-escena3d.js') < html.indexOf('grupo-local.js?') &&
+   html.indexOf('via-lactea-escena3d.js') < html.indexOf('vecindario-solar.js?'), 'mapa.html carga la escena compartida antes de las dos escenas');
+ok(!/grupo-local\.js\?v=20261012_2000|vecindario-solar\.js\?v=20261012_2000/.test(html), 'versiones de caché nuevas de las dos escenas');
 
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\nTodo bien');

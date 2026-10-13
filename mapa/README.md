@@ -119,6 +119,7 @@ Bitácora Registro** desde la base de datos (ver la carpeta `registro/`).
 | `js/via-lactea-duplicados.js` | Una estrella, un marcador: fusiona los nombres duplicados de `OBJECTS` al cargar | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-vecindario-catalogo.js` | Qué estrellas entran en esa escena y cómo funde | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-centro.js` | Centro de la escena: proyección respecto al objeto centrado y vuelo de la cámara (pura) | Servidor (`/bitacora-mapa/js/`) |
+| `js/via-lactea-escena3d.js` | Escena 3D compartida por el Grupo Local y el vecindario: cámara, gestos, rejilla, marcadores y bucle | Servidor (`/bitacora-mapa/js/`) |
 | `js/via-lactea-viaje.js` | La ruta de un viaje: orden, tramos y trazo dorado | Servidor (`/bitacora-mapa/js/`) |
 | `images/` | Imágenes del mapa (cenital, de canto y bocetos) | Servidor (`/bitacora-mapa/images/`) |
 
