@@ -147,7 +147,7 @@ var GrupoLocal = (function () {
     autoGiro: (window.CONFIG && CONFIG.grupoLocal && CONFIG.grupoLocal.autoGiro != null)
       ? CONFIG.grupoLocal.autoGiro : 0.0004,
     colores: {
-      fondo: { y: 0.4, c0: '#061024', c07: '#01030a', c1: '#01030a' },
+      fondo: { y: 0.4, centro: '#061024', medio: '#01030a', borde: '#01030a' },
       estrellas: { n: 260, rgb: '200,220,255' },
       rejilla: { rgb: '30,79,214', alfa: 0.35, eje: 0.18, rotulo: 'rgba(77,140,255,0.6)' },
       nucleo: '#f4faff',
@@ -283,7 +283,7 @@ var GrupoLocal = (function () {
     var frac = Math.min(0.85, 0.45 * margen);
     var psi = Math.atan2(u.z, h);
     var p = Math.acos(Math.max(-1, Math.min(1, frac))) - psi;
-    cam.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p));
+    cam.pitch = VLEscena3D.topePitch(p);
   }
 
   function focus(l, b, d, name, tipo, soloAnillo) {

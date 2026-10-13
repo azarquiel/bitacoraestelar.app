@@ -93,7 +93,7 @@ var VecindarioSolar = (function () {
     decimales: true,
     colores: {
       // Fondo: degradado oscuro con un tinte cálido; rejilla dorada.
-      fondo: { y: 0.46, c0: '#120c04', c07: '#05030a', c1: '#03020a' },
+      fondo: { y: 0.46, centro: '#120c04', medio: '#05030a', borde: '#03020a' },
       estrellas: { n: 240, rgb: '255,240,214' },
       rejilla: { rgb: '214,164,74', alfa: 0.32, eje: 0.16, rotulo: 'rgba(255,208,120,0.6)' },
       nucleo: '#fff9ef',

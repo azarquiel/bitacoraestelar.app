@@ -14,7 +14,7 @@
        objetos,                       // catálogo con x, y, z (origen en 0,0,0)
        yaw, pitch, fovMin, fovMax, autoGiro,
        decimales,                     // fmtDist con decimales bajo 100 al
-       colores: { fondo: {y, c0, c07, c1}, estrellas: {n, rgb},
+       colores: { fondo: {y, centro, medio, borde}, estrellas: {n, rgb},
                   rejilla: {rgb, alfa, eje, rotulo}, nucleo, alfaEtiqueta },
        rgba(o, a, aten),              // color de un objeto ('rgba(...)')
        volver: {escala, aria, texto}, // rótulos de la pastilla de centro
@@ -33,6 +33,9 @@
   var DEG = Math.PI / 180;
   var ORIGEN = { x: 0, y: 0, z: 0 };
   var VUELO_MS = 500;
+
+  // Tope del cabeceo: la cámara nunca llega a mirar justo desde un polo.
+  function topePitch(p) { return Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p)); }
 
   function fmtDist(ly, decimales) {
     if (ly >= 1e6) return (ly / 1e6).toFixed(ly < 1e7 ? 1 : 0) + ' millones de';
@@ -192,9 +195,9 @@
       // la opacidad de la capa (canvas.style.opacity).
       var f = col.fondo;
       var bg = ctx.createRadialGradient(W * 0.5, H * f.y, 0, W * 0.5, H * f.y, Math.max(W, H));
-      bg.addColorStop(0, f.c0);
-      bg.addColorStop(0.7, f.c07);
-      bg.addColorStop(1, f.c1);
+      bg.addColorStop(0, f.centro);
+      bg.addColorStop(0.7, f.medio);
+      bg.addColorStop(1, f.borde);
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, W, H);
 
@@ -367,7 +370,7 @@
         if (Math.abs(p.clientX - downX) + Math.abs(p.clientY - downY) > 5) downMoved = true;
         cam.yaw += (p.clientX - last.x) * 0.006;
         cam.pitch += (p.clientY - last.y) * 0.006;
-        cam.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, cam.pitch));
+        cam.pitch = topePitch(cam.pitch);
         last = { x: p.clientX, y: p.clientY };
       }
     }
@@ -519,7 +522,7 @@
     };
   }
 
-  var API = { crear: crear, fmtDist: fmtDist, ORIGEN: ORIGEN };
+  var API = { crear: crear, topePitch: topePitch, ORIGEN: ORIGEN };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLEscena3D = API; }
