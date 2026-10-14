@@ -139,8 +139,7 @@ ok(/centrar:\s*escena\.centrar[\s\S]{0,40}esCentro:\s*escena\.esCentro[\s\S]{0,4
 ok(/VLCentro\.proyectar/.test(esc) && !/var cyaw/.test(vs + gl + esc) && /VLEscena3D\.crear\(/.test(vs), 'el vecindario proyecta por VLCentro (sin copia de la cuenta)');
 ok(/if \(centro\) anillo\(project\(centro\)\)/.test(esc), 'la estrella centrada lleva el anillo');
 ok(/realzado = !!\(o === hovPrev \|\| o === centro/.test(esc), 'y su nombre siempre visible');
-ok(/if \(!interactive\) volverAlOrigen\(\)/.test(esc), 'salir del vecindario devuelve el centro al Sol');
-ok(/Volver al Sol, origen de la escena/.test(vs), 'el rótulo del botón es «Volver al Sol» con «origen de la escena»');
+// Salir de la escena, los rótulos y el vuelo: se ejecutan en test_escena3d.js (#444).
 ok(/closest\('\.mw-ui-control'\)/.test(esc), 'el arrastre del vecindario no empieza sobre un control');
 ok(/armarCentrar\(obj, VecindarioSolar\)/.test(app), 'la ficha de una estrella del vecindario arma «Centrar»');
 ok(/VecindarioSolar\.volver\(\)/.test(app), 'Inicio también vuelve al Sol');
