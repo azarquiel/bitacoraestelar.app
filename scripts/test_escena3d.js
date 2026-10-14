@@ -159,12 +159,14 @@ global.performance = { now: function () { return ahora; } };
   ok(E3['mw-centro'].attrs['data-escala'] === par[0] && E3['mw-centro-volver-txt'].textContent === par[1] &&
      E3['mw-centro-volver'].attrs['aria-label'] === par[1] + ', origen de la escena', par[0] + ': rótulos y data-escala son los de la escena');
   ok(E3['mw-centro-estado'].textContent === 'Centro: A' && E3['mw-centro'].clases['mw-centro-visible'] === true, par[0] + ': la pastilla anuncia el centro');
+  ok(tt.e.project({ x: 50, y: 0, z: 0 }).sx === 500, par[0] + ': con movimiento reducido centrar salta, sin animación');
   E3['mw-centro-volver'].clic();
   ok(!tt.e.centroDesplazado() && E3['mw-centro-estado'].textContent === '' && E3['mw-centro'].clases['mw-centro-visible'] === false,
      par[0] + ': «' + par[1] + '» devuelve el centro y vacía la pastilla');
   tt.e.centrar({ name: 'A', x: 50, y: 0, z: 0 });
   tt.e.sync(0, 0.2);
-  ok(!tt.e.centroDesplazado() && E3['mw-centro'].clases['mw-centro-visible'] === false, par[0] + ': perder la interacción devuelve el centro al origen');
+  ok(!tt.e.centroDesplazado() && E3['mw-centro'].clases['mw-centro-visible'] === false &&
+     tt.e.project({ x: 0, y: 0, z: 0 }).sx === 500, par[0] + ': perder la interacción devuelve el centro (y la cámara) al origen');
 });
 var ps = pastilla();
 var ts = nueva({ documento: ps.doc, volver: { escala: 'x', aria: 'x', texto: 'x' } });
@@ -190,6 +192,13 @@ ahora = 700; tv.ventana.siguiente();
 ok(tv.e.project({ x: 0, y: 0, z: 0 }).sx !== 500 && tv.e.centroDesplazado() === false, 'volver también vuela (a los 200 ms aún no llegó)');
 ahora = 1000; tv.ventana.siguiente();
 ok(tv.e.project({ x: 0, y: 0, z: 0 }).sx === 500, 'y llega al origen a los 500 ms');
+
+// Los rótulos reales de cada escena (los que pasa al crearla), no los de la prueba.
+[['vecindario-solar.js', 'vecindario', 'Volver al Sol'], ['grupo-local.js', 'grupo-local', 'Volver a la Vía Láctea']].forEach(function (f) {
+  var src = require('fs').readFileSync(__dirname + '/../mapa/js/' + f[0], 'utf8');
+  ok(src.indexOf("volver: { escala: '" + f[1] + "', aria: '" + f[2] + ", origen de la escena', texto: '" + f[2] + "' }") > 0,
+     f[0] + ' pone sus rótulos y data-escala al crear la escena');
+});
 
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\nTodo bien');
