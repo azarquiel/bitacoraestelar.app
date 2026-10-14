@@ -110,7 +110,7 @@ _Evitar_: foco, pivote, origen (para este sentido).
 
 `window.VLEscalas` (`mapa/js/via-lactea-escalas.js`, test `scripts/test_escalas.js`): puro, sin DOM. Dos reglas con nombre:
 
-- **Radio de campo (`RADIO_CAMPO` = 0,42):** el radio de la escena (vecindario, Grupo Local) ocupa el 42 % del lado corto del visor. `radioCampo(ancho, alto)` es la única cuenta; antes estaba copiada en 8 líneas.
+- **Radio de campo (`RADIO_CAMPO` = 0,42):** el radio de la escena (vecindario, Grupo Local) ocupa el 42 % del lado corto del visor. `radioCampo(ancho, alto)` es la única cuenta; antes estaba copiada en 8 líneas (el ticket #446 contaba 12: las de `grupo-local.js` y `vecindario-solar.js` ya habían pasado a `escena3d.js` con #443).
 - **Topes de zoom con el centro desplazado (#424):** `limitar({capa, desplazado, escala, pedida, ancho, alto, anchoImagen, cfg})` devuelve la escala que deja la rueda o el pellizco. No cruza a la escala vecina; un tope ya rebasado solo impide seguir en esa dirección. **Sin imagen de la galaxia cargada no hay dato para el tope y el zoom no se aleja**: peor un zoom parado que cruzar de escala o caer a 0 (96e979f).
 
 ## Vecindario solar (estrellas cercanas)

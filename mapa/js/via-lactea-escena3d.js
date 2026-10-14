@@ -5,6 +5,7 @@
    Cámara, proyección, rejilla, marcadores, gestos (ratón, rueda, táctil),
    centro de la escena y bucle de dibujo de las dos escenas 3D del mapa. Un
    arreglo en cómo se mueve una escena llega aquí a las dos a la vez (#443).
+   Usa VLEscalas.radioCampo (via-lactea-escalas.js, se carga antes).
 
    Cada escena (vecindario-solar.js, grupo-local.js) aporta solo su catálogo,
    sus colores y su función de pintar el origen y lo suyo propio:

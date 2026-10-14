@@ -57,6 +57,7 @@
   // escala. Un tope ya rebasado no empuja la vista atrás: solo impide seguir en
   // esa dirección. Del mapa de la galaxia no hay centro: pasa libre.
   function limitar(p) {
+    // Mismo predicado que VLCapas.puedeCambiarDeEscala (capas.js se carga después).
     if (!p.desplazado || p.capa === 'galaxia') return p.pedida;
     var t = topes(p);
     var r = p.capa === 'vecindario'
