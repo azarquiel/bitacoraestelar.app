@@ -11,6 +11,7 @@ function ok(c, e) { if (c) console.log('  ok   ' + e); else { fallos++; console.
 function casi(a, b) { return Math.abs(a - b) < 1e-9; }
 
 global.VLCentro = require('../mapa/js/via-lactea-centro.js');
+global.VLEscalas = require('../mapa/js/via-lactea-escalas.js');
 global.VLViaje = { movimientoReducido: function () { return true; } };
 var E = require('../mapa/js/via-lactea-escena3d.js');
 

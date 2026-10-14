@@ -1312,22 +1312,12 @@
     if (!desplazado) return pedida;
     var galImg = document.getElementById('mw-image');
     var vr = viewer.getBoundingClientRect();
-    var cfgV = (window.CONFIG && CONFIG.vecindario) || {};
-    var cfgG = (window.CONFIG && CONFIG.grupoLocal) || {};
-    var umbral = cfgG.umbral || 0.1;
-    var umbralFinal = (cfgG.umbralFinal != null) ? cfgG.umbralFinal : umbral * 0.4;
-    if (umbralFinal >= umbral) umbralFinal = umbral * 0.4;
-    var salida = (cfgV.fovSalidaAl != null) ? cfgV.fovSalidaAl : cfgV.fovFinalAl;
-    salida = Math.min(cfgV.fovInicioAl, Math.max(cfgV.fovFinalAl, salida));   // como fundidoVecindario
-    var rw = galImg && galImg.naturalWidth ? getImgRect(galImg).width : 0;
-    var min = rw ? (Math.min(vr.width, vr.height) * 0.42 * CONFIG.fisica.anchoImagenAl) / (rw * salida) : NaN;
-    var topes = {
-      grupoLocalMax: umbralFinal,
-      // Sin datos para el tope, no se aleja: peor un zoom parado que cruzar de escala.
-      vecindarioMin: isFinite(min) ? min : Infinity
-    };
-    var r = VLCapas.limitarEscala(VLCapas.capaActiva(alphaAtlas, alphaVecindario), desplazado, scale, pedida, topes);
-    return isFinite(r) ? r : scale;
+    return VLEscalas.limitar({
+      capa: VLCapas.capaActiva(alphaAtlas, alphaVecindario), desplazado: desplazado,
+      escala: scale, pedida: pedida, ancho: vr.width, alto: vr.height,
+      anchoImagen: galImg && galImg.naturalWidth ? getImgRect(galImg).width : 0,
+      cfg: window.CONFIG
+    });
   }
   // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro
   // desplazado o se está dentro del vecindario (VLCentro.puntoFijoZoom).
@@ -1345,7 +1335,7 @@
       pxPerLy = (r.width * scale) / CONFIG.fisica.anchoImagenAl;
       if (pxPerLy > 0) {
         var vr = viewer.getBoundingClientRect();
-        fov = (Math.min(vr.width, vr.height) * 0.42) / pxPerLy;   // campo (al) del vecindario
+        fov = VLEscalas.radioCampo(vr.width, vr.height) / pxPerLy;   // campo (al) del vecindario
       }
     }
     // Fundido: 0 salvo que el Sol esté centrado (cenital) y el campo baje del
@@ -1404,7 +1394,7 @@
     var D = Math.max(Math.min(reg, alcance), busquedaMaxDist);
     if (!(D > 0)) { minScale = base; return; }
     var vr = viewer.getBoundingClientRect();
-    var R = Math.min(vr.width, vr.height) * 0.42;
+    var R = VLEscalas.radioCampo(vr.width, vr.height);
     var galImg = document.getElementById('mw-image');
     var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : Math.min(vr.width, vr.height);
     // Si aún no hay dimensiones válidas (layout no listo), no tocar minScale para
@@ -3263,7 +3253,7 @@
     if (isEdgeView) performViewSwap();   // el vecindario solo existe en cenital
     var galImg = document.getElementById('mw-image');
     var vr = viewer.getBoundingClientRect();
-    var R = Math.min(vr.width, vr.height) * 0.42;
+    var R = VLEscalas.radioCampo(vr.width, vr.height);
     var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : R;
     var fovFin = (CONFIG.vecindario && CONFIG.vecindario.fovFinalAl) || 900;
     var fov = obj ? Math.min(fovFin * 0.8, Math.max((obj.dist || 10) * 2.5, 12))
@@ -3638,7 +3628,7 @@
     recalcularMinScale();
     var galImg = document.getElementById('mw-image');
     var vr = viewer.getBoundingClientRect();
-    var R = Math.min(vr.width, vr.height) * 0.42;
+    var R = VLEscalas.radioCampo(vr.width, vr.height);
     var imgW = (galImg && galImg.naturalWidth) ? getImgRect(galImg).width : Math.min(vr.width, vr.height);
     var margen = (CONFIG.busqueda && CONFIG.busqueda.margenExtragalactico) || 1.8;
     var targetFov = d * margen;

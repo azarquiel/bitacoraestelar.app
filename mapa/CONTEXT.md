@@ -106,6 +106,13 @@ _Evitar_: foco, pivote, origen (para este sentido).
 - **Solo se cambia de escala con el centro en el origen.** Rige al salir de una escena 3D y al entrar en el vecindario; del mapa de la galaxia al Grupo Local se pasa libre, porque alejarse ya enseña la galaxia entera y el Grupo Local se abre siempre en su origen. Con el centro desplazado, el zoom se para en el tope de la escena; para pasar a la escala vecina hay que «Volver al origen» primero (rotulado «Volver al Sol» o «Volver a la Vía Láctea»), visible en las tres escalas mientras el centro esté desplazado.
 - **El centro es volátil:** no sobrevive a recargar ni a cambiar de escala.
 
+## Escalas del visor (topes de zoom y campo)
+
+`window.VLEscalas` (`mapa/js/via-lactea-escalas.js`, test `scripts/test_escalas.js`): puro, sin DOM. Dos reglas con nombre:
+
+- **Radio de campo (`RADIO_CAMPO` = 0,42):** el radio de la escena (vecindario, Grupo Local) ocupa el 42 % del lado corto del visor. `radioCampo(ancho, alto)` es la única cuenta; antes estaba copiada en 8 líneas.
+- **Topes de zoom con el centro desplazado (#424):** `limitar({capa, desplazado, escala, pedida, ancho, alto, anchoImagen, cfg})` devuelve la escala que deja la rueda o el pellizco. No cruza a la escala vecina; un tope ya rebasado solo impide seguir en esa dirección. **Sin imagen de la galaxia cargada no hay dato para el tope y el zoom no se aleja**: peor un zoom parado que cruzar de escala o caer a 0 (96e979f).
+
 ## Vecindario solar (estrellas cercanas)
 
 Escena 3D de las estrellas a ≤ `CONFIG.vecindario.distMaxAl` (1500 al) del Sol, que aparece al hacer zoom máximo sobre el Sol en la vista cenital. Se puebla desde los **objetos del mapa** que tengan coordenadas galácticas y esa distancia.

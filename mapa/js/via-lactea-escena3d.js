@@ -84,7 +84,7 @@
     // ---- Proyección 3D --------------------------------------------------------
     function project(o) {
       return VLCentro.proyectar(o, puntoCentro,
-        { yaw: cam.yaw, pitch: cam.pitch, fov: cam.fov, R: Math.min(W, H) * 0.42, cx: cx, cy: cy });
+        { yaw: cam.yaw, pitch: cam.pitch, fov: cam.fov, R: VLEscalas.radioCampo(W, H), cx: cx, cy: cy });
     }
 
     // ---- Rejilla de planos concéntricos ---------------------------------------
@@ -96,7 +96,7 @@
       for (var k = 0.5; k <= 30; k *= 2) rings.push(base * k);
 
       ctx.lineWidth = 1;
-      var scale = Math.min(W, H) * 0.42 / cam.fov;
+      var scale = VLEscalas.radioCampo(W, H) / cam.fov;
       var o0 = project(ORIGEN);
 
       // Realce con la plomada: ver VLCentro.realceAnillos.
@@ -429,7 +429,7 @@
       if (tip && !interactive) tip.style.opacity = 0;
       if (scaleTag) scaleTag.style.opacity = alpha > 0.5 ? 1 : 0;
       if (pxPerLy > 0) {
-        var R = Math.min(W, H) * 0.42;
+        var R = VLEscalas.radioCampo(W, H);
         var f = R / pxPerLy;
         cam.fov = Math.max(cam.fovMin, Math.min(cam.fovMax, f));
       }
