@@ -16,8 +16,8 @@
    para scripts/test_capas_controles.js).
 
    Interfaz (window.VLCapas):
-     puedeCambiarDeEscala(capa, centroDesplazado), limitarEscala(...) -> con el
-       centro desplazado el zoom no cruza a otra escala (#424)
+     puedeCambiarDeEscala(capa, centroDesplazado) -> con el centro desplazado el
+       zoom no cruza a otra escala (#424); los topes: VLEscalas.limitar
      capaActiva(alphaAtlas, alphaVecindario) -> 'galaxia' | 'grupoLocal' | 'vecindario'
      controlesVisibles(capa, canto, giros)   -> { abatimiento, giroCanto,
                                                   giroPlano, leyendaObjetos,
@@ -63,21 +63,10 @@
     return !centroDesplazado || capa === 'galaxia';
   }
 
-  // La escala que deja el zoom: la pedida, o el tope si cruzarlo cambiaría de
-  // escala. topes = { vecindarioMin, grupoLocalMax }, las escalas de la galaxia
-  // donde EMPIEZA el fundido de salida. Un tope ya rebasado no empuja la vista
-  // atrás: solo impide seguir en esa dirección.
-  function limitarEscala(capa, centroDesplazado, actual, pedida, topes) {
-    if (puedeCambiarDeEscala(capa, centroDesplazado)) return pedida;
-    if (capa === 'vecindario') return Math.max(pedida, Math.min(actual, topes.vecindarioMin));
-    return Math.min(pedida, Math.max(actual, topes.grupoLocalMax));
-  }
-
   var API = {
     capaActiva: capaActiva,
     controlesVisibles: controlesVisibles,
-    puedeCambiarDeEscala: puedeCambiarDeEscala,
-    limitarEscala: limitarEscala
+    puedeCambiarDeEscala: puedeCambiarDeEscala
   };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
