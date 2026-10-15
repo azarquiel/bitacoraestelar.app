@@ -1157,17 +1157,7 @@
 
   function updateGrupoLocal() {
     if (typeof GrupoLocal === 'undefined' || !GrupoLocal.ready) return;
-    var cfg = (window.CONFIG && CONFIG.grupoLocal) || {};
-    var umbral = cfg.umbral || 0.1;
-    var umbralFinal = (cfg.umbralFinal != null) ? cfg.umbralFinal : umbral * 0.4;
-    if (umbralFinal >= umbral) umbralFinal = umbral * 0.4;
-
-    // Opacidad de la galaxia: 1 por encima del umbral, 0 por debajo del final,
-    // fundido lineal en la banda intermedia.
-    var galaxyAlpha;
-    if (scale >= umbral) galaxyAlpha = 1;
-    else if (scale <= umbralFinal) galaxyAlpha = 0;
-    else galaxyAlpha = (scale - umbralFinal) / (umbral - umbralFinal);
+    var galaxyAlpha = VLEscalas.fundidoGrupoLocal(scale, window.CONFIG && CONFIG.grupoLocal);
     var atlasAlpha = 1 - galaxyAlpha;
 
     img.style.opacity = galaxyAlpha;
@@ -1208,8 +1198,7 @@
     var vr = viewer.getBoundingClientRect();
     var dx = (r.left + r.width / 2) - (vr.left + vr.width / 2);
     var dy = (r.top + r.height / 2) - (vr.top + vr.height / 2);
-    var frac = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.proximidad) || 0.28;
-    return Math.sqrt(dx * dx + dy * dy) < Math.min(vr.width, vr.height) * frac;
+    return VLEscalas.solCerca(dx, dy, vr.width, vr.height, window.CONFIG);
   }
 
   // «Volver al Sol» (#425): la pastilla #mw-centro con solo el botón. La
@@ -1230,11 +1219,10 @@
     var el = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
     if (!el || !el.style.left) return;
     var r = el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
-    var frac = (window.CONFIG && CONFIG.vecindario && CONFIG.vecindario.proximidad) || 0.28;
     // Con viaje el encuadre descentra el Sol a propósito: nada que enseñar (#427).
-    var fuera = !viajeActivo && VLCentro.solDescentrado(
+    var fuera = !viajeActivo && !VLEscalas.solCerca(
       (r.left + r.width / 2) - (vr.left + vr.width / 2),
-      (r.top + r.height / 2) - (vr.top + vr.height / 2), vr.width, vr.height, frac);
+      (r.top + r.height / 2) - (vr.top + vr.height / 2), vr.width, vr.height, window.CONFIG);
     if (!fuera && !propia) return;   // la pastilla es de una escena 3D
     if (fuera && !propia) {
       centroPastilla.setAttribute('data-escala', 'galaxia');
@@ -1322,7 +1310,7 @@
   // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro
   // desplazado o se está dentro del vecindario (VLCentro.puntoFijoZoom).
   function puntoDeZoom(x, y) {
-    return VLCentro.puntoFijoZoom(x, y, viewer.getBoundingClientRect(), centroDesplazado() || dentroVecindario);
+    return VLCentro.puntoFijoZoom(x, y, viewer.getBoundingClientRect(), VLEscalas.zoomAlCentro(centroDesplazado(), dentroVecindario));
   }
 
   function updateVecindario() {
@@ -1440,10 +1428,9 @@
       anchoPant = Math.max(anchoPant, h3.w);
       altoPant = Math.max(altoPant, h3.h);
     }
-    if (holguraSol && holguraSol.escala === scale) {
-      anchoPant = Math.max(anchoPant, viewerRect.width + 2 * holguraSol.x);
-      altoPant = Math.max(altoPant, viewerRect.height + 2 * holguraSol.y);
-    }
+    var ampl = VLGeometria.conHolgura(anchoPant, altoPant, viewerRect.width, viewerRect.height, holguraSol, scale);
+    anchoPant = ampl.w;
+    altoPant = ampl.h;
     var pos = VLGeometria.clampDesplazamiento(
       posX, posY, anchoPant, altoPant, viewerRect.width, viewerRect.height);
     posX = pos.x;

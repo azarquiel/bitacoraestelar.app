@@ -14,6 +14,8 @@
 'use strict';
 
 var C = require('../mapa/js/via-lactea-centro.js');
+var E = require('../mapa/js/via-lactea-escalas.js');
+var G = require('../mapa/js/via-lactea-geometria.js');
 
 var fallos = 0;
 function ok(cond, etiqueta) {
@@ -172,7 +174,8 @@ ok(/mw-realzado \.mw-punto,\s*#mw-content\.mw-viaje \.mw-object-anchor \.mw-punt
   p = C.puntoFijoZoom(500, 400, vr, true);
   ok(p.x === 410 && p.y === 320, 'zoom con centro de escena: el centro del visor');
 })();
-ok(/VLCentro\.puntoFijoZoom\(x, y, [\s\S]*?centroDesplazado\(\) \|\| dentroVecindario\)/.test(app), 'la app ancla al centro dentro del vecindario');
+ok(E.zoomAlCentro(false, true) && E.zoomAlCentro(true, false) && !E.zoomAlCentro(false, false), 'se ancla al centro con centro desplazado o dentro del vecindario');
+ok(/VLEscalas\.zoomAlCentro\(centroDesplazado\(\), dentroVecindario\)/.test(app), 'la app pregunta al módulo escalas');
 
 // Sin abanico de solapados (M8/M20): ningún marcador se desplaza ni lleva línea-guía de grupo.
 ok(!/FAN_GROUPS|fanOutClusters|data-ox|data-oy/.test(app), 'ya no hay abanico de objetos solapados');
@@ -200,16 +203,26 @@ ok(!/Math\.max\(2\.4, 4 \* p\.persp\)/.test(vecin + grupo + esc), 'ya no hay rad
 
 // «Volver al Sol» del mapa de la galaxia (#425).
 console.log('Volver al Sol (galaxia)');
-ok(C.solDescentrado(0, 0, 800, 600, 0.28) === false, 'el Sol en el centro no pide botón');
-ok(C.solDescentrado(100, 100, 800, 600, 0.28) === false, 'dentro de la zona (141 < 168) no pide botón');
-ok(C.solDescentrado(200, 150, 800, 600, 0.28) === true, 'fuera de la zona (250 > 168) sí');
+ok(E.solCerca(0, 0, 800, 600, {}) === true, 'el Sol en el centro no pide botón');
+ok(E.solCerca(100, 100, 800, 600, {}) === true, 'dentro de la zona (141 < 168) no pide botón');
+ok(E.solCerca(200, 150, 800, 600, {}) === false, 'fuera de la zona (250 > 168) sí');
 ok(C.duracionVuelo(1000, 1000) === 500, 'recorrido largo: 500 ms');
 ok(C.duracionVuelo(0, 1000) === 250, 'Sol ya en el centro: mínimo de 250 ms');
 ok(C.duracionVuelo(50, 1000) > 250 && C.duracionVuelo(50, 1000) < 500, 'recorrido corto: entre 250 y 500 ms');
 ok(/setAttribute\('data-escala', 'galaxia'\)/.test(app), 'la app pone la pastilla en escala «galaxia»');
 ok(/'Volver al Sol, origen de la escena'/.test(app), 'rótulo accesible «Volver al Sol, origen de la escena»');
 ok(/reducido \|\| dist < 1/.test(app), 'movimiento reducido: el Sol se centra al instante');
-ok(/holguraSol/.test(app) && /sinClamp/.test(app), 'a escala 1 el clamp no impide centrar el Sol (holgura)');
+(function () {
+  var h = { x: 300, y: 200, escala: 1 };
+  var a = G.conHolgura(500, 400, 800, 600, h, 1);
+  ok(a.w === 1400 && a.h === 1000, 'a la escala de la holgura la huella llega hasta el encuadre del Sol');
+  a = G.conHolgura(500, 400, 800, 600, h, 2);
+  ok(a.w === 500 && a.h === 400, 'a otra escala la holgura no cuenta');
+  a = G.conHolgura(2000, 1500, 800, 600, h, 1);
+  ok(a.w === 2000 && a.h === 1500, 'una huella mayor no se reduce');
+  a = G.conHolgura(500, 400, 800, 600, null, 1);
+  ok(a.w === 500 && a.h === 400, 'sin holgura, la huella es la misma');
+})();
 ok(/function terminarVueloSol/.test(app) && /'wheel', 'touchstart'/.test(app), 'un gesto durante el vuelo lo termina en el destino');
 ok(/centerOnAnchor\(sol\.x, sol\.y, scale\)/.test(app), 'el vuelo conserva la escala');
 ok(/if \(!isDragging\) ?|isDragging\) return;\s*var propia/.test(app), 'durante el arrastre no se reevalúa');
@@ -224,7 +237,7 @@ ok(sc.desactivado && !sc.aviso && sc.texto === 'Centrado', 'ya centrado: «Centr
 ok(/viajeActivo \|\| escena\.esCentro/.test(app), 'el clic no centra con viaje activo');
 ok(/GrupoLocal\.alOrigen\(\)/.test(app) && /VecindarioSolar\.alOrigen\(\)/.test(app), 'arrancar un viaje devuelve las dos escenas al origen');
 ok(app.indexOf('GrupoLocal.alOrigen()') < app.indexOf('encuadrarViaje(viajeActivo);'), 'el origen vuelve antes del encuadre');
-ok(/!viajeActivo && VLCentro\.solDescentrado/.test(app), 'con viaje no se enseña «Volver al Sol»');
+ok(/!viajeActivo && !VLEscalas\.solCerca/.test(app), 'con viaje no se enseña «Volver al Sol»');
 ok(/id="ficha-centrar-aviso"[^>]*>Termina el viaje para centrar/.test(html) && /aria-describedby="ficha-centrar-aviso"/.test(html), 'aviso visible y enlazado al botón');
 ok(/alOrigen: escena\.alOrigen/.test(gl) && /alOrigen: escena\.alOrigen/.test(vs) && /alOrigen: volverAlOrigen/.test(esc), 'las dos escenas exponen alOrigen');
 

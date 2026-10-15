@@ -67,6 +67,14 @@
     };
   }
 
+  // Huella (anchoPant × altoPant) ampliada por la holgura de «Volver al Sol»
+  // (#425) mientras la escala sea la suya: el rango llega hasta el encuadre del Sol.
+  //   holgura: { x, y, escala } o null
+  function conHolgura(anchoPant, altoPant, viewW, viewH, holgura, escala) {
+    if (!holgura || holgura.escala !== escala) return { w: anchoPant, h: altoPant };
+    return { w: Math.max(anchoPant, viewW + 2 * holgura.x), h: Math.max(altoPant, viewH + 2 * holgura.y) };
+  }
+
   // Nuevo desplazamiento al pasar de escalaAntes a escalaDespues manteniendo fijo
   // en pantalla el punto (cx, cy) —relativo al centro del visor— bajo el cursor
   // o el punto medio del pellizco.
@@ -218,6 +226,7 @@
     rectContain: rectContain,
     huellaRotada: huellaRotada,
     clampDesplazamiento: clampDesplazamiento,
+    conHolgura: conHolgura,
     zoomAlrededor: zoomAlrededor,
     proyectarInclinado: proyectarInclinado,
     planoDesdePantalla: planoDesdePantalla,
