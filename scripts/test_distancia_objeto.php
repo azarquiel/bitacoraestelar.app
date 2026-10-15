@@ -43,6 +43,13 @@ eq(bitacora_distancia_al([], 1000.0), 3.0, 'una paralaje de 1000 mas es 1 pc');
 // Con medidas publicadas la paralaje sobra: la medida ya suele tenerla en cuenta.
 eq(bitacora_distancia_al([5000.0], 0.4378), 5000.0, 'habiendo medida, la paralaje no la pisa');
 
+echo "una paralaje ruidosa no se invierte:\n";
+// Phi Cas: 0,2142 ± 0,0838 mas (error 39 %) daba 15.227 al. 1/plx solo es una
+// distancia fiable si el error relativo es pequeño; con S/N < 5 es ruido.
+eq(bitacora_distancia_al([], 0.2142, 0.0838), null, 'Phi Cas: S/N 2,6, no se coloca por paralaje');
+eq(bitacora_distancia_al([], 0.4378, 0.0529), 7450.0, 'NGC 2022: S/N 8, sigue valiendo');
+eq(bitacora_distancia_al([5000.0], 0.2142, 0.0838), 5000.0, 'una medida publicada no depende del S/N');
+
 echo "una paralaje que no sirve deja el objeto sin colocar:\n";
 // Las paralajes negativas existen (ruido de medida en objetos lejanos) y darían
 // una distancia negativa, que colocaría el objeto en el lado contrario del mapa.

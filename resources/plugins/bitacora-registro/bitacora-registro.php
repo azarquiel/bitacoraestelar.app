@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.6
+ * Version:     1.38.7
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.6' );
+define( 'BITACORA_VERSION', '1.38.7' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -3305,7 +3305,7 @@ function bitacora_simbad( $identificador ) {
     // Versionada: si cambia la forma del array devuelto (nuevas claves como
     // sp_type o gaia_dr3_id), subir esta versión invalida de golpe la caché
     // vieja en vez de dejar arrays a medias 30 días sirviendo null.
-    $cache_key = 'bitacora_simbad_v2_' . md5( strtolower( $id ) );
+    $cache_key = 'bitacora_simbad_v3_' . md5( strtolower( $id ) );
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
         return is_array( $cache ) ? $cache : null;
@@ -3315,7 +3315,7 @@ function bitacora_simbad( $identificador ) {
     // en la misma consulta: son gratis. `sp_type` alimenta el color de respaldo
     // (BitacoraGaiaColor.bpRpPorTipo) cuando la estrella no tiene fotometría de
     // Gaia (primarias muy brillantes, saturadas y fuera de catálogo).
-    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, b.sp_type, d.dist, d.unit, b.plx_value "
+    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, b.sp_type, d.dist, d.unit, b.plx_value, b.plx_err "
         . "FROM basic AS b JOIN ident AS i ON i.oidref = b.oid "
         . "LEFT JOIN mesDistance AS d ON d.oidref = b.oid "
         . "WHERE i.id = '" . str_replace( "'", "''", $id ) . "'";
@@ -3346,7 +3346,7 @@ function bitacora_simbad( $identificador ) {
     }
     array_shift( $lineas ); // cabecera
 
-    $ra = null; $dec = null; $morph = ''; $otype = ''; $sp_type = ''; $plx = null;
+    $ra = null; $dec = null; $morph = ''; $otype = ''; $sp_type = ''; $plx = null; $plx_err = null;
     $distancias_al = array();
     // Factores a años luz por unidad de SIMBAD.
     $a_al = array( 'pc' => 3.2616, 'kpc' => 3261.6, 'mpc' => 3261600.0, 'ly' => 1.0, 'al' => 1.0 );
@@ -3380,10 +3380,11 @@ function bitacora_simbad( $identificador ) {
         // La paralaje es del objeto, así que viene repetida en todas las filas.
         if ( null === $plx && is_numeric( $c[7] ) ) {
             $plx = floatval( $c[7] );
+            $plx_err = ( isset( $c[8] ) && is_numeric( $c[8] ) ) ? floatval( $c[8] ) : null;
         }
     }
 
-    $dist_al = bitacora_distancia_al( $distancias_al, $plx );
+    $dist_al = bitacora_distancia_al( $distancias_al, $plx, $plx_err );
 
     if ( null === $ra ) {
         set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
