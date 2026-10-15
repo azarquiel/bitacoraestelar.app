@@ -31,6 +31,12 @@ if ( ! defined( 'BITACORA_AL_POR_PARSEC' ) ) {
     define( 'BITACORA_AL_POR_PARSEC', 3.2616 );
 }
 
+// Señal/ruido mínima de una paralaje para invertirla en distancia. 5 es el
+// umbral habitual (error relativo del 20 %); NGC 2022 tiene 8,3.
+if ( ! defined( 'BITACORA_PLX_SN_MIN' ) ) {
+    define( 'BITACORA_PLX_SN_MIN', 5.0 );
+}
+
 // Un megapársec son un millón de pársecs: la unidad en la que dan la distancia
 // tanto el Open Astronomy Catalog como la ley de Hubble.
 if ( ! defined( 'BITACORA_AL_POR_MPC' ) ) {
@@ -63,13 +69,14 @@ if ( ! defined( 'BITACORA_Z_MIN_HUBBLE' ) ) {
  *
  * @param array      $medidas_al Distancias publicadas, YA en años luz (pueden ser cero).
  * @param float|null $plx_mas    Paralaje en milisegundos de arco, si SIMBAD la tiene.
+ * @param float|null $plx_err    Su error, para descartarla si es ruido (BITACORA_PLX_SN_MIN).
  *
  * Con varias medidas se toma la MEDIANA, no la media: las distancias publicadas
  * de un mismo objeto se separan a veces por un factor 2 y una sola medida vieja
  * y disparatada no debe arrastrar al resto. La paralaje solo entra si no hay
  * ninguna medida, porque una medida publicada ya suele tenerla en cuenta.
  */
-function bitacora_distancia_al( $medidas_al, $plx_mas = null ) {
+function bitacora_distancia_al( $medidas_al, $plx_mas = null, $plx_err = null ) {
     $medidas = array();
     foreach ( (array) $medidas_al as $d ) {
         // Una distancia negativa o nula no es una medida, es un hueco del catálogo.
@@ -90,6 +97,13 @@ function bitacora_distancia_al( $medidas_al, $plx_mas = null ) {
 
     // Una paralaje negativa es ruido de medida (las hay en Gaia para objetos
     // lejanos), y con ella la distancia saldría negativa: no vale como fuente.
+    // Invertir la paralaje solo da una distancia con error pequeño: Phi Cas
+    // (0,2142 ± 0,0838 mas) salía a 15.227 al. Con S/N bajo es ruido, y sin
+    // distancia el objeto queda sin colocar, que es mejor que mal colocado.
+    if ( is_numeric( $plx_err ) && floatval( $plx_err ) > 0
+        && floatval( $plx_mas ) / floatval( $plx_err ) < BITACORA_PLX_SN_MIN ) {
+        return null;
+    }
     if ( is_numeric( $plx_mas ) && floatval( $plx_mas ) > 0 ) {
         return round( 1000.0 * BITACORA_AL_POR_PARSEC / floatval( $plx_mas ) );
     }
