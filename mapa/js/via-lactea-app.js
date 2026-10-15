@@ -1258,7 +1258,7 @@
     destinoSol = { x: x1, y: y1 };
     applyTransform();
     var t0 = performance.now();
-    var dur = VLCentro.duracionVuelo(dist, Math.hypot(viewer.clientWidth, viewer.clientHeight));
+    var dur = VLEscalas.duracionVuelo(dist, Math.hypot(viewer.clientWidth, viewer.clientHeight));
     var desde = { x: x0, y: y0, z: 0 }, hasta = { x: x1, y: y1, z: 0 };
     (function paso(ahora) {
       var t = Math.min(1, (ahora - t0) / dur), p = VLCentro.vuelo(desde, hasta, t);
@@ -1330,9 +1330,9 @@
     });
   }
   // Punto fijo del zoom: el del gesto, o el centro del visor si hay centro
-  // desplazado o se está dentro del vecindario (VLCentro.puntoFijoZoom).
+  // desplazado o se está dentro del vecindario (VLEscalas.puntoFijoZoom).
   function puntoDeZoom(x, y) {
-    return VLCentro.puntoFijoZoom(x, y, viewer.getBoundingClientRect(), VLEscalas.zoomAlCentro(centroDesplazado(), dentroVecindario));
+    return VLEscalas.puntoFijoZoom(x, y, viewer.getBoundingClientRect(), VLEscalas.zoomAlCentro(centroDesplazado(), dentroVecindario));
   }
 
   function updateVecindario() {
@@ -2786,7 +2786,7 @@
     fichaCentrarObj = obj;
     fichaCentrarEscena = obj ? escena : null;
     fichaCentrarBtn.hidden = !obj;
-    var st = VLCentro.estadoCentrar(!!obj && escena.esCentro(obj), !!viajeActivo);
+    var st = VLEscena3D.estadoCentrar(!!obj && escena.esCentro(obj), !!viajeActivo);
     fichaCentrarTxt.textContent = st.texto;
     if (st.desactivado) fichaCentrarBtn.setAttribute('aria-disabled', 'true');
     else fichaCentrarBtn.removeAttribute('aria-disabled');

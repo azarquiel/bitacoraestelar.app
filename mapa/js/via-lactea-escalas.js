@@ -27,6 +27,8 @@
      proximidadSol(cfg)                -> fracción del lado corto (CONFIG.vecindario.proximidad)
      solCerca(dx, dy, ancho, alto, cfg)-> ¿el Sol está a menos de la proximidad del centro?
      zoomAlCentro(desplazado, dentro)  -> ¿el zoom ancla al centro del visor y no al cursor?
+     puntoFijoZoom(x, y, vr, alCentro) -> {x, y} donde ancla el zoom (cursor o centro del visor)
+     duracionVuelo(distPx, diagonalPx) -> ms del vuelo del Sol al centro (250-500)
      topes(p)                          -> { vecindarioMin, grupoLocalMax }
      limitar(p)                        -> escala que deja el zoom
        p = { capa, desplazado, escala, pedida, ancho, alto,
@@ -73,6 +75,23 @@
   // vecindario, que se pinta siempre en el centro del visor) el zoom no sigue al cursor.
   function zoomAlCentro(desplazado, dentroVecindario) { return !!(desplazado || dentroVecindario); }
 
+  // Punto fijo del zoom (px de pantalla): el del gesto, salvo que el centro de la
+  // escena esté a la vista (zoomAlCentro), que entonces es el centro del visor:
+  // anclar al cursor movería la galaxia bajo una escena quieta y, al volver a
+  // ella, el Sol quedaría descentrado.
+  //   vr: rect del visor {left, top, width, height}
+  function puntoFijoZoom(x, y, vr, centroDeEscena) {
+    if (!centroDeEscena) return { x: x, y: y };
+    return { x: vr.left + vr.width / 2, y: vr.top + vr.height / 2 };
+  }
+
+  // Duración (ms) del vuelo del Sol al centro: 500 si el recorrido pasa de un
+  // cuarto de la diagonal, y baja hasta 250 cuando el Sol ya casi está.
+  function duracionVuelo(distPx, diagonalPx) {
+    var t = Math.min(1, distPx / (0.25 * diagonalPx));
+    return 250 + 250 * t;
+  }
+
   // Escalas de la galaxia donde EMPIEZA el fundido de salida de cada vecina.
   function topes(p) {
     var cfg = p.cfg || {};
@@ -104,7 +123,8 @@
   }
 
   var API = { RADIO_CAMPO: RADIO_CAMPO, radioCampo: radioCampo, umbrales: umbrales, fundidoGrupoLocal: fundidoGrupoLocal,
-              proximidadSol: proximidadSol, solCerca: solCerca, zoomAlCentro: zoomAlCentro, topes: topes, limitar: limitar };
+              proximidadSol: proximidadSol, solCerca: solCerca, zoomAlCentro: zoomAlCentro, puntoFijoZoom: puntoFijoZoom,
+              duracionVuelo: duracionVuelo, topes: topes, limitar: limitar };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLEscalas = API; }

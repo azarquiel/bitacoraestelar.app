@@ -87,34 +87,6 @@
     ctx.beginPath(); ctx.arc(pie.sx, pie.sy, 2, 0, Math.PI * 2); ctx.stroke();
   }
 
-  // Duración (ms) del vuelo del Sol al centro: 500 si el recorrido pasa de un
-  // cuarto de la diagonal, y baja hasta 250 cuando el Sol ya casi está.
-  function duracionVuelo(distPx, diagonalPx) {
-    var t = Math.min(1, distPx / (0.25 * diagonalPx));
-    return 250 + 250 * t;
-  }
-
-  // Punto fijo del zoom (px de pantalla): el del gesto, salvo que el centro de la
-  // escena esté a la vista, que entonces es el centro del visor. Vale para el
-  // centro desplazado a un objeto y para el vecindario solar, cuya escena se
-  // pinta siempre en el centro del visor: anclar al cursor movería la galaxia
-  // bajo una escena quieta y, al volver a ella, el Sol quedaría descentrado.
-  //   vr: rect del visor {left, top, width, height}
-  function puntoFijoZoom(x, y, vr, centroDeEscena) {
-    if (!centroDeEscena) return { x: x, y: y };
-    return { x: vr.left + vr.width / 2, y: vr.top + vr.height / 2 };
-  }
-
-  // Estado del botón «Centrar» de la ficha (#427): con un viaje activo el viaje
-  // se ve desde el origen, así que no centra y la ficha dice por qué.
-  function estadoCentrar(esCentro, viajeActivo) {
-    return {
-      texto: esCentro ? 'Centrado' : 'Centrar',
-      desactivado: !!(esCentro || viajeActivo),
-      aviso: !!viajeActivo && !esCentro
-    };
-  }
-
   // ÚNICO escritor de la pastilla #mw-centro (#445): la app (galaxia) y la
   // escena compartida (Grupo Local, vecindario) la pintan solo por aquí.
   //   op: {escala, aria, texto} · visible: true/false
@@ -130,9 +102,8 @@
     if (p) p.classList.toggle('mw-centro-visible', !!visible);
   }
 
-  var API = { rotularPastilla: rotularPastilla, mostrarPastilla: mostrarPastilla, estadoCentrar: estadoCentrar, proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada, puntoFijoZoom: puntoFijoZoom,
-              realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA,
-              duracionVuelo: duracionVuelo };
+  var API = { rotularPastilla: rotularPastilla, mostrarPastilla: mostrarPastilla, proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada,
+              realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLCentro = API; }

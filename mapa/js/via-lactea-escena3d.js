@@ -38,6 +38,16 @@
   // Tope del cabeceo: la cámara nunca llega a mirar justo desde un polo.
   function topePitch(p) { return Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p)); }
 
+  // Estado del botón «Centrar» de la ficha (#427): con un viaje activo el viaje
+  // se ve desde el origen, así que no centra y la ficha dice por qué.
+  function estadoCentrar(esCentro, viajeActivo) {
+    return {
+      texto: esCentro ? 'Centrado' : 'Centrar',
+      desactivado: !!(esCentro || viajeActivo),
+      aviso: !!viajeActivo && !esCentro
+    };
+  }
+
   function fmtDist(ly, decimales) {
     if (ly >= 1e6) return (ly / 1e6).toFixed(ly < 1e7 ? 1 : 0) + ' millones de';
     if (ly >= 1e3) return (ly / 1e3).toFixed(ly < 1e4 ? 1 : 0) + ' mil';
@@ -521,7 +531,7 @@
     };
   }
 
-  var API = { crear: crear, topePitch: topePitch, ORIGEN: ORIGEN };
+  var API = { crear: crear, topePitch: topePitch, estadoCentrar: estadoCentrar, ORIGEN: ORIGEN };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLEscena3D = API; }
