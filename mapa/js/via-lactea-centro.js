@@ -115,7 +115,22 @@
     };
   }
 
-  var API = { estadoCentrar: estadoCentrar, proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada, puntoFijoZoom: puntoFijoZoom,
+  // ÚNICO escritor de la pastilla #mw-centro (#445): la app (galaxia) y la
+  // escena compartida (Grupo Local, vecindario) la pintan solo por aquí.
+  //   op: {escala, aria, texto} · visible: true/false
+  function rotularPastilla(doc, op) {
+    var p = doc.getElementById('mw-centro'), v = doc.getElementById('mw-centro-volver');
+    if (!p || !v) return;
+    p.setAttribute('data-escala', op.escala);
+    v.setAttribute('aria-label', op.aria);
+    doc.getElementById('mw-centro-volver-txt').textContent = op.texto;
+  }
+  function mostrarPastilla(doc, visible) {
+    var p = doc.getElementById('mw-centro');
+    if (p) p.classList.toggle('mw-centro-visible', !!visible);
+  }
+
+  var API = { rotularPastilla: rotularPastilla, mostrarPastilla: mostrarPastilla, estadoCentrar: estadoCentrar, proyectar: proyectar, vuelo: vuelo, anillo: anillo, plomada: plomada, puntoFijoZoom: puntoFijoZoom,
               realceAnillos: realceAnillos, REALCE_REJILLA: REALCE_REJILLA,
               duracionVuelo: duracionVuelo };
 

@@ -1213,7 +1213,7 @@
     if (!centroPastilla || !centroVolver || isDragging) return;
     var propia = centroPastilla.getAttribute('data-escala') === 'galaxia';
     if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') {
-      if (propia) centroPastilla.classList.remove('mw-centro-visible');
+      if (propia) VLCentro.mostrarPastilla(document, false);
       return;
     }
     var el = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
@@ -1225,13 +1225,11 @@
       (r.top + r.height / 2) - (vr.top + vr.height / 2), vr.width, vr.height, window.CONFIG);
     if (!fuera && !propia) return;   // la pastilla es de una escena 3D
     if (fuera && !propia) {
-      centroPastilla.setAttribute('data-escala', 'galaxia');
-      centroVolver.setAttribute('aria-label', 'Volver al Sol, origen de la escena');
-      document.getElementById('mw-centro-volver-txt').textContent = 'Volver al Sol';
+      VLCentro.rotularPastilla(document, { escala: 'galaxia', aria: 'Volver al Sol, origen de la escena', texto: 'Volver al Sol' });
     }
     // El botón desaparece: su foco pasa al visor, no al body.
     if (!fuera && document.activeElement === centroVolver) viewer.focus({ preventScroll: true });
-    centroPastilla.classList.toggle('mw-centro-visible', fuera);
+    VLCentro.mostrarPastilla(document, fuera);
   }
   // Vuelo del Sol al centro SIN tocar el zoom (posX/posY). Un gesto lo termina
   // EN EL DESTINO (nunca a medio camino) y se aplica desde ahí.
@@ -1288,9 +1286,6 @@
       ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
   }
 
-  // Zoom de la rueda y del pellizco con el centro desplazado (#424): no cruza a
-  // otra escala (los topes son donde EMPIEZA el fundido de salida) y va hacia el
-  // objeto centrado, que cae en el centro del visor, no hacia el cursor.
   // Las tres escalas se ven con la misma interfaz de centro (#445):
   // centroDesplazado(), volver() y alOrigen(). La app pregunta a esta lista en
   // vez de comprobar cada escena por separado; la galaxia va la última porque
@@ -1315,8 +1310,10 @@
   function centroAlOrigen() {
     escenas().forEach(function (e) { if (e.alOrigen) e.alOrigen(); });
   }
-  // Solo las escenas 3D: el Sol fuera de la vista no limita el zoom ni lo ancla
-  // al centro del visor (#424).
+  // Zoom de la rueda y del pellizco con el centro desplazado (#424): no cruza a
+  // otra escala (los topes son donde EMPIEZA el fundido de salida) y va hacia el
+  // objeto centrado, que cae en el centro del visor, no hacia el cursor. Solo
+  // cuentan las escenas 3D: el Sol fuera de la vista no limita el zoom.
   function centroDesplazado() {
     return escenas3D().some(function (e) { return !!e.centroDesplazado && e.centroDesplazado(); });
   }

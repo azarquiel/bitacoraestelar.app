@@ -486,9 +486,7 @@
     if (indicadorVolver) indicadorVolver.addEventListener('click', volver);
     function rotularVolver() {
       if (!indicador || !indicadorVolver) return;
-      indicador.setAttribute('data-escala', op.volver.escala);
-      indicadorVolver.setAttribute('aria-label', op.volver.aria);
-      doc.getElementById('mw-centro-volver-txt').textContent = op.volver.texto;
+      VLCentro.rotularPastilla(doc, op.volver);
     }
     function pintarIndicador(silencio) {
       if (!indicador || !indicadorEstado) return;
@@ -502,7 +500,7 @@
       indicadorEstado.title = indicadorEstado.textContent;
       // El botón desaparece con el centro: su foco pasa al visor, no al body.
       if (!centro && doc.activeElement === indicadorVolver) stage.focus({ preventScroll: true });
-      indicador.classList.toggle('mw-centro-visible', !!centro);
+      VLCentro.mostrarPastilla(doc, centro);
     }
 
     // setViaje: el tramo de la salida que se está recorriendo, como ids de

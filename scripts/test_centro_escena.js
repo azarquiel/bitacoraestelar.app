@@ -209,7 +209,7 @@ ok(E.solCerca(200, 150, 800, 600, {}) === false, 'fuera de la zona (250 > 168) s
 ok(C.duracionVuelo(1000, 1000) === 500, 'recorrido largo: 500 ms');
 ok(C.duracionVuelo(0, 1000) === 250, 'Sol ya en el centro: mínimo de 250 ms');
 ok(C.duracionVuelo(50, 1000) > 250 && C.duracionVuelo(50, 1000) < 500, 'recorrido corto: entre 250 y 500 ms');
-ok(/setAttribute\('data-escala', 'galaxia'\)/.test(app), 'la app pone la pastilla en escala «galaxia»');
+ok(/rotularPastilla\(document, \{ escala: 'galaxia'/.test(app),'la app pone la pastilla en escala «galaxia»');
 ok(/'Volver al Sol, origen de la escena'/.test(app), 'rótulo accesible «Volver al Sol, origen de la escena»');
 ok(/VLViaje\.movimientoReducido\(\) \|\| dist < 1/.test(app), 'movimiento reducido: el Sol se centra al instante');
 (function () {
@@ -236,7 +236,7 @@ ok(!sn.desactivado && !sn.aviso, 'sin viaje: «Centrar» funciona');
 ok(sc.desactivado && !sc.aviso && sc.texto === 'Centrado', 'ya centrado: «Centrado» sin aviso de viaje');
 ok(/viajeActivo \|\| escena\.esCentro/.test(app), 'el clic no centra con viaje activo');
 ok(/if \(viajeActivo\) centroAlOrigen\(\);/.test(app) && /e\.alOrigen\) e\.alOrigen\(\)/.test(app), 'arrancar un viaje devuelve las escenas al origen');
-ok(app.indexOf('GrupoLocal.alOrigen()') < app.indexOf('encuadrarViaje(viajeActivo);'), 'el origen vuelve antes del encuadre');
+ok(app.indexOf('centroAlOrigen();') > 0 && app.indexOf('centroAlOrigen();') < app.indexOf('encuadrarViaje(viajeActivo);'),'el origen vuelve antes del encuadre');
 ok(/!viajeActivo && !VLEscalas\.solCerca/.test(app), 'con viaje no se enseña «Volver al Sol»');
 ok(/id="ficha-centrar-aviso"[^>]*>Termina el viaje para centrar/.test(html) && /aria-describedby="ficha-centrar-aviso"/.test(html), 'aviso visible y enlazado al botón');
 ok(/alOrigen: escena\.alOrigen/.test(gl) && /alOrigen: escena\.alOrigen/.test(vs) && /alOrigen: volverAlOrigen/.test(esc), 'las dos escenas exponen alOrigen');
