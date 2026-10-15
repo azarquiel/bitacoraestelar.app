@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.5
+ * Version:     1.38.6
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.5' );
+define( 'BITACORA_VERSION', '1.38.6' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -3255,7 +3255,10 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '', $ongc 
     // ya los ha capturado la tabla de categorías; la única excepción que descontar es
     // 'As*' (asterismo), que son varias estrellas y no una. Una regla en vez de una
     // tabla de treinta códigos que siempre se queda corta.
-    if ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) {
+    // 'MUL' (objeto múltiple: Kappa Boötis, cuyas componentes son κ¹ y κ²) es la
+    // otra forma en que SIMBAD etiqueta un sistema estelar sin '*'. Va después de la
+    // rama de galaxia: también cae ahí algún par de galaxias (LEDA, 2MASX).
+    if ( ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) || 'MUL' === $codigo ) {
         return array( 'tipo' => 'estrella', 'color' => '#dfe7f5' );
     }
 
