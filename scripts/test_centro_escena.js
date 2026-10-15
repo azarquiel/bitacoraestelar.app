@@ -129,7 +129,7 @@ ok(/<div id="mw-viewer" tabindex="-1"/.test(html), '#mw-viewer admite el foco al
 ok(/aria-label="Volver a la Vía Láctea, origen de la escena"/.test(boton), 'aria-label del Grupo Local con «origen de la escena»');
 ok(/volver:\s*escena\.volver/.test(gl) && /volver:\s*volver/.test(esc), 'GrupoLocal expone volver()');
 ok(/closest\('\.mw-ui-control'\)/.test(esc) && /VLEscena3D\.crear\(/.test(gl), 'el arrastre del Grupo Local no empieza sobre un control');
-ok(/e\.key === 'Home'[\s\S]{0,400}GrupoLocal\.volver\(\)/.test(app), 'Inicio llama a GrupoLocal.volver()');
+ok(/e\.key === 'Home'[\s\S]{0,200}volverCentro\(\)/.test(app) && /escenas3D\(\)\.concat\(escenaGalaxia\)/.test(app), 'Inicio llama volver() de la lista de escenas (GrupoLocal incluido)');
 ok(!/grupo-local\.js\?v=20261011_1200|via-lactea-app\.js\?v=20261011_1200/.test(html),
    'las versiones de caché no repiten las de #421 (producción serviría los viejos)');
 
@@ -144,7 +144,7 @@ ok(/realzado = !!\(o === hovPrev \|\| o === centro/.test(esc), 'y su nombre siem
 // Salir de la escena, los rótulos y el vuelo: se ejecutan en test_escena3d.js (#444).
 ok(/closest\('\.mw-ui-control'\)/.test(esc), 'el arrastre del vecindario no empieza sobre un control');
 ok(/armarCentrar\(obj, VecindarioSolar\)/.test(app), 'la ficha de una estrella del vecindario arma «Centrar»');
-ok(/VecindarioSolar\.volver\(\)/.test(app), 'Inicio también vuelve al Sol');
+ok(/e\.volver && e\.volver\(\)/.test(app) && /typeof VecindarioSolar !== 'undefined' && VecindarioSolar/.test(app), 'Inicio también vuelve al Sol (vecindario en la lista)');
 ok(!/vecindario-solar\.js\?v=20261004_1200/.test(html), 'versión de caché nueva del vecindario');
 
 // Realce de los anillos de distancia con la plomada: el más próximo al pie x1,8,
@@ -209,9 +209,9 @@ ok(E.solCerca(200, 150, 800, 600, {}) === false, 'fuera de la zona (250 > 168) s
 ok(C.duracionVuelo(1000, 1000) === 500, 'recorrido largo: 500 ms');
 ok(C.duracionVuelo(0, 1000) === 250, 'Sol ya en el centro: mínimo de 250 ms');
 ok(C.duracionVuelo(50, 1000) > 250 && C.duracionVuelo(50, 1000) < 500, 'recorrido corto: entre 250 y 500 ms');
-ok(/setAttribute\('data-escala', 'galaxia'\)/.test(app), 'la app pone la pastilla en escala «galaxia»');
+ok(/rotularPastilla\(document, \{ escala: 'galaxia'/.test(app),'la app pone la pastilla en escala «galaxia»');
 ok(/'Volver al Sol, origen de la escena'/.test(app), 'rótulo accesible «Volver al Sol, origen de la escena»');
-ok(/reducido \|\| dist < 1/.test(app), 'movimiento reducido: el Sol se centra al instante');
+ok(/VLViaje\.movimientoReducido\(\) \|\| dist < 1/.test(app), 'movimiento reducido: el Sol se centra al instante');
 (function () {
   var h = { x: 300, y: 200, escala: 1 };
   var a = G.conHolgura(500, 400, 800, 600, h, 1);
@@ -227,7 +227,7 @@ ok(/function terminarVueloSol/.test(app) && /'wheel', 'touchstart'/.test(app), '
 ok(/centerOnAnchor\(sol\.x, sol\.y, scale\)/.test(app), 'el vuelo conserva la escala');
 ok(/if \(!isDragging\) ?|isDragging\) return;\s*var propia/.test(app), 'durante el arrastre no se reevalúa');
 ok(/data-escala="galaxia"\] > \.mw-icono/.test(html), 'en la galaxia la pastilla enseña solo el botón');
-ok(/centroPastilla\.getAttribute\('data-escala'\) === 'galaxia' && volverAlSol/.test(app), 'Inicio también vuelve al Sol en la galaxia');
+ok(/volver: function \(\) \{ return escenaGalaxia\.centroDesplazado\(\) && volverAlSol/.test(app), 'Inicio también vuelve al Sol en la galaxia');
 
 // ---- #427: los viajes se ven siempre desde el origen ----
 var sv = C.estadoCentrar(false, true), sn = C.estadoCentrar(false, false), sc = C.estadoCentrar(true, false);
@@ -235,8 +235,8 @@ ok(sv.desactivado && sv.aviso && sv.texto === 'Centrar', 'viaje activo: «Centra
 ok(!sn.desactivado && !sn.aviso, 'sin viaje: «Centrar» funciona');
 ok(sc.desactivado && !sc.aviso && sc.texto === 'Centrado', 'ya centrado: «Centrado» sin aviso de viaje');
 ok(/viajeActivo \|\| escena\.esCentro/.test(app), 'el clic no centra con viaje activo');
-ok(/GrupoLocal\.alOrigen\(\)/.test(app) && /VecindarioSolar\.alOrigen\(\)/.test(app), 'arrancar un viaje devuelve las dos escenas al origen');
-ok(app.indexOf('GrupoLocal.alOrigen()') < app.indexOf('encuadrarViaje(viajeActivo);'), 'el origen vuelve antes del encuadre');
+ok(/if \(viajeActivo\) centroAlOrigen\(\);/.test(app) && /e\.alOrigen\) e\.alOrigen\(\)/.test(app), 'arrancar un viaje devuelve las escenas al origen');
+ok(app.indexOf('centroAlOrigen();') > 0 && app.indexOf('centroAlOrigen();') < app.indexOf('encuadrarViaje(viajeActivo);'),'el origen vuelve antes del encuadre');
 ok(/!viajeActivo && !VLEscalas\.solCerca/.test(app), 'con viaje no se enseña «Volver al Sol»');
 ok(/id="ficha-centrar-aviso"[^>]*>Termina el viaje para centrar/.test(html) && /aria-describedby="ficha-centrar-aviso"/.test(html), 'aviso visible y enlazado al botón');
 ok(/alOrigen: escena\.alOrigen/.test(gl) && /alOrigen: escena\.alOrigen/.test(vs) && /alOrigen: volverAlOrigen/.test(esc), 'las dos escenas exponen alOrigen');

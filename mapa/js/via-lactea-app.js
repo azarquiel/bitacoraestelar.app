@@ -1213,7 +1213,7 @@
     if (!centroPastilla || !centroVolver || isDragging) return;
     var propia = centroPastilla.getAttribute('data-escala') === 'galaxia';
     if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') {
-      if (propia) centroPastilla.classList.remove('mw-centro-visible');
+      if (propia) VLCentro.mostrarPastilla(document, false);
       return;
     }
     var el = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
@@ -1225,13 +1225,11 @@
       (r.top + r.height / 2) - (vr.top + vr.height / 2), vr.width, vr.height, window.CONFIG);
     if (!fuera && !propia) return;   // la pastilla es de una escena 3D
     if (fuera && !propia) {
-      centroPastilla.setAttribute('data-escala', 'galaxia');
-      centroVolver.setAttribute('aria-label', 'Volver al Sol, origen de la escena');
-      document.getElementById('mw-centro-volver-txt').textContent = 'Volver al Sol';
+      VLCentro.rotularPastilla(document, { escala: 'galaxia', aria: 'Volver al Sol, origen de la escena', texto: 'Volver al Sol' });
     }
     // El botón desaparece: su foco pasa al visor, no al body.
     if (!fuera && document.activeElement === centroVolver) viewer.focus({ preventScroll: true });
-    centroPastilla.classList.toggle('mw-centro-visible', fuera);
+    VLCentro.mostrarPastilla(document, fuera);
   }
   // Vuelo del Sol al centro SIN tocar el zoom (posX/posY). Un gesto lo termina
   // EN EL DESTINO (nunca a medio camino) y se aplica desde ahí.
@@ -1255,16 +1253,16 @@
     holguraSol = { x: Math.abs(posX), y: Math.abs(posY), escala: scale };
     var x1 = posX, y1 = posY;
     var dist = Math.hypot(x1 - x0, y1 - y0);
-    var reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reducido || dist < 1) { pintarVolverSol(); return true; }
+    if (VLViaje.movimientoReducido() || dist < 1) { pintarVolverSol(); return true; }
     posX = x0; posY = y0;
     destinoSol = { x: x1, y: y1 };
     applyTransform();
     var t0 = performance.now();
     var dur = VLCentro.duracionVuelo(dist, Math.hypot(viewer.clientWidth, viewer.clientHeight));
+    var desde = { x: x0, y: y0, z: 0 }, hasta = { x: x1, y: y1, z: 0 };
     (function paso(ahora) {
-      var t = Math.min(1, (ahora - t0) / dur), e = 1 - Math.pow(1 - t, 3);
-      posX = x0 + (x1 - x0) * e; posY = y0 + (y1 - y0) * e;
+      var t = Math.min(1, (ahora - t0) / dur), p = VLCentro.vuelo(desde, hasta, t);
+      posX = p.x; posY = p.y;
       applyTransform();
       animFrame = t < 1 ? requestAnimationFrame(paso) : null;
       if (t >= 1) destinoSol = null;
@@ -1288,12 +1286,36 @@
       ? Math.max(maxScale, MAXSCALE_VECINDARIO) : maxScale;
   }
 
+  // Las tres escalas se ven con la misma interfaz de centro (#445):
+  // centroDesplazado(), volver() y alOrigen(). La app pregunta a esta lista en
+  // vez de comprobar cada escena por separado; la galaxia va la última porque
+  // su «centro» es el Sol (la pastilla «Volver al Sol» visible).
+  var escenaGalaxia = {
+    centroDesplazado: function () {
+      return !!centroPastilla && centroPastilla.classList.contains('mw-centro-visible') &&
+        centroPastilla.getAttribute('data-escala') === 'galaxia';
+    },
+    volver: function () { return escenaGalaxia.centroDesplazado() && volverAlSol(); },
+    alOrigen: function () { /* sin centro que devolver: el encuadre del viaje ya la coloca */ }
+  };
+  function escenas3D() {
+    return [typeof GrupoLocal !== 'undefined' && GrupoLocal,
+            typeof VecindarioSolar !== 'undefined' && VecindarioSolar].filter(Boolean);
+  }
+  function escenas() { return escenas3D().concat(escenaGalaxia); }
+  // Primera escena que devuelve true al volver (Inicio): GL, vecindario, galaxia.
+  function volverCentro() {
+    return escenas().some(function (e) { return e.volver && e.volver(); });
+  }
+  function centroAlOrigen() {
+    escenas().forEach(function (e) { if (e.alOrigen) e.alOrigen(); });
+  }
   // Zoom de la rueda y del pellizco con el centro desplazado (#424): no cruza a
   // otra escala (los topes son donde EMPIEZA el fundido de salida) y va hacia el
-  // objeto centrado, que cae en el centro del visor, no hacia el cursor.
+  // objeto centrado, que cae en el centro del visor, no hacia el cursor. Solo
+  // cuentan las escenas 3D: el Sol fuera de la vista no limita el zoom.
   function centroDesplazado() {
-    return (typeof GrupoLocal !== 'undefined' && !!GrupoLocal.centroDesplazado && GrupoLocal.centroDesplazado()) ||
-      (typeof VecindarioSolar !== 'undefined' && !!VecindarioSolar.centroDesplazado && VecindarioSolar.centroDesplazado());
+    return escenas3D().some(function (e) { return !!e.centroDesplazado && e.centroDesplazado(); });
   }
   function limitarZoom(pedida) {
     var desplazado = centroDesplazado();
@@ -1943,11 +1965,7 @@
     }
     // Inicio hace lo del «Volver» de la pastilla de centro (#423), con la misma
     // guarda. Sin centro desplazado no hace nada y la tecla sigue su curso.
-    if (e.key === 'Home' && libre && !e.shiftKey &&
-        ((typeof GrupoLocal !== 'undefined' && GrupoLocal.volver && GrupoLocal.volver()) ||
-         (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.volver && VecindarioSolar.volver()) ||
-         (centroPastilla.classList.contains('mw-centro-visible') &&
-          centroPastilla.getAttribute('data-escala') === 'galaxia' && volverAlSol()))) {
+    if (e.key === 'Home' && libre && !e.shiftKey && volverCentro()) {
       e.preventDefault();
       return;
     }
@@ -3431,10 +3449,7 @@
 
     reflejarEnUrl();
     // El viaje se ve desde el origen: el centro vuelve antes del encuadre (#427).
-    if (viajeActivo) {
-      if (typeof GrupoLocal !== 'undefined' && GrupoLocal.alOrigen) GrupoLocal.alOrigen();
-      if (typeof VecindarioSolar !== 'undefined' && VecindarioSolar.alOrigen) VecindarioSolar.alOrigen();
-    }
+    if (viajeActivo) centroAlOrigen();
     pintarVolverSol();
     if (viajeActivo) { encuadrarViaje(viajeActivo); avisarCambioDeCapa(viajeActivo); }
   }
