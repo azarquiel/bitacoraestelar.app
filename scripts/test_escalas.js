@@ -51,5 +51,25 @@ console.log('limitar: galaxia siempre libre:');
 eq(E.limitar(p('galaxia', true, 1, 100, 1000)), 100, 'acercando');
 eq(E.limitar(p('galaxia', true, 1, 0.001, 1000)), 0.001, 'alejando');
 
+console.log('fundidoGrupoLocal (umbral 0.1, final 0.04):');
+var GL = CFG.grupoLocal;
+eq(E.fundidoGrupoLocal(0.5, GL), 1, 'por encima del umbral: galaxia entera');
+eq(E.fundidoGrupoLocal(0.1, GL), 1, 'en el umbral: galaxia entera');
+eq(E.fundidoGrupoLocal(0.04, GL), 0, 'en el final: solo atlas');
+eq(E.fundidoGrupoLocal(0.001, GL), 0, 'por debajo del final: solo atlas');
+eq(Math.abs(E.fundidoGrupoLocal(0.07, GL) - 0.5) < 1e-9, true, 'punto medio: 0,5');
+eq(E.umbrales({ umbral: 0.1 }).umbralFinal, 0.1 * 0.4, 'sin umbralFinal: 40 % del umbral');
+eq(E.umbrales({ umbral: 0.1, umbralFinal: 0.2 }).umbralFinal, 0.1 * 0.4, 'umbralFinal no menor que el umbral: 40 %');
+eq(E.umbrales(undefined).umbral, 0.1, 'sin config: umbral 0,1');
+eq(E.topes(p('grupoLocal', true, 1, 1, 1000)).grupoLocalMax, 0.04, 'el tope del Grupo Local es el umbralFinal');
+
+console.log('cercanía del Sol (800x600, proximidad 0.28 -> radio 168):');
+eq(E.proximidadSol({}), 0.28, 'sin config: 0,28');
+eq(E.proximidadSol({ vecindario: { proximidad: 0.12 } }), 0.12, 'la config manda');
+eq(E.solCerca(0, 0, 800, 600, {}), true, 'Sol en el centro: cerca');
+eq(E.solCerca(100, 100, 800, 600, {}), true, 'dentro del radio (141 < 168)');
+eq(E.solCerca(200, 150, 800, 600, {}), false, 'fuera del radio (250 > 168)');
+eq(E.solCerca(100, 100, 800, 600, { vecindario: { proximidad: 0.12 } }), false, 'con proximidad 0,12 (radio 72) ya no');
+
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
 console.log('\nTodo verde.');
