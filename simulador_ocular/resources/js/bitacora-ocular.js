@@ -366,9 +366,9 @@
           toggle.setAttribute('aria-expanded', abrir ? 'true' : 'false');
           if (abrir) (num(apert.value) ? focal : apert).focus();
         });
-        function usarManual() {
-          var a = num(apert.value), f = num(focal.value);
-          if (!(a > 0) || !(f > 0)) return;
+        // Solo al confirmar el campo y dentro de su rango (BitacoraBase): por
+        // tecla, cada valor a medias lanzaba su consulta de Gaia (#461).
+        BitacoraBase.montarTeleManual(apert, focal, tipo, function (a, f) {
           // El tipo fija la transmisión t (refractor 0,9 · reflector 0,7 ·
           // catadióptrico 0,65, siguiendo a Torres Lapasió); se guarda en el
           // telescopio para que magLimiteTelescopio() la use.
@@ -380,10 +380,7 @@
           teleSel = { id: '_manual', vendor: '', modelo: 'Telescopio manual', apertura_mm: a, focal_mm: f, transmision: t, arana: arana };
           $('sim-tele-input').value = '';
           actualizar();
-        }
-        apert.addEventListener('input', usarManual);
-        focal.addEventListener('input', usarManual);
-        if (tipo) tipo.addEventListener('change', usarManual);
+        });
       }
 
       /* ══════════════════ CÁLCULO ÓPTICO ══════════════════ */
@@ -1475,7 +1472,6 @@
           actualizar();
         });
       }
-      window.addEventListener('resize', function () { actualizar(); });
       montarTeleManual();
       montarSelectorObjeto();
       montarAccionesVista();

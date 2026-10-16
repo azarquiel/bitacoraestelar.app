@@ -178,6 +178,30 @@ window.BitacoraBase = (function () {
     };
   }
 
+  /* Telescopio manual del simulador: apertura y focal tecleadas a mano. Solo se
+     usan al CONFIRMAR el campo (`change`), nunca por tecla: escribiendo «1200»
+     la focal pasa por «1», y ese campo de 360′ a mag 20 se quedaba en la caché
+     de Gaia toda la sesión (#461). El rango es el min/max del propio <input>;
+     fuera de él no se usa y el campo queda con aria-invalid. Vacío no se marca:
+     está a medias, no mal. alUsar(apertura, focal) solo con los dos válidos. */
+  function montarTeleManual(apert, focal, tipo, alUsar) {
+    function valor(el) {
+      var v = parseFloat(String(el.value).replace(',', '.'));
+      if (isNaN(v)) { el.removeAttribute('aria-invalid'); return null; }
+      var min = parseFloat(el.min), max = parseFloat(el.max);
+      var dentro = v > 0 && !(v < min) && !(v > max);
+      if (dentro) el.removeAttribute('aria-invalid'); else el.setAttribute('aria-invalid', 'true');
+      return dentro ? v : null;
+    }
+    function confirmar() {
+      var a = valor(apert), f = valor(focal);
+      if (a != null && f != null) alUsar(a, f);
+    }
+    apert.addEventListener('change', confirmar);
+    focal.addEventListener('change', confirmar);
+    if (tipo) tipo.addEventListener('change', confirmar);
+  }
+
   // ── Transparencia del cielo (IR, ºC): más negativo = más transparente ──
   // Escala del observador: IR −30 extremadamente … IR > −5 pobre. A diferencia
   // del SQM/Bortle, el IR se teclea con cualquier valor, así que la etiqueta se
@@ -815,6 +839,7 @@ window.BitacoraBase = (function () {
     BORTLE: BORTLE,
     claseBortlePorSqm: claseBortlePorSqm,
     montarCielo: montarCielo,
+    montarTeleManual: montarTeleManual,
     TRANSPARENCIA: TRANSPARENCIA,
     transparenciaPorIr: transparenciaPorIr,
     montarTransparencia: montarTransparencia,
