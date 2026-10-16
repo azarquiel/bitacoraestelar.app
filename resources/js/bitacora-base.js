@@ -813,8 +813,10 @@ window.BitacoraBase = (function () {
    *
    *   api(url, opts) -> Promise<{ok, status, data}>
    *     cookie de sesión + X-WP-Nonce de window.BITACORA_WP; un body que no
-   *     sea string se serializa a JSON y lleva su Content-Type; la respuesta
-   *     sin JSON válido resuelve con data = {} (nunca revienta por el parseo).
+   *     sea string ni Blob se serializa a JSON y lleva su Content-Type; la
+   *     respuesta sin JSON válido resuelve con data = {} y sinJson: true (nunca
+   *     revienta por el parseo). opts.timeout (ms, 30 s por defecto) aborta y
+   *     resuelve {ok: false, status: 0, timeout: true}; un fallo de red rechaza.
    *
    *   ruta(nombre) -> URL de un endpoint hermano de observaciones.
    *     BITACORA_WP solo expone el endpoint de observaciones; sus hermanos
@@ -823,25 +825,42 @@ window.BitacoraBase = (function () {
    *
    *   errorDe(res, porDefecto, textos) -> mensaje para el observador.
    *     Los textos 401/403 propios de cada dominio («Solo puedes tocar tu
-   *     propio equipo») entran por parámetro, no por reimplementación.
+   *     propio equipo») entran por parámetro, no por reimplementación. Las
+   *     escrituras pasan mIncierto: lo que se dice cuando no se sabe si se hizo.
    *
    *   flash(txt, err) -> aviso efímero en el elemento #flash de la página.
    */
+  var API_TIMEOUT = 30000;   // ms; las escrituras que consultan SIMBAD/VizieR piden más
+
   function api(url, opts) {
     var WP = window.BITACORA_WP || {};
     opts = opts || {};
     opts.credentials = 'same-origin';
     opts.headers = opts.headers || {};
     opts.headers['X-WP-Nonce'] = WP.nonce;
-    if (opts.body) {
+    // Un Blob/File (subida de medios) va tal cual, con el Content-Type que traiga.
+    if (opts.body && !(typeof Blob !== 'undefined' && opts.body instanceof Blob)) {
       opts.headers['Content-Type'] = 'application/json';
       if (typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
     }
+    // Timeout por petición: resuelve {timeout: true, status: 0}, no rechaza,
+    // para que quien llama lo distinga de un fallo de red (que sí rechaza) y de
+    // un error HTTP. La bandera cubre también un abort durante la lectura del body.
+    var ctrl = new AbortController(), vencido = false;
+    var t = setTimeout(function () { vencido = true; ctrl.abort(); }, opts.timeout || API_TIMEOUT);
+    opts.signal = ctrl.signal;
+    var porTimeout = { ok: false, status: 0, timeout: true, data: {} };
     return fetch(url, opts).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (d) {
+      return r.json().then(function (d) {
         return { ok: r.ok, status: r.status, data: d };
+      }, function () {
+        return vencido ? porTimeout : { ok: r.ok, status: r.status, data: {}, sinJson: true };
       });
-    });
+    }, function (e) {
+      if (vencido) return porTimeout;
+      throw e;
+    }).then(function (res) { clearTimeout(t); return res; },
+            function (e) { clearTimeout(t); throw e; });
   }
 
   function ruta(nombre) {
@@ -853,6 +872,13 @@ window.BitacoraBase = (function () {
     textos = textos || {};
     if (res.status === 401) return textos.m401 || 'Debes iniciar sesión.';
     if (res.status === 403 && textos.m403) return textos.m403;
+    // Sin respuesta a tiempo, o un 5xx que no es del plugin (502/504 de la
+    // pasarela en HTML, o el fatal de PHP que WordPress envuelve en JSON): la
+    // petición pudo llegar a hacerse. Una escritura lo dice con mIncierto.
+    var incierto = res.timeout || (res.status >= 500 &&
+      (res.sinJson || (res.data && res.data.code === 'internal_server_error')));
+    if (incierto && textos.mIncierto) return textos.mIncierto + (res.status ? ' (error ' + res.status + ')' : '');
+    if (res.timeout) return 'El servidor no respondió a tiempo.';
     if (res.data && res.data.message) return res.data.message;
     return porDefecto + ' (error ' + res.status + ')';
   }

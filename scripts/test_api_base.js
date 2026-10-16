@@ -26,12 +26,21 @@ global.window.BITACORA_WP = {
   nonce: 'n0nc3'
 };
 
-/* fetch de mentira: apunta la petición y responde lo que diga PROXIMA. */
+/* fetch de mentira: apunta la petición y responde lo que diga PROXIMA. Con
+   colgada: true no responde nunca y solo sale por el abort, como un servidor
+   que se queda pensando. */
 var pedido = null;
 var PROXIMA = { ok: true, status: 200, json: '{"hola":1}' };
 global.fetch = function (url, opts) {
   pedido = { url: url, opts: opts };
   var r = PROXIMA;
+  if (r.colgada) {
+    return new Promise(function (_, rechaza) {
+      opts.signal.addEventListener('abort', function () {
+        var e = new Error('aborted'); e.name = 'AbortError'; rechaza(e);
+      });
+    });
+  }
   return Promise.resolve({
     ok: r.ok, status: r.status,
     json: function () {
@@ -74,6 +83,72 @@ casos.push(function () {
   return B.api('https://x/api').then(function (res) {
     ok(res.ok === false && res.status === 500, 'el estado HTTP se conserva');
     ok(res.data && Object.keys(res.data).length === 0, 'data = {} (el parseo nunca rechaza)');
+    ok(res.sinJson === true && !res.timeout, 'sinJson marca que el cuerpo no era JSON');
+    PROXIMA = { ok: true, status: 200, json: '{}' };
+    return B.api('https://x/api');
+  }).then(function (res) {
+    ok(!res.sinJson, 'con JSON válido no hay sinJson');
+  });
+});
+
+/* 3b ─ api(): timeout por petición, distinto de un error HTTP (#463) */
+casos.push(function () {
+  console.log('3b. api(): timeout');
+  PROXIMA = { colgada: true };
+  var t0 = Date.now();
+  return B.api('https://x/api', { timeout: 20 }).then(function (res) {
+    ok(res.timeout === true, 'resuelve con timeout: true');
+    ok(res.ok === false && res.status === 0, 'ok false y status 0: no hubo respuesta HTTP');
+    ok(Date.now() - t0 < 1000, 'aborta a su hora, no espera al servidor');
+    PROXIMA = { ok: true, status: 200, json: '{}' };
+    return B.api('https://x/api', { timeout: 20 });
+  }).then(function (res) {
+    ok(res.ok === true && !res.timeout, 'si responde a tiempo, sin timeout');
+  });
+});
+
+/* 3c ─ api(): un fallo de red sigue rechazando (no es un timeout) */
+casos.push(function () {
+  console.log('3c. api(): fallo de red');
+  var fetchBueno = global.fetch;
+  global.fetch = function () { return Promise.reject(new TypeError('Failed to fetch')); };
+  return B.api('https://x/api').then(function () {
+    ok(false, 'debía rechazar');
+  }, function (e) {
+    ok(e instanceof TypeError, 'rechaza con el error de red tal cual');
+  }).then(function () { global.fetch = fetchBueno; });
+});
+
+/* 3d ─ api(): un Blob (subida de medios) va tal cual, con su Content-Type */
+casos.push(function () {
+  console.log('3d. api(): body Blob');
+  var b = new Blob(['xx'], { type: 'image/png' });
+  return B.api('https://x/media', { method: 'POST', body: b, headers: { 'Content-Type': 'image/png' } }).then(function () {
+    ok(pedido.opts.body === b, 'el Blob no se serializa');
+    ok(pedido.opts.headers['Content-Type'] === 'image/png', 'conserva su Content-Type');
+    ok(pedido.opts.headers['X-WP-Nonce'] === 'n0nc3', 'y lleva el nonce');
+  });
+});
+
+/* 3e ─ AC3: 504 en HTML al guardar → «no se sabe si se guardó» (#463) */
+casos.push(function () {
+  console.log('3e. guardar con 504 en HTML');
+  var TEXTOS = { mIncierto: 'No se sabe si la observación se guardó. Revisa el listado antes de volver a enviarla.' };
+  PROXIMA = { ok: false, status: 504, json: '<html>Gateway Time-out</html>' };
+  return B.api('https://x/api', { method: 'POST', body: {} }).then(function (res) {
+    var m = B.errorDe(res, 'No se pudo guardar', TEXTOS);
+    ok(/no se sabe si/i.test(m) && /listado/.test(m), 'dice que no se sabe y manda al listado: ' + m);
+    ok(!/contactar/.test(m), 'no dice «no se pudo contactar»');
+    ok(B.errorDe({ ok: false, status: 0, timeout: true, data: {} }, 'x', TEXTOS).indexOf(TEXTOS.mIncierto) === 0,
+       'el timeout también es incierto');
+    ok(B.errorDe({ ok: false, status: 0, timeout: true, data: {} }, 'x') === 'El servidor no respondió a tiempo.',
+       'timeout sin texto propio');
+    ok(B.errorDe({ status: 500, data: { code: 'internal_server_error', message: '<p>Error crítico</p>' } }, 'x', TEXTOS)
+       .indexOf(TEXTOS.mIncierto) === 0, 'el fatal de PHP en JSON de WordPress también es incierto');
+    ok(B.errorDe({ status: 500, data: { code: 'bitacora_x', message: 'Falta el objeto.' } }, 'x', TEXTOS)
+       === 'Falta el objeto.', 'un 500 con mensaje propio del plugin se enseña tal cual');
+    ok(B.errorDe({ status: 504, sinJson: true, data: {} }, 'No se pudo') === 'No se pudo (error 504)',
+       'sin mIncierto, el 5xx sigue con el respaldo de siempre');
     PROXIMA = { ok: true, status: 200, json: '{}' };
   });
 });
