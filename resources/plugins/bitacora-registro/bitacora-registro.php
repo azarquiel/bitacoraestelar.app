@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.8
+ * Version:     1.38.9
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.8' );
+define( 'BITACORA_VERSION', '1.38.9' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -3292,6 +3292,35 @@ function bitacora_coords_texto( $l, $b, $d ) {
 }
 
 /**
+ * ¿La consulta a un catálogo falló por la red y no por el objeto? Lo es un
+ * WP_Error (timeout, DNS), un 429 (el servicio nos frena) o un 5xx. Cualquier
+ * otra respuesta es el catálogo contestando, y si no trae el objeto es que no
+ * está. Es la ÚNICA regla que separa las dos cosas en las consultas de
+ * bitacora_completar_objeto (issue #460).
+ */
+function bitacora_fallo_de_red( $respuesta ) {
+    if ( is_wp_error( $respuesta ) ) {
+        return true;
+    }
+    $codigo = (int) wp_remote_retrieve_response_code( $respuesta );
+    return 429 === $codigo || $codigo >= 500;
+}
+
+/**
+ * Cachea que una consulta no dio resultado. Si el catálogo contestó «no está»,
+ * 'nulo' durante un día; si falló la red, 'fallo' solo unos minutos, para que
+ * un corte no deje el objeto sin distancia ni tipo 24 h. Los lectores tratan
+ * cualquier valor no numérico como null.
+ */
+function bitacora_cachear_ausencia( $cache_key, $fallo_de_red ) {
+    if ( $fallo_de_red ) {
+        set_transient( $cache_key, 'fallo', 5 * MINUTE_IN_SECONDS );
+    } else {
+        set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
+    }
+}
+
+/**
  * Consulta SIMBAD (servicio TAP) por identificador y devuelve
  * array( 'ra', 'dec', 'dist_al', 'morph', 'otype', 'sp_type', 'gaia_dr3_id' ) o
  * null si no se encuentra o falla la red. La distancia es la mediana de las
@@ -3336,7 +3365,7 @@ function bitacora_simbad( $identificador ) {
         )
     );
     if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
-        set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+        bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
         return null;
     }
 
@@ -3398,7 +3427,13 @@ function bitacora_simbad( $identificador ) {
     // Andromedae) no puede engancharse a la estrella vecina como sí le pasa a
     // una búsqueda por radio. Si SIMBAD no lo vinculó, ninguna búsqueda posicional
     // del plugin va a acertar mejor: bitacora_gaia_bprp() no la intenta.
+    // Si la subconsulta falla por la red (false), el objeto se resuelve igual,
+    // pero se cachea minutos y no 30 días para volver a preguntar por el id.
     $gaia_dr3_id = bitacora_simbad_gaia_dr3_id( $id );
+    $ttl = ( false === $gaia_dr3_id ) ? 5 * MINUTE_IN_SECONDS : 30 * DAY_IN_SECONDS;
+    if ( false === $gaia_dr3_id ) {
+        $gaia_dr3_id = null;
+    }
 
     $resultado = array(
         'ra'          => $ra,
@@ -3409,13 +3444,13 @@ function bitacora_simbad( $identificador ) {
         'sp_type'     => $sp_type,
         'gaia_dr3_id' => $gaia_dr3_id,
     );
-    set_transient( $cache_key, $resultado, 30 * DAY_IN_SECONDS );
+    set_transient( $cache_key, $resultado, $ttl );
     return $resultado;
 }
 
 /**
  * Identificador `Gaia DR3 <source_id>` que SIMBAD ya tiene vinculado a un
- * objeto, o null si no lo tiene. Consulta aparte porque va contra la tabla
+ * objeto, null si no lo tiene o false si falló la red. Consulta aparte porque va contra la tabla
  * `ident` (alias del mismo oid), no contra `basic`; solo se llama cuando
  * bitacora_simbad() ya resolvió el objeto, y su resultado viaja dentro de la
  * misma caché de 30 días, así que no repite petición.
@@ -3441,7 +3476,10 @@ function bitacora_simbad_gaia_dr3_id( $identificador ) {
             ),
         )
     );
-    if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
+    if ( bitacora_fallo_de_red( $respuesta ) ) {
+        return false;
+    }
+    if ( 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
         return null;
     }
     $csv = trim( wp_remote_retrieve_body( $respuesta ) );
@@ -3482,7 +3520,7 @@ function bitacora_gaia_bprp( $gaia_dr3_id ) {
     $cache_key = 'bitacora_bprp_' . $gaia_dr3_id;
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
-        return ( 'nulo' === $cache ) ? null : floatval( $cache );
+        return is_numeric( $cache ) ? floatval( $cache ) : null; // 'nulo' o 'fallo'
     }
 
     $proveedores = array(
@@ -3499,6 +3537,8 @@ function bitacora_gaia_bprp( $gaia_dr3_id ) {
         ),
     );
 
+    // 'fallo' solo si no contestó ninguno; un «no está» de cualquiera manda.
+    $fallo_de_red = true;
     foreach ( $proveedores as $p ) {
         $respuesta = wp_remote_post(
             $p['url'],
@@ -3512,6 +3552,7 @@ function bitacora_gaia_bprp( $gaia_dr3_id ) {
                 ),
             )
         );
+        $fallo_de_red = $fallo_de_red && bitacora_fallo_de_red( $respuesta );
         if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
             continue;
         }
@@ -3528,7 +3569,7 @@ function bitacora_gaia_bprp( $gaia_dr3_id ) {
         }
     }
 
-    set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+    bitacora_cachear_ausencia( $cache_key, $fallo_de_red );
     return null;
 }
 
@@ -3555,7 +3596,7 @@ function bitacora_vizier_dist_al( $identificador ) {
     $cache_key = 'bitacora_vizier_dist_' . md5( $nombre );
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
-        return ( 'nulo' === $cache ) ? null : floatval( $cache );
+        return is_numeric( $cache ) ? floatval( $cache ) : null; // 'nulo' o 'fallo'
     }
 
     $respuesta = wp_remote_post(
@@ -3584,7 +3625,7 @@ function bitacora_vizier_dist_al( $identificador ) {
         }
     }
 
-    set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+    bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
     return null;
 }
 
@@ -3610,7 +3651,7 @@ function bitacora_oac_dist_al( $identificador ) {
     $cache_key = 'bitacora_oac_dist_' . md5( strtolower( $id ) );
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
-        return ( 'nulo' === $cache ) ? null : floatval( $cache );
+        return is_numeric( $cache ) ? floatval( $cache ) : null; // 'nulo' o 'fallo'
     }
 
     $respuesta = wp_remote_get(
@@ -3625,7 +3666,7 @@ function bitacora_oac_dist_al( $identificador ) {
         }
     }
 
-    set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+    bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
     return null;
 }
 
@@ -3652,7 +3693,7 @@ function bitacora_ned_dist_al( $identificador ) {
     $cache_key = 'bitacora_ned_dist_' . md5( strtolower( $id ) );
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
-        return ( 'nulo' === $cache ) ? null : floatval( $cache );
+        return is_numeric( $cache ) ? floatval( $cache ) : null; // 'nulo' o 'fallo'
     }
 
     $respuesta = wp_remote_get(
@@ -3668,7 +3709,7 @@ function bitacora_ned_dist_al( $identificador ) {
         }
     }
 
-    set_transient( $cache_key, 'nulo', DAY_IN_SECONDS ); // reintenta en 1 día
+    bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
     return null;
 }
 
