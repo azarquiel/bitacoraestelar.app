@@ -684,37 +684,71 @@ window.BitacoraBase = (function () {
        puedeEscribir()                  opcional; si devuelve false no se
                                         consulta (y si pasa a false mientras se
                                         consulta, el resultado se descarta)
-       espera                           ms de espera tras la última tecla (700) */
+       espera                           ms de espera tras la última tecla (700)
+       timeout                          ms antes de abortar una consulta que
+                                        Sesame no contesta (10000)
+
+     Solo cuenta la respuesta del último nombre escrito: cada tecla aborta la
+     consulta que siga en camino, y si su respuesta llega igual se descarta. */
   var SESAME_URL = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?';
 
   function resolutorNombre(opts) {
     opts = opts || {};
     var espera = (opts.espera != null) ? opts.espera : 700;
+    var timeout = (opts.timeout != null) ? opts.timeout : 10000;
     var puedeEscribir = opts.puedeEscribir || function () { return true; };
     var onEstado = opts.onEstado || function () {};
     var onResuelto = opts.onResuelto || function () {};
-    var temporizador = null, ultima = '';
+    var temporizador = null, ultima = '', turno = 0, enVuelo = null;
 
     function consultar(q) {
       if (q === ultima || !puedeEscribir()) return;
       ultima = q;
+      var mio = ++turno, ctrl = new AbortController();
+      enVuelo = ctrl;
+      var corte = setTimeout(function () { ctrl.abort(); }, timeout);
+      function vigente() {
+        clearTimeout(corte);
+        if (mio !== turno) return false;   // llegó tarde: hay un nombre más nuevo
+        enVuelo = null;
+        return true;
+      }
       onEstado('buscando', q);
       // La consulta viaja canonicalizada (aliasAbell); q sigue siendo lo escrito.
-      fetch(SESAME_URL + encodeURIComponent(aliasAbell(q) || q))
-        .then(function (r) { return r.text(); })
-        .then(function (txt) {
-          if (!puedeEscribir()) return;    // el observador escribió mientras tanto
-          var d = leerSesame(txt);
+      fetch(SESAME_URL + encodeURIComponent(aliasAbell(q) || q), { signal: ctrl.signal })
+        .then(function (r) {
+          if (!r.ok) throw new Error('Sesame HTTP ' + r.status);
+          return r.text();
+        })
+        .then(leerSesame)
+        // Los avisos van en el segundo argumento y no en un .catch: un fallo
+        // dentro de onResuelto no debe acabar avisando de que Sesame falló.
+        .then(function (d) {
+          if (!vigente()) return;
+          // El observador escribió mientras tanto: se descarta, y se olvida para
+          // poder volver a pedirlo.
+          if (!puedeEscribir()) { ultima = ''; return; }
           if (d) { onResuelto({ ra: d.ra, dec: d.dec, otype: d.otype, q: q }); }
           else { onEstado('nada', q); }
-        })
-        .catch(function () { onEstado('error', q); });
+        }, function () {
+          if (!vigente()) return;
+          ultima = '';                     // tras un error, el mismo nombre se reintenta
+          onEstado('error', q);
+        });
     }
 
     return {
       programar: function (nombre) {
         var q = String(nombre == null ? '' : nombre).trim();
         if (temporizador) clearTimeout(temporizador);
+        // Si el nombre cambió, lo que esté en camino ya no es el último: fuera. Y
+        // se olvida como «última», para que volver a ese nombre lo consulte otra
+        // vez (quien lo usa puede haber tirado ya sus coordenadas).
+        // programar('') cancela sin consultar nada.
+        if (q !== ultima) {
+          if (enVuelo) { turno++; enVuelo.abort(); enVuelo = null; }
+          ultima = '';
+        }
         // Menos de dos letras no es un nombre: ni se consulta ni se avisa.
         if (q.length < 2 || !puedeEscribir()) return;
         temporizador = setTimeout(function () { consultar(q); }, espera);
