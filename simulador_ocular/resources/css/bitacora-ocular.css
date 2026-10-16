@@ -305,6 +305,8 @@
 #mw-obs-form .tele-manual .row {margin-bottom:0;}
 #mw-obs-form .tele-manual .row .field {margin-bottom:0;}
 #mw-obs-form .tele-manual > .field {margin:12px 0 0;}
+/* Valor fuera del rango del campo: no se usa (#461). El rango va en la etiqueta. */
+#mw-obs-form .tele-manual input[aria-invalid="true"] {border-color:var(--rojo);color:var(--rojo);}
 
 /* Créditos: fórmulas del prof. J. R. Torres Lapasió. Destacado pero sobrio:
    filete ámbar a la izquierda y tipografía menor que el cuerpo. */
