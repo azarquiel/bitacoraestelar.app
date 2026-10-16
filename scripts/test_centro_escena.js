@@ -16,6 +16,7 @@
 var C = require('../mapa/js/via-lactea-centro.js');
 var E = require('../mapa/js/via-lactea-escalas.js');
 var G = require('../mapa/js/via-lactea-geometria.js');
+var S3 = require('../mapa/js/via-lactea-escena3d.js');
 
 var fallos = 0;
 function ok(cond, etiqueta) {
@@ -169,9 +170,9 @@ ok(/mw-realzado \.mw-punto,\s*#mw-content\.mw-viaje \.mw-object-anchor \.mw-punt
 // que no se mueve, y al volver el Sol quedaría descentrado.
 (function () {
   var vr = { left: 10, top: 20, width: 800, height: 600 };
-  var p = C.puntoFijoZoom(500, 400, vr, false);
+  var p = E.puntoFijoZoom(500, 400, vr, false);
   ok(p.x === 500 && p.y === 400, 'zoom normal: el punto del gesto');
-  p = C.puntoFijoZoom(500, 400, vr, true);
+  p = E.puntoFijoZoom(500, 400, vr, true);
   ok(p.x === 410 && p.y === 320, 'zoom con centro de escena: el centro del visor');
 })();
 ok(E.zoomAlCentro(false, true) && E.zoomAlCentro(true, false) && !E.zoomAlCentro(false, false), 'se ancla al centro con centro desplazado o dentro del vecindario');
@@ -206,9 +207,9 @@ console.log('Volver al Sol (galaxia)');
 ok(E.solCerca(0, 0, 800, 600, {}) === true, 'el Sol en el centro no pide botón');
 ok(E.solCerca(100, 100, 800, 600, {}) === true, 'dentro de la zona (141 < 168) no pide botón');
 ok(E.solCerca(200, 150, 800, 600, {}) === false, 'fuera de la zona (250 > 168) sí');
-ok(C.duracionVuelo(1000, 1000) === 500, 'recorrido largo: 500 ms');
-ok(C.duracionVuelo(0, 1000) === 250, 'Sol ya en el centro: mínimo de 250 ms');
-ok(C.duracionVuelo(50, 1000) > 250 && C.duracionVuelo(50, 1000) < 500, 'recorrido corto: entre 250 y 500 ms');
+ok(E.duracionVuelo(1000, 1000) === 500, 'recorrido largo: 500 ms');
+ok(E.duracionVuelo(0, 1000) === 250, 'Sol ya en el centro: mínimo de 250 ms');
+ok(E.duracionVuelo(50, 1000) > 250 && E.duracionVuelo(50, 1000) < 500, 'recorrido corto: entre 250 y 500 ms');
 ok(/rotularPastilla\(document, \{ escala: 'galaxia'/.test(app),'la app pone la pastilla en escala «galaxia»');
 ok(/'Volver al Sol, origen de la escena'/.test(app), 'rótulo accesible «Volver al Sol, origen de la escena»');
 ok(/VLViaje\.movimientoReducido\(\) \|\| dist < 1/.test(app), 'movimiento reducido: el Sol se centra al instante');
@@ -230,7 +231,7 @@ ok(/data-escala="galaxia"\] > \.mw-icono/.test(html), 'en la galaxia la pastilla
 ok(/volver: function \(\) \{ return escenaGalaxia\.centroDesplazado\(\) && volverAlSol/.test(app), 'Inicio también vuelve al Sol en la galaxia');
 
 // ---- #427: los viajes se ven siempre desde el origen ----
-var sv = C.estadoCentrar(false, true), sn = C.estadoCentrar(false, false), sc = C.estadoCentrar(true, false);
+var sv = S3.estadoCentrar(false, true), sn = S3.estadoCentrar(false, false), sc = S3.estadoCentrar(true, false);
 ok(sv.desactivado && sv.aviso && sv.texto === 'Centrar', 'viaje activo: «Centrar» desactivado con aviso');
 ok(!sn.desactivado && !sn.aviso, 'sin viaje: «Centrar» funciona');
 ok(sc.desactivado && !sc.aviso && sc.texto === 'Centrado', 'ya centrado: «Centrado» sin aviso de viaje');
