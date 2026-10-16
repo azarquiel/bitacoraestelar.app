@@ -30,7 +30,7 @@ var consultas = [];      // cada URL pedida
 var respuesta = M42;
 global.fetch = function (url) {
   consultas.push(url);
-  return Promise.resolve({ text: function () { return Promise.resolve(respuesta); } });
+  return Promise.resolve({ ok: true, text: function () { return Promise.resolve(respuesta); } });
 };
 
 // Espera corta para no alargar el test; en producción son 700 ms.
@@ -42,6 +42,7 @@ function nuevo(opts) {
   var visto = { resueltos: [], estados: [] };
   visto.resolutor = B.resolutorNombre({
     espera: ESPERA,
+    timeout: opts.timeout,
     puedeEscribir: opts.puedeEscribir,
     onResuelto: function (d) { visto.resueltos.push(d); },
     onEstado: function (estado, q) { visto.estados.push(estado + ':' + q); }
@@ -153,6 +154,92 @@ Promise.resolve()
     return tras(ESPERA * 3, function () {
       ok(v.estados[v.estados.length - 1] === 'error:M42', 'la red caída avisa como error');
       ok(v.resueltos.length === 0, 'y no escribe coordenadas');
+    });
+  })
+  .then(function () {
+    // Un 5xx del CDS trae una página HTML: no es «no encontrado».
+    var v = nuevo();
+    global.fetch = function () {
+      return Promise.resolve({ ok: false, status: 503, text: function () {
+        return Promise.resolve('<html><body>Service Unavailable</body></html>');
+      } });
+    };
+    v.resolutor.programar('M42');
+    return tras(ESPERA * 3, function () {
+      ok(v.estados[v.estados.length - 1] === 'error:M42', 'un 5xx avisa como error, no como «nada»');
+      ok(v.resueltos.length === 0, 'y no escribe coordenadas');
+    });
+  })
+  .then(function () {
+    // Sesame que no contesta nunca: la consulta se aborta pasado el timeout.
+    var abortada = false;
+    var v = nuevo({ timeout: ESPERA * 2 });
+    global.fetch = function (url, init) {
+      return new Promise(function (_res, rej) {
+        init.signal.addEventListener('abort', function () { abortada = true; rej(new Error('abort')); });
+      });
+    };
+    v.resolutor.programar('M42');
+    return tras(ESPERA * 6, function () {
+      ok(abortada, 'la consulta colgada se aborta');
+      ok(v.estados[v.estados.length - 1] === 'error:M42', 'y avisa como error');
+    });
+  })
+
+  /* ── 6. Respuestas fuera de orden ──────────────────────────────────────────
+     «NGC 68» se consulta, el observador sigue tecleando hasta «NGC 6826» y la
+     respuesta de «NGC 68» llega la última. Manda el último nombre escrito. */
+  .then(function () {
+    seccion('Respuestas que llegan fuera de orden:');
+    var NGC68 = '%C.0 G\n%J 4.53500000 30.06500000 = 00 18 08.4    +30 03 54\n';
+    var NGC6826 = '%C.0 PN\n%J 296.20000000 50.52500000 = 19 44 48.0    +50 31 30\n';
+    var pendientes = {};
+    global.fetch = function (url) {
+      return new Promise(function (res) {
+        var txt = /6826/.test(url) ? NGC6826 : NGC68;
+        pendientes[/6826/.test(url) ? 'NGC 6826' : 'NGC 68'] = function () {
+          res({ ok: true, text: function () { return Promise.resolve(txt); } });
+        };
+      });
+    };
+    var v = nuevo();
+    v.resolutor.programar('NGC 68');
+    return tras(ESPERA * 3, function () {
+      v.resolutor.programar('NGC 6826');
+    }).then(function () {
+      return tras(ESPERA * 3, function () {
+        pendientes['NGC 6826']();
+      });
+    }).then(function () {
+      return tras(ESPERA, function () { pendientes['NGC 68'](); });
+    }).then(function () {
+      return tras(ESPERA, function () {
+        var ultimo = v.resueltos[v.resueltos.length - 1];
+        ok(v.resueltos.length === 1, 'solo se escribe una respuesta (' + v.resueltos.length + ')');
+        ok(ultimo && ultimo.q === 'NGC 6826' && Math.abs(ultimo.ra - 296.2) < 1e-6,
+          'quedan las coordenadas de NGC 6826');
+        ok(v.estados.indexOf('error:NGC 68') < 0, 'la consulta descartada no avisa de error');
+      });
+    });
+  })
+  .then(function () {
+    // Mientras «NGC 6826» está en camino el observador borra hasta «N»: su
+    // respuesta ya no corresponde a lo escrito.
+    var resolver;
+    global.fetch = function () {
+      return new Promise(function (res) {
+        resolver = function () { res({ ok: true, text: function () { return Promise.resolve(M42); } }); };
+      });
+    };
+    var v = nuevo();
+    v.resolutor.programar('NGC 6826');
+    return tras(ESPERA * 3, function () {
+      v.resolutor.programar('N');
+      resolver();
+    }).then(function () {
+      return tras(ESPERA, function () {
+        ok(v.resueltos.length === 0, 'borrar el nombre descarta la respuesta en camino');
+      });
     });
   })
 
