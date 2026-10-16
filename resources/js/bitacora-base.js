@@ -676,9 +676,9 @@ window.BitacoraBase = (function () {
     function consultar(q) {
       if (q === ultima || !puedeEscribir()) return;
       ultima = q;
-      var mio = ++turno, ctl = new AbortController();
-      enVuelo = ctl;
-      var corte = setTimeout(function () { ctl.abort(); }, timeout);
+      var mio = ++turno, ctrl = new AbortController();
+      enVuelo = ctrl;
+      var corte = setTimeout(function () { ctrl.abort(); }, timeout);
       function vigente() {
         clearTimeout(corte);
         if (mio !== turno) return false;   // llegó tarde: hay un nombre más nuevo
@@ -687,27 +687,35 @@ window.BitacoraBase = (function () {
       }
       onEstado('buscando', q);
       // La consulta viaja canonicalizada (aliasAbell); q sigue siendo lo escrito.
-      fetch(SESAME_URL + encodeURIComponent(aliasAbell(q) || q), { signal: ctl.signal })
+      fetch(SESAME_URL + encodeURIComponent(aliasAbell(q) || q), { signal: ctrl.signal })
         .then(function (r) {
           if (!r.ok) throw new Error('Sesame HTTP ' + r.status);
           return r.text();
         })
-        .then(function (txt) {
-          if (!vigente() || !puedeEscribir()) return;    // el observador escribió mientras tanto
-          var d = leerSesame(txt);
+        .then(leerSesame)
+        // Los avisos van en el segundo argumento y no en un .catch: un fallo
+        // dentro de onResuelto no debe acabar avisando de que Sesame falló.
+        .then(function (d) {
+          if (!vigente()) return;
+          // El observador escribió mientras tanto: se descarta, y se olvida para
+          // poder volver a pedirlo.
+          if (!puedeEscribir()) { ultima = ''; return; }
           if (d) { onResuelto({ ra: d.ra, dec: d.dec, otype: d.otype, q: q }); }
           else { onEstado('nada', q); }
-        })
-        .catch(function () { if (vigente()) onEstado('error', q); });
+        }, function () {
+          if (!vigente()) return;
+          ultima = '';                     // tras un error, el mismo nombre se reintenta
+          onEstado('error', q);
+        });
     }
 
     return {
       programar: function (nombre) {
         var q = String(nombre == null ? '' : nombre).trim();
         if (temporizador) clearTimeout(temporizador);
-        // Lo que esté en camino ya no es el último nombre: fuera. Y se olvida
-        // como «última», para que volver a ese mismo nombre lo consulte otra vez.
-        if (enVuelo) { turno++; enVuelo.abort(); enVuelo = null; ultima = ''; }
+        // Si el nombre cambió, lo que esté en camino ya no es el último: fuera. Y
+        // se olvida como «última», para que volver a ese nombre lo consulte otra vez.
+        if (enVuelo && q !== ultima) { turno++; enVuelo.abort(); enVuelo = null; ultima = ''; }
         // Menos de dos letras no es un nombre: ni se consulta ni se avisa.
         if (q.length < 2 || !puedeEscribir()) return;
         temporizador = setTimeout(function () { consultar(q); }, espera);

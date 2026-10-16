@@ -206,6 +206,8 @@
   function resolveObject(){
     var txt=objInput.value.trim();
     resolved=null; radecBox.classList.remove('show');
+    // Las que trajo SIMBAD son de otro nombre: ya no valen para este.
+    if(coordsAuto && coordsDe!==txt){ raManual.value=''; decManual.value=''; coordsAuto=false; }
     if(txt===''){ setStatus(objStatus,'info','Escribe un objeto Messier (M1–M110), una estrella de carbono o un NGC/IC.'); recompute(); return; }
 
     var mn=messierNumber(txt);
@@ -250,7 +252,7 @@
   // BitacoraBase.resolutorNombre, compartido con el simulador de oculares. Va
   // directo al CDS: ya no pasa por el endpoint /coordenadas del plugin, así que
   // el autocompletado tampoco depende de la sesión.
-  var coordsAuto=false;
+  var coordsAuto=false, coordsDe='';   // coordsDe: nombre al que pertenecen
   // ¿Podemos rellenar las cajetillas? Sí si están vacías o si las rellenamos
   // nosotros (coordsAuto); NO si el usuario ha escrito coordenadas a mano.
   function cajetillasLibres(){
@@ -259,9 +261,11 @@
   var resolutorCoords = BitacoraBase.resolutorNombre({
     puedeEscribir: cajetillasLibres,
     onResuelto: function(d){
+      // El nombre cambió a uno que no consulta SIMBAD (Messier, carbono, vacío).
+      if(d.q!==objInput.value.trim()) return;
       raManual.value  = formatRA(d.ra);
       decManual.value = formatDec(d.dec);
-      coordsAuto=true;   // marcadas como auto: se pueden sustituir si cambia el nombre
+      coordsAuto=true; coordsDe=d.q;   // marcadas como auto: se pueden sustituir si cambia el nombre
       resolveObject();   // re-resuelve ya con las coordenadas puestas
       setStatus(objStatus,'ok','✓ Coordenadas de “'+d.q+'” traídas de SIMBAD (puedes ajustarlas).');
     },

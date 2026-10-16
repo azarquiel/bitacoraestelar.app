@@ -242,6 +242,75 @@ Promise.resolve()
       });
     });
   })
+  .then(function () {
+    // Una tecla que no cambia el nombre (un espacio al final) no tira la
+    // consulta que ya va en camino.
+    var resolver, abortada = false;
+    global.fetch = function (url, init) {
+      consultas.push(url);
+      init.signal.addEventListener('abort', function () { abortada = true; });
+      return new Promise(function (res) {
+        resolver = function () { res({ ok: true, text: function () { return Promise.resolve(M42); } }); };
+      });
+    };
+    consultas = [];
+    var v = nuevo();
+    v.resolutor.programar('M42');
+    return tras(ESPERA * 3, function () {
+      v.resolutor.programar('M42 ');
+    }).then(function () {
+      return tras(ESPERA * 3, function () { resolver(); });
+    }).then(function () {
+      return tras(ESPERA, function () {
+        ok(!abortada && consultas.length === 1, 'el mismo nombre no aborta ni repite la consulta');
+        ok(v.resueltos.length === 1, 'y su respuesta se escribe');
+      });
+    });
+  })
+
+  /* ── 7. Después de un error ────────────────────────────────────────────────*/
+  .then(function () {
+    seccion('Después de un error:');
+    consultas = [];
+    var falla = true;
+    global.fetch = function (url) {
+      consultas.push(url);
+      if (falla) return Promise.reject(new Error('sin red'));
+      return Promise.resolve({ ok: true, text: function () { return Promise.resolve(M42); } });
+    };
+    var v = nuevo();
+    v.resolutor.programar('M42');
+    return tras(ESPERA * 3, function () {
+      falla = false;
+      v.resolutor.programar('M42');
+    }).then(function () {
+      return tras(ESPERA * 3, function () {
+        ok(consultas.length === 2, 'el mismo nombre se puede reintentar (' + consultas.length + ')');
+        ok(v.resueltos.length === 1, 'y el reintento escribe las coordenadas');
+      });
+    });
+  })
+  .then(function () {
+    // Un fallo dentro de onResuelto es de quien lo cablea, no de Sesame.
+    var estados = [];
+    global.fetch = function () {
+      return Promise.resolve({ ok: true, text: function () { return Promise.resolve(M42); } });
+    };
+    var r = B.resolutorNombre({
+      espera: ESPERA,
+      onResuelto: function () { throw new Error('fallo del consumidor'); },
+      onEstado: function (e) { estados.push(e); }
+    });
+    var avisos = [];
+    function capturar(e) { avisos.push(e); }
+    process.on('unhandledRejection', capturar);
+    r.programar('M42');
+    return tras(ESPERA * 3, function () {
+      process.removeListener('unhandledRejection', capturar);
+      ok(estados.indexOf('error') < 0, 'un fallo en onResuelto no se avisa como error de Sesame');
+      ok(avisos.length === 1, 'y sale a la consola en vez de tragarse');
+    });
+  })
 
   .then(function () {
     console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
