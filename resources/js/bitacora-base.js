@@ -183,10 +183,13 @@ window.BitacoraBase = (function () {
      la focal pasa por «1», y ese campo de 360′ a mag 20 se quedaba en la caché
      de Gaia toda la sesión (#461). El rango es el min/max del propio <input>;
      fuera de él no se usa y el campo queda con aria-invalid. Vacío no se marca:
-     está a medias, no mal. alUsar(apertura, focal) solo con los dos válidos. */
+     está a medias, no mal. alUsar(apertura, focal) solo con los dos válidos, y
+     tras una pausa: las flechas del campo y la rueda disparan `change` en cada
+     paso, y cada paso sería su consulta. */
   function montarTeleManual(apert, focal, tipo, alUsar) {
+    var pendiente = null;
     function valor(el) {
-      var v = parseFloat(String(el.value).replace(',', '.'));
+      var v = parseFloat(el.value);
       if (isNaN(v)) { el.removeAttribute('aria-invalid'); return null; }
       var min = parseFloat(el.min), max = parseFloat(el.max);
       var dentro = v > 0 && !(v < min) && !(v > max);
@@ -195,7 +198,8 @@ window.BitacoraBase = (function () {
     }
     function confirmar() {
       var a = valor(apert), f = valor(focal);
-      if (a != null && f != null) alUsar(a, f);
+      clearTimeout(pendiente);
+      if (a != null && f != null) pendiente = setTimeout(function () { alUsar(a, f); }, 250);
     }
     apert.addEventListener('change', confirmar);
     focal.addEventListener('change', confirmar);

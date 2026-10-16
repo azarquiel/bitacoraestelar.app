@@ -7,7 +7,8 @@
    un campo de 360′ a mag 20, y esa consulta de Gaia se quedaba en la caché
    (superconjunto monotónico) toda la sesión. Ahora solo se usa el valor al
    confirmarlo (`change`), y un valor fuera del rango del campo no se usa: el
-   campo lo marca con aria-invalid.
+   campo lo marca con aria-invalid. Y se espera una pausa corta: las flechas
+   del campo y la rueda disparan `change` en cada paso.
 
    Monta la entrada con un DOM falso, simula las pulsaciones y cuenta las
    llamadas a actualizar.
@@ -18,6 +19,13 @@
 global.window = {};
 require('../resources/js/bitacora-base.js');
 var B = global.window.BitacoraBase;
+
+// Temporizador falso: los `change` encadenados se juntan en una pausa, y aquí
+// la pausa se cumple a mano con esperar().
+var pendientes = [];
+global.setTimeout = function (fn) { pendientes.push(fn); return pendientes.length; };
+global.clearTimeout = function (id) { if (id) pendientes[id - 1] = null; };
+function esperar() { var p = pendientes; pendientes = []; p.forEach(function (fn) { if (fn) fn(); }); }
 
 var fallos = 0;
 function ok(cond, etiqueta) {
@@ -35,7 +43,14 @@ function campo(attrs) {
     setAttribute: function (k, v) { at[k] = String(v); },
     removeAttribute: function (k) { delete at[k]; },
     getAttribute: function (k) { return k in at ? at[k] : null; },
-    disparar: function (tipo) { (oyentes[tipo] || []).forEach(function (fn) { fn({ type: tipo, target: this }); }, this); },
+    disparar: function (tipo) {
+      (oyentes[tipo] || []).forEach(function (fn) { fn({ type: tipo, target: this }); }, this);
+      if (tipo === 'change') esperar();
+    },
+    // Las flechas del campo: un `change` por paso, sin pausa entre ellos.
+    pasos: function (desde, hasta) {
+      for (var v = desde; v <= hasta; v += 1) { this.value = String(v); (oyentes.change || []).forEach(function (fn) { fn({ type: 'change', target: this }); }, this); }
+    },
     teclear: function (texto) {
       for (var i = 1; i <= texto.length; i++) { this.value = texto.slice(0, i); this.disparar('input'); }
     }
@@ -81,6 +96,16 @@ console.log('Un valor fuera de rango no consulta y el campo lo marca:');
   m.apert.value = '5000'; m.apert.disparar('change');
   ok(m.usos.length === 1 && m.apert.getAttribute('aria-invalid') === 'true',
     'apertura 5000 (máximo 1000): sin llamada y marcada');
+})();
+
+console.log('Las flechas del campo no consultan en cada paso:');
+(function () {
+  var m = montar();
+  m.apert.value = '200'; m.apert.disparar('change');
+  m.focal.pasos(1190, 1200);
+  ok(m.usos.length === 0, '11 pasos de flecha sin pausa: 0 llamadas a actualizar');
+  esperar();
+  ok(m.usos.length === 1 && m.usos[0][1] === 1200, 'tras la pausa: 1 llamada, con la focal final 1200');
 })();
 
 console.log('Un campo vacío está incompleto, no fuera de rango:');

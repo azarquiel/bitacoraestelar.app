@@ -354,7 +354,8 @@
       // telescopio activo, y el buscador queda vacío para no dar lugar a dudas.
       function limpiarTeleManual() {
         var a = $('sim-tele-manual-apert'), f = $('sim-tele-manual-focal');
-        if (a) a.value = ''; if (f) f.value = '';
+        if (a) { a.value = ''; a.removeAttribute('aria-invalid'); }
+        if (f) { f.value = ''; f.removeAttribute('aria-invalid'); }
       }
       function montarTeleManual() {
         var toggle = $('sim-tele-manual-toggle'), caja = $('sim-tele-manual');
