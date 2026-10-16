@@ -23,6 +23,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BITACORA_VERSION', '1.38.9' );
+// Lo que se cachea que una consulta a un catálogo falló por la red (issue #460):
+// minutos, no el día de «no está», para que un corte no deje el objeto sin datos.
+define( 'BITACORA_TTL_FALLO_RED', 5 * 60 ); // 5 minutos
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -3293,7 +3296,8 @@ function bitacora_coords_texto( $l, $b, $d ) {
 
 /**
  * ¿La consulta a un catálogo falló por la red y no por el objeto? Lo es un
- * WP_Error (timeout, DNS), un 429 (el servicio nos frena) o un 5xx. Cualquier
+ * WP_Error (timeout, DNS), un 408 (timeout del servidor), un 429 (el servicio
+ * nos frena) o un 5xx. Cualquier
  * otra respuesta es el catálogo contestando, y si no trae el objeto es que no
  * está. Es la ÚNICA regla que separa las dos cosas en las consultas de
  * bitacora_completar_objeto (issue #460).
@@ -3303,7 +3307,7 @@ function bitacora_fallo_de_red( $respuesta ) {
         return true;
     }
     $codigo = (int) wp_remote_retrieve_response_code( $respuesta );
-    return 429 === $codigo || $codigo >= 500;
+    return 408 === $codigo || 429 === $codigo || $codigo >= 500;
 }
 
 /**
@@ -3314,7 +3318,7 @@ function bitacora_fallo_de_red( $respuesta ) {
  */
 function bitacora_cachear_ausencia( $cache_key, $fallo_de_red ) {
     if ( $fallo_de_red ) {
-        set_transient( $cache_key, 'fallo', 5 * MINUTE_IN_SECONDS );
+        set_transient( $cache_key, 'fallo', BITACORA_TTL_FALLO_RED );
     } else {
         set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
     }
@@ -3372,7 +3376,7 @@ function bitacora_simbad( $identificador ) {
     $csv = trim( wp_remote_retrieve_body( $respuesta ) );
     $lineas = preg_split( '/\r?\n/', $csv );
     if ( count( $lineas ) < 2 ) {
-        set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
+        bitacora_cachear_ausencia( $cache_key, false );
         return null;
     }
     array_shift( $lineas ); // cabecera
@@ -3418,7 +3422,7 @@ function bitacora_simbad( $identificador ) {
     $dist_al = bitacora_distancia_al( $distancias_al, $plx, $plx_err );
 
     if ( null === $ra ) {
-        set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
+        bitacora_cachear_ausencia( $cache_key, false );
         return null;
     }
 
@@ -3430,7 +3434,7 @@ function bitacora_simbad( $identificador ) {
     // Si la subconsulta falla por la red (false), el objeto se resuelve igual,
     // pero se cachea minutos y no 30 días para volver a preguntar por el id.
     $gaia_dr3_id = bitacora_simbad_gaia_dr3_id( $id );
-    $ttl = ( false === $gaia_dr3_id ) ? 5 * MINUTE_IN_SECONDS : 30 * DAY_IN_SECONDS;
+    $ttl = ( false === $gaia_dr3_id ) ? BITACORA_TTL_FALLO_RED : 30 * DAY_IN_SECONDS;
     if ( false === $gaia_dr3_id ) {
         $gaia_dr3_id = null;
     }
@@ -3450,10 +3454,11 @@ function bitacora_simbad( $identificador ) {
 
 /**
  * Identificador `Gaia DR3 <source_id>` que SIMBAD ya tiene vinculado a un
- * objeto, null si no lo tiene o false si falló la red. Consulta aparte porque va contra la tabla
- * `ident` (alias del mismo oid), no contra `basic`; solo se llama cuando
- * bitacora_simbad() ya resolvió el objeto, y su resultado viaja dentro de la
- * misma caché de 30 días, así que no repite petición.
+ * objeto, null si no lo tiene o false si falló la red. Consulta aparte porque
+ * va contra la tabla `ident` (alias del mismo oid), no contra `basic`; solo se
+ * llama cuando bitacora_simbad() ya resolvió el objeto, y su resultado viaja
+ * dentro de la misma caché (30 días, o minutos si devolvió false), así que no
+ * repite petición.
  */
 function bitacora_simbad_gaia_dr3_id( $identificador ) {
     $id = trim( (string) $identificador );

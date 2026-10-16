@@ -84,8 +84,16 @@ foreach ($consultas as [$nombre, $llamar, $no_esta]) {
     eq($llamar(), null, '200 «no está»: devuelve null');
     eq(es_nulo_un_dia(cacheado()), true, "200 «no está»: 'nulo' 24 h, como siempre");
 
+    preparar(array_fill(0, $n, new WP_Error()));
+    $llamar();
+    $c = cacheado();
+    eq($c !== null && $c[0] === 'fallo' && $c[1] === BITACORA_TTL_FALLO_RED, true, "TTL del 'fallo': BITACORA_TTL_FALLO_RED");
+
+    preparar(array_fill(0, $n, http(408)));
+    $llamar();
+    eq(es_fallo_corto(cacheado()), true, "408: marcador 'fallo' de minutos");
+
     // El marcador leído de la caché da null sin pedir nada (y nunca 0.0).
-    global $cache, $peticiones;
     preparar([]);
     $llamar();
     $clave = array_key_first($cache);
