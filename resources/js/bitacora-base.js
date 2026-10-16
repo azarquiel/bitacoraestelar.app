@@ -714,8 +714,13 @@ window.BitacoraBase = (function () {
         var q = String(nombre == null ? '' : nombre).trim();
         if (temporizador) clearTimeout(temporizador);
         // Si el nombre cambió, lo que esté en camino ya no es el último: fuera. Y
-        // se olvida como «última», para que volver a ese nombre lo consulte otra vez.
-        if (enVuelo && q !== ultima) { turno++; enVuelo.abort(); enVuelo = null; ultima = ''; }
+        // se olvida como «última», para que volver a ese nombre lo consulte otra
+        // vez (quien lo usa puede haber tirado ya sus coordenadas).
+        // programar('') cancela sin consultar nada.
+        if (q !== ultima) {
+          if (enVuelo) { turno++; enVuelo.abort(); enVuelo = null; }
+          ultima = '';
+        }
         // Menos de dos letras no es un nombre: ni se consulta ni se avisa.
         if (q.length < 2 || !puedeEscribir()) return;
         temporizador = setTimeout(function () { consultar(q); }, espera);

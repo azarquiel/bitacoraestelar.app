@@ -91,8 +91,8 @@ Promise.resolve()
   })
 
   /* ── 3. La misma consulta no se repite ─────────────────────────────────────
-     Volver al mismo nombre (borrar una letra y reescribirla) no debe disparar
-     otra consulta al CDS. */
+     Pedir otra vez el mismo nombre, sin cambiarlo entre medias, no debe
+     disparar otra consulta al CDS. (Si cambia y vuelve, sí: ver la sección 6.) */
   .then(function () {
     seccion('Deduplicado de la última consulta:');
     consultas = [];
@@ -264,6 +264,26 @@ Promise.resolve()
       return tras(ESPERA, function () {
         ok(!abortada && consultas.length === 1, 'el mismo nombre no aborta ni repite la consulta');
         ok(v.resueltos.length === 1, 'y su respuesta se escribe');
+      });
+    });
+  })
+
+  .then(function () {
+    // Una errata borrada antes de la espera: el formulario ya tiró las
+    // coordenadas de A al ver «A x», así que volver a A tiene que consultarlo.
+    consultas = [];
+    global.fetch = function (url) {
+      consultas.push(url);
+      return Promise.resolve({ ok: true, text: function () { return Promise.resolve(M42); } });
+    };
+    var v = nuevo();
+    v.resolutor.programar('NGC 6826');
+    return tras(ESPERA * 3, function () {
+      v.resolutor.programar('NGC 6826x');
+      v.resolutor.programar('NGC 6826');
+    }).then(function () {
+      return tras(ESPERA * 3, function () {
+        ok(consultas.length === 2, 'volver a un nombre tras cambiarlo lo consulta otra vez (' + consultas.length + ')');
       });
     });
   })

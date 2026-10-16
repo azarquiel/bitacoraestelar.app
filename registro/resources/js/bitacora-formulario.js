@@ -208,10 +208,12 @@
     resolved=null; radecBox.classList.remove('show');
     // Las que trajo SIMBAD son de otro nombre: ya no valen para este.
     if(coordsAuto && coordsDe!==txt){ raManual.value=''; decManual.value=''; coordsAuto=false; }
-    if(txt===''){ setStatus(objStatus,'info','Escribe un objeto Messier (M1–M110), una estrella de carbono o un NGC/IC.'); recompute(); return; }
+    // Messier, carbono o vacío no consultan SIMBAD: se cancela lo que vaya en camino.
+    if(txt===''){ resolutorCoords.programar(''); setStatus(objStatus,'info','Escribe un objeto Messier (M1–M110), una estrella de carbono o un NGC/IC.'); recompute(); return; }
 
     var mn=messierNumber(txt);
     if(mn!==null){
+      resolutorCoords.programar('');
       if(mn>=1 && mn<=110 && MESSIER[mn]){
         var o=MESSIER[mn];
         var et='M'+mn+(o.n?' · '+o.n:'')+' ('+o.c+')';
@@ -227,6 +229,7 @@
     // de RA/Dec oculta, igual que con un Messier.
     var carb=carbonoPorNombre(txt);
     if(carb){
+      resolutorCoords.programar('');
       var etc='estrella de carbono'+(carb.cons?' · '+carb.cons:'');
       resolved={tipo:'carbono',num:null,nombre:carb.nombre,ra:carb.ra,dec:carb.dec,cons:carb.cons,etiqueta:carb.nombre,mag:carb.mag};
       setStatus(objStatus,'ok','✓ '+carb.nombre+' — '+etc+(carb.mag!=null?' · mag ≈ '+String(carb.mag).replace('.',','):'')+'.');
