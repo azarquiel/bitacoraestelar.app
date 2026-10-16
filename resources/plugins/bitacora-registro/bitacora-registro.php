@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.7
+ * Version:     1.38.8
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.7' );
+define( 'BITACORA_VERSION', '1.38.8' );
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -3258,7 +3258,9 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '', $ongc 
     // 'MUL' (objeto múltiple: Kappa Boötis, cuyas componentes son κ¹ y κ²) es la
     // otra forma en que SIMBAD etiqueta un sistema estelar sin '*'. Va después de la
     // rama de galaxia: también cae ahí algún par de galaxias (LEDA, 2MASX).
-    if ( ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) || 'MUL' === $codigo ) {
+    // 'HXB'/'LXB'/'XB' (binaria de rayos X) es la tercera: Gamma Cas es una estrella
+    // Be y SIMBAD la tipa 'HXB'. No entra 'X' a secas: fuente de rayos X sin clasificar.
+    if ( ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) || in_array( $codigo, array( 'MUL', 'HXB', 'LXB', 'XB' ), true ) ) {
         return array( 'tipo' => 'estrella', 'color' => '#dfe7f5' );
     }
 

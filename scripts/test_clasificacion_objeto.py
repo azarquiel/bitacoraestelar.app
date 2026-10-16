@@ -51,7 +51,7 @@ check(color_estrella != color_desconocido,
 
 # La regla estelar del PHP, sin tabla de códigos: el otype lleva '*' (salvo 'As*',
 # un asterismo, que son varias estrellas y no una). Se comprueba que siga siendo esa.
-check("strpos( $codigo, '*' )" in cuerpo and "'AS*'" in cuerpo and "'MUL' === $codigo" in cuerpo,
+check("strpos( $codigo, '*' )" in cuerpo and "'AS*'" in cuerpo and "'MUL', 'HXB', 'LXB', 'XB'" in cuerpo,
       "la regla estelar es «el otype lleva '*', menos As*»")
 
 # ── Galaxias: lista de otypes extragalácticos y colores por clase, del PHP ───
@@ -128,7 +128,7 @@ def clasificar_mw(otype, tipo_obs="", morph="", ongc=""):
     if cod in OTYPES_GALAXIA or cat_ongc == "GALAXIA":
         clase = clase_hubble(morph)
         return (clase, COLOR_CLASE[clase]) if clase else ("galaxia", COLOR_CLASE["galaxia"])
-    if ("*" in cod and cod != "AS*") or cod == "MUL":
+    if ("*" in cod and cod != "AS*") or cod in ("MUL", "HXB", "LXB", "XB"):
         return "estrella", color_estrella
     clase = clase_hubble(morph)
     if clase:
@@ -150,6 +150,7 @@ DORADOS = [
     ("PM*", "", "estrella"),      # movimiento propio alto: la estrella de Barnard
     ("WD*", "", "estrella"),      # enana blanca: Sirio B
     ("mul", "", "estrella"),      # sistema múltiple sin '*': Kappa Boötis
+    ("HXB", "", "estrella"),      # binaria de rayos X sin '*': Gamma Cas
     ("As*", "", "desconocido"),   # asterismo: lleva '*' pero son VARIAS estrellas
     ("G",   "", "galaxia"),       # galaxia sin morph: galaxia, NO 'desconocido'
     ("pA*", "", "protoplanetaria"),  # Frosty Leo: lleva '*' pero es objeto extenso
