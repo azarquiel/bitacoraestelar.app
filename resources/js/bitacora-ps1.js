@@ -1856,7 +1856,7 @@
     var png = P16();
     notas = notas || {};
     // Lo que falla al traer los dos ficheros es red; lo que falla después, no.
-    function deRed(e) { (e = e || new Error('red')).red = true; throw e; }
+    function deRed(e) { (e = e || new Error('red')).falloRed = true; throw e; }
     return Promise.all([
       fetch(urlPng).then(function (r) {
         if (!r.ok) throw new Error('textura ' + r.status);
@@ -1908,8 +1908,8 @@
     }).catch(function (e) {
       /* Un error al decodificar es un fallo de código, no de red: sale en
          consola y no se reintenta en cada repintado (#462). */
-      if (!(e && e.red)) console.error('[Bitácora] Error al leer la textura ' + urlPng + ':', e);
-      if (!notas.motivo) notas.motivo = (e && e.red) ? 'red' : 'lectura';
+      if (!(e && e.falloRed)) console.error('[Bitácora] Error al leer la textura ' + urlPng + ':', e);
+      if (!notas.motivo) notas.motivo = (e && e.falloRed) ? 'red' : 'lectura';
       return null;
     });
   }
