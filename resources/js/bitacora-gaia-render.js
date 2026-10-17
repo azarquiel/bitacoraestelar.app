@@ -1272,10 +1272,16 @@
               '&rad=' + encodeURIComponent(rad) + '&mag=' + encodeURIComponent(mag);
     return fetch(url, { signal: ctrl.signal }).then(function (r) {
       clearTimeout(id);
-      if (!r.ok) throw new Error();
+      if (!r.ok) throw new Error('gaia_proxy ' + r.status);
       return r.json();
-    }, function (err) { clearTimeout(id); throw err; });
+    }, function (err) { clearTimeout(id); throw err; }).catch(function (err) {
+      // Todo lo de aquí es red o proxy (también un JSON roto): quien pinta
+      // lo distingue de un error de código con esFalloRed (#462).
+      (err = err || new Error('gaia_proxy')).falloRed = true;
+      throw err;
+    });
   }
+  function esFalloRed(err) { return !!(err && err.falloRed); }
   // Un reintento: el proxy hace failover entre proveedores TAP (ver
   // gaia_proxy.php), así un fallo puntual del primero suele resolverse solo
   // en el segundo intento, sin que el usuario tenga que volver a pedirlo.
@@ -2984,6 +2990,7 @@
     config: CFG,
     fot: FOT,
     consultar: consultar,
+    esFalloRed: esFalloRed,
     precalentar: precalentar,
     profundidadConsulta: profundidadConsulta,
     cacheGaia: cacheGaia,
