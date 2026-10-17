@@ -745,12 +745,22 @@
             if (peticion !== contadorPeticion || !capa.aviso) return;
             if (!$('sim-aviso').textContent) $('sim-aviso').textContent = capa.aviso;
           });
-        }).catch(function () {
+        }).catch(function (err) {
           if (peticion !== contadorPeticion) return;
           // Cualquier error de la vista de Gaia mata también el indicador de
           // procesado: no debe quedarse encendido sobre la placa de respaldo.
           var procesando = $('sim-procesando');
           if (procesando) procesando.hidden = true;
+          /* Un error de código no es una caída de Gaia: la placa DSS no lo
+             arregla y lo escondería (#462). Va a consola con su traza. */
+          if (!BitacoraGaiaRender.esFalloRed(err)) {
+            console.error('[Bitácora] Error al pintar la vista de Gaia:', err);
+            cargando.textContent = 'Error del simulador al pintar el campo.';
+            $('sim-aviso').textContent = 'Error del simulador al pintar el campo (' +
+              ((err && err.message) || err) + '). No es un fallo de Gaia: está en la consola del navegador.';
+            elVista.setAttribute('aria-busy', 'false');
+            return;
+          }
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el
           // canvas en negro, mostramos la placa DSS del mismo campo como respaldo.
           cargando.style.display = 'flex';
@@ -911,7 +921,14 @@
         // plena, el DSS se llenaría de las mismas estrellas que el Canvas 2D y
         // ambas vistas quedarían casi idénticas.
         var ra0 = centro.ra; var dec0 = centro.dec; var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
-        consultarGaia(ra0, dec0, arcmin).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function () { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3: se muestra solo la imagen.'; });
+        consultarGaia(ra0, dec0, arcmin).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function (err) {
+          // El fallo de una vista vieja no pisa el aviso de la nueva (#462).
+          if (pet !== contadorPeticion) return;
+          if (BitacoraGaiaRender.esFalloRed(err)) { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3: se muestra solo la imagen.'; return; }
+          console.error('[Bitácora] Error al superponer Gaia sobre la placa:', err);
+          $('sim-aviso').textContent = 'Error del simulador al superponer las estrellas (' +
+            ((err && err.message) || err) + '): se muestra solo la imagen.';
+        });
       }
 
       /* ══════════════════ CRUCETA: DESPLAZAR EL CAMPO ══════════════════
@@ -1300,6 +1317,8 @@
         objetoSel = o;
         // Objeto nuevo, encuadre nuevo: el desplazamiento era del anterior.
         pasoX = pasoY = 0;
+        // Y otra placa: el bloqueo de CORS de la anterior no la condena (#462).
+        corsFallo = false;
         pintarObjeto();
         actualizar();
         precalentarGaia(o);
@@ -1459,7 +1478,7 @@
       // y dispara 'change' → actualizar.
       if (window.BitacoraBase && $('sim-bortle') && $('sim-sqm')) BitacoraBase.montarCielo($('sim-bortle'), $('sim-sqm'));
       ['sim-pupila-ojo', 'sim-sqm'].forEach(function (id) { $(id).addEventListener('change', actualizar); });
-      $('sim-origen').addEventListener('change', actualizar);
+      $('sim-origen').addEventListener('change', function () { corsFallo = false; actualizar(); });
       /* Casilla de la capa de galaxias: gobierna la OPCIÓN del módulo compartido,
          no una variable de aquí, para que el generador del formulario de registro
          y el simulador respondan al mismo mando. El estado inicial lo pone el
