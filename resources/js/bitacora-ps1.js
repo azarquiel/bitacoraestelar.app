@@ -1855,15 +1855,17 @@
        vez de disfrazarse de fallo de red (ADR 0020). */
     var png = P16();
     notas = notas || {};
+    // Lo que falla al traer los dos ficheros es red; lo que falla después, no.
+    function deRed(e) { (e = e || new Error('red')).falloRed = true; throw e; }
     return Promise.all([
       fetch(urlPng).then(function (r) {
         if (!r.ok) throw new Error('textura ' + r.status);
         return r.arrayBuffer();
-      }),
+      }).catch(deRed),
       fetch(urlJson).then(function (r) {
         if (!r.ok) throw new Error('sidecar ' + r.status);
         return r.json();
-      })
+      }).catch(deRed)
     ]).then(function (par) {
       var sc = par[1] || {};
       return png.leer(new Uint8Array(par[0]), notas).then(function (img) {
@@ -1903,8 +1905,11 @@
           zpt: NaN
         };
       });
-    }).catch(function () {
-      if (!notas.motivo) notas.motivo = 'red';
+    }).catch(function (e) {
+      /* Un error al decodificar es un fallo de código, no de red: sale en
+         consola y no se reintenta en cada repintado (#462). */
+      if (!(e && e.falloRed)) console.error('[Bitácora] Error al leer la textura ' + urlPng + ':', e);
+      if (!notas.motivo) notas.motivo = (e && e.falloRed) ? 'red' : 'lectura';
       return null;
     });
   }
@@ -1943,7 +1948,12 @@
       p = ps1DescargarParche(gal);
     }
     notasPS1[clave] = notas;
+    var porProxy = !fila;
     p = p.then(function (f) {
+      /* Un fallo de red no es un dato: sin borrar la entrada, el null de un
+         corte pasajero se serviría hasta recargar (#462). Por el proxy todo
+         null es de red, que su 502 no distingue «no cubre» de «no responde». */
+      if (!f && (porProxy || notas.motivo === 'red') && cachePS1[clave] === p) delete cachePS1[clave];
       if (!f) return null;
       f.ra = gal.ra; f.dec = gal.dec; f.ladoArcmin = gal.ladoArcmin;
       if (!(f.escalaAs > 0)) f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
