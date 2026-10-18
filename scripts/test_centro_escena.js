@@ -217,8 +217,12 @@ ok(/VLViaje\.movimientoReducido\(\) \|\| dist < 1/.test(app), 'movimiento reduci
   var h = { x: 300, y: 200, escala: 1 };
   var a = G.conHolgura(500, 400, 800, 600, h, 1);
   ok(a.w === 1400 && a.h === 1000, 'a la escala de la holgura la huella llega hasta el encuadre del Sol');
+  // El zoom alrededor del centro escala el desplazamiento: la holgura con él, o
+  // el clamp saca del centro lo centrado al primer zoom (NGC 2419, fuera de la imagen).
   a = G.conHolgura(500, 400, 800, 600, h, 2);
-  ok(a.w === 500 && a.h === 400, 'a otra escala la holgura no cuenta');
+  ok(a.w === 2000 && a.h === 1400, 'al acercar, la holgura crece con la escala');
+  a = G.conHolgura(500, 400, 800, 600, h, 0.5);
+  ok(a.w === 1100 && a.h === 800, 'al alejar, mengua con ella');
   a = G.conHolgura(2000, 1500, 800, 600, h, 1);
   ok(a.w === 2000 && a.h === 1500, 'una huella mayor no se reduce');
   a = G.conHolgura(500, 400, 800, 600, null, 1);

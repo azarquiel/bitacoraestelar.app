@@ -1438,8 +1438,9 @@
   }
 
   // «Volver al Sol» (#425) y «Centrar»: a escalas donde la imagen cabe en el
-  // visor el clamp dejaría el Sol (o el objeto) sin centrar. holguraCentro amplía el rango hasta ese encuadre
-  // mientras la escala sea la suya; sinClamp lo salta al calcularlo.
+  // visor el clamp dejaría el Sol (o el objeto) sin centrar. holguraCentro
+  // amplía el rango hasta ese encuadre y lo escala con el zoom (conHolgura);
+  // sinClamp lo salta al calcularlo.
   var holguraCentro = null, sinClamp = false;
   function clampPosition() {
     if (sinClamp) return;
