@@ -8,12 +8,13 @@
    Abre el mapa real en Chrome headless (CDP): sirve mapa.html y mapa/js de este
    repo y reenvía el resto (datos.js, imágenes) a bitacoraestelar.app.
 
-   node scripts/harness_relevo_grupo_local.js [repo] [objId=ngc2419]  */
+   node scripts/harness_relevo_grupo_local.js [objId=ngc2419]  */
 'use strict';
 var http = require('http'), https = require('https'), fs = require('fs'), path = require('path');
 var cp = require('child_process');
-var REPO = process.argv[2] || path.join(__dirname, '..'), OBJ = process.argv[3] || 'ngc2419';
+var REPO = path.join(__dirname, '..'), OBJ = process.argv[2] || 'ngc2419';
 var PORT = 8765, DBG = 9333;
+var PERFIL = fs.mkdtempSync(path.join(require('os').tmpdir(), 'harness-mapa-'));
 
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0];
@@ -33,10 +34,12 @@ var srv = http.createServer(function (req, res) {
 
 var chrome = cp.spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
   '--headless=new', '--remote-debugging-port=' + DBG, '--window-size=1280,800',
-  '--user-data-dir=' + path.join(__dirname, '.perfil-chrome'), '--no-first-run', 'about:blank'
+  '--user-data-dir=' + PERFIL, '--no-first-run', 'about:blank'
 ], { stdio: 'ignore' });
-process.on('exit', function () { try { fs.rmSync(path.join(__dirname, '.perfil-chrome'), { recursive: true, force: true }); } catch (e) {} });
+// El perfil se borra cuando Chrome ya ha salido: antes aún escribe en él.
+chrome.on('exit', function () { fs.rmSync(PERFIL, { recursive: true, force: true }); });
 
+function salir(c) { chrome.once('exit', function () { process.exit(c); }); chrome.kill(); }
 function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 async function main() {
   var tabs;
@@ -109,7 +112,7 @@ async function main() {
     if (s2.op >= 1) { console.log('vuelta a galaxia  nucleo', s2.dx, s2.dy, 'op', s2.op); if (Math.abs(s2.dx) > 5 || Math.abs(s2.dy) > 5) fallo = true; break; }
   }
   console.log(fallo ? 'ROJO: la Vía Láctea no está en el centro en el relevo' : (relevo ? 'VERDE' : 'SIN RELEVO'));
-  ws.close(); chrome.kill(); srv.close();
-  process.exit(fallo ? 1 : 0);
+  ws.close(); srv.close();
+  salir(fallo ? 1 : 0);
 }
-main().catch(function (e) { console.error(e); chrome.kill(); srv.close(); process.exit(2); });
+main().catch(function (e) { console.error(e); srv.close(); salir(2); });

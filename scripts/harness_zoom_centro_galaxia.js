@@ -6,13 +6,15 @@
    Abre el mapa real en Chrome headless (CDP): sirve mapa.html y mapa/js de este
    repo y reenvía el resto (datos.js, imágenes) a bitacoraestelar.app.
    SIN_CENTRAR=1: sin «Centrar», mide la deriva bajo el cursor al hacer zoom.
+   Con M13 da ROJO (~17 px): es el clamp del borde de la imagen, no el centrado.
 
-   node scripts/harness_zoom_centro_galaxia.js [repo] [objId=ngc2419]  */
+   node scripts/harness_zoom_centro_galaxia.js [objId=ngc2419]  */
 'use strict';
 var http = require('http'), https = require('https'), fs = require('fs'), path = require('path');
 var cp = require('child_process');
-var REPO = process.argv[2] || path.join(__dirname, '..'), OBJ = process.argv[3] || 'ngc2419';
+var REPO = path.join(__dirname, '..'), OBJ = process.argv[2] || 'ngc2419';
 var PORT = 8765, DBG = 9333;
+var PERFIL = fs.mkdtempSync(path.join(require('os').tmpdir(), 'harness-mapa-'));
 
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0];
@@ -32,10 +34,12 @@ var srv = http.createServer(function (req, res) {
 
 var chrome = cp.spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
   '--headless=new', '--remote-debugging-port=' + DBG, '--window-size=1280,800',
-  '--user-data-dir=' + path.join(__dirname, '.perfil-chrome'), '--no-first-run', 'about:blank'
+  '--user-data-dir=' + PERFIL, '--no-first-run', 'about:blank'
 ], { stdio: 'ignore' });
-process.on('exit', function () { try { fs.rmSync(path.join(__dirname, '.perfil-chrome'), { recursive: true, force: true }); } catch (e) {} });
+// El perfil se borra cuando Chrome ya ha salido: antes aún escribe en él.
+chrome.on('exit', function () { fs.rmSync(PERFIL, { recursive: true, force: true }); });
 
+function salir(c) { chrome.once('exit', function () { process.exit(c); }); chrome.kill(); }
 function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 async function main() {
   var tabs;
@@ -80,7 +84,7 @@ async function main() {
       console.log('  deriva bajo el cursor', a1.dx - a0.dx, a1.dy - a0.dy);
       if (Math.abs(a1.dx - a0.dx) > 3 || Math.abs(a1.dy - a0.dy) > 3) mal = true;
     }
-    console.log(mal ? 'ROJO' : 'VERDE'); ws.close(); chrome.kill(); srv.close(); process.exit(mal ? 1 : 0);
+    console.log(mal ? 'ROJO' : 'VERDE'); ws.close(); srv.close(); salir(mal ? 1 : 0);
   }
   await ev("document.getElementById('" + OBJ + "-anchor').querySelector('.mw-punto').click()");
   await esperar(300);
@@ -100,7 +104,7 @@ async function main() {
     if (Math.abs(z.dx) > 3 || Math.abs(z.dy) > 3) fallo = true;
   }
   console.log(fallo ? 'ROJO: el objeto centrado se va del centro con el zoom' : 'VERDE');
-  ws.close(); chrome.kill(); srv.close();
-  process.exit(fallo ? 1 : 0);
+  ws.close(); srv.close();
+  salir(fallo ? 1 : 0);
 }
-main().catch(function (e) { console.error(e); chrome.kill(); srv.close(); process.exit(2); });
+main().catch(function (e) { console.error(e); srv.close(); salir(2); });
