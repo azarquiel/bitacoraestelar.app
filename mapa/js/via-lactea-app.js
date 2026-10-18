@@ -1231,31 +1231,30 @@
     if (!fuera && document.activeElement === centroVolver) viewer.focus({ preventScroll: true });
     VLCentro.mostrarPastilla(document, fuera);
   }
-  // Vuelo del Sol al centro SIN tocar el zoom (posX/posY). Un gesto lo termina
-  // EN EL DESTINO (nunca a medio camino) y se aplica desde ahí.
-  var destinoSol = null;
-  function terminarVueloSol() {
-    if (!destinoSol) return;
+  // Vuelo de un punto de la imagen (% y altura zPx) al centro del visor SIN
+  // tocar el zoom (posX/posY): lo comparten «Volver al Sol» y «Centrar». Un
+  // gesto lo termina EN EL DESTINO (nunca a medio camino) y se aplica desde ahí.
+  var destinoVuelo = null;
+  function terminarVueloGalaxia() {
+    if (!destinoVuelo) return;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    posX = destinoSol.x; posY = destinoSol.y; destinoSol = null;
+    posX = destinoVuelo.x; posY = destinoVuelo.y; destinoVuelo = null;
     applyTransform();
   }
   ['mousedown', 'wheel', 'touchstart'].forEach(function (ev) {
-    viewer.addEventListener(ev, terminarVueloSol, { capture: true, passive: true });
+    viewer.addEventListener(ev, terminarVueloGalaxia, { capture: true, passive: true });
   });
-  function volverAlSol() {
-    if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') return false;
-    var sol = isEdgeView ? CONFIG.sol.canto : CONFIG.sol.cenital;
+  function volarAlCentro(xPct, yPct, zPx) {
     var x0 = posX, y0 = posY;
     sinClamp = true;
-    centerOnAnchor(sol.x, sol.y, scale);   // calcula (y aplica) el destino
+    centerOnAnchor(xPct, yPct, scale, Math.max(maxScale, scale), zPx);   // calcula (y aplica) el destino
     sinClamp = false;
-    holguraSol = { x: Math.abs(posX), y: Math.abs(posY), escala: scale };
+    holguraCentro = { x: Math.abs(posX), y: Math.abs(posY), escala: scale };
     var x1 = posX, y1 = posY;
     var dist = Math.hypot(x1 - x0, y1 - y0);
-    if (VLViaje.movimientoReducido() || dist < 1) { pintarVolverSol(); return true; }
+    if (VLViaje.movimientoReducido() || dist < 1) { pintarVolverSol(); return; }
     posX = x0; posY = y0;
-    destinoSol = { x: x1, y: y1 };
+    destinoVuelo = { x: x1, y: y1 };
     applyTransform();
     var t0 = performance.now();
     var dur = VLEscalas.duracionVuelo(dist, Math.hypot(viewer.clientWidth, viewer.clientHeight));
@@ -1265,8 +1264,13 @@
       posX = p.x; posY = p.y;
       applyTransform();
       animFrame = t < 1 ? requestAnimationFrame(paso) : null;
-      if (t >= 1) destinoSol = null;
+      if (t >= 1) destinoVuelo = null;
     })(t0);
+  }
+  function volverAlSol() {
+    if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') return false;
+    var sol = isEdgeView ? CONFIG.sol.canto : CONFIG.sol.cenital;
+    volarAlCentro(sol.x, sol.y);
     return true;
   }
   if (centroVolver) {
@@ -1296,6 +1300,16 @@
         centroPastilla.getAttribute('data-escala') === 'galaxia';
     },
     volver: function () { return escenaGalaxia.centroDesplazado() && volverAlSol(); },
+    // «Centrar» de la ficha de un marcador: el objeto vuela al centro del visor
+    // como el Sol al volver; el centro es lo que haya en el centro del visor.
+    centrar: function (obj) { var a = anclaEnVista(obj); volarAlCentro(a.x, a.y, a.z); },
+    esCentro: function (obj) {
+      var el = document.getElementById(obj.id + (isEdgeView ? '-edge' : '') + '-anchor');
+      if (!el) return false;
+      var r = el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
+      return VLEscalas.enCentro((r.left + r.width / 2) - (vr.left + vr.width / 2),
+                                (r.top + r.height / 2) - (vr.top + vr.height / 2));
+    },
     alOrigen: function () { /* sin centro que devolver: el encuadre del viaje ya la coloca */ }
   };
   function escenas3D() {
@@ -1415,10 +1429,10 @@
     minScale = Math.min(base, necesaria);
   }
 
-  // «Volver al Sol» (#425): a escalas donde la imagen cabe en el visor el clamp
-  // dejaría el Sol sin centrar. holguraSol amplía el rango hasta ese encuadre
+  // «Volver al Sol» (#425) y «Centrar»: a escalas donde la imagen cabe en el
+  // visor el clamp dejaría el Sol (o el objeto) sin centrar. holguraCentro amplía el rango hasta ese encuadre
   // mientras la escala sea la suya; sinClamp lo salta al calcularlo.
-  var holguraSol = null, sinClamp = false;
+  var holguraCentro = null, sinClamp = false;
   function clampPosition() {
     if (sinClamp) return;
     var viewerRect = viewer.getBoundingClientRect();
@@ -1450,7 +1464,7 @@
       anchoPant = Math.max(anchoPant, h3.w);
       altoPant = Math.max(altoPant, h3.h);
     }
-    var ampl = VLGeometria.conHolgura(anchoPant, altoPant, viewerRect.width, viewerRect.height, holguraSol, scale);
+    var ampl = VLGeometria.conHolgura(anchoPant, altoPant, viewerRect.width, viewerRect.height, holguraCentro, scale);
     anchoPant = ampl.w;
     altoPant = ampl.h;
     var pos = VLGeometria.clampDesplazamiento(
@@ -1874,9 +1888,18 @@
   var pdfCoords = document.getElementById('pdf-modal-coords');
   var currentPdfUrl = '';
 
+  // Clic en un marcador: abre su ficha y, como en las escenas 3D, arma
+  // «Centrar». La rama del PDF no abre la ficha y no lo arma.
   function openObjectPdf(e) {
     if (e) e.stopPropagation();
     var dot = e.currentTarget;
+    abrirMarcador(dot);
+    var anchor = dot.closest('.mw-object-anchor');
+    var id = anchor && anchor.getAttribute('data-id');
+    var obj = id && OBJECTS.filter(function (o) { return o.id === id; })[0];
+    if (obj && fichaOverlay.style.display === 'flex') armarCentrar(obj, escenaGalaxia);
+  }
+  function abrirMarcador(dot) {
     var url = dot.getAttribute('data-pdf');   // '' si nadie lo ha observado (#233)
 
     // Si el objeto tiene ficha interactiva, se abre esta en lugar del PDF
@@ -3543,6 +3566,22 @@
       typeof o.l === 'number' && typeof o.b === 'number';
   }
 
+  // Dónde está un objeto en la vista activa, lo que centerOnAnchor necesita para
+  // dejarlo en el centro: x, y en % de la imagen y z, su altura en px.
+  function anclaEnVista(obj) {
+    if (isEdgeView) {
+      // Con el punto de vista girado, la x del objeto es la reproyectada.
+      var g = GAL[obj.id];
+      return { x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : obj.edge.x,
+               y: edgeYDe(obj), z: 0 };
+    }
+    // Con el disco abatido, el objeto no está sobre el plano sino a su altura:
+    // se la pasamos al centrado o los que más se despegan quedan descuadrados.
+    var imgCen = document.getElementById('mw-image');
+    var z = (imgCen && imgCen.naturalWidth) ? alturaObjetoPx(obj.id, getImgRect(imgCen)) : 0;
+    return { x: obj.top.x, y: obj.top.y, z: z };
+  }
+
   // Lleva la vista a un objeto REGISTRADO (de OBJECTS): al atlas si es
   // extragaláctico, o al mapa de la galaxia (zoom-in + parpadeo) si es galáctico.
   function irAObjetoRegistrado(obj) {
@@ -3576,23 +3615,8 @@
       showToast('Se ha reactivado la visualización de: ' + tipoReactivado + '.');
     }
 
-    var pos;
-    if (isEdgeView) {
-      // Con el punto de vista girado, la x del objeto es la reproyectada.
-      var g = GAL[obj.id];
-      pos = {
-        x: (edgeRotation !== 0 && g) ? edgeXAt(g, edgeRotation) : obj.edge.x,
-        y: edgeYDe(obj)
-      };
-    } else {
-      pos = obj.top;
-    }
-    // Con el disco abatido, el objeto no está sobre el plano sino a su altura:
-    // se la pasamos al centrado o los que más se despegan quedan descuadrados.
-    var imgCen = document.getElementById('mw-image');
-    var zObj = (!isEdgeView && imgCen && imgCen.naturalWidth)
-      ? alturaObjetoPx(obj.id, getImgRect(imgCen)) : 0;
-    centerOnAnchor(pos.x, pos.y, CONFIG.busqueda.zoom, null, zObj);
+    var a = anclaEnVista(obj);
+    centerOnAnchor(a.x, a.y, CONFIG.busqueda.zoom, null, a.z);
     // El parpadeo se lanza tras un instante para que el centrado ya esté hecho.
     setTimeout(function () { blinkObject(obj.id); }, 60);
   }

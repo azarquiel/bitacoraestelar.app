@@ -25,7 +25,7 @@ var cd = app.slice(app.indexOf('function centroDesplazado'), app.indexOf('functi
 ok(/escenas3D\(\)\.some/.test(cd), 'centroDesplazado() del zoom mira solo las escenas 3D');
 
 // El vuelo de la galaxia reutiliza la curva y el movimiento reducido compartidos.
-var sol = app.slice(app.indexOf('function volverAlSol'), app.indexOf('centroVolver.addEventListener'));
+var sol = app.slice(app.indexOf('function volarAlCentro'), app.indexOf('centroVolver.addEventListener'));
 ok(/VLCentro\.vuelo\(/.test(sol) && !/Math\.pow\(1 - t, 3\)/.test(sol), 'volverAlSol usa VLCentro.vuelo, sin curva propia');
 ok(/VLViaje\.movimientoReducido\(\)/.test(sol) && !/matchMedia/.test(sol), 'volverAlSol usa VLViaje.movimientoReducido()');
 

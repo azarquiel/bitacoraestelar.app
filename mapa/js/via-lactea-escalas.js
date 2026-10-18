@@ -71,6 +71,10 @@
     return Math.sqrt(dx * dx + dy * dy) < Math.min(ancho, alto) * proximidadSol(cfg);
   }
 
+  // ¿Cae un objeto en el centro del visor? dx, dy: del centro al objeto, en px.
+  // Tolera el redondeo del vuelo y de la proyección.
+  function enCentro(dx, dy) { return Math.sqrt(dx * dx + dy * dy) < 2; }
+
   // Con el centro de la escena a la vista (centro desplazado, o dentro del
   // vecindario, que se pinta siempre en el centro del visor) el zoom no sigue al cursor.
   function zoomAlCentro(desplazado, dentroVecindario) { return !!(desplazado || dentroVecindario); }
@@ -123,7 +127,7 @@
   }
 
   var API = { RADIO_CAMPO: RADIO_CAMPO, radioCampo: radioCampo, umbrales: umbrales, fundidoGrupoLocal: fundidoGrupoLocal,
-              proximidadSol: proximidadSol, solCerca: solCerca, zoomAlCentro: zoomAlCentro, puntoFijoZoom: puntoFijoZoom,
+              proximidadSol: proximidadSol, solCerca: solCerca, enCentro: enCentro, zoomAlCentro: zoomAlCentro, puntoFijoZoom: puntoFijoZoom,
               duracionVuelo: duracionVuelo, topes: topes, limitar: limitar };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }

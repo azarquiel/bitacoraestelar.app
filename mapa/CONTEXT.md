@@ -99,7 +99,7 @@ Dos puntos distintos de cada escala: vecindario solar, Vía Láctea y Grupo Loca
 **Origen**: punto fijo desde el que se miden las coordenadas de una escena: el Sol en el vecindario y en el mapa de la galaxia, la Vía Láctea en el Grupo Local. Nunca cambia; las distancias que enseña el mapa son siempre al origen.
 _Evitar_: centro (para este sentido).
 
-**Centro de la escena**: objeto alrededor del cual gira la cámara y hacia el que va el zoom. Por defecto coincide con el origen; en las escenas 3D el usuario lo desplaza a una estrella o galaxia con «Centrar» o con la búsqueda; en el mapa de la galaxia, arrastrando.
+**Centro de la escena**: objeto alrededor del cual gira la cámara y hacia el que va el zoom. Por defecto coincide con el origen; en las escenas 3D el usuario lo desplaza a una estrella o galaxia con «Centrar» o con la búsqueda; en el mapa de la galaxia, arrastrando o con «Centrar» (el objeto vuela al centro del visor sin tocar el zoom, el mismo vuelo que «Volver al Sol»).
 _Evitar_: foco, pivote, origen (para este sentido).
 
 - **Centrar no reubica nada:** solo mueve la cámara. Coordenadas, distancias y rótulos siguen referidos al origen.

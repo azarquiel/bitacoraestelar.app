@@ -224,8 +224,8 @@ ok(/VLViaje\.movimientoReducido\(\) \|\| dist < 1/.test(app), 'movimiento reduci
   a = G.conHolgura(500, 400, 800, 600, null, 1);
   ok(a.w === 500 && a.h === 400, 'sin holgura, la huella es la misma');
 })();
-ok(/function terminarVueloSol/.test(app) && /'wheel', 'touchstart'/.test(app), 'un gesto durante el vuelo lo termina en el destino');
-ok(/centerOnAnchor\(sol\.x, sol\.y, scale\)/.test(app), 'el vuelo conserva la escala');
+ok(/function terminarVueloGalaxia/.test(app) && /'wheel', 'touchstart'/.test(app), 'un gesto durante el vuelo lo termina en el destino');
+ok(/centerOnAnchor\(xPct, yPct, scale, Math\.max\(maxScale, scale\), zPx\)/.test(app), 'el vuelo conserva la escala');
 ok(/if \(!isDragging\) ?|isDragging\) return;\s*var propia/.test(app), 'durante el arrastre no se reevalúa');
 ok(/data-escala="galaxia"\] > \.mw-icono/.test(html), 'en la galaxia la pastilla enseña solo el botón');
 ok(/volver: function \(\) \{ return escenaGalaxia\.centroDesplazado\(\) && volverAlSol/.test(app), 'Inicio también vuelve al Sol en la galaxia');

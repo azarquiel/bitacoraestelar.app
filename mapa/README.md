@@ -52,9 +52,10 @@ en `scripts/test_capas_controles.js`); el `display` lo aplica
   que en la galaxia. Entrar exige tener el Sol centrado (el botón
   **Volver al Sol** lo centra de un toque); una vez dentro, la escena se queda hasta que se aleja bastante (2500 al), para
   que el vaivén del zoom no mezcle las dos imágenes.
-- **Centrar la escena en un objeto** (épica #420): en el Grupo Local y en el
-  vecindario solar, el botón **Centrar** de la ficha pone una galaxia o una
-  estrella en el centro, y la cámara gira y se acerca alrededor de ella. Sirve
+- **Centrar la escena en un objeto** (épica #420): en el Grupo Local, en el
+  vecindario solar y en el mapa de la galaxia, el botón **Centrar** de la ficha
+  pone una galaxia, una estrella o un objeto en el centro (en la galaxia, sin
+  tocar el zoom; la pastilla ofrece **Volver al Sol**), y la cámara gira y se acerca alrededor de ella. Sirve
   para estudiar un conjunto lejos del origen —el grupo de M81, el subgrupo de
   M31, las estrellas que rodean a una dada— sin que el Sol o la Vía Láctea
   manden en el encuadre. Centrar solo mueve la cámara: las distancias siguen
