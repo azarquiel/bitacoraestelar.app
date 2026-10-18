@@ -68,11 +68,15 @@
   }
 
   // Huella (anchoPant × altoPant) ampliada por la holgura de «Volver al Sol»
-  // (#425) mientras la escala sea la suya: el rango llega hasta el encuadre del Sol.
-  //   holgura: { x, y, escala } o null
+  // (#425) y «Centrar»: el rango llega hasta el encuadre de lo centrado. El zoom
+  // alrededor del centro escala el desplazamiento, así que la holgura escala con
+  // él; si caducara al cambiar de escala, el clamp sacaría del centro lo
+  // centrado al primer zoom.
+  //   holgura: { x, y, escala } o null; x, y en px a su escala
   function conHolgura(anchoPant, altoPant, viewW, viewH, holgura, escala) {
-    if (!holgura || holgura.escala !== escala) return { w: anchoPant, h: altoPant };
-    return { w: Math.max(anchoPant, viewW + 2 * holgura.x), h: Math.max(altoPant, viewH + 2 * holgura.y) };
+    if (!holgura) return { w: anchoPant, h: altoPant };
+    var k = escala / holgura.escala;
+    return { w: Math.max(anchoPant, viewW + 2 * holgura.x * k), h: Math.max(altoPant, viewH + 2 * holgura.y * k) };
   }
 
   // Nuevo desplazamiento al pasar de escalaAntes a escalaDespues manteniendo fijo

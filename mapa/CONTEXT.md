@@ -99,11 +99,11 @@ Dos puntos distintos de cada escala: vecindario solar, Vía Láctea y Grupo Loca
 **Origen**: punto fijo desde el que se miden las coordenadas de una escena: el Sol en el vecindario y en el mapa de la galaxia, la Vía Láctea en el Grupo Local. Nunca cambia; las distancias que enseña el mapa son siempre al origen.
 _Evitar_: centro (para este sentido).
 
-**Centro de la escena**: objeto alrededor del cual gira la cámara y hacia el que va el zoom. Por defecto coincide con el origen; en las escenas 3D el usuario lo desplaza a una estrella o galaxia con «Centrar» o con la búsqueda; en el mapa de la galaxia, arrastrando.
+**Centro de la escena**: objeto alrededor del cual gira la cámara y hacia el que va el zoom. Por defecto coincide con el origen; en las escenas 3D el usuario lo desplaza a una estrella o galaxia con «Centrar» o con la búsqueda; en el mapa de la galaxia, arrastrando o con «Centrar» (el objeto vuela al centro del visor sin tocar el zoom, el mismo vuelo que «Volver al Sol»).
 _Evitar_: foco, pivote, origen (para este sentido).
 
 - **Centrar no reubica nada:** solo mueve la cámara. Coordenadas, distancias y rótulos siguen referidos al origen.
-- **Solo se cambia de escala con el centro en el origen.** Rige al salir de una escena 3D y al entrar en el vecindario; del mapa de la galaxia al Grupo Local se pasa libre, porque alejarse ya enseña la galaxia entera y el Grupo Local se abre siempre en su origen. Con el centro desplazado, el zoom se para en el tope de la escena; para pasar a la escala vecina hay que «Volver al origen» primero (rotulado «Volver al Sol» o «Volver a la Vía Láctea»), visible en las tres escalas mientras el centro esté desplazado.
+- **Solo se cambia de escala con el centro en el origen.** Rige en las tres escalas, también del mapa de la galaxia al Grupo Local: con el Sol fuera de la vista (tras «Centrar» un objeto lejano) la Vía Láctea entraba descentrada en el Grupo Local, cuya Vía Láctea está en el centro. Y en el fundido al Grupo Local no vale la holgura del clamp de «Centrar» / «Volver al Sol» (`VLEscalas.holguraVigente`): el clamp centra la galaxia y el relevo casa. Con el centro desplazado, el zoom se para en el tope de la escena; para pasar a la escala vecina hay que «Volver al origen» primero (rotulado «Volver al Sol» o «Volver a la Vía Láctea»), visible en las tres escalas mientras el centro esté desplazado.
 - **El centro es volátil:** no sobrevive a recargar ni a cambiar de escala.
 
 ## Escalas del visor (topes de zoom y campo)

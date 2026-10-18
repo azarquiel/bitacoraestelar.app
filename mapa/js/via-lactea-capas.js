@@ -57,10 +57,10 @@
   }
 
   // ¿Se puede cambiar de escala con la rueda o el pellizco? (#424) Solo con el
-  // centro en el origen; del mapa de la galaxia no hay centro, así que se pasa
-  // libre hacia el Grupo Local y hacia el vecindario.
+  // centro en el origen, también en la galaxia (con el Sol a la vista): si no,
+  // la Vía Láctea entra descentrada en el Grupo Local.
   function puedeCambiarDeEscala(capa, centroDesplazado) {
-    return !centroDesplazado || capa === 'galaxia';
+    return !centroDesplazado;
   }
 
   var API = {

@@ -71,6 +71,10 @@
     return Math.sqrt(dx * dx + dy * dy) < Math.min(ancho, alto) * proximidadSol(cfg);
   }
 
+  // ¿Cae un objeto en el centro del visor? dx, dy: del centro al objeto, en px.
+  // Tolera el redondeo del vuelo y de la proyección.
+  function enCentro(dx, dy) { return Math.sqrt(dx * dx + dy * dy) < 2; }
+
   // Con el centro de la escena a la vista (centro desplazado, o dentro del
   // vecindario, que se pinta siempre en el centro del visor) el zoom no sigue al cursor.
   function zoomAlCentro(desplazado, dentroVecindario) { return !!(desplazado || dentroVecindario); }
@@ -104,27 +108,40 @@
       : NaN;
     return {
       grupoLocalMax: umbrales(cfgG).umbralFinal,
+      // La galaxia, al alejar, se para donde empieza a fundirse con el Grupo Local.
+      galaxiaMin: umbrales(cfgG).umbral,
       // Sin dato (o tope 0), no se aleja.
       vecindarioMin: (isFinite(min) && min > 0) ? min : Infinity
     };
   }
 
+  // Holgura del clamp de «Centrar» / «Volver al Sol» que vale a esta escala: en
+  // el fundido al Grupo Local ninguna, para que el clamp centre la galaxia y su
+  // Vía Láctea case con la del Grupo Local, que está en el centro.
+  function holguraVigente(holgura, escala, cfg) {
+    return (holgura && escala >= umbrales(cfg && cfg.grupoLocal).umbral) ? holgura : null;
+  }
+
   // La escala que deja el zoom: la pedida, o el tope si cruzarlo cambiaría de
   // escala. Un tope ya rebasado no empuja la vista atrás: solo impide seguir en
-  // esa dirección. Del mapa de la galaxia no hay centro: pasa libre.
+  // esa dirección. En la galaxia el centro desplazado es el Sol fuera de la
+  // vista: alejar no pasa al Grupo Local, cuya Vía Láctea está en el centro.
+  // Acercar no se limita: entrar al vecindario ya exige el Sol centrado.
   function limitar(p) {
     // Mismo predicado que VLCapas.puedeCambiarDeEscala (capas.js se carga después).
-    if (!p.desplazado || p.capa === 'galaxia') return p.pedida;
+    if (!p.desplazado) return p.pedida;
     var t = topes(p);
     var r = p.capa === 'vecindario'
       ? Math.max(p.pedida, Math.min(p.escala, t.vecindarioMin))
-      : Math.min(p.pedida, Math.max(p.escala, t.grupoLocalMax));
+      : p.capa === 'galaxia'
+        ? Math.max(p.pedida, Math.min(p.escala, t.galaxiaMin))
+        : Math.min(p.pedida, Math.max(p.escala, t.grupoLocalMax));
     return isFinite(r) ? r : p.escala;
   }
 
   var API = { RADIO_CAMPO: RADIO_CAMPO, radioCampo: radioCampo, umbrales: umbrales, fundidoGrupoLocal: fundidoGrupoLocal,
-              proximidadSol: proximidadSol, solCerca: solCerca, zoomAlCentro: zoomAlCentro, puntoFijoZoom: puntoFijoZoom,
-              duracionVuelo: duracionVuelo, topes: topes, limitar: limitar };
+              proximidadSol: proximidadSol, solCerca: solCerca, enCentro: enCentro, zoomAlCentro: zoomAlCentro, puntoFijoZoom: puntoFijoZoom,
+              duracionVuelo: duracionVuelo, topes: topes, limitar: limitar, holguraVigente: holguraVigente };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
   if (typeof window !== 'undefined') { window.VLEscalas = API; }
