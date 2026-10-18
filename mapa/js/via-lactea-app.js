@@ -1334,13 +1334,14 @@
   }
   // Zoom de la rueda y del pellizco con el centro desplazado (#424): no cruza a
   // otra escala (los topes son donde EMPIEZA el fundido de salida) y va hacia el
-  // objeto centrado, que cae en el centro del visor, no hacia el cursor. Solo
-  // cuentan las escenas 3D: el Sol fuera de la vista no limita el zoom.
+  // objeto centrado, que cae en el centro del visor, no hacia el cursor. El
+  // punto fijo solo cuenta las escenas 3D: en la galaxia el zoom sigue al cursor.
   function centroDesplazado() {
     return escenas3D().some(function (e) { return !!e.centroDesplazado && e.centroDesplazado(); });
   }
+  // Los topes sí cuentan la galaxia: con el Sol fuera no se sale al Grupo Local.
   function limitarZoom(pedida) {
-    var desplazado = centroDesplazado();
+    var desplazado = centroDesplazado() || escenaGalaxia.centroDesplazado();
     if (!desplazado) return pedida;
     var galImg = document.getElementById('mw-image');
     var vr = viewer.getBoundingClientRect();
@@ -1473,7 +1474,8 @@
       anchoPant = Math.max(anchoPant, h3.w);
       altoPant = Math.max(altoPant, h3.h);
     }
-    var ampl = VLGeometria.conHolgura(anchoPant, altoPant, viewerRect.width, viewerRect.height, holguraCentro, scale);
+    var ampl = VLGeometria.conHolgura(anchoPant, altoPant, viewerRect.width, viewerRect.height,
+      VLEscalas.holguraVigente(holguraCentro, scale, window.CONFIG), scale);
     anchoPant = ampl.w;
     altoPant = ampl.h;
     var pos = VLGeometria.clampDesplazamiento(

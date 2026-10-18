@@ -47,9 +47,18 @@ eq(E.limitar(p('grupoLocal', true, 0.01, 0.005, 1000)), 0.005, 'alejar es libre'
 eq(E.limitar(p('grupoLocal', true, 0.05, 0.1, 1000)), 0.05, 'ya rebasado, no sigue acercando');
 eq(E.limitar(p('grupoLocal', false, 0.01, 0.1, 1000)), 0.1, 'centro en el origen: libre');
 
-console.log('limitar: galaxia siempre libre:');
-eq(E.limitar(p('galaxia', true, 1, 100, 1000)), 100, 'acercando');
-eq(E.limitar(p('galaxia', true, 1, 0.001, 1000)), 0.001, 'alejando');
+console.log('holguraVigente: la del centrado no llega al Grupo Local:');
+var H = { x: 30, y: 0, escala: 2 };
+eq(E.holguraVigente(H, 0.5, CFG), H, 'por encima del umbral (0,1) vale');
+eq(E.holguraVigente(H, 0.1, CFG), H, 'en el umbral aún vale');
+eq(E.holguraVigente(H, 0.09, CFG), null, 'en el fundido no: la Vía Láctea entra centrada');
+eq(E.holguraVigente(null, 0.5, CFG), null, 'sin holgura, nada');
+
+console.log('limitar: galaxia (tope del Grupo Local = umbral 0,1, donde empieza el fundido):');
+eq(E.limitar(p('galaxia', true, 1, 0.001, 1000)), 0.1, 'centro desplazado: alejar se para en el tope');
+eq(E.limitar(p('galaxia', true, 1, 100, 1000)), 100, 'centro desplazado: acercar es libre');
+eq(E.limitar(p('galaxia', true, 0.08, 0.05, 1000)), 0.08, 'ya rebasado, no sigue alejando');
+eq(E.limitar(p('galaxia', false, 1, 0.001, 1000)), 0.001, 'Sol centrado: pasa al Grupo Local');
 
 console.log('fundidoGrupoLocal (umbral 0.1, final 0.04):');
 var GL = CFG.grupoLocal;
