@@ -19,6 +19,9 @@ ok(!E.enCentro(3, 0) && !E.enCentro(0, -40), 'unos px fuera ya no');
 var ga = app.slice(app.indexOf('var escenaGalaxia'), app.indexOf('function escenas3D'));
 ok(/centrar: function/.test(ga) && /esCentro: function/.test(ga), 'la galaxia ofrece centrar() y esCentro()');
 ok(/VLEscalas\.enCentro\(/.test(ga), 'esCentro usa VLEscalas.enCentro');
+ok(/querySelector\('\.mw-punto'\)/.test(ga), 'esCentro mide el punto (el hundido deja el ancla en el plano)');
+ok(/centrar: function \(obj\) \{\s*if \(VLCapas\.capaActiva\(alphaAtlas, alphaVecindario\) !== 'galaxia'\) return;/.test(ga), 'centrar solo con la galaxia como capa activa');
+ok((app.match(/\(r\.left \+ r\.width \/ 2\) - \(vr\.left \+ vr\.width \/ 2\)/g) || []).length === 1, 'una sola cuenta del desfase al centro del visor (desfaseDelVisor)');
 
 // Un solo vuelo para el Sol y para el objeto: sin copiar la curva.
 var vuelo = app.slice(app.indexOf('function volarAlCentro'), app.indexOf('centroVolver.addEventListener'));

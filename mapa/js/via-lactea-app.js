@@ -1186,6 +1186,13 @@
   // imagen se funde en el punto "Sol" y aparece la capa del vecindario
   // (vecindario-solar.js), acoplando su fov a los píxeles/año-luz de la galaxia.
   // --------------------------------------------------------------------------
+  // Del centro del visor al centro de un elemento, en px de pantalla.
+  function desfaseDelVisor(el) {
+    var r = el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
+    return { dx: (r.left + r.width / 2) - (vr.left + vr.width / 2),
+             dy: (r.top + r.height / 2) - (vr.top + vr.height / 2) };
+  }
+
   // ¿Está el marcador del Sol (vista cenital) cerca del centro del visor?
   function cercaDelSol() {
     if (isEdgeView) return false;
@@ -1194,11 +1201,8 @@
     // El ancla mide 0x0 (sus hijos son absolutos): su caja ES su posición, así
     // que no se puede exigir que tenga tamaño. Sin colocar aún, no hay Sol.
     if (!el.style.left) return false;
-    var r = el.getBoundingClientRect();
-    var vr = viewer.getBoundingClientRect();
-    var dx = (r.left + r.width / 2) - (vr.left + vr.width / 2);
-    var dy = (r.top + r.height / 2) - (vr.top + vr.height / 2);
-    return VLEscalas.solCerca(dx, dy, vr.width, vr.height, window.CONFIG);
+    var d = desfaseDelVisor(el), vr = viewer.getBoundingClientRect();
+    return VLEscalas.solCerca(d.dx, d.dy, vr.width, vr.height, window.CONFIG);
   }
 
   // «Volver al Sol» (#425): la pastilla #mw-centro con solo el botón. La
@@ -1218,11 +1222,9 @@
     }
     var el = document.getElementById(isEdgeView ? 'sun-edge-anchor' : 'mw-sun-anchor');
     if (!el || !el.style.left) return;
-    var r = el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
+    var d = desfaseDelVisor(el), vr = viewer.getBoundingClientRect();
     // Con viaje el encuadre descentra el Sol a propósito: nada que enseñar (#427).
-    var fuera = !viajeActivo && !VLEscalas.solCerca(
-      (r.left + r.width / 2) - (vr.left + vr.width / 2),
-      (r.top + r.height / 2) - (vr.top + vr.height / 2), vr.width, vr.height, window.CONFIG);
+    var fuera = !viajeActivo && !VLEscalas.solCerca(d.dx, d.dy, vr.width, vr.height, window.CONFIG);
     if (!fuera && !propia) return;   // la pastilla es de una escena 3D
     if (fuera && !propia) {
       VLCentro.rotularPastilla(document, { escala: 'galaxia', aria: 'Volver al Sol, origen de la escena', texto: 'Volver al Sol' });
@@ -1302,13 +1304,19 @@
     volver: function () { return escenaGalaxia.centroDesplazado() && volverAlSol(); },
     // «Centrar» de la ficha de un marcador: el objeto vuela al centro del visor
     // como el Sol al volver; el centro es lo que haya en el centro del visor.
-    centrar: function (obj) { var a = anclaEnVista(obj); volarAlCentro(a.x, a.y, a.z); },
+    centrar: function (obj) {
+      if (VLCapas.capaActiva(alphaAtlas, alphaVecindario) !== 'galaxia') return;
+      var a = anclaEnVista(obj);
+      volarAlCentro(a.x, a.y, a.z);
+    },
+    // Se mide el punto, no el ancla: el hundido bajo el plano abatido deja el
+    // ancla en el plano y se desplaza en px de pantalla (como en dibujarRuta).
     esCentro: function (obj) {
-      var el = document.getElementById(obj.id + (isEdgeView ? '-edge' : '') + '-anchor');
+      var a = document.getElementById(obj.id + (isEdgeView ? '-edge' : '') + '-anchor');
+      var el = a && (a.querySelector('.mw-punto') || a);
       if (!el) return false;
-      var r = el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
-      return VLEscalas.enCentro((r.left + r.width / 2) - (vr.left + vr.width / 2),
-                                (r.top + r.height / 2) - (vr.top + vr.height / 2));
+      var d = desfaseDelVisor(el);
+      return VLEscalas.enCentro(d.dx, d.dy);
     },
     alOrigen: function () { /* sin centro que devolver: el encuadre del viaje ya la coloca */ }
   };
