@@ -1789,6 +1789,15 @@
   // ═══════════════════════════════════════════════════════════════════════
   // ENVÍO: crea (POST) o modifica (PUT) según el modo
   // ═══════════════════════════════════════════════════════════════════════
+  // Clave de idempotencia (#464): nace al abrir el formulario y se conserva entre
+  // reintentos, así que un envío que se perdió a medias y se repite no crea otra
+  // fila. Solo se renueva cuando una creación sale bien.
+  function nuevaClaveIdem(){
+    return (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+  var claveIdem = nuevaClaveIdem();
+
   $('obsForm').addEventListener('submit',function(e){
     e.preventDefault();
     if(!lastComputed) return;
@@ -1804,6 +1813,7 @@
     var expl = recogerExploracion();
     var todas = expl ? [expl].concat(entradas) : entradas;
     var payload = Object.assign({}, lastComputed, { entradas: todas });
+    if(!editandoId) payload.clave_idem = claveIdem;
 
     // Siempre mostramos el bloque de datos: sirve de comprobante.
     jsonArea.value=JSON.stringify(payload,null,2);
@@ -1841,7 +1851,11 @@
         } else if(distCaja){
           distCaja.hidden = true;
         }
+        if(res.data.aviso_ficha){
+          txt += ' <span style="color:var(--ambar,#c88)">' + res.data.aviso_ficha + '</span>';
+        }
         $('outNote').innerHTML='<span style="color:var(--verde)">'+txt+'</span>';
+        if(!editando) claveIdem = nuevaClaveIdem();
         // Si esta observación ha dicho el lugar, el servidor lo sube al viaje: hay
         // que releerlo para que el selector de base desaparezca sin recargar. El
         // aviso descarta consultas repetidas de la misma noche, así que se le
@@ -1856,12 +1870,13 @@
         return;
       }
       // Un 502/504 en HTML, un fatal de PHP o un timeout pueden llegar con el
-      // INSERT ya hecho: reenviar a ciegas la duplicaría.
+      // INSERT ya hecho: reenviar es seguro porque la clave de idempotencia
+      // hace que el servidor devuelva la observación ya creada.
       var msg=BitacoraBase.errorDe(res, 'No se pudo guardar la observación', {
         m401: 'Debes iniciar sesión para registrar observaciones.',
         m403: 'Solo puedes modificar tus propias observaciones.',
         mIncierto: 'El servidor falló y no se sabe si la observación se guardó. '
-          + 'Revisa el listado de observaciones antes de volver a enviarla.'
+          + 'Vuelve a pulsar Guardar: si ya estaba guardada, no se duplicará.'
       });
       $('outNote').innerHTML='<span style="color:var(--rojo)">✗ '+msg+'</span>';
     })

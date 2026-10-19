@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.9
+ * Version:     1.38.10
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.9' );
+define( 'BITACORA_VERSION', '1.38.10' );
 // Lo que se cachea que una consulta a un catálogo falló por la red (issue #460):
 // minutos, no el día de «no está», para que un corte no deje el objeto sin datos.
 define( 'BITACORA_TTL_FALLO_RED', 5 * 60 ); // 5 minutos
@@ -182,6 +182,7 @@ function bitacora_crear_tabla() {
         default_index smallint(6) NOT NULL DEFAULT 0,
         origen varchar(16) NOT NULL DEFAULT 'formulario',
         oal_id varchar(64) NOT NULL DEFAULT '',
+        clave_idem varchar(64) DEFAULT NULL,
         observador_id bigint(20) unsigned DEFAULT NULL,
         usuario_id bigint(20) unsigned NOT NULL,
         base_id bigint(20) unsigned DEFAULT NULL,
@@ -197,7 +198,8 @@ function bitacora_crear_tabla() {
         KEY activas (borrada_en, creado_en),
         KEY base_activas (base_id, borrada_en),
         KEY viaje_id (viaje_id),
-        KEY oal_id (usuario_id, oal_id)
+        KEY oal_id (usuario_id, oal_id),
+        UNIQUE KEY clave_idem (usuario_id, clave_idem)
     ) $collate;";
 
     // Tabla hija: las entradas de una observación, una por ocular/aumento.
@@ -783,7 +785,7 @@ function bitacora_viaje_heredar_cielo( $viaje_id, $obs ) {
 /**
  * Recalcula y guarda el viaje de una observación ya escrita en la tabla. Se
  * llama al registrar y al editar: si cambia la fecha, la hora o la base, la
- * observación se muda al viaje que le toca.
+ * observación se muda al viaje que le toca. Devuelve false si no pudo escribir.
  */
 function bitacora_viaje_sincronizar( $observacion_id, $viaje_elegido = 0 ) {
     global $wpdb;
@@ -845,13 +847,16 @@ function bitacora_viaje_sincronizar( $observacion_id, $viaje_elegido = 0 ) {
         );
     }
     $cambios['viaje_id'] = $viaje_id;
-    $wpdb->update(
+    $ok = $wpdb->update(
         bitacora_nombre_tabla(),
         $cambios,
         array( 'id' => intval( $observacion_id ) ),
         null,
         array( '%d' )
     );
+    if ( false === $ok ) {
+        return false;
+    }
     bitacora_viaje_heredar_cielo( $viaje_id, $obs );
     return $viaje_id;
 }
@@ -2149,7 +2154,8 @@ function bitacora_sanitizar_imagen_url( $valor ) {
 
 /**
  * Reemplaza TODAS las entradas de una observación (y sus imágenes) por la lista
- * dada. Se usa al crear y al editar.
+ * dada. Se usa al crear y al editar. Devuelve false si algún paso falla: quien
+ * llama decide si deshacer (los dos lo hacen, dentro de una transacción).
  */
 function bitacora_guardar_entradas( $observacion_id, $entradas ) {
     global $wpdb;
@@ -2160,13 +2166,17 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
     $previas = $wpdb->get_col( $wpdb->prepare( "SELECT id FROM $t_ent WHERE observacion_id = %d", $observacion_id ) );
     if ( $previas ) {
         $ids = implode( ',', array_map( 'intval', $previas ) );
-        $wpdb->query( "DELETE FROM $t_img WHERE entrada_id IN ($ids)" );
+        if ( false === $wpdb->query( "DELETE FROM $t_img WHERE entrada_id IN ($ids)" ) ) {
+            return false;
+        }
     }
-    $wpdb->delete( $t_ent, array( 'observacion_id' => $observacion_id ), array( '%d' ) );
+    if ( false === $wpdb->delete( $t_ent, array( 'observacion_id' => $observacion_id ), array( '%d' ) ) ) {
+        return false;
+    }
 
     $orden = 0;
     foreach ( $entradas as $e ) {
-        $wpdb->insert(
+        $ok = $wpdb->insert(
             $t_ent,
             array(
                 'observacion_id' => $observacion_id,
@@ -2197,11 +2207,14 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                 '%s', // creado_en
             )
         );
+        if ( false === $ok ) {
+            return false;
+        }
         $entrada_id = $wpdb->insert_id;
 
         $io = 0;
         foreach ( $e['imagenes'] as $img ) {
-            $wpdb->insert(
+            $ok = $wpdb->insert(
                 $t_img,
                 array(
                     'entrada_id' => $entrada_id,
@@ -2226,10 +2239,14 @@ function bitacora_guardar_entradas( $observacion_id, $entradas ) {
                     '%s', // creado_en
                 )
             );
+            if ( false === $ok ) {
+                return false;
+            }
             $io++;
         }
         $orden++;
     }
+    return true;
 }
 
 /* ===========================================================================
@@ -2281,18 +2298,27 @@ function bitacora_observador_id_desde_nombre( $nombre, $usuario_id = 0 ) {
     return intval( $wpdb->insert_id );
 }
 
-/** Enlaza una observación con su observador (find-or-create por nombre). */
+/**
+ * Enlaza una observación con su observador (find-or-create por nombre).
+ * Devuelve false si no pudo escribir; null si no hay nombre; si no, el id.
+ */
 function bitacora_asignar_observador( $observacion_id, $nombre, $usuario_id = 0 ) {
     global $wpdb;
     $oid = bitacora_observador_id_desde_nombre( $nombre, $usuario_id );
+    if ( null !== $oid && ! $oid ) {
+        return false; // había nombre y el INSERT del observador falló (insert_id 0)
+    }
     if ( $oid ) {
-        $wpdb->update(
+        $ok = $wpdb->update(
             bitacora_nombre_tabla(),
             array( 'observador_id' => $oid ),
             array( 'id' => $observacion_id ),
             array( '%d' ),
             array( '%d' )
         );
+        if ( false === $ok ) {
+            return false;
+        }
     }
     return $oid;
 }
@@ -4990,12 +5016,13 @@ function bitacora_upsert_ficha( $observacion_id, $datos ) {
     $existe = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE observacion_id = %d", $observacion_id ) );
     if ( $existe ) {
         $datos['actualizado_en'] = current_time( 'mysql', true );
-        $wpdb->update( $tabla, $datos, array( 'observacion_id' => $observacion_id ) );
+        $ok = $wpdb->update( $tabla, $datos, array( 'observacion_id' => $observacion_id ) );
     } else {
         $datos['observacion_id'] = $observacion_id;
         $datos['creado_en']      = current_time( 'mysql', true );
-        $wpdb->insert( $tabla, $datos );
+        $ok = $wpdb->insert( $tabla, $datos );
     }
+    return false !== $ok;
 }
 
 /**
@@ -5025,7 +5052,7 @@ function bitacora_sembrar_ficha_desde_registro( $observacion_id, $params ) {
         'fecha_hora_local' => sanitize_text_field( $params['fechaHoraLocal'] ?? '' ),
         'fecha_hora_utc'   => ( $utc_raw && strtotime( $utc_raw ) ) ? gmdate( 'Y-m-d H:i:s', strtotime( $utc_raw ) ) : null,
     );
-    bitacora_upsert_ficha( $observacion_id, $campos );
+    return bitacora_upsert_ficha( $observacion_id, $campos );
 }
 
 /* ===========================================================================
@@ -5275,7 +5302,89 @@ function bitacora_base_salud( WP_REST_Request $peticion ) {
 }
 
 /**
- * Guarda una observación. Devuelve el id creado.
+ * Clave de idempotencia que manda el formulario al abrirse y conserva entre
+ * reintentos. Null si no llega o no es válida (clientes antiguos, importación).
+ */
+function bitacora_clave_idem( $params ) {
+    $c = isset( $params['clave_idem'] ) ? $params['clave_idem'] : '';
+    return ( is_string( $c ) && preg_match( '/^[A-Za-z0-9_-]{8,64}$/', $c ) ) ? $c : null;
+}
+
+/** La observación que ya creó esa clave para ese usuario, o null. */
+function bitacora_observacion_por_clave( $usuario_id, $clave ) {
+    global $wpdb;
+    $tabla = bitacora_nombre_tabla();
+    return $wpdb->get_row( $wpdb->prepare(
+        "SELECT id, objeto FROM $tabla WHERE usuario_id = %d AND clave_idem = %s",
+        $usuario_id, $clave
+    ) );
+}
+
+/** Error 500 que dice en qué paso del guardado se cayó. */
+function bitacora_error_paso( $paso ) {
+    return new WP_Error(
+        'error_bd',
+        'No se pudo guardar la observación: falló «' . $paso . '». No se ha guardado nada.',
+        array( 'status' => 500, 'paso' => $paso )
+    );
+}
+
+/**
+ * Ejecuta $cuerpo dentro de una transacción: si devuelve un WP_Error se deshace
+ * todo lo escrito; si no, se confirma. Devuelve lo que devolvió $cuerpo.
+ */
+function bitacora_en_transaccion( $cuerpo ) {
+    global $wpdb;
+    $wpdb->query( 'START TRANSACTION' );
+    $r = $cuerpo();
+    $wpdb->query( is_wp_error( $r ) ? 'ROLLBACK' : 'COMMIT' );
+    return $r;
+}
+
+/**
+ * Lo que va DENTRO de la transacción al guardar o editar: observador, viaje y
+ * entradas. La fila ya está escrita (o actualizada). Devuelve true o WP_Error.
+ */
+function bitacora_escribir_dependientes( $id, $datos, $usuario_id, $params, $entradas ) {
+    if ( false === bitacora_asignar_observador( $id, $datos['observador'], $usuario_id ) ) {
+        return bitacora_error_paso( 'observador' );
+    }
+    // El viaje (sesión) al que pertenece: el que eligió el observador en el
+    // formulario o, si no eligió, el de esa noche. Va DESPUÉS de asignar el
+    // observador para que el viaje recién creado nazca ya con él.
+    if ( false === bitacora_viaje_sincronizar( $id, bitacora_viaje_pedido( $params ) ) ) {
+        return bitacora_error_paso( 'viaje' );
+    }
+    if ( false === bitacora_guardar_entradas( $id, $entradas ) ) {
+        return bitacora_error_paso( 'entradas' );
+    }
+    return true;
+}
+
+/**
+ * Lo que va FUERA de la transacción: nunca tumba el guardado. Devuelve los
+ * avisos ('aviso' = objeto sin situar en el mapa, 'aviso_ficha' = ficha sin sembrar).
+ */
+function bitacora_escribir_accesorios( $id, $datos, $params ) {
+    // Si se eligió base, el cliente manda la astrometría ya calculada: se siembra
+    // la ficha (lat/lon + alt/az + sol/luna) en este mismo momento.
+    $aviso_ficha = ( false === bitacora_sembrar_ficha_desde_registro( $id, $params ) )
+        ? 'No se pudo guardar la astrometría de la ficha; edita la observación y guárdala para reintentarlo.' : '';
+
+    // Si el objeto observado aún no está en el catálogo del mapa, se crea con su
+    // posición calculada (galáctica + top/edge). No bloquea el guardado: si no
+    // se puede colocar, la observación queda guardada igual y se avisa.
+    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'], isset( $datos['tipo'] ) ? $datos['tipo'] : '' );
+    return array(
+        'aviso'       => is_wp_error( $obj_res ) ? $obj_res->get_error_message() : '',
+        'aviso_ficha' => $aviso_ficha,
+    );
+}
+
+/**
+ * Guarda una observación. Devuelve el id creado. Es atómico (fila, observador,
+ * viaje y entradas se escriben o no se escribe nada) y, si el cliente manda
+ * clave_idem, reintentarlo devuelve la observación ya creada en vez de otra.
  */
 function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     global $wpdb;
@@ -5304,40 +5413,59 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     $datos['usuario_id'] = get_current_user_id();
     $datos['creado_en']  = current_time( 'mysql', true );
 
-    // Sin formatos explícitos: $wpdb usa %s para todo y convierte null en NULL,
-    // así los campos astrométricos vacíos (ahora en la ficha) se guardan NULL.
-    $ok = $wpdb->insert( bitacora_nombre_tabla(), $datos );
-
-    if ( false === $ok ) {
-        return new WP_Error( 'error_bd', 'No se pudo guardar la observación.', array( 'status' => 500 ) );
+    // Reintento de una creación que ya salió bien: se devuelve la primera.
+    $clave = bitacora_clave_idem( $params );
+    if ( $clave ) {
+        $datos['clave_idem'] = $clave;
+        $previa = bitacora_observacion_por_clave( $datos['usuario_id'], $clave );
+        if ( $previa ) {
+            return bitacora_respuesta_repetida( $previa );
+        }
     }
 
-    $id = $wpdb->insert_id;
-    bitacora_asignar_observador( $id, $datos['observador'], get_current_user_id() );
-    // El viaje (sesión) al que pertenece: el que eligió el observador en el
-    // formulario o, si no eligió, el de esa noche. Va DESPUÉS de asignar el
-    // observador para que el viaje recién creado nazca ya con él.
-    bitacora_viaje_sincronizar( $id, bitacora_viaje_pedido( $params ) );
-    bitacora_guardar_entradas( $id, $entradas );
-    // Si se eligió base, el cliente manda la astrometría ya calculada: se siembra
-    // la ficha (lat/lon + alt/az + sol/luna) en este mismo momento.
-    bitacora_sembrar_ficha_desde_registro( $id, $params );
+    $id = 0;
+    $r  = bitacora_en_transaccion( function () use ( $wpdb, $datos, $params, $entradas, &$id ) {
+        // Sin formatos explícitos: $wpdb usa %s para todo y convierte null en NULL,
+        // así los campos astrométricos vacíos (ahora en la ficha) se guardan NULL.
+        if ( false === $wpdb->insert( bitacora_nombre_tabla(), $datos ) ) {
+            return bitacora_error_paso( 'observación' );
+        }
+        $id = $wpdb->insert_id;
+        return bitacora_escribir_dependientes( $id, $datos, $datos['usuario_id'], $params, $entradas );
+    } );
+    if ( is_wp_error( $r ) ) {
+        // Dos envíos simultáneos con la misma clave: el índice único echó al segundo.
+        $previa = $clave ? bitacora_observacion_por_clave( $datos['usuario_id'], $clave ) : null;
+        return $previa ? bitacora_respuesta_repetida( $previa ) : $r;
+    }
 
-    // Si el objeto observado aún no está en el catálogo del mapa, se crea con su
-    // posición calculada (galáctica + top/edge). No bloquea el guardado: si no
-    // se puede colocar, la observación queda guardada igual y se avisa.
-    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'], isset( $datos['tipo'] ) ? $datos['tipo'] : '' );
-    $aviso   = is_wp_error( $obj_res ) ? $obj_res->get_error_message() : '';
+    $avisos = bitacora_escribir_accesorios( $id, $datos, $params );
 
     return new WP_REST_Response(
         array(
-            'ok'      => true,
-            'id'      => $id,
-            'objeto'  => $datos['objeto'],
-            'mensaje' => 'Observación registrada.',
-            'aviso'   => $aviso,
+            'ok'          => true,
+            'id'          => $id,
+            'objeto'      => $datos['objeto'],
+            'mensaje'     => 'Observación registrada.',
+            'aviso'       => $avisos['aviso'],
+            'aviso_ficha' => $avisos['aviso_ficha'],
         ),
         201
+    );
+}
+
+/** Respuesta al reintento de una creación que ya existe: la misma, sin otra fila. */
+function bitacora_respuesta_repetida( $previa ) {
+    return new WP_REST_Response(
+        array(
+            'ok'          => true,
+            'id'          => intval( $previa->id ),
+            'objeto'      => $previa->objeto,
+            'mensaje'     => 'Observación ya registrada.',
+            'aviso'       => '',
+            'aviso_ficha' => '',
+        ),
+        200
     );
 }
 
@@ -5389,35 +5517,36 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
 
     $datos['actualizado_en'] = current_time( 'mysql', true );
 
-    $ok = $wpdb->update(
-        bitacora_nombre_tabla(),
-        $datos,
-        array( 'id' => $id )
-    );
-
-    if ( false === $ok ) {
-        return new WP_Error( 'error_bd', 'No se pudo actualizar la observación.', array( 'status' => 500 ) );
+    $r = bitacora_en_transaccion( function () use ( $wpdb, $id, $obs, $datos, $params, $entradas ) {
+        if ( false === $wpdb->update( bitacora_nombre_tabla(), $datos, array( 'id' => $id ) ) ) {
+            return bitacora_error_paso( 'observación' );
+        }
+        // Si cambió el viaje elegido —o, sin elegir ninguno, la fecha o la base—, la
+        // observación se muda al que le toca ahora. El viaje que deja atrás se
+        // queda, aunque se vacíe: es del observador y puede tener crónica escrita.
+        // Las entradas se reemplazan por el conjunto recibido; si algo falla, las
+        // anteriores siguen ahí.
+        return bitacora_escribir_dependientes( $id, $datos, intval( $obs->usuario_id ), $params, $entradas );
+    } );
+    if ( is_wp_error( $r ) ) {
+        return $r;
     }
 
-    bitacora_asignar_observador( $id, $datos['observador'], intval( $obs->usuario_id ) );
-    // Si cambió el viaje elegido —o, sin elegir ninguno, la fecha o la base—, la
-    // observación se muda al que le toca ahora. El viaje que deja atrás se
-    // queda, aunque se vacíe: es del observador y puede tener crónica escrita.
-    bitacora_viaje_sincronizar( $id, bitacora_viaje_pedido( $params ) );
-
-    // Reemplaza el conjunto de entradas por el recibido.
-    bitacora_guardar_entradas( $id, $entradas );
-    // Re-siembra la ficha con la astrometría recalculada (si hay base/ubicación).
-    bitacora_sembrar_ficha_desde_registro( $id, $params );
-
-    // Si al editar se cambió a un objeto que aún no está en el mapa, se crea.
-    $obj_res = bitacora_asegurar_objeto_mapa( $datos['objeto'], $datos['objeto_etiqueta'], $datos['ra'], $datos['decl'], isset( $datos['tipo'] ) ? $datos['tipo'] : '' );
-    $aviso   = is_wp_error( $obj_res ) ? $obj_res->get_error_message() : '';
+    // Re-siembra la ficha con la astrometría recalculada y, si al editar se
+    // cambió a un objeto que aún no está en el mapa, lo crea.
+    $avisos = bitacora_escribir_accesorios( $id, $datos, $params );
 
     return new WP_REST_Response(
         // El objeto viaja de vuelta igual que al crear: es a él a quien hay que
         // ponerle la distancia a mano si el aviso dice que no se pudo situar.
-        array( 'ok' => true, 'id' => $id, 'objeto' => $datos['objeto'], 'mensaje' => 'Observación actualizada.', 'aviso' => $aviso ),
+        array(
+            'ok'          => true,
+            'id'          => $id,
+            'objeto'      => $datos['objeto'],
+            'mensaje'     => 'Observación actualizada.',
+            'aviso'       => $avisos['aviso'],
+            'aviso_ficha' => $avisos['aviso_ficha'],
+        ),
         200
     );
 }
