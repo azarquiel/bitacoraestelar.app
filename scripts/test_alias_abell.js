@@ -29,5 +29,10 @@ ok(f('PN A66 12') === '', 'la forma ya canónica no se reescribe');
 ok(f('M57') === '' && f('Albireo') === '', 'nombres ajenos no se tocan');
 ok(f('') === '' && f(null) === '', 'entrada vacía no revienta');
 
+console.log('Tabla compartida con PHP (scripts/fixtures/alias_abell.json):');
+JSON.parse(require('fs').readFileSync(__dirname + '/fixtures/alias_abell.json', 'utf8')).forEach(function (c) {
+  ok(f(c[0]) === c[1], JSON.stringify(c[0]) + ' → ' + JSON.stringify(c[1]));
+});
+
 if (fallos) { console.error(fallos + ' fallo(s).'); process.exit(1); }
 console.log('todo en orden.');

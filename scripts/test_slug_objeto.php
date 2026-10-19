@@ -24,6 +24,11 @@ foreach ( json_decode( (string) file_get_contents( __DIR__ . '/fixtures/slug_obj
 }
 eq( bitacora_slug_objeto( null ), '', 'null -> ""' );
 
+echo "alias Abell (scripts/fixtures/alias_abell.json):\n";
+foreach ( json_decode( (string) file_get_contents( __DIR__ . '/fixtures/alias_abell.json' ), true ) as $caso ) {
+    eq( bitacora_alias_abell( $caso[0] ), $caso[1], '"' . $caso[0] . '" -> "' . $caso[1] . '"' );
+}
+
 echo "sin copias de la receta en el plugin:\n";
 foreach ( glob( __DIR__ . '/../resources/plugins/bitacora-registro/*.php' ) as $f ) {
     if ( 'bitacora-slug.php' === basename( $f ) ) { continue; }
