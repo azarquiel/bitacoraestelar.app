@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.10
+ * Version:     1.38.11
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.10' );
+define( 'BITACORA_VERSION', '1.38.11' );
 // Lo que se cachea que una consulta a un catálogo falló por la red (issue #460):
 // minutos, no el día de «no está», para que un corte no deje el objeto sin datos.
 define( 'BITACORA_TTL_FALLO_RED', 5 * 60 ); // 5 minutos
@@ -53,6 +53,9 @@ define( 'BITACORA_TABLA_VIAJE_TRIPULACION', 'bitacora_viaje_tripulacion' );
 // A qué viaje pertenece una observación: función pura, sin WordPress ni BD, y
 // la única costura con test propio (scripts/test_viaje_noche.php).
 require_once __DIR__ . '/bitacora-viaje.php';
+
+// La regla nombre -> slug, una sola (scripts/test_slug_objeto.php).
+require_once __DIR__ . '/bitacora-slug.php';
 
 // Importar observaciones de los compañeros desde el XML de Open Astronomy Log
 // que escribe registro/plantilla-oal.html (scripts/test_oal_import.php).
@@ -2738,7 +2741,7 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
     $viaje_objetos  = array();
     $obs_rows = $wpdb->get_results( "SELECT * FROM $t_ob WHERE borrada_en IS NULL ORDER BY id ASC" );
     foreach ( $obs_rows as $ob ) {
-        $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', $ob->objeto ) );
+        $slug = bitacora_slug_objeto( $ob->objeto );
         if ( '' === $slug ) {
             continue;
         }
@@ -3894,7 +3897,7 @@ function bitacora_plan_fusion_estrellas( array $filas ) {
 /** El texto de `objeto` que agrupa bajo la fila canónica (su slug, mostrando su etiqueta si coincide). */
 function bitacora_objeto_de_fila_estrella( array $fila ) {
     $e = (string) $fila['etiqueta'];
-    return ( '' !== $e && strtolower( preg_replace( '/[^A-Za-z0-9]/', '', $e ) ) === $fila['slug'] ) ? $e : $fila['slug'];
+    return ( '' !== $e && bitacora_slug_objeto( $e ) === $fila['slug'] ) ? $e : $fila['slug'];
 }
 
 /** La fila de estrella ya registrada en la posición de $calc (de completar_objeto), o null. */
@@ -3925,7 +3928,7 @@ function bitacora_estrella_existente( $calc ) {
  */
 function bitacora_unificar_estrella( $datos ) {
     global $wpdb;
-    $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $datos['objeto'] ) );
+    $slug = bitacora_slug_objeto( (string) $datos['objeto'] );
     if ( '' === $slug || $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . bitacora_nombre_tabla_objetos() . ' WHERE slug = %s', $slug ) ) ) {
         return $datos;
     }
@@ -3950,7 +3953,7 @@ function bitacora_fusionar_estrellas_duplicadas() {
     $obs   = (array) $wpdb->get_results( "SELECT id, objeto FROM $t_ob WHERE objeto <> ''" );
     $n = array();
     foreach ( $obs as $o ) {
-        $s = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $o->objeto ) );
+        $s = bitacora_slug_objeto( (string) $o->objeto );
         $n[ $s ] = ( isset( $n[ $s ] ) ? $n[ $s ] : 0 ) + 1;
     }
     $filas = (array) $wpdb->get_results( "SELECT slug, etiqueta, gal_l, gal_b, dist_al FROM $t_obj WHERE tipo IN ('estrella','carbono')", ARRAY_A );
@@ -3960,7 +3963,7 @@ function bitacora_fusionar_estrellas_duplicadas() {
     unset( $f );
     $plan = bitacora_plan_fusion_estrellas( $filas );
     foreach ( $obs as $o ) {
-        $s = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $o->objeto ) );
+        $s = bitacora_slug_objeto( (string) $o->objeto );
         if ( isset( $plan[ $s ] ) ) {
             $wpdb->update( $t_ob, array( 'objeto' => bitacora_objeto_de_fila_estrella( $plan[ $s ] ) ), array( 'id' => intval( $o->id ) ), array( '%s' ), array( '%d' ) );
         }
@@ -3983,7 +3986,7 @@ function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = nu
     $identificador = trim( (string) $identificador );
     // El slug debe coincidir con el que agrupa las OBSERVACIONES en el visor:
     // minúsculas y sin nada que no sea letra o número ("NGC 6826" -> "ngc6826").
-    $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', $identificador ) );
+    $slug = bitacora_slug_objeto( $identificador );
     if ( '' === $slug ) {
         return null;
     }
@@ -4165,7 +4168,7 @@ function bitacora_objetos_backfill() {
     $colocados = 0;
     $problemas = array();
     foreach ( (array) $filas as $o ) {
-        $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $o->objeto ) );
+        $slug = bitacora_slug_objeto( (string) $o->objeto );
         if ( '' === $slug || isset( $ya[ $slug ] ) || isset( $problemas[ $o->objeto ] ) ) {
             continue;
         }
@@ -4272,7 +4275,7 @@ function bitacora_crear_objeto( WP_REST_Request $peticion ) {
     if ( '' === $ident ) {
         return new WP_Error( 'falta_id', 'Falta el identificador del objeto (p. ej. "M63").', array( 'status' => 400 ) );
     }
-    $slug = sanitize_key( str_replace( ' ', '', $ident ) );
+    $slug = bitacora_slug_objeto( $ident );
     if ( '' === $slug ) {
         return new WP_Error( 'id_invalido', 'El identificador no es válido.', array( 'status' => 400 ) );
     }
@@ -6021,7 +6024,7 @@ function bitacora_generar_ficha_interno( WP_REST_Request $peticion ) {
 
     // Nombre de descarga: objeto en minúscula, sin espacios, + "_inv.docx".
     // "M30" -> "m30_inv.docx"   |   "NGC 6826" -> "ngc6826_inv.docx"
-    $slug = strtolower( preg_replace( '/[^A-Za-z0-9]/', '', $obs->objeto ) );
+    $slug = bitacora_slug_objeto( $obs->objeto );
     if ( '' === $slug ) {
         $slug = 'ficha';
     }

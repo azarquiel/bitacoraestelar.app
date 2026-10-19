@@ -20,6 +20,8 @@
  * (XXE), sin red y con un tope de tamaño.
  */
 
+require_once __DIR__ . '/bitacora-slug.php';
+
 /* ===========================================================================
  * 1. PURA · leer el XML
  * =========================================================================== */
@@ -1526,11 +1528,6 @@ function bitacora_oal_num( $v ) {
     return ( null === $v || '' === $v ) ? '' : floatval( $v );
 }
 
-/** El slug del catálogo del mapa, la misma receta que bitacora_asegurar_objeto_mapa(). */
-function bitacora_oal_slug( $objeto ) {
-    return strtolower( preg_replace( '/[^A-Za-z0-9]/', '', (string) $objeto ) );
-}
-
 /**
  * El `estado` de un viaje: la salida entera con lo que cuelga de ella.
  *
@@ -1658,7 +1655,7 @@ function bitacora_oal_estado_viajes( $viajes, $usuario_id ) {
         // entera el mismo objeto se repite en muchas noches.
         $slugs = array();
         foreach ( (array) $obs as $o ) {
-            $slug = bitacora_oal_slug( $o->objeto );
+            $slug = bitacora_slug_objeto( $o->objeto );
             if ( '' !== $slug && ! array_key_exists( $slug, $tipos ) ) {
                 $tipos[ $slug ] = '';
                 $slugs[]        = $slug;
@@ -1696,7 +1693,7 @@ function bitacora_oal_estado_viajes( $viajes, $usuario_id ) {
             if ( '' === $firma ) {
                 $firma = $firma_dueno;
             }
-            $slug = bitacora_oal_slug( $o->objeto );
+            $slug = bitacora_slug_objeto( $o->objeto );
             foreach ( $entradas as $i => $e ) {
                 if ( $o->telescopio_id ) {
                     $equipo['telescopios'][ intval( $o->telescopio_id ) ] = 1;
