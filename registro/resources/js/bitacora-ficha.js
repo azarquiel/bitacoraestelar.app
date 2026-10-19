@@ -170,11 +170,11 @@
         OBS = { ra: parseFloat(o.ra), dec: parseFloat(o.decl), etiqueta: (o.objeto_etiqueta || o.objeto || '') };
         if (cabecera) cabecera.textContent = OBS.etiqueta + (o.observador ? (' · ' + o.observador) : '');
         if (o.base_id) basePendiente = o.base_id;   // base ya elegida en el registro
-        return cargarBases().then(function () {
-          return api(WP.endpoint + '/' + obsId + '/ficha-datos').then(function (fres) {
-            if (fres.ok && fres.data && fres.data.observacion_id) { precargar(fres.data); }
-            recompute();
-          });
+        // Bases y ficha-datos no dependen la una de la otra: van a la vez.
+        return Promise.all([cargarBases(), api(WP.endpoint + '/' + obsId + '/ficha-datos')]).then(function (r) {
+          var fres = r[1];
+          if (fres.ok && fres.data && fres.data.observacion_id) { precargar(fres.data); }
+          recompute();
         });
       }).catch(function () {
         outNote.innerHTML = '<span style="color:var(--rojo)">✗ No se pudo contactar con el servidor.</span>';

@@ -551,6 +551,10 @@
   // cargar el módulo: `var` se iza sin su valor, así que declararlo más abajo
   // dejaba WP en `undefined` justo en esas líneas y el aviso nacía null.
   var WP = window.BITACORA_WP || null;
+  // Guardar o dar de alta un objeto puede encadenar varias consultas del
+  // servidor a SIMBAD/VizieR (20 s cada una): el timeout por defecto de api()
+  // abortaría guardados que sí terminan. Igual con la subida de imágenes.
+  var ESCRITURA_MS = 120000;
 
   // ── Episodios del feed RSS del observador (issue #178) ──
   // Se piden solo al abrir el fieldset, una vez por carga de página (nunca por
@@ -560,10 +564,8 @@
     audioDetails.addEventListener('toggle', function(){
       if (!audioDetails.open || episodiosPedidos || !WP || !WP.observadorClave) return;
       episodiosPedidos = true;
-      fetch(WP.observadores + '/' + encodeURIComponent(WP.observadorClave) + '/episodios', {
-        credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce }
-      })
-        .then(function(r){ return r.ok ? r.json() : { episodios: [] }; })
+      BitacoraBase.api(WP.observadores + '/' + encodeURIComponent(WP.observadorClave) + '/episodios')
+        .then(function(res){ return res.ok ? res.data : { episodios: [] }; })
         .then(function(d){
           var episodios = (d && d.episodios) || [];
           if (!episodios.length) { if ($('audioFeedAviso')) $('audioFeedAviso').hidden = false; return; }
@@ -598,8 +600,8 @@
   var VIAJES_API = WP ? BitacoraBase.ruta('viajes/de-la-noche') : '';
   function pedirViaje(datos, metodo){
     var q = '?fecha='+encodeURIComponent(datos.fecha)+'&hora='+encodeURIComponent(datos.hora);
-    return fetch(VIAJES_API+q, { method:metodo, credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
-      .then(function(r){ if(!r.ok) throw new Error('viaje'); return r.json(); });
+    return BitacoraBase.api(VIAJES_API+q, { method:metodo })
+      .then(function(res){ if(!res.ok) throw new Error('viaje'); return res.data; });
   }
   function etiquetaViaje(v){
     var nombre = v.nombre || ('Viaje del '+(v.noche||''));
@@ -670,9 +672,9 @@
   function cargarBases(){
     if(!WP) return;
     var API = BitacoraBase.ruta('bases');
-    fetch(API, { credentials:'same-origin', headers:{ 'X-WP-Nonce':WP.nonce } })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){
+    BitacoraBase.api(API)
+      .then(function(res){
+        var d = res.ok ? res.data : null;
         if(!Array.isArray(d)) return;
         listaBases=d; basesCargadas=true;
         if(basePendiente!=null){ baseSel=basePorId(basePendiente); basePendiente=null; }
@@ -886,9 +888,9 @@
   function cargarFlota() {
     if (!WP) return;
     var API = BitacoraBase.ruta('equipo');
-    fetch(API, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
+    BitacoraBase.api(API)
+      .then(function (res) {
+        var d = res.ok ? res.data : null;
         if (!d) return;
         flota = {
           telescopios: d.telescopios || [], oculares: d.oculares || [],
@@ -1036,11 +1038,7 @@
     var id = editandoId || derivandoId;
     if(!id || !WP) return;
     $('outNote').textContent = 'Cargando la observación nº ' + id + '…';
-    fetch(WP.endpoint + '/' + id, {
-      credentials:'same-origin',
-      headers:{ 'X-WP-Nonce': WP.nonce }
-    })
-    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, status:r.status, data:d}; }); })
+    BitacoraBase.api(WP.endpoint + '/' + id)
     .then(function(res){
       if(!res.ok){
         $('outNote').innerHTML = '<span style="color:var(--rojo)">✗ No se pudo cargar la observación nº ' + id + '.</span>';
@@ -1154,16 +1152,14 @@
   function subirImagen(file, rowEl, statusEl){
     if(!WP || !WP.media){ statusEl.textContent='(sin sesión de WordPress no se puede subir)'; return; }
     statusEl.textContent='Subiendo…';
-    fetch(WP.media, {
-      method:'POST', credentials:'same-origin',
+    BitacoraBase.api(WP.media, {
+      method:'POST', timeout:ESCRITURA_MS,
       headers:{
-        'X-WP-Nonce':WP.nonce,
         'Content-Disposition':'attachment; filename="'+encodeURIComponent(file.name)+'"',
         'Content-Type': file.type||'application/octet-stream'
       },
       body:file
     })
-    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,status:r.status,data:d}; }); })
     .then(function(res){
       if(res.ok && res.data && res.data.id){
         rowEl.setAttribute('data-img-id', res.data.id);
@@ -1171,7 +1167,7 @@
         ponerMiniatura(rowEl, res.data.source_url||'');
         statusEl.innerHTML='<span style="color:var(--verde)">✓ subida</span>';
       } else {
-        var msg=(res.data&&res.data.message)?res.data.message:('error '+res.status);
+        var msg=BitacoraBase.errorDe(res, 'No se pudo subir');
         statusEl.innerHTML='<span style="color:var(--rojo)">'+msg+'</span>';
       }
     })
@@ -1830,18 +1826,7 @@
     // anterior. Solo el éxito vuelve a destaparlos, y una vez.
     mostrarEncadenar(false);
 
-    fetch(url,{
-      method:metodo,
-      credentials:'same-origin',          // envía la cookie de sesión
-      headers:{
-        'Content-Type':'application/json',
-        'X-WP-Nonce':WP.nonce             // demuestra que la petición sale de esta página
-      },
-      body:JSON.stringify(payload)
-    })
-    .then(function(r){
-      return r.json().then(function(data){ return {ok:r.ok, status:r.status, data:data}; });
-    })
+    BitacoraBase.api(url, { method:metodo, body:payload, timeout:ESCRITURA_MS })
     .then(function(res){
       submitBtn.disabled=false;
       if(res.ok && res.data && res.data.ok){
@@ -1870,9 +1855,14 @@
         if(!editando) mostrarEncadenar(true);
         return;
       }
-      var msg=(res.data && res.data.message) ? res.data.message : 'Error '+res.status;
-      if(res.status===401) msg='Debes iniciar sesión para registrar observaciones.';
-      if(res.status===403) msg='Solo puedes modificar tus propias observaciones.';
+      // Un 502/504 en HTML, un fatal de PHP o un timeout pueden llegar con el
+      // INSERT ya hecho: reenviar a ciegas la duplicaría.
+      var msg=BitacoraBase.errorDe(res, 'No se pudo guardar la observación', {
+        m401: 'Debes iniciar sesión para registrar observaciones.',
+        m403: 'Solo puedes modificar tus propias observaciones.',
+        mIncierto: 'El servidor falló y no se sabe si la observación se guardó. '
+          + 'Revisa el listado de observaciones antes de volver a enviarla.'
+      });
       $('outNote').innerHTML='<span style="color:var(--rojo)">✗ '+msg+'</span>';
     })
     .catch(function(){
@@ -1913,20 +1903,17 @@
       }
       distBtn.disabled = true;
       distNota.textContent = 'Situando…';
-      fetch(WP.objetos,{
-        method:'POST',
-        credentials:'same-origin',
-        headers:{ 'Content-Type':'application/json', 'X-WP-Nonce':WP.nonce },
-        body:JSON.stringify({ id:objetoSinSituar, label:objetoSinSituar, dist_al:al })
+      BitacoraBase.api(WP.objetos, {
+        method:'POST', timeout:ESCRITURA_MS,
+        body:{ id:objetoSinSituar, label:objetoSinSituar, dist_al:al }
       })
-      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
       .then(function(res){
         distBtn.disabled = false;
         if(res.ok){
           distNota.innerHTML='<span style="color:var(--verde)">✓ '+objetoSinSituar+' ya está en el mapa.</span>';
           return;
         }
-        var msg=(res.data && res.data.message) ? res.data.message : 'No se pudo situar el objeto.';
+        var msg=BitacoraBase.errorDe(res, 'No se pudo situar el objeto');
         distNota.innerHTML='<span style="color:var(--rojo)">✗ '+msg+'</span>';
       })
       .catch(function(){
