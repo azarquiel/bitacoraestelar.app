@@ -3191,6 +3191,7 @@ function bitacora_categorias_ongc() {
  * scripts/gen_ongc_tipo.py y se carga una sola vez (static).
  */
 function bitacora_ongc_tipo( $identificador ) {
+    $identificador = bitacora_alias_abell( $identificador ) ?: $identificador; // mismo objeto que SIMBAD (#466)
     static $mapa = null;
     if ( null === $mapa ) {
         $archivo = __DIR__ . '/datos/ongc-tipo.json';
@@ -3371,8 +3372,9 @@ function bitacora_simbad( $identificador ) {
         return null;
     }
     // Versionada: si cambia la forma del array devuelto (nuevas claves como
-    // sp_type o gaia_dr3_id) o lo que se consulta (alias Abell), subir esta versión invalida de golpe la caché
-    // vieja en vez de dejar arrays a medias 30 días sirviendo null.
+    // sp_type o gaia_dr3_id) o lo que se consulta (alias Abell), subir esta
+    // versión invalida de golpe la caché vieja en vez de dejar arrays a medias
+    // 30 días sirviendo null.
     $cache_key = 'bitacora_simbad_v4_' . md5( strtolower( $id ) );
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
