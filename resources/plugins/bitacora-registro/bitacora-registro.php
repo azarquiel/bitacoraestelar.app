@@ -2305,6 +2305,9 @@ function bitacora_observador_id_desde_nombre( $nombre, $usuario_id = 0 ) {
 function bitacora_asignar_observador( $observacion_id, $nombre, $usuario_id = 0 ) {
     global $wpdb;
     $oid = bitacora_observador_id_desde_nombre( $nombre, $usuario_id );
+    if ( null !== $oid && ! $oid ) {
+        return false; // había nombre y el INSERT del observador falló (insert_id 0)
+    }
     if ( $oid ) {
         $ok = $wpdb->update(
             bitacora_nombre_tabla(),
