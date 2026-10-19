@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.11
+ * Version:     1.38.12
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,12 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.11' );
+define( 'BITACORA_VERSION', '1.38.12' );
+// Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
+// usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
+define( 'BITACORA_TOPE_AUMENTO', 10000 );
+define( 'BITACORA_TOPE_CAMPO', 10 );    // grados
+define( 'BITACORA_TOPE_PUPILA', 15 );   // mm
 // Lo que se cachea que una consulta a un catálogo falló por la red (issue #460):
 // minutos, no el día de «no está», para que un corte no deje el objeto sin datos.
 define( 'BITACORA_TTL_FALLO_RED', 5 * 60 ); // 5 minutos
@@ -1417,6 +1422,70 @@ function bitacora_validar_resultado( $d ) {
     );
 }
 
+/** ¿Es una fecha de calendario real en formato YYYY-MM-DD? */
+function bitacora_fecha_valida( $texto ) {
+    return 1 === preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', (string) $texto, $m )
+        && checkdate( (int) $m[2], (int) $m[3], (int) $m[1] );
+}
+
+/**
+ * Entero opcional en [$min, $max]: null si viene vacío, WP_Error 400 si no es un
+ * entero de ese rango (antes se descartaba sin avisar).
+ */
+function bitacora_validar_entero_opcional( $valor, $min, $max, $nombre ) {
+    if ( null === $valor || '' === $valor ) {
+        return null;
+    }
+    if ( ! is_numeric( $valor ) || floatval( $valor ) !== floor( floatval( $valor ) ) || $valor < $min || $valor > $max ) {
+        return new WP_Error( 'campo_invalido', "$nombre debe ser un entero entre $min y $max.", array( 'status' => 400 ) );
+    }
+    return intval( $valor );
+}
+
+/**
+ * Astrometría que el cliente calcula para la sesión: RA/Dec obligatorios
+ * (identifican el objeto), el resto opcional, más las dos fechas de la ficha.
+ * Es la ÚNICA lectura de esos campos: la usan validar_datos (para rechazar) y
+ * sembrar_ficha_desde_registro (para escribir), así que no pueden divergir.
+ *
+ * @return array|WP_Error Claves ra, decl, lat, lon, objAlt, objAz, sunAlt,
+ *                        moonAlt, fecha_hora_local, fecha_hora_utc.
+ */
+function bitacora_validar_astrometria( $d ) {
+    $v = array();
+    foreach ( array( 'ra' => array( 0, 360 ), 'dec' => array( -90, 90 ) ) as $campo => $rng ) {
+        $resultado = bitacora_validar_num( $d[ $campo ] ?? null, $rng[0], $rng[1], $campo );
+        if ( is_wp_error( $resultado ) ) {
+            return $resultado;
+        }
+        $v[ 'dec' === $campo ? 'decl' : $campo ] = $resultado;
+    }
+    $opcionales = array(
+        'lat'     => array( -90,  90  ),
+        'lon'     => array( -180, 180 ),
+        'objAlt'  => array( -90,  90  ),
+        'objAz'   => array( 0,    360 ),
+        'sunAlt'  => array( -90,  90  ),
+        'moonAlt' => array( -90,  90  ),
+    );
+    foreach ( $opcionales as $campo => $rng ) {
+        $valor = $d[ $campo ] ?? null;
+        if ( null === $valor || '' === $valor ) {
+            $v[ $campo ] = null;
+            continue;
+        }
+        $resultado = bitacora_validar_num( $valor, $rng[0], $rng[1], $campo );
+        if ( is_wp_error( $resultado ) ) {
+            return $resultado;
+        }
+        $v[ $campo ] = $resultado;
+    }
+    $utc_raw = sanitize_text_field( $d['fechaHoraUTC'] ?? '' );
+    $v['fecha_hora_local'] = sanitize_text_field( $d['fechaHoraLocal'] ?? '' );
+    $v['fecha_hora_utc']   = ( $utc_raw && strtotime( $utc_raw ) ) ? gmdate( 'Y-m-d H:i:s', strtotime( $utc_raw ) ) : null;
+    return $v;
+}
+
 /**
  * Valida y normaliza los datos de una observación recibidos del navegador.
  * La usan tanto la creación como la edición: una sola fuente de verdad.
@@ -1441,45 +1510,19 @@ function bitacora_validar_datos( $d ) {
         return new WP_Error( 'campo_invalido', 'Falta el nombre del observador.', array( 'status' => 400 ) );
     }
 
-    // --- Fecha de la observación (opcional, para el mapa: 'cuándo se observó') ---
+    // --- Fecha de la observación (noche, 'cuándo se observó'). El formulario la
+    //     exige; el servidor NO, para poder editar filas antiguas sin fecha, pero
+    //     si llega ha de ser YYYY-MM-DD (registro/CONTEXT.md, «Qué exige el servidor»). ---
     $fecha_obs = sanitize_text_field( $d['fechaObservacion'] ?? '' );
-
-    // --- RA/Dec: obligatorios (identifican el objeto; permiten calcular la ficha) ---
-    $v = array();
-    foreach ( array( 'ra' => array( 0, 360 ), 'dec' => array( -90, 90 ) ) as $campo => $rng ) {
-        $resultado = bitacora_validar_num( $d[ $campo ] ?? null, $rng[0], $rng[1], $campo );
-        if ( is_wp_error( $resultado ) ) {
-            return $resultado;
-        }
-        $v[ $campo ] = $resultado;
+    if ( '' !== $fecha_obs && ! bitacora_fecha_valida( $fecha_obs ) ) {
+        return new WP_Error( 'campo_invalido', 'La fecha de la observación debe ser YYYY-MM-DD.', array( 'status' => 400 ) );
     }
 
-    // --- Resto de astrometría: OPCIONAL (su sitio es la ficha, Form 2) ---
-    $opcionales = array(
-        'lat'     => array( -90,  90  ),
-        'lon'     => array( -180, 180 ),
-        'objAlt'  => array( -90,  90  ),
-        'objAz'   => array( 0,    360 ),
-        'sunAlt'  => array( -90,  90  ),
-        'moonAlt' => array( -90,  90  ),
-    );
-    foreach ( $opcionales as $campo => $rng ) {
-        $valor = $d[ $campo ] ?? null;
-        if ( null === $valor || '' === $valor ) {
-            $v[ $campo ] = null;
-            continue;
-        }
-        $resultado = bitacora_validar_num( $valor, $rng[0], $rng[1], $campo );
-        if ( is_wp_error( $resultado ) ) {
-            return $resultado;
-        }
-        $v[ $campo ] = $resultado;
+    // --- Astrometría: RA/Dec obligatorios, el resto opcional (su sitio es la ficha) ---
+    $v = bitacora_validar_astrometria( $d );
+    if ( is_wp_error( $v ) ) {
+        return $v;
     }
-
-    // --- Fechas (opcionales; su sitio es la ficha) ---
-    $fecha_local   = sanitize_text_field( $d['fechaHoraLocal'] ?? '' );
-    $fecha_utc_raw = sanitize_text_field( $d['fechaHoraUTC'] ?? '' );
-    $fecha_utc     = ( $fecha_utc_raw && strtotime( $fecha_utc_raw ) ) ? gmdate( 'Y-m-d H:i:s', strtotime( $fecha_utc_raw ) ) : null;
 
     // --- Enlace a la ficha publicada (PDF), opcional ---
     $pdf = isset( $d['pdf'] ) ? esc_url_raw( $d['pdf'] ) : '';
@@ -1509,10 +1552,9 @@ function bitacora_validar_datos( $d ) {
         }
         $cielo_sqm = floatval( $d['cieloSqm'] );
     }
-    $cielo_bortle = null;
-    if ( isset( $d['cieloBortle'] ) && '' !== $d['cieloBortle'] && null !== $d['cieloBortle'] ) {
-        $b = intval( $d['cieloBortle'] );
-        $cielo_bortle = ( $b >= 1 && $b <= 9 ) ? $b : null;
+    $cielo_bortle = bitacora_validar_entero_opcional( $d['cieloBortle'] ?? null, 1, 9, 'La clase Bortle' );
+    if ( is_wp_error( $cielo_bortle ) ) {
+        return $cielo_bortle;
     }
     // --- Transparencia del cielo (IR, ºC): escala de −30 (extremadamente
     //     transparente) a >−5 (pobre). Opcional, la mide el observador. ---
@@ -1525,12 +1567,10 @@ function bitacora_validar_datos( $d ) {
     }
     // --- Seeing (escala de Antoniadi: 1 excelente – 5 pésimo). Opcional, y se
     //     anota por observación porque se mide con el ocular puesto y empeora o
-    //     mejora a lo largo de la noche. Fuera de rango se descarta en vez de
-    //     rechazar el registro entero: es un dato accesorio, como el Bortle. ---
-    $seeing = null;
-    if ( isset( $d['seeing'] ) && '' !== $d['seeing'] && null !== $d['seeing'] ) {
-        $s = intval( $d['seeing'] );
-        $seeing = ( $s >= 1 && $s <= 5 ) ? $s : null;
+    //     mejora a lo largo de la noche. Fuera de rango: 400, como el resto. ---
+    $seeing = bitacora_validar_entero_opcional( $d['seeing'] ?? null, 1, 5, 'El seeing' );
+    if ( is_wp_error( $seeing ) ) {
+        return $seeing;
     }
     // --- Base de observación (opcional): lugar reutilizable del observador. Su
     //     propiedad/visibilidad se comprueba al guardar (bitacora_base_legible). ---
@@ -1597,7 +1637,7 @@ function bitacora_validar_datos( $d ) {
         'tipo'            => $tipo,
         'num'             => $num,
         'ra'              => $v['ra'],
-        'decl'            => $v['dec'],
+        'decl'            => $v['decl'],
         'observador'      => $observador,
         'telescopio'      => $telescopio,
         'telescopio_id'   => $telescopio_id,
@@ -1627,24 +1667,6 @@ function bitacora_sanitizar_url_https( $valor ) {
         return '';
     }
     return mb_substr( $v, 0, 255 );
-}
-
-/**
- * Formatos de $wpdb para los datos de bitacora_validar_datos().
- *
- * Los campos opcionales (sqm, ir, temp) pueden ser null: para que $wpdb
- * guarde NULL de verdad —y no 0— el formato de un valor null debe ser '%s'
- * (así WordPress lo trata como NULL en vez de convertirlo a 0.0 con '%f').
- */
-function bitacora_formatos_datos( $datos ) {
-    // 16 campos fijos: los 13 primeros y los 3 de cielo al final.
-    $base = array( '%s','%s','%s','%d','%f','%f','%s','%s','%s','%s','%f','%f','%f','%f','%f','%f' );
-    // Ajuste para sqm, ir, temp: si son null, formato '%s' (=> NULL).
-    foreach ( array( 'sqm', 'ir', 'temp' ) as $campo ) {
-        $base[] = ( null === $datos[ $campo ] ) ? '%s' : '%f';
-    }
-    $base[] = '%s'; // pdf
-    return $base;
 }
 
 /**
@@ -2048,15 +2070,15 @@ function bitacora_validar_entradas( $lista ) {
             $titulo  = sanitize_text_field( isset( $e['titulo'] ) ? $e['titulo'] : '' );
         } else {
             $aumento = isset( $e['aumento'] ) ? $e['aumento'] : null;
-            if ( ! is_numeric( $aumento ) || $aumento <= 0 || $aumento > 10000 ) {
-                return new WP_Error( 'entrada_invalida', "Entrada $n: el aumento debe ser un número mayor que 0.", array( 'status' => 400 ) );
+            if ( ! is_numeric( $aumento ) || $aumento <= 0 || $aumento > BITACORA_TOPE_AUMENTO ) {
+                return new WP_Error( 'entrada_invalida', 'Entrada ' . $n . ': el aumento debe ser un número mayor que 0 y de hasta ' . BITACORA_TOPE_AUMENTO . '.', array( 'status' => 400 ) );
             }
             $aumento = floatval( $aumento );
 
             // Campo real en grados decimales (p. ej. 1.17 para 1º 10').
             $campo = isset( $e['campoReal'] ) ? $e['campoReal'] : null;
-            if ( ! is_numeric( $campo ) || $campo <= 0 || $campo > 10 ) {
-                return new WP_Error( 'entrada_invalida', "Entrada $n: el campo real (en grados) debe estar entre 0 y 10.", array( 'status' => 400 ) );
+            if ( ! is_numeric( $campo ) || $campo <= 0 || $campo > BITACORA_TOPE_CAMPO ) {
+                return new WP_Error( 'entrada_invalida', 'Entrada ' . $n . ': el campo real (en grados) debe estar entre 0 y ' . BITACORA_TOPE_CAMPO . '.', array( 'status' => 400 ) );
             }
             $campo = floatval( $campo );
 
@@ -2064,10 +2086,10 @@ function bitacora_validar_entradas( $lista ) {
             $pupila = isset( $e['pupilaSalida'] ) ? $e['pupilaSalida'] : null;
             if ( null === $pupila || '' === $pupila ) {
                 $pupila = null;
-            } elseif ( is_numeric( $pupila ) && $pupila > 0 && $pupila <= 15 ) {
+            } elseif ( is_numeric( $pupila ) && $pupila > 0 && $pupila <= BITACORA_TOPE_PUPILA ) {
                 $pupila = floatval( $pupila );
             } else {
-                return new WP_Error( 'entrada_invalida', "Entrada $n: la pupila de salida (mm) está fuera de rango.", array( 'status' => 400 ) );
+                return new WP_Error( 'entrada_invalida', 'Entrada ' . $n . ': la pupila de salida (mm) debe estar entre 0 y ' . BITACORA_TOPE_PUPILA . '.', array( 'status' => 400 ) );
             }
 
             // Botón vacío: datos.js lo genera a partir de aumento/campo/pupila.
@@ -5034,26 +5056,24 @@ function bitacora_upsert_ficha( $observacion_id, $datos ) {
  * ubicación (lat/lon). No pisa SQM/IR (viven en la observación) ni pdf/lugar.
  */
 function bitacora_sembrar_ficha_desde_registro( $observacion_id, $params ) {
-    $lat = ( isset( $params['lat'] ) && is_numeric( $params['lat'] ) ) ? floatval( $params['lat'] ) : null;
-    $lon = ( isset( $params['lon'] ) && is_numeric( $params['lon'] ) ) ? floatval( $params['lon'] ) : null;
-    if ( null === $lat || null === $lon ) {
+    $a = bitacora_validar_astrometria( $params ); // mismos rangos que validar_datos
+    if ( is_wp_error( $a ) ) {
+        return false;
+    }
+    if ( null === $a['lat'] || null === $a['lon'] ) {
         return; // sin base/ubicación no se siembra la ficha
     }
-    $n = function ( $k ) use ( $params ) {
-        return ( isset( $params[ $k ] ) && is_numeric( $params[ $k ] ) ) ? floatval( $params[ $k ] ) : null;
-    };
-    $utc_raw = sanitize_text_field( $params['fechaHoraUTC'] ?? '' );
     $campos = array(
-        'ra'               => $n( 'ra' ),
-        'decl'             => $n( 'dec' ),
-        'lat'              => $lat,
-        'lon'              => $lon,
-        'obj_alt'          => $n( 'objAlt' ),
-        'obj_az'           => $n( 'objAz' ),
-        'sun_alt'          => $n( 'sunAlt' ),
-        'moon_alt'         => $n( 'moonAlt' ),
-        'fecha_hora_local' => sanitize_text_field( $params['fechaHoraLocal'] ?? '' ),
-        'fecha_hora_utc'   => ( $utc_raw && strtotime( $utc_raw ) ) ? gmdate( 'Y-m-d H:i:s', strtotime( $utc_raw ) ) : null,
+        'ra'               => $a['ra'],
+        'decl'             => $a['decl'],
+        'lat'              => $a['lat'],
+        'lon'              => $a['lon'],
+        'obj_alt'          => $a['objAlt'],
+        'obj_az'           => $a['objAz'],
+        'sun_alt'          => $a['sunAlt'],
+        'moon_alt'         => $a['moonAlt'],
+        'fecha_hora_local' => $a['fecha_hora_local'],
+        'fecha_hora_utc'   => $a['fecha_hora_utc'],
     );
     return bitacora_upsert_ficha( $observacion_id, $campos );
 }
