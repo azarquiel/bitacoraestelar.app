@@ -34,6 +34,7 @@ class WpdbFalso {
 }
 $wpdb = new WpdbFalso();
 
+require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-slug.php';
 $fuente = (string) file_get_contents( __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-registro.php' );
 $desde  = strpos( $fuente, 'function bitacora_clave_posicion_estrella' );
 $hasta  = strpos( $fuente, '/**', strpos( $fuente, 'function bitacora_fusionar_estrellas_duplicadas' ) );
