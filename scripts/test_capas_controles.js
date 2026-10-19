@@ -59,7 +59,7 @@ console.log('leyenda: cada escala enseña la suya y esconde las otras dos:');
 console.log('puedeCambiarDeEscala (#424): solo con el centro en el origen:');
 ['galaxia', 'grupoLocal', 'vecindario'].forEach(function (capa) {
   eq(C.puedeCambiarDeEscala(capa, false), true, capa + ': centro en el origen, se cambia');
-  eq(C.puedeCambiarDeEscala(capa, true), capa === 'galaxia', capa + ': centro desplazado, ' + (capa === 'galaxia' ? 'se pasa libre' : 'no se cambia'));
+  eq(C.puedeCambiarDeEscala(capa, true), false, capa + ': centro desplazado, no se cambia');
 });
 
 if (fallos) { console.log('\n' + fallos + ' fallo(s).'); process.exit(1); }
