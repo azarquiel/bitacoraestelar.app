@@ -11,7 +11,7 @@
 
 ## Backend (WordPress & PHP)
 - Ubicación: Todo el código personalizado vive en `resources/plugins/bitacora-registro`.
-- Base de Datos: Tablas personalizadas `{prefix}bitacora` y `{prefix}bitacora_objetos`. Usa `$wpdb`.
+- Base de Datos: Tablas personalizadas `{prefix}bitacora` y `{prefix}bitacora_objetos`. Usa `$wpdb`. Prefijo de tablas en producción: `dgrh_` (`dgrh_bitacora_observaciones`, `dgrh_bitacora_entradas`...). Base de datos: `mdgboybv_yfbj1`.
 - API: Endpoints REST bajo el namespace `/wp-json/bitacora/v1/*`.
 - Producción: El dominio base es `bitacoraestelar.app`.
 - **Versión del plugin**: al modificar `bitacora-registro.php`, sube el número en DOS sitios: el comentario `Version:` de cabecera Y la constante `define('BITACORA_VERSION', ...)`. Solo la constante dispara la migración automática de esquema (`bitacora_comprobar_version()` en `plugins_loaded`); si se te olvida y solo subes la cabecera, las columnas/tablas nuevas no se crean en producción y las peticiones que las usan fallan con 500.
