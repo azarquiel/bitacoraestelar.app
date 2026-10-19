@@ -5366,7 +5366,7 @@ function bitacora_escribir_accesorios( $id, $datos, $params ) {
     // Si se eligió base, el cliente manda la astrometría ya calculada: se siembra
     // la ficha (lat/lon + alt/az + sol/luna) en este mismo momento.
     $aviso_ficha = ( false === bitacora_sembrar_ficha_desde_registro( $id, $params ) )
-        ? 'No se pudo guardar la astrometría de la ficha; vuelve a guardar para reintentarlo.' : '';
+        ? 'No se pudo guardar la astrometría de la ficha; edita la observación y guárdala para reintentarlo.' : '';
 
     // Si el objeto observado aún no está en el catálogo del mapa, se crea con su
     // posición calculada (galáctica + top/edge). No bloquea el guardado: si no
