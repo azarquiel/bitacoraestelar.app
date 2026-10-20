@@ -17,6 +17,19 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 - **De dónde vino:** `origen` distingue `formulario` (normal), `oal` (importada) y `legacy` (migrada). No cambia el significado, solo las garantías.
 - **Apunta a otras entradas del glosario:** objeto mirado tiene o debería tener su [[objeto del mapa]]; el sitio, su [[base]] (vía el viaje); alturas y azimuts calculados, su [[astrometría de la sesión]]. Campo `tipo` de aquí es TIPO DE LA OBSERVACIÓN (cómo se identificó el objeto: `messier`, `carbono`, `otro`), homónimo peligroso del tipo del objeto del mapa: ver aviso en [[clasificación de objeto del mapa]].
 
+### Qué exige el servidor (#467)
+
+`POST`/`PUT /observaciones` pasa por `bitacora_validar_datos`. Decisión campo a campo frente a lo que exige el formulario:
+
+- **Objeto, observador, RA y Dec: los exige el servidor** (identifican la fila).
+- **Fecha: el servidor NO la exige, pero si llega ha de ser `YYYY-MM-DD` real** (400 si no). El formulario sí la pide; el servidor la deja opcional para poder editar filas antiguas sin fecha.
+- **Telescopio: el servidor NO lo exige.** El formulario lo obliga a salir de la flota; las filas antiguas y las de OAL traen el texto libre o nada.
+- **Viaje: el servidor NO lo exige del cliente**, lo deduce de la noche (`bitacora_viaje_pedido`).
+- **Seeing (1–5) y Bortle (1–9): fuera de rango o no entero es 400**, ya no se descartan en silencio.
+- **Topes de cada entrada** (aumento ≤ 10000, campo ≤ 10º, pupila ≤ 15 mm): constantes `BITACORA_TOPE_*` en PHP y `TOPES` en `bitacora-formulario.js`; el formulario los avisa antes de enviar. Test: `scripts/test_validacion_servidor.php`.
+- **La astrometría se lee en un solo sitio** (`bitacora_validar_astrometria`): la usan `validar_datos` y la siembra de la ficha, con los mismos rangos.
+- La importación OAL no pasa por `validar_datos` (su propio INSERT): nada de esto la afecta.
+
 ## Resultado de la observación
 
 **Explorado – no confirmado**: estado de un objeto que alguien ha intentado observar y no ha visto (épica #393). Cada observación guarda UN `resultado` (`{prefix}bitacora`): `visto` (defecto, y lo que leen todas las filas previas), `detectado_no_visto` (detectado pero no visto) o `no_visto` (claramente no visto). `motivo_no_visto` (`nubes`, `contaminacion`, `luna`, `bajo`, `seeing`, `apertura`, `no_localizado`, `otro`) es opcional y solo existe en un no visto. **Terminología heredada:** en el código previo, «explorado» a secas significaba «observado», porque toda fila contaba como vista (el eje «Explorados / Por explorar»); la épica lo renombra a «Confirmados».

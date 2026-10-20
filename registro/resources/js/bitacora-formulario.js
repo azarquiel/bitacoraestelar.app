@@ -1602,11 +1602,11 @@
       '</div>'+
       '<div class="row">'+
         '<label class="field"><span class="lab">Aumento (✕) *</span>'+
-          '<input type="number" class="e-aumento" step="1" min="1" placeholder="70"></label>'+
+          '<input type="number" class="e-aumento" step="1" min="1" max="10000" placeholder="70"></label>'+
         '<label class="field"><span class="lab">Campo real *</span>'+
           '<input type="text" class="e-campo" placeholder="1º 10′ · ó 1.17 · ó 70′"></label>'+
         '<label class="field"><span class="lab">Pupila de salida (mm)</span>'+
-          '<input type="number" class="e-pupila" step="0.1" min="0" placeholder="6.6"></label>'+
+          '<input type="number" class="e-pupila" step="0.1" min="0" max="15" placeholder="6.6"></label>'+
       '</div>'+
       '<label class="field"><span class="lab">Nombre del ocular</span>'+
         '<input type="text" class="e-titulo" placeholder="Nagler 31mm"></label>'+
@@ -1744,11 +1744,14 @@
     return out;
   }
 
+  // Mismos topes que BITACORA_TOPE_* en bitacora-registro.php (los fija un test).
+  var TOPES={aumento:10000, campo:10, pupila:15};
   function validarEntradas(lista){
     for(var i=0;i<lista.length;i++){
       var e=lista[i], n=i+1;
-      if(!(e.aumento>0)) return {ok:false, error:'Ocular '+n+': falta el aumento (un número mayor que 0).'};
-      if(!(e.campoReal>0)) return {ok:false, error:'Ocular '+n+': el campo real no es válido (p. ej. 1º 10′, 1.17 ó 70′).'};
+      if(!(e.aumento>0) || e.aumento>TOPES.aumento) return {ok:false, error:'Ocular '+n+': el aumento debe ser mayor que 0 y de hasta '+TOPES.aumento+'.'};
+      if(!(e.campoReal>0) || e.campoReal>TOPES.campo) return {ok:false, error:'Ocular '+n+': el campo real no es válido (p. ej. 1º 10′, 1.17 ó 70′; hasta '+TOPES.campo+'º).'};
+      if(e.pupilaSalida!=null && !(e.pupilaSalida>0 && e.pupilaSalida<=TOPES.pupila)) return {ok:false, error:'Ocular '+n+': la pupila de salida debe estar entre 0 y '+TOPES.pupila+' mm.'};
       if(textoPlano(e.descripcion)==='') return {ok:false, error:'Ocular '+n+': falta la descripción.'};
     }
     return {ok:true};
