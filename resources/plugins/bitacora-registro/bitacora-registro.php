@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.12
+ * Version:     1.38.13
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.12' );
+define( 'BITACORA_VERSION', '1.38.13' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -3213,6 +3213,7 @@ function bitacora_categorias_ongc() {
  * scripts/gen_ongc_tipo.py y se carga una sola vez (static).
  */
 function bitacora_ongc_tipo( $identificador ) {
+    $identificador = bitacora_alias_abell( $identificador ) ?: $identificador; // mismo objeto que SIMBAD (#466)
     static $mapa = null;
     if ( null === $mapa ) {
         $archivo = __DIR__ . '/datos/ongc-tipo.json';
@@ -3384,14 +3385,19 @@ function bitacora_cachear_ausencia( $cache_key, $fallo_de_red ) {
  * peticiones.
  */
 function bitacora_simbad( $identificador ) {
+    // El mismo alias que aplica el navegador antes de Sesame: sin él, «Abell 12»
+    // traía la distancia y el tipo del cúmulo ACO 12 con las coordenadas de la
+    // planetaria.
     $id = trim( (string) $identificador );
+    $id = bitacora_alias_abell( $id ) ?: $id;
     if ( '' === $id ) {
         return null;
     }
     // Versionada: si cambia la forma del array devuelto (nuevas claves como
-    // sp_type o gaia_dr3_id), subir esta versión invalida de golpe la caché
-    // vieja en vez de dejar arrays a medias 30 días sirviendo null.
-    $cache_key = 'bitacora_simbad_v3_' . md5( strtolower( $id ) );
+    // sp_type o gaia_dr3_id) o lo que se consulta (alias Abell), subir esta
+    // versión invalida de golpe la caché vieja en vez de dejar arrays a medias
+    // 30 días sirviendo null.
+    $cache_key = 'bitacora_simbad_v4_' . md5( strtolower( $id ) );
     $cache = get_transient( $cache_key );
     if ( false !== $cache ) {
         return is_array( $cache ) ? $cache : null;
@@ -3780,6 +3786,7 @@ function bitacora_ned_dist_al( $identificador ) {
  */
 function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_dado = null, $dec_dado = null, $tipo_obs = '' ) {
     $sim = bitacora_simbad( $identificador );
+    $ident = bitacora_alias_abell( $identificador ) ?: $identificador; // peldaños de distancia: el mismo objeto que SIMBAD
 
     // Coordenadas: preferimos las dadas (de la observación); si no, las de SIMBAD.
     $tiene_radec = ( null !== $ra_dado && '' !== $ra_dado && null !== $dec_dado && '' !== $dec_dado );
@@ -3798,13 +3805,13 @@ function bitacora_completar_objeto( $identificador, $dist_manual_al = null, $ra_
     // objeto que ya se preguntó no vuelve a costar red.
     $dist_al = $sim ? $sim['dist_al'] : null;                       // medidas o paralaje
     if ( null === $dist_al ) {
-        $dist_al = bitacora_vizier_dist_al( $identificador );       // cúmulos abiertos
+        $dist_al = bitacora_vizier_dist_al( $ident );       // cúmulos abiertos
     }
     if ( null === $dist_al ) {
-        $dist_al = bitacora_oac_dist_al( $identificador );          // transitorios y restos
+        $dist_al = bitacora_oac_dist_al( $ident );          // transitorios y restos
     }
     if ( null === $dist_al ) {
-        $dist_al = bitacora_ned_dist_al( $identificador );          // estimación por z
+        $dist_al = bitacora_ned_dist_al( $ident );          // estimación por z
     }
     if ( null === $dist_al ) {
         $dist_al = ( null !== $dist_manual_al ) ? floatval( $dist_manual_al ) : null;
