@@ -269,6 +269,7 @@
       raManual.value  = formatRA(d.ra);
       decManual.value = formatDec(d.dec);
       coordsAuto=true; coordsDe=d.q;   // marcadas como auto: se pueden sustituir si cambia el nombre
+      BitacoraBase.precalentarObjeto(d.q);   // el servidor consulta los catálogos ahora, no al guardar (#468)
       resolveObject();   // re-resuelve ya con las coordenadas puestas
       setStatus(objStatus,'ok','✓ Coordenadas de “'+d.q+'” traídas de SIMBAD (puedes ajustarlas).');
     },

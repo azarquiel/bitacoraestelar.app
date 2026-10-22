@@ -868,6 +868,18 @@ window.BitacoraBase = (function () {
     return String(WP.endpoint || '').replace(/\/observaciones\/?$/, '/' + nombre);
   }
 
+  /* Precalienta la caché del servidor (#468): GET /resolver ejecuta las consultas
+     a SIMBAD/VizieR/OAC/NED y las deja en transients, así que el «Guardar» que
+     viene después no sale a la red. Sin respuesta que esperar y sin avisos: si
+     falla, el guardado hace esas consultas como siempre. Sin BITACORA_WP (página
+     sin sesión) no hace nada. */
+  function precalentarObjeto(nombre) {
+    var q = String(nombre == null ? '' : nombre).trim();
+    if (q.length < 2 || !(window.BITACORA_WP || {}).endpoint) return Promise.resolve(null);
+    return api(ruta('resolver') + '?q=' + encodeURIComponent(q), { timeout: 60000 })
+      .then(null, function () { return null; });
+  }
+
   function errorDe(res, porDefecto, textos) {
     textos = textos || {};
     if (res.status === 401) return textos.m401 || 'Debes iniciar sesión.';
@@ -893,6 +905,7 @@ window.BitacoraBase = (function () {
     esc: esc,
     api: api,
     ruta: ruta,
+    precalentarObjeto: precalentarObjeto,
     errorDe: errorDe,
     flash: flash,
     aliasMessier: aliasMessier,

@@ -165,6 +165,25 @@ casos.push(function () {
   return Promise.resolve();
 });
 
+/* 4b ─ precalentarObjeto(): GET /resolver sin esperar nada y sin romper (#468) */
+casos.push(function () {
+  console.log('4b. precalentarObjeto(): calienta la caché del servidor');
+  pedido = null;
+  return B.precalentarObjeto('NGC 7000').then(function () {
+    ok(pedido && pedido.url === B.ruta('resolver') + '?q=NGC%207000', 'GET /resolver?q= con el nombre codificado');
+    pedido = null;
+    return B.precalentarObjeto(' ');
+  }).then(function () {
+    ok(pedido === null, 'nombre vacío: no hay petición');
+    var antes = global.fetch;
+    global.fetch = function () { return Promise.reject(new Error('sin red')); };
+    return B.precalentarObjeto('M 999').then(function (r) {
+      global.fetch = antes;
+      ok(r === null, 'un fallo de red no rechaza: el guardado lo hará como siempre');
+    });
+  });
+});
+
 /* 5 ─ errorDe(): mensajes por parámetro, no por reimplementación */
 casos.push(function () {
   console.log('5. errorDe(): 401/403 y respaldos');

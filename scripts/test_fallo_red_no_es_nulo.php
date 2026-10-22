@@ -108,19 +108,26 @@ preparar([new WP_Error(), http(200, "bprp\n")]);
 bitacora_gaia_bprp('123');
 eq(es_nulo_un_dia(cacheado()), true, "CDS caído y GAVO «no está»: 'nulo' 24 h");
 
-echo "bitacora_simbad · la subconsulta del id de Gaia:\n";
-$encontrado = "ra,dec,morph,otype,sp,dist,unit,plx,plx_err\n10.5,41.2,,Star,K3III,,,,\n";
-preparar([http(200, $encontrado), new WP_Error()]);
+echo "bitacora_simbad · el id de Gaia DR3 viaja en la misma consulta (#468):\n";
+$cab = "ra,dec,morph,otype,sp,dist,unit,plx,plx_err,id\n";
+preparar([http(200, $cab . "10.5,41.2,,Star,K3III,,,,,Gaia DR3 1234567890\n")]);
 $sim = bitacora_simbad('Gamma And');
-eq($sim['ra'], 10.5, 'el objeto se resuelve aunque falle la subconsulta');
-eq($sim['gaia_dr3_id'], null, 'gaia_dr3_id null, nunca false');
-$c = cacheado();
-eq($c !== null && $c[0]['gaia_dr3_id'] === null && $c[1] <= HOUR_IN_SECONDS, true,
-    'subconsulta caída: el resultado se cachea minutos, no 30 días');
+eq($peticiones, 1, 'una sola petición a SIMBAD para el objeto y su id de Gaia');
+eq($sim['gaia_dr3_id'], '1234567890', 'gaia_dr3_id sale de la columna g.id');
+eq(cacheado()[1], 30 * DAY_IN_SECONDS, 'resultado completo: 30 días');
 
-preparar([http(200, $encontrado), http(200, "id\n")]);
-bitacora_simbad('Gamma And');
-eq(cacheado()[1], 30 * DAY_IN_SECONDS, 'subconsulta «no tiene id de Gaia»: 30 días, como siempre');
+preparar([http(200, $cab . "10.5,41.2,,Star,K3III,,,,,\n")]);
+eq(bitacora_simbad('Gamma And')['gaia_dr3_id'], null, 'sin vínculo a Gaia: null');
+
+preparar([http(200, $cab . "10.5,41.2,,Star,K3III,10,pc,,,\n10.5,41.2,,Star,K3III,12,pc,,,Gaia DR3 77\n")]);
+eq(bitacora_simbad('Gamma And')['gaia_dr3_id'], '77', 'varias filas de distancia: se toma el id de la que lo trae');
+
+echo "bitacora_completar_objeto · catálogos caídos (#468, AC2):\n";
+preparar(array_fill(0, 8, new WP_Error()));
+$r = bitacora_completar_objeto('NGC 7000', null, 314.7, 44.3);
+eq($r instanceof WP_Error, true, 'no revienta: devuelve un error de «sin distancia» para el aviso manual');
+$r = bitacora_completar_objeto('NGC 7000', 2600, 314.7, 44.3);
+eq(is_array($r) && $r['dist_al'] === 2600.0, true, 'con la distancia a mano, el objeto se coloca igual');
 
 echo $fallos ? "\n$fallos FALLOS\n" : "\nTodo bien.\n";
 exit($fallos ? 1 : 0);

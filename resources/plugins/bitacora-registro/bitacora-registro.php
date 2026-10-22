@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.13
+ * Version:     1.38.14
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.13' );
+define( 'BITACORA_VERSION', '1.38.14' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -3407,9 +3407,17 @@ function bitacora_simbad( $identificador ) {
     // en la misma consulta: son gratis. `sp_type` alimenta el color de respaldo
     // (BitacoraGaiaColor.bpRpPorTipo) cuando la estrella no tiene fotometría de
     // Gaia (primarias muy brillantes, saturadas y fuera de catálogo).
-    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, b.sp_type, d.dist, d.unit, b.plx_value, b.plx_err "
+    //
+    // `g.id` es el identificador `Gaia DR3 <source_id>` que SIMBAD ya tiene
+    // vinculado al objeto (#468): viaja en esta misma consulta en vez de pagar
+    // una segunda ida y vuelta al mismo servicio. Es identidad, no posición, así
+    // que en sistemas múltiples (Gamma Andromedae) no se engancha a la vecina.
+    // Si SIMBAD no lo vinculó, ninguna búsqueda posicional del plugin acertará
+    // mejor: bitacora_gaia_bprp() no la intenta.
+    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, b.sp_type, d.dist, d.unit, b.plx_value, b.plx_err, g.id "
         . "FROM basic AS b JOIN ident AS i ON i.oidref = b.oid "
         . "LEFT JOIN mesDistance AS d ON d.oidref = b.oid "
+        . "LEFT JOIN ident AS g ON g.oidref = b.oid AND g.id LIKE 'Gaia DR3%' "
         . "WHERE i.id = '" . str_replace( "'", "''", $id ) . "'";
 
     $url = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync';
@@ -3439,6 +3447,7 @@ function bitacora_simbad( $identificador ) {
     array_shift( $lineas ); // cabecera
 
     $ra = null; $dec = null; $morph = ''; $otype = ''; $sp_type = ''; $plx = null; $plx_err = null;
+    $gaia_dr3_id = null;
     $distancias_al = array();
     // Factores a años luz por unidad de SIMBAD.
     $a_al = array( 'pc' => 3.2616, 'kpc' => 3261.6, 'mpc' => 3261600.0, 'ly' => 1.0, 'al' => 1.0 );
@@ -3469,6 +3478,9 @@ function bitacora_simbad( $identificador ) {
         if ( is_numeric( $dist ) && isset( $a_al[ $unidad ] ) ) {
             $distancias_al[] = floatval( $dist ) * $a_al[ $unidad ];
         }
+        if ( null === $gaia_dr3_id && isset( $c[9] ) && preg_match( '/^Gaia DR3 (\d+)$/', trim( $c[9] ), $m ) ) {
+            $gaia_dr3_id = $m[1];
+        }
         // La paralaje es del objeto, así que viene repetida en todas las filas.
         if ( null === $plx && is_numeric( $c[7] ) ) {
             $plx = floatval( $c[7] );
@@ -3483,19 +3495,6 @@ function bitacora_simbad( $identificador ) {
         return null;
     }
 
-    // Identificador propio de Gaia DR3, si SIMBAD ya lo tiene vinculado a este
-    // objeto: es identidad, no posición, así que en sistemas múltiples (Gamma
-    // Andromedae) no puede engancharse a la estrella vecina como sí le pasa a
-    // una búsqueda por radio. Si SIMBAD no lo vinculó, ninguna búsqueda posicional
-    // del plugin va a acertar mejor: bitacora_gaia_bprp() no la intenta.
-    // Si la subconsulta falla por la red (false), el objeto se resuelve igual,
-    // pero se cachea minutos y no 30 días para volver a preguntar por el id.
-    $gaia_dr3_id = bitacora_simbad_gaia_dr3_id( $id );
-    $ttl = ( false === $gaia_dr3_id ) ? BITACORA_TTL_FALLO_RED : 30 * DAY_IN_SECONDS;
-    if ( false === $gaia_dr3_id ) {
-        $gaia_dr3_id = null;
-    }
-
     $resultado = array(
         'ra'          => $ra,
         'dec'         => $dec,
@@ -3505,55 +3504,8 @@ function bitacora_simbad( $identificador ) {
         'sp_type'     => $sp_type,
         'gaia_dr3_id' => $gaia_dr3_id,
     );
-    set_transient( $cache_key, $resultado, $ttl );
+    set_transient( $cache_key, $resultado, 30 * DAY_IN_SECONDS );
     return $resultado;
-}
-
-/**
- * Identificador `Gaia DR3 <source_id>` que SIMBAD ya tiene vinculado a un
- * objeto, null si no lo tiene o false si falló la red. Consulta aparte porque
- * va contra la tabla `ident` (alias del mismo oid), no contra `basic`; solo se
- * llama cuando bitacora_simbad() ya resolvió el objeto, y su resultado viaja
- * dentro de la misma caché (30 días, o minutos si devolvió false), así que no
- * repite petición.
- */
-function bitacora_simbad_gaia_dr3_id( $identificador ) {
-    $id = trim( (string) $identificador );
-    if ( '' === $id ) {
-        return null;
-    }
-    $adql = "SELECT i.id FROM ident AS i JOIN basic AS b ON i.oidref = b.oid "
-        . "JOIN ident AS i2 ON i2.oidref = b.oid "
-        . "WHERE i2.id = '" . str_replace( "'", "''", $id ) . "' AND i.id LIKE 'Gaia DR3%'";
-
-    $respuesta = wp_remote_post(
-        'https://simbad.cds.unistra.fr/simbad/sim-tap/sync',
-        array(
-            'timeout' => 20,
-            'body'    => array(
-                'request' => 'doQuery',
-                'lang'    => 'ADQL',
-                'format'  => 'csv',
-                'query'   => $adql,
-            ),
-        )
-    );
-    if ( bitacora_fallo_de_red( $respuesta ) ) {
-        return false;
-    }
-    if ( 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
-        return null;
-    }
-    $csv = trim( wp_remote_retrieve_body( $respuesta ) );
-    $lineas = preg_split( '/\r?\n/', $csv );
-    if ( count( $lineas ) < 2 ) {
-        return null;
-    }
-    $linea = trim( $lineas[1], " \"\r\n" );
-    if ( ! preg_match( '/^Gaia DR3 (\d+)$/', $linea, $m ) ) {
-        return null;
-    }
-    return $m[1];
 }
 
 /**
@@ -3561,7 +3513,7 @@ function bitacora_simbad_gaia_dr3_id( $identificador ) {
  * o falla la red. Alimenta el color de las estrellas del vecindario solar.
  *
  * Solo consulta cuando $gaia_dr3_id viene informado (identificador que SIMBAD ya
- * tiene vinculado al objeto, ver bitacora_simbad_gaia_dr3_id): busca por ese
+ * tiene vinculado al objeto, ver bitacora_simbad): busca por ese
  * `source_id` exacto, identidad y no posición. Sin id no se intenta ninguna
  * búsqueda por radio — un radio de ~10″ engancha a la estrella vecina en sistemas
  * múltiples (Gamma Andromedae: la primaria K está saturada y fuera de Gaia, y una
