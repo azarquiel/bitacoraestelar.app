@@ -185,7 +185,9 @@
       var aux2Sel = null;  // la segunda, montada DETRÁS de la primera; null = ninguna
 
       var corsFallo = false;
-      var contadorPeticion = 0;
+      /* Frescura de las peticiones (qué vista es la actual, qué se aborta al quedar
+         superada, el timeout de la placa): del módulo bitacora-peticion-vista.js. */
+      var peticiones = BitacoraPeticionVista.crear();
 
       /* ── Encuadre: el campo se puede mover en pasos del 10 % (épica #265) ──
          `pasoX` cuenta hacia el Este (la IZQUIERDA del lienzo) y `pasoY` hacia
@@ -565,7 +567,7 @@
         cargando.style.display = 'flex';
         cargando.textContent = 'solicitando imagen…';
         elVista.setAttribute('aria-busy', 'true');
-        var peticion = ++contadorPeticion;
+        var peticion = peticiones.nueva();
 
         if (origen === 'canvas-2d') {
           renderGaia2D(arcmin, peticion, centro, conservar);
@@ -575,11 +577,16 @@
         if (origen === 'hips') {
           var u = urlHips(centro.ra, centro.dec, arcmin);
           contarSegundos(peticion, null);
-          cargarPlaca(u).then(function (im) {
-            if (peticion !== contadorPeticion) return;
+          var lanzado = peticion.lanzar({
+            gaia: function (p) { return consultarGaia(centro.ra, centro.dec, arcmin, false, p); },
+            placas: [u]
+          });
+          lanzado.placas.then(function (res) {
+            var im = res[0];
+            if (!peticion.vivo()) return;
             if (!im) { cargando.textContent = 'hips2fits no respondió: prueba el origen DSS.'; elVista.setAttribute('aria-busy', 'false'); return; }
             finCarga();
-            renderizar(im, null, u, arcmin, centro);
+            renderizar(im, null, u, arcmin, centro, lanzado.gaia, peticion);
           });
         } else {
           renderDSS(arcmin, peticion, centro);
@@ -602,7 +609,7 @@
       function contarSegundos(peticion, porque) {
         var reloj = ++relojCarga, base = elCargando.textContent, t0 = Date.now();
         (function tic() {
-          if (reloj !== relojCarga || peticion !== contadorPeticion ||
+          if (reloj !== relojCarga || !peticion.vivo() ||
               elVista.getAttribute('aria-busy') !== 'true') return;
           var s = Math.round((Date.now() - t0) / 1000);
           if (s > 0) elCargando.textContent = base + ' (' + s + ' s)' + (s >= 8 && porque ? ' — ' + porque : '');
@@ -645,10 +652,14 @@
         contarSegundos(peticion, fuente === 'eso'
           ? 'el archivo del ESO sirve la placa entera: puede tardar medio minuto'
           : 'SkyView une las placas del campo en su servidor: un campo ancho tarda unos 15 s');
-        Promise.all([cargarPlaca(urlProfunda), cargarPlaca(urlCorta)])
+        var lanzado = peticion.lanzar({
+          gaia: function (p) { return consultarGaia(ra, dec, arcmin, false, p); },
+          placas: [urlProfunda, urlCorta]
+        });
+        lanzado.placas
           .then(function (res) {
             var profunda = res[0], corta = res[1];
-            if (peticion !== contadorPeticion) return;
+            if (!peticion.vivo()) return;
             if (!profunda && !corta) {
               if (fuente === 'skyview') {
                 cargando.textContent = 'SkyView no responde: probando con el archivo del ESO…';
@@ -662,7 +673,7 @@
               return;
             }
             finCarga();
-            renderizar(profunda || corta, profunda ? corta : null, urlProfunda, arcmin, centro);
+            renderizar(profunda || corta, profunda ? corta : null, urlProfunda, arcmin, centro, lanzado.gaia, peticion);
           });
       }
 
@@ -728,9 +739,9 @@
           carbonoMag: objetoSel.carbono ? objetoSel.mag : null,
           cumulo: (objetoSel.globular && objetoSel.cumulo) || null,
           catalogo: catDifuso,
-          vivo: function () { return peticion === contadorPeticion; }
+          vivo: function () { return peticion.vivo(); }, signal: peticion.signal
         }).then(function (r) {
-          if (peticion !== contadorPeticion || r.cancelada) return;
+          if (!peticion.vivo() || r.cancelada) return;
           finCarga();
           // El aviso del campo (catálogo agotado / resplandor de fondo) lo
           // redacta el módulo; aquí solo se decide dónde pintarlo.
@@ -739,21 +750,23 @@
           r.galaxias.then(function (capa) {
             // Solo esta petición apaga SU indicador: si otra más nueva ya está
             // en marcha, el suyo lo gestiona ella (y actualizar() lo ha reseteado).
-            if (procesando && peticion === contadorPeticion) procesando.hidden = true;
+            if (procesando && peticion.vivo()) procesando.hidden = true;
             // El aviso no pisa a los que ya puso actualizar() (campo recortado,
             // pupila, catálogo agotado): esos son del equipo y mandan.
-            if (peticion !== contadorPeticion || !capa.aviso) return;
+            if (!peticion.vivo() || !capa.aviso) return;
             if (!$('sim-aviso').textContent) $('sim-aviso').textContent = capa.aviso;
           });
         }).catch(function (err) {
-          if (peticion !== contadorPeticion) return;
+          if (!peticion.vivo()) return;
           // Cualquier error de la vista de Gaia mata también el indicador de
           // procesado: no debe quedarse encendido sobre la placa de respaldo.
           var procesando = $('sim-procesando');
           if (procesando) procesando.hidden = true;
           /* Un error de código no es una caída de Gaia: la placa DSS no lo
              arregla y lo escondería (#462). Va a consola con su traza. */
-          if (!BitacoraGaiaRender.esFalloRed(err)) {
+          var clase = BitacoraPeticionVista.clasificar(err);
+          if (clase === 'cancelada') return;
+          if (clase === 'codigo') {
             console.error('[Bitácora] Error al pintar la vista de Gaia:', err);
             cargando.textContent = 'Error del simulador al pintar el campo.';
             $('sim-aviso').textContent = 'Error del simulador al pintar el campo (' +
@@ -780,9 +793,6 @@
       function sexToDeg(s, esRA) { var sig = /^\s*-/.test(s) ? -1 : 1; var p = s.trim().replace(/[+\-]/g, '').replace(/:/g, ' ').split(/\s+/).map(Number); var abs = (p[0] || 0) + (p[1] || 0) / 60 + (p[2] || 0) / 3600; return sig * abs * (esRA ? 15 : 1); }
       // ra/dec en GRADOS: el centro lo calcula centroVista() y puede venir desplazado.
       function urlHips(ra, dec, arcmin) { return 'https://alasky.cds.unistra.fr/hips-image-services/hips2fits?hips=' + encodeURIComponent('CDS/P/PanSTARRS/DR1/color-z-zg-g') + '&ra=' + ra.toFixed(5) + '&dec=' + dec.toFixed(5) + '&fov=' + (arcmin / 60).toFixed(4) + '&width=' + PROC + '&height=' + PROC + '&projection=TAN&format=jpg'; }
-      // La carga (resolver null si falla, nunca rechazar) vive en el módulo
-      // compartido, fuente única con el formulario de registro (como urlPlaca).
-      function cargarPlaca(url) { return BitacoraGaiaRender.cargarPlaca(url); }
 
       function lumas(imagen) {
         var c = document.createElement('canvas'); c.width = c.height = PROC; var ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(imagen, 0, 0, PROC, PROC); var dd;
@@ -813,7 +823,7 @@
         return pintarFot(BitacoraGaiaRender.flujoDePlaca(v, esHips), canvas, p);
       }
 
-      function renderizar(profunda, corta, urlRespaldo, arcmin, centro) {
+      function renderizar(profunda, corta, urlRespaldo, arcmin, centro, gaia, peticion) {
         if (!ocularSel) return;
         // La placa que llega ya está centrada donde toca: fuera el deslizamiento
         // provisional que se aplicó al pulsar la cruceta.
@@ -828,7 +838,7 @@
         if (!corsFallo) {
           if (procesarFotometrico(profunda, corta, canvas, pupila)) {
             canvas.style.display = 'block'; img.style.display = 'none';
-            superponerGaia(canvas, arcmin, centro);
+            superponerGaia(canvas, arcmin, centro, gaia, peticion);
             return;
           }
           corsFallo = true;
@@ -850,7 +860,7 @@
          rendirse; renderGaia2D, si TODOS fallan, cae a la placa DSS. */
       /* Consulta y dibujo de Gaia: delegados al módulo compartido BitacoraGaiaRender.
          Aquí quedan solo los adaptadores que le pasan el equipo/cielo del simulador. */
-      function consultarGaia(ra0, dec0, arcmin, paraCapa) {
+      function consultarGaia(ra0, dec0, arcmin, paraCapa, peticion) {
         /* `paraCapa`: solo la vista de Gaia pinta la capa de galaxias, y solo
            ella necesita la consulta hasta el tope del proxy —la máscara del
            parche quiere TODAS las estrellas que PanSTARRS registra
@@ -863,7 +873,7 @@
            Ver magConsultaGaia. */
         var mag = BitacoraGaiaRender.profundidadConsulta(
           teleApertura(), transmisionEfectiva(), datosOcular().aumentos, paraCapa);
-        return BitacoraGaiaRender.consultar(ra0, dec0, arcmin, mag);
+        return peticion.gaia(ra0, dec0, arcmin, mag);
       }
       /* Campo que la vista actual va a pedir a Gaia: el mismo número que calcula
          actualizar() para el render (campo real del ocular, acotado por el tope
@@ -885,21 +895,6 @@
         return Math.min(datosOcular().campoReal * 60, max);
       }
 
-      /* Precalentado de la consulta de Gaia, con los MISMOS parámetros que va a
-         pedir la vista. Antes pedía el radio por defecto (60') y la profundidad
-         sin capa: en cuanto el ocular abarcaba más de eso, la consulta de verdad
-         no cabía en la entrada cacheada y se pagaban DOS descargas (medido en el
-         arranque: 598 kB tirados y luego 2,4 MB). El caché es un superconjunto
-         monotónico (ADR 0014), así que pedir exactamente lo de la vista solo
-         puede acabar en acierto; y NO se pide de más a propósito, porque una
-         consulta más honda de la necesaria encarece el ORDER BY del TAP para
-         esas coordenadas durante el resto de la sesión. */
-      function precalentarGaia(o) {
-        return consultarGaia(sexToDeg(o.ra, true), sexToDeg(o.dec, false),
-          arcminVista(), $('sim-origen').value === 'canvas-2d')
-          .catch(function () { /* se reintentará al usarse */ });
-      }
-
       function dibujarGaia(ctx, estrellas, ra0, dec0, arcmin, mlim, conGlow, objetoCarbono) {
         BitacoraGaiaRender.dibujar(ctx, estrellas, {
           ra: ra0, dec: dec0, arcmin: arcmin, mlim: mlim, afov: datosOcular().afov,
@@ -911,7 +906,8 @@
 
       /* `arcmin` y `centro`, los de la placa ya pintada: la superposición cae
          sobre ella, no sobre el campo que pide el ocular. */
-      function superponerGaia(canvas, arcmin, centro) {
+      /* `gaia`: la consulta que ya salió a la vez que la placa (ver lanzar). */
+      function superponerGaia(canvas, arcmin, centro, gaia, peticion) {
         // En las vistas DSS/PanSTARRS la PLACA fotográfica ya contiene el campo de
         // estrellas hasta muy débil; el overlay de Gaia solo REALZA las estrellas
         // brillantes (núcleo nítido y color, que la placa quema). Por eso aquí el
@@ -920,11 +916,11 @@
         // de Gaia son lo único que se pinta—. Si se usara aquí la mag. límite
         // plena, el DSS se llenaría de las mismas estrellas que el Canvas 2D y
         // ambas vistas quedarían casi idénticas.
-        var ra0 = centro.ra; var dec0 = centro.dec; var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = contadorPeticion;
-        consultarGaia(ra0, dec0, arcmin).then(function (estrellas) { if (pet !== contadorPeticion) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function (err) {
+        var ra0 = centro.ra; var dec0 = centro.dec; var mlim = 7.7 + 5 * Math.log10(teleApertura() / 100); var pet = peticion;
+        gaia.then(function (estrellas) { if (!pet.vivo()) return; dibujarGaia(canvas.getContext('2d'), estrellas, ra0, dec0, arcmin, mlim, false, !!objetoSel.carbono); }).catch(function (err) {
           // El fallo de una vista vieja no pisa el aviso de la nueva (#462).
-          if (pet !== contadorPeticion) return;
-          if (BitacoraGaiaRender.esFalloRed(err)) { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3: se muestra solo la imagen.'; return; }
+          if (!pet.vivo()) return;
+          if (BitacoraPeticionVista.clasificar(err) === 'red') { $('sim-aviso').textContent = 'No se pudo consultar Gaia DR3: se muestra solo la imagen.'; return; }
           console.error('[Bitácora] Error al superponer Gaia sobre la placa:', err);
           $('sim-aviso').textContent = 'Error del simulador al superponer las estrellas (' +
             ((err && err.message) || err) + '): se muestra solo la imagen.';
@@ -1310,8 +1306,8 @@
         }
       }
 
-      // Cambia el objeto activo: repinta la ficha, recalcula la simulación y
-      // precalienta la consulta de Gaia del nuevo objeto en segundo plano.
+      // Cambia el objeto activo: repinta la ficha y recalcula la simulación (que
+      // ya lanza la consulta de Gaia a la vez que la placa).
       function elegirObjeto(o) {
         if (!o) return;
         objetoSel = o;
@@ -1321,7 +1317,6 @@
         corsFallo = false;
         pintarObjeto();
         actualizar();
-        precalentarGaia(o);
       }
 
       /* ══════════════════ MODO "CUALQUIER OBJETO" ══════════════════
@@ -1500,10 +1495,6 @@
 
       /* ══════════════════ ARRANQUE ══════════════════ */
       cargarCatalogo();
-      // Precalienta la consulta de Gaia del objeto en segundo plano: cuando el
-      // usuario cambie a Canvas 2D (o el overlay la necesite) ya estará en caché.
-      precalentarGaia(objetoSel);
-
     } catch (err) {
       console.error('[Bitácora] Error al iniciar el simulador de ocular:', err);
     }

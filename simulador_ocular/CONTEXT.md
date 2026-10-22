@@ -54,6 +54,20 @@ El pipeline completo del modo Canvas-2D — fondo → consulta de Gaia → velo 
 - **Test de contrato:** `scripts/test_vista_gaia.js` — entra por la interfaz (fetch de mentira, ctx falso), y debe sobrevivir a cualquier refactor interno del pipeline.
 - _Evitar_: «escena» (ocupado por la escena difusa de PS1), «pipeline del render» sin nombre.
 
+## Petición de vista (`BitacoraPeticionVista`)
+
+Dueña ÚNICA de la frescura de una vista (`simulador_ocular/resources/js/bitacora-peticion-vista.js`): cuál es la petición actual, qué se aborta al quedar superada, cuánto espera una placa y en qué orden salen las peticiones. `bitacora-ocular.js` solo pinta lo que devuelve; no lleva contador de generación ni `AbortController` propios.
+
+- **Interfaz:** `crear().nueva()` devuelve una petición (`vivo()`, `signal`, `gaia()`, `placa()`, `lanzar({gaia, placas})`); `clasificar(err)` dice `'cancelada' | 'red' | 'codigo'`. Una `nueva()` deja la anterior superada: `vivo()` es falso al instante.
+- **Gaia sale a la vez que la placa** (HiPS y DSS): `lanzar` pide Gaia primero y las placas a continuación, en el mismo turno. La superposición espera a las dos, pero ya no se suman las latencias (la placa DSS tarda ~13 s en SkyView).
+- **Abortar lo superado, sin tumbar lo compartido:** la consulta de Gaia y el parche PS1 de cache son peticiones compartidas entre vistas. Cada una lleva una cuenta de usuarios (`BitacoraGaiaRender.unirse`): el `fetch` solo se aborta cuando el último usuario con `signal` se va, y quien se une SIN `signal` (el precalentado del formulario) la hace inabortable. El aborto de la vista superada se aplaza un turno para que la nueva se una a lo que ya vuela (cambiar de pupila o de SQM no cambia la consulta de Gaia).
+- **El trabajo de CPU del parche PS1 no empieza** para una vista superada: `ps1ParcheDeGalaxia` mira `vivo()` justo después de la descarga, antes de la máscara, el relleno y el anclaje.
+- **La placa tiene timeout** (`PLACA_TIMEOUT_MS`, 60 s como Gaia): vencer, cancelar y fallar resuelven `null`, que para quien llama es una placa caída (el respaldo del ESO, el aviso).
+- **Cancelar no es un fallo de red:** el error de Gaia cancelado sale con `cancelada` y sin `falloRed`, y no se reintenta.
+- **Sin precalentado del simulador:** el del arranque salía antes de que llegase el catálogo, con 60′ y mag 17 por defecto, y casi nunca acertaba la clave real; con Gaia saliendo a la vez que la placa no tiene nada que adivinar. El del formulario de registro (`BitacoraGaiaRender.precalentar`) sigue como estaba.
+- **`vistaGaia` no cambia de contrato:** solo acepta un `signal` opcional, que reenvía a la consulta y al parche; sin él nada se aborta.
+- **Test:** `scripts/test_peticion_vista.js`, con `fetch` e `Image` inyectados, sin red.
+
 ## Desplazamiento del campo
 
 **Centro del campo** es el par `ra`/`dec` que se le pasa al render, y no tiene por qué ser el del objeto: el observador encuadra un campo rico poniendo el centro a medio camino entre dos objetos, o sacando del campo la estrella que deslumbra. **Desplazamiento del campo** es lo que separa ese centro del objeto elegido, contado en **pasos** enteros.

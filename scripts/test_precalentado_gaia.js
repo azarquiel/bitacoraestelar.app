@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /* Test del PRECALENTADO de la consulta a Gaia del simulador
-   (`precalentarGaia`/`arcminVista` en simulador_ocular/resources/js/bitacora-ocular.js,
+   (`precalentar` del formulario y `arcminVista` del simulador, en
+   simulador_ocular/resources/js/bitacora-ocular.js; el precalentado propio del
+   simulador desapareció en #470,
    sobre el caché de `consultar` en resources/js/bitacora-gaia-render.js).
 
    El fallo que fija (medido en el arranque de /simulador/): el precalentado
@@ -62,21 +64,16 @@ console.log('Un precalentado más somero que la vista tampoco vale:');
 ok(descargas({ arcmin: VISTA.arcmin, mag: 15 }, VISTA) === 2,
   'misma anchura pero menos profundidad → segunda descarga');
 
-/* ── Cableado en el simulador: los dos precalentados pasan por el helper ── */
+/* ── Cableado en el simulador ── */
 var ocular = fs.readFileSync(
   path.join(__dirname, '../simulador_ocular/resources/js/bitacora-ocular.js'), 'utf8');
 
-console.log('El simulador precalienta con lo que va a pedir la vista:');
-ok(/function precalentarGaia\(/.test(ocular),
-  'existe precalentarGaia(), el precalentado del simulador');
-ok((ocular.match(/precalentarGaia\(/g) || []).length >= 3,
-  'los dos sitios que precalentaban (elegirObjeto y el arranque) lo llaman');
-ok(!/consultarGaia\(sexToDeg\([^)]*\)\s*,\s*sexToDeg\([^)]*\)\)/.test(ocular),
-  'ya no queda ninguna consulta de precalentado sin campo ni profundidad');
-ok(/precalentarGaia[\s\S]{0,400}arcminVista\(\)/.test(ocular),
-  'precalentarGaia pide el campo de la vista (arcminVista)');
-ok(/precalentarGaia[\s\S]{0,400}'canvas-2d'/.test(ocular),
-  'y la profundidad de la capa solo cuando la vista es la de Gaia (canvas-2d)');
+/* El precalentado del simulador desapareció (#470): salía en el arranque,
+   antes de que llegase el catálogo, con 60' y mag 17 por defecto, y casi
+   nunca acertaba la clave de la vista. Ahora la vista lanza Gaia a la vez que
+   la placa (scripts/test_peticion_vista.js), así que no hay nada que adivinar. */
+console.log('El simulador ya no precalienta a ciegas:');
+ok(!/precalentarGaia/.test(ocular), 'no queda precalentarGaia en el simulador');
 
 console.log('arcminVista acota por el tope del origen, como actualizar():');
 ok(/function arcminVista\(\)[\s\S]{0,400}GAIA_MAX_ARCMIN[\s\S]{0,120}DSS_MAX_ARCMIN/.test(ocular),
