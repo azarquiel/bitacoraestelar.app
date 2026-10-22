@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /* Test del PRECALENTADO de la consulta a Gaia del simulador
-   (`precalentarGaia`/`arcminVista` en simulador_ocular/resources/js/bitacora-ocular.js,
+   (`precalentar` del formulario y `arcminVista` del simulador, en
+   simulador_ocular/resources/js/bitacora-ocular.js; el precalentado propio del
+   simulador desapareció en #470,
    sobre el caché de `consultar` en resources/js/bitacora-gaia-render.js).
 
    El fallo que fija (medido en el arranque de /simulador/): el precalentado
