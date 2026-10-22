@@ -1265,30 +1265,62 @@
   function radioConsulta(arcmin) {
     return Math.min(GAIA_RADIO_MAX, Math.max(GAIA_RADIO_MIN, (arcmin / 60) * 0.72));
   }
-  function fetchGaiaUnaVez(ra, dec, rad, mag) {
+  /* `cancel`: el AbortController de la ENTRADA de caché (no el del intento).
+     Abortarlo es cancelar, y cancelar no es un fallo de red: el error sale con
+     `cancelada` y sin `falloRed`, y no se reintenta. El timeout de 60 s sí es
+     red, y se reintenta. */
+  function fetchGaiaUnaVez(ra, dec, rad, mag, cancel) {
     var ctrl = new AbortController();
     var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
+    var alCancelar = function () { ctrl.abort(); };
+    if (cancel) {
+      if (cancel.signal.aborted) ctrl.abort();
+      else cancel.signal.addEventListener('abort', alCancelar, { once: true });
+    }
+    function suelta() {
+      clearTimeout(id);
+      if (cancel) cancel.signal.removeEventListener('abort', alCancelar);
+    }
     var url = PROXY_URL + '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) +
               '&rad=' + encodeURIComponent(rad) + '&mag=' + encodeURIComponent(mag);
     return fetch(url, { signal: ctrl.signal }).then(function (r) {
-      clearTimeout(id);
+      suelta();
       if (!r.ok) throw new Error('gaia_proxy ' + r.status);
       return r.json();
-    }, function (err) { clearTimeout(id); throw err; }).catch(function (err) {
+    }, function (err) { suelta(); throw err; }).catch(function (err) {
+      err = err || new Error('gaia_proxy');
+      if (cancel && cancel.signal.aborted) { err.cancelada = true; throw err; }
       // Todo lo de aquí es red o proxy (también un JSON roto): quien pinta
       // lo distingue de un error de código con esFalloRed (#462).
-      (err = err || new Error('gaia_proxy')).falloRed = true;
+      err.falloRed = true;
       throw err;
     });
   }
   function esFalloRed(err) { return !!(err && err.falloRed); }
+  function esCancelada(err) { return !!(err && err.cancelada); }
   // Un reintento: el proxy hace failover entre proveedores TAP (ver
   // gaia_proxy.php), así un fallo puntual del primero suele resolverse solo
   // en el segundo intento, sin que el usuario tenga que volver a pedirlo.
-  function fetchGaia(ra, dec, rad, mag) {
-    return fetchGaiaUnaVez(ra, dec, rad, mag).catch(function () {
-      return fetchGaiaUnaVez(ra, dec, rad, mag);
+  // Lo cancelado no se reintenta.
+  function fetchGaia(ra, dec, rad, mag, cancel) {
+    return fetchGaiaUnaVez(ra, dec, rad, mag, cancel).catch(function (err) {
+      if (esCancelada(err)) throw err;
+      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel);
     });
+  }
+  /* Una petición de caché la comparten todas las vistas que piden lo mismo (y el
+     precalentado del formulario), así que abortarla porque UNA vista quedó
+     superada dejaría sin respuesta a las demás. `ent` lleva la cuenta: cada
+     `signal` que se une suma un usuario y su abort lo resta; solo el último
+     aborta el fetch. Quien se une SIN signal (precalentado, harnesses) la hace
+     inabortable: nadie puede decidir por él. */
+  function unirse(ent, signal) {
+    if (!signal) { ent.n = Infinity; return; }
+    if (signal.aborted) return;
+    ent.n++;
+    signal.addEventListener('abort', function () {
+      if (--ent.n <= 0) ent.ctrl.abort();
+    }, { once: true });
   }
   /* Profundidad a la que se consulta Gaia para UNA vista. Estaba copiada en
      cuatro sitios (vistaGaia, renderPlaca, el precalentado del simulador y el
@@ -1333,7 +1365,10 @@
       .catch(function () {});
   }
 
-  function consultar(ra0, dec0, arcmin, mag) {
+  /* `o.signal` (opcional): aborta la petición si se queda sin usuarios (ver
+     `unirse`). Sin él, la consulta no se cancela nunca. */
+  function consultar(ra0, dec0, arcmin, mag, o) {
+    var signal = o && o.signal;
     var rad = radioConsulta(arcmin || GAIA_ARCMIN_DEFECTO);
     var prof = (mag > 0) ? mag : GAIA_MAG_DEFECTO;
     var clave = ra0.toFixed(3) + ',' + dec0.toFixed(3);
@@ -1341,7 +1376,7 @@
     // Reutiliza el caché solo si YA cubre el radio Y la profundidad pedidos:
     // sin el segundo chequeo, cambiar a un equipo más grande sobre el mismo
     // objeto se quedaba con el catálogo más somero que trajo el equipo chico.
-    if (ent && ent.rad >= rad - 1e-6 && ent.mag >= prof - 1e-6) return ent.promise;
+    if (ent && ent.rad >= rad - 1e-6 && ent.mag >= prof - 1e-6) { unirse(ent, signal); return ent.promise; }
     // Superconjunto monotónico (ADR 0014): funde con lo ya cacheado ANTES de
     // fetchear, para que una escritura tardía (precalentado somero llegando
     // después de la vista honda) nunca pise profundidad ya conseguida.
@@ -1349,18 +1384,16 @@
       rad = Math.max(rad, ent.rad);
       prof = Math.max(prof, ent.mag);
     }
-    var nueva = {
-      rad: rad,
-      mag: prof,
-      promise: fetchGaia(ra0.toFixed(5), dec0.toFixed(5), rad.toFixed(5), prof.toFixed(2)).then(function (jj) {
-        var arr = (jj.data || []).filter(function (f) { return f[2] != null; });
-        // Campo denso: el proxy manda los momentos de la banda truncada
-        // (ADR 0014). Cuelgan del array para que viajen con las estrellas
-        // sin cambiar la firma de nadie.
-        arr.fondo = jj.fondo || null;
-        return arr;
-      })
-    };
+    var nueva = { rad: rad, mag: prof, n: 0, ctrl: new AbortController() };
+    unirse(nueva, signal);
+    nueva.promise = fetchGaia(ra0.toFixed(5), dec0.toFixed(5), rad.toFixed(5), prof.toFixed(2), nueva.ctrl).then(function (jj) {
+      var arr = (jj.data || []).filter(function (f) { return f[2] != null; });
+      // Campo denso: el proxy manda los momentos de la banda truncada
+      // (ADR 0014). Cuelgan del array para que viajen con las estrellas
+      // sin cambiar la firma de nadie.
+      arr.fondo = jj.fondo || null;
+      return arr;
+    });
     cacheGaia[clave] = nueva;
     nueva.promise.catch(function () { if (cacheGaia[clave] === nueva) delete cacheGaia[clave]; });
     return nueva.promise;
@@ -1504,13 +1537,29 @@
   }
 
   /* Carga una placa; resuelve a null si el servidor no responde (para poder
-     decidir el respaldo en vez de dejar el lienzo negro). */
-  function cargarPlaca(url) {
+     decidir el respaldo en vez de dejar el lienzo negro). Sigue sin rechazar
+     nunca: el timeout (`o.timeout`, ms) y la cancelación (`o.signal`) también
+     resuelven a null, que para quien llama es lo mismo que una placa caída. Al
+     cancelar se suelta la imagen (src vacío) para que el navegador corte la
+     descarga. */
+  function cargarPlaca(url, o) {
+    o = o || {};
     return new Promise(function (res) {
-      var im = new Image();
+      var im = new Image(), t;
+      function fin(v) {
+        clearTimeout(t);
+        if (o.signal) o.signal.removeEventListener('abort', corta);
+        res(v);
+      }
+      function corta() { im.onload = im.onerror = null; im.src = ''; fin(null); }
       im.crossOrigin = 'anonymous';
-      im.onload = function () { res(im); };
-      im.onerror = function () { res(null); };
+      im.onload = function () { fin(im); };
+      im.onerror = function () { fin(null); };
+      if (o.signal) {
+        if (o.signal.aborted) { res(null); return; }
+        o.signal.addEventListener('abort', corta, { once: true });
+      }
+      if (o.timeout > 0) t = setTimeout(corta, o.timeout);
       im.src = url;
     });
   }
@@ -2769,12 +2818,15 @@
        ctx  contexto 2D ya dimensionado (size × size)
        o    { ra, dec, arcmin, size, apertura, aumentos, transmision|optica,
               arana, sqm, pupilaSalida, pupilaOjo, afov, conGlow,
-              carbono, carbonoMag, cumulo, catalogo, vivo }
+              carbono, carbonoMag, cumulo, catalogo, vivo, signal }
      Devuelve una promesa de:
        { estrellas, estrellasDibujo, mlim, fondo, avisoCampo, galaxias }
      `galaxias` es LA PROMESA de la capa PS1 ({aviso}): el formulario la espera
      (la imagen que sube debe llevar la galaxia) y el simulador pinta estrellas
      ya y engancha el aviso cuando llegue. Nunca rechaza.
+     `signal` (opcional) corta las descargas pendientes (Gaia, parche PS1) cuando
+     la vista queda superada; sin él nada se aborta. `vivo` sigue mandando sobre
+     el resultado.
      Con `vivo()` falso resuelve { cancelada: true } sin volver a tocar el ctx:
      cancelar NO es un error — el rechazo de esta promesa significa «Gaia no
      responde» y en el simulador dispara el respaldo DSS.
@@ -2805,7 +2857,7 @@
     var mlim = limite();
     var P = window.BitacoraPS1;
     if (!P) throw new Error('BitacoraGaiaRender necesita BitacoraPS1 (capa de galaxias desde imagen); carga bitacora-ps1.js');
-    return consultar(o.ra, o.dec, o.arcmin, profundidadConsulta(o.apertura, t, o.aumentos, true)).then(function (estrellas) {
+    return consultar(o.ra, o.dec, o.arcmin, profundidadConsulta(o.apertura, t, o.aumentos, true), { signal: o.signal }).then(function (estrellas) {
       if (!vivo()) return { cancelada: true };
       /* Campo denso: la banda truncada llega como momentos y entra como velo
          (cielo extra) en toda la cadena, incluida la magnitud límite (ADR
@@ -2891,7 +2943,7 @@
         catalogo: o.catalogo || null,
         apertura: o.apertura,   // la PSF del parche va como 1/D, igual que el disco de Airy
         mlim: mlim,             // profundidad del grano del parche dentro de la escena (#210)
-        vivo: vivo
+        vivo: vivo, signal: o.signal
       });
       return { estrellas: estrellas, estrellasDibujo: estrellasDibujo, mlim: mlim,
                fondo: fondo, avisoCampo: avisoCampo, galaxias: galaxias };
@@ -2991,6 +3043,8 @@
     fot: FOT,
     consultar: consultar,
     esFalloRed: esFalloRed,
+    esCancelada: esCancelada,
+    unirse: unirse,
     precalentar: precalentar,
     profundidadConsulta: profundidadConsulta,
     cacheGaia: cacheGaia,

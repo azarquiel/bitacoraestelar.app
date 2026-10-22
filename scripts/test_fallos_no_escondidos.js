@@ -173,7 +173,8 @@ function montarSimulador() {
   };
   global.fetch = function () { return Promise.reject(new TypeError('Failed to fetch')); };
   ['resources/js/bitacora-base.js', 'resources/js/bitacora-equipo.js',
-   'resources/js/bitacora-gaia-render.js', 'resources/js/bitacora-ps1.js'].forEach(cargar);
+   'resources/js/bitacora-gaia-render.js', 'resources/js/bitacora-ps1.js',
+   'simulador_ocular/resources/js/bitacora-peticion-vista.js'].forEach(cargar);
 
   // Dos estrellas de carbono: la primera es la elegida al arrancar.
   global.BITACORA_CARBONO = [

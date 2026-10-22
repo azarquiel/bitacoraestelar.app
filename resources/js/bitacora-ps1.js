@@ -1794,6 +1794,7 @@
      solo de sesión y la clave es el objeto: el parche no depende del ocular ni
      del aumento, así que la textura se decodifica una vez. */
   var cachePS1 = {};
+  var usuariosPS1 = {};   // clave → {n, ctrl}: quién espera cada parche en vuelo (ver ps1FuenteParche)
   /* Las notas del parche que no vino, con la MISMA clave que su promesa: la
      caché es de sesión y el campo se repinta con cada ocular, así que sin esto
      el segundo repintado se quedaría sin causa y el aviso caería al comodín del
@@ -1849,7 +1850,7 @@
      DecompressionStream— da null con el motivo en `notas`, nunca una imagen a
      medias: quien llama pinta la fila del catálogo, el mismo respaldo que
      cuando el proxy no responde. */
-  function ps1LeerTextura(urlPng, urlJson, notas) {
+  function ps1LeerTextura(urlPng, urlJson, notas, signal) {
     /* El guardián va FUERA de la promesa: que falte el módulo del códec es un
        error de carga de la página, no una textura rota, y tiene que sonar en
        vez de disfrazarse de fallo de red (ADR 0020). */
@@ -1858,11 +1859,11 @@
     // Lo que falla al traer los dos ficheros es red; lo que falla después, no.
     function deRed(e) { (e = e || new Error('red')).falloRed = true; throw e; }
     return Promise.all([
-      fetch(urlPng).then(function (r) {
+      fetch(urlPng, { signal: signal }).then(function (r) {
         if (!r.ok) throw new Error('textura ' + r.status);
         return r.arrayBuffer();
       }).catch(deRed),
-      fetch(urlJson).then(function (r) {
+      fetch(urlJson, { signal: signal }).then(function (r) {
         if (!r.ok) throw new Error('sidecar ' + r.status);
         return r.json();
       }).catch(deRed)
@@ -1922,10 +1923,11 @@
      Resuelve a null también cuando PS1 no cubre el campo (502 del proxy) o el
      servicio no responde: la capa se apaga sola y el aviso lo da quien llama.
      gal: {nombre, ra, dec, ladoArcmin, …}. */
-  function ps1FuenteParche(gal, notas) {
+  function ps1FuenteParche(gal, notas, signal) {
     notas = notas || {};
     var clave = gal.ra.toFixed(5) + ',' + gal.dec.toFixed(5) + ',' + gal.ladoArcmin.toFixed(2);
     if (cachePS1[clave]) {
+      if (usuariosPS1[clave]) R().unirse(usuariosPS1[clave], signal);
       var previas = notasPS1[clave];
       return cachePS1[clave].then(function (f) {
         if (!f && previas && previas.motivo) notas.motivo = previas.motivo;
@@ -1935,9 +1937,13 @@
       });
     }
     var fila = ps1FilaTextura(gal.nombre), p;
+    /* Una petición compartida con cuenta de usuarios (R().unirse): aborta el
+       fetch solo cuando ya no la espera nadie. */
+    var ent = usuariosPS1[clave] = { n: 0, ctrl: new AbortController() };
+    R().unirse(ent, signal);
     if (fila && fila[1] === 'imagen') {
       var base = TEXTURAS_URL + ps1IdTextura(gal.nombre) + '.' + fila[2];
-      p = ps1LeerTextura(base + '.png', base + '.json', notas);
+      p = ps1LeerTextura(base + '.png', base + '.json', notas, ent.ctrl.signal);
     } else if (fila) {
       notas.motivo = fila[6] || 'fila';
       return Promise.resolve(null);
@@ -1945,7 +1951,7 @@
       notas.motivo = 'sin-textura';
       return Promise.resolve(null);
     } else {
-      p = ps1DescargarParche(gal);
+      p = ps1DescargarParche(gal, ent.ctrl.signal);
     }
     notasPS1[clave] = notas;
     var porProxy = !fila;
@@ -1953,7 +1959,7 @@
       /* Un fallo de red no es un dato: sin borrar la entrada, el null de un
          corte pasajero se serviría hasta recargar (#462). Por el proxy todo
          null es de red, que su 502 no distingue «no cubre» de «no responde». */
-      if (!f && (porProxy || notas.motivo === 'red') && cachePS1[clave] === p) delete cachePS1[clave];
+      if (!f && (porProxy || notas.motivo === 'red' || ent.ctrl.signal.aborted) && cachePS1[clave] === p) delete cachePS1[clave];
       if (!f) return null;
       f.ra = gal.ra; f.dec = gal.dec; f.ladoArcmin = gal.ladoArcmin;
       if (!(f.escalaAs > 0)) f.escalaAs = gal.ladoArcmin * 60 / f.ancho;
@@ -1964,8 +1970,8 @@
   }
 
   /* Camino de respaldo: el parche cosido por ps1-proxy.php, en caliente. */
-  function ps1DescargarParche(gal) {
-    return fetch(ps1UrlParche(gal)).then(function (r) {
+  function ps1DescargarParche(gal, signal) {
+    return fetch(ps1UrlParche(gal), { signal: signal }).then(function (r) {
       if (!r.ok) throw new Error('ps1-proxy ' + r.status);
       return r.arrayBuffer();
     }).then(function (buf) {
@@ -2211,9 +2217,15 @@
      de él sale la escena que decide qué fuentes se conservan (las compañeras
      que asoman por el parche incluidas). Sin catálogo, la escena es la propia
      galaxia sola, que ya protege su núcleo. */
-  function ps1ParcheDeGalaxia(gal, estrellas, catalogo, mlim, notas) {
-    return ps1FuenteParche(gal, notas).then(function (f) {
+  /* `cancel` (opcional): {vivo, signal} de la vista que lo pide. El signal corta
+     la descarga si nadie más la espera; `vivo` decide, ya con el parche
+     descargado, si merece la pena el trabajo de CPU de debajo (máscara,
+     relleno, anclaje: cientos de ms por galaxia) o la vista ya está superada. */
+  function ps1ParcheDeGalaxia(gal, estrellas, catalogo, mlim, notas, cancel) {
+    cancel = cancel || {};
+    return ps1FuenteParche(gal, notas, cancel.signal).then(function (f) {
       if (!f) return null;
+      if (cancel.vivo && !cancel.vivo()) return null;
       // Cómo está puesta la rejilla del recorte respecto al cielo. Una vez por
       // galaxia: no depende del ocular ni del aumento.
       f.afin = ps1AfinParche(f, gal);
@@ -2356,7 +2368,8 @@
      pendiente —el formulario la espera para subir la imagen ya completa— y
      nunca rechaza: sin imagen, la vista es la de antes de esta capa.
 
-     `o`: {ra0, dec0, arcmin, size, estrellas, catalogo, vivo}. `vivo` es el
+     `o`: {ra0, dec0, arcmin, size, estrellas, catalogo, vivo, signal}. `signal`
+     corta la descarga del parche si la vista queda superada. `vivo` es el
      testigo de que la petición sigue siendo la actual (el observador puede haber
      cambiado de campo mientras el parche viajaba). */
   function ps1CapaGalaxias(difuso, ctx, cielo, capaEst, o) {
@@ -2406,8 +2419,9 @@
     return Promise.all(campo.map(function (gal) {
       var esLaApuntada = !!apuntada && gal.ra === apuntada[2] && gal.dec === apuntada[3];
       return ps1ParcheDeGalaxia(gal, o.estrellas, catalogo, mlim,
-                                esLaApuntada ? notasApuntada : null).then(function (parche) {
-        if (!parche) { if (esLaApuntada) apuntadaSinParche = true; return; }
+                                esLaApuntada ? notasApuntada : null,
+                                { vivo: vivo, signal: o.signal }).then(function (parche) {
+        if (!parche) { if (esLaApuntada && vivo()) apuntadaSinParche = true; return; }
         if (!vivo()) return;
         for (var x = 0; x < (parche.enEscena || []).length; x++) {
           if (excluidas.indexOf(parche.enEscena[x]) === -1) excluidas.push(parche.enEscena[x]);
@@ -2471,6 +2485,7 @@
     ps1FilaTextura: ps1FilaTextura,
     ps1LeerTextura: ps1LeerTextura,
     ps1FuenteParche: ps1FuenteParche,
+    ps1ParcheDeGalaxia: ps1ParcheDeGalaxia,
     parseFITS: parseFITS,
     ps1CieloAPixel: ps1CieloAPixel,
     ps1AfinParche: ps1AfinParche,
