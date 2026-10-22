@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.14
+ * Version:     1.38.15
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.14' );
+define( 'BITACORA_VERSION', '1.38.15' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -31,6 +31,8 @@ define( 'BITACORA_TOPE_PUPILA', 15 );   // mm
 // Lo que se cachea que una consulta a un catálogo falló por la red (issue #460):
 // minutos, no el día de «no está», para que un corte no deje el objeto sin datos.
 define( 'BITACORA_TTL_FALLO_RED', 5 * 60 ); // 5 minutos
+define( 'BITACORA_RESOLVER_MAX', 20 );     // consultas /resolver sin caché por IP anónima…
+define( 'BITACORA_RESOLVER_VENTANA', 60 ); // …por ventana de tantos segundos
 // Distancia (años luz) por encima de la cual NO se resuelve el color BP–RP de un
 // objeto: más allá, la estrella de Gaia más cercana sería una de fondo sin
 // relación con el objeto (una galaxia, una nebulosa). El vecindario solar solo
@@ -1826,7 +1828,10 @@ function bitacora_registrar_rutas() {
             'callback'            => 'bitacora_resolver_objeto',
             'permission_callback' => '__return_true',
             'args'                => array(
-                'q' => array( 'required' => true ),
+                'q' => array(
+                    'required'          => true,
+                    'validate_callback' => 'bitacora_resolver_q_valida',
+                ),
             ),
         )
     );
@@ -4006,6 +4011,33 @@ function bitacora_asegurar_objeto_mapa( $identificador, $etiqueta = '', $ra = nu
     return true;
 }
 
+/** `q` de /resolver: texto no vacío y corto (ningún identificador de catálogo pasa de 100). */
+function bitacora_resolver_q_valida( $q ) {
+    $q = trim( (string) $q );
+    return '' !== $q && mb_strlen( $q ) <= 100;
+}
+
+/**
+ * Cupo de /resolver para anónimos: BITACORA_RESOLVER_MAX consultas que fallan en
+ * caché por BITACORA_RESOLVER_VENTANA segundos y por IP (ventana fija). Devuelve
+ * 0 si pasa (y cuenta la consulta) o los segundos hasta que acabe la ventana.
+ * ponytail: ventana fija y REMOTE_ADDR; si hay proxy inverso delante, todos
+ * comparten IP; usar la cabecera que fije el hosting solo si se confía en ella.
+ */
+function bitacora_resolver_cupo( $ip, $ahora ) {
+    $key  = 'bitacora_rl_' . md5( (string) $ip );
+    $reg  = get_transient( $key );
+    if ( ! is_array( $reg ) || $ahora >= $reg[1] + BITACORA_RESOLVER_VENTANA ) {
+        $reg = array( 0, $ahora );
+    }
+    if ( $reg[0] >= BITACORA_RESOLVER_MAX ) {
+        return max( 1, $reg[1] + BITACORA_RESOLVER_VENTANA - $ahora );
+    }
+    $reg[0]++;
+    set_transient( $key, $reg, BITACORA_RESOLVER_VENTANA );
+    return 0;
+}
+
 /**
  * GET /resolver?q=M104 — resuelve un objeto por identificador (SIMBAD) SIN
  * guardarlo y devuelve su posición para el buscador del mapa: coordenadas
@@ -4017,10 +4049,31 @@ function bitacora_resolver_objeto( WP_REST_Request $peticion ) {
     if ( '' === $q ) {
         return new WP_Error( 'falta_q', 'Indica un objeto a buscar.', array( 'status' => 400 ) );
     }
-    $calc = bitacora_completar_objeto( $q, null );
-    if ( is_wp_error( $calc ) ) {
-        $calc->add_data( array( 'status' => 404 ) );
-        return $calc;
+    // Un acierto de caché no cuesta red, así que no gasta cupo. El fallo también
+    // se cachea (poco rato): repetir una q que no existe no debe repetir las 6 llamadas.
+    $cache_key = 'bitacora_res_' . md5( strtolower( $q ) );
+    $calc      = get_transient( $cache_key );
+    if ( false === $calc ) {
+        if ( ! is_user_logged_in() ) {
+            $espera = bitacora_resolver_cupo( isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '', time() );
+            if ( $espera > 0 ) {
+                return new WP_REST_Response(
+                    array( 'code' => 'demasiadas_consultas', 'message' => 'Demasiadas búsquedas seguidas. Espera un momento.' ),
+                    429,
+                    array( 'Retry-After' => $espera )
+                );
+            }
+        }
+        $calc = bitacora_completar_objeto( $q, null );
+        if ( is_wp_error( $calc ) ) {
+            $calc = array( 'error' => $calc->get_error_code(), 'mensaje' => $calc->get_error_message() );
+            set_transient( $cache_key, $calc, BITACORA_TTL_FALLO_RED );
+        } else {
+            set_transient( $cache_key, $calc, DAY_IN_SECONDS );
+        }
+    }
+    if ( isset( $calc['error'] ) ) {
+        return new WP_Error( $calc['error'], $calc['mensaje'], array( 'status' => 404 ) );
     }
     return new WP_REST_Response(
         array(
