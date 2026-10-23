@@ -15,9 +15,6 @@ declare(strict_types=1);
 
    Sin framework:  php scripts/test_equipo_compartido.php  */
 
-define( 'BITACORA_COMPARTIR_MAX', 10 );
-define( 'BITACORA_COMPARTIR_VENTANA', 60 );
-
 class WP_Error {
     public $codigo, $mensaje, $datos;
     public function __construct( $c = '', $m = '', $d = null ) { $this->codigo = $c; $this->mensaje = $m; $this->datos = $d; }
@@ -39,7 +36,6 @@ class WP_REST_Request implements ArrayAccess {
 function is_wp_error( $x ) { return $x instanceof WP_Error; }
 function current_time( $t, $g = false ) { return '2026-10-24 22:00:00'; }
 function get_current_user_id() { return $GLOBALS['yo']; }
-function sanitize_text_field( $s ) { return trim( (string) $s ); }
 function bitacora_nombre_tabla_equipo_compartido() { return 'comp'; }
 function bitacora_nombre_tabla_telescopios() { return 'tel'; }
 function bitacora_nombre_tabla_oculares() { return 'ocu'; }
@@ -53,7 +49,7 @@ function set_transient( $k, $v, $ttl ) { $GLOBALS['cache'][ $k ] = $v; return tr
 $USUARIOS = array( 5 => 'ana', 7 => 'beto', 9 => 'Carla' );
 function get_user_by( $campo, $v ) {
     foreach ( $GLOBALS['USUARIOS'] as $id => $login ) {
-        if ( strtolower( $login ) === strtolower( trim( $v ) ) ) { return (object) array( 'ID' => $id, 'user_login' => $login, 'user_email' => "$login@x" ); }
+        if ( strtolower( $login ) === strtolower( trim( $v ) ) ) { return (object) array( 'ID' => $id, 'user_login' => $login ); }
     }
     return false;
 }
@@ -99,6 +95,9 @@ class WpdbFalso {
 }
 
 $fuente = (string) file_get_contents( __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-registro.php' );
+// Los límites, los del plugin: si cambian, el test los sigue.
+preg_match_all( "/^define\\( 'BITACORA_COMPARTIR_\\w+', \\d+ \\);/m", $fuente, $defs );
+foreach ( $defs[0] as $d ) { eval( $d ); }
 foreach ( array(
     'bitacora_cupo', 'bitacora_equipo_compartido_cupo', 'bitacora_equipo_compartido_no_encontrado',
     'bitacora_equipo_compartido_destinatario', 'bitacora_equipo_compartido_listar',
@@ -190,7 +189,7 @@ eq( $r->d['espera'], $r->h['Retry-After'], 'y el cuerpo los repite' );
 eq( revocar( 'beto' )->s, 429, 'revocar comparte el cupo de escritura' );
 eq( $wpdb->pares, array(), 'el bloqueado no escribe' );
 eq( listar()->s, 200, 'leer tiene su propio cupo' );
-for ( $i = 0; $i < 6 * BITACORA_COMPARTIR_MAX; $i++ ) { listar(); }
+for ( $i = 0; $i < BITACORA_COMPARTIR_LECTURA_MAX; $i++ ) { listar(); }
 eq( listar()->d['codigo'] ?? null, 'limite-de-ritmo', 'que también se agota' );
 $GLOBALS['yo'] = 7;
 eq( compartir( 'ana' )->s, 201, 'el cupo es por usuario' );

@@ -54,6 +54,7 @@ define( 'BITACORA_TABLA_AUXILIARES', 'bitacora_auxiliares' );
 define( 'BITACORA_TABLA_EQUIPO_COMPARTIDO', 'bitacora_equipo_compartido' );
 define( 'BITACORA_COMPARTIR_MAX', 10 );   // altas/revocaciones por usuario…
 define( 'BITACORA_COMPARTIR_VENTANA', 60 ); // …por ventana de tantos segundos
+define( 'BITACORA_COMPARTIR_LECTURA_MAX', 60 ); // listados por usuario y ventana
 // Bases del observador (lugares de observación reutilizables) y su compartición.
 define( 'BITACORA_TABLA_BASES', 'bitacora_bases' );
 define( 'BITACORA_TABLA_BASE_COMPARTIDA', 'bitacora_base_compartida' );
@@ -2662,6 +2663,7 @@ function bitacora_equipo_compartido_cupo( $accion, $max ) {
     );
 }
 
+/** La respuesta única para «no existe», «eres tú», «entrada inválida» y «no lo compartías». */
 function bitacora_equipo_compartido_no_encontrado() {
     return new WP_REST_Response(
         array( 'codigo' => 'no-encontrado-o-no-permitido', 'message' => 'No encontramos a nadie con ese nombre de usuario o no se puede compartir con esa persona.' ),
@@ -2670,25 +2672,26 @@ function bitacora_equipo_compartido_no_encontrado() {
 }
 
 /**
- * Id del usuario con ese nombre EXACTO, o 0. get_user_by sanea el nombre y MySQL
- * no distingue mayúsculas: sin la comparación estricta, «Pepe» encontraría a «pepe».
+ * Usuario con ese nombre EXACTO, o null. get_user_by sanea el nombre y MySQL no
+ * distingue mayúsculas: sin la comparación estricta, «Pepe» encontraría a «pepe».
+ * 60 es la longitud de user_login en WordPress.
  */
 function bitacora_equipo_compartido_destinatario( $nombre ) {
     if ( ! is_string( $nombre ) ) {
-        return 0;
+        return null;
     }
     $nombre = trim( $nombre );
     if ( '' === $nombre || mb_strlen( $nombre ) > 60 ) {
-        return 0;
+        return null;
     }
     $u = get_user_by( 'login', $nombre );
-    return ( $u && $u->user_login === $nombre ) ? (int) $u->ID : 0;
+    return ( $u && $u->user_login === $nombre ) ? $u : null;
 }
 
 /** GET /equipo/compartido → { comparto: [nombre…], conmigo: [nombre…] }. */
 function bitacora_equipo_compartido_listar( WP_REST_Request $peticion ) {
     global $wpdb;
-    $limite = bitacora_equipo_compartido_cupo( 'lectura', 6 * BITACORA_COMPARTIR_MAX );
+    $limite = bitacora_equipo_compartido_cupo( 'lectura', BITACORA_COMPARTIR_LECTURA_MAX );
     if ( $limite ) {
         return $limite;
     }
@@ -2707,12 +2710,13 @@ function bitacora_equipo_compartido_crear( WP_REST_Request $peticion ) {
     if ( $limite ) {
         return $limite;
     }
-    $yo   = get_current_user_id();
-    $dest = bitacora_equipo_compartido_destinatario( $peticion->get_param( 'usuario' ) );
-    if ( ! $dest || $dest === $yo ) {
+    $yo = get_current_user_id();
+    $u  = bitacora_equipo_compartido_destinatario( $peticion->get_param( 'usuario' ) );
+    if ( ! $u || (int) $u->ID === $yo ) {
         return bitacora_equipo_compartido_no_encontrado();
     }
-    $nombre = trim( $peticion->get_param( 'usuario' ) );
+    $dest   = (int) $u->ID;
+    $nombre = $u->user_login;
     // INSERT IGNORE sobre la clave única: 1 fila nueva, 0 si ya existía (también
     // si otra petición la creó a la vez), false si falla la BD.
     $tc = bitacora_nombre_tabla_equipo_compartido();
@@ -2733,15 +2737,15 @@ function bitacora_equipo_compartido_revocar( WP_REST_Request $peticion ) {
     if ( $limite ) {
         return $limite;
     }
-    $dest = bitacora_equipo_compartido_destinatario( $peticion->get_param( 'usuario' ) );
-    $n    = $dest ? $wpdb->delete( bitacora_nombre_tabla_equipo_compartido(), array( 'propietario_id' => get_current_user_id(), 'destinatario_id' => $dest ), array( '%d', '%d' ) ) : 0;
+    $u = bitacora_equipo_compartido_destinatario( $peticion->get_param( 'usuario' ) );
+    $n = $u ? $wpdb->delete( bitacora_nombre_tabla_equipo_compartido(), array( 'propietario_id' => get_current_user_id(), 'destinatario_id' => (int) $u->ID ), array( '%d', '%d' ) ) : 0;
     if ( false === $n ) {
         return new WP_REST_Response( array( 'codigo' => 'error-bd', 'message' => 'No se pudo dejar de compartir la flota.' ), 500 );
     }
     if ( ! $n ) {
         return bitacora_equipo_compartido_no_encontrado();
     }
-    return new WP_REST_Response( array( 'ok' => true, 'nombre' => trim( $peticion->get_param( 'usuario' ) ) ), 200 );
+    return new WP_REST_Response( array( 'ok' => true, 'nombre' => $u->user_login ), 200 );
 }
 
 /* ===========================================================================
