@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.16
+ * Version:     1.38.17
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.16' );
+define( 'BITACORA_VERSION', '1.38.17' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -5371,6 +5371,59 @@ function bitacora_error_paso( $paso ) {
 }
 
 /**
+ * Comprueba que cada telescopio, ocular y auxiliar de la observación es del
+ * catálogo global (usuario_id NULL) o del usuario actual (#493). Se llama ANTES
+ * de escribir nada. Inexistente: 400; de otra cuenta: 403 con la pieza señalada
+ * (tipo, id y nombre) para que el formulario diga qué cambiar.
+ *
+ * $previas (editar): función que devuelve las piezas que la observación ya
+ * guardaba, array( 'telescopio' => ids, 'ocular' => ids, 'auxiliar' => ids ).
+ * Una pieza que no cambia no se revalida: editar no falla porque ya no sea usable.
+ *
+ * @return true|WP_Error
+ */
+function bitacora_validar_equipo_usable( $datos, $entradas, $previas = null ) {
+    global $wpdb;
+    $piezas = array();
+    if ( ! empty( $datos['telescopio_id'] ) ) {
+        $piezas[] = array( 'telescopio', intval( $datos['telescopio_id'] ) );
+    }
+    foreach ( (array) $entradas as $e ) {
+        foreach ( array( 'ocular_id' => 'ocular', 'auxiliar_id' => 'auxiliar', 'auxiliar2_id' => 'auxiliar' ) as $col => $tipo ) {
+            if ( ! empty( $e[ $col ] ) ) {
+                $piezas[] = array( $tipo, intval( $e[ $col ] ) );
+            }
+        }
+    }
+    $previas_ids = null;
+    $uid         = get_current_user_id();
+    foreach ( $piezas as $p ) {
+        list( $tipo, $id ) = $p;
+        $tabla = bitacora_equipo_tabla( $tipo );
+        $fila  = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $tabla WHERE id = %d", $id ) );
+        if ( $fila && ( null === $fila->usuario_id || intval( $fila->usuario_id ) === $uid ) ) {
+            continue;
+        }
+        if ( $previas && null === $previas_ids ) {
+            $previas_ids = $previas();
+        }
+        if ( $previas_ids && in_array( $id, $previas_ids[ $tipo ], true ) ) {
+            continue;
+        }
+        if ( ! $fila ) {
+            return new WP_Error( 'pieza_inexistente', "El $tipo con id $id no existe.", array( 'status' => 400, 'pieza' => array( 'tipo' => $tipo, 'id' => $id ) ) );
+        }
+        $nombre = trim( implode( ' ', array_filter( array( $fila->vendor ?? '', $fila->modelo ?? ( $fila->nombre ?? '' ) ) ) ) );
+        return new WP_Error(
+            'pieza_no_usable',
+            "El $tipo «{$nombre}» (id $id) no es tuyo y ya no está compartido contigo. Cámbialo por otro y vuelve a guardar.",
+            array( 'status' => 403, 'pieza' => array( 'tipo' => $tipo, 'id' => $id, 'nombre' => $nombre ) )
+        );
+    }
+    return true;
+}
+
+/**
  * Ejecuta $cuerpo dentro de una transacción: si devuelve un WP_Error se deshace
  * todo lo escrito; si no, se confirma. Devuelve lo que devolvió $cuerpo.
  */
@@ -5448,6 +5501,11 @@ function bitacora_guardar_observacion( WP_REST_Request $peticion ) {
     // Base elegida: solo vale si es del usuario, pública o compartida con él.
     if ( $datos['base_id'] && ! bitacora_base_legible( $datos['base_id'], get_current_user_id() ) ) {
         return new WP_Error( 'base_invalida', 'Esa base no existe o no puedes usarla.', array( 'status' => 400 ) );
+    }
+
+    $equipo = bitacora_validar_equipo_usable( $datos, $entradas );
+    if ( is_wp_error( $equipo ) ) {
+        return $equipo;
     }
 
     // Campos que fija el servidor, nunca el navegador.
@@ -5556,9 +5614,22 @@ function bitacora_editar_observacion( WP_REST_Request $peticion ) {
         return new WP_Error( 'base_invalida', 'Esa base no existe o no puedes usarla.', array( 'status' => 400 ) );
     }
 
+    $equipo = bitacora_validar_equipo_usable( $datos, $entradas, function () use ( $obs, $id ) {
+        $ids = array( 'telescopio' => array( intval( $obs->telescopio_id ?? 0 ) ), 'ocular' => array(), 'auxiliar' => array() );
+        foreach ( bitacora_obtener_entradas( $id ) as $en ) {
+            $ids['ocular'][]   = intval( $en->ocular_id ?? 0 );
+            $ids['auxiliar'][] = intval( $en->auxiliar_id ?? 0 );
+            $ids['auxiliar'][] = intval( $en->auxiliar2_id ?? 0 );
+        }
+        return $ids;
+    } );
+    if ( is_wp_error( $equipo ) ) {
+        return $equipo;
+    }
+
     $datos['actualizado_en'] = current_time( 'mysql', true );
 
-    $r = bitacora_en_transaccion( function () use ( $wpdb, $id, $obs, $datos, $params, $entradas ) {
+    $r = bitacora_en_transaccion( function () use ( $wpdb, $id, $obs,$datos, $params, $entradas ) {
         if ( false === $wpdb->update( bitacora_nombre_tabla(), $datos, array( 'id' => $id ) ) ) {
             return bitacora_error_paso( 'observación' );
         }
