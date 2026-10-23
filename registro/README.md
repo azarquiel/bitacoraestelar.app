@@ -682,9 +682,9 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | `GET` | `/datos.js` | No | Emite `OBSERVADORES`/`OBJECTS`/`OBSERVACIONES`/`VIAJES` como JavaScript para el visor |
 | `GET` | `/equipo/catalogo` | Sí | Catálogo global de telescopios/oculares/auxiliares/filtros |
 | `GET` | `/equipo` | Sí | Equipo personal del usuario. *(Pendiente, #495)* Suma el equipo compartido con él: cada pieza ajena lleva `de`, el nombre visible del propietario (nunca su correo). Orden: propias, luego compartidas por propietario y por nombre |
-| `GET` | `/equipo/compartir` | Sí | *(Pendiente, #494)* Las dos listas: a quién comparto mi flota y quién la comparte conmigo |
-| `POST` | `/equipo/compartir` | Sí | *(Pendiente, #494)* `{usuario}`: comparte la flota entera con ese nombre de usuario exacto. Errores con `codigo`: `no-encontrado-o-no-permitido` (no existe o no se puede, misma respuesta), `ya-compartido` (aviso) y `limite-de-ritmo` (`429` con `Retry-After`) |
-| `DELETE` | `/equipo/compartir` | Sí | *(Pendiente, #494)* `{usuario}`: deja de compartir con esa persona *(solo el propietario)*. Las observaciones ya guardadas no cambian |
+| `GET` | `/equipo/compartir` | Sí | Las dos listas, `{comparto, conmigo}`, con nombres de usuario: a quién comparto mi flota y quién la comparte conmigo (#494) |
+| `POST` | `/equipo/compartir` | Sí | `{usuario}`: comparte la flota entera con ese nombre de usuario exacto (`201 {ok, nombre}`). Errores con `codigo`: `no-encontrado-o-no-permitido` (`404`; no existe o no se puede, misma respuesta), `ya-compartido` (`200`, aviso) y `limite-de-ritmo` (`429` con `Retry-After`) (#494) |
+| `DELETE` | `/equipo/compartir` | Sí | `{usuario}` (cuerpo o query): deja de compartir con esa persona *(solo el propietario)*; si no compartías con ella, `404 no-encontrado-o-no-permitido`. Las observaciones ya guardadas no cambian (#494) |
 | `POST` | `/equipo/{telescopio\|ocular\|auxiliar\|filtro}` | Sí | Añade una pieza a su flota (del catálogo o a medida) |
 | `PUT`/`DELETE` | `/equipo/{tipo}/{id}` | Sí | Edita/borra una pieza *(solo el dueño)* |
 

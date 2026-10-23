@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.17
+ * Version:     1.39.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.17' );
+define( 'BITACORA_VERSION', '1.39.0' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -50,6 +50,11 @@ define( 'BITACORA_TABLA_OCULARES', 'bitacora_oculares' );
 // Clave del transient que cachea el catálogo GLOBAL de equipo (ver bitacora_equipo_catalogo).
 define( 'BITACORA_EQUIPO_CATALOGO_CACHE', 'bitacora_equipo_catalogo' );
 define( 'BITACORA_TABLA_AUXILIARES', 'bitacora_auxiliares' );
+// Flota compartida: el propietario deja usar TODO su equipo a un destinatario (#494).
+define( 'BITACORA_TABLA_EQUIPO_COMPARTIDO', 'bitacora_equipo_compartido' );
+define( 'BITACORA_COMPARTIR_MAX', 10 );   // altas/revocaciones por usuario…
+define( 'BITACORA_COMPARTIR_VENTANA', 60 ); // …por ventana de tantos segundos
+define( 'BITACORA_COMPARTIR_LECTURA_MAX', 60 ); // listados por usuario y ventana
 // Bases del observador (lugares de observación reutilizables) y su compartición.
 define( 'BITACORA_TABLA_BASES', 'bitacora_bases' );
 define( 'BITACORA_TABLA_BASE_COMPARTIDA', 'bitacora_base_compartida' );
@@ -151,6 +156,12 @@ function bitacora_nombre_tabla_oculares() {
 function bitacora_nombre_tabla_auxiliares() {
     global $wpdb;
     return $wpdb->prefix . BITACORA_TABLA_AUXILIARES;
+}
+
+/** Nombre real de la tabla de flota compartida (propietario_id ↔ destinatario_id). */
+function bitacora_nombre_tabla_equipo_compartido() {
+    global $wpdb;
+    return $wpdb->prefix . BITACORA_TABLA_EQUIPO_COMPARTIDO;
 }
 
 /**
@@ -418,6 +429,19 @@ function bitacora_crear_tabla() {
         UNIQUE KEY base_usuario (base_id, usuario_id)
     ) $collate;";
 
+    // Flota compartida: el propietario deja elegir TODO su equipo (telescopios,
+    // oculares, auxiliares) al destinatario. Solo lectura, como las bases.
+    $tabla_equipo_comp = bitacora_nombre_tabla_equipo_compartido();
+    $sql_equipo_comp = "CREATE TABLE $tabla_equipo_comp (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        propietario_id bigint(20) unsigned NOT NULL,
+        destinatario_id bigint(20) unsigned NOT NULL,
+        creado_en datetime NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY propietario_destinatario (propietario_id, destinatario_id),
+        KEY destinatario_id (destinatario_id)
+    ) $collate;";
+
     // El VIAJE INTERESTELAR: la salida de un observador, una noche, desde una
     // base. Todas las observaciones de esa noche cuelgan de él (viaje_id). El
     // telescopio NO entra en la identidad —cambiar de tubo no parte la salida en
@@ -477,6 +501,7 @@ function bitacora_crear_tabla() {
     dbDelta( $sql_auxiliares );
     dbDelta( $sql_bases );
     dbDelta( $sql_base_comp );
+    dbDelta( $sql_equipo_comp );
     // El lugar del viaje pasó de "NULL = sin base" a "0 = sin lugar". Los NULL se
     // convierten ANTES de que dbDelta ponga la columna NOT NULL: con el modo
     // estricto de MySQL, un ALTER a NOT NULL sobre datos con NULL falla.
@@ -1927,6 +1952,19 @@ function bitacora_registrar_rutas() {
             ),
         )
     );
+    // Flota compartida (#494): a quién comparto y quién comparte conmigo; alta y
+    // revocación por nombre de usuario exacto (`usuario`, en el cuerpo o la query).
+    // Sin `args`: la validación va en el manejador para que una entrada inválida
+    // responda igual que un nombre que no existe.
+    register_rest_route(
+        'bitacora/v1',
+        '/equipo/compartir',
+        array(
+            array( 'methods' => 'GET',    'callback' => 'bitacora_equipo_compartido_listar',  'permission_callback' => $solo_logueados ),
+            array( 'methods' => 'POST',   'callback' => 'bitacora_equipo_compartido_crear',   'permission_callback' => $solo_logueados ),
+            array( 'methods' => 'DELETE', 'callback' => 'bitacora_equipo_compartido_revocar', 'permission_callback' => $solo_logueados ),
+        )
+    );
 
     // ── Bases del observador (lugares de observación) ──
     register_rest_route( 'bitacora/v1', '/bases', array(
@@ -2600,6 +2638,114 @@ function bitacora_equipo_borrar( WP_REST_Request $peticion ) {
     }
     $wpdb->delete( $tabla, array( 'id' => intval( $peticion['id'] ) ), array( '%d' ) );
     return new WP_REST_Response( array( 'ok' => true ), 200 );
+}
+
+/* ---------------------------------------------------------------------------
+ * Flota compartida (#494). El propietario deja elegir TODO su equipo a otro
+ * usuario, identificado por nombre de usuario exacto. Solo lectura: editar y
+ * borrar siguen pasando por bitacora_equipo_pieza_propia.
+ *
+ * Cada error lleva un `codigo` estable que la pantalla (#497) traduce. «No
+ * existe», «es el tuyo», «entrada inválida» y «no lo compartías» responden
+ * EXACTAMENTE igual, para que ninguna petición sirva para enumerar usuarios.
+ * ------------------------------------------------------------------------- */
+
+/** 429 `limite-de-ritmo` con Retry-After si el usuario agotó el cupo de $accion; null si pasa. */
+function bitacora_equipo_compartido_cupo( $accion, $max ) {
+    $espera = bitacora_cupo( 'equipo_compartido_' . $accion . ':' . get_current_user_id(), time(), $max, BITACORA_COMPARTIR_VENTANA );
+    if ( ! $espera ) {
+        return null;
+    }
+    return new WP_REST_Response(
+        array( 'codigo' => 'limite-de-ritmo', 'message' => 'Demasiados intentos seguidos.', 'espera' => $espera ),
+        429,
+        array( 'Retry-After' => $espera )
+    );
+}
+
+/** La respuesta única para «no existe», «eres tú», «entrada inválida» y «no lo compartías». */
+function bitacora_equipo_compartido_no_encontrado() {
+    return new WP_REST_Response(
+        array( 'codigo' => 'no-encontrado-o-no-permitido', 'message' => 'No encontramos a nadie con ese nombre de usuario o no se puede compartir con esa persona.' ),
+        404
+    );
+}
+
+/**
+ * Usuario con ese nombre EXACTO, o null. get_user_by sanea el nombre y MySQL no
+ * distingue mayúsculas: sin la comparación estricta, «Pepe» encontraría a «pepe».
+ * 60 es la longitud de user_login en WordPress.
+ */
+function bitacora_equipo_compartido_destinatario( $nombre ) {
+    if ( ! is_string( $nombre ) ) {
+        return null;
+    }
+    $nombre = trim( $nombre );
+    if ( '' === $nombre || mb_strlen( $nombre ) > 60 ) {
+        return null;
+    }
+    $u = get_user_by( 'login', $nombre );
+    return ( $u && $u->user_login === $nombre ) ? $u : null;
+}
+
+/** GET /equipo/compartir → { comparto: [nombre…], conmigo: [nombre…] }. */
+function bitacora_equipo_compartido_listar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $limite = bitacora_equipo_compartido_cupo( 'lectura', BITACORA_COMPARTIR_LECTURA_MAX );
+    if ( $limite ) {
+        return $limite;
+    }
+    $yo  = get_current_user_id();
+    $tc  = bitacora_nombre_tabla_equipo_compartido();
+    $usu = $wpdb->users;
+    $comparto = $wpdb->get_col( $wpdb->prepare( "SELECT u.user_login FROM $tc c JOIN $usu u ON u.ID = c.destinatario_id WHERE c.propietario_id = %d ORDER BY u.user_login", $yo ) );
+    $conmigo  = $wpdb->get_col( $wpdb->prepare( "SELECT u.user_login FROM $tc c JOIN $usu u ON u.ID = c.propietario_id WHERE c.destinatario_id = %d ORDER BY u.user_login", $yo ) );
+    return new WP_REST_Response( array( 'comparto' => $comparto ? $comparto : array(), 'conmigo' => $conmigo ? $conmigo : array() ), 200 );
+}
+
+/** POST /equipo/compartir {usuario} → 201 compartido, o 200 `ya-compartido` (aviso, no error). */
+function bitacora_equipo_compartido_crear( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $limite = bitacora_equipo_compartido_cupo( 'escritura', BITACORA_COMPARTIR_MAX );
+    if ( $limite ) {
+        return $limite;
+    }
+    $yo = get_current_user_id();
+    $u  = bitacora_equipo_compartido_destinatario( $peticion->get_param( 'usuario' ) );
+    if ( ! $u || (int) $u->ID === $yo ) {
+        return bitacora_equipo_compartido_no_encontrado();
+    }
+    $dest   = (int) $u->ID;
+    $nombre = $u->user_login;
+    // INSERT IGNORE sobre la clave única: 1 fila nueva, 0 si ya existía (también
+    // si otra petición la creó a la vez), false si falla la BD.
+    $tc = bitacora_nombre_tabla_equipo_compartido();
+    $n  = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO $tc (propietario_id, destinatario_id, creado_en) VALUES (%d, %d, %s)", $yo, $dest, current_time( 'mysql', true ) ) );
+    if ( false === $n ) {
+        return new WP_REST_Response( array( 'codigo' => 'error-bd', 'message' => 'No se pudo compartir la flota.' ), 500 );
+    }
+    if ( 0 === (int) $n ) {
+        return new WP_REST_Response( array( 'ok' => true, 'codigo' => 'ya-compartido', 'nombre' => $nombre, 'message' => 'Ya compartes tu flota con ' . $nombre . '.' ), 200 );
+    }
+    return new WP_REST_Response( array( 'ok' => true, 'nombre' => $nombre ), 201 );
+}
+
+/** DELETE /equipo/compartir?usuario=… → deja de compartir con él. Solo el propietario. */
+function bitacora_equipo_compartido_revocar( WP_REST_Request $peticion ) {
+    global $wpdb;
+    $limite = bitacora_equipo_compartido_cupo( 'escritura', BITACORA_COMPARTIR_MAX );
+    if ( $limite ) {
+        return $limite;
+    }
+    $u = bitacora_equipo_compartido_destinatario( $peticion->get_param( 'usuario' ) );
+    $n = $u ? $wpdb->delete( bitacora_nombre_tabla_equipo_compartido(), array( 'propietario_id' => get_current_user_id(), 'destinatario_id' => (int) $u->ID ), array( '%d', '%d' ) ) : 0;
+    if ( false === $n ) {
+        return new WP_REST_Response( array( 'codigo' => 'error-bd', 'message' => 'No se pudo dejar de compartir la flota.' ), 500 );
+    }
+    if ( ! $n ) {
+        return bitacora_equipo_compartido_no_encontrado();
+    }
+    return new WP_REST_Response( array( 'ok' => true, 'nombre' => $u->user_login ), 200 );
 }
 
 /* ===========================================================================
@@ -4024,24 +4170,32 @@ function bitacora_resolver_q_valida( $q ) {
 }
 
 /**
- * Cupo de /resolver para anónimos: BITACORA_RESOLVER_MAX consultas que fallan en
- * caché por BITACORA_RESOLVER_VENTANA segundos y por IP (ventana fija). Devuelve
- * 0 si pasa (y cuenta la consulta) o los segundos hasta que acabe la ventana.
- * ponytail: ventana fija y REMOTE_ADDR; si hay proxy inverso delante, todos
- * comparten IP; usar la cabecera que fije el hosting solo si se confía en ella.
+ * Límite de ritmo de ventana fija: $max peticiones por $ventana segundos y por
+ * $clave. Devuelve 0 si pasa (y cuenta la petición) o los segundos hasta que
+ * acabe la ventana.
  */
-function bitacora_resolver_cupo( $ip, $ahora ) {
-    $key  = 'bitacora_rl_' . md5( (string) $ip );
+function bitacora_cupo( $clave, $ahora, $max, $ventana ) {
+    $key  = 'bitacora_rl_' . md5( (string) $clave );
     $reg  = get_transient( $key );
-    if ( ! is_array( $reg ) || $ahora >= $reg[1] + BITACORA_RESOLVER_VENTANA ) {
+    if ( ! is_array( $reg ) || $ahora >= $reg[1] + $ventana ) {
         $reg = array( 0, $ahora );
     }
-    if ( $reg[0] >= BITACORA_RESOLVER_MAX ) {
-        return max( 1, $reg[1] + BITACORA_RESOLVER_VENTANA - $ahora );
+    if ( $reg[0] >= $max ) {
+        return max( 1, $reg[1] + $ventana - $ahora );
     }
     $reg[0]++;
-    set_transient( $key, $reg, BITACORA_RESOLVER_VENTANA );
+    set_transient( $key, $reg, $ventana );
     return 0;
+}
+
+/**
+ * Cupo de /resolver para anónimos: BITACORA_RESOLVER_MAX consultas que fallan en
+ * caché por BITACORA_RESOLVER_VENTANA segundos y por IP.
+ * ponytail: REMOTE_ADDR; si hay proxy inverso delante, todos comparten IP;
+ * usar la cabecera que fije el hosting solo si se confía en ella.
+ */
+function bitacora_resolver_cupo( $ip, $ahora ) {
+    return bitacora_cupo( $ip, $ahora, BITACORA_RESOLVER_MAX, BITACORA_RESOLVER_VENTANA );
 }
 
 /**
