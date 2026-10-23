@@ -219,11 +219,11 @@ Política con la que los tres proxies del simulador (`gaia_proxy.php`, `dss-prox
 
 ## Lista de equipo
 
-Telescopios y oculares que el simulador ofrece. Con sesión, son los de `GET /equipo` más el catálogo; sin sesión, solo el catálogo (`GET /equipo/catalogo`, público). El vocabulario es el de `registro/CONTEXT.md`, sección «Equipo compartido».
+Telescopios que el simulador ofrece. Con sesión, los de `GET /equipo` delante del catálogo; sin sesión, solo el catálogo (`GET /equipo/catalogo`, público). Hoy el orden lo fija `BitacoraEquipo.flotaPrimero` (`resources/js/bitacora-equipo.js`): mi flota y luego el catálogo. El vocabulario es el de `registro/CONTEXT.md`, sección «Equipo compartido».
 
-- **Incluye el equipo compartido conmigo (#498).** `GET /equipo` trae también la flota que otros comparten conmigo, cada pieza con `de` (nombre visible del propietario). No hay endpoint propio: el simulador usa el mismo que el registro.
-- **Orden:** mi flota, luego lo compartido conmigo agrupado por propietario y por nombre, con la etiqueta «Equipo de B», y luego el catálogo. Lo fija `BitacoraEquipo.flotaPrimero` (`resources/js/bitacora-equipo.js`), el mismo que usa el formulario, así que una pieza se ve igual en las dos pantallas.
-- **Sin nada compartido, el orden es el de antes;** sin sesión, solo catálogo. Elegir la pieza no es control de acceso: lo que se puede usar lo decide el servidor (`simulador_ocular/README.md`, «Qué cambia al iniciar sesión»).
+- **Pendiente (#498): la lista incluirá el equipo compartido conmigo.** `GET /equipo` traerá también la flota que otros comparten conmigo, cada pieza con `de` (#495). No hay endpoint propio: el simulador usa el mismo que el registro.
+- **Orden con lo compartido:** mi flota, luego lo compartido conmigo agrupado por propietario y por nombre, con la etiqueta «Equipo de B», y luego el catálogo. Mismo orden y rotulado que el selector del formulario (#496), así que una pieza se verá igual en las dos pantallas.
+- **Sin nada compartido, el orden es el de hoy;** sin sesión, solo catálogo. Elegir la pieza no es control de acceso: lo que se puede usar lo decide el servidor (`simulador_ocular/README.md`, «Qué cambia al iniciar sesión»).
 
 ## Transmisión y araña por tipo óptico
 

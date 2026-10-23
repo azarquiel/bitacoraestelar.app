@@ -62,6 +62,8 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 
 **Flota entera de un usuario —telescopios, oculares y auxiliares— que otro usuario puede elegir en sus observaciones** (`{prefix}bitacora_equipo_compartido`: una fila por pareja `propietario_id` + `destinatario_id`, clave única). Épica #492; la razón de cada decisión, en ADR 0032 (`docs/adr/0032-el-equipo-se-comparte-por-flota-entera.md`).
 
+> **Estado:** vocabulario fijado antes de construir. Tabla, rutas, validación y campo `de` llegan con #493 a #499; cada punto cita la historia que lo construye.
+
 - **Flota entera, por destinatario, solo lectura.** El propietario decide con quién la comparte (opt-in); no hay compartir pieza a pieza, así que lo que añada a su flota después también queda compartido. Igual que la [[base]] `seleccionada`, compartir es SOLO LECTURA: el destinatario puede elegir la pieza en una observación y en el simulador, pero editarla o borrarla sigue siendo del dueño (`PUT`/`DELETE /equipo/{tipo}/{id}` dan 403).
 - **Se localiza por nombre de usuario exacto**, sin buscador ni autocompletado, con límite de ritmo. «No existe» y «no se puede compartir con esa persona» dan la misma respuesta (`no-encontrado-o-no-permitido`), para no permitir averiguar quién tiene cuenta. Compartir dos veces con la misma persona es `ya-compartido`: un aviso, no un error. Rutas: `GET`/`POST`/`DELETE /equipo/compartir` (#494, tabla en `registro/README.md`).
 - **Revocar borra la fila y no reescribe el pasado.** Las observaciones ya guardadas conservan su `telescopio_id` y el texto `telescopio`, que es la instantánea que sobrevive aunque la pieza desaparezca (#495).
