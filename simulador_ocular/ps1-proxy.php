@@ -32,13 +32,10 @@ const PS1_BASE            = 'https://ps1images.stsci.edu/cgi-bin/';
 const PS1_CACHE_DIR       = __DIR__ . '/cache-ps1';
 const PS1_CACHE_MAX_BYTES = 150 * 1024 * 1024;   // objetivo de tamaño de la caché (best-effort, como el DSS)
 const PS1_CACHE_LOWWATER  = 0.80;
-const PS1_CONNECT_TIMEOUT = 8;                   // s: timeout de CONEXIÓN a STScI
+const PS1_LOG_FILE        = PS1_CACHE_DIR . '/.hits.log';   // log de latencia (mismo formato que Gaia y DSS)
 const PS1_REQUEST_TIMEOUT = 30;                  // s: timeout TOTAL de CADA petición a STScI
 const PS1_MIN_BYTES       = 2880;                // bytes: un FITS válido trae al menos un bloque de cabecera
-const PS1_CLEANUP_EVERY   = 300;                 // s
-const PS1_CLEANUP_MAX_DEL = 300;
 const PS1_CLIENT_MAXAGE   = 31536000;            // s: 1 año (el parche es inmutable)
-const PS1_ORPHAN_TTL      = 3600;
 const PS1_ESCALA_NATIVA   = 0.25;                // ″/px del stack: el `size` de fitscut va en estos píxeles
 const PS1_LADO_MIN        = 1.5;                 // ′  (mismos topes que la capa del render)
 const PS1_LADO_MAX        = 20.0;                // ′
@@ -225,6 +222,7 @@ function ps1_fusionar(array $trozos): ?string {
  * Devuelve el cuerpo de una respuesta 2xx, o null si falla.
  */
 function ps1_fetch(string $url, int $min_bytes): ?string {
+    $t0 = microtime(true);
     $body = false;
     $http = 0;
     if (function_exists('curl_init')) {
@@ -232,7 +230,7 @@ function ps1_fetch(string $url, int $min_bytes): ?string {
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_CONNECTTIMEOUT => PS1_CONNECT_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => CACHE_LRU_CONNECT_TIMEOUT,
             CURLOPT_TIMEOUT        => PS1_REQUEST_TIMEOUT,
             CURLOPT_USERAGENT      => 'simulador-ocular/1.0',
         ]);
@@ -248,6 +246,7 @@ function ps1_fetch(string $url, int $min_bytes): ?string {
         $body = @file_get_contents($url, false, $ctx);
         $http = ($body !== false && $body !== '') ? 200 : 0;
     }
+    cache_lru_traza(str_contains($url, 'fitscut') ? 'recorte' : 'nombres', (string) parse_url($url, PHP_URL_HOST), $http, $t0);
     if ($body !== false && strlen($body) >= $min_bytes && ($http === 0 || ($http >= 200 && $http < 300))) {
         return $body;
     }
@@ -292,7 +291,7 @@ function ps1_servir_directo(string $datos): void {
  * Sirve el parche de una entrada de caché con ETag/Cache-Control. 304 si el ETag
  * del cliente coincide. Termina la ejecución.
  */
-function ps1_servir(string $fichero, string $clave): void {
+function ps1_servir(string $fichero, string $clave, string $estado = 'hit', ?string $etapa = null): void {
     // ETag = la clave, como en el DSS: el acierto hace touch() (LRU) y cambia
     // mtime, así que el ETag no puede depender de él. El parche es inmutable:
     // PS1 DR2 es un archivo fijo y la petición es determinista.
@@ -304,6 +303,7 @@ function ps1_servir(string $fichero, string $clave): void {
 
     if (($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag) {
         http_response_code(304);
+        cache_lru_log_registrar(PS1_LOG_FILE, $clave, '304', $etapa, 0);
         exit;
     }
 
@@ -315,6 +315,7 @@ function ps1_servir(string $fichero, string $clave): void {
     header('Content-Type: application/fits');
     header('Content-Length: ' . strlen($datos));
     echo $datos;
+    cache_lru_log_registrar(PS1_LOG_FILE, $clave, $estado, $etapa, strlen($datos));
     exit;
 }
 
@@ -341,63 +342,18 @@ $banda  = ps1_banda_valida((string) ($_GET['banda'] ?? 'g'));
 $clave   = ps1_clave($ra, $dec, $lado, $salida, $banda);
 $fichero = ps1_ruta($clave);
 
-// ── ACIERTO de caché ── (los parches son inmutables; no caducan)
-if (is_file($fichero)) {
-    @touch($fichero);                    // LRU: renueva su antigüedad
-    ps1_servir($fichero, $clave);        // termina
-}
-
-// ── FALLO: armar el parche bajo bloqueo (evita estampida) ──
-$lock = @fopen($fichero . '.lock', 'c');
-if ($lock && flock($lock, LOCK_EX)) {
-    // Otra petición pudo llenar la caché mientras esperábamos el lock.
-    if (is_file($fichero)) {
-        flock($lock, LOCK_UN);
-        fclose($lock);
-        ps1_servir($fichero, $clave);    // termina
-    }
-
-    $datos = ps1_armar_parche($ra, $dec, $lado, $salida, $banda);
-
-    if ($datos === null) {
-        flock($lock, LOCK_UN);
-        fclose($lock);
+cache_lru_flujo(
+    [
+        'ruta' => $fichero, 'clave' => $clave, 'dir' => PS1_CACHE_DIR, 'patron' => '*.fits',
+        'max_bytes' => PS1_CACHE_MAX_BYTES, 'lowwater' => PS1_CACHE_LOWWATER, 'log' => PS1_LOG_FILE,
+    ],
+    static function (?string &$etapa) use ($ra, $dec, $lado, $salida, $banda): ?string {
+        return ps1_armar_parche($ra, $dec, $lado, $salida, $banda);
+    },
+    static fn(string $estado, ?string $etapa) => ps1_servir($fichero, $clave, $estado, $etapa),
+    'ps1_servir_directo',
+    static function (): void {
         http_response_code(502);
         exit('ps1cutouts no respondió o no cubre ese campo');
     }
-
-    // Escritura ATÓMICA (temp + rename) para no dejar ficheros a medias.
-    $tmp = $fichero . '.tmp' . getmypid();
-    if (file_put_contents($tmp, $datos) !== false) {
-        @rename($tmp, $fichero);
-    } else {
-        @unlink($tmp);
-    }
-    flock($lock, LOCK_UN);
-    fclose($lock);
-    // El .lock no se borra: unlink mientras otro proceso lo tiene en flock es una
-    // carrera. Es vacío, hay uno por parche, y la limpieza los retira si envejecen.
-
-    cache_lru_limpieza([
-        'dir' => PS1_CACHE_DIR, 'patron' => '*.fits',
-        'max_bytes' => PS1_CACHE_MAX_BYTES, 'lowwater' => PS1_CACHE_LOWWATER,
-        'max_del' => PS1_CLEANUP_MAX_DEL, 'cada' => PS1_CLEANUP_EVERY,
-        'huerfano_ttl' => PS1_ORPHAN_TTL,
-    ]);
-
-    if (is_file($fichero)) {
-        ps1_servir($fichero, $clave);    // termina
-    }
-    ps1_servir_directo($datos);          // termina
-}
-
-// No se pudo bloquear (caso raro): servir sin cachear.
-if ($lock) {
-    fclose($lock);
-}
-$datos = ps1_armar_parche($ra, $dec, $lado, $salida, $banda);
-if ($datos !== null) {
-    ps1_servir_directo($datos);          // termina
-}
-http_response_code(502);
-exit('ps1cutouts no respondió o no cubre ese campo');
+);

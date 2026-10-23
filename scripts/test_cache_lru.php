@@ -107,6 +107,75 @@ ok(!is_file($tmpViejo),  'retira los .tmp huérfanos ya envejecidos');
 ok(is_file($lockNuevo),  'no toca un .lock reciente: puede haber un flock en curso');
 
 limpiar_dir($dir);
+
+echo "cache_lru_flujo (con un fetch falso):\n";
+/* Arma un flujo sobre $dir con callbacks que NO terminan, y devuelve lo que
+   pasó. $datos = lo que devuelve el fetch (null = el origen falla). */
+$flujo = function (string $dir, ?string $datos, array $extra = []): array {
+    $r = ['fetch' => 0, 'servido' => [], 'directo' => null, 'fallo' => 0];
+    $cfg = ['ruta' => "$dir/k.bin", 'clave' => 'k', 'dir' => $dir, 'patron' => '*.bin',
+            'max_bytes' => 1 << 20, 'lowwater' => 0.8, 'log' => "$dir/.hits.log"] + $extra;
+    cache_lru_flujo(
+        $cfg,
+        function (?string &$etapa) use (&$r, $datos) { $r['fetch']++; $etapa = 'sonda'; return $datos; },
+        function (string $estado, ?string $etapa) use (&$r) { $r['servido'][] = [$estado, $etapa]; },
+        function (string $d) use (&$r) { $r['directo'] = $d; },
+        function () use (&$r) { $r['fallo']++; }
+    );
+    return $r;
+};
+$log = fn(string $dir): array => array_map(fn($l) => json_decode($l, true),
+    array_filter(explode("\n", (string) @file_get_contents("$dir/.hits.log"))));
+
+// FALLO + escritura: pide al origen una vez, escribe atómicamente y sirve la entrada.
+$r = $flujo($dir, 'CONTENIDO');
+eq($r['fetch'], 1, 'fallo de caché: un solo fetch');
+eq($r['servido'], [['miss', 'sonda']], 'sirve la entrada recién escrita como miss, con su etapa');
+eq(file_get_contents("$dir/k.bin"), 'CONTENIDO', 'el fichero queda escrito');
+eq(glob("$dir/*.tmp*") ?: [], [], 'escritura atómica: no queda ningún .tmp');
+
+// ACIERTO: no toca el origen.
+$r = $flujo($dir, 'OTRO');
+eq($r['fetch'], 0, 'acierto: el fetch ni se llama');
+eq($r['servido'], [['hit', null]], 'acierto: sirve como hit');
+eq(file_get_contents("$dir/k.bin"), 'CONTENIDO', 'acierto: no reescribe la entrada');
+limpiar_dir($dir);
+
+// 502: el origen falla → fallo(), nada en disco, y queda en el log como error.
+$r = $flujo($dir, null);
+eq($r['fallo'], 1, '502: llama a fallo()');
+eq([$r['servido'], $r['directo']], [[], null], '502: no sirve nada');
+ok(!is_file("$dir/k.bin"), '502: no escribe la caché');
+$l = $log($dir);
+eq([$l[0]['estado'] ?? null, $l[0]['etapa'] ?? null], ['error', 'sonda'], '502: queda en el log como error con su etapa');
+limpiar_dir($dir);
+@unlink("$dir/.hits.log");   // limpiar_dir no ve los ficheros ocultos
+
+// Codificación solo en disco: el directo recibe el crudo.
+$r = $flujo($dir, 'abc', ['codificar' => fn(string $d) => strrev($d)]);
+eq(file_get_contents("$dir/k.bin"), 'cba', 'codificar: lo que se escribe es lo codificado');
+limpiar_dir($dir);
+$r = $flujo($dir, 'abc', ['codificar' => fn(string $d) => false]);
+eq([$r['directo'], $r['servido']], ['abc', []], 'si no se puede escribir, sirve el crudo directo');
+eq(glob("$dir/*.tmp*") ?: [], [], 'y no deja un .tmp');
+eq($log($dir)[0]['estado'] ?? null, 'miss', 'el directo también queda en el log');
+limpiar_dir($dir);
+
+// Sin flock (el .lock no se puede crear): descarga directa, sin cachear.
+mkdir("$dir/k.bin.lock");
+$r = $flujo($dir, 'XYZ');
+eq([$r['directo'], $r['servido']], ['XYZ', []], 'sin lock: sirve directo');
+ok(!is_file("$dir/k.bin"), 'sin lock: no cachea');
+$r = $flujo($dir, null);
+eq($r['fallo'], 1, 'sin lock y el origen falla: 502');
+rmdir("$dir/k.bin.lock");
+limpiar_dir($dir);
+
+echo "cache_lru_log_linea (formato único):\n";
+eq(array_keys(json_decode(cache_lru_log_linea(1.0, 'k', 'hit', null, 1, 1.0), true)),
+    ['t', 'clave', 'estado', 'etapa', 'bytes', 'ms', 'traza'], 'las claves del log, en orden');
+
+limpiar_dir($dir);
 @rmdir($dir);
 
 if ($fallos) { echo "\n$fallos fallo(s).\n"; exit(1); }

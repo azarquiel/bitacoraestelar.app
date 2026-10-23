@@ -1024,7 +1024,7 @@ proxy de Gaia (`gaia_proxy.php`):
   cada acierto renueva su antigüedad (`touch`) y las populares sobreviven. Al superar
   `DSS_CACHE_MAX_BYTES`, borra las **más antiguas** hasta bajar al 80 % del tope.
 - **Limpieza incremental**: no se escanea el directorio en cada petición (throttle
-  con un *stamp*), y cada pasada borra como mucho `DSS_CLEANUP_MAX_DEL` entradas.
+  con un *stamp*), y cada pasada borra como mucho `CACHE_LRU_MAX_DEL` entradas.
   También barre `.lock`/`.tmp` huérfanos. Sin cron ni tareas externas.
 - **Anti-estampida**: la descarga se hace bajo `flock`, con escritura atómica
   (temp + `rename`), así varias peticiones simultáneas de la misma placa no la

@@ -22,22 +22,19 @@ declare(strict_types=1);
 const DSS_CACHE_DIR       = __DIR__ . '/cache-dss';
 const DSS_CACHE_MAX_BYTES = 150 * 1024 * 1024;   // objetivo de tamaño de la caché (150 MB, best-effort: se aplica en la limpieza incremental)
 const DSS_CACHE_LOWWATER  = 0.80;                // tras evict, bajar hasta el 80% del tope
-const DSS_CONNECT_TIMEOUT = 8;                   // s: timeout de CONEXIÓN al archivo del ESO
+const DSS_LOG_FILE        = DSS_CACHE_DIR . '/.hits.log';   // log de latencia (mismo formato que Gaia y PS1)
 const DSS_REQUEST_TIMEOUT = 40;                  // s: timeout TOTAL de la petición
 const DSS_ESO_MAX_ARCMIN  = 120;                 // ' : campo máximo que sirve el ESO (por encima devuelve HTML de error)
 const DSS_SKYVIEW_MAX_ARCMIN = 180;              // ' : SkyView une placas y sirve 3° limpios; a 4° ya se ve la costura (#383)
 const DSS_MIN_BYTES       = 200;                 // bytes: por debajo se considera respuesta inválida
-const DSS_CLEANUP_EVERY   = 300;                 // s: limpieza como mucho cada 5 min
-const DSS_CLEANUP_MAX_DEL = 300;                 // nº máx. de entradas a borrar por pasada (incremental)
 const DSS_CLIENT_MAXAGE   = 31536000;            // s: Cache-Control max-age que se anuncia al navegador (1 año)
-const DSS_ORPHAN_TTL      = 3600;                // s: edad mínima de un .lock/.tmp huérfano para retirarlo
 const DSS_SURVEYS         = ['DSS1', 'DSS2-red', 'DSS2-blue', 'DSS2-infrared'];
 const DSS_FUENTES         = ['eso', 'skyview'];   // de dónde bajar la placa (ver dss_url)
 /* El mismo reconocimiento, con el nombre que le da cada servicio. */
 const DSS_SKYVIEW         = ['DSS1' => 'dss1r', 'DSS2-red' => 'dss2r', 'DSS2-blue' => 'dss2b', 'DSS2-infrared' => 'dss2ir'];
 
-/* La política de caché LRU (qué se evicta y cuándo se limpia) es la misma que la
-   del proxy de Gaia y vive en el módulo compartido. */
+/* La política de caché LRU y el flujo de la petición son los mismos que los de los
+   proxies de Gaia y PS1 y viven en el módulo compartido. */
 require_once __DIR__ . '/bitacora-cache-lru.php';
 
 // ───────────────────────── FUNCIONES PURAS (testables) ───────────────────────
@@ -126,6 +123,7 @@ function dss_url(string $ra, string $dec, float $x, float $y, string $sv, string
  * null si falla o es demasiado pequeña para ser una imagen válida.
  */
 function dss_fetch(string $url): ?string {
+    $t0 = microtime(true);
     $body = false;
     $http = 0;
     if (function_exists('curl_init')) {
@@ -133,7 +131,7 @@ function dss_fetch(string $url): ?string {
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_CONNECTTIMEOUT => DSS_CONNECT_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => CACHE_LRU_CONNECT_TIMEOUT,
             CURLOPT_TIMEOUT        => DSS_REQUEST_TIMEOUT,
             CURLOPT_USERAGENT      => 'simulador-ocular/1.0',
         ]);
@@ -151,6 +149,7 @@ function dss_fetch(string $url): ?string {
         // Sin cURL no hay código HTTP fiable; un cuerpo no vacío se da por bueno.
         $http = ($body !== false && $body !== '') ? 200 : 0;
     }
+    cache_lru_traza('placa', (string) parse_url($url, PHP_URL_HOST), $http, $t0);
     if ($body !== false && strlen($body) >= DSS_MIN_BYTES && ($http === 0 || ($http >= 200 && $http < 300))) {
         return $body;
     }
@@ -173,7 +172,7 @@ function dss_servir_directo(string $datos): void {
  * Sirve la placa GIF de una entrada de caché con ETag/Cache-Control. Responde 304
  * si el ETag del cliente coincide. Termina la ejecución.
  */
-function dss_servir(string $fichero, string $clave): void {
+function dss_servir(string $fichero, string $clave, string $estado = 'hit', ?string $etapa = null): void {
     // ETag = la clave. El acierto de caché hace touch() (para el LRU), que cambia
     // mtime; por eso el ETag NO puede depender de mtime o nunca habría 304. La placa
     // de una región es inmutable (el DSS es un archivo fijo y la petición es
@@ -186,6 +185,7 @@ function dss_servir(string $fichero, string $clave): void {
 
     if (($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag) {
         http_response_code(304);
+        cache_lru_log_registrar(DSS_LOG_FILE, $clave, '304', $etapa, 0);
         exit;
     }
 
@@ -197,6 +197,7 @@ function dss_servir(string $fichero, string $clave): void {
     header('Content-Type: image/gif');
     header('Content-Length: ' . strlen($datos));
     echo $datos;
+    cache_lru_log_registrar(DSS_LOG_FILE, $clave, $estado, $etapa, strlen($datos));
     exit;
 }
 
@@ -226,65 +227,18 @@ if (!dss_validar_coord($ra) || !dss_validar_coord($dec)) {
 $clave   = dss_clave($ra, $dec, $x, $y, $sv, $fte);
 $fichero = dss_ruta($clave);
 
-// ── ACIERTO de caché ── (las placas son inmutables; no caducan)
-if (is_file($fichero)) {
-    @touch($fichero);                    // LRU: renueva su antigüedad
-    dss_servir($fichero, $clave);        // termina
-}
-
-// ── FALLO: descargar la placa bajo bloqueo (evita estampida) ──
-$lock = @fopen($fichero . '.lock', 'c');
-if ($lock && flock($lock, LOCK_EX)) {
-    // Otra petición pudo llenar la caché mientras esperábamos el lock.
-    if (is_file($fichero)) {
-        flock($lock, LOCK_UN);
-        fclose($lock);
-        dss_servir($fichero, $clave);    // termina
-    }
-
-    $datos = dss_fetch(dss_url($ra, $dec, $x, $y, $sv, $fte));
-
-    if ($datos === null) {
-        flock($lock, LOCK_UN);
-        fclose($lock);
+cache_lru_flujo(
+    [
+        'ruta' => $fichero, 'clave' => $clave, 'dir' => DSS_CACHE_DIR, 'patron' => '*.gif',
+        'max_bytes' => DSS_CACHE_MAX_BYTES, 'lowwater' => DSS_CACHE_LOWWATER, 'log' => DSS_LOG_FILE,
+    ],
+    static function (?string &$etapa) use ($ra, $dec, $x, $y, $sv, $fte): ?string {
+        return dss_fetch(dss_url($ra, $dec, $x, $y, $sv, $fte));
+    },
+    static fn(string $estado, ?string $etapa) => dss_servir($fichero, $clave, $estado, $etapa),
+    'dss_servir_directo',
+    static function (): void {
         http_response_code(502);
         exit('El servidor del DSS no respondió');
     }
-
-    // Escritura ATÓMICA (temp + rename) para no dejar ficheros a medias.
-    $tmp = $fichero . '.tmp' . getmypid();
-    if (file_put_contents($tmp, $datos) !== false) {
-        @rename($tmp, $fichero);
-    } else {
-        @unlink($tmp);
-    }
-    flock($lock, LOCK_UN);
-    fclose($lock);
-    // El fichero .lock NO se borra: unlink mientras otro proceso lo tiene abierto en
-    // flock es una condición de carrera. Es vacío y hay uno por placa; la limpieza
-    // incremental los retira si envejecen.
-
-    cache_lru_limpieza([
-        'dir' => DSS_CACHE_DIR, 'patron' => '*.gif',
-        'max_bytes' => DSS_CACHE_MAX_BYTES, 'lowwater' => DSS_CACHE_LOWWATER,
-        'max_del' => DSS_CLEANUP_MAX_DEL, 'cada' => DSS_CLEANUP_EVERY,
-        'huerfano_ttl' => DSS_ORPHAN_TTL,
-    ]);
-
-    if (is_file($fichero)) {
-        dss_servir($fichero, $clave);    // termina
-    }
-    // Si por lo que sea no se escribió la caché, servimos la placa directa.
-    dss_servir_directo($datos);          // termina
-}
-
-// No se pudo bloquear (caso raro): servir sin cachear con una descarga directa.
-if ($lock) {
-    fclose($lock);
-}
-$datos = dss_fetch(dss_url($ra, $dec, $x, $y, $sv, $fte));
-if ($datos !== null) {
-    dss_servir_directo($datos);          // termina
-}
-http_response_code(502);
-exit('El servidor del DSS no respondió');
+);
