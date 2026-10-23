@@ -705,9 +705,10 @@
         var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
         if (!conservar) { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC); }
         cargando.style.display = 'flex'; cargando.textContent = 'consultando estrellas de Gaia DR3…';
-        // La primera consulta de un campo muy rico tarda hasta un minuto en el
-        // servidor (luego queda cacheada).
-        contarSegundos(peticion, 'campo muy rico: la primera vez tarda hasta un minuto y queda guardado para siempre');
+        // La primera consulta de un campo muy rico va como job asíncrono en el
+        // TAP y tarda minutos (#505); mientras, el campo queda pintado sin
+        // estrellas y el módulo vuelve a preguntar solo. Luego queda cacheada.
+        contarSegundos(peticion, 'cargando estrellas de un campo muy rico: la primera vez tarda unos minutos y queda guardado para siempre');
 
         var ra0 = centro.ra, dec0 = centro.dec;
         var eq = datosOcular();

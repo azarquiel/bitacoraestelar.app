@@ -31,7 +31,9 @@ declare(strict_types=1);
        endpoint ?stats=1 de solo lectura para leerlo agregado.
 
    Endpoints:
-     GET ?ra=..&dec=..&rad=..&mag=..   → datos Gaia (JSON)
+     GET ?ra=..&dec=..&rad=..&mag=..   → datos Gaia (JSON); 202 {pendiente,
+                                         reintentar_en} mientras un campo denso
+                                         corre como job asíncrono (ADR 0014, #505)
      GET ?stats=1                      → estado de la caché y agregado del log
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -64,6 +66,14 @@ const GAIA_MAX_RAD         = 4.5;                // ° : radio máximo aceptado 
 const GAIA_MAX_MAG         = 20.0;               // mag: límite máximo aceptado (= GAIA_MAG_TOPE en bitacora-gaia-render.js)
 const GAIA_CLIENT_MAXAGE   = 86400;              // s: Cache-Control max-age que se anuncia al navegador
 const GAIA_LOG_FILE        = GAIA_CACHE_DIR . '/.hits.log';   // log de aciertos (US-1: medir antes de tocar)
+/* Campos densos (#505): ningún TAP síncrono termina el bulbo (GAVO corta a
+   ~20 s con «use TAP's async mode», CDS se cuelga hasta los 55 s), así que la
+   consulta segura va como job UWS a GAVO. Medido el 2026-10-24: la sonda de M7
+   acabó en 222 s en asíncrono (n = 1). El cliente vuelve a preguntar cada
+   GAIA_ASYNC_REINTENTAR s, y cada pregunta cuesta un GET de la fase a GAVO. */
+const GAIA_ASYNC_URL        = 'https://dc.zah.uni-heidelberg.de/tap/async';
+const GAIA_ASYNC_REINTENTAR = 10;                 // s: `reintentar_en` del 202 (afinar con M6, M8 y Baade medidos)
+const GAIA_UWS_TIMEOUT      = 8;                  // s: crear el job, arrancarlo y preguntar su fase (se hace con el lock tomado)
 
 // ───────────────────────── FUNCIONES PURAS (testables) ───────────────────────
 
@@ -158,12 +168,14 @@ function gaia_fondo_consultas(float $ra, float $dec, float $rad, float $mag, flo
     return [$cds, $gavo];
 }
 
-/** URLs de proveedores del agregado (failover), en orden de preferencia. */
+/** URLs de proveedores del agregado (failover), en orden de preferencia. GAVO
+    primero (#505): los pide la petición que recoge el job con el lock tomado, y
+    en GAVO cuestan ~0,7 s; un CDS colgado costaría 55 s. */
 function gaia_fondo_urls(float $ra, float $dec, float $rad, float $mag, float $corte): array {
     [$cds, $gavo] = gaia_fondo_consultas($ra, $dec, $rad, $mag, $corte);
     return [
-        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
         'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' . rawurlencode($gavo),
+        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
     ];
 }
 
@@ -230,12 +242,12 @@ function gaia_espacial_consultas(float $ra, float $dec, float $rad, float $mag, 
     return [$cds, $gavo];
 }
 
-/** URLs de proveedores del agregado espacial (failover), en orden de preferencia. */
+/** URLs de proveedores del agregado espacial (failover), GAVO primero como el fondo. */
 function gaia_espacial_urls(float $ra, float $dec, float $rad, float $mag, float $corte, int $N): array {
     [$cds, $gavo] = gaia_espacial_consultas($ra, $dec, $rad, $mag, $corte, $N);
     return [
-        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
         'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' . rawurlencode($gavo),
+        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
     ];
 }
 
@@ -270,7 +282,55 @@ function gaia_proveedor(string $url): string {
     if (str_contains($host, 'cds.unistra.fr')) {
         return 'cds';
     }
-    return str_contains($host, 'uni-heidelberg.de') ? 'gavo' : $host;
+    // El job UWS se crea en dc.zah.uni-heidelberg.de pero vive en dc.g-vo.org.
+    return (str_contains($host, 'uni-heidelberg.de') || str_contains($host, 'g-vo.org')) ? 'gavo' : $host;
+}
+
+/* ═══════════ Job asíncrono de los campos densos (#505) ═══════════ */
+
+/** Ruta del fichero con la URL del job UWS de una clave. */
+function gaia_ruta_job(string $clave): string {
+    return GAIA_CACHE_DIR . '/' . $clave . '.job';
+}
+
+/** ¿Es el 500 del límite síncrono del TAP («Query timed out… use TAP's async
+    mode»)? Entonces el campo es denso y el otro proveedor síncrono tampoco
+    termina: se corta el failover y se va al job. Pura. */
+function gaia_es_plazo_sync(int $http, string $body): bool {
+    return $http >= 500 && stripos($body, 'timed out') !== false;
+}
+
+/** Parámetros del POST que crea el job: la consulta SEGURA de GAVO. MAXREC va
+    explícito porque el del servidor queda vacío en el job. Pura. */
+function gaia_job_parametros(float $ra, float $dec, float $rad, float $mag): array {
+    return [
+        'REQUEST' => 'doQuery', 'LANG' => 'ADQL', 'FORMAT' => 'json', 'MAXREC' => GAIA_MAX_ROWS,
+        'QUERY' => gaia_consultas($ra, $dec, $rad, $mag, true)[1],
+    ];
+}
+
+/**
+ * Qué hacer con la respuesta a la fase del job. Pura.
+ *   listo     COMPLETED: recoger el resultado.
+ *   arrancar  PENDING: el RUN no llegó (GAVO ignora PHASE=RUN al crear); reenviarlo.
+ *   pendiente en cola o ejecutándose, o la pregunta falló por red/5xx: el job
+ *             puede seguir vivo y se vuelve a preguntar. Borrarlo por un tropiezo
+ *             de GAVO relanzaría la consulta entera.
+ *   error     404 (destruido: caducado) o fase terminal sin resultado.
+ */
+function gaia_job_decision(int $http, string $fase): string {
+    if ($http === 404) {
+        return 'error';
+    }
+    if ($http < 200 || $http >= 300) {
+        return 'pendiente';
+    }
+    return match (strtoupper(trim($fase))) {
+        'COMPLETED' => 'listo',
+        'PENDING' => 'arrancar',
+        'QUEUED', 'EXECUTING', 'HELD', 'SUSPENDED' => 'pendiente',
+        default => 'error',
+    };
 }
 
 /** Mediana de una lista de números (0.0 si está vacía). */
@@ -292,8 +352,8 @@ function gaia_mediana(array $v): float {
  * fallo de la caché de disco, solo del navegador.
  */
 function gaia_log_agregado(string $texto): array {
-    $estados = ['hit', 'miss', '304', 'error'];
-    $r  = ['peticiones' => 0, 'hit' => 0, 'miss' => 0, '304' => 0, 'error' => 0, 'ratio' => null, 'bytes' => 0];
+    $estados = ['hit', 'miss', '304', 'error', 'pendiente'];
+    $r  = ['peticiones' => 0, 'hit' => 0, 'miss' => 0, '304' => 0, 'error' => 0, 'pendiente' => 0, 'ratio' => null, 'bytes' => 0];
     $ms = [];
     foreach (explode("\n", $texto) as $linea) {
         if ($linea === '') {
@@ -365,14 +425,19 @@ function gaia_json_headers(): void {
  *      conjunto completo hasta el `mag` físico — sin truncamiento y sin pagar
  *      la ordenación (que es el coste dominante medido del TAP).
  *   2ª pasada, SEGURA (ORDER BY + TOP 40000): solo si la sonda tocó techo
- *      (campo denso) o devolvió algo ilegible. En denso, la sonda barata
- *      (~2 s medidos por 200k filas) es un sobrecoste pequeño frente a la
- *      consulta ordenada que igualmente había que pagar.
- * Devuelve null si todos los proveedores fallan.
+ *      (campo denso) o falló. Va como JOB ASÍNCRONO en GAVO (#505): en el bulbo
+ *      ningún TAP síncrono la termina. Se crea, se apunta en `<clave>.job` y se
+ *      devuelve false (pendiente: el proxy responde 202). Las peticiones
+ *      siguientes de la clave entran por el .job: consultan su fase y, cuando
+ *      acaba, recogen el resultado y le añaden fondo y espacial.
+ * Devuelve el JSON, false si el job sigue en marcha, o null si falla.
  */
-function gaia_fetch(float $ra, float $dec, float $rad, float $mag, ?string &$etapa = null): ?string {
-    $etapa = 'densa';
-    $json = gaia_fetch_urls(gaia_proveedores_sonda($ra, $dec, $rad, $mag), 'sonda');
+function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_job, ?string &$etapa = null): string|false|null {
+    $etapa = 'async';
+    if (is_file($ruta_job)) {
+        return gaia_job_avanzar($ruta_job, $ra, $dec, $rad, $mag);
+    }
+    $json = gaia_fetch_urls(gaia_proveedores_sonda($ra, $dec, $rad, $mag), 'sonda', true);
     if ($json !== null) {
         $filas = gaia_num_filas($json);
         if ($filas !== null && !gaia_truncada($filas)) {
@@ -381,10 +446,88 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, ?string &$eta
         }
         unset($json);   // libera el cuerpo de la sonda (~14 MB) antes de la 2ª pasada
     }
-    $json = gaia_fetch_urls(gaia_proveedores($ra, $dec, $rad, $mag, true), 'segura');
-    if ($json === null) {
+    // Sin .job escrito nadie volvería a preguntar por el job: no se lanza.
+    if (!is_writable(dirname($ruta_job))) {
         return null;
     }
+    $job = gaia_job_lanzar($ra, $dec, $rad, $mag);
+    if ($job === null || @file_put_contents($ruta_job, $job) === false) {
+        return null;
+    }
+    return false;
+}
+
+/**
+ * Crea el job de la consulta segura en GAVO y lo arranca. Devuelve su URL (la
+ * del `Location` del 303, que es la de verdad: el job vive en otro host) o null.
+ * GAVO ignora PHASE=RUN en la creación (probado el 2026-10-24), así que el RUN
+ * va en un segundo POST; si se pierde, la fase PENDING lo reenvía.
+ */
+function gaia_job_lanzar(float $ra, float $dec, float $rad, float $mag): ?string {
+    [$http, , $job] = gaia_uws(GAIA_ASYNC_URL, gaia_job_parametros($ra, $dec, $rad, $mag), GAIA_UWS_TIMEOUT);
+    if ($http !== 303 || $job === '') {
+        return null;
+    }
+    gaia_uws($job . '/phase', ['PHASE' => 'RUN'], GAIA_UWS_TIMEOUT);
+    return $job;
+}
+
+/**
+ * Una pregunta al job de `$ruta_job`: false si sigue en marcha, null si acabó
+ * mal (se borra el .job y la siguiente petición podrá lanzar otro), o el JSON
+ * con fondo y espacial si acabó bien. El .job se borra al recogerlo.
+ */
+function gaia_job_avanzar(string $ruta_job, float $ra, float $dec, float $rad, float $mag): string|false|null {
+    $job = trim((string) @file_get_contents($ruta_job));
+    [$http, $fase] = gaia_uws($job . '/phase', null, GAIA_UWS_TIMEOUT);
+    switch (gaia_job_decision($http, $fase)) {
+        case 'arrancar':
+            gaia_uws($job . '/phase', ['PHASE' => 'RUN'], GAIA_UWS_TIMEOUT);
+            return false;
+        case 'pendiente':
+            return false;
+        case 'error':
+            @unlink($ruta_job);
+            return null;
+    }
+    [$http, $json] = gaia_uws($job . '/results/result', null, GAIA_REQUEST_TIMEOUT);
+    if ($http < 200 || $http >= 300) {
+        // Un 404 es que el resultado ya no existe; lo demás, un tropiezo: se reintenta.
+        if ($http === 404) {
+            @unlink($ruta_job);
+            return null;
+        }
+        return false;
+    }
+    @unlink($ruta_job);
+    return gaia_num_filas($json) === null ? null : gaia_completar_densa($json, $ra, $dec, $rad, $mag);
+}
+
+/** Petición de control UWS (crear, arrancar, fase, resultado) con su traza en
+    la etapa `async`. Devuelve [http, cuerpo, Location]; sin seguir redirecciones. */
+function gaia_uws(string $url, ?array $post, int $timeout): array {
+    $t0 = microtime(true);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => CACHE_LRU_CONNECT_TIMEOUT,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_ENCODING       => '',
+        CURLOPT_USERAGENT      => 'simulador-ocular/1.0',
+    ]);
+    if ($post !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
+    }
+    $body = curl_exec($ch);
+    $http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $loc = (string) curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+    cache_lru_traza('async', gaia_proveedor($url), $http, $t0);
+    return [$http, is_string($body) ? $body : '', $loc];
+}
+
+/** Añade a la respuesta segura de un campo denso el fondo y el velo espacial
+    de la banda que el TOP dejó fuera. */
+function gaia_completar_densa(string $json, float $ra, float $dec, float $rad, float $mag): string {
     /* Campo denso: el TOP recortó una banda cuya luz es físicamente relevante
        (en M7, SB ~21 mag/arcsec², más brillante que un cielo oscuro). Se piden
        sus momentos agregados (medidos: ~39 s en M7, una vez por región, caché
@@ -407,8 +550,10 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, ?string &$eta
  * separados. Devuelve el primer cuerpo de una respuesta 2xx no vacía, o null.
  * Cada intento se anota en $GLOBALS['cache_lru_traza'] (#429): sin él, un CDS que
  * agota los 55 s y un GAVO que responde en 1 s se ven como una sonda de 56 s.
+ * Con `$cortar_en_plazo`, un 500 por el límite síncrono del TAP corta el
+ * failover (#505): el campo es denso y el siguiente tampoco terminaría.
  */
-function gaia_fetch_urls(array $urls, string $etapa): ?string {
+function gaia_fetch_urls(array $urls, string $etapa, bool $cortar_en_plazo = false): ?string {
     foreach ($urls as $url) {
         $t0 = microtime(true);
         $ch = curl_init($url);
@@ -426,6 +571,9 @@ function gaia_fetch_urls(array $urls, string $etapa): ?string {
         // notice que se cuela en la respuesta JSON si display_errors está On.
         if ($http >= 200 && $http < 300 && $body !== false && $body !== '') {
             return $body;
+        }
+        if ($cortar_en_plazo && gaia_es_plazo_sync((int) $http, (string) $body)) {
+            return null;
         }
     }
     return null;
@@ -496,9 +644,10 @@ if (PHP_SAPI === 'cli') {
 
 /* Una consulta a un campo denso (hacia el bulbo) tarda más que el
    max_execution_time por defecto (30 s) y el proceso moría a mitad. Con margen
-   sobre GAIA_REQUEST_TIMEOUT manda el timeout de curl, no el de PHP. Ahora hay
-   hasta dos pasadas (sonda + segura) × dos proveedores. */
-@set_time_limit(GAIA_REQUEST_TIMEOUT * 4 + 60);
+   sobre GAIA_REQUEST_TIMEOUT manda el timeout de curl, no el de PHP. Lo más
+   largo es recoger un job (#505): fase + resultado + fondo y espacial × dos
+   proveedores. */
+@set_time_limit(GAIA_UWS_TIMEOUT + GAIA_REQUEST_TIMEOUT * 5 + 60);
 /* Si el navegador se cansa y corta, el trabajo NO se tira: PHP termina la
    consulta y la ESCRIBE en la caché, así el reintento del cliente -o el
    siguiente observador que mire el mismo objeto- la encuentra ya hecha en
@@ -553,15 +702,26 @@ if ($rad <= 0 || $rad > GAIA_MAX_RAD || $mag <= 0 || $mag > GAIA_MAX_MAG
 [$qra, $qdec, $qrad, $qmag] = gaia_cuantizar((float) $ra, (float) $dec, (float) $rad, (float) $mag);
 $clave = gaia_clave($qra, $qdec, $qrad, $qmag);
 $ruta = gaia_ruta($clave);
+$ruta_job = gaia_ruta_job($clave);
 
 cache_lru_flujo(
     [
         'ruta' => $ruta, 'clave' => $clave, 'dir' => GAIA_CACHE_DIR, 'patron' => '*.json.gz',
         'max_bytes' => GAIA_CACHE_MAX_BYTES, 'lowwater' => GAIA_CACHE_LOWWATER, 'log' => GAIA_LOG_FILE,
         'codificar' => static fn(string $json) => gzencode($json, 6),
+        'job' => $ruta_job,
+        // Contrato 202 (ADR 0014): sin ETag y sin caché, que la respuesta cambia.
+        'pendiente' => static function (): void {
+            http_response_code(202);
+            gaia_json_headers();
+            header('Cache-Control: no-store');
+            header('Retry-After: ' . GAIA_ASYNC_REINTENTAR);
+            echo json_encode(['pendiente' => true, 'reintentar_en' => GAIA_ASYNC_REINTENTAR]);
+            exit;
+        },
     ],
-    static function (?string &$etapa) use ($qra, $qdec, $qrad, $qmag): ?string {
-        return gaia_fetch($qra, $qdec, $qrad, $qmag, $etapa);
+    static function (?string &$etapa) use ($qra, $qdec, $qrad, $qmag, $ruta_job): string|false|null {
+        return gaia_fetch($qra, $qdec, $qrad, $qmag, $ruta_job, $etapa);
     },
     static fn(string $estado, ?string $etapa) => gaia_servir($ruta, $clave, $estado, $etapa),
     static function (string $json): void {

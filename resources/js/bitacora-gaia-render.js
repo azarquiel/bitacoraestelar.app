@@ -1298,15 +1298,46 @@
   }
   function esFalloRed(err) { return !!(err && err.falloRed); }
   function esCancelada(err) { return !!(err && err.cancelada); }
+  /* Espera de un 202 (#505): resuelve a los `s` segundos y rechaza como
+     cancelada si se cancela antes. */
+  function esperarPendiente(s, cancel) {
+    return new Promise(function (resolver, rechazar) {
+      var id = setTimeout(function () {
+        if (cancel) cancel.signal.removeEventListener('abort', alCancelar);
+        resolver();
+      }, (s > 0 ? s : 10) * 1000);
+      function alCancelar() {
+        clearTimeout(id);
+        var err = new Error('gaia_proxy cancelada');
+        err.cancelada = true;
+        rechazar(err);
+      }
+      if (!cancel) return;
+      if (cancel.signal.aborted) alCancelar();
+      else cancel.signal.addEventListener('abort', alCancelar, { once: true });
+    });
+  }
   // Un reintento: el proxy hace failover entre proveedores TAP (ver
   // gaia_proxy.php), así un fallo puntual del primero suele resolverse solo
   // en el segundo intento, sin que el usuario tenga que volver a pedirlo.
   // Lo cancelado no se reintenta.
+  // Un campo denso responde 202 `{pendiente, reintentar_en}` mientras su job
+  // asíncrono corre en el TAP (ADR 0014): se vuelve a preguntar, sin gastar
+  // el reintento, hasta que llegan los datos. Es `r.ok`: sin esto llegaba
+  // como una lista vacía.
   function fetchGaia(ra, dec, rad, mag, cancel) {
-    return fetchGaiaUnaVez(ra, dec, rad, mag, cancel).catch(function (err) {
-      if (esCancelada(err)) throw err;
-      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel);
-    });
+    var reintentado = false;
+    function intento() {
+      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel).then(function (jj) {
+        if (!jj || !jj.pendiente) return jj;
+        return esperarPendiente(jj.reintentar_en, cancel).then(intento);
+      }, function (err) {
+        if (esCancelada(err) || reintentado) throw err;
+        reintentado = true;
+        return intento();
+      });
+    }
+    return intento();
   }
   /* Una petición de caché la comparten todas las vistas que piden lo mismo (y el
      precalentado del formulario), así que abortarla porque UNA vista quedó

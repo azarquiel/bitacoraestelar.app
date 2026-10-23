@@ -140,7 +140,7 @@ eq($d304['estado'], '304', 'estado 304');
 eq($d304['bytes'], 0, '304 → bytes 0');
 // Un fallo lleva la etapa de adquisición.
 eq(json_decode(trim(cache_lru_log_linea(1.0, 'k', 'miss', 'sonda', 10, 900.0)), true)['etapa'], 'sonda', 'fallo resuelto por la sonda');
-eq(json_decode(trim(cache_lru_log_linea(1.0, 'k', 'miss', 'densa', 10, 900.0)), true)['etapa'], 'densa', 'fallo que tuvo que ir a la segura');
+eq(json_decode(trim(cache_lru_log_linea(1.0, 'k', 'miss', 'async', 10, 900.0)), true)['etapa'], 'async', 'fallo que tuvo que ir al job asíncrono');
 // #429: la traza dice qué proveedor respondió y cuánto costó cada intento.
 eq($d['traza'], null, 'sin traza en un acierto (no fue al TAP)');
 $traza = [['sonda', 'cds', 0, 55012.3], ['sonda', 'gavo', 200, 702.1]];
@@ -160,6 +160,40 @@ eq($provs, ['gavo', 'cds'], 'sonda: GAVO primero, CDS de failover');
 [$cds_q, $gavo_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, false);
 ok(preg_match('/^SELECT TOP \d+ RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM/', $cds_q) === 1, 'columnas CDS: ra, dec, G, BP-RP');
 ok(preg_match('/^SELECT TOP \d+ ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM/', $gavo_q) === 1, 'columnas GAVO: ra, dec, G, BP-RP');
+
+echo "campos densos por TAP asíncrono (#505):\n";
+// El job lo crea dc.zah… pero vive en dc.g-vo.org: también es GAVO en la traza.
+eq(gaia_proveedor('https://dc.g-vo.org/__system__/tap/run/async/pji8zt1g/phase'), 'gavo', 'host del job UWS → gavo');
+// El 500 de GAVO por su límite síncrono corta el failover: CDS tampoco termina.
+$plazo = '<INFO name="QUERY_STATUS" value="ERROR">Query timed out (took too long). Use TAP\'s async mode</INFO>';
+ok(gaia_es_plazo_sync(500, $plazo), '500 «Query timed out» → límite síncrono');
+ok(!gaia_es_plazo_sync(500, 'Internal error'), '500 de otra cosa → no corta el failover');
+ok(!gaia_es_plazo_sync(200, $plazo), 'un 2xx nunca es plazo agotado');
+ok(!gaia_es_plazo_sync(0, ''), 'sin respuesta (red) → no corta el failover');
+// El job es la consulta SEGURA de GAVO, con MAXREC explícito (el del servidor va vacío).
+$p = gaia_job_parametros(268.463, -34.793, 0.89, 19.5);
+[, $gavo_seg] = gaia_consultas(268.463, -34.793, 0.89, 19.5, true);
+eq($p['QUERY'], $gavo_seg, 'job = consulta segura de GAVO (ORDER BY + TOP 40000)');
+eq([$p['REQUEST'], $p['LANG'], $p['FORMAT'], $p['MAXREC']], ['doQuery', 'ADQL', 'json', GAIA_MAX_ROWS], 'job: doQuery, ADQL, json, MAXREC = TOP');
+// Qué hacer con la fase del job.
+eq(gaia_job_decision(200, "COMPLETED\n"), 'listo', 'COMPLETED → recoger');
+eq(gaia_job_decision(200, 'EXECUTING'), 'pendiente', 'EXECUTING → 202');
+eq(gaia_job_decision(200, 'QUEUED'), 'pendiente', 'QUEUED → 202');
+eq(gaia_job_decision(200, 'PENDING'), 'arrancar', 'PENDING (RUN perdido) → reenviar RUN');
+eq(gaia_job_decision(200, 'ERROR'), 'error', 'ERROR → 502 y borrar el .job');
+eq(gaia_job_decision(200, 'ABORTED'), 'error', 'ABORTED (plazo del job) → error');
+eq(gaia_job_decision(200, 'ARCHIVED'), 'error', 'ARCHIVED (resultado ya borrado) → error');
+eq(gaia_job_decision(404, ''), 'error', '404 (job destruido, caducado) → error');
+eq(gaia_job_decision(503, ''), 'pendiente', '5xx al preguntar la fase → no se borra el job, se vuelve a preguntar');
+eq(gaia_job_decision(0, ''), 'pendiente', 'sin respuesta al preguntar la fase → se vuelve a preguntar');
+// Fondo y espacial van GAVO primero: los recoge la petición que tiene el lock.
+eq(gaia_proveedor(gaia_fondo_urls(268.463, -34.793, 0.89, 19.5, 15.2)[0]), 'gavo', 'fondo: GAVO primero');
+eq(gaia_proveedor(gaia_espacial_urls(268.463, -34.793, 0.89, 19.5, 15.2, 8)[0]), 'gavo', 'espacial: GAVO primero');
+// Un pendiente entra en el agregado de ?stats=1 (AC4 del alcance).
+$agp = gaia_log_agregado(cache_lru_log_linea(1.0, 'p', 'pendiente', 'async', 0, 21000.0)
+    . cache_lru_log_linea(2.0, 'p', 'miss', 'async', 900, 5000.0));
+eq([$agp['peticiones'], $agp['pendiente'], $agp['miss']], [2, 1, 1], 'stats cuenta los pendientes');
+eq($agp['ms_mediano']['async'], 5000.0, 'stats: ms de la recogida del job bajo la etapa async');
 
 echo "gaia_mediana:\n";
 eq(gaia_mediana([]), 0.0, 'lista vacía → 0');

@@ -71,6 +71,48 @@ agregado/velo ya usado en cúmulos:
 Lo que este ADR fija es que ninguna solución puede simplemente ignorar la
 población truncada (su pérdida es físicamente relevante, ver Contexto).
 
+## Campos densos por TAP asíncrono (#505, 2026-10-24)
+
+Medido del 11-10 al 23-10: en las densas había 1 éxito de 33. En el bulbo
+**ningún TAP síncrono termina**. GAVO corta a ~20 s con un 500 («Query timed
+out… use TAP's async mode») y CDS se cuelga hasta los 55 s. Bajar `mag` no lo
+arregla. En asíncrono, la sonda de M7 sí acabó, en 222 s.
+
+- **Cuándo.** La sonda síncrona va igual que antes. Si toca el techo o falla,
+  la consulta segura deja de ser síncrona: va como **job UWS** a
+  `https://dc.zah.uni-heidelberg.de/tap/async`, con `ORDER BY + TOP 40000` y
+  `MAXREC` explícito. Si GAVO devuelve el 500 de su límite síncrono, la sonda
+  no pasa a CDS: el campo es denso y CDS tampoco terminaría.
+- **Un job por clave.** La URL del job (la del `Location` del 303) se guarda en
+  `<clave>.job`, junto a la entrada. Se crea y se consulta con el `flock` de la
+  entrada tomado. Mientras exista el `.job`, una petición que encuentra el lock
+  ocupado responde 202 sin esperar.
+  - GAVO ignora `PHASE=RUN` al crear el job, así que el RUN va en un segundo
+    POST. Si se pierde, la fase `PENDING` lo reenvía.
+- **Contrato 202.** Mientras el job está `QUEUED` o `EXECUTING`, el proxy
+  responde `202` con `{"pendiente": true, "reintentar_en": s}` y lo repite en
+  `Retry-After`. La respuesta lleva `Cache-Control: no-store` y no lleva ETag.
+  - Un fallo de red o un 5xx al preguntar la fase también da 202 y conserva el
+    `.job`. Así un tropiezo de GAVO no relanza la consulta entera.
+- **COMPLETED.** La petición que lo ve descarga el resultado. Le añade `fondo` y
+  `fondo.espacial`, ahora pedidos a GAVO primero (~0,7 s cada uno). Escribe la
+  entrada y responde 200 con el mismo JSON que antes: mismas columnas, mismo
+  orden. Después borra el `.job`.
+- **ERROR, ABORTED, ARCHIVED o 404 (job caducado).** Responde 502 y borra el
+  `.job`. La siguiente petición puede lanzar un job nuevo.
+- **Cliente.** `fetchGaia` reconoce el 202 y espera `reintentar_en` con un
+  `setTimeout` cancelable. Luego vuelve a preguntar, sin gastar el único
+  reintento de los fallos. Lo cancelado no se reintenta. Mientras tanto, la
+  vista ya está pintada sin estrellas y el indicador avisa de que se están
+  cargando. El progreso lo empuja el cliente al volver a preguntar: no hace
+  falta un cron en el hosting.
+- **Log.** Hay un estado nuevo, `pendiente`, y una etapa nueva, `async`, que
+  cubre el job, su fase, el resultado y las dos consultas de control.
+  `?stats=1` cuenta los pendientes. La etapa `densa` (la segura síncrona)
+  desaparece de las líneas nuevas.
+- Abierto: `reintentar_en` = 10 s es una estimación con n = 1. Hay que medir
+  M6, M8 y la ventana de Baade antes de afinarlo.
+
 ## Consecuencias
 
 - Campos no densos (la mayoría del cielo): desaparece el coste del `ORDER BY`

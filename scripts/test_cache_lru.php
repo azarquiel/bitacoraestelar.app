@@ -111,13 +111,14 @@ limpiar_dir($dir);
 echo "cache_lru_flujo (con un fetch falso):\n";
 /* Arma un flujo sobre $dir con callbacks que NO terminan, y devuelve lo que
    pasó. $datos = lo que devuelve el fetch (null = el origen falla). */
-$flujo = function (string $dir, ?string $datos, array $extra = []): array {
-    $r = ['fetch' => 0, 'servido' => [], 'directo' => null, 'fallo' => 0];
-    $cfg = ['ruta' => "$dir/k.bin", 'clave' => 'k', 'dir' => $dir, 'patron' => '*.bin',
-            'max_bytes' => 1 << 20, 'lowwater' => 0.8, 'log' => "$dir/.hits.log"] + $extra;
+$flujo = function (string $dir, string|false|null $datos, array $extra = []): array {
+    $r = ['fetch' => 0, 'servido' => [], 'directo' => null, 'fallo' => 0, 'pendiente' => 0];
+    $cfg = $extra + ['ruta' => "$dir/k.bin", 'clave' => 'k', 'dir' => $dir, 'patron' => '*.bin',
+            'max_bytes' => 1 << 20, 'lowwater' => 0.8, 'log' => "$dir/.hits.log",
+            'pendiente' => function () use (&$r) { $r['pendiente']++; }];
     cache_lru_flujo(
         $cfg,
-        function (?string &$etapa) use (&$r, $datos) { $r['fetch']++; $etapa = 'sonda'; return $datos; },
+        function (?string &$etapa) use (&$r, $datos) { $r['fetch']++; $etapa = ($datos === false) ? 'async' : 'sonda'; return $datos; },
         function (string $estado, ?string $etapa) use (&$r) { $r['servido'][] = [$estado, $etapa]; },
         function (string $d) use (&$r) { $r['directo'] = $d; },
         function () use (&$r) { $r['fallo']++; }
@@ -170,6 +171,36 @@ $r = $flujo($dir, null);
 eq($r['fallo'], 1, 'sin lock y el origen falla: 502');
 rmdir("$dir/k.bin.lock");
 limpiar_dir($dir);
+
+echo "cache_lru_flujo con job asíncrono (#505):\n";
+@unlink("$dir/.hits.log");
+// El origen dice «sigue en marcha» (false): pendiente(), nada en disco, ni 502.
+$r = $flujo($dir, false);
+eq([$r['pendiente'], $r['fallo'], $r['servido'], $r['directo']], [1, 0, [], null], 'fetch pendiente → pendiente(), ni 502 ni datos');
+ok(!is_file("$dir/k.bin"), 'pendiente: no escribe la caché');
+$l = $log($dir);
+eq([$l[0]['estado'] ?? null, $l[0]['etapa'] ?? null], ['pendiente', 'async'], 'pendiente: queda en el log con su etapa');
+// Con un job vivo y el lock tomado por otra petición (la que recoge el
+// resultado), no se espera al flock: pendiente al instante y sin fetch, así
+// que no puede lanzar un segundo job (AC2) ni retener un hit (AC6).
+file_put_contents("$dir/k.job", 'https://ejemplo/job/1');
+$otro = fopen("$dir/k.bin.lock", 'c');
+flock($otro, LOCK_EX);
+$t0 = microtime(true);
+$r = $flujo($dir, 'NO-DEBE-PEDIRSE', ['job' => "$dir/k.job"]);
+eq([$r['fetch'], $r['pendiente']], [0, 1], 'lock ocupado con job vivo → pendiente sin fetch');
+ok(microtime(true) - $t0 < 0.5, 'lock ocupado con job vivo → no espera al flock');
+flock($otro, LOCK_UN);
+fclose($otro);
+// Lock libre con job vivo: sí entra y deja que el fetch consulte el job.
+$r = $flujo($dir, 'RESULTADO', ['job' => "$dir/k.job"]);
+eq([$r['fetch'], $r['servido']], [1, [['miss', 'sonda']]], 'lock libre con job vivo → fetch y miss');
+// Sin cfg pendiente (DSS, PS1) un false no puede colarse como datos: es un 502.
+limpiar_dir($dir);
+$r = $flujo($dir, false, ['pendiente' => null]);
+eq([$r['fallo'], $r['servido']], [1, []], 'sin pendiente en cfg → false es un fallo');
+limpiar_dir($dir);
+@unlink("$dir/.hits.log");
 
 echo "cache_lru_log_linea (formato único):\n";
 eq(array_keys(json_decode(cache_lru_log_linea(1.0, 'k', 'hit', null, 1, 1.0), true)),
