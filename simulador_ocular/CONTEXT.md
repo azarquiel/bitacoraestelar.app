@@ -217,6 +217,14 @@ Política con la que los tres proxies del simulador (`gaia_proxy.php`, `dss-prox
 - **Lo que NO es compartido:** la clave de caché, la ruta y el servido. Cada proxy sirve otra cosa (JSON con negociación gzip / GIF) y con sus propios cuerpos de error; unificarlo pediría más perillas de las que ahorra.
 - **Test:** `scripts/test_cache_lru.php`, sobre directorio temporal de verdad. La limpieza —el patrón que acota qué se borra, el stamp que evita escanear en cada petición, el barrido de huérfanos— no la cubría ningún test antes; los de cada proxy solo comprobaban su copia de la selección.
 
+## Lista de equipo
+
+Telescopios y oculares que el simulador ofrece. Con sesión, son los de `GET /equipo` más el catálogo; sin sesión, solo el catálogo (`GET /equipo/catalogo`, público). El vocabulario es el de `registro/CONTEXT.md`, sección «Equipo compartido».
+
+- **Incluye el equipo compartido conmigo (#498).** `GET /equipo` trae también la flota que otros comparten conmigo, cada pieza con `de` (nombre visible del propietario). No hay endpoint propio: el simulador usa el mismo que el registro.
+- **Orden:** mi flota, luego lo compartido conmigo agrupado por propietario y por nombre, con la etiqueta «Equipo de B», y luego el catálogo. Lo fija `BitacoraEquipo.flotaPrimero` (`resources/js/bitacora-equipo.js`), el mismo que usa el formulario, así que una pieza se ve igual en las dos pantallas.
+- **Sin nada compartido, el orden es el de antes;** sin sesión, solo catálogo. Elegir la pieza no es control de acceso: lo que se puede usar lo decide el servidor (`simulador_ocular/README.md`, «Qué cambia al iniciar sesión»).
+
 ## Transmisión y araña por tipo óptico
 
 Dos tablas indexadas por la columna `Optics` del catálogo de equipo: la **transmisión** luminosa del tubo (refractor 0,9 · reflector 0,7 · catadióptrico 0,65–0,68, según Torres Lapasió) y si su secundario va sujeto por **araña** de brazos, que es lo que produce los *diffraction spikes*.

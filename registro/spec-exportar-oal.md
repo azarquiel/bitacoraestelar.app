@@ -65,6 +65,12 @@ estética: el diálogo de AstroPlanner pinta cada recurso del fichero como una
 fila que hay que emparejar a mano, y volcar el catálogo entero lo llena de
 ruido.
 
+**El equipo prestado sale como cualquier otro** (ADR 0032, épica #492). Una
+pieza de otro usuario que una observación usa es un `<scope>`, `<eyepiece>` o
+`<lens>` más, con su modelo y sus specs: `bitacora_oal_equipo_estado` la pide
+por id, sin mirar de quién es. El XML no dice que fuera prestada, porque OAL
+no tiene dónde, y no se le añade nada.
+
 ## El XML que se produce
 
 El dialecto es el del ADR 0001, con las correcciones que el esquema exige y
