@@ -96,7 +96,9 @@ var VecindarioSolar = (function () {
       fondo: { y: 0.46, centro: '#120c04', medio: '#05030a', borde: '#03020a' },
       estrellas: { n: 240, rgb: '255,240,214' },
       rejilla: { rgb: '214,164,74', alfa: 0.32, eje: 0.16, rotulo: 'rgba(255,208,120,0.6)' },
-      nucleo: '#fff9ef',
+      // El núcleo lleva el color de la clase: con uno crema fijo el color solo
+      // vivía en el halo y todas las estrellas parecían la misma.
+      nucleo: function (o) { return rgbaDe(o.bprp, 1); },
       alfaEtiqueta: 1
     },
     // COLOR EXACTO de Gaia (por BP–RP)
