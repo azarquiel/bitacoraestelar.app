@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.38.15
+ * Version:     1.38.16
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.38.15' );
+define( 'BITACORA_VERSION', '1.38.16' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -3320,7 +3320,13 @@ function bitacora_clasificar_objeto( $otype, $morph = '', $tipo_obs = '', $ongc 
     // rama de galaxia: también cae ahí algún par de galaxias (LEDA, 2MASX).
     // 'HXB'/'LXB'/'XB' (binaria de rayos X) es la tercera: Gamma Cas es una estrella
     // Be y SIMBAD la tipa 'HXB'. No entra 'X' a secas: fuente de rayos X sin clasificar.
-    if ( ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) || in_array( $codigo, array( 'MUL', 'HXB', 'LXB', 'XB' ), true ) ) {
+    // La otra salida son las CANDIDATAS A VARIABLE, que SIMBAD codifica sin '*' y con
+    // '?' final: Aldebaran es 'LP?' y caía en 'desconocido', fuera del vecindario solar.
+    // Se quita el '?' y se mira si lo que queda es una clase de variable; no vale
+    // cualquier '?' ('PN?', 'G?', 'SN?' son dudas de OTRA cosa y siguen sin clasificar).
+    $variable_dudosa = '?' === substr( $codigo, -1 )
+        && in_array( substr( $codigo, 0, -1 ), array( 'LP', 'MI', 'SR', 'IR', 'ER', 'CE', 'RR', 'OR', 'RO', 'AE' ), true );
+    if ( ( false !== strpos( $codigo, '*' ) && 'AS*' !== $codigo ) || $variable_dudosa || in_array( $codigo, array( 'MUL', 'HXB', 'LXB', 'XB' ), true ) ) {
         return array( 'tipo' => 'estrella', 'color' => '#dfe7f5' );
     }
 
