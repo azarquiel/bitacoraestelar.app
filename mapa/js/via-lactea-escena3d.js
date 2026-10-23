@@ -285,7 +285,7 @@
           ctx.lineJoin = 'round';
           ctx.stroke();
         } else {
-          ctx.fillStyle = col.nucleo; ctx.fill();
+          ctx.fillStyle = typeof col.nucleo === 'function' ? col.nucleo(o) : col.nucleo; ctx.fill();
         }
 
         var labelRect = null;
