@@ -230,7 +230,7 @@ no puede tumbar una temporada.
 | XML | Bitácora | Regla |
 |---|---|---|
 | `<site>` | `bitacora_bases` | Entre las bases que ese usuario ve (suyas + compartidas): nombre normalizado (sin acentos ni mayúsculas); si no, coordenadas a ≤150 m; si no, base privada nueva suya. |
-| `<scope>`, `<eyepiece>`, `<lens>` | telescopios / oculares / auxiliares | Modelo normalizado contra el catálogo global (`usuario_id NULL`) y su equipo personal; si no casa, equipo personal nuevo con las specs del XML. |
+| `<scope>`, `<eyepiece>`, `<lens>` | telescopios / oculares / auxiliares | Modelo normalizado contra el catálogo global (`usuario_id NULL`) y su equipo personal; si no casa, equipo personal nuevo con las specs del XML. El equipo compartido con él **no** entra (ver abajo). |
 | `<observer>` | usuario WP (el que importa) | El bloque `<observer>` describe a quién firma; el dueño de los datos es `usuario_id`. |
 | `<coObserver>` | `bitacora_viaje_tripulacion` | Casa con el catálogo de observadores por nombre normalizado; si no, lo crea. |
 | `<session>` | `bitacora_viajes` | Clave `usuario_id + noche + base_id`. La noche es la del `begin`. |
@@ -244,6 +244,13 @@ no puede tumbar una temporada.
 La fusión por noche+objeto es el corazón: en OAL una observación es un objeto
 con **un** telescopio y **un** ocular; aquí una observación tiene varias
 entradas. M13 a 78× y a 210× la misma noche es una ficha, no dos.
+
+**El equipo compartido no cambia la importación** (ADR 0032, épica #492). El
+emparejamiento (`bitacora_oal_equipo_visible`) mira solo el catálogo y el
+equipo propio del que importa, así que una pieza que no casa sigue naciendo
+pieza personal suya, aunque un compañero le comparta una igual. Lo contrario
+haría nacer prestada la observación importada. `GET /equipo` sí incluye lo
+compartido (#495), pero el importador no lo usa.
 
 Altura, azimut, altura del Sol y de la Luna **no** se calculan al importar. Los
 sigue calculando la página de la ficha con el Meeus de `bitacora-astro.js`: no
