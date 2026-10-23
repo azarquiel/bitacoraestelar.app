@@ -1958,7 +1958,7 @@ function bitacora_registrar_rutas() {
     // responda igual que un nombre que no existe.
     register_rest_route(
         'bitacora/v1',
-        '/equipo/compartido',
+        '/equipo/compartir',
         array(
             array( 'methods' => 'GET',    'callback' => 'bitacora_equipo_compartido_listar',  'permission_callback' => $solo_logueados ),
             array( 'methods' => 'POST',   'callback' => 'bitacora_equipo_compartido_crear',   'permission_callback' => $solo_logueados ),
@@ -2688,7 +2688,7 @@ function bitacora_equipo_compartido_destinatario( $nombre ) {
     return ( $u && $u->user_login === $nombre ) ? $u : null;
 }
 
-/** GET /equipo/compartido → { comparto: [nombre…], conmigo: [nombre…] }. */
+/** GET /equipo/compartir → { comparto: [nombre…], conmigo: [nombre…] }. */
 function bitacora_equipo_compartido_listar( WP_REST_Request $peticion ) {
     global $wpdb;
     $limite = bitacora_equipo_compartido_cupo( 'lectura', BITACORA_COMPARTIR_LECTURA_MAX );
@@ -2703,7 +2703,7 @@ function bitacora_equipo_compartido_listar( WP_REST_Request $peticion ) {
     return new WP_REST_Response( array( 'comparto' => $comparto ? $comparto : array(), 'conmigo' => $conmigo ? $conmigo : array() ), 200 );
 }
 
-/** POST /equipo/compartido {usuario} → 201 compartido, o 200 `ya-compartido` (aviso, no error). */
+/** POST /equipo/compartir {usuario} → 201 compartido, o 200 `ya-compartido` (aviso, no error). */
 function bitacora_equipo_compartido_crear( WP_REST_Request $peticion ) {
     global $wpdb;
     $limite = bitacora_equipo_compartido_cupo( 'escritura', BITACORA_COMPARTIR_MAX );
@@ -2730,7 +2730,7 @@ function bitacora_equipo_compartido_crear( WP_REST_Request $peticion ) {
     return new WP_REST_Response( array( 'ok' => true, 'nombre' => $nombre ), 201 );
 }
 
-/** DELETE /equipo/compartido?usuario=… → deja de compartir con él. Solo el propietario. */
+/** DELETE /equipo/compartir?usuario=… → deja de compartir con él. Solo el propietario. */
 function bitacora_equipo_compartido_revocar( WP_REST_Request $peticion ) {
     global $wpdb;
     $limite = bitacora_equipo_compartido_cupo( 'escritura', BITACORA_COMPARTIR_MAX );
