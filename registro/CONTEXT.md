@@ -58,6 +58,13 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 - **Base es del [[viaje interestelar]], no de la observación:** se indica una vez por salida. Viaje sin base es legítimo y usa el sentinela `base_id = 0`, no `NULL`, porque con `NULL` la clave única de MySQL admitiría duplicados.
 - **No confundir con el lugar de la crónica:** base es geometría (dónde está el observador en la Tierra); lo que se cuenta de la noche vive en el viaje.
 
+## Flota compartida
+
+**El propietario deja elegir TODO su equipo** (telescopios, oculares y auxiliares) a otro usuario (`{prefix}bitacora_equipo_compartido`, `propietario_id` ↔ `destinatario_id`, #494). Se comparte la flota entera por destinatario, nunca pieza a pieza.
+
+- **SOLO LECTURA, como la base:** el destinatario elige las piezas; editarlas o borrarlas sigue siendo 403.
+- **Por nombre de usuario exacto, sin buscador:** «no existe», «eres tú» y «no lo compartías» responden igual (`no-encontrado-o-no-permitido`), con límite de ritmo, para que nadie enumere usuarios.
+
 ## Viaje interestelar
 
 **Sesión de observación**: salida de UN observador, UNA noche, desde UNA [[base]]. Todo objeto observado bajo esa terna cuelga del mismo viaje, y ahí viven los datos de la salida y no del objeto (lugar, crónica, meteo, cielo, comienzo y fin, tripulación). Se gestionan en **Mi bitácora** (`registro/mis-viajes-wordpress.html` + `bitacora-viajes.js` + `bitacora-listado.js`).
