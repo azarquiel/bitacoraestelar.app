@@ -105,7 +105,7 @@ $wpdb = new WpdbFalso();
 $fuente = (string) file_get_contents( __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-registro.php' );
 foreach ( array( 'bitacora_guardar_entradas', 'bitacora_asignar_observador', 'bitacora_clave_idem', 'bitacora_observacion_por_clave',
                  'bitacora_error_paso', 'bitacora_en_transaccion', 'bitacora_escribir_dependientes', 'bitacora_escribir_accesorios',
-                 'bitacora_respuesta_repetida', 'bitacora_guardar_observacion', 'bitacora_editar_observacion' ) as $f ) {
+                 'bitacora_respuesta_repetida', 'bitacora_validar_equipo_usable', 'bitacora_guardar_observacion', 'bitacora_editar_observacion' ) as $f ) {
     if ( ! preg_match( '/^function ' . $f . '\(.*?^\}$/ms', $fuente, $m ) ) { echo "FALLA no se encuentra $f en el plugin\n"; exit( 1 ); }
     eval( $m[0] );
 }
