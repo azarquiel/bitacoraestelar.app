@@ -831,7 +831,15 @@
       sel._pob = true;
       if (pre) sel.value = String(pre);
     };
-    pob(el.querySelector('.e-ocular'), 'oculares', '— Elige un ocular —', el._ocuPre);
+    var so = el.querySelector('.e-ocular'), nueva = !so._pob;
+    pob(so, 'oculares', '— Elige un ocular —', el._ocuPre);
+    // Ocular heredado al encadenar (el nombre no viaja entre campos): por defecto,
+    // el nombre comercial. Solo al poblar, para no pisar lo que se borre a mano.
+    var tit = el.querySelector('.e-titulo');
+    if (nueva && so.value && tit && !tit.value.trim() && !editandoId) {
+      var oc = piezaPorId('oculares', so.value);
+      if (oc) tit.value = nombrePieza(oc);
+    }
     pob(el.querySelector('.e-auxiliar'), 'auxiliares', '— Sin auxiliar —', el._auxPre);
     pob(el.querySelector('.e-auxiliar2'), 'auxiliares', '— Sin segundo auxiliar —', el._aux2Pre);
   }
