@@ -62,12 +62,12 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 
 **Flota entera de un usuario —telescopios, oculares y auxiliares— que otro usuario puede elegir en sus observaciones** (`{prefix}bitacora_equipo_compartido`: una fila por pareja `propietario_id` + `destinatario_id`, clave única). Épica #492; la razón de cada decisión, en ADR 0032 (`docs/adr/0032-el-equipo-se-comparte-por-flota-entera.md`).
 
-> **Estado:** vocabulario fijado antes de construir. Tabla, rutas, validación y campo `de` llegan con #493 a #499; cada punto cita la historia que lo construye.
+> **Estado:** vocabulario fijado antes de construir. La validación de propiedad ya está (#493); tabla, rutas, campo `de` y etiquetas llegan con #494 a #499. Cada punto cita la historia que lo construye.
 
 - **Flota entera, por destinatario, solo lectura.** El propietario decide con quién la comparte (opt-in); no hay compartir pieza a pieza, así que lo que añada a su flota después también queda compartido. Igual que la [[base]] `seleccionada`, compartir es SOLO LECTURA: el destinatario puede elegir la pieza en una observación y en el simulador, pero editarla o borrarla sigue siendo del dueño (`PUT`/`DELETE /equipo/{tipo}/{id}` dan 403).
 - **Se localiza por nombre de usuario exacto**, sin buscador ni autocompletado, con límite de ritmo. «No existe» y «no se puede compartir con esa persona» dan la misma respuesta (`no-encontrado-o-no-permitido`), para no permitir averiguar quién tiene cuenta. Compartir dos veces con la misma persona es `ya-compartido`: un aviso, no un error. Rutas: `GET`/`POST`/`DELETE /equipo/compartir` (#494, tabla en `registro/README.md`).
 - **Revocar borra la fila y no reescribe el pasado.** Las observaciones ya guardadas conservan su `telescopio_id` y el texto `telescopio`, que es la instantánea que sobrevive aunque la pieza desaparezca (#495).
-- **Quién puede usar una pieza.** Al guardar una observación, cada pieza (telescopio de la observación; ocular y auxiliares de cada entrada) ha de ser del catálogo global (`usuario_id` NULL), propia (su `usuario_id` es el de quien guarda) o compartida con quien guarda. Si no, 403 con la pieza rechazada y el motivo, antes de escribir nada (#493, #495). Lo que ya está guardado no se revalida al leerlo.
+- **Quién puede usar una pieza.** Al guardar una observación, cada pieza (telescopio de la observación; ocular y auxiliares de cada entrada) ha de ser del catálogo global (`usuario_id` NULL), propia (su `usuario_id` es el de quien guarda) o compartida con quien guarda (esta rama, #495). Una pieza de otro es 403 `pieza_no_usable` («no es tuyo y ya no está compartido contigo»), y un id que no existe es 400 `pieza_inexistente`; los dos nombran la pieza y se devuelven antes de escribir nada (#493, `bitacora_validar_equipo_usable`). Lo que ya está guardado no se revalida al leerlo, y editar sin cambiar las piezas no las vuelve a juzgar.
 - **`GET /equipo` trae lo propio y lo compartido conmigo**, y cada pieza ajena lleva `de` con el nombre visible de su propietario (#495). El catálogo sigue en `GET /equipo/catalogo`. Orden estable: propias, luego compartidas agrupadas por propietario y por nombre, luego catálogo.
 - **Cómo se nombra al propietario:** en pantalla, siempre su **nombre visible** (`display_name`). El **nombre de usuario** (`user_login`) solo sirve para localizar a quien se comparte, en la pantalla de compartir. Nunca se muestra un correo. Mismo criterio en el formulario, el simulador, la lista de observaciones y la pantalla de compartir.
 - **OAL no cambia.** Una pieza prestada se exporta como cualquier `<scope>`/`<eyepiece>`, y la importación sigue creando piezas del que importa (`registro/spec-exportar-oal.md`, `registro/spec-importar-oal.md`).
@@ -89,8 +89,10 @@ Los textos de pantalla de las historias #493 a #499 usan estas palabras literalm
 | Término | Qué nombra | Formas derivadas |
 |---|---|---|
 | **Equipo compartido** | La función: la flota de otro que puedo elegir. Título y texto de ayuda | `#scopeHint` lo menciona solo si hay alguno (#496) |
-| **Equipo de B** | Pieza u observación prestada | Grupo «De B» del selector y opción «B · Dobson 12"» (#496); etiqueta en el simulador (#498) y en la lista de observaciones (#499) |
-| **Equipo no disponible** | Pieza de una observación que ya no existe o que ya no se puede elegir | Opción «Dobson 12" (ya no disponible)» del selector (#496); motivo del 403: «ya no está compartida contigo» (#493) |
+| **Equipo de B** | Pieza u observación prestada, siga o no compartida | Etiqueta en la lista y el detalle de observaciones (#499) y junto al resultado del simulador (#498). En los selectores, abreviado: grupo «De B» y opción «B · Dobson 12"» (#496, #498) |
+| **Equipo no disponible** | Pieza de una observación que ya no existe, así que no se sabe de quién era | Etiqueta en la lista y el detalle (#499) |
+| **ya no disponible** | Pieza guardada que ya no se puede elegir (borrada o dejada de compartir) | Sufijo de la opción en el selector al editar: «Dobson 12" (ya no disponible)» (#496) |
+| **ya no está compartido contigo** | Motivo de rechazo al guardar una pieza de otro | Mensaje del 403 `pieza_no_usable` (#493); el formulario lo dice como «B ya no comparte "Dobson 12"» (#496) |
 | **Compartir mi flota** | La acción del propietario y su pantalla | Listas «Comparto con» y «Comparten conmigo» (#497) |
 | **Dejar de compartir** | Revocar | Botón de fila «Dejar de compartir con B» (#497) |
 

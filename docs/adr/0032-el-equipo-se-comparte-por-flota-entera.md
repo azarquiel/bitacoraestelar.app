@@ -41,8 +41,8 @@ compartido» y «Pieza prestada». Aquí solo se guarda la razón.
    disponible», fuera de la calibración (#499).
 5. **Solo lectura, sin confirmación de B.** B no confirma cada observación
    hecha con su equipo, y no hay bandeja de pendientes para que cuenten en su
-   equipo. Una observación prestada no cuenta para el dueño ni para el
-   observador. Queda fuera de la épica.
+   equipo. Una observación prestada no calibra ni el equipo del dueño ni el
+   del observador. Queda fuera de la épica.
 6. **El dueño ha de tener cuenta.** No se admite equipo de un observador
    invitado sin cuenta como propietario. Es una segunda fase, si el caso
    aparece.
