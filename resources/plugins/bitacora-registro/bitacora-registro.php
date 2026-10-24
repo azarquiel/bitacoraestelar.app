@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.39.0
+ * Version:     1.39.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.39.0' );
+define( 'BITACORA_VERSION', '1.39.1' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -2486,9 +2486,9 @@ function bitacora_equipo_esquema( $tipo ) {
 function bitacora_equipo_leer_todo( $usuario_id ) {
     global $wpdb;
     $cond = ( null === $usuario_id ) ? 'usuario_id IS NULL' : $wpdb->prepare( 'usuario_id = %d', $usuario_id );
-    $tel = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_telescopios() . " WHERE $cond ORDER BY vendor ASC, modelo ASC" );
-    $ocu = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_oculares() . " WHERE $cond ORDER BY vendor ASC, modelo ASC" );
-    $aux = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_auxiliares() . " WHERE $cond ORDER BY vendor ASC, nombre ASC" );
+    $tel = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_telescopios() . " WHERE $cond ORDER BY vendor ASC, modelo ASC, id ASC" );
+    $ocu = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_oculares() . " WHERE $cond ORDER BY vendor ASC, modelo ASC, id ASC" );
+    $aux = $wpdb->get_results( 'SELECT * FROM ' . bitacora_nombre_tabla_auxiliares() . " WHERE $cond ORDER BY vendor ASC, nombre ASC, id ASC" );
     return array(
         'telescopios' => $tel ? $tel : array(),
         'oculares'    => $ocu ? $ocu : array(),
@@ -2510,8 +2510,43 @@ function bitacora_equipo_catalogo( WP_REST_Request $peticion ) {
     return new WP_REST_Response( $cache, 200 );
 }
 
+/**
+ * GET /equipo: lo propio y, detrás, lo compartido conmigo (#495). Cada pieza
+ * ajena lleva `de` con el nombre visible (display_name) de su dueño, nunca su
+ * login ni su correo. Las ajenas se ordenan aquí y no en SQL para que el orden
+ * sea total: dueño por nombre (y por id si dos se llaman igual), modelo e id.
+ */
 function bitacora_equipo_personal( WP_REST_Request $peticion ) {
-    return new WP_REST_Response( bitacora_equipo_leer_todo( get_current_user_id() ), 200 );
+    global $wpdb;
+    $yo  = get_current_user_id();
+    $out = bitacora_equipo_leer_todo( $yo );
+    $tc  = bitacora_nombre_tabla_equipo_compartido();
+    $duenos = $wpdb->get_results( $wpdb->prepare(
+        "SELECT u.ID, u.display_name FROM $tc c JOIN {$wpdb->users} u ON u.ID = c.propietario_id WHERE c.destinatario_id = %d", $yo
+    ) );
+    if ( ! $duenos ) {
+        return new WP_REST_Response( $out, 200 );
+    }
+    $de = array();
+    foreach ( $duenos as $u ) {
+        $de[ (int) $u->ID ] = (string) $u->display_name;
+    }
+    $ids = implode( ',', array_keys( $de ) );
+    foreach ( array( 'telescopio' => 'telescopios', 'ocular' => 'oculares', 'auxiliar' => 'auxiliares' ) as $tipo => $clave ) {
+        $mcol  = bitacora_equipo_esquema( $tipo )['modelo_col'];
+        $filas = $wpdb->get_results( 'SELECT * FROM ' . bitacora_equipo_tabla( $tipo ) . " WHERE usuario_id IN ($ids)" );
+        $filas = $filas ? $filas : array();
+        foreach ( $filas as $f ) {
+            $f->de = $de[ (int) $f->usuario_id ];
+        }
+        usort( $filas, function ( $a, $b ) use ( $mcol ) {
+            return strcasecmp( $a->de, $b->de ) ?: ( (int) $a->usuario_id <=> (int) $b->usuario_id )
+                ?: strcasecmp( (string) $a->vendor, (string) $b->vendor ) ?: strcasecmp( (string) $a->$mcol, (string) $b->$mcol )
+                ?: ( (int) $a->id <=> (int) $b->id );
+        } );
+        $out[ $clave ] = array_merge( $out[ $clave ], $filas );
+    }
+    return new WP_REST_Response( $out, 200 );
 }
 
 /**
@@ -5525,10 +5560,61 @@ function bitacora_error_paso( $paso ) {
 }
 
 /**
+ * Piezas de una observación como lista de array( tipo, id ): el telescopio y el
+ * ocular y las dos auxiliares de cada entrada. Las entradas valen como arrays
+ * (validadas) o como filas de la BD.
+ */
+function bitacora_equipo_piezas( $telescopio_id, $entradas ) {
+    $piezas = array();
+    if ( ! empty( $telescopio_id ) ) {
+        $piezas[] = array( 'telescopio', intval( $telescopio_id ) );
+    }
+    foreach ( (array) $entradas as $e ) {
+        $e = (array) $e;
+        foreach ( array( 'ocular_id' => 'ocular', 'auxiliar_id' => 'auxiliar', 'auxiliar2_id' => 'auxiliar' ) as $col => $tipo ) {
+            if ( ! empty( $e[ $col ] ) ) {
+                $piezas[] = array( $tipo, intval( $e[ $col ] ) );
+            }
+        }
+    }
+    return $piezas;
+}
+
+/** ¿Puede $uid elegir esta fila de equipo? Catálogo, propia o de alguien que le comparte su flota (#495). */
+function bitacora_equipo_pieza_usable( $fila, $uid ) {
+    global $wpdb;
+    if ( null === $fila->usuario_id || intval( $fila->usuario_id ) === $uid ) {
+        return true;
+    }
+    $tc = bitacora_nombre_tabla_equipo_compartido();
+    return (bool) $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $tc WHERE propietario_id = %d AND destinatario_id = %d", intval( $fila->usuario_id ), $uid ) );
+}
+
+/**
+ * Piezas de la observación que su autor ya no puede elegir (#495): borradas
+ * (`existe` false, «Equipo no disponible») o que su dueño dejó de compartir
+ * (`existe` true, «ya no disponible»). Se juzga con el autor, no con quien lee.
+ * El texto `telescopio` de la observación sigue siendo lo que se muestra.
+ */
+function bitacora_piezas_no_disponibles( $obs, $entradas ) {
+    global $wpdb;
+    $out = array();
+    foreach ( bitacora_equipo_piezas( $obs->telescopio_id ?? null, $entradas ) as $p ) {
+        list( $tipo, $id ) = $p;
+        $fila = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . bitacora_equipo_tabla( $tipo ) . ' WHERE id = %d', $id ) );
+        if ( ! $fila || ! bitacora_equipo_pieza_usable( $fila, intval( $obs->usuario_id ) ) ) {
+            $out[] = array( 'tipo' => $tipo, 'id' => $id, 'existe' => (bool) $fila );
+        }
+    }
+    return $out;
+}
+
+/**
  * Comprueba que cada telescopio, ocular y auxiliar de la observación es del
- * catálogo global (usuario_id NULL) o del usuario actual (#493). Se llama ANTES
- * de escribir nada. Inexistente: 400; de otra cuenta: 403 con la pieza señalada
- * (tipo, id y nombre) para que el formulario diga qué cambiar.
+ * catálogo global (usuario_id NULL), del usuario actual (#493) o compartido con
+ * él (#495). Se llama ANTES de escribir nada. Inexistente: 400; de otra cuenta
+ * que no le comparte: 403 con la pieza señalada (tipo, id y nombre) para que el
+ * formulario diga qué cambiar.
  *
  * $previas (editar): función que devuelve las piezas que la observación ya
  * guardaba, array( 'telescopio' => ids, 'ocular' => ids, 'auxiliar' => ids ).
@@ -5538,24 +5624,13 @@ function bitacora_error_paso( $paso ) {
  */
 function bitacora_validar_equipo_usable( $datos, $entradas, $previas = null ) {
     global $wpdb;
-    $piezas = array();
-    if ( ! empty( $datos['telescopio_id'] ) ) {
-        $piezas[] = array( 'telescopio', intval( $datos['telescopio_id'] ) );
-    }
-    foreach ( (array) $entradas as $e ) {
-        foreach ( array( 'ocular_id' => 'ocular', 'auxiliar_id' => 'auxiliar', 'auxiliar2_id' => 'auxiliar' ) as $col => $tipo ) {
-            if ( ! empty( $e[ $col ] ) ) {
-                $piezas[] = array( $tipo, intval( $e[ $col ] ) );
-            }
-        }
-    }
     $previas_ids = null;
     $uid         = get_current_user_id();
-    foreach ( $piezas as $p ) {
+    foreach ( bitacora_equipo_piezas( $datos['telescopio_id'] ?? null, $entradas ) as $p ) {
         list( $tipo, $id ) = $p;
         $tabla = bitacora_equipo_tabla( $tipo );
         $fila  = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $tabla WHERE id = %d", $id ) );
-        if ( $fila && ( null === $fila->usuario_id || intval( $fila->usuario_id ) === $uid ) ) {
+        if ( $fila && bitacora_equipo_pieza_usable( $fila, $uid ) ) {
             continue;
         }
         if ( $previas && null === $previas_ids ) {
@@ -5731,6 +5806,7 @@ function bitacora_leer_observacion( WP_REST_Request $peticion ) {
         return new WP_Error( 'no_encontrada', 'Esa observación no existe.', array( 'status' => 404 ) );
     }
     $obs->entradas = bitacora_obtener_entradas( $obs->id );
+    $obs->piezas_no_disponibles = bitacora_piezas_no_disponibles( $obs, $obs->entradas );
     return new WP_REST_Response( $obs, 200 );
 }
 

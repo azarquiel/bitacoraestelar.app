@@ -350,6 +350,11 @@
           return;
         }
         estado.personal = res.data || { telescopios: [], oculares: [], auxiliares: [] };
+        // /equipo trae también lo compartido conmigo (#495), marcado con `de`.
+        // Mi flota es solo lo propio: lo ajeno no se edita ni se borra aquí.
+        ['telescopios', 'oculares', 'auxiliares'].forEach(function (k) {
+          estado.personal[k] = (estado.personal[k] || []).filter(function (it) { return !('de' in it); });
+        });
         ['telescopio', 'ocular', 'auxiliar'].forEach(function (tipo) {
           pintarCategoria(tipo);
           pintarAdd(tipo);
