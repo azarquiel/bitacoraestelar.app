@@ -186,6 +186,12 @@ eq(gaia_job_decision(200, 'ARCHIVED'), 'error', 'ARCHIVED (resultado ya borrado)
 eq(gaia_job_decision(404, ''), 'error', '404 (job destruido, caducado) → error');
 eq(gaia_job_decision(503, ''), 'pendiente', '5xx al preguntar la fase → no se borra el job, se vuelve a preguntar');
 eq(gaia_job_decision(0, ''), 'pendiente', 'sin respuesta al preguntar la fase → se vuelve a preguntar');
+// El .job no puede dejar la clave en 202 para siempre (fallos de red continuos, fichero roto).
+$job_ok = 'https://dc.g-vo.org/__system__/tap/run/async/pji8zt1g';
+ok(gaia_job_vigente($job_ok, 60), 'job de GAVO recién creado → vigente');
+ok(!gaia_job_vigente($job_ok, GAIA_ASYNC_TTL + 1), 'pasado el plazo del job → caducado');
+ok(!gaia_job_vigente('', 60), '.job vacío → no vigente');
+ok(!gaia_job_vigente('https://otro.example.org/job/1', 60), 'job fuera de GAVO → no vigente (no se pide a otro host)');
 // Fondo y espacial van GAVO primero: los recoge la petición que tiene el lock.
 eq(gaia_proveedor(gaia_fondo_urls(268.463, -34.793, 0.89, 19.5, 15.2)[0]), 'gavo', 'fondo: GAVO primero');
 eq(gaia_proveedor(gaia_espacial_urls(268.463, -34.793, 0.89, 19.5, 15.2, 8)[0]), 'gavo', 'espacial: GAVO primero');

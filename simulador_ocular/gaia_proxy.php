@@ -74,6 +74,7 @@ const GAIA_LOG_FILE        = GAIA_CACHE_DIR . '/.hits.log';   // log de aciertos
 const GAIA_ASYNC_URL        = 'https://dc.zah.uni-heidelberg.de/tap/async';
 const GAIA_ASYNC_REINTENTAR = 10;                 // s: `reintentar_en` del 202 (afinar con M6, M8 y Baade medidos)
 const GAIA_UWS_TIMEOUT      = 8;                  // s: crear el job, arrancarlo y preguntar su fase (se hace con el lock tomado)
+const GAIA_ASYNC_TTL        = 7200 + 600;         // s: el executionduration que anuncia GAVO, más margen; pasado, el .job caduca
 
 // ───────────────────────── FUNCIONES PURAS (testables) ───────────────────────
 
@@ -309,6 +310,13 @@ function gaia_job_parametros(float $ra, float $dec, float $rad, float $mag): arr
     ];
 }
 
+/** ¿Sigue valiendo el job apuntado en un .job de `$edad` segundos? Uno vacío,
+    fuera de GAVO o más viejo que su plazo de ejecución dejaría la clave en
+    202 para siempre (p. ej. con GAVO fallando sin parar): caduca. Pura. */
+function gaia_job_vigente(string $job, int $edad): bool {
+    return $job !== '' && gaia_proveedor($job) === 'gavo' && $edad <= GAIA_ASYNC_TTL;
+}
+
 /**
  * Qué hacer con la respuesta a la fase del job. Pura.
  *   listo     COMPLETED: recoger el resultado.
@@ -465,7 +473,7 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_
  */
 function gaia_job_lanzar(float $ra, float $dec, float $rad, float $mag): ?string {
     [$http, , $job] = gaia_uws(GAIA_ASYNC_URL, gaia_job_parametros($ra, $dec, $rad, $mag), GAIA_UWS_TIMEOUT);
-    if ($http !== 303 || $job === '') {
+    if ($http !== 303 || !gaia_job_vigente($job, 0)) {
         return null;
     }
     gaia_uws($job . '/phase', ['PHASE' => 'RUN'], GAIA_UWS_TIMEOUT);
@@ -479,6 +487,10 @@ function gaia_job_lanzar(float $ra, float $dec, float $rad, float $mag): ?string
  */
 function gaia_job_avanzar(string $ruta_job, float $ra, float $dec, float $rad, float $mag): string|false|null {
     $job = trim((string) @file_get_contents($ruta_job));
+    if (!gaia_job_vigente($job, time() - (int) @filemtime($ruta_job))) {
+        @unlink($ruta_job);
+        return null;
+    }
     [$http, $fase] = gaia_uws($job . '/phase', null, GAIA_UWS_TIMEOUT);
     switch (gaia_job_decision($http, $fase)) {
         case 'arrancar':
@@ -499,8 +511,14 @@ function gaia_job_avanzar(string $ruta_job, float $ra, float $dec, float $rad, f
         }
         return false;
     }
-    @unlink($ruta_job);
-    return gaia_num_filas($json) === null ? null : gaia_completar_densa($json, $ra, $dec, $rad, $mag);
+    if (gaia_num_filas($json) === null) {
+        @unlink($ruta_job);
+        return null;
+    }
+    // El .job lo borra cache_lru_flujo DESPUÉS de escribir la entrada: mientras
+    // se piden fondo y espacial, las demás peticiones siguen viendo el job y
+    // responden 202 sin esperar al lock.
+    return gaia_completar_densa($json, $ra, $dec, $rad, $mag);
 }
 
 /** Petición de control UWS (crear, arrancar, fase, resultado) con su traza en

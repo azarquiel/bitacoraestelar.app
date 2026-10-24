@@ -708,7 +708,7 @@
         // La primera consulta de un campo muy rico va como job asíncrono en el
         // TAP y tarda minutos (#505); mientras, el campo queda pintado sin
         // estrellas y el módulo vuelve a preguntar solo. Luego queda cacheada.
-        contarSegundos(peticion, 'cargando estrellas de un campo muy rico: la primera vez tarda unos minutos y queda guardado para siempre');
+        contarSegundos(peticion, 'cargando estrellas de un campo muy rico: la primera vez puede tardar unos minutos y queda guardado para siempre');
 
         var ra0 = centro.ra, dec0 = centro.dec;
         var eq = datosOcular();

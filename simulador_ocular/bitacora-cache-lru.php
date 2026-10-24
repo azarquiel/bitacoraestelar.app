@@ -237,7 +237,10 @@ function cache_lru_flujo(array $cfg, callable $fetch, callable $servir, callable
         $en_disco = isset($cfg['codificar']) ? $cfg['codificar']($datos) : $datos;
         $tmp = $ruta . '.tmp' . getmypid();
         if ($en_disco !== false && file_put_contents($tmp, $en_disco) !== false) {
-            @rename($tmp, $ruta);
+            // El job asíncrono se retira solo cuando su resultado ya está en disco.
+            if (@rename($tmp, $ruta) && isset($cfg['job'])) {
+                @unlink($cfg['job']);
+            }
         } else {
             @unlink($tmp);
         }

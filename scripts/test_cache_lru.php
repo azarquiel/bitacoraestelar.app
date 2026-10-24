@@ -195,6 +195,12 @@ fclose($otro);
 // Lock libre con job vivo: sí entra y deja que el fetch consulte el job.
 $r = $flujo($dir, 'RESULTADO', ['job' => "$dir/k.job"]);
 eq([$r['fetch'], $r['servido']], [1, [['miss', 'sonda']]], 'lock libre con job vivo → fetch y miss');
+ok(!is_file("$dir/k.job"), 'el .job se retira una vez escrita la entrada');
+// Si la entrada no se puede escribir, el job se conserva: su resultado sigue recogible.
+limpiar_dir($dir);
+file_put_contents("$dir/k.job", 'https://ejemplo/job/1');
+$flujo($dir, 'RESULTADO', ['job' => "$dir/k.job", 'codificar' => fn(string $d) => false]);
+ok(is_file("$dir/k.job"), 'escritura fallida → el .job se conserva');
 // Sin cfg pendiente (DSS, PS1) un false no puede colarse como datos: es un 502.
 limpiar_dir($dir);
 $r = $flujo($dir, false, ['pendiente' => null]);
