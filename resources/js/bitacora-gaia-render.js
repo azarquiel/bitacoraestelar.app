@@ -1298,15 +1298,48 @@
   }
   function esFalloRed(err) { return !!(err && err.falloRed); }
   function esCancelada(err) { return !!(err && err.cancelada); }
+  /* Espera de un 202 (#505): resuelve a los `s` segundos y rechaza como
+     cancelada si se cancela antes. */
+  function esperarPendiente(s, cancel) {
+    return new Promise(function (resolver, rechazar) {
+      var id = setTimeout(function () {
+        if (cancel) cancel.signal.removeEventListener('abort', alCancelar);
+        resolver();
+      }, (s > 0 ? s : 10) * 1000);
+      function alCancelar() {
+        clearTimeout(id);
+        var err = new Error('gaia_proxy cancelada');
+        err.cancelada = true;
+        rechazar(err);
+      }
+      if (!cancel) return;
+      if (cancel.signal.aborted) alCancelar();
+      else cancel.signal.addEventListener('abort', alCancelar, { once: true });
+    });
+  }
   // Un reintento: el proxy hace failover entre proveedores TAP (ver
   // gaia_proxy.php), así un fallo puntual del primero suele resolverse solo
   // en el segundo intento, sin que el usuario tenga que volver a pedirlo.
   // Lo cancelado no se reintenta.
-  function fetchGaia(ra, dec, rad, mag, cancel) {
-    return fetchGaiaUnaVez(ra, dec, rad, mag, cancel).catch(function (err) {
-      if (esCancelada(err)) throw err;
-      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel);
-    });
+  // Un campo denso responde 202 `{pendiente, reintentar_en, paso, pasos}`
+  // mientras su cadena asíncrona corre en el TAP (ADR 0014): se vuelve a
+  // preguntar, sin gastar el reintento, hasta que llegan los datos. Es `r.ok`:
+  // sin esto llegaba como una lista vacía. `alPendiente(info)` se llama en
+  // cada 202.
+  function fetchGaia(ra, dec, rad, mag, cancel, alPendiente) {
+    var reintentado = false;
+    function intento() {
+      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel).then(function (jj) {
+        if (!jj || !jj.pendiente) return jj;
+        if (alPendiente) alPendiente(jj);
+        return esperarPendiente(jj.reintentar_en, cancel).then(intento);
+      }, function (err) {
+        if (esCancelada(err) || reintentado) throw err;
+        reintentado = true;
+        return intento();
+      });
+    }
+    return intento();
   }
   /* Una petición de caché la comparten todas las vistas que piden lo mismo (y el
      precalentado del formulario), así que abortarla porque UNA vista quedó
@@ -1314,6 +1347,21 @@
      `signal` que se une suma un usuario y su abort lo resta; solo el último
      aborta el fetch. Quien se une SIN signal (precalentado, harnesses) la hace
      inabortable: nadie puede decidir por él. */
+  /* Aviso de campo denso: lo pinta cada página donde quiera, el texto es uno.
+     El progreso solo avanza mientras alguien vuelve a preguntar, de ahí lo de
+     la página abierta; no se promete un tiempo (hay una sola medida). */
+  function textoPendiente(info) {
+    return 'Campo muy denso: Gaia DR3 no lo sirve al momento y se está pidiendo por partes (paso ' +
+      ((info && info.paso) || 1) + ' de ' + ((info && info.pasos) || 3) + '). La primera vez puede tardar ' +
+      'bastantes minutos: deja esta página abierta y las estrellas aparecerán solas. Después queda guardado.';
+  }
+  /* Quien espera una entrada pendiente quiere saberlo, se uniera antes o
+     después del primer 202 (el precalentado suele ser quien la lanzó). */
+  function avisarPendiente(ent, alPendiente) {
+    if (!alPendiente) return;
+    ent.avisos.push(alPendiente);
+    if (ent.pendiente) alPendiente(ent.pendiente);
+  }
   function unirse(ent, signal) {
     if (!signal) { ent.n = Infinity; return; }
     if (signal.aborted) return;
@@ -1376,7 +1424,11 @@
     // Reutiliza el caché solo si YA cubre el radio Y la profundidad pedidos:
     // sin el segundo chequeo, cambiar a un equipo más grande sobre el mismo
     // objeto se quedaba con el catálogo más somero que trajo el equipo chico.
-    if (ent && ent.rad >= rad - 1e-6 && ent.mag >= prof - 1e-6) { unirse(ent, signal); return ent.promise; }
+    if (ent && ent.rad >= rad - 1e-6 && ent.mag >= prof - 1e-6) {
+      unirse(ent, signal);
+      avisarPendiente(ent, o && o.alPendiente);
+      return ent.promise;
+    }
     // Superconjunto monotónico (ADR 0014): funde con lo ya cacheado ANTES de
     // fetchear, para que una escritura tardía (precalentado somero llegando
     // después de la vista honda) nunca pise profundidad ya conseguida.
@@ -1384,9 +1436,13 @@
       rad = Math.max(rad, ent.rad);
       prof = Math.max(prof, ent.mag);
     }
-    var nueva = { rad: rad, mag: prof, n: 0, ctrl: new AbortController() };
+    var nueva = { rad: rad, mag: prof, n: 0, ctrl: new AbortController(), avisos: [], pendiente: null };
     unirse(nueva, signal);
-    nueva.promise = fetchGaia(ra0.toFixed(5), dec0.toFixed(5), rad.toFixed(5), prof.toFixed(2), nueva.ctrl).then(function (jj) {
+    avisarPendiente(nueva, o && o.alPendiente);
+    nueva.promise = fetchGaia(ra0.toFixed(5), dec0.toFixed(5), rad.toFixed(5), prof.toFixed(2), nueva.ctrl, function (info) {
+      nueva.pendiente = info;
+      nueva.avisos.forEach(function (f) { f(info); });
+    }).then(function (jj) {
       var arr = (jj.data || []).filter(function (f) { return f[2] != null; });
       // Campo denso: el proxy manda los momentos de la banda truncada
       // (ADR 0014). Cuelgan del array para que viajen con las estrellas
@@ -1395,6 +1451,10 @@
       return arr;
     });
     cacheGaia[clave] = nueva;
+    // Resuelta (o caída), ya no está pendiente: una vista posterior no debe
+    // recibir el aviso viejo, ni la entrada retener sus oyentes.
+    var asentar = function () { nueva.pendiente = null; nueva.avisos = []; };
+    nueva.promise.then(asentar, asentar);
     nueva.promise.catch(function () { if (cacheGaia[clave] === nueva) delete cacheGaia[clave]; });
     return nueva.promise;
   }
@@ -2827,6 +2887,9 @@
      `signal` (opcional) corta las descargas pendientes (Gaia, parche PS1) cuando
      la vista queda superada; sin él nada se aborta. `vivo` sigue mandando sobre
      el resultado.
+     `alPendiente(info)` (opcional, también en render y renderPlaca): campo
+     denso que el proxy está pidiendo por partes (#505); el texto para el
+     observador lo da textoPendiente(info). La promesa sigue esperando.
      Con `vivo()` falso resuelve { cancelada: true } sin volver a tocar el ctx:
      cancelar NO es un error — el rechazo de esta promesa significa «Gaia no
      responde» y en el simulador dispara el respaldo DSS.
@@ -2857,7 +2920,7 @@
     var mlim = limite();
     var P = window.BitacoraPS1;
     if (!P) throw new Error('BitacoraGaiaRender necesita BitacoraPS1 (capa de galaxias desde imagen); carga bitacora-ps1.js');
-    return consultar(o.ra, o.dec, o.arcmin, profundidadConsulta(o.apertura, t, o.aumentos, true), { signal: o.signal }).then(function (estrellas) {
+    return consultar(o.ra, o.dec, o.arcmin, profundidadConsulta(o.apertura, t, o.aumentos, true), { signal: o.signal, alPendiente: o.alPendiente }).then(function (estrellas) {
       if (!vivo()) return { cancelada: true };
       /* Campo denso: la banda truncada llega como momentos y entra como velo
          (cielo extra) en toda la cadena, incluida la magnitud límite (ADR
@@ -2960,7 +3023,7 @@
       apertura: o.apertura, aumentos: o.aumentos, transmision: o.transmision,
       optica: o.optica, arana: o.arana, sqm: o.sqm,
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, afov: o.afov,
-      conGlow: o.conGlow, carbono: o.carbono, carbonoMag: o.carbonoMag
+      conGlow: o.conGlow, carbono: o.carbono, carbonoMag: o.carbonoMag, alPendiente: o.alPendiente
     }).then(function (r) {
       if (r.cancelada) return r;
       return r.galaxias.then(function (capa) {
@@ -3027,7 +3090,7 @@
       if (o.conGaia === false || !(o.apertura > 0)) return r;
       if (typeof o.ra !== 'number' || typeof o.dec !== 'number') return r;
       var mlim = 7.7 + 5 * Math.log10(o.apertura / 100);
-      return consultar(o.ra, o.dec, arcmin, profundidadConsulta(o.apertura, t, o.aumentos, false)).then(function (estrellas) {
+      return consultar(o.ra, o.dec, arcmin, profundidadConsulta(o.apertura, t, o.aumentos, false), { alPendiente: o.alPendiente }).then(function (estrellas) {
         dibujar(ctx, estrellas, {
           ra: o.ra, dec: o.dec, arcmin: arcmin, mlim: mlim, afov: o.afov,
           apertura: o.apertura, conGlow: false,
@@ -3043,6 +3106,7 @@
     fot: FOT,
     consultar: consultar,
     esFalloRed: esFalloRed,
+    textoPendiente: textoPendiente,
     esCancelada: esCancelada,
     unirse: unirse,
     precalentar: precalentar,

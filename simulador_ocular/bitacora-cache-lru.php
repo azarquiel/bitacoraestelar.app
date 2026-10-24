@@ -111,7 +111,7 @@ const CACHE_LRU_LOG_MAX_BYTES   = 5 * 1024 * 1024;    // bytes: al superarlo el 
 /**
  * Línea del log: un JSON por petición, con salto de línea final. Pura — el
  * instante y el tiempo entran como parámetros, así el test no depende del reloj.
- * `etapa` solo tiene sentido en un fallo (en Gaia `sonda` | `densa`).
+ * `etapa` solo tiene sentido en un fallo (en Gaia `sonda` | `async`).
  * `traza` (#429): un intento por origen, [etapa, proveedor, http, ms]; solo
  * cuando la petición fue al origen (null en un acierto).
  */
@@ -171,7 +171,13 @@ function cache_lru_traza(string $etapa, string $proveedor, int $http, float $t0)
  *   cfg  ruta, clave, dir, patron, max_bytes, lowwater, log   (obligatorios)
  *        codificar  callable(string): string|false  — lo que se escribe en disco
  *                   (Gaia lo gzipa); el servido directo sigue recibiendo el crudo.
- *   fetch($etapa)       ?string  — pide al origen; null = falló. `$etapa` por referencia.
+ *        pendiente  callable(): void  — (#505, solo Gaia) responde «todavía no»
+ *                   (202) cuando el fetch devuelve false. Sin él, false es un 502.
+ *        job        ruta del fichero del job asíncrono en marcha. Si existe, quien
+ *                   encuentra el lock ocupado responde pendiente sin esperar:
+ *                   el que lo tiene está consultando o recogiendo ese job.
+ *   fetch($etapa)       string|false|null — pide al origen; null = falló, false =
+ *                                  sigue en marcha (job asíncrono). `$etapa` por referencia.
  *   servir($estado, $etapa)      — sirve la entrada de caché; registra su propio log
  *                                  (conoce los bytes y si fue 304) y termina.
  *   directo($datos)              — sirve los datos en memoria, sin caché.
@@ -183,6 +189,17 @@ function cache_lru_flujo(array $cfg, callable $fetch, callable $servir, callable
     $ruta = $cfg['ruta'];
     $reg = static fn(string $estado, ?string $etapa, int $bytes) =>
         cache_lru_log_registrar($cfg['log'], $cfg['clave'], $estado, $etapa, $bytes);
+    $pendiente = $cfg['pendiente'] ?? null;
+    // Fetch sin datos todavía: 202 si el proxy lo sabe decir, 502 si no.
+    $sin_datos = static function (string|false|null $datos, ?string $etapa) use ($reg, $pendiente, $fallo): void {
+        if ($datos === false && $pendiente) {
+            $reg('pendiente', $etapa, 0);
+            $pendiente();
+            return;
+        }
+        $reg('error', $etapa, 0);
+        $fallo();
+    };
 
     // ── ACIERTO de caché ── (las respuestas son inmutables; no caducan)
     if (is_file($ruta)) {
@@ -193,7 +210,11 @@ function cache_lru_flujo(array $cfg, callable $fetch, callable $servir, callable
 
     // ── FALLO: pedir al origen bajo bloqueo (evita estampida) ──
     $lock = @fopen($ruta . '.lock', 'c');
-    if ($lock && flock($lock, LOCK_EX)) {
+    /* #505: con un job vivo, el lock lo tiene una petición que solo consulta su
+       fase o recoge su resultado. Esperarla no adelanta nada y retendría un
+       worker; además, el que espera no debe poder lanzar otro job. */
+    $con_job = $pendiente && isset($cfg['job']) && is_file($cfg['job']);
+    if ($lock && flock($lock, $con_job ? LOCK_EX | LOCK_NB : LOCK_EX)) {
         // Otra petición pudo llenar la caché mientras esperábamos el lock.
         if (is_file($ruta)) {
             flock($lock, LOCK_UN);
@@ -205,11 +226,10 @@ function cache_lru_flujo(array $cfg, callable $fetch, callable $servir, callable
         $etapa = null;
         $datos = $fetch($etapa);
 
-        if ($datos === null) {
+        if (!is_string($datos)) {
             flock($lock, LOCK_UN);
             fclose($lock);
-            $reg('error', $etapa, 0);
-            $fallo();
+            $sin_datos($datos, $etapa);
             return;
         }
 
@@ -217,7 +237,10 @@ function cache_lru_flujo(array $cfg, callable $fetch, callable $servir, callable
         $en_disco = isset($cfg['codificar']) ? $cfg['codificar']($datos) : $datos;
         $tmp = $ruta . '.tmp' . getmypid();
         if ($en_disco !== false && file_put_contents($tmp, $en_disco) !== false) {
-            @rename($tmp, $ruta);
+            // El job asíncrono se retira solo cuando su resultado ya está en disco.
+            if (@rename($tmp, $ruta) && isset($cfg['job'])) {
+                @unlink($cfg['job']);
+            }
         } else {
             @unlink($tmp);
         }
@@ -244,17 +267,22 @@ function cache_lru_flujo(array $cfg, callable $fetch, callable $servir, callable
         return;
     }
 
-    // No se pudo bloquear (caso raro): servir sin cachear con una petición directa.
     if ($lock) {
         fclose($lock);
     }
+    if ($con_job) {
+        // Lock ocupado por quien atiende el job (ver arriba): «todavía no».
+        $reg('pendiente', 'async', 0);
+        $pendiente();
+        return;
+    }
+    // No se pudo bloquear (caso raro): servir sin cachear con una petición directa.
     $etapa = null;
     $datos = $fetch($etapa);
-    if ($datos !== null) {
+    if (is_string($datos)) {
         $reg('miss', $etapa, strlen($datos));
         $directo($datos);
         return;
     }
-    $reg('error', $etapa, 0);
-    $fallo();
+    $sin_datos($datos, $etapa);
 }

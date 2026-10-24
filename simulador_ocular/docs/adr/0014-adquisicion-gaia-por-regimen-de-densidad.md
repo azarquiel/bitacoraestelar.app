@@ -71,6 +71,80 @@ agregado/velo ya usado en cúmulos:
 Lo que este ADR fija es que ninguna solución puede simplemente ignorar la
 población truncada (su pérdida es físicamente relevante, ver Contexto).
 
+## Campos densos por TAP asíncrono (#505, 2026-10-24)
+
+Medido del 11-10 al 23-10: en las densas había 1 éxito de 33. GAVO corta a
+~20 s con un 500 («Query timed out… use TAP's async mode») y CDS se cuelga
+hasta los 55 s. Bajar `mag` no lo arregla.
+
+Medido en vivo el 2026-10-24 sobre M7 (0,89°, mag 19,5):
+
+- La segura (`ORDER BY + TOP 40000`) como job UWS en GAVO **no termina**: ERROR
+  a las 7200 s exactas, el `executionDuration` del servidor.
+- En síncrono, todo el cono pasa de 20 s, incluso un `COUNT(*)`. M7 a 0,2° y
+  el polo a 0,89° responden en 2-3 s, así que lo caro es el cono.
+- Un agregado del cono entero en asíncrono sí termina: el histograma de G, en
+  280 s (1 735 376 estrellas, corte de 40 000 en G ≈ 15,2).
+
+Decisión:
+
+- **Primero la vía síncrona de siempre**, ahora GAVO primero también en la
+  segura: sonda, y si toca techo o falla, segura, fondo y espacial. Con el
+  servidor sano es lo más rápido (la única densa que terminó en producción
+  tardó 38 s). Si GAVO responde con el 500 de su límite síncrono, no se pasa a
+  CDS: el campo es denso y CDS tampoco terminaría. El primer 202 llega a ~45 s
+  (sonda + segura); el AC1 original de < 25 s se cambia por eso, a sabiendas.
+- **Si la segura tampoco termina, una cadena de tres jobs** en
+  `https://dc.zah.uni-heidelberg.de/tap/async`, ninguno con `ORDER BY`:
+  1. **histograma** por centésima de G (`FLOOR(G·100)`), con `COUNT`, flujo y
+     segundo momento por celda. Da la celda de corte `b` (la más alta tal que lo
+     de debajo cabe en 40 000) y los momentos del fondo, exactos.
+  2. **espacial**: el velo por celdas del cielo de la banda `FLOOR(G·100) ≥ b`.
+     Si falla, se sigue sin él (velo uniforme, como en la vía síncrona).
+  3. **datos**: las filas con `FLOOR(G·100) < b`, `TOP` y `MAXREC` 40 000. Tienen
+     que ser exactamente las que contó el histograma; si no, es un error, no un
+     truncado silencioso.
+
+  Los tres usan la misma celda en el mismo servidor, así que la partición
+  filas/fondo es exacta. El JSON final es el de siempre (mismas columnas, mismo
+  orden, `fondo` y `fondo.espacial`). La única diferencia: `fondo.corte` cae en
+  un borde de centésima (`b/100`), no en la estrella 40 000. Si el campo cabe
+  entero en el TOP, se salta el espacial y no hay fondo. Esto autoriza el
+  histograma previo en la vía asíncrona, que el ticket dejaba fuera de alcance
+  como «COUNT previo»; el ADR 0012 lo descartó por coste en síncrono, no aquí.
+- **Un job por clave.** El estado de la cadena (paso, URL del job —la del
+  `Location` del 303—, corte, momentos y celdas) se guarda como JSON en
+  `<clave>.job`, junto a la entrada, con tmp + rename. Se lanza y se avanza con
+  el `flock` de la entrada tomado. Mientras exista el `.job`, una petición que
+  encuentra el lock ocupado responde 202 sin esperar.
+  - GAVO ignora `PHASE=RUN` al crear el job, así que el RUN va en un segundo
+    POST. Si se pierde, la fase `PENDING` lo reenvía.
+- **Contrato 202.** Mientras la cadena no acaba, el proxy responde `202` con
+  `{"pendiente": true, "reintentar_en": 15, "paso": N, "pasos": 3}` y repite
+  `reintentar_en` en `Retry-After`. La respuesta lleva `Cache-Control: no-store`
+  y no lleva ETag.
+  - Un fallo de red o un 5xx al preguntar la fase también da 202 y conserva el
+    `.job`, para que un tropiezo de GAVO no relance la cadena.
+  - Cuando un paso acaba, esa misma petición lanza el siguiente y responde 202.
+- **Fin.** Al acabar el paso de datos se monta el JSON, se escribe la entrada y
+  se responde 200. El `.job` se borra **después** de escribir la entrada.
+- **ERROR, ABORTED, ARCHIVED, 404 o caducado.** Responde 502 y borra el `.job`;
+  la siguiente petición puede lanzar otra cadena. Un paso caduca si sigue sin
+  acabar pasados 7200 s + 10 min desde que se lanzó. Un paso COMPLETED se
+  recoge aunque nadie preguntara en horas: GAVO guarda el resultado ~48 h.
+- **Cliente.** `fetchGaia` reconoce el 202 y espera `reintentar_en` con un
+  `setTimeout` cancelable. Luego vuelve a preguntar, sin gastar el único
+  reintento de los fallos. Lo cancelado no se reintenta. En cada 202 avisa a
+  quien espere la entrada (`alPendiente`), también a quien se une tarde. El
+  simulador y el formulario pintan `textoPendiente(info)`: el paso, y que hay
+  que dejar la página abierta, porque la cadena solo avanza mientras alguien
+  vuelve a preguntar (no hay cron en el hosting).
+- **Log.** Estado nuevo `pendiente` y etapa nueva `async` (la cadena: jobs,
+  fases y resultados). `?stats=1` cuenta los pendientes.
+- Abierto: la duración de cada paso está medida solo en M7 y con GAVO
+  degradado. Hay que medir M6, M8 y la ventana de Baade antes de afinar
+  `reintentar_en`.
+
 ## Consecuencias
 
 - Campos no densos (la mayoría del cielo): desaparece el coste del `ORDER BY`
