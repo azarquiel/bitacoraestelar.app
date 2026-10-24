@@ -5806,7 +5806,9 @@ function bitacora_leer_observacion( WP_REST_Request $peticion ) {
         return new WP_Error( 'no_encontrada', 'Esa observación no existe.', array( 'status' => 404 ) );
     }
     $obs->entradas = bitacora_obtener_entradas( $obs->id );
-    $obs->piezas_no_disponibles = bitacora_piezas_no_disponibles( $obs, $obs->entradas );
+    // Solo al autor: a otro lector le diría si su prestamista dejó de compartir.
+    $obs->piezas_no_disponibles = intval( $obs->usuario_id ) === get_current_user_id()
+        ? bitacora_piezas_no_disponibles( $obs, $obs->entradas ) : array();
     return new WP_REST_Response( $obs, 200 );
 }
 

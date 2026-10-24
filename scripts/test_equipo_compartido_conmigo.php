@@ -217,9 +217,8 @@ unset( $wpdb->piezas['tel'][30] );
 $r = leer();
 eq( array( $r->s, $r->d->telescopio ), array( 200, 'Obsession Dob 18' ), 'borrada: 200 con su texto' );
 eq( $r->d->piezas_no_disponibles[0], array( 'tipo' => 'telescopio', 'id' => 30, 'existe' => false ), 'borrada: marca «Equipo no disponible»' );
-$GLOBALS['yo'] = 7;
-$wpdb->pares = array( '7-5' => true );
-eq( count( leer()->d->piezas_no_disponibles ), 1, 'se juzga con el autor, no con quien lee' );
+$GLOBALS['yo'] = 9;
+eq( leer()->d->piezas_no_disponibles, array(), 'otro lector no ve la marca: no sabe si le dejaron de compartir' );
 
 echo "6. Editar el resto de una observación cuya pieza ya no existe:\n";
 $GLOBALS['yo'] = 5;
