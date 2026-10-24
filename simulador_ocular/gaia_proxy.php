@@ -339,7 +339,8 @@ function gaia_cadena_consulta(string $paso, float $ra, float $dec, float $rad, f
 function gaia_job_parametros(string $paso, float $ra, float $dec, float $rad, float $mag, ?int $b): array {
     return [
         'REQUEST' => 'doQuery', 'LANG' => 'ADQL', 'FORMAT' => 'json',
-        'MAXREC' => $paso === 'datos' ? GAIA_MAX_ROWS : 10000,
+        // Los agregados no se recortan: un espacial de 4,5° a |dec| alto pasa de 10 000 celdas.
+        'MAXREC' => $paso === 'datos' ? GAIA_MAX_ROWS : GAIA_TECHO_FILAS,
         'QUERY' => gaia_cadena_consulta($paso, $ra, $dec, $rad, $mag, $b),
     ];
 }
@@ -607,6 +608,8 @@ function gaia_cadena_estado(string $ruta_job): ?array {
 function gaia_cadena_avanzar(string $ruta_job, float $ra, float $dec, float $rad, float $mag): string|false|null {
     $e = gaia_cadena_estado($ruta_job);
     if ($e === null) {
+        // También el .job de una versión anterior (una URL suelta): un 502 y el
+        // reintento del cliente lanza la cadena nueva.
         @unlink($ruta_job);
         return null;
     }
@@ -630,7 +633,12 @@ function gaia_cadena_avanzar(string $ruta_job, float $ra, float $dec, float $rad
     if ($decision === 'listo') {
         [$http, $res] = gaia_uws($job . '/results/result', null, GAIA_REQUEST_TIMEOUT);
         if ($http !== 404 && ($http < 200 || $http >= 300)) {
-            return false;   // tropiezo al descargar: se reintenta en la siguiente pregunta
+            // Tropiezo al descargar: se reintenta en la siguiente pregunta, pero
+            // no para siempre (GAVO guarda el resultado ~48 h).
+            if (!gaia_job_caducado(time() - (int) @filemtime($ruta_job))) {
+                return false;
+            }
+            $http = 404;
         }
         if ($http === 404) {
             $res = null;

@@ -57,6 +57,11 @@ function caso(nombre, fn) { return function () { console.log(nombre); return fn(
       ok(vistos.length >= 1 && vistos[0] === 2, 'quien pidió recibe el aviso con el paso (' + vistos.join(',') + ')');
       ok(tardio.length >= 1, 'quien se une tarde lo recibe en cuanto se une (' + tardio.length + ')');
       ok(e.length === 2, 'y al final las estrellas');
+      var viejo = 0;
+      return R.consultar(ra, 20, 60, 18, { alPendiente: function () { viejo++; } }).then(function () {
+        ok(viejo === 0, 'una vista posterior sobre la entrada ya resuelta no recibe el aviso viejo');
+      });
+    }).then(function () {
       var t = R.textoPendiente({ paso: 2, pasos: 3 });
       ok(/2 de 3/.test(t) && /abierta/.test(t), 'el texto dice el paso y que hay que dejar la página abierta («' + t + '»)');
     });

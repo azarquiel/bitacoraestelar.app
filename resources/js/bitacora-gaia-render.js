@@ -1451,6 +1451,10 @@
       return arr;
     });
     cacheGaia[clave] = nueva;
+    // Resuelta (o caída), ya no está pendiente: una vista posterior no debe
+    // recibir el aviso viejo, ni la entrada retener sus oyentes.
+    var asentar = function () { nueva.pendiente = null; nueva.avisos = []; };
+    nueva.promise.then(asentar, asentar);
     nueva.promise.catch(function () { if (cacheGaia[clave] === nueva) delete cacheGaia[clave]; });
     return nueva.promise;
   }
