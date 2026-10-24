@@ -661,7 +661,7 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 |---|---|---|---|
 | `POST` | `/observaciones` | Sí | Crea una observación. `viajeId` es **obligatorio**; `baseId` solo si ese viaje aún no tiene lugar, y entonces sube a él. `resultado` y `motivo_no_visto` son opcionales (sin `resultado`, `visto`; fuera de lista, `400`) |
 | `GET` | `/observaciones` | Sí | Lista las activas. `?borradas=1` para la papelera, `?mias=1` para filtrar por autor, `?resultado=no_confirmado` para los intentos fallidos (cada uno con `confirmado_despues`) y `&solo_pendientes=1` para quitar los ya confirmados |
-| `GET` | `/observaciones/{id}` | Sí | Devuelve una, para precargar el formulario |
+| `GET` | `/observaciones/{id}` | Sí | Devuelve una, para precargar el formulario. `piezas_no_disponibles`: `[{tipo, id, existe}]` con las piezas que su autor ya no puede elegir; `existe: false` es borrada, `true` es que dejaron de compartírsela (#495) |
 | `PUT` | `/observaciones/{id}` | Sí | La modifica *(solo el autor)* |
 | `DELETE` | `/observaciones/{id}` | Sí | Borrado suave *(solo el autor)* |
 | `POST` | `/observaciones/{id}/restaurar` | Sí | Deshace el borrado *(solo el autor)* |
@@ -681,7 +681,7 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | `GET` | `/observadores` | No | Lista los observadores |
 | `GET` | `/datos.js` | No | Emite `OBSERVADORES`/`OBJECTS`/`OBSERVACIONES`/`VIAJES` como JavaScript para el visor |
 | `GET` | `/equipo/catalogo` | Sí | Catálogo global de telescopios/oculares/auxiliares/filtros |
-| `GET` | `/equipo` | Sí | Equipo personal del usuario. *(Pendiente, #495)* Suma el equipo compartido con él: cada pieza ajena lleva `de`, el nombre visible del propietario (nunca su correo). Orden: propias, luego compartidas por propietario y por nombre |
+| `GET` | `/equipo` | Sí | Equipo personal del usuario más el compartido con él (#495): cada pieza ajena lleva `de`, el nombre visible del propietario (nunca su login ni su correo). Orden: propias, luego compartidas por propietario y por nombre |
 | `GET` | `/equipo/compartir` | Sí | Las dos listas, `{comparto, conmigo}`, con nombres de usuario: a quién comparto mi flota y quién la comparte conmigo (#494) |
 | `POST` | `/equipo/compartir` | Sí | `{usuario}`: comparte la flota entera con ese nombre de usuario exacto (`201 {ok, nombre}`). Errores con `codigo`: `no-encontrado-o-no-permitido` (`404`; no existe o no se puede, misma respuesta), `ya-compartido` (`200`, aviso) y `limite-de-ritmo` (`429` con `Retry-After`) (#494) |
 | `DELETE` | `/equipo/compartir` | Sí | `{usuario}` (cuerpo o query): deja de compartir con esa persona *(solo el propietario)*; si no compartías con ella, `404 no-encontrado-o-no-permitido`. Las observaciones ya guardadas no cambian (#494) |
