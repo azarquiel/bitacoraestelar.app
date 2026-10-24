@@ -154,7 +154,7 @@ eq(gaia_proveedor('https://otro.example.org/tap/sync'), 'otro.example.org', 'hos
 
 // #429: la sonda va GAVO primero, CDS de failover; no se quita ninguno.
 $provs = [];
-foreach (gaia_proveedores_sonda(10.0, 20.0, 0.5, 16.0) as $u) { $provs[] = gaia_proveedor($u); }
+foreach (gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, false) as $u) { $provs[] = gaia_proveedor($u); }
 eq($provs, ['gavo', 'cds'], 'sonda: GAVO primero, CDS de failover');
 // El cliente lee por posición: las dos consultas devuelven ra, dec, G, BP-RP en ese orden.
 [$cds_q, $gavo_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, false);
@@ -170,11 +170,71 @@ ok(gaia_es_plazo_sync(500, $plazo), '500 «Query timed out» → límite síncro
 ok(!gaia_es_plazo_sync(500, 'Internal error'), '500 de otra cosa → no corta el failover');
 ok(!gaia_es_plazo_sync(200, $plazo), 'un 2xx nunca es plazo agotado');
 ok(!gaia_es_plazo_sync(0, ''), 'sin respuesta (red) → no corta el failover');
-// El job es la consulta SEGURA de GAVO, con MAXREC explícito (el del servidor va vacío).
-$p = gaia_job_parametros(268.463, -34.793, 0.89, 19.5);
-[, $gavo_seg] = gaia_consultas(268.463, -34.793, 0.89, 19.5, true);
-eq($p['QUERY'], $gavo_seg, 'job = consulta segura de GAVO (ORDER BY + TOP 40000)');
-eq([$p['REQUEST'], $p['LANG'], $p['FORMAT'], $p['MAXREC']], ['doQuery', 'ADQL', 'json', GAIA_MAX_ROWS], 'job: doQuery, ADQL, json, MAXREC = TOP');
+// La segura síncrona va GAVO primero: la única densa que terminó en producción
+// la sirvió GAVO en 16 s, y CDS colgado costaría 55 s antes del 202.
+$provs = [];
+foreach (gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, true) as $u) { $provs[] = gaia_proveedor($u); }
+eq($provs, ['gavo', 'cds'], 'segura síncrona: GAVO primero, CDS de failover');
+
+echo "cadena asíncrona de un campo denso (#505): histograma → espacial → datos:\n";
+/* Ningún paso lleva ORDER BY: la segura ordenada no terminó ni en 2 h de job
+   (M7, 2026-10-24). El corte sale del histograma, y los tres pasos usan la
+   MISMA expresión de celda, FLOOR(G·100), así que la partición es exacta. */
+$h = gaia_cadena_consulta('hist', 268.463, -34.793, 0.89, 19.5, null);
+ok(stripos($h, 'ORDER BY') === false && stripos($h, 'GROUP BY g100') !== false, 'histograma: agrupa por centésima de G, sin ORDER BY');
+ok(strpos($h, 'FLOOR(phot_g_mean_mag*100) AS g100') !== false, 'histograma: celda FLOOR(G·100)');
+ok(strpos($h, 'SUM(POWER(10,-0.4*phot_g_mean_mag))') !== false && strpos($h, 'SUM(POWER(10,-0.8*phot_g_mean_mag))') !== false,
+    'histograma: trae los momentos del fondo (flujo y m2) por celda');
+ok(strpos($h, 'phot_g_mean_mag<=19.5') !== false, 'histograma: acotado por el mag del cliente');
+$d = gaia_cadena_consulta('datos', 268.463, -34.793, 0.89, 19.5, 1520);
+ok(stripos($d, 'ORDER BY') === false, 'datos: sin ORDER BY');
+ok(strpos($d, 'FLOOR(phot_g_mean_mag*100)<1520') !== false, 'datos: G por debajo de la celda de corte');
+ok(preg_match('/^SELECT TOP \d+ ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM/', $d) === 1,
+    'datos: mismas 4 columnas, mismo orden que la segura de hoy');
+ok(strpos(gaia_cadena_consulta('datos', 10.0, 20.0, 0.5, 16.0, null), 'FLOOR') === false, 'datos sin corte: todo hasta mag');
+$e = gaia_cadena_consulta('espacial', 268.463, -34.793, 0.89, 19.5, 1520);
+ok(strpos($e, 'FLOOR(phot_g_mean_mag*100)>=1520') !== false && strpos($e, 'GROUP BY rx, dy') !== false,
+    'espacial: la banda desde la celda de corte, por celdas del cielo');
+ok(strpos($e, 'FLOOR(ra*' . GAIA_ESPACIAL_N . ')') !== false, 'espacial: granularidad GAIA_ESPACIAL_N');
+$p = gaia_job_parametros('datos', 268.463, -34.793, 0.89, 19.5, 1520);
+eq([$p['REQUEST'], $p['LANG'], $p['FORMAT'], $p['MAXREC']], ['doQuery', 'ADQL', 'json', GAIA_MAX_ROWS], 'job de datos: MAXREC = TOP (el del servidor va vacío)');
+eq($p['QUERY'], $d, 'job de datos: su consulta');
+
+// El corte: la celda más alta tal que lo de debajo cabe en el TOP.
+$hist = [[1530, 30000, 3.0e-7, 1e-14], [1510, 25000, 3.5e-7, 2e-14], [1520, 10000, 1.5e-7, 1e-14], [1600, 5000, 0.4e-7, 1e-15]];
+$c = gaia_cadena_corte($hist, 40000);
+eq($c['b'], 1530, 'corte: 1510+1520 = 35 000 caben, con 1530 ya no');
+eq($c['n'], 35000, 'corte: filas que traerá el paso de datos');
+eq($c['fondo'][0], 35000, 'fondo: n = las celdas ≥ corte (1530 y 1600)');
+ok(abs($c['fondo'][1] - 3.4e-7) < 1e-18 && abs($c['fondo'][2] - 1.1e-14) < 1e-26, 'fondo: flujo y m2 exactos, sumados por celda');
+$c = gaia_cadena_corte([[1500, 100, 1.0, 1.0], [1700, 200, 1.0, 1.0]], 40000);
+eq([$c['b'], $c['n'], $c['fondo']], [null, 300, null], 'todo cabe en el TOP → sin corte ni fondo');
+
+// La máquina de pasos, pura.
+$e0 = ['paso' => 'hist'];
+$hjson = json_encode(['data' => $hist]);
+$a = gaia_cadena_avance($e0, $hjson, 0.89, 19.5);
+eq([$a['lanzar'] ?? null, $a['estado']['b'] ?? null, $a['estado']['n'] ?? null], ['espacial', 1530, 35000], 'hist listo → lanza espacial con el corte');
+ok(isset(gaia_cadena_avance($e0, null, 0.89, 19.5)['error']), 'hist en ERROR → 502');
+$a2 = gaia_cadena_avance($e0, json_encode(['data' => [[1500, 100, 1.0, 1.0]]]), 0.5, 16.0);
+eq([$a2['lanzar'] ?? null, array_key_exists('b', $a2['estado'] ?? []) ? $a2['estado']['b'] : 'x'], ['datos', null], 'campo que cabe → salta el espacial');
+$e1 = $a['estado'];
+$e1['paso'] = 'espacial';
+$a = gaia_cadena_avance($e1, '{"data":[[2147,-279,9,0.1,0.001]]}', 0.89, 19.5);
+eq([$a['lanzar'] ?? null, $a['estado']['esp'] ?? null], ['datos', [[2147, -279, 9, 0.1, 0.001]]], 'espacial listo → lanza datos y guarda las celdas');
+$a = gaia_cadena_avance($e1, null, 0.89, 19.5);
+eq([$a['lanzar'] ?? null, array_key_exists('esp', $a['estado'] ?? []) ? $a['estado']['esp'] : 'x'], ['datos', null], 'espacial en ERROR → sigue sin velo espacial (degradación)');
+$e2 = ['paso' => 'datos', 'b' => 1530, 'n' => 2, 'fondo' => [35000, 3.4e-7, 1.1e-14], 'esp' => [[2147, -279, 9, 0.1, 0.001]]];
+$fin = gaia_cadena_avance($e2, '{"metadata":[],"data":[[1,2,15.1,0.5],[3,4,15.2,0.6]]}', 0.89, 19.5);
+$j = json_decode($fin['listo'] ?? 'null', true);
+eq($j['data'] ?? null, [[1, 2, 15.1, 0.5], [3, 4, 15.2, 0.6]], 'datos listos → 200 con las filas tal cual');
+eq([$j['fondo']['corte'] ?? null, $j['fondo']['n'] ?? null, $j['fondo']['rad'] ?? null], [15.3, 35000, 0.89], 'fondo con corte = celda/100');
+eq($j['fondo']['espacial']['celdas'] ?? null, [[2147, -279, 9, 0.1, 0.001]], 'fondo.espacial con las celdas guardadas');
+ok(isset(gaia_cadena_avance($e2, '{"data":[[1,2,15.1,0.5]]}', 0.89, 19.5)['error']), 'filas ≠ las del histograma → error, no truncado silencioso');
+ok(isset(gaia_cadena_avance($e2, null, 0.89, 19.5)['error']), 'datos en ERROR → 502');
+eq(json_decode(gaia_cadena_avance(['paso' => 'datos', 'b' => null, 'n' => 1], '{"data":[[1,2,15.1,0.5]]}', 0.5, 16.0)['listo'], true),
+    ['data' => [[1, 2, 15.1, 0.5]]], 'sin corte → sin fondo');
+eq(array_map('gaia_cadena_paso_num', ['hist', 'espacial', 'datos']), [1, 2, 3], 'paso N de 3 para el aviso');
 // Qué hacer con la fase del job.
 eq(gaia_job_decision(200, "COMPLETED\n"), 'listo', 'COMPLETED → recoger');
 eq(gaia_job_decision(200, 'EXECUTING'), 'pendiente', 'EXECUTING → 202');
@@ -186,12 +246,11 @@ eq(gaia_job_decision(200, 'ARCHIVED'), 'error', 'ARCHIVED (resultado ya borrado)
 eq(gaia_job_decision(404, ''), 'error', '404 (job destruido, caducado) → error');
 eq(gaia_job_decision(503, ''), 'pendiente', '5xx al preguntar la fase → no se borra el job, se vuelve a preguntar');
 eq(gaia_job_decision(0, ''), 'pendiente', 'sin respuesta al preguntar la fase → se vuelve a preguntar');
-// El .job no puede dejar la clave en 202 para siempre (fallos de red continuos, fichero roto).
-$job_ok = 'https://dc.g-vo.org/__system__/tap/run/async/pji8zt1g';
-ok(gaia_job_vigente($job_ok, 60), 'job de GAVO recién creado → vigente');
-ok(!gaia_job_vigente($job_ok, GAIA_ASYNC_TTL + 1), 'pasado el plazo del job → caducado');
-ok(!gaia_job_vigente('', 60), '.job vacío → no vigente');
-ok(!gaia_job_vigente('https://otro.example.org/job/1', 60), 'job fuera de GAVO → no vigente (no se pide a otro host)');
+// Solo se pregunta a jobs de GAVO; un .job vacío o roto no deja la clave en 202 para siempre.
+ok(gaia_job_valido('https://dc.g-vo.org/__system__/tap/run/async/pji8zt1g'), 'job de GAVO → válido');
+ok(!gaia_job_valido(''), '.job vacío → no válido');
+ok(!gaia_job_valido('https://otro.example.org/job/1'), 'job fuera de GAVO → no válido (no se pide a otro host)');
+ok(!gaia_job_caducado(60) && gaia_job_caducado(GAIA_ASYNC_TTL + 1), 'un paso sin acabar caduca pasado el plazo del job');
 // Fondo y espacial van GAVO primero: los recoge la petición que tiene el lock.
 eq(gaia_proveedor(gaia_fondo_urls(268.463, -34.793, 0.89, 19.5, 15.2)[0]), 'gavo', 'fondo: GAVO primero');
 eq(gaia_proveedor(gaia_espacial_urls(268.463, -34.793, 0.89, 19.5, 15.2, 8)[0]), 'gavo', 'espacial: GAVO primero');

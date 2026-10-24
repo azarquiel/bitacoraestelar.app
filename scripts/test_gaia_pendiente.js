@@ -44,6 +44,23 @@ function caso(nombre, fn) { return function () { console.log(nombre); return fn(
       ok(n.llamadas === 3, 'pregunta tres veces (' + n.llamadas + ')');
     });
   }),
+  caso('el aviso de campo denso llega a quien pide, también si se une tarde:', function (ra) {
+    var P2 = { status: 202, cuerpo: { pendiente: true, reintentar_en: 0.01, paso: 2, pasos: 3 } };
+    guion([P2, P2, P2, DATOS]);
+    var vistos = [], tardio = [];
+    var p = R.consultar(ra, 20, 60, 18, { alPendiente: function (info) { vistos.push(info.paso); } });
+    // Una segunda vista (o el precalentado ya en vuelo) se une con la entrada pendiente.
+    setTimeout(function () {
+      R.consultar(ra, 20, 60, 18, { alPendiente: function (info) { tardio.push(info.paso); } });
+    }, 15);
+    return p.then(function (e) {
+      ok(vistos.length >= 1 && vistos[0] === 2, 'quien pidió recibe el aviso con el paso (' + vistos.join(',') + ')');
+      ok(tardio.length >= 1, 'quien se une tarde lo recibe en cuanto se une (' + tardio.length + ')');
+      ok(e.length === 2, 'y al final las estrellas');
+      var t = R.textoPendiente({ paso: 2, pasos: 3 });
+      ok(/2 de 3/.test(t) && /abierta/.test(t), 'el texto dice el paso y que hay que dejar la página abierta («' + t + '»)');
+    });
+  }),
   caso('esperar no gasta el único reintento de los fallos:', function (ra) {
     var n = guion([PEND, E502, PEND, DATOS]);
     return R.consultar(ra, 20, 60, 18).then(function (e) {

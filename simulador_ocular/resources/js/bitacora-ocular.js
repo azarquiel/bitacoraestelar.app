@@ -705,10 +705,10 @@
         var colorFondo = 'rgb(' + fondo + ',' + fondo + ',' + fondo + ')';
         if (!conservar) { ctx.fillStyle = colorFondo; ctx.fillRect(0, 0, PROC, PROC); }
         cargando.style.display = 'flex'; cargando.textContent = 'consultando estrellas de Gaia DR3…';
-        // La primera consulta de un campo muy rico va como job asíncrono en el
-        // TAP y tarda minutos (#505); mientras, el campo queda pintado sin
-        // estrellas y el módulo vuelve a preguntar solo. Luego queda cacheada.
-        contarSegundos(peticion, 'cargando estrellas de un campo muy rico: la primera vez puede tardar unos minutos y queda guardado para siempre');
+        // La primera consulta de un campo muy rico tarda hasta un minuto en el
+        // servidor (luego queda cacheada). Si ni así termina, el proxy la pide
+        // por partes (#505) y avisa: ver alPendiente abajo.
+        contarSegundos(peticion, 'campo muy rico: la primera vez tarda hasta un minuto y queda guardado para siempre');
 
         var ra0 = centro.ra, dec0 = centro.dec;
         var eq = datosOcular();
@@ -740,7 +740,17 @@
           carbonoMag: objetoSel.carbono ? objetoSel.mag : null,
           cumulo: (objetoSel.globular && objetoSel.cumulo) || null,
           catalogo: catDifuso,
-          vivo: function () { return peticion.vivo(); }, signal: peticion.signal
+          vivo: function () { return peticion.vivo(); }, signal: peticion.signal,
+          /* Campo denso pedido por partes: el aviso sustituye al de «hasta un
+             minuto», que ya no es verdad. Se rearranca el contador sobre el
+             texto nuevo, que si no lo pisa en el siguiente segundo. */
+          alPendiente: function (info) {
+            if (!peticion.vivo()) return;
+            var texto = BitacoraGaiaRender.textoPendiente(info);
+            if (cargando.textContent.indexOf(texto) === 0) return;
+            cargando.textContent = texto;
+            contarSegundos(peticion, null);
+          }
         }).then(function (r) {
           if (!peticion.vivo() || r.cancelada) return;
           finCarga();

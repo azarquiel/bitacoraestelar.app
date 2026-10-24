@@ -1495,7 +1495,9 @@
       optica:d.optica, arana:d.arana, sqm:sqmSim, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
       // El campo aparente fija el tamaño de las estrellas: el lienzo se muestra a
       // un diámetro ∝ afov, así que el radio en píxeles va con 1/afov.
-      afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, conGlow:true
+      afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, conGlow:true,
+      // Campo denso pedido por partes (#505): que el observador sepa por qué tarda.
+      alPendiente:function(info){ if(pet===_simPeticion) spin.textContent=BitacoraGaiaRender.textoPendiente(info); }
     };
     var pet=++_simPeticion;
     var promesa=(fuente==='dss')
