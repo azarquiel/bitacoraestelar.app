@@ -696,11 +696,13 @@
         telescopioSel = null; telescopioIdSel = null;   // se conserva telescopioNombre
       } else if (scopeSelect.value) {
         telescopioSel = piezaPorId('telescopios', scopeSelect.value);
-        telescopioIdSel = telescopioSel ? telescopioSel.id : null;
-        telescopioNombre = telescopioSel ? nombrePieza(telescopioSel) : '';
+        // Sin pieza en la lista es la opción «(ya no disponible)»: conserva su id y nombre.
+        telescopioIdSel = telescopioSel ? telescopioSel.id : scopeSelect.value;
+        telescopioNombre = telescopioSel ? nombrePieza(telescopioSel) : telescopioNombre;
       } else {
         telescopioSel = null; telescopioIdSel = null; telescopioNombre = '';
       }
+      avisarPrestadas();
       recompute();
       if (entradasBox) {
         Array.prototype.forEach.call(entradasBox.querySelectorAll('.entry'), function (el) { recalcEntrada(el, false); });
@@ -731,43 +733,14 @@
     for (var i = 0; i < arr.length; i++) { if (String(arr[i].id) === String(id)) return arr[i]; }
     return null;
   }
-  function nombrePieza(p) {
-    if (!p) return '';
-    return ((p.vendor ? p.vendor + ' ' : '') + (p.modelo || p.nombre || '')).trim();
-  }
-  function specsPieza(cat, p) {
-    var n = function (v) { var x = parseFloat(v); return isNaN(x) ? null : x; };
-    var s = [];
-    if (cat === 'telescopios') {
-      if (n(p.apertura_mm) != null) s.push(n(p.apertura_mm) + 'mm');
-      if (n(p.focal_mm) != null) s.push('f=' + n(p.focal_mm));
-    } else if (cat === 'oculares') {
-      if (n(p.focal_mm) != null) s.push(n(p.focal_mm) + 'mm');
-      if (n(p.campo_aparente) != null) s.push(n(p.campo_aparente) + '°');
-    } else {
-      if (n(p.factor) != null) s.push('×' + n(p.factor));
-    }
-    return s.length ? ' (' + s.join(' ') + ')' : '';
-  }
+  // Nombre, etiquetas del selector y grupos: fuente única en BitacoraEquipo (#496).
+  var nombrePieza = BitacoraEquipo.nombrePieza;
 
-  // Rellena un <select> con una categoría de la flota (value = id).
-  function llenarSelect(sel, cat, placeholder) {
+  // Rellena un <select> con una categoría de la flota (value = id). `noDisp`
+  // ({id, nombre}): pieza guardada que ya no está en la lista, para no perderla.
+  function llenarSelect(sel, cat, placeholder, noDisp) {
     if (!sel) return;
-    var html = '<option value="">' + placeholder + '</option>';
-    (flota[cat] || []).forEach(function (p) {
-      // El telescopio lleva delante su nombre propio (destaca); sus características
-      // (fabricante, modelo, óptica) van detrás, separadas, para leerse como
-      // secundarias. Un <option> nativo no admite estilar solo una parte, así que
-      // la jerarquía se da por el orden y el separador.
-      var nom = (cat === 'telescopios' && p.nombre) ? String(p.nombre).trim() : '';
-      var carac = nombrePieza(p) + specsPieza(cat, p);
-      var etiqueta = nom ? (nom + '  —  ' + carac) : carac;
-      html += '<option value="' + p.id + '">' + textoOpcion(etiqueta) + '</option>';
-    });
-    sel.innerHTML = html;
-  }
-  function textoOpcion(t) {
-    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    sel.innerHTML = BitacoraEquipo.opcionesHtml(cat, flota[cat], placeholder, noDisp);
   }
 
   // Cálculo óptico. 'auxs' es la lista de ópticas auxiliares montadas, EN ORDEN
@@ -827,7 +800,10 @@
     if (!flotaCargada) return;
     var pob = function (sel, cat, placeholder, pre) {
       if (!sel || sel._pob) return;
-      llenarSelect(sel, cat, placeholder);
+      llenarSelect(sel, cat, placeholder, sinDisponible(cat, pre, function () {
+        var t = el.querySelector('.e-titulo');
+        return (t && t.value.trim()) || (cat === 'oculares' ? 'Ocular' : 'Auxiliar');
+      }));
       sel._pob = true;
       if (pre) sel.value = String(pre);
     };
@@ -842,6 +818,40 @@
     }
     pob(el.querySelector('.e-auxiliar'), 'auxiliares', '— Sin auxiliar —', el._auxPre);
     pob(el.querySelector('.e-auxiliar2'), 'auxiliares', '— Sin segundo auxiliar —', el._aux2Pre);
+    avisarPrestadas();
+  }
+
+  // Pieza guardada que la lista cargada ya no trae (su dueño dejó de compartir o la
+  // borró): se conserva como opción «(ya no disponible)» en vez de vaciar el
+  // selector sin avisar (#496). Solo se juzga si la categoría llegó entera.
+  function sinDisponible(cat, id, nombre) {
+    if (!id || flotaParcial[cat] || piezaPorId(cat, id)) return undefined;
+    return { id: id, nombre: nombre() };
+  }
+
+  // El <select> que tiene elegida esta pieza ({tipo, id}), para llevarle el foco.
+  function selectorDePieza(pieza) {
+    if (pieza.tipo === 'telescopio') return $('scopeSelect');
+    var q = pieza.tipo === 'ocular' ? '.e-ocular' : '.e-auxiliar, .e-auxiliar2';
+    var hallado = null;
+    if (entradasBox) Array.prototype.forEach.call(entradasBox.querySelectorAll(q), function (sel) {
+      if (!hallado && String(sel.value) === String(pieza.id)) hallado = sel;
+    });
+    return hallado;
+  }
+
+  // Línea bajo cada selector de equipo cuando lo elegido es de otro (UX-3). Un único
+  // sitio la repinta: el selector de telescopio, y cada entrada con sus oculares.
+  function avisarPrestadas() {
+    var pinta = function (nodo, piezas) { if (nodo) nodo.textContent = BitacoraEquipo.avisoPrestada(piezas); };
+    pinta(scopePrestado, [telescopioSel]);
+    if (!entradasBox) return;
+    Array.prototype.forEach.call(entradasBox.querySelectorAll('.entry'), function (el) {
+      pinta(el.querySelector('.e-prestado'), ['.e-ocular', '.e-auxiliar', '.e-auxiliar2'].map(function (q) {
+        var sel = el.querySelector(q);
+        return sel && sel.value ? piezaPorId(q === '.e-ocular' ? 'oculares' : 'auxiliares', sel.value) : null;
+      }));
+    });
   }
 
   // Rellena el select de telescopios y aplica la preselección pendiente.
@@ -856,16 +866,21 @@
     var sel = $('scopeSelect');
     if (!sel) return;
     var vacia = !(flota.telescopios && flota.telescopios.length);
-    if (!sel._pob) {
-      llenarSelect(sel, 'telescopios', vacia ? '— No tienes telescopios en tu flota —' : '— Elige un telescopio de tu flota —');
+    var noDisp = telescopioIdPendiente != null
+      ? sinDisponible('telescopios', telescopioIdPendiente, function () { return telescopioNombre || 'Telescopio'; })
+      : undefined;
+    if (!sel._pob || noDisp) {
+      llenarSelect(sel, 'telescopios', vacia ? '— No tienes telescopios en tu flota —' : '— Elige un telescopio de tu flota —', noDisp);
       sel._pob = true;
     }
-    // Preselección pendiente (modo edición): telescopio de la flota por id.
+    // Preselección pendiente (modo edición): telescopio de la flota por id. Si ya
+    // no está disponible, la opción «(ya no disponible)» queda elegida y su id se
+    // conserva: guardar sin tocarla no la vacía ni la sustituye.
     if (telescopioIdPendiente != null) {
       sel.value = String(telescopioIdPendiente);
       if (sel.value) {
         telescopioSel = piezaPorId('telescopios', telescopioIdPendiente);
-        telescopioIdSel = telescopioSel ? telescopioSel.id : null;
+        telescopioIdSel = telescopioSel ? telescopioSel.id : (noDisp ? noDisp.id : null);
         telescopioNombre = telescopioSel ? nombrePieza(telescopioSel) : telescopioNombre;
       }
     }
@@ -877,11 +892,14 @@
       op.value = '__legacy__'; op.textContent = telescopioNombre + ' (fuera de tu flota)';
       sel.appendChild(op); sel.value = '__legacy__';
     }
+    var hint = $('scopeHint');
     if (vacia) {
-      var hint = $('scopeHint');
       if (hint) hint.innerHTML = 'No tienes telescopios en tu flota. Añádelos en <a href="/mi-flota/">Mi flota</a> para poder registrar (y generar la imagen con el simulador).';
+    } else if (hint && BitacoraEquipo.hayCompartido(flota)) {
+      hint.innerHTML = 'Elige un telescopio de tu flota o de una flota que te hayan compartido, y en cada ocular, una pieza de la lista: los aumentos, la pupila y el campo real se calculan solos. Gestiona tu equipo en <a href="/mi-flota/">Mi flota</a>.';
     }
     telescopioIdPendiente = null;
+    avisarPrestadas();
     recompute();
   }
 
@@ -894,21 +912,39 @@
     }
   }
 
+  // Categorías de la respuesta de /equipo que NO llegaron como lista (carga parcial):
+  // de ellas no se puede decir que una pieza «ya no está disponible».
+  var flotaParcial = { telescopios: true, oculares: true, auxiliares: true };
+  var flotaError = $('flotaError');
+  var scopePrestado = $('scopePrestado');   // selector cacheado (registro/)
+
+  // Fallo de carga (UX-7): el formulario sigue con lo que haya y lo dice, con salida.
+  function avisarFlota(texto) {
+    if (!flotaError) return;
+    flotaError.hidden = !texto;
+    var t = flotaError.querySelector('.msg');
+    if (t) t.textContent = texto || '';
+  }
+
   function cargarFlota() {
     if (!WP) return;
     var API = BitacoraBase.ruta('equipo');
     BitacoraBase.api(API)
       .then(function (res) {
         var d = res.ok ? res.data : null;
-        if (!d) return;
-        flota = {
-          telescopios: d.telescopios || [], oculares: d.oculares || [],
-          auxiliares: d.auxiliares || []
-        };
+        if (!d) { avisarFlota('No se pudo cargar tu equipo. Puedes seguir, pero no podrás elegir telescopio ni oculares de la lista.'); return; }
+        var cats = ['telescopios', 'oculares', 'auxiliares'];
+        flota = { telescopios: [], oculares: [], auxiliares: [] };
+        var faltan = [];
+        cats.forEach(function (c) {
+          flotaParcial[c] = !Array.isArray(d[c]);
+          if (!flotaParcial[c]) flota[c] = d[c]; else faltan.push(c);
+        });
         flotaCargada = true;
+        avisarFlota(faltan.length ? 'Solo se ha podido cargar parte de tu equipo (faltan: ' + faltan.join(', ') + ').' : '');
         sincronizarFlota();
       })
-      .catch(function () { /* sin flota: los campos ópticos se rellenan a mano */ });
+      .catch(function () { avisarFlota('No se pudo contactar con el servidor para cargar tu equipo.'); });
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1076,6 +1112,11 @@
   pintarResultado();
   cargarParaEditar();
   cargarFlota();   // carga el equipo del observador y puebla los selectores
+  if (flotaError) {
+    flotaError.addEventListener('click', function (ev) {
+      if (ev.target.closest('.reintentar')) { avisarFlota(''); cargarFlota(); }
+    });
+  }
   cargarBases();   // carga las bases (mías + públicas + compartidas) del selector
 
   // Precarga el observador con el nombre del usuario de WordPress (editable).
@@ -1095,6 +1136,12 @@
   // biblioteca de medios de WordPress; se guarda su id/URL.
   // ═══════════════════════════════════════════════════════════════════════
   var entradasBox = $('entradas'), addEntryBtn = $('addEntry');
+  // Un solo manejador delegado para el aviso de equipo prestado de todas las entradas.
+  if (entradasBox) {
+    entradasBox.addEventListener('change', function (ev) {
+      if (ev.target.closest('.e-ocular, .e-auxiliar, .e-auxiliar2')) avisarPrestadas();
+    });
+  }
 
   /* Precalentado de la consulta a Gaia. Apuntar al botón "Generar con el
      simulador" ya es intención de generar, así que la consulta sale mientras el
@@ -1611,6 +1658,7 @@
         '<label class="field e-aux2-wrap" hidden><span class="lab">Segundo auxiliar (opcional)</span>'+
           '<select class="e-auxiliar2"><option value="">— Sin segundo auxiliar —</option></select></label>'+
       '</div>'+
+      '<p class="hint e-prestado" role="status" style="margin:-8px 0 8px;font-size:12.5px;"></p>'+
       '<div class="row">'+
         '<label class="field"><span class="lab">Aumento (✕) *</span>'+
           '<input type="number" class="e-aumento" step="1" min="1" max="10000" placeholder="70"></label>'+
@@ -1886,6 +1934,15 @@
       // Un 502/504 en HTML, un fatal de PHP o un timeout pueden llegar con el
       // INSERT ya hecho: reenviar es seguro porque la clave de idempotencia
       // hace que el servidor devuelva la observación ya creada.
+      // Una pieza que su dueño dejó de compartir mientras se rellenaba (#496): se
+      // nombra, no se toca nada de lo escrito y el foco va al selector de esa pieza.
+      var pieza = res.status === 403 && res.data && res.data.data && res.data.data.pieza;
+      if(pieza){
+        var selPieza = selectorDePieza(pieza);
+        $('outNote').innerHTML='<span role="alert" style="color:var(--rojo)">✗ '+BitacoraBase.esc(BitacoraEquipo.mensajeRechazo(pieza, flota))+'</span>';
+        if(selPieza) selPieza.focus();
+        return;
+      }
       var msg=BitacoraBase.errorDe(res, 'No se pudo guardar la observación', {
         m401: 'Debes iniciar sesión para registrar observaciones.',
         m403: 'Solo puedes modificar tus propias observaciones.',
