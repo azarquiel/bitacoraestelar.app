@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.39.1
+ * Version:     1.39.2
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.39.1' );
+define( 'BITACORA_VERSION', '1.39.2' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -721,6 +721,12 @@ function bitacora_crear_tabla() {
     if ( ! get_option( 'bitacora_estrellas_fusion_v1' ) ) {
         bitacora_fusionar_estrellas_duplicadas();
         update_option( 'bitacora_estrellas_fusion_v1', 1 );
+    }
+
+    // Cúmulos con nebulosidad ya guardados como 'emision'/'abierto' (NGC 6997, IC 5146...).
+    if ( ! get_option( 'bitacora_cumulo_nebulosa_v1' ) ) {
+        bitacora_objetos_migrar_cumulo_nebulosa();
+        update_option( 'bitacora_cumulo_nebulosa_v1', 1 );
     }
 
     update_option( 'bitacora_db_version', BITACORA_VERSION );
@@ -3346,6 +3352,9 @@ function bitacora_categorias_mapa() {
         // y muchas lo son de verdad. Meterla aquí cambiaría planetarias buenas por
         // protoplanetarias inventadas; se queda en 'desconocido', que es la verdad.
         array( 'protoplanetaria', array( 'PA*' ), '#ffc4e1' ),
+        // Cúmulo con nebulosidad (OpenNGC 'Cl+N'). Sin códigos otype: SIMBAD no
+        // distingue esta mezcla, así que solo se llega aquí por bitacora_categorias_ongc().
+        array( 'cumulo_nebulosa', array(), '#d6e86b' ),
     );
 }
 
@@ -3384,11 +3393,10 @@ function bitacora_categorias_ongc() {
         'EMN'  => 'emision',
         'RFN'  => 'reflexion',
         'SNR'  => 'snr',
-        // Cúmulo CON nebulosidad: lo que domina al ocular es la nebulosa (M42,
-        // IC 5146), no el cúmulo embebido. M42 ya era 'emision' por su otype
-        // SIMBAD 'HII', así que esta regla no lo mueve; IC 5146 sí deja de
-        // salir 'abierto'.
-        'CL+N' => 'emision',
+        // Cúmulo CON nebulosidad: categoría propia. Mandarlo a 'emision' (ADR 0002)
+        // etiquetaba de nebulosa de emisión a cúmulos abiertos con nebulosidad
+        // tenue como NGC 6997; mandarlo a 'abierto' hacía lo contrario con IC 5146.
+        'CL+N' => 'cumulo_nebulosa',
     );
 }
 
@@ -4466,6 +4474,33 @@ function bitacora_objetos_reclasificar() {
         if ( 'desconocido' === $c['tipo'] && 'desconocido' !== $o->tipo && '' !== $o->tipo && 'otro' !== $o->tipo ) {
             continue;
         }
+        $wpdb->update(
+            $t_obj,
+            array( 'tipo' => $c['tipo'], 'color' => $c['color'], 'actualizado_en' => current_time( 'mysql' ) ),
+            array( 'id' => intval( $o->id ) )
+        );
+        $hechos++;
+    }
+    return $hechos;
+}
+
+/**
+ * Mueve a 'cumulo_nebulosa' los objetos ya guardados cuyo Type en el OpenNGC es
+ * Cl+N: los que la regla de ADR 0002 dejó en 'emision' (NGC 6997) o en 'abierto'
+ * (IC 5146 antes de ese ADR). Sin red: el OpenNGC gana a SIMBAD en el clasificador,
+ * así que no hace falta preguntarle. Solo escribe tipo y color; idempotente.
+ */
+function bitacora_objetos_migrar_cumulo_nebulosa() {
+    global $wpdb;
+    $t_obj = bitacora_nombre_tabla_objetos();
+    $filas = $wpdb->get_results( "SELECT id, slug, etiqueta FROM $t_obj WHERE tipo IN ('emision', 'abierto')" );
+    $hechos = 0;
+    foreach ( (array) $filas as $o ) {
+        $ongc = bitacora_ongc_tipo( '' !== $o->etiqueta ? $o->etiqueta : $o->slug );
+        if ( 'Cl+N' !== $ongc ) {
+            continue;
+        }
+        $c = bitacora_clasificar_objeto( '', '', '', $ongc );
         $wpdb->update(
             $t_obj,
             array( 'tipo' => $c['tipo'], 'color' => $c['color'], 'actualizado_en' => current_time( 'mysql' ) ),

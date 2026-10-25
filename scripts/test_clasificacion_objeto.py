@@ -28,7 +28,7 @@ tabla = tabla[:tabla.index("\n}\n")]
 cuerpo = PHP[PHP.index("function bitacora_clasificar_objeto"):]
 cuerpo = cuerpo[:cuerpo.index("\n}\n")]
 reglas = []  # (tipo, [codigos_mayus], color)
-for m in re.finditer(r"array\(\s*'([a-z]+)',\s*array\(([^)]*)\),\s*'(#[0-9a-fA-F]{6})'\s*\)", tabla):
+for m in re.finditer(r"array\(\s*'([a-z_]+)',\s*array\(([^)]*)\),\s*'(#[0-9a-fA-F]{6})'\s*\)", tabla):
     tipo, codes_raw, color = m.group(1), m.group(2), m.group(3).lower()
     codes = [c.strip().strip("'").upper() for c in codes_raw.split(",") if c.strip()]
     reglas.append((tipo, codes, color))
@@ -77,7 +77,7 @@ check(set(COLOR_CLASE) >= {"E", "S0", "S", "SB", "Irr", "galaxia"},
 ongc_fn = PHP[PHP.index("function bitacora_categorias_ongc"):]
 ongc_fn = ongc_fn[:ongc_fn.index("\n}\n")]
 ONG_CATEGORIAS = {m.group(1).upper(): m.group(2)
-                  for m in re.finditer(r"'([A-Za-z*+]+)'\s*=>\s*'([A-Za-z]+)'", ongc_fn)}
+                  for m in re.finditer(r"'([A-Za-z*+]+)'\s*=>\s*'([A-Za-z_]+)'", ongc_fn)}
 check(len(ONG_CATEGORIAS) >= 9, f"categorías del OpenNGC parseadas ({sorted(ONG_CATEGORIAS)})")
 tipos_mw = {t for t, _c, _col in reglas}
 check(all(v == "GALAXIA" or v in tipos_mw for v in ONG_CATEGORIAS.values()),
@@ -221,7 +221,8 @@ DORADOS_ONG = [
     ("WR*", "", "", "HII",  "emision"),   # NGC 6888 -> HD 192163 (estrella WR central)
     ("ISM", "", "", "SNR",  "snr"),       # NGC 6960, Velo oeste
     ("sh",  "", "", "SNR",  "snr"),       # NGC 6992, Velo este
-    ("OpC", "", "", "CL+N", "emision"),   # IC 5146, Cocoon (SIMBAD lo tipa cúmulo)
+    ("OpC", "", "", "CL+N", "cumulo_nebulosa"),   # IC 5146 y NGC 6997 (SIMBAD: cúmulo)
+    ("HII", "", "", "CL+N", "cumulo_nebulosa"),   # M42: el OpenNGC manda sobre SIMBAD
     # OpenNGC gana sobre un otype estelar: si hay catálogo, no se adivina "estrella".
     ("*",   "", "", "HII",  "emision"),
     # OpenNGC solo, sin SIMBAD: ya clasifica.
@@ -247,6 +248,17 @@ ONG_TIPO = json.loads((RAIZ / "resources/plugins/bitacora-registro/datos/ongc-ti
 ANCLAS_ONG = {"NGC6888": "HII", "NGC6960": "SNR", "NGC6992": "SNR", "IC5146": "Cl+N"}
 for nombre, esperado in ANCLAS_ONG.items():
     check(ONG_TIPO.get(nombre) == esperado, f"{nombre} -> {ONG_TIPO.get(nombre)!r} (esperado {esperado!r})")
+
+# Migración de filas antiguas: TODO Cl+N del catálogo (no solo NGC 6997) cae en la
+# categoría nueva, y la migración PHP filtra por ese mismo Type.
+n_cln = [k for k, v in ONG_TIPO.items() if v == "Cl+N"]
+check(len(n_cln) >= 60 and "NGC6997" in n_cln, f"{len(n_cln)} objetos Cl+N en el catálogo, NGC6997 entre ellos")
+mig = PHP[PHP.index("function bitacora_objetos_migrar_cumulo_nebulosa"):]
+mig = mig[:mig.index("\n}\n")]
+check("tipo IN ('emision', 'abierto')" in mig and "'Cl+N' !== $ongc" in mig,
+      "la migración revisa las filas 'emision' y 'abierto' y filtra por Type Cl+N")
+check("bitacora_objetos_migrar_cumulo_nebulosa();" in PHP and "bitacora_cumulo_nebulosa_v1" in PHP,
+      "la migración corre una vez desde bitacora_crear_tabla")
 
 
 def clave_ongc(s):

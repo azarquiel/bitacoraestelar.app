@@ -109,3 +109,18 @@ Reglas que acompañan a la decisión:
 - **El mapa `tipo` sigue siendo una sola categoría.** Los objetos dobles
   (cúmulo+nebulosa, galaxia+…) se resuelven a la dominante; un modelo
   multi-etiqueta queda fuera de alcance.
+
+## Enmienda (2026-10-25): `Cl+N` tiene categoría propia
+
+La regla `Cl+N → emision` etiquetaba de nebulosa de emisión a cúmulos abiertos
+con nebulosidad tenue (NGC 6997, SIMBAD `OpC`). Se descarta la alternativa
+«categoría nueva», que este ADR había rechazado por coste de taxonomía: el coste
+es una fila en `bitacora_categorias_mapa()`, otra en la leyenda y el test.
+
+- `Cl+N → cumulo_nebulosa` (color `#d6e86b`, leyenda «Cúmulo con nebulosa»).
+  Afecta a los 66 `Cl+N` del OpenNGC, incluido M42 (NGC 1976), que antes salía
+  `emision` por su otype `HII`: el catálogo manda sobre SIMBAD, como en el resto.
+- Las filas ya guardadas se migran una vez, sin red, en
+  `bitacora_objetos_migrar_cumulo_nebulosa()` (`bitacora_cumulo_nebulosa_v1`,
+  versión 1.39.2): toda fila `emision` o `abierto` cuyo Type sea `Cl+N`.
+- El tipo declarado en la observación sigue ganando sobre todo esto.
