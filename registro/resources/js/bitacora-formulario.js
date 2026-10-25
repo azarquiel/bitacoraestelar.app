@@ -844,7 +844,7 @@
   // sitio la repinta: el selector de telescopio, y cada entrada con sus oculares.
   function avisarPrestadas() {
     var pinta = function (nodo, piezas) { if (nodo) nodo.textContent = BitacoraEquipo.avisoPrestada(piezas); };
-    pinta($('scopePrestado'), [telescopioSel]);
+    pinta(scopePrestado, [telescopioSel]);
     if (!entradasBox) return;
     Array.prototype.forEach.call(entradasBox.querySelectorAll('.entry'), function (el) {
       pinta(el.querySelector('.e-prestado'), ['.e-ocular', '.e-auxiliar', '.e-auxiliar2'].map(function (q) {
@@ -916,6 +916,7 @@
   // de ellas no se puede decir que una pieza «ya no está disponible».
   var flotaParcial = { telescopios: true, oculares: true, auxiliares: true };
   var flotaError = $('flotaError');
+  var scopePrestado = $('scopePrestado');   // selector cacheado (registro/)
 
   // Fallo de carga (UX-7): el formulario sigue con lo que haya y lo dice, con salida.
   function avisarFlota(texto) {
