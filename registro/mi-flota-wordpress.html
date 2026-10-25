@@ -45,6 +45,27 @@
 #mw-obs-form .flash.err {border-color:var(--rojo);color:var(--rojo);}
 #mw-obs-form .flota-links {margin-top:10px;font-size:14px;color:var(--tinta-tenue);}
 #mw-obs-form .flota-links a {color:var(--ambar);}
+/* Compartir mi flota (#497) */
+#mw-obs-form .cf-aviso {font-size:14px;color:var(--tinta-tenue);margin:0 0 12px;}
+#mw-obs-form .cf-alta {display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-bottom:6px;}
+#mw-obs-form .cf-alta .field {flex:1 1 220px;min-width:0;margin:0;}
+#mw-obs-form .cf-alta .fi-btn {min-height:44px;padding:0 18px;}
+#mw-obs-form .cf-error {color:var(--rojo);font-size:14px;margin:6px 0 0;}
+#mw-obs-form .cf-error:empty, #mw-obs-form .cf-estado:empty {display:none;}
+#mw-obs-form .cf-estado {color:var(--verde);font-size:14px;margin:6px 0 0;}
+#mw-obs-form .cf-lista {list-style:none;padding:0;margin:6px 0 16px;display:flex;flex-direction:column;gap:8px;}
+#mw-obs-form .cf-titulo {font-size:15px;margin:18px 0 0;}
+#mw-obs-form .cf-titulo:focus {outline:2px solid var(--ambar);outline-offset:2px;}
+#mw-obs-form .cf-fila {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--noche-2);border:1px solid var(--linea);border-radius:10px;padding:10px 14px;}
+#mw-obs-form .cf-nom {flex:1 1 140px;min-width:0;overflow-wrap:anywhere;font-weight:600;}
+#mw-obs-form .cf-vacio {color:var(--tinta-tenue);font-size:14px;font-style:italic;}
+#mw-obs-form .cf-conf {flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px;}
+#mw-obs-form .cf-conf p {flex:1 1 100%;margin:0;font-size:14px;}
+#mw-obs-form .cf-btn {background:none;border:1px solid var(--linea);border-radius:14px;color:var(--tinta);
+    font-family:ui-monospace,Menlo,monospace;font-size:13px;min-height:44px;min-width:44px;padding:0 14px;cursor:pointer;}
+#mw-obs-form .cf-btn:hover, #mw-obs-form .cf-btn:focus-visible {border-color:var(--ambar);}
+#mw-obs-form .cf-btn.danger:hover, #mw-obs-form .cf-btn.danger:focus-visible {color:var(--rojo);border-color:var(--rojo);}
 </style>
 
 <div id="mw-obs-form">
@@ -79,6 +100,23 @@
     <div class="flota-list" id="listaAuxiliares"></div>
     <div class="flota-add" id="addAuxiliar"></div>
   </fieldset>
+
+  <fieldset id="compartirFlota">
+    <legend><div class="leg"><span class="num">4</span>
+      <div><h2>Compartir mi flota</h2><p>Deja que otras personas usen tu equipo al observar.</p></div></div></legend>
+    <p class="cf-aviso">Las personas de esta lista podrán elegir tus telescopios, oculares y auxiliares al registrar observaciones y en el simulador. No podrán editarlos ni borrarlos.</p>
+    <form class="cf-alta" id="cfForm" novalidate>
+      <label class="field" for="cfUsuario"><span class="lab">Nombre de usuario</span>
+        <input type="text" id="cfUsuario" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="cfError"></label>
+      <button type="submit" class="fi-btn" id="cfBoton">Compartir</button>
+    </form>
+    <p class="cf-error" id="cfError" role="alert"></p>
+    <p class="cf-estado" id="cfEstado" role="status"></p>
+    <h3 class="cf-titulo" id="cfTituloComparto" tabindex="-1">Comparto con</h3>
+    <ul class="cf-lista" id="cfComparto" aria-labelledby="cfTituloComparto"></ul>
+    <h3 class="cf-titulo" id="cfTituloConmigo">Comparten conmigo</h3>
+    <ul class="cf-lista" id="cfConmigo" aria-labelledby="cfTituloConmigo"></ul>
+  </fieldset>
 </div>
 <div class="flash" id="flotaFlash"></div>
 </div>
@@ -87,3 +125,14 @@
 <script src="/wp-content/uploads/bitacora/bitacora-base.js?v=20260826_2340" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-equipo.js?v=20260807_1200" defer></script>
 <script src="/wp-content/uploads/bitacora/bitacora-flota.js?v=20260826_2340" defer></script>
+<script src="/wp-content/uploads/bitacora/bitacora-compartir-flota.js?v=20261025_1200" defer></script>
+<script defer>
+/* Arranque de «Compartir mi flota»: va aparte de bitacora-flota.js, que no lo conoce. */
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.BITACORA_WP || !window.BitacoraCompartirFlota) return;
+  BitacoraCompartirFlota.montar(
+    { form: 'cfForm', campo: 'cfUsuario', boton: 'cfBoton', comparto: 'cfComparto', conmigo: 'cfConmigo',
+      error: 'cfError', estado: 'cfEstado', encabezado: 'cfTituloComparto' },
+    { api: BitacoraBase.api, url: BitacoraBase.ruta('equipo') + '/compartir' });
+});
+</script>

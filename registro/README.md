@@ -28,6 +28,7 @@ estructura interna de WordPress. Son portables desde el primer día.
 | `bitacora-listado.css` | Estilos del listado | Servidor, por FTP |
 | `mi-flota-wordpress.html` | Fragmento de "Mi flota" (equipo del observador) | Editor de WordPress |
 | `bitacora-flota.js` | Lógica de "Mi flota" | Servidor, por FTP |
+| `bitacora-compartir-flota.js` | Sección «Compartir mi flota» de "Mi flota" (#497) | Servidor, por FTP |
 | `mis-viajes-wordpress.html` | Fragmento de "Mi bitácora": las salidas con sus objetos, la lista plana de observaciones y la papelera | Editor de WordPress |
 | `bitacora-viajes.js` | Lógica de las salidas (ficha, OAL, desplegable de objetos) | Servidor, por FTP |
 | `plantilla-oal.html` | La **plantilla** que se dan a los compañeros: un único archivo que anota sus noches y escribe el XML | Servidor, por FTP (se descarga desde la página de importar) |
