@@ -132,7 +132,124 @@
       .concat(catalogo || []);
   }
 
+  /* ── Selector unificado del formulario de registro (#496) ──
+     /equipo trae lo propio y lo compartido conmigo; las ajenas llevan `de` (nombre
+     visible del dueño). El catálogo (usuario_id null) no viaja por /equipo, pero el
+     selector lo soporta por si se le pasa. Un <select> nativo: teclado, lector de
+     pantalla y selector del móvil gratis. */
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function nombrePieza(p) {
+    if (!p) return '';
+    return ((p.vendor ? p.vendor + ' ' : '') + (p.modelo || p.nombre || '')).trim();
+  }
+
+  function specsPieza(cat, p) {
+    var s = [];
+    if (cat === 'telescopios') {
+      if (num(p.apertura_mm) != null) s.push(num(p.apertura_mm) + 'mm');
+      if (num(p.focal_mm) != null) s.push('f=' + num(p.focal_mm));
+    } else if (cat === 'oculares') {
+      if (num(p.focal_mm) != null) s.push(num(p.focal_mm) + 'mm');
+      if (num(p.campo_aparente) != null) s.push(num(p.campo_aparente) + '°');
+    } else if (num(p.factor) != null) {
+      s.push('×' + num(p.factor));
+    }
+    return s.length ? ' (' + s.join(' ') + ')' : '';
+  }
+
+  /* Texto de una opción. El telescopio lleva delante su nombre propio y detrás sus
+     características (un <option> no se puede estilar por trozos: la jerarquía se da
+     por orden y separador). La pieza prestada EMPIEZA por su dueño: con el selector
+     cerrado solo se ve la opción elegida, y en pantalla estrecha el final se corta. */
+  function etiquetaOpcion(cat, p) {
+    var nom = (cat === 'telescopios' && p.nombre) ? String(p.nombre).trim() : '';
+    var carac = nombrePieza(p) + specsPieza(cat, p);
+    var et = nom ? (nom + '  —  ' + carac) : carac;
+    return p.de ? p.de + ' · ' + et : et;
+  }
+
+  /* Grupos del selector, ya ordenados y sin vacíos: Mi flota, un «De {nombre}» por
+     dueño (en el orden en que llegan, que ya es el estable del servidor) y Catálogo. */
+  function gruposPiezas(piezas) {
+    var propias = [], catalogo = [], ajenos = [], porDueno = {};
+    (piezas || []).forEach(function (p) {
+      if (p.de) {
+        var k = p.de + '\u0000' + p.usuario_id;
+        if (!porDueno[k]) { porDueno[k] = { etiqueta: 'De ' + p.de, piezas: [] }; ajenos.push(porDueno[k]); }
+        porDueno[k].piezas.push(p);
+      } else if (p.usuario_id === null) {
+        catalogo.push(p);
+      } else {
+        propias.push(p);
+      }
+    });
+    var out = [];
+    if (propias.length) out.push({ etiqueta: 'Mi flota', piezas: propias });
+    out = out.concat(ajenos);
+    if (catalogo.length) out.push({ etiqueta: 'Catálogo', piezas: catalogo });
+    return out;
+  }
+
+  /* HTML de las <option> de un selector. Sin nada compartido ni catálogo, sin
+     <optgroup>: es el selector de siempre. `noDisponible` ({id, nombre}) añade la
+     pieza que la observación guardó y ya no se puede elegir, para que no se pierda
+     en silencio (mismo patrón que «__legacy__»). */
+  function opcionesHtml(cat, piezas, placeholder, noDisponible) {
+    var op = function (p) { return '<option value="' + esc(p.id) + '">' + esc(etiquetaOpcion(cat, p)) + '</option>'; };
+    var grupos = gruposPiezas(piezas);
+    var html = '<option value="">' + placeholder + '</option>';
+    if (grupos.length === 1 && grupos[0].etiqueta === 'Mi flota') {
+      html += grupos[0].piezas.map(op).join('');
+    } else {
+      grupos.forEach(function (g) {
+        html += '<optgroup label="' + esc(g.etiqueta) + '">' + g.piezas.map(op).join('') + '</optgroup>';
+      });
+    }
+    var esta = noDisponible && (piezas || []).some(function (p) { return String(p.id) === String(noDisponible.id); });
+    if (noDisponible && !esta) {
+      html += '<option value="' + esc(noDisponible.id) + '">' + esc((noDisponible.nombre || 'Pieza') + ' (ya no disponible)') + '</option>';
+    }
+    return html;
+  }
+
+  /* Línea bajo el selector cuando se elige equipo ajeno: el efecto se conoce al
+     decidir, no al ver las estadísticas. `elegidas`: las piezas en juego (con huecos). */
+  function avisoPrestada(elegidas) {
+    var duenos = [];
+    (elegidas || []).forEach(function (p) { if (p && p.de && duenos.indexOf(p.de) < 0) duenos.push(p.de); });
+    if (!duenos.length) return '';
+    return 'Equipo de ' + duenos.join(' y ') + '. Esta observación no entrará en la calibración de tu equipo.';
+  }
+
+  function hayCompartido(flota) {
+    return ['telescopios', 'oculares', 'auxiliares'].some(function (c) {
+      return ((flota && flota[c]) || []).some(function (p) { return !!p.de; });
+    });
+  }
+
+  /* Texto cuando el servidor rechaza una pieza (403 pieza_no_usable). `pieza` es la
+     que señala el servidor ({tipo, id, nombre}); se busca en la flota cargada para
+     nombrar al dueño y usar el nombre con que la veía quien rellenaba. */
+  function mensajeRechazo(pieza, flota) {
+    var cat = { telescopio: 'telescopios', ocular: 'oculares', auxiliar: 'auxiliares' }[pieza.tipo];
+    var hallada = ((flota && flota[cat]) || []).filter(function (p) { return String(p.id) === String(pieza.id); })[0];
+    var nombre = (hallada && hallada.nombre) || pieza.nombre;
+    var quien = hallada && hallada.de;
+    return (quien ? quien + ' ya no comparte "' + nombre + '".' : '"' + nombre + '" ya no está disponible para ti.')
+      + ' Elige otra pieza y vuelve a guardar.';
+  }
+
   var API = {
+    nombrePieza: nombrePieza,
+    etiquetaOpcion: etiquetaOpcion,
+    gruposPiezas: gruposPiezas,
+    opcionesHtml: opcionesHtml,
+    avisoPrestada: avisoPrestada,
+    hayCompartido: hayCompartido,
+    mensajeRechazo: mensajeRechazo,
     focalEfectiva: focalEfectiva,
     focalConAuxiliares: focalConAuxiliares,
     nombreTelescopio: nombreTelescopio,
