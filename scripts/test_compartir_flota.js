@@ -72,6 +72,11 @@ var NO_EXISTE = { ok: false, status: 404, data: { codigo: 'no-encontrado-o-no-pe
   r = await c.anadir('   ');
   ok(r.error && a.llamadas.length === 2, 'campo vacío: se avisa y no se llama a la API');
 
+  a = apiFalsa(['red', { ok: true, status: 201, data: { ok: true, nombre: 'Beto' } }, lista(['Beto'], [])]);
+  c = CF.crear({ api: a, url: URL }); await c.cargar();
+  r = await c.anadir('Beto');
+  ok(r.vaciar && c.estado.comparto.join() === 'Beto' && c.estado.mensaje.tipo === 'ok', 'carga inicial fallida: el alta recarga y la persona aparece');
+
   seccion('Criterio 3 · revocar con confirmación');
   a = apiFalsa([lista(['Ana', 'Beto', 'Dani'], []), { ok: true, status: 200, data: { ok: true, nombre: 'Ana' } },
                 { ok: true, status: 200, data: { ok: true } }, { ok: true, status: 200, data: { ok: true } }]);

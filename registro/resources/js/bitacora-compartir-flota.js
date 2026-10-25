@@ -38,7 +38,7 @@
   /* ── Estado y acciones ──
      estado.comparto / conmigo: null = sin cargar; [] = vacío; [nombre…].
      estado.confirmando: nombre cuya fila pide confirmar la revocación.
-     Cada acción resuelve { aviso, error, foco, vaciar } y deja el texto en
+     Cada acción resuelve { error, foco, vaciar } y deja el texto en
      estado.mensaje ({texto, tipo:'ok'|'error'}); la capa DOM solo lo muestra. */
   function crear(deps) {
     var url = deps.url;
@@ -73,9 +73,12 @@
         st.ocupado = false;
         if (!r.res || !r.res.ok) return fallo(r.res, 'No se pudo compartir la flota');
         var n = r.res.data.nombre || nombre;
-        if (st.comparto && st.comparto.indexOf(n) < 0) st.comparto = st.comparto.concat(n).sort();
         var ya = r.res.data.codigo === 'ya-compartido';
-        st.mensaje = { texto: ya ? 'Ya compartes con ' + n + '.' : 'Ahora compartes tu flota con ' + n + '.', tipo: 'ok' };
+        var aviso = { texto: ya ? 'Ya compartes con ' + n + '.' : 'Ahora compartes tu flota con ' + n + '.', tipo: 'ok' };
+        // Lista sin cargar (falló la carga inicial): se recarga para que aparezca.
+        if (!st.comparto) return cargar().then(function () { st.mensaje = aviso; return { vaciar: true }; });
+        if (st.comparto.indexOf(n) < 0) st.comparto = st.comparto.concat(n).sort();
+        st.mensaje = aviso;
         return { vaciar: true };
       });
     }
@@ -94,7 +97,7 @@
           if (r.res && r.res.status === 404) return cargar().then(function () { return e; });
           return e;
         }
-        var i = st.comparto.indexOf(nombre);
+        var i = st.comparto ? st.comparto.indexOf(nombre) : -1;
         if (i >= 0) st.comparto.splice(i, 1);
         st.mensaje = { texto: 'Has dejado de compartir con ' + nombre + '.', tipo: 'ok' };
         // Foco: la fila que ocupa ahora su sitio; si era la última, el encabezado.
