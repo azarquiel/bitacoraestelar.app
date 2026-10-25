@@ -39,6 +39,7 @@ function bitacora_nombre_tabla_entradas() { return 'ent'; }
 function bitacora_nombre_tabla_telescopios() { return 'tel'; }
 function bitacora_nombre_tabla_oculares() { return 'ocu'; }
 function bitacora_nombre_tabla_auxiliares() { return 'aux'; }
+function bitacora_nombre_tabla_equipo_compartido() { return 'comp'; }
 
 // Postizos de lo que NO se prueba aquí.
 function bitacora_validar_datos( $p ) { return array( 'objeto' => 'M13', 'base_id' => 0, 'telescopio_id' => $p['telescopioId'] ?? null ); }
@@ -64,12 +65,13 @@ class WpdbFalso {
         $f = $this->piezas[ $m[1] ][ (int) $m[2] ] ?? null;
         return $f ? (object) $f : null;
     }
+    public function get_var( $sql ) { return null; } // nadie comparte: eso lo prueba test_equipo_compartido_conmigo
     public function insert( $t, $d ) { return 1; }
     public function update( $t, $d, $w ) { return 1; }
 }
 
 $fuente = (string) file_get_contents( __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-registro.php' );
-foreach ( array( 'bitacora_equipo_tabla', 'bitacora_validar_equipo_usable', 'bitacora_guardar_observacion', 'bitacora_editar_observacion' ) as $f ) {
+foreach ( array( 'bitacora_equipo_tabla', 'bitacora_equipo_piezas', 'bitacora_equipo_pieza_usable', 'bitacora_validar_equipo_usable', 'bitacora_guardar_observacion', 'bitacora_editar_observacion' ) as $f ) {
     if ( ! preg_match( '/^function ' . $f . '\(.*?^\}$/ms', $fuente, $m ) ) { echo "FALLA no se encuentra $f en el plugin\n"; exit( 1 ); }
     eval( $m[0] );
 }
