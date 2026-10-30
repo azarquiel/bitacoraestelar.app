@@ -106,6 +106,21 @@ console.log('flotaPrimero (Mi flota delante del catálogo global):');
   eq(E.flotaPrimero(null, catalogo)[0].id, 3, 'sin flota -> el catálogo abre la lista');
   eq(E.flotaPrimero(flota, null).length, 1, 'sin catálogo -> solo la flota');
   eq(E.flotaPrimero(null, null).length, 0, 'sin nada -> lista vacía');
+
+  // Tres procedencias (#498): lo propio, lo compartido conmigo (lleva `de`) y el catálogo.
+  // /equipo las trae mezcladas y con lo compartido por delante: el orden lo pone flotaPrimero.
+  var mezcla = [
+    { id: 50, de: 'B', usuario_id: 8, modelo: 'Dobson 12' },
+    { id: 91, usuario_id: 1, nombre: 'El de viaje' },
+    { id: 51, de: 'C', usuario_id: 9, modelo: 'Refractor 80' }
+  ];
+  var tres = E.flotaPrimero(mezcla, catalogo);
+  eq(tres.map(function (p) { return p.id; }).join(','), '91,50,51,3,7', 'propio, luego compartido, luego catálogo');
+  eq(tres[0].esFlota, true, 'lo propio sigue marcado esFlota');
+  eq(!!tres[1].esFlota, false, 'lo compartido NO se marca como Mi flota');
+  eq(tres[1].de, 'B', 'lo compartido conserva su dueño');
+  eq('esFlota' in mezcla[0], false, 'con compartido tampoco muta la entrada');
+  eq(E.flotaPrimero([mezcla[0]], null)[0].id, 50, 'solo compartido -> sale igual');
 })();
 
 console.log('rotuloNave (la nave que hizo el viaje, en la ficha del mapa):');
