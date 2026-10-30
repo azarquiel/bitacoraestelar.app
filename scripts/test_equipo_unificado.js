@@ -80,6 +80,8 @@ console.log('Marcas de equipo ajeno en lo leído (#499):');
   eq(E.motivoExclusion(ajena, false), '', 'a otro lector no se le habla de «tu equipo»');
   eq(E.motivoExclusion(propia, true), '', 'propia: sin motivo');
   eq(E.motivoExclusion(desaparecida, true).indexOf('ya no existe') > -1, true, 'desaparecida: motivo propio');
+  var mixta = { calibra: false, equipo_prestado: [{ de: 'B' }], equipo_no_disponible: [{ tipo: 'ocular', id: 77 }] };
+  eq(E.motivoExclusion(mixta, true).indexOf('Hecha con el equipo de B') === 0 && E.motivoExclusion(mixta, true).indexOf('ya no existe') > -1, true, 'prestada y desaparecida a la vez: dice las dos');
   eq(E.excluidasCalibracion([propia, prestada, desaparecida, ajena]), 2, 'solo cuentan MIS excluidas (las de otro no)');
   eq(E.excluidasCalibracion([]), 0, 'lista vacía -> 0');
 })();

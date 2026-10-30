@@ -241,8 +241,10 @@
   function motivoExclusion(obs, esAutor) {
     if (!esAutor || !obs || obs.calibra !== false) return '';
     var et = etiquetasEquipoAjeno(obs).filter(function (e) { return e.estado === 'prestado'; })[0];
-    if (et) return 'Hecha con el ' + et.texto.charAt(0).toLowerCase() + et.texto.slice(1) + ', por eso no entra en la calibración de tu equipo.';
-    return 'Una pieza ya no existe y no se sabe de quién era, por eso no entra en la calibración de tu equipo.';
+    var hay = obs.equipo_no_disponible && obs.equipo_no_disponible.length;
+    var frase = et ? 'Hecha con el ' + et.texto.charAt(0).toLowerCase() + et.texto.slice(1) + ', por eso no entra en la calibración de tu equipo.' : '';
+    if (hay) frase += (frase ? ' ' : '') + 'Una pieza ya no existe y no se sabe de quién era' + (et ? '.' : ', por eso no entra en la calibración de tu equipo.');
+    return frase;
   }
 
   /* Cuántas de MIS observaciones quedan fuera de la calibración por el equipo (UX-3). */
