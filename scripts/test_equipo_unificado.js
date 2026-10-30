@@ -65,6 +65,25 @@ console.log('avisoPrestada (consecuencia visible al elegir):');
   eq(E.avisoPrestada([deB, deC]).indexOf('Equipo de B y C.'), 0, 'dos dueños -> «B y C»');
 })();
 
+console.log('Marcas de equipo ajeno en lo leído (#499):');
+(function () {
+  var propia = { mia: true, calibra: true, equipo_prestado: [], equipo_no_disponible: [] };
+  var prestada = { mia: true, calibra: false, equipo_prestado: [{ tipo: 'telescopio', id: 2, de: 'B' }, { tipo: 'ocular', id: 6, de: 'B' }], equipo_no_disponible: [] };
+  var desaparecida = { mia: true, calibra: false, equipo_prestado: [], equipo_no_disponible: [{ tipo: 'ocular', id: 77 }] };
+  var ajena = { mia: false, calibra: false, equipo_prestado: [{ tipo: 'telescopio', id: 2, de: 'B' }], equipo_no_disponible: [] };
+  eq(E.etiquetasEquipoAjeno(propia).length, 0, 'propia: sin etiqueta');
+  eq(E.etiquetasEquipoAjeno(prestada).map(function (e) { return e.texto; }).join('|'), 'Equipo de B', 'prestada: «Equipo de B» una sola vez');
+  eq(E.etiquetasEquipoAjeno(desaparecida)[0].texto, 'Equipo no disponible', 'desaparecida: «Equipo no disponible», no «prestado»');
+  eq(E.etiquetasEquipoAjeno({ equipo_prestado: [{ de: 'B' }], equipo_no_disponible: [{}] }).length, 2, 'ambas cosas: dos etiquetas distintas');
+  eq(E.etiquetasEquipoAjeno(null).length, 0, 'sin observación -> nada');
+  eq(E.motivoExclusion(prestada, true), 'Hecha con el equipo de B, por eso no entra en la calibración de tu equipo.', 'UX-4: la frase del detalle');
+  eq(E.motivoExclusion(ajena, false), '', 'a otro lector no se le habla de «tu equipo»');
+  eq(E.motivoExclusion(propia, true), '', 'propia: sin motivo');
+  eq(E.motivoExclusion(desaparecida, true).indexOf('ya no existe') > -1, true, 'desaparecida: motivo propio');
+  eq(E.excluidasCalibracion([propia, prestada, desaparecida, ajena]), 2, 'solo cuentan MIS excluidas (las de otro no)');
+  eq(E.excluidasCalibracion([]), 0, 'lista vacía -> 0');
+})();
+
 console.log('hayCompartido:');
 eq(E.hayCompartido({ telescopios: [mio1], oculares: [], auxiliares: [deB] }), true, 'basta una pieza de otro en cualquier categoría');
 eq(E.hayCompartido({ telescopios: [mio1], oculares: [mio2], auxiliares: [] }), false, 'sin piezas con `de` -> falso');

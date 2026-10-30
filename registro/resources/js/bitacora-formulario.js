@@ -1018,6 +1018,12 @@
     // si no casa con la flota, se ofrece como opción heredada "(fuera de tu flota)").
     telescopioNombre = obs.telescopio || '';
     telescopioIdPendiente = obs.telescopio_id ? obs.telescopio_id : null;
+    // Detalle (#499): qué equipo ajeno lleva y por qué no calibra. Editar es solo del autor.
+    var ajeno = $('equipoAjenoObs');
+    if (ajeno) {
+      var et = BitacoraEquipo.etiquetasEquipoAjeno(obs).map(function (e) { return '⇄ ' + e.texto; }).join(' · ');
+      ajeno.textContent = et ? et + '. ' + BitacoraEquipo.motivoExclusion(obs, true) : '';
+    }
     if($('fechaObs') && obs.fecha_observacion) $('fechaObs').value = obs.fecha_observacion;
     if($('horaObs') && obs.hora_observacion) $('horaObs').value = obs.hora_observacion;
     if($('cieloSqm') && obs.cielo_sqm != null && obs.cielo_sqm !== '') {

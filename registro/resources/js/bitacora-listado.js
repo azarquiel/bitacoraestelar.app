@@ -186,6 +186,14 @@
         }
 
         cards.innerHTML = '';
+        // UX-3: lo excluido se dice, no se esconde. Solo mías y fuera de la papelera.
+        var fuera = (!viendoPapelera && window.BitacoraEquipo) ? BitacoraEquipo.excluidasCalibracion(filas) : 0;
+        if (fuera) {
+          var nota = document.createElement('div');
+          nota.className = 'msg';
+          nota.textContent = fuera + (fuera === 1 ? ' excluida' : ' excluidas') + ' por usar equipo de otros: no calibran tu equipo, pero siguen en tu registro, en el mapa y en las estadísticas.';
+          cards.appendChild(nota);
+        }
         vistas.forEach(function (obs) {
           cards.appendChild(crearTarjeta(obs));
         });
@@ -224,6 +232,16 @@
           (r.detalle ? ' <span style="color:var(--tinta-tenue);opacity:0.65;font-size:0.92em">' + esc(r.detalle) + '</span>' : '');
       }
 
+      /* Etiqueta «Equipo de B» / «Equipo no disponible» (#499): icono más texto, a
+         la vista y no en un title (que no existe en pantallas táctiles). */
+      function etiquetaEquipo(obs) {
+        if (!window.BitacoraEquipo) return '';
+        return BitacoraEquipo.etiquetasEquipoAjeno(obs).map(function (e) {
+          return ' <span class="equipo-ajeno" style="font-size:0.88em;color:var(--tinta-tenue);white-space:nowrap">' +
+            '<span aria-hidden="true">⇄</span> ' + esc(e.texto) + '</span>';
+        }).join('');
+      }
+
       // `borrada` va explícito porque las tarjetas de la pestaña de viajes las
       // pide otro script: no puede depender de en qué pestaña crea estar este.
       function crearTarjeta(obs, borrada) {
@@ -239,7 +257,7 @@
             (obs.audio_url ? ' <span title="Tiene tramo de audio">🎧</span>' : '') +
             '<span class="num">nº ' + esc(obs.id) + '</span></div>' +
           '<div class="meta">' +
-            '<div class="who">' + esc(obs.observador) + telescopioDe(obs) + '</div>' +
+            '<div class="who">' + esc(obs.observador) + telescopioDe(obs) + etiquetaEquipo(obs) + '</div>' +
             '<div class="when">' + fmtFecha(obs.fecha_observacion) + '</div>' +
             lineaNoConfirmado(obs) +
           '</div>' +

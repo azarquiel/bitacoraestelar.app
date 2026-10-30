@@ -661,8 +661,8 @@ Todas las rutas cuelgan de `/wp-json/bitacora/v1/`.
 | Método | Ruta | Sesión | Qué hace |
 |---|---|---|---|
 | `POST` | `/observaciones` | Sí | Crea una observación. `viajeId` es **obligatorio**; `baseId` solo si ese viaje aún no tiene lugar, y entonces sube a él. `resultado` y `motivo_no_visto` son opcionales (sin `resultado`, `visto`; fuera de lista, `400`) |
-| `GET` | `/observaciones` | Sí | Lista las activas. `?borradas=1` para la papelera, `?mias=1` para filtrar por autor, `?resultado=no_confirmado` para los intentos fallidos (cada uno con `confirmado_despues`) y `&solo_pendientes=1` para quitar los ya confirmados |
-| `GET` | `/observaciones/{id}` | Sí | Devuelve una, para precargar el formulario. `piezas_no_disponibles`: `[{tipo, id, existe}]` con las piezas que su autor ya no puede elegir; `existe: false` es borrada, `true` es que dejaron de compartírsela (#495) |
+| `GET` | `/observaciones` | Sí | Lista las activas. `?borradas=1` para la papelera, `?mias=1` para filtrar por autor, `?resultado=no_confirmado` para los intentos fallidos (cada uno con `confirmado_despues`) y `&solo_pendientes=1` para quitar los ya confirmados. Cada observación lleva `equipo_prestado` (`[{tipo, id, de}]`, `de` = nombre visible del dueño), `equipo_no_disponible` (`[{tipo, id}]`: id guardado cuya fila ya no existe) y `calibra` (`false` si hay alguna de las dos; es la señal que debe respetar cualquier cálculo de calibración del equipo) (#499) |
+| `GET` | `/observaciones/{id}` | Sí | Devuelve una, para precargar el formulario. `piezas_no_disponibles`: `[{tipo, id, existe}]` con las piezas que su autor ya no puede elegir; `existe: false` es borrada, `true` es que dejaron de compartírsela (#495). Lleva también `equipo_prestado`, `equipo_no_disponible` y `calibra`, como el listado (#499) |
 | `PUT` | `/observaciones/{id}` | Sí | La modifica *(solo el autor)* |
 | `DELETE` | `/observaciones/{id}` | Sí | Borrado suave *(solo el autor)* |
 | `POST` | `/observaciones/{id}/restaurar` | Sí | Deshace el borrado *(solo el autor)* |
