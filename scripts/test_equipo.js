@@ -121,6 +121,11 @@ console.log('flotaPrimero (Mi flota delante del catálogo global):');
   eq(tres[1].de, 'B', 'lo compartido conserva su dueño');
   eq('esFlota' in mezcla[0], false, 'con compartido tampoco muta la entrada');
   eq(E.flotaPrimero([mezcla[0]], null)[0].id, 50, 'solo compartido -> sale igual');
+  // Dueños intercalados (B, C, B): se agrupan por dueño como los optgroup del formulario.
+  var intercalado = [
+    { id: 1, de: 'B', usuario_id: 8 }, { id: 2, de: 'C', usuario_id: 9 }, { id: 3, de: 'B', usuario_id: 8 }
+  ];
+  eq(E.flotaPrimero(intercalado, null).map(function (p) { return p.id; }).join(','), '1,3,2', 'lo compartido se agrupa por dueño');
 })();
 
 console.log('rotuloNave (la nave que hizo el viaje, en la ficha del mapa):');

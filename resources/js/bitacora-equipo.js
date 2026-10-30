@@ -133,6 +133,12 @@
       if (p.de) compartidas.push(p);
       else propias.push(Object.assign({}, p, { esFlota: true }));
     });
+    // Agrupadas por dueño, dueños en orden de aparición: como los <optgroup> del formulario.
+    var duenos = [];
+    compartidas.forEach(function (p) { var k = p.de + '\u0000' + p.usuario_id; if (duenos.indexOf(k) < 0) duenos.push(k); });
+    compartidas.sort(function (a, b) {
+      return duenos.indexOf(a.de + '\u0000' + a.usuario_id) - duenos.indexOf(b.de + '\u0000' + b.usuario_id);
+    });
     return propias.concat(compartidas, catalogo || []);
   }
 

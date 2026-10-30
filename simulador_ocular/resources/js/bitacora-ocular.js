@@ -338,7 +338,8 @@
           // tecleando la marca, así que hay que poder verlos sin buscar. Sin
           // flota no se lista nada: el catálogo global es enorme y las 12
           // primeras entradas no le sirven a nadie.
-          todosSiVacio: hayFlota,
+          // Getter: tras "Reintentar" hayFlota cambia y el buscador ya está montado.
+          get todosSiVacio() { return hayFlota; },
           onElegir: function (it) { teleSel = it; $('sim-tele-input').value = nombreTele(it); limpiarTeleManual(); actualizar(); }
         });
         BitacoraBase.montarBuscadorCatalogo({
