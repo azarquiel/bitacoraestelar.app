@@ -219,9 +219,9 @@ Política con la que los tres proxies del simulador (`gaia_proxy.php`, `dss-prox
 
 ## Lista de equipo
 
-Telescopios que el simulador ofrece. Con sesión, los de `GET /equipo` delante del catálogo; sin sesión, solo el catálogo (`GET /equipo/catalogo`, público). Hoy el orden lo fija `BitacoraEquipo.flotaPrimero` (`resources/js/bitacora-equipo.js`): mi flota y luego el catálogo. El vocabulario es el de `registro/CONTEXT.md`, sección «Equipo compartido».
+Telescopios que el simulador ofrece. Con sesión, los de `GET /equipo` delante del catálogo; sin sesión, solo el catálogo (`GET /equipo/catalogo`, público). El orden lo fija `BitacoraEquipo.flotaPrimero` (`resources/js/bitacora-equipo.js`): mi flota, lo compartido conmigo (rotulado «B · …», y «Equipo de B.» junto al resultado) y el catálogo. Los oculares compartidos van igual; los propios siguen sin ofrecerse. Si `GET /equipo` falla con sesión, el simulador avisa de que solo muestra el catálogo y ofrece reintentar. El vocabulario es el de `registro/CONTEXT.md`, sección «Equipo compartido».
 
-- **Pendiente (#498): la lista incluirá el equipo compartido conmigo.** `GET /equipo` traerá también la flota que otros comparten conmigo, cada pieza con `de` (#495). No hay endpoint propio: el simulador usa el mismo que el registro.
+- **La lista incluye el equipo compartido conmigo (#498).** `GET /equipo` trae también la flota que otros comparten conmigo, cada pieza con `de` (#495). No hay endpoint propio: el simulador usa el mismo que el registro.
 - **Orden con lo compartido:** mi flota, luego lo compartido conmigo agrupado por propietario y por nombre, con la etiqueta «de B», y luego el catálogo. Con una pieza prestada elegida, «Equipo de B» se ve junto al resultado. Mismo orden y rotulado que el selector del formulario (#496), así que una pieza se verá igual en las dos pantallas.
 - **Sin nada compartido, el orden es el de hoy;** sin sesión, solo catálogo. Elegir la pieza no es control de acceso: lo que se puede usar lo decide el servidor (`simulador_ocular/README.md`, «Qué cambia al iniciar sesión»).
 

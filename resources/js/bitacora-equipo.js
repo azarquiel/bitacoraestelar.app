@@ -121,15 +121,25 @@
     return String(Math.round(n * 10) / 10);
   }
 
-  /* Lista de telescopios a ofrecer al observador: SU flota delante, el catálogo
-     global detrás. Las piezas propias se copian marcadas con `esFlota:true` (la
+  /* Lista de piezas a ofrecer al observador: SU flota delante, luego lo que le
+     comparten (`de` = dueño, el mismo orden de procedencias que el selector del
+     registro) y el catálogo global detrás. Las piezas propias se copian marcadas con `esFlota:true` (la
      entrada no se toca: es la respuesta de la API, que otros ya están leyendo).
      No hace falta descartar repetidos: flota y catálogo salen de la misma tabla
      —solo cambia el usuario_id—, así que el id no puede estar en las dos. */
   function flotaPrimero(flota, catalogo) {
-    return (flota || [])
-      .map(function (p) { return Object.assign({}, p, { esFlota: true }); })
-      .concat(catalogo || []);
+    var propias = [], compartidas = [];
+    (flota || []).forEach(function (p) {
+      if (p.de) compartidas.push(p);
+      else propias.push(Object.assign({}, p, { esFlota: true }));
+    });
+    // Agrupadas por dueño, dueños en orden de aparición: como los <optgroup> del formulario.
+    var duenos = [];
+    compartidas.forEach(function (p) { var k = p.de + '\u0000' + p.usuario_id; if (duenos.indexOf(k) < 0) duenos.push(k); });
+    compartidas.sort(function (a, b) {
+      return duenos.indexOf(a.de + '\u0000' + a.usuario_id) - duenos.indexOf(b.de + '\u0000' + b.usuario_id);
+    });
+    return propias.concat(compartidas, catalogo || []);
   }
 
   /* ── Selector unificado del formulario de registro (#496) ──
