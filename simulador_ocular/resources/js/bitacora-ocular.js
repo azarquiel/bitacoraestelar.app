@@ -220,10 +220,13 @@
 
       /* ══════════════════ CATÁLOGO DE EQUIPO ══════════════════ */
       function num(v) { if (v == null || v === '') return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
-      function nombrePieza(p) { return ((p.vendor ? p.vendor + ' ' : '') + (p.modelo || p.nombre || '')).trim() || '(sin nombre)'; }
+      function nombrePieza(p) { return conDueno(p, ((p.vendor ? p.vendor + ' ' : '') + (p.modelo || p.nombre || '')).trim() || '(sin nombre)'); }
       // Rótulo del telescopio: su nombre propio de Mi flota si lo tiene (helper
       // compartido con la flota), o "vendor modelo" en su defecto.
-      function nombreTele(p) { return BitacoraEquipo.nombreTelescopio(p) || '(sin nombre)'; }
+      // La pieza prestada EMPIEZA por su dueño («B · Dobson 12"»), como en el
+      // selector del formulario: la propiedad no puede perderse al cortar el texto.
+      function conDueno(p, t) { return p.de ? p.de + ' · ' + t : t; }
+      function nombreTele(p) { return conDueno(p, BitacoraEquipo.nombreTelescopio(p) || '(sin nombre)'); }
       function itemPorId(cat, id) { var arr = catalogo[cat] || []; for (var i = 0; i < arr.length; i++) { if (String(arr[i].id) === String(id)) return arr[i]; } return null; }
       // Características del telescopio: apertura y focal. Las piezas de Mi flota
       // se etiquetan como tales, que si no un nombre propio ("El de viaje") no
@@ -259,8 +262,40 @@
         if (!haySesion() || !WP.endpoint) return Promise.resolve(null);
         var API = WP.endpoint.replace(/observaciones\/?$/, 'equipo');
         return fetch(API, { credentials: 'same-origin', headers: { 'X-WP-Nonce': WP.nonce } })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .catch(function () { return null; });
+          .then(function (r) { return r.ok ? r.json() : false; })
+          .catch(function () { return false; });
+      }
+      // `false` = con sesión pero /equipo falló (distinto de `null`, sin sesión):
+      // el simulador avisa de que solo ofrece el catálogo y deja reintentar.
+      var catalogoGlobal = null;   // respuesta del catálogo, para recomponer la lista al reintentar
+      function aplicarFlota(flota) {
+        var d = catalogoGlobal;
+        var mios = (flota && flota.telescopios) || [];
+        // Oculares: solo los compartidos conmigo van delante. Los propios no se
+        // ofrecían (el simulador los toma del catálogo) y siguen sin ofrecerse.
+        var ocPrestados = ((flota && flota.oculares) || []).filter(function (p) { return !!p.de; });
+        hayFlota = mios.length > 0;
+        catalogo = {
+          telescopios: BitacoraEquipo.flotaPrimero(mios, d.telescopios || []),
+          oculares: BitacoraEquipo.flotaPrimero(ocPrestados, d.oculares || []),
+          auxiliares: d.auxiliares || []
+        };
+        var hint = $('sim-eq-hint');
+        if (!hint) return;
+        var hayPrestado = mios.concat(ocPrestados).some(function (p) { return !!p.de; });
+        hint.textContent = flota === false
+          ? 'No se pudo leer tu equipo: solo se muestra el catálogo. '
+          : hayPrestado
+            ? 'Salen primero tus telescopios de Mi flota, luego el equipo que te comparten (con el nombre de su dueño delante) y detrás el catálogo.'
+            : hayFlota
+              ? 'Tus telescopios de Mi flota salen los primeros de la lista; detrás, el catálogo de equipo.'
+              : 'Telescopio y ocular elegidos del catálogo de equipo.';
+        if (flota === false) {
+          var reintento = document.createElement('button');
+          reintento.type = 'button'; reintento.className = 'link-manual'; reintento.textContent = 'Reintentar';
+          reintento.addEventListener('click', function () { cargarFlota().then(aplicarFlota); });
+          hint.appendChild(reintento);
+        }
       }
 
       function cargarCatalogo() {
@@ -275,21 +310,11 @@
           .then(function (res) {
             var d = res[0], flota = res[1];
             if (!d || (!(d.telescopios || []).length && !(d.oculares || []).length)) { usarEjemplo('No se pudo leer el catálogo de equipo. Se usa un equipo de ejemplo.'); return; }
-            // Telescopios: los de Mi flota delante del catálogo global (helper
-            // compartido con la flota). Oculares y auxiliares siguen saliendo del
-            // catálogo global tal cual.
-            var mios = (flota && flota.telescopios) || [];
-            hayFlota = mios.length > 0;
-            catalogo = {
-              telescopios: BitacoraEquipo.flotaPrimero(mios, d.telescopios || []),
-              oculares: d.oculares || [], auxiliares: d.auxiliares || []
-            };
-            var hint = $('sim-eq-hint');
-            if (hint) {
-              hint.textContent = hayFlota
-                ? 'Tus telescopios de Mi flota salen los primeros de la lista; detrás, el catálogo de equipo.'
-                : 'Telescopio y ocular elegidos del catálogo de equipo.';
-            }
+            // Telescopios y oculares: lo de Mi flota y lo compartido conmigo delante
+            // del catálogo global (helper compartido con el formulario). Los
+            // auxiliares siguen saliendo del catálogo global tal cual.
+            catalogoGlobal = d;
+            aplicarFlota(flota);
             poblarEquipo();
           })
           .catch(function () { usarEjemplo('No se pudo leer el catálogo de equipo. Se usa un equipo de ejemplo.'); });
@@ -313,7 +338,8 @@
           // tecleando la marca, así que hay que poder verlos sin buscar. Sin
           // flota no se lista nada: el catálogo global es enorme y las 12
           // primeras entradas no le sirven a nadie.
-          todosSiVacio: hayFlota,
+          // Getter: tras "Reintentar" hayFlota cambia y el buscador ya está montado.
+          get todosSiVacio() { return hayFlota; },
           onElegir: function (it) { teleSel = it; $('sim-tele-input').value = nombreTele(it); limpiarTeleManual(); actualizar(); }
         });
         BitacoraBase.montarBuscadorCatalogo({
@@ -344,9 +370,10 @@
         montarAux('sim-aux-input', 'sim-aux-sugg', 'sim-aux-clear', function (it) { auxSel = it; });
         montarAux('sim-aux2-input', 'sim-aux2-sugg', 'sim-aux2-clear', function (it) { aux2Sel = it; });
 
-        var t0 = (catalogo.telescopios || []).find(function (p) { return num(p.focal_mm) && num(p.apertura_mm); });
+        // La pieza de arranque nunca es una prestada: se elige a propósito.
+        var t0 = (catalogo.telescopios || []).find(function (p) { return !p.de && num(p.focal_mm) && num(p.apertura_mm); });
         if (t0) { teleSel = t0; $('sim-tele-input').value = nombreTele(t0); }
-        var o0 = (catalogo.oculares || []).find(function (p) { return num(p.focal_mm); });
+        var o0 = (catalogo.oculares || []).find(function (p) { return !p.de && num(p.focal_mm); });
         if (o0) { ocularSel = o0; $('sim-ocular-input').value = nombrePieza(o0); }
         actualizar();
       }
@@ -481,7 +508,17 @@
       }
 
       /* ══════════════════ RENDER CENTRALIZADO ══════════════════ */
+      // «Equipo de B.» junto al resultado mientras haya una pieza prestada elegida.
+      // Sin la advertencia de calibración del formulario: el simulador no registra.
+      function pintarPrestado() {
+        var el = $('sim-eq-prestado'); if (!el) return;
+        var duenos = [];
+        [teleSel, ocularSel].forEach(function (p) { if (p && p.de && duenos.indexOf(p.de) < 0) duenos.push(p.de); });
+        el.textContent = duenos.length ? 'Equipo de ' + duenos.join(' y ') + '.' : '';
+        el.hidden = !duenos.length;
+      }
       function actualizar() {
+        pintarPrestado();
         var aviso = $('sim-aviso');
         // El veredicto de resolución de una doble depende del equipo (apertura y
         // aumento): se recalcula en cada actualización, también si falta equipo.
