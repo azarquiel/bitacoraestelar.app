@@ -686,11 +686,18 @@ window.BitacoraBase = (function () {
                                         consulta, el resultado se descarta)
        espera                           ms de espera tras la última tecla (700)
        timeout                          ms antes de abortar una consulta que
-                                        Sesame no contesta (10000)
+                                        Sesame no contesta (10000), por espejo
 
      Solo cuenta la respuesta del último nombre escrito: cada tecla aborta la
      consulta que siga en camino, y si su respuesta llega igual se descarta. */
-  var SESAME_URL = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?';
+  /* Espejos de Sesame por orden. El CDS se cuelga a veces (timeout sin
+     respuesta) y entonces el formulario se quedaba mudo: si falla la red, el
+     timeout o el HTTP, se prueba el siguiente. «Nada encontrado» es respuesta
+     válida y NO pasa al siguiente. Ambos sirven CORS abierto. */
+  var SESAME_URLS = [
+    'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?',
+    'https://vizier.cfa.harvard.edu/viz-bin/nph-sesame/-oI/S?'
+  ];
 
   function resolutorNombre(opts) {
     opts = opts || {};
@@ -704,22 +711,33 @@ window.BitacoraBase = (function () {
     function consultar(q) {
       if (q === ultima || !puedeEscribir()) return;
       ultima = q;
-      var mio = ++turno, ctrl = new AbortController();
-      enVuelo = ctrl;
-      var corte = setTimeout(function () { ctrl.abort(); }, timeout);
+      var mio = ++turno, corte = null;
       function vigente() {
         clearTimeout(corte);
         if (mio !== turno) return false;   // llegó tarde: hay un nombre más nuevo
         enVuelo = null;
         return true;
       }
+      // Pide a un espejo; cada uno con su propio timeout y su propio abort.
+      function pedir(i) {
+        var ctrl = new AbortController();
+        enVuelo = ctrl;
+        corte = setTimeout(function () { ctrl.abort(); }, timeout);
+        // La consulta viaja canonicalizada (aliasAbell); q sigue siendo lo escrito.
+        return fetch(SESAME_URLS[i] + encodeURIComponent(aliasAbell(q) || q), { signal: ctrl.signal })
+          .then(function (r) {
+            if (!r.ok) throw new Error('Sesame HTTP ' + r.status);
+            return r.text();
+          })
+          .then(function (t) { clearTimeout(corte); return t; }, function (e) {
+            clearTimeout(corte);
+            // Si ya no somos el último nombre, no se gasta otro espejo.
+            if (mio !== turno || i + 1 >= SESAME_URLS.length) throw e;
+            return pedir(i + 1);
+          });
+      }
       onEstado('buscando', q);
-      // La consulta viaja canonicalizada (aliasAbell); q sigue siendo lo escrito.
-      fetch(SESAME_URL + encodeURIComponent(aliasAbell(q) || q), { signal: ctrl.signal })
-        .then(function (r) {
-          if (!r.ok) throw new Error('Sesame HTTP ' + r.status);
-          return r.text();
-        })
+      pedir(0)
         .then(leerSesame)
         // Los avisos van en el segundo argumento y no en un .catch: un fallo
         // dentro de onResuelto no debe acabar avisando de que Sesame falló.

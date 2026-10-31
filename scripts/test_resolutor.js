@@ -186,6 +186,42 @@ Promise.resolve()
     });
   })
 
+  .then(function () {
+    seccion('Respaldo al segundo espejo:');
+    var v = nuevo({ timeout: ESPERA * 2 });
+    consultas = [];
+    // El CDS se cuelga; el espejo CfA contesta.
+    global.fetch = function (url, init) {
+      consultas.push(url);
+      if (/cds\.unistra\.fr/.test(url)) {
+        return new Promise(function (_r, rej) {
+          init.signal.addEventListener('abort', function () { rej(new Error('abort')); });
+        });
+      }
+      return Promise.resolve({ ok: true, text: function () { return Promise.resolve(M42); } });
+    };
+    v.resolutor.programar('M42');
+    return tras(ESPERA * 8, function () {
+      ok(consultas.length === 2 && /harvard/.test(consultas[1]), 'tras el timeout del CDS pide al espejo CfA');
+      ok(v.resueltos.length === 1, 'y las coordenadas llegan');
+      ok(v.estados.indexOf('error:M42') < 0, 'sin avisar de error');
+    });
+  })
+  .then(function () {
+    // «Nada encontrado» del primer espejo es definitivo: no se pregunta al segundo.
+    var v = nuevo();
+    consultas = [];
+    global.fetch = function (url) {
+      consultas.push(url);
+      return Promise.resolve({ ok: true, text: function () { return Promise.resolve(SIN_RESULTADO); } });
+    };
+    v.resolutor.programar('zzqx99');
+    return tras(ESPERA * 3, function () {
+      ok(consultas.length === 1, '«nada» no prueba el segundo espejo');
+      ok(v.estados[v.estados.length - 1] === 'nada:zzqx99', 'y avisa de «nada»');
+    });
+  })
+
   /* ── 6. Respuestas fuera de orden ──────────────────────────────────────────
      «NGC 68» se consulta, el observador sigue tecleando hasta «NGC 6826» y la
      respuesta de «NGC 68» llega la última. Manda el último nombre escrito. */
@@ -305,7 +341,8 @@ Promise.resolve()
       v.resolutor.programar('M42');
     }).then(function () {
       return tras(ESPERA * 3, function () {
-        ok(consultas.length === 2, 'el mismo nombre se puede reintentar (' + consultas.length + ')');
+        // 2 espejos fallidos + 1 reintento que acierta.
+        ok(consultas.length === 3, 'el mismo nombre se puede reintentar (' + consultas.length + ')');
         ok(v.resueltos.length === 1, 'y el reintento escribe las coordenadas');
       });
     });
