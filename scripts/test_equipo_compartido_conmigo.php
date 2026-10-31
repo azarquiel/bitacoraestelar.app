@@ -56,6 +56,7 @@ function bitacora_obtener_entradas( $id ) { return $GLOBALS['wpdb']->ent; }
 function bitacora_error_paso( $p ) { return new WP_Error( 'error_bd', $p, array( 'status' => 500 ) ); }
 function bitacora_en_transaccion( $c ) { $GLOBALS['escrituras']++; return $c(); }
 function bitacora_escribir_dependientes( $id, $d, $u, $p, $e ) { return true; }
+function bitacora_anotar_equipo_prestado( $filas ) {}   // marca de equipo ajeno (#499): scripts/test_equipo_prestado.php
 function bitacora_escribir_accesorios( $id, $d, $p ) { return array( 'aviso' => '', 'aviso_ficha' => '' ); }
 
 // Usuarios con login, nombre visible y correo: el correo y el login no deben salir.

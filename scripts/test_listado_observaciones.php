@@ -22,6 +22,12 @@ $PLUGIN = $RAIZ . '/resources/plugins/bitacora-registro/bitacora-registro.php';
 function bitacora_nombre_tabla() { return 'wp_bitacora'; }
 function bitacora_nombre_tabla_telescopios() { return 'wp_bitacora_telescopios'; }
 function get_current_user_id() { return 3; }
+function bitacora_nombre_tabla_entradas() { return 'wp_bitacora_entradas'; }
+function bitacora_nombre_tabla_oculares() { return 'wp_bitacora_oculares'; }
+function bitacora_nombre_tabla_auxiliares() { return 'wp_bitacora_auxiliares'; }
+function bitacora_equipo_tabla( $t ) { return array( 'telescopio' => 'wp_bitacora_telescopios', 'ocular' => 'wp_bitacora_oculares', 'auxiliar' => 'wp_bitacora_auxiliares' )[ $t ]; }
+function get_userdata( $id ) { return false; }
+require_once dirname( __DIR__ ) . '/resources/plugins/bitacora-registro/bitacora-equipo-prestado.php';
 
 class WP_REST_Request {
     private $p;
@@ -50,6 +56,9 @@ class WpdbSqlite {
         $this->pdo->exec( 'CREATE TABLE wp_bitacora_telescopios (
             id INTEGER PRIMARY KEY, usuario_id INTEGER, vendor TEXT, modelo TEXT,
             nombre TEXT, optica TEXT, notas TEXT, creado_en TEXT )' );
+        $this->pdo->exec( 'CREATE TABLE wp_bitacora_entradas ( id INTEGER PRIMARY KEY, observacion_id INTEGER, ocular_id INTEGER, auxiliar_id INTEGER, auxiliar2_id INTEGER )' );
+        $this->pdo->exec( 'CREATE TABLE wp_bitacora_oculares ( id INTEGER PRIMARY KEY, usuario_id INTEGER )' );
+        $this->pdo->exec( 'CREATE TABLE wp_bitacora_auxiliares ( id INTEGER PRIMARY KEY, usuario_id INTEGER )' );
         $this->pdo->exec( "INSERT INTO wp_bitacora_telescopios
             (id, usuario_id, vendor, modelo, nombre, optica, notas, creado_en)
             VALUES (7, 3, 'Skywatcher', 'Dobson 200', 'El Faro', 'newton', '', '2026-01-01')" );
@@ -90,11 +99,13 @@ class WpdbSqlite {
 
 // ── La función real, tal cual está en el plugin ──────────────────────────────
 $fuente = file_get_contents( $PLUGIN );
-if ( ! preg_match( '/^function bitacora_listar_observaciones\(.*?^\}/ms', $fuente, $m ) ) {
-    fwrite( STDERR, "No encuentro bitacora_listar_observaciones() en el plugin\n" );
-    exit( 1 );
+foreach ( array( 'bitacora_equipo_piezas', 'bitacora_anotar_equipo_prestado', 'bitacora_listar_observaciones' ) as $fn ) {
+    if ( ! preg_match( '/^function ' . $fn . '\(.*?^\}/ms', $fuente, $m ) ) {
+        fwrite( STDERR, "No encuentro $fn() en el plugin\n" );
+        exit( 1 );
+    }
+    eval( $m[0] );
 }
-eval( $m[0] );
 
 // ── Comprobaciones ───────────────────────────────────────────────────────────
 $fallos = 0;
@@ -122,6 +133,8 @@ ok( isset( $por_id[1] ) && 'El Faro' === $por_id[1]->tel_nombre, 'el telescopio 
 ok( isset( $por_id[1] ) && 'Skywatcher' === $por_id[1]->tel_vendor && 'Dobson 200' === $por_id[1]->tel_modelo, 'y con vendor y modelo' );
 ok( isset( $por_id[2] ) && null === $por_id[2]->tel_nombre, 'la observación vieja (sin flota) se sigue listando' );
 ok( isset( $por_id[2] ) && 'Celestron 114 antiguo' === $por_id[2]->telescopio, 'conservando su texto libre' );
+
+ok( isset( $por_id[1] ) && true === $por_id[1]->calibra && array() === $por_id[1]->equipo_prestado, 'el listado lleva la marca de equipo prestado (#499): telescopio propio calibra' );
 
 // ── #400: filtro «Explorado – no confirmado» ──────────────────────────────────
 function ids( $d ) { $i = array_map( function ( $f ) { return (int) $f->id; }, $d ); sort( $i ); return $i; }

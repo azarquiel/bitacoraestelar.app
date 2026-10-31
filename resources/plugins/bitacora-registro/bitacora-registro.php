@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.39.1
+ * Version:     1.40.0
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.39.1' );
+define( 'BITACORA_VERSION', '1.40.0' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -76,6 +76,10 @@ require_once __DIR__ . '/bitacora-oal.php';
 // De dónde sale la distancia al Sol de un objeto, sin la cual no hay sitio en
 // el mapa: funciones puras, con test propio (scripts/test_distancia_objeto.php).
 require_once __DIR__ . '/bitacora-distancia.php';
+
+// Qué observaciones usaron equipo de otro y cuáles calibran (#499): regla pura,
+// con test propio (scripts/test_equipo_prestado.php).
+require_once __DIR__ . '/bitacora-equipo-prestado.php';
 
 /**
  * Nombre real de la tabla, con el prefijo que use esta instalación
@@ -5591,6 +5595,58 @@ function bitacora_equipo_pieza_usable( $fila, $uid ) {
 }
 
 /**
+ * Marca cada observación con el equipo de otro (#499), sin columna: se deduce al
+ * leer. Añade `equipo_prestado` ([{tipo, id, de}], `de` = nombre visible del
+ * dueño), `equipo_no_disponible` ([{tipo, id}]) y `calibra` (false si hay alguna
+ * de las dos). Lo comparten el listado y el detalle para que no se separen.
+ * Tres consultas con IN (entradas, una por tabla de piezas), no una por fila.
+ *
+ * @param object[] $filas Observaciones (con `id`, `usuario_id`, `telescopio_id`).
+ */
+function bitacora_anotar_equipo_prestado( $filas ) {
+    global $wpdb;
+    if ( ! $filas ) {
+        return;
+    }
+    $ids  = implode( ',', array_map( function ( $f ) { return intval( $f->id ); }, $filas ) );
+    $ents = array();
+    foreach ( (array) $wpdb->get_results( 'SELECT observacion_id, ocular_id, auxiliar_id, auxiliar2_id FROM ' . bitacora_nombre_tabla_entradas() . " WHERE observacion_id IN ($ids)" ) as $e ) {
+        $ents[ intval( $e->observacion_id ) ][] = $e;
+    }
+    $piezas = array();
+    $por_tipo = array( 'telescopio' => array(), 'ocular' => array(), 'auxiliar' => array() );
+    foreach ( $filas as $f ) {
+        $piezas[ $f->id ] = bitacora_equipo_piezas( $f->telescopio_id ?? null, $ents[ intval( $f->id ) ] ?? array() );
+        foreach ( $piezas[ $f->id ] as $p ) {
+            $por_tipo[ $p[0] ][ $p[1] ] = true;
+        }
+    }
+    $duenos = array();
+    foreach ( $por_tipo as $tipo => $set ) {
+        if ( $set ) {
+            $lista = implode( ',', array_keys( $set ) );
+            foreach ( (array) $wpdb->get_results( 'SELECT id, usuario_id FROM ' . bitacora_equipo_tabla( $tipo ) . " WHERE id IN ($lista)" ) as $r ) {
+                $duenos[ $tipo . ':' . intval( $r->id ) ] = null === $r->usuario_id ? null : intval( $r->usuario_id );
+            }
+        }
+    }
+    $nombres = array();
+    foreach ( $filas as $f ) {
+        $r = bitacora_equipo_prestado( $f->usuario_id, $piezas[ $f->id ], $duenos );
+        $f->equipo_prestado = array();
+        foreach ( $r['prestado'] as $p ) {
+            if ( ! isset( $nombres[ $p['dueno_id'] ] ) ) {
+                $u = get_userdata( $p['dueno_id'] );
+                $nombres[ $p['dueno_id'] ] = $u ? $u->display_name : 'otro usuario';
+            }
+            $f->equipo_prestado[] = array( 'tipo' => $p['tipo'], 'id' => $p['id'], 'de' => $nombres[ $p['dueno_id'] ] );
+        }
+        $f->equipo_no_disponible = $r['no_disponible'];
+        $f->calibra              = $r['calibra'];
+    }
+}
+
+/**
  * Piezas de la observación que su autor ya no puede elegir (#495): borradas
  * (`existe` false, «Equipo no disponible») o que su dueño dejó de compartir
  * (`existe` true, «ya no disponible»). Se juzga con el autor, no con quien lee.
@@ -5809,6 +5865,7 @@ function bitacora_leer_observacion( WP_REST_Request $peticion ) {
     // Solo al autor: a otro lector le diría si su prestamista dejó de compartir.
     $obs->piezas_no_disponibles = intval( $obs->usuario_id ) === get_current_user_id()
         ? bitacora_piezas_no_disponibles( $obs, $obs->entradas ) : array();
+    bitacora_anotar_equipo_prestado( array( $obs ) );
     return new WP_REST_Response( $obs, 200 );
 }
 
@@ -6476,6 +6533,7 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
         $f->mia = ( intval( $f->usuario_id ) === $usuario );
         $f->confirmado_despues = (bool) intval( $f->confirmado_despues );
     }
+    bitacora_anotar_equipo_prestado( $filas );
 
     return new WP_REST_Response( $filas, 200 );
 }

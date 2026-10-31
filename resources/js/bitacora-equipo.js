@@ -234,6 +234,34 @@
     return 'Equipo de ' + duenos.join(' y ') + '. Esta observación no entrará en la calibración de tu equipo.';
   }
 
+  /* Etiquetas de una observación leída del servidor (#499): `equipo_prestado`
+     ([{tipo, id, de}]) y `equipo_no_disponible` ([{tipo, id}]). Dos estados con
+     texto distinto: a lo que no se puede comprobar no se le llama «prestado». */
+  function etiquetasEquipoAjeno(obs) {
+    var out = [];
+    var duenos = [];
+    ((obs && obs.equipo_prestado) || []).forEach(function (p) { if (duenos.indexOf(p.de) < 0) duenos.push(p.de); });
+    if (duenos.length) out.push({ estado: 'prestado', texto: 'Equipo de ' + duenos.join(' y ') });
+    if (obs && obs.equipo_no_disponible && obs.equipo_no_disponible.length) out.push({ estado: 'no-disponible', texto: 'Equipo no disponible' });
+    return out;
+  }
+
+  /* Frase visible del detalle: por qué la observación no calibra. Solo para su
+     autor: «tu equipo» no es verdad para quien lee la de otro. */
+  function motivoExclusion(obs, esAutor) {
+    if (!esAutor || !obs || obs.calibra !== false) return '';
+    var et = etiquetasEquipoAjeno(obs).filter(function (e) { return e.estado === 'prestado'; })[0];
+    var hay = obs.equipo_no_disponible && obs.equipo_no_disponible.length;
+    var frase = et ? 'Hecha con el ' + et.texto.charAt(0).toLowerCase() + et.texto.slice(1) + ', por eso no entra en la calibración de tu equipo.' : '';
+    if (hay) frase += (frase ? ' ' : '') + 'Una pieza ya no existe y no se sabe de quién era' + (et ? '.' : ', por eso no entra en la calibración de tu equipo.');
+    return frase;
+  }
+
+  /* Cuántas de MIS observaciones quedan fuera de la calibración por el equipo (UX-3). */
+  function excluidasCalibracion(filas) {
+    return (filas || []).filter(function (o) { return o.mia && o.calibra === false; }).length;
+  }
+
   function hayCompartido(flota) {
     return ['telescopios', 'oculares', 'auxiliares'].some(function (c) {
       return ((flota && flota[c]) || []).some(function (p) { return !!p.de; });
@@ -258,6 +286,9 @@
     gruposPiezas: gruposPiezas,
     opcionesHtml: opcionesHtml,
     avisoPrestada: avisoPrestada,
+    etiquetasEquipoAjeno: etiquetasEquipoAjeno,
+    motivoExclusion: motivoExclusion,
+    excluidasCalibracion: excluidasCalibracion,
     hayCompartido: hayCompartido,
     mensajeRechazo: mensajeRechazo,
     focalEfectiva: focalEfectiva,

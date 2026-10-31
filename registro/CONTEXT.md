@@ -62,7 +62,7 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 
 **Flota entera de un usuario —telescopios, oculares y auxiliares— que otro usuario puede elegir en sus observaciones** (`{prefix}bitacora_equipo_compartido`: una fila por pareja `propietario_id` + `destinatario_id`, clave única). Épica #492; la razón de cada decisión, en ADR 0032 (`docs/adr/0032-el-equipo-se-comparte-por-flota-entera.md`).
 
-> **Estado:** la validación de propiedad (#493), la tabla y las rutas de compartir (#494), y `GET /equipo` con `de` y la marca de pieza no disponible (#495) ya están; las etiquetas llegan con #496 a #499. Cada punto cita la historia que lo construye.
+> **Estado:** la validación de propiedad (#493), la tabla y las rutas de compartir (#494), y `GET /equipo` con `de` y la marca de pieza no disponible (#495) ya están; las etiquetas llegan con #496 a #499 (#499: etiqueta y exclusión, hechas). Cada punto cita la historia que lo construye.
 
 - **Flota entera, por destinatario, solo lectura.** El propietario decide con quién la comparte (opt-in); no hay compartir pieza a pieza, así que lo que añada a su flota después también queda compartido. Igual que la [[base]] `seleccionada`, compartir es SOLO LECTURA: el destinatario puede elegir la pieza en una observación y en el simulador, pero editarla o borrarla sigue siendo del dueño (`PUT`/`DELETE /equipo/{tipo}/{id}` dan 403).
 - **Se localiza por nombre de usuario exacto**, sin buscador ni autocompletado, con límite de ritmo. «No existe» y «no se puede compartir con esa persona» dan la misma respuesta (`no-encontrado-o-no-permitido`), para no permitir averiguar quién tiene cuenta. Compartir dos veces con la misma persona es `ya-compartido`: un aviso, no un error. Rutas: `GET`/`POST`/`DELETE /equipo/compartir` (#494, tabla en `registro/README.md`).
@@ -81,6 +81,8 @@ Formularios de registro (`registro/*-wordpress.html`) y su lógica de sesión: o
 - **Prestada no depende de que siga compartida.** Si B revoca, la pieza sigue siendo de B y la observación sigue siendo prestada, con el nombre de B. Lo único que cambia es que A ya no puede elegirla en una observación nueva.
 - **Una pieza que ya no existe no se puede atribuir.** La observación se muestra con su texto de `telescopio` y la marca «Equipo no disponible», y editar el resto de la observación no falla por ello (#493, #495).
 - **No calibra el equipo del observador.** Las observaciones prestadas, y las de pieza que ya no existe, se excluyen de la calibración del equipo de quien observa. Tampoco cuentan para el dueño. Siguen en el registro, el mapa y las estadísticas generales (#499).
+- **Dónde se deduce:** `bitacora_equipo_prestado` (`bitacora-equipo-prestado.php`, pura) y `bitacora_anotar_equipo_prestado` (por lotes) ponen `equipo_prestado`, `equipo_no_disponible` y `calibra` en el listado y en el detalle. Hoy ningún código en vivo calcula la calibración (H2c lee `observaciones.csv` a mano): `calibra` es el contrato que debe respetar quien la calcule. Una observación sin id de pieza (texto libre antiguo) no marca nada.
+- **La cifra «N excluidas» vive en el listado de Mi bitácora** (no había recuento de calibración donde ponerla); la frase «no entra en la calibración de tu equipo» solo se dice a su autor.
 
 ### Vocabulario de la interfaz
 
