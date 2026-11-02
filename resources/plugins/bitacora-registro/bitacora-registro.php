@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.40.0
+ * Version:     1.40.1
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.40.0' );
+define( 'BITACORA_VERSION', '1.40.1' );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -3616,19 +3616,29 @@ function bitacora_simbad( $identificador ) {
         . "LEFT JOIN ident AS g ON g.oidref = b.oid AND g.id LIKE 'Gaia DR3%' "
         . "WHERE i.id = '" . str_replace( "'", "''", $id ) . "'";
 
-    $url = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync';
-    $respuesta = wp_remote_post(
-        $url,
-        array(
-            'timeout' => 20,
-            'body'    => array(
-                'request' => 'doQuery',
-                'lang'    => 'ADQL',
-                'format'  => 'csv',
-                'query'   => $adql,
-            ),
-        )
-    );
+    // CDS primero; si no contesta (se cuelga a veces), el espejo de CfA. Solo un
+    // fallo de red o un 5xx pasa al siguiente: un 200 sin filas es «no está».
+    $respuesta = null;
+    foreach ( array(
+        'https://simbad.cds.unistra.fr/simbad/sim-tap/sync',
+        'https://simbad.cfa.harvard.edu/simbad/sim-tap/sync',
+    ) as $url ) {
+        $respuesta = wp_remote_post(
+            $url,
+            array(
+                'timeout' => 15,
+                'body'    => array(
+                    'request' => 'doQuery',
+                    'lang'    => 'ADQL',
+                    'format'  => 'csv',
+                    'query'   => $adql,
+                ),
+            )
+        );
+        if ( ! is_wp_error( $respuesta ) && 200 === wp_remote_retrieve_response_code( $respuesta ) ) {
+            break;
+        }
+    }
     if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
         bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
         return null;

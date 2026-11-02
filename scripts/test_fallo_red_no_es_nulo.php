@@ -63,10 +63,17 @@ $consultas = [
     ['bitacora_gaia_bprp',      fn() => bitacora_gaia_bprp('123'),           "bprp\n"],
 ];
 
+// El CDS no contesta y CfA sí: SIMBAD resuelve con el segundo (Barnard 361, 2026-10-31).
+echo "bitacora_simbad · respaldo CfA:\n";
+preparar([new WP_Error(), http(200, "ra,dec,morph_type,otype_txt,sp_type,dist,unit,plx_value,plx_err,id\n318.05,47.39,,DNe,,,,,,\n")]);
+$r = bitacora_simbad('Barnard 361');
+eq(is_array($r) && abs($r['ra'] - 318.05) < 1e-6, true, 'CDS caído: coordenadas del espejo');
+eq($GLOBALS['peticiones'], 2, 'y fueron dos peticiones');
+
 foreach ($consultas as [$nombre, $llamar, $no_esta]) {
     echo "$nombre:\n";
-    // bitacora_gaia_bprp tiene dos proveedores: el fallo tiene que ser de los dos.
-    $n = $nombre === 'bitacora_gaia_bprp' ? 2 : 1;
+    // simbad y gaia_bprp tienen dos proveedores: el fallo tiene que ser de los dos.
+    $n = in_array($nombre, ['bitacora_gaia_bprp', 'bitacora_simbad'], true) ? 2 : 1;
 
     preparar(array_fill(0, $n, new WP_Error()));
     eq($llamar(), null, 'WP_Error: devuelve null');
