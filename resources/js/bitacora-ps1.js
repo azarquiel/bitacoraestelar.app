@@ -1661,13 +1661,33 @@
      el campo y el aviso tienen que leerlo igual o el aviso buscaría otra fila. */
   function ps1NombreFila(f) { return f[0] || f[1]; }
 
+  /* Lado (arcmin) con el que se pinta el objeto: el de SU TEXTURA, si el
+     manifiesto lo declara (columna 7, el mismo número que el generador metió en
+     el hash de versión), y si no, la regla del catálogo. Desde el lado medido
+     (ADR 0034) el lado de una difusa ya no se deduce de r_e: lo decidió el
+     generador mirando si el marco llega al cielo, y el parche solo encaja en
+     el lienzo con ESE lado (q = ancho / lado). Sin manifiesto, con una fila
+     anterior a la columna o con el objeto servido por el proxy, sale lo de
+     siempre. No vale `ancho·escalaAs/60`: difiere del lado en la 4.ª cifra y
+     movería bits de todo el banco. */
+  var indiceLado = { tabla: null, porNombre: null };
+  function ps1LadoDeFila(g) {
+    var t = (typeof window !== 'undefined' && window.BITACORA_DSO_TEXTURAS) || null;
+    if (t && indiceLado.tabla !== t) {
+      indiceLado.tabla = t; indiceLado.porNombre = {};
+      for (var i = 0; i < t.length; i++) indiceLado.porNombre[t[i][0]] = t[i];
+    }
+    var r = t ? indiceLado.porNombre[ps1NombreFila(g)] : null;
+    return (r && r[1] === 'imagen' && r[7] > 0) ? r[7] : ps1LadoArcmin(g[4]);
+  }
+
   function ps1GalaxiasDelCampo(catalogo, ra0, dec0, arcmin) {
     var out = [], cos0 = Math.cos(dec0 * Math.PI / 180), radio = arcmin / 120;
     for (var i = 0; i < (catalogo || []).length; i++) {
       var g = catalogo[i];
       if (!(g[3] > PS1.decMin)) continue;                       // sin cobertura al sur
       if (!ps1CabeEnParche(g)) continue;
-      var lado = ps1LadoArcmin(g[4]);
+      var lado = ps1LadoDeFila(g);
       var margen = radio + lado / 120;
       var dra = ((((g[2] - ra0) + 540) % 360) - 180) * cos0;
       var ddec = g[3] - dec0;
@@ -1828,7 +1848,9 @@
   }
 
   /* Fila del manifiesto (window.BITACORA_DSO_TEXTURAS, generado):
-     [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo].
+     [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo, ladoArcmin].
+     `ladoArcmin` solo en las de imagen (ps1LadoDeFila); una fila sin él es
+     anterior a la columna y su lado sale del catálogo.
      Que un objeto no tenga textura es un DATO (modelo = "fila" con su motivo) y
      no un silencio; sin manifiesto cargado, null y todo sigue como antes. */
   function ps1FilaTextura(nombre) {

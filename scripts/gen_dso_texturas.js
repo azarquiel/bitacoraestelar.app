@@ -360,7 +360,10 @@ function textoManifiesto(dir) {
     .map(function (s) {
       return { ra: s.ra, fila: s.modelo === 'fila'
         ? [s.nombre, 'fila', s.version || '', 0, 0, 0, s.motivo]
-        : [s.nombre, 'imagen', s.version, s.ancho, s.escalaAs, s.auditoria.fracAusencia, ''] };
+        /* El lado EXACTO, el mismo número que entró en version(): el runtime
+           pinta con él (ps1LadoDeFila) y no con ancho·escala, que difiere en
+           la 4.ª cifra. Va al final para no mover el motivo de [6]. */
+        : [s.nombre, 'imagen', s.version, s.ancho, s.escalaAs, s.auditoria.fracAusencia, '', s.ladoArcmin] };
     })
     .concat(filasControl())
     .sort(function (a, b) { return a.ra - b.ra; })
@@ -371,7 +374,8 @@ function textoManifiesto(dir) {
   return { filas: filas.length, texto:
     '/* Texturas DSO — GENERADO, no editar a mano.\n' +
     '   Regenerar: node scripts/gen_dso_texturas.js --banco (o --solo "<nombre>")\n' +
-    '   Campos: [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo]\n' +
+    '   Campos: [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo, ladoArcmin]\n' +
+    '   (ladoArcmin solo en las de imagen: el lado con el que se generó y se pinta)\n' +
     '   modelo ∈ {imagen, fila}; motivo ∈ {"", sur, no-cabe, sin-cobertura,\n' +
     '   pisada, ausencia-excesiva, celda-perdida}. Una fila que no está aquí se\n' +
     '   pide al proxy mientras BitacoraPS1.cfg.proxyRespaldo siga encendido. */\n' +

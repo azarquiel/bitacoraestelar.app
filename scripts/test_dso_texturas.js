@@ -200,6 +200,40 @@ var sobran = Object.keys(enRepo).filter(function (id) {
 });
 ok(!sobran.length, 'y no hay ninguna textura de más' + (sobran.length ? ': ' + sobran.join(', ') : ''));
 
+/* El lado con que se pinta es el de la textura (ADR 0034): la columna 7 del
+   manifiesto tiene que ser EXACTAMENTE el `ladoArcmin` del sidecar de su
+   versión —el que entró en el hash—, y el campo tiene que pintar con ella y no
+   con la regla del catálogo. Sin lo primero, un lado medido se perdería al
+   regenerar; sin lo segundo, el parche no encajaría en el lienzo. */
+console.log('\nEl lado del manifiesto es el de la textura:');
+var MAN = (new Function('window', fs.readFileSync(G.MANIFIESTO, 'utf8') + ';return window.BITACORA_DSO_TEXTURAS;'))({});
+var ladoMal = MAN.filter(function (r) {
+  if (r[1] !== 'imagen') return false;
+  var id = PS1.ps1IdTextura(r[0]), sc = null;
+  [G.DSO, G.FIXTURES].forEach(function (d) {
+    var p = path.join(d, id + '.' + r[2] + '.json');
+    if (!sc && fs.existsSync(p)) sc = JSON.parse(fs.readFileSync(p, 'utf8'));
+  });
+  return !sc || r[7] !== sc.ladoArcmin;
+}).map(function (r) { return r[0]; });
+ok(!ladoMal.length, 'cada fila de imagen lleva el ladoArcmin exacto de su sidecar' +
+   (ladoMal.length ? ': ' + ladoMal.join(', ') : ''));
+(function () {
+  var guardado = window.BITACORA_DSO_TEXTURAS;
+  var neb = window.BITACORA_NEBULOSAS.filter(function (f) { return f[0] === 'NGC2068'; })[0];
+  var catalogo = [neb], regla = PS1.ps1LadoArcmin(neb[4]);
+  window.BITACORA_DSO_TEXTURAS = [['NGC2068', 'imagen', 'x', 1, 0.5, 0, '', 12.345]];
+  var conLado = PS1.ps1GalaxiasDelCampo(catalogo, neb[2], neb[3], 10)[0];
+  window.BITACORA_DSO_TEXTURAS = [['NGC2068', 'imagen', 'x', 1, 0.5, 0, '']];
+  var sinLado = PS1.ps1GalaxiasDelCampo(catalogo, neb[2], neb[3], 10)[0];
+  window.BITACORA_DSO_TEXTURAS = [['NGC2068', 'fila', '', 0, 0, 0, 'no-cabe', 12.345]];
+  var deFila = PS1.ps1GalaxiasDelCampo(catalogo, neb[2], neb[3], 10)[0];
+  window.BITACORA_DSO_TEXTURAS = guardado;
+  ok(conLado && conLado.ladoArcmin === 12.345, 'el campo pinta con el lado de la fila de imagen');
+  ok(sinLado && sinLado.ladoArcmin === regla, 'sin columna, el lado sale del catálogo, como antes');
+  ok(deFila && deFila.ladoArcmin === regla, 'una fila sin imagen no impone lado');
+})();
+
 /* La regla de #229: si el objeto no tiene imagen DONDE ESTÁ EL OBJETO, no hay
    imagen. Se prueba sobre parches sintéticos —la regla es geométrica y no
    necesita PS1— y luego sobre el veredicto escrito, que sí sale de píxeles

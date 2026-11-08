@@ -28,7 +28,7 @@
    detector, y M78 tiene que seguir pintada —un «arreglo» que apague la capa
    también quitaría el canto—.
 
-   Fixtures: texturas publicadas de NGC 2064/2067/2068 en scripts/fixtures/dso
+   Fixtures: texturas publicadas de NGC 2064/2067 en scripts/fixtures/dso-costura (M78 en dso/)
    y Gaia DR3 del campo en scripts/fixtures/gaia/gaia_campo_m78.csv, sacada de
    GAVO (https://dc.g-vo.org/tap/sync) con
      SELECT ra,dec,phot_g_mean_mag FROM gaia.dr3lite
@@ -41,7 +41,9 @@
 'use strict';
 var fs = require('fs'), path = require('path');
 var RAIZ = path.join(__dirname, '..');
-var DIR_DSO = path.join(__dirname, 'fixtures', 'dso');
+/* `dso/` es solo del banco golden (test_dso_texturas lo vigila); las texturas
+   que solo necesita este test viven aparte. */
+var DIRS_DSO = [path.join(__dirname, 'fixtures', 'dso'), path.join(__dirname, 'fixtures', 'dso-costura')];
 var DIR_GAIA = path.join(__dirname, 'fixtures', 'gaia');
 var BASE = 'https://textura-de-mentira/dso/';
 
@@ -118,8 +120,12 @@ function fresco() {
 }
 global.fetch = function (url) {
   url = String(url);
-  var ruta = url.indexOf(BASE) === 0 ? path.join(DIR_DSO, url.slice(BASE.length)) : null;
-  if (!ruta || !fs.existsSync(ruta)) return Promise.resolve({ ok: false, status: 404 });
+  var ruta = null;
+  if (url.indexOf(BASE) === 0) DIRS_DSO.forEach(function (d) {
+    var p = path.join(d, url.slice(BASE.length));
+    if (!ruta && fs.existsSync(p)) ruta = p;
+  });
+  if (!ruta) return Promise.resolve({ ok: false, status: 404 });
   var b = fs.readFileSync(ruta);
   return Promise.resolve({ ok: true, status: 200,
     arrayBuffer: function () { return Promise.resolve(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); },
