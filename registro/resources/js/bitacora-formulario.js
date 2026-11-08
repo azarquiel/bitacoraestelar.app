@@ -1186,6 +1186,16 @@
     return d+'º '+m+'′';
   }
   function textoPlano(html){ var d=document.createElement('div'); d.innerHTML=html||''; return (d.textContent||'').trim(); }
+  // Pegar texto de un PDF: une los renglones cortados (BitacoraBase.htmlDeTextoPegado).
+  function pegadoLimpio(ed){
+    if(!ed || !window.BitacoraBase || !BitacoraBase.htmlDeTextoPegado) return;
+    ed.addEventListener('paste', function(ev){
+      var html=BitacoraBase.htmlDeTextoPegado(ev.clipboardData && ev.clipboardData.getData('text/plain'));
+      if(html===null) return;
+      ev.preventDefault();
+      try{ document.execCommand('insertHTML', false, html); }catch(_e){}
+    });
+  }
 
   function renumerarEntradas(){
     var i=0;
@@ -1704,6 +1714,7 @@
     el.querySelector('.e-pupila').value  = (datos.pupila_salida!==undefined&&datos.pupila_salida!==null&&datos.pupila_salida!=='')?datos.pupila_salida:'';
     el.querySelector('.e-titulo').value  = datos.titulo||'';
     el.querySelector('.e-desc').innerHTML = datos.descripcion||'';
+    pegadoLimpio(el.querySelector('.e-desc'));
 
     // Equipo de la entrada: preselección guardada (modo edición) + poblado de los
     // selects (cuando la flota esté cargada) + recálculo al cambiar de pieza.
@@ -1826,6 +1837,7 @@
   // Es una entrada especial: se envía como { esExploracion:true, titulo:
   // "<objeto>. Exploración", descripcion }, sin aumento/campo/pupila ni imágenes.
   var explDesc = $('explDesc'), explToolbar = $('explToolbar'), explNombre = $('explNombre');
+  pegadoLimpio(explDesc);
   if(explToolbar && explDesc){
     try{ document.execCommand('defaultParagraphSeparator', false, 'p'); }catch(_e){}
     explToolbar.querySelectorAll('button').forEach(function(btn){

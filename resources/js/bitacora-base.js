@@ -954,6 +954,30 @@ window.BitacoraBase = (function () {
     parseRA: parseRA,
     parseDec: parseDec,
     formatRA: formatRA,
-    formatDec: formatDec
+    formatDec: formatDec,
+    htmlDeTextoPegado: htmlDeTextoPegado
   };
+
+  /* Texto pegado (típicamente de un PDF) → HTML de párrafos. El PDF corta cada
+     renglón: el salto se quita salvo que la línea cierre frase (. ! ? … con
+     comilla/paréntesis opcional) o venga una línea en blanco. "obser-\nvación"
+     se recompone. Sin saltos devuelve null: que pegue el navegador. */
+  function htmlDeTextoPegado(texto) {
+    var t = String(texto || '').replace(/\r\n?/g, '\n');
+    if (t.indexOf('\n') < 0) return null;
+    var parrafos = [], actual = '';
+    function cerrar() { if (actual) parrafos.push(actual); actual = ''; }
+    t.split('\n').forEach(function (l) {
+      l = l.replace(/[ \t ]+/g, ' ').trim();
+      if (!l) { cerrar(); return; }
+      if (!actual) actual = l;
+      else if (/\p{L}-$/u.test(actual) && /^\p{Ll}/u.test(l)) actual = actual.slice(0, -1) + l;
+      else actual += ' ' + l;
+      if (/[.!?…]["'»”’)\]]*$/.test(l)) cerrar();
+    });
+    cerrar();
+    return parrafos.map(function (p) {
+      return '<p>' + p.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>';
+    }).join('');
+  }
 })();
