@@ -2404,6 +2404,12 @@
     'el suelo sale del borde del recorte y puede apagar lo más tenue';
   var MOTIVO_CUBIERTA = 'cubierta';
   var TEXTO_AVISO = {
+    /* ADR 0034: el objeto está DENTRO del parche de lado medido de una
+       nebulosa vecina mayor, que lo pinta anclado al brillo de ESA. No falta
+       imagen —y por eso nada de servicios—, pero su luz propia puede quedar
+       bajo el umbral: en NGC 2064 y NGC 2067, dentro de M78, se queda. */
+    'cubierta': 'se pinta como parte de la imagen de la nebulosa vecina que la contiene, ' +
+                'con el brillo de esa; su nebulosidad propia puede no llegar a verse',
     'sur': 'sin imagen de cartografiado: PanSTARRS no cubre por debajo de −30° de declinación',
     'no-cabe': 'sin imagen de cartografiado: esta galaxia es mayor que el recorte que sirve PanSTARRS, ' +
       'y el stack pierde su disco exterior al restar el fondo; se muestra el campo sin ella',
@@ -2431,9 +2437,7 @@
   };
 
   function ps1TextoAviso(motivo) {
-    /* `cubierta` (ADR 0034) no es falta de imagen: el objeto está DENTRO del
-       parche de lado medido de otro, que lo pinta. No hay nada que avisar. */
-    if (!motivo || motivo === MOTIVO_CUBIERTA) return '';
+    if (!motivo) return '';
     return TEXTO_AVISO[motivo] || ILEGIBLE;
   }
 
@@ -2549,11 +2553,11 @@
       var aviso = ps1TextoAviso(filaAp && filaAp[1] === 'fila'
         ? (filaAp[6] || 'sin-textura') : notasApuntada.motivo);
       /* Cubierta (ADR 0034): la pinta el parche de su dueño, así que su
-         «sin parche» no es una caída del servicio. Ninguna de las ramas de
-         abajo le aplica. */
+         «sin parche» no es una caída del servicio. Su texto ya está puesto y
+         ninguna de las ramas de abajo le aplica. */
       var cubierta = !!filaAp && filaAp[1] === 'fila' && filaAp[6] === MOTIVO_CUBIERTA;
       if (cubierta) {
-        aviso = '';
+        aviso = TEXTO_AVISO[MOTIVO_CUBIERTA];
       } else if (!aviso && apuntada && !(apuntada[3] > PS1.decMin)) {
         aviso = TEXTO_AVISO['sur'];
       } else if (!aviso && apuntada && !ps1CabeEnParche(apuntada)) {

@@ -147,7 +147,7 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   pantalla sale un **canto recto** (M78, `scripts/test_costura_parches.js`). El lado con
   que se pinta lo dice el manifiesto (columna 7, `ps1LadoDeFila`), no el catálogo.
   - Un parche medido que contiene el centro de otra difusa sin borde la deja como
-    `cubierta`: no pinta ni avisa, porque su luz va dentro del dueño.
+    `cubierta`: no pinta (su luz va dentro del dueño, con el brillo de ese) y lo avisa.
   - _Evitar_: «tesela» o «tile» para el parche, y «solape» para la cobertura (los
     cuadrados del caso M78 casi no se solapaban: eran cantos libres).
 - **Invariante:** lo que devuelve `ps1LeerTextura` es indistinguible en forma de lo que

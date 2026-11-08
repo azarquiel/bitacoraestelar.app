@@ -147,12 +147,12 @@ function render(caso) {
   return P.ps1CapaGalaxias(difuso, ctx, cielo, null, {
     ra0: caso.ra, dec0: caso.dec, arcmin: arcmin, size: SIZE,
     estrellas: leerGaia(caso.gaia), apertura: caso.D
-  }).then(function () {
+  }).then(function (res) {
     var nivel = new Float32Array(SIZE * SIZE);
     if (pantalla) for (var i = 0; i < nivel.length; i++) nivel[i] = pantalla[i * 4];
     var campo = P.ps1GalaxiasDelCampo(P.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS),
                                       caso.ra, caso.dec, arcmin).map(function (g) { return g.nombre; });
-    return { nivel: nivel, pintado: !!pantalla, campo: campo, arcmin: arcmin };
+    return { nivel: nivel, pintado: !!pantalla, campo: campo, arcmin: arcmin, aviso: (res && res.aviso) || '' };
   });
 }
 
@@ -250,6 +250,16 @@ var M78 = { ra: 86.69092, dec: 0.07931, gaia: 'gaia_ngc2068.csv' };
 var CASOS = [
   { nombre: 'M78 · 457 mm 190× SQM 21,2', obj: M78, D: 457.2, M: 190, sqm: 21.2, canto: false },
   { nombre: 'M78 · 203 mm 100× SQM 20,5', obj: M78, D: 203, M: 100, sqm: 20.5, canto: false },
+  /* Centrado en las cubiertas (ADR 0034): el borde de 20′ del parche de M78
+     queda a ~3′ de NGC 2064, dentro del campo. Sin canto también aquí. */
+  { nombre: 'NGC 2064 · 457 mm 190× SQM 21,2', obj: { ra: 86.5766, dec: 0.0059, gaia: 'gaia_ngc2068.csv' },
+    D: 457.2, M: 190, sqm: 21.2, cubierta: true },
+  { nombre: 'NGC 2064 · 203 mm 100× SQM 20,5', obj: { ra: 86.5766, dec: 0.0059, gaia: 'gaia_ngc2068.csv' },
+    D: 203, M: 100, sqm: 20.5, cubierta: true },
+  { nombre: 'NGC 2067 · 457 mm 190× SQM 21,2', obj: { ra: 86.6328, dec: 0.1313, gaia: 'gaia_ngc2068.csv' },
+    D: 457.2, M: 190, sqm: 21.2, cubierta: true },
+  { nombre: 'NGC 2067 · 203 mm 100× SQM 20,5', obj: { ra: 86.6328, dec: 0.1313, gaia: 'gaia_ngc2068.csv' },
+    D: 203, M: 100, sqm: 20.5, cubierta: true },
   // Controles: recorte que llega a cielo oscuro. Si el detector los marcara,
   // estaría midiendo estructura y no costura.
   { nombre: 'control M57 · 457 mm 190× SQM 21,2', obj: { ra: 283.39587, dec: 33.02858, gaia: 'gaia_ngc6720.csv' },
@@ -268,7 +278,15 @@ CASOS.reduce(function (cadena, caso) {
          mirar qué ha encontrado el detector. */
       if (process.env.COSTURA_PNG) volcar(r.nivel, canto, caso.nombre);
       ok(r.pintado, 'la capa pinta');
-      ok(senal > 0.2, 'el objeto apuntado sigue visible (' + (100 * senal).toFixed(0) + ' % de r<1′ sobre el fondo)');
+      if (caso.cubierta) {
+        /* Su luz va en el parche de M78, con el brillo de M78, y hoy no llega
+           al umbral (0 % medido): no se exige verla, se exige que se DIGA. */
+        console.log('  ·     visibilidad del apuntado: ' + (100 * senal).toFixed(0) + ' % de r<1′');
+        ok(/vecina que la contiene/.test(r.aviso) && !/servici/i.test(r.aviso),
+           'la cubierta avisa de dónde se pinta («' + r.aviso + '»)');
+      } else {
+        ok(senal > 0.2, 'el objeto apuntado sigue visible (' + (100 * senal).toFixed(0) + ' % de r<1′ sobre el fondo)');
+      }
       ok(canto.run < RUN, 'sin canto recto ≥ ' + RUN + ' px y ≥ ' + T + ' niveles — el más largo: ' + describe(canto));
     });
   });

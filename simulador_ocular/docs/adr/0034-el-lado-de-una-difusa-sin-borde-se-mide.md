@@ -48,8 +48,10 @@ cuadrado y cortando nebulosa en el borde.
    pedir **ese mismo recorte vecino** a la escala del peldaño. Es una
    desviación consciente de «mismo lado» del ADR 0028.
 3. **Si ningún peldaño llega, se publica el tope** con `marco.llega = false` en
-   el sidecar. Es la lista de revisión, no un veredicto oculto. Sin cielo vecino
-   con que medir, se queda el lado de catálogo y el sidecar dice por qué.
+   el sidecar, junto con la escalera entera y el peor cuadrado de cada peldaño.
+   Hoy solo consta ahí: el informe del banco (`textoInforme`) todavía no lo
+   lista. Sin cielo vecino con que medir, se queda el lado de catálogo y el
+   sidecar dice por qué.
 4. **Un parche medido cubre a las difusas sin borde real cuyo centro contiene.**
    La cubierta sale `fila` con motivo `cubierta` y no pinta: su luz va dentro
    de la imagen del dueño.
@@ -59,7 +61,9 @@ cuadrado y cortando nebulosa en el borde.
    - Orden de dueños, puro de datos: primero el que llega al cielo, luego el
      lado mayor y luego el nombre.
    - Un objeto cubierto no cubre a nadie.
-   - Una cubierta no avisa de nada: el objeto se ve.
+   - Una cubierta **avisa**: se pinta dentro de la imagen de la vecina que la
+     contiene, con el brillo de esa, y su nebulosidad propia puede no verse. No
+     menciona servicios ni falta de imagen, porque la imagen está.
 5. **El runtime pinta con el lado de la textura.** El manifiesto lleva el lado
    exacto en la columna 7 (`ps1LadoDeFila`). `ancho·escalaAs/60` no vale:
    difiere en la 4.ª cifra y movería bits de todo el banco. Sin columna, el
@@ -86,9 +90,11 @@ Con el manifiesto nuevo, `test_costura_parches.js` sale verde:
 
 - **La luz de NGC 2064 y NGC 2067 deja de verse.** El parche de M78 reparte la
   magnitud de M78 por 20′, y la nebulosidad de las cubiertas queda bajo el
-  umbral. Es coherente (una sola ganancia, sin cantos) pero más pobre que el
-  cielo. Si importa, la conversación es sobre las magnitudes de esas filas
-  (ADR 0031, μ asumida), no sobre el pintado.
+  umbral: centrado en cualquiera de las dos, 0 % de r<1′ sobre el fondo con
+  457 mm a 190× y con 203 mm a 100×, sin canto en ninguno, y el aviso de
+  `cubierta` lo dice. Es coherente (una sola ganancia, sin cantos) pero más
+  pobre que el cielo. Si importa, la conversación es sobre las magnitudes de
+  esas filas (ADR 0031, μ asumida), no sobre el pintado.
 - **Las texturas de lado medido pesan más.** Una de 20′ son unos 7,8 MB frente
   a 0,4 MB.
 - **El resto del banco no está regenerado.** Las otras difusas que este ADR
@@ -106,4 +112,7 @@ Con el manifiesto nuevo, `test_costura_parches.js` sale verde:
   `ps1CapaGalaxias`. Rojo en `c60b2a8`, verde con este ADR.
 - `scripts/test_dso_texturas.js`, sección «El lado medido»: escalera, marco
   por cuadrados, cobertura y reanudación.
-- `scripts/test_fuente_parche.js`: `cubierta` no avisa ni pide nada.
+- `scripts/test_costura_parches.js` también centrado en NGC 2064 y NGC 2067:
+  sin canto, y con el aviso de `cubierta`.
+- `scripts/test_fuente_parche.js`: `cubierta` dice dónde se pinta, no habla de
+  servicios ni de falta de imagen, y no pide nada.
