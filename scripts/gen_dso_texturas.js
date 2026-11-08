@@ -626,14 +626,22 @@ function medirLado(f, gal0, escalera, conLado) {
         marco.motivo = vec0.motivo || 'celda-perdida';
         return { gal: gal0, p: p0, vecino: vec0, marco: marco };
       }
+      /* «Misma escala» RELATIVA, al 1 %: el ceil de ps1SalidaParche y el
+         redondeo de fitscut dejan peldaños a 0,499 cuando el vecino está a
+         0,500 (NGC 2170 y cuatro más a 4,05′), y σ por píxel va con la
+         escala: un 0,2 % de escala es un 0,2 % de σ. Con la tolerancia
+         absoluta de 1e-3 el peldaño quedaba sin juzgar —el vecino re-pedido
+         vuelve a 0,500— y la escalera se paraba en el anterior. Lo que la
+         tolerancia protege es el salto de verdad: el tope de 20′ a 0,586. */
+      function mismaEscala(a, b) { return Math.abs(a - b) <= 0.01 * b; }
       function vecinoA(escalaAs) {
-        if (Math.abs(escalaAs - vec0.escalaAs) <= 1e-3) return Promise.resolve(vec0);
+        if (mismaEscala(escalaAs, vec0.escalaAs)) return Promise.resolve(vec0);
         var salidaV = Math.round(vec0.ladoArcmin * 60 / escalaAs);
         return bajar(vec0.ra, vec0.dec, vec0.ladoArcmin, salidaV).then(function (q) {
           var out = Object.assign({}, vec0, { escalaAs: q.escalaAs, celdas: celdasDe(q) });
           delete out.cielo; delete out.sigma; delete out.px;
           if (celdaPerdida(q)) { out.motivo = 'celda-perdida'; return out; }
-          if (Math.abs(q.escalaAs - escalaAs) > 1e-3) { out.motivo = 'otra-escala'; out.escalaParcheAs = escalaAs; return out; }
+          if (!mismaEscala(q.escalaAs, escalaAs)) { out.motivo = 'otra-escala'; out.escalaParcheAs = escalaAs; return out; }
           var c = PS1.ps1CieloCampo(q.datos);
           if (!c.n) { out.motivo = 'sin-cobertura'; return out; }
           out.cielo = c.cielo; out.sigma = c.sigma; out.px = c.n;

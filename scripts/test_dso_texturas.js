@@ -240,6 +240,24 @@ console.log('\nEl lado medido:');
   var esc = PS1.ps1EscaleraLados(4.05).map(function (l) { return +l.toFixed(3); });
   ok(JSON.stringify(esc) === JSON.stringify([4.05, 6.075, 9.112, 13.669, 20]),
      'la escalera es ×1,5 desde el lado de catálogo y acaba en el tope (' + esc.join(', ') + ')');
+  /* Los peldaños derivados no pueden arrastrar coma flotante al ceil de la
+     salida: 1,80·1,5² = 4,050000000000001 daba 487 px (0,499″/px) y el
+     generador no podía juzgar ese peldaño contra un vecino a 0,500, así que
+     cinco nebulosas se quedaron a 2,70′ sin llegar al cielo. */
+  var peorEsc = 0;
+  [1.5, 1.8, 2.21, 2.7, 3.12, 4.05, 4.409000000000001, 6.36, 9, 12.73].forEach(function (l0) {
+    PS1.ps1EscaleraLados(l0).slice(1).forEach(function (l) {
+      /* Los que tocan el tope de píxeles (≥ 17,07′ y el de 20′) cambian de
+         escala a propósito (regla C); ahí el vecino se re-pide a su escala. */
+      var s = PS1.ps1SalidaParche(l);
+      if (s >= PS1.cfg.salidaMax) return;
+      var e = l * 60 / s;
+      peorEsc = Math.max(peorEsc, Math.abs(e - PS1.cfg.escalaObjetivoAs) / PS1.cfg.escalaObjetivoAs);
+    });
+  });
+  ok(peorEsc < 0.002, 'ningún peldaño bajo el tope se aparta de 0,5″/px más de un 0,2 % (' +
+     (100 * peorEsc).toFixed(3) + ' %)');
+  ok(PS1.ps1EscaleraLados(1.8)[2] === 4.05, 'y 1,80·1,5² es 4,05 exacto, no 4,050000000000001');
   ok(PS1.ps1LadoSeMide('RfN') && PS1.ps1LadoSeMide('HII') && PS1.ps1LadoSeMide('EmN') &&
      !PS1.ps1LadoSeMide('PN') && !PS1.ps1LadoSeMide('SNR') && !PS1.ps1LadoSeMide(''),
      'se mide el lado de las difusas sin borde real, no el de compactas ni galaxias');
