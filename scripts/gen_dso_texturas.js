@@ -515,9 +515,30 @@ function generar(nombre, dir) {
      manifiesto sale del banco (`filasControl`), sin disco y sin red. */
   if (motivo) throw new Error(nombre + ' no admite textura (' + motivo + '): su fila la pone el manifiesto, no una textura');
 
+  var plan = planDe(f, dir);
+  if (plan.resuelto) {
+    var r = plan.resuelto;
+    console.log('ya estaba' + (r.y.estado === 'fila' ? ' (fila)' : '') + ': ' + plan.id + '.' + r.v +
+      ' en ' + path.relative(RAIZ, r.y.dir));
+    return Promise.resolve(r.y.estado);
+  }
+  var lado0 = plan.escalera[0], gal0 = plan.conLado(lado0);
+  return (plan.mide ? medirLado(f, gal0, plan.escalera, plan.conLado)
+                    : bajar(gal0.ra, gal0.dec, lado0, PS1.ps1SalidaParche(lado0)).then(function (p) {
+                        return { gal: gal0, p: p, vecino: null, marco: null };
+                      }))
+    .then(function (m) { return publicar(f, m.gal, m.p, m.vecino, m.marco, plan.id, dir); });
+}
+
+/* Qué haría `generar` con una fila, sin red: su escalera de lados y si alguno
+   de sus peldaños ya está resuelto en disco. Es la ÚNICA decisión de
+   reanudación; `--seco` la usa tal cual, o diría «ya está» de lo que la tirada
+   real rehace (pasaba con la ley del lado medido: el seco no sabía de ella).
+   Devuelve {mide, escalera, id, conLado, resuelto: {y, v, lado} | null}. */
+function planDe(f, dir) {
   var lado0 = PS1.ps1LadoArcmin(f[4]);
   var campo = PS1.ps1GalaxiasDelCampo([f], f[2], f[3], lado0);
-  if (!campo.length) throw new Error(nombre + ': ps1GalaxiasDelCampo no lo devuelve');
+  if (!campo.length) throw new Error(f[0] + ': ps1GalaxiasDelCampo no lo devuelve');
   /* El lado, explícito en cada peldaño: el generador no carga el manifiesto,
      pero quien lo llame desde un proceso que sí (un test) no debe heredar el
      lado publicado a través de ps1LadoDeFila. */
@@ -528,23 +549,59 @@ function generar(nombre, dir) {
      antes de pedir nada y la tirada sigue siendo reanudable. */
   var mide = PS1.ps1LadoSeMide(f[12]);
   var escalera = mide ? PS1.ps1EscaleraLados(lado0) : [lado0];
-  var gal0 = conLado(lado0);
-  var id = PS1.ps1IdTextura(gal0.nombre);
-  for (var k = 0; k < escalera.length; k++) {
+  var id = PS1.ps1IdTextura(campo[0].nombre), resuelto = null;
+  for (var k = 0; k < escalera.length && !resuelto; k++) {
     var gk = conLado(escalera[k]), vk = version(gk, PS1.ps1SalidaParche(gk.ladoArcmin));
     var y = yaResuelto(dir, id, vk, mide);
-    if (y) {
-      console.log('ya estaba' + (y.estado === 'fila' ? ' (fila)' : '') + ': ' + id + '.' + vk +
-        ' en ' + path.relative(RAIZ, y.dir));
-      return Promise.resolve(y.estado);
-    }
+    if (y) resuelto = { y: y, v: vk, lado: escalera[k] };
   }
+  return { mide: mide, escalera: escalera, id: id, conLado: conLado, resuelto: resuelto };
+}
 
-  return (mide ? medirLado(f, gal0, escalera, conLado)
-               : bajar(gal0.ra, gal0.dec, lado0, PS1.ps1SalidaParche(lado0)).then(function (p) {
-                   return { gal: gal0, p: p, vecino: null, marco: null };
-                 }))
-    .then(function (m) { return publicar(f, m.gal, m.p, m.vecino, m.marco, id, dir); });
+/* Peticiones a STScI que costaría un objeto pendiente, en recortes: [mín, máx].
+   Sin medir, 2 (el suyo y su campo vecino). Midiendo, el mínimo es el mismo
+   (llega en el primer peldaño) y el máximo es la escalera entera más el
+   vecino, más el vecino otra vez a la escala del tope si el tope cambia de
+   ″/px (a 20′ va a 0,586). Es lo que medirLado pide, contado sin pedirlo. */
+function peticionesDe(plan) {
+  if (!plan.mide) return [PARCHES_POR_OBJETO, PARCHES_POR_OBJETO];
+  var esc0 = plan.escalera[0] * 60 / PS1.ps1SalidaParche(plan.escalera[0]);
+  var tope = plan.escalera[plan.escalera.length - 1];
+  var cambia = Math.abs(tope * 60 / PS1.ps1SalidaParche(tope) - esc0) > 1e-3;
+  return [2, plan.escalera.length + 1 + (cambia ? 1 : 0)];
+}
+
+/* Pista, sin píxeles, de cómo acabará la escalera de un objeto que ya tiene
+   textura de la ley anterior: su sidecar trae el cielo del MARCO entero y el
+   del campo vecino. Si el marco ya está sobre el suelo del anclaje, el primer
+   peldaño seguro que no llega y el lado crece. Si está debajo, puede llegar en
+   el primero —o no: la ley mira por cuadrados, y un tramo encendido de un solo
+   lado no mueve la mediana del marco entero (NGC 2064)—. Es una pista para
+   decidir la tirada, no el veredicto: ese sale de los píxeles. */
+function pistaDe(dir, nombre, id) {
+  var man = manifiestoCommiteado(), fila = null;
+  for (var i = 0; i < man.length; i++) if (man[i][0] === nombre) { fila = man[i]; break; }
+  if (!fila || fila[1] !== 'imagen') return fila ? 'publicada como fila (' + fila[6] + ')' : 'sin fila publicada';
+  var sc = null;
+  [dir, FIXTURES].forEach(function (d) {
+    var p = path.join(d, id + '.' + fila[2] + '.json');
+    if (!sc && fs.existsSync(p)) sc = JSON.parse(fs.readFileSync(p, 'utf8'));
+  });
+  var v = sc && sc.vecino;
+  if (!sc || !sc.auditoria || !v || !(v.sigma > 0)) return 'sin cielo vecino publicado: no se puede anticipar';
+  var exceso = (sc.auditoria.cielo - v.cielo) / v.sigma;
+  return exceso > PS1.cfg.kRuido
+    ? 'marco a ' + exceso.toFixed(1) + 'σ: CRECERÁ'
+    : 'marco a ' + exceso.toFixed(1) + 'σ: puede quedarse en su lado';
+}
+
+var manifiestoCache = null;
+function manifiestoCommiteado() {
+  if (!manifiestoCache) {
+    manifiestoCache = (new Function('window', fs.readFileSync(MANIFIESTO, 'utf8') +
+      ';return window.BITACORA_DSO_TEXTURAS;'))({});
+  }
+  return manifiestoCache;
 }
 
 /* La escalera de un objeto que se mide. Devuelve el peldaño elegido: el
@@ -569,14 +626,22 @@ function medirLado(f, gal0, escalera, conLado) {
         marco.motivo = vec0.motivo || 'celda-perdida';
         return { gal: gal0, p: p0, vecino: vec0, marco: marco };
       }
+      /* «Misma escala» RELATIVA, al 1 %: el ceil de ps1SalidaParche y el
+         redondeo de fitscut dejan peldaños a 0,499 cuando el vecino está a
+         0,500 (NGC 2170 y cuatro más a 4,05′), y σ por píxel va con la
+         escala: un 0,2 % de escala es un 0,2 % de σ. Con la tolerancia
+         absoluta de 1e-3 el peldaño quedaba sin juzgar —el vecino re-pedido
+         vuelve a 0,500— y la escalera se paraba en el anterior. Lo que la
+         tolerancia protege es el salto de verdad: el tope de 20′ a 0,586. */
+      function mismaEscala(a, b) { return Math.abs(a - b) <= 0.01 * b; }
       function vecinoA(escalaAs) {
-        if (Math.abs(escalaAs - vec0.escalaAs) <= 1e-3) return Promise.resolve(vec0);
+        if (mismaEscala(escalaAs, vec0.escalaAs)) return Promise.resolve(vec0);
         var salidaV = Math.round(vec0.ladoArcmin * 60 / escalaAs);
         return bajar(vec0.ra, vec0.dec, vec0.ladoArcmin, salidaV).then(function (q) {
           var out = Object.assign({}, vec0, { escalaAs: q.escalaAs, celdas: celdasDe(q) });
           delete out.cielo; delete out.sigma; delete out.px;
           if (celdaPerdida(q)) { out.motivo = 'celda-perdida'; return out; }
-          if (Math.abs(q.escalaAs - escalaAs) > 1e-3) { out.motivo = 'otra-escala'; out.escalaParcheAs = escalaAs; return out; }
+          if (!mismaEscala(q.escalaAs, escalaAs)) { out.motivo = 'otra-escala'; out.escalaParcheAs = escalaAs; return out; }
           var c = PS1.ps1CieloCampo(q.datos);
           if (!c.n) { out.motivo = 'sin-cobertura'; return out; }
           out.cielo = c.cielo; out.sigma = c.sigma; out.px = c.n;
@@ -826,11 +891,56 @@ function correrBanco(dir, seco) {
       var salidaSeca = PS1.ps1SalidaParche(o.gal.ladoArcmin);
       var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, salidaSeca);
       if (seco) {
-        var y = yaResuelto(dir, id, v);
-        console.log('  ' + (y ? 'ya está (' + y.estado + ')' : 'pediría') + '  ' + id + '.' + v +
-          '  ' + o.gal.ladoArcmin.toFixed(2) + '′ → ' + salidaSeca + ' px (' +
-          (o.gal.ladoArcmin * 60 / salidaSeca).toFixed(3) + '″/px)');
-        if (y) estado.ya++; else estado.pendientes++;
+        /* La MISMA decisión que generar (planDe), no una copia: antes el seco
+           llamaba a yaResuelto sin la escalera ni `exigeMarco`, y daba por
+           hechas las texturas que la ley del lado medido rehace. */
+        var plan = planDe(o.fila, dir), r = plan.resuelto;
+        if (r) {
+          console.log('  ya está (' + r.y.estado + ')  ' + id + '.' + r.v + '  ' + r.lado.toFixed(2) + '′');
+          estado.ya++;
+          return;
+        }
+        var pet = peticionesDe(plan), l0 = plan.escalera[0], s0 = PS1.ps1SalidaParche(l0);
+        /* Los PNG no van en git: en un checkout el banco es solo sidecars. Un
+           sidecar de un peldaño sin su PNG al lado no es trabajo de la ley, es
+           disco: la tirada lo baja y sale el MISMO nombre. Se dice aparte para
+           que la lista de lo que la ley cambia no se infle con eso. */
+        var soloPng = null;
+        plan.escalera.forEach(function (l) {
+          var vl = version(plan.conLado(l), PS1.ps1SalidaParche(l));
+          [dir, FIXTURES].forEach(function (d) {
+            var p = path.join(d, id + '.' + vl + '.json');
+            if (soloPng || !fs.existsSync(p)) return;
+            var s = JSON.parse(fs.readFileSync(p, 'utf8'));
+            if (!plan.mide || s.marco) soloPng = { v: vl, lado: l };
+          });
+        });
+        var porque = soloPng
+          ? 'SOLO FALTA EL PNG en disco (sidecar ' + id + '.' + soloPng.v + ' a ' + soloPng.lado.toFixed(2) +
+            '′ ya escrito' + (plan.mide ? ' con su lado medido' : '') + '): sale el mismo nombre'
+          : plan.mide
+          ? (plan.escalera.length > 1 ? 'lado medido, escalera ' +
+              plan.escalera.map(function (l) { return l.toFixed(2); }).join('→') + '′' : 'lado medido, ya en el tope') +
+            ' · ' + pistaDe(dir, o.nombre, id)
+          : 'sin textura';
+        /* Sin el PNG, generar no reanuda: vuelve a subir la escalera hasta el
+           peldaño que ya se midió (es determinista, sale el mismo), con su
+           vecino y el vecino a la escala de ese peldaño si cambia. */
+        if (soloPng) {
+          var k = plan.escalera.indexOf(soloPng.lado), n = PARCHES_POR_OBJETO;
+          if (plan.mide && k > 0) {
+            var e0 = l0 * 60 / s0, ek = soloPng.lado * 60 / PS1.ps1SalidaParche(soloPng.lado);
+            n = (k + 1) + 1 + (Math.abs(ek - e0) > 1e-3 ? 1 : 0);
+          }
+          pet = [n, n];
+        }
+        console.log('  pediría  ' + id + '  ' + l0.toFixed(2) + '′ → ' + s0 + ' px (' +
+          (l0 * 60 / s0).toFixed(3) + '″/px) · ' + pet[0] + (pet[1] > pet[0] ? '–' + pet[1] : '') +
+          ' recortes · ' + porque);
+        estado.pendientes++;
+        estado.pendientesDe = estado.pendientesDe || [];
+        estado.pendientesDe.push({ nombre: o.nombre, clase: o.fila[12] || 'galaxia', mide: plan.mide && !soloPng,
+                                   soloPng: !!soloPng, pet: pet, porque: porque });
         return;
       }
       /* `generar` avisa de lo suyo tirando —también antes de la primera promesa,
@@ -1109,10 +1219,26 @@ function cerrar(estado) {
      un informe reescritos tras una tirada real parcial son justo lo que no debe
      pasar por mirar. */
   if (estado && estado.seco) {
-    console.log('\nen seco: ' + estado.ya + ' ya está(n), ' + estado.pendientes +
-      ' pendiente(s) · ' + PARCHES_POR_OBJETO * estado.pendientes + ' parches (' +
-      PARCHES_POR_OBJETO + ' por objeto: el suyo y su campo vecino)' + (estado.fallos.length ? ', ' + estado.fallos.length + ' fallo(s)' : '') +
+    var pend = estado.pendientesDe || [], min = 0, max = 0, medidos = 0, crecen = 0, png = 0;
+    pend.forEach(function (p) {
+      min += p.pet[0]; max += p.pet[1];
+      if (p.mide) medidos++;
+      if (p.soloPng) png++;
+      if (/CRECERÁ/.test(p.porque)) crecen++;
+    });
+    console.log('\nen seco: ' + estado.ya + ' ya está(n), ' + estado.pendientes + ' pendiente(s)' +
+      (medidos ? ' (' + medidos + ' por lado medido, ' + crecen + ' de ellas crecerán seguro)' : '') +
+      (png ? ' · ' + png + ' de las pendientes solo por falta del PNG en disco' : '') +
+      ' · ' + min + (max > min ? '–' + max : '') + ' recortes a STScI' +
+      (estado.fallos.length ? ', ' + estado.fallos.length + ' fallo(s)' : '') +
       '. Ni manifiesto ni informe tocados.');
+    if (pend.length) {
+      console.log('pendientes:');
+      pend.forEach(function (p) {
+        console.log('  ' + p.nombre + '  [' + p.clase + ']  ' + p.pet[0] + (p.pet[1] > p.pet[0] ? '–' + p.pet[1] : '') +
+          ' recortes · ' + p.porque);
+      });
+    }
     if (estado.fallos.length) { console.error('  ' + estado.fallos.join('\n  ')); process.exit(1); }
     return;
   }

@@ -385,9 +385,18 @@
      hasta el tope, que se prueba siempre como último peldaño. Determinista:
      es lo que deja al generador saber de antemano los nombres posibles de la
      textura (version() lleva el lado) y seguir siendo reanudable. */
+  /* El primer peldaño va TAL CUAL —es el lado de catálogo y su textura de la
+     ley anterior se llama por él—; los derivados, redondeados a la milésima de
+     minuto. Sin redondear, 1,80·1,5·1,5 = 4,050000000000001 y el ceil de
+     ps1SalidaParche da 487 px en vez de 486: escala 0,499 y un peldaño que el
+     generador no podía juzgar contra un vecino a 0,500 (NGC 2170 y cuatro más
+     se quedaron en 2,70′). */
   function ps1EscaleraLados(lado0) {
-    var out = [], l = (lado0 > 0) ? lado0 : PS1.ladoMin;
-    while (l < PS1.ladoMax) { out.push(l); l *= PS1.ladoPaso; }
+    var out = [], base = (lado0 > 0) ? lado0 : PS1.ladoMin, l = base;
+    while (l < PS1.ladoMax) {
+      out.push(l === base ? l : Math.round(l * 1000) / 1000);
+      l *= PS1.ladoPaso;
+    }
     out.push(PS1.ladoMax);
     return out;
   }

@@ -1,0 +1,107 @@
+{
+ "nombre": "NGC1788",
+ "version": "9c4a3f42",
+ "generador": "gen_dso_texturas 2",
+ "ra": 76.72175,
+ "dec": -3.34097,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-11-08"
+ },
+ "ancho": 486,
+ "alto": 486,
+ "ladoArcmin": 4.05,
+ "escalaAs": 0.5000000121071928,
+ "wcs": {
+  "ra0": 75.9999999999974,
+  "dec0": -1.99999999999994,
+  "x0": 5432.25,
+  "y0": 9901.25,
+  "gx": -0.000138888892251998,
+  "gy": 0.000138888892251998
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 96.01269277954101,
+  "uMin": -1.7925730130028934,
+  "uMax": 9.45427433025911,
+  "centinela": 0
+ },
+ "celdas": {
+  "pedidas": 1,
+  "cosidas": 1
+ },
+ "vecino": {
+  "ra": 76.76682661222947,
+  "dec": -3.34097,
+  "direccion": "E",
+  "offsetArcmin": 2.7,
+  "ladoArcmin": 1.8,
+  "difusaMasCercaArcmin": 98.10920982341824,
+  "escalaAs": 0.5000000121071928,
+  "celdas": {
+   "pedidas": 1,
+   "cosidas": 1
+  },
+  "cielo": 165.62149047851562,
+  "sigma": 136.67763995361327,
+  "px": 46656
+ },
+ "marco": {
+  "regla": "lado-medido",
+  "ladoCatalogo": 1.8,
+  "peldanos": [
+   {
+    "lado": 1.8,
+    "escalaAs": 0.5000000121071928,
+    "llega": false,
+    "suelo": 370.6379504089355,
+    "peor": {
+     "N": 6735.72509765625,
+     "S": 8628.1572265625,
+     "E": 3544.037841796875,
+     "O": 1536.4949951171875
+    }
+   },
+   {
+    "lado": 2.7,
+    "escalaAs": 0.5000000121071928,
+    "llega": false,
+    "suelo": 370.6379504089355,
+    "peor": {
+     "N": 563.3072509765625,
+     "S": 496.21856689453125,
+     "E": 1045.7459716796875,
+     "O": 900.3932495117188
+    }
+   },
+   {
+    "lado": 4.05,
+    "escalaAs": 0.5000000121071928,
+    "llega": true,
+    "suelo": 370.6379504089355,
+    "peor": {
+     "N": 168.72039794921875,
+     "S": 197.3679656982422,
+     "E": 360.9051513671875,
+     "O": 130.82980346679688
+    }
+   }
+  ],
+  "llega": true,
+  "ladoElegido": 4.05
+ },
+ "auditoria": {
+  "cielo": 66.72061157226562,
+  "sigma": 96.01269277954101,
+  "fracAusencia": 0.0004487798269234026,
+  "fracAusenciaEscena": 0.0018549953625115938,
+  "bloqueMayorFrac": 0.0004487798269234026,
+  "bloqueRellenoCaja": 0.6794871794871795,
+  "bloqueComponentes": 1,
+  "bytes": 451523,
+  "errCuantMaxSigma": 0.0004357715464292284,
+  "errCuantMaxRel": 0.00008741808465539957
+ }
+}

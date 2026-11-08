@@ -106,6 +106,42 @@ Con el manifiesto nuevo, `test_costura_parches.js` sale verde:
 - **Las estrellas brillantes en el marco cuentan como luz.** Solo cuesta lado
   (llevan a NGC 2064 y NGC 2067 al tope), nunca un canto.
 
+## Enmienda (2026-11-08): las 11 que crecían seguro
+
+El `--seco` corregido (PR #522) separó lo que esta ley cambia de lo que solo es
+un PNG que falta en disco. Se regeneraron las 11 cuyo marco publicado ya estaba
+sobre el suelo:
+
+| Objeto | Lado antes → medido | Escala |
+|---|---|---|
+| NGC1788, NGC1999, NGC2247 | 1,80′ → 4,05′ | 0,500 |
+| NGC2170 | 1,80′ → 6,075′ | 0,500 |
+| NGC2245 | 1,80′ → 9,113′ | 0,500 |
+| IC0435 | 3,12′ → 4,68′ | 0,500 |
+| NGC6590 | 3,118′ → 4,677′ | 0,499 |
+| NGC2182 | 2,205′ → 4,961′ | 0,500 |
+| IC0466 | 1,50′ → 7,594′ | 0,500 |
+| NGC2261 | 1,50′ → 11,391′ | 0,500 |
+| NGC2327 | 1,50′ → 17,086′ | 0,501 |
+
+Las 11 llegan al cielo, ninguna toca el tope, ninguna cubre a otra y ninguna
+se solapa con otro parche del banco. El único solape que queda es M51 con
+NGC 5195, galaxias, anterior a esta ley.
+
+**Fallo encontrado en la primera tirada.**
+- **Qué pasó:** cinco nebulosas (NGC 1788, 1999, 2170, 2245 y 2247) se
+  quedaron en 2,70′ sin llegar al cielo.
+- **Causa:** 1,80·1,5² = 4,050000000000001, y el `ceil` de `ps1SalidaParche`
+  daba 487 px en vez de 486. La escala salía a 0,499 contra un vecino a
+  0,500, la tolerancia absoluta de 1e-3 dejaba el peldaño sin juzgar y la
+  escalera se paraba en el anterior.
+- **Arreglo:**
+  - los peldaños derivados se redondean a la milésima de minuto; el primero
+    no, porque es el nombre de la textura vieja;
+  - «misma escala» es ahora relativa, al 1 %;
+  - `test_dso_texturas` vigila que ningún peldaño bajo el tope de píxeles se
+    aparte más de un 0,2 % de 0,5″/px.
+
 ## Tests
 
 - `scripts/test_costura_parches.js`: el síntoma, sobre la pantalla de

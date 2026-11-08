@@ -1,0 +1,95 @@
+{
+ "nombre": "IC0435",
+ "version": "f34727a5",
+ "generador": "gen_dso_texturas 2",
+ "ra": 85.75238,
+ "dec": -2.31261,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-11-08"
+ },
+ "ancho": 562,
+ "alto": 562,
+ "ladoArcmin": 4.68,
+ "escalaAs": 0.49955516153643237,
+ "wcs": {
+  "ra0": 83.9999999999972,
+  "dec0": -1.99999999999994,
+  "x0": 12902.7300181985,
+  "y0": 2541.01118534803,
+  "gx": -0.000138765322649009,
+  "gy": 0.000138765322649009
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 107.80679546127318,
+  "uMin": -3.371496717864614,
+  "uMax": 9.324282173337114,
+  "centinela": 0
+ },
+ "celdas": {
+  "pedidas": 1,
+  "cosidas": 1
+ },
+ "vecino": {
+  "ra": 85.83044357978275,
+  "dec": -2.31261,
+  "direccion": "E",
+  "offsetArcmin": 4.68,
+  "ladoArcmin": 3.1199999999999997,
+  "difusaMasCercaArcmin": 25.41262941261195,
+  "escalaAs": 0.49933333018593723,
+  "celdas": {
+   "pedidas": 1,
+   "cosidas": 1
+  },
+  "cielo": -6.959074974060059,
+  "sigma": 99.05823864383697,
+  "px": 140625
+ },
+ "marco": {
+  "regla": "lado-medido",
+  "ladoCatalogo": 3.1199999999999997,
+  "peldanos": [
+   {
+    "lado": 3.1199999999999997,
+    "escalaAs": 0.49933333018593723,
+    "llega": false,
+    "suelo": 141.62828299169541,
+    "peor": {
+     "N": 280.7022399902344,
+     "S": 285.3850402832031,
+     "E": 367.0156555175781,
+     "O": 405.9177551269531
+    }
+   },
+   {
+    "lado": 4.68,
+    "escalaAs": 0.49955516153643237,
+    "llega": true,
+    "suelo": 141.62828299169541,
+    "peor": {
+     "N": 80.71503448486328,
+     "S": 59.16273880004883,
+     "E": 138.24375915527344,
+     "O": 61.60594177246094
+    }
+   }
+  ],
+  "llega": true,
+  "ladoElegido": 4.68
+ },
+ "auditoria": {
+  "cielo": 26.38437271118164,
+  "sigma": 107.80679546127318,
+  "fracAusencia": 0.000782031635870873,
+  "fracAusenciaEscena": 0.0014374923615031398,
+  "bloqueMayorFrac": 0.000782031635870873,
+  "bloqueRellenoCaja": 0.5880952380952381,
+  "bloqueComponentes": 1,
+  "bytes": 603401,
+  "errCuantMaxSigma": 0.0004817963259784346,
+  "errCuantMaxRel": 0.00009827403012940827
+ }
+}
