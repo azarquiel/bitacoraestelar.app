@@ -272,7 +272,11 @@ function escribirFila(dir, nombre, motivo, ra, dec, v, auditoria) {
    ausencia. Se mira en el directorio de salida y en las fixtures, que es donde
    viven las texturas del banco golden. La usan `generar` y el recorrido en seco,
    que si no acabarían discrepando. */
-function yaResuelto(dir, id, v) {
+/* `exigeMarco` (ADR 0034): en una clase de lado medido, una textura escrita por
+   la ley anterior —sin `marco` en el sidecar— no resuelve nada aunque su
+   nombre coincida con el del primer peldaño: nadie miró si su marco llegaba al
+   cielo, que es justo lo que el canto de M78 demostró que no se puede suponer. */
+function yaResuelto(dir, id, v, exigeMarco) {
   var dirs = dir === FIXTURES ? [dir] : [dir, FIXTURES];
   for (var i = 0; i < dirs.length; i++) {
     var fila = path.join(dirs[i], id + '.' + v + '.fila.json');
@@ -290,7 +294,9 @@ function yaResuelto(dir, id, v) {
          pero el sidecar está incompleto, y esa es la única corrida que lo puede
          arreglar —el nombre de fichero no cambia—. Lo que NO se reintenta es lo
          que el cielo decide: sin cobertura y otra escala saldrían igual. */
-      var motivo = (JSON.parse(fs.readFileSync(sc, 'utf8')).vecino || {}).motivo;
+      var scJson = JSON.parse(fs.readFileSync(sc, 'utf8'));
+      if (exigeMarco && !scJson.marco) continue;
+      var motivo = (scJson.vecino || {}).motivo;
       if (motivo === 'celda-perdida' || motivo === 'descarga-fallida') continue;
       return { dir: dirs[i], estado: 'ya' };
     }
@@ -355,9 +361,49 @@ function sidecarsUnicos(dir) {
 /* El texto, sin tocar el disco: es lo que compara el test. Escribir para volver
    a leer y restaurar era inocuo con seis filas; con setenta y cuatro, un test
    interrumpido deja el manifiesto bueno hecho un muñón (#258). */
+/* Quién cubre a quién (ADR 0034). Un parche de lado medido que creció hasta
+   contener el CENTRO de otra difusa sin borde real ya trae su luz: si las dos
+   pintasen, el solape iría dos veces y con dos ganancias distintas, que es el
+   canto que este ADR quita. La cubierta sale `fila` con motivo `cubierta` y
+   no pinta; el dueño la pinta dentro de su imagen.
+   Se resuelve aquí, sobre el banco ENTERO, y no en generar(): una tirada
+   `--solo` no sabe aún el lado final de sus vecinas. Orden de dueños, puro de
+   datos para que la imagen no cambie al reencuadrar: primero los que llegan al
+   cielo (un tope sin cielo no debe tragarse a quien sí llegó), luego el lado
+   mayor, luego el nombre. Un objeto ya cubierto no cubre a nadie. Las
+   compactas y las galaxias no se cubren: tienen borde o isofota propios.
+   Devuelve {nombre → nombre del dueño}. */
+function cubiertas(sidecars) {
+  var clase = {};
+  PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS).forEach(function (g) {
+    clase[PS1.ps1NombreFila(g)] = g[12] || '';
+  });
+  var duenos = sidecars.filter(function (s) {
+    return s.modelo !== 'fila' && s.marco && s.marco.regla === 'lado-medido' && s.ladoArcmin > 0;
+  }).sort(function (a, b) {
+    return ((b.marco.llega === true) - (a.marco.llega === true)) ||
+           (b.ladoArcmin - a.ladoArcmin) || (a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : 0);
+  });
+  var out = {};
+  duenos.forEach(function (d) {
+    if (out[d.nombre]) return;
+    var cos = Math.cos(d.dec * Math.PI / 180), media = d.ladoArcmin / 2;
+    sidecars.forEach(function (s) {
+      if (s === d || out[s.nombre] || !PS1.ps1LadoSeMide(clase[s.nombre])) return;
+      var de = Math.abs((((s.ra - d.ra) + 540) % 360) - 180) * cos * 60, dn = Math.abs(s.dec - d.dec) * 60;
+      if (de <= media && dn <= media) out[s.nombre] = d.nombre;
+    });
+  });
+  return out;
+}
+
 function textoManifiesto(dir) {
-  var filas = sidecarsUnicos(dir)
+  var unicos = sidecarsUnicos(dir), cubierta = cubiertas(unicos);
+  var filas = unicos
     .map(function (s) {
+      if (cubierta[s.nombre]) {
+        return { ra: s.ra, fila: [s.nombre, 'fila', s.version || '', 0, 0, 0, 'cubierta'] };
+      }
       return { ra: s.ra, fila: s.modelo === 'fila'
         ? [s.nombre, 'fila', s.version || '', 0, 0, 0, s.motivo]
         /* El lado EXACTO, el mismo número que entró en version(): el runtime
@@ -377,7 +423,7 @@ function textoManifiesto(dir) {
     '   Campos: [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo, ladoArcmin]\n' +
     '   (ladoArcmin solo en las de imagen: el lado con el que se generó y se pinta)\n' +
     '   modelo ∈ {imagen, fila}; motivo ∈ {"", sur, no-cabe, sin-cobertura,\n' +
-    '   pisada, ausencia-excesiva, celda-perdida}. Una fila que no está aquí se\n' +
+    '   pisada, ausencia-excesiva, celda-perdida, cubierta}. Una fila que no está aquí se\n' +
     '   pide al proxy mientras BitacoraPS1.cfg.proxyRespaldo siga encendido. */\n' +
     'window.BITACORA_DSO_TEXTURAS = [\n' + cuerpo + '\n];\n' };
 }
@@ -469,23 +515,129 @@ function generar(nombre, dir) {
      manifiesto sale del banco (`filasControl`), sin disco y sin red. */
   if (motivo) throw new Error(nombre + ' no admite textura (' + motivo + '): su fila la pone el manifiesto, no una textura');
 
-  var lado = PS1.ps1LadoArcmin(f[4]);
-  var campo = PS1.ps1GalaxiasDelCampo([f], f[2], f[3], lado);
+  var lado0 = PS1.ps1LadoArcmin(f[4]);
+  var campo = PS1.ps1GalaxiasDelCampo([f], f[2], f[3], lado0);
   if (!campo.length) throw new Error(nombre + ': ps1GalaxiasDelCampo no lo devuelve');
-  /* La resolución la decide el objeto, no una constante (regla C del §4.2 del
-     objetivo, fase 2 del ADR 0024). Entra en `version()`, así que cambiarla
-     renombra la textura: republicar es parte del trato, no un efecto secundario. */
-  var gal = campo[0], salida = PS1.ps1SalidaParche(gal.ladoArcmin), v = version(gal, salida);
-
-  var id = PS1.ps1IdTextura(gal.nombre), base = path.join(dir, id + '.' + v);
-  var y = yaResuelto(dir, id, v);
-  if (y) {
-    console.log('ya estaba' + (y.estado === 'fila' ? ' (fila)' : '') + ': ' + id +
-      ' en ' + path.relative(RAIZ, y.dir));
-    return Promise.resolve(y.estado);
+  /* El lado, explícito en cada peldaño: el generador no carga el manifiesto,
+     pero quien lo llame desde un proceso que sí (un test) no debe heredar el
+     lado publicado a través de ps1LadoDeFila. */
+  function conLado(l) { var g = Object.assign({}, campo[0]); g.ladoArcmin = l; return g; }
+  /* Lado medido (ADR 0034): una difusa sin borde real prueba la escalera
+     entera; el resto, solo su lado de catálogo, como siempre. La escalera es
+     determinista, así que todos los nombres posibles de la textura se conocen
+     antes de pedir nada y la tirada sigue siendo reanudable. */
+  var mide = PS1.ps1LadoSeMide(f[12]);
+  var escalera = mide ? PS1.ps1EscaleraLados(lado0) : [lado0];
+  var gal0 = conLado(lado0);
+  var id = PS1.ps1IdTextura(gal0.nombre);
+  for (var k = 0; k < escalera.length; k++) {
+    var gk = conLado(escalera[k]), vk = version(gk, PS1.ps1SalidaParche(gk.ladoArcmin));
+    var y = yaResuelto(dir, id, vk, mide);
+    if (y) {
+      console.log('ya estaba' + (y.estado === 'fila' ? ' (fila)' : '') + ': ' + id + '.' + vk +
+        ' en ' + path.relative(RAIZ, y.dir));
+      return Promise.resolve(y.estado);
+    }
   }
 
-  return bajar(gal.ra, gal.dec, gal.ladoArcmin, salida).then(function (p) {
+  return (mide ? medirLado(f, gal0, escalera, conLado)
+               : bajar(gal0.ra, gal0.dec, lado0, PS1.ps1SalidaParche(lado0)).then(function (p) {
+                   return { gal: gal0, p: p, vecino: null, marco: null };
+                 }))
+    .then(function (m) { return publicar(f, m.gal, m.p, m.vecino, m.marco, id, dir); });
+}
+
+/* La escalera de un objeto que se mide. Devuelve el peldaño elegido: el
+   primero cuyo marco llega al cielo, o el tope si ninguno llega (y entonces el
+   sidecar lo declara: `marco.llega = false`, a la lista de revisión). El cielo
+   y la σ son los del CAMPO VECINO del lado de catálogo —donde el ADR 0028 ya
+   midió cielo—, no los de un vecino del lado agrandado, que a 1,5·lado cae en
+   otra nebulosa en cuanto el complejo es grande (Orión B). Lo que el ADR 0028
+   exige es la misma ″/px, porque σ es por píxel: si el peldaño cambia de escala
+   (el tope de 20′ va a 0,586″/px), ese mismo recorte vecino se vuelve a pedir a
+   la escala del peldaño. Sin cielo vecino no hay con qué medir: se queda en el
+   lado de catálogo, que es lo de siempre, y el sidecar dice por qué. */
+function medirLado(f, gal0, escalera, conLado) {
+  var lado0 = escalera[0], salida0 = PS1.ps1SalidaParche(lado0);
+  return bajar(gal0.ra, gal0.dec, lado0, salida0).then(function (p0) {
+    var fits0 = { ancho: p0.ancho, alto: p0.alto, datos: p0.datos, escalaAs: p0.escalaAs, wcs: p0.wcs || null };
+    fits0.afin = PS1.ps1AfinParche(fits0, gal0);
+    return auditarCampoVecino(f, gal0, fits0, salida0).then(function (vec0) {
+      var marco = { regla: 'lado-medido', ladoCatalogo: lado0, peldanos: [] };
+      if (vec0.motivo || celdaPerdida(p0)) {
+        marco.llega = null;
+        marco.motivo = vec0.motivo || 'celda-perdida';
+        return { gal: gal0, p: p0, vecino: vec0, marco: marco };
+      }
+      function vecinoA(escalaAs) {
+        if (Math.abs(escalaAs - vec0.escalaAs) <= 1e-3) return Promise.resolve(vec0);
+        var salidaV = Math.round(vec0.ladoArcmin * 60 / escalaAs);
+        return bajar(vec0.ra, vec0.dec, vec0.ladoArcmin, salidaV).then(function (q) {
+          var out = Object.assign({}, vec0, { escalaAs: q.escalaAs, celdas: celdasDe(q) });
+          delete out.cielo; delete out.sigma; delete out.px;
+          if (celdaPerdida(q)) { out.motivo = 'celda-perdida'; return out; }
+          if (Math.abs(q.escalaAs - escalaAs) > 1e-3) { out.motivo = 'otra-escala'; out.escalaParcheAs = escalaAs; return out; }
+          var c = PS1.ps1CieloCampo(q.datos);
+          if (!c.n) { out.motivo = 'sin-cobertura'; return out; }
+          out.cielo = c.cielo; out.sigma = c.sigma; out.px = c.n;
+          return out;
+        }).catch(function (e) {
+          var out = Object.assign({}, vec0); delete out.cielo; delete out.sigma; delete out.px;
+          out.motivo = 'descarga-fallida'; out.error = (e && e.message) || String(e);
+          return out;
+        });
+      }
+      var ultimo = null;   // último peldaño JUZGADO: a él se vuelve si el siguiente no se puede juzgar
+      function peldano(k) {
+        var g = conLado(escalera[k]);
+        var traer = k === 0 ? Promise.resolve(p0) : bajar(g.ra, g.dec, g.ladoArcmin, PS1.ps1SalidaParche(g.ladoArcmin));
+        return traer.then(function (pk) {
+          /* Un mosaico mutilado no se mide: vale el último peldaño juzgado y,
+             si es el primero, publicar() lo convierte en fila celda-perdida y
+             la siguiente corrida lo reintenta. */
+          if (celdaPerdida(pk)) {
+            marco.peldanos.push({ lado: g.ladoArcmin, motivo: 'celda-perdida' });
+            return ultimo || { gal: g, p: pk, vecino: vec0, marco: marco };
+          }
+          return vecinoA(pk.escalaAs).then(function (vk) {
+            if (vk.motivo) {
+              /* Sin cielo a esta escala el peldaño no se puede juzgar: vale el
+                 anterior. El primero siempre se juzga (es la escala de vec0). */
+              marco.peldanos.push({ lado: g.ladoArcmin, escalaAs: pk.escalaAs, motivo: 'vecino-' + vk.motivo });
+              return ultimo;
+            }
+            var m = PS1.ps1MarcoLlegaAlCielo(pk.datos, pk.ancho, pk.alto, vk.cielo, vk.sigma);
+            marco.peldanos.push({ lado: g.ladoArcmin, escalaAs: pk.escalaAs, llega: m.llega,
+                                  suelo: m.suelo, peor: m.peor });
+            console.log('  ' + gal0.nombre + ' · ' + g.ladoArcmin.toFixed(2) + '′  marco ' +
+              (m.llega ? 'LLEGA' : 'no llega') + ' (suelo ' + m.suelo.toFixed(1) + '; peor N ' +
+              m.peor.N.toFixed(0) + ' S ' + m.peor.S.toFixed(0) + ' E ' + m.peor.E.toFixed(0) +
+              ' O ' + m.peor.O.toFixed(0) + ')');
+            ultimo = { gal: g, p: pk, vecino: vk, marco: marco };
+            if (m.llega || k === escalera.length - 1) return ultimo;
+            return peldano(k + 1);
+          });
+        });
+      }
+      return peldano(0).then(function (r) {
+        /* Lo que se publica declara si su marco llega: el último peldaño
+           juzgado manda, no el último probado. */
+        var j = r.marco.peldanos.filter(function (e) { return e.lado === r.gal.ladoArcmin && 'llega' in e; })[0];
+        r.marco.llega = j ? j.llega : null;
+        r.marco.ladoElegido = r.gal.ladoArcmin;
+        return r;
+      });
+    });
+  });
+}
+
+/* Escribe la textura de un peldaño ya decidido: lo que antes hacía `generar`
+   tras su única descarga. `vecino` viene hecho cuando el lado se midió (es el
+   de la escala del peldaño); si no, se audita aquí como siempre. */
+function publicar(f, gal, p, vecinoHecho, marco, id, dir) {
+  var salida = PS1.ps1SalidaParche(gal.ladoArcmin), v = version(gal, salida);
+  var base = path.join(dir, id + '.' + v);
+  return Promise.resolve(p).then(function (p) {
     var esperada = gal.ladoArcmin * 60 / salida;
     if (Math.abs(p.escalaAs - esperada) > 1e-3) {
       throw new Error('la escala del recorte (' + p.escalaAs + '″/px) no es la pedida (' + esperada + ')');
@@ -568,7 +720,8 @@ function generar(nombre, dir) {
     /* El campo vecino ANTES de escribir: cielo y σ son parte del sidecar, y un
        sidecar se sirve como inmutable (ADR 0026, punto 3), así que no se puede
        completar después. */
-    return auditarCampoVecino(f, gal, fits, salida).then(function (vecino) {
+    var vecinoListo = vecinoHecho ? Promise.resolve(vecinoHecho) : auditarCampoVecino(f, gal, fits, salida);
+    return vecinoListo.then(function (vecino) {
       fs.mkdirSync(dir, { recursive: true });
       /* Si venía de un `celda-perdida` de una corrida anterior, ese veredicto ya
          no vale: la textura está escrita y su fila sobra. */
@@ -599,6 +752,12 @@ function generar(nombre, dir) {
            que dice si ese recorte es cielo o tiene otro objeto dentro. Sin
            `cielo`, lleva `motivo` y el objeto queda marcado. */
         vecino: vecino,
+        /* Cómo se eligió el lado (ADR 0034), solo en las clases que lo miden:
+           la escalera entera, con el peor cuadrado del marco de cada peldaño y
+           el suelo contra el que se juzgó. `llega: false` es el tope sin cielo
+           (a la lista de revisión); `null`, sin cielo vecino con que medir. El
+           manifiesto lee de aquí quién cubre a quién. */
+        marco: marco || undefined,
         auditoria: {
           cielo: cielo, sigma: sigma,
           fracAusencia: nAus / p.datos.length,
@@ -929,7 +1088,7 @@ module.exports = { version: version, filaDe: filaDe, motivoAusencia: motivoAusen
                    escribirManifiesto: escribirManifiesto, escribirInforme: escribirInforme,
                    textoManifiesto: textoManifiesto, textoInforme: textoInforme,
                    DSO: path.join(RAIZ, 'simulador_ocular', 'dso'),
-                   filasControl: filasControl, generar: generar,
+                   filasControl: filasControl, generar: generar, cubiertas: cubiertas,
                    GENERADOR: GENERADOR, FIXTURES: FIXTURES, MANIFIESTO: MANIFIESTO,
                    INFORME: INFORME };
 if (require.main !== module) return;

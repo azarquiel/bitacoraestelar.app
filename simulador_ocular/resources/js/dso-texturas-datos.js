@@ -3,7 +3,7 @@
    Campos: [nombre, modelo, version, ancho, escalaAs, fracAusencia, motivo, ladoArcmin]
    (ladoArcmin solo en las de imagen: el lado con el que se generó y se pinta)
    modelo ∈ {imagen, fila}; motivo ∈ {"", sur, no-cabe, sin-cobertura,
-   pisada, ausencia-excesiva, celda-perdida}. Una fila que no está aquí se
+   pisada, ausencia-excesiva, celda-perdida, cubierta}. Una fila que no está aquí se
    pide al proxy mientras BitacoraPS1.cfg.proxyRespaldo siga encendido. */
 window.BITACORA_DSO_TEXTURAS = [
   ["NGC 55", "fila", "", 0, 0, 0, "sur"],
@@ -31,9 +31,9 @@ window.BITACORA_DSO_TEXTURAS = [
   ["IC0432", "imagen", "72ea9a3b", 1080, 0.5000000121071928, 0.00037122770919067213, "", 9],
   ["NGC2023", "imagen", "ddf83077", 967, 0.4994829406387764, 0.0006961904160994302, "", 8.05],
   ["IC0435", "imagen", "4bbe84ff", 375, 0.49933333018593723, 0.0017564444444444444, "", 3.1199999999999997],
-  ["NGC2064", "imagen", "6a450f8f", 1080, 0.5000000121071928, 0.0000814471879286694, "", 9],
-  ["NGC2067", "imagen", "80396ceb", 530, 0.49905664448153403, 0, "", 4.409000000000001],
-  ["NGC2068", "imagen", "ae28f267", 486, 0.5000000121071928, 0.00020745482565327102, "", 4.05],
+  ["NGC2064", "fila", "43adab87", 0, 0, 0, "cubierta"],
+  ["NGC2067", "fila", "43dea8ab", 0, 0, 0, "cubierta"],
+  ["NGC2068", "imagen", "3f6f8c5d", 2048, 0.5859374999999977, 0.000015497207641601562, "", 20],
   ["Abell 12", "imagen", "08739bd6", 180, 0.5000000121071928, 0.03506172839506173, "", 1.5],
   ["NGC2149", "imagen", "372167a8", 265, 0.49905664448153403, 0, "", 2.205],
   ["NGC2170", "imagen", "ecccd4bb", 216, 0.5000000121071928, 0.0012002743484224967, "", 1.8],

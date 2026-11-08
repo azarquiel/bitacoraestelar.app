@@ -28,22 +28,20 @@
    detector, y M78 tiene que seguir pintada —un «arreglo» que apague la capa
    también quitaría el canto—.
 
-   Fixtures: texturas publicadas de NGC 2064/2067 en scripts/fixtures/dso-costura (M78 en dso/)
-   y Gaia DR3 del campo en scripts/fixtures/gaia/gaia_campo_m78.csv, sacada de
-   GAVO (https://dc.g-vo.org/tap/sync) con
-     SELECT ra,dec,phot_g_mean_mag FROM gaia.dr3lite
-     WHERE 1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',86.69092,0.07931,0.25))
-       AND phot_g_mean_mag<=20 ORDER BY phot_g_mean_mag
-   (radio 0,25°: cubre el parche de NGC 2064, que llega a 14′ de M78; el
-   gaia_ngc2068.csv del golden solo cubre 3′ y deja estrellas sin máscara).
+   Lo arregla el lado medido (ADR 0034): el parche de M78 crece por la
+   escalera hasta que su marco llega al cielo (20′), y NGC 2064 y NGC 2067,
+   cuyo centro cae dentro, salen `cubierta` en el manifiesto y no pintan. Se
+   mide con el manifiesto COMMITEADO: si alguien vuelve a publicar los tres
+   parches sueltos, esto vuelve a rojo.
+
+   Fixtures: la textura golden de M78 (scripts/fixtures/dso) y su Gaia
+   (gaia_ngc2068.csv, radio 0,75·20′ desde ADR 0034: cubre el campo entero).
 
    Uso:  node scripts/test_costura_parches.js */
 'use strict';
 var fs = require('fs'), path = require('path');
 var RAIZ = path.join(__dirname, '..');
-/* `dso/` es solo del banco golden (test_dso_texturas lo vigila); las texturas
-   que solo necesita este test viven aparte. */
-var DIRS_DSO = [path.join(__dirname, 'fixtures', 'dso'), path.join(__dirname, 'fixtures', 'dso-costura')];
+var DIRS_DSO = [path.join(__dirname, 'fixtures', 'dso')];
 var DIR_GAIA = path.join(__dirname, 'fixtures', 'gaia');
 var BASE = 'https://textura-de-mentira/dso/';
 
@@ -248,7 +246,7 @@ function volcar(L, canto, nombre) {
     nombre.replace(/[^A-Za-z0-9]+/g, '_') + '.png'), rgb, SIZE, SIZE);
 }
 
-var M78 = { ra: 86.69092, dec: 0.07931, gaia: 'gaia_campo_m78.csv' };
+var M78 = { ra: 86.69092, dec: 0.07931, gaia: 'gaia_ngc2068.csv' };
 var CASOS = [
   { nombre: 'M78 · 457 mm 190× SQM 21,2', obj: M78, D: 457.2, M: 190, sqm: 21.2, canto: false },
   { nombre: 'M78 · 203 mm 100× SQM 20,5', obj: M78, D: 203, M: 100, sqm: 20.5, canto: false },

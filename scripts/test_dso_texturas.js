@@ -234,6 +234,64 @@ ok(!ladoMal.length, 'cada fila de imagen lleva el ladoArcmin exacto de su sideca
   ok(deFila && deFila.ladoArcmin === regla, 'una fila sin imagen no impone lado');
 })();
 
+/* La ley del lado medido (ADR 0034), sin red. */
+console.log('\nEl lado medido:');
+(function () {
+  var esc = PS1.ps1EscaleraLados(4.05).map(function (l) { return +l.toFixed(3); });
+  ok(JSON.stringify(esc) === JSON.stringify([4.05, 6.075, 9.112, 13.669, 20]),
+     'la escalera es ×1,5 desde el lado de catálogo y acaba en el tope (' + esc.join(', ') + ')');
+  ok(PS1.ps1LadoSeMide('RfN') && PS1.ps1LadoSeMide('HII') && PS1.ps1LadoSeMide('EmN') &&
+     !PS1.ps1LadoSeMide('PN') && !PS1.ps1LadoSeMide('SNR') && !PS1.ps1LadoSeMide(''),
+     'se mide el lado de las difusas sin borde real, no el de compactas ni galaxias');
+  /* El caso de NGC 2064: un tramo encendido de una quinta parte de un lado. La
+     mediana del lado entero lo deja pasar; la ley, por cuadrados, no. */
+  var W = 200, d = new Float32Array(W * W), y, x;
+  ok(PS1.ps1MarcoLlegaAlCielo(d, W, W, 0, 10).llega, 'un marco de cielo llega');
+  for (y = 80; y < 120; y++) for (x = 0; x < 12; x++) d[y * W + x] = 100;
+  var m = PS1.ps1MarcoLlegaAlCielo(d, W, W, 0, 10);
+  ok(!m.llega && m.peor.E >= 100 && m.peor.O < m.suelo,
+     'un tramo encendido en un solo lado basta para que no llegue (y se ve en qué lado)');
+})();
+
+/* Quién cubre a quién: sobre sidecars de mentira, con nombres reales del
+   catálogo para que la clase sea la suya (NGC2064/2067 RfN, NGC6720 PN). */
+(function () {
+  function sc(nombre, ra, dec, lado, llega) {
+    return { nombre: nombre, ra: ra, dec: dec, ladoArcmin: lado, version: 'x',
+             marco: llega === undefined ? undefined : { regla: 'lado-medido', llega: llega } };
+  }
+  var c = G.cubiertas([sc('NGC2068', 10, 0, 20, true), sc('NGC2064', 10.1, 0.05, 9, false),
+                       sc('NGC6720', 9.95, 0, 2, undefined)]);
+  ok(c.NGC2064 === 'NGC2068' && !c.NGC6720 && !c.NGC2068,
+     'el parche medido cubre a la difusa cuyo centro contiene, no a la compacta ni a sí mismo');
+  var c2 = G.cubiertas([sc('NGC2064', 10, 0, 20, false), sc('NGC2068', 10.05, 0, 20, true)]);
+  ok(c2.NGC2064 === 'NGC2068' && !c2.NGC2068,
+     'con dos que se contienen, manda el que llega al cielo aunque el nombre vaya después');
+  /* 2068 (20′) va primero por lado y cubre a 2067 (a 7,2′); 2064 está a 15′
+     de 2068 —fuera de su caja— y a 7,8′ de 2067, dentro de la de 2067. */
+  var c3 = G.cubiertas([sc('NGC2068', 10, 0, 20, true), sc('NGC2067', 10.12, 0, 19, true),
+                        sc('NGC2064', 10.25, 0, 9, false)]);
+  ok(c3.NGC2067 === 'NGC2068' && !c3.NGC2064,
+     'una cubierta no cubre a nadie: lo que solo ella contenía sigue pintando');
+  ok(!Object.keys(G.cubiertas([sc('NGC2068', 10, 0, 4.05, undefined), sc('NGC2067', 10.01, 0, 4.4, undefined)])).length,
+     'sin lado medido no hay cobertura: el banco anterior a la ley no cambia');
+})();
+
+/* Reanudar no puede dar por buena una textura de la ley vieja en una clase
+   que se mide: su nombre coincide con el del primer peldaño, pero nadie miró
+   su marco. */
+(function () {
+  var tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dso-0034-'));
+  fs.writeFileSync(path.join(tmp, 'NGC_X.v1.png'), 'x');
+  fs.writeFileSync(path.join(tmp, 'NGC_X.v1.json'), JSON.stringify({ nombre: 'NGC X', vecino: {} }));
+  var viejo = G.yaResuelto(tmp, 'NGC_X', 'v1', true), sinExigir = G.yaResuelto(tmp, 'NGC_X', 'v1', false);
+  fs.writeFileSync(path.join(tmp, 'NGC_X.v1.json'), JSON.stringify({ nombre: 'NGC X', vecino: {}, marco: { regla: 'lado-medido' } }));
+  var nuevo = G.yaResuelto(tmp, 'NGC_X', 'v1', true);
+  fs.rmSync(tmp, { recursive: true, force: true });
+  ok(!viejo && !!sinExigir && !!nuevo,
+     'una textura sin `marco` no reanuda una clase de lado medido; con `marco`, sí');
+})();
+
 /* La regla de #229: si el objeto no tiene imagen DONDE ESTÁ EL OBJETO, no hay
    imagen. Se prueba sobre parches sintéticos —la regla es geométrica y no
    necesita PS1— y luego sobre el veredicto escrito, que sí sale de píxeles

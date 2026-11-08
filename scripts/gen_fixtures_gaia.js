@@ -17,6 +17,7 @@ var RAIZ = path.join(__dirname, '..');
 global.window = {};
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-gaia-render.js'));
 require(path.join(RAIZ, 'resources', 'js', 'bitacora-ps1.js'));
+require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.js'));
 var R = global.window.BitacoraGaiaRender, PS1 = window.BitacoraPS1.cfg;
@@ -112,7 +113,9 @@ function pedir(c) {
 
 function bajar(o) {
   var f = fila(o.fuente, o.cat);
-  var lado = window.BitacoraPS1.ps1LadoArcmin(f[4]);
+  /* El lado de la TEXTURA (ADR 0034), el mismo con el que el runtime pinta:
+     con lado medido ya no sale de r_e, y M78 pasó de 4,05′ a 20′. */
+  var lado = window.BitacoraPS1.ps1LadoDeFila(f);
   var radDeg = (lado * 0.75) / 60;
   var cs = consultas(f[2], f[3], radDeg);
   return pedir(cs[0])

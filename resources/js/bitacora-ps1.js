@@ -74,6 +74,11 @@
     ladoFactor: 6,         // lado del parche = 6·r_e → radio 3·r_e ≈ 94 % de la luz de un disco
     ladoMax: 20,           // ′: por encima, el parche se sale de la skycell casi seguro
     ladoMin: 1.5,          // ′: por debajo no queda parche que mirar
+    /* Lado medido (ADR 0034): factor de cada peldaño de la escalera con la que
+       el generador agranda el parche de una difusa sin borde real hasta que su
+       marco llega al cielo (ps1EscaleraLados). Es el tamaño del paso, no un
+       criterio: el criterio es ps1MarcoLlegaAlCielo. */
+    ladoPaso: 1.5,
     decMin: -30,           // PS1 no cubre más al sur (365 de las 1295 filas del RC3)
     /* Objeto que el manifiesto de texturas no menciona: se pide a STScI como
        hasta ahora. Es el régimen mixto mientras el manifiesto no cubra el
@@ -362,6 +367,68 @@
     if (!m.length) return 0;
     m.sort(function (a, b) { return a - b; });
     return m[m.length >> 1];
+  }
+
+  /* ── Lado medido (ADR 0034) ────────────────────────────────────────────────
+     El lado de una difusa SIN borde real (HII, EmN, RfN) no sale de su r_e de
+     catálogo: el eje mayor del OpenNGC de una nebulosa de reflexión es una
+     isofota de placa vieja, y en M78 (4,5′ contra ~8′ reales) el recorte
+     cortaba la nebulosa con peso 1 en el borde. En pantalla eso es un canto
+     recto (scripts/test_costura_parches.js). El generador sube el lado por la
+     escalera hasta que el marco llega al cielo; las compactas (PN, SNR) tienen
+     borde real y las galaxias, su isofota: a ellas no se les mide. */
+  function ps1LadoSeMide(clase) {
+    return PS1_CLASES_DIFUSAS.indexOf(clase) >= 0 && PS1_CLASES_COMPACTAS.indexOf(clase) < 0;
+  }
+
+  /* Los lados que se prueban, en orden: el del catálogo y luego ×ladoPaso
+     hasta el tope, que se prueba siempre como último peldaño. Determinista:
+     es lo que deja al generador saber de antemano los nombres posibles de la
+     textura (version() lleva el lado) y seguir siendo reanudable. */
+  function ps1EscaleraLados(lado0) {
+    var out = [], l = (lado0 > 0) ? lado0 : PS1.ladoMin;
+    while (l < PS1.ladoMax) { out.push(l); l *= PS1.ladoPaso; }
+    out.push(PS1.ladoMax);
+    return out;
+  }
+
+  /* ¿Llega el marco al cielo? El marco es el MISMO del 6 % de ps1Cielo,
+     troceado en cuadrados de su propio grosor, y cada cuadrado tiene que
+     quedar con su mediana bajo el suelo del anclaje —cielo + kRuido·σ, los del
+     campo vecino—: un cuadrado por encima es luz que ps1AnclarACatalogo
+     conservaría hasta el canto. Por cuadrados y no por lado entero porque una
+     nebulosa que solo toca un tramo del borde (el este de NGC 2064 corta 2′ de
+     M78 en un lado de 9′) pasa la mediana del lado y deja el canto igual. La
+     mediana por cuadrado aguanta una estrella pequeña; una brillante en el
+     marco cuenta como luz, y eso solo cuesta lado, nunca un canto.
+     Devuelve {llega, suelo, peor: {N, S, E, O}} (peor = mayor mediana de
+     cuadrado de cada lado; N es la última fila, que crece al norte). */
+  function ps1MarcoLlegaAlCielo(datos, ancho, alto, cielo, sigma) {
+    var g = Math.max(1, Math.round(Math.min(ancho, alto) * 0.06));
+    var suelo = cielo + PS1.kRuido * sigma;
+    function mediana(x0, y0) {
+      var m = [];
+      for (var y = y0; y < Math.min(alto, y0 + g); y++) {
+        for (var x = x0; x < Math.min(ancho, x0 + g); x++) {
+          var v = datos[y * ancho + x];
+          if (v === v) m.push(v);
+        }
+      }
+      if (!m.length) return -Infinity;   // sin medida no hay luz que cortar
+      m.sort(function (a, b) { return a - b; });
+      return m[m.length >> 1];
+    }
+    var peor = { N: -Infinity, S: -Infinity, E: -Infinity, O: -Infinity }, t;
+    for (t = 0; t < ancho; t += g) {
+      peor.S = Math.max(peor.S, mediana(t, 0));
+      peor.N = Math.max(peor.N, mediana(t, alto - g));
+    }
+    for (t = 0; t < alto; t += g) {
+      peor.E = Math.max(peor.E, mediana(0, t));
+      peor.O = Math.max(peor.O, mediana(ancho - g, t));
+    }
+    var llega = peor.N < suelo && peor.S < suelo && peor.E < suelo && peor.O < suelo;
+    return { llega: llega, suelo: suelo, peor: peor };
   }
 
   /* Ruido del parche: σ robusta (MAD·1,4826) del mismo borde del que sale el
@@ -2335,6 +2402,7 @@
      que llena su parche va alto y apaga lo más tenue (#287, ADR 0028). */
   var CIELO_SIN_MEDIR = 'el cielo de esta imagen no se pudo medir fuera del objeto: ' +
     'el suelo sale del borde del recorte y puede apagar lo más tenue';
+  var MOTIVO_CUBIERTA = 'cubierta';
   var TEXTO_AVISO = {
     'sur': 'sin imagen de cartografiado: PanSTARRS no cubre por debajo de −30° de declinación',
     'no-cabe': 'sin imagen de cartografiado: esta galaxia es mayor que el recorte que sirve PanSTARRS, ' +
@@ -2363,7 +2431,9 @@
   };
 
   function ps1TextoAviso(motivo) {
-    if (!motivo) return '';
+    /* `cubierta` (ADR 0034) no es falta de imagen: el objeto está DENTRO del
+       parche de lado medido de otro, que lo pinta. No hay nada que avisar. */
+    if (!motivo || motivo === MOTIVO_CUBIERTA) return '';
     return TEXTO_AVISO[motivo] || ILEGIBLE;
   }
 
@@ -2478,7 +2548,13 @@
          que es lo que no puede pasar: de esa fila nadie pidió nada. */
       var aviso = ps1TextoAviso(filaAp && filaAp[1] === 'fila'
         ? (filaAp[6] || 'sin-textura') : notasApuntada.motivo);
-      if (!aviso && apuntada && !(apuntada[3] > PS1.decMin)) {
+      /* Cubierta (ADR 0034): la pinta el parche de su dueño, así que su
+         «sin parche» no es una caída del servicio. Ninguna de las ramas de
+         abajo le aplica. */
+      var cubierta = !!filaAp && filaAp[1] === 'fila' && filaAp[6] === MOTIVO_CUBIERTA;
+      if (cubierta) {
+        aviso = '';
+      } else if (!aviso && apuntada && !(apuntada[3] > PS1.decMin)) {
         aviso = TEXTO_AVISO['sur'];
       } else if (!aviso && apuntada && !ps1CabeEnParche(apuntada)) {
         aviso = TEXTO_AVISO['no-cabe'];
@@ -2500,6 +2576,10 @@
   window.BitacoraPS1 = {
     cfg: PS1,
     ps1LadoArcmin: ps1LadoArcmin,
+    ps1LadoDeFila: ps1LadoDeFila,
+    ps1LadoSeMide: ps1LadoSeMide,
+    ps1EscaleraLados: ps1EscaleraLados,
+    ps1MarcoLlegaAlCielo: ps1MarcoLlegaAlCielo,
     ps1LadoSinRecorte: ps1LadoSinRecorte,
     ps1SalidaParche: ps1SalidaParche,
     ps1UrlParche: ps1UrlParche,
@@ -2541,6 +2621,7 @@
     ps1DatosConPsf: ps1DatosConPsf,
     ps1CabeEnParche: ps1CabeEnParche,
     ps1CatalogoDifuso: ps1CatalogoDifuso,
+    ps1NombreFila: ps1NombreFila,
     ps1RadioBordeAs: ps1RadioBordeAs,
     ps1ThetaIntDeGal: ps1ThetaIntDeGal,
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,

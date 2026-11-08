@@ -414,6 +414,19 @@ Promise.resolve().then(function () {
        pide parche (ps1GalaxiasDelCampo lo descarta antes), así que su causa no
        puede venir de una petición; si el aviso saliera de la comprobación local
        diría lo del sur, y lo que el manifiesto declara es otra cosa. */
+    /* `cubierta` (ADR 0034) es lo contrario de los de arriba: el objeto SÍ se
+       ve, dentro del parche de lado medido de otro. Ni texto de falta de
+       imagen, ni —sobre todo— el del servicio, al que caería si «sin parche»
+       se leyera como una caída. Y tampoco pide nada: su luz la trae el dueño. */
+    var C = fresco();
+    C.cfg.proxyRespaldo = false;
+    window.BITACORA_DSO_TEXTURAS = [['NGC 5194', 'fila', '', 0, 0, 0, 'cubierta']];
+    pedidos = [];
+    return capaDe(C, 'NGC 5194').then(function (r) {
+      ok(r.aviso === '', 'cubierta no avisa de nada («' + (r.aviso || '') + '»)');
+      ok(pedidos.length === 0, '  y no salió ni una petición (' + pedidos.length + ')');
+    });
+  }).then(function () {
     var S = fresco();
     S.cfg.proxyRespaldo = false;
     window.BITACORA_DSO_TEXTURAS = [['NGC 25', 'fila', '', 0, 0, 0, 'pisada']];
