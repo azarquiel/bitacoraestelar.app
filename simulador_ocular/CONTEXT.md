@@ -140,6 +140,16 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   telescopio por debajo del píxel. `salida` entra en `version()` (ADR 0026), así que
   cambiar la regla **republica el banco entero**. _Evitar_: «`PS1.salida`» como el tamaño
   del parche; es la constante de la fase 1 y ya no manda.
+- **Lado medido (ADR 0034):** en una difusa sin borde real (HII, EmN, RfN) el lado del
+  parche no sale de r_e. El generador sube una escalera determinista (×1,5, tope 20′)
+  hasta que el **marco llega al cielo**: cada cuadrado del marco del 6 % queda bajo
+  `cielo + kRuido·σ` del campo vecino. Sin eso, el recorte corta nebulosa con peso 1 y en
+  pantalla sale un **canto recto** (M78, `scripts/test_costura_parches.js`). El lado con
+  que se pinta lo dice el manifiesto (columna 7, `ps1LadoDeFila`), no el catálogo.
+  - Un parche medido que contiene el centro de otra difusa sin borde la deja como
+    `cubierta`: no pinta (su luz va dentro del dueño, con el brillo de ese) y lo avisa.
+  - _Evitar_: «tesela» o «tile» para el parche, y «solape» para la cobertura (los
+    cuadrados del caso M78 casi no se solapaban: eran cantos libres).
 - **Invariante:** lo que devuelve `ps1LeerTextura` es indistinguible en forma de lo que
   devuelve `parseFITS`. Nada aguas abajo de esa frontera —`ps1AnclarACatalogo`, la mezcla,
   `ps1PsfParche`, H2c, la máscara difusa— puede saber de dónde vino el parche.
