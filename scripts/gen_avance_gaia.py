@@ -282,7 +282,7 @@ def leer_celda(datos):
     firma, ver, nivel, _, ipix, n, ntramos, paso = CABECERA.unpack_from(datos)
     if firma != FIRMA or ver != VERSION_FORMATO or ntramos != NTRAMOS or paso != PASO_MIL:
         raise ValueError('cabecera desconocida')
-    if len(datos) != TAM_CABECERA + 12 * n:
+    if len(datos) != TAM_CABECERA + DTYPE_FILA.itemsize * n:
         raise ValueError('tamaño incoherente con el nº de filas')
     hist = np.frombuffer(datos, dtype='<u4', count=NTRAMOS, offset=CABECERA.size).astype(np.int64)
     filas = np.frombuffer(datos, dtype=DTYPE_FILA, count=n, offset=TAM_CABECERA)
@@ -428,15 +428,22 @@ def tap_async(adql, maxrec):
             _http(job + '/phase', b'PHASE=RUN')
             t0 = time.time()
             while True:
+                if time.time() - t0 > PLAZO_JOB_S + 600:
+                    # Como un ERROR del servidor: repetirlo igual no cabría
+                    # tampoco; el llamador lo parte.
+                    raise JobFallido('job sin terminar tras el plazo')
                 try:
                     fase = _http(job + '/phase', timeout=60).decode().strip()
+                except urllib.error.HTTPError as e:
+                    if e.code == 404:          # job borrado o caducado: no esperar más
+                        raise RuntimeError('el job ya no existe (404)')
+                    time.sleep(30)
+                    continue
                 except (urllib.error.URLError, OSError):
                     time.sleep(30)
                     continue
                 if fase in ('COMPLETED', 'ERROR', 'ABORTED'):
                     break
-                if time.time() - t0 > PLAZO_JOB_S + 600:
-                    raise RuntimeError('job sin terminar tras el plazo')
                 antes = time.time()
                 # Un plazo agotado aquí NO es un fallo del job: se vuelve a
                 # esperar. Reintentar desde fuera borraría el job y lo
@@ -662,9 +669,23 @@ def escribir_manifiesto(salida, total):
 ESPERADO_G15 = 36_897_335      # GAVO dr3lite, 2026-11-08 (#516)
 
 
+def recuento_group_by(trabajo, nivel=NIVEL):
+    """Suma de los tramos G < 15 de los histogramas que devolvió GAVO (pasada 1),
+    por source_id. Es la cifra independiente para el AC 1: la cabecera de cada
+    celda la recalcula de sus propias filas, así que compararla con las filas
+    sería tautológico. None si falta alguna región."""
+    total = 0
+    for r in range(nceldas(NIVEL_HIST)):
+        h = leer_hist(trabajo, r)
+        if h is None:
+            return None
+        total += sum(sum(v[:TRAMOS_AVANCE]) for v in h.values())
+    return total
+
+
 def verificar_salida(salida, nivel=NIVEL):
-    """AC 1 y 3: todas las celdas existen e íntegras, suma de filas ≈ esperado y
-    suma de los tramos < 15 de los histogramas = suma de filas."""
+    """AC 1 y 3: todas las celdas existen e íntegras y suma de filas ≈ esperado.
+    (El cruce con el GROUP BY lo hace recuento_group_by.)"""
     faltan, malas, filas, hist15, vacias = [], [], 0, 0, 0
     for c in range(nceldas(nivel)):
         try:
@@ -690,8 +711,11 @@ def leer_cono(salida, ra, dec, radio):
     """Lo que hará el cliente: leer las celdas del cono y recortar al cono."""
     partes = []
     for c in celdas_del_cono(ra, dec, radio + 0.05):
-        with open(ruta_celda(salida, c), 'rb') as fh:
-            partes.append(leer_celda(fh.read())['filas'])
+        try:
+            with open(ruta_celda(salida, c), 'rb') as fh:
+                partes.append(leer_celda(fh.read())['filas'])
+        except FileNotFoundError:
+            raise SystemExit('falta la celda %d: genera antes con --campos' % c)
     filas = np.concatenate(partes)
     d = decodificar_filas(filas)
     dentro = distancia_angular(d['ra'], d['dec'], ra, dec) <= radio
@@ -739,7 +763,10 @@ def main():
         print('celdas que faltan: %d · corruptas: %d · vacías: %d' % (len(v['faltan']), len(v['malas']), v['vacias']))
         print('filas: %d (esperado %d, desvío %+.4f %%) · histogramas G<15: %d'
               % (v['filas'], ESPERADO_G15, 100 * v['desvio'], v['hist15']))
-        ok = not v['faltan'] and not v['malas'] and abs(v['desvio']) <= 0.001 and v['hist15'] == v['filas']
+        gb = recuento_group_by(a.trabajo)
+        print('GROUP BY de GAVO, G<15: %s' % ('sin histogramas en ' + a.trabajo if gb is None else gb))
+        ok = (not v['faltan'] and not v['malas'] and abs(v['desvio']) <= 0.001
+              and v['hist15'] == v['filas'] and gb == v['filas'])
         print('AC 1 y 3:', 'PASA' if ok else 'NO PASA')
         sys.exit(0 if ok else 1)
 
@@ -751,10 +778,16 @@ def main():
             ctl = tap_async(adql_cono(ra, dec, RADIO_CONTROL), MAXREC_LOTE)[1:]
             c_ra = np.array([float(f[0]) for f in ctl])
             c_dec = np.array([float(f[1]) for f in ctl])
-            sin_av, sin_ctl = emparejar(c_ra, c_dec, av['ra'], av['dec'])
+            # Franja de 0,2″ en el borde del cono: el float32 mueve hasta ~0,05″
+            # y una estrella rozando el borde puede quedar dentro en un lado y
+            # fuera en el otro sin que falte nada.
+            franja = 0.2 / 3600
+            av_in = distancia_angular(av['ra'], av['dec'], ra, dec) <= RADIO_CONTROL - franja
+            ctl_in = distancia_angular(c_ra, c_dec, ra, dec) <= RADIO_CONTROL - franja
+            sin_av, sin_ctl = emparejar(c_ra[ctl_in], c_dec[ctl_in], av['ra'][av_in], av['dec'][av_in])
             print('%s: Avance %d · GAVO %d · de GAVO sin pareja %d · del Avance sin pareja %d'
-                  % (nombre, len(av['ra']), len(c_ra), sin_av, sin_ctl), flush=True)
-            ok &= sin_av == 0 and sin_ctl == 0 and len(av['ra']) == len(c_ra)
+                  % (nombre, av_in.sum(), ctl_in.sum(), sin_av, sin_ctl), flush=True)
+            ok &= sin_av == 0 and sin_ctl == 0 and av_in.sum() == ctl_in.sum()
         print('AC 4:', 'PASA' if ok else 'NO PASA')
         sys.exit(0 if ok else 1)
 
@@ -764,7 +797,9 @@ def main():
         generar(a.salida, a.trabajo, lotes, solo_celdas=celdas)
         return
 
-    if a.medir:
+    if a.medir is not None:
+        if a.medir < 1:
+            raise SystemExit('--medir necesita al menos 1 lote')
         # Los densos (M7, M6) primero: estimar con cielo vacío engaña.
         densos = [ang2pix_nest(NIVEL_LOTE, *CAMPOS[c]).item() for c in ('m7', 'm6')]
         resto = np.linspace(0, nceldas(NIVEL_LOTE) - 1, max(a.medir - len(densos), 0)).astype(int).tolist()

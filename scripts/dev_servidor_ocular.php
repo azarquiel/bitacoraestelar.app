@@ -16,10 +16,6 @@ if ($uri === '/' || $uri === '/ocular') {
     return true;
 }
 
-/* Las texturas DSO viven en uploads/bitacora/dso/ (en el repo, simulador_ocular/dso/,
-   generado por gen_dso_texturas.js e ignorado en git). El subdirectorio solo
-   puede ser ese; la clase de caracteres no admite «/», así que `dso/..` es lo
-   peor que llega y lo rechaza is_file(). */
 /* El Avance de Gaia (#516) vive en uploads/bitacora/avance/ (en el repo,
    simulador_ocular/avance/, generado por gen_avance_gaia.py e ignorado en git).
    El servidor embebido no lee .htaccess: aquí se imitan sus cabeceras. */
@@ -37,6 +33,10 @@ if (preg_match('#^/wp-content/uploads/bitacora/avance/(manifiesto\.json|n6/[0-9]
     return true;
 }
 
+/* Las texturas DSO viven en uploads/bitacora/dso/ (en el repo, simulador_ocular/dso/,
+   generado por gen_dso_texturas.js e ignorado en git). El subdirectorio solo
+   puede ser ese; la clase de caracteres no admite «/», así que `dso/..` es lo
+   peor que llega y lo rechaza is_file(). */
 if (preg_match('#^/wp-content/uploads/bitacora/((?:dso/)?[A-Za-z0-9._-]+)$#', $uri, $m)) {
     $nombre = $m[1];
     $candidatos = array(
