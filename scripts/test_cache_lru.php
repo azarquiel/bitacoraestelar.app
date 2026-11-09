@@ -108,6 +108,31 @@ ok(is_file($lockNuevo),  'no toca un .lock reciente: puede haber un flock en cur
 
 limpiar_dir($dir);
 
+/* AC 6 de #516: el Avance de Gaia (uploads/bitacora/avance/n6/*.bin) vive al lado
+   de cache_gaia/, no dentro, y no casa con *.json.gz: la LRU nunca lo expulsa
+   aunque la caché esté por encima del tope y las celdas sean lo más viejo. */
+echo "cache_lru_limpieza no toca el Avance de Gaia (#516):\n";
+$proxy = file_get_contents(__DIR__ . '/../simulador_ocular/gaia_proxy.php');
+ok(preg_match("#const GAIA_CACHE_DIR\s*=\s*__DIR__\s*\.\s*'/cache_gaia';#", $proxy) === 1, 'la caché del proxy es cache_gaia/');
+ok(strpos($proxy, "'patron' => '*.json.gz'") !== false && strpos($proxy, '/avance') === false,
+   'el proxy limpia *.json.gz y su caché no apunta al Avance');
+$raiz = sys_get_temp_dir() . '/lru_avance_' . getmypid();
+@mkdir("$raiz/cache_gaia", 0775, true);
+@mkdir("$raiz/avance/n6", 0775, true);
+$celda = "$raiz/avance/n6/4242.bin";
+file_put_contents($celda, str_repeat('x', 5000));
+touch($celda, time() - 999999);
+$celdaTmp = "$raiz/avance/n6/1.bin.tmp9";
+file_put_contents($celdaTmp, 'x');
+touch($celdaTmp, time() - 999999);
+$entrada = entrada("$raiz/cache_gaia", 'k.json.gz', 1200, 5000);
+cache_lru_limpieza($cfg("$raiz/cache_gaia", '*.json.gz'));
+ok(!is_file($entrada), 'la caché sí evicta por encima del tope');
+ok(is_file($celda) && is_file($celdaTmp), 'las celdas del Avance (y sus .tmp) siguen ahí: la limpieza no sube ni baja de directorio');
+ok(fnmatch('*.json.gz', '4242.bin') === false, 'una celda no casa con *.json.gz');
+foreach ([$celda, $celdaTmp, "$raiz/cache_gaia/.cleanup"] as $f) { @unlink($f); }
+@rmdir("$raiz/avance/n6"); @rmdir("$raiz/avance"); @rmdir("$raiz/cache_gaia"); @rmdir($raiz);
+
 echo "cache_lru_flujo (con un fetch falso):\n";
 /* Arma un flujo sobre $dir con callbacks que NO terminan, y devuelve lo que
    pasó. $datos = lo que devuelve el fetch (null = el origen falla). */

@@ -33,6 +33,12 @@ simulador_ocular/cache_gaia/*
 # sin ellos el guardián byte a byte no puede verificar lo que declara (#258).
 simulador_ocular/dso/*.png
 
+# El Avance de Gaia (#516) que genera scripts/gen_avance_gaia.py: 49 152 celdas
+# (~445 MB) y su manifiesto se publican por FTP en uploads/bitacora/avance/ y no
+# entran en git. Solo su .htaccess, que es fuente.
+simulador_ocular/avance/*
+!simulador_ocular/avance/.htaccess
+
 # Caché local de los arneses de canales (harness_canales_g.js /
 # harness_auditoria_canales.js): son respuestas del proxy de producción, 30 MB
 # en el banco actual. No son fixtures pineadas — se vuelven a bajar solas.
