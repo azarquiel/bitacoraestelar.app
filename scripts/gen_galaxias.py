@@ -16,8 +16,10 @@ V es 12,6–12,95 según el tipo. Ver el comentario de BT_MAX.
 Compañeras demasiado débiles para el corte pero que se ven junto a su galaxia
 brillante con equipo real: entran sin tope de magnitud desde
 mapa/datos/rc3_incluidas.tsv, la misma consulta que rc3_mb.tsv en un cono de
-10′ alrededor de NGC 7331 (NGC 7335, 7337 y 7340). Con BT si lo hay; si no, mB.
-Las que ya estén en el catálogo (la propia NGC 7331) no se repiten.
+10′ alrededor de NGC 7331 (NGC 7335, 7337 y 7340), más el Quinteto de Stephan
+(NGC 7317, 7318A, 7318B y 7319, BT 13,9–14,6), de un cono de 4′ alrededor de
+NGC 7320 servido por el espejo vizier.cfa.harvard.edu. Con BT si lo hay; si no,
+mB. Las que ya estén en el catálogo (NGC 7331, NGC 7320) no se repiten.
 
 Para qué: el perfil de SÉRSIC de esta fila es el PRESUPUESTO DE LUZ de la galaxia.
 Desde la capa de imagen difusa, quien manda en la morfología es la imagen
