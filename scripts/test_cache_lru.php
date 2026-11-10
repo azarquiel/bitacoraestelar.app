@@ -112,10 +112,11 @@ echo "cache_lru_flujo (con un fetch falso):\n";
 /* Arma un flujo sobre $dir con callbacks que NO terminan, y devuelve lo que
    pasó. $datos = lo que devuelve el fetch (null = el origen falla). */
 $flujo = function (string $dir, string|false|null $datos, array $extra = []): array {
-    $r = ['fetch' => 0, 'servido' => [], 'directo' => null, 'fallo' => 0, 'pendiente' => 0];
+    $r = ['fetch' => 0, 'servido' => [], 'directo' => null, 'fallo' => 0, 'pendiente' => 0, 'saturado' => 0];
     $cfg = $extra + ['ruta' => "$dir/k.bin", 'clave' => 'k', 'dir' => $dir, 'patron' => '*.bin',
             'max_bytes' => 1 << 20, 'lowwater' => 0.8, 'log' => "$dir/.hits.log",
-            'pendiente' => function () use (&$r) { $r['pendiente']++; }];
+            'pendiente' => function () use (&$r) { $r['pendiente']++; },
+            'saturado' => function () use (&$r) { $r['saturado']++; }];
     cache_lru_flujo(
         $cfg,
         function (?string &$etapa) use (&$r, $datos) { $r['fetch']++; $etapa = ($datos === false) ? 'async' : 'sonda'; return $datos; },
@@ -206,6 +207,39 @@ limpiar_dir($dir);
 $r = $flujo($dir, false, ['pendiente' => null]);
 eq([$r['fallo'], $r['servido']], [1, []], 'sin pendiente en cfg → false es un fallo');
 limpiar_dir($dir);
+@unlink("$dir/.hits.log");
+
+echo "cache_lru_flujo con turnos de descarga:\n";
+// Los turnos acotan cuántas peticiones van al origen a la vez, sea cual sea la clave.
+$t1 = cache_lru_turno($dir, 2);
+$t2 = cache_lru_turno($dir, 2);
+ok(is_resource($t1) && is_resource($t2), 'hay tantos turnos como se piden');
+ok(cache_lru_turno($dir, 2) === null, 'y ni uno más: el tercero se queda sin turno');
+$r = $flujo($dir, 'NO-DEBE-PEDIRSE', ['turnos' => 2]);
+eq([$r['fetch'], $r['saturado'], $r['fallo']], [0, 1, 0], 'sin turno: ni fetch ni 502, responde saturado');
+ok(!is_file("$dir/k.bin"), 'sin turno: no escribe la caché');
+$l = $log($dir);
+eq([$l[0]['estado'] ?? null, $l[0]['etapa'] ?? null], ['error', 'saturado'], 'sin turno: queda en el log');
+// Con un job vivo no es un fallo: el dato está en camino.
+file_put_contents("$dir/k.job", 'https://ejemplo/job/1');
+$r = $flujo($dir, 'NO-DEBE-PEDIRSE', ['turnos' => 2, 'job' => "$dir/k.job"]);
+eq([$r['fetch'], $r['pendiente'], $r['saturado']], [0, 1, 0], 'sin turno con job vivo → pendiente');
+unlink("$dir/k.job");
+// Un acierto no gasta turno: la caché se sirve aunque el origen esté saturado.
+file_put_contents("$dir/k.bin", 'YA');
+$r = $flujo($dir, 'OTRO', ['turnos' => 2]);
+eq([$r['servido'], $r['saturado']], [[['hit', null]], 0], 'un acierto no necesita turno');
+limpiar_dir($dir);
+fclose($t1);
+$r = $flujo($dir, 'DATOS', ['turnos' => 2]);
+eq([$r['fetch'], $r['servido']], [1, [['miss', 'sonda']]], 'al soltarse un turno, la siguiente petición pasa');
+$r2 = cache_lru_turno($dir, 2);
+ok(is_resource($r2), 'y el flujo devuelve su turno al terminar');
+fclose($r2); fclose($t2);
+limpiar_dir($dir);
+// Sin disco donde contar no hay límite (igual que sin flock no hay caché).
+ok(cache_lru_turno("$dir/no-existe", 2) === false, 'directorio sin escritura → sin límite, no 503 perpetuo');
+foreach (glob("$dir/.turno*") ?: [] as $f) { unlink($f); }
 @unlink("$dir/.hits.log");
 
 echo "cache_lru_log_linea (formato único):\n";

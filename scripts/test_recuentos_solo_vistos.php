@@ -33,7 +33,12 @@ function bitacora_nombre_tabla_bases() { return 'bas'; }
 function bitacora_nombre_tabla_base_compartida() { return 'comp'; }
 function bitacora_base_propia( $id ) { return true; }
 
-$fuente = (string) file_get_contents( __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-registro.php' );
+// El plugin entero: el fichero principal y los que carga con lo que aquí se mira
+// (la ficha .docx y los paneles del escritorio).
+$fuente = '';
+foreach ( array( 'registro', 'ficha-docx', 'admin' ) as $parte ) {
+    $fuente .= (string) file_get_contents( __DIR__ . "/../resources/plugins/bitacora-registro/bitacora-$parte.php" );
+}
 function sacar( string $fuente, string $nombre ): string {
     $desde = strpos( $fuente, "function $nombre(" );
     if ( false === $desde ) { echo "FALLA no se encuentra $nombre() en el plugin\n"; exit( 1 ); }
@@ -97,7 +102,9 @@ $r = bitacora_base_borrar( $pet );
 ok( $r instanceof WP_REST_Response, 'una base sin filas sí se borra' );
 
 echo "el SQL de cada recuento (criterios 2 y 4):\n";
-ok( preg_match( "/n_observaciones = intval\\( \\\$wpdb->get_var\\( \\\$wpdb->prepare\\(\\s*\"SELECT COUNT\\(\\*\\) FROM \\\$obs WHERE base_id = %d AND borrada_en IS NULL AND resultado = 'visto'\"/", $fuente ), 'n_observaciones de las bases solo cuenta vistas' );
+// El recuento de las bases se EJECUTA en scripts/test_bases_recuento.php; aquí
+// solo se fija que n_observaciones sigue saliendo de las vistas.
+ok( false !== strpos( sacar( $fuente, 'bitacora_bases_listar' ), "SUM( CASE WHEN resultado = 'visto' THEN 1 ELSE 0 END ) AS n_observaciones" ), 'n_observaciones de las bases solo cuenta vistas' );
 ok( preg_match( "/AS num_observaciones/", $fuente ) && preg_match( "/resultado = 'visto' \\) AS num_observaciones/", $fuente ), 'num_observaciones del observador solo cuenta vistas' );
 ok( preg_match( "/resultado = 'visto' \\) AS num FROM/", $fuente ), 'el panel de administración solo cuenta vistas' );
 ok( ! preg_match( "/resultado[^;]*DELETE|con_observaciones[^;]*resultado/", sacar( $fuente, 'bitacora_base_borrar' ) ), 'el guardián no mira el resultado' );

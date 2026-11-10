@@ -121,15 +121,10 @@
       // la página. Sin esto, un nombre con "<" podría inyectar HTML.
       // Escapamos también las comillas porque usamos esc() DENTRO de atributos
       // (href="…", data-id="…"): una comilla suelta rompería el atributo.
-      function esc(txt) {
-        if (txt === null || txt === undefined) return '';
-        return String(txt)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
-      }
+      // La regla es una sola y vive en bitacora-base.js (cargado antes). Va como
+      // declaración de función y no como `var esc = …`: mostrarMensaje() se llama
+      // más arriba (sin sesión) y una `var` aún no estaría asignada.
+      function esc(txt) { return window.BitacoraBase.esc(txt); }
 
       // "2023-10-21 21:30:00" -> "21 oct 2023, 21:30 UTC"
       function fmtFecha(v) {

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bitácora Registro
  * Description: Almacena observaciones astronómicas en una tabla propia (SQL estándar, portable). Expone un endpoint REST protegido por sesión de WordPress.
- * Version:     1.40.1
+ * Version:     1.40.2
  * Author:      Israel Pérez de Tudela Vázquez
  * License:     GPL-2.0-or-later
  *
@@ -22,7 +22,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BITACORA_VERSION', '1.40.1' );
+// La versión se escribe UNA vez, en la cabecera `Version:` de arriba. De ella
+// sale la constante que dispara la migración de esquema
+// (bitacora_comprobar_version): con dos sitios, subir solo la cabecera dejaba
+// las columnas nuevas sin crear y las peticiones que las usan, en 500.
+define( 'BITACORA_VERSION', get_file_data( __FILE__, array( 'v' => 'Version' ) )['v'] );
 // Topes de una entrada por ocular. El formulario (bitacora-formulario.js, TOPES)
 // usa los mismos valores; scripts/test_validacion_servidor.php lo comprueba.
 define( 'BITACORA_TOPE_AUMENTO', 10000 );
@@ -80,6 +84,16 @@ require_once __DIR__ . '/bitacora-distancia.php';
 // Qué observaciones usaron equipo de otro y cuáles calibran (#499): regla pura,
 // con test propio (scripts/test_equipo_prestado.php).
 require_once __DIR__ . '/bitacora-equipo-prestado.php';
+
+// Las consultas a SIMBAD, Gaia, VizieR, OAC y NED: toda la red del plugin
+// (scripts/test_fallo_red_no_es_nulo.php).
+require_once __DIR__ . '/bitacora-catalogos.php';
+
+// La ficha .docx de una observación (GET /observaciones/{id}/ficha).
+require_once __DIR__ . '/bitacora-ficha-docx.php';
+
+// La pantalla del escritorio, sus paneles y las semillas de datos.
+require_once __DIR__ . '/bitacora-admin.php';
 
 /**
  * Nombre real de la tabla, con el prefijo que use esta instalación
@@ -1069,16 +1083,23 @@ function bitacora_viajes_listar( WP_REST_Request $peticion ) {
     }
     $filas = $wpdb->get_results( $sql );
     $uid   = get_current_user_id();
+    // El listado es público, las coordenadas de una base no: solo viajan si
+    // quien mira puede ver esa base. Una consulta por base distinta, no por fila.
+    $legible = array();
     foreach ( $filas as $f ) {
+        $bid = intval( $f->base_id );
+        if ( $bid > 0 && ! isset( $legible[ $bid ] ) ) {
+            $legible[ $bid ] = bitacora_base_legible( $bid, $uid );
+        }
         $f->num_objetos        = intval( $f->num_objetos );
         $f->num_filas          = intval( $f->num_filas );
         $f->num_no_confirmados = $f->num_filas - $f->num_objetos;
         $f->mio         = ( intval( $f->usuario_id ) === $uid );
         $f->objetos     = $f->objetos_ruta ? explode( '|', $f->objetos_ruta ) : array();
         unset( $f->objetos_ruta );
-        // base null = el viaje no registró lugar; es lo que hace que el
-        // formulario de registro vuelva a preguntarlo.
-        $f->base = intval( $f->base_id ) > 0 ? array(
+        // base null = el viaje no registró lugar (o quien mira no puede ver
+        // la base); es lo que hace que el formulario vuelva a preguntarlo.
+        $f->base = ( $bid > 0 && $legible[ $bid ] ) ? array(
             'id'        => intval( $f->base_id ),
             'nombre'    => $f->base_nombre,
             'lat'       => $f->base_lat,
@@ -1179,7 +1200,8 @@ function bitacora_viaje_leer( WP_REST_Request $peticion ) {
     $t_ocu = bitacora_nombre_tabla_oculares();
     $t_bas = bitacora_nombre_tabla_bases();
 
-    $viaje->base = $viaje->base_id
+    // Ruta pública: las coordenadas solo viajan si quien mira puede ver la base.
+    $viaje->base = ( $viaje->base_id && bitacora_base_legible( $viaje->base_id, get_current_user_id() ) )
         ? $wpdb->get_row( $wpdb->prepare( "SELECT id, nombre, lat, lon, altitud_m, tz FROM $t_bas WHERE id = %d", $viaje->base_id ) )
         : null;
 
@@ -1316,15 +1338,26 @@ function bitacora_viaje_editar( WP_REST_Request $peticion ) {
         return new WP_REST_Response( bitacora_viaje_adornar( bitacora_viaje_obtener( $viaje->id ) ), 200 );
     }
     $datos['actualizado_en'] = current_time( 'mysql', true );
-    $wpdb->update( bitacora_nombre_tabla_viajes(), $datos, array( 'id' => intval( $viaje->id ) ) );
-    // El lugar es del viaje: si se muda, se lleva con él las observaciones de esa
-    // salida, que es lo que mantiene en pie la salud de la base.
-    if ( isset( $datos['base_id'] ) ) {
-        $wpdb->update(
+    // Las dos escrituras van juntas: un viaje mudado con sus observaciones en el
+    // lugar anterior descuadra la salud de las dos bases.
+    $r = bitacora_en_transaccion( function () use ( $wpdb, $datos, $viaje ) {
+        $error = new WP_Error( 'error_bd', 'No se pudo guardar el viaje. No se ha cambiado nada.', array( 'status' => 500 ) );
+        if ( false === $wpdb->update( bitacora_nombre_tabla_viajes(), $datos, array( 'id' => intval( $viaje->id ) ) ) ) {
+            return $error;
+        }
+        // El lugar es del viaje: si se muda, se lleva con él las observaciones de esa
+        // salida, que es lo que mantiene en pie la salud de la base.
+        if ( isset( $datos['base_id'] ) && false === $wpdb->update(
             bitacora_nombre_tabla(),
             array( 'base_id' => $datos['base_id'] ? $datos['base_id'] : null ),
             array( 'viaje_id' => intval( $viaje->id ) )
-        );
+        ) ) {
+            return $error;
+        }
+        return true;
+    } );
+    if ( is_wp_error( $r ) ) {
+        return $r;
     }
     return new WP_REST_Response( bitacora_viaje_adornar( bitacora_viaje_obtener( $viaje->id ) ), 200 );
 }
@@ -1369,23 +1402,36 @@ function bitacora_viaje_tripulacion_guardar( WP_REST_Request $peticion ) {
     $t_tri = bitacora_nombre_tabla_viaje_tripulacion();
     $t_obr = bitacora_nombre_tabla_observadores();
 
-    $wpdb->delete( $t_tri, array( 'viaje_id' => intval( $viaje->id ) ), array( '%d' ) );
+    // Se reemplaza entera, así que borrar y volver a poner van en una transacción:
+    // si un alta falla, la tripulación anterior sigue ahí.
     $puestos = array();
-    foreach ( $ids as $oid ) {
-        $oid = intval( $oid );
-        // Solo observadores que existen de verdad, y sin repetir.
-        if ( $oid <= 0 || isset( $puestos[ $oid ] ) ) {
-            continue;
+    $r = bitacora_en_transaccion( function () use ( $wpdb, $viaje, $ids, $t_tri, $t_obr, &$puestos ) {
+        $error = new WP_Error( 'error_bd', 'No se pudo guardar la tripulación. No se ha cambiado nada.', array( 'status' => 500 ) );
+        if ( false === $wpdb->delete( $t_tri, array( 'viaje_id' => intval( $viaje->id ) ), array( '%d' ) ) ) {
+            return $error;
         }
-        if ( ! $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t_obr WHERE id = %d", $oid ) ) ) {
-            continue;
+        foreach ( $ids as $oid ) {
+            $oid = intval( $oid );
+            // Solo observadores que existen de verdad, y sin repetir.
+            if ( $oid <= 0 || isset( $puestos[ $oid ] ) ) {
+                continue;
+            }
+            if ( ! $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t_obr WHERE id = %d", $oid ) ) ) {
+                continue;
+            }
+            if ( false === $wpdb->insert( $t_tri, array(
+                'viaje_id'      => intval( $viaje->id ),
+                'observador_id' => $oid,
+                'creado_en'     => current_time( 'mysql', true ),
+            ), array( '%d', '%d', '%s' ) ) ) {
+                return $error;
+            }
+            $puestos[ $oid ] = true;
         }
-        $wpdb->insert( $t_tri, array(
-            'viaje_id'      => intval( $viaje->id ),
-            'observador_id' => $oid,
-            'creado_en'     => current_time( 'mysql', true ),
-        ), array( '%d', '%d', '%s' ) );
-        $puestos[ $oid ] = true;
+        return true;
+    } );
+    if ( is_wp_error( $r ) ) {
+        return $r;
     }
     return new WP_REST_Response( array( 'ok' => true, 'tripulacion' => array_keys( $puestos ) ), 200 );
 }
@@ -2341,6 +2387,14 @@ function bitacora_observador_id_desde_nombre( $nombre, $usuario_id = 0 ) {
     if ( '' === $clave ) {
         $clave = 'obs-' . substr( md5( $nombre ), 0, 12 );
     }
+    // Un usuario, un observador: quien ya tiene el suyo y firma con otro nombre
+    // (el de un compañero) no se queda con ese otro. Sin esto, registrar una
+    // observación de «Ana» enlazaba a Ana con la cuenta de quien la tecleó.
+    if ( $usuario_id && $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM $tabla WHERE usuario_id = %d AND clave <> %s LIMIT 1", intval( $usuario_id ), $clave
+    ) ) ) {
+        $usuario_id = 0;
+    }
     $id = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $tabla WHERE clave = %s", $clave ) );
     if ( $id ) {
         // Si el observador ya existía sin usuario vinculado y ahora conocemos uno
@@ -2659,7 +2713,9 @@ function bitacora_equipo_editar( WP_REST_Request $peticion ) {
         return new WP_Error( 'sin_cambios', 'No hay nada que actualizar.', array( 'status' => 400 ) );
     }
     $upd['actualizado_en'] = current_time( 'mysql', true );
-    $wpdb->update( $tabla, $upd, array( 'id' => intval( $peticion['id'] ) ) );
+    if ( false === $wpdb->update( $tabla, $upd, array( 'id' => intval( $peticion['id'] ) ) ) ) {
+        return new WP_Error( 'bd', 'No se pudo guardar la pieza de equipo.', array( 'status' => 500 ) );
+    }
     $fila = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $tabla WHERE id = %d", intval( $peticion['id'] ) ) );
     return new WP_REST_Response( array( 'ok' => true, 'item' => $fila ), 200 );
 }
@@ -2952,19 +3008,44 @@ function bitacora_datos_js( WP_REST_Request $peticion ) {
     $observaciones  = array();
     $viaje_objetos  = array();
     $obs_rows = $wpdb->get_results( "SELECT * FROM $t_ob WHERE borrada_en IS NULL ORDER BY id ASC" );
+
+    // Fichas, entradas e imágenes se traen de una vez y se reparten aquí: pedirlas
+    // observación a observación eran más de mil consultas por cada visita al
+    // mapa, que es público y no se cachea.
+    $fichas_de = array();
+    foreach ( $wpdb->get_results( "SELECT * FROM $t_fic ORDER BY id ASC" ) as $f ) {
+        if ( ! isset( $fichas_de[ (int) $f->observacion_id ] ) ) {
+            $fichas_de[ (int) $f->observacion_id ] = $f;
+        }
+    }
+    $entradas_de = array();
+    foreach ( $wpdb->get_results(
+        "SELECT e.* FROM $t_ent e JOIN $t_ob o ON o.id = e.observacion_id
+         WHERE o.borrada_en IS NULL ORDER BY e.orden ASC, e.id ASC"
+    ) as $e ) {
+        $entradas_de[ (int) $e->observacion_id ][] = $e;
+    }
+    $imagenes_de = array();
+    foreach ( $wpdb->get_results(
+        "SELECT i.* FROM $t_img i JOIN $t_ent e ON e.id = i.entrada_id JOIN $t_ob o ON o.id = e.observacion_id
+         WHERE o.borrada_en IS NULL ORDER BY i.orden ASC, i.id ASC"
+    ) as $im ) {
+        $imagenes_de[ (int) $im->entrada_id ][] = $im;
+    }
+
     foreach ( $obs_rows as $ob ) {
         $slug = bitacora_slug_objeto( $ob->objeto );
         if ( '' === $slug ) {
             continue;
         }
-        $ficha = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t_fic WHERE observacion_id = %d", $ob->id ) );
+        $ficha = isset( $fichas_de[ (int) $ob->id ] ) ? $fichas_de[ (int) $ob->id ] : null;
 
-        $entradas = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $t_ent WHERE observacion_id = %d ORDER BY orden ASC, id ASC", $ob->id ) );
+        $entradas = isset( $entradas_de[ (int) $ob->id ] ) ? $entradas_de[ (int) $ob->id ] : array();
         $entries = array();
         foreach ( $entradas as $e ) {
             $principales = array();
             $anexos = array();
-            $imgs = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $t_img WHERE entrada_id = %d ORDER BY orden ASC, id ASC", $e->id ) );
+            $imgs = isset( $imagenes_de[ (int) $e->id ] ) ? $imagenes_de[ (int) $e->id ] : array();
             foreach ( $imgs as $im ) {
                 $origen_im = isset( $im->origen ) ? $im->origen : 'subida';
                 if ( 'anexo' === $im->tipo ) {
@@ -3543,397 +3624,6 @@ function bitacora_coords_texto( $l, $b, $d ) {
 }
 
 /**
- * ¿La consulta a un catálogo falló por la red y no por el objeto? Lo es un
- * WP_Error (timeout, DNS), un 408 (timeout del servidor), un 429 (el servicio
- * nos frena) o un 5xx. Cualquier
- * otra respuesta es el catálogo contestando, y si no trae el objeto es que no
- * está. Es la ÚNICA regla que separa las dos cosas en las consultas de
- * bitacora_completar_objeto (issue #460).
- */
-function bitacora_fallo_de_red( $respuesta ) {
-    if ( is_wp_error( $respuesta ) ) {
-        return true;
-    }
-    $codigo = (int) wp_remote_retrieve_response_code( $respuesta );
-    return 408 === $codigo || 429 === $codigo || $codigo >= 500;
-}
-
-/**
- * Cachea que una consulta no dio resultado. Si el catálogo contestó «no está»,
- * 'nulo' durante un día; si falló la red, 'fallo' solo unos minutos, para que
- * un corte no deje el objeto sin distancia ni tipo 24 h. Los lectores tratan
- * cualquier valor no numérico como null.
- */
-function bitacora_cachear_ausencia( $cache_key, $fallo_de_red ) {
-    if ( $fallo_de_red ) {
-        set_transient( $cache_key, 'fallo', BITACORA_TTL_FALLO_RED );
-    } else {
-        set_transient( $cache_key, 'nulo', DAY_IN_SECONDS );
-    }
-}
-
-/**
- * Consulta SIMBAD (servicio TAP) por identificador y devuelve
- * array( 'ra', 'dec', 'dist_al', 'morph', 'otype', 'sp_type', 'gaia_dr3_id' ) o
- * null si no se encuentra o falla la red. La distancia es la mediana de las
- * medidas disponibles y, si no hay ninguna, la que da la paralaje (ver
- * bitacora_distancia_al). Se cachea 30 días por identificador para no repetir
- * peticiones.
- */
-function bitacora_simbad( $identificador ) {
-    // El mismo alias que aplica el navegador antes de Sesame: sin él, «Abell 12»
-    // traía la distancia y el tipo del cúmulo ACO 12 con las coordenadas de la
-    // planetaria.
-    $id = trim( (string) $identificador );
-    $id = bitacora_alias_abell( $id ) ?: $id;
-    if ( '' === $id ) {
-        return null;
-    }
-    // Versionada: si cambia la forma del array devuelto (nuevas claves como
-    // sp_type o gaia_dr3_id) o lo que se consulta (alias Abell), subir esta
-    // versión invalida de golpe la caché vieja en vez de dejar arrays a medias
-    // 30 días sirviendo null.
-    $cache_key = 'bitacora_simbad_v4_' . md5( strtolower( $id ) );
-    $cache = get_transient( $cache_key );
-    if ( false !== $cache ) {
-        return is_array( $cache ) ? $cache : null;
-    }
-
-    // `plx_value` (paralaje, en mas) y `sp_type` (tipo espectral en texto) viajan
-    // en la misma consulta: son gratis. `sp_type` alimenta el color de respaldo
-    // (BitacoraGaiaColor.bpRpPorTipo) cuando la estrella no tiene fotometría de
-    // Gaia (primarias muy brillantes, saturadas y fuera de catálogo).
-    //
-    // `g.id` es el identificador `Gaia DR3 <source_id>` que SIMBAD ya tiene
-    // vinculado al objeto (#468): viaja en esta misma consulta en vez de pagar
-    // una segunda ida y vuelta al mismo servicio. Es identidad, no posición, así
-    // que en sistemas múltiples (Gamma Andromedae) no se engancha a la vecina.
-    // Si SIMBAD no lo vinculó, ninguna búsqueda posicional del plugin acertará
-    // mejor: bitacora_gaia_bprp() no la intenta.
-    $adql = "SELECT b.ra, b.dec, b.morph_type, b.otype_txt, b.sp_type, d.dist, d.unit, b.plx_value, b.plx_err, g.id "
-        . "FROM basic AS b JOIN ident AS i ON i.oidref = b.oid "
-        . "LEFT JOIN mesDistance AS d ON d.oidref = b.oid "
-        . "LEFT JOIN ident AS g ON g.oidref = b.oid AND g.id LIKE 'Gaia DR3%' "
-        . "WHERE i.id = '" . str_replace( "'", "''", $id ) . "'";
-
-    // CDS primero; si no contesta (se cuelga a veces), el espejo de CfA. Solo un
-    // fallo de red o un 5xx pasa al siguiente: un 200 sin filas es «no está».
-    $respuesta = null;
-    foreach ( array(
-        'https://simbad.cds.unistra.fr/simbad/sim-tap/sync',
-        'https://simbad.cfa.harvard.edu/simbad/sim-tap/sync',
-    ) as $url ) {
-        $respuesta = wp_remote_post(
-            $url,
-            array(
-                'timeout' => 15,
-                'body'    => array(
-                    'request' => 'doQuery',
-                    'lang'    => 'ADQL',
-                    'format'  => 'csv',
-                    'query'   => $adql,
-                ),
-            )
-        );
-        if ( ! is_wp_error( $respuesta ) && 200 === wp_remote_retrieve_response_code( $respuesta ) ) {
-            break;
-        }
-    }
-    if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
-        bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
-        return null;
-    }
-
-    $csv = trim( wp_remote_retrieve_body( $respuesta ) );
-    $lineas = preg_split( '/\r?\n/', $csv );
-    if ( count( $lineas ) < 2 ) {
-        bitacora_cachear_ausencia( $cache_key, false );
-        return null;
-    }
-    array_shift( $lineas ); // cabecera
-
-    $ra = null; $dec = null; $morph = ''; $otype = ''; $sp_type = ''; $plx = null; $plx_err = null;
-    $gaia_dr3_id = null;
-    $distancias_al = array();
-    // Factores a años luz por unidad de SIMBAD.
-    $a_al = array( 'pc' => 3.2616, 'kpc' => 3261.6, 'mpc' => 3261600.0, 'ly' => 1.0, 'al' => 1.0 );
-
-    foreach ( $lineas as $linea ) {
-        if ( '' === trim( $linea ) ) {
-            continue;
-        }
-        $c = str_getcsv( $linea );
-        if ( count( $c ) < 8 ) {
-            continue;
-        }
-        if ( null === $ra && is_numeric( $c[0] ) ) {
-            $ra = floatval( $c[0] );
-            $dec = floatval( $c[1] );
-        }
-        if ( '' === $morph && '' !== trim( $c[2] ) ) {
-            $morph = trim( $c[2] );
-        }
-        if ( '' === $otype && '' !== trim( $c[3] ) ) {
-            $otype = trim( $c[3] );
-        }
-        if ( '' === $sp_type && '' !== trim( $c[4] ) ) {
-            $sp_type = trim( $c[4] );
-        }
-        $dist = trim( $c[5] );
-        $unidad = strtolower( trim( $c[6] ) );
-        if ( is_numeric( $dist ) && isset( $a_al[ $unidad ] ) ) {
-            $distancias_al[] = floatval( $dist ) * $a_al[ $unidad ];
-        }
-        if ( null === $gaia_dr3_id && isset( $c[9] ) && preg_match( '/^Gaia DR3 (\d+)$/', trim( $c[9] ), $m ) ) {
-            $gaia_dr3_id = $m[1];
-        }
-        // La paralaje es del objeto, así que viene repetida en todas las filas.
-        if ( null === $plx && is_numeric( $c[7] ) ) {
-            $plx = floatval( $c[7] );
-            $plx_err = ( isset( $c[8] ) && is_numeric( $c[8] ) ) ? floatval( $c[8] ) : null;
-        }
-    }
-
-    $dist_al = bitacora_distancia_al( $distancias_al, $plx, $plx_err );
-
-    if ( null === $ra ) {
-        bitacora_cachear_ausencia( $cache_key, false );
-        return null;
-    }
-
-    $resultado = array(
-        'ra'          => $ra,
-        'dec'         => $dec,
-        'dist_al'     => $dist_al,
-        'morph'       => $morph,
-        'otype'       => $otype,
-        'sp_type'     => $sp_type,
-        'gaia_dr3_id' => $gaia_dr3_id,
-    );
-    set_transient( $cache_key, $resultado, 30 * DAY_IN_SECONDS );
-    return $resultado;
-}
-
-/**
- * Índice BP–RP (color de Gaia DR3) de una estrella, o null si no hay coincidencia
- * o falla la red. Alimenta el color de las estrellas del vecindario solar.
- *
- * Solo consulta cuando $gaia_dr3_id viene informado (identificador que SIMBAD ya
- * tiene vinculado al objeto, ver bitacora_simbad): busca por ese
- * `source_id` exacto, identidad y no posición. Sin id no se intenta ninguna
- * búsqueda por radio — un radio de ~10″ engancha a la estrella vecina en sistemas
- * múltiples (Gamma Andromedae: la primaria K está saturada y fuera de Gaia, y una
- * búsqueda posicional coge la compañera B, con un color completamente distinto).
- * Si SIMBAD, que ya hace su propio crossmatch, no vinculó el objeto a Gaia,
- * tampoco lo va a acertar mejor una búsqueda por posición del plugin: mejor
- * $bp_rp = null y que el llamador caiga al tipo espectral (sp_type).
- *
- * Consulta Gaia DR3 por TAP con el mismo failover que el proxy del simulador:
- * CDS (VizieR I/355/gaiadr3) y, si falla, GAVO (gaia.dr3lite). Se cachea 30 días
- * por source_id.
- */
-function bitacora_gaia_bprp( $gaia_dr3_id ) {
-    $gaia_dr3_id = trim( (string) $gaia_dr3_id );
-    if ( '' === $gaia_dr3_id || ! ctype_digit( $gaia_dr3_id ) ) {
-        return null;
-    }
-    $cache_key = 'bitacora_bprp_' . $gaia_dr3_id;
-    $cache = get_transient( $cache_key );
-    if ( false !== $cache ) {
-        return is_numeric( $cache ) ? floatval( $cache ) : null; // 'nulo' o 'fallo'
-    }
-
-    $proveedores = array(
-        array(
-            'url'   => 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync',
-            'query' => 'SELECT TOP 1 "BP-RP" AS bprp FROM "I/355/gaiadr3"'
-                . ' WHERE Source=' . $gaia_dr3_id . ' AND "BP-RP" IS NOT NULL',
-        ),
-        array(
-            'url'   => 'https://dc.zah.uni-heidelberg.de/tap/sync',
-            'query' => 'SELECT TOP 1 phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM gaia.dr3lite'
-                . ' WHERE source_id=' . $gaia_dr3_id
-                . ' AND phot_bp_mean_mag IS NOT NULL AND phot_rp_mean_mag IS NOT NULL',
-        ),
-    );
-
-    // 'fallo' solo si no contestó ninguno; un «no está» de cualquiera manda.
-    $fallo_de_red = true;
-    foreach ( $proveedores as $p ) {
-        $respuesta = wp_remote_post(
-            $p['url'],
-            array(
-                'timeout' => 20,
-                'body'    => array(
-                    'request' => 'doQuery',
-                    'lang'    => 'ADQL',
-                    'format'  => 'csv',
-                    'query'   => $p['query'],
-                ),
-            )
-        );
-        $fallo_de_red = $fallo_de_red && bitacora_fallo_de_red( $respuesta );
-        if ( is_wp_error( $respuesta ) || 200 !== wp_remote_retrieve_response_code( $respuesta ) ) {
-            continue;
-        }
-        $csv = trim( wp_remote_retrieve_body( $respuesta ) );
-        $lineas = preg_split( '/\r?\n/', $csv );
-        if ( count( $lineas ) < 2 ) {
-            continue; // solo cabecera: sin coincidencia en este proveedor
-        }
-        $val = trim( $lineas[1], " \"\r\n" );
-        if ( is_numeric( $val ) ) {
-            $bprp = floatval( $val );
-            set_transient( $cache_key, (string) $bprp, 30 * DAY_IN_SECONDS );
-            return $bprp;
-        }
-    }
-
-    bitacora_cachear_ausencia( $cache_key, $fallo_de_red );
-    return null;
-}
-
-/**
- * Distancia en años luz según VizieR, la SEGUNDA base de datos: se pregunta por
- * el nombre del objeto cuando SIMBAD no sabe a qué distancia está. Devuelve la
- * distancia o null. Se cachea 30 días por nombre.
- *
- * Catálogo consultado: B/ocl (Dias, «Optically visible open clusters and
- * Candidates»), que trae la distancia en pársecs de ~1.700 cúmulos abiertos, la
- * familia con más huecos en el `mesDistance` de SIMBAD (M11, NGC 869 y NGC 457
- * están aquí y allí no). Es una lista, no un catálogo general: las nebulosas
- * difusas siguen sin tener fuente automática y se resuelven a mano.
- */
-function bitacora_vizier_dist_al( $identificador ) {
-    // Los catálogos tabulados casan el nombre por texto exacto: "ngc2024" no es
-    // "NGC 2024". Si el identificador no tiene forma de prefijo+número (un nombre
-    // propio, una designación rara), no hay nada que preguntar aquí.
-    $nombre = bitacora_nombre_catalogo( $identificador );
-    if ( '' === $nombre ) {
-        return null;
-    }
-
-    $cache_key = 'bitacora_vizier_dist_' . md5( $nombre );
-    $cache = get_transient( $cache_key );
-    if ( false !== $cache ) {
-        return is_numeric( $cache ) ? floatval( $cache ) : null; // 'nulo' o 'fallo'
-    }
-
-    $respuesta = wp_remote_post(
-        'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync',
-        array(
-            'timeout' => 20,
-            'body'    => array(
-                'request' => 'doQuery',
-                'lang'    => 'ADQL',
-                'format'  => 'csv',
-                'query'   => 'SELECT TOP 1 Dist FROM "B/ocl/clusters"'
-                    . ' WHERE Cluster = \'' . str_replace( "'", "''", $nombre ) . '\' AND Dist > 0',
-            ),
-        )
-    );
-    if ( ! is_wp_error( $respuesta ) && 200 === wp_remote_retrieve_response_code( $respuesta ) ) {
-        $lineas = preg_split( '/\r?\n/', trim( wp_remote_retrieve_body( $respuesta ) ) );
-        if ( count( $lineas ) >= 2 ) {
-            $val = trim( $lineas[1], " \"\r\n" );
-            if ( is_numeric( $val ) && floatval( $val ) > 0 ) {
-                // La columna Dist de B/ocl viene en pársecs.
-                $al = round( floatval( $val ) * BITACORA_AL_POR_PARSEC );
-                set_transient( $cache_key, (string) $al, 30 * DAY_IN_SECONDS );
-                return $al;
-            }
-        }
-    }
-
-    bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
-    return null;
-}
-
-/**
- * Distancia en años luz según el OPEN ASTRONOMY CATALOG (api.astrocats.space),
- * o null. Se cachea 30 días por identificador.
- *
- * Es el catálogo abierto de los TRANSITORIOS —supernovas, mareas, kilonovas— y
- * de ellos publica la distancia de luminosidad en megapársecs. Cubre un hueco
- * que no tapa ningún otro: los restos históricos, que se registran por su nombre
- * de toda la vida y no tienen distancia en SIMBAD. M1 (la Cangrejo) responde
- * aquí como SN 1054, a 0,0019 Mpc (~6.200 años luz).
- *
- * Es estrecho a propósito y no se equivoca de objeto: preguntado por M31, M42,
- * M51 o NGC 2024 contesta que no lo conoce, así que no puede colar la distancia
- * de otro astro.
- */
-function bitacora_oac_dist_al( $identificador ) {
-    $id = trim( (string) $identificador );
-    if ( '' === $id ) {
-        return null;
-    }
-    $cache_key = 'bitacora_oac_dist_' . md5( strtolower( $id ) );
-    $cache = get_transient( $cache_key );
-    if ( false !== $cache ) {
-        return is_numeric( $cache ) ? floatval( $cache ) : null; // 'nulo' o 'fallo'
-    }
-
-    $respuesta = wp_remote_get(
-        'https://api.astrocats.space/' . rawurlencode( $id ) . '/lumdist',
-        array( 'timeout' => 20 )
-    );
-    if ( ! is_wp_error( $respuesta ) && 200 === wp_remote_retrieve_response_code( $respuesta ) ) {
-        $al = bitacora_oac_dist_al_desde_json( wp_remote_retrieve_body( $respuesta ) );
-        if ( null !== $al ) {
-            set_transient( $cache_key, (string) $al, 30 * DAY_IN_SECONDS );
-            return $al;
-        }
-    }
-
-    bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
-    return null;
-}
-
-/**
- * Distancia en años luz estimada a partir del corrimiento al rojo que da NED
- * (NASA/IPAC Extragalactic Database), o null. Se cachea 30 días.
- *
- * NED es la referencia de lo extragaláctico y su servicio ObjectLookup resuelve
- * el nombre y devuelve el z en un JSON pequeño. Lo que NO devuelve por ninguna
- * vía automática son sus distancias independientes del corrimiento al rojo (la
- * compilación NED-D): eso solo está en la página web, y raspar HTML dentro del
- * plugin sería tan frágil como inútil el día que cambien la plantilla.
- *
- * Así que de NED sale el z, y del z sale una ESTIMACIÓN por la ley de Hubble,
- * que es la última fuente de la escalera y solo se acepta lejos
- * (bitacora_distancia_por_redshift explica por qué). A los objetos galácticos
- * NED les devuelve z nulo, así que no estorban.
- */
-function bitacora_ned_dist_al( $identificador ) {
-    $id = trim( (string) $identificador );
-    if ( '' === $id ) {
-        return null;
-    }
-    $cache_key = 'bitacora_ned_dist_' . md5( strtolower( $id ) );
-    $cache = get_transient( $cache_key );
-    if ( false !== $cache ) {
-        return is_numeric( $cache ) ? floatval( $cache ) : null; // 'nulo' o 'fallo'
-    }
-
-    $respuesta = wp_remote_get(
-        add_query_arg( 'name', rawurlencode( $id ), 'https://ned.ipac.caltech.edu/srs/ObjectLookup' ),
-        array( 'timeout' => 20 )
-    );
-    if ( ! is_wp_error( $respuesta ) && 200 === wp_remote_retrieve_response_code( $respuesta ) ) {
-        $z  = bitacora_ned_redshift_desde_json( wp_remote_retrieve_body( $respuesta ) );
-        $al = bitacora_distancia_por_redshift( $z );
-        if ( null !== $al ) {
-            set_transient( $cache_key, (string) $al, 30 * DAY_IN_SECONDS );
-            return $al;
-        }
-    }
-
-    bitacora_cachear_ausencia( $cache_key, bitacora_fallo_de_red( $respuesta ) );
-    return null;
-}
-
-/**
  * Completa la posición y metadatos de un objeto del mapa a partir de su
  * identificador (etiqueta/slug). Resuelve el objeto en SIMBAD para obtener
  * distancia y tipo morfológico. Las coordenadas se toman de $ra_dado/$dec_dado
@@ -4222,19 +3912,35 @@ function bitacora_resolver_q_valida( $q ) {
  * Límite de ritmo de ventana fija: $max peticiones por $ventana segundos y por
  * $clave. Devuelve 0 si pasa (y cuenta la petición) o los segundos hasta que
  * acabe la ventana.
+ *
+ * Leer, sumar y guardar van bajo un bloqueo con nombre de MySQL: sin él, N
+ * peticiones a la vez leían todas el mismo contador y pasaban todas, que es
+ * justo la ráfaga que el cupo existe para frenar. El bloqueo es por clave, así
+ * que un usuario no hace esperar a otro.
+ * shortcut: si el bloqueo no llega en 2 s (o la BD no tiene GET_LOCK) se cuenta
+ * sin él, como antes; pasar a un contador atómico si eso llega a verse.
  */
 function bitacora_cupo( $clave, $ahora, $max, $ventana ) {
-    $key  = 'bitacora_rl_' . md5( (string) $clave );
-    $reg  = get_transient( $key );
+    global $wpdb;
+    $key    = 'bitacora_rl_' . md5( (string) $clave );
+    $tomado = '1' === (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 2)', $key ) );
+
+    $reg = get_transient( $key );
     if ( ! is_array( $reg ) || $ahora >= $reg[1] + $ventana ) {
         $reg = array( 0, $ahora );
     }
+    $espera = 0;
     if ( $reg[0] >= $max ) {
-        return max( 1, $reg[1] + $ventana - $ahora );
+        $espera = max( 1, $reg[1] + $ventana - $ahora );
+    } else {
+        $reg[0]++;
+        set_transient( $key, $reg, $ventana );
     }
-    $reg[0]++;
-    set_transient( $key, $reg, $ventana );
-    return 0;
+
+    if ( $tomado ) {
+        $wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $key ) );
+    }
+    return $espera;
 }
 
 /**
@@ -4523,6 +4229,17 @@ function bitacora_crear_objeto( WP_REST_Request $peticion ) {
         return new WP_Error( 'id_invalido', 'El identificador no es válido.', array( 'status' => 400 ) );
     }
 
+    // El catálogo del mapa es de todos: un objeto que ya está solo lo reescribe
+    // un administrador. Va antes de resolver para no gastar red en balde.
+    if ( ! current_user_can( 'manage_options' ) ) {
+        $ya = $wpdb->get_row(
+            $wpdb->prepare( "SELECT * FROM " . bitacora_nombre_tabla_objetos() . " WHERE slug = %s", $slug )
+        );
+        if ( $ya ) {
+            return new WP_REST_Response( array( 'resultado' => 'existente', 'objeto' => $ya ), 200 );
+        }
+    }
+
     $num = null;
     if ( preg_match( '/^m(\d+)$/', $slug, $mm ) ) {
         $num = intval( $mm[1] );
@@ -4567,565 +4284,6 @@ function bitacora_crear_objeto( WP_REST_Request $peticion ) {
         array( 'resultado' => $res, 'objeto' => $fila_guardada ),
         ( 'insertado' === $res ) ? 201 : 200
     );
-}
-
-/**
- * Convierte un valor numérico de los CSV (decimales con coma, p. ej. "12,5")
- * a float, o null si está vacío/no numérico.
- */
-function bitacora_csv_num( $v ) {
-    $v = trim( (string) $v );
-    if ( '' === $v ) {
-        return null;
-    }
-    $v = str_replace( ',', '.', $v );
-    return is_numeric( $v ) ? floatval( $v ) : null;
-}
-
-/**
- * Lee un CSV del plugin (UTF-8) y devuelve un array de filas asociativas usando
- * la primera línea como cabecera. null si no existe. El separador es ';'.
- */
-function bitacora_leer_csv( $nombre, $sep = ';' ) {
-    $archivo = __DIR__ . '/datos/' . $nombre;
-    if ( ! file_exists( $archivo ) ) {
-        return null;
-    }
-    $lineas = file( $archivo, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
-    if ( ! $lineas ) {
-        return array();
-    }
-    // Quita el BOM UTF-8 si lo hubiera y los retornos de carro (CRLF) de cada
-    // línea, para que el último campo de cada fila no arrastre un "\r".
-    $lineas = array_map( function ( $l ) { return rtrim( $l, "\r" ); }, $lineas );
-    $lineas[0] = preg_replace( '/^\xEF\xBB\xBF/', '', $lineas[0] );
-    // Entrecomillado y escape explícitos: desde PHP 8.4 omitirlos avisa de que su
-    // valor por defecto va a cambiar. Estos son los de siempre.
-    $cabecera = str_getcsv( array_shift( $lineas ), $sep, '"', '\\' );
-    $filas = array();
-    foreach ( $lineas as $linea ) {
-        $campos = str_getcsv( $linea, $sep, '"', '\\' );
-        $fila = array();
-        foreach ( $cabecera as $i => $col ) {
-            $fila[ trim( $col ) ] = isset( $campos[ $i ] ) ? $campos[ $i ] : '';
-        }
-        $filas[] = $fila;
-    }
-    return $filas;
-}
-
-/**
- * Importa el catálogo GLOBAL de equipo (telescopios, oculares y auxiliares) desde
- * los CSV de datos/. Idempotente: upsert por (vendor, modelo) sobre las filas del
- * catálogo (usuario_id NULL); no toca el equipo personal de nadie.
- * Devuelve array con recuentos por categoría o WP_Error.
- */
-function bitacora_importar_equipo_seed() {
-    global $wpdb;
-    $ahora = current_time( 'mysql', true );
-    $totales = array( 'telescopios' => 0, 'oculares' => 0, 'auxiliares' => 0 );
-
-    // Upsert de una fila del catálogo (usuario_id NULL) buscando por vendor+modelo.
-    $upsert = function ( $tabla, $clave_modelo, $vendor, $modelo, $datos ) use ( $wpdb, $ahora ) {
-        if ( '' === trim( (string) $vendor ) && '' === trim( (string) $modelo ) ) {
-            return null;
-        }
-        $id = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM $tabla WHERE usuario_id IS NULL AND vendor = %s AND $clave_modelo = %s",
-            $vendor,
-            $modelo
-        ) );
-        if ( $id ) {
-            $wpdb->update( $tabla, array_merge( $datos, array( 'actualizado_en' => $ahora ) ), array( 'id' => intval( $id ) ) );
-            return 'actualizado';
-        }
-        $wpdb->insert( $tabla, array_merge(
-            array( 'usuario_id' => null, 'vendor' => $vendor, $clave_modelo => $modelo, 'creado_en' => $ahora ),
-            $datos
-        ) );
-        return 'insertado';
-    };
-
-    // Telescopios: Vendor;Model;Optics;D (mm);D (inch);FL (mm);f/Ratio;...
-    $tel = bitacora_leer_csv( 'telescopios.csv' );
-    if ( is_array( $tel ) ) {
-        $t = bitacora_nombre_tabla_telescopios();
-        foreach ( $tel as $f ) {
-            $r = $upsert( $t, 'modelo', sanitize_text_field( $f['Vendor'] ), sanitize_text_field( $f['Model'] ), array(
-                'optica'      => sanitize_text_field( isset( $f['Optics'] ) ? $f['Optics'] : '' ),
-                'apertura_mm' => bitacora_csv_num( isset( $f['D (mm)'] ) ? $f['D (mm)'] : '' ),
-                'focal_mm'    => bitacora_csv_num( isset( $f['FL (mm)'] ) ? $f['FL (mm)'] : '' ),
-                'f_ratio'     => bitacora_csv_num( isset( $f['f/Ratio'] ) ? $f['f/Ratio'] : '' ),
-            ) );
-            if ( $r ) {
-                $totales['telescopios']++;
-            }
-        }
-    }
-
-    // Oculares: Vendor;Model;F.Length (mm);AFoV (°);Barrel (");Reticle
-    $ocu = bitacora_leer_csv( 'oculares.csv' );
-    if ( is_array( $ocu ) ) {
-        $t = bitacora_nombre_tabla_oculares();
-        foreach ( $ocu as $f ) {
-            $r = $upsert( $t, 'modelo', sanitize_text_field( $f['Vendor'] ), sanitize_text_field( $f['Model'] ), array(
-                'focal_mm'       => bitacora_csv_num( isset( $f['F.Length (mm)'] ) ? $f['F.Length (mm)'] : '' ),
-                'campo_aparente' => bitacora_csv_num( isset( $f['AFoV (°)'] ) ? $f['AFoV (°)'] : '' ),
-                'barril_mm'      => bitacora_csv_num( isset( $f['Barrel (")'] ) ? $f['Barrel (")'] : '' ),
-            ) );
-            if ( $r ) {
-                $totales['oculares']++;
-            }
-        }
-    }
-
-    // Auxiliares: Vendor;Name;Magnification;Focal Length extension (mm)
-    $aux = bitacora_leer_csv( 'auxiliares.csv' );
-    if ( is_array( $aux ) ) {
-        $t = bitacora_nombre_tabla_auxiliares();
-        foreach ( $aux as $f ) {
-            $r = $upsert( $t, 'nombre', sanitize_text_field( $f['Vendor'] ), sanitize_text_field( $f['Name'] ), array(
-                'factor'       => bitacora_csv_num( isset( $f['Magnification'] ) ? $f['Magnification'] : '' ),
-                'extension_mm' => bitacora_csv_num( isset( $f['Focal Length extension (mm)'] ) ? $f['Focal Length extension (mm)'] : '' ),
-            ) );
-            if ( $r ) {
-                $totales['auxiliares']++;
-            }
-        }
-    }
-
-    return $totales;
-}
-
-/**
- * Importa (o actualiza) los objetos desde datos/objetos-seed.json.
- * Devuelve array( 'insertados' => n, 'actualizados' => n ) o WP_Error.
- */
-function bitacora_importar_objetos_seed() {
-    global $wpdb;
-    $archivo = __DIR__ . '/datos/objetos-seed.json';
-    if ( ! file_exists( $archivo ) ) {
-        return new WP_Error( 'sin_semilla', 'No se encontró datos/objetos-seed.json en el servidor.' );
-    }
-    $json = json_decode( file_get_contents( $archivo ), true );
-    if ( ! is_array( $json ) ) {
-        return new WP_Error( 'semilla_invalida', 'El archivo de objetos no es un JSON válido.' );
-    }
-
-    $insertados = 0;
-    $actualizados = 0;
-    $avisos = array();
-
-    foreach ( $json as $o ) {
-        $slug = isset( $o['id'] ) ? sanitize_key( $o['id'] ) : '';
-        if ( '' === $slug ) {
-            continue;
-        }
-        $num = null;
-        if ( preg_match( '/^m(\d+)$/', $slug, $mm ) ) {
-            $num = intval( $mm[1] );
-        }
-
-        $fila = array(
-            'slug'         => $slug,
-            'num'          => $num,
-            'nombre'       => sanitize_text_field( isset( $o['name'] ) ? $o['name'] : '' ),
-            'etiqueta'     => sanitize_text_field( isset( $o['label'] ) ? $o['label'] : '' ),
-            'color'        => sanitize_text_field( isset( $o['color'] ) ? $o['color'] : '' ),
-            'ficha'        => sanitize_text_field( isset( $o['ficha'] ) ? $o['ficha'] : '' ),
-            'coords_texto' => sanitize_text_field( isset( $o['coords'] ) ? $o['coords'] : '' ),
-            'top_x'        => isset( $o['top']['x'] ) ? floatval( $o['top']['x'] ) : null,
-            'top_y'        => isset( $o['top']['y'] ) ? floatval( $o['top']['y'] ) : null,
-            'edge_x'       => isset( $o['edge']['x'] ) ? floatval( $o['edge']['x'] ) : null,
-            'edge_y'       => isset( $o['edge']['y'] ) ? floatval( $o['edge']['y'] ) : null,
-            'gal_l'        => isset( $o['l'] ) ? floatval( $o['l'] ) : null,
-            'gal_b'        => isset( $o['b'] ) ? floatval( $o['b'] ) : null,
-            'dist_al'      => isset( $o['dist_al'] ) ? floatval( $o['dist_al'] )
-                              : ( isset( $o['dist'] ) ? floatval( $o['dist'] ) : null ),
-            // La semilla no declara el tipo, solo el color de la leyenda, y ambos
-            // van 1:1: NGC 40, NGC 6826, NGC 6905, M27 y M57 son #5fe0c8 =
-            // 'planetaria'. Sin esto se quedaban en el mapa con el tipo vacío.
-            'tipo'         => sanitize_text_field(
-                ( isset( $o['tipo'] ) && '' !== $o['tipo'] )
-                    ? $o['tipo']
-                    : bitacora_tipo_por_color( isset( $o['color'] ) ? $o['color'] : '' )
-            ),
-            'morph'        => sanitize_text_field( isset( $o['morph'] ) ? $o['morph'] : '' ),
-        );
-
-        // Si la semilla no trae posición, se calcula automáticamente resolviendo
-        // el objeto en SIMBAD (coordenadas + distancia + tipo morfológico). Los
-        // objetos que ya traen top/edge del catálogo no tocan la red.
-        if ( null === $fila['top_x'] && null === $fila['top_y'] ) {
-            $ident = $fila['etiqueta'] ? $fila['etiqueta'] : strtoupper( $slug );
-            $calc  = bitacora_completar_objeto( $ident, $fila['dist_al'] );
-            if ( is_wp_error( $calc ) ) {
-                $avisos[] = $calc->get_error_message();
-            } else {
-                foreach ( $calc as $k => $v ) {
-                    // El valor calculado rellena solo lo que la semilla dejó vacío.
-                    if ( ! isset( $fila[ $k ] ) || null === $fila[ $k ] || '' === $fila[ $k ] ) {
-                        $fila[ $k ] = $v;
-                    }
-                }
-            }
-        }
-
-        $res = bitacora_guardar_objeto_fila( $slug, $fila );
-        if ( is_wp_error( $res ) ) {
-            $avisos[] = $slug . ': ' . $res->get_error_message();
-        } elseif ( 'actualizado' === $res ) {
-            $actualizados++;
-        } else {
-            $insertados++;
-        }
-    }
-    return array( 'insertados' => $insertados, 'actualizados' => $actualizados, 'avisos' => $avisos );
-}
-
-/**
- * Importa las observaciones históricas desde datos/observaciones-seed.json
- * (extraído de via-lactea-datos.js). Reemplaza las que ya estuvieran marcadas
- * como origen='legacy', de modo que es idempotente. Devuelve los recuentos.
- */
-function bitacora_importar_observaciones_seed() {
-    global $wpdb;
-    $archivo = __DIR__ . '/datos/observaciones-seed.json';
-    if ( ! file_exists( $archivo ) ) {
-        return new WP_Error( 'sin_semilla', 'No se encontró datos/observaciones-seed.json en el servidor.' );
-    }
-    $data = json_decode( file_get_contents( $archivo ), true );
-    if ( ! is_array( $data ) || empty( $data['observaciones'] ) ) {
-        return new WP_Error( 'semilla_invalida', 'La semilla de observaciones no es válida.' );
-    }
-
-    $t_ob  = bitacora_nombre_tabla();
-    $t_ent = bitacora_nombre_tabla_entradas();
-    $t_img = bitacora_nombre_tabla_imagenes();
-
-    // Borra las históricas previas (y sus entradas/imágenes) para reimportar limpio.
-    $previas = $wpdb->get_col( "SELECT id FROM $t_ob WHERE origen = 'legacy'" );
-    if ( $previas ) {
-        $ids     = implode( ',', array_map( 'intval', $previas ) );
-        $ent_ids = $wpdb->get_col( "SELECT id FROM $t_ent WHERE observacion_id IN ($ids)" );
-        if ( $ent_ids ) {
-            $eids = implode( ',', array_map( 'intval', $ent_ids ) );
-            $wpdb->query( "DELETE FROM $t_img WHERE entrada_id IN ($eids)" );
-        }
-        $wpdb->query( "DELETE FROM $t_ent WHERE observacion_id IN ($ids)" );
-        $wpdb->query( "DELETE FROM " . bitacora_nombre_tabla_fichas() . " WHERE observacion_id IN ($ids)" );
-        $wpdb->query( "DELETE FROM $t_ob WHERE id IN ($ids)" );
-    }
-
-    $usuario = get_current_user_id();
-    $ahora   = current_time( 'mysql', true );
-    $n_obs = 0; $n_ent = 0; $n_img = 0;
-
-    foreach ( $data['observaciones'] as $o ) {
-        $slug = sanitize_key( isset( $o['slug'] ) ? $o['slug'] : '' );
-        if ( '' === $slug ) {
-            continue;
-        }
-        $num = ( preg_match( '/^m(\d+)$/', $slug, $mm ) ) ? intval( $mm[1] ) : null;
-        // "m1" -> "M1"; "ngc40" -> "NGC 40"
-        $objeto = ( null !== $num ) ? ( 'M' . $num ) : strtoupper( preg_replace( '/^([a-z]+)(\d+)$/', '$1 $2', $slug ) );
-        $nombre_obs = sanitize_text_field( isset( $o['observador_nombre'] ) ? $o['observador_nombre'] : '' );
-
-        // Sin formatos: $wpdb usa %s para todo y convierte null en NULL.
-        $wpdb->insert( $t_ob, array(
-            'objeto'          => $objeto,
-            'objeto_etiqueta' => $objeto,
-            'tipo'            => ( null !== $num ) ? 'messier' : 'otro',
-            'num'             => $num,
-            'observador'      => $nombre_obs,
-            'telescopio'      => sanitize_text_field( isset( $o['instrumento'] ) ? $o['instrumento'] : '' ),
-            'fecha_observacion' => sanitize_text_field( isset( $o['fecha'] ) ? (string) $o['fecha'] : '' ),
-            'default_index'   => intval( isset( $o['default_index'] ) ? $o['default_index'] : 0 ),
-            'origen'          => 'legacy',
-            'usuario_id'      => $usuario,
-            'creado_en'       => $ahora,
-        ) );
-        $obs_id = intval( $wpdb->insert_id );
-        if ( ! $obs_id ) {
-            continue;
-        }
-        bitacora_asignar_observador( $obs_id, $nombre_obs, $usuario );
-        // La sesión (lugar/fecha/pdf) va a la ficha, no a la observación.
-        $wpdb->insert( bitacora_nombre_tabla_fichas(), array(
-            'observacion_id' => $obs_id,
-            'lugar'          => sanitize_text_field( isset( $o['lugar'] ) ? $o['lugar'] : '' ),
-            'fecha'          => sanitize_text_field( isset( $o['fecha'] ) ? (string) $o['fecha'] : '' ),
-            'pdf'            => esc_url_raw( isset( $o['pdf'] ) ? $o['pdf'] : '' ),
-            'creado_en'      => $ahora,
-        ) );
-        $n_obs++;
-
-        $orden = 0;
-        $entries = isset( $o['entries'] ) && is_array( $o['entries'] ) ? $o['entries'] : array();
-        foreach ( $entries as $e ) {
-            $wpdb->insert( $t_ent, array(
-                'observacion_id' => $obs_id,
-                'orden'          => $orden,
-                'aumento'        => isset( $e['aumento'] ) ? $e['aumento'] : null,
-                'campo_real'     => isset( $e['campo_real'] ) ? $e['campo_real'] : null,
-                'pupila_salida'  => isset( $e['pupila'] ) ? $e['pupila'] : null,
-                'boton'          => sanitize_text_field( isset( $e['boton'] ) ? $e['boton'] : '' ),
-                'titulo'         => sanitize_text_field( isset( $e['titulo'] ) ? $e['titulo'] : '' ),
-                'descripcion'    => wp_kses_post( isset( $e['html'] ) ? $e['html'] : '' ),
-                'creado_en'      => $ahora,
-            ) );
-            $ent_id = intval( $wpdb->insert_id );
-            $n_ent++;
-
-            $io = 0;
-            $imgs = isset( $e['imagenes'] ) && is_array( $e['imagenes'] ) ? $e['imagenes'] : array();
-            foreach ( $imgs as $img ) {
-                $archivo = sanitize_text_field( isset( $img['archivo'] ) ? $img['archivo'] : '' );
-                if ( '' === $archivo ) {
-                    continue;
-                }
-                $pos = ( isset( $img['pos'] ) && in_array( $img['pos'], array( 'left', 'right' ), true ) ) ? $img['pos'] : '';
-                $wpdb->insert( $t_img, array(
-                    'entrada_id' => $ent_id,
-                    'orden'      => $io,
-                    'tipo'       => ( isset( $img['tipo'] ) && 'anexo' === $img['tipo'] ) ? 'anexo' : 'principal',
-                    'imagen_id'  => null,
-                    'imagen_url' => $archivo,   // nombre de archivo; el visor antepone la ruta base
-                    'etiqueta'   => sanitize_text_field( isset( $img['etiqueta'] ) ? $img['etiqueta'] : '' ),
-                    'pos'        => $pos,
-                    'creado_en'  => $ahora,
-                ) );
-                $io++; $n_img++;
-            }
-            $orden++;
-        }
-    }
-
-    return array( 'observaciones' => $n_obs, 'entradas' => $n_ent, 'imagenes' => $n_img );
-}
-
-/** Panel del escritorio: importación de las observaciones históricas. */
-function bitacora_panel_legacy() {
-    global $wpdb;
-    $t = bitacora_nombre_tabla();
-
-    if ( isset( $_POST['bitacora_importar_legacy'] ) && check_admin_referer( 'bitacora_importar_legacy' ) ) {
-        $r = bitacora_importar_observaciones_seed();
-        if ( is_wp_error( $r ) ) {
-            echo '<div class="notice notice-error"><p>' . esc_html( $r->get_error_message() ) . '</p></div>';
-        } else {
-            echo '<div class="notice notice-success"><p>Importadas <strong>' . intval( $r['observaciones'] ) .
-                 '</strong> observaciones históricas, ' . intval( $r['entradas'] ) . ' entradas y ' .
-                 intval( $r['imagenes'] ) . ' imágenes.</p></div>';
-        }
-    }
-
-    if ( isset( $_POST['bitacora_reasignar_legacy'] ) && check_admin_referer( 'bitacora_reasignar_legacy' ) ) {
-        $uid = intval( isset( $_POST['bitacora_usuario_destino'] ) ? $_POST['bitacora_usuario_destino'] : 0 );
-        $destino = $uid ? get_userdata( $uid ) : false;
-        if ( $destino ) {
-            $n = $wpdb->query( $wpdb->prepare( "UPDATE $t SET usuario_id = %d WHERE origen = 'legacy'", $uid ) );
-            // Vincula también el observador de esas observaciones a este usuario de WordPress.
-            $t_obs = bitacora_nombre_tabla_observadores();
-            $wpdb->query( $wpdb->prepare(
-                "UPDATE $t_obs SET usuario_id = %d WHERE id IN ( SELECT observador_id FROM ( SELECT DISTINCT observador_id FROM $t WHERE origen = 'legacy' AND observador_id IS NOT NULL ) AS sub )",
-                $uid
-            ) );
-            echo '<div class="notice notice-success"><p>Reasignadas <strong>' . intval( $n ) . '</strong> observaciones históricas a <strong>' . esc_html( $destino->display_name ) . '</strong>. Ya puedes editarlas y generar sus fichas desde ese usuario.</p></div>';
-        } else {
-            echo '<div class="notice notice-error"><p>Selecciona un usuario válido.</p></div>';
-        }
-    }
-
-    $total = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $t WHERE origen = 'legacy'" ) );
-
-    echo '<div style="margin:22px 0;padding:2px 18px 14px;border:1px solid #c3c4c7;border-left:4px solid #2271b1;background:#fff;max-width:820px">';
-    echo '<h2 style="margin-top:14px">Observaciones históricas (de via-lactea-datos.js)</h2>';
-    echo '<p>Importadas en la base de datos: <strong>' . $total . '</strong>. Incluyen sus entradas por ocular, textos e imágenes.</p>';
-    echo '<form method="post">';
-    wp_nonce_field( 'bitacora_importar_legacy' );
-    echo '<button type="submit" name="bitacora_importar_legacy" value="1" class="button button-primary">Importar / reimportar observaciones históricas</button>';
-    echo ' <span style="color:#646970">Idempotente: reemplaza las históricas por las de la semilla (no toca las que registres con el formulario).</span>';
-    echo '</form>';
-
-    // Reasignar la propiedad (usuario_id) de las históricas a un usuario de WordPress.
-    echo '<form method="post" style="margin-top:16px;padding-top:14px;border-top:1px solid #e0e0e0">';
-    wp_nonce_field( 'bitacora_reasignar_legacy' );
-    echo '<label style="margin-right:8px">Propietario de las observaciones históricas: </label>';
-    wp_dropdown_users( array( 'name' => 'bitacora_usuario_destino', 'selected' => get_current_user_id() ) );
-    echo ' <button type="submit" name="bitacora_reasignar_legacy" value="1" class="button">Reasignar</button>';
-    echo '<p style="color:#646970;margin:8px 0 0">Pone las históricas a nombre del usuario elegido (el que puede editarlas y generar sus fichas). No reimporta ni cambia su contenido.</p>';
-    echo '</form></div>';
-}
-
-/** Panel del escritorio: catálogo de observadores. */
-function bitacora_panel_observadores() {
-    global $wpdb;
-    $t = bitacora_nombre_tabla_observadores();
-
-    // Canales propios del observador: el feed RSS de su podcast (issue #178), de
-    // donde el fieldset de audio saca el desplegable de episodios, y su blog, el
-    // "planeta de origen" que el mapa enciende junto a su nombre. Un solo
-    // formulario por fila guarda los dos.
-    if ( isset( $_POST['bitacora_guardar_feed'] ) && check_admin_referer( 'bitacora_guardar_feed' ) ) {
-        $obs_id   = intval( $_POST['bitacora_observador_id'] ?? 0 );
-        $feed_url = esc_url_raw( trim( $_POST['bitacora_feed_rss_url'] ?? '' ) );
-        // https obligado: un blog en http avisa de inseguro al visitante que llega.
-        // Una URL que no lo cumple NO se guarda como vacía: eso borraría en
-        // silencio el blog que ya tenía el observador (y apagaría su planeta)
-        // por una errata al teclear. Se deja como estaba y se dice por qué, que
-        // es lo mismo que hace el REST devolviendo un 400.
-        $blog_crudo = trim( (string) ( $_POST['bitacora_blog_url'] ?? '' ) );
-        $blog_url   = bitacora_sanitizar_url_https( $blog_crudo );
-        $campos     = array( 'feed_rss_url' => $feed_url );
-        $blog_malo  = ( '' !== $blog_crudo && '' === $blog_url );
-        if ( ! $blog_malo ) {
-            $campos['blog_url'] = $blog_url;
-        }
-        if ( $obs_id ) {
-            $wpdb->update(
-                $t,
-                $campos,
-                array( 'id' => $obs_id ),
-                array_fill( 0, count( $campos ), '%s' ),
-                array( '%d' )
-            );
-            if ( $blog_malo ) {
-                echo '<div class="notice notice-error"><p>La URL del blog debe empezar por <code>https://</code>. El blog se ha dejado como estaba; el feed sí se ha guardado.</p></div>';
-            } else {
-                echo '<div class="notice notice-success"><p>Canales del observador actualizados.</p></div>';
-            }
-        }
-    }
-
-    $obs = $wpdb->get_results(
-        "SELECT o.*, ( SELECT COUNT(*) FROM " . bitacora_nombre_tabla() . " b WHERE b.observador_id = o.id AND b.borrada_en IS NULL AND b.resultado = 'visto' ) AS num FROM $t o ORDER BY o.nombre ASC"
-    );
-    echo '<div style="margin:22px 0;padding:2px 18px 14px;border:1px solid #c3c4c7;border-left:4px solid #2271b1;background:#fff;max-width:820px">';
-    echo '<h2 style="margin-top:14px">Observadores</h2>';
-    if ( empty( $obs ) ) {
-        echo '<p>Todavía no hay observadores. Se crean solos al registrar observaciones.</p></div>';
-        return;
-    }
-    echo '<p>Disponibles en <code>/wp-json/bitacora/v1/observadores</code>. Filtra observaciones con <code>?observador=ID</code>.</p>';
-    echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Nombre</th><th>Clave</th><th>Observaciones</th><th>Canales propios (podcast y blog)</th></tr></thead><tbody>';
-    foreach ( $obs as $o ) {
-        printf(
-            '<tr><td>%d</td><td><strong>%s</strong></td><td>%s</td><td>%d</td><td>' .
-            '<form method="post" style="display:flex;gap:6px;flex-wrap:wrap">%s' .
-            '<input type="hidden" name="bitacora_observador_id" value="%d">' .
-            '<input type="url" name="bitacora_feed_rss_url" value="%s" placeholder="https://…/feed.xml" style="flex:1 1 220px">' .
-            '<input type="url" name="bitacora_blog_url" value="%s" placeholder="https://… (blog)" style="flex:1 1 220px">' .
-            '<button type="submit" name="bitacora_guardar_feed" value="1" class="button">Guardar</button>' .
-            '</form></td></tr>',
-            intval( $o->id ), esc_html( $o->nombre ), esc_html( $o->clave ), intval( $o->num ),
-            wp_nonce_field( 'bitacora_guardar_feed', '_wpnonce', true, false ),
-            intval( $o->id ), esc_attr( $o->feed_rss_url ),
-            esc_attr( isset( $o->blog_url ) ? $o->blog_url : '' )
-        );
-    }
-    echo '</tbody></table></div>';
-}
-
-/** Panel del escritorio: estado e importación de los objetos del mapa. */
-function bitacora_panel_objetos() {
-    global $wpdb;
-    $tabla = bitacora_nombre_tabla_objetos();
-
-    if ( isset( $_POST['bitacora_importar_objetos'] ) && check_admin_referer( 'bitacora_importar_objetos' ) ) {
-        $r = bitacora_importar_objetos_seed();
-        if ( is_wp_error( $r ) ) {
-            echo '<div class="notice notice-error"><p>' . esc_html( $r->get_error_message() ) . '</p></div>';
-        } else {
-            echo '<div class="notice notice-success"><p>Objetos importados: <strong>' . intval( $r['insertados'] ) .
-                 '</strong> nuevos, <strong>' . intval( $r['actualizados'] ) . '</strong> actualizados.</p></div>';
-        }
-    }
-
-    $total = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $tabla" ) );
-
-    echo '<div style="margin:22px 0;padding:2px 18px 14px;border:1px solid #c3c4c7;border-left:4px solid #2271b1;background:#fff;max-width:820px">';
-    echo '<h2 style="margin-top:14px">Objetos del mapa (Vía Láctea)</h2>';
-    echo '<p>Objetos en la base de datos: <strong>' . $total . '</strong>. Disponibles en <code>/wp-json/bitacora/v1/objetos</code>.</p>';
-    echo '<form method="post">';
-    wp_nonce_field( 'bitacora_importar_objetos' );
-    echo '<button type="submit" name="bitacora_importar_objetos" value="1" class="button button-primary">Importar / actualizar objetos desde la semilla</button>';
-    echo ' <span style="color:#646970">Idempotente: puedes pulsarlo las veces que quieras sin duplicar (clave: el identificador del objeto).</span>';
-    echo '</form>';
-
-    // ── Backfill del color BP–RP (Gaia) para el vecindario solar ──
-    if ( isset( $_POST['bitacora_backfill_bprp'] ) && check_admin_referer( 'bitacora_backfill_bprp' ) ) {
-        $n = bitacora_backfill_bprp();
-        echo '<div class="notice notice-success"><p>Color BP–RP completado en <strong>' . intval( $n ) . '</strong> objeto(s) cercano(s).</p></div>';
-    }
-    $sin_bprp = intval( $wpdb->get_var( $wpdb->prepare(
-        "SELECT COUNT(*) FROM $tabla WHERE bp_rp IS NULL AND dist_al IS NOT NULL AND dist_al <= %f",
-        BITACORA_BPRP_DIST_MAX_AL
-    ) ) );
-    echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
-    wp_nonce_field( 'bitacora_backfill_bprp' );
-    echo '<button type="submit" name="bitacora_backfill_bprp" value="1" class="button">Completar color BP–RP de objetos cercanos</button>';
-    echo ' <span style="color:#646970">Consulta Gaia el color de las estrellas cercanas para el vecindario solar. Pendientes: <strong>' . $sin_bprp . '</strong>. Idempotente. Los objetos nuevos ya lo obtienen al registrarse.</span>';
-    echo '</form>';
-
-    // ── Backfill de objetos observados que se quedaron fuera del mapa ──
-    if ( isset( $_POST['bitacora_backfill_objetos'] ) && check_admin_referer( 'bitacora_backfill_objetos' ) ) {
-        $r = bitacora_objetos_backfill();
-        echo '<div class="notice notice-success"><p>Colocados en el mapa: <strong>' . intval( $r['colocados'] ) . '</strong> objeto(s).</p>';
-        foreach ( $r['problemas'] as $obj => $motivo ) {
-            echo '<p>' . esc_html( $obj ) . ': ' . esc_html( $motivo ) . '</p>';
-        }
-        echo '</div>';
-    }
-    echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
-    wp_nonce_field( 'bitacora_backfill_objetos' );
-    echo '<button type="submit" name="bitacora_backfill_objetos" value="1" class="button">Colocar en el mapa los objetos observados que falten</button>';
-    echo ' <span style="color:#646970">Reintenta los objetos de observaciones ya guardadas que no se pudieron situar en su día (p. ej. porque entonces no se les encontró la distancia). Idempotente.</span>';
-    echo '</form>';
-
-    // ── Reclasificación del antiguo cajón 'otro' (estrella / desconocido) ──
-    if ( isset( $_POST['bitacora_reclasificar_objetos'] ) && check_admin_referer( 'bitacora_reclasificar_objetos' ) ) {
-        $n = bitacora_objetos_reclasificar();
-        echo '<div class="notice notice-success"><p>Reclasificados: <strong>' . intval( $n ) . '</strong> objeto(s).</p></div>';
-    }
-    // Lo que el contador cuenta es lo que el rótulo promete: objetos SIN clasificar.
-    // La consulta de bitacora_objetos_reclasificar() es más ancha —entran también las
-    // filas en 'estrella' (protoplanetarias guardadas antes de que existiera su
-    // categoría) y en 'abierto' (cúmulos con nebulosidad que el OpenNGC reescribe a
-    // 'emision', ADR 0002)—, y la diferencia es a propósito: una estrella o un cúmulo
-    // bien clasificado no es un pendiente, es trabajo extra que el botón hace de paso.
-    // Lo que no puede pasar es lo contrario, que el contador sea más ancho que la
-    // consulta: entonces el panel enseñaría pendientes que el botón no toca. Si algún
-    // día se estrecha la consulta, se estrecha este COUNT con ella.
-    $sin_clasificar = intval( $wpdb->get_var( "SELECT COUNT(*) FROM $tabla WHERE tipo IN ('otro', '', 'desconocido')" ) );
-    echo '<form method="post" style="margin-top:14px;padding-top:12px;border-top:1px solid #e0e0e0">';
-    wp_nonce_field( 'bitacora_reclasificar_objetos' );
-    echo '<button type="submit" name="bitacora_reclasificar_objetos" value="1" class="button">Reclasificar los objetos sin clasificar («otro» o «desconocido»)</button>';
-    echo ' <span style="color:#646970">Vuelve a preguntar el tipo a SIMBAD para los objetos que no tienen clasificación. Sirve para dos cosas: separar el antiguo cajón «otro» —que mezclaba «es una estrella» con «no se pudo clasificar»— y rescatar los que están en «Sin clasificar» porque el clasificador aún no conocía su tipo cuando se registraron. Pendientes: <strong>' . $sin_clasificar . '</strong>. Idempotente; no toca la posición ni la distancia.</span>';
-    echo '</form></div>';
-
-    // ── Catálogo de equipo (telescopios / oculares / auxiliares) ──
-    if ( isset( $_POST['bitacora_importar_equipo'] ) && check_admin_referer( 'bitacora_importar_equipo' ) ) {
-        $r = bitacora_importar_equipo_seed();
-        if ( is_wp_error( $r ) ) {
-            echo '<div class="notice notice-error"><p>' . esc_html( $r->get_error_message() ) . '</p></div>';
-        } else {
-            echo '<div class="notice notice-success"><p>Catálogo de equipo importado: <strong>' . intval( $r['telescopios'] ) .
-                 '</strong> telescopios, <strong>' . intval( $r['oculares'] ) . '</strong> oculares, <strong>' .
-                 intval( $r['auxiliares'] ) . '</strong> auxiliares.</p></div>';
-        }
-    }
-    $t_tel = intval( $wpdb->get_var( 'SELECT COUNT(*) FROM ' . bitacora_nombre_tabla_telescopios() . ' WHERE usuario_id IS NULL' ) );
-    $t_ocu = intval( $wpdb->get_var( 'SELECT COUNT(*) FROM ' . bitacora_nombre_tabla_oculares() . ' WHERE usuario_id IS NULL' ) );
-    $t_aux = intval( $wpdb->get_var( 'SELECT COUNT(*) FROM ' . bitacora_nombre_tabla_auxiliares() . ' WHERE usuario_id IS NULL' ) );
-    echo '<div style="margin:22px 0;padding:2px 18px 14px;border:1px solid #c3c4c7;border-left:4px solid #2271b1;background:#fff;max-width:820px">';
-    echo '<h2 style="margin-top:14px">Catálogo de equipo</h2>';
-    echo '<p>Catálogo global: <strong>' . $t_tel . '</strong> telescopios, <strong>' . $t_ocu . '</strong> oculares, <strong>' . $t_aux . '</strong> auxiliares. Cada observador arma su flota desde estos modelos o añadiendo los suyos.</p>';
-    echo '<form method="post">';
-    wp_nonce_field( 'bitacora_importar_equipo' );
-    echo '<button type="submit" name="bitacora_importar_equipo" value="1" class="button button-primary">Importar / actualizar catálogo desde los CSV</button>';
-    echo ' <span style="color:#646970">Idempotente (clave: fabricante + modelo). No toca el equipo personal de nadie.</span>';
-    echo '</form></div>';
 }
 
 /* ===========================================================================
@@ -5395,18 +4553,27 @@ function bitacora_bases_listar( WP_REST_Request $peticion ) {
          ORDER BY nombre ASC",
         $uid, $uid
     ) );
+    // Los dos recuentos de todas las bases, en UNA consulta (eran dos por base).
+    // n_observaciones cuenta solo lo visto (ranking y medalla, #396); n_filas
+    // cuenta todo, porque es lo que protege el borrado (bitacora_base_borrar).
+    $recuento = array();
+    if ( $filas ) {
+        $ids = implode( ',', array_map( function ( $b ) { return intval( $b->id ); }, $filas ) );
+        foreach ( $wpdb->get_results(
+            "SELECT base_id, COUNT(*) AS n_filas,
+                    SUM( CASE WHEN resultado = 'visto' THEN 1 ELSE 0 END ) AS n_observaciones
+             FROM $obs WHERE base_id IN ($ids) AND borrada_en IS NULL GROUP BY base_id"
+        ) as $r ) {
+            $recuento[ intval( $r->base_id ) ] = $r;
+        }
+    }
     $out = array();
     foreach ( $filas as $b ) {
         $es_mia = intval( $b->usuario_id ) === intval( $uid );
         $b->es_mia = $es_mia;
-        // n_observaciones cuenta solo lo visto (ranking y medalla, #396); n_filas
-        // cuenta todo, porque es lo que protege el borrado (bitacora_base_borrar).
-        $b->n_filas         = intval( $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM $obs WHERE base_id = %d AND borrada_en IS NULL", $b->id
-        ) ) );
-        $b->n_observaciones = intval( $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM $obs WHERE base_id = %d AND borrada_en IS NULL AND resultado = 'visto'", $b->id
-        ) ) );
+        $r = isset( $recuento[ intval( $b->id ) ] ) ? $recuento[ intval( $b->id ) ] : null;
+        $b->n_filas         = $r ? intval( $r->n_filas ) : 0;
+        $b->n_observaciones = $r ? intval( $r->n_observaciones ) : 0;
         $b->compartidos = $es_mia ? bitacora_base_compartidos( $b->id ) : array();
         if ( ! $es_mia ) {
             $b->dueno = bitacora_nombre_usuario( intval( $b->usuario_id ) );
@@ -5451,7 +4618,9 @@ function bitacora_base_editar( WP_REST_Request $peticion ) {
         return $datos;
     }
     $datos['actualizado_en'] = current_time( 'mysql', true );
-    $wpdb->update( bitacora_nombre_tabla_bases(), $datos, array( 'id' => intval( $peticion['id'] ) ) );
+    if ( false === $wpdb->update( bitacora_nombre_tabla_bases(), $datos, array( 'id' => intval( $peticion['id'] ) ) ) ) {
+        return new WP_Error( 'bd', 'No se pudo guardar la base.', array( 'status' => 500 ) );
+    }
     bitacora_base_guardar_compartidos( intval( $peticion['id'] ), $datos['visibilidad'], $peticion->get_json_params() );
     return new WP_REST_Response( array( 'ok' => true, 'id' => intval( $peticion['id'] ) ), 200 );
 }
@@ -5502,7 +4671,9 @@ function bitacora_base_compartir( WP_REST_Request $peticion ) {
     $params = $peticion->get_json_params();
     $vis = ( isset( $params['visibilidad'] ) && in_array( $params['visibilidad'], array( 'privada', 'publica', 'seleccionada' ), true ) )
         ? $params['visibilidad'] : $prev->visibilidad;
-    $wpdb->update( bitacora_nombre_tabla_bases(), array( 'visibilidad' => $vis, 'actualizado_en' => current_time( 'mysql', true ) ), array( 'id' => intval( $peticion['id'] ) ) );
+    if ( false === $wpdb->update( bitacora_nombre_tabla_bases(), array( 'visibilidad' => $vis, 'actualizado_en' => current_time( 'mysql', true ) ), array( 'id' => intval( $peticion['id'] ) ) ) ) {
+        return new WP_Error( 'bd', 'No se pudo guardar con quién se comparte la base.', array( 'status' => 500 ) );
+    }
     bitacora_base_guardar_compartidos( intval( $peticion['id'] ), $vis, $params );
     return new WP_REST_Response( array( 'ok' => true, 'id' => intval( $peticion['id'] ) ), 200 );
 }
@@ -6032,434 +5203,6 @@ function bitacora_restaurar_observacion( WP_REST_Request $peticion ) {
     );
 }
 
-/* ===========================================================================
- * 3-BIS. GENERAR LA FICHA .docx DE UNA OBSERVACIÓN
- *
- * El .docx se genera en PHP, sin dependencias externas. Se abre la plantilla
- * original (ficha/plantilla_ficha.docx) como ZIP con la clase ZipArchive, se
- * sustituyen las marcas [entre corchetes] dentro del XML —teniendo en cuenta
- * que Word puede partir un mismo texto en varios fragmentos— y se vuelve a
- * comprimir. El diseño (tipografías, colores, brújula, márgenes) se conserva
- * EXACTAMENTE: solo se tocan los textos, no la estructura.
- *
- * Único requisito: la extensión ZipArchive de PHP (activa por defecto en la
- * práctica totalidad de los WordPress). No hace falta Node.js, ni unzip/zip,
- * ni proc_open.
- *
- * La plantilla se busca en ficha/plantilla_ficha.docx, o en la ruta que
- * indiques con define( 'BITACORA_PLANTILLA', '/ruta/a/plantilla_ficha.docx' );.
- * =========================================================================== */
-
-/**
- * Traduce el objeto a su catalogo legible, para el hueco [Catalogo].
- */
-function bitacora_catalogo_de( $obs ) {
-    if ( 'messier' === $obs->tipo ) {
-        return 'Catálogo Messier';
-    }
-    $o = strtoupper( (string) $obs->objeto );
-    if ( 0 === strpos( $o, 'NGC' ) ) {
-        return 'Catálogo NGC';
-    }
-    if ( 0 === strpos( $o, 'IC' ) ) {
-        return 'Catálogo IC';
-    }
-    return 'Objeto de cielo profundo';
-}
-
-/**
- * Constelación de un objeto Messier, deducida de su número (M1–M110). No se
- * guarda en la tabla: es información fija del catálogo, la misma que muestra el
- * autocompletado del formulario. Para objetos que no son Messier devuelve '',
- * y la ficha usa solo las coordenadas.
- */
-function bitacora_constelacion_de( $obs ) {
-    if ( 'messier' !== $obs->tipo || ! $obs->num ) {
-        return '';
-    }
-    $mapa = array(
-        1=>'Taurus', 2=>'Aquarius', 3=>'Canes Venatici', 4=>'Scorpius', 5=>'Serpens',
-        6=>'Scorpius', 7=>'Scorpius', 8=>'Sagittarius', 9=>'Ophiuchus', 10=>'Ophiuchus',
-        11=>'Scutum', 12=>'Ophiuchus', 13=>'Hercules', 14=>'Ophiuchus', 15=>'Pegasus',
-        16=>'Serpens', 17=>'Sagittarius', 18=>'Sagittarius', 19=>'Ophiuchus', 20=>'Sagittarius',
-        21=>'Sagittarius', 22=>'Sagittarius', 23=>'Sagittarius', 24=>'Sagittarius', 25=>'Sagittarius',
-        26=>'Scutum', 27=>'Vulpecula', 28=>'Sagittarius', 29=>'Cygnus', 30=>'Capricornus',
-        31=>'Andromeda', 32=>'Andromeda', 33=>'Triangulum', 34=>'Perseus', 35=>'Gemini',
-        36=>'Auriga', 37=>'Auriga', 38=>'Auriga', 39=>'Cygnus', 40=>'Ursa Major',
-        41=>'Canis Major', 42=>'Orion', 43=>'Orion', 44=>'Cancer', 45=>'Taurus',
-        46=>'Puppis', 47=>'Puppis', 48=>'Hydra', 49=>'Virgo', 50=>'Monoceros',
-        51=>'Canes Venatici', 52=>'Cassiopeia', 53=>'Coma Berenices', 54=>'Sagittarius', 55=>'Sagittarius',
-        56=>'Lyra', 57=>'Lyra', 58=>'Virgo', 59=>'Virgo', 60=>'Virgo',
-        61=>'Virgo', 62=>'Ophiuchus', 63=>'Canes Venatici', 64=>'Coma Berenices', 65=>'Leo',
-        66=>'Leo', 67=>'Cancer', 68=>'Hydra', 69=>'Sagittarius', 70=>'Sagittarius',
-        71=>'Sagitta', 72=>'Aquarius', 73=>'Aquarius', 74=>'Pisces', 75=>'Sagittarius',
-        76=>'Perseus', 77=>'Cetus', 78=>'Orion', 79=>'Lepus', 80=>'Scorpius',
-        81=>'Ursa Major', 82=>'Ursa Major', 83=>'Hydra', 84=>'Virgo', 85=>'Coma Berenices',
-        86=>'Virgo', 87=>'Virgo', 88=>'Coma Berenices', 89=>'Virgo', 90=>'Virgo',
-        91=>'Coma Berenices', 92=>'Hercules', 93=>'Puppis', 94=>'Canes Venatici', 95=>'Leo',
-        96=>'Leo', 97=>'Ursa Major', 98=>'Coma Berenices', 99=>'Coma Berenices', 100=>'Coma Berenices',
-        101=>'Ursa Major', 102=>'Draco', 103=>'Cassiopeia', 104=>'Virgo', 105=>'Leo',
-        106=>'Canes Venatici', 107=>'Ophiuchus', 108=>'Ursa Major', 109=>'Ursa Major', 110=>'Andromeda',
-    );
-    $n = intval( $obs->num );
-    return isset( $mapa[ $n ] ) ? $mapa[ $n ] : '';
-}
-
-/* --- Motor de sustitución en el .docx (sin dependencias externas) --------- */
-
-function bitacora_docx_decode( $s ) {
-    return str_replace(
-        array( '&lt;', '&gt;', '&quot;', '&apos;', '&amp;' ),
-        array( '<', '>', '"', "'", '&' ),
-        $s
-    );
-}
-function bitacora_docx_encode( $s ) {
-    return str_replace( array( '&', '<', '>' ), array( '&amp;', '&lt;', '&gt;' ), $s );
-}
-
-/**
- * Extrae los <w:t>…</w:t> de un XML: apertura, texto (decodificado), cierre y
- * posición en bytes. Devuelve array( $runs, $concat ).
- */
-function bitacora_docx_extraer_runs( $xml ) {
-    $runs = array();
-    if ( preg_match_all( '/(<w:t\b[^>]*>)(.*?)(<\/w:t>)/s', $xml, $m, PREG_OFFSET_CAPTURE ) ) {
-        foreach ( $m[0] as $k => $whole ) {
-            $runs[] = array(
-                'apertura' => $m[1][ $k ][0],
-                'texto'    => bitacora_docx_decode( $m[2][ $k ][0] ),
-                'cierre'   => $m[3][ $k ][0],
-                'ini'      => $whole[1],
-                'fin'      => $whole[1] + strlen( $whole[0] ),
-            );
-        }
-    }
-    $concat = '';
-    foreach ( $runs as $r ) {
-        $concat .= $r['texto'];
-    }
-    return array( $runs, $concat );
-}
-
-/**
- * Reparte un reemplazo [pos, pos+len) que puede abarcar varios runs: el valor
- * entero va al primer run tocado; en los demás se borra su parte.
- */
-function bitacora_docx_reemplazar( $runs, &$nuevo, $pos, $len, $valor ) {
-    $offsets = array();
-    $acc = 0;
-    foreach ( $runs as $r ) {
-        $offsets[] = $acc;
-        $acc += strlen( $r['texto'] );
-    }
-    $restante = $len;
-    $total = count( $runs );
-    for ( $idx = 0; $idx < $total && $restante > 0; $idx++ ) {
-        $ini = $offsets[ $idx ];
-        $fin = $ini + strlen( $runs[ $idx ]['texto'] );
-        if ( $pos < $fin && $pos + $len > $ini ) {
-            $li = max( 0, $pos - $ini );
-            $lf = min( strlen( $runs[ $idx ]['texto'] ), $pos + $len - $ini );
-            $inserta = ( $restante === $len ) ? $valor : '';
-            $nuevo[ $idx ] = substr( $nuevo[ $idx ], 0, $li ) . $inserta . substr( $nuevo[ $idx ], $lf );
-            $restante -= ( $lf - $li );
-        }
-    }
-}
-
-function bitacora_docx_reconstruir( $xml, $runs, $nuevo ) {
-    $salida = '';
-    $cursor = 0;
-    foreach ( $runs as $idx => $r ) {
-        $salida .= substr( $xml, $cursor, $r['ini'] - $cursor );
-        // Un «\n» del valor es un salto de línea del documento (#396).
-        $texto   = str_replace( "\n", '</w:t><w:br/><w:t xml:space="preserve">', bitacora_docx_encode( $nuevo[ $idx ] ) );
-        $salida .= $r['apertura'] . $texto . $r['cierre'];
-        $cursor = $r['fin'];
-    }
-    return $salida . substr( $xml, $cursor );
-}
-
-/** Sustituye las marcas [clave] (aunque Word las haya partido en varios runs). */
-function bitacora_docx_sustituir_campos( $xml, $valores ) {
-    list( $runs, $concat ) = bitacora_docx_extraer_runs( $xml );
-    if ( ! count( $runs ) ) {
-        return $xml;
-    }
-    $nuevo = array();
-    foreach ( $runs as $r ) {
-        $nuevo[] = $r['texto'];
-    }
-    foreach ( $valores as $clave => $valor ) {
-        $marca = '[' . $clave . ']';
-        $desde = 0;
-        while ( false !== ( $pos = strpos( $concat, $marca, $desde ) ) ) {
-            bitacora_docx_reemplazar( $runs, $nuevo, $pos, strlen( $marca ), $valor );
-            $desde = $pos + strlen( $marca );
-        }
-    }
-    return bitacora_docx_reconstruir( $xml, $runs, $nuevo );
-}
-
-/** Sustituye la línea fija «Ophiucus <coords>» de la plantilla por la real. */
-function bitacora_docx_sustituir_constelacion( $xml, $nueva ) {
-    if ( '' === $nueva ) {
-        return $xml;
-    }
-    list( $runs, $concat ) = bitacora_docx_extraer_runs( $xml );
-    if ( ! count( $runs ) ) {
-        return $xml;
-    }
-    $nuevo = array();
-    foreach ( $runs as $r ) {
-        $nuevo[] = $r['texto'];
-    }
-    $patron = '/Ophiucus\s+\d{1,2}h\s+\d{1,2}m\s+[-+]?\d{1,3}\xc2\xba\s+\d{1,2}\xe2\x80\x99/';
-    $hubo = false;
-    if ( preg_match_all( $patron, $concat, $mm, PREG_OFFSET_CAPTURE ) ) {
-        foreach ( $mm[0] as $match ) {
-            bitacora_docx_reemplazar( $runs, $nuevo, $match[1], strlen( $match[0] ), $nueva );
-            $hubo = true;
-        }
-    }
-    return $hubo ? bitacora_docx_reconstruir( $xml, $runs, $nuevo ) : $xml;
-}
-
-/* --- Formato de los valores (equivalente al antiguo generador Node) ------- */
-
-function bitacora_ficha_grados( $v ) {
-    if ( null === $v || '' === $v ) {
-        return "\xe2\x80\x94"; // —
-    }
-    $n = floatval( $v );
-    return ( $n >= 0 ? '+' : "\xe2\x88\x92" ) . number_format( abs( $n ), 1, '.', '' ) . "\xc2\xb0";
-}
-function bitacora_ficha_azimut( $v ) {
-    if ( null === $v || '' === $v ) {
-        return "\xe2\x80\x94";
-    }
-    return number_format( floatval( $v ), 1, '.', '' ) . "\xc2\xb0";
-}
-function bitacora_ficha_radec_texto( $ra, $dec ) {
-    $ra  = floatval( $ra );
-    $dec = floatval( $dec );
-    $h   = $ra / 15;
-    $hh  = floor( $h );
-    $mm  = round( ( $h - $hh ) * 60 );
-    $signo = $dec < 0 ? '-' : '+';
-    $ad  = abs( $dec );
-    $dd  = floor( $ad );
-    $dm  = round( ( $ad - $dd ) * 60 );
-    return sprintf( "%dh %02dm %s%d\xc2\xba %02d\xe2\x80\x99", $hh, $mm, $signo, $dd, $dm );
-}
-function bitacora_ficha_datos_cielo( $obs ) {
-    // SQM/IR viven en la observación (cielo_sqm/cielo_ir); la ficha solo los lee.
-    $sqm = isset( $obs->cielo_sqm ) ? $obs->cielo_sqm : null;
-    $ir  = isset( $obs->cielo_ir )  ? $obs->cielo_ir  : null;
-    $p = array();
-    if ( null !== $sqm && '' !== $sqm ) {
-        $p[] = 'SQM-L ' . ( 0 + $sqm );
-    }
-    if ( null !== $ir && '' !== $ir ) {
-        $p[] = 'IR ' . ( 0 + $ir ) . "\xc2\xb0";
-    }
-    if ( isset( $obs->temp ) && null !== $obs->temp && '' !== $obs->temp ) {
-        $p[] = 'Temperatura ambiente ' . ( 0 + $obs->temp ) . "\xc2\xb0";
-    }
-    return implode( ' ', $p );
-}
-function bitacora_ficha_nombre_largo( $obs ) {
-    if ( 'messier' === $obs->tipo && $obs->num ) {
-        return 'Messier ' . intval( $obs->num );
-    }
-    $etiqueta = $obs->objeto_etiqueta ? $obs->objeto_etiqueta : $obs->objeto;
-    $partes = preg_split( '/\s+[·(]/u', trim( $etiqueta ) );
-    return trim( $partes[0] );
-}
-/** Motivos de un no visto, tal como los rotula la app (BitacoraBase.MOTIVOS_NO_VISTO). */
-function bitacora_ficha_motivo_etiqueta( $motivo ) {
-    $m = array(
-        'nubes'         => 'Nubes o transparencia',
-        'contaminacion' => 'Contaminación lumínica',
-        'luna'          => 'Luna',
-        'bajo'          => 'Objeto bajo u obstáculo',
-        'seeing'        => 'Seeing',
-        'apertura'      => 'Apertura insuficiente',
-        'no_localizado' => 'No localizado',
-        'otro'          => 'Otro',
-    );
-    return isset( $m[ $motivo ] ) ? $m[ $motivo ] : '';
-}
-/**
- * La línea de estado de un intento fallido («Explorado – no confirmado ·
- * detectado · Luna»), o '' si la observación se vio (#396).
- */
-function bitacora_ficha_estado_linea( $obs ) {
-    $res = isset( $obs->resultado ) ? $obs->resultado : 'visto';
-    if ( 'detectado_no_visto' !== $res && 'no_visto' !== $res ) {
-        return '';
-    }
-    $p = array( "Explorado \xe2\x80\x93 no confirmado" );
-    if ( 'detectado_no_visto' === $res ) {
-        $p[] = 'detectado';
-    }
-    $motivo = bitacora_ficha_motivo_etiqueta( isset( $obs->motivo_no_visto ) ? $obs->motivo_no_visto : '' );
-    if ( '' !== $motivo ) {
-        $p[] = $motivo;
-    }
-    return implode( ' · ', $p );
-}
-function bitacora_ficha_constelacion_coords( $obs ) {
-    $partes = array();
-    $cons = bitacora_constelacion_de( $obs );
-    if ( '' !== $cons ) {
-        $partes[] = $cons;
-    }
-    $partes[] = bitacora_ficha_radec_texto( $obs->ra, $obs->decl );
-    return implode( ' ', $partes );
-}
-
-function bitacora_generar_ficha( WP_REST_Request $peticion ) {
-    // Envoltura: registra el último error (visible en el panel de Bitácora) y
-    // captura cualquier excepción/fatal de PHP para devolver un mensaje legible
-    // en lugar de un 500 opaco.
-    try {
-        $resultado = bitacora_generar_ficha_interno( $peticion );
-        if ( is_wp_error( $resultado ) ) {
-            update_option( 'bitacora_error_ficha', gmdate( 'Y-m-d H:i:s' ) . ' UTC — ' . $resultado->get_error_message() );
-        }
-        return $resultado;
-    } catch ( \Throwable $e ) {
-        update_option(
-            'bitacora_error_ficha',
-            gmdate( 'Y-m-d H:i:s' ) . ' UTC — EXCEPCIÓN: ' . $e->getMessage() . ' @ ' . basename( $e->getFile() ) . ':' . $e->getLine()
-        );
-        return new WP_Error( 'excepcion', 'Error al generar la ficha: ' . $e->getMessage(), array( 'status' => 500 ) );
-    }
-}
-
-function bitacora_generar_ficha_interno( WP_REST_Request $peticion ) {
-    $id  = intval( $peticion['id'] );
-    $obs = bitacora_obtener( $id );
-
-    if ( ! $obs || $obs->borrada_en ) {
-        return new WP_Error( 'no_encontrada', 'Esa observación no existe.', array( 'status' => 404 ) );
-    }
-    if ( ! class_exists( 'ZipArchive' ) ) {
-        return new WP_Error( 'sin_zip', 'El servidor no tiene la extensión ZipArchive de PHP, necesaria para generar el .docx.', array( 'status' => 500 ) );
-    }
-
-    $dir_ficha = __DIR__ . '/ficha';
-    $plantilla = defined( 'BITACORA_PLANTILLA' ) ? BITACORA_PLANTILLA : $dir_ficha . '/plantilla_ficha.docx';
-    if ( ! file_exists( $plantilla ) ) {
-        return new WP_Error( 'sin_generador', 'No se encontró la plantilla de la ficha en el servidor.', array( 'status' => 500 ) );
-    }
-
-    // La astrometría vive en la ficha (bitacora_fichas). Fusionamos: partimos de
-    // la observación y, si hay ficha, sus valores mandan. Así el .docx refleja
-    // la ficha (Form 2), con la observación como respaldo.
-    $ficha  = bitacora_obtener_ficha( $id );
-    $fuente = clone $obs;
-    foreach ( array( 'ra', 'decl', 'fecha_hora_local', 'fecha_hora_utc', 'lat', 'lon', 'obj_alt', 'obj_az', 'sun_alt', 'moon_alt', 'sqm', 'ir', 'temp' ) as $c ) {
-        if ( ! isset( $fuente->$c ) ) {
-            $fuente->$c = null;   // la columna ya no existe en la observación
-        }
-        if ( $ficha && isset( $ficha->$c ) && null !== $ficha->$c && '' !== $ficha->$c ) {
-            $fuente->$c = $ficha->$c;
-        }
-    }
-
-    // Marcas [entre corchetes] de la plantilla -> valores de la observación.
-    $valores = array(
-        'Nombre_observador' => $obs->observador ? $obs->observador : '',
-        // El estado va en la primera línea, bajo el nombre (#396).
-        'Nombre_objeto'     => trim( bitacora_ficha_nombre_largo( $obs ) . "\n" . bitacora_ficha_estado_linea( $obs ) ),
-        'Catálogo'          => bitacora_catalogo_de( $obs ),
-        'Datos_del_dielo'   => bitacora_ficha_datos_cielo( $fuente ),  // errata original de la plantilla
-        'Datos_del_cielo'   => bitacora_ficha_datos_cielo( $fuente ),  // por si algún día la corriges
-        'altitud_sol'       => bitacora_ficha_grados( $fuente->sun_alt ),
-        'altitud_luna'      => bitacora_ficha_grados( $fuente->moon_alt ),
-        'altitud_objeto'    => bitacora_ficha_grados( $fuente->obj_alt ),
-        'azimut_objeto'     => bitacora_ficha_azimut( $fuente->obj_az ),
-        'Telescopio'        => $obs->telescopio ? $obs->telescopio : '',
-    );
-    $constelacion = bitacora_ficha_constelacion_coords( $fuente );
-
-    // Trabajamos sobre una COPIA de la plantilla (nunca sobre el original).
-    // Nota: wp_tempnam() vive en wp-admin/includes/file.php y NO está cargada
-    // en una petición REST, así que usamos tempnam() de PHP (siempre disponible)
-    // y recurrimos a wp_tempnam() solo si aquélla fallara.
-    $tmp = tempnam( sys_get_temp_dir(), 'bitacora-ficha' );
-    if ( ! $tmp && function_exists( 'wp_tempnam' ) ) {
-        $tmp = wp_tempnam( 'bitacora-ficha' );
-    }
-    if ( ! $tmp || ! copy( $plantilla, $tmp ) ) {
-        if ( $tmp ) {
-            @unlink( $tmp );
-        }
-        return new WP_Error( 'sin_temp', 'No se pudo preparar el archivo temporal.', array( 'status' => 500 ) );
-    }
-
-    $zip = new ZipArchive();
-    if ( true !== $zip->open( $tmp ) ) {
-        @unlink( $tmp );
-        return new WP_Error( 'zip_error', 'No se pudo abrir la plantilla .docx.', array( 'status' => 500 ) );
-    }
-
-    // Solo el cuerpo, las cabeceras y los pies contienen texto visible.
-    $objetivos = array();
-    for ( $i = 0; $i < $zip->numFiles; $i++ ) {
-        $n = $zip->getNameIndex( $i );
-        if ( preg_match( '#^word/(document|header\d+|footer\d+)\.xml$#', $n ) ) {
-            $objetivos[] = $n;
-        }
-    }
-    $contenidos = array();
-    foreach ( $objetivos as $n ) {
-        $contenidos[ $n ] = $zip->getFromName( $n );
-    }
-    foreach ( $contenidos as $n => $xml ) {
-        if ( false === $xml ) {
-            continue;
-        }
-        $xml = bitacora_docx_sustituir_constelacion( $xml, $constelacion );
-        $xml = bitacora_docx_sustituir_campos( $xml, $valores );
-        $zip->deleteName( $n );
-        $zip->addFromString( $n, $xml );
-    }
-    $zip->close();
-
-    // Nombre de descarga: objeto en minúscula, sin espacios, + "_inv.docx".
-    // "M30" -> "m30_inv.docx"   |   "NGC 6826" -> "ngc6826_inv.docx"
-    $slug = bitacora_slug_objeto( $obs->objeto );
-    if ( '' === $slug ) {
-        $slug = 'ficha';
-    }
-    $nombre = $slug . '_inv.docx';
-
-    $contenido = file_get_contents( $tmp );
-    @unlink( $tmp );
-
-    // Éxito: borra el registro de error para que el panel no muestre uno viejo.
-    delete_option( 'bitacora_error_ficha' );
-
-    // Entregamos el binario y cortamos: si WordPress siguiera, envolvería la
-    // respuesta en JSON y corrompería el .docx.
-    while ( ob_get_level() > 0 ) {
-        ob_end_clean();
-    }
-    if ( ! headers_sent() ) {
-        nocache_headers();
-        header( 'Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document' );
-        header( 'Content-Disposition: attachment; filename="' . $nombre . '"' );
-        header( 'Content-Length: ' . strlen( $contenido ) );
-        header( 'X-Content-Type-Options: nosniff' );
-    }
-    echo $contenido;
-    exit;
-}
-
 /**
  * Lista las observaciones. Por defecto excluye las borradas.
  * Acepta ?borradas=1 para ver la papelera, y ?mias=1 para filtrar por autor.
@@ -6486,7 +5229,8 @@ function bitacora_listar_observaciones( WP_REST_Request $peticion ) {
     $where  = $ver_borradas ? 'o.borrada_en IS NOT NULL' : 'o.borrada_en IS NULL';
     $params = array();
 
-    if ( $solo_mias ) {
+    // La papelera es siempre la propia, lo pida el cliente o no.
+    if ( $solo_mias || $ver_borradas ) {
         $where   .= ' AND o.usuario_id = %d';
         $params[] = $usuario;
     }
@@ -6764,129 +5508,3 @@ function bitacora_inyectar_reproductor_menu() {
     <?php
 }
 add_action( 'wp_footer', 'bitacora_inyectar_reproductor_menu' );
-
-/* ===========================================================================
- * 5. PANTALLA DE ADMINISTRACIÓN
- *
- * Una tabla sencilla para ver lo registrado sin salir de WordPress.
- * =========================================================================== */
-function bitacora_menu_admin() {
-    add_menu_page(
-        'Bitácora Registro',
-        'Bitácora',
-        'read',                 // cualquier usuario logueado puede ver
-        'bitacora-registro',
-        'bitacora_pantalla_admin',
-        'dashicons-star-filled',
-        30
-    );
-}
-add_action( 'admin_menu', 'bitacora_menu_admin' );
-
-/**
- * Panel de diagnóstico en el escritorio: comprueba que el servidor puede
- * generar la ficha .docx (extensión ZipArchive y plantilla subida).
- */
-function bitacora_panel_diagnostico() {
-    $dir_ficha = __DIR__ . '/ficha';
-    $plantilla = defined( 'BITACORA_PLANTILLA' ) ? BITACORA_PLANTILLA : $dir_ficha . '/plantilla_ficha.docx';
-
-    $ok  = '<span style="color:#137333;font-weight:700">&#10003;</span>';
-    $bad = '<span style="color:#b32d2e;font-weight:700">&#10007;</span>';
-
-    $zip_ok       = class_exists( 'ZipArchive' );
-    $plantilla_ok = file_exists( $plantilla );
-    $todo_ok      = $zip_ok && $plantilla_ok;
-
-    $filas = array(
-        array( 'ZipArchive (extensión de PHP)', $zip_ok ? $ok . ' disponible' : $bad . ' no está activa &mdash; actívala en tu hosting' ),
-        array( 'Plantilla (' . esc_html( basename( $plantilla ) ) . ')', $plantilla_ok ? $ok . ' subida' : $bad . ' falta en el servidor' ),
-    );
-
-    echo '<div style="margin:22px 0;padding:2px 18px 12px;border:1px solid #c3c4c7;border-left:4px solid ' . ( $todo_ok ? '#137333' : '#dba617' ) . ';background:#fff;max-width:820px">';
-    echo '<h2 style="margin-top:14px">Generador de fichas (.docx)</h2>';
-    echo '<table class="widefat striped"><tbody>';
-    foreach ( $filas as $f ) {
-        echo '<tr><td style="width:300px"><strong>' . esc_html( $f[0] ) . '</strong></td><td>' . $f[1] . '</td></tr>';
-    }
-    echo '</tbody></table>';
-    echo $todo_ok
-        ? '<p style="color:#137333"><strong>Todo listo:</strong> el botón «Ficha» del listado debería funcionar.</p>'
-        : '<p><strong>Falta algo</strong> (las filas con &#10007;).</p>';
-
-    $ultimo = get_option( 'bitacora_error_ficha' );
-    if ( $ultimo ) {
-        echo '<p style="margin-top:14px"><strong>Último intento fallido al generar una ficha:</strong></p>';
-        echo '<pre style="white-space:pre-wrap;background:#fcf0f1;border:1px solid #f0c3c4;padding:10px 12px;border-radius:4px;color:#8a1f1f">' . esc_html( $ultimo ) . '</pre>';
-        echo '<p style="color:#646970;font-size:12px">Se actualiza cada vez que el botón «Ficha» falla. Si ya funciona, ignóralo.</p>';
-    }
-    echo '</div>';
-}
-
-function bitacora_pantalla_admin() {
-    global $wpdb;
-    $tabla = bitacora_nombre_tabla();
-
-    $activas  = $wpdb->get_results( "SELECT * FROM $tabla WHERE borrada_en IS NULL ORDER BY creado_en DESC, id DESC LIMIT 100" );
-    $borradas = $wpdb->get_results( "SELECT * FROM $tabla WHERE borrada_en IS NOT NULL ORDER BY borrada_en DESC LIMIT 50" );
-
-    echo '<div class="wrap"><h1>Bitácora Registro</h1>';
-    echo '<p>Observaciones activas: <strong>' . count( $activas ) . '</strong>';
-    if ( $borradas ) {
-        echo ' &nbsp;·&nbsp; En la papelera: <strong>' . count( $borradas ) . '</strong>';
-    }
-    echo '</p>';
-
-    bitacora_panel_diagnostico();
-
-    bitacora_panel_objetos();
-
-    bitacora_panel_observadores();
-
-    bitacora_oal_panel();
-
-    bitacora_panel_legacy();
-
-    if ( empty( $activas ) && empty( $borradas ) ) {
-        echo '<p>Todavía no hay observaciones. Registra la primera desde el formulario.</p></div>';
-        return;
-    }
-
-    bitacora_tabla_admin( $activas, 'Observaciones registradas' );
-
-    if ( $borradas ) {
-        bitacora_tabla_admin( $borradas, 'Papelera (borrado suave: los datos siguen ahí)', true );
-    }
-
-    echo '</div>';
-}
-
-/**
- * Pinta una tabla de observaciones en el panel de administración.
- */
-function bitacora_tabla_admin( $filas, $titulo, $es_papelera = false ) {
-    if ( empty( $filas ) ) {
-        return;
-    }
-    echo '<h2 style="margin-top:28px">' . esc_html( $titulo ) . '</h2>';
-    echo '<table class="widefat striped"><thead><tr>
-        <th>ID</th><th>Objeto</th><th>Observador</th><th>Telescopio</th>';
-    echo $es_papelera ? '<th>Borrada</th>' : '';
-    echo '</tr></thead><tbody>';
-
-    foreach ( $filas as $f ) {
-        printf(
-            '<tr%s><td>%d</td><td><strong>%s</strong></td><td>%s</td><td>%s</td>',
-            $es_papelera ? ' style="opacity:.6"' : '',
-            $f->id,
-            esc_html( $f->objeto ),
-            esc_html( $f->observador ),
-            esc_html( $f->telescopio )
-        );
-        if ( $es_papelera ) {
-            printf( '<td>%s</td>', esc_html( $f->borrada_en ) );
-        }
-        echo '</tr>';
-    }
-    echo '</tbody></table>';
-}

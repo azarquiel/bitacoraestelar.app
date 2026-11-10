@@ -2259,7 +2259,7 @@
       var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
       return parseInt(m[3], 10) + ' ' + meses[parseInt(m[2], 10) - 1] + ' ' + m[1];
     }
-    return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return escHtml(t);
   }
 
   // LA NAVE DEL VIAJE: el telescopio con el que se observó, al mismo nivel que la
@@ -2277,14 +2277,13 @@
   function barraEstelar(f) {
     var nave = rotuloNave(f);
     if (!f.fecha && !nave) return '';
-    var esc = function (t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
     var fecha = f.fecha
       ? '<span>Bitácora Estelar · Fecha estelar ' + fmtFechaEstelar(f.fecha) + '</span>' : '<span></span>';
     // La nave NO se pasa a mayúsculas: 18" f/4.5 se escribe así, con su f minúscula.
     var naveHtml = nave
       ? '<span class="ficha-nave" style="text-transform:none;color:#cfe6f7;font-weight:600;letter-spacing:.06em;white-space:nowrap;">' +
         '<span style="color:#8fb2cf;font-weight:400;letter-spacing:.12em;text-transform:uppercase;">Nave · </span>' +
-        esc(nave) + '</span>' : '';
+        escHtml(nave) + '</span>' : '';
     return '<div class="ficha-estelar" style="font-family:ui-monospace,\'SF Mono\',Menlo,monospace;' +
       'font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8fb2cf;margin:0 0 10px;' +
       'border-bottom:1px solid rgba(143,178,207,.2);padding-bottom:8px;display:flex;gap:10px;' +
@@ -2592,11 +2591,12 @@
     renderFichaNormal(f, info, { observadorNombre: VLO.nombreObservador(f.observador) });
   }
 
-  // Escapa texto para insertarlo con seguridad en HTML (nombres de observador).
+  // Escapa texto para insertarlo con seguridad en HTML, también dentro de un
+  // atributo (de ahí las dos comillas). Es la única del mapa: úsala, no copies.
   function escHtml(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   // Pantalla de descubrimiento: información básica del objeto + la lista de las
@@ -3139,7 +3139,7 @@
     }).forEach(function (clave) {
       if (!conObs[clave]) return;
       var nom = nombreDe(clave);
-      opts +='<option value="' + clave + '">' + String(nom).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
+      opts +='<option value="' + escHtml(clave) + '">' + escHtml(nom) + '</option>';
     });
     observadorSelect.innerHTML = opts;
 
@@ -3259,8 +3259,7 @@
     // (Messier, RASC…) será otro <optgroup> y nada más.
     var html = '<option value="">— Todo mi catálogo —</option><optgroup label="Viajes">';
     lista.forEach(function (v) {
-      html += '<option value="' + v.id + '">' +
-        v.etiqueta.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
+      html += '<option value="' + escHtml(v.id) + '">' + escHtml(v.etiqueta) + '</option>';
     });
     viajeSelect.innerHTML = html + '</optgroup>';
     viajeSelect.disabled = false;

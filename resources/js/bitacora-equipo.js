@@ -147,8 +147,12 @@
      visible del dueño). El catálogo (usuario_id null) no viaja por /equipo, pero el
      selector lo soporta por si se le pasa. Un <select> nativo: teclado, lector de
      pantalla y selector del móvil gratis. */
+  // Copia propia a propósito: este módulo se carga también en el mapa, donde no
+  // está bitacora-base.js. Misma regla que BitacoraBase.esc, comillas incluidas.
   function esc(t) {
-    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   function nombrePieza(p) {

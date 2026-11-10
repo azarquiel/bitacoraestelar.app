@@ -61,7 +61,10 @@ class WpdbFalso {
         foreach ( $a as $v ) { $sql = preg_replace( '/%[ds]/', is_int( $v ) ? (string) $v : "'$v'", $sql, 1 ); }
         return $sql;
     }
+    // El bloqueo con nombre del cupo (bitacora_cupo): siempre se concede.
+    public function get_var( $sql ) { return false !== strpos( $sql, 'GET_LOCK' ) ? '1' : null; }
     public function query( $sql ) {
+        if ( false !== strpos( $sql, 'RELEASE_LOCK' ) ) { return 1; }
         preg_match( '/^INSERT IGNORE INTO comp .* VALUES \((\d+), (\d+), /', $sql, $m );
         $k = $m[1] . '-' . $m[2];
         if ( isset( $this->pares[ $k ] ) ) { return 0; }

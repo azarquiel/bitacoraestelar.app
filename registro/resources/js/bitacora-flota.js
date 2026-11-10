@@ -114,11 +114,8 @@
         return catalogoPromise;
       }
 
-      function esc(t) {
-        if (t === null || t === undefined) return '';
-        return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-      }
+      // Escapado de HTML: uno solo, el de bitacora-base.js (cargado antes).
+      function esc(t) { return window.BitacoraBase.esc(t); }
 
       function mostrarFlash(txt, esError) {
         flash.textContent = txt;

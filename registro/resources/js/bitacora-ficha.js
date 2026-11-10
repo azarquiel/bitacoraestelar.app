@@ -50,7 +50,7 @@
     // se calcula ni se guarda la ficha.
     var listaBases = [], baseSel = null, basePendiente = null;
 
-    function escOpt(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function escOpt(t) { return BitacoraBase.esc(t); }   // el escapado único, que también cubre las comillas
     function basePorId(id) { for (var i = 0; i < listaBases.length; i++) { if (String(listaBases[i].id) === String(id)) return listaBases[i]; } return null; }
 
     function fmtDeg(v) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '°'; }

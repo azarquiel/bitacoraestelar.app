@@ -75,7 +75,8 @@ class WpdbSqlite {
             (11, 3, 5, 'M51', '2026-05-01', '2026-05-01', 'visto', NULL, NULL),
             (12, 3, 5, 'M104', '2026-04-01', '2026-04-01', 'detectado_no_visto', 'luna', NULL),
             (13, 4, 6, 'M81', '2026-04-02', '2026-04-02', 'no_visto', 'seeing', NULL),
-            (14, 3, 5, 'M3', '2026-04-03', '2026-04-03', 'no_visto', 'otro', '2026-04-04')" );
+            (14, 3, 5, 'M3', '2026-04-03', '2026-04-03', 'no_visto', 'otro', '2026-04-04'),
+            (15, 4, 6, 'M5', '2026-04-05', '2026-04-05', 'visto', NULL, '2026-04-06')" );
     }
     public function prepare( $sql, ...$args ) {
         if ( 1 === count( $args ) && is_array( $args[0] ) ) { $args = $args[0]; }
@@ -151,6 +152,10 @@ ok( 11 === $por[10]->confirmado_id && '2026-05-01' === $por[10]->confirmado_fech
 ok( ids( nc( array( 'resultado' => 'no_confirmado', 'mias' => '1', 'solo_pendientes' => '1' ) ) ) === array( 12 ), 'solo_pendientes oculta el ya confirmado' );
 ok( 'luna' === $por[12]->motivo_no_visto && 'detectado_no_visto' === $por[12]->resultado, 'la fila lleva subtipo y motivo' );
 ok( count( nc( array() ) ) === 6, 'sin el filtro, el listado normal no cambia' );
+
+// ── La papelera es solo la propia, aunque el cliente no mande mias=1 ──────────
+ok( ids( nc( array( 'borradas' => '1' ) ) ) === array( 14 ), 'borradas sin mias no enseña la papelera de otro' );
+ok( ids( nc( array( 'borradas' => '1', 'mias' => '1' ) ) ) === array( 14 ), 'borradas con mias, igual' );
 
 echo $fallos ? "\n$fallos fallo(s)\n" : "\nTodo correcto\n";
 exit( $fallos ? 1 : 0 );

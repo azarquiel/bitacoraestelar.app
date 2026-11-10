@@ -1,0 +1,73 @@
+# Los tests del repo, en cada PR y en cada push a main.
+#
+# Son scripts sueltos, sin framework ni dependencias: cada `scripts/test_*.php`
+# y `scripts/test_*.js` es un proceso que sale con 0 si pasa. Aquí solo se lanzan.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Un push nuevo a la misma rama cancela la tirada anterior.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: Backend (PHP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'   # la versión con la que se desarrolla
+          extensions: pdo_sqlite, dom, zip, curl, mbstring
+          coverage: none
+      - name: Sintaxis
+        run: |
+          fallos=0
+          for f in resources/plugins/bitacora-registro/*.php simulador_ocular/*.php scripts/*.php; do
+            php -l "$f" > /dev/null || fallos=1
+          done
+          exit $fallos
+      - name: Tests
+        run: |
+          fallos=0
+          for f in scripts/test_*.php; do
+            if php "$f" > salida.txt 2>&1; then
+              echo "  ok    $f"
+            else
+              echo "::error file=$f::falla $f"
+              cat salida.txt
+              fallos=1
+            fi
+          done
+          exit $fallos
+
+  node:
+    name: Frontend (Node, batería rápida)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Informativo de momento: varios tests comparan contra valores «golden»
+    # calculados en un Mac, y aún no se ha visto esta batería en verde en el
+    # runner de Linux. El trabajo se pone rojo si falla, pero no bloquea el PR.
+    # Quitar esta línea en cuanto salga verde aquí.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Historia completa: test_version_js_mapa.js compara con el merge-base
+          # con origin/main, y con la copia superficial por defecto no lo hay.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      # --rapida salta los 13 tests de más de 30 s (ver LENTOS en bateria.js):
+      # esos siguen siendo cosa de lanzarlos a mano antes de dar una rama por buena.
+      - run: node scripts/bateria.js --rapida
