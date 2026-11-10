@@ -723,17 +723,23 @@ def leer_cono(salida, ra, dec, radio):
 
 
 def emparejar(a_ra, a_dec, b_ra, b_dec, tol_arcsec=0.3):
-    """Cuántas de A no tienen pareja en B a < tol, y viceversa (por posición)."""
-    from scipy.spatial import cKDTree
+    """Cuántas de A no tienen pareja en B a < tol, y viceversa (por posición).
+    Solo numpy (sin scipy): ventana en dec sobre B ordenada por dec."""
+    tol = tol_arcsec / 3600.0
 
-    def unit(ra, dec):
-        ra, dec = np.radians(ra), np.radians(dec)
-        return np.c_[np.cos(dec) * np.cos(ra), np.cos(dec) * np.sin(ra), np.sin(dec)]
-    cuerda = 2 * math.sin(math.radians(tol_arcsec / 3600) / 2)
-    ua, ub = unit(a_ra, a_dec), unit(b_ra, b_dec)
-    sin_a = (cKDTree(ub).query(ua, k=1)[0] > cuerda).sum() if len(ub) else len(ua)
-    sin_b = (cKDTree(ua).query(ub, k=1)[0] > cuerda).sum() if len(ua) else len(ub)
-    return int(sin_a), int(sin_b)
+    def sin_pareja(x_ra, x_dec, y_ra, y_dec):
+        if not len(y_ra):
+            return len(x_ra)
+        o = np.argsort(y_dec)
+        y_ra, y_dec = np.asarray(y_ra)[o], np.asarray(y_dec)[o]
+        lo = np.searchsorted(y_dec, np.asarray(x_dec) - tol, 'left')
+        hi = np.searchsorted(y_dec, np.asarray(x_dec) + tol, 'right')
+        n = 0
+        for r, d, a, b in zip(x_ra, x_dec, lo, hi):
+            if a == b or distancia_angular(r, d, y_ra[a:b], y_dec[a:b]).min() > tol:
+                n += 1
+        return n
+    return int(sin_pareja(a_ra, a_dec, b_ra, b_dec)), int(sin_pareja(b_ra, b_dec, a_ra, a_dec))
 
 
 def lotes_de_campos(campos, margen=0.1):
