@@ -70,7 +70,9 @@ $datos_js = substr( $datos_js, 0, strpos( $datos_js, "\n}\n" ) );
 ok( false !== strpos( $datos_js, "\$observadores[ \$o->clave ]['blog'] = \$o->blog_url;" ),
     'datos.js emite el blog del observador en OBSERVADORES' );
 
-$panel = substr( $fuente, strpos( $fuente, 'function bitacora_panel_observadores(' ) );
+// Los paneles del escritorio viven en su propio fichero.
+$admin = (string) file_get_contents( __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-admin.php' );
+$panel = substr( $admin, strpos( $admin, 'function bitacora_panel_observadores(' ) );
 $panel = substr( $panel, 0, strpos( $panel, "\n}\n" ) );
 ok( false !== strpos( $panel, "\$_POST['bitacora_blog_url']" ) &&
     false !== strpos( $panel, 'bitacora_sanitizar_url_https( $blog_crudo )' ),

@@ -22,6 +22,11 @@ define('DAY_IN_SECONDS', 86400);
 
 function add_action(...$a) {}
 function register_activation_hook(...$a) {}
+// La versión sale de la cabecera del plugin, como en WordPress.
+function get_file_data( $archivo, $cabeceras ) {
+    preg_match( '/^[ \t\/*#@]*Version:(.*)$/mi', (string) file_get_contents( $archivo ), $m );
+    return array( 'v' => trim( $m[1] ?? '' ) );
+}
 
 require __DIR__ . '/../resources/plugins/bitacora-registro/bitacora-registro.php';
 

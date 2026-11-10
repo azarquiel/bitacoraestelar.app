@@ -346,6 +346,9 @@ cache_lru_flujo(
     [
         'ruta' => $fichero, 'clave' => $clave, 'dir' => PS1_CACHE_DIR, 'patron' => '*.fits',
         'max_bytes' => PS1_CACHE_MAX_BYTES, 'lowwater' => PS1_CACHE_LOWWATER, 'log' => PS1_LOG_FILE,
+        // Un campo con varias galaxias pide un parche por cada una a la vez, y
+        // cada petición es corta (≤ PS1_REQUEST_TIMEOUT por celda): más turnos.
+        'turnos' => 8,
     ],
     static function (?string &$etapa) use ($ra, $dec, $lado, $salida, $banda): ?string {
         return ps1_armar_parche($ra, $dec, $lado, $salida, $banda);

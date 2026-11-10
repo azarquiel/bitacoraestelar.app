@@ -105,6 +105,44 @@ const CACHE_LRU_CADA            = 300;                // s: limpieza como mucho 
 const CACHE_LRU_MAX_DEL         = 300;                // nº máx. de entradas a borrar por pasada (incremental)
 const CACHE_LRU_ORPHAN_TTL      = 3600;               // s: edad mínima de un .lock/.tmp huérfano para retirarlo
 const CACHE_LRU_LOG_MAX_BYTES   = 5 * 1024 * 1024;    // bytes: al superarlo el log rota a .1 (un solo nivel)
+const CACHE_LRU_TURNOS          = 4;                  // nº máx. de peticiones al origen a la vez, por proxy
+const CACHE_LRU_TURNO_ESPERA    = 10;                 // s: Retry-After del 503 cuando no queda turno
+
+// ─────────────────────── TURNOS DE DESCARGA (semáforo) ───────────────────────
+
+/**
+ * Toma uno de los `$max` turnos de descarga de `$dir`. El bloqueo por clave
+ * evita la estampida sobre UNA entrada; esto acota el total: sin ello, N
+ * peticiones a N regiones distintas retienen N procesos PHP durante minutos y
+ * el resto del sitio se queda sin ninguno.
+ *
+ * Devuelve el handle del turno (se suelta al cerrarlo o al acabar el proceso),
+ * null si están todos ocupados, o false si no se pueden crear los ficheros: sin
+ * disco donde contar no hay límite, igual que sin flock no hay caché.
+ */
+function cache_lru_turno(string $dir, int $max) {
+    for ($i = 0; $i < $max; $i++) {
+        $h = @fopen($dir . '/.turno' . $i, 'c');
+        if (!$h) {
+            return false;
+        }
+        if (flock($h, LOCK_EX | LOCK_NB)) {
+            return $h;
+        }
+        fclose($h);
+    }
+    return null;
+}
+
+/** Respuesta por defecto cuando no queda turno: 503 con Retry-After. Termina. */
+function cache_lru_saturado(): void {
+    http_response_code(503);
+    header('Retry-After: ' . CACHE_LRU_TURNO_ESPERA);
+    header('Cache-Control: no-store');
+    header('Access-Control-Allow-Origin: *');
+    header('Content-Type: application/json; charset=utf-8');
+    exit(json_encode(['error' => 'Demasiadas descargas a la vez; reintenta en unos segundos']));
+}
 
 // ─────────────────────────── LOG DE LATENCIA ─────────────────────────────────
 
@@ -176,6 +214,10 @@ function cache_lru_traza(string $etapa, string $proveedor, int $http, float $t0)
  *        job        ruta del fichero del job asíncrono en marcha. Si existe, quien
  *                   encuentra el lock ocupado responde pendiente sin esperar:
  *                   el que lo tiene está consultando o recogiendo ese job.
+ *        turnos     nº máx. de peticiones al origen a la vez (CACHE_LRU_TURNOS).
+ *        saturado   callable(): void — responde «no queda turno» (por defecto,
+ *                   cache_lru_saturado: 503 + Retry-After). Con un job vivo se
+ *                   responde pendiente: el dato está en camino, no es un fallo.
  *   fetch($etapa)       string|false|null — pide al origen; null = falló, false =
  *                                  sigue en marcha (job asíncrono). `$etapa` por referencia.
  *   servir($estado, $etapa)      — sirve la entrada de caché; registra su propio log
@@ -208,12 +250,29 @@ function cache_lru_flujo(array $cfg, callable $fetch, callable $servir, callable
         return;
     }
 
-    // ── FALLO: pedir al origen bajo bloqueo (evita estampida) ──
-    $lock = @fopen($ruta . '.lock', 'c');
     /* #505: con un job vivo, el lock lo tiene una petición que solo consulta su
        fase o recoge su resultado. Esperarla no adelanta nada y retendría un
        worker; además, el que espera no debe poder lanzar otro job. */
     $con_job = $pendiente && isset($cfg['job']) && is_file($cfg['job']);
+
+    /* ── TURNO ── Se toma ANTES de esperar el lock de la clave: así también
+       quien espera a que otro termine la misma entrada cuenta, y los procesos
+       retenidos por este proxy nunca pasan de `turnos`. Se suelta solo, al
+       salir de la función o al acabar el proceso. */
+    $turno = cache_lru_turno($cfg['dir'], $cfg['turnos'] ?? CACHE_LRU_TURNOS);
+    if ($turno === null) {
+        if ($con_job) {
+            $reg('pendiente', 'async', 0);
+            $pendiente();
+            return;
+        }
+        $reg('error', 'saturado', 0);
+        ($cfg['saturado'] ?? 'cache_lru_saturado')();
+        return;
+    }
+
+    // ── FALLO: pedir al origen bajo bloqueo (evita estampida) ──
+    $lock = @fopen($ruta . '.lock', 'c');
     if ($lock && flock($lock, $con_job ? LOCK_EX | LOCK_NB : LOCK_EX)) {
         // Otra petición pudo llenar la caché mientras esperábamos el lock.
         if (is_file($ruta)) {

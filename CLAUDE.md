@@ -14,7 +14,8 @@
 - Base de Datos: Tablas personalizadas `{prefix}bitacora` y `{prefix}bitacora_objetos`. Usa `$wpdb`. Prefijo de tablas en producción: `dgrh_` (`dgrh_bitacora_observaciones`, `dgrh_bitacora_entradas`...). Base de datos: `mdgboybv_yfbj1`.
 - API: Endpoints REST bajo el namespace `/wp-json/bitacora/v1/*`.
 - Producción: El dominio base es `bitacoraestelar.app`.
-- **Versión del plugin**: al modificar `bitacora-registro.php`, sube el número en DOS sitios: el comentario `Version:` de cabecera Y la constante `define('BITACORA_VERSION', ...)`. Solo la constante dispara la migración automática de esquema (`bitacora_comprobar_version()` en `plugins_loaded`); si se te olvida y solo subes la cabecera, las columnas/tablas nuevas no se crean en producción y las peticiones que las usan fallan con 500.
+- **Versión del plugin**: al modificar el plugin, sube el número en la cabecera `Version:` de `bitacora-registro.php`. Es el único sitio: la constante `BITACORA_VERSION` se lee de ahí (`get_file_data`) y es la que dispara la migración automática de esquema (`bitacora_comprobar_version()` en `plugins_loaded`). Sin subirla, las columnas/tablas nuevas no se crean en producción y las peticiones que las usan fallan con 500.
+- **Ficheros del plugin**: `bitacora-registro.php` (esquema, rutas REST y manejadores) carga el resto con `require_once`: `bitacora-catalogos.php` (SIMBAD, Gaia, VizieR, OAC, NED), `bitacora-ficha-docx.php`, `bitacora-admin.php` (escritorio y semillas), `bitacora-oal.php`, `bitacora-viaje.php`, `bitacora-distancia.php`, `bitacora-slug.php`, `bitacora-equipo-prestado.php`. Al desplegar se suben TODOS: si falta uno, el plugin entero cae con un fatal.
 
 ## Frontend (Vanilla Web)
 - Sin Bundlers: No uses `npm`, `webpack`, `vite` ni dependencias externas. Es JS/HTML nativo.

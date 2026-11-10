@@ -883,7 +883,7 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
         $mapa_viaje[ $id ] = array( 'id' => $viaje_id, 'base_id' => $base_id );
         bitacora_oal_viaje_actualizar( $viaje_id, $n );
         foreach ( $n['tripulacion'] as $companero ) {
-            bitacora_oal_tripulante( $viaje_id, $companero, $usuario_id );
+            bitacora_oal_tripulante( $viaje_id, $companero );
         }
     }
 
@@ -902,6 +902,7 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
     $creadas = 0;
     $actualizadas = 0;
     $adoptadas = 0;
+    $por_situar = array();
     foreach ( $grupos as $g ) {
         $viaje = isset( $mapa_viaje[ $g['noche_id'] ] ) ? $mapa_viaje[ $g['noche_id'] ] : null;
         if ( ! $viaje ) {
@@ -910,7 +911,9 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
         // Cada observación la firma quien la hizo (el <observer> de su bloque);
         // el dueño del fichero solo cubre las que no lo dicen.
         $quien    = '' !== trim( $g['observador'] ) ? trim( $g['observador'] ) : $firma;
-        $quien_id = ( $quien === $firma ) ? $observador_id : bitacora_observador_id_desde_nombre( $quien, $usuario_id );
+        // Solo la firma del fichero es la cuenta que importa: el observador de un
+        // bloque ajeno se crea (o se encuentra) sin enlazarlo a ella.
+        $quien_id = ( $quien === $firma ) ? $observador_id : bitacora_observador_id_desde_nombre( $quien, 0 );
         $tel_id = 0;
         foreach ( $g['entradas'] as $e ) {
             if ( ! $tel_id && ! empty( $equipo['telescopios'][ $e['telescopio'] ] ) ) {
@@ -957,36 +960,62 @@ function bitacora_oal_importar( $xml, $usuario_id, $confirmar = false ) {
             $obs_id   = $adopcion['adoptadas'][ $g['oal_id'] ];
             $adoptada = true;
         }
-        if ( $obs_id ) {
-            $wpdb->update( $t_ob, $fila, array( 'id' => $obs_id ) );
-            if ( $adoptada ) {
-                $adoptadas++;
-            } else {
-                $actualizadas++;
-            }
+        // Cada observación entra entera (fila, entradas y ficha) o no entra: una
+        // fila sin sus entradas es una observación vacía que nadie pidió. La
+        // transacción es por observación y no por fichero para que un fallo a
+        // mitad no tire lo que ya entró bien; relanzar el mismo XML es seguro.
+        $existia = (bool) $obs_id;
+        $wpdb->query( 'START TRANSACTION' );
+        if ( $existia ) {
+            $escrita = ( false !== $wpdb->update( $t_ob, $fila, array( 'id' => $obs_id ) ) );
         } else {
             $fila['creado_en'] = $ahora;
-            $wpdb->insert( $t_ob, $fila );
-            $obs_id = intval( $wpdb->insert_id );
-            $creadas++;
+            $escrita = ( false !== $wpdb->insert( $t_ob, $fila ) );
+            $obs_id  = $escrita ? intval( $wpdb->insert_id ) : 0;
         }
-        if ( ! $obs_id ) {
-            continue;
-        }
-        bitacora_oal_entradas_guardar( $obs_id, $g, $datos, $equipo, $ahora );
-        bitacora_oal_ficha_guardar( $obs_id, $g, $viaje['base_id'], $ahora );
-
-        // Lo importado también se pinta: si el objeto aún no está en el catálogo
-        // del mapa, se calcula su sitio, igual que al registrar desde el
-        // formulario. Sin esto la observación existe pero el mapa se queda
-        // vacío, y el buscador —que resuelve en SIMBAD al vuelo— sí lo
-        // encuentra, así que el hueco no se nota hasta que se busca. Se hace
-        // también en las actualizaciones: así una importación repetida coloca
-        // los objetos de lo que se importó antes de que esto existiera.
-        $obj_res = bitacora_asegurar_objeto_mapa( $unif['objeto'], $g['objeto'], $g['ra'], $g['dec'], $g['tipo'] );
-        if ( is_wp_error( $obj_res ) ) {
+        if ( ! $escrita || ! $obs_id
+            || false === bitacora_oal_entradas_guardar( $obs_id, $g, $datos, $equipo, $ahora )
+            || false === bitacora_oal_ficha_guardar( $obs_id, $g, $viaje['base_id'], $ahora ) ) {
+            $wpdb->query( 'ROLLBACK' );
             $problemas[] = array(
                 'donde' => $g['objeto'],
+                'que'   => 'La base de datos rechazó esta observación: no se ha guardado. Vuelve a importar el fichero para reintentarla.',
+            );
+            continue;
+        }
+        $wpdb->query( 'COMMIT' );
+        if ( ! $existia ) {
+            $creadas++;
+        } elseif ( $adoptada ) {
+            $adoptadas++;
+        } else {
+            $actualizadas++;
+        }
+        // Una vez por objeto, aunque se observara varias noches: con los datos de
+        // la primera, que es la que lo colocaba cuando esto iba dentro del bucle.
+        if ( ! isset( $por_situar[ $unif['objeto'] ] ) ) {
+            $por_situar[ $unif['objeto'] ] = array( $unif['objeto'], $g['objeto'], $g['ra'], $g['dec'], $g['tipo'] );
+        }
+    }
+
+    // Lo importado también se pinta: si el objeto aún no está en el catálogo
+    // del mapa, se calcula su sitio, igual que al registrar desde el
+    // formulario. Sin esto la observación existe pero el mapa se queda
+    // vacío, y el buscador —que resuelve en SIMBAD al vuelo— sí lo
+    // encuentra, así que el hueco no se nota hasta que se busca. Se hace
+    // también en las actualizaciones: así una importación repetida coloca
+    // los objetos de lo que se importó antes de que esto existiera.
+    //
+    // Va DESPUÉS de escribir todas las observaciones: situar un objeto nuevo son
+    // hasta seis consultas a catálogos externos, y con ellas dentro del bucle un
+    // fichero grande agotaba el tiempo de PHP con la importación a medias. Así,
+    // si se corta aquí, las observaciones ya están todas guardadas y lo que
+    // falta por situar lo coloca la siguiente importación o el backfill.
+    foreach ( $por_situar as $s ) {
+        $obj_res = bitacora_asegurar_objeto_mapa( $s[0], $s[1], $s[2], $s[3], $s[4] );
+        if ( is_wp_error( $obj_res ) ) {
+            $problemas[] = array(
+                'donde' => $s[1],
                 'que'   => $obj_res->get_error_message(),
             );
         }
@@ -1152,9 +1181,10 @@ function bitacora_oal_viaje_actualizar( $viaje_id, $noche ) {
 }
 
 /** Apunta a un compañero en la tripulación del viaje (sin repetirlo). */
-function bitacora_oal_tripulante( $viaje_id, $nombre, $usuario_id ) {
+function bitacora_oal_tripulante( $viaje_id, $nombre ) {
     global $wpdb;
-    $oid = bitacora_observador_id_desde_nombre( $nombre, $usuario_id );
+    // Sin usuario: un compañero de salida no es la cuenta que importa el fichero.
+    $oid = bitacora_observador_id_desde_nombre( $nombre, 0 );
     if ( ! $oid ) {
         return;
     }
@@ -1179,7 +1209,8 @@ function bitacora_oal_modelo( $datos, $clase, $id ) {
 /**
  * Reescribe las entradas de una observación: una por ocular/aumento, en orden.
  * Al reimportar se borran y se vuelven a poner, que es lo que hace que quitar
- * un aumento en la plantilla lo quite también aquí.
+ * un aumento en la plantilla lo quite también aquí. Devuelve false si la base
+ * de datos rechaza algún paso: quien llama deshace la observación entera.
  */
 function bitacora_oal_entradas_guardar( $obs_id, $grupo, $datos, $equipo, $ahora ) {
     global $wpdb;
@@ -1194,13 +1225,13 @@ function bitacora_oal_entradas_guardar( $obs_id, $grupo, $datos, $equipo, $ahora
     $previas = $wpdb->get_results( $wpdb->prepare(
         "SELECT id, orden FROM $t_ent WHERE observacion_id = %d", $obs_id
     ), ARRAY_A );
-    if ( $previas ) {
-        $wpdb->query( $wpdb->prepare( "DELETE FROM $t_ent WHERE observacion_id = %d", $obs_id ) );
+    if ( $previas && false === $wpdb->query( $wpdb->prepare( "DELETE FROM $t_ent WHERE observacion_id = %d", $obs_id ) ) ) {
+        return false;
     }
     $nuevas = array();
     foreach ( $grupo['entradas'] as $orden => $e ) {
         $ocular = bitacora_oal_modelo( $datos, 'oculares', $e['ocular'] );
-        $wpdb->insert( $t_ent, array(
+        $ok = $wpdb->insert( $t_ent, array(
             'observacion_id' => $obs_id,
             'orden'          => $orden,
             'aumento'        => $e['aumento'],
@@ -1211,6 +1242,9 @@ function bitacora_oal_entradas_guardar( $obs_id, $grupo, $datos, $equipo, $ahora
             'descripcion'    => wp_kses_post( $e['descripcion'] ),
             'creado_en'      => $ahora,
         ) );
+        if ( false === $ok ) {
+            return false;
+        }
         $nuevas[ $orden ] = intval( $wpdb->insert_id );
     }
     if ( $previas ) {
@@ -1218,21 +1252,26 @@ function bitacora_oal_entradas_guardar( $obs_id, $grupo, $datos, $equipo, $ahora
         foreach ( $previas as $p ) {
             $destino = isset( $nuevas[ intval( $p['orden'] ) ] ) ? $nuevas[ intval( $p['orden'] ) ] : $ultima;
             if ( $destino ) {
-                $wpdb->update( $t_img, array( 'entrada_id' => $destino ), array( 'entrada_id' => intval( $p['id'] ) ) );
+                $ok = $wpdb->update( $t_img, array( 'entrada_id' => $destino ), array( 'entrada_id' => intval( $p['id'] ) ) );
             } else {
                 // Sin ninguna entrada nueva no hay dónde colgarlos, y dejarlos
                 // apuntando a una entrada que ya no existe los esconde para
                 // siempre igual que borrarlos, pero ocupando sitio.
-                $wpdb->delete( $t_img, array( 'entrada_id' => intval( $p['id'] ) ) );
+                $ok = $wpdb->delete( $t_img, array( 'entrada_id' => intval( $p['id'] ) ) );
+            }
+            if ( false === $ok ) {
+                return false;
             }
         }
     }
+    return true;
 }
 
 /**
  * Siembra la ficha con los datos CRUDOS que el XML sí sabe. La altura, el
  * azimut y el Sol y la Luna los sigue calculando la página de la ficha con
- * bitacora-astro.js: no se duplica la astronomía en PHP.
+ * bitacora-astro.js: no se duplica la astronomía en PHP. Devuelve false si la
+ * base de datos la rechaza.
  */
 function bitacora_oal_ficha_guardar( $obs_id, $grupo, $base_id, $ahora ) {
     global $wpdb;
@@ -1260,11 +1299,10 @@ function bitacora_oal_ficha_guardar( $obs_id, $grupo, $base_id, $ahora ) {
     );
     $ya = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t_fi WHERE observacion_id = %d", $obs_id ) );
     if ( $ya ) {
-        $wpdb->update( $t_fi, $fila, array( 'id' => intval( $ya ) ) );
-    } else {
-        $fila['creado_en'] = $ahora;
-        $wpdb->insert( $t_fi, $fila );
+        return false !== $wpdb->update( $t_fi, $fila, array( 'id' => intval( $ya ) ) );
     }
+    $fila['creado_en'] = $ahora;
+    return false !== $wpdb->insert( $t_fi, $fila );
 }
 
 /* ===========================================================================

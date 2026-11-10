@@ -62,8 +62,12 @@ ok( false !== strpos( $r[1], "NOT NULL DEFAULT 'visto'" ), "resultado es NOT NUL
 ok( false === strpos( $m[1], 'NOT NULL' ), 'motivo_no_visto admite NULL' );
 eq( array_column( $wpdb->filas, 'resultado' ), array( 'visto', 'visto' ), "las filas previas leen 'visto'" );
 eq( array_column( $wpdb->filas, 'motivo_no_visto' ), array( null, null ), 'las filas previas no tienen motivo' );
-ok( preg_match( "/Version:\s+(\S+)/", $fuente, $v1 ) && preg_match( "/'BITACORA_VERSION', '([^']+)'/", $fuente, $v2 ) && $v1[1] === $v2[1],
-    'cabecera Version: y BITACORA_VERSION coinciden (solo la constante dispara la migración)' );
+// La versión se escribe UNA vez: la constante que dispara la migración se lee de
+// la cabecera. Dos literales podían quedar desparejados al subir solo uno.
+ok( preg_match( "/^ \* Version:\s+\d+\.\d+\.\d+\s*$/m", $fuente ), 'la cabecera Version: lleva un número de versión' );
+ok( 1 === preg_match_all( "/define\( 'BITACORA_VERSION',/", $fuente )
+    && false !== strpos( $fuente, "define( 'BITACORA_VERSION', get_file_data( __FILE__, array( 'v' => 'Version' ) )['v'] );" ),
+    'BITACORA_VERSION sale de la cabecera, no de un segundo literal' );
 
 echo "\nresultado (criterio 2):\n";
 eq( bitacora_validar_resultado( array() ), array( 'resultado' => 'visto', 'motivo_no_visto' => null ), 'sin resultado: visto' );

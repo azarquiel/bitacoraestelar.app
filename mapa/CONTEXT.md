@@ -21,7 +21,7 @@ Lo que separa una dirección del cielo de un sitio en el mapa: sin distancia no 
 5. **NED**, por **corrimiento al rojo**: ESTIMACIÓN por ley de Hubble, no medida, y solo válida lejos (ver invariante).
 6. La que escriba **a mano** el observador, único recurso para lo que ninguna base de datos sabe: nebulosas difusas galácticas (NGC 2024 no tiene ni medida, ni paralaje, ni entrada en `B/ocl`, ni z).
 
-- **Fuente única de la regla:** `bitacora-distancia.php`, puro y sin WordPress; consultas de red viven en `bitacora-registro.php`, una por fuente y todas con caché de 30 días. Test `scripts/test_distancia_objeto.php`, que fija el parseo con respuestas reales de cada servicio.
+- **Fuente única de la regla:** `bitacora-distancia.php`, puro y sin WordPress; consultas de red viven en `bitacora-catalogos.php`, una por fuente y todas con caché de 30 días. Test `scripts/test_distancia_objeto.php`, que fija el parseo con respuestas reales de cada servicio.
 - **Paralaje ≤ 0 no es distancia:** ruido de medida daría valor negativo, que colocaría el objeto al lado contrario del mapa.
 - **Ley de Hubble no vale de cerca** (`BITACORA_Z_MIN_HUBBLE`, z = 0,01): velocidad propia de una galaxia dentro de su grupo es del orden de la de expansión y se come la señal. M104 tiene z = 0,00363, que por Hubble da ~51 millones de años luz cuando está a ~29. Por debajo del corte, NED se calla.
 - **De NED sale el z, no su distancia:** sus distancias independientes del corrimiento al rojo (NED-D) no las publica ninguna API —solo la web—, y su TAP (`NEDTAP.objdir`) expone cuántas hay (`n_dist`) pero no cuáles. Raspar HTML dentro del plugin no compensa.
