@@ -1140,6 +1140,57 @@ del golden): `docs/validacion/dso_texturas_fase1.md`.
 
 ---
 
+### Avance de Gaia (`avance/`)
+
+Gaia DR3 con G < 15 (~36,9 M de estrellas, ~445 MB), generado *offline* y
+servido como ficheros estáticos, un fichero por celda HEALPix nested de nivel 6
+(ADR 0033, #516). Lo usarán el proxy (pista de densidad) y el cliente (vista
+provisional + mitad brillante del conjunto completo): #517 y #519.
+
+En `/wp-content/uploads/bitacora/avance/`:
+
+- `n6/<ipix>.bin` — las **49 152** celdas, también las vacías (0 filas): un 404
+  significa siempre «Avance no disponible», nunca «celda vacía». Cabecera de
+  188 B (firma `BAVG`, versión, nivel, ipix, nº de filas y el histograma de
+  profundidad de **toda** la celda: 42 tramos de 0,5 mag, G 0-21) y filas de
+  12 B little-endian ordenadas por G: ra y dec en `float32`, G en `uint16`
+  (`floor(G·1000)`) y BP−RP en `int16` (×1000, −32768 = nulo). Cada estrella
+  va en la celda de su posición, no de su `source_id`. El formato exacto está en
+  la cabecera de `scripts/gen_avance_gaia.py`.
+- `manifiesto.json` — versión, catálogo, nivel, frontera (15), total de filas y
+  fecha. Es lo que proxy y cliente consultan para saber que el Avance existe.
+- `.htaccess` — los `.bin` con `Cache-Control: public, max-age=31536000,
+  immutable` y `application/octet-stream`; el manifiesto con `no-cache`.
+
+Vive **fuera** de `cache_gaia/` y no casa con `*.json.gz`: la caché LRU del
+proxy nunca lo ve (`php scripts/test_cache_lru.php` lo fija).
+
+Generar (reanudable: si se corta, se relanza igual y sigue donde iba; nunca más
+de 2 jobs a la vez contra GAVO). El trabajo intermedio va a `.scratch/avance_gaia/`:
+
+```
+python3 scripts/gen_avance_gaia.py --medir 7          # 7 lotes (112 celdas), M7 y M6 incluidos
+python3 scripts/gen_avance_gaia.py                    # todo → simulador_ocular/avance/
+python3 scripts/gen_avance_gaia.py --verificar        # AC 1 y 3: 49 152 celdas, filas ≈ 36 897 335
+python3 scripts/gen_avance_gaia.py --verificar-campos m7,m13,polo   # AC 4 contra GAVO
+```
+
+Test sin red: `python3 scripts/test_avance_gaia.py`.
+
+**Publicarlo: primero `n6/` entero por FTP, después el `.htaccess`, y el
+manifiesto el ÚLTIMO.** El manifiesto es lo que anuncia el Avance; si llega
+antes que las celdas, los clientes piden ficheros que aún no están.
+Comprobar las cabeceras tras subir:
+`curl -sI https://bitacoraestelar.app/wp-content/uploads/bitacora/avance/n6/0.bin`
+→ `Cache-Control: public, max-age=31536000, immutable` y
+`Content-Type: application/octet-stream`.
+
+**Las celdas son inmutables durante un año.** Regenerar con otro contenido en
+las mismas rutas no llega a quien ya las tiene en caché: una versión nueva del
+Avance tiene que cambiar de ruta (p. ej. `n6v2/`) y anunciarse en el manifiesto.
+
+---
+
 ## Despliegue
 
 1. **JS y CSS** → por FTP a `/wp-content/uploads/bitacora/`.

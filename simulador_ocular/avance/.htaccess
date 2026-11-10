@@ -1,0 +1,16 @@
+# Avance de Gaia (#516, ADR 0033): uploads/bitacora/avance/.
+# Las celdas n6/<ipix>.bin no cambian nunca para una versión del Avance: se
+# cachean un año sin revalidar. El manifiesto NO es inmutable: es lo que dice
+# a proxy y cliente que el Avance existe y cuál es, y tiene que poder cambiar.
+# No cuelga de cache_gaia/: la caché LRU del proxy nunca lo ve ni lo expulsa.
+<FilesMatch "\.bin$">
+    ForceType application/octet-stream
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </IfModule>
+</FilesMatch>
+<Files "manifiesto.json">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-cache"
+    </IfModule>
+</Files>

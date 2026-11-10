@@ -16,6 +16,23 @@ if ($uri === '/' || $uri === '/ocular') {
     return true;
 }
 
+/* El Avance de Gaia (#516) vive en uploads/bitacora/avance/ (en el repo,
+   simulador_ocular/avance/, generado por gen_avance_gaia.py e ignorado en git).
+   El servidor embebido no lee .htaccess: aquí se imitan sus cabeceras. */
+if (preg_match('#^/wp-content/uploads/bitacora/avance/(manifiesto\.json|n6/[0-9]+\.bin)$#', $uri, $m)) {
+    $ruta = $raiz . '/simulador_ocular/avance/' . $m[1];
+    if (!is_file($ruta)) { http_response_code(404); return true; }
+    if (substr($m[1], -4) === '.bin') {
+        header('Content-Type: application/octet-stream');
+        header('Cache-Control: public, max-age=31536000, immutable');
+    } else {
+        header('Content-Type: application/json');
+        header('Cache-Control: no-cache');
+    }
+    readfile($ruta);
+    return true;
+}
+
 /* Las texturas DSO viven en uploads/bitacora/dso/ (en el repo, simulador_ocular/dso/,
    generado por gen_dso_texturas.js e ignorado en git). El subdirectorio solo
    puede ser ese; la clase de caracteres no admite «/», así que `dso/..` es lo
