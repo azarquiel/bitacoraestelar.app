@@ -88,6 +88,8 @@ const GAIA_AVANCE_CABECERA  = 188;               // B: lo único que el proxy le
 const GAIA_AVANCE_TRAMOS    = 42;                // tramos de 0,5 mag, G 0-21
 const GAIA_PISTA_UMBRAL     = 130000;            // filas previstas: GAIA_TECHO_FILAS / 1,5
 const GAIA_PISTA_MARGEN     = 0.015;             // °: borde borroso de la celda (E4 del ADR 0012)
+const GAIA_AVANCE_PASO_MIL  = 500;               // milésimas de mag por tramo
+const GAIA_CIELO_DEG2       = 41253.0;           // área de la esfera en grados²
 
 // ───────────────────────── FUNCIONES PURAS (testables) ───────────────────────
 
@@ -570,7 +572,7 @@ function gaia_ang2pix_nest(int $nivel, float $ra, float $dec): int {
  */
 function gaia_celdas_cono(float $ra, float $dec, float $rad, int $nivel = GAIA_AVANCE_NIVEL): array {
     $r = $rad + GAIA_PISTA_MARGEN;
-    $lado = sqrt(41253.0 / (12 * 4 ** $nivel));
+    $lado = sqrt(GAIA_CIELO_DEG2 / (12 * 4 ** $nivel));
     $sd = sin(deg2rad($dec));
     $cd = cos(deg2rad($dec));
     $celdas = [gaia_ang2pix_nest($nivel, $ra, $dec) => true];
@@ -609,10 +611,10 @@ function gaia_avance_hist(string $cab, int $ipix): ?array {
     }
     $c = unpack('a4firma/vver/Cnivel/Ccero/Vipix/Vn/vtramos/vpaso', $cab);
     if ($c === false || $c['firma'] !== 'BAVG' || $c['ver'] !== 1 || $c['nivel'] !== GAIA_AVANCE_NIVEL
-        || $c['ipix'] !== $ipix || $c['tramos'] !== GAIA_AVANCE_TRAMOS || $c['paso'] !== 500) {
+        || $c['ipix'] !== $ipix || $c['tramos'] !== GAIA_AVANCE_TRAMOS || $c['paso'] !== GAIA_AVANCE_PASO_MIL) {
         return null;
     }
-    $h = unpack('V' . GAIA_AVANCE_TRAMOS, $cab, 20);
+    $h = unpack('V' . GAIA_AVANCE_TRAMOS, $cab, GAIA_AVANCE_CABECERA - 4 * GAIA_AVANCE_TRAMOS);
     return $h === false ? null : array_values($h);
 }
 
@@ -632,9 +634,11 @@ function gaia_pista_densa(?int $prevision): bool {
     return $prevision !== null && $prevision > GAIA_PISTA_UMBRAL;
 }
 
-/** Campos de la pista en la línea del log (AC4). */
-function gaia_pista_log(?int $prevision, bool $usada): array {
-    return ['prevision' => $prevision, 'pista' => $usada];
+/** Campos de la pista en la línea del log (AC4). `fallida`: la pista dijo
+    «denso» pero la cadena no se pudo lanzar y se siguió el flujo de siempre;
+    sin la marca, esa sonda contaría como un fallo de la pista en el AC5. */
+function gaia_pista_log(?int $prevision, bool $usada, bool $fallida = false): array {
+    return ['prevision' => $prevision, 'pista' => $usada] + ($fallida ? ['pista_fallida' => true] : []);
 }
 
 // ───────────────────────── EFECTOS (disco / red) ─────────────────────────────
@@ -717,10 +721,13 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_
     /* Pista de densidad (#517): previsión > umbral → directo a la cadena, sin
        sonda ni segura. Si no se puede lanzar, el flujo de siempre: la pista
        solo ahorra tiempo, nunca quita la vía síncrona. */
-    if (gaia_pista_densa($prevision) && is_writable(dirname($ruta_job))
-        && gaia_cadena_lanzar($ruta_job, ['paso' => 'hist'], $ra, $dec, $rad, $mag)) {
-        $GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, true);
-        return false;
+    if (gaia_pista_densa($prevision)) {
+        $lanzada = is_writable(dirname($ruta_job))
+            && gaia_cadena_lanzar($ruta_job, ['paso' => 'hist'], $ra, $dec, $rad, $mag);
+        $GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, $lanzada, !$lanzada);
+        if ($lanzada) {
+            return false;
+        }
     }
     $etapa = 'densa';
     $json = gaia_fetch_urls(gaia_proveedores_gavo_primero($ra, $dec, $rad, $mag, false), 'sonda', true);

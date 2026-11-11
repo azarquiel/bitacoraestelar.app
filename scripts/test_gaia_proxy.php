@@ -482,6 +482,8 @@ $con = json_decode(cache_lru_log_linea(1.0, 'k', 'pendiente', 'async', 0, 900.0,
     ['prevision' => 245000, 'pista' => true]), true);
 eq([$con['prevision'], $con['pista']], [245000, true], 'la línea lleva previsión y si se usó la pista');
 eq(gaia_pista_log(null, false), ['prevision' => null, 'pista' => false], 'sin Avance → previsión null');
+eq(gaia_pista_log(245000, false, true), ['prevision' => 245000, 'pista' => false, 'pista_fallida' => true],
+    'denso pero la cadena no se lanzó → marcado (no cuenta como fallo de la pista en el AC5)');
 $mix = gaia_log_agregado(cache_lru_log_linea(1.0, 'v', 'miss', 'sonda', 10, 900.0)
     . cache_lru_log_linea(2.0, 'n', 'pendiente', 'async', 0, 800.0, null, gaia_pista_log(245000, true))
     . cache_lru_log_linea(3.0, 'n', 'miss', 'sonda', 10, 900.0, null, gaia_pista_log(4000, false)));

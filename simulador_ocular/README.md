@@ -172,7 +172,7 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   sale en un segundo, sin sonda ni segura. Sin manifiesto, con una celda ausente
   o con una cabecera ilegible no hay pista y el flujo es el de siempre. El log
   apunta `prevision` y `pista` en cada línea; `?stats=1` cuenta en `pista` las
-  peticiones que la usaron.
+  peticiones que la usaron, y `pista_fallida` marca las que la pista mandó a la cadena pero no se pudo lanzar (siguieron por la sonda).
 - **Tamaño** = imagen estelar física (disco de Airy + seeing, ver más abajo), en
   cuadratura con un **suelo de visibilidad** en píxeles (`radioSuelo`, con un
   término extra `radioSueloMag · flujoRelativo^radioSueloExp` y `radioSueloMax`
