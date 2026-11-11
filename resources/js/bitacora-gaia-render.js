@@ -581,8 +581,8 @@
 
      Un solo array para todas las capas difusas con desvanecido propio, y el
      valor lleva información en vez de un simple sí/no: PS1 escribe 0 (gamma
-     completa, exactamente lo que hacía con el flag) y el cúmulo escribe su
-     s_halo. La convención vive aquí y no copiada a mano en cada harness. */
+     completa, exactamente lo que hacía con el flag) y el cúmulo escribe 1
+     (lineal, #535) donde pinta luz. La convención vive aquí y no copiada a mano en cada harness. */
   function difusoMarcado(mask, i) {
     return !!(mask && mask[i] >= 0);
   }
@@ -649,8 +649,7 @@
          visibilidadDifusa es contar dos veces el mismo umbral, y entre las dos
          lo dejaban en 0 DN sobre el cielo en cualquier pupila. Aquí manda el
          modelo: sin s, y con el realce a la t que ese modelo haya escrito (0 en
-         PS1 = gamma completa; s_halo en el cúmulo, para que el realce decaiga
-         donde el velo ya se ve bien). Si otra capa difusa cae en el mismo
+         PS1 = gamma completa; 1 en el cúmulo = lineal, #535). Si otra capa difusa cae en el mismo
          píxel, su luz entra en este trato; son unos pocos píxeles y ninguno
          decide nada. */
       var t = o.difusoMask ? o.difusoMask[i] : -1;
@@ -2853,9 +2852,14 @@
         if (o.campoCrudo) o.campoCrudo[idx] = crudo;
         if (o.campoGranoI) o.campoGranoI[idx] = I;
         difuso[idx] += I;
-        // La t del realce es s_halo: donde el velo ya se ve bien, el realce se
-        // retira y el núcleo no se quema a blanco (ver difusoMarcado).
-        if (sH > mascara[idx]) mascara[idx] = sH;
+        /* t = 1 (sin realce, lineal) donde el cúmulo pinta luz (#535): la gamma
+           con t = s_halo entraba entera donde el halo roza el umbral y lo
+           pintaba ×10 sobre su nivel lineal a 6′. Un píxel bajo el umbral no se
+           pinta por encima de su nivel lineal. Solo donde I > 0, para no
+           linealizar la luz de otra capa en píxeles a los que el cúmulo no
+           aporta nada (ver difusoMarcado). */
+        var tCumulo = I > 0 ? 1 : 0;
+        if (tCumulo > mascara[idx]) mascara[idx] = tCumulo;
       }
     }
 

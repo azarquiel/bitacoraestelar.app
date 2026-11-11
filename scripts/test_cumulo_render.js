@@ -395,8 +395,8 @@ var identico = true;
 for (var q = 0; q < D1.length; q++) if (D1[q] !== D2[q]) { identico = false; break; }
 ok(identico, 'dos pintados del mismo cúmulo son idénticos bit a bit');
 
-/* La máscara difusa lleva s_halo, no un sí/no: el realce decae donde el velo ya
-   se ve bien. */
+/* La máscara difusa marca con t = 1 (lineal, #535) los píxeles donde el cúmulo
+   pinta luz. */
 // Campo más ancho que el cúmulo entero: así hay esquinas fuera de r_t donde el
 // cúmulo no pinta y la máscara no debe marcar.
 var M = pintar(M13, 200, 100, 21.5, campoAncho, SIZE);
@@ -405,8 +405,32 @@ var marcados = 0, conT = 0;
 for (var p = 0; p < mask.length; p++) {
   if (R.difusoMarcado(mask, p)) { marcados++; if (mask[p] > 0) conT++; }
 }
-ok(marcados > 0 && conT > 0, 'la máscara lleva la t de s_halo (' + conT + '/' + marcados + ' px con t>0)');
+ok(marcados > 0 && conT > 0, 'la máscara marca con t = 1 donde pinta (' + conT + '/' + marcados + ' px con t>0)');
 ok(!R.difusoMarcado(mask, 2 * SIZE + 2), 'y no marca la esquina, fuera de r_t');
+
+/* #535: el halo se pinta en lineal. El realce perceptual entraba entero donde
+   el halo roza el umbral y lo dejaba a 15,7 DN a 6′ (lineal: 7,8) y pintado
+   hasta 7,8′ con el umbral en 5,8′. Nivel por anillo con la MISMA cadena que
+   pintarFot: t de la máscara que escribió pintarCumulo, realce y valorDeFlujo. */
+(function () {
+  var c = R.ctxFotometrico(M.cielo), pxArc = campoAncho / SIZE;
+  var suma = new Float64Array(200), sumaLin = new Float64Array(200), n = new Float64Array(200);
+  for (var p = 0; p < mask.length; p++) {
+    var F = M.difuso[p]; if (!(F > 0)) continue;
+    var r = Math.hypot(p % SIZE + 0.5 - SIZE / 2, Math.floor(p / SIZE) + 0.5 - SIZE / 2) * pxArc;
+    var k = Math.floor(r / 0.1); if (k >= 200) continue;
+    var t = R.difusoMarcado(mask, p) ? mask[p] : 0;
+    suma[k] += R.valorDeFlujo(R.realzarPerceptual(F, c.Fcielo, c.rango, t), c.FcieloPintado, c.rango);
+    sumaLin[k] += R.valorDeFlujo(F, c.FcieloPintado, c.rango);
+    n[k]++;
+  }
+  var dn = function (k) { return n[k] ? suma[k] / n[k] : 0; };
+  var borde = 0;
+  for (var k = 0; k < 200; k++) if (dn(k) >= 1) borde = (k + 1) * 0.1;
+  ok(dn(60) <= 7.8, 'M13 200/100x: el halo a 6′ no pasa de su nivel lineal (' + dn(60).toFixed(1) + ' DN ≤ 7,8)');
+  ok(borde < 6.5, 'M13 200/100x: el borde pintado queda a menos de 6,5′ (' + borde.toFixed(1) + '′)');
+  ok(Math.abs(dn(10) - sumaLin[10] / n[10]) <= 1, 'y a 1′ (s_halo = 1) el núcleo no cambia');
+})();
 
 console.log(fallos ? '\n' + fallos + ' fallo(s)' : '\nTodo correcto');
 process.exit(fallos ? 1 : 0);
