@@ -180,7 +180,8 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   filas que el techo de la sonda (200 000), el paso de datos trae el campo
   entero, sin corte ni velo, igual que la sonda. Una pista errónea solo cuesta
   tiempo, nunca estrellas. El log
-  apunta `prevision` y `pista` en cada línea; `?stats=1` cuenta en `pista` las
+  apunta `prevision`, `pista` y `prevision_cono` (el cono entero, G ≤ 21: lo que
+  GAVO recorre, dato para recalibrar en #526) en cada línea; `?stats=1` cuenta en `pista` las
   peticiones que la usaron, y `pista_fallida` marca las que la pista mandó a la cadena pero no se pudo lanzar (siguieron por la sonda).
 - **Tamaño** = imagen estelar física (disco de Airy + seeing, ver más abajo), en
   cuadratura con un **suelo de visibilidad** en píxeles (`radioSuelo`, con un

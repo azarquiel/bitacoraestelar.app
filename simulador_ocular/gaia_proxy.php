@@ -666,9 +666,12 @@ function gaia_pista_densa(?int $prevision): bool {
 
 /** Campos de la pista en la línea del log (AC4). `fallida`: la pista dijo
     «denso» pero la cadena no se pudo lanzar y se siguió el flujo de siempre;
-    sin la marca, esa sonda contaría como un fallo de la pista en el AC5. */
-function gaia_pista_log(?int $prevision, bool $usada, bool $fallida = false): array {
-    return ['prevision' => $prevision, 'pista' => $usada] + ($fallida ? ['pista_fallida' => true] : []);
+    sin la marca, esa sonda contaría como un fallo de la pista en el AC5.
+    `cono`: previsión del cono entero (G ≤ 21), lo que GAVO tiene que recorrer;
+    es el dato para recalibrar la pista por coste (#526). */
+function gaia_pista_log(?int $prevision, bool $usada, bool $fallida = false, ?int $cono = null): array {
+    return ['prevision' => $prevision, 'pista' => $usada] + ($fallida ? ['pista_fallida' => true] : [])
+        + ['prevision_cono' => $cono];
 }
 
 // ───────────────────────── EFECTOS (disco / red) ─────────────────────────────
@@ -679,9 +682,11 @@ function gaia_pista_log(?int $prevision, bool $usada, bool $fallida = false): ar
  * celda dentro del cono (#517). Lee SOLO los 188 B de cabecera
  * de cada celda. null —sin pista, flujo de hoy— si falta el manifiesto, su
  * ruta no es la de una celda, o alguna celda falta o es ilegible: nunca una
- * suma parcial. No lanza: una pista rota no puede ser un 500.
+ * suma parcial. No lanza: una pista rota no puede ser un 500. En `$cono`
+ * deja, con las mismas cabeceras, la previsión del cono entero (G ≤ 21, #526).
  */
-function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, float $desde = 0.0, string $dir = GAIA_AVANCE_DIR): ?int {
+function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, float $desde = 0.0, string $dir = GAIA_AVANCE_DIR, ?int &$cono = null): ?int {
+    $cono = null;
     try {
         $m = json_decode((string) @file_get_contents($dir . '/manifiesto.json'), true);
         $ruta = is_array($m) ? (string) ($m['ruta'] ?? '') : '';
@@ -703,6 +708,7 @@ function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, flo
             }
             $hists[$ipix] = $h;
         }
+        $cono = gaia_pista_suma($hists, $fracciones, 0.0, GAIA_AVANCE_TRAMOS / 2);
         return gaia_pista_suma($hists, $fracciones, $desde, $mag);
     } catch (\Throwable) {
         return null;
@@ -756,7 +762,7 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_
     if (gaia_pista_densa($prevision)) {
         $lanzada = is_writable(dirname($ruta_job))
             && gaia_cadena_lanzar($ruta_job, ['paso' => 'hist'], $ra, $dec, $rad, $mag);
-        $GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, $lanzada, !$lanzada);
+        $GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, $lanzada, !$lanzada, $GLOBALS['cache_lru_extra']['prevision_cono'] ?? null);
         if ($lanzada) {
             return false;
         }
@@ -1066,8 +1072,8 @@ $ruta = gaia_ruta($clave);
 $ruta_job = gaia_ruta_job($clave);
 /* Pista de densidad (#517): en toda petición, para que el log la registre
    (AC4); solo la usa gaia_fetch al lanzar un campo nuevo. */
-$prevision = gaia_pista_prevision($qra, $qdec, $qrad, $qmag);
-$GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, false);
+$prevision = gaia_pista_prevision($qra, $qdec, $qrad, $qmag, 0.0, GAIA_AVANCE_DIR, $prevision_cono);
+$GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, false, false, $prevision_cono);
 
 cache_lru_flujo(
     [

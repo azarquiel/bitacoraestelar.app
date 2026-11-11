@@ -501,6 +501,13 @@ eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), $esperada(10000
 ok($esperada(100000) < 100000 * count($cm7), '... menor que la suma de celdas enteras');
 eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 15.0, $av), $esperada(100000), 'desde = 15: G 19,5-20 es complemento');
 eq(gaia_pista_prevision(268.447, -34.841, 0.89, 19.5, 0.0, $av), 0, 'mag 19,5: G 19,5-20 queda fuera');
+// #526 (AC 0): en la misma pasada, la previsión del cono entero (G ≤ 21).
+$cono = -1;
+gaia_pista_prevision(268.447, -34.841, 0.89, 16.0, 0.0, $av, $cono);
+eq($cono, (int) round((100000 + 999999) * array_sum($fm7)), 'prevision_cono = todos los tramos, sea cual sea mag');
+$cono = -1;
+gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av . '/no-existe', $cono);
+eq($cono, null, 'sin Avance → prevision_cono null');
 // Celda ausente: sin pista, nunca una suma parcial.
 rename("$av/n6/{$cm7[3]}.bin", "$av/aparte.bin");
 eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'celda ausente → sin pista');
@@ -537,8 +544,12 @@ eq(cache_lru_log_linea(1.0, 'k', 'hit', null, 1, 1.0, null, []), $sin, 'sin extr
 $con = json_decode(cache_lru_log_linea(1.0, 'k', 'pendiente', 'async', 0, 900.0, [['async', 'gavo', 303, 400.0]],
     ['prevision' => 245000, 'pista' => true]), true);
 eq([$con['prevision'], $con['pista']], [245000, true], 'la línea lleva previsión y si se usó la pista');
-eq(gaia_pista_log(null, false), ['prevision' => null, 'pista' => false], 'sin Avance → previsión null');
-eq(gaia_pista_log(245000, false, true), ['prevision' => 245000, 'pista' => false, 'pista_fallida' => true],
+eq(gaia_pista_log(null, false), ['prevision' => null, 'pista' => false, 'prevision_cono' => null], 'sin Avance → previsión null');
+eq(gaia_pista_log(4000, false, false, 90000), ['prevision' => 4000, 'pista' => false, 'prevision_cono' => 90000],
+    'la línea lleva también la previsión del cono entero (#526)');
+eq(gaia_pista_log(245000, true, false, 900000), ['prevision' => 245000, 'pista' => true, 'prevision_cono' => 900000],
+    'también cuando se usa la pista');
+eq(gaia_pista_log(245000, false, true), ['prevision' => 245000, 'pista' => false, 'pista_fallida' => true, 'prevision_cono' => null],
     'denso pero la cadena no se lanzó → marcado (no cuenta como fallo de la pista en el AC5)');
 $mix = gaia_log_agregado(cache_lru_log_linea(1.0, 'v', 'miss', 'sonda', 10, 900.0)
     . cache_lru_log_linea(2.0, 'n', 'pendiente', 'async', 0, 800.0, null, gaia_pista_log(245000, true))
