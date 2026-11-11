@@ -86,22 +86,26 @@ module.exports = function (R) {
     });
   }
 
+  function ladoNativoPx(lado) { return Math.round(lado * 60 / ESCALA_NATIVA); }
+
+  /* `salida` null: sin `output_size`, el píxel nativo tal cual (#370). */
   function urlRecorte(fichero, ra, dec, lado, salida) {
-    var size = Math.round(lado * 60 / ESCALA_NATIVA);
     return BASE + 'fitscut.cgi?red=' + encodeURIComponent(fichero) +
-      '&x=' + ra + '&y=' + dec + '&size=' + size + '&output_size=' + salida +
-      '&format=fits&wcs=1';
+      '&x=' + ra + '&y=' + dec + '&size=' + ladoNativoPx(lado) +
+      (salida == null ? '' : '&output_size=' + salida) + '&format=fits&wcs=1';
   }
 
   /* La costura del proxy, pero sobre los datos ya parseados: es lo mismo, y
      aquí no hace falta pelearse con el offset de la cabecera. Primer píxel
      válido gana; el solape discrepa ~15 % y promediar queda pendiente allí
      también. */
+  function mismaRejilla(a, b) { return !!b && a.datos.length === b.datos.length; }
+
   function coser(capas) {
     var base = capas[0];
     for (var c = 1; c < capas.length; c++) {
       var o = capas[c];
-      if (!o || o.datos.length !== base.datos.length) continue;
+      if (!mismaRejilla(base, o)) continue;
       for (var i = 0; i < base.datos.length; i++) {
         if (!isFinite(base.datos[i]) && isFinite(o.datos[i])) base.datos[i] = o.datos[i];
       }
@@ -209,10 +213,14 @@ module.exports = function (R) {
     });
   }
 
-  function urlRecorteNativo(fichero, ra, dec, lado) {
-    return BASE + 'fitscut.cgi?red=' + encodeURIComponent(fichero) +
-      '&x=' + ra + '&y=' + dec + '&size=' + Math.round(lado * 60 / ESCALA_NATIVA) +
-      '&format=fits&wcs=1';
+  /* Un reintento, como bajarReintentando. Solo cuenta los bytes del intento que
+     llegó entero: los de uno cortado no son parte del recorte. */
+  function bajarContandoReintentando(url, cuenta) {
+    function intento() {
+      var c = { bytes: 0 };
+      return bajarContando(url, c).then(function (b) { cuenta.bytes += c.bytes; return b; });
+    }
+    return intento().catch(intento);
   }
 
   /* El parche a `salida` px por el camino nativo. Devuelve lo mismo que `bajar`
@@ -246,16 +254,18 @@ module.exports = function (R) {
       var base = null, cosidas = 0, cadena = Promise.resolve();
       cs.forEach(function (celda) {
         cadena = cadena.then(function () {
-          var url = urlRecorteNativo(celda, ra, dec, lado);
-          return bajarContando(url, cuenta).catch(function () { return bajarContando(url, cuenta); })
+          return bajarContandoReintentando(urlRecorte(celda, ra, dec, lado, null), cuenta)
             .then(function (b) {
               var ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
               b = null;
               var p = window.BitacoraPS1.parseFITS(ab);
               if (!p || !p.datos) return;
-              cosidas++;
-              if (!base) { base = p; return; }
+              if (!base) { base = p; cosidas++; return; }
+              /* Una capa de otra rejilla no se cose: no cuenta como cosida, y
+                 el mosaico queda corto y sin cachear, como una celda caída. */
+              if (!mismaRejilla(base, p)) return;
               coser([base, p]);
+              cosidas++;
             }).catch(function () { /* una celda que falla no tumba el parche, pero se cuenta */ });
         });
       });
@@ -286,6 +296,6 @@ module.exports = function (R) {
 
   return { bajar: bajar, bajarNativo: bajarNativo, dir: DIR, ESCALA_NATIVA: ESCALA_NATIVA,
            /* Para medir (harness_ps1_nativo_370.js), no para producir. */
-           _interno: { celdas: celdas, urlRecorte: urlRecorte, urlRecorteNativo: urlRecorteNativo,
+           _interno: { celdas: celdas, urlRecorte: urlRecorte, ladoNativoPx: ladoNativoPx,
                        bajarContando: bajarContando } };
 };

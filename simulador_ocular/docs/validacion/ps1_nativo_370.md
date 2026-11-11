@@ -203,18 +203,21 @@ bloques enteros con dato); la corrida 3 vuelve a pesar AC5 con ella.
 |---|---|---|
 | AC1 RAM | pico **485–616 MB** nativo frente a 234–294 MB fitscut (×2,1), lejos de 8 GB. **Swap: +284 MB, el listón literal de 256 MB FALLA** | ver nota |
 | AC2 volumen | **CABE**: factor medido ×3,95 en la muestra; extrapolado a 2065 aptas 25,3 GB / 2,1 h (hoy 6,0 GB / 1,3 h) | ≤ 100 GB, ≤ 24 h |
-| AC3 flujo | **PASA** (corrida 2): propio 0, `fitscut` peor 1,65 σ/px, por encima de los 0,32–0,36 de #366 | |
-| AC4 en caliente | **PASA**: sin cambios en `ps1-proxy.php`, `dso-texturas-datos.js` ni `bitacora-ps1.js`; `test_ps1_proxy.php` verde | |
-| AC5 PNG | **PASA** (corrida 2): ×0,9997, misma resolución en 69/69 | corrida 3 pendiente |
-| AC6 | **pendiente de decisión**: depende de cómo se lea la swap de AC1 | |
+| AC3 flujo | **No hay un PASA en banco para el propio** (ADR 0005): en la corrida 2 su columna es 0 por construcción. Lo que sí está medido: el propio conserva el flujo en `test_remuestreo_ps1.js` (sintético, 1 ± 1e-5 a factor 2,34) y `fitscut` **sesga** en el banco hasta 1,65 σ/px, con NGC 7293 reproduciendo el 10,1 % de #366. La cifra de `fitscut` sale de la máscara común, no de la métrica de #366: no es comparable uno a uno con 0,32–0,36 | |
+| AC4 en caliente | **PASA**: sin cambios en `ps1-proxy.php`, `dso-texturas-datos.js` ni `bitacora-ps1.js`; `test_ps1_proxy.php` verde. Ojo: `gen_dso_texturas.js` reescribe `dso-texturas-datos.js` al ejecutarse (ya pasaba antes) | |
+| AC5 PNG | corrida 2 (regla NaN vieja): ×0,9997, misma resolución en 69/69. **Con la regla de mayoría, pendiente de la corrida 3.** El ≤ 16 MB/parche se sigue de la misma resolución (2048² float32 = 16,00 MB, L2.4), no se ha medido aparte | corrida 3 |
+| AC6 | **Leído al pie de la letra, No-Go**: AC1 rompió su listón de swap. Decide el dueño de la issue (ver nota) | |
 
 **Nota sobre la swap (AC1).** El listón prerregistrado mide `vm.swapusage`
 de TODA la máquina antes y después de una corrida de unos 25 min, con 1,2 GB
 ya en swap al empezar y otros procesos vivos. Con un pico de 616 MB en 16 GB
 no es atribuible a la medida, pero el ADR 0012 bis no deja reinterpretarlo a
-posteriori: el listón, leído literalmente, FALLA. La salida limpia es una
-medida nueva y fechada contra el MISMO listón —solo `fitscut`, solo nativo y
-un control en reposo de igual duración— o que el dueño de la issue decida.
+posteriori: el listón, leído literalmente, FALLA, y AC6 manda cerrar sin
+código de producción. Volver a medir hasta que pase sería ajustar a
+posteriori, así que no se repite por iniciativa propia: el listón estaba mal
+diseñado (mide la máquina, no el proceso) y eso lo decide el dueño de la
+issue. Si decide No-Go, sobra el `--nativo` del generador y se quita; si
+decide que la swap no es atribuible, el camino queda como opt-in.
 
 **AC2, alcance.** La extrapolación es a las 2065 filas aptas de hoy (la issue
 dice ≈1050), y cuenta solo los recortes del parche: la escalera de lados

@@ -52,9 +52,7 @@ var LIBPNG = require('./lib_png.js');
    Coste y sesgo medidos en simulador_ocular/docs/validacion/ps1_nativo_370.md. */
 var LIBBAJAR = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender);
 var METODO = process.argv.indexOf('--nativo') > 0 ? 'nativo' : 'fitscut';
-var bajar = METODO === 'nativo'
-  ? function (ra, dec, lado, salida) { return LIBBAJAR.bajarNativo(ra, dec, lado, salida); }
-  : LIBBAJAR.bajar;
+var bajar = METODO === 'nativo' ? LIBBAJAR.bajarNativo : LIBBAJAR.bajar;
 /* Del banco salen dos cosas que ya estaban resueltas y no se rehacen aquí: la
    clave con la que se busca un nombre (las galaxias van 'NGC 5194' y las
    nebulosas 'NGC0040', y hay alternos) y el veredicto de si un objeto es apto.
@@ -209,9 +207,9 @@ function arg(n, pordefecto) {
    depende la cabecera inmutable de #209. */
 /* `metodo` (#370): 'nativo' entra en la semilla porque cambia los píxeles con
    los mismos parámetros; 'fitscut' (el defecto) no entra, para que el banco ya
-   publicado conserve sus nombres. */
+   publicado conserve sus nombres. Sin `metodo`, 'fitscut': la función no lee
+   argv, así que un test que la llama da lo mismo lo lancen como lo lancen. */
 function version(gal, salida, metodo) {
-  metodo = metodo || METODO;
   var semilla = [GENERADOR, SONDEO, PS1.cfg.banda, gal.nombre,
                  gal.ra.toFixed(5), gal.dec.toFixed(5),
                  gal.ladoArcmin.toFixed(3), salida, 'asinh16']
@@ -565,7 +563,7 @@ function planDe(f, dir) {
   var escalera = mide ? PS1.ps1EscaleraLados(lado0) : [lado0];
   var id = PS1.ps1IdTextura(campo[0].nombre), resuelto = null;
   for (var k = 0; k < escalera.length && !resuelto; k++) {
-    var gk = conLado(escalera[k]), vk = version(gk, PS1.ps1SalidaParche(gk.ladoArcmin));
+    var gk = conLado(escalera[k]), vk = version(gk, PS1.ps1SalidaParche(gk.ladoArcmin), METODO);
     var y = yaResuelto(dir, id, vk, mide);
     if (y) resuelto = { y: y, v: vk, lado: escalera[k] };
   }
@@ -714,7 +712,7 @@ function medirLado(f, gal0, escalera, conLado) {
    tras su única descarga. `vecino` viene hecho cuando el lado se midió (es el
    de la escala del peldaño); si no, se audita aquí como siempre. */
 function publicar(f, gal, p, vecinoHecho, marco, id, dir) {
-  var salida = PS1.ps1SalidaParche(gal.ladoArcmin), v = version(gal, salida);
+  var salida = PS1.ps1SalidaParche(gal.ladoArcmin), v = version(gal, salida, METODO);
   var base = path.join(dir, id + '.' + v);
   return Promise.resolve(p).then(function (p) {
     var esperada = gal.ladoArcmin * 60 / salida;
@@ -905,7 +903,7 @@ function correrBanco(dir, seco) {
         return;
       }
       var salidaSeca = PS1.ps1SalidaParche(o.gal.ladoArcmin);
-      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, salidaSeca);
+      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, salidaSeca, METODO);
       if (seco) {
         /* La MISMA decisión que generar (planDe), no una copia: antes el seco
            llamaba a yaResuelto sin la escalera ni `exigeMarco`, y daba por
@@ -923,7 +921,7 @@ function correrBanco(dir, seco) {
            que la lista de lo que la ley cambia no se infle con eso. */
         var soloPng = null;
         plan.escalera.forEach(function (l) {
-          var vl = version(plan.conLado(l), PS1.ps1SalidaParche(l));
+          var vl = version(plan.conLado(l), PS1.ps1SalidaParche(l), METODO);
           [dir, FIXTURES].forEach(function (d) {
             var p = path.join(d, id + '.' + vl + '.json');
             if (soloPng || !fs.existsSync(p)) return;

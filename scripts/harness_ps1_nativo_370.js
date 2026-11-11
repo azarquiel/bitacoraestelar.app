@@ -18,7 +18,7 @@
        Solo los recortes del parche: la escalera de lados (ADR 0034) y el campo
        vecino del generador son peticiones aparte que multiplican los DOS caminos.
 
-   --flujo [--n N]                            (AC3 + AC5)
+   --flujo [--n N] [--solo NOMBRE] [--salida PX]  (AC3 + AC5; --salida fija la salida para todos)
        El banco: contra el mosaico nativo (la verdad, sin remuestrear), el sesgo
        de la media del parche de `fitscut` a la regla C y el del remuestreo propio,
        en σ/px con el MISMO denominador para los dos —σ del cielo del parche de
@@ -43,6 +43,7 @@ var BJ = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender);
 var B = require('./lib_banco_dso.js')(window.BitacoraGaiaRender);
 var MUESTRA = require('./lib_muestra_dso.js');
 var COD = require('../resources/js/bitacora-png16.js');
+var RM = require('./lib_remuestreo_ps1.js');
 var PNG = require('./lib_png.js');
 
 function arg(n, d) { var i = process.argv.indexOf(n); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : d; }
@@ -80,7 +81,7 @@ function modoBytes() {
   console.log('muestra de ' + lista.length + ' filas aptas, semilla ' + MUESTRA.SEMILLA);
   return enSerie(lista, function (o, i) {
     if (hecho[o.nombre]) return;
-    var g = o.gal, sal = PS1.ps1SalidaParche(g.ladoArcmin), nat = Math.round(g.ladoArcmin * 60 / BJ.ESCALA_NATIVA);
+    var g = o.gal, sal = PS1.ps1SalidaParche(g.ladoArcmin), nat = I.ladoNativoPx(g.ladoArcmin);
     return I.celdas(g.ra, g.dec, g.ladoArcmin, PS1.cfg.banda).then(function (c) {
       var fila = { lado: g.ladoArcmin, salida: sal, nativo: nat, celdas: c.lista.length,
                    hoy: { bytes: 0, ms: 0 }, nat: { bytes: 0, ms: 0 }, fallos: 0 };
@@ -92,7 +93,7 @@ function modoBytes() {
           }).catch(function () { fila.fallos++; });
         }
         return una(I.urlRecorte(celda, g.ra, g.dec, g.ladoArcmin, sal), fila.hoy)
-          .then(function () { return una(I.urlRecorteNativo(celda, g.ra, g.dec, g.ladoArcmin), fila.nat); });
+          .then(function () { return una(I.urlRecorte(celda, g.ra, g.dec, g.ladoArcmin, null), fila.nat); });
       }).then(function () {
         hecho[o.nombre] = fila;
         fs.writeFileSync(f, JSON.stringify(hecho));
@@ -112,7 +113,7 @@ function modoBytes() {
     var bppHoy = s.bHoy / s.pxHoy, bppNat = s.bNat / s.pxNat, celdasMedias = s.celdas / filas.length;
     var aptas = b.catalogo.filter(B.apta), tHoy = 0, tNat = 0;
     aptas.forEach(function (fila) {
-      var l = PS1.ps1LadoArcmin(fila[4]), sal = PS1.ps1SalidaParche(l), nat = Math.round(l * 60 / BJ.ESCALA_NATIVA);
+      var l = PS1.ps1LadoArcmin(fila[4]), sal = PS1.ps1SalidaParche(l), nat = I.ladoNativoPx(l);
       tHoy += celdasMedias * sal * sal * bppHoy; tNat += celdasMedias * nat * nat * bppNat;
     });
     var horasNat = tNat / (s.bNat / s.msNat) / 3.6e6, horasHoy = tHoy / (s.bHoy / s.msHoy) / 3.6e6;
@@ -128,11 +129,6 @@ function modoBytes() {
 }
 
 /* ── AC3 + AC5 ───────────────────────────────────────────────────────── */
-function mediaFinitos(d) {
-  var s = 0, n = 0;
-  for (var i = 0; i < d.length; i++) { var v = d[i]; if (v === v) { s += v; n++; } }
-  return { media: s / n, n: n };
-}
 function bytesPng(F) {
   var c = PS1.ps1Cielo(F.datos, F.ancho, F.alto), s = PS1.ps1SigmaCielo(F.datos, F.ancho, F.alto, c);
   var cod = COD.codificar(F.datos, { a: s });
@@ -159,15 +155,15 @@ function sesgosMascaraComun(nativo, fit, pro, sal) {
   }
   return { ref: sR / n, fit: sF / n, pro: sP / n, frac: n / ref.length };
 }
-var RM = require('./lib_remuestreo_ps1.js');
-
-function modoFlujo(salidas) {
+/* `salidaFija`: 0 = la regla C de cada objeto; un número = esa salida para
+   todos (`--salida`, la comprobación de la premisa de #366 en NGC 7293). */
+function modoFlujo(salidaFija) {
   var lista = b.objetos.filter(function (o) { return o.gal; });
   if (hay('--solo')) lista = lista.filter(function (o) { return B.clave(o.nombre) === B.clave(arg('--solo')); });
   if (N) lista = lista.slice(0, N);
   var filas = [];
   return enSerie(lista, function (o, i) {
-    var g = o.gal, sal = salidas || PS1.ps1SalidaParche(g.ladoArcmin);
+    var g = o.gal, sal = salidaFija || PS1.ps1SalidaParche(g.ladoArcmin);
     return BJ.bajar(g.ra, g.dec, g.ladoArcmin, sal).then(function (fit) {
       return BJ.bajarNativo(g.ra, g.dec, g.ladoArcmin, sal, null, { conNativo: true, sinCache: true }).then(function (pro) {
         var cielo = PS1.ps1Cielo(fit.datos, fit.ancho, fit.alto);
@@ -187,6 +183,7 @@ function modoFlujo(salidas) {
     }).catch(function (e) { console.log('FALLO ' + o.nombre + ': ' + (e && e.message || e)); });
   }).then(function () {
     function orden(k) { return filas.map(function (f) { return f[k]; }).sort(function (a, c) { return a - c; }); }
+    if (!filas.length) { console.log('\nAC3: ningún objeto medido'); process.exitCode = 1; return; }
     var sf = orden('sFit'), sp = orden('sPro');
     var pf = filas.reduce(function (a, f) { return a + f.pngFit; }, 0), pp = filas.reduce(function (a, f) { return a + f.pngPro; }, 0);
     var malRes = filas.filter(function (f) { return f.anchoFit !== f.sal || f.anchoPro !== f.sal; }).length;
