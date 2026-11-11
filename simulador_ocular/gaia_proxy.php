@@ -76,6 +76,18 @@ const GAIA_ASYNC_URL        = 'https://dc.zah.uni-heidelberg.de/tap/async';
 const GAIA_ASYNC_REINTENTAR = 15;                 // s: `reintentar_en` del 202; los pasos duran minutos
 const GAIA_UWS_TIMEOUT      = 8;                  // s: crear el job, arrancarlo y preguntar su fase (se hace con el lock tomado)
 const GAIA_ASYNC_TTL        = 7200 + 600;         // s: el executionduration que anuncia GAVO, más margen; pasado, el .job caduca
+/* Pista de densidad (#517, ADR 0033 punto 2): el proxy suma el histograma de
+   profundidad de las celdas del Avance que tocan el cono y, si la previsión pasa
+   del umbral, va directo a la cadena asíncrona sin gastar ~41-150 s en una sonda
+   y una segura que en los densos fallan 33 de cada 34 veces. El umbral es el
+   techo entre 1,5: las celdas enteras cubren más área que el cono. Es solo una
+   pista: si se equivoca hacia «no denso», el flujo del ADR 0014 sigue igual. */
+const GAIA_AVANCE_DIR       = __DIR__ . '/avance';
+const GAIA_AVANCE_NIVEL     = 6;
+const GAIA_AVANCE_CABECERA  = 188;               // B: lo único que el proxy lee de cada celda
+const GAIA_AVANCE_TRAMOS    = 42;                // tramos de 0,5 mag, G 0-21
+const GAIA_PISTA_UMBRAL     = 130000;            // filas previstas: GAIA_TECHO_FILAS / 1,5
+const GAIA_PISTA_MARGEN     = 0.015;             // °: borde borroso de la celda (E4 del ADR 0012)
 
 // ───────────────────────── FUNCIONES PURAS (testables) ───────────────────────
 
@@ -467,7 +479,7 @@ function gaia_mediana(array $v): float {
  */
 function gaia_log_agregado(string $texto): array {
     $estados = ['hit', 'miss', '304', 'error', 'pendiente'];
-    $r  = ['peticiones' => 0, 'hit' => 0, 'miss' => 0, '304' => 0, 'error' => 0, 'pendiente' => 0, 'ratio' => null, 'bytes' => 0];
+    $r  = ['peticiones' => 0, 'hit' => 0, 'miss' => 0, '304' => 0, 'error' => 0, 'pendiente' => 0, 'ratio' => null, 'bytes' => 0, 'pista' => 0];
     $ms = [];
     foreach (explode("\n", $texto) as $linea) {
         if ($linea === '') {
@@ -484,6 +496,7 @@ function gaia_log_agregado(string $texto): array {
         $r['peticiones']++;
         $r[$estado]++;
         $r['bytes'] += (int) ($e['bytes'] ?? 0);
+        $r['pista'] += (($e['pista'] ?? false) === true) ? 1 : 0;   // #517; las líneas viejas no la llevan
         $etapa = ($estado === 'miss') ? (string) ($e['etapa'] ?? 'desconocida') : $estado;
         $ms[$etapa][] = (float) ($e['ms'] ?? 0);
     }
@@ -509,7 +522,156 @@ function gaia_num_filas(string $json): ?int {
     return (is_array($j) && isset($j['data']) && is_array($j['data'])) ? count($j['data']) : null;
 }
 
+/**
+ * ipix HEALPix NESTED de (ra, dec) en grados (Górski et al. 2005). Port escalar
+ * de ang2pix_nest de scripts/gen_avance_gaia.py: misma celda que el Avance.
+ */
+function gaia_ang2pix_nest(int $nivel, float $ra, float $dec): int {
+    $nside = 1 << $nivel;
+    $z = sin(deg2rad($dec));
+    $za = abs($z);
+    $tt = fmod(fmod(fmod($ra, 360.0) + 360.0, 360.0) / 90.0, 4.0);   // 2φ/π en [0, 4)
+    if ($za <= 2.0 / 3.0) {
+        $t1 = $nside * (0.5 + $tt);
+        $t2 = $nside * ($z * 0.75);
+        $jp = (int) floor($t1 - $t2);
+        $jm = (int) floor($t1 + $t2);
+        $ifp = $jp >> $nivel;
+        $ifm = $jm >> $nivel;
+        $face = ($ifp === $ifm) ? ($ifp & 3) + 4 : (($ifp < $ifm) ? $ifp & 3 : ($ifm & 3) + 8);
+        $ix = $jm & ($nside - 1);
+        $iy = $nside - 1 - ($jp & ($nside - 1));
+    } else {
+        $ntt = min((int) floor($tt), 3);
+        $tp = $tt - $ntt;
+        $tmp = $nside * sqrt(3.0 * (1.0 - $za));
+        $jp = min((int) floor($tp * $tmp), $nside - 1);
+        $jm = min((int) floor((1.0 - $tp) * $tmp), $nside - 1);
+        if ($z >= 0) {
+            $face = $ntt; $ix = $nside - $jm - 1; $iy = $nside - $jp - 1;
+        } else {
+            $face = $ntt + 8; $ix = $jp; $iy = $jm;
+        }
+    }
+    $pix = 0;
+    for ($b = 0; $b < $nivel; $b++) {
+        $pix |= (($ix >> $b) & 1) << (2 * $b);
+        $pix |= (($iy >> $b) & 1) << (2 * $b + 1);
+    }
+    return $face * $nside * $nside + $pix;
+}
+
+/**
+ * Celdas de `$nivel` que tocan el cono ampliado en GAIA_PISTA_MARGEN. Rejilla
+ * interior a lado/8 (una celda entera dentro del cono no cabe entre sus puntos)
+ * más el anillo del borde a lado/256 (las que solo lo rozan) y el centro (cono
+ * más pequeño que una celda). Los puntos se ponen con distancia y rumbo
+ * esféricos, así que vale también sobre los polos.
+ */
+function gaia_celdas_cono(float $ra, float $dec, float $rad, int $nivel = GAIA_AVANCE_NIVEL): array {
+    $r = $rad + GAIA_PISTA_MARGEN;
+    $lado = sqrt(41253.0 / (12 * 4 ** $nivel));
+    $sd = sin(deg2rad($dec));
+    $cd = cos(deg2rad($dec));
+    $celdas = [gaia_ang2pix_nest($nivel, $ra, $dec) => true];
+    $punto = static function (float $rho, float $theta) use ($nivel, $ra, $sd, $cd, &$celdas): void {
+        $p = deg2rad($rho);
+        $sdec = max(-1.0, min(1.0, $sd * cos($p) + $cd * sin($p) * cos($theta)));
+        $pra = $ra + rad2deg(atan2(sin($theta) * sin($p) * $cd, cos($p) - $sd * $sdec));
+        $celdas[gaia_ang2pix_nest($nivel, $pra, rad2deg(asin($sdec)))] = true;
+    };
+    $paso = $lado / 8;
+    $n = (int) ceil($r / $paso);
+    for ($i = -$n; $i <= $n; $i++) {
+        for ($j = -$n; $j <= $n; $j++) {
+            $rho = hypot($i * $paso, $j * $paso);
+            if ($rho <= $r) {
+                $punto($rho, atan2($i * $paso, $j * $paso));
+            }
+        }
+    }
+    $m = max(64, (int) ceil(2 * M_PI * $r / ($lado / 256)));
+    for ($k = 0; $k < $m; $k++) {
+        $punto($r, 2 * M_PI * $k / $m);
+    }
+    $ids = array_keys($celdas);
+    sort($ids);
+    return $ids;
+}
+
+/**
+ * Histograma de profundidad de la cabecera de una celda del Avance (formato en
+ * scripts/gen_avance_gaia.py), o null si no es la cabecera íntegra de `$ipix`.
+ */
+function gaia_avance_hist(string $cab, int $ipix): ?array {
+    if (strlen($cab) < GAIA_AVANCE_CABECERA) {
+        return null;
+    }
+    $c = unpack('a4firma/vver/Cnivel/Ccero/Vipix/Vn/vtramos/vpaso', $cab);
+    if ($c === false || $c['firma'] !== 'BAVG' || $c['ver'] !== 1 || $c['nivel'] !== GAIA_AVANCE_NIVEL
+        || $c['ipix'] !== $ipix || $c['tramos'] !== GAIA_AVANCE_TRAMOS || $c['paso'] !== 500) {
+        return null;
+    }
+    $h = unpack('V' . GAIA_AVANCE_TRAMOS, $cab, 20);
+    return $h === false ? null : array_values($h);
+}
+
+/** Filas previstas en [desde, mag]: tramos k de [2·desde, 2·mag). Con `mag` ya
+    cuantizada a 0,5 (GAIA_QUANT_MAG) los tramos casan sin interpolar. */
+function gaia_pista_tramos(array $hist, float $desde, float $mag): int {
+    $hasta = min(count($hist), (int) floor($mag * 2 + 1e-9));
+    $suma = 0;
+    for ($k = max(0, (int) ceil($desde * 2 - 1e-9)); $k < $hasta; $k++) {
+        $suma += (int) $hist[$k];
+    }
+    return $suma;
+}
+
+/** ¿La pista manda el campo directo a la cadena asíncrona? Sin previsión, no. */
+function gaia_pista_densa(?int $prevision): bool {
+    return $prevision !== null && $prevision > GAIA_PISTA_UMBRAL;
+}
+
+/** Campos de la pista en la línea del log (AC4). */
+function gaia_pista_log(?int $prevision, bool $usada): array {
+    return ['prevision' => $prevision, 'pista' => $usada];
+}
+
 // ───────────────────────── EFECTOS (disco / red) ─────────────────────────────
+
+/**
+ * Pista de densidad: filas previstas del cono en [desde, mag] según los
+ * histogramas de las celdas del Avance (#517). Lee SOLO los 188 B de cabecera
+ * de cada celda. null —sin pista, flujo de hoy— si falta el manifiesto, su
+ * ruta no es la de una celda, o alguna celda falta o es ilegible: nunca una
+ * suma parcial. No lanza: una pista rota no puede ser un 500.
+ */
+function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, float $desde = 0.0, string $dir = GAIA_AVANCE_DIR): ?int {
+    try {
+        $m = json_decode((string) @file_get_contents($dir . '/manifiesto.json'), true);
+        $ruta = is_array($m) ? (string) ($m['ruta'] ?? '') : '';
+        if (($m['nivel'] ?? null) !== GAIA_AVANCE_NIVEL || !preg_match('#^[a-z0-9_]+/\{ipix\}\.bin$#', $ruta)) {
+            return null;
+        }
+        $suma = 0;
+        foreach (gaia_celdas_cono($ra, $dec, $rad) as $ipix) {
+            $fh = @fopen($dir . '/' . str_replace('{ipix}', (string) $ipix, $ruta), 'rb');
+            if ($fh === false) {
+                return null;
+            }
+            $cab = (string) @fread($fh, GAIA_AVANCE_CABECERA);
+            fclose($fh);
+            $h = gaia_avance_hist($cab, $ipix);
+            if ($h === null) {
+                return null;
+            }
+            $suma += gaia_pista_tramos($h, $desde, $mag);
+        }
+        return $suma;
+    } catch (\Throwable) {
+        return null;
+    }
+}
 
 /** Estado del directorio de caché: entradas, bytes y antigüedad. Solo lectura. */
 function gaia_cache_estado(string $dir, string $patron): array {
@@ -547,10 +709,18 @@ function gaia_json_headers(): void {
  *      avanzar paso a paso hasta servir el mismo JSON de siempre.
  * Devuelve el JSON, false si la cadena sigue en marcha, o null si falla.
  */
-function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_job, ?string &$etapa = null): string|false|null {
+function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_job, ?string &$etapa = null, ?int $prevision = null): string|false|null {
     $etapa = 'async';
     if (is_file($ruta_job)) {
         return gaia_cadena_avanzar($ruta_job, $ra, $dec, $rad, $mag);
+    }
+    /* Pista de densidad (#517): previsión > umbral → directo a la cadena, sin
+       sonda ni segura. Si no se puede lanzar, el flujo de siempre: la pista
+       solo ahorra tiempo, nunca quita la vía síncrona. */
+    if (gaia_pista_densa($prevision) && is_writable(dirname($ruta_job))
+        && gaia_cadena_lanzar($ruta_job, ['paso' => 'hist'], $ra, $dec, $rad, $mag)) {
+        $GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, true);
+        return false;
     }
     $etapa = 'densa';
     $json = gaia_fetch_urls(gaia_proveedores_gavo_primero($ra, $dec, $rad, $mag, false), 'sonda', true);
@@ -855,6 +1025,10 @@ if ($rad <= 0 || $rad > GAIA_MAX_RAD || $mag <= 0 || $mag > GAIA_MAX_MAG
 $clave = gaia_clave($qra, $qdec, $qrad, $qmag);
 $ruta = gaia_ruta($clave);
 $ruta_job = gaia_ruta_job($clave);
+/* Pista de densidad (#517): en toda petición, para que el log la registre
+   (AC4); solo la usa gaia_fetch al lanzar un campo nuevo. */
+$prevision = gaia_pista_prevision($qra, $qdec, $qrad, $qmag);
+$GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, false);
 
 cache_lru_flujo(
     [
@@ -874,8 +1048,8 @@ cache_lru_flujo(
             exit;
         },
     ],
-    static function (?string &$etapa) use ($qra, $qdec, $qrad, $qmag, $ruta_job): string|false|null {
-        return gaia_fetch($qra, $qdec, $qrad, $qmag, $ruta_job, $etapa);
+    static function (?string &$etapa) use ($qra, $qdec, $qrad, $qmag, $ruta_job, $prevision): string|false|null {
+        return gaia_fetch($qra, $qdec, $qrad, $qmag, $ruta_job, $etapa, $prevision);
     },
     static fn(string $estado, ?string $etapa) => gaia_servir($ruta, $clave, $estado, $etapa),
     static function (string $json): void {

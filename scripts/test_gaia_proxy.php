@@ -380,5 +380,112 @@ ok(!fnmatch('*.json.gz', '.htaccess') && !fnmatch('*.lock', '.htaccess') && !fnm
 // La expulsión LRU y la limpieza ya no son de este proxy: son la política
 // compartida con el del DSS. Su test es scripts/test_cache_lru.php.
 
+echo "\npista de densidad (#517, ADR 0033 punto 2):\n";
+/* ipix de nivel 6 calculados con ang2pix_nest de scripts/gen_avance_gaia.py
+   (contrastado con ivo_healpix_index de GAVO): RA 0/360, polos, la frontera
+   za = 2/3 (|dec| ≈ 41,81°) y bordes de cara. */
+foreach ([[0, 0, 18090], [359.999, 0, 18773], [0.0, 89.9, 4095], [123.4, -89.9, 36864],
+          [45, 41.81, 1023], [45, 41.82, 3072], [200, -41.81, 43606], [200, -41.82, 43606],
+          [90, 0, 22186], [268.447, -34.841, 28711], [250.423, 36.46, 9436],
+          [192.86, 27.13, 28149], [135, -60, 37680], [315.5, 10.2, 12480]] as [$pra, $pdec, $pix]) {
+    eq(gaia_ang2pix_nest(6, (float) $pra, (float) $pdec), $pix, "ang2pix_nest(6, $pra, $pdec)");
+}
+// Las celdas del cono cubren las de gen_avance_gaia.celdas_del_cono (M7, 0,89°).
+$cm7 = gaia_celdas_cono(268.447, -34.841, 0.89);
+eq(array_values(array_diff([28708, 28709, 28710, 28711, 28716, 28717, 28720, 28722, 28728], $cm7)), [],
+    'M7 0,89°: superconjunto de las celdas del generador');
+ok(count($cm7) === count(array_unique($cm7)), 'celdas sin repetir');
+ok(count(gaia_celdas_cono(10.0, 89.95, 0.5)) >= 4, 'cono sobre el polo: no revienta y toca varias celdas');
+
+// Cabecera de celda de mentira, mismo formato que bytes_celda del generador.
+$cab = static fn(int $ipix, array $hist, string $firma = 'BAVG', int $ver = 1, int $nivel = 6, int $n = 0): string =>
+    pack('a4vCCVVvv', $firma, $ver, $nivel, 0, $ipix, $n, 42, 500)
+    . pack('V*', ...array_pad($hist, 42, 0));
+eq(strlen($cab(1, [])), GAIA_AVANCE_CABECERA, 'cabecera de 188 B');
+$h = array_fill(0, 42, 1);
+eq(gaia_avance_hist($cab(7, $h), 7), $h, 'cabecera válida → histograma');
+eq(gaia_avance_hist($cab(7, $h), 8), null, 'ipix distinto → ilegible');
+eq(gaia_avance_hist($cab(7, $h, 'XXXX'), 7), null, 'firma rota → ilegible');
+eq(gaia_avance_hist($cab(7, $h, 'BAVG', 2), 7), null, 'versión desconocida → ilegible');
+eq(gaia_avance_hist($cab(7, $h, 'BAVG', 1, 5), 7), null, 'nivel distinto → ilegible');
+eq(gaia_avance_hist(substr($cab(7, $h), 0, 100), 7), null, 'truncada → ilegible');
+eq(gaia_avance_hist('', 7), null, 'vacía → ilegible');
+
+// Tramos [k/2, (k+1)/2): con `mag` cuantizada a 0,5 casan sin interpolar.
+$h = range(1, 42);   // tramo k vale k+1
+eq(gaia_pista_tramos($h, 0.0, 20.0), array_sum(range(1, 40)), 'G ≤ 20 → tramos 0-39 (40 y 41 fuera)');
+eq(gaia_pista_tramos($h, 0.0, 16.5), array_sum(range(1, 33)), 'G ≤ 16,5 → tramos 0-32');
+eq(gaia_pista_tramos($h, 15.0, 20.0), array_sum(range(31, 40)), 'con desde = 15 (#518) → tramos 30-39');
+eq(gaia_pista_tramos($h, 0.0, 25.0), array_sum($h), 'mag por encima del histograma → todos');
+
+eq(GAIA_PISTA_UMBRAL, 130000, 'umbral = techo 200 000 / 1,5 (redondeado)');
+ok(!gaia_pista_densa(130000), '130 000 → flujo de hoy (sonda)');
+ok(gaia_pista_densa(130001), '130 001 → directo a la cadena asíncrona');
+ok(!gaia_pista_densa(null), 'sin previsión → flujo de hoy');
+
+// Avance de mentira en disco con las celdas del cono de M7.
+$av = sys_get_temp_dir() . '/test_gaia_avance_' . getmypid();
+@mkdir($av . '/n6', 0775, true);
+$manif = static fn(string $ruta = 'n6/{ipix}.bin') =>
+    file_put_contents($av . '/manifiesto.json', json_encode(['version' => 1, 'nivel' => 6, 'frontera' => 15.0, 'ruta' => $ruta]));
+$manif();
+$poner = static function (int $total) use ($av, $cm7, $cab): void {
+    foreach ($cm7 as $i => $c) {
+        $hh = array_fill(0, 42, 0);
+        $hh[39] = $i === 0 ? $total : 0;     // G 19,5-20: dentro a mag 20
+        $hh[41] = 999999;                    // G 20,5-21: fuera a mag 20
+        // Filas basura detrás: el proxy no las lee.
+        file_put_contents("$av/n6/$c.bin", $cab($c, $hh, 'BAVG', 1, 6, 3) . str_repeat("\xff", 36));
+    }
+};
+$poner(130000);
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), 130000, 'previsión = suma de tramos del cono');
+ok(!gaia_pista_densa(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av)), '130 000 en disco → sonda');
+$poner(130001);
+ok(gaia_pista_densa(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av)), '130 001 en disco → asíncrona');
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 15.0, $av), 130001, 'desde = 15: G 19,5-20 es complemento');
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 19.5, 0.0, $av), 0, 'mag 19,5: G 19,5-20 queda fuera');
+// Celda ausente: sin pista, nunca una suma parcial.
+rename("$av/n6/{$cm7[3]}.bin", "$av/aparte.bin");
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'celda ausente → sin pista');
+rename("$av/aparte.bin", "$av/n6/{$cm7[3]}.bin");
+// Cabecera corrupta.
+file_put_contents("$av/n6/{$cm7[2]}.bin", 'BAVG basura');
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'cabecera corrupta → sin pista');
+$poner(130001);
+// Fichero de otra celda copiado en el sitio equivocado.
+copy("$av/n6/{$cm7[0]}.bin", "$av/n6/{$cm7[1]}.bin");
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'celda con el ipix de otra → sin pista');
+$poner(130001);
+// Manifiesto: ausente, ilegible o con una ruta que no es la de una celda.
+foreach (['n6/../../x/{ipix}.bin', '/etc/{ipix}.bin', 'n6/fijo.bin'] as $mala) {
+    $manif($mala);
+    eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, "ruta del manifiesto «{$mala}» → sin pista");
+}
+file_put_contents($av . '/manifiesto.json', '{roto');
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'manifiesto ilegible → sin pista');
+unlink($av . '/manifiesto.json');
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'sin manifiesto → sin pista');
+// Una versión nueva del Avance se anuncia cambiando la ruta (README: n6v2/).
+@mkdir($av . '/n6v2', 0775, true);
+foreach ($cm7 as $c) { rename("$av/n6/$c.bin", "$av/n6v2/$c.bin"); }
+$manif('n6v2/{ipix}.bin');
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), 130001, 'sigue la ruta del manifiesto (n6v2/)');
+ok(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av . '/no-existe') === null, 'sin directorio del Avance → sin pista');
+array_map('unlink', array_merge(glob("$av/n6/*") ?: [], glob("$av/n6v2/*") ?: [], glob("$av/*.json") ?: []));
+@rmdir("$av/n6"); @rmdir("$av/n6v2"); @rmdir($av);
+
+echo "pista en el log (AC4):\n";
+$sin = cache_lru_log_linea(1.0, 'k', 'hit', null, 1, 1.0);
+eq(cache_lru_log_linea(1.0, 'k', 'hit', null, 1, 1.0, null, []), $sin, 'sin extra → línea idéntica a la de hoy');
+$con = json_decode(cache_lru_log_linea(1.0, 'k', 'pendiente', 'async', 0, 900.0, [['async', 'gavo', 303, 400.0]],
+    ['prevision' => 245000, 'pista' => true]), true);
+eq([$con['prevision'], $con['pista']], [245000, true], 'la línea lleva previsión y si se usó la pista');
+eq(gaia_pista_log(null, false), ['prevision' => null, 'pista' => false], 'sin Avance → previsión null');
+$mix = gaia_log_agregado(cache_lru_log_linea(1.0, 'v', 'miss', 'sonda', 10, 900.0)
+    . cache_lru_log_linea(2.0, 'n', 'pendiente', 'async', 0, 800.0, null, gaia_pista_log(245000, true))
+    . cache_lru_log_linea(3.0, 'n', 'miss', 'sonda', 10, 900.0, null, gaia_pista_log(4000, false)));
+eq([$mix['peticiones'], $mix['pista']], [3, 1], 'stats mezcla líneas viejas y nuevas y cuenta las que usaron la pista');
+
 if ($fallos) { echo "\n$fallos fallo(s).\n"; exit(1); }
 echo "\nTodo verde.\n";

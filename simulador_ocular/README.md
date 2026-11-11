@@ -165,6 +165,14 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   indicador cuenta los segundos y lo explica a partir de los 8. Después queda
   en la caché del proxy (inmutable: Gaia DR3 es un catálogo fijo) y esa
   región es instantánea para todos, para siempre.
+  **Pista de densidad** (#517, ADR 0033): antes de la sonda, el proxy suma el
+  histograma de profundidad (solo la cabecera de 188 B) de las celdas del
+  Avance que tocan el cono, con 0,015° de margen. Si la previsión de filas pasa
+  de `GAIA_PISTA_UMBRAL` (130 000), va directo a la cadena asíncrona y el 202
+  sale en un segundo, sin sonda ni segura. Sin manifiesto, con una celda ausente
+  o con una cabecera ilegible no hay pista y el flujo es el de siempre. El log
+  apunta `prevision` y `pista` en cada línea; `?stats=1` cuenta en `pista` las
+  peticiones que la usaron.
 - **Tamaño** = imagen estelar física (disco de Airy + seeing, ver más abajo), en
   cuadratura con un **suelo de visibilidad** en píxeles (`radioSuelo`, con un
   término extra `radioSueloMag · flujoRelativo^radioSueloExp` y `radioSueloMax`
@@ -1144,8 +1152,9 @@ del golden): `docs/validacion/dso_texturas_fase1.md`.
 
 Gaia DR3 con G < 15 (~36,9 M de estrellas, ~445 MB), generado *offline* y
 servido como ficheros estáticos, un fichero por celda HEALPix nested de nivel 6
-(ADR 0033, #516). Lo usarán el proxy (pista de densidad) y el cliente (vista
-provisional + mitad brillante del conjunto completo): #517 y #519.
+(ADR 0033, #516). Lo usan el proxy (pista de densidad, #517: lee solo las
+cabeceras, siguiendo la `ruta` del manifiesto) y el cliente (vista provisional
++ mitad brillante del conjunto completo, #519).
 
 En `/wp-content/uploads/bitacora/avance/`:
 
