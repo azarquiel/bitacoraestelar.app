@@ -14,3 +14,4 @@ Orden cronológico de ejecución:
 8. `validacion-visual-difusas.md` (2026-09-05) — qué se mira, de dónde sale su Gaia y cómo se guarda el «antes»
 9. `costura-parche-nebulosas.md` (2026-09-06) — medida de la costura del parche en NGC 6888 y por qué el grano se recorta a la mlim del equipo (#210)
 10. `luz-sub-mlim-tres-canales.md` (2026-09-19) — dos medidas sobre los canales sub-mlim: qué canal se lleva la luz en cada tipo de objeto con un 18", y de dónde sale el halo de M13 a 514x (#329). El mapa de los canales está en `auditoria-identidad-conservacion-canales.md`
+11. `nucleo-quemado-globulares-rango-dinamico.md` (2026-11-10) — núcleo quemado de M22 a 406 mm/50×: en un arnés aproximado lo recortan los solapes de los discos de estrella en el `clamp` final, con ayuda de `adaptacionLocal`, no la capa difusa; falta confirmarlo en el canvas real, luminancias reales en el ocular y operadores de tono de la literatura
