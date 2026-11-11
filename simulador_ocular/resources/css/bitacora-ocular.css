@@ -230,6 +230,14 @@
   align-items:flex-end;padding-bottom:18px;
 }
 
+/* Vista provisional del Avance de Gaia (#519): las brillantes ya están
+   pintadas. El aviso sigue centrado, como siempre, pero sin tapar el campo:
+   fondo transparente, texto más tenue y una sombra que lo despega de las
+   estrellas que pasen por detrás. */
+#mw-obs-form .vista .cargando.provisional {
+  background:transparent;opacity:.7;text-shadow:0 0 4px #000, 0 0 2px #000;
+}
+
 /* Pantalla completa: el círculo pasa a ocupar el lado corto de la pantalla. El
    !important pisa el width/height EN LÍNEA que actualizar() fija en cada
    render. La clase la pone el JS al entrar/salir (evita duplicar todo con el

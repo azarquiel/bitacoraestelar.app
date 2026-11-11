@@ -36,6 +36,9 @@
  *   BitacoraGaiaRender.marcaBorde({ pasoX, pasoY, arcmin }) → null | { angulo, grados, texto }
  *   BitacoraGaiaRender.radioMarca({ ancho, alto, circulo, caja }) → % del lado donde cabe la marca
  *   BitacoraGaiaRender.consultar(ra, dec, arcmin, mag) → Promise<estrellas[]>  (prefetch)
+ *       Con el Avance de Gaia publicado (avance/manifiesto.json, ADR 0033) es
+ *       Avance ∪ complemento débil (desde=15); sin él, la consulta de siempre.
+ *   BitacoraGaiaRender.cacheAvance / reiniciarAvance(m) → celdas del Avance en memoria
  *   BitacoraGaiaRender.precalentar(opts) → void   (la consulta de render(), disparada antes)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
  *   BitacoraGaiaRender.magLimite({ apertura, aumentos, transmision, sqm }) → number|null
@@ -1269,7 +1272,7 @@
      Abortarlo es cancelar, y cancelar no es un fallo de red: el error sale con
      `cancelada` y sin `falloRed`, y no se reintenta. El timeout de 60 s sí es
      red, y se reintenta. */
-  function fetchGaiaUnaVez(ra, dec, rad, mag, cancel) {
+  function fetchGaiaUnaVez(ra, dec, rad, mag, cancel, desde) {
     var ctrl = new AbortController();
     var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
     var alCancelar = function () { ctrl.abort(); };
@@ -1282,7 +1285,8 @@
       if (cancel) cancel.signal.removeEventListener('abort', alCancelar);
     }
     var url = PROXY_URL + '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) +
-              '&rad=' + encodeURIComponent(rad) + '&mag=' + encodeURIComponent(mag);
+              '&rad=' + encodeURIComponent(rad) + '&mag=' + encodeURIComponent(mag) +
+              (desde ? '&desde=' + desde : '');
     return fetch(url, { signal: ctrl.signal }).then(function (r) {
       suelta();
       if (!r.ok) throw new Error('gaia_proxy ' + r.status);
@@ -1308,9 +1312,7 @@
       }, (s > 0 ? s : 10) * 1000);
       function alCancelar() {
         clearTimeout(id);
-        var err = new Error('gaia_proxy cancelada');
-        err.cancelada = true;
-        rechazar(err);
+        rechazar(cancelada());
       }
       if (!cancel) return;
       if (cancel.signal.aborted) alCancelar();
@@ -1326,10 +1328,11 @@
   // preguntar, sin gastar el reintento, hasta que llegan los datos. Es `r.ok`:
   // sin esto llegaba como una lista vacía. `alPendiente(info)` se llama en
   // cada 202.
-  function fetchGaia(ra, dec, rad, mag, cancel, alPendiente) {
+  // `desde` ('15' o nada): con él, solo el complemento débil (#518).
+  function fetchGaia(ra, dec, rad, mag, cancel, alPendiente, desde) {
     var reintentado = false;
     function intento() {
-      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel).then(function (jj) {
+      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel, desde).then(function (jj) {
         if (!jj || !jj.pendiente) return jj;
         if (alPendiente) alPendiente(jj);
         return esperarPendiente(jj.reintentar_en, cancel).then(intento);
@@ -1413,8 +1416,188 @@
       .catch(function () {});
   }
 
+  /* ── Avance de Gaia (ADR 0033, #516/#519) ──────────────────────────────────
+     Gaia DR3 con G < 15 en ficheros estáticos, uno por celda HEALPix nested de
+     nivel 6 (formato en la cabecera de scripts/gen_avance_gaia.py). Con él,
+     consultar() pide a la vez las celdas que tocan el cono y el COMPLEMENTO
+     DÉBIL al proxy (desde=15), y resuelve el CONJUNTO COMPLETO (la unión): lo
+     único que entra en la física. Las filas del Avance solas son la VISTA
+     PROVISIONAL, que solo se entrega por `alAvance` y nunca se cachea aquí.
+     Sin manifiesto, o con una celda caída o ilegible, se pide sin `desde`,
+     como antes del Avance. */
+  var AVANCE_URL       = '/wp-content/uploads/bitacora/avance/';
+  var AVANCE_NIVEL     = 6;
+  var AVANCE_FRONTERA  = 15;          // G < 15 en el Avance; el proxy solo admite «15»
+  var AVANCE_CABECERA  = 188;
+  var AVANCE_FILA      = 12;
+  var AVANCE_SIN_BPRP  = -32768;
+  var AVANCE_MAX_CELDAS = 2000;       // celdas en memoria (~10 kB de media cada una)
+  var avanceManifiesto;               // undefined: sin saber; null: no hay; objeto: publicado
+  var avanceManifiestoPromesa = null;
+  /* Caché de celdas en window (regla de red): ipix → {promise<ArrayBuffer>, n,
+     ctrl, lista}. Se comparte entre vistas con la misma cuenta de usuarios que
+     cacheGaia (`unirse`): una celda solo se aborta cuando la deja el último. */
+  var cacheAvance = new Map();
+
+  function manifiestoAvance() {
+    if (avanceManifiesto !== undefined) return Promise.resolve(avanceManifiesto);
+    if (avanceManifiestoPromesa) return avanceManifiestoPromesa;
+    avanceManifiestoPromesa = Promise.resolve().then(function () {
+      return fetch(AVANCE_URL + 'manifiesto.json');
+    }).then(function (r) {
+      if (!r || !r.ok) return null;              // 404: Avance no publicado
+      return r.json().then(function (m) {
+        return (m && m.version === 1 && m.nivel === AVANCE_NIVEL && m.frontera === AVANCE_FRONTERA &&
+                typeof m.ruta === 'string' && m.ruta.indexOf('{ipix}') >= 0) ? m : null;
+      });
+    }).then(function (m) { avanceManifiesto = m; return m; }, function () {
+      avanceManifiestoPromesa = null;            // red: lo reintenta la próxima consulta
+      return null;
+    });
+    return avanceManifiestoPromesa;
+  }
+
+  /* ipix HEALPix NESTED (Górski et al. 2005): port de gaia_ang2pix_nest
+     (gaia_proxy.php) y de ang2pix_nest (gen_avance_gaia.py), misma celda. */
+  function ang2pixNest(nivel, ra, dec) {
+    var nside = 1 << nivel, z = Math.sin(dec * Math.PI / 180), za = Math.abs(z);
+    var tt = ((((ra % 360) + 360) % 360) / 90) % 4;
+    var face, ix, iy;
+    if (za <= 2 / 3) {
+      var t1 = nside * (0.5 + tt), t2 = nside * (z * 0.75);
+      var jp = Math.floor(t1 - t2), jm = Math.floor(t1 + t2);
+      var ifp = jp >> nivel, ifm = jm >> nivel;
+      face = (ifp === ifm) ? (ifp & 3) + 4 : ((ifp < ifm) ? ifp & 3 : (ifm & 3) + 8);
+      ix = jm & (nside - 1);
+      iy = nside - 1 - (jp & (nside - 1));
+    } else {
+      var ntt = Math.min(Math.floor(tt), 3), tp = tt - ntt;
+      var tmp = nside * Math.sqrt(3 * (1 - za));
+      var jpp = Math.min(Math.floor(tp * tmp), nside - 1), jmp = Math.min(Math.floor((1 - tp) * tmp), nside - 1);
+      if (z >= 0) { face = ntt; ix = nside - jmp - 1; iy = nside - jpp - 1; }
+      else { face = ntt + 8; ix = jpp; iy = jmp; }
+    }
+    var pix = 0;
+    for (var b = 0; b < nivel; b++) {
+      pix |= ((ix >> b) & 1) << (2 * b);
+      pix |= ((iy >> b) & 1) << (2 * b + 1);
+    }
+    return face * nside * nside + pix;
+  }
+  function vectorDe(ra, dec) {
+    var a = ra * Math.PI / 180, d = dec * Math.PI / 180;
+    return [Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)];
+  }
+  /* Celdas que tocan el cono: rejilla de paso lado/32 girada como vectores 3D
+     sobre la base local norte/este (la de gaia_fracciones_cono, sin
+     singularidad en el polo), hasta 3 pasos MÁS ALLÁ del radio: una celda que
+     solo roza el borde cae siempre en algún punto. Sobran celdas, no faltan;
+     las filas se recortan luego al cono exacto. */
+  function celdasDelCono(ra, dec, rad) {
+    var paso = Math.sqrt(41253 / (12 * Math.pow(4, AVANCE_NIVEL))) / 32;
+    var r = rad + 3 * paso;
+    var a = ra * Math.PI / 180, d = dec * Math.PI / 180;
+    var sa = Math.sin(a), ca = Math.cos(a), sd = Math.sin(d), cd = Math.cos(d);
+    var c = [cd * ca, cd * sa, sd], no = [-sd * ca, -sd * sa, cd], es = [-sa, ca, 0];
+    var n = Math.ceil(r / paso), vistas = {}, lista = [];
+    for (var i = -n; i <= n; i++) {
+      for (var j = -n; j <= n; j++) {
+        var rho = Math.sqrt(i * i + j * j) * paso;
+        if (rho > r) continue;
+        var p = rho * Math.PI / 180, th = Math.atan2(i, j);
+        var cp = Math.cos(p), sn = Math.sin(p) * Math.cos(th), se = Math.sin(p) * Math.sin(th);
+        var x = cp * c[0] + sn * no[0] + se * es[0], y = cp * c[1] + sn * no[1] + se * es[1];
+        var zz = Math.max(-1, Math.min(1, cp * c[2] + sn * no[2] + se * es[2]));
+        var ip = ang2pixNest(AVANCE_NIVEL, Math.atan2(y, x) * 180 / Math.PI, Math.asin(zz) * 180 / Math.PI);
+        if (!vistas[ip]) { vistas[ip] = true; lista.push(ip); }
+      }
+    }
+    return lista.sort(function (u, v) { return u - v; });
+  }
+  /* El cono que de verdad consulta el proxy (gaia_cuantizar): centro al
+     0,001° más cercano (PHP round: mitades lejos del cero) y radio al 0,01°
+     por arriba. El Avance se recorta a ESTE cono, o la unión no coincidiría
+     en el borde con la consulta sin `desde`. */
+  function conoProxy(ra, dec, rad) {
+    function centro(x) { var y = x / 0.001; return +((y < 0 ? -1 : 1) * Math.round(Math.abs(y)) * 0.001).toFixed(3); }
+    return { ra: centro(ra), dec: centro(dec), rad: +(Math.ceil(rad / 0.01 - 1e-9) * 0.01).toFixed(2) };
+  }
+  // Nº de filas de una celda íntegra de `ipix`, o -1.
+  function filasCeldaAvance(buf, ipix) {
+    if (!buf || buf.byteLength < AVANCE_CABECERA) return -1;
+    var v = new DataView(buf);
+    if (v.getUint32(0, false) !== 0x42415647 || v.getUint16(4, true) !== 1 ||   // 'BAVG', versión 1
+        v.getUint8(6) !== AVANCE_NIVEL || v.getUint32(8, true) !== ipix) return -1;
+    var filas = v.getUint32(12, true);
+    return buf.byteLength === AVANCE_CABECERA + AVANCE_FILA * filas ? filas : -1;
+  }
+  function celdaAvance(man, ipix, signal) {
+    var ent = cacheAvance.get(ipix);
+    if (!ent || (!ent.lista && ent.ctrl.signal.aborted)) {
+      var nueva = ent = { n: 0, ctrl: new AbortController(), lista: false };
+      ent.promise = fetch(AVANCE_URL + man.ruta.replace('{ipix}', ipix), { signal: ent.ctrl.signal }).then(function (r) {
+        if (!r.ok) throw new Error('avance ' + r.status);
+        return r.arrayBuffer();
+      }).then(function (buf) {
+        if (filasCeldaAvance(buf, ipix) < 0) throw new Error('avance ilegible ' + ipix);
+        nueva.lista = true;
+        // La más reciente al final; se expulsan las listas más viejas.
+        cacheAvance.delete(ipix); cacheAvance.set(ipix, nueva);
+        for (var k of cacheAvance.keys()) {
+          if (cacheAvance.size <= AVANCE_MAX_CELDAS) break;
+          if (cacheAvance.get(k).lista) cacheAvance.delete(k);
+        }
+        return buf;
+      });
+      ent.promise.catch(function () { if (cacheAvance.get(ipix) === nueva) cacheAvance.delete(ipix); });
+      cacheAvance.set(ipix, ent);
+    }
+    unirse(ent, signal);
+    return ent.promise;
+  }
+  /* Filas del Avance dentro del cono del proxy, con la forma de las del proxy:
+     [ra, dec, G, BP−RP|null]. Rechaza si falta o no se lee alguna celda. */
+  function avanceDelCono(man, ra, dec, rad, signal) {
+    var cono = conoProxy(ra, dec, rad);
+    var celdas = celdasDelCono(cono.ra, cono.dec, cono.rad);
+    return Promise.all(celdas.map(function (ip) { return celdaAvance(man, ip, signal); })).then(function (bufs) {
+      var c = vectorDe(cono.ra, cono.dec), cosR = Math.cos(cono.rad * Math.PI / 180), filas = [];
+      bufs.forEach(function (buf) {
+        var v = new DataView(buf), n = (buf.byteLength - AVANCE_CABECERA) / AVANCE_FILA;
+        for (var k = 0, off = AVANCE_CABECERA; k < n; k++, off += AVANCE_FILA) {
+          var ra1 = v.getFloat32(off, true), de1 = v.getFloat32(off + 4, true);
+          var p = vectorDe(ra1, de1);
+          if (p[0] * c[0] + p[1] * c[1] + p[2] * c[2] < cosR) continue;
+          var bprp = v.getInt16(off + 10, true);
+          filas.push([ra1, de1, v.getUint16(off + 8, true) / 1000, bprp === AVANCE_SIN_BPRP ? null : bprp / 1000]);
+        }
+      });
+      return filas;
+    });
+  }
+  /* Conjunto completo = Avance ∪ complemento. La frontera G = 15 los separa por
+     construcción; el filtro del complemento solo blinda contra un proxy que
+     ignorase `desde` (devolvería también las brillantes: saldrían dos veces). */
+  function unirConjunto(brillantes, jj) {
+    var debiles = (jj.data || []).filter(function (f) { return f[2] != null && f[2] >= AVANCE_FRONTERA; });
+    var arr = brillantes.concat(debiles);
+    arr.fondo = jj.fondo || null;
+    return arr;
+  }
+  function cancelada() { var e = new Error('gaia_proxy cancelada'); e.cancelada = true; return e; }
+  /* Quien espera una entrada aún sin resolver recibe la provisional, se uniera
+     antes o después de que llegase (como avisarPendiente). */
+  function avisarAvance(ent, alAvance) {
+    if (!alAvance || ent.asentada) return;
+    ent.alAvance.push(alAvance);
+    if (ent.avance) alAvance(ent.avance);
+  }
+
   /* `o.signal` (opcional): aborta la petición si se queda sin usuarios (ver
-     `unirse`). Sin él, la consulta no se cancela nunca. */
+     `unirse`). Sin él, la consulta no se cancela nunca.
+     `o.alAvance(filas)` (opcional): las filas del Avance recortadas al cono,
+     ANTES de que llegue el complemento; solo para pintar la provisional. La
+     promesa resuelve siempre el conjunto completo. */
   function consultar(ra0, dec0, arcmin, mag, o) {
     var signal = o && o.signal;
     var rad = radioConsulta(arcmin || GAIA_ARCMIN_DEFECTO);
@@ -1427,6 +1610,7 @@
     if (ent && ent.rad >= rad - 1e-6 && ent.mag >= prof - 1e-6) {
       unirse(ent, signal);
       avisarPendiente(ent, o && o.alPendiente);
+      avisarAvance(ent, o && o.alAvance);
       return ent.promise;
     }
     // Superconjunto monotónico (ADR 0014): funde con lo ya cacheado ANTES de
@@ -1436,28 +1620,72 @@
       rad = Math.max(rad, ent.rad);
       prof = Math.max(prof, ent.mag);
     }
-    var nueva = { rad: rad, mag: prof, n: 0, ctrl: new AbortController(), avisos: [], pendiente: null };
+    var nueva = { rad: rad, mag: prof, n: 0, ctrl: new AbortController(), avisos: [], pendiente: null,
+                  alAvance: [], avance: null, asentada: false };
     unirse(nueva, signal);
     avisarPendiente(nueva, o && o.alPendiente);
-    nueva.promise = fetchGaia(ra0.toFixed(5), dec0.toFixed(5), rad.toFixed(5), prof.toFixed(2), nueva.ctrl, function (info) {
+    avisarAvance(nueva, o && o.alAvance);
+    var sRa = ra0.toFixed(5), sDec = dec0.toFixed(5), sRad = rad.toFixed(5), sMag = prof.toFixed(2);
+    function alPendiente(info) {
       nueva.pendiente = info;
       nueva.avisos.forEach(function (f) { f(info); });
-    }).then(function (jj) {
-      var arr = (jj.data || []).filter(function (f) { return f[2] != null; });
-      // Campo denso: el proxy manda los momentos de la banda truncada
-      // (ADR 0014). Cuelgan del array para que viajen con las estrellas
-      // sin cambiar la firma de nadie.
-      arr.fondo = jj.fondo || null;
-      return arr;
-    });
+    }
+    function sinAvance() {
+      return fetchGaia(sRa, sDec, sRad, sMag, nueva.ctrl, alPendiente).then(function (jj) {
+        var arr = (jj.data || []).filter(function (f) { return f[2] != null; });
+        // Campo denso: el proxy manda los momentos de la banda truncada
+        // (ADR 0014). Cuelgan del array para que viajen con las estrellas
+        // sin cambiar la firma de nadie.
+        arr.fondo = jj.fondo || null;
+        return arr;
+      });
+    }
+    /* Avance y complemento salen A LA VEZ. El complemento lleva su propio
+       controlador, encadenado al de la entrada, para poder descartarlo solo él
+       si el Avance cae (y pedir entonces sin `desde`). */
+    function conAvance(man) {
+      if (!man) return sinAvance();
+      if (nueva.ctrl.signal.aborted) return Promise.reject(cancelada());
+      var ctrlDesde = new AbortController();
+      nueva.ctrl.signal.addEventListener('abort', function () { ctrlDesde.abort(); }, { once: true });
+      var listo = false;
+      var complemento = fetchGaia(sRa, sDec, sRad, sMag, ctrlDesde, alPendiente, String(AVANCE_FRONTERA));
+      complemento.then(function () { listo = true; }, function () {});
+      var brillantes = avanceDelCono(man, +sRa, +sDec, +sRad, nueva.ctrl.signal);
+      return brillantes.then(function (filas) {
+        if (!listo && !nueva.ctrl.signal.aborted) {
+          nueva.avance = filas;
+          nueva.alAvance.forEach(function (f) { f(filas); });
+        }
+        return complemento.then(function (jj) { return unirConjunto(filas, jj); });
+      }, function () {
+        if (nueva.ctrl.signal.aborted) throw cancelada();
+        ctrlDesde.abort();
+        complemento.catch(function () {});
+        return sinAvance();
+      });
+    }
+    /* El Avance solo vale si la vista pide más allá de su frontera; por debajo
+       el complemento estaría vacío y la consulta de siempre es más corta.
+       Con el manifiesto ya conocido todo sale en este mismo turno (el
+       precalentado y `lanzar` cuentan con ello); la primera vez espera a él. */
+    nueva.promise = (prof <= AVANCE_FRONTERA) ? sinAvance()
+      : (avanceManifiesto !== undefined) ? conAvance(avanceManifiesto)
+      : manifiestoAvance().then(conAvance);
     cacheGaia[clave] = nueva;
     // Resuelta (o caída), ya no está pendiente: una vista posterior no debe
-    // recibir el aviso viejo, ni la entrada retener sus oyentes.
-    var asentar = function () { nueva.pendiente = null; nueva.avisos = []; };
+    // recibir el aviso viejo ni la provisional, ni la entrada retener oyentes.
+    var asentar = function () {
+      nueva.pendiente = null; nueva.avisos = [];
+      nueva.avance = null; nueva.alAvance = []; nueva.asentada = true;
+    };
     nueva.promise.then(asentar, asentar);
     nueva.promise.catch(function () { if (cacheGaia[clave] === nueva) delete cacheGaia[clave]; });
     return nueva.promise;
   }
+  // En el navegador el manifiesto sale ya al cargar, para que la primera vista
+  // no lo espere. (Los tests cargan el módulo sin fetch en window.)
+  if (typeof window.fetch === 'function') manifiestoAvance();
 
   /* ── Placas del DSS: URL del proxy ──────────────────────────────────────────
      Fuente única de la petición a dss-proxy.php, compartida por el simulador y
@@ -2890,6 +3118,12 @@
      `alPendiente(info)` (opcional, también en render y renderPlaca): campo
      denso que el proxy está pidiendo por partes (#505); el texto para el
      observador lo da textoPendiente(info). La promesa sigue esperando.
+     `alAvance(r)` (opcional, solo el simulador): con el Avance de Gaia (ADR
+     0033) pinta antes la VISTA PROVISIONAL —las G < 15 del cono, solo
+     estrellas: sin capa difusa, sin velo y con la magnitud límite del equipo—
+     y la entrega con `r.provisional`. La completa la sustituye entera; la
+     promesa sigue significando «vista completa». Una vista superada (`vivo()`
+     falso) no pinta ninguna de las dos.
      Con `vivo()` falso resuelve { cancelada: true } sin volver a tocar el ctx:
      cancelar NO es un error — el rechazo de esta promesa significa «Gaia no
      responde» y en el simulador dispara el respaldo DSS.
@@ -2920,7 +3154,33 @@
     var mlim = limite();
     var P = window.BitacoraPS1;
     if (!P) throw new Error('BitacoraGaiaRender necesita BitacoraPS1 (capa de galaxias desde imagen); carga bitacora-ps1.js');
-    return consultar(o.ra, o.dec, o.arcmin, profundidadConsulta(o.apertura, t, o.aumentos, true), { signal: o.signal, alPendiente: o.alPendiente }).then(function (estrellas) {
+    function opEstrellas(m) {
+      return {
+        ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: m, afov: o.afov,
+        apertura: o.apertura,   // el disco de Airy va como 1/D
+        conGlow: (o.conGlow !== false), carbono: !!o.carbono,
+        carbonoMag: (o.carbono && o.carbonoMag != null) ? o.carbonoMag : null,
+        arana: arana
+      };
+    }
+    /* Vista provisional (ADR 0033 punto 5): el Avance solo, al instante. Solo
+       estrellas: sin capa difusa (ni niebla, ni cúmulo, ni galaxias), sin velo
+       y con la magnitud límite DEL EQUIPO, la que no sale de las filas. Es
+       parcial y quien la recibe lo dice. La sustituye entera la completa, que
+       repinta todo el lienzo. */
+    var mlimEquipo = mlim, fondoEquipo = fondo;
+    var alAvance = o.alAvance && function (filas) {
+      if (!vivo()) return;
+      var capa = capaEstrellas(filas, opEstrellas(mlimEquipo), SIZE);
+      pintarFot(new Float32Array(SIZE * SIZE), ctx, {
+        pupilaSalida: cielo.pupilaSalida, pupilaOjo: cielo.pupilaOjo, sqm: cielo.sqm,
+        transmision: t, aumentos: cielo.aumentos, perceptual: true
+      }, capa, 0);
+      o.alAvance({ provisional: true, estrellas: filas, estrellasDibujo: filas,
+                   mlim: mlimEquipo, fondo: fondoEquipo, avisoCampo: '' });
+    };
+    return consultar(o.ra, o.dec, o.arcmin, profundidadConsulta(o.apertura, t, o.aumentos, true),
+                     { signal: o.signal, alPendiente: o.alPendiente, alAvance: alAvance }).then(function (estrellas) {
       if (!vivo()) return { cancelada: true };
       /* Campo denso: la banda truncada llega como momentos y entra como velo
          (cielo extra) en toda la cadena, incluida la magnitud límite (ADR
@@ -2991,13 +3251,7 @@
         });
         if (rVelo && !(thNiebla > 0)) thNiebla = rVelo.thetaArcmin;
       }
-      var opEst = {
-        ra: o.ra, dec: o.dec, arcmin: o.arcmin, mlim: mlim, afov: o.afov,
-        apertura: o.apertura,   // el disco de Airy va como 1/D
-        conGlow: (o.conGlow !== false), carbono: !!o.carbono,
-        carbonoMag: (o.carbono && o.carbonoMag != null) ? o.carbonoMag : null,
-        arana: arana
-      };
+      var opEst = opEstrellas(mlim);
       var capaEst = capaEstrellas(estrellasDibujo, opEst, SIZE);
       pintarFot(difuso, ctx, cielo, capaEst, thNiebla);
       var galaxias = P.ps1CapaGalaxias(difuso, ctx, cielo, capaEst, {
@@ -3112,6 +3366,15 @@
     precalentar: precalentar,
     profundidadConsulta: profundidadConsulta,
     cacheGaia: cacheGaia,
+    cacheAvance: cacheAvance,
+    manifiestoAvance: manifiestoAvance,
+    celdasDelCono: celdasDelCono,
+    ang2pixNest: ang2pixNest,
+    conoProxy: conoProxy,
+    /* Olvida el manifiesto y las celdas (sin argumento: se vuelve a preguntar,
+       p. ej. tras publicar el Avance con la página abierta) o fija uno ya
+       sabido (`null`: sin Avance). Para tests y consola. */
+    reiniciarAvance: function (m) { avanceManifiesto = m; avanceManifiestoPromesa = null; cacheAvance.clear(); },
     dibujar: dibujar,
     vistaGaia: vistaGaia,
     render: render,

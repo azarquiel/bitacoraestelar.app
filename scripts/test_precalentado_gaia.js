@@ -27,6 +27,9 @@ var path = require('path');
 global.window = {};
 require('../resources/js/bitacora-gaia-render.js');
 var R = global.window.BitacoraGaiaRender;
+// Sin Avance de Gaia (ADR 0033): aquí se mide el caché de la consulta de siempre,
+// que sale en el mismo turno. El camino con Avance lo cubre test_vista_gaia.js.
+R.reiniciarAvance(null);
 
 var fallos = 0;
 function ok(cond, etiqueta) {
