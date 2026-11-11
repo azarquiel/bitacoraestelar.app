@@ -278,5 +278,30 @@ var codigo = fuente.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''
     ok(codigo.indexOf(prohibido) === -1, 'bitacora-cumulos.js no usa ' + prohibido);
   });
 
+/* El registro encuentra el globular por posición (BitacoraCumulos.globularEn).
+   Se usa la tabla Messier REAL del formulario: si un Messier queda cerca de un
+   globular, tiene que caer dentro del radio; y nada a medio camino. */
+console.log('\nglobularEn (registro):');
+(function () {
+  var fs = require('fs'), path = require('path');
+  var src = fs.readFileSync(path.join(__dirname, '..', 'registro', 'resources', 'js', 'bitacora-formulario.js'), 'utf8');
+  var re = /(\d+):\{n:'[^']*',ra:([\d.\-]+),de:([\d.\-]+)/g, m, n = 0, enRadio = 0, dudosos = [];
+  while ((m = re.exec(src))) {
+    n++;
+    var ra = +m[2], de = +m[3];
+    if (C.globularEn(ra, de)) { enRadio++; continue; }
+    if (C.globularEn(ra, de, 10)) dudosos.push('M' + m[1]);
+  }
+  ok(n === 110, 'lee los 110 Messier del formulario (' + n + ')');
+  ok(enRadio === 29, 'los 29 globulares Messier caen en el radio (' + enRadio + ')');
+  ok(dudosos.length === 0, 'ningún Messier entre 2′ y 10′ de un globular (' + dudosos.join(', ') + ')');
+  var m13 = C.globularEn(250.4235, 36.4613);
+  ok(m13 && m13.id === 'NGC 6205' && m13.rh === 1.69 && m13.pa === null, 'M13 da la ficha Harris de NGC 6205');
+  ok(C.globularEn(10.6847, 41.269) === null, 'M31 no es un globular');
+  var filas = global.window.BITACORA_GLOBULARES, propios = 0;
+  filas.forEach(function (e) { var f = C.globularEn(e[2], e[3]); if (f && f.id === e[0]) propios++; });
+  ok(propios === filas.length, 'cada fila de Harris se encuentra a sí misma (' + propios + '/' + filas.length + ')');
+})();
+
 console.log(fallos === 0 ? '\nTodo OK' : '\n' + fallos + ' fallo(s)');
 process.exit(fallos === 0 ? 0 : 1);

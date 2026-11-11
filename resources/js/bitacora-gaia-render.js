@@ -3286,6 +3286,9 @@
       optica: o.optica, arana: o.arana, sqm: o.sqm,
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, afov: o.afov,
       conGlow: o.conGlow, carbono: o.carbono, carbonoMag: o.carbonoMag, alPendiente: o.alPendiente,
+      // Ficha Harris del globular (BitacoraCumulos.globularEn): sin ella, el cúmulo
+      // se pinta como un campo de Gaia más, sin velo ni grano.
+      cumulo: o.cumulo || null,
       /* Vista provisional en el lienzo (#529): el modal la enseña mientras
          llega el resto. La promesa sigue esperando la completa con su capa de
          galaxias, que es la única que se sube. */

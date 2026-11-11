@@ -477,8 +477,35 @@
     return h / 4294967296;
   }
 
+  /* Ficha física de una fila de window.BITACORA_GLOBULARES (Harris 1996, rev.
+     2010), la que espera `poblacion`. Harris no publica ángulo de posición:
+     el perfil se evalúa en radio circular (pa nulo). */
+  function fichaDeFila(e) {
+    return { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
+             Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+  }
+
+  /* El globular del catálogo a menos de `radioArcmin` (2′ por defecto) de
+     (ra, dec) en grados, o null. Por posición y no por nombre: así vale para
+     M 13, NGC 6205 o unas coordenadas a mano. Las posiciones de Messier y de
+     Harris difieren < 1′, y dos globulares nunca están a 2′. */
+  function globularEn(ra, dec, radioArcmin) {
+    var filas = window.BITACORA_GLOBULARES || [], lim = (radioArcmin || 2) / 60;
+    var d2r = Math.PI / 180, mejor = null, dMin = Infinity;
+    for (var i = 0; i < filas.length; i++) {
+      var e = filas[i];
+      var cosd = Math.sin(dec * d2r) * Math.sin(e[3] * d2r) +
+                 Math.cos(dec * d2r) * Math.cos(e[3] * d2r) * Math.cos((ra - e[2]) * d2r);
+      var d = Math.acos(Math.min(1, cosd)) / d2r;
+      if (d < dMin) { dMin = d; mejor = e; }
+    }
+    return (mejor && dMin <= lim) ? fichaDeFila(mejor) : null;
+  }
+
   window.BitacoraCumulos = {
     config: CFG,
+    fichaDeFila: fichaDeFila,
+    globularEn: globularEn,
     versionLF: versionLF,
     lfInterpolada: lfInterpolada,
     radioPropio: radioPropio,

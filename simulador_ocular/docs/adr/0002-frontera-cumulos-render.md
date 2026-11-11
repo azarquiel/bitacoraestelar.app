@@ -73,3 +73,8 @@ un punto fijo iterado metería el criterio de parada dentro de la imagen.
   integración**, no como camino alternativo que produzca un cúmulo parcialmente distinto. Deuda
   independiente anotada: `registro/registrar-observacion-wordpress.html:171` carga
   `globulares-datos.js` sin usarlo; no se toca en esta rama.
+  **Enmienda (2026-11-11):** el registro también pinta globulares. `registrar-observacion-wordpress.html`
+  carga `lf-globulares-datos.js` y `bitacora-cumulos.js`; el formulario busca la ficha con
+  `BitacoraCumulos.globularEn(ra, dec)` (por posición, radio 2′) y `render()` la pasa a
+  `vistaGaia` como `cumulo`. La ficha sale de `BitacoraCumulos.fichaDeFila`, la misma que usa el
+  simulador. Sin esto, el modal «Generar imagen» pintaba un globular como un campo de Gaia más.

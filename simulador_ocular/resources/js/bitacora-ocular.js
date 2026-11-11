@@ -83,13 +83,8 @@
           constelacion: '', ra: degAHms(e[2]), dec: degADms(e[3]),
           tipo: 'cúmulo globular', carbono: false, doble: false, globular: true,
           rCore: rc, rTidal: rc * Math.pow(10, c), muV0: e[7],
-          /* Ficha física para bitacora-cumulos.js: es la MISMA fila del catálogo,
-             sin recortar. Harris no publica ángulo de posición, así que el perfil
-             se evalúa en radio circular (pa nulo). */
-          cumulo: {
-            id: e[0], ra: e[2], dec: e[3], rc: rc, rh: e[5], c: c, muV0: e[7],
-            Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null
-          }
+          // Ficha física para bitacora-cumulos.js: la MISMA que usa el registro.
+          cumulo: window.BitacoraCumulos ? window.BitacoraCumulos.fichaDeFila(e) : null
         };
       });
       // Códigos de catálogo -> nombre largo (fuente: mapa/datos/catalogos_dobles.csv).
