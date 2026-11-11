@@ -343,9 +343,16 @@ function gaia_cadena_consulta(string $paso, float $ra, float $dec, float $rad, f
                 . ' SUM(POWER(10,-0.4*phot_g_mean_mag)) AS flujo, SUM(POWER(10,-0.8*phot_g_mean_mag)) AS m2'
                 . $donde . ' AND ' . $celda . '>=' . $b . ' GROUP BY rx, dy';
         default:
-            return 'SELECT TOP ' . GAIA_MAX_ROWS . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
+            return 'SELECT TOP ' . gaia_cadena_top($b) . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
                 . $donde . ($b === null ? '' : ' AND ' . $celda . '<' . $b);
     }
+}
+
+/** TOP (y MAXREC) del paso de datos: con corte, el de la segura (40 000); sin
+    corte, el techo de la sonda, porque un campo que cabe bajo el techo se trae
+    entero (salvaguarda de la pista, #517). Pura. */
+function gaia_cadena_top(?int $b): int {
+    return $b === null ? GAIA_TECHO_FILAS : GAIA_MAX_ROWS;
 }
 
 /** Parámetros del POST que crea el job de un paso. MAXREC va explícito porque
@@ -354,7 +361,7 @@ function gaia_job_parametros(string $paso, float $ra, float $dec, float $rad, fl
     return [
         'REQUEST' => 'doQuery', 'LANG' => 'ADQL', 'FORMAT' => 'json',
         // Los agregados no se recortan: un espacial de 4,5° a |dec| alto pasa de 10 000 celdas.
-        'MAXREC' => $paso === 'datos' ? GAIA_MAX_ROWS : GAIA_TECHO_FILAS,
+        'MAXREC' => $paso === 'datos' ? gaia_cadena_top($b) : GAIA_TECHO_FILAS,
         'QUERY' => gaia_cadena_consulta($paso, $ra, $dec, $rad, $mag, $b),
     ];
 }
@@ -399,7 +406,12 @@ function gaia_cadena_avance(array $e, ?string $res, float $rad, float $mag): arr
         if (!is_array($j) || !isset($j['data']) || !is_array($j['data'])) {
             return ['error' => true];
         }
-        $c = gaia_cadena_corte($j['data'], GAIA_MAX_ROWS);
+        /* Salvaguarda de la pista (#517): la pista sobreestima y puede traer
+           aquí un campo que la sonda habría servido entero. Si el cono cabe
+           bajo el techo de la sonda, se trae entero, como haría ella: una pista
+           errónea solo cuesta tiempo, nunca estrellas (ADR 0033). */
+        $total = array_sum(array_map(static fn($f) => (int) ($f[1] ?? 0), $j['data']));
+        $c = gaia_cadena_corte($j['data'], gaia_truncada($total) ? GAIA_MAX_ROWS : GAIA_TECHO_FILAS);
         $sig = ($c['b'] === null) ? 'datos' : 'espacial';
         return ['lanzar' => $sig, 'estado' => ['paso' => $sig] + $c];
     }

@@ -170,7 +170,12 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   Avance que tocan el cono, con 0,015° de margen. Si la previsión de filas pasa
   de `GAIA_PISTA_UMBRAL` (130 000), va directo a la cadena asíncrona y el 202
   sale en un segundo, sin sonda ni segura. Sin manifiesto, con una celda ausente
-  o con una cabecera ilegible no hay pista y el flujo es el de siempre. El log
+  o con una cabecera ilegible no hay pista y el flujo es el de siempre.
+  La pista suma celdas enteras y sobreestima (×1,5-8,6 medido con el Avance),
+  así que la cadena lleva una **salvaguarda**: si su histograma cuenta menos
+  filas que el techo de la sonda (200 000), el paso de datos trae el campo
+  entero, sin corte ni velo, igual que la sonda. Una pista errónea solo cuesta
+  tiempo, nunca estrellas. El log
   apunta `prevision` y `pista` en cada línea; `?stats=1` cuenta en `pista` las
   peticiones que la usaron, y `pista_fallida` marca las que la pista mandó a la cadena pero no se pudo lanzar (siguieron por la sonda).
 - **Tamaño** = imagen estelar física (disco de Airy + seeing, ver más abajo), en

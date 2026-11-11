@@ -212,7 +212,8 @@ eq([$c['b'], $c['n'], $c['fondo']], [null, 300, null], 'todo cabe en el TOP → 
 
 // La máquina de pasos, pura.
 $e0 = ['paso' => 'hist'];
-$hjson = json_encode(['data' => $hist]);
+// Más un tramo débil que lleva el cono por encima del techo: solo entonces se corta (#517).
+$hjson = json_encode(['data' => array_merge($hist, [[1900, GAIA_TECHO_FILAS, 1.0, 1.0]])]);
 $a = gaia_cadena_avance($e0, $hjson, 0.89, 19.5);
 eq([$a['lanzar'] ?? null, $a['estado']['b'] ?? null, $a['estado']['n'] ?? null], ['espacial', 1530, 35000], 'hist listo → lanza espacial con el corte');
 ok(isset(gaia_cadena_avance($e0, null, 0.89, 19.5)['error']), 'hist en ERROR → 502');
@@ -235,6 +236,29 @@ ok(isset(gaia_cadena_avance($e2, null, 0.89, 19.5)['error']), 'datos en ERROR �
 eq(json_decode(gaia_cadena_avance(['paso' => 'datos', 'b' => null, 'n' => 1], '{"data":[[1,2,15.1,0.5]]}', 0.5, 16.0)['listo'], true),
     ['data' => [[1, 2, 15.1, 0.5]]], 'sin corte → sin fondo');
 eq(array_map('gaia_cadena_paso_num', ['hist', 'espacial', 'datos']), [1, 2, 3], 'paso N de 3 para el aviso');
+
+/* Salvaguarda de la pista (#517): la pista sobreestima (celdas enteras, ×1,5-8,6
+   medido) y puede mandar a la cadena un campo que la sonda traía entero. Si el
+   histograma del cono cabe bajo el techo de la sonda, la cadena lo trae entero,
+   sin corte ni velo: una pista errónea solo cuesta tiempo, nunca estrellas. */
+echo "cadena: un campo que la sonda traería entero no se corta (salvaguarda de la pista):\n";
+$hbajo = [];
+for ($g = 600; $g < 2000; $g++) { $hbajo[] = [$g, 76, 1e-7, 1e-14]; }   // 106 400 filas
+$a = gaia_cadena_avance(['paso' => 'hist'], json_encode(['data' => $hbajo]), 0.89, 20.0);
+$clave_o = static fn(array $x, string $k) => array_key_exists($k, $x) ? $x[$k] : 'x';
+eq([$a['lanzar'] ?? null, $clave_o($a['estado'] ?? [], 'b'), $a['estado']['n'] ?? null, $clave_o($a['estado'] ?? [], 'fondo')],
+    ['datos', null, 106400, null], '106 400 filas (< techo) → datos sin corte, sin espacial ni fondo');
+$hjusto = [[1500, GAIA_TECHO_FILAS - 1, 1.0, 1.0]];
+eq($clave_o(gaia_cadena_avance(['paso' => 'hist'], json_encode(['data' => $hjusto]), 0.89, 20.0)['estado'] ?? [], 'b'), null,
+    'techo − 1 → entero (lo mismo que la sonda: solo tocar el techo es truncado)');
+$htecho = [[1500, 30000, 1.0, 1.0], [1600, GAIA_TECHO_FILAS - 30000, 1.0, 1.0]];
+$a = gaia_cadena_avance(['paso' => 'hist'], json_encode(['data' => $htecho]), 0.89, 20.0);
+eq([$a['lanzar'] ?? null, $a['estado']['b'] ?? null, $a['estado']['n'] ?? null], ['espacial', 1600, 30000],
+    'en el techo → corte en el TOP de 40 000, como antes');
+$dsin = gaia_cadena_consulta('datos', 268.463, -34.793, 0.89, 20.0, null);
+ok(strpos($dsin, 'SELECT TOP ' . GAIA_TECHO_FILAS . ' ') === 0, 'datos sin corte: TOP = techo de la sonda');
+eq(gaia_job_parametros('datos', 268.463, -34.793, 0.89, 20.0, null)['MAXREC'], GAIA_TECHO_FILAS, 'datos sin corte: MAXREC = techo');
+ok(strpos($d, 'SELECT TOP ' . GAIA_MAX_ROWS . ' ') === 0, 'datos con corte: sigue el TOP de 40 000');
 // Qué hacer con la fase del job.
 eq(gaia_job_decision(200, "COMPLETED\n"), 'listo', 'COMPLETED → recoger');
 eq(gaia_job_decision(200, 'EXECUTING'), 'pendiente', 'EXECUTING → 202');

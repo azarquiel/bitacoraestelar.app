@@ -68,3 +68,9 @@ Avance.
 - El estudio de celdas del ADR 0012 (NO PASA) no se contradice: falló la adquisición
   **en frío y en tiempo de petición**. El Avance no adquiere nada en tiempo de petición,
   y el mismo informe E4 midió las celdas ya en caché en 17-203 ms.
+- (#517) La pista suma celdas **enteras** y, con el Avance ya generado, sobreestima
+  entre ×1,5 y ×8,6 frente al cono real (no ×1,5). Como la cadena asíncrona corta en el
+  `TOP 40000`, un falso positivo convertía en velo estrellas que la sonda habría
+  traído. Salvaguarda: si el histograma de la cadena queda por debajo del techo de la
+  sonda, el paso de datos trae el campo entero (`TOP`/`MAXREC` = techo). La garantía
+  «solo cuesta tiempo, nunca estrellas» ya no depende de lo bien que estime la pista.
