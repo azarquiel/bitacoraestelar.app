@@ -560,8 +560,7 @@ eq([$mix['peticiones'], $mix['pista']], [3, 1], 'stats mezcla líneas viejas y n
 echo "gaia_desde (solo admite 15; AC7):\n";
 eq(gaia_desde(null), null, 'sin desde → null (contrato de hoy)');
 eq(gaia_desde('15'), 15.0, '«15» → 15');
-eq(gaia_desde('15.0'), 15.0, '«15.0» → 15');
-foreach (['14', 'abc', '', '15abc', ' 15', '16', '-15', '1e1'] as $malo) {
+foreach (['14', 'abc', '', '15abc', ' 15', '16', '-15', '1e1', '15.0'] as $malo) {
     eq(gaia_desde($malo), false, "«{$malo}» → inválido (400)");
 }
 eq(gaia_desde(['15']), false, 'desde[]=15 (array) → inválido, sin TypeError');

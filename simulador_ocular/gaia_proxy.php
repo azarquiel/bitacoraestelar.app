@@ -106,14 +106,14 @@ const GAIA_DESDE            = 15.0;
 
 /**
  * Valida el parámetro `desde` tal como llega de $_GET: null si no viene (el
- * contrato de hoy), GAIA_DESDE si es «15» o «15.0», y false en cualquier otro
- * caso (400). `mixed` porque `desde[]=15` llega como array. Pura.
+ * contrato de hoy), GAIA_DESDE si es exactamente «15», y false en cualquier
+ * otro caso (400). `mixed` porque `desde[]=15` llega como array. Pura.
  */
 function gaia_desde(mixed $v): float|false|null {
     if ($v === null) {
         return null;
     }
-    return (is_string($v) && preg_match('/^15(\.0+)?$/', $v)) ? GAIA_DESDE : false;
+    return $v === '15' ? GAIA_DESDE : false;
 }
 
 /** Condición ADQL de la frontera sobre la columna G, con el AND detrás, o

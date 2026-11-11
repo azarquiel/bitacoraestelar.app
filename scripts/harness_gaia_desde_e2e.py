@@ -1,6 +1,11 @@
 """E2E del proxy de Gaia con desde=15 (#518) contra un `php -S` local.
-Uso: python3 -I e2e.py BASE SRVDIR ra dec rad mag"""
-import json, math, os, struct, sys, urllib.error, urllib.request
+
+Comprueba AC2, AC3 (con el proveedor que sirva), AC5, AC6, AC7 y AC8. SRVDIR es
+el directorio que sirve `php -S`: gaia_proxy.php, bitacora-cache-lru.php y
+`avance/` (enlace al Avance real). La caché se crea en SRVDIR/cache_gaia.
+Uso: python3 -I scripts/harness_gaia_desde_e2e.py BASE SRVDIR ra dec rad mag
+     p. ej. http://127.0.0.1:8518 /tmp/srv 305 40 1.2 15.5"""
+import json, math, os, struct, subprocess, sys, urllib.error, urllib.request
 
 BASE, SRV = sys.argv[1], sys.argv[2]
 ra, dec, rad, mag = map(float, sys.argv[3:7])
@@ -70,10 +75,7 @@ print('  ejemplo:', json.dumps(ls[-1])[:300])
 
 print('AC3: (Avance ∩ cono) ∪ complemento == completo, por posición')
 man = json.load(open(os.path.join(SRV, 'avance', 'manifiesto.json')))
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-php_pix = None
 # celdas del cono: las que ya calcula el proxy (gaia_fracciones_cono) vía php CLI
-import subprocess
 out = subprocess.run(['php', '-r', 'require "%s/gaia_proxy.php"; echo json_encode(array_keys(gaia_fracciones_cono(%r,%r,%r)));'
                       % (SRV, ra, dec, rad + 0.3)], capture_output=True, text=True).stdout
 celdas = json.loads(out)
