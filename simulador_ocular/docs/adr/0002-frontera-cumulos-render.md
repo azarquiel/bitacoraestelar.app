@@ -61,8 +61,11 @@ un punto fijo iterado metería el criterio de parada dentro de la imagen.
 - **La máscara difusa pasa a ser `Float32Array`** con centinela `-1`. Contrato:
   `mask[i] < 0` → flujo no evaluado por un modelo difuso específico; `mask[i] >= 0` → flujo ya
   evaluado, y **el valor es la `t` de `realzarPerceptual`**. PS1 escribe `0` (gamma completa, bit a
-  bit igual que antes); el cúmulo escribe `s_halo`. `t` no *es* `s_halo`: coinciden hoy por
-  diseño, y la API no debe fusionarlas semánticamente. Se exporta `difusoMarcado(mask, i)` para
+  bit igual que antes); el cúmulo escribía `s_halo`. `t` no *es* `s_halo`, y la API no debe
+  fusionarlas semánticamente. **Enmienda (#535, 2026-11-11):** el cúmulo escribe `1` (lineal, sin
+  realce) solo en los píxeles a los que aporta luz. Con `t = s_halo` el realce entraba entero
+  donde el halo roza el umbral y lo pintaba por encima de su nivel lineal (M13, 200 mm/100×:
+  15,5 DN a 6′ frente a 7,8 lineal). Se exporta `difusoMarcado(mask, i)` para
   que los harness no repitan la convención (hoy la tienen copiada a mano en seis sitios).
 - **Despliegue:** el render de cúmulos es solo del simulador. `bitacora-cumulos.js` se carga
   únicamente en `simulador_ocular/ocular-wordpress.html`, antes de `bitacora-gaia-render.js`.
