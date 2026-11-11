@@ -1409,11 +1409,21 @@
         return sign + pad2(dd) + ' ' + pad2(mm) + ' ' + pad2(ss);
       }
       function libreEstado(txt, cls) { var e = $('sim-libre-estado'); if (e) { e.textContent = txt || ''; e.className = 'sim-libre-estado' + (cls ? ' ' + cls : ''); } }
+      // Globular de Harris a menos de 1′ (o de su r_c, si es mayor) de RA/Dec.
+      function globularEn(raDeg, decDeg) {
+        return CATALOGO_GLOBULARES.find(function (g) {
+          var c = g.cumulo, dRa = (((raDeg - c.ra + 540) % 360) - 180) * Math.cos(decDeg * Math.PI / 180);
+          return Math.hypot(dRa, decDeg - c.dec) * 60 < Math.max(1, c.rc);
+        }) || null;
+      }
       // Construye y activa el objeto libre desde los campos RA/Dec.
       function fijarObjetoLibre(nombre, tipo) {
         var raDeg = BitacoraBase.parseRA($('sim-libre-ra').value);
         var decDeg = BitacoraBase.parseDec($('sim-libre-dec').value);
         if (raDeg == null || decDeg == null) { libreEstado('Introduce una RA y una Dec válidas (o busca un nombre en SIMBAD).'); return; }
+        // Un globular de Harris se pinta igual venga de su pestaña o de aquí.
+        var glob = globularEn(raDeg, decDeg);
+        if (glob) { libreEstado('✓ ' + glob.nombre + '  ·  AR ' + glob.ra + '  ·  Dec ' + glob.dec, 'ok'); elegirObjeto(glob); return; }
         var o = { nombre: (nombre || 'Objeto libre'), constelacion: '', ra: degAHms(raDeg), dec: degADms(decDeg), tipo: tipo || '', carbono: false, doble: false };
         libreEstado('✓ ' + o.nombre + '  ·  AR ' + o.ra + '  ·  Dec ' + o.dec, 'ok');
         elegirObjeto(o);
