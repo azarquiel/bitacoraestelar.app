@@ -244,3 +244,63 @@ AC3 sobre 69 objetos (σ/px contra el mosaico nativo, σ del parche de fitscut)
   listón: peor propio < 0,32 y < peor fitscut  →  PASA
 AC5  PNG Σ propio / Σ fitscut = 0.9996  (147.08 / 147.13 MB)  ·  resolución distinta de la regla C: 0  →  PASA
 ```
+
+## Máquina de referencia y cómo repetir en otra
+
+Las tres corridas son de la misma máquina, el 2026-11-11:
+
+| | |
+|---|---|
+| Equipo | iMac (iMac18,2) |
+| CPU | Intel Core i7-7700 @ 3,60 GHz, 4 núcleos físicos / 8 lógicos, x86_64 |
+| RAM | 16 GB |
+| Swap | 2 GB (macOS, dinámica y cifrada); **ya había 1,23 GB ocupados antes de AC1** |
+| Disco | SSD PCIe, 279 GB libres |
+| SO | macOS 13.7.8 (22H730), Darwin 22.6.0 |
+| Node | v24.16.0 · PHP 8.5.12 (solo para `test_ps1_proxy.php`) |
+| Red | la doméstica de desarrollo; caudal medido contra PS1: 1,33 MB/s con `output_size`, 3,36 MB/s nativo |
+
+### Qué depende de la máquina y qué no
+
+| AC | ¿Depende de la máquina? | Qué esperar en otra |
+|---|---|---|
+| AC1 pico de RSS | **Poco**: es memoria del proceso (mosaico nativo float32 + base + una capa). Debería salir parecido, ~0,5–0,6 GB, en cualquier máquina con Node 24 | Lo que sí cambia es la **swap**, que depende de lo demás que haya abierto |
+| AC1 swap | **Sí, del todo**: mide la máquina entera, no el proceso | Es la única razón por la que AC6 sale No-Go. Es la medida que tiene sentido repetir |
+| AC2 bytes | **No**: son los bytes que sirve PS1 | El factor ×3,95 y los 25,3 GB deben salir iguales |
+| AC2 tiempo | **Sí, de la red** (y de la carga de STScI) | Con 2,1 h aquí, el listón de 24 h deja margen de sobra |
+| AC3 y AC5 | **No**: son aritmética sobre los mismos datos | Repetirlo no aporta nada |
+| AC4 | **No**: es el diff | |
+
+**Conclusión:** solo merece la pena repetir **AC1**, y en concreto la swap. Para que la cifra se pueda atribuir a la medida y no al resto del equipo, la nueva corrida debería cumplir esto:
+
+1. **Máquina en reposo**: sin navegador, IDE ni otros trabajos. Apunta la swap ocupada al empezar; aquí ya había 1,23 GB.
+2. **Un control en reposo** de la misma duración (unos 25 min), sin lanzar nada, para ver cuánto se mueve la swap sola.
+3. Si se puede, **pasadas separadas**: solo `fitscut` y solo nativo.
+4. El listón **no cambia**: +256 MB de swap como máximo y 8 GB de pico de RSS (prerregistro de arriba). Se anota como medida nueva y fechada, con la máquina en esta misma tabla.
+
+### Comandos
+
+```
+git fetch origin && git checkout worktree-feat-ps1-nativo-370
+sh scripts/harness_ps1_nativo_370_ram.sh          # AC1, unos 25 min
+```
+
+`harness_ps1_nativo_370_ram.sh` usa `/usr/bin/time -l` y `sysctl vm.swapusage`, que **solo existen en macOS**. En Linux:
+- El pico de RSS ya sale en cada línea JSON del arnés (`maxRssNodeKB`, de `process.resourceUsage()`), y es portable.
+- Para la swap, mira `free -m` antes y después.
+
+Si la otra máquina tiene otra red y quieres contrastar el tiempo de AC2, lanza `node scripts/harness_ps1_nativo_370.js --bytes`. Es reanudable y guarda los datos en `$TMPDIR/bitacora-ps1-harness/ac2_370.json`.
+
+### Plantilla para la nueva corrida
+
+| Campo | Valor |
+|---|---|
+| Fecha | |
+| Equipo / CPU / RAM / swap total | |
+| SO / Node | |
+| Swap ocupada al empezar | |
+| Control en reposo (25 min): Δ swap | |
+| AC1 · pico de RSS `fitscut` (mín–máx de los 9) | |
+| AC1 · pico de RSS nativo (mín–máx de los 9) | |
+| AC1 · Δ swap de la corrida | |
+| Veredicto contra el listón (≤ 256 MB, ≤ 8 GB) | |
