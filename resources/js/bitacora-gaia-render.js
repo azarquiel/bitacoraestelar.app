@@ -614,8 +614,8 @@
     // s = visibilidadDifusa ya calculada en pintarFot (0 = justo en el umbral,
     // 1 = ya totalmente visible). Sin ella (llamadas antiguas), boost completo
     // como siempre. Con ella, el boost decae hacia gamma=1 (sin boost) según
-    // crece s: rescata lo que roza el umbral, no infla lo que ya se ve bien
-    // -un núcleo de cúmulo globular resuelto no debe quemarse a blanco-.
+    // crece s: rescata lo que roza el umbral, no infla lo que ya se ve bien.
+    // El cúmulo globular ya no usa este decaimiento: pasa t = 1 (#535).
     var t = (s == null) ? 0 : Math.max(0, Math.min(1, s));
     var gammaEfectiva = 1 + (FOT.GAMMA_PERCEPTUAL - 1) * (1 - t);
     var nivel = valorDeFlujo(F, Fcielo, rango);
@@ -2855,11 +2855,10 @@
         /* t = 1 (sin realce, lineal) donde el cúmulo pinta luz (#535): la gamma
            con t = s_halo entraba entera donde el halo roza el umbral y lo
            pintaba ×10 sobre su nivel lineal a 6′. Un píxel bajo el umbral no se
-           pinta por encima de su nivel lineal. Solo donde I > 0, para no
-           linealizar la luz de otra capa en píxeles a los que el cúmulo no
-           aporta nada (ver difusoMarcado). */
-        var tCumulo = I > 0 ? 1 : 0;
-        if (tCumulo > mascara[idx]) mascara[idx] = tCumulo;
+           pinta por encima de su nivel lineal. Solo donde I > 0: marcar con 0
+           un píxel sin luz del cúmulo le daría a la de otra capa la gamma
+           completa sin pasar por el umbral (ver difusoMarcado). */
+        if (I > 0) mascara[idx] = 1;
       }
     }
 

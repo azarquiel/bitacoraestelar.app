@@ -401,11 +401,14 @@ ok(identico, 'dos pintados del mismo cúmulo son idénticos bit a bit');
 // cúmulo no pinta y la máscara no debe marcar.
 var M = pintar(M13, 200, 100, 21.5, campoAncho, SIZE);
 var mask = M.cielo.difusoMask;
-var marcados = 0, conT = 0;
+// Solo pinta el cúmulo: marcado ⇔ luz > 0, y todo marcado lleva t = 1 exacto.
+var marcados = 0, malos = 0;
 for (var p = 0; p < mask.length; p++) {
-  if (R.difusoMarcado(mask, p)) { marcados++; if (mask[p] > 0) conT++; }
+  var marca = R.difusoMarcado(mask, p);
+  if (marca) marcados++;
+  if (marca !== (M.difuso[p] > 0) || (marca && mask[p] !== 1)) malos++;
 }
-ok(marcados > 0 && conT > 0, 'la máscara marca con t = 1 donde pinta (' + conT + '/' + marcados + ' px con t>0)');
+ok(marcados > 0 && malos === 0, 'la máscara marca con t = 1 justo donde pinta (' + marcados + ' px, ' + malos + ' fuera de regla)');
 ok(!R.difusoMarcado(mask, 2 * SIZE + 2), 'y no marca la esquina, fuera de r_t');
 
 /* #535: el halo se pinta en lineal. El realce perceptual entraba entero donde
