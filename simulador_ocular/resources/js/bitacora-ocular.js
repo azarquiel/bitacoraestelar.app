@@ -759,6 +759,7 @@
            resuelve también cuando el parche falla (nunca rechaza), y cualquier
            render posterior lo mata al entrar en actualizar(). */
         var procesando = $('sim-procesando');
+        var pendiente = false;   // ¿ya avisó el campo denso? (alPendiente)
         var hayDifuso = BitacoraPS1.galaxiasImagen && BitacoraPS1
           .ps1GalaxiasDelCampo(catDifuso, ra0, dec0, arcmin).length > 0;
         /* Toda la cadena (fondo → consulta → velo → magnitud límite → cúmulo →
@@ -783,9 +784,21 @@
              texto nuevo, que si no lo pisa en el siguiente segundo. */
           alPendiente: function (info) {
             if (!peticion.vivo()) return;
+            pendiente = true;
             var texto = BitacoraGaiaRender.textoPendiente(info);
             if (cargando.textContent.indexOf(texto) === 0) return;
             cargando.textContent = texto;
+            contarSegundos(peticion, null);
+          },
+          /* Vista provisional (Avance de Gaia, ADR 0033): las brillantes ya
+             están pintadas. El aviso baja a la franja tenue para no taparlas
+             y dice que es parcial; el del campo denso, si ya está, manda (más
+             informativo). La completa la sustituye entera y finCarga lo quita. */
+          alAvance: function () {
+            if (!peticion.vivo()) return;
+            cargando.classList.add('suave');
+            if (pendiente) return;
+            cargando.textContent = 'cargando estrellas…';
             contarSegundos(peticion, null);
           }
         }).then(function (r) {
@@ -824,6 +837,8 @@
           }
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el
           // canvas en negro, mostramos la placa DSS del mismo campo como respaldo.
+          // La provisional, si la hubo, ya no vale: el aviso vuelve a tapar.
+          cargando.classList.remove('suave');
           cargando.style.display = 'flex';
           cargando.textContent = 'Gaia DR3 no responde (CDS/GAVO); mostrando placa DSS…';
           renderDSS(arcmin, peticion, centro);
