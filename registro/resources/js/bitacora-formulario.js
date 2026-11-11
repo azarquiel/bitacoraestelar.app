@@ -1289,6 +1289,8 @@
     var D=parseFloat(telescopioSel.apertura_mm);
     return {
       ra:resolved.ra, dec:resolved.dec, carbono:(resolved.tipo==='carbono'),
+      // Globular del catálogo en esa posición: el mismo render que el simulador.
+      cumulo:(window.BitacoraCumulos?BitacoraCumulos.globularEn(resolved.ra, resolved.dec):null),
       carbonoMag:(resolved.tipo==='carbono'?resolved.mag:null),
       apertura:D, aumentos:opt.aumento, afov:parseFloat(ocular.campo_aparente),
       arcmin:opt.campoReal*60,
@@ -1568,7 +1570,7 @@
       optica:d.optica, arana:d.arana, sqm:sqmSim, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
       // El campo aparente fija el tamaño de las estrellas: el lienzo se muestra a
       // un diámetro ∝ afov, así que el radio en píxeles va con 1/afov.
-      afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, conGlow:true,
+      afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, cumulo:d.cumulo, conGlow:true,
       // Campo denso pedido por partes (#505): que el observador sepa por qué tarda.
       alPendiente:function(info){
         if(pet!==_simPeticion) return;
