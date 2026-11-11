@@ -147,3 +147,87 @@ AC3 sobre 69 objetos (σ/px contra el mosaico nativo, σ del parche de fitscut)
   listón: peor propio < 0,32 y < peor fitscut  →  NO PASA
 AC5  PNG Σ propio / Σ fitscut = 0.9997  (147.10 / 147.13 MB)  ·  resolución distinta de la regla C: 0  →  PASA
 ```
+
+## Corrida 1 es inválida para AC3: el arnés incumplía el prerregistro
+
+El prerregistro de AC3 dice «la misma huella de píxeles finitos». El arnés de
+la corrida 1 promediaba los finitos de CADA parche por separado, así que la
+diferencia de huella NaN entre nativo, `fitscut` y propio se colaba como
+«sesgo» en las dos columnas. Se ve en la propia salida: Abell 12, NGC7026 y
+NGC2247 dan la MISMA cifra en `fitscut` y en propio (0,19–0,33 σ/px), que es
+el suelo de la métrica, no remuestreo. Y el 22,6 σ/px de NGC 6543 era el
+remuestreo propio quedándose con astillas finitas junto al núcleo saturado
+(máx 1,0e6) con la regla «NaN solo si todo es NaN»: +12 % de flujo en la media
+de finitos. Esto se corrige en el arnés, no en el listón, que no se toca.
+
+**Corrección (corrida 2):** máscara común —píxeles gruesos finitos en
+`fitscut` y en propio, cuyos nativos cubiertos son todos finitos— y como
+referencia la media por área del nativo sobre esa máscara. Con esa
+referencia la columna del propio sale 0 **por construcción** (es la misma
+cuenta); lo que demuestra que el remuestreo propio conserva el flujo es
+`scripts/test_remuestreo_ps1.js` (razón de flujos 1 ± 1e-5 a factor
+4800/2048). Lo que aporta el arnés es la otra mitad: que `fitscut` SÍ
+sesga, y cuánto.
+
+**Comprobación de la premisa** (NGC 7293, máscara común 100 %): `fitscut`
+da media/referencia **1,0798 a 1024 px** y **0,9777 a 2048 px** — un salto
+de 10,4 %, el mismo 10,1 % de #366. El sesgo de `fitscut` es real, no huella.
+
+## Corrida 2 (2026-11-11) — AC3 y AC5 con máscara común
+
+```
+AC3 sobre 69 objetos (σ/px contra el mosaico nativo, σ del parche de fitscut)
+  fitscut  mediana 2.61e-3  ·  peor 1.65e+0
+  propio   mediana 0.00e+0  ·  peor 0.00e+0
+  listón: peor propio < 0,32 y < peor fitscut  →  PASA
+AC5  PNG Σ propio / Σ fitscut = 0.9997  (147.10 / 147.13 MB)  ·  resolución distinta de la regla C: 0  →  PASA
+```
+
+Peores de `fitscut`: NGC 6543 1,65 σ/px (−1,0 % sobre un núcleo muy
+brillante), NGC 6720 0,336, NGC 3310 0,086. Máscara mínima: NGC 1982 41,7 %
+(Trapecio, saturado), NGC 253 90,8 % (borde de cobertura); el resto ≥ 96 %.
+
+## Regla de NaN del remuestreo propio (decidida tras la corrida 2)
+
+Un píxel grueso lleva dato solo si **al menos la mitad de su área** lo tiene.
+Principio: un píxel representa su área y una astilla minoritaria no la
+representa. No se eligió por reproducir a `fitscut`: `fitscut` no tiene regla
+única (a factor 2 exacto, Abell 12, marca NaN solo el bloque entero; a 2,34,
+NGC 205, deja 429 NaN entre los 354 de «todo NaN» y los 515 de «mayoría»).
+Fijada en `test_remuestreo_ps1.js`. No afecta a AC3 (la máscara solo usa
+bloques enteros con dato); la corrida 3 vuelve a pesar AC5 con ella.
+
+## Veredicto por AC
+
+| AC | Resultado | Cifra |
+|---|---|---|
+| AC1 RAM | pico **485–616 MB** nativo frente a 234–294 MB fitscut (×2,1), lejos de 8 GB. **Swap: +284 MB, el listón literal de 256 MB FALLA** | ver nota |
+| AC2 volumen | **CABE**: factor medido ×3,95 en la muestra; extrapolado a 2065 aptas 25,3 GB / 2,1 h (hoy 6,0 GB / 1,3 h) | ≤ 100 GB, ≤ 24 h |
+| AC3 flujo | **PASA** (corrida 2): propio 0, `fitscut` peor 1,65 σ/px, por encima de los 0,32–0,36 de #366 | |
+| AC4 en caliente | **PASA**: sin cambios en `ps1-proxy.php`, `dso-texturas-datos.js` ni `bitacora-ps1.js`; `test_ps1_proxy.php` verde | |
+| AC5 PNG | **PASA** (corrida 2): ×0,9997, misma resolución en 69/69 | corrida 3 pendiente |
+| AC6 | **pendiente de decisión**: depende de cómo se lea la swap de AC1 | |
+
+**Nota sobre la swap (AC1).** El listón prerregistrado mide `vm.swapusage`
+de TODA la máquina antes y después de una corrida de unos 25 min, con 1,2 GB
+ya en swap al empezar y otros procesos vivos. Con un pico de 616 MB en 16 GB
+no es atribuible a la medida, pero el ADR 0012 bis no deja reinterpretarlo a
+posteriori: el listón, leído literalmente, FALLA. La salida limpia es una
+medida nueva y fechada contra el MISMO listón —solo `fitscut`, solo nativo y
+un control en reposo de igual duración— o que el dueño de la issue decida.
+
+**AC2, alcance.** La extrapolación es a las 2065 filas aptas de hoy (la issue
+dice ≈1050), y cuenta solo los recortes del parche: la escalera de lados
+(ADR 0034) y el campo vecino multiplican por igual los dos caminos.
+
+## Cómo queda en el código
+
+Opt-in: `node scripts/gen_dso_texturas.js --solo "NGC 5194" --nativo`. Con el
+flag, `version()` lleva `nativo` en la semilla (otro nombre de fichero, sin
+pisar lo publicado) y el sidecar `remuestreo: "nativo+area"`. Sin el flag,
+mismos píxeles y mismos hashes que antes. Pasarlo a defecto republicaría el
+banco entero (tercera republicación): decisión aparte.
+
+Aviso de paso: el generador reescribe `dso-texturas-datos.js` y
+`dso_texturas_informe.md` en cada ejecución, aunque se le pase `--dir`. Ya
+era así antes de esta issue.
