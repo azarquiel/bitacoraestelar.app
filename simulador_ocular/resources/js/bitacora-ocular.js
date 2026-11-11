@@ -601,6 +601,7 @@
         var conservar = conservarVista;
         conservarVista = false;
         cargando.classList.toggle('suave', conservar);
+        cargando.classList.remove('provisional');   // la vista nueva aún no tiene nada pintado
         cargando.style.display = 'flex';
         cargando.textContent = 'solicitando imagen…';
         elVista.setAttribute('aria-busy', 'true');
@@ -791,12 +792,14 @@
             contarSegundos(peticion, null);
           },
           /* Vista provisional (Avance de Gaia, ADR 0033): las brillantes ya
-             están pintadas. El aviso baja a la franja tenue para no taparlas
-             y dice que es parcial; el del campo denso, si ya está, manda (más
-             informativo). La completa la sustituye entera y finCarga lo quita. */
+             están pintadas. El aviso sigue centrado pero transparente y más
+             tenue (.provisional) para no taparlas, y dice que es parcial; el
+             del campo denso, si ya está, manda (más informativo). La completa
+             la sustituye entera y finCarga lo quita. */
           alAvance: function () {
             if (!peticion.vivo()) return;
-            cargando.classList.add('suave');
+            cargando.classList.remove('suave');
+            cargando.classList.add('provisional');
             if (pendiente) return;
             cargando.textContent = 'cargando estrellas…';
             contarSegundos(peticion, null);
@@ -838,7 +841,7 @@
           // Gaia (VizieR) no respondió tras los reintentos: en vez de dejar el
           // canvas en negro, mostramos la placa DSS del mismo campo como respaldo.
           // La provisional, si la hubo, ya no vale: el aviso vuelve a tapar.
-          cargando.classList.remove('suave');
+          cargando.classList.remove('suave', 'provisional');
           cargando.style.display = 'flex';
           cargando.textContent = 'Gaia DR3 no responde (CDS/GAVO); mostrando placa DSS…';
           renderDSS(arcmin, peticion, centro);
