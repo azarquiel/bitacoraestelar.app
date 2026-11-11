@@ -182,5 +182,110 @@ module.exports = function (R) {
     });
   }
 
-  return { bajar: bajar, dir: DIR, ESCALA_NATIVA: ESCALA_NATIVA };
+  /* ── Camino nativo (#370) ───────────────────────────────────────────────
+     Mismas celdas, mismo recorte y misma costura que `bajar`, pero pidiendo
+     SOLO `size`: `fitscut` devuelve el píxel nativo de 0,25″ sin remuestrear
+     (verificado en #366) y el paso a `salida` lo hace `lib_remuestreo_ps1.js`
+     promediando por área, que conserva el flujo. `bajar` y su caché no se
+     tocan: este camino tiene clave propia ('nativo') y no se mezcla con ella.
+
+     Coste medido en simulador_ocular/docs/validacion/ps1_nativo_370.md. */
+  var RM = require('./lib_remuestreo_ps1.js');
+  var TIMEOUT_MS = 120000;     // sin datos en 2 min = conexión muerta; un nativo de 92 MB tarda ~20 s
+
+  /* Como bajar1, pero contando los bytes que llegan por el cable y con un
+     timeout de socket: un recorte nativo atascado colgaría la generación. */
+  function bajarContando(url, cuenta) {
+    return new Promise(function (res, rej) {
+      var q = https.get(url, { headers: { 'User-Agent': 'simulador-ocular/1.0' } }, function (r) {
+        if (r.statusCode !== 200) { r.resume(); return rej(new Error('HTTP ' + r.statusCode)); }
+        var t = [];
+        r.on('data', function (c) { t.push(c); cuenta.bytes += c.length; });
+        r.on('end', function () { res(Buffer.concat(t)); });
+        r.on('error', rej);
+      });
+      q.setTimeout(TIMEOUT_MS, function () { q.destroy(new Error('timeout de ' + TIMEOUT_MS + ' ms')); });
+      q.on('error', rej);
+    });
+  }
+
+  function urlRecorteNativo(fichero, ra, dec, lado) {
+    return BASE + 'fitscut.cgi?red=' + encodeURIComponent(fichero) +
+      '&x=' + ra + '&y=' + dec + '&size=' + Math.round(lado * 60 / ESCALA_NATIVA) +
+      '&format=fits&wcs=1';
+  }
+
+  /* El parche a `salida` px por el camino nativo. Devuelve lo mismo que `bajar`
+     (ancho, alto, escalaAs, datos, wcs, celdasPedidas, celdasCosidas) más
+     `red` = { bytes, ms } de las peticiones de recorte de ESTA llamada (0 si
+     salió de caché).
+     opciones.conNativo: devolver también `nativo` (el mosaico a 0,25″ antes de
+       remuestrear), para medir contra él; nunca se cachea.
+     opciones.sinCache: ni leer ni escribir la caché. */
+  function bajarNativo(ra, dec, lado, salida, banda, opciones) {
+    opciones = opciones || {};
+    banda = banda || window.BitacoraPS1.cfg.banda;
+    var clave = crypto.createHash('md5')
+      .update(['nativo', ra, dec, lado, salida, banda].join('|')).digest('hex');
+    var f = path.join(DIR, clave + '.json');
+    if (!opciones.sinCache && !opciones.conNativo && fs.existsSync(f)) {
+      var g = JSON.parse(fs.readFileSync(f, 'utf8'));
+      g.datos = new Float32Array(Buffer.from(g.datos, 'base64').buffer.slice(0));
+      g.red = { bytes: 0, ms: 0 };
+      return Promise.resolve(g);
+    }
+    var cuenta = { bytes: 0 }, t0 = Date.now();
+    return celdas(ra, dec, lado, banda).then(function (c) {
+      var cs = c.lista;
+      if (!cs.length) {
+        if (c.esquinasFallidas) throw new Error('no se pudo preguntar por las celdas');
+        throw new Error('sin cobertura de PS1');
+      }
+      /* Costura INCREMENTAL: cada celda se cose sobre la base y se suelta, para
+         que el pico de memoria sea base + una capa, no base + cuatro. */
+      var base = null, cosidas = 0, cadena = Promise.resolve();
+      cs.forEach(function (celda) {
+        cadena = cadena.then(function () {
+          var url = urlRecorteNativo(celda, ra, dec, lado);
+          return bajarContando(url, cuenta).catch(function () { return bajarContando(url, cuenta); })
+            .then(function (b) {
+              var ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+              b = null;
+              var p = window.BitacoraPS1.parseFITS(ab);
+              if (!p || !p.datos) return;
+              cosidas++;
+              if (!base) { base = p; return; }
+              coser([base, p]);
+            }).catch(function () { /* una celda que falla no tumba el parche, pero se cuenta */ });
+        });
+      });
+      return cadena.then(function () {
+        if (!base) throw new Error('ninguna celda devolvió imagen');
+        var ms = Date.now() - t0;
+        var esc = base.escalaAs > 0 ? base.escalaAs : lado * 60 / base.ancho;
+        var datos = salida === base.ancho ? base.datos
+          : RM.remuestrearArea(base.datos, base.ancho, base.alto, salida);
+        var g = { ancho: salida, alto: salida, escalaAs: esc * base.ancho / salida,
+                  datos: datos, ladoArcmin: lado, salida: salida, metodo: 'nativo',
+                  wcs: RM.wcsRemuestreada(base.wcs || null, base.ancho, salida),
+                  celdasPedidas: cs.length + c.esquinasFallidas, celdasCosidas: cosidas,
+                  red: { bytes: cuenta.bytes, ms: ms } };
+        if (opciones.conNativo) g.nativo = base;
+        if (!opciones.sinCache && g.celdasCosidas >= g.celdasPedidas) {
+          fs.writeFileSync(f, JSON.stringify({
+            ancho: g.ancho, alto: g.alto, escalaAs: g.escalaAs, ladoArcmin: lado,
+            salida: salida, metodo: 'nativo', wcs: g.wcs,
+            celdasPedidas: g.celdasPedidas, celdasCosidas: g.celdasCosidas,
+            datos: Buffer.from(new Float32Array(datos).buffer).toString('base64')
+          }));
+        }
+        return g;
+      });
+    });
+  }
+
+  return { bajar: bajar, bajarNativo: bajarNativo, dir: DIR, ESCALA_NATIVA: ESCALA_NATIVA,
+           /* Para medir (harness_ps1_nativo_370.js), no para producir. */
+           _interno: { celdas: celdas, urlRecorte: urlRecorte, urlRecorteNativo: urlRecorteNativo,
+                       bajarContando: bajarContando } };
 };
