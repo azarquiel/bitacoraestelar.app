@@ -556,5 +556,64 @@ $mix = gaia_log_agregado(cache_lru_log_linea(1.0, 'v', 'miss', 'sonda', 10, 900.
     . cache_lru_log_linea(3.0, 'n', 'miss', 'sonda', 10, 900.0, null, gaia_pista_log(4000, false)));
 eq([$mix['peticiones'], $mix['pista']], [3, 1], 'stats mezcla líneas viejas y nuevas y cuenta las que usaron la pista');
 
+/* ═══════════ Complemento débil: desde=15 (#518, ADR 0033 puntos 3 y 4) ═══════════ */
+echo "gaia_desde (solo admite 15; AC7):\n";
+eq(gaia_desde(null), null, 'sin desde → null (contrato de hoy)');
+eq(gaia_desde('15'), 15.0, '«15» → 15');
+foreach (['14', 'abc', '', '15abc', ' 15', '16', '-15', '1e1', '15.0'] as $malo) {
+    eq(gaia_desde($malo), false, "«{$malo}» → inválido (400)");
+}
+eq(gaia_desde(['15']), false, 'desde[]=15 (array) → inválido, sin TypeError');
+eq(gaia_desde(15), false, 'un entero no llega nunca de $_GET: inválido');
+
+echo "gaia_clave con desde (AC5):\n";
+eq(gaia_clave(56.75, 24.115, 0.36, 16.5), '5146bcd58673a597e7b911681caafef8f14ab630', 'sin desde: la clave de hoy, fijada');
+eq(gaia_clave(56.75, 24.115, 0.36, 16.5, null), gaia_clave(56.75, 24.115, 0.36, 16.5), 'desde null = sin desde');
+ok(gaia_clave(56.75, 24.115, 0.36, 16.5, 15.0) !== gaia_clave(56.75, 24.115, 0.36, 16.5), 'con desde → otra clave (y otro ETag)');
+eq(gaia_clave(56.75, 24.115, 0.36, 16.5, 15.0), gaia_clave(56.75, 24.115, 0.36, 16.5, 15.0), 'con desde: determinista');
+
+echo "consultas con desde (AC1, AC2):\n";
+foreach ([false, true] as $seg) {
+    $nom = $seg ? 'segura' : 'sonda';
+    [$c0, $g0] = gaia_consultas(56.75, 24.115, 0.36, 16.5, $seg);
+    eq([$c0, $g0], gaia_consultas(56.75, 24.115, 0.36, 16.5, $seg, null), "$nom: desde null = consulta de hoy");
+    ok(stripos($c0 . $g0, '>=15') === false, "$nom: sin desde no hay frontera");
+    [$c1, $g1] = gaia_consultas(56.75, 24.115, 0.36, 16.5, $seg, 15.0);
+    ok(strpos($c1, 'Gmag>=15 AND') !== false, "$nom CDS: Gmag>=15");
+    ok(strpos($g1, 'phot_g_mean_mag>=15 AND') !== false, "$nom GAVO: phot_g_mean_mag>=15");
+    eq(str_replace('Gmag>=15 AND ', '', $c1), $c0, "$nom CDS: solo cambia la frontera");
+    eq(str_replace('phot_g_mean_mag>=15 AND ', '', $g1), $g0, "$nom GAVO: solo cambia la frontera");
+    eq(gaia_proveedores_gavo_primero(56.75, 24.115, 0.36, 16.5, $seg), gaia_proveedores_gavo_primero(56.75, 24.115, 0.36, 16.5, $seg, null),
+        "$nom: URLs sin desde, las de hoy");
+    $urls = gaia_proveedores_gavo_primero(56.75, 24.115, 0.36, 16.5, $seg, 15.0);
+    ok(strpos(rawurldecode($urls[0]), 'phot_g_mean_mag>=15') !== false && strpos(rawurldecode($urls[1]), 'Gmag>=15') !== false,
+        "$nom: las dos URLs llevan la frontera");
+}
+// Campos densos (AC4): el TOP ordenado se aplica al complemento.
+[$cs] = gaia_consultas(268.447, -34.841, 0.89, 19.5, true, 15.0);
+ok(strpos($cs, 'TOP ' . GAIA_MAX_ROWS) !== false && stripos($cs, 'ORDER BY Gmag') !== false, 'segura con desde: TOP 40000 ORDER BY sobre el complemento');
+
+echo "cadena asíncrona con desde (todos los pasos, incluido hist):\n";
+foreach (['hist' => null, 'espacial' => 1700, 'datos' => 1700] as $paso => $b) {
+    $q0 = gaia_cadena_consulta($paso, 268.447, -34.841, 0.89, 19.5, $b);
+    eq(gaia_cadena_consulta($paso, 268.447, -34.841, 0.89, 19.5, $b, null), $q0, "$paso: desde null = consulta de hoy");
+    $q1 = gaia_cadena_consulta($paso, 268.447, -34.841, 0.89, 19.5, $b, 15.0);
+    ok(strpos($q1, 'phot_g_mean_mag>=15 AND') !== false, "$paso: lleva phot_g_mean_mag>=15");
+    eq(str_replace('phot_g_mean_mag>=15 AND ', '', $q1), $q0, "$paso: solo cambia la frontera");
+    eq(gaia_job_parametros($paso, 268.447, -34.841, 0.89, 19.5, $b, 15.0)['QUERY'], $q1, "$paso: el job lleva la frontera");
+}
+ok(strpos(gaia_cadena_consulta('datos', 268.447, -34.841, 0.89, 19.5, null, 15.0), 'phot_g_mean_mag>=15') !== false,
+    'datos sin corte (cabe entero) también lleva la frontera');
+
+echo "log con mag y desde (AC6):\n";
+eq(gaia_log_peticion(16.5, null), ['mag' => 16.5, 'desde' => null], 'sin desde → desde null');
+eq(gaia_log_peticion(18.0, 15.0), ['mag' => 18.0, 'desde' => 15.0], 'con desde');
+$lin = json_decode(cache_lru_log_linea(1.0, 'k', 'miss', 'sonda', 1, 1.0, null,
+    gaia_pista_log(4000, false, false, 9000) + gaia_log_peticion(18.0, 15.0)), true);
+eq([$lin['mag'], $lin['desde'], $lin['prevision']], [18, 15, 4000], 'la línea lleva mag, desde y la pista');
+
+echo "tope de la caché (AC8):\n";
+eq(GAIA_CACHE_MAX_BYTES, 1536 * 1024 * 1024, 'GAIA_CACHE_MAX_BYTES = 1,5 GB');
+
 if ($fallos) { echo "\n$fallos fallo(s).\n"; exit(1); }
 echo "\nTodo verde.\n";
