@@ -1312,9 +1312,7 @@
       }, (s > 0 ? s : 10) * 1000);
       function alCancelar() {
         clearTimeout(id);
-        var err = new Error('gaia_proxy cancelada');
-        err.cancelada = true;
-        rechazar(err);
+        rechazar(cancelada());
       }
       if (!cancel) return;
       if (cancel.signal.aborted) alCancelar();

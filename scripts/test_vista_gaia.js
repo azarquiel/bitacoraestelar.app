@@ -460,6 +460,14 @@ casos.push(function () {
        'nada repinta durante el pendiente: la provisional sigue a la vista (' + despues.length + ' avisos después)');
     ok(reg.putImageData > trasAvance, 'al completar la sustituye la completa');
     ok(mismoConjunto(r.estrellas, dentro(M, M.brillantes.concat(M.debiles))), 'que es el conjunto completo');
+    // Al revés: el complemento llega ANTES que las celdas. No hay nada que
+    // adelantar, así que no se pinta provisional y se va directo a la completa.
+    var M2 = nuevoMundo(270, -25, { retCelda: 40, retProxy: 0 }), prov = 0;
+    return R.vistaGaia(lienzo(64, null).getContext('2d'), opts({ ra: 270, dec: -25, alAvance: function () { prov++; } }))
+      .then(function (r2) {
+        ok(prov === 0, 'complemento antes que las celdas: sin provisional');
+        ok(mismoConjunto(r2.estrellas, dentro(M2, M2.brillantes.concat(M2.debiles))), 'y la completa igual');
+      });
   });
 });
 
