@@ -60,6 +60,23 @@ ok(rb[0] !== rb[0], 'bloque todo NaN → NaN');
 casi(rb[1], 5, 1e-6, 'bloque sin NaN');
 casi(rb[3], 5 / 3, 1e-6, 'bloque con un NaN: media de los tres finitos');
 
+console.log('regla de mayoría: un píxel con menos de la mitad de su área con dato sale NaN');
+var d = new Float32Array([NaN, NaN, 1, 1,
+                          NaN, 9, 1, 1,
+                          5, 5, 7, NaN,
+                          NaN, NaN, 7, NaN]);
+var rd = RM.remuestrearArea(d, 4, 4, 2);
+ok(rd[0] !== rd[0], '1 de 4 con dato → NaN (no el 9 de la astilla)');
+casi(rd[2], 5, 1e-6, '2 de 4 con dato (justo la mitad) → media de los dos');
+casi(rd[3], 7, 1e-6, '2 de 4 con dato en diagonal → media de los dos');
+/* Factor no entero, 3 → 2: el píxel grueso 0 cubre 1,5 × 1,5 nativos. Con la
+   fila 0 y la columna 0 en NaN solo queda con dato el cuarto del nativo (1,1)
+   que cae dentro: 0,25 / 2,25 del área → NaN. El grueso 3 queda entero con dato. */
+var e = new Float32Array([NaN, NaN, NaN, NaN, 4, 4, NaN, 4, 4]);
+var re = RM.remuestrearArea(e, 3, 3, 2);
+ok(re[0] !== re[0], 'factor 1,5: un noveno del área con dato → NaN');
+casi(re[3], 4, 1e-6, 'factor 1,5: el píxel entero con dato conserva su valor');
+
 console.log('factor no entero con NaN en una mitad: el brillo superficial de la mitad válida se conserva');
 var c = new Float32Array(N * N);
 for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) c[y * N + x] = x < N / 2 ? NaN : 42;

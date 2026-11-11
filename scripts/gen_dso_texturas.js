@@ -30,6 +30,7 @@
          node scripts/gen_dso_texturas.js --banco
          node scripts/gen_dso_texturas.js --banco --seco   # qué haría, sin red
          node scripts/gen_dso_texturas.js --solo "NGC 5194" --dir scripts/fixtures/dso
+         node scripts/gen_dso_texturas.js --solo "NGC 5194" --nativo  # píxel nativo + remuestreo propio (#370)
 */
 'use strict';
 
@@ -45,7 +46,15 @@ require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.
 
 var PS1 = window.BitacoraPS1, P16 = window.BitacoraPNG16;
 var LIBPNG = require('./lib_png.js');
-var bajar = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender).bajar;
+/* `--nativo` (#370, opt-in): pedir a fitscut el píxel nativo y remuestrear con
+   lib_remuestreo_ps1.js, que conserva el flujo, en vez de `output_size`. Sin
+   el flag, todo sigue exactamente como antes: mismos píxeles, mismos hashes.
+   Coste y sesgo medidos en simulador_ocular/docs/validacion/ps1_nativo_370.md. */
+var LIBBAJAR = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender);
+var METODO = process.argv.indexOf('--nativo') > 0 ? 'nativo' : 'fitscut';
+var bajar = METODO === 'nativo'
+  ? function (ra, dec, lado, salida) { return LIBBAJAR.bajarNativo(ra, dec, lado, salida); }
+  : LIBBAJAR.bajar;
 /* Del banco salen dos cosas que ya estaban resueltas y no se rehacen aquí: la
    clave con la que se busca un nombre (las galaxias van 'NGC 5194' y las
    nebulosas 'NGC0040', y hay alternos) y el veredicto de si un objeto es apto.
@@ -198,10 +207,15 @@ function arg(n, pordefecto) {
    La decisión, con lo que se midió y lo que se exige a cambio, en el ADR 0026
    (docs/adr/0026-el-nombre-de-una-textura-sale-de-sus-parametros.md). De ella
    depende la cabecera inmutable de #209. */
-function version(gal, salida) {
+/* `metodo` (#370): 'nativo' entra en la semilla porque cambia los píxeles con
+   los mismos parámetros; 'fitscut' (el defecto) no entra, para que el banco ya
+   publicado conserve sus nombres. */
+function version(gal, salida, metodo) {
+  metodo = metodo || METODO;
   var semilla = [GENERADOR, SONDEO, PS1.cfg.banda, gal.nombre,
                  gal.ra.toFixed(5), gal.dec.toFixed(5),
-                 gal.ladoArcmin.toFixed(3), salida, 'asinh16'].join('|');
+                 gal.ladoArcmin.toFixed(3), salida, 'asinh16']
+    .concat(metodo === 'nativo' ? ['nativo'] : []).join('|');
   return crypto.createHash('sha256').update(semilla).digest('hex').slice(0, 8);
 }
 
@@ -801,6 +815,8 @@ function publicar(f, gal, p, vecinoHecho, marco, id, dir) {
         nombre: gal.nombre, version: v, generador: GENERADOR,
         ra: gal.ra, dec: gal.dec,
         fuente: { sondeo: SONDEO, banda: PS1.cfg.banda, descargado: new Date().toISOString().slice(0, 10) },
+        /* Solo si no es el de siempre, para no tocar los sidecars ya publicados. */
+        remuestreo: METODO === 'nativo' ? 'nativo+area' : undefined,
         ancho: p.ancho, alto: p.alto, ladoArcmin: gal.ladoArcmin, escalaAs: p.escalaAs,
         /* La WCS tal cual la deja parseFITS, no en tarjetas FITS: pasar de
            CRPIX/CDELT/PC a esto es una ley, y esa ley ya vive en parseFITS
@@ -1207,7 +1223,7 @@ var nombre = arg('--solo', '');
 var dir = path.resolve(RAIZ, arg('--dir', path.join('simulador_ocular', 'dso')));
 var enBanco = process.argv.indexOf('--banco') > 0, seco = process.argv.indexOf('--seco') > 0;
 if (!nombre && !enBanco) {
-  console.error('uso: node scripts/gen_dso_texturas.js --solo "NGC 5194" | --banco [--seco] [--dir <ruta>]');
+  console.error('uso: node scripts/gen_dso_texturas.js --solo "NGC 5194" | --banco [--seco] [--dir <ruta>] [--nativo]');
   process.exit(2);
 }
 

@@ -63,6 +63,10 @@ ok(G.version(M51, 1024) === v0, 'mismo objeto y mismos parámetros, mismo hash')
   ok(G.version(otro, 1024) !== v0, 'cambiar ' + par[0] + ' cambia el hash');
 });
 ok(G.version(M51, 2048) !== v0, 'cambiar la resolución de salida cambia el hash');
+/* #370: el camino nativo cambia los píxeles con los mismos parámetros, así que
+   entra en el hash; el de `fitscut` no, para no republicar el banco por él. */
+ok(G.version(M51, 1024, 'nativo') !== v0, 'el camino nativo cambia el hash');
+ok(G.version(M51, 1024, 'fitscut') === v0, 'el camino de fitscut deja el hash de siempre');
 
 console.log('\nEncontrar el objeto en el catálogo:');
 require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'galaxias-datos.js'));

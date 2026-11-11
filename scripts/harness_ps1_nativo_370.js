@@ -138,25 +138,50 @@ function bytesPng(F) {
   var cod = COD.codificar(F.datos, { a: s });
   return PNG.bufferGris16(cod.u16, F.ancho, F.alto).length;
 }
-function modoFlujo() {
+/* La MISMA huella para las tres medias (cláusula de AC3 en el prerregistro;
+   la corrida 1 la incumplía: cada parche promediaba sus propios finitos y la
+   diferencia de huella NaN se colaba como «sesgo» en las dos columnas).
+   Máscara: píxeles gruesos finitos en fitscut y en el propio, y cuyos nativos
+   cubiertos son TODOS finitos. Referencia: la media por área del nativo sobre
+   cada uno de esos píxeles, que con el bloque entero finito es justo lo que
+   remuestrearArea calcula —por eso la columna del propio sale ~0 por
+   construcción y la que informa es la de fitscut—. */
+function sesgosMascaraComun(nativo, fit, pro, sal) {
+  var ind = new Float32Array(nativo.datos.length);
+  for (var i = 0; i < ind.length; i++) ind[i] = nativo.datos[i] === nativo.datos[i] ? 0 : 1;
+  var fracNan = RM.remuestrearArea(ind, nativo.ancho, nativo.alto, sal);
+  var ref = RM.remuestrearArea(nativo.datos, nativo.ancho, nativo.alto, sal);
+  var sR = 0, sF = 0, sP = 0, n = 0;
+  for (var k = 0; k < ref.length; k++) {
+    var f = fit.datos[k], p = pro.datos[k];
+    if (fracNan[k] !== 0 || f !== f || p !== p) continue;
+    sR += ref[k]; sF += f; sP += p; n++;
+  }
+  return { ref: sR / n, fit: sF / n, pro: sP / n, frac: n / ref.length };
+}
+var RM = require('./lib_remuestreo_ps1.js');
+
+function modoFlujo(salidas) {
   var lista = b.objetos.filter(function (o) { return o.gal; });
+  if (hay('--solo')) lista = lista.filter(function (o) { return B.clave(o.nombre) === B.clave(arg('--solo')); });
   if (N) lista = lista.slice(0, N);
   var filas = [];
   return enSerie(lista, function (o, i) {
-    var g = o.gal, sal = PS1.ps1SalidaParche(g.ladoArcmin);
+    var g = o.gal, sal = salidas || PS1.ps1SalidaParche(g.ladoArcmin);
     return BJ.bajar(g.ra, g.dec, g.ladoArcmin, sal).then(function (fit) {
       return BJ.bajarNativo(g.ra, g.dec, g.ladoArcmin, sal, null, { conNativo: true, sinCache: true }).then(function (pro) {
-        var nat = mediaFinitos(pro.nativo.datos), mf = mediaFinitos(fit.datos), mp = mediaFinitos(pro.datos);
         var cielo = PS1.ps1Cielo(fit.datos, fit.ancho, fit.alto);
         var sigma = PS1.ps1SigmaCielo(fit.datos, fit.ancho, fit.alto, cielo);
-        var fila = { n: o.nombre, sal: sal, anchoFit: fit.ancho, anchoPro: pro.ancho,
-                     sFit: Math.abs(mf.media - nat.media) / sigma, sPro: Math.abs(mp.media - nat.media) / sigma,
-                     pngFit: bytesPng(fit), pngPro: bytesPng(pro) };
+        var m = sesgosMascaraComun(pro.nativo, fit, pro, sal);
+        var fila = { n: o.nombre, sal: sal, anchoFit: fit.ancho, anchoPro: pro.ancho, mascara: m.frac,
+                     sFit: Math.abs(m.fit - m.ref) / sigma, sPro: Math.abs(m.pro - m.ref) / sigma,
+                     rFit: m.fit / m.ref, pngFit: bytesPng(fit), pngPro: bytesPng(pro) };
         pro.nativo = null;
         filas.push(fila);
         console.log('[' + (i + 1) + '/' + lista.length + '] ' + o.nombre + '  ' + sal + ' px  ' +
           'fitscut ' + fila.sFit.toExponential(2) + ' σ/px  ·  propio ' + fila.sPro.toExponential(2) +
-          ' σ/px  ·  PNG ' + (fila.pngPro / fila.pngFit).toFixed(3) + '×' +
+          ' σ/px  ·  media fitscut/ref ' + fila.rFit.toFixed(4) + '  ·  máscara ' + (100 * fila.mascara).toFixed(1) + ' %' +
+          '  ·  PNG ' + (fila.pngPro / fila.pngFit).toFixed(3) + '×' +
           (fila.anchoFit !== sal || fila.anchoPro !== sal ? '  RESOLUCIÓN ≠ REGLA C' : ''));
       });
     }).catch(function (e) { console.log('FALLO ' + o.nombre + ': ' + (e && e.message || e)); });
@@ -178,6 +203,6 @@ function modoFlujo() {
 
 var p = hay('--ram') ? modoRam(arg('--ram'), arg('--camino', 'nativo'))
       : hay('--bytes') ? modoBytes()
-      : hay('--flujo') ? modoFlujo()
+      : hay('--flujo') ? modoFlujo(hay('--salida') ? +arg('--salida') : 0)
       : Promise.reject(new Error('uso: --ram NOMBRE --camino fitscut|nativo · --bytes · --flujo'));
 p.catch(function (e) { console.error(e && e.stack || e); process.exit(1); });
