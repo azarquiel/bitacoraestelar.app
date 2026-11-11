@@ -205,7 +205,7 @@ bloques enteros con dato); la corrida 3 vuelve a pesar AC5 con ella.
 | AC2 volumen | **CABE**: factor medido ×3,95 en la muestra; extrapolado a 2065 aptas 25,3 GB / 2,1 h (hoy 6,0 GB / 1,3 h) | ≤ 100 GB, ≤ 24 h |
 | AC3 flujo | **No hay un PASA en banco para el propio** (ADR 0005): en la corrida 2 su columna es 0 por construcción. Lo que sí está medido: el propio conserva el flujo en `test_remuestreo_ps1.js` (sintético, 1 ± 1e-5 a factor 2,34) y `fitscut` **sesga** en el banco hasta 1,65 σ/px, con NGC 7293 reproduciendo el 10,1 % de #366. La cifra de `fitscut` sale de la máscara común, no de la métrica de #366: no es comparable uno a uno con 0,32–0,36 | |
 | AC4 en caliente | **PASA**: sin cambios en `ps1-proxy.php`, `dso-texturas-datos.js` ni `bitacora-ps1.js`; `test_ps1_proxy.php` verde. Ojo: `gen_dso_texturas.js` reescribe `dso-texturas-datos.js` al ejecutarse (ya pasaba antes) | |
-| AC5 PNG | corrida 2 (regla NaN vieja): ×0,9997, misma resolución en 69/69. **Con la regla de mayoría, pendiente de la corrida 3.** El ≤ 16 MB/parche se sigue de la misma resolución (2048² float32 = 16,00 MB, L2.4), no se ha medido aparte | corrida 3 |
+| AC5 PNG | **PASA con la regla de mayoría** (corrida 3): Σ PNG ×0,9996 (147,08 / 147,13 MB), misma resolución en 69/69, sin fallos. Corrida 2 con la regla vieja: ×0,9997. El ≤ 16 MB/parche se sigue de la misma resolución (2048² float32 = 16,00 MB, L2.4), no se ha medido aparte | corrida 3 |
 | AC6 | **Leído al pie de la letra, No-Go**: AC1 rompió su listón de swap. Decide el dueño de la issue (ver nota) | |
 
 **Nota sobre la swap (AC1).** El listón prerregistrado mide `vm.swapusage`
@@ -234,3 +234,13 @@ banco entero (tercera republicación): decisión aparte.
 Aviso de paso: el generador reescribe `dso-texturas-datos.js` y
 `dso_texturas_informe.md` en cada ejecución, aunque se le pase `--dir`. Ya
 era así antes de esta issue.
+
+## Corrida 3 (2026-11-11) — AC3 y AC5 con la regla de mayoría
+
+```
+AC3 sobre 69 objetos (σ/px contra el mosaico nativo, σ del parche de fitscut)
+  fitscut  mediana 2.61e-3  ·  peor 1.65e+0
+  propio   mediana 0.00e+0  ·  peor 0.00e+0
+  listón: peor propio < 0,32 y < peor fitscut  →  PASA
+AC5  PNG Σ propio / Σ fitscut = 0.9996  (147.08 / 147.13 MB)  ·  resolución distinta de la regla C: 0  →  PASA
+```
