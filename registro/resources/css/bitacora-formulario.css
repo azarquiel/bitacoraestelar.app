@@ -210,6 +210,10 @@
    inferior sobre un degradado. */
 .sim-gen-spin.suave {background:linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0) 40%);
   align-items:flex-end;padding-bottom:16px;}
+/* Vista provisional del Avance de Gaia (#529): las brillantes ya están en el
+   lienzo. El aviso sigue centrado, como en el simulador, pero transparente y
+   más tenue, con una sombra que lo despega de las estrellas de detrás. */
+.sim-gen-spin.provisional {background:transparent;opacity:.7;text-shadow:0 0 4px #000, 0 0 2px #000;}
 /* Cruceta del encuadre, la misma que en el simulador: botones de 44 px (WCAG
    2.2 pide 24 mínimo; en táctil, 44) con 8 px de separación, en ámbar porque
    esto se mira de noche. El Este a la IZQUIERDA y el Oeste a la derecha: es el

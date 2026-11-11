@@ -1550,9 +1550,19 @@
     // Al desplazar NO se borra el lienzo: deslizarSim ya movió lo pintado y el
     // aviso de carga se aparta al borde para no tapar el campo.
     spin.classList.toggle('suave', !!conservar);
+    spin.classList.remove('provisional');
     if(!conservar){ ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900); }
     var D=diametroSim(d);
     var off=document.createElement('canvas'); off.width=off.height=D;
+    var pendiente=false;   // ¿ya avisó el campo denso? (alPendiente)
+    // El círculo del ocular, recortado del lienzo de trabajo: lo usan la
+    // provisional y la completa.
+    function volcar(){
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
+      ctx.save(); ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.clip();
+      ctx.drawImage(off, 450-D/2, 450-D/2);
+      ctx.restore();
+    }
     var opciones={
       ra:centro.ra, dec:centro.dec, arcmin:arcmin, apertura:d.apertura, aumentos:d.aumentos,
       optica:d.optica, arana:d.arana, sqm:sqmSim, pupilaSalida:d.pupilaSalida, pupilaOjo:7,
@@ -1560,7 +1570,22 @@
       // un diámetro ∝ afov, así que el radio en píxeles va con 1/afov.
       afov:d.afov, carbono:d.carbono, carbonoMag:d.carbonoMag, conGlow:true,
       // Campo denso pedido por partes (#505): que el observador sepa por qué tarda.
-      alPendiente:function(info){ if(pet===_simPeticion) spin.textContent=BitacoraGaiaRender.textoPendiente(info); }
+      alPendiente:function(info){
+        if(pet!==_simPeticion) return;
+        pendiente=true;
+        spin.textContent=BitacoraGaiaRender.textoPendiente(info);
+      },
+      /* Vista provisional del Avance de Gaia (#529, ADR 0033): las brillantes
+         se enseñan ya, con el aviso centrado pero transparente y tenue. «Usar»
+         sigue desactivado: lo que se sube es siempre la completa. Si el campo
+         denso ya avisó, su texto manda. Solo la vista de Gaia la tiene. */
+      alAvance:function(){
+        if(pet!==_simPeticion) return;
+        volcar();
+        spin.classList.remove('suave');
+        spin.classList.add('provisional');
+        if(!pendiente) spin.textContent='cargando estrellas…';
+      }
     };
     var pet=++_simPeticion;
     var promesa=(fuente==='dss')
@@ -1570,15 +1595,15 @@
       if(pet!==_simPeticion) return;   // el observador ya cambió de fuente
       // SkyView caído: el respaldo del ESO no pasa de 2° y hay que decirlo.
       if(fuente==='dss' && r.arcmin<arcmin) n.info.innerHTML+=' · placa del ESO recortada a '+fmtCampo(r.arcmin/60);
-      ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
-      ctx.save(); ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.clip();
-      ctx.drawImage(off, 450-D/2, 450-D/2);
-      ctx.restore();
+      volcar();
+      spin.classList.remove('provisional');
       spin.style.display='none'; usar.disabled=false;
       n.vista.setAttribute('aria-busy', 'false');
       _simUsar=function(){ usarImagenGenerada(canvas, el, d, fuente); };
     }).catch(function(){
       if(pet!==_simPeticion) return;
+      // La provisional ya no vale: el aviso de error vuelve a tapar el campo.
+      spin.classList.remove('provisional');
       spin.style.display='flex';
       n.vista.setAttribute('aria-busy', 'false');
       spin.textContent=(fuente==='dss')

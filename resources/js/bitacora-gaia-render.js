@@ -25,7 +25,9 @@
  *           sqm,                // brillo de cielo (mag/arcsec²)
  *           pupilaSalida, pupilaOjo,  // para el gris de fondo
  *           carbono,            // bool: realce rojo de la estrella central
- *           conGlow }           // bool (def. true): glow de estrellas no resueltas
+ *           conGlow,            // bool (def. true): glow de estrellas no resueltas
+ *           alPendiente,        // fn(info): campo denso pedido por partes
+ *           alAvance }          // fn(r): vista provisional ya en el lienzo (#529)
  *   BitacoraGaiaRender.renderPlaca(canvas, opts) → Promise<{fuente}>
  *       La MISMA vista, pero con la placa fotográfica del DSS (vía dss-proxy.php)
  *       en vez del catálogo: mismas opts, más { dssProxy, fuente, conGaia }.
@@ -3277,7 +3279,11 @@
       apertura: o.apertura, aumentos: o.aumentos, transmision: o.transmision,
       optica: o.optica, arana: o.arana, sqm: o.sqm,
       pupilaSalida: o.pupilaSalida, pupilaOjo: o.pupilaOjo, afov: o.afov,
-      conGlow: o.conGlow, carbono: o.carbono, carbonoMag: o.carbonoMag, alPendiente: o.alPendiente
+      conGlow: o.conGlow, carbono: o.carbono, carbonoMag: o.carbonoMag, alPendiente: o.alPendiente,
+      /* Vista provisional en el lienzo (#529): el modal la enseña mientras
+         llega el resto. La promesa sigue esperando la completa con su capa de
+         galaxias, que es la única que se sube. */
+      alAvance: o.alAvance
     }).then(function (r) {
       if (r.cancelada) return r;
       return r.galaxias.then(function (capa) {

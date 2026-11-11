@@ -520,6 +520,41 @@ casos.push(function () {
   });
 });
 
+/* 14 ─ #529: render() del formulario reenvía alAvance. La provisional queda en
+   el lienzo antes del proxy; la promesa resuelve la completa, y su imagen es la
+   MISMA, píxel a píxel, que sin alAvance (lo que se sube no cambia). */
+casos.push(function () {
+  console.log('14. render() con alAvance (#529)');
+  R.reiniciarAvance(MANIFIESTO);
+  var equipo = function (extra) {
+    var o = { ra: 345, dec: -15, arcmin: 30, apertura: 200, aumentos: 100, transmision: 0.9,
+              arana: true, sqm: 21.5, pupilaSalida: 2, pupilaOjo: 7, afov: 68, conGlow: true };
+    for (var k in extra) o[k] = extra[k];
+    return o;
+  };
+  var clave = (345).toFixed(3) + ',' + (-15).toFixed(3);
+  var M = nuevoMundo(345, -15, { retProxy: 30 });
+  var sin = { fillRect: 0, putImageData: 0 }, con = { fillRect: 0, putImageData: 0 };
+  var prov = [], pintadas = -1;
+  return R.render(lienzo(64, sin), equipo()).then(function (a) {
+    delete R.cacheGaia[clave];
+    M.eventos = [];
+    return R.render(lienzo(64, con), equipo({ alAvance: function (r) {
+      prov.push(r); M.eventos.push('avance'); pintadas = con.putImageData;
+    } })).then(function (b) {
+      ok(prov.length === 1 && prov[0].provisional === true, 'alAvance llega una vez, con la provisional');
+      ok(pintadas > 0, 'y la provisional ya está en el lienzo cuando se avisa');
+      ok(M.eventos[0] === 'avance', 'antes que la respuesta del proxy (' + M.eventos.join(' → ') + ')');
+      ok(mismoConjunto(b.estrellas, dentro(M, M.brillantes.concat(M.debiles))) && typeof b.aviso === 'string',
+         'la promesa resuelve la completa, con el aviso de la capa de galaxias');
+      ok(con.putImageData > pintadas, 'la completa repinta encima de la provisional');
+      ok(sin.ultima && con.ultima && sin.ultima.length === con.ultima.length &&
+         sin.ultima.every(function (x, i) { return x === con.ultima[i]; }),
+         'la imagen final es idéntica a la de render() sin alAvance, píxel a píxel');
+    });
+  });
+});
+
 (function corre(i) {
   if (i >= casos.length) {
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodo en orden');
