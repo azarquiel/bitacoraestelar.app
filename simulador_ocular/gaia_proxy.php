@@ -77,17 +77,20 @@ const GAIA_ASYNC_REINTENTAR = 15;                 // s: `reintentar_en` del 202;
 const GAIA_UWS_TIMEOUT      = 8;                  // s: crear el job, arrancarlo y preguntar su fase (se hace con el lock tomado)
 const GAIA_ASYNC_TTL        = 7200 + 600;         // s: el executionduration que anuncia GAVO, más margen; pasado, el .job caduca
 /* Pista de densidad (#517, ADR 0033 punto 2): el proxy suma el histograma de
-   profundidad de las celdas del Avance que tocan el cono y, si la previsión pasa
-   del umbral, va directo a la cadena asíncrona sin gastar ~41-150 s en una sonda
-   y una segura que en los densos fallan 33 de cada 34 veces. El umbral es el
-   techo entre 1,5: las celdas enteras cubren más área que el cono. Es solo una
-   pista: si se equivoca hacia «no denso», el flujo del ADR 0014 sigue igual. */
+   profundidad de las celdas del Avance que tocan el cono, cada una ponderada
+   por la fracción de su área que cae dentro, y, si la previsión pasa del
+   umbral, va directo a la cadena asíncrona sin gastar ~41-150 s en una sonda
+   y una segura que en los densos fallan 33 de cada 34 veces. Medido con el
+   Avance (G < 15, 18 conos de ≥ 2000 filas): la ponderada da ×0,86-1,04 de
+   las filas reales del cono (las celdas enteras daban ×1,3-18,7). El umbral
+   es el techo entre 1,1. Es solo una pista: si se equivoca, la salvaguarda de
+   la cadena (gaia_cadena_avance) hace que cueste tiempo, nunca estrellas. */
 const GAIA_AVANCE_DIR       = __DIR__ . '/avance';
 const GAIA_AVANCE_NIVEL     = 6;
 const GAIA_AVANCE_CABECERA  = 188;               // B: lo único que el proxy lee de cada celda
 const GAIA_AVANCE_TRAMOS    = 42;                // tramos de 0,5 mag, G 0-21
-const GAIA_PISTA_UMBRAL     = 130000;            // filas previstas: GAIA_TECHO_FILAS / 1,5
-const GAIA_PISTA_MARGEN     = 0.015;             // °: borde borroso de la celda (E4 del ADR 0012)
+const GAIA_PISTA_UMBRAL     = 180000;            // filas previstas: GAIA_TECHO_FILAS / 1,1
+const GAIA_PISTA_PUNTOS     = 4000;              // muestras del cono para las fracciones (error ~2 %)
 const GAIA_AVANCE_PASO_MIL  = 500;               // milésimas de mag por tramo
 const GAIA_CIELO_DEG2       = 41253.0;           // área de la esfera en grados²
 
@@ -576,41 +579,39 @@ function gaia_ang2pix_nest(int $nivel, float $ra, float $dec): int {
 }
 
 /**
- * Celdas de `$nivel` que tocan el cono ampliado en GAIA_PISTA_MARGEN. Rejilla
- * interior a lado/8 (una celda entera dentro del cono no cabe entre sus puntos)
- * más el anillo del borde a lado/256 (las que solo lo rozan) y el centro (cono
- * más pequeño que una celda). Los puntos se ponen con distancia y rumbo
- * esféricos, así que vale también sobre los polos.
+ * Fracción de cada celda de `$nivel` que cae dentro del cono: ipix →
+ * área(celda ∩ cono) / área(celda). Se reparten ~GAIA_PISTA_PUNTOS puntos en
+ * una rejilla uniforme del cono (distancia y rumbo esféricos desde el centro:
+ * vale sobre los polos), se cuentan por celda y se escala para que la suma de
+ * áreas sea exactamente la del cono. Una celda que solo roza el cono puede no
+ * recibir puntos: su área es despreciable para una previsión. Pura.
  */
-function gaia_celdas_cono(float $ra, float $dec, float $rad, int $nivel = GAIA_AVANCE_NIVEL): array {
-    $r = $rad + GAIA_PISTA_MARGEN;
-    $lado = sqrt(GAIA_CIELO_DEG2 / (12 * 4 ** $nivel));
+function gaia_fracciones_cono(float $ra, float $dec, float $rad, int $nivel = GAIA_AVANCE_NIVEL): array {
     $sd = sin(deg2rad($dec));
     $cd = cos(deg2rad($dec));
-    $celdas = [gaia_ang2pix_nest($nivel, $ra, $dec) => true];
-    $punto = static function (float $rho, float $theta) use ($nivel, $ra, $sd, $cd, &$celdas): void {
-        $p = deg2rad($rho);
-        $sdec = max(-1.0, min(1.0, $sd * cos($p) + $cd * sin($p) * cos($theta)));
-        $pra = $ra + rad2deg(atan2(sin($theta) * sin($p) * $cd, cos($p) - $sd * $sdec));
-        $celdas[gaia_ang2pix_nest($nivel, $pra, rad2deg(asin($sdec)))] = true;
-    };
-    $paso = $lado / 8;
-    $n = (int) ceil($r / $paso);
+    $paso = sqrt(M_PI * $rad * $rad / GAIA_PISTA_PUNTOS);
+    $n = (int) ceil($rad / $paso);
+    $cuenta = [];
+    $total = 0;
     for ($i = -$n; $i <= $n; $i++) {
         for ($j = -$n; $j <= $n; $j++) {
             $rho = hypot($i * $paso, $j * $paso);
-            if ($rho <= $r) {
-                $punto($rho, atan2($i * $paso, $j * $paso));
+            if ($rho > $rad) {
+                continue;
             }
+            $p = deg2rad($rho);
+            $theta = atan2($i * $paso, $j * $paso);
+            $sdec = max(-1.0, min(1.0, $sd * cos($p) + $cd * sin($p) * cos($theta)));
+            $pra = $ra + rad2deg(atan2(sin($theta) * sin($p) * $cd, cos($p) - $sd * $sdec));
+            $c = gaia_ang2pix_nest($nivel, $pra, rad2deg(asin($sdec)));
+            $cuenta[$c] = ($cuenta[$c] ?? 0) + 1;
+            $total++;
         }
     }
-    $m = max(64, (int) ceil(2 * M_PI * $r / ($lado / 256)));
-    for ($k = 0; $k < $m; $k++) {
-        $punto($r, 2 * M_PI * $k / $m);
-    }
-    $ids = array_keys($celdas);
-    sort($ids);
-    return $ids;
+    $area_cono = 2 * M_PI * (1 - cos(deg2rad($rad))) * (180 / M_PI) ** 2;
+    $escala = $area_cono / (GAIA_CIELO_DEG2 / (12 * 4 ** $nivel)) / $total;
+    ksort($cuenta);
+    return array_map(static fn(int $k): float => $k * $escala, $cuenta);
 }
 
 /**
@@ -641,6 +642,16 @@ function gaia_pista_tramos(array $hist, float $desde, float $mag): int {
     return $suma;
 }
 
+/** Previsión de filas en [desde, mag]: Σ tramos(celda) × fracción(celda),
+    con los histogramas y las fracciones indexados por ipix. Pura. */
+function gaia_pista_suma(array $hists, array $fracciones, float $desde, float $mag): int {
+    $suma = 0.0;
+    foreach ($fracciones as $ipix => $f) {
+        $suma += gaia_pista_tramos($hists[$ipix], $desde, $mag) * $f;
+    }
+    return (int) round($suma);
+}
+
 /** ¿La pista manda el campo directo a la cadena asíncrona? Sin previsión, no. */
 function gaia_pista_densa(?int $prevision): bool {
     return $prevision !== null && $prevision > GAIA_PISTA_UMBRAL;
@@ -657,7 +668,8 @@ function gaia_pista_log(?int $prevision, bool $usada, bool $fallida = false): ar
 
 /**
  * Pista de densidad: filas previstas del cono en [desde, mag] según los
- * histogramas de las celdas del Avance (#517). Lee SOLO los 188 B de cabecera
+ * histogramas de las celdas del Avance, ponderados por la fracción de cada
+ * celda dentro del cono (#517). Lee SOLO los 188 B de cabecera
  * de cada celda. null —sin pista, flujo de hoy— si falta el manifiesto, su
  * ruta no es la de una celda, o alguna celda falta o es ilegible: nunca una
  * suma parcial. No lanza: una pista rota no puede ser un 500.
@@ -669,8 +681,9 @@ function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, flo
         if (($m['nivel'] ?? null) !== GAIA_AVANCE_NIVEL || !preg_match('#^[a-z0-9_]+/\{ipix\}\.bin$#', $ruta)) {
             return null;
         }
-        $suma = 0;
-        foreach (gaia_celdas_cono($ra, $dec, $rad) as $ipix) {
+        $fracciones = gaia_fracciones_cono($ra, $dec, $rad);
+        $hists = [];
+        foreach (array_keys($fracciones) as $ipix) {
             $fh = @fopen($dir . '/' . str_replace('{ipix}', (string) $ipix, $ruta), 'rb');
             if ($fh === false) {
                 return null;
@@ -681,9 +694,9 @@ function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, flo
             if ($h === null) {
                 return null;
             }
-            $suma += gaia_pista_tramos($h, $desde, $mag);
+            $hists[$ipix] = $h;
         }
-        return $suma;
+        return gaia_pista_suma($hists, $fracciones, $desde, $mag);
     } catch (\Throwable) {
         return null;
     }

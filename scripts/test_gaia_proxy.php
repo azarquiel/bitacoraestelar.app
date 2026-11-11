@@ -237,8 +237,8 @@ eq(json_decode(gaia_cadena_avance(['paso' => 'datos', 'b' => null, 'n' => 1], '{
     ['data' => [[1, 2, 15.1, 0.5]]], 'sin corte → sin fondo');
 eq(array_map('gaia_cadena_paso_num', ['hist', 'espacial', 'datos']), [1, 2, 3], 'paso N de 3 para el aviso');
 
-/* Salvaguarda de la pista (#517): la pista sobreestima (celdas enteras, ×1,5-8,6
-   medido) y puede mandar a la cadena un campo que la sonda traía entero. Si el
+/* Salvaguarda de la pista (#517): la pista puede equivocarse (×0,86-1,04 medido
+   con la ponderación por área, más en conos pequeños) y puede mandar a la cadena un campo que la sonda traía entero. Si el
    histograma del cono cabe bajo el techo de la sonda, la cadena lo trae entero,
    sin corte ni velo: una pista errónea solo cuesta tiempo, nunca estrellas. */
 echo "cadena: un campo que la sonda traería entero no se corta (salvaguarda de la pista):\n";
@@ -414,12 +414,27 @@ foreach ([[0, 0, 18090], [359.999, 0, 18773], [0.0, 89.9, 4095], [123.4, -89.9, 
           [192.86, 27.13, 28149], [135, -60, 37680], [315.5, 10.2, 12480]] as [$pra, $pdec, $pix]) {
     eq(gaia_ang2pix_nest(6, (float) $pra, (float) $pdec), $pix, "ang2pix_nest(6, $pra, $pdec)");
 }
-// Las celdas del cono cubren las de gen_avance_gaia.celdas_del_cono (M7, 0,89°).
-$cm7 = gaia_celdas_cono(268.447, -34.841, 0.89);
-eq(array_values(array_diff([28708, 28709, 28710, 28711, 28716, 28717, 28720, 28722, 28728], $cm7)), [],
-    'M7 0,89°: superconjunto de las celdas del generador');
-ok(count($cm7) === count(array_unique($cm7)), 'celdas sin repetir');
-ok(count(gaia_celdas_cono(10.0, 89.95, 0.5)) >= 4, 'cono sobre el polo: no revienta y toca varias celdas');
+/* Fracción de cada celda dentro del cono (opción B de #517): la pista pondera
+   cada histograma por área(celda ∩ cono) / área(celda). */
+$area_celda = GAIA_CIELO_DEG2 / (12 * 4 ** 6);
+$area_cono = static fn(float $r): float => 2 * M_PI * (1 - cos(deg2rad($r))) * (180 / M_PI) ** 2;
+$fm7 = gaia_fracciones_cono(268.447, -34.841, 0.89);
+ok(abs(array_sum($fm7) * $area_celda / $area_cono(0.89) - 1) < 1e-9, 'Σ fracción × área de celda = área del cono');
+ok(min($fm7) > 0 && max($fm7) <= 1.0 + 0.05, 'fracciones en (0, 1] (± muestreo)');
+eq(array_values(array_diff([28709, 28710, 28711, 28716, 28717, 28722], array_keys($fm7))), [],
+    'M7 0,89°: están las celdas que el cono cubre de verdad (generador)');
+$fpeq = gaia_fracciones_cono(268.447, -34.841, 0.05);
+eq(array_keys($fpeq), [28711], 'cono pequeño dentro de una celda → solo esa');
+ok(abs($fpeq[28711] - $area_cono(0.05) / $area_celda) < 1e-9, '... con fracción = área del cono / área de la celda');
+$fgr = gaia_fracciones_cono(268.447, -34.841, 3.0);
+ok(max($fgr) > 0.95 && max($fgr) < 1.05, 'cono grande: las celdas interiores valen ≈ 1');
+$fpolo = gaia_fracciones_cono(10.0, 89.95, 0.5);
+ok(count($fpolo) >= 4 && abs(array_sum($fpolo) * $area_celda / $area_cono(0.5) - 1) < 1e-9, 'cono sobre el polo: varias celdas y el área cuadra');
+$t0 = microtime(true);
+gaia_fracciones_cono(268.447, -34.841, GAIA_MAX_RAD);
+$ms = (microtime(true) - $t0) * 1000;
+ok($ms < 50, sprintf('fracciones a %.1f° en %.1f ms (listón: < 50 ms)', GAIA_MAX_RAD, $ms));
+$cm7 = array_keys($fm7);
 
 // Cabecera de celda de mentira, mismo formato que bytes_celda del generador.
 $cab = static fn(int $ipix, array $hist, string $firma = 'BAVG', int $ver = 1, int $nivel = 6, int $n = 0): string =>
@@ -442,10 +457,17 @@ eq(gaia_pista_tramos($h, 0.0, 16.5), array_sum(range(1, 33)), 'G ≤ 16,5 → tr
 eq(gaia_pista_tramos($h, 15.0, 20.0), array_sum(range(31, 40)), 'con desde = 15 (#518) → tramos 30-39');
 eq(gaia_pista_tramos($h, 0.0, 25.0), array_sum($h), 'mag por encima del histograma → todos');
 
-eq(GAIA_PISTA_UMBRAL, 130000, 'umbral = techo 200 000 / 1,5 (redondeado)');
-ok(!gaia_pista_densa(130000), '130 000 → flujo de hoy (sonda)');
-ok(gaia_pista_densa(130001), '130 001 → directo a la cadena asíncrona');
+eq(GAIA_PISTA_UMBRAL, 180000, 'umbral = techo 200 000 / 1,1 (redondeado; ponderada medida ×0,86-1,04)');
+ok(!gaia_pista_densa(180000), '180 000 → flujo de hoy (sonda)');
+ok(gaia_pista_densa(180001), '180 001 → directo a la cadena asíncrona');
 ok(!gaia_pista_densa(null), 'sin previsión → flujo de hoy');
+
+// Suma ponderada, pura.
+$hu = array_fill(0, 42, 0);
+$hu[39] = 1000;
+eq(gaia_pista_suma([1 => $hu, 2 => $hu], [1 => 1.0, 2 => 0.25], 0.0, 20.0), 1250, 'Σ tramos × fracción');
+eq(gaia_pista_suma([1 => $hu], [1 => 0.5], 0.0, 19.5), 0, 'fuera de [desde, mag] no cuenta');
+eq(gaia_pista_suma([], [], 0.0, 20.0), 0, 'sin celdas → 0');
 
 // Avance de mentira en disco con las celdas del cono de M7.
 $av = sys_get_temp_dir() . '/test_gaia_avance_' . getmypid();
@@ -453,21 +475,20 @@ $av = sys_get_temp_dir() . '/test_gaia_avance_' . getmypid();
 $manif = static fn(string $ruta = 'n6/{ipix}.bin') =>
     file_put_contents($av . '/manifiesto.json', json_encode(['version' => 1, 'nivel' => 6, 'frontera' => 15.0, 'ruta' => $ruta]));
 $manif();
-$poner = static function (int $total) use ($av, $cm7, $cab): void {
-    foreach ($cm7 as $i => $c) {
+$poner = static function (int $porCelda) use ($av, $cm7, $cab): void {
+    foreach ($cm7 as $c) {
         $hh = array_fill(0, 42, 0);
-        $hh[39] = $i === 0 ? $total : 0;     // G 19,5-20: dentro a mag 20
+        $hh[39] = $porCelda;                 // G 19,5-20: dentro a mag 20
         $hh[41] = 999999;                    // G 20,5-21: fuera a mag 20
         // Filas basura detrás: el proxy no las lee.
         file_put_contents("$av/n6/$c.bin", $cab($c, $hh, 'BAVG', 1, 6, 3) . str_repeat("\xff", 36));
     }
 };
-$poner(130000);
-eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), 130000, 'previsión = suma de tramos del cono');
-ok(!gaia_pista_densa(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av)), '130 000 en disco → sonda');
-$poner(130001);
-ok(gaia_pista_densa(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av)), '130 001 en disco → asíncrona');
-eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 15.0, $av), 130001, 'desde = 15: G 19,5-20 es complemento');
+$esperada = static fn(int $porCelda): int => (int) round($porCelda * array_sum($fm7));
+$poner(100000);
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), $esperada(100000), 'previsión = Σ tramos × fracción del cono');
+ok($esperada(100000) < 100000 * count($cm7), '... menor que la suma de celdas enteras');
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 15.0, $av), $esperada(100000), 'desde = 15: G 19,5-20 es complemento');
 eq(gaia_pista_prevision(268.447, -34.841, 0.89, 19.5, 0.0, $av), 0, 'mag 19,5: G 19,5-20 queda fuera');
 // Celda ausente: sin pista, nunca una suma parcial.
 rename("$av/n6/{$cm7[3]}.bin", "$av/aparte.bin");
@@ -476,11 +497,11 @@ rename("$av/aparte.bin", "$av/n6/{$cm7[3]}.bin");
 // Cabecera corrupta.
 file_put_contents("$av/n6/{$cm7[2]}.bin", 'BAVG basura');
 eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'cabecera corrupta → sin pista');
-$poner(130001);
+$poner(100000);
 // Fichero de otra celda copiado en el sitio equivocado.
 copy("$av/n6/{$cm7[0]}.bin", "$av/n6/{$cm7[1]}.bin");
 eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'celda con el ipix de otra → sin pista');
-$poner(130001);
+$poner(100000);
 // Manifiesto: ausente, ilegible o con una ruta que no es la de una celda.
 foreach (['n6/../../x/{ipix}.bin', '/etc/{ipix}.bin', 'n6/fijo.bin'] as $mala) {
     $manif($mala);
@@ -494,7 +515,7 @@ eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), null, 'sin mani
 @mkdir($av . '/n6v2', 0775, true);
 foreach ($cm7 as $c) { rename("$av/n6/$c.bin", "$av/n6v2/$c.bin"); }
 $manif('n6v2/{ipix}.bin');
-eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), 130001, 'sigue la ruta del manifiesto (n6v2/)');
+eq(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av), $esperada(100000), 'sigue la ruta del manifiesto (n6v2/)');
 ok(gaia_pista_prevision(268.447, -34.841, 0.89, 20.0, 0.0, $av . '/no-existe') === null, 'sin directorio del Avance → sin pista');
 array_map('unlink', array_merge(glob("$av/n6/*") ?: [], glob("$av/n6v2/*") ?: [], glob("$av/*.json") ?: []));
 @rmdir("$av/n6"); @rmdir("$av/n6v2"); @rmdir($av);
