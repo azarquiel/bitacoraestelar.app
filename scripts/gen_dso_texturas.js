@@ -30,6 +30,7 @@
          node scripts/gen_dso_texturas.js --banco
          node scripts/gen_dso_texturas.js --banco --seco   # qué haría, sin red
          node scripts/gen_dso_texturas.js --solo "NGC 5194" --dir scripts/fixtures/dso
+         node scripts/gen_dso_texturas.js --solo "NGC 5194" --nativo  # píxel nativo + remuestreo propio (#370)
 */
 'use strict';
 
@@ -45,7 +46,13 @@ require(path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'nebulosas-datos.
 
 var PS1 = window.BitacoraPS1, P16 = window.BitacoraPNG16;
 var LIBPNG = require('./lib_png.js');
-var bajar = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender).bajar;
+/* `--nativo` (#370, opt-in): pedir a fitscut el píxel nativo y remuestrear con
+   lib_remuestreo_ps1.js, que conserva el flujo, en vez de `output_size`. Sin
+   el flag, todo sigue exactamente como antes: mismos píxeles, mismos hashes.
+   Coste y sesgo medidos en simulador_ocular/docs/validacion/ps1_nativo_370.md. */
+var LIBBAJAR = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender);
+var METODO = process.argv.indexOf('--nativo') > 0 ? 'nativo' : 'fitscut';
+var bajar = METODO === 'nativo' ? LIBBAJAR.bajarNativo : LIBBAJAR.bajar;
 /* Del banco salen dos cosas que ya estaban resueltas y no se rehacen aquí: la
    clave con la que se busca un nombre (las galaxias van 'NGC 5194' y las
    nebulosas 'NGC0040', y hay alternos) y el veredicto de si un objeto es apto.
@@ -198,10 +205,15 @@ function arg(n, pordefecto) {
    La decisión, con lo que se midió y lo que se exige a cambio, en el ADR 0026
    (docs/adr/0026-el-nombre-de-una-textura-sale-de-sus-parametros.md). De ella
    depende la cabecera inmutable de #209. */
-function version(gal, salida) {
+/* `metodo` (#370): 'nativo' entra en la semilla porque cambia los píxeles con
+   los mismos parámetros; 'fitscut' (el defecto) no entra, para que el banco ya
+   publicado conserve sus nombres. Sin `metodo`, 'fitscut': la función no lee
+   argv, así que un test que la llama da lo mismo lo lancen como lo lancen. */
+function version(gal, salida, metodo) {
   var semilla = [GENERADOR, SONDEO, PS1.cfg.banda, gal.nombre,
                  gal.ra.toFixed(5), gal.dec.toFixed(5),
-                 gal.ladoArcmin.toFixed(3), salida, 'asinh16'].join('|');
+                 gal.ladoArcmin.toFixed(3), salida, 'asinh16']
+    .concat(metodo === 'nativo' ? ['nativo'] : []).join('|');
   return crypto.createHash('sha256').update(semilla).digest('hex').slice(0, 8);
 }
 
@@ -551,7 +563,7 @@ function planDe(f, dir) {
   var escalera = mide ? PS1.ps1EscaleraLados(lado0) : [lado0];
   var id = PS1.ps1IdTextura(campo[0].nombre), resuelto = null;
   for (var k = 0; k < escalera.length && !resuelto; k++) {
-    var gk = conLado(escalera[k]), vk = version(gk, PS1.ps1SalidaParche(gk.ladoArcmin));
+    var gk = conLado(escalera[k]), vk = version(gk, PS1.ps1SalidaParche(gk.ladoArcmin), METODO);
     var y = yaResuelto(dir, id, vk, mide);
     if (y) resuelto = { y: y, v: vk, lado: escalera[k] };
   }
@@ -700,7 +712,7 @@ function medirLado(f, gal0, escalera, conLado) {
    tras su única descarga. `vecino` viene hecho cuando el lado se midió (es el
    de la escala del peldaño); si no, se audita aquí como siempre. */
 function publicar(f, gal, p, vecinoHecho, marco, id, dir) {
-  var salida = PS1.ps1SalidaParche(gal.ladoArcmin), v = version(gal, salida);
+  var salida = PS1.ps1SalidaParche(gal.ladoArcmin), v = version(gal, salida, METODO);
   var base = path.join(dir, id + '.' + v);
   return Promise.resolve(p).then(function (p) {
     var esperada = gal.ladoArcmin * 60 / salida;
@@ -801,6 +813,8 @@ function publicar(f, gal, p, vecinoHecho, marco, id, dir) {
         nombre: gal.nombre, version: v, generador: GENERADOR,
         ra: gal.ra, dec: gal.dec,
         fuente: { sondeo: SONDEO, banda: PS1.cfg.banda, descargado: new Date().toISOString().slice(0, 10) },
+        /* Solo si no es el de siempre, para no tocar los sidecars ya publicados. */
+        remuestreo: METODO === 'nativo' ? 'nativo+area' : undefined,
         ancho: p.ancho, alto: p.alto, ladoArcmin: gal.ladoArcmin, escalaAs: p.escalaAs,
         /* La WCS tal cual la deja parseFITS, no en tarjetas FITS: pasar de
            CRPIX/CDELT/PC a esto es una ley, y esa ley ya vive en parseFITS
@@ -889,7 +903,7 @@ function correrBanco(dir, seco) {
         return;
       }
       var salidaSeca = PS1.ps1SalidaParche(o.gal.ladoArcmin);
-      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, salidaSeca);
+      var id = PS1.ps1IdTextura(o.nombre), v = version(o.gal, salidaSeca, METODO);
       if (seco) {
         /* La MISMA decisión que generar (planDe), no una copia: antes el seco
            llamaba a yaResuelto sin la escalera ni `exigeMarco`, y daba por
@@ -907,7 +921,7 @@ function correrBanco(dir, seco) {
            que la lista de lo que la ley cambia no se infle con eso. */
         var soloPng = null;
         plan.escalera.forEach(function (l) {
-          var vl = version(plan.conLado(l), PS1.ps1SalidaParche(l));
+          var vl = version(plan.conLado(l), PS1.ps1SalidaParche(l), METODO);
           [dir, FIXTURES].forEach(function (d) {
             var p = path.join(d, id + '.' + vl + '.json');
             if (soloPng || !fs.existsSync(p)) return;
@@ -1207,7 +1221,7 @@ var nombre = arg('--solo', '');
 var dir = path.resolve(RAIZ, arg('--dir', path.join('simulador_ocular', 'dso')));
 var enBanco = process.argv.indexOf('--banco') > 0, seco = process.argv.indexOf('--seco') > 0;
 if (!nombre && !enBanco) {
-  console.error('uso: node scripts/gen_dso_texturas.js --solo "NGC 5194" | --banco [--seco] [--dir <ruta>]');
+  console.error('uso: node scripts/gen_dso_texturas.js --solo "NGC 5194" | --banco [--seco] [--dir <ruta>] [--nativo]');
   process.exit(2);
 }
 

@@ -177,24 +177,12 @@ if (arg.volumen != null) { volumen(b); process.exit(0); }
 
 var lista = b.objetos.filter(function (o) { return o.gal; });
 
-/* Muestra aleatoria del catálogo apto, para las cifras de volumen: el banco está
-   elegido por modo de fallo y sus lados no representan la distribución. Semilla
-   fija y escrita (LCG de Numerical Recipes) para que la muestra sea la misma en
-   cualquier ejecución; el ADR 0012 bis pide que la selección no dependa de haber
-   visto los resultados. */
-var SEMILLA = 20260904;
+/* Muestra aleatoria del catálogo apto, para las cifras de volumen (semilla fija;
+   el sorteo vive en lib_muestra_dso.js, compartido con #370). */
+var MUESTRA = require('./lib_muestra_dso.js');
 if (arg.muestra) {
-  var enBanco = {};
-  lista.forEach(function (o) { enBanco[B.clave(o.nombre)] = 1; });
-  var pool = b.catalogo.filter(function (fila) { return B.apta(fila) && !enBanco[B.clave(fila[0])]; });
-  var s = SEMILLA, sacadas = [];
-  for (var t = 0; t < +arg.muestra && pool.length; t++) {
-    s = (1664525 * s + 1013904223) % 4294967296;
-    var fila = pool.splice(s % pool.length, 1)[0];
-    sacadas.push({ nombre: fila[0], fila: fila, motivo: 'muestra aleatoria (semilla ' + SEMILLA + ')', gal: B.gal(fila) });
-  }
-  lista = sacadas.filter(function (o) { return o.gal; });
-  console.log('muestra aleatoria de ' + lista.length + ' filas aptas, semilla ' + SEMILLA);
+  lista = MUESTRA(B, b, +arg.muestra);
+  console.log('muestra aleatoria de ' + lista.length + ' filas aptas, semilla ' + MUESTRA.SEMILLA);
 }
 if (arg.solo) lista = lista.filter(function (o) { return B.clave(o.nombre) === B.clave(arg.solo); });
 if (arg.n) lista = lista.slice(0, +arg.n);
