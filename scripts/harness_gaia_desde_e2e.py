@@ -5,7 +5,7 @@ el directorio que sirve `php -S`: gaia_proxy.php, bitacora-cache-lru.php y
 `avance/` (enlace al Avance real). La caché se crea en SRVDIR/cache_gaia.
 Uso: python3 -I scripts/harness_gaia_desde_e2e.py BASE SRVDIR ra dec rad mag
      p. ej. http://127.0.0.1:8518 /tmp/srv 305 40 1.2 15.5"""
-import json, math, os, struct, subprocess, sys, urllib.error, urllib.request
+import json, math, os, struct, subprocess, sys, time, urllib.error, urllib.request
 
 BASE, SRV = sys.argv[1], sys.argv[2]
 ra, dec, rad, mag = map(float, sys.argv[3:7])
@@ -37,6 +37,20 @@ def log_lines():
         return []
 
 
+def esperar(q):
+    """Como el cliente: con caché fría un campo puede ir a la cadena asíncrona
+    (202 + reintentar_en, ADR 0014); se vuelve a preguntar hasta que no sea 202."""
+    t0 = time.time()
+    while True:
+        s, h, b = get(q)
+        if s != 202:
+            return s, h, b
+        espera = json.loads(b).get('reintentar_en', 15)
+        quien = 'complemento' if 'desde=' in q else 'completo'
+        print('  202 pendiente (%s), %.0f s; reintento en %d s' % (quien, time.time() - t0, espera), flush=True)
+        time.sleep(espera)
+
+
 cono = 'ra=%s&dec=%s&rad=%s&mag=%s' % (ra, dec, rad, mag)
 
 print('AC7: desde inválido → 400 sin TAP ni log')
@@ -49,8 +63,8 @@ ok(s == 400, 'desde[]=15 → %d' % s)
 ok(len(log_lines()) == n0, 'ninguna línea de log (no se consultó nada)')
 
 print('Peticiones completo y complemento')
-s0, h0, b0 = get(cono)
-s1, h1, b1 = get(cono + '&desde=15')
+s0, h0, b0 = esperar(cono)
+s1, h1, b1 = esperar(cono + "&desde=15")
 ok(s0 == 200 and s1 == 200, 'status %d / %d' % (s0, s1))
 full, comp = json.loads(b0), json.loads(b1)
 print('  filas completo %d · complemento %d · fondo %s/%s' % (len(full['data']), len(comp['data']), 'fondo' in full, 'fondo' in comp))
