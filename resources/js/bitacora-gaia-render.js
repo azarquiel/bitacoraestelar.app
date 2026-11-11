@@ -3247,7 +3247,10 @@
          cada celda sobre la media se pinta como capa difusa; la media queda en
          el cielo (cielo.veloSB). Mutuamente excluyente con la niebla (un campo
          denso no tiene estrellas en la banda de niebla). */
-      if (velo != null && estrellas.fondo && estrellas.fondo.espacial) {
+      /* Con cúmulo no: su luz ya la pinta pintarCumulo y aquí salía dos veces, en
+         bloques de celda y con un arco en el borde de r_t (M22 a 52×, medido en
+         el navegador: apagarlo entero es lo único que lo deja limpio). */
+      if (!cum && velo != null && estrellas.fondo && estrellas.fondo.espacial) {
         var rVelo = veloEspacial(difuso, estrellas.fondo.espacial, {
           ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE, veloSB: velo
         });
