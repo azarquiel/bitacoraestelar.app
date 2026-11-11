@@ -114,8 +114,11 @@ limpiar_dir($dir);
 echo "cache_lru_limpieza no toca el Avance de Gaia (#516):\n";
 $proxy = file_get_contents(__DIR__ . '/../simulador_ocular/gaia_proxy.php');
 ok(preg_match("#const GAIA_CACHE_DIR\s*=\s*__DIR__\s*\.\s*'/cache_gaia';#", $proxy) === 1, 'la caché del proxy es cache_gaia/');
-ok(strpos($proxy, "'patron' => '*.json.gz'") !== false && strpos($proxy, '/avance') === false,
-   'el proxy limpia *.json.gz y su caché no apunta al Avance');
+/* Desde #517 el proxy LEE el Avance (pista de densidad), pero la limpieza
+   sigue atada a GAIA_CACHE_DIR: ninguna configuración de caché lo nombra. */
+ok(strpos($proxy, "'dir' => GAIA_CACHE_DIR, 'patron' => '*.json.gz'") !== false
+   && preg_match("#const GAIA_AVANCE_DIR\s*=\s*__DIR__\s*\.\s*'/avance';#", $proxy) === 1,
+   'el proxy limpia *.json.gz de cache_gaia/ y el Avance vive aparte');
 $raiz = sys_get_temp_dir() . '/lru_avance_' . getmypid();
 @mkdir("$raiz/cache_gaia", 0775, true);
 @mkdir("$raiz/avance/n6", 0775, true);

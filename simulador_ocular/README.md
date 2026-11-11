@@ -165,6 +165,24 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   indicador cuenta los segundos y lo explica a partir de los 8. Después queda
   en la caché del proxy (inmutable: Gaia DR3 es un catálogo fijo) y esa
   región es instantánea para todos, para siempre.
+  **Pista de densidad** (#517, ADR 0033): antes de la sonda, el proxy suma el
+  histograma de profundidad (solo la cabecera de 188 B) de las celdas del
+  Avance que tocan el cono, cada una **ponderada por la fracción de su área que
+  cae dentro** (~4000 puntos de muestreo: ~5 ms el muestreo; la previsión
+  entera, con la lectura de cabeceras, ~5-10 ms y ~60 ms a 4,5°, 98 celdas). Medido con el
+  Avance, la previsión da ×0,86-1,04 de las filas reales del cono (las celdas
+  enteras daban ×1,3-18,7); se queda corta en cúmulos compactos con conos
+  pequeños, lo que solo lleva a la sonda. Si pasa de `GAIA_PISTA_UMBRAL`
+  (180 000 = techo / 1,1), va directo a la cadena asíncrona y el 202 sale en un
+  segundo, sin sonda ni segura. Sin manifiesto, con una celda ausente o con una
+  cabecera ilegible no hay pista y el flujo es el de siempre.
+  La cadena lleva además una **salvaguarda**: si su histograma cuenta menos
+  filas que el techo de la sonda (200 000), el paso de datos trae el campo
+  entero, sin corte ni velo, igual que la sonda. Una pista errónea solo cuesta
+  tiempo, nunca estrellas. El log
+  apunta `prevision`, `pista` y `prevision_cono` (el cono entero, G ≤ 21: lo que
+  GAVO recorre, dato para recalibrar en #526) en cada línea; `?stats=1` cuenta en `pista` las
+  peticiones que la usaron, y `pista_fallida` marca las que la pista mandó a la cadena pero no se pudo lanzar (siguieron por la sonda).
 - **Tamaño** = imagen estelar física (disco de Airy + seeing, ver más abajo), en
   cuadratura con un **suelo de visibilidad** en píxeles (`radioSuelo`, con un
   término extra `radioSueloMag · flujoRelativo^radioSueloExp` y `radioSueloMax`
@@ -1144,8 +1162,9 @@ del golden): `docs/validacion/dso_texturas_fase1.md`.
 
 Gaia DR3 con G < 15 (~36,9 M de estrellas, ~445 MB), generado *offline* y
 servido como ficheros estáticos, un fichero por celda HEALPix nested de nivel 6
-(ADR 0033, #516). Lo usarán el proxy (pista de densidad) y el cliente (vista
-provisional + mitad brillante del conjunto completo): #517 y #519.
+(ADR 0033, #516). Lo usan el proxy (pista de densidad, #517: lee solo las
+cabeceras, siguiendo la `ruta` del manifiesto) y el cliente (vista provisional
++ mitad brillante del conjunto completo, #519).
 
 En `/wp-content/uploads/bitacora/avance/`:
 

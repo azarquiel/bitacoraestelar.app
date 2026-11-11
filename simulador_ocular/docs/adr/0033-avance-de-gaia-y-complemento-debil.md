@@ -22,7 +22,9 @@ Medido en GAVO (`gaia.dr3lite`, 2026-11-08), Gaia DR3 hasta G < 15 son 36,9 M de
    (recuentos por tramos de 0,5 mag hasta G 21) y después las filas.
 2. **Pista de densidad.** El proxy suma los histogramas de las celdas que tocan el cono.
    Si las filas previstas del complemento pasan de 130 000 (el techo de 200 000 entre 1,5,
-   porque las celdas cubren más área que el cono), va directo a la cadena asíncrona. Una
+   porque las celdas cubren más área que el cono), va directo a la cadena asíncrona.
+   _Revisado en #517: cada celda se pondera por su fracción dentro del cono y el umbral
+   es 180 000 (ver Consecuencias)._ Una
    pista equivocada solo cuesta tiempo: si dice «no denso» y la sonda toca techo, el flujo
    del ADR 0014 sigue igual.
 3. **Complemento débil.** Con `desde=15`, el proxy solo pide 15 ≤ G ≤ `mag`. El cliente une
@@ -68,3 +70,16 @@ Avance.
 - El estudio de celdas del ADR 0012 (NO PASA) no se contradice: falló la adquisición
   **en frío y en tiempo de petición**. El Avance no adquiere nada en tiempo de petición,
   y el mismo informe E4 midió las celdas ya en caché en 17-203 ms.
+- (#517) Con el Avance ya generado, sumar celdas **enteras** sobreestimaba entre ×1,3 y
+  ×18,7 frente al cono real (no ×1,5), y la cadena asíncrona corta en el `TOP 40000`: un
+  falso positivo convertía en velo estrellas que la sonda habría traído. Dos cambios:
+  - **Salvaguarda en la cadena:** si su histograma queda por debajo del techo de la
+    sonda, el paso de datos trae el campo entero (`TOP`/`MAXREC` = techo). La garantía
+    «solo cuesta tiempo, nunca estrellas» ya no depende de lo bien que estime la pista.
+  - **Previsión ponderada por área:** cada celda cuenta por la fracción de su área
+    dentro del cono. Medido sobre G < 15 (18 conos de ≥ 2000 filas): ×0,86-1,04. Con eso
+    el umbral del punto 2 pasa de techo / 1,5 (130 000) a techo / 1,1 (**180 000**). Se
+    queda corta en cúmulos compactos con conos pequeños (M13 y M42 a 0,2°: ×0,2-0,25),
+    lo que solo los manda a la sonda. Los tramos de G ≥ 15 no se pueden validar en local
+    (no hay filas); se supone que G < 15 es el caso peor, porque las débiles se reparten
+    más uniformes que las brillantes de un cúmulo.

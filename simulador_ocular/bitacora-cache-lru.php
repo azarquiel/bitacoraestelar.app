@@ -152,8 +152,10 @@ function cache_lru_saturado(): void {
  * `etapa` solo tiene sentido en un fallo (en Gaia `sonda` | `async`).
  * `traza` (#429): un intento por origen, [etapa, proveedor, http, ms]; solo
  * cuando la petición fue al origen (null en un acierto).
+ * `extra`: campos propios de un proxy, detrás de los comunes (Gaia: la pista de
+ * densidad, #517). Sin extra, la línea es la de siempre.
  */
-function cache_lru_log_linea(float $t, string $clave, string $estado, ?string $etapa, int $bytes, float $ms, ?array $traza = null): string {
+function cache_lru_log_linea(float $t, string $clave, string $estado, ?string $etapa, int $bytes, float $ms, ?array $traza = null, array $extra = []): string {
     return json_encode([
         't'      => round($t, 3),
         'clave'  => $clave,
@@ -162,7 +164,7 @@ function cache_lru_log_linea(float $t, string $clave, string $estado, ?string $e
         'bytes'  => $bytes,
         'ms'     => round($ms, 1),
         'traza'  => $traza,
-    ], JSON_UNESCAPED_SLASHES) . "\n";
+    ] + $extra, JSON_UNESCAPED_SLASHES) . "\n";
 }
 
 /**
@@ -190,7 +192,7 @@ function cache_lru_log_registrar(string $archivo, string $clave, string $estado,
     $ahora = microtime(true);
     $ms = ($ahora - (float) ($_SERVER['REQUEST_TIME_FLOAT'] ?? $ahora)) * 1000;
     cache_lru_log_escribir($archivo, cache_lru_log_linea($ahora, $clave, $estado, $etapa, $bytes, $ms,
-        $GLOBALS['cache_lru_traza'] ?? null), CACHE_LRU_LOG_MAX_BYTES);
+        $GLOBALS['cache_lru_traza'] ?? null, $GLOBALS['cache_lru_extra'] ?? []), CACHE_LRU_LOG_MAX_BYTES);
 }
 
 /** Anota un intento contra el origen en la traza de la petición en curso (#429). */
