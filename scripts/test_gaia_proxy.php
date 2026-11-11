@@ -245,11 +245,11 @@ echo "cadena: un campo que la sonda traería entero no se corta (salvaguarda de 
 $hbajo = [];
 for ($g = 600; $g < 2000; $g++) { $hbajo[] = [$g, 76, 1e-7, 1e-14]; }   // 106 400 filas
 $a = gaia_cadena_avance(['paso' => 'hist'], json_encode(['data' => $hbajo]), 0.89, 20.0);
-$clave_o = static fn(array $x, string $k) => array_key_exists($k, $x) ? $x[$k] : 'x';
-eq([$a['lanzar'] ?? null, $clave_o($a['estado'] ?? [], 'b'), $a['estado']['n'] ?? null, $clave_o($a['estado'] ?? [], 'fondo')],
+$valor_o_x = static fn(array $x, string $k) => array_key_exists($k, $x) ? $x[$k] : 'x';
+eq([$a['lanzar'] ?? null, $valor_o_x($a['estado'] ?? [], 'b'), $a['estado']['n'] ?? null, $valor_o_x($a['estado'] ?? [], 'fondo')],
     ['datos', null, 106400, null], '106 400 filas (< techo) → datos sin corte, sin espacial ni fondo');
 $hjusto = [[1500, GAIA_TECHO_FILAS - 1, 1.0, 1.0]];
-eq($clave_o(gaia_cadena_avance(['paso' => 'hist'], json_encode(['data' => $hjusto]), 0.89, 20.0)['estado'] ?? [], 'b'), null,
+eq($valor_o_x(gaia_cadena_avance(['paso' => 'hist'], json_encode(['data' => $hjusto]), 0.89, 20.0)['estado'] ?? [], 'b'), null,
     'techo − 1 → entero (lo mismo que la sonda: solo tocar el techo es truncado)');
 $htecho = [[1500, 30000, 1.0, 1.0], [1600, GAIA_TECHO_FILAS - 30000, 1.0, 1.0]];
 $a = gaia_cadena_avance(['paso' => 'hist'], json_encode(['data' => $htecho]), 0.89, 20.0);
@@ -430,6 +430,17 @@ $fgr = gaia_fracciones_cono(268.447, -34.841, 3.0);
 ok(max($fgr) > 0.95 && max($fgr) < 1.05, 'cono grande: las celdas interiores valen ≈ 1');
 $fpolo = gaia_fracciones_cono(10.0, 89.95, 0.5);
 ok(count($fpolo) >= 4 && abs(array_sum($fpolo) * $area_celda / $area_cono(0.5) - 1) < 1e-9, 'cono sobre el polo: varias celdas y el área cuadra');
+/* Centro justo en el polo (dec ±90 cuantizada es válida): cos(dec) ≈ 6e-17 y el
+   rumbo esférico colapsaba la RA de todos los puntos. Las 4 celdas que tocan el
+   polo norte (4095, 8191, 12287, 16383) valen lo mismo. */
+foreach ([[90.0, [4095, 8191, 12287, 16383]], [-90.0, null]] as [$pdec, $esperadas]) {
+    $fp = gaia_fracciones_cono(10.0, $pdec, 0.5);
+    if ($esperadas !== null) {
+        eq(array_keys($fp), $esperadas, "dec $pdec: las 4 celdas del polo");
+    }
+    ok(max($fp) <= 1.0 + 0.05 && max($fp) / min($fp) < 1.1, "dec $pdec: fracciones simétricas y ≤ 1");
+}
+ok(max(gaia_fracciones_cono(10.0, -90.0, 1.0)) <= 1.05, 'dec −90, rad 1°: ninguna fracción > 1');
 $t0 = microtime(true);
 gaia_fracciones_cono(268.447, -34.841, GAIA_MAX_RAD);
 $ms = (microtime(true) - $t0) * 1000;

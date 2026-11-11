@@ -168,7 +168,8 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
   **Pista de densidad** (#517, ADR 0033): antes de la sonda, el proxy suma el
   histograma de profundidad (solo la cabecera de 188 B) de las celdas del
   Avance que tocan el cono, cada una **ponderada por la fracción de su área que
-  cae dentro** (~4000 puntos de muestreo, ~5 ms; ~60 ms a 4,5°). Medido con el
+  cae dentro** (~4000 puntos de muestreo: ~5 ms el muestreo; la previsión
+  entera, con la lectura de cabeceras, ~5-10 ms y ~60 ms a 4,5°, 98 celdas). Medido con el
   Avance, la previsión da ×0,86-1,04 de las filas reales del cono (las celdas
   enteras daban ×1,3-18,7); se queda corta en cúmulos compactos con conos
   pequeños, lo que solo lleva a la sonda. Si pasa de `GAIA_PISTA_UMBRAL`

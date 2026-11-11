@@ -409,8 +409,9 @@ function gaia_cadena_avance(array $e, ?string $res, float $rad, float $mag): arr
         if (!is_array($j) || !isset($j['data']) || !is_array($j['data'])) {
             return ['error' => true];
         }
-        /* Salvaguarda de la pista (#517): la pista sobreestima y puede traer
-           aquí un campo que la sonda habría servido entero. Si el cono cabe
+        /* Salvaguarda de la pista (#517): la pista es una estimación (×0,86-1,04
+           medido, más error en conos pequeños) y puede traer aquí un campo que
+           la sonda habría servido entero. Si el cono cabe
            bajo el techo de la sonda, se trae entero, como haría ella: una pista
            errónea solo cuesta tiempo, nunca estrellas (ADR 0033). */
         $total = array_sum(array_map(static fn($f) => (int) ($f[1] ?? 0), $j['data']));
@@ -581,14 +582,17 @@ function gaia_ang2pix_nest(int $nivel, float $ra, float $dec): int {
 /**
  * Fracción de cada celda de `$nivel` que cae dentro del cono: ipix →
  * área(celda ∩ cono) / área(celda). Se reparten ~GAIA_PISTA_PUNTOS puntos en
- * una rejilla uniforme del cono (distancia y rumbo esféricos desde el centro:
- * vale sobre los polos), se cuentan por celda y se escala para que la suma de
+ * una rejilla uniforme del cono (distancia y rumbo desde el centro, girados
+ * como vectores 3D sobre la base local norte/este: sin singularidad en el
+ * polo, donde el rumbo esférico colapsaba la RA), se cuentan por celda y se escala para que la suma de
  * áreas sea exactamente la del cono. Una celda que solo roza el cono puede no
  * recibir puntos: su área es despreciable para una previsión. Pura.
  */
 function gaia_fracciones_cono(float $ra, float $dec, float $rad, int $nivel = GAIA_AVANCE_NIVEL): array {
-    $sd = sin(deg2rad($dec));
-    $cd = cos(deg2rad($dec));
+    [$sa, $ca, $sd, $cd] = [sin(deg2rad($ra)), cos(deg2rad($ra)), sin(deg2rad($dec)), cos(deg2rad($dec))];
+    $centro = [$cd * $ca, $cd * $sa, $sd];
+    $norte = [-$sd * $ca, -$sd * $sa, $cd];
+    $este = [-$sa, $ca, 0.0];
     $paso = sqrt(M_PI * $rad * $rad / GAIA_PISTA_PUNTOS);
     $n = (int) ceil($rad / $paso);
     $cuenta = [];
@@ -601,9 +605,12 @@ function gaia_fracciones_cono(float $ra, float $dec, float $rad, int $nivel = GA
             }
             $p = deg2rad($rho);
             $theta = atan2($i * $paso, $j * $paso);
-            $sdec = max(-1.0, min(1.0, $sd * cos($p) + $cd * sin($p) * cos($theta)));
-            $pra = $ra + rad2deg(atan2(sin($theta) * sin($p) * $cd, cos($p) - $sd * $sdec));
-            $c = gaia_ang2pix_nest($nivel, $pra, rad2deg(asin($sdec)));
+            [$cp, $sn, $se] = [cos($p), sin($p) * cos($theta), sin($p) * sin($theta)];
+            $v = [];
+            for ($k = 0; $k < 3; $k++) {
+                $v[$k] = $cp * $centro[$k] + $sn * $norte[$k] + $se * $este[$k];
+            }
+            $c = gaia_ang2pix_nest($nivel, rad2deg(atan2($v[1], $v[0])), rad2deg(asin(max(-1.0, min(1.0, $v[2])))));
             $cuenta[$c] = ($cuenta[$c] ?? 0) + 1;
             $total++;
         }
