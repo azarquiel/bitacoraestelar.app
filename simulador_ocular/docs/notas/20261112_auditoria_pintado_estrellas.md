@@ -9,7 +9,8 @@ tanto el aumento `M` y la pupila de salida `d`?
 **Incorrecto frente al modelo físico lineal de referencia.** Con `d ≤ P_eye`, el flujo integrado
 de la estrella crece ×5–10 al subir aumentos (debería ser constante) y el tamaño aparente de la
 PSF apenas cambia (debería crecer ∝ M). Fondo de cielo, campo real y escala de píxel son
-correctos. Hay además un bug confirmado: el salto del −50 % en `factorDilucion`.
+correctos. Había además un bug confirmado, el salto del −50 % en `factorDilucion`, ya arreglado (ver
+«Bugs, por prioridad»).
 
 Causa raíz: el brillo de la estrella se pinta como **margen de detección sobre `mlim`**, no como
 flujo, y el tamaño lo fija un **suelo de visibilidad en píxeles**, no la PSF multiplicada por `M`.
@@ -104,9 +105,11 @@ Flujo lineal ΣF/Fref (antes de `pintarFot`), cociente entre 2,5 mm y 40 mm: ×5
 
 ## Bugs, por prioridad
 
-1. **Confirmado: salto del −50 % en `factorDilucion`.** Al cruzar `Rtot = suelo·√2` el factor
-   pasa de 1 a 0,5 en un paso. Corrección de una línea: `2*suelo*suelo/(Rtot*Rtot)`. Afecta a
-   equipos pequeños con mucho aumento (con 70 mm, a partir de ~340×).
+1. **Confirmado y ARREGLADO: salto del −50 % en `factorDilucion`.** Al cruzar `Rtot = suelo·√2`
+   el factor pasaba de 1 a 0,5 en un paso. Ahora devuelve `2*suelo*suelo/(Rtot*Rtot)`: vale 1 en
+   el umbral y desde ahí congela `alfa·Rtot²`. Medido con el arnés (70 mm, g 10): ΣV se queda en
+   1030 entre 333× y 378×, donde antes caía a 515. Guardián: sección 10 de
+   `scripts/test_estrella_fisica.js`.
 2. **Decisión del proyecto que falla la referencia: el flujo estelar crece con M** (ADR 0018/0019).
    No se propone volver a la rama de flujo (`CFG.alfaPorFlujo`), probada y descartada en el
    ADR 0018. Lo pendiente es separar «flujo» (constante con d ≤ P_eye) de «margen de detección».
