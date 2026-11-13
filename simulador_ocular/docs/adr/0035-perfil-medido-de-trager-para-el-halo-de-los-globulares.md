@@ -1,6 +1,6 @@
 # La forma radial de los globulares sale del perfil medido de Trager 1995
 
-**Propuesto** el 2026-11-13 al cerrar el spike #537. Falta que el usuario lo acepte. Hasta entonces producción sigue con King 1962 y los parámetros de Harris.
+**Aceptado** el 2026-11-13 por el usuario, al cerrar el spike #537 (PR #554). Propuesto ese mismo día. Producción sigue con King 1962 hasta que se implemente.
 
 Medidas: `simulador_ocular/docs/notas/perfil-king-contra-trager-globulares.md`. Arnés: `scripts/spike_537_perfil_globulares.js`.
 

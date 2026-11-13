@@ -1,6 +1,6 @@
 # El perfil King 1962 de Harris contra Trager 1995 en los globulares del seed
 
-Fecha: 2026-11-13. Spike #537. Estado: medida terminada, sin cambios en producción. La decisión propuesta está en el ADR 0035.
+Fecha: 2026-11-13. Spike #537. Estado: medida terminada, sin cambios en producción. La decisión está en el ADR 0035, aceptado el 2026-11-13.
 
 Nota de partida: `brillo-halo-globulares-justificacion.md` §3 (solo M13 y M15).
 
