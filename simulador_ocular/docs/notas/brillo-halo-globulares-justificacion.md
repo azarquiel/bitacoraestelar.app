@@ -1,8 +1,12 @@
 # Brillo del halo de los globulares: en qué se apoya y si está justificado
 
 Fecha: 2026-11-11. Estado: investigación y medida, sin cambios en producción.
-Destino previsto: `simulador_ocular/docs/notas/brillo-halo-globulares-justificacion.md`
-(la escritura en el checkout compartido estaba bloqueada).
+
+> **Superada en parte (2026-11-13).** Las medidas son de antes de #535 (PR #538).
+> Desde entonces el cúmulo escribe t = 1 en `difusoMask` y su halo se pinta en
+> lineal, sin gamma: lo que esta nota dice de `GAMMA_PERCEPTUAL` con t = s_halo
+> (§0.2, §2, §6) ya no describe a los globulares en producción. La parte del
+> perfil (§3) la amplía `perfil-king-contra-trager-globulares.md` (#537).
 
 **Pregunta del usuario.** ¿En qué nos basamos para fijar el brillo del halo de los
 cúmulos globulares? Parece demasiado brillante. ¿Es una impresión o lo dicen los datos?
@@ -330,29 +334,16 @@ el umbral, así que **apaga** el halo, no lo aclara. **[sin medir]**
 
 ## 7. Reproducir
 
-Los arneses son efímeros, en `/Users/isra/.claude/jobs/faa6acac/tmp/arnes/` y fuera
-del repo. Usan los mismos `require` que `scripts/matriz_m13.js`:
-
-```
-node halo.js      <repo>   # tablas §2.1-2.3 (pintarCumulo + valorDeFlujo/realzarPerceptual)
-node trager.js    <repo>   # King(Harris) contra Trager por tramos (M13, M15)
-node ablacion.js  <repo>   # §2.4 y §3 punto a punto + V integrada de muVf
-node crumey.js    <repo>   # §2.3 (C de pantalla) y §4 (cruce encerrado)
-```
-
-El nivel de cada radio se forma igual que en `pintarFot:656-696`:
+Los arneses de esta nota fueron efímeros y no están en el repo. Las tablas de §2
+se rehacen llamando a `pintarCumulo` con los `require` de `scripts/matriz_m13.js`
+y formando el nivel de cada radio igual que `pintarFot:656-696` (antes de #535):
 
 ```
 DN = valorDeFlujo(realzarPerceptual(I·s_halo, Fcielo, rango, s_halo), FcieloPintado, rango)
 ```
 
-Las cuatro corridas tardan unos 2 min en total, sin paralelizar.
-
-Entrada pendiente para `simulador_ocular/docs/notas/README.md`:
-
-```
-12. `brillo-halo-globulares-justificacion.md` (2026-11-11) — de dónde sale el brillo del halo de los globulares: el exterior lo inflan la gamma perceptual con t = s_halo y la rampa que arranca 1 mag bajo el umbral (ninguna con fuente), más un King 1962 que va 0,9-1,1 mag por encima de Trager entre 5′ y 17′
-```
+El residuo King − Trager de §3, para M13, M15 y el resto del seed, lo reproduce
+`node scripts/spike_537_perfil_globulares.js`.
 
 ---
 

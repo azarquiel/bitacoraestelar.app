@@ -34,8 +34,13 @@ function ficha(id) {
     ebv: e[10], feh: e[11], elip: e[12], pa: null };
 }
 var mag = function (F) { return F > 0 ? -2.5 * Math.log10(F) : Infinity; };
-var mediana = function (v) { if (!v.length) return NaN; v = v.slice().sort(function (a, b) { return a - b; }); return v[Math.floor(v.length / 2)]; };
-var f = function (x, d) { return isFinite(x) ? x.toFixed(d == null ? 2 : d) : '—'; };
+var mediana = function (v) {
+  if (!v.length) return NaN;
+  v = v.slice().sort(function (a, b) { return a - b; });
+  var h = v.length >> 1;
+  return v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2;
+};
+var f = function (x, d) { return x === Infinity ? '+∞' : isFinite(x) ? x.toFixed(d == null ? 2 : d) : '—'; };
 
 /* ── Datos ─────────────────────────────────────────────────────────────── */
 var TRAGER = {};
@@ -123,17 +128,31 @@ function normalizar(sig, rtAs) {
   return function (r) { return sig(r) / acu; };
 }
 
-/* Curva muVf de Trager interpolada en log r; fuera de su último radio sigue la
-   pendiente de los dos últimos nodos. shortcut: extrapolación lineal en log r,
-   solo pesa en globulares cuyo r_t de Harris supera la cobertura de Trager. */
+/* Curva muVf de Trager interpolada en log r, solo con nodos de peso > 0 y un
+   nodo por radio (media si se repite). Devuelve también el último radio
+   medido: más allá no hay datos y no se extrapola aquí (ver formaTrager). */
 function curvaTrager(pts) {
-  var p = pts.slice().sort(function (a, b) { return a.rAs - b.rAs; });
-  var lr = p.map(function (q) { return Math.log10(q.rAs); }), mf = p.map(function (q) { return q.muf; });
-  return function (rAs) {
-    var x = Math.log10(Math.max(rAs, p[0].rAs)), n = lr.length;
+  var por = {};
+  pts.filter(function (q) { return q.w > 0; }).forEach(function (q) { (por[q.rAs] = por[q.rAs] || []).push(q.muf); });
+  var rs = Object.keys(por).map(Number).sort(function (a, b) { return a - b; });
+  var lr = rs.map(Math.log10), mf = rs.map(function (r) { return por[r].reduce(function (a, x) { return a + x; }, 0) / por[r].length; });
+  function muf(rAs) {
+    var x = Math.log10(Math.min(Math.max(rAs, rs[0]), rs[rs.length - 1])), n = lr.length;
     var j = 1; while (j < n - 1 && lr[j] < x) j++;
-    var u = (x - lr[j - 1]) / ((lr[j] - lr[j - 1]) || 1e-9);
+    var u = (x - lr[j - 1]) / (lr[j] - lr[j - 1]);
     return mf[j - 1] + u * (mf[j] - mf[j - 1]);
+  }
+  return { muf: muf, rUlt: rs[rs.length - 1] };
+}
+/* Forma de Trager hasta r_t de Harris, en mag/arcsec² relativas. Más allá del
+   último nodo medido se empalma con la caída del K62 de producción: sin datos,
+   no se inventa pendiente propia, y el exceso solo se juzga dentro de lo medido. */
+var PERFIL_KING = R.perfilKing;  // el original: corrida() sustituye R.perfilKing por esta forma
+function formaTrager(tr, rcAs, rtAs) {
+  var mK = function (r) { return mag(PERFIL_KING(r, rcAs, rtAs)); };
+  return function (r) {
+    if (r >= rtAs) return Infinity;
+    return r <= tr.rUlt ? tr.muf(r) : tr.muf(tr.rUlt) + mK(r) - mK(tr.rUlt);
   };
 }
 
@@ -148,24 +167,23 @@ Object.keys(MVDM).forEach(function (id) {
 });
 console.log('Integrador King66/Wilson contra Conc de MvdM05: ' + (malas ? malas + ' fallos' : 'ok (|Δc| ≤ 0,03 en todos)'));
 if (malas) process.exit(1);
+if (mediana([1, 2, 3, 4]) !== 2.5 || mediana([3, 1, 2]) !== 2) { console.error('FALLA mediana'); process.exit(1); }
 
 /* ── P1 y P2: residuos por tramos de r/r_h ─────────────────────────────── */
 var TRAMOS = [[0, 1], [1, 2], [2, 4], [4, 8], [8, 1e9]];
 var RES = {};
 console.log('\n## P1/P2 · mediana de (modelo − Trager) en mag/arcsec², puntos con peso > 0 y r < r_t(Harris)');
-console.log('negativo = modelo más brillante que Trager. Tramos en r/r_h: ' + TRAMOS.map(function (t) { return t[0] + '-' + (t[1] > 1e8 ? '∞' : t[1]); }).join(' | '));
+console.log('negativo = modelo más brillante que Trager; +∞ = el modelo ya se truncó. Tramos en r/r_h: ' + TRAMOS.map(function (t) { return t[0] + '-' + (t[1] > 1e8 ? '∞' : t[1]); }).join(' | '));
+console.log('Filas «X−T»: solo forma, mediana punto a punto de (X − TrgN) sobre los mismos puntos.');
 SEED.forEach(function (par) {
   var K = ficha(par[0]), clave = par[0].replace('NGC ', 'ngc'), pts = TRAGER[clave];
-  var pob = C.poblacionCacheada(K, 0), Ft = Math.pow(10, -0.4 * K.Vt), rtAs = pob.rtAs, rhAs = K.rh * 60, rcAs = K.rc * 60;
-  var muf = curvaTrager(pts);
+  var pob = C.poblacionCacheada(K, 0), Ft = Math.pow(10, -0.4 * K.Vt), rtAs = pob.rtAs, rhAs = K.rh * 60;
+  var tr = curvaTrager(pts), muf = tr.muf;
   // Punto cero: V de integrar muVf hasta el último nodo de Trager.
-  var rMax = Math.max.apply(null, pts.map(function (q) { return q.rAs; }));
-  var N = 4000, Fint = 0, lr0 = Math.log10(0.5), lr1 = Math.log10(rMax);
-  Fint += Math.pow(10, -0.4 * muf(0.5)) * Math.PI * 0.25;
+  var N = 4000, Fint = Math.pow(10, -0.4 * muf(0.5)) * Math.PI * 0.25, lr0 = Math.log10(0.5), lr1 = Math.log10(tr.rUlt);
   for (var i = 0; i < N; i++) { var ra = Math.pow(10, lr0 + (lr1 - lr0) * i / N), rb = Math.pow(10, lr0 + (lr1 - lr0) * (i + 1) / N);
     Fint += 0.5 * (Math.pow(10, -0.4 * muf(ra)) * ra + Math.pow(10, -0.4 * muf(rb)) * rb) * (rb - ra) * 2 * Math.PI; }
-  var w = pts.filter(function (q) { return q.w > 0; });
-  var rUlt = Math.max.apply(null, w.map(function (q) { return q.rAs; }));
+  var w = pts.filter(function (q) { return q.w > 0 && q.rAs < rtAs; });
   var cand = { K62: function (r) { return mag(Ft * pob.sigma(r)); } };
   var mv = MVDM[par[0]] || {};
   ['K', 'W'].forEach(function (m) {
@@ -174,95 +192,98 @@ SEED.forEach(function (par) {
     var sN = normalizar(function (r) { return mod.sigma(r / r0); }, rtM);
     cand[m === 'K' ? 'K66' : 'Wil'] = function (r) { return mag(Ft * sN(r)); };
   });
-  var sT = normalizar(function (r) { return Math.pow(10, -0.4 * muf(r)); }, rtAs);
+  var fT = formaTrager(tr, K.rc * 60, rtAs);
+  var sT = normalizar(function (r) { return Math.pow(10, -0.4 * fT(r)); }, rtAs);
   cand.TrgN = function (r) { return mag(Ft * sT(r)); };
-  // Desplazamiento de punto cero del K62 en el núcleo (0,5-3 r_c): separa forma de normalización.
-  var zp = mediana(w.filter(function (q) { return q.rAs >= 0.5 * rcAs && q.rAs <= 3 * rcAs; }).map(function (q) { return cand.K62(q.rAs) - q.mu; }));
-  var fila = { c: K.c, rt: rtAs / 60, rUltRh: rUlt / rhAs, rUlt: rUlt / 60, Vtr: mag(Fint), Vt: K.Vt, zp: zp, tramos: {} , chi: mv };
-  Object.keys(cand).forEach(function (k) {
-    fila.tramos[k] = TRAMOS.map(function (t) {
-      var v = w.filter(function (q) { return q.rAs < rtAs && q.rAs >= t[0] * rhAs && q.rAs < t[1] * rhAs; })
-        .map(function (q) { return cand[k](q.rAs) - q.mu; }).filter(isFinite);
-      return { n: v.length, m: mediana(v) };
+  var fila = { rt: rtAs / 60, rUlt: tr.rUlt / 60, rUltRh: tr.rUlt / rhAs, Vtr: mag(Fint), tramos: {}, forma: {} };
+  TRAMOS.forEach(function (t, j) {
+    var q = w.filter(function (q) { return q.rAs >= t[0] * rhAs && q.rAs < t[1] * rhAs; });
+    Object.keys(cand).forEach(function (k) {
+      (fila.tramos[k] = fila.tramos[k] || [])[j] = { n: q.length, m: mediana(q.map(function (x) { return cand[k](x.rAs) - x.mu; })) };
+      if (k !== 'TrgN') (fila.forma[k] = fila.forma[k] || [])[j] = { n: q.length, m: mediana(q.map(function (x) { return cand[k](x.rAs) - cand.TrgN(x.rAs); })) };
     });
   });
   RES[par[0]] = fila;
-  console.log('\n' + par[1] + ' (' + par[0] + ')  c=' + K.c + '  r_t=' + f(fila.rt, 1) + "'  r_h=" + K.rh + "'  último punto Trager con peso: " + f(fila.rUlt, 1) + "' (" + f(fila.rUltRh, 1) + ' r_h)');
-  console.log('  V integrando muVf = ' + f(fila.Vtr) + '  frente V_t Harris = ' + K.Vt + '  (Δ ' + f(fila.Vtr - K.Vt) + ')   K62 − Trager en 0,5-3 r_c: ' + f(zp));
+  console.log('\n' + par[1] + ' (' + par[0] + ')  c=' + K.c + '  r_t=' + f(fila.rt, 1) + "'  r_h=" + K.rh + "'  último nodo de Trager con peso: " + f(fila.rUlt, 1) + "' (" + f(fila.rUltRh, 1) + ' r_h)');
+  console.log('  V integrando muVf = ' + f(fila.Vtr) + '  frente V_t Harris = ' + K.Vt + '  (Δ ' + f(fila.Vtr - K.Vt) + ')');
   if (mv.K) console.log('  χ² MvdM05: K66 ' + mv.K.chi2 + '  Wilson ' + (mv.W ? mv.W.chi2 : '—'));
   Object.keys(fila.tramos).forEach(function (k) {
-    console.log('  ' + k.padEnd(5) + fila.tramos[k].map(function (t) { return (t.n ? f(t.m) : '—').padStart(6) + ' (' + t.n + ')'; }).join(' '));
+    console.log('  ' + k.padEnd(7) + fila.tramos[k].map(function (t) { return (t.n ? f(t.m) : '—').padStart(6) + ' (' + t.n + ')'; }).join(' '));
   });
-  /* Solo forma: modelo − TrgN. Los dos van normalizados a V_t, así que el punto
-     cero (V_t de Harris frente a la luz que mide Trager) se cancela. */
-  ['K62', 'K66', 'Wil'].forEach(function (k) {
-    if (!fila.tramos[k]) return;
-    console.log('  ' + (k + '−T').padEnd(7) + fila.tramos[k].map(function (t, i) { var d = t.m - fila.tramos.TrgN[i].m; return (t.n ? f(d) : '—').padStart(6); }).join('       '));
+  Object.keys(fila.forma).forEach(function (k) {
+    console.log('  ' + (k + '−T').padEnd(7) + fila.forma[k].map(function (t) { return (t.n ? f(t.m) : '—').padStart(6) + ' (' + t.n + ')'; }).join(' '));
   });
 });
 
 /* Resumen de P2: por candidato, mediana entre globulares de |modelo − TrgN| en
-   los tramos exteriores (2-4 y 4-8 r_h). Solo globulares con ajuste de MvdM05. */
-console.log('\n## P2 · resumen: mediana entre globulares de |modelo − TrgN| (solo forma), tramos 2-4 y 4-8 r_h');
+   los tramos exteriores (2-4 y 4-8 r_h) con n ≥ 3. Solo globulares con ajuste de MvdM05. */
+console.log('\n## P2 · resumen: mediana entre globulares de |modelo − TrgN| (solo forma), tramos 2-4 y 4-8 r_h con n ≥ 3');
 ['K62', 'K66', 'Wil'].forEach(function (k) {
   var por = [2, 3].map(function (j) {
-    return mediana(Object.keys(RES).filter(function (id) { return RES[id].tramos.Wil; }).map(function (id) {
-      var t = RES[id].tramos; return t[k][j].n ? Math.abs(t[k][j].m - t.TrgN[j].m) : NaN; }).filter(isFinite));
+    var v = Object.keys(RES).filter(function (id) { return RES[id].forma.Wil; }).map(function (id) {
+      var t = RES[id].forma[k][j]; return t.n >= 3 ? Math.abs(t.m) : NaN; }).filter(function (x) { return !isNaN(x); });
+    return mediana(v) + ' (' + v.length + ' GC)';
   });
-  console.log('  ' + k.padEnd(4) + ' 2-4 r_h: ' + f(por[0]) + '   4-8 r_h: ' + f(por[1]));
+  console.log('  ' + k.padEnd(4) + ' 2-4 r_h: ' + por[0].replace(/(\d\.\d\d)\d*/, '$1') + '   4-8 r_h: ' + por[1].replace(/(\d\.\d\d)\d*/, '$1'));
 });
 
 /* ── P3: pipeline real con el perfil de producción y con el de Trager ───── */
 var CASOS = [[200, 100, 21.5], [406, 50, 21.5], [457, 70, 21.5], [457, 154, 21.5]];
 var SIZE = 200;
-function corrida(K, D, MAG, sqm, perfilAlt, realization) {
+/* El perfil alternativo entra sustituyendo R.perfilKing/R.areaKing. La población
+   se cachea por id: la alternativa va con un id propio para no pisar la de
+   producción. Ojo: esa entrada de caché queda con la normalización de Trager y
+   la forma King una vez restaurado perfilKing; no se reutiliza fuera de corrida(). */
+function corrida(K, D, MAG, sqm, perfilAlt) {
   var pk = R.perfilKing, ak = R.areaKing;
   if (perfilAlt) { R.perfilKing = perfilAlt.perfil; R.areaKing = perfilAlt.area; }
   try {
-    var pob = C.poblacionCacheada(K, realization);
+    var pob = C.poblacionCacheada(K, 0);
     var cielo = { pupilaSalida: D / MAG, pupilaOjo: 7, sqm: sqm, transmision: 0.9, aumentos: MAG, perceptual: true };
     var res = R.pintarCumulo(new Float32Array(SIZE * SIZE), K, { ra0: K.ra, dec0: K.dec, arcmin: Math.ceil(2.4 * pob.rtAs / 60),
-      size: SIZE, cielo: cielo, apertura: D, estrellas: [], realization: realization });
+      size: SIZE, cielo: cielo, apertura: D, estrellas: [], realization: 0 });
     var t = res.tabla, cH = res.cHalo, cp = R.ctxFotometrico(cielo, 2 * K.rh), Fu = cH.Fcielo * cH.Cmin;
-    // Nivel en pantalla con t = 1 (halo lineal, #535): sin realce perceptual.
-    var dn = function (i) { return R.valorDeFlujo(R.realzarPerceptual(t.I[i] * t.sHalo[i], cp.Fcielo, cp.rango, 1), cp.FcieloPintado, cp.rango); };
+    // Halo lineal (#535): t = 1, sin realce perceptual, así que el nivel es valorDeFlujo a secas.
     var rU = 0, r1 = 0, DN = [];
-    for (var i = 0; i < t.r.length; i++) { if (t.I[i] >= Fu) rU = t.r[i]; DN.push(dn(i)); if (DN[i] >= 1) r1 = t.r[i]; }
-    return { t: t, DN: DN, rU: rU, r1: r1, Fu: Fu };
+    for (var i = 0; i < t.r.length; i++) {
+      DN.push(R.valorDeFlujo(t.I[i] * t.sHalo[i], cp.FcieloPintado, cp.rango));
+      if (t.I[i] >= Fu) rU = t.r[i];
+      if (DN[i] >= 1) r1 = t.r[i];
+    }
+    return { r: t.r, DN: DN, rU: rU, r1: r1 };
   } finally { R.perfilKing = pk; R.areaKing = ak; }
 }
 console.log('\n## P3 · pipeline real (halo lineal), producción (K62 Harris) frente a perfil de Trager normalizado a V_t');
-console.log("r_exceso: primer radio ≥ 2 r_h donde K62 − Trager (los dos normalizados a V_t) < −0,3 mag; r_umbral: velo ≥ F_u; r_1DN: nivel ≥ 1 DN");
-var P3 = {};
+console.log("r_exceso: primer radio ≥ 2 r_h, dentro de lo medido por Trager, desde el que K62 − TrgN < −0,3 mag en TODO un tramo de 0,1 dex; r_umbral: velo ≥ F_u; r_1DN: nivel ≥ 1 DN");
 SEED.forEach(function (par) {
-  var K = ficha(par[0]), clave = par[0].replace('NGC ', 'ngc'), muf = curvaTrager(TRAGER[clave]);
-  var pob = C.poblacionCacheada(K, 0), rtAs = pob.rtAs, Ft = Math.pow(10, -0.4 * K.Vt);
-  // Perfil alternativo con la firma de perfilKing: forma de Trager, área cerrada para que Σ = forma/área.
-  var forma = function (r) { return r >= rtAs ? 0 : Math.pow(10, -0.4 * (muf(r) - muf(0.5))); };
+  var K = ficha(par[0]), clave = par[0].replace('NGC ', 'ngc'), tr = curvaTrager(TRAGER[clave]);
+  var pob = C.poblacionCacheada(K, 0), rtAs = pob.rtAs, Ft = Math.pow(10, -0.4 * K.Vt), rhAs = K.rh * 60;
+  var fT = formaTrager(tr, K.rc * 60, rtAs);
+  var forma = function (r) { return Math.pow(10, -0.4 * (fT(r) - fT(0.5))); };
   var Nn = 20000, h = rtAs / Nn, area = 0;
   for (var i = 0; i < Nn; i++) { var a = i * h, b = a + h, m = a + h / 2; area += (forma(a) * a + 4 * forma(m) * m + forma(b) * b) * h / 6; }
   area *= 2 * Math.PI;
-  var alt = { perfil: function (r) { return forma(r); }, area: function () { return area / ((K.rc * 60) * (K.rc * 60)); } };
-  /* r_exceso: halo exterior (≥ 2 r_h) donde producción va más de 0,3 mag por
-     encima de Trager. Los dos con la misma normalización (V_t), como el pipeline.
-     Primera versión del arnés buscaba desde r_t hacia dentro y se paraba en el
-     truncamiento del King (μ = ∞): corregido, ver la nota. */
-  var rEx = null;
-  for (var rr = 2 * K.rh * 60; rr < rtAs; rr += 1) {
-    if (mag(Ft * pob.sigma(rr)) - mag(Ft * forma(rr) / area) < -0.3) { rEx = rr; break; }
+  var alt = { perfil: forma, area: function () { return area / ((K.rc * 60) * (K.rc * 60)); } };
+  var resid = function (r) { return mag(Ft * pob.sigma(r)) - mag(Ft * forma(r) / area); };
+  var rEx = null, hasta = Math.min(rtAs, tr.rUlt);
+  for (var rr = 2 * rhAs; rr * 1.259 <= hasta && rEx == null; rr *= 1.01) {
+    var sostenido = true;
+    for (var x = rr; x <= rr * 1.259; x *= 1.01) if (!(resid(x) < -0.3)) { sostenido = false; break; }
+    if (sostenido) rEx = rr;
   }
-  P3[par[0]] = { rEx: rEx, casos: [] };
+  var Kalt = Object.assign({}, K, { id: K.id + '·trager' });
   console.log('\n' + par[1] + '  r_exceso = ' + (rEx ? f(rEx / 60) + "'" : 'no hay'));
   CASOS.forEach(function (cs) {
-    var A = corrida(K, cs[0], cs[1], cs[2], null, 0), B = corrida(K, cs[0], cs[1], cs[2], alt, 7);
-    var maxD = 0, rMax = 0;
-    for (var i = 0; i < A.DN.length; i++) { var dd = A.DN[i] - B.DN[i]; if (Math.abs(dd) > Math.abs(maxD)) { maxD = dd; rMax = A.t.r[i]; } }
-    var pintaExceso = rEx != null && A.r1 > rEx;
-    var maxExt = 0;  // mayor ΔDN (K62 − Trager) en el halo exterior, r ≥ 2 r_h
-    for (var j = 0; j < A.DN.length; j++) if (A.t.r[j] >= 2 * K.rh * 60) maxExt = Math.max(maxExt, A.DN[j] - B.DN[j]);
-    P3[par[0]].casos.push({ caso: cs, maxD: maxD, rMax: rMax, maxExt: maxExt, pintaExceso: pintaExceso });
+    var A = corrida(K, cs[0], cs[1], cs[2], null), B = corrida(Kalt, cs[0], cs[1], cs[2], alt);
+    var maxExt = 0, maxInt = 0, rInt = 0;
+    for (var j = 0; j < A.DN.length; j++) {
+      var d = A.DN[j] - B.DN[j];
+      if (A.r[j] >= 2 * rhAs) maxExt = Math.max(maxExt, d);
+      else if (Math.abs(d) > Math.abs(maxInt)) { maxInt = d; rInt = A.r[j]; }
+    }
+    var pinta = rEx != null && A.r1 > rEx;
     console.log('  ' + (cs[0] + '/' + cs[1] + '×').padEnd(9) + " K62: r_umbral " + f(A.rU / 60) + "' r_1DN " + f(A.r1 / 60) +
-      "'  |  Trager: r_umbral " + f(B.rU / 60) + "' r_1DN " + f(B.r1 / 60) + "'  |  máx ΔDN (K62−Trager) " + f(maxD, 1) + ' a ' + f(rMax / 60) + "'" +
-      '  |  ΔDN exterior máx ' + f(maxExt, 1) + '  |  pinta dentro del exceso: ' + (pintaExceso ? 'SÍ' : 'no'));
+      "'  |  Trager: r_umbral " + f(B.rU / 60) + "' r_1DN " + f(B.r1 / 60) + "'  |  ΔDN exterior máx " + f(maxExt, 1) +
+      '  |  ΔDN interior (< 2 r_h) ' + f(maxInt, 1) + ' a ' + f(rInt / 60) + "'  |  pinta dentro del exceso: " + (pinta ? 'SÍ' : 'no'));
   });
 });

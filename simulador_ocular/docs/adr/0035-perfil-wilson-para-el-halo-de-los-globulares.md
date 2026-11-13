@@ -12,10 +12,10 @@ La forma radial del cúmulo (`perfilKing`, `bitacora-gaia-render.js:2258`, con r
 
 En los 13 globulares del seed, contra los perfiles de Trager 1995 y con todos los modelos normalizados a V_t:
 
-- **El exceso no depende de la concentración.** King 1962 va ≤ −0,3 mag por encima de Trager entre 2 y 8 r_h en 7 de 13, desde c = 0,93 hasta c = 2,29. M13 llega a −0,97 mag a 4–8 r_h.
-- **Se pinta en 3 de 13, y en un cuarto de forma marginal.** Con el pipeline real, el halo de M13 llega 0,9–1,3′ más lejos que con la forma de Trager. M2 y M9 llevan 2,4–4,7 DN de más en el halo exterior, y M55 ~1 DN en dos de los cuatro equipos.
-- **Wilson es el que mejor sigue la forma.** Mediana de |modelo − Trager| a 2–4 / 4–8 r_h: Wilson 0,11 / 0,12 mag, King 1966 0,11 / 0,13 y King 1962 (producción) 0,16 / 0,31.
-- **Más allá de 8 r_h, King 1966 se trunca antes de tiempo** (+0,9 a +2,4 mag en M2, M5, M10 y M13). Wilson se queda en ±0,22.
+- **El exceso no depende de la concentración.** King 1962 va ≤ −0,3 mag por encima de Trager más allá de 2 r_h en 8 de 13, desde c = 0,93 hasta c = 2,29. M13 llega a −1,03 mag a 4–8 r_h.
+- **Se pinta en 3 de 13, y en un cuarto de forma marginal.** Con el pipeline real, el halo de M13 llega 0,9–1,3′ más lejos que con la forma de Trager. M2 y M9 llevan 2,4–4,4 DN de más en el halo exterior, y M55 ~1 DN en dos de los cuatro equipos.
+- **Wilson es el que mejor sigue la forma.** Mediana de |modelo − Trager| a 2–4 / 4–8 r_h: Wilson 0,10 / 0,11 mag, King 1966 0,10 / 0,16 y King 1962 (producción) 0,15 / 0,31.
+- **Más allá de 8 r_h, King 1966 se trunca antes de tiempo** (+0,90 a +2,41 mag en M2, M5 y M13). Wilson se queda en ±0,15.
 
 ## Decisión propuesta
 
