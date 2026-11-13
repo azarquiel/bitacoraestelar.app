@@ -253,37 +253,77 @@ function corrida(K, D, MAG, sqm, perfilAlt) {
     return { r: t.r, DN: DN, rU: rU, r1: r1 };
   } finally { R.perfilKing = pk; R.areaKing = ak; }
 }
-console.log('\n## P3 · pipeline real (halo lineal), producción (K62 Harris) frente a perfil de Trager normalizado a V_t');
-console.log("r_exceso: primer radio ≥ 2 r_h, dentro de lo medido por Trager, desde el que K62 − TrgN < −0,3 mag en TODO un tramo de 0,1 dex; r_umbral: velo ≥ F_u; r_1DN: nivel ≥ 1 DN");
-SEED.forEach(function (par) {
-  var K = ficha(par[0]), clave = par[0].replace('NGC ', 'ngc'), tr = curvaTrager(TRAGER[clave]);
-  var pob = C.poblacionCacheada(K, 0), rtAs = pob.rtAs, Ft = Math.pow(10, -0.4 * K.Vt), rhAs = K.rh * 60;
-  var fT = formaTrager(tr, K.rc * 60, rtAs);
-  var forma = function (r) { return Math.pow(10, -0.4 * (fT(r) - fT(0.5))); };
+/* Perfil alternativo con la firma de perfilKing a partir de una Σ relativa
+   cualquiera, truncado en el r_t de Harris (la tabla de pintarCumulo acaba ahí)
+   y con el área cerrada numéricamente. */
+function perfilDesde(sig, rcAs, rtAs) {
+  var forma = function (r) { return r >= rtAs ? 0 : sig(r); };
   var Nn = 20000, h = rtAs / Nn, area = 0;
   for (var i = 0; i < Nn; i++) { var a = i * h, b = a + h, m = a + h / 2; area += (forma(a) * a + 4 * forma(m) * m + forma(b) * b) * h / 6; }
   area *= 2 * Math.PI;
-  var alt = { perfil: forma, area: function () { return area / ((K.rc * 60) * (K.rc * 60)); } };
-  var resid = function (r) { return mag(Ft * pob.sigma(r)) - mag(Ft * forma(r) / area); };
+  return { perfil: forma, area: function () { return area / (rcAs * rcAs); }, sigma: function (r) { return forma(r) / area; } };
+}
+
+console.log('\n## P3 · pipeline real (halo lineal), producción (K62 Harris) frente a perfil de Trager normalizado a V_t');
+console.log("r_exceso: primer radio ≥ 2 r_h, dentro de lo medido por Trager, desde el que K62 − TrgN < −0,3 mag en TODO un tramo de 0,1 dex; r_umbral: velo ≥ F_u; r_1DN: nivel ≥ 1 DN");
+console.log('ΔDN≥rEx: mayor exceso de K62 sobre Trager desde r_exceso; franja: r_1DN(K62) − r_exceso, en pasos de la tabla radial');
+var P3B = [];
+SEED.forEach(function (par) {
+  var K = ficha(par[0]), clave = par[0].replace('NGC ', 'ngc'), tr = curvaTrager(TRAGER[clave]);
+  var pob = C.poblacionCacheada(K, 0), rtAs = pob.rtAs, Ft = Math.pow(10, -0.4 * K.Vt), rhAs = K.rh * 60, rcAs = K.rc * 60;
+  var fT = formaTrager(tr, rcAs, rtAs);
+  var alts = { Trg: perfilDesde(function (r) { return Math.pow(10, -0.4 * (fT(r) - fT(0.5))); }, rcAs, rtAs) };
+  var mv = MVDM[par[0]] || {};
+  ['K', 'W'].forEach(function (m) {
+    if (!mv[m]) return;
+    var mod = modeloDinamico(mv[m].W0, m === 'W'), r0 = mv[m].r0As;
+    alts[m === 'K' ? 'K66' : 'Wil'] = perfilDesde(function (r) { return mod.sigma(r / r0); }, rcAs, rtAs);
+  });
+  var resid = function (r) { return mag(pob.sigma(r)) - mag(alts.Trg.sigma(r)); };
   var rEx = null, hasta = Math.min(rtAs, tr.rUlt);
   for (var rr = 2 * rhAs; rr * 1.259 <= hasta && rEx == null; rr *= 1.01) {
     var sostenido = true;
     for (var x = rr; x <= rr * 1.259; x *= 1.01) if (!(resid(x) < -0.3)) { sostenido = false; break; }
     if (sostenido) rEx = rr;
   }
-  var Kalt = Object.assign({}, K, { id: K.id + '·trager' });
   console.log('\n' + par[1] + '  r_exceso = ' + (rEx ? f(rEx / 60) + "'" : 'no hay'));
+  var err = {};  // por modelo: máximo entre equipos de |DN(modelo) − DN(Trager)|
   CASOS.forEach(function (cs) {
-    var A = corrida(K, cs[0], cs[1], cs[2], null), B = corrida(Kalt, cs[0], cs[1], cs[2], alt);
-    var maxExt = 0, maxInt = 0, rInt = 0;
+    var A = corrida(K, cs[0], cs[1], cs[2], null), R_ = {};
+    Object.keys(alts).forEach(function (k) { R_[k] = corrida(Object.assign({}, K, { id: K.id + '·' + k }), cs[0], cs[1], cs[2], alts[k]); });
+    var B = R_.Trg, paso = A.r[1] - A.r[0];
+    var maxExt = 0, maxEx = 0, maxInt = 0, rInt = 0;
     for (var j = 0; j < A.DN.length; j++) {
       var d = A.DN[j] - B.DN[j];
       if (A.r[j] >= 2 * rhAs) maxExt = Math.max(maxExt, d);
       else if (Math.abs(d) > Math.abs(maxInt)) { maxInt = d; rInt = A.r[j]; }
+      if (rEx != null && A.r[j] >= rEx) maxEx = Math.max(maxEx, d);
     }
+    var mods = { K62: A }; Object.keys(R_).forEach(function (k) { if (k !== 'Trg') mods[k] = R_[k]; });
+    Object.keys(mods).forEach(function (k) {
+      var e = 0; for (var j = 0; j < B.DN.length; j++) e = Math.max(e, Math.abs(mods[k].DN[j] - B.DN[j]));
+      err[k] = Math.max(err[k] || 0, e);
+      (err[k + '_r1'] = err[k + '_r1'] || []).push(mods[k].r1 / 60);
+    });
     var pinta = rEx != null && A.r1 > rEx;
     console.log('  ' + (cs[0] + '/' + cs[1] + '×').padEnd(9) + " K62: r_umbral " + f(A.rU / 60) + "' r_1DN " + f(A.r1 / 60) +
       "'  |  Trager: r_umbral " + f(B.rU / 60) + "' r_1DN " + f(B.r1 / 60) + "'  |  ΔDN exterior máx " + f(maxExt, 1) +
+      '  |  ΔDN≥rEx ' + (rEx != null ? f(maxEx, 1) : '—') + '  |  franja ' + (rEx != null ? f((A.r1 - rEx) / paso, 1) : '—') +
       '  |  ΔDN interior (< 2 r_h) ' + f(maxInt, 1) + ' a ' + f(rInt / 60) + "'  |  pinta dentro del exceso: " + (pinta ? 'SÍ' : 'no'));
   });
+  var fila = { gc: par[1], chiMejor: mv.K && mv.W ? (mv.K.chi2 <= mv.W.chi2 ? 'K66' : 'Wil') : null };
+  ['K62', 'K66', 'Wil'].forEach(function (k) { if (err[k] != null) fila[k] = err[k]; });
+  P3B.push(fila);
+  console.log('  máx |DN − DN(Trager)| entre equipos: ' + ['K62', 'K66', 'Wil'].filter(function (k) { return err[k] != null; })
+    .map(function (k) { return k + ' ' + f(err[k], 1) + " (r_1DN " + err[k + '_r1'].map(function (x) { return f(x); }).join('/') + "')"; }).join('  ') +
+    "  · Trager r_1DN " + CASOS.map(function () { return ''; }).join('') + (fila.chiMejor ? '  · χ² MvdM05 elige ' + fila.chiMejor : ''));
+});
+
+console.log('\n## P3b · qué perfil se acerca más a Trager en el pipeline: máx |DN − DN(Trager)| entre los cuatro equipos');
+console.log('GC    K62    K66    Wil   χ²→  mejor');
+P3B.forEach(function (x) {
+  var c = ['K62', 'K66', 'Wil'].filter(function (k) { return x[k] != null; });
+  var mejor = c.reduce(function (a, b) { return x[b] < x[a] ? b : a; });
+  console.log(x.gc.padEnd(5) + ['K62', 'K66', 'Wil'].map(function (k) { return (x[k] != null ? f(x[k], 1) : '—').padStart(6); }).join(' ') +
+    '   ' + (x.chiMejor || '—').padEnd(4) + ' ' + mejor + (x.chiMejor ? '  (χ² da ' + f(x[x.chiMejor], 1) + ')' : ''));
 });
