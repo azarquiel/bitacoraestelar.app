@@ -245,8 +245,9 @@ ok(radioMag(457, 6, 15) > radioMag(152, 6, 15),
    Pasado el punto en que el disco físico (Airy+seeing) supera al suelo
    artístico, más aumento no trae más luz: los mismos fotones se reparten en
    un disco mayor. `factorDilucion(suelo, Rtot)` diluye el alpha de pico por
-   (suelo/Rtot)² -exacto para este perfil autosimilar, ver dibujarEstrellaColor-
-   en cuanto Rtot supera a suelo·√2 (equivale a fisico > suelo). */
+   2·(suelo/Rtot)² -exacto para este perfil autosimilar, ver dibujarEstrellaColor-
+   en cuanto Rtot supera a suelo·√2 (equivale a fisico > suelo), así que
+   alpha·Rtot² se congela en el valor del umbral y el paso es continuo. */
 console.log('\n10. Sobre-aumentar diluye el brillo de pico (conservación de flujo):');
 var eqPoco = equipo(200, 1200, 25, 60);   // aumento bajo: fisico <= suelo
 var oPoco = { arcmin: eqPoco.arcmin, afov: eqPoco.afov, apertura: eqPoco.apertura, size: SIZE, g: 8 };
@@ -259,8 +260,16 @@ var oMucho = { arcmin: eqMucho.arcmin, afov: eqMucho.afov, apertura: eqMucho.ape
 var sueloMucho = R.sueloEstrella(oMucho), RtotMucho = R.radioEstrella(oMucho);
 var dilMucho = R.factorDilucion(sueloMucho, RtotMucho);
 ok(dilMucho < 1, 'a mucho aumento (Rtot=' + RtotMucho.toFixed(2) + ' px), factorDilucion=' + dilMucho.toFixed(4) + ' < 1');
-casi(dilMucho * RtotMucho * RtotMucho, sueloMucho * sueloMucho, 1e-6,
-  'diluido, alfa_pico·Rtot² = suelo² (conserva el flujo total, no crece con el aumento)');
+casi(dilMucho * RtotMucho * RtotMucho, 2 * sueloMucho * sueloMucho, 1e-6,
+  'diluido, alfa_pico·Rtot² = 2·suelo², el valor del umbral (conserva el flujo total, no crece con el aumento)');
+
+// Sin salto en el umbral: con (suelo/Rtot)² a secas el flujo caía a la mitad de
+// golpe al cruzar Rtot = suelo·√2 (70 mm, g 10: de 1030 a 515 entre 333× y 341×).
+var umbral = Math.SQRT2 * 2.18;
+casi(R.factorDilucion(2.18, umbral * (1 + 1e-9)), 1, 1e-6,
+  'justo pasado el umbral la dilución vale 1 (continua, sin salto del 50 %)');
+ok(R.factorDilucion(2.18, umbral * 1.01) < 1 && R.factorDilucion(2.18, umbral * 1.01) > 0.97,
+  'un 1 % por encima del umbral diluye un ~2 %, no un 50 %');
 
 
 /* ── Sección 11: cuánto puede engordar una brillante sobre una débil ─────────

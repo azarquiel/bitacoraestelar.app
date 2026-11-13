@@ -2107,12 +2107,15 @@
   }
   /* Sobre-aumentar más allá de lo que el disco de Airy+seeing justifica no
      trae más luz real: la misma cantidad de fotones se reparte en un disco
-     mayor. Diluimos el alpha de pico por (suelo/Rtot)² -conserva el flujo
-     total exacto para este perfil de gradiente autosimilar- en cuanto el
-     término físico supera al suelo artístico (Rtot > suelo·√2 equivale a
-     fisico > suelo, por la cuadratura suelo²+fisico²=Rtot²). */
+     mayor. En cuanto el término físico supera al suelo artístico (Rtot >
+     suelo·√2 equivale a fisico > suelo, por la cuadratura suelo²+fisico²=Rtot²)
+     diluimos el alpha de pico para que alpha·Rtot² se quede en el valor que
+     tenía en ese umbral -conserva el flujo total exacto para este perfil de
+     gradiente autosimilar-. Vale 1 justo en el umbral: con (suelo/Rtot)² a
+     secas saltaba de 1 a 0,5 y el flujo caía a la mitad de golpe (auditoría
+     20261112_auditoria_pintado_estrellas.md, fila E). */
   function factorDilucion(suelo, Rtot) {
-    return (Rtot > suelo * Math.SQRT2) ? (suelo * suelo) / (Rtot * Rtot) : 1;
+    return (Rtot > suelo * Math.SQRT2) ? 2 * (suelo * suelo) / (Rtot * Rtot) : 1;
   }
   /* Alpha del DISCO de una estrella resuelta. radioArcsec es el radio DIBUJADO
      (Rtot) en segundos de arco; dilucion, el factor de reparto de radioEstrella.
