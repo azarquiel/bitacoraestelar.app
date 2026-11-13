@@ -21,3 +21,5 @@ Orden cronológico de ejecución:
 16. `cierre_284_cielo_publicado.md` (2026-09-13) — #308: los cinco criterios de éxito de la épica #284, medidos contra el cielo que publica el sidecar (columna SC) y no contra el patrón
 15. `recaptura_r5_cielo_vecino.md` (2026-09-13) — deltas de la recaptura R5 del golden difuso (el cielo del parche sale del campo vecino), con la línea base de la batería y el arnés de #274 re-corrido como testigo
 17. `dso_texturas_l2_2_apertura.md` (2026-09-22) — #323 (US-7): L2.2, la apertura en el objeto difuso; 457 vs 914 mm en las cuatro golden sobre texturas de fase 2, el signo de `θ_add` en los seis cuantiles y la causa de que el listón no se cumpla en nativo
+18. `trager1995_seed.tsv` (2026-11-13) — #537: perfiles de Trager, King & Djorgovski 1995 de los 13 globulares del seed (VizieR J/AJ/109/218, espejo CfA); mismo formato que `trager1995.tsv`
+19. `mclaughlin2005_modelos_seed.tsv` (2026-11-13) — #537: ajustes King 1966, Wilson y ley de potencias de McLaughlin & van der Marel 2005 (VizieR J/ApJS/161/304/models) para los mismos globulares; M15 y M30 no tienen ajuste
