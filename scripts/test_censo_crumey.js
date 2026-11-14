@@ -41,18 +41,21 @@ ok(b450.plano === null && b450.aumentoMax === 600, '450 mm: sin plano en el barr
 
 /* ── Criterio 2: censo de M13 ────────────────────────────────────────────────
    Embudo publicado en maglimite_vs_schaefer.md (200 mm, SQM 21, campo 28′,
-   250×): 891 estrellas pasan el mlim del cielo limpio y el render dibuja 548. */
+   250×): 891 estrellas pasan el mlim del cielo limpio y el render dibuja 548.
+   Con la forma de Trager (#556, ADR 0035) dibuja 535: el censo no cambia, y el
+   embudo de maglimite_vs_schaefer.md lleva la cifra nueva fechada. */
 var e250 = H.escenaM13(PROD, 200, 250, 21);
 ok(e250.censoLimpio === 891, '250×: 891 estrellas pasan el mlim del cielo limpio (' + e250.censoLimpio + ')');
-ok(e250.dibujadas === 548, '250×: el render dibuja 548 (' + e250.dibujadas + ')');
+ok(e250.dibujadas === 535, '250×: el render dibuja 535 (' + e250.dibujadas + ')');
 cerca(e250.mlim, 15.23, 0.005, '250×: mlim puntual del embudo');
 
 /* ── Criterio 3: frontera resuelta/no-resuelta y corte de la niebla ─────────
    Frontera con las definiciones de matriz_m13.js, que publica para 400 mm,
-   200× y cielo 21,5: f_res(núcleo) = 26,5 % y r_50 = 1,17 r_h. */
+   200× y cielo 21,5: f_res(núcleo) = 26,8 % y r_50 = 1,27 r_h con la forma de
+   Trager (#556, ADR 0035; con King 1962 eran 26,5 % y 1,17). */
 var f400 = H.frontera(H.escenaM13(PROD, 400, 200, 21.5));
-cerca(f400.fResNucleo, 0.265, 0.0005, 'frontera: f_res(núcleo) de la matriz M13');
-cerca(f400.r50, 1.17, 0.005, 'frontera: r_50/r_h de la matriz M13');
+cerca(f400.fResNucleo, 0.268, 0.0005, 'frontera: f_res(núcleo) de la matriz M13');
+cerca(f400.r50, 1.27, 0.005, 'frontera: r_50/r_h de la matriz M13');
 /* La variante solo mueve mlim: la cola de glow que separa el corte de la
    niebla del mlim es la misma con los dos techos. */
 var n27 = H.niebla(PROD, e250), n25 = H.niebla(CRUMEY, H.escenaM13(CRUMEY, 200, 250, 21));
@@ -62,12 +65,13 @@ ok(n25.corte < n27.corte && n25.nBanda >= 0 && n27.total > 0, 'con el techo de C
 /* ── Criterio 4: ruido de la propia escena ───────────────────────────────────
    El sorteo del ADR 0012 es Poisson-binomial: E = Σa, σ = √Σa(1−a).
    test_conservacion_sorteo.js publica, para 467 mm, 173×, SQM 21, lienzo de
-   512 px y campo 2,4·r_t: 1097 candidatas, Σa = 1083,5 y σ = 3,6. */
+   512 px y campo 2,4·r_t: 1050 candidatas, Σa = 1037,2 y σ = 3,5 con la forma
+   de Trager (#556, ADR 0035; con King 1962 eran 1097, 1083,5 y 3,6). */
 var campo = { size: 512, arcmin: Math.ceil(2.4 * H.m13(PROD).rtAs / 60) };
 var s467 = H.sorteo(H.escenaM13(PROD, 467, 173, 21, 0, campo));
-ok(s467.candidatas === 1097, 'sorteo: 1097 candidatas (' + s467.candidatas + ')');
-cerca(s467.esperanza, 1083.5, 0.05, 'sorteo: Σa');
-cerca(s467.sigma, 3.6, 0.05, 'sorteo: σ Poisson-binomial');
+ok(s467.candidatas === 1050, 'sorteo: 1050 candidatas (' + s467.candidatas + ')');
+cerca(s467.esperanza, 1037.2, 0.05, 'sorteo: Σa');
+cerca(s467.sigma, 3.5, 0.05, 'sorteo: σ Poisson-binomial');
 
 console.log(fallos ? '\n' + fallos + ' fallo(s)' : '\nTodo correcto');
 process.exit(fallos ? 1 : 0);

@@ -761,6 +761,10 @@ no a un ajuste visual:
 - **`perfilKing`/`areaKing`**: forma cerrada del perfil (1 en el centro, 0 en el radio
   de marea `r_t`) y de su integral de área efectiva, sin discretizar en anillos (evita
   artefactos de anillos visibles en renders anteriores basados en esa técnica).
+- **Forma medida (ADR 0035):** los 124 globulares con perfil de **Trager, King &
+  Djorgovski (1995)** usan esa curva `muVf` como forma radial, empalmada con la caída
+  de King más allá del último radio medido y siempre normalizada a `V_t`. King 1962
+  queda para los que Trager no cubre. Fuente: `mapa/datos/trager1995.tsv`.
 - **Resta de luz ya resuelta (evita contar dos veces)**: el flujo total catalogado
   (`mu_V0`) incluye la luz de las estrellas que Gaia también dibuja como puntos: se
   resta su flujo sumado antes de pintar el halo. Esa resta usa una consulta **aparte**,

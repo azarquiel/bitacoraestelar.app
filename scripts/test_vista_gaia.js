@@ -167,7 +167,7 @@ casos.push(function () {
 casos.push(function () {
   var e = CATALOGO.filter(function (f) { return f[0] === 'NGC 6205'; })[0];   // M13
   var cum = { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-              Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+              Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
   var gaia = require('fs').readFileSync(__dirname + '/../simulador_ocular/docs/validacion/m13_gaia_dr3.csv', 'utf8')
     .trim().split('\n').slice(1).map(function (l) {
       var c = l.split(',');

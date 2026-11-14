@@ -38,9 +38,11 @@ var psolo = [61, 250].map(function (MAG) {
   return { nNuc: fila.nNuc, fNuc: +(100 * fila.fNuc).toFixed(1) };
 });
 
-// Referencia documentada (tres_modelos_mres.md): 61× → 1 estrella, 0,7 % del
-// flujo del núcleo en puntos; 250× → 36 estrellas, 22,5 %.
-var REF = [{ nNuc: 1, fNuc: 0.7 }, { nNuc: 36, fNuc: 22.5 }];
+// Referencia documentada (tres_modelos_mres.md): 61× → 1 estrella, 0,6 % del
+// flujo del núcleo en puntos; 250× → 36 estrellas, 22,6 %. Recalibrada el
+// 2026-11-14 con la forma de Trager (#556, ADR 0035); con King 1962 eran 0,7 %
+// y 22,5 %. La fila, U y el veredicto se movieron en el mismo commit.
+var REF = [{ nNuc: 1, fNuc: 0.6 }, { nNuc: 36, fNuc: 22.6 }];
 var precondicion = psolo.every(function (p, i) {
   return cerca(p.nNuc, REF[i].nNuc, 0.05) && cerca(p.fNuc, REF[i].fNuc, 0.05);
 });
@@ -80,7 +82,7 @@ ok(V.ANCLA.id === 'NGC 6205' && V.ANCLA.D === 200 && V.ANCLA.sqm === 21 && V.ANC
 console.log('\nVeredicto (calibración + listones; tarda unos minutos):');
 
 var r = V.evaluar();
-ok(cerca(r.U, 1.817095e-1, 1e-4), 'U reproduce el valor calibrado (' + r.U.toExponential(6) + ')');
+ok(cerca(r.U, 1.922331e-1, 1e-4), 'U reproduce el valor calibrado (' + r.U.toExponential(6) + ')');
 ok(r.pasa === false, 'el veredicto sigue siendo NEGATIVO (veredicto.md)');
 
 var por = {};

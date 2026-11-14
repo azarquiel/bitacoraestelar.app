@@ -48,7 +48,7 @@ function delCatalogo(id) {
   var e = CATALOGO.filter(function (f) { return f[0] === id; })[0];
   if (!e) throw new Error('no está en el catálogo: ' + id);
   return { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-           Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+           Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
 }
 
 function pintar(cum, D, MAG, sqm, arcmin, SIZE) {

@@ -4,6 +4,15 @@ Fecha: 2026-08-24. Prerregistro: `simulador_ocular/docs/adr/0016-rotura-nucleo/p
 Arnés: `scripts/veredicto_rotura_nucleo.js`. Candado: `scripts/test_veredicto_rotura_nucleo.js`.
 Cero cambios en `resources/js/*`.
 
+> **Recalibrado el 2026-11-14 (#556, ADR 0035).** Con la forma de Trager para
+> M13, la precondición se mueve a 1 estrella y 0,6 % a 61× y 36 estrellas y
+> 22,6 % a 250× (`harness_tres_modelos_mres.js`). U se reancla, sin tocar ancla,
+> Δ ni rejilla: **U = 1,922331 × 10⁻¹**. **El veredicto no cambia:** P1 y P3
+> fallan, P2 y los dos ordinales pasan, y en el banco del 18″ solo falla
+> M30/98×. Medidas nuevas: P1 [0,0014; 0,0323; 0,2025; 0,5239], P2 [0,1922;
+> 0,3492; 0,5027], P3 1,627, M30/98× Φ = 0,156. Las cifras de abajo son las de
+> King 1962, el 2026-08-24.
+
 ## Veredicto
 
 **La métrica Φ, tal como quedó prerregistrada, queda FALSADA** (P1, P3 y un

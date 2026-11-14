@@ -46,7 +46,7 @@ function delCatalogo(id) {
   var e = CATALOGO.filter(function (f) { return f[0] === id; })[0];
   if (!e) throw new Error('no está en el catálogo: ' + id);
   return { id: e[0], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-           Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+           Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
 }
 var M13 = delCatalogo('NGC 6205');
 var pobM13 = C.poblacion(M13);
@@ -149,18 +149,29 @@ ok(pobM13.sigma(pobM13.rtAs * 1.1) === 0, 'más allá del radio de marea no hay 
 /* ── 5. m_crowd: continua, monótona y con la dependencia física correcta ── */
 console.log('Límite por aglomeración m_crowd(r):');
 var omega = Math.PI * Math.pow(1.0 / 2, 2);   // beam de 1" FWHM
-var previo = -Infinity, monotona = true, saltoMax = 0, anterior = null;
+/* Un escalón es un salto que no siguen sus vecinos: se mide con la segunda
+   diferencia, no con la primera. La primera también crece con la PENDIENTE, y
+   m_crowd es empinada pero continua donde barre los últimos bins de la LF
+   (m ≈ 29–30 en M13, poco antes de irse a +∞): con la forma de Trager
+   (ADR 0035) el halo llega ahí a 545" con 0,202 mag por arcsec y Sigma
+   cambiando 0,008 mag, sin escalón ninguno. Un bin entero de la LF (0,25 mag)
+   en un solo arcsec sigue dando una segunda diferencia de ~0,25. */
+var previo = -Infinity, monotona = true, saltoMax = 0, anterior = null, dAnterior = null;
 for (var r = 1; r < pobM13.rtAs; r += 1) {
   var m = pobM13.mCrowd(r, omega);
   if (isFinite(m)) {
     if (m < previo - 1e-9) monotona = false;
-    if (anterior !== null && isFinite(anterior)) saltoMax = Math.max(saltoMax, Math.abs(m - anterior));
+    if (anterior !== null && isFinite(anterior)) {
+      var dm = m - anterior;
+      if (dAnterior !== null) saltoMax = Math.max(saltoMax, Math.abs(dm - dAnterior));
+      dAnterior = dm;
+    }
     previo = m;
   }
   anterior = m;
 }
 ok(monotona, 'crece hacia fuera: en el núcleo se resuelven menos estrellas');
-ok(saltoMax < 0.2, 'sin escalones en r (salto máximo ' + saltoMax.toFixed(3) + ' mag entre arcsec contiguos)');
+ok(saltoMax < 0.2, 'sin escalones en r (segunda diferencia máxima ' + saltoMax.toFixed(3) + ' mag entre arcsec contiguos)');
 var mNucleo = pobM13.mCrowd(2, omega);
 ok(pobM13.mCrowd(2, omega * 4) < mNucleo, 'un beam más ancho aglomera antes (m_crowd más brillante)');
 ok(pobM13.mCrowd(2, omega, 60) < mNucleo, 'un criterio k más exigente también');
@@ -238,7 +249,7 @@ console.log('Conservación (Fase 1): mu_V(0) del modelo contra el medido por Har
 var residuos = [];
 CATALOGO.forEach(function (e) {
   var cum = { id: e[0], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-              Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+              Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
   if (cum.Vt == null || cum.dkpc == null || cum.muV0 == null) return;
   var p = C.poblacion(cum);
   if (!p) return;

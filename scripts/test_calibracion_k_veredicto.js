@@ -20,15 +20,20 @@ function ok(cond, etiqueta) {
   else { fallos++; console.error('  FALLA ' + etiqueta); }
 }
 
+/* Los K documentados se recalibraron el 2026-11-14 (#556, ADR 0035): con la
+   forma de Trager el grano del núcleo de M13 cambia y el ancla da otro K. Se
+   reejecutó `calibrar_k_textura.js` sin tocar ancla ni listones; el patrón de
+   veredicto es el mismo (veredicto.md, §6). Con King 1962 eran 8,245813e-2 y
+   2,547573e-1. */
 console.log('\nVeredicto de calibración de K — ambos estadísticos falsan los listones:');
 
 var energia = C.correr('energia');
-ok(Math.abs(energia.K - 8.245813e-2) / 8.245813e-2 < 1e-4,
+ok(Math.abs(energia.K - 7.985609e-2) / 7.985609e-2 < 1e-4,
   'K (energía) reproduce el valor documentado (' + energia.K.toExponential(6) + ')');
 ok(!energia.resultado.pasa, 'estadístico de energía sigue falsando los listones');
 
 var minkowski = C.correr('minkowski');
-ok(Math.abs(minkowski.K - 2.547573e-1) / 2.547573e-1 < 1e-4,
+ok(Math.abs(minkowski.K - 2.493572e-1) / 2.493572e-1 < 1e-4,
   'K (Minkowski) reproduce el valor documentado (' + minkowski.K.toExponential(6) + ')');
 ok(!minkowski.resultado.pasa, 'vía de escape Minkowski sigue falsando los listones (anti-vacuidad)');
 

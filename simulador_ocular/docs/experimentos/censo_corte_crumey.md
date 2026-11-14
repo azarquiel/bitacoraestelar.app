@@ -36,6 +36,14 @@ El test ancla cada medida a una cifra que publica otro sitio del repo:
 | f_res(núcleo) y r_50, 400 mm, 200×, 21,5 | `matriz_m13.js`: 26,5 % y 1,17 r_h | 26,5 % y 1,17 r_h |
 | Sorteo del ADR 0012, 467 mm, 173×, SQM 21 | `test_conservacion_sorteo.js`: 1097 candidatas, Σa 1083,5, σ 3,6 | 1097, 1083,5, 3,61 |
 
+> **Reanclado el 2026-11-14 (#556, ADR 0035).** Con la forma de Trager para M13
+> las anclas de la escena se mueven, cada una medida en su publicador: 535
+> dibujadas (891 en el censo, igual), f_res(núcleo) 26,8 % y r_50 1,27 r_h
+> (`matriz_m13.js`), y 1050 candidatas, Σa 1037,2 y σ 3,5
+> (`test_conservacion_sorteo.js`). El efecto del techo de Crumey no cambia:
+> −42 dibujadas a 250× y −106 a 350× (antes −38 y −107), y 0 con 450 mm. Las
+> tablas de este documento son las de King 1962.
+
 ## 1. Barrido de `magLimite`, de 20× a 600× (cielo 21,5)
 
 Ejecutado el 2026-09-23. Transmisión 0,9, pupila del ojo 7 mm.
