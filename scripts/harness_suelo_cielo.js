@@ -1086,6 +1086,20 @@ function vecino() {
   console.log('  con el vecino DENTRO de la extensión real (< 1): ' + u.filter(function (o) { return o.enExt < 1; })
     .map(function (o) { return o.nombre + ' ' + o.enExt.toFixed(2); }).join(', '));
 
+  /* Control de no regresión, medido y no argumentado: a cuántos les mueve el
+     vecino cada opción. Un vecino que no se mueve da el mismo par (cielo, σ). */
+  ['V1', 'V2'].forEach(function (k) {
+    var mueve = [];
+    geo.forEach(function (g) {
+      var f = PUB.fila(g.nombre), ladoCat = PS1.ps1LadoArcmin(f[4]), b = galYRadio(f, ladoCat);
+      var v0 = vecinoCon(f, b, ladoCat), v = vecinoCon(f, b, k === 'V1' ? g.ladoPub : 2 * ladoCat);
+      if (v0 && v && (v.dir !== v0.dir || Math.abs(v.offsetArcmin - v0.offsetArcmin) > 1e-9)) mueve.push(g.nombre);
+    });
+    console.log('  ' + k + ' mueve el vecino de ' + mueve.length + ' de ' + geo.length +
+      (mueve.length < 20 ? ': ' + mueve.join(', ') : '') +
+      ' · NGC6888 ' + (mueve.indexOf('NGC6888') >= 0 ? 'SE MUEVE' : 'no se mueve'));
+  });
+
   /* 2. Dirección: en los `vecina-dentro`, ¿había otra limpia? Se pregunta a
      `ps1CampoVecino` con el catálogo SIN la difusa que se mete: si la ley
      elige entonces otra dirección limpia, existía. */

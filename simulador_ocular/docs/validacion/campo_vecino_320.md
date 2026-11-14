@@ -26,7 +26,10 @@ manifiesto se lee en un contexto `vm` aparte y no en `window`: ahí
 Borde interior del campo vecino (`offset − lado/2`) en unidades de la extensión
 real: `r_obj` de catálogo o, si el ADR 0034 midió más, el medio lado publicado.
 
-- 66 texturas de imagen: mínimo **0,18**, p25 1,60, mediana **1,69**, máximo 10,71.
+- **66 texturas de imagen, no 68.** El manifiesto de hoy tiene 74 filas, de
+  las que 66 son `imagen`; el 68 del ticket es de un banco anterior. Las filas
+  sin imagen no tienen campo vecino.
+- Mínimo **0,18**, p25 1,60, mediana **1,69**, máximo 10,71.
 - **10 de 66 tienen el vecino dentro de su propia extensión, y son todas de
   lado medido** (ADR 0034): NGC 2327 0,18 · NGC 2261 0,26 · NGC 2245, IC 0466 y
   NGC 2068 0,40 · NGC 2170 0,59 · NGC 1788, NGC 1999, NGC 2247 y NGC 2182 0,89.
@@ -97,7 +100,7 @@ sobre el sidecar viejo.
 
 - **El campo de 32,66′, medido hoy:** σ **30,4**, no 41,1. El 41,1 del
   2026-09-12 no se reproduce.
-- **Por cuadrantes:** 23,5 / 27,9 / 32,4 / 32,7 en el campo de 30′, y
+- **Por cuadrantes** (script suelto, no un modo del arnés): 23,5 / 27,9 / 32,4 / 32,7 en el campo de 30′, y
   26,3 / 30,4 / 33,1 / 32,5 en el de 32,66′. Cada skycell tiene su
   profundidad, ±17 %.
 - **Con la lib arreglada,** `--patron --solo NGC7293` coloca el vecino del patrón
@@ -110,9 +113,13 @@ actualizado. No es un problema de la ley.
 
 | | objetos cuyo vecino se mueve | escaleras que cambian | NGC 6888 | ¿republica? |
 |---|---|---|---|---|
-| V0 (hoy) | 0 | 0 | 1,41, sin tocar | no |
-| **V1** | **12**: lado medido ≠ catálogo. Los otros 54, idénticos | 2: NGC 1788 y NGC 2247 | sin tocar (no es de lado medido) | sí |
-| V2 | 66 | 4 | se mueve | sí |
+| V0 (hoy) | 0 | 0 | 1,41 (`cierre_284`, criterio 3) | no |
+| **V1** | **12**, las de lado medido. Los otros 54, el mismo vecino | 2: NGC 1788 y NGC 2247 | 1,41: su vecino no se mueve | sí |
+| V2 | 66 | 4 de las 12 medidas; las otras 54, sin medir | su vecino se mueve: razón **sin medir** | sí |
+
+Lo de «cuántos mueve» lo imprime `--vecino --sin-red`, no es un argumento. Un
+vecino que no se mueve baja el mismo recorte y da el mismo par (cielo, σ), así
+que en V1 los objetos que hoy clavan el patrón no se mueven.
 | dirección limpia | 0 útiles | — | — | — |
 
 Republicar es el banco entero en V1 y en V2. El cielo y la σ viven en el
@@ -131,5 +138,11 @@ gana **V1**. La implementación y la republicación son otro ticket.
   bajar sus peldaños nuevos.
 - **Punto fijo.** Si el lado crece, V1 vuelve a alejar el vecino. Como solo
   aleja, converge, pero la implementación tiene que iterar o declararlo.
+- **La opción μ25 del ticket** (desplazamiento sacado del radio de la escena
+  en vez del lado) no se midió. En las 12 el lado medido ya es mayor que
+  `2·r_obj`, así que no cambiaría a quién se mueve, pero la distancia no es la
+  misma.
+- **El 41,1 de septiembre no se explica:** el mismo campo da hoy 30,4. Las
+  skycells varían ±17 % por cuadrante, pero eso no basta para pasar de 30 a 41.
 - **NGC 2327:** 0,61σ contra V1 y 0,22σ contra V2. V1 cae a 25′, en otro campo:
   puede ser gradiente y no pedestal. No supera el listón contra V2.

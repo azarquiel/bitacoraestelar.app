@@ -11,7 +11,7 @@ Medidas: `simulador_ocular/docs/validacion/campo_vecino_320.md`. Arnés:
 El ADR 0034 hizo crecer el lado de 12 difusas, pero dejó su campo vecino
 colocado con el lado de catálogo (`max(1,5·lado, 2·r_obj)`). En 10 de ellas el
 vecino cae dentro de la extensión que el propio generador midió, y en NGC 1788
-lleva un pedestal de 4,3–4,8σ.
+lleva un pedestal de 4,31σ contra el patrón de cielo lejano.
 
 ## Lo que se midió
 
@@ -45,9 +45,9 @@ lleva un pedestal de 4,3–4,8σ.
 ## Descartadas
 
 - **Factor 3 para todos (V2).** También arregla NGC 1788, y con más margen
-  contra el patrón (−0,33σ frente a −0,50σ), pero
-  mueve el vecino de los 66, NGC 6888 incluido, y cambia 4 escaleras en vez de
-  2. Paga control de regresión por objetos que no lo necesitaban. Si al
+  contra el patrón (−0,33σ frente a −0,50σ), pero mueve el vecino de los 66,
+  NGC 6888 incluido (su razón queda sin medir), y cambia 4 escaleras de las 12
+  medidas, frente a 2. Paga control de regresión por objetos que no lo necesitaban. Si al
   implementar V1 NGC 1788 se pasa del listón, V2 restringido a las de lado
   medido es el siguiente candidato.
 - **Preferir la dirección limpia.** No arregla ni uno de los 4 en que aplicaría.
