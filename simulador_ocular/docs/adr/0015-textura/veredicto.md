@@ -4,6 +4,17 @@ Fecha: 2026-08-22. Prerregistro: `simulador_ocular/docs/adr/0015-textura/prerreg
 Ley: `simulador_ocular/docs/adr/0015-umbral-de-textura-para-el-grano-sbf.md`, implementada en
 `resources/js/bitacora-gaia-render.js` (`TEXTURA`, `#97`).
 
+> **Recalibrado el 2026-11-14 (#556, ADR 0035).** La forma radial de M13 pasó de
+> King 1962 a la curva medida de Trager 1995. `node scripts/calibrar_k_textura.js`,
+> sin tocar ancla ni listones, da K = 7,985609 × 10⁻² (energía) y
+> 2,493572 × 10⁻¹ (Minkowski), P(ver) = 0,632 en el ancla. **El veredicto no
+> cambia:** con energía fallan P1, P2 y el banco y P3 pasa; con Minkowski fallan
+> los cuatro. Medidas nuevas, energía: P1 [0,9998; 0,9990; 0,9544; 0,7015],
+> P2 [0,6321; 0,2536; 0,0932], P3 0,0150, banco igual salvo M55/480× = 0,057.
+> Minkowski: P1 [1,00; 1,00; 1,00; 1,00], P2 [0,6321; 0,2160; 0,0700], P3 0,5807,
+> banco igual salvo M55/480× = 0,228 y M62/270× = 0,831. Las tablas de abajo
+> son las de King 1962, el 2026-08-22.
+
 ## Veredicto
 
 **El canal queda APAGADO** (`TEXTURA.ACTIVO = false`, sin cambios respecto a

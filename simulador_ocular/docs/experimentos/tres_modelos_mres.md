@@ -18,6 +18,14 @@ dibuja: por eso el flujo total sale idéntico en todas las filas y hace de contr
 - «flujo núcleo en puntos» = fracción del flujo del cúmulo dentro de r_c que va en
   estrellas dibujadas, pesada por Σ(r)·r. Es la media del modelo, no un recuento.
 
+> **Medido de nuevo el 2026-11-14 (#556, ADR 0035).** Las tablas de abajo son
+> del perfil King 1962. Con la forma de Trager, la fila P_solo del núcleo queda
+> en 1 estrella y 0,6 % a 61× y 36 estrellas y 22,6 % a 250× (m_res(0) 11,69 y
+> 13,68; 134 y 506 estrellas en total). Es la referencia de la precondición de
+> `test_veredicto_rotura_nucleo.js`. Ojo: el total de 548 a 250× ya no salía en
+> `main` antes de este cambio (daba 523); la columna que vigila el candado es la
+> del núcleo.
+
 ## 200 mm, SQM 21, 61×
 
 | modelo | m_res(0) | estrellas núcleo | estrellas total | μ_velo(0) | flujo núcleo en puntos | flujo cúmulo en puntos | flujo total |

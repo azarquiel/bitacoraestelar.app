@@ -59,6 +59,10 @@ carencia acotada del modelo, no un ajuste pendiente, y queda anotada aquí. Hast
 
 ## Cómo se llegó hasta aquí (M13, 200 mm, SQM 21, campo 28′)
 
+> **2026-11-14 (#556, ADR 0035).** Con la forma de Trager para M13, el render
+> dibuja 535 a 250× en vez de 548; los 891 que pasan el mlim no cambian
+> (`harness_censo_crumey.js`). La conclusión de este documento sigue en pie.
+
 Embudo medido sobre la fixture `simulador_ocular/docs/validacion/m13_gaia_dr3.csv` (11 970 estrellas
 en el campo, G < 18,5):
 
