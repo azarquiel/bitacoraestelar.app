@@ -78,3 +78,10 @@ un punto fijo iterado metería el criterio de parada dentro de la imagen.
   `BitacoraCumulos.globularEn(ra, dec)` (por posición, radio 2′) y `render()` la pasa a
   `vistaGaia` como `cumulo`. La ficha sale de `BitacoraCumulos.fichaDeFila`, la misma que usa el
   simulador. Sin esto, el modal «Generar imagen» pintaba un globular como un campo de Gaia más.
+- **Enmienda (ADR 0035, #556, 2026-11-14): la forma del perfil radial es de la población.**
+  `bitacora-cumulos.js` decide la forma de Σ(r): la curva `muVf` medida por Trager, King &
+  Djorgovski (1995) para los 124 globulares que la tienen, empalmada más allá del último nodo con
+  la caída del King 1962 de Harris hasta su r_t; King 1962 de Harris para el resto. La curva viaja
+  en la fila del catálogo (`globulares-datos.js`, campo 13) y `fichaDeFila` la pasa como `trager`.
+  El render sigue sin saber qué forma es: solo lee `pob.sigma` y `pob.rtAs`. `perfilKing`/`areaKing`
+  siguen en `bitacora-gaia-render.js` como la ley de King y como el empalme de la curva medida.

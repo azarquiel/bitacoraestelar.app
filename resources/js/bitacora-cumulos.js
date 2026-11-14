@@ -10,7 +10,9 @@
  *   - N_tot        número total de estrellas, DERIVADO del flujo integrado
  *   - S1(m_lim)    flujo de las estrellas más débiles que m_lim
  *   - S2(m_lim)    suma de sus flujos AL CUADRADO: la varianza del grano (SBF)
- *   - Sigma(r)     perfil de King normalizado a 1 sobre el cielo (1/arcsec²)
+ *   - Sigma(r)     perfil radial normalizado a 1 sobre el cielo (1/arcsec²):
+ *                  la curva medida de Trager 1995 si el globular la tiene, si no
+ *                  King 1962 con r_c y c de Harris (ADR 0035)
  *   - m_crowd(r)   hasta dónde llega la resolución por aglomeración
  *   - sintéticas   las estrellas brillantes que Gaia no trae (núcleo aglomerado)
  *
@@ -26,7 +28,8 @@
  *
  * Depende de: lf-globulares-datos.js (window.BITACORA_LF_GLOBULARES) y, en
  * tiempo de llamada, de BitacoraGaiaRender.perfilKing/areaKing — el perfil de
- * King es una sola ley y vive en un solo sitio.
+ * King es una sola ley y vive en un solo sitio. Lo usan los globulares sin
+ * curva de Trager y el empalme más allá del último radio medido.
  * =========================================================================== */
 (function () {
   'use strict';
@@ -90,7 +93,7 @@
 
   function render() {
     var R = window.BitacoraGaiaRender;
-    if (!R || !R.perfilKing) throw new Error('BitacoraCumulos necesita BitacoraGaiaRender (perfil de King)');
+    if (!R || !R.perfilKing) throw new Error('BitacoraCumulos necesita BitacoraGaiaRender (perfil de King, también empalme de Trager)');
     return R;
   }
 
@@ -176,6 +179,40 @@
     var u = dxAs * Math.sin(a) + dyAs * Math.cos(a);       // eje mayor
     var v = -dxAs * Math.cos(a) + dyAs * Math.sin(a);      // eje menor
     return Math.sqrt(u * u + (v / (1 - elip)) * (v / (1 - elip)));
+  }
+
+  /* ── Forma radial medida (ADR 0035) ─────────────────────────────────────── */
+
+  /* Perfil relativo (1 en el centro) desde la curva muVf de Trager 1995 que
+     trae la fila del catálogo: [log r0, log r1, [muVf...]], equiespaciada en
+     log r (gen_globulares.py). Dentro de lo medido, lineal en log r y plana por
+     dentro del primer nodo. Más allá del último nodo se empalma con la caída
+     del King 1962 de Harris, Σ(r1)·K(r)/K(r1), sin inventar pendiente propia.
+     Cero desde r_t de Harris, aunque Trager mida más lejos. */
+  function formaTrager(t, rcAs, rtAs) {
+    var R = render(), l0 = t[0], l1 = t[1], mu = t[2], n = mu.length - 1;
+    var paso = (l1 - l0) / n, rUlt = Math.pow(10, l1);
+    function flujo(x) {                         // x = log10 r, dentro de [l0, l1]
+      var u = (x - l0) / paso, j = Math.min(n - 1, Math.max(0, Math.floor(u)));
+      return Math.pow(10, -0.4 * (mu[j] + (u - j) * (mu[j + 1] - mu[j]) - mu[0]));
+    }
+    var fUlt = flujo(l1), kUlt = R.perfilKing(rUlt, rcAs, rtAs);
+    return function (rAs) {
+      if (rAs >= rtAs) return 0;
+      if (rAs <= rUlt) return flujo(rAs > 0 ? Math.max(l0, Math.log10(rAs)) : l0);
+      return fUlt * R.perfilKing(rAs, rcAs, rtAs) / kUlt;
+    };
+  }
+
+  /* ∫0^rt perfil(r)·2πr dr por Simpson, 20 000 tramos: la cuadratura del spike
+     #537. Una vez por población (poblacionCacheada). */
+  function areaNumerica(perfil, rtAs) {
+    var N = 20000, h = rtAs / N, acu = 0;
+    for (var i = 0; i < N; i++) {
+      var a = i * h, b = a + h, m = a + h / 2;
+      acu += (perfil(a) * a + 4 * perfil(m) * m + perfil(b) * b) * h / 6;
+    }
+    return 2 * Math.PI * acu;
   }
 
   /* ── Población ──────────────────────────────────────────────────────────── */
@@ -281,12 +318,23 @@
 
     var rcAs = cumulo.rc * 60, rtAs = rcAs * Math.pow(10, cumulo.c);
     var kKing = rtAs / rcAs;
-    // Normalización del perfil: perfilKing integra areaKing(k)·r_c² sobre el
-    // cielo, así que Sigma(r) sale en fracción de estrellas por arcsec².
-    var normPerfil = R.areaKing(kKing) * rcAs * rcAs;
+    /* Forma radial (ADR 0035): la curva medida de Trager 1995 si el globular la
+       tiene; si no, King 1962 con r_c y c de Harris. r_t es siempre el de
+       Harris. Las dos son relativas: Sigma(r) = perfil/normPerfil sale en
+       fracción de estrellas por arcsec², y la usan igual el velo, el crowding,
+       el punto fijo de m_res y el muestreo de las sintéticas. */
+    var perfil, normPerfil;
+    if (cumulo.trager) {
+      perfil = formaTrager(cumulo.trager, rcAs, rtAs);
+      normPerfil = areaNumerica(perfil, rtAs);
+    } else {
+      perfil = function (rAs) { return R.perfilKing(rAs, rcAs, rtAs); };
+      // perfilKing integra areaKing(k)·r_c² sobre el cielo.
+      normPerfil = R.areaKing(kKing) * rcAs * rcAs;
+    }
 
     function sigma(rAs) {
-      return R.perfilKing(rAs, rcAs, rtAs) / normPerfil;
+      return perfil(rAs) / normPerfil;
     }
 
     /* Aglomeración con umbral duro: hasta qué magnitud se distinguen puntos
@@ -354,7 +402,7 @@
       var h = rtAs / PASOS_CDF, acu = 0;
       for (var j = 0; j < PASOS_CDF; j++) {
         var r0 = j * h, r1 = r0 + h;
-        acu += (R.perfilKing(r0, rcAs, rtAs) * r0 + R.perfilKing(r1, rcAs, rtAs) * r1) / 2 * h;
+        acu += (perfil(r0) * r0 + perfil(r1) * r1) / 2 * h;
         cdf[j + 1] = acu;
       }
       for (j = 0; j <= PASOS_CDF; j++) cdf[j] /= acu;
@@ -451,7 +499,9 @@
      la LF. */
   var cache = {};
   function poblacionCacheada(cumulo, realization) {
-    var clave = [cumulo.id, versionLF(), realization || 0].join('|');
+    // La forma entra en la clave: el mismo id con y sin curva de Trager son dos
+    // poblaciones distintas (los arneses comparan una contra otra).
+    var clave = [cumulo.id, versionLF(), realization || 0].join('|') + (cumulo.trager ? '|trager' : '');
     if (!cache[clave]) cache[clave] = poblacion(cumulo);
     return cache[clave];
   }
@@ -479,10 +529,12 @@
 
   /* Ficha física de una fila de window.BITACORA_GLOBULARES (Harris 1996, rev.
      2010), la que espera `poblacion`. Harris no publica ángulo de posición:
-     el perfil se evalúa en radio circular (pa nulo). */
+     el perfil se evalúa en radio circular (pa nulo). `trager` es la curva
+     medida de la forma radial (ADR 0035), o null. */
   function fichaDeFila(e) {
     return { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-             Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+             Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null,
+             trager: e[13] || null };
   }
 
   /* El globular del catálogo a menos de `radioArcmin` (2′ por defecto) de

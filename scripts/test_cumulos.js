@@ -46,7 +46,7 @@ function delCatalogo(id) {
   var e = CATALOGO.filter(function (f) { return f[0] === id; })[0];
   if (!e) throw new Error('no está en el catálogo: ' + id);
   return { id: e[0], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-           Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+           Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
 }
 var M13 = delCatalogo('NGC 6205');
 var pobM13 = C.poblacion(M13);
@@ -238,7 +238,7 @@ console.log('Conservación (Fase 1): mu_V(0) del modelo contra el medido por Har
 var residuos = [];
 CATALOGO.forEach(function (e) {
   var cum = { id: e[0], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-              Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+              Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
   if (cum.Vt == null || cum.dkpc == null || cum.muV0 == null) return;
   var p = C.poblacion(cum);
   if (!p) return;

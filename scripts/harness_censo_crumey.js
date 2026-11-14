@@ -77,7 +77,7 @@ var GAIA = fs.readFileSync(path.join(RAIZ, 'simulador_ocular/docs/validacion/m13
 function cumuloM13(V) {
   var e = V.GLOBULARES.filter(function (f) { return f[0] === 'NGC 6205'; })[0];
   return { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-           Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+           Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
 }
 function m13(V) { return V.C.poblacionCacheada(cumuloM13(V), 0); }
 

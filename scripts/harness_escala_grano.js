@@ -35,7 +35,7 @@ var R = window.BitacoraGaiaRender;
 
 var e = window.BITACORA_GLOBULARES.filter(function (f) { return f[0] === 'NGC 6205'; })[0];
 var M13 = { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[7],
-            Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null };
+            Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
 var D = 200, SQM = 21.0, SIZE = 1440, ARCMIN = 6;   // 6' / 1440 px = 0,25 "/px
 var AUMENTOS = [61, 120, 173, 250];
 var rhAs = M13.rh * 60;

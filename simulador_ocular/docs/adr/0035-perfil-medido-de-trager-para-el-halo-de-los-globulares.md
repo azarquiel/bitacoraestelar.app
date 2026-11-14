@@ -1,6 +1,12 @@
 # La forma radial de los globulares sale del perfil medido de Trager 1995
 
-**Aceptado** el 2026-11-13 por el usuario, al cerrar el spike #537 (PR #554). Propuesto ese mismo día. Producción sigue con King 1962 hasta que se implemente.
+**Aceptado** el 2026-11-13 por el usuario, al cerrar el spike #537 (PR #554). Propuesto ese mismo día. **Implementado** en #556 (rama `feat/556-perfil-trager-globulares`), 2026-11-14.
+
+Cómo quedó la implementación:
+
+- **124 globulares con curva, no 125.** Trager trae 125 nombres, pero `terzan11` es Terzan 5, que Trager también mide con su propio nombre. Harris solo tiene Terzan 5.
+- **Remuestreo a 0,02 dex en log r.** Es el paso más grueso con el que el radio pintado (≥ 1 DN) de los 13 del seed sale igual que en el spike en los cuatro equipos. Con 0,03 y 0,05 dex, M5 y M62 se mueven un paso de la tabla radial. `globulares-datos.js` pasa de 13 a 124 KB.
+- **El test del halo (E3.2b) mide solo la forma.** Al residuo se le suma ΔV = V(muVf integrada) − V_t de Harris, porque la diferencia de punto cero queda fuera de este ADR. Sin esa corrección, M12, M30 y M55 no pasarían con ninguna forma, y M13 se quedaría en −0,31 mag a 8–∞ r_h. Con ella, `main` falla en M4, M5, M12, M13 y M15. M9 pasa: su exceso solo se ve en DN del pipeline, no en la forma.
 
 Medidas: `simulador_ocular/docs/notas/perfil-king-contra-trager-globulares.md`. Arnés: `scripts/spike_537_perfil_globulares.js`.
 
