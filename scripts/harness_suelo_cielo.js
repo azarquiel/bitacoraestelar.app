@@ -1018,6 +1018,9 @@ function cieloDe(v, ladoCat, escalaAs) {
   return bajar(v.ra, v.dec, ladoCat, Math.round(ladoCat * 60 / escalaAs), PS1.cfg.banda).then(function (q) {
     if (q.celdasCosidas < q.celdasPedidas) return { motivo: 'celda-perdida' };
     var c = PS1.ps1CieloCampo(q.datos);
+    /* σ es por píxel (ADR 0028): un recorte que no vuelve a la escala pedida no
+       vale para esa escala. Mismo 1 % que `mismaEscala` del generador. */
+    if (Math.abs(q.escalaAs - escalaAs) > 0.01 * escalaAs) return { motivo: 'otra-escala' };
     return c.n ? { cielo: c.cielo, sigma: c.sigma, n: c.n, escalaAs: q.escalaAs } : { motivo: 'sin-cobertura' };
   }).catch(function (e) { return { motivo: 'descarga: ' + (e && e.message || e) }; });
 }
@@ -1026,15 +1029,21 @@ function cieloDe(v, ladoCat, escalaAs) {
    juzgar con su `peor` publicado contra el suelo nuevo. Devuelve el primer lado
    que llega, o null si ninguno de los JUZGADOS llega (crecería: sin medir). */
 function escaleraCon(marco, parPorEscala) {
-  var res = null;
-  marco.peldanos.forEach(function (p) {
-    if (res || !p.peor) return;
+  /* Contraste declarado (ADR 0008): es la condición de `ps1MarcoLlegaAlCielo`
+     (bitacora-ps1.js:417 y :439) aplicada a los `peor` que el sidecar ya
+     publica, porque re-bajar cada peldaño solo para volver a calcularlos es red
+     sin información nueva. Si el suelo o el veredicto cambian allí, aquí se
+     cambian a mano. Como el generador (`medirLado`), un peldaño que no se puede
+     juzgar PARA la escalera: no se salta. */
+  for (var i = 0; i < marco.peldanos.length; i++) {
+    var p = marco.peldanos[i];
+    if (!p.peor) return null;
     var par = parPorEscala(p.escalaAs);
-    if (!par) return;
+    if (!par) return null;
     var suelo = par.cielo + PS1.cfg.kRuido * par.sigma;
-    if (p.peor.N < suelo && p.peor.S < suelo && p.peor.E < suelo && p.peor.O < suelo) res = p.lado;
-  });
-  return res;
+    if (p.peor.N < suelo && p.peor.S < suelo && p.peor.E < suelo && p.peor.O < suelo) return p.lado;
+  }
+  return null;
 }
 
 function vecino() {
@@ -1069,13 +1078,13 @@ function vecino() {
   /* La extensión REAL: r_obj de catálogo, salvo donde el ADR 0034 midió más
      (el medio lado publicado de una difusa que creció). */
   var u = geo.map(function (g) {
-    return { nombre: g.nombre, x: g.borde / Math.max(g.rObj, g.medido ? g.ladoPub / 2 : 0) };
-  }).sort(function (a, b) { return a.x - b.x; });
-  var cuartil = function (q) { return u[Math.floor(q * (u.length - 1))].x.toFixed(2); };
+    return { nombre: g.nombre, enExt: g.borde / Math.max(g.rObj, g.medido ? g.ladoPub / 2 : 0) };
+  }).sort(function (a, b) { return a.enExt - b.enExt; });
+  var cuartil = function (q) { return u[Math.floor(q * (u.length - 1))].enExt.toFixed(2); };
   console.log('  borde interior del vecino en unidades de la extensión real: mín ' + cuartil(0) +
     ' · p25 ' + cuartil(0.25) + ' · mediana ' + cuartil(0.5) + ' · máx ' + cuartil(1));
-  console.log('  con el vecino DENTRO de la extensión real (< 1): ' + u.filter(function (o) { return o.x < 1; })
-    .map(function (o) { return o.nombre + ' ' + o.x.toFixed(2); }).join(', '));
+  console.log('  con el vecino DENTRO de la extensión real (< 1): ' + u.filter(function (o) { return o.enExt < 1; })
+    .map(function (o) { return o.nombre + ' ' + o.enExt.toFixed(2); }).join(', '));
 
   /* 2. Dirección: en los `vecina-dentro`, ¿había otra limpia? Se pregunta a
      `ps1CampoVecino` con el catálogo SIN la difusa que se mete: si la ley
@@ -1087,6 +1096,7 @@ function vecino() {
     var v = PS1.ps1CampoVecino(b.gal, b.rObjMax, cat), quitadas = [], w = v, limpia = null;
     /* Se quitan las intrusas de una en una hasta que alguna dirección sale
        limpia: eso dice si existía y cuál era. */
+    /* shortcut: como mucho 6 intrusas quitadas; el banco no pasa de 1, subirlo si alguna lo agota. */
     while (w && w.difusaDentro && quitadas.length < 6) {
       quitadas.push(w.difusaDentro);
       w = PS1.ps1CampoVecino(b.gal, b.rObjMax, cat.filter(function (r) {
@@ -1171,7 +1181,16 @@ function informeVecinoFila(r, s) {
       r['d' + k] = (c0.cielo - c.cielo) / c.sigma;   // σ del campo de referencia: la de V0 la infla el pedestal
     }
   });
-  if (r.patron && r.patron.cielo != null && c0) r.dPatron = (c0.cielo - r.patron.cielo) / r.patron.sigma;
+  /* Contra el patrón solo se compara el CIELO, que no depende del píxel; la σ
+     del anillo es de otra escala, así que se divide por la de V1, que es un
+     campo limpio a la escala del parche. */
+  var c1 = parA(r.par.V1, e0);
+  if (r.patron && r.patron.cielo != null && c0 && c1) {
+    r.dPatron = (c0.cielo - r.patron.cielo) / c1.sigma;
+    r.dPatronV1 = (c1.cielo - r.patron.cielo) / c1.sigma;
+    var c2 = parA(r.par.V2, e0);
+    if (c2) r.dPatronV2 = (c2.cielo - r.patron.cielo) / c2.sigma;
+  }
   /* La escalera, con el par de cada opción a la escala de cada peldaño. */
   r.escalera = {};
   ['V0', 'V1', 'V2'].forEach(function (k) {
@@ -1179,7 +1198,8 @@ function informeVecinoFila(r, s) {
   });
   console.log('              V0−V1 ' + (r.dV1 != null ? r.dV1.toFixed(2) + 'σ' : '—') +
     ' · V0−V2 ' + (r.dV2 != null ? r.dV2.toFixed(2) + 'σ' : '—') +
-    (r.dPatron != null ? ' · V0−patrón ' + r.dPatron.toFixed(2) + 'σ' : '') +
+    (r.dPatron != null ? ' · V0−patrón ' + r.dPatron.toFixed(2) + 'σ · V1−patrón ' +
+      r.dPatronV1.toFixed(3) + 'σ' + (r.dPatronV2 != null ? ' · V2−patrón ' + r.dPatronV2.toFixed(3) + 'σ' : '') : '') +
     ' · escalera V0/V1/V2: ' + ['V0', 'V1', 'V2'].map(function (k) {
       return r.escalera[k] == null ? 'crece' : r.escalera[k].toFixed(2) + '′';
     }).join(' / '));

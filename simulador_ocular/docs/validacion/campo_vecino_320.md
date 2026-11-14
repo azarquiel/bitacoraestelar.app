@@ -70,10 +70,17 @@ en NGC 1788). «Crece»: con ese cielo, ningún peldaño ya juzgado llega, así 
 la escalera seguiría subiendo, y eso solo se sabe bajando los peldaños nuevos.
 
 Contra el **patrón de cielo lejano** (criterio 2), solo NGC 1788 lo tiene entre
-estas 12: −1,5 DN, σ 49,4.
+estas 12: −1,5 DN. Se compara solo el cielo, que no depende del píxel; la σ del
+anillo es de otra escala, así que se divide por la del campo alejado.
 
-- V0 queda a **3,38σ**.
-- V1 queda a **0,39σ** y pasa el listón 1 del ADR 0027 (0,50).
+- V0 queda a **4,31σ**.
+- V1 queda a **−0,496σ**: pasa el listón 1 del ADR 0027 (0,50), pero por muy
+  poco.
+- V2 queda a **−0,332σ**: también pasa, con más margen.
+
+Las dos opciones quitan el pedestal. V1 cae un poco por debajo del cielo
+lejano: puede ser gradiente del campo, y con 3 milésimas de margen no se puede
+decir más.
 
 ### La dirección limpia: descartada
 

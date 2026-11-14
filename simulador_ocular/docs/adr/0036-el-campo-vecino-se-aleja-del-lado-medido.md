@@ -18,8 +18,10 @@ lleva un pedestal de 4,3–4,8σ.
 - **10 de 66 vecinos caen dentro de la extensión real del objeto,** y los 10
   son de lado medido. Ninguno con lado de catálogo.
 - **Solo NGC 1788 lleva pedestal por encima del listón** (0,5σ, ADR 0027):
-  - con su vecino de hoy, 3,38σ contra el patrón de cielo lejano;
-  - con el vecino alejado según el lado medido, 0,39σ.
+  - con su vecino de hoy, 4,31σ contra el patrón de cielo lejano;
+  - con el vecino alejado según el lado medido, −0,496σ: pasa el listón,
+    pero justo;
+  - con factor 3 para todos, −0,332σ.
 - **Preferir la dirección limpia no arregla nada:** en los 4 `vecina-dentro`
   del banco, la intrusa pisa las cuatro direcciones.
 - **NGC 7293 no era un problema de la ley.** El arnés leía un sidecar viejo; con
@@ -42,9 +44,12 @@ lleva un pedestal de 4,3–4,8σ.
 
 ## Descartadas
 
-- **Factor 3 para todos (V2).** También arregla NGC 1788 (4,29σ → limpio), pero
+- **Factor 3 para todos (V2).** También arregla NGC 1788, y con más margen
+  contra el patrón (−0,33σ frente a −0,50σ), pero
   mueve el vecino de los 66, NGC 6888 incluido, y cambia 4 escaleras en vez de
-  2. Paga control de regresión por objetos que no lo necesitaban.
+  2. Paga control de regresión por objetos que no lo necesitaban. Si al
+  implementar V1 NGC 1788 se pasa del listón, V2 restringido a las de lado
+  medido es el siguiente candidato.
 - **Preferir la dirección limpia.** No arregla ni uno de los 4 en que aplicaría.
 
 ## Lo que cuesta
