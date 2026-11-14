@@ -31,18 +31,38 @@ module.exports = function (RAIZ, PS1, P16, dirs) {
     return null;
   }
 
+  /* Los sidecars de VERSIONES VIEJAS se quedan en disco al republicar, y sin el
+     PNG a mano el primero alfabético no es el publicado: en 31 de 66 objetos
+     era otro. Con fila en el manifiesto solo vale su versión; sin ella,
+     cualquiera. El manifiesto se lee en un contexto aparte y NO en `window`:
+     ahí `ps1LadoDeFila` lo usaría y cambiaría el lado —y con él la geometría
+     del campo vecino— de quien solo quería localizar un fichero. */
+  var MANIFIESTO = (function () {
+    var w = {};
+    require('vm').runInNewContext(fs.readFileSync(path.join(RAIZ, 'simulador_ocular',
+      'resources', 'js', 'dso-texturas-datos.js'), 'utf8'), { window: w });
+    return w.BITACORA_DSO_TEXTURAS || [];
+  })();
+  function candidatos(dir, nombre) {
+    var id = PS1.ps1IdTextura(nombre), ver = null;
+    MANIFIESTO.forEach(function (t) {
+      if (t[1] === 'imagen' && PS1.ps1IdTextura(t[0]) === id) ver = t[2];
+    });
+    return fs.readdirSync(dir).filter(function (f) {
+      return (ver ? f === id + '.' + ver + '.json'
+                  : f.indexOf(id + '.') === 0 && /\.json$/.test(f) && f.indexOf('.fila.') < 0);
+    });
+  }
+
   /* El par (sidecar, PNG), mirando los directorios en orden. El nombre de
      fichero lleva la versión y la versión sale del manifiesto: si el PNG de
      disco no es el que el manifiesto declara, esto no lo encuentra, que es lo
      que queremos —medir lo publicado, no lo que haya por ahí—. */
   function parche(nombre) {
-    var id = PS1.ps1IdTextura(nombre);
     for (var i = 0; i < DIRS.length; i++) {
       var dir = DIRS[i];
       if (!fs.existsSync(dir)) continue;
-      var cand = fs.readdirSync(dir).filter(function (f) {
-        return f.indexOf(id + '.') === 0 && /\.json$/.test(f) && f.indexOf('.fila.') < 0;
-      });
+      var cand = candidatos(dir, nombre);
       for (var j = 0; j < cand.length; j++) {
         var png = path.join(dir, cand[j].replace(/\.json$/, '.png'));
         if (fs.existsSync(png)) return { json: path.join(dir, cand[j]), png: png, dir: dir };
@@ -59,12 +79,9 @@ module.exports = function (RAIZ, PS1, P16, dirs) {
   function sidecar(nombre) {
     var p = parche(nombre);
     if (p) return JSON.parse(fs.readFileSync(p.json, 'utf8'));
-    var id = PS1.ps1IdTextura(nombre);
     for (var i = 0; i < DIRS.length; i++) {
       if (!fs.existsSync(DIRS[i])) continue;
-      var cand = fs.readdirSync(DIRS[i]).filter(function (f) {
-        return f.indexOf(id + '.') === 0 && /\.json$/.test(f) && f.indexOf('.fila.') < 0;
-      });
+      var cand = candidatos(DIRS[i], nombre);
       if (cand.length) return JSON.parse(fs.readFileSync(path.join(DIRS[i], cand[0]), 'utf8'));
     }
     return null;
