@@ -1,4 +1,25 @@
 {
+  "enabledPlugins": {
+    "mattpocock-skills@mattpocock": true,
+    "ponytail@ponytail": true,
+    "i-have-adhd@i-have-adhd": true
+  },
+  "env": {
+    "PONYTAIL_DEFAULT_MODE": "ultra"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Sesión de este proyecto: antes de responder al primer mensaje, invoca con la herramienta Skill: i-have-adhd:i-have-adhd (args: full) y anthropic-skills:caveman (args: full). Ponytail ya arranca en ultra (PONYTAIL_DEFAULT_MODE). No anuncies la carga.'"
+          }
+        ]
+      }
+    ]
+  },
   "extraKnownMarketplaces": {
     "mattpocock": {
       "source": {
@@ -6,8 +27,5 @@
         "repo": "mattpocock/skills"
       }
     }
-  },
-  "enabledPlugins": {
-    "mattpocock-skills@mattpocock": true
   }
 }
