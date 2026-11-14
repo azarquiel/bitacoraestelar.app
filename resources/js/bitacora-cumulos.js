@@ -4,8 +4,9 @@
  * ¿Qué estrellas existen en este cúmulo y dónde están? Nada más. Aquí no hay
  * ojo, ni telescopio, ni canvas: solo el cúmulo tal y como es.
  *
- * De un cúmulo del catálogo de Harris (V_t, d, E(B-V), [Fe/H], geometría de
- * King) y de una función de luminosidad de isócrona salen:
+ * De un cúmulo del catálogo de Harris (V_t, d, E(B-V), [Fe/H], r_c y c), de su
+ * curva de Trager 1995 si la tiene, y de una función de luminosidad de
+ * isócrona salen:
  *
  *   - N_tot        número total de estrellas, DERIVADO del flujo integrado
  *   - S1(m_lim)    flujo de las estrellas más débiles que m_lim

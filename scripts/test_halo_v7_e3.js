@@ -50,8 +50,10 @@ var REFS = ['NGC 6205', 'NGC 7078', 'NGC 6121', 'NGC 104', 'NGC 5139'];
 /* Los 13 del seed (#537) llevan la curva de Trager (ADR 0035): su área sale de
    cuadratura en producción, no de la fórmula cerrada de King, y es la que hay
    que cerrar aquí con una malla diez veces más fina. */
-var SEED_IDS = ['NGC 7089', 'NGC 6121', 'NGC 5904', 'NGC 6333', 'NGC 6254', 'NGC 6218', 'NGC 6205',
-  'NGC 6402', 'NGC 7078', 'NGC 6656', 'NGC 7099', 'NGC 6809', 'NGC 6266'];
+var SEED = [['NGC 7089', 'M2'], ['NGC 6121', 'M4'], ['NGC 5904', 'M5'], ['NGC 6333', 'M9'], ['NGC 6254', 'M10'],
+  ['NGC 6218', 'M12'], ['NGC 6205', 'M13'], ['NGC 6402', 'M14'], ['NGC 7078', 'M15'], ['NGC 6656', 'M22'],
+  ['NGC 7099', 'M30'], ['NGC 6809', 'M55'], ['NGC 6266', 'M62']];
+var SEED_IDS = SEED.map(function (p) { return p[0]; });
 
 REFS.concat(SEED_IDS.filter(function (id) { return REFS.indexOf(id) < 0; })).forEach(function (id) {
   var cum = H.cumulo(id);
@@ -185,9 +187,6 @@ function mediana(v) {
 }
 ok(mediana([1, 2, 3, 4]) === 2.5 && mediana([3, 1, 2]) === 2, 'mediana: par e impar');
 
-var SEED = [['NGC 7089', 'M2'], ['NGC 6121', 'M4'], ['NGC 5904', 'M5'], ['NGC 6333', 'M9'], ['NGC 6254', 'M10'],
-  ['NGC 6218', 'M12'], ['NGC 6205', 'M13'], ['NGC 6402', 'M14'], ['NGC 7078', 'M15'], ['NGC 6656', 'M22'],
-  ['NGC 7099', 'M30'], ['NGC 6809', 'M55'], ['NGC 6266', 'M62']];
 var TRAMOS_HALO = [[2, 4], [4, 8], [8, Infinity]];
 var UMBRAL_EXCESO = -0.3;
 
