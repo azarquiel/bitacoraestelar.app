@@ -1,6 +1,6 @@
 # La forma radial de los globulares sale del perfil medido de Trager 1995
 
-**Aceptado** el 2026-11-13 por el usuario, al cerrar el spike #537 (PR #554). Propuesto ese mismo día. **Implementado** en #556 (rama `feat/556-perfil-trager-globulares`), 2026-11-14.
+**Aceptado** el 2026-11-13 por el usuario, al cerrar el spike #537 (PR #554). Propuesto ese mismo día. **Implementado** en #556, PR #557 (https://github.com/azarquiel/bitacoraestelar.app/pull/557), 2026-11-14.
 
 Cómo quedó la implementación:
 
