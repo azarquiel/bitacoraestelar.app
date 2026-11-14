@@ -15,5 +15,5 @@ Nivel de la capa difusa en el centro (`pintarCumulo`, misma configuración, sin 
 La mediana de 21×21 píxeles en el centro de las capturas (estrellas incluidas) pasa de
 105 a 97 en M30 y de 132 a 126 en M15.
 
-El ADR 0035 preveía que el centro de M30 bajase 34–36 DN. Si el núcleo sigue siendo
-creíble lo decide el usuario.
+El ADR 0035 preveía que el centro de M30 bajase 34–36 DN. **El usuario da por creíble
+el núcleo de M30 (2026-11-14):** el cambio se nota, pero no hace falta tocar el núcleo.
