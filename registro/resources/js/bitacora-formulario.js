@@ -1947,21 +1947,31 @@
     .then(function(res){
       submitBtn.disabled=false;
       if(res.ok && res.data && res.data.ok){
-        var txt = '✓ ' + BitacoraBase.avisoGuardado(payload.resultado==='visto', res.data.id, editando);
-        txt += ' <a href="' + BitacoraBase.urlMapa(res.data.objeto || payload.objeto) + '">Ver en el mapa</a>';
+        // Con nodos y textContent, no con HTML concatenado: los avisos son texto
+        // del servidor (mensajes de error que pueden repetir el nombre del objeto).
+        var nota = document.createElement('span'), enlace = document.createElement('a');
+        nota.style.color = 'var(--verde)';
+        nota.textContent = '✓ ' + BitacoraBase.avisoGuardado(payload.resultado==='visto', res.data.id, editando) + ' ';
+        enlace.href = BitacoraBase.urlMapa(res.data.objeto || payload.objeto);
+        enlace.textContent = 'Ver en el mapa';
+        nota.appendChild(enlace);
+        function avisoAmbar(t){
+          var a = document.createElement('span');
+          a.style.color = 'var(--ambar,#c88)';
+          a.textContent = ' ' + t;
+          nota.appendChild(a);
+        }
         // Si el objeto no se pudo colocar en el mapa (p. ej. ninguna base de datos
         // tiene su distancia), se guarda igual, se avisa y se ofrece escribir a
         // mano lo que falta, que es lo único que separa al objeto del mapa.
         if(res.data.aviso){
-          txt += ' <span style="color:var(--ambar,#c88)">El objeto no se ha podido situar en el mapa automáticamente: ' + res.data.aviso + '</span>';
+          avisoAmbar('El objeto no se ha podido situar en el mapa automáticamente: ' + res.data.aviso);
           pedirDistancia(res.data.objeto);
         } else if(distCaja){
           distCaja.hidden = true;
         }
-        if(res.data.aviso_ficha){
-          txt += ' <span style="color:var(--ambar,#c88)">' + res.data.aviso_ficha + '</span>';
-        }
-        $('outNote').innerHTML='<span style="color:var(--verde)">'+txt+'</span>';
+        if(res.data.aviso_ficha) avisoAmbar(res.data.aviso_ficha);
+        $('outNote').replaceChildren(nota);
         if(!editando) claveIdem = nuevaClaveIdem();
         // Si esta observación ha dicho el lugar, el servidor lo sube al viaje: hay
         // que releerlo para que el selector de base desaparezca sin recargar. El

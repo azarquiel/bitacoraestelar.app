@@ -76,6 +76,13 @@ ok(/if\(!editando\) mostrarEncadenar\(true\)/.test(envio),
 ok(envio.indexOf('mostrarEncadenar(false)') < envio.indexOf('mostrarEncadenar(true)'),
    'en ese orden: primero tapar, luego el éxito');
 
+/* Los avisos del guardado (`aviso`, `aviso_ficha`) son texto del servidor y
+   pueden repetir lo que escribió el usuario: van con textContent, nunca
+   concatenados en HTML (XSS; Semgrep raw-html-concat). */
+var exito = envio.slice(envio.indexOf('res.data.ok'), envio.indexOf("replaceChildren(nota)"));
+ok(exito.length > 0 && !/innerHTML/.test(exito) && !/['"]\s*<\/?[a-z]/i.test(exito),
+   'los avisos del guardado no se meten en HTML');
+
 /* #317: desde una observación ya guardada (?editar=12) también se encadena, y
    eso NO es editarla: se deriva una hermana. Los botones los destapa la carga
    (la observación ya existe, no hay nada que guardar antes) y solo la carga que

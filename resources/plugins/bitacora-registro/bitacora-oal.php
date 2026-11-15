@@ -1391,6 +1391,7 @@ function bitacora_oal_panel() {
     if ( $resumen && ! $resumen['aplicado'] && $resumen['observaciones'] > 0 ) {
         echo '<form method="post" style="margin-top:12px;padding-top:12px;border-top:1px solid #e0e0e0">';
         wp_nonce_field( 'bitacora_oal' );
+        // nosemgrep: php.lang.security.injection.echoed-request.echoed-request — intval(): solo puede salir un entero
         echo '<input type="hidden" name="bitacora_oal_usuario" value="' . intval( $destino ) . '" />';
         echo '<input type="hidden" name="bitacora_oal_texto" value="' . esc_attr( $xml ) . '" />';
         echo '<button type="submit" name="bitacora_oal_paso" value="importar" class="button button-primary">Importar de verdad</button>';
