@@ -155,9 +155,11 @@ Promise.resolve().then(function () {
        más (#286, ADR 0028): el cielo medido fuera del objeto se publica al
        generar, y un parche cosido en caliente por el proxy no tiene sidecar
        donde llevarlo. Por eso ps1AnclarACatalogo los trata como opcionales y
-       sin ellos manda el marco; el resto de la forma no se mueve. */
+       sin ellos manda el marco; el resto de la forma no se mueve. Igual
+       `ladoApertura` (ADR 0037): sale del `marco` del sidecar y el proxy no lo
+       tiene, así que su parche se ancla en el parche entero, como siempre. */
     var suyas = {};
-    ['ra', 'dec', 'ladoArcmin', 'cieloVecino', 'sigmaVecino'].forEach(function (k) { suyas[k] = 1; });
+    ['ra', 'dec', 'ladoArcmin', 'cieloVecino', 'sigmaVecino', 'ladoApertura'].forEach(function (k) { suyas[k] = 1; });
     var soloLector = {};
     Object.keys(f).forEach(function (k) { if (!suyas[k]) soloLector[k] = f[k]; });
     ok(claves(soloLector) === claves(patron),
@@ -530,6 +532,31 @@ Promise.resolve().then(function () {
   }, function (e) { global.fetch = previo; ok(false, 'lanzó: ' + e.message); });
 
 }).then(function () {
+  /* ── La apertura de anclaje viaja del sidecar al parche (ADR 0037, #560) ── */
+  console.log('\nUna textura cuyo lado creció con la escalera del ADR 0034:');
+  var buenoPng = fs.readFileSync(path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.png'));
+  var base = JSON.parse(fs.readFileSync(
+    path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.json'), 'utf8'));
+  var crecido = Object.assign({}, base, { marco: { regla: 'lado-medido', ladoCatalogo: base.ladoArcmin / 4 } });
+  var previo = global.fetch;
+  function servir(sc) {
+    global.fetch = function (u) {
+      if (/\.json$/.test(String(u))) return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(sc); } });
+      return Promise.resolve({ ok: true, status: 200, arrayBuffer: function () {
+        return Promise.resolve(buenoPng.buffer.slice(buenoPng.byteOffset, buenoPng.byteOffset + buenoPng.byteLength)); } });
+    };
+  }
+  servir(crecido);
+  return fresco().ps1LeerTextura('a.png', 'a.json', {}).then(function (f) {
+    ok(f && f.ladoApertura === base.ladoArcmin / 4, 'el parche trae su lado de catálogo como apertura');
+    servir(base);
+    return fresco().ps1LeerTextura('a.png', 'a.json', {});
+  }).then(function (f) {
+    ok(f && f.ladoApertura == null, 'y sin `marco` (galaxia) no trae ninguna');
+    global.fetch = previo;
+  }, function (e) { global.fetch = previo; ok(false, 'lanzó: ' + e.message); });
+
+}).then(function () {
   /* ADR 0005: cardinalidad mínima. Sin ella, una promesa perdida por el camino
      deja el proceso en verde con la mitad de los casos sin correr.
      Mutaciones documentadas, comprobadas: en ps1FuenteParche, cambiar
@@ -542,7 +569,7 @@ Promise.resolve().then(function () {
      servicio—; y quitar la línea que lee las notas cacheadas en
      ps1FuenteParche, otros 2, porque la causa se pierde al repintar. */
   console.log('');
-  ok(comprobaciones >= 61, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 61)');
+  ok(comprobaciones >= 82, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 82)');
   console.log(fallos ? '\n' + fallos + ' fallo(s).' : '\ntodo en orden.');
   process.exit(fallos ? 1 : 0);
 }).catch(function (e) {

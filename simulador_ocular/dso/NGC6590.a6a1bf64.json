@@ -1,0 +1,111 @@
+{
+ "nombre": "NGC6590",
+ "version": "a6a1bf64",
+ "generador": "gen_dso_texturas 3",
+ "ra": 274.27079,
+ "dec": -19.86606,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-11-15"
+ },
+ "ancho": 562,
+ "alto": 562,
+ "ladoArcmin": 4.677,
+ "escalaAs": 0.4991103297236124,
+ "wcs": {
+  "ra0": 276.27908325199,
+  "dec0": -17.9999999999994,
+  "x0": -13354.7621029019,
+  "y0": 13826.3530144989,
+  "gx": -0.000138641758256559,
+  "gy": 0.000138641758256559
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 160.31795948982239,
+  "uMin": -3.6133350647075035,
+  "uMax": 10.04935423543283,
+  "centinela": 0
+ },
+ "celdas": {
+  "pedidas": 1,
+  "cosidas": 1
+ },
+ "vecino": {
+  "ra": 274.27079,
+  "dec": -19.749135000000003,
+  "direccion": "N",
+  "offsetArcmin": 7.015499999999999,
+  "ladoArcmin": 3.118,
+  "difusaMasCercaArcmin": 43.625470596651354,
+  "escalaAs": 0.4986667044221148,
+  "celdas": {
+   "pedidas": 1,
+   "cosidas": 1
+  },
+  "cielo": 71.27532196044922,
+  "sigma": 235.2643074050903,
+  "px": 140493
+ },
+ "marco": {
+  "regla": "lado-medido",
+  "ladoCatalogo": 3.118,
+  "peldanos": [
+   {
+    "lado": 3.118,
+    "ladoVecino": 3.118,
+    "escalaAs": 0.4986667044221148,
+    "llega": false,
+    "suelo": 222.67326544818877,
+    "peor": {
+     "N": 482.55035400390625,
+     "S": 787.4415283203125,
+     "E": 615.7464599609375,
+     "O": 588.17626953125
+    }
+   },
+   {
+    "lado": 4.677,
+    "ladoVecino": 3.118,
+    "escalaAs": 0.4991103297236124,
+    "llega": true,
+    "suelo": 222.67326544818877,
+    "peor": {
+     "N": 100.44275665283203,
+     "S": 172.63230895996094,
+     "E": 132.38368225097656,
+     "O": 140.6364288330078
+    }
+   },
+   {
+    "lado": 4.677,
+    "ladoVecino": 4.677,
+    "escalaAs": 0.4991103297236124,
+    "llega": true,
+    "suelo": 424.17178306808466,
+    "peor": {
+     "N": 100.44275665283203,
+     "S": 172.63230895996094,
+     "E": 132.38368225097656,
+     "O": 140.6364288330078
+    }
+   }
+  ],
+  "llega": true,
+  "ladoVecino": 4.677,
+  "ladoElegido": 4.677
+ },
+ "auditoria": {
+  "cielo": -20.355981826782227,
+  "sigma": 160.31795948982239,
+  "fracAusencia": 0.0005509048770912222,
+  "fracAusenciaEscena": 0.0010099778849670016,
+  "bloqueMayorFrac": 0.00031977811831157153,
+  "bloqueRellenoCaja": 0.7214285714285714,
+  "bloqueComponentes": 2,
+  "bytes": 606133,
+  "errCuantMaxSigma": 0.0005227191625812206,
+  "errCuantMaxRel": 0.00010622265994886249
+ }
+}

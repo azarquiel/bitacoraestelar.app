@@ -97,7 +97,11 @@ function fmt(n, d) { return Number(n).toFixed(d == null ? 2 : d).replace('.', ',
   }
   var virgo = campoVirgo();
   var basesVirgo = virgo.map(function (g) { return BASE + idSintetico(g.nombre); });
-  var baseTope = BASE + 'NGC_5194.69218f92';
+  /* La versión publicada de M51 sale del manifiesto, no escrita aquí: cada
+     republicación cambia el hash y borra la vieja del servidor (#560). */
+  var filaTope = PS1.ps1FilaTextura('NGC 5194');
+  if (!filaTope || filaTope[1] !== 'imagen') throw new Error('el manifiesto no trae imagen de NGC 5194');
+  var baseTope = BASE + PS1.ps1IdTextura('NGC 5194') + '.' + filaTope[2];
 
   /* El criterio 2 de L2.4 («ocupa ≤ 16 MB en float32») es el tamaño del
      Float32Array decodificado, no el crecimiento del montón: igual que
