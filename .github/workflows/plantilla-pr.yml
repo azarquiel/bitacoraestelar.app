@@ -1,0 +1,27 @@
+# La sección «Conocimiento» de la plantilla de PR, contestada.
+#
+# Workflow aparte de tests.yml: se relanza al editar el cuerpo de la PR
+# (`edited`) sin volver a correr la batería entera.
+name: plantilla-pr
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  plantilla:
+    name: Plantilla de PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      # El cuerpo entra por env, nunca interpolado en el script: lo escribe cualquiera.
+      - env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/plantilla_pr.js

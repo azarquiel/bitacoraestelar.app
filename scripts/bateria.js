@@ -57,7 +57,8 @@ var LENTOS = [
    - Cuando un esperado se pone verde, el resumen lo dice y pide quitarlo. No
      rompe la batería por eso —ponerse verde es la buena noticia— pero se ve. */
 var ESPERADOS = {
-  'test_halo_v7_e5.js': '#294 · E5.4 sobre matriz_v7.json, archivada el 2026-08-17'
+  'test_halo_v7_e5.js': '#294 · E5.4 sobre matriz_v7.json, archivada el 2026-08-17',
+  'test_dso_texturas.js': '#532 · el manifiesto desempata versiones por mtime; en un checkout limpio no regenera igual'
 };
 
 var args = process.argv.slice(2);
