@@ -82,7 +82,7 @@ Parche, cielo y anclaje:
 | [0034 · El lado de una difusa sin borde se mide](0034-el-lado-de-una-difusa-sin-borde-se-mide.md) | decisión | |
 | [0036 · El campo vecino se aleja del lado medido](0036-el-campo-vecino-se-aleja-del-lado-medido.md) | decisión | |
 | [0037 · El anclaje a catálogo se mide en la apertura del objeto](0037-el-anclaje-se-mide-en-la-apertura-del-objeto.md) | decisión | |
-| [0038 · El control negativo de NGC 6888 se retira](0038-el-control-negativo-de-ngc-6888-se-retira.md) | decisión | propuesto · enmienda 0027 |
+| [0038 · El control negativo de NGC 6888 se retira](0038-el-control-negativo-de-ngc-6888-se-retira.md) | decisión | enmienda 0027 |
 
 ## Un ADR nuevo
 

@@ -1,7 +1,7 @@
 # El control negativo de NGC 6888 (listón 4 de #274) se retira
 
 Fecha: 2026-11-15
-Estado: **propuesto**, post hoc. Ticket: #567.
+Estado: **aceptado** el 2026-11-15 (post hoc). Ticket: #567.
 Enmienda a: ADR 0027 (listón 4 del prerregistro).
 
 Medidas: `simulador_ocular/docs/validacion/control_negativo_6888_567.md`.
@@ -33,7 +33,7 @@ Sobre los cuatro PNG que ha tenido el objeto, y sobre el v3 recortado:
 - **El anillo exterior está dentro del objeto**: el semieje del catálogo es
   3,33 `r_e`.
 
-## Decisión propuesta
+## Decisión
 
 1. **El listón 4 se retira como veredicto.** La razón depende de la máscara, del
    umbral por píxel de cada descarga y del trozo de anillo que cabe en el
