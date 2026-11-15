@@ -71,3 +71,56 @@ jobs:
       # --rapida salta los 13 tests de más de 30 s (ver LENTOS en bateria.js):
       # esos siguen siendo cosa de lanzarlos a mano antes de dar una rama por buena.
       - run: node scripts/bateria.js --rapida
+
+  iso-audit:
+    name: Auditoría ISO 25010 / 25012
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. ISO 25010 (Seguridad): Evita que la IA suba claves, rutas locales o tokens
+      - name: Seguridad — Detección de secretos (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2. ISO 25010 (Seguridad y Fiabilidad): Análisis estático para PHP y JS sin dependencias
+      - name: Calidad y Seguridad — Análisis estático (Semgrep)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/php
+            p/javascript
+            p/xss
+            p/sql-injection
+
+      # 3. ISO 25012 (Calidad de Datos): Valida que ningún JSON generado esté corrupto
+      - name: Calidad de Datos — Integridad de JSONs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - name: Validar sintaxis de todos los JSON del repo
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            let errores = 0;
+            function recorrer(dir) {
+              for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (item.name === ".git" || item.name === "node_modules") continue;
+                const ruta = path.join(dir, item.name);
+                if (item.isDirectory()) recorrer(ruta);
+                else if (item.name.endsWith(".json")) {
+                  try {
+                    JSON.parse(fs.readFileSync(ruta, "utf8"));
+                  } catch (e) {
+                    console.error(`::error file=${ruta}::JSON corrupto: ${e.message}`);
+                    errores++;
+                  }
+                }
+              }
+            }
+            recorrer(".");
+            process.exit(errores);
+          '
