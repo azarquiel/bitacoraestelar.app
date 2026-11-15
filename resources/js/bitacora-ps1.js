@@ -1808,9 +1808,15 @@
      limpia. Preferir la limpia sería otra ley y pide su propio ADR.
 
      Geometría y nada más: no baja nada ni decide si el campo vale. Devuelve
-     null si ninguna de las cuatro direcciones cae en cobertura. */
-  function ps1CampoVecino(gal, rObjMaxAs, catalogo) {
-    var d = Math.max(1.5 * gal.ladoArcmin, 2 * rObjMaxAs / 60) / 60;   // grados
+     null si ninguna de las cuatro direcciones cae en cobertura.
+
+     `ladoPublicado` (ADR 0036, #320) es el lado que la escalera del ADR 0034
+     eligió: el vecino se ALEJA según él, pero el recorte —y el cuadrado contra
+     el que se juzga la vecina— sigue siendo `gal.ladoArcmin`, el de catálogo.
+     Sin él, o igual al de catálogo, el vecino es el de siempre. */
+  function ps1CampoVecino(gal, rObjMaxAs, catalogo, ladoPublicado) {
+    var ladoPos = Math.max(gal.ladoArcmin, ladoPublicado || 0);
+    var d = Math.max(1.5 * ladoPos, 2 * rObjMaxAs / 60) / 60;   // grados
     var cd = Math.cos(gal.dec * Math.PI / 180) || 1;
     /* La AR se envuelve: un objeto cerca de 0h da un centro negativo o mayor que
        360 que el recorte no sabe pedir. */

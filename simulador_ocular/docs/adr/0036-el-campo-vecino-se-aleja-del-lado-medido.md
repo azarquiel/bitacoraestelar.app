@@ -1,7 +1,9 @@
 # El campo vecino de una difusa de lado medido se aleja según ese lado
 
-**Propuesto** el 2026-11-14 al cerrar la medida de #320. Falta que lo acepte el
-usuario. La implementación y la republicación van en un ticket aparte.
+**Aceptado** el 2026-11-15. Propuesto el 2026-11-14 al cerrar la medida de #320.
+Implementado en `ps1CampoVecino(gal, rObj, catálogo, ladoPublicado)` y en el
+punto fijo de `medirLado` (`gen_dso_texturas.js`), con `GENERADOR` a
+`gen_dso_texturas 3`. La republicación del banco va aparte.
 
 Medidas: `simulador_ocular/docs/validacion/campo_vecino_320.md`. Arnés:
 `node scripts/harness_suelo_cielo.js --vecino`.

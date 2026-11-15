@@ -146,3 +146,39 @@ gana **V1**. La implementación y la republicación son otro ticket.
   skycells varían ±17 % por cuadrante, pero eso no basta para pasar de 30 a 41.
 - **NGC 2327:** 0,61σ contra V1 y 0,22σ contra V2. V1 cae a 25′, en otro campo:
   puede ser gradiente y no pedestal. No supera el listón contra V2.
+
+## La implementación, medida (2026-11-15)
+
+Tirada de las 12 de lado medido con el generador nuevo, en un directorio
+aparte (`--solo … --dir <scratch>`), sin tocar el banco publicado.
+
+- **El punto fijo es monótono por regla:** primera ronda con el vecino de
+  catálogo; si el lado crece, el vecino se aleja a ese lado y la escalera se
+  vuelve a juzgar desde ahí. No se vuelven a juzgar los peldaños de debajo.
+- **10 de 12 quedan en su lado publicado**, ahora juzgado con el vecino
+  alejado: llegan todos.
+- **NGC 2247 crece de 4,05′ a 6,08′**, como predijo el ADR.
+- **NGC 1788 crece hasta el tope (20′) y no llega** (`marco.llega = false`,
+  7,7 MB). Su cielo nuevo queda a **−0,134σ** del patrón (−7,6 / 45,3 contra
+  −1,5): pasa el listón 1 con margen. Comprobado aparte: con el vecino de su
+  propio lado, 6,08′, 9,11′ y 13,67′ tampoco llegan (suelos 60,6 / 56,9 / 55,4
+  frente a peores 298 / 61 / 438), así que no hay un lado menor coherente que
+  la regla monótona se salte.
+- **El suelo nuevo no siempre es más bajo:** subió en 7 de las 12 (NGC 1788
+  37,1 → 60,3 en el tope; NGC 6590 222,7 → 424,2). Alejar quita pedestal, pero
+  la σ del campo nuevo puede ser mayor.
+- **El cuadrado de la vecina:** con el recorte de catálogo y con el del lado
+  publicado, el veredicto `difusaDentro` es el mismo en las 12 (ninguna
+  vecina dentro).
+
+### Lo que la implementación NO cierra
+
+- **6 objetos con el lado publicado igual al de catálogo y dirección distinta a la publicada**
+  (NGC 3310, NGC 4125, NGC 4565, IC 4684, NGC 6720, NGC 7331): mismo
+  desplazamiento, otra dirección, porque la «difusa más cerca» publicada es
+  mucho mayor que la de hoy. No lo causa el ADR 0036 (sin lado publicado el
+  vecino es bit a bit el de antes): es deriva entre el catálogo de hoy y el del
+  día que se generaron. La republicación los moverá igualmente, así que los
+  «54 sin cambios» son 48.
+- **El retroceso cuando el vecino alejado falla** (`vecino-alejado-*`, vale la
+  ronda anterior) no se ejercitó: las 12 midieron bien.

@@ -1006,6 +1006,13 @@ function galYRadio(f, lado) {
   return { gal: g, rObjMax: RAD.rObjMaxAs(fits, f, g) };
 }
 
+/* V1 es ya la ley (ADR 0036): el lado publicado va como `ladoPublicado` y
+   coloca el vecino; el cuadrado juzgado sigue siendo el de catálogo. */
+function vecinoV1(f, base, ladoPub) {
+  return PS1.ps1CampoVecino(base.gal, base.rObjMax,
+    PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS), ladoPub);
+}
+
 function vecinoCon(f, base, ladoGeom) {
   return PS1.ps1CampoVecino(Object.assign({}, base.gal, { ladoArcmin: ladoGeom }), base.rObjMax,
     PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS));
@@ -1092,7 +1099,7 @@ function vecino() {
     var mueve = [];
     geo.forEach(function (g) {
       var f = PUB.fila(g.nombre), ladoCat = PS1.ps1LadoArcmin(f[4]), b = galYRadio(f, ladoCat);
-      var v0 = vecinoCon(f, b, ladoCat), v = vecinoCon(f, b, k === 'V1' ? g.ladoPub : 2 * ladoCat);
+      var v0 = vecinoCon(f, b, ladoCat), v = k === 'V1' ? vecinoV1(f, b, g.ladoPub) : vecinoCon(f, b, 2 * ladoCat);
       if (v0 && v && (v.dir !== v0.dir || Math.abs(v.offsetArcmin - v0.offsetArcmin) > 1e-9)) mueve.push(g.nombre);
     });
     console.log('  ' + k + ' mueve el vecino de ' + mueve.length + ' de ' + geo.length +
@@ -1141,7 +1148,7 @@ function vecino() {
     return cad.then(function () {
       var f = PUB.fila(n), s = PUB.sidecar(n), ladoCat = PS1.ps1LadoArcmin(f[4]);
       var b = galYRadio(f, ladoCat);
-      var v0 = vecinoCon(f, b, ladoCat), v1 = vecinoCon(f, b, s.ladoArcmin), v2 = vecinoCon(f, b, 2 * ladoCat);
+      var v0 = vecinoCon(f, b, ladoCat), v1 = vecinoV1(f, b, s.ladoArcmin), v2 = vecinoCon(f, b, 2 * ladoCat);
       /* Comprobación de que esto coloca el vecino donde lo colocó el generador. */
       var mismo = v0 && Math.abs(v0.offsetArcmin - s.vecino.offsetArcmin) < 1e-6 && v0.dir === s.vecino.direccion;
       var escalas = [];
