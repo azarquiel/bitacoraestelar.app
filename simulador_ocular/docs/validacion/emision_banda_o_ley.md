@@ -27,6 +27,12 @@ catálogo, no al ZPT de la cabecera—, porque es la que decide lo que se ve.
 
 ## NGC 6888 (Creciente, HII): la estructura NO está en los datos
 
+> **Nota del 2026-11-15 (#567).** La tabla de anillos de abajo cuenta con las
+> estrellas de la escena (3,54 `r_e`) dentro, porque `ps1QuitarEstrellas`
+> conserva las que caen en ella. Quitándolas todas, el anillo 0–0,5 baja del 43 %
+> al 0,6 %, y el resto a un tercio. El veredicto no cambia: descansa en la
+> comparación de bandas. Medidas en `control_negativo_6888_567.md`.
+
 `r_e` = 127,3″; el semieje del catálogo es `r_e`/0,30 = 424″ = 3,33 `r_e`, o sea
 que la cáscara vive entre 1,5 y 3,3 `r_e`. El parche llega a 3,00.
 

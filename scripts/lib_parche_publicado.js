@@ -36,16 +36,24 @@ module.exports = function (RAIZ, PS1, P16, dirs) {
      era otro. Con fila en el manifiesto solo vale su versión; sin ella,
      cualquiera. El manifiesto se lee en un contexto aparte y NO en `window`:
      ahí `ps1LadoDeFila` lo usaría y cambiaría el lado —y con él la geometría
-     del campo vecino— de quien solo quería localizar un fichero. */
-  var MANIFIESTO = (function () {
-    var w = {};
-    require('vm').runInNewContext(fs.readFileSync(path.join(RAIZ, 'simulador_ocular',
-      'resources', 'js', 'dso-texturas-datos.js'), 'utf8'), { window: w });
-    return w.BITACORA_DSO_TEXTURAS || [];
-  })();
+     del campo vecino— de quien solo quería localizar un fichero.
+     Un directorio con su propio `manifiesto.js` (el dso-texturas-datos.js de
+     esa tirada, la convención de `harness_nucleo_republicacion.js`) se lee con
+     el suyo: es como se mide un banco viejo con `--dir` (#567). */
+  var MANIFIESTOS = {};
+  function manifiesto(dir) {
+    var f = path.join(dir, 'manifiesto.js');
+    if (!fs.existsSync(f)) f = path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js');
+    if (!MANIFIESTOS[f]) {
+      var w = {};
+      require('vm').runInNewContext(fs.readFileSync(f, 'utf8'), { window: w });
+      MANIFIESTOS[f] = w.BITACORA_DSO_TEXTURAS || [];
+    }
+    return MANIFIESTOS[f];
+  }
   function candidatos(dir, nombre) {
     var id = PS1.ps1IdTextura(nombre), ver = null;
-    MANIFIESTO.forEach(function (t) {
+    manifiesto(dir).forEach(function (t) {
       if (t[1] === 'imagen' && PS1.ps1IdTextura(t[0]) === id) ver = t[2];
     });
     return fs.readdirSync(dir).filter(function (f) {

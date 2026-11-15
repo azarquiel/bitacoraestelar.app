@@ -66,6 +66,11 @@ sí tienen campo vecino publicado, así que SC los mide y E4 no.
 
 **Pasa: 1,41, contra el 1,80 del listón.**
 
+> **Nota del 2026-11-15 (#567).** Esta razón no mide estructura: sigue a la
+> máscara de estrellas, al umbral por píxel y al lado del parche. Con el banco v3
+> da 2,72. El listón se retira (ADR 0038) y este criterio queda como medida, no
+> como prueba. El veredicto de #263 sobre NGC 6888 no dependía de él.
+
 | ley | anillos 0–0,5 / 0,5–1 / 1–1,5 / 1,5–2 / 2–3 / 3–4 `r_e` | razón sin el anillo interior |
 |---|---|---|
 | L0 | 42,9 / 12,9 / 12,4 / 17,8 / 13,1 / 9,7 % | **1,85** |
