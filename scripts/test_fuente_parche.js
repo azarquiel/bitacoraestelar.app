@@ -532,7 +532,6 @@ Promise.resolve().then(function () {
   }, function (e) { global.fetch = previo; ok(false, 'lanzó: ' + e.message); });
 
 }).then(function () {
-}).then(function () {
   /* ── La apertura de anclaje viaja del sidecar al parche (ADR 0037, #560) ── */
   console.log('\nUna textura cuyo lado creció con la escalera del ADR 0034:');
   var buenoPng = fs.readFileSync(path.join(FIXT, PS1.ps1IdTextura('NGC 5194') + '.' + FILA[2] + '.png'));
@@ -570,7 +569,7 @@ Promise.resolve().then(function () {
      servicio—; y quitar la línea que lee las notas cacheadas en
      ps1FuenteParche, otros 2, porque la causa se pierde al repintar. */
   console.log('');
-  ok(comprobaciones >= 61, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 61)');
+  ok(comprobaciones >= 82, 'se ejecutaron todas las comprobaciones (' + comprobaciones + ' ≥ 82)');
   console.log(fallos ? '\n' + fallos + ' fallo(s).' : '\ntodo en orden.');
   process.exit(fallos ? 1 : 0);
 }).catch(function (e) {

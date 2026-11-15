@@ -1218,7 +1218,9 @@ ok(window.BitacoraPS1.ps1AnclarACatalogo.length === 4,
    del lado de catálogo, con la `frac` de ese lado. Mismo objeto en un parche
    del triple de lado, con nebulosidad del complejo fuera de su lado: el núcleo
    tiene que salir igual que en el parche de catálogo. */
-var LADO_G = LADO_P * 3, PX_G = PX_P * 3, nebFuera = 50;
+// Nebulosidad del complejo: la mitad del brillo medio del objeto en su lado.
+var LADO_G = LADO_P * 3, PX_G = PX_P * 3, nebFuera = 0;
+for (iP = 0; iP < crudoP.length; iP++) nebFuera += (crudoP[iP] - 1000) / crudoP.length / 2;
 var crudoG = new Float32Array(PX_G * PX_G);
 for (iP = 0; iP < crudoG.length; iP++) {
   var yG = ((PX_G - 1) / 2 - Math.floor(iP / PX_G)) * ESCALA_P;
@@ -1227,9 +1229,9 @@ for (iP = 0; iP < crudoG.length; iP++) {
   crudoG[iP] = 1000 + window.BitacoraPS1.ps1FlujoModelo(compsH, galH.pa, yG, xG) * 1e9 + (dentroG ? 0 : nebFuera);
 }
 var oG = { magV: galH.magV, n: galH.n, reArcsec: galH.reArcsec, ladoArcmin: LADO_G, escalaAs: ESCALA_P,
-           cielo: 1000, sigma: 1 };
+           cielo: 1000, sigma: 1e-3 };
 var oP = { magV: galH.magV, n: galH.n, reArcsec: galH.reArcsec, ladoArcmin: LADO_P, escalaAs: ESCALA_P,
-           cielo: 1000, sigma: 1 };
+           cielo: 1000, sigma: 1e-3 };
 var centroP = (PX_P / 2) * PX_P + PX_P / 2, centroG = (PX_G / 2) * PX_G + PX_G / 2;
 var netoCat = window.BitacoraPS1.ps1AnclarACatalogo(crudoP, PX_P, PX_P, oP);
 var netoVie = window.BitacoraPS1.ps1AnclarACatalogo(crudoG, PX_G, PX_G, oG);
@@ -1244,6 +1246,18 @@ var netoIgual = window.BitacoraPS1.ps1AnclarACatalogo(crudoP, PX_P, PX_P,
   Object.assign({}, oP, { ladoApertura: LADO_P }));
 casi(netoIgual[centroP] / netoCat[centroP], 1, 1e-6,
   'una apertura igual al parche no cambia nada (galaxias y compactas)');
+
+/* Una apertura sin objeto (núcleo sobresustraído: NaN) no reescala el parche
+   entero con una k desbocada: vale el parche, como antes. */
+var crudoHueco = Float32Array.from(crudoG);
+var mH = (LADO_P * 30) / ESCALA_P, cH = (PX_G - 1) / 2;
+for (iP = 0; iP < crudoHueco.length; iP++) {
+  if (Math.abs(iP % PX_G - cH) <= mH && Math.abs(Math.floor(iP / PX_G) - cH) <= mH) crudoHueco[iP] = NaN;
+}
+crudoHueco[centroG] = 1002;   // un píxel de ruido sobre el suelo
+var netoHueco = window.BitacoraPS1.ps1AnclarACatalogo(crudoHueco, PX_G, PX_G, Object.assign({}, oG, { ladoApertura: LADO_P }));
+var netoHuecoV = window.BitacoraPS1.ps1AnclarACatalogo(crudoHueco, PX_G, PX_G, oG);
+casi(netoHueco[0] / netoHuecoV[0], 1, 1e-6, 'apertura vacía: se ancla en el parche, sin k desbocada');
 
 /* La apertura sale del sidecar: `marco.ladoCatalogo` si el lado creció, y si
    no, ninguna (el propio parche). */

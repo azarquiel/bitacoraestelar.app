@@ -1280,15 +1280,19 @@
     var lado = o.ladoArcmin;
     if (o.ladoApertura > 0 && o.ladoApertura < o.ladoArcmin && suma > 0) {
       var med = (o.ladoApertura * 60 / 2) / o.escalaAs;
-      var cx = (ancho - 1) / 2, cy = (alto - 1) / 2, sumaAp = 0, x, y;
+      var cx = (ancho - 1) / 2, cy = (alto - 1) / 2, sumaAp = 0, nAp = 0, x, y;
       for (y = Math.ceil(cy - med); y <= cy + med; y++) {
         for (x = Math.ceil(cx - med); x <= cx + med; x++) {
           var w = neto[y * ancho + x];
+          nAp++;
           if (w > 0) sumaAp += w;
         }
       }
-      // Sin luz dentro de la apertura no hay con qué medir: vale el parche.
-      if (sumaAp > 0) { suma = sumaAp; lado = o.ladoApertura; }
+      /* Una apertura casi vacía (núcleo sobresustraído, todo NaN) daría una k
+         enorme aplicada al parche entero: por debajo de 0,1 veces el brillo
+         medio del parche vale el parche. En el banco v3 la menor es 0,67
+         (objetos más débiles que su complejo, IC 0063, IC 0444): pasan. */
+      if (sumaAp > 0 && sumaAp / nAp >= 0.1 * suma / datos.length) { suma = sumaAp; lado = o.ladoApertura; }
     }
     if (!(suma > 0) || !(o.magV > 0)) return neto;
     var radioEnRe = (o.reArcsec > 0) ? (lado * 60 / 2) / o.reArcsec : Infinity;

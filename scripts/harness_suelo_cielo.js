@@ -654,7 +654,8 @@ function medirOpciones(nombre, patronDelObjeto) {
     var anclado = PS1.ps1AnclarACatalogo(datos, ancho, alto, {
       magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
       ladoArcmin: gal.ladoArcmin, escalaAs: F.escalaAs,
-      cielo: parSC ? parSC.cielo : null, sigma: parSC ? parSC.sigma : 0
+      cielo: parSC ? parSC.cielo : null, sigma: parSC ? parSC.sigma : 0,
+      ladoApertura: PS1.ps1LadoApertura(F.side)   // ADR 0037: la apertura que usa el runtime
     });
     var nProd = 0, apProd = 0;
     for (var y = 0; y < alto; y++) {

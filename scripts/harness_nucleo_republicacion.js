@@ -71,6 +71,7 @@ function nucleo(dir, t, leyVieja) {
     if (!img || !f) return null;
     var datos = P16.decodificar(img.u16, sc.codificacion);
     var gal = PS1.ps1GalaxiasDelCampo([f], f[2], f[3], PS1.ps1LadoArcmin(f[4]))[0];
+    if (!gal) return null;
     var lado = t[7] > 0 ? t[7] : gal.ladoArcmin;
     var vec = PS1.ps1CieloDeSidecar(sc) || {};
     var o = {
@@ -97,13 +98,16 @@ function main() {
   if (!dirA || !dirD) { console.error('Uso: --antes <dir> --despues <dir> [--ley-antes vieja] [--solo X]'); process.exit(2); }
   var mA = manifiesto(dirA), mD = manifiesto(dirD), viejaA = arg('--ley-antes') === 'vieja';
   var nombres = Object.keys(mD).filter(function (n) { return !solo || n === solo; });
-  Object.keys(mA).forEach(function (n) {
-    if (!mD[n] && (!solo || n === solo)) console.log(n + ': está antes y no después (¿sale del banco?)');
-  });
   var fuera = 0, filas = [];
+  // Una textura que desaparece es la regresión total: falla.
+  Object.keys(mA).forEach(function (n) {
+    if (!mD[n] && (!solo || n === solo)) { fuera++; filas.push([n, 'PIERDE LA TEXTURA (imagen antes, no después)']); }
+  });
   return nombres.reduce(function (p, n) {
     return p.then(function () {
-      return Promise.all([mA[n] ? nucleo(dirA, mA[n], viejaA) : null, nucleo(dirD, mD[n], false)]).then(function (r) {
+      // Un objeto nuevo no tiene «antes» contra el que medirse: se lista, no falla.
+      if (!mA[n]) return filas.push([n, 'nuevo en el banco: sin antes']);
+      return Promise.all([nucleo(dirA, mA[n], viejaA), nucleo(dirD, mD[n], false)]).then(function (r) {
         // Sin medir es fallo: en un clon sin PNG todo saldría verde.
         if (!r[0] || !r[1]) { fuera++; return filas.push([n, 'SIN MEDIR (falta PNG o fila de catálogo)']); }
         var crece = Math.abs(r[1].lado - r[0].lado) > 1e-6;
