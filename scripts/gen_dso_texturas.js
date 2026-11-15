@@ -63,6 +63,11 @@ var BANCO = require('./lib_banco_dso.js')(window.BitacoraGaiaRender);
 /* Versión del generador. Súbela cuando cambie lo que determina los píxeles: el
    nombre de fichero lleva el hash, así que subirla republica todas las
    texturas y deja las viejas huérfanas (la URL es inmutable a propósito). */
+/* shortcut: el ADR 0036 (#320) cambia el vecino de las 12 de lado medido y
+   exige subir esto a 'gen_dso_texturas 3', pero la subida va en el mismo commit
+   que la tirada del banco y sus fixtures: sin ellos el test se queda sin
+   fixture de NGC 5194. No lances --banco sin subirlo, y no antes de #560 (el
+   anclaje diluye el núcleo cuando el lado crece: la tirada v3 se revirtió). */
 var GENERADOR = 'gen_dso_texturas 2';
 var SONDEO = 'PS1 DR2 3π stack';
 var MANIFIESTO = path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js');
@@ -475,9 +480,9 @@ function escribirManifiesto(dir) {
    que es buena y ya está medida. */
 var PARCHES_POR_OBJETO = 2;
 
-function auditarCampoVecino(f, gal, fits, salida) {
+function auditarCampoVecino(f, gal, fits, salida, ladoPublicado) {
   var v = PS1.ps1CampoVecino(gal, RAD.rObjMaxAs(fits, f, gal),
-    PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS));
+    PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS), ladoPublicado);
   if (!v) return Promise.resolve({ motivo: 'sin-cobertura' });
   var out = { ra: v.ra, dec: v.dec, direccion: v.dir, offsetArcmin: v.offsetArcmin,
               ladoArcmin: v.ladoArcmin,
@@ -572,15 +577,17 @@ function planDe(f, dir) {
 
 /* Peticiones a STScI que costaría un objeto pendiente, en recortes: [mín, máx].
    Sin medir, 2 (el suyo y su campo vecino). Midiendo, el mínimo es el mismo
-   (llega en el primer peldaño) y el máximo es la escalera entera más el
-   vecino, más el vecino otra vez a la escala del tope si el tope cambia de
-   ″/px (a 20′ va a 0,586). Es lo que medirLado pide, contado sin pedirlo. */
+   (llega en el primer peldaño) y el máximo es la escalera entera más un
+   vecino por ronda del punto fijo (ADR 0036: como mucho una por peldaño), más
+   el vecino otra vez a la escala del tope en las dos rondas que pueden pisarlo
+   si el tope cambia de ″/px (a 20′ va a 0,586). Es lo que medirLado pide,
+   contado sin pedirlo. */
 function peticionesDe(plan) {
   if (!plan.mide) return [PARCHES_POR_OBJETO, PARCHES_POR_OBJETO];
   var esc0 = plan.escalera[0] * 60 / PS1.ps1SalidaParche(plan.escalera[0]);
   var tope = plan.escalera[plan.escalera.length - 1];
   var cambia = Math.abs(tope * 60 / PS1.ps1SalidaParche(tope) - esc0) > 1e-3;
-  return [2, plan.escalera.length + 1 + (cambia ? 1 : 0)];
+  return [2, 2 * plan.escalera.length + (cambia ? 2 : 0)];
 }
 
 /* Pista, sin píxeles, de cómo acabará la escalera de un objeto que ya tiene
@@ -618,92 +625,134 @@ function manifiestoCommiteado() {
 
 /* La escalera de un objeto que se mide. Devuelve el peldaño elegido: el
    primero cuyo marco llega al cielo, o el tope si ninguno llega (y entonces el
-   sidecar lo declara: `marco.llega = false`, a la lista de revisión). El cielo
-   y la σ son los del CAMPO VECINO del lado de catálogo —donde el ADR 0028 ya
-   midió cielo—, no los de un vecino del lado agrandado, que a 1,5·lado cae en
-   otra nebulosa en cuanto el complejo es grande (Orión B). Lo que el ADR 0028
-   exige es la misma ″/px, porque σ es por píxel: si el peldaño cambia de escala
-   (el tope de 20′ va a 0,586″/px), ese mismo recorte vecino se vuelve a pedir a
-   la escala del peldaño. Sin cielo vecino no hay con qué medir: se queda en el
-   lado de catálogo, que es lo de siempre, y el sidecar dice por qué. */
+   sidecar lo declara: `marco.llega = false`, a la lista de revisión).
+
+   El cielo y la σ son los del CAMPO VECINO colocado según el lado PUBLICADO
+   (ADR 0036, #320), con el recorte del lado de catálogo: lo que se aleja es
+   dónde se pide, no qué se baja. Como el lado publicado sale de la escalera y
+   la escalera se juzga con ese vecino, se itera hasta punto fijo: primera ronda
+   con el vecino del lado de catálogo (el de siempre: si llega ahí, ni una
+   petición más); si el lado crece, el vecino se aleja a ese lado y la escalera
+   se vuelve a juzgar DESDE ese peldaño. Ni el lado ni el vecino retroceden
+   POR REGLA (ADR 0036, «solo se aleja»): los peldaños de debajo no se vuelven
+   a juzgar, aunque el suelo nuevo puede ser mayor que el viejo —subió en 7 de
+   las 12 de la tirada de #320—. Cada ronda sube al menos un peldaño, así que
+   acaba en el tope como mucho. NGC 1788, el único que crece hasta el tope, no
+   llega en 6,08′, 9,11′ ni 13,67′ ni con el vecino de su propio lado.
+
+   Lo que el ADR 0028 exige es la misma ″/px, porque σ es por píxel: si el
+   peldaño cambia de escala (el tope de 20′ va a 0,586″/px), ese mismo recorte
+   vecino se vuelve a pedir a la escala del peldaño. Sin cielo vecino en la
+   primera ronda no hay con qué medir: se queda en el lado de catálogo, que es
+   lo de siempre, y el sidecar dice por qué. Si lo que falla es el vecino
+   ALEJADO (vecina-dentro, sin cobertura, descarga), vale la ronda anterior
+   entera —su lado y su vecino, que sí eran cielo medido— y `marco.ladoVecino`
+   menor que `ladoElegido` declara que el punto fijo no se alcanzó. */
 function medirLado(f, gal0, escalera, conLado) {
   var lado0 = escalera[0], salida0 = PS1.ps1SalidaParche(lado0);
   return bajar(gal0.ra, gal0.dec, lado0, salida0).then(function (p0) {
     var fits0 = { ancho: p0.ancho, alto: p0.alto, datos: p0.datos, escalaAs: p0.escalaAs, wcs: p0.wcs || null };
     fits0.afin = PS1.ps1AfinParche(fits0, gal0);
-    return auditarCampoVecino(f, gal0, fits0, salida0).then(function (vec0) {
-      var marco = { regla: 'lado-medido', ladoCatalogo: lado0, peldanos: [] };
-      if (vec0.motivo || celdaPerdida(p0)) {
-        marco.llega = null;
-        marco.motivo = vec0.motivo || 'celda-perdida';
-        return { gal: gal0, p: p0, vecino: vec0, marco: marco };
-      }
-      /* «Misma escala» RELATIVA, al 1 %: el ceil de ps1SalidaParche y el
-         redondeo de fitscut dejan peldaños a 0,499 cuando el vecino está a
-         0,500 (NGC 2170 y cuatro más a 4,05′), y σ por píxel va con la
-         escala: un 0,2 % de escala es un 0,2 % de σ. Con la tolerancia
-         absoluta de 1e-3 el peldaño quedaba sin juzgar —el vecino re-pedido
-         vuelve a 0,500— y la escalera se paraba en el anterior. Lo que la
-         tolerancia protege es el salto de verdad: el tope de 20′ a 0,586. */
-      function mismaEscala(a, b) { return Math.abs(a - b) <= 0.01 * b; }
-      function vecinoA(escalaAs) {
-        if (mismaEscala(escalaAs, vec0.escalaAs)) return Promise.resolve(vec0);
-        var salidaV = Math.round(vec0.ladoArcmin * 60 / escalaAs);
-        return bajar(vec0.ra, vec0.dec, vec0.ladoArcmin, salidaV).then(function (q) {
-          var out = Object.assign({}, vec0, { escalaAs: q.escalaAs, celdas: celdasDe(q) });
-          delete out.cielo; delete out.sigma; delete out.px;
-          if (celdaPerdida(q)) { out.motivo = 'celda-perdida'; return out; }
-          if (!mismaEscala(q.escalaAs, escalaAs)) { out.motivo = 'otra-escala'; out.escalaParcheAs = escalaAs; return out; }
-          var c = PS1.ps1CieloCampo(q.datos);
-          if (!c.n) { out.motivo = 'sin-cobertura'; return out; }
-          out.cielo = c.cielo; out.sigma = c.sigma; out.px = c.n;
-          return out;
-        }).catch(function (e) {
-          var out = Object.assign({}, vec0); delete out.cielo; delete out.sigma; delete out.px;
-          out.motivo = 'descarga-fallida'; out.error = (e && e.message) || String(e);
-          return out;
-        });
-      }
-      var ultimo = null;   // último peldaño JUZGADO: a él se vuelve si el siguiente no se puede juzgar
-      function peldano(k) {
-        var g = conLado(escalera[k]);
-        var traer = k === 0 ? Promise.resolve(p0) : bajar(g.ra, g.dec, g.ladoArcmin, PS1.ps1SalidaParche(g.ladoArcmin));
-        return traer.then(function (pk) {
-          /* Un mosaico mutilado no se mide: vale el último peldaño juzgado y,
-             si es el primero, publicar() lo convierte en fila celda-perdida y
-             la siguiente corrida lo reintenta. */
-          if (celdaPerdida(pk)) {
-            marco.peldanos.push({ lado: g.ladoArcmin, motivo: 'celda-perdida' });
-            return ultimo || { gal: g, p: pk, vecino: vec0, marco: marco };
-          }
-          return vecinoA(pk.escalaAs).then(function (vk) {
-            if (vk.motivo) {
-              /* Sin cielo a esta escala el peldaño no se puede juzgar: vale el
-                 anterior. El primero siempre se juzga (es la escala de vec0). */
-              marco.peldanos.push({ lado: g.ladoArcmin, escalaAs: pk.escalaAs, motivo: 'vecino-' + vk.motivo });
-              return ultimo;
-            }
-            var m = PS1.ps1MarcoLlegaAlCielo(pk.datos, pk.ancho, pk.alto, vk.cielo, vk.sigma);
-            marco.peldanos.push({ lado: g.ladoArcmin, escalaAs: pk.escalaAs, llega: m.llega,
-                                  suelo: m.suelo, peor: m.peor });
-            console.log('  ' + gal0.nombre + ' · ' + g.ladoArcmin.toFixed(2) + '′  marco ' +
-              (m.llega ? 'LLEGA' : 'no llega') + ' (suelo ' + m.suelo.toFixed(1) + '; peor N ' +
-              m.peor.N.toFixed(0) + ' S ' + m.peor.S.toFixed(0) + ' E ' + m.peor.E.toFixed(0) +
-              ' O ' + m.peor.O.toFixed(0) + ')');
-            ultimo = { gal: g, p: pk, vecino: vk, marco: marco };
-            if (m.llega || k === escalera.length - 1) return ultimo;
-            return peldano(k + 1);
+    var marco = { regla: 'lado-medido', ladoCatalogo: lado0, peldanos: [] };
+
+    /* Una ronda: la escalera desde el peldaño k0 con el vecino alejado según
+       escalera[k0]. `previa` es el resultado de la ronda anterior (null en la
+       primera), al que se vuelve si esta no se puede juzgar. */
+    function ronda(k0, previa) {
+      var ladoV = escalera[k0];
+      return auditarCampoVecino(f, gal0, fits0, salida0, ladoV).then(function (vec0) {
+        if (!previa && (vec0.motivo || celdaPerdida(p0))) {
+          marco.llega = null;
+          marco.motivo = vec0.motivo || 'celda-perdida';
+          return { gal: gal0, p: p0, vecino: vec0, marco: marco };
+        }
+        if (vec0.motivo) {
+          marco.peldanos.push({ lado: ladoV, ladoVecino: ladoV, motivo: 'vecino-alejado-' + vec0.motivo });
+          return previa;
+        }
+        /* «Misma escala» RELATIVA, al 1 %: el ceil de ps1SalidaParche y el
+           redondeo de fitscut dejan peldaños a 0,499 cuando el vecino está a
+           0,500 (NGC 2170 y cuatro más a 4,05′), y σ por píxel va con la
+           escala: un 0,2 % de escala es un 0,2 % de σ. Con la tolerancia
+           absoluta de 1e-3 el peldaño quedaba sin juzgar —el vecino re-pedido
+           vuelve a 0,500— y la escalera se paraba en el anterior. Lo que la
+           tolerancia protege es el salto de verdad: el tope de 20′ a 0,586. */
+        function mismaEscala(a, b) { return Math.abs(a - b) <= 0.01 * b; }
+        function vecinoA(escalaAs) {
+          if (mismaEscala(escalaAs, vec0.escalaAs)) return Promise.resolve(vec0);
+          var salidaV = Math.round(vec0.ladoArcmin * 60 / escalaAs);
+          return bajar(vec0.ra, vec0.dec, vec0.ladoArcmin, salidaV).then(function (q) {
+            var out = Object.assign({}, vec0, { escalaAs: q.escalaAs, celdas: celdasDe(q) });
+            delete out.cielo; delete out.sigma; delete out.px;
+            if (celdaPerdida(q)) { out.motivo = 'celda-perdida'; return out; }
+            if (!mismaEscala(q.escalaAs, escalaAs)) { out.motivo = 'otra-escala'; out.escalaParcheAs = escalaAs; return out; }
+            var c = PS1.ps1CieloCampo(q.datos);
+            if (!c.n) { out.motivo = 'sin-cobertura'; return out; }
+            out.cielo = c.cielo; out.sigma = c.sigma; out.px = c.n;
+            return out;
+          }).catch(function (e) {
+            var out = Object.assign({}, vec0); delete out.cielo; delete out.sigma; delete out.px;
+            out.motivo = 'descarga-fallida'; out.error = (e && e.message) || String(e);
+            return out;
           });
+        }
+        var ultimo = previa;   // último peldaño JUZGADO: a él se vuelve si el siguiente no se puede juzgar
+        function peldano(k) {
+          var g = conLado(escalera[k]);
+          /* El parche del peldaño de partida ya se bajó en la ronda anterior. */
+          var traer = k === 0 ? Promise.resolve(p0)
+                    : (previa && k === k0) ? Promise.resolve(previa.p)
+                    : bajar(g.ra, g.dec, g.ladoArcmin, PS1.ps1SalidaParche(g.ladoArcmin));
+          return traer.then(function (pk) {
+            /* Un mosaico mutilado no se mide: vale el último peldaño juzgado y,
+               si es el primero, publicar() lo convierte en fila celda-perdida y
+               la siguiente corrida lo reintenta. */
+            if (celdaPerdida(pk)) {
+              marco.peldanos.push({ lado: g.ladoArcmin, ladoVecino: ladoV, motivo: 'celda-perdida' });
+              return ultimo || { gal: g, p: pk, vecino: vec0, marco: marco };
+            }
+            return vecinoA(pk.escalaAs).then(function (vk) {
+              if (vk.motivo) {
+                /* Sin cielo a esta escala el peldaño no se puede juzgar: vale el
+                   anterior (o la ronda anterior). El primero de la primera ronda
+                   siempre se juzga (es la escala de vec0). */
+                marco.peldanos.push({ lado: g.ladoArcmin, ladoVecino: ladoV, escalaAs: pk.escalaAs,
+                                      motivo: 'vecino-' + vk.motivo });
+                return ultimo;
+              }
+              var m = PS1.ps1MarcoLlegaAlCielo(pk.datos, pk.ancho, pk.alto, vk.cielo, vk.sigma);
+              marco.peldanos.push({ lado: g.ladoArcmin, ladoVecino: ladoV, escalaAs: pk.escalaAs,
+                                    llega: m.llega, suelo: m.suelo, peor: m.peor });
+              console.log('  ' + gal0.nombre + ' · ' + g.ladoArcmin.toFixed(2) + '′  marco ' +
+                (m.llega ? 'LLEGA' : 'no llega') + ' (vecino a ' + ladoV.toFixed(2) + '′; suelo ' +
+                m.suelo.toFixed(1) + '; peor N ' + m.peor.N.toFixed(0) + ' S ' + m.peor.S.toFixed(0) +
+                ' E ' + m.peor.E.toFixed(0) + ' O ' + m.peor.O.toFixed(0) + ')');
+              ultimo = { gal: g, p: pk, vecino: vk, marco: marco, ladoVecino: ladoV };
+              if (m.llega || k === escalera.length - 1) return ultimo;
+              return peldano(k + 1);
+            });
+          });
+        }
+        return peldano(k0).then(function (r) {
+          var k = escalera.indexOf(r.gal.ladoArcmin);
+          /* Punto fijo: el vecino ya está colocado según el lado elegido. */
+          if (r === previa || k <= k0) return r;
+          return ronda(k, r);
         });
-      }
-      return peldano(0).then(function (r) {
-        /* Lo que se publica declara si su marco llega: el último peldaño
-           juzgado manda, no el último probado. */
-        var j = r.marco.peldanos.filter(function (e) { return e.lado === r.gal.ladoArcmin && 'llega' in e; })[0];
-        r.marco.llega = j ? j.llega : null;
-        r.marco.ladoElegido = r.gal.ladoArcmin;
-        return r;
       });
+    }
+
+    return ronda(0, null).then(function (r) {
+      /* Lo que se publica declara si su marco llega: el ÚLTIMO juicio de su
+         lado manda —en una ronda posterior ese lado se vuelve a juzgar con el
+         vecino alejado—, no el último peldaño probado. */
+      var j = r.marco.peldanos.filter(function (e) {
+        return e.lado === r.gal.ladoArcmin && e.ladoVecino === r.ladoVecino && 'llega' in e;
+      }).pop();
+      if (!r.marco.motivo) r.marco.llega = j ? j.llega : null;
+      if (r.ladoVecino !== undefined) r.marco.ladoVecino = r.ladoVecino;
+      r.marco.ladoElegido = r.gal.ladoArcmin;
+      return r;
     });
   });
 }

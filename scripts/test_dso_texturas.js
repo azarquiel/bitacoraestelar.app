@@ -703,6 +703,29 @@ ok(vFuera.difusaDentro === null,
 ok(ic59.v.difusaDentro === null,
    'y el campo vecino de IC 0059, el que midió #274, sigue siendo cielo');
 
+/* ── El vecino se aleja del lado PUBLICADO (#320, ADR 0036) ────────────────
+   Objeto de 10′ de catálogo con lado medido de 22,5′: el vecino se coloca a
+   1,5 × 22,5′ = 33,75′, pero el recorte sigue siendo de 10′. Sin lado
+   publicado, o con el mismo de catálogo, todo queda como estaba. */
+var vHoy = PS1.ps1CampoVecino(centro, 60, []);
+ok(JSON.stringify(PS1.ps1CampoVecino(centro, 60, [], 10)) === JSON.stringify(vHoy),
+   'con el lado publicado igual al de catálogo, el vecino no se mueve');
+var vMed = PS1.ps1CampoVecino(centro, 60, [], 22.5);
+ok(Math.abs(vMed.offsetArcmin - 33.75) < 1e-9 && vMed.ladoArcmin === 10,
+   'con lado medido de 22,5′ se aleja a 33,75′ y el recorte sigue de 10′ (' +
+   vMed.offsetArcmin + '′, ' + vMed.ladoArcmin + '′)');
+ok(Math.abs(Math.abs(vMed.dec - centro.dec) * 60 + Math.abs(vMed.ra - centro.ra) * 60 - 33.75) < 1e-9,
+   'y su centro está ahí de verdad, no solo declarado');
+/* La difusa que se mete se juzga con el cuadrado que se BAJA (10′), no con uno
+   de 22,5′: a 33,75′ al norte, una difusa de 1′ a 7′ del centro del campo cae
+   fuera del recorte de 10′ y dentro del de 22,5′. */
+var vCaja = PS1.ps1CampoVecino(centro, 60, [difusaRe('n', 10, 33.75 / 60 + 7 / 60, RE_CHICA),
+                                            difusaRe('s', 10, -33.75 / 60, RE_CHICA),
+                                            difusaRe('e', 10 + 33.75 / 60, 0, RE_CHICA),
+                                            difusaRe('o', 10 - 33.75 / 60, 0, RE_CHICA)], 22.5);
+ok(vCaja.dir === 'N' && vCaja.difusaDentro === null,
+   'la vecina se juzga con el recorte de catálogo (' + vCaja.dir + ', ' + vCaja.difusaDentro + ')');
+
 var png = fs.readFileSync(path.join(G.FIXTURES, PS1.ps1IdTextura('NGC 5194') + '.' + vBanco + '.png'));
 P16.leer(png).then(function (img) {
   ok(!!img && img.ancho === sc.ancho && img.alto === sc.alto,

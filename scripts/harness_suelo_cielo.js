@@ -11,7 +11,7 @@
    aquí no se decide ninguno y no se define ninguna ley (ADR 0008): cielo, σ,
    extensión, escena y anclaje son las funciones de `resources/js/bitacora-ps1.js`.
 
-   Seis modos, en el orden en que se usan:
+   Siete modos, en el orden en que se usan:
 
      --marco     la medida que falta: qué fracción del marco del 6 % cae dentro
                  de la extensión, para los objetos `imagen` del manifiesto.
@@ -31,6 +31,10 @@
                  como se juzgan los criterios de éxito de la épica #284 (#308).
      --hash      el coste: `version()` de gen_dso_texturas.js con los parámetros
                  de hoy y con los de cada opción (ADR 0026).
+     --vecino    #320: ¿cae el campo vecino dentro del propio objeto? Geometría
+                 del banco entero y, CON RED, el cielo de dos vecinos más
+                 lejanos para las difusas de lado medido (ADR 0034), con su
+                 escalera de lados vuelta a juzgar.
 
    Uso:
      node scripts/harness_suelo_cielo.js --marco [--dir <ruta a dso/>]
@@ -40,6 +44,7 @@
      node scripts/harness_suelo_cielo.js --e3nativo
      node scripts/harness_suelo_cielo.js --opciones
      node scripts/harness_suelo_cielo.js --hash
+     node scripts/harness_suelo_cielo.js --vecino [--solo NGC1788] [--sin-red]
 
    Veredicto y tablas: simulador_ocular/docs/validacion/suelo_cielo_parche.md */
 'use strict';
@@ -959,14 +964,296 @@ function hash() {
   console.log('  punto 3 del ADR 0026, contenido nuevo bajo un nombre declarado inmutable.');
 }
 
+/* ───────────────────────── --vecino (#320) ───────────────────────── */
+
+/* ¿Es cielo el campo vecino? `ps1CampoVecino` lo aleja `max(1,5·lado, 2·r_obj)`
+   y solo mira si cae OTRA difusa catalogada; la extensión del propio objeto no
+   la mira. Aquí se mide, sin definir ley (ADR 0008): la geometría la pone
+   siempre `ps1CampoVecino`, y las opciones se le piden pasándole otro lado.
+
+     V0  la de hoy: `ladoArcmin` = lado de catálogo.
+     V1  el lado MEDIDO (ADR 0034) en vez del de catálogo: el vecino sale de la
+         extensión que el propio generador ya midió. Solo mueve a las difusas de
+         lado medido; en las demás los dos lados son el mismo número.
+     V2  factor 3 en vez de 1,5 (lado de catálogo ×2): mueve a todo el banco.
+
+   En V1 y V2 el recorte que se baja sigue siendo del lado de catálogo y a la
+   escala del parche: σ es por píxel (ADR 0028). Pasar un lado mayor hace que
+   el veredicto `difusaDentro` mire un cuadrado mayor que el que se baja: es
+   más estricto, nunca más laxo.
+
+   El juez de «es cielo» es el del prerregistro (ADR 0027, listón 1):
+   |Δcielo| ≤ 0,5·σ contra el vecino más lejano, o contra el patrón de cielo
+   lejano donde lo hay. Y la escalera del ADR 0034 se vuelve a juzgar con los
+   `peor` que el sidecar ya publica: no hace falta bajar los peldaños. */
+var LISTON_CIELO = 0.5;            // σ, listón 1 del ADR 0027
+
+function difusasDeLadoMedido() {
+  return objetosPublicados().filter(function (n) {
+    var s = PUB.sidecar(n);
+    return s && s.marco && s.marco.regla === 'lado-medido';
+  });
+}
+
+/* El gal y el r_obj con los que el GENERADOR colocó el vecino: los del parche
+   del lado de catálogo (`medirLado` llama a `auditarCampoVecino` con `fits0`).
+   La WCS no cambia el radio de la escena, que sale del catálogo. */
+function galYRadio(f, lado) {
+  var g = Object.assign({}, galDe(f), { ladoArcmin: lado });
+  var salida = PS1.ps1SalidaParche(lado);
+  var fits = { ancho: salida, alto: salida, escalaAs: lado * 60 / salida, wcs: null };
+  fits.afin = PS1.ps1AfinParche(fits, g);
+  return { gal: g, rObjMax: RAD.rObjMaxAs(fits, f, g) };
+}
+
+/* V1 es ya la ley (ADR 0036): el lado publicado va como `ladoPublicado` y
+   coloca el vecino; el cuadrado juzgado sigue siendo el de catálogo. */
+function vecinoV1(base, ladoPub) {
+  return PS1.ps1CampoVecino(base.gal, base.rObjMax,
+    PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS), ladoPub);
+}
+
+function vecinoCon(f, base, ladoGeom) {
+  return PS1.ps1CampoVecino(Object.assign({}, base.gal, { ladoArcmin: ladoGeom }), base.rObjMax,
+    PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS));
+}
+
+function cieloDe(v, ladoCat, escalaAs) {
+  if (!v) return Promise.resolve({ motivo: 'sin-cobertura' });
+  if (v.difusaDentro) return Promise.resolve({ motivo: 'vecina-dentro: ' + v.difusaDentro });
+  var bajar = require('./lib_bajar_parche.js')(window.BitacoraGaiaRender).bajar;
+  return bajar(v.ra, v.dec, ladoCat, Math.round(ladoCat * 60 / escalaAs), PS1.cfg.banda).then(function (q) {
+    if (q.celdasCosidas < q.celdasPedidas) return { motivo: 'celda-perdida' };
+    var c = PS1.ps1CieloCampo(q.datos);
+    /* σ es por píxel (ADR 0028): un recorte que no vuelve a la escala pedida no
+       vale para esa escala. Mismo 1 % que `mismaEscala` del generador. */
+    if (Math.abs(q.escalaAs - escalaAs) > 0.01 * escalaAs) return { motivo: 'otra-escala' };
+    return c.n ? { cielo: c.cielo, sigma: c.sigma, n: c.n, escalaAs: q.escalaAs } : { motivo: 'sin-cobertura' };
+  }).catch(function (e) { return { motivo: 'descarga: ' + (e && e.message || e) }; });
+}
+
+/* La escalera del ADR 0034 con otro cielo: cada peldaño juzgado se vuelve a
+   juzgar con su `peor` publicado contra el suelo nuevo. Devuelve el primer lado
+   que llega, o null si ninguno de los JUZGADOS llega (crecería: sin medir). */
+function escaleraCon(marco, parPorEscala) {
+  /* Contraste declarado (ADR 0008): es la condición de `ps1MarcoLlegaAlCielo`
+     (bitacora-ps1.js:417 y :439) aplicada a los `peor` que el sidecar ya
+     publica, porque re-bajar cada peldaño solo para volver a calcularlos es red
+     sin información nueva. Si el suelo o el veredicto cambian allí, aquí se
+     cambian a mano. Como el generador (`medirLado`), un peldaño que no se puede
+     juzgar PARA la escalera: no se salta. */
+  for (var i = 0; i < marco.peldanos.length; i++) {
+    var p = marco.peldanos[i];
+    if (!p.peor) return null;
+    var par = parPorEscala(p.escalaAs);
+    if (!par) return null;
+    var suelo = par.cielo + PS1.cfg.kRuido * par.sigma;
+    if (p.peor.N < suelo && p.peor.S < suelo && p.peor.E < suelo && p.peor.O < suelo) return p.lado;
+  }
+  return null;
+}
+
+function vecino() {
+  var solo = arg('--solo', ''), conRed = !tiene('--sin-red');
+  var todos = objetosPublicados();
+
+  /* 1. Geometría, banco entero: el borde interior del vecino contra r_obj. */
+  console.log('── 1. Geometría del campo vecino publicado, ' + todos.length + ' texturas de imagen');
+  var geo = [];
+  todos.forEach(function (n) {
+    var f = PUB.fila(n), s = PUB.sidecar(n);
+    if (!f || !s || !s.vecino || !(s.vecino.offsetArcmin > 0)) return;
+    var b = galYRadio(f, PS1.ps1LadoArcmin(f[4]));
+    var borde = s.vecino.offsetArcmin - s.vecino.ladoArcmin / 2;
+    geo.push({ nombre: n, clase: f[12] || 'gal', borde: borde, rObj: b.rObjMax / 60,
+               ladoPub: s.ladoArcmin, medido: !!(s.marco && s.marco.regla === 'lado-medido'),
+               motivo: s.vecino.motivo || '' });
+  });
+  geo.forEach(function (g) {
+    g.dentroPub = g.borde < g.ladoPub / 2;   // el vecino pisa el propio parche publicado
+  });
+  var pisa = geo.filter(function (g) { return g.dentroPub; });
+  console.log('  vecino con su borde interior DENTRO del parche publicado (borde < lado/2): ' +
+              pisa.length + ' de ' + geo.length);
+  pisa.forEach(function (g) {
+    console.log('    ' + (g.nombre + '            ').slice(0, 13) + ' ' + (g.clase + '    ').slice(0, 5) +
+      ' borde ' + g.borde.toFixed(2) + '′ · parche hasta ' + (g.ladoPub / 2).toFixed(2) + '′' +
+      (g.medido ? ' · lado medido' : ''));
+  });
+  var noMedidas = pisa.filter(function (g) { return !g.medido; }).length;
+  console.log('  de ellos con lado de catálogo (sin ADR 0034): ' + noMedidas);
+  /* La extensión REAL: r_obj de catálogo, salvo donde el ADR 0034 midió más
+     (el medio lado publicado de una difusa que creció). */
+  var u = geo.map(function (g) {
+    return { nombre: g.nombre, enExt: g.borde / Math.max(g.rObj, g.medido ? g.ladoPub / 2 : 0) };
+  }).sort(function (a, b) { return a.enExt - b.enExt; });
+  var cuartil = function (q) { return u[Math.floor(q * (u.length - 1))].enExt.toFixed(2); };
+  console.log('  borde interior del vecino en unidades de la extensión real: mín ' + cuartil(0) +
+    ' · p25 ' + cuartil(0.25) + ' · mediana ' + cuartil(0.5) + ' · máx ' + cuartil(1));
+  console.log('  con el vecino DENTRO de la extensión real (< 1): ' + u.filter(function (o) { return o.enExt < 1; })
+    .map(function (o) { return o.nombre + ' ' + o.enExt.toFixed(2); }).join(', '));
+
+  /* Control de no regresión, medido y no argumentado: a cuántos les mueve el
+     vecino cada opción. Un vecino que no se mueve da el mismo par (cielo, σ). */
+  ['V1', 'V2'].forEach(function (k) {
+    var mueve = [];
+    geo.forEach(function (g) {
+      var f = PUB.fila(g.nombre), ladoCat = PS1.ps1LadoArcmin(f[4]), b = galYRadio(f, ladoCat);
+      var v0 = vecinoCon(f, b, ladoCat), v = k === 'V1' ? vecinoV1(b, g.ladoPub) : vecinoCon(f, b, 2 * ladoCat);
+      if (v0 && v && (v.dir !== v0.dir || Math.abs(v.offsetArcmin - v0.offsetArcmin) > 1e-9)) mueve.push(g.nombre);
+    });
+    console.log('  ' + k + ' mueve el vecino de ' + mueve.length + ' de ' + geo.length +
+      (mueve.length < 20 ? ': ' + mueve.join(', ') : '') +
+      ' · NGC6888 ' + (mueve.indexOf('NGC6888') >= 0 ? 'SE MUEVE' : 'no se mueve'));
+  });
+
+  /* 2. Dirección: en los `vecina-dentro`, ¿había otra limpia? Se pregunta a
+     `ps1CampoVecino` con el catálogo SIN la difusa que se mete: si la ley
+     elige entonces otra dirección limpia, existía. */
+  console.log('\n── 2. Los `vecina-dentro`: ¿había otra dirección limpia?');
+  var cat = PS1.ps1CatalogoDifuso(window.BITACORA_GALAXIAS, window.BITACORA_NEBULOSAS);
+  geo.filter(function (g) { return g.motivo === 'vecina-dentro'; }).forEach(function (g) {
+    var f = PUB.fila(g.nombre), b = galYRadio(f, PS1.ps1LadoArcmin(f[4]));
+    var v = PS1.ps1CampoVecino(b.gal, b.rObjMax, cat), quitadas = [], w = v, limpia = null;
+    /* Se quitan las intrusas de una en una hasta que alguna dirección sale
+       limpia: eso dice si existía y cuál era. */
+    /* shortcut: como mucho 6 intrusas quitadas; el banco no pasa de 1, subirlo si alguna lo agota. */
+    while (w && w.difusaDentro && quitadas.length < 6) {
+      quitadas.push(w.difusaDentro);
+      w = PS1.ps1CampoVecino(b.gal, b.rObjMax, cat.filter(function (r) {
+        return quitadas.indexOf(PS1.ps1NombreFila(r)) < 0;
+      }));
+      if (w && !w.difusaDentro) limpia = w;
+    }
+    /* Con el catálogo reducido a la primera intrusa, la ley elige la dirección
+       MÁS LEJANA de ella: si aun así la pisa, la pisa en las cuatro. */
+    var sola = v && v.difusaDentro && PS1.ps1CampoVecino(b.gal, b.rObjMax, cat.filter(function (r) {
+      return PS1.ps1NombreFila(r) === v.difusaDentro;
+    }));
+    if (sola && sola.difusaDentro) limpia = null;
+    console.log('    ' + (g.nombre + '            ').slice(0, 13) + ' elige ' + (v && v.dir) +
+      ' (dentro: ' + (v && v.difusaDentro) + ')' +
+      (limpia ? ' · sin ' + quitadas.join(', ') + ' elegiría ' + limpia.dir : ' · ninguna limpia'));
+  });
+
+  if (!conRed) return;
+
+  /* 3. Con red: el cielo de V0/V1/V2 en las difusas de lado medido. */
+  var lista = difusasDeLadoMedido().filter(function (n) { return !solo || PUB.clave(n) === PUB.clave(solo); });
+  var patron = fs.existsSync(SALIDA_PATRON) ? JSON.parse(fs.readFileSync(SALIDA_PATRON, 'utf8')) : {};
+  console.log('\n── 3. Cielo del vecino V0 (hoy) · V1 (del lado medido) · V2 (factor 3), ' +
+              lista.length + ' difusas de lado medido. Con red.');
+  var filas = [];
+  return lista.reduce(function (cad, n) {
+    return cad.then(function () {
+      var f = PUB.fila(n), s = PUB.sidecar(n), ladoCat = PS1.ps1LadoArcmin(f[4]);
+      var b = galYRadio(f, ladoCat);
+      var v0 = vecinoCon(f, b, ladoCat), v1 = vecinoV1(b, s.ladoArcmin), v2 = vecinoCon(f, b, 2 * ladoCat);
+      /* Comprobación de que esto coloca el vecino donde lo colocó el generador. */
+      var mismo = v0 && Math.abs(v0.offsetArcmin - s.vecino.offsetArcmin) < 1e-6 && v0.dir === s.vecino.direccion;
+      var escalas = [];
+      s.marco.peldanos.forEach(function (p) {
+        if (p.escalaAs > 0 && !escalas.some(function (e) { return Math.abs(e - p.escalaAs) <= 0.01 * e; })) escalas.push(p.escalaAs);
+      });
+      var r = { nombre: n, ladoCat: ladoCat, ladoPub: s.ladoArcmin, mismo: mismo,
+                v: { V0: v0, V1: v1, V2: v2 }, par: {}, patron: patron[PUB.clave(n)] || null };
+      var cadena = Promise.resolve();
+      ['V0', 'V1', 'V2'].forEach(function (k) {
+        r.par[k] = [];
+        escalas.forEach(function (e) {
+          /* V0 a la escala del sidecar ES el par publicado: se lee, no se baja. */
+          if (k === 'V0' && s.vecino.sigma > 0 && Math.abs(e - s.vecino.escalaAs) <= 0.01 * e) {
+            r.par.V0.push({ cielo: s.vecino.cielo, sigma: s.vecino.sigma, escalaPedida: e, publicado: true });
+            return;
+          }
+          cadena = cadena.then(function () {
+            return cieloDe(r.v[k], ladoCat, e).then(function (c) { c.escalaPedida = e; r.par[k].push(c); });
+          });
+        });
+      });
+      return cadena.then(function () { filas.push(r); informeVecinoFila(r, s); });
+    });
+  }, Promise.resolve()).then(function () { informeVecinoResumen(filas); });
+}
+
+function parA(lista, escalaAs) {
+  for (var i = 0; i < (lista || []).length; i++) {
+    var c = lista[i];
+    if (Math.abs(c.escalaPedida - escalaAs) <= 0.01 * escalaAs) return c.sigma > 0 ? c : null;
+  }
+  return null;
+}
+
+function informeVecinoFila(r, s) {
+  var e0 = r.par.V0[0] && r.par.V0[0].escalaPedida;
+  function txt(k) {
+    var v = r.v[k], c = parA(r.par[k], e0);
+    var donde = v ? v.dir + ' ' + v.offsetArcmin.toFixed(2) + '′' : '—';
+    if (!c) return k + ' ' + donde + ' ' + ((r.par[k][0] && r.par[k][0].motivo) || 'sin par');
+    return k + ' ' + donde + ' cielo ' + c.cielo.toFixed(1) + ' σ ' + c.sigma.toFixed(1);
+  }
+  console.log((r.nombre + '            ').slice(0, 13) + ' lado ' + r.ladoCat.toFixed(2) + '′→' +
+    r.ladoPub.toFixed(2) + '′' + (r.mismo ? '' : ' ¡V0 NO coincide con el sidecar!'));
+  console.log('              ' + ['V0', 'V1', 'V2'].map(txt).join('  ·  '));
+  var c0 = parA(r.par.V0, e0);
+  ['V1', 'V2'].forEach(function (k) {
+    var c = parA(r.par[k], e0);
+    if (c0 && c) {
+      r['d' + k] = (c0.cielo - c.cielo) / c.sigma;   // σ del campo de referencia: la de V0 la infla el pedestal
+    }
+  });
+  /* Contra el patrón solo se compara el CIELO, que no depende del píxel; la σ
+     del anillo es de otra escala, así que se divide por la de V1, que es un
+     campo limpio a la escala del parche. */
+  var c1 = parA(r.par.V1, e0);
+  if (r.patron && r.patron.cielo != null && c0 && c1) {
+    r.dPatron = (c0.cielo - r.patron.cielo) / c1.sigma;
+    r.dPatronV1 = (c1.cielo - r.patron.cielo) / c1.sigma;
+    var c2 = parA(r.par.V2, e0);
+    if (c2) r.dPatronV2 = (c2.cielo - r.patron.cielo) / c2.sigma;
+  }
+  /* La escalera, con el par de cada opción a la escala de cada peldaño. */
+  r.escalera = {};
+  ['V0', 'V1', 'V2'].forEach(function (k) {
+    r.escalera[k] = escaleraCon(s.marco, function (e) { return parA(r.par[k], e); });
+  });
+  console.log('              V0−V1 ' + (r.dV1 != null ? r.dV1.toFixed(2) + 'σ' : '—') +
+    ' · V0−V2 ' + (r.dV2 != null ? r.dV2.toFixed(2) + 'σ' : '—') +
+    (r.dPatron != null ? ' · V0−patrón ' + r.dPatron.toFixed(2) + 'σ · V1−patrón ' +
+      r.dPatronV1.toFixed(3) + 'σ' + (r.dPatronV2 != null ? ' · V2−patrón ' + r.dPatronV2.toFixed(3) + 'σ' : '') : '') +
+    ' · escalera V0/V1/V2: ' + ['V0', 'V1', 'V2'].map(function (k) {
+      return r.escalera[k] == null ? 'crece' : r.escalera[k].toFixed(2) + '′';
+    }).join(' / '));
+}
+
+function informeVecinoResumen(filas) {
+  function cuenta(k) {
+    return filas.filter(function (r) { return r[k] != null && r[k] > LISTON_CIELO; });
+  }
+  console.log('\n── resumen');
+  console.log('  V0 lleva pedestal (V0 − V2 > ' + LISTON_CIELO + 'σ): ' +
+    cuenta('dV2').map(function (r) { return r.nombre; }).join(', ') + ' (' + cuenta('dV2').length + ' de ' + filas.length + ')');
+  console.log('  V0 lleva pedestal (V0 − V1 > ' + LISTON_CIELO + 'σ): ' +
+    cuenta('dV1').map(function (r) { return r.nombre; }).join(', ') + ' (' + cuenta('dV1').length + ' de ' + filas.length + ')');
+  var cambia = filas.filter(function (r) {
+    return r.escalera.V1 !== r.escalera.V0 || r.escalera.V2 !== r.escalera.V0;
+  });
+  console.log('  escalera que cambia con V1 o V2: ' + (cambia.length ? cambia.map(function (r) {
+    return r.nombre + ' (' + ['V0', 'V1', 'V2'].map(function (k) {
+      return r.escalera[k] == null ? 'crece' : r.escalera[k].toFixed(2);
+    }).join('/') + ')';
+  }).join(', ') : 'ninguna'));
+}
+
 /* ───────────────────────── despacho ───────────────────────── */
 
 var modo = tiene('--marco') ? marco : tiene('--patron') ? patron
          : tiene('--escala') ? escala : tiene('--e3nativo') ? e3nativo
          : tiene('--e1') ? e1
-         : tiene('--opciones') ? opciones : tiene('--hash') ? hash : null;
+         : tiene('--opciones') ? opciones : tiene('--hash') ? hash
+         : tiene('--vecino') ? vecino : null;
 if (!modo) {
-  console.error('uso: node scripts/harness_suelo_cielo.js --marco | --patron | --e1 | --escala | --e3nativo | --opciones | --hash');
+  console.error('uso: node scripts/harness_suelo_cielo.js --marco | --patron | --e1 | --escala | --e3nativo | --opciones | --hash | --vecino');
   process.exit(2);
 }
 Promise.resolve().then(modo).catch(function (e) {
