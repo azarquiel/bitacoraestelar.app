@@ -1,4 +1,4 @@
-# Informe E1 — histograma de profundidad (eje 1, ADR 0012)
+# Informe E1 — histograma de profundidad (eje 1, ADR 0030)
 
 **Veredicto: NO PASA — no implementar la Fase 1 por la vía del COUNT previo.**
 
@@ -19,7 +19,7 @@ Arnés: `scripts/harness_gaia_e1_histograma.js`. Crudos: `scripts/salida_gaia_e1
 | Virgo | no saturante | 1,12 s | 1,26 s | 1,22 s | 20,0 | PASA | L3 1,12 s — NO PASA |
 | Polo N | no saturante | 1,15 s | 1,24 s | 1,30 s | 20,0 | PASA | L3 1,15 s — NO PASA |
 
-Listones preregistrados (ADR 0012): L2 = speedup neto `control/(hist+rec)` ≥ 3× en cada
+Listones preregistrados (ADR 0030): L2 = speedup neto `control/(hist+rec)` ≥ 3× en cada
 campo saturante; L3 = sobrecoste del histograma ≤ 1 s en no saturantes; L4 = el COUNT solo
 se acepta si su coste es pequeño frente al ahorro. L4 no llega a evaluarse como ratio:
 **no hubo ahorro en ningún campo** (de −0,47 s a −9,89 s).
@@ -56,7 +56,7 @@ Hallazgos operativos del servidor, relevantes para cualquier E futuro:
 
 ## Decisión que activa el preregistro
 
-Por el criterio del ADR 0012, la profundidad adaptativa por COUNT previo queda
+Por el criterio del ADR 0030, la profundidad adaptativa por COUNT previo queda
 **descartada con medidas**. Vías que siguen vivas, sin decidir:
 
 1. **Escalera iterativa (E1-bis)**: consulta con profundidad conservadora estimada sin

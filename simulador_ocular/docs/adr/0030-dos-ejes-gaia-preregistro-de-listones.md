@@ -65,3 +65,5 @@ Es el resultado de un trade-off real (reutilización frente a complejidad, con l
 «no teselar» como salida legítima), sorprendería sin contexto (¿por qué el teselado no intenta
 abaratar el frío? porque está medido que no puede) y es caro de revertir: los listones son el
 contrato del estudio, y moverlos a posteriori convierte las medidas en retórica.
+
+Informes del estudio: `0030-dos-ejes-gaia/` (E1, E2+E3, E4).

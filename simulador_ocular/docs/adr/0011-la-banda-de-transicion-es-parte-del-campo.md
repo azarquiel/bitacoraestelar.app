@@ -1,5 +1,7 @@
 # El `(1−a)` de la banda de transición es campo
 
+Estado: derogado por [ADR 0012](0012-el-crowding-es-una-probabilidad-por-estrella.md): `P_solo` sustituye a la banda `δ`, y `test_banda_conservacion` pasó a `test_conservacion_sorteo`. Se conserva como historia.
+
 La banda `[m_res−δ, m_res+δ]` existe para que la frontera resuelta/no resuelta no dibuje un
 anillo: sus estrellas se pintan con peso continuo `a(m)`, de 1 en el borde brillante a 0 en el
 débil. Pero el campo estadístico se integraba con corte DURO en `m_res+δ`, así que la banda no
