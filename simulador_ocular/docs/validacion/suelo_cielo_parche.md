@@ -205,6 +205,11 @@ ninguna opción: en los cuatro, Δ del suelo efectivo ≤ 0,12 mag y Δ de apaga
 | NGC 4594 | 97 | 0,8 % | Δ0,03 / 0,0 | Δ0,03 / 0,0 |
 | NGC 4486 | 178 | 0,1 % | Δ0,02 / 0,0 | Δ0,04 / 0,0 |
 
+> **Nota del 2026-11-15 (#567).** El listón 4 se retira (ADR 0038). El anillo
+> 0–0,5 `r_e` no es la Wolf-Rayet sino las estrellas de Gaia que la escena
+> conserva: quitándolas todas, baja al 0,6 %. La razón sigue a esa máscara, al
+> umbral por píxel y al lado del parche. Medidas en `control_negativo_6888_567.md`.
+
 **Listón 4 (control negativo) estaba mal escrito, y se dice con la medida
 delante.** Pedía que la razón entre el máximo de los anillos interiores
 (0–3 `r_e`) y el exterior (3–4) se quedara en ≤ 2,0. Falla para TODAS las

@@ -1,6 +1,7 @@
 # Prerregistro — de dónde salen el cielo y la σ de un parche (#274)
 
-Fecha: 2026-09-12. Comprometido ANTES de medir ninguna de las cuatro opciones y
+Fecha: 2026-09-12 · Enmendado por: [ADR 0038](0038-el-control-negativo-de-ngc-6888-se-retira.md)
+(aceptado; el listón 4 se retira como veredicto). Comprometido ANTES de medir ninguna de las cuatro opciones y
 antes de mirar el patrón de cielo lejano de ningún objeto. Ningún listón se
 retoca tras ver la salida: si ninguna opción pasa, la ley se queda como está y
 eso es el resultado (disciplina de los ADR 0012, 0015, 0022 y 0024).

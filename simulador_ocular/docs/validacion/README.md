@@ -24,3 +24,4 @@ Orden cronológico de ejecución:
 18. `trager1995_seed.tsv` (2026-11-13) — #537: perfiles de Trager, King & Djorgovski 1995 de los 13 globulares del seed (VizieR J/AJ/109/218, espejo CfA); mismo formato que `trager1995.tsv`
 19. `mclaughlin2005_modelos_seed.tsv` (2026-11-13) — #537: ajustes King 1966, Wilson y ley de potencias de McLaughlin & van der Marel 2005 (VizieR J/ApJS/161/304/models) para los mismos globulares; M15 y M30 no tienen ajuste
 20. `campo_vecino_320.md` (2026-11-14) — #320: el campo vecino cae dentro de la extensión de 10 difusas de lado medido; solo NGC 1788 lleva pedestal; V0/V1/V2 medidas y la σ «baja» de NGC 7293 era un sidecar viejo leído por el arnés
+21. `control_negativo_6888_567.md` (2026-11-15) — #567: por qué la razón del control negativo de NGC 6888 pasó de 1,85 a 2,36 (σ por píxel del PNG v2, y el lado de v3) y por qué el listón 4 se retira (ADR 0038)

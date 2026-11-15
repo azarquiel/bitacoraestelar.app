@@ -76,15 +76,16 @@ Parche, cielo y anclaje:
 
 | ADR | Tipo | Estado |
 |---|---|---|
-| [0027 · De dónde salen el cielo y la σ de un parche](0027-preregistro-de-donde-sale-el-cielo-y-la-sigma-de-un-parche.md) | prerregistro | |
+| [0027 · De dónde salen el cielo y la σ de un parche](0027-preregistro-de-donde-sale-el-cielo-y-la-sigma-de-un-parche.md) | prerregistro | enmendado por 0038 |
 | [0028 · El cielo de un parche se mide fuera del objeto](0028-el-cielo-de-un-parche-se-mide-fuera-del-objeto.md) | decisión | |
 | [0031 · μ asumida en nebulosas de reflexión](0031-preregistro-mu-asumida-en-nebulosas-de-reflexion.md) | prerregistro | |
 | [0034 · El lado de una difusa sin borde se mide](0034-el-lado-de-una-difusa-sin-borde-se-mide.md) | decisión | |
 | [0036 · El campo vecino se aleja del lado medido](0036-el-campo-vecino-se-aleja-del-lado-medido.md) | decisión | |
 | [0037 · El anclaje a catálogo se mide en la apertura del objeto](0037-el-anclaje-se-mide-en-la-apertura-del-objeto.md) | decisión | |
+| [0038 · El control negativo de NGC 6888 se retira](0038-el-control-negativo-de-ngc-6888-se-retira.md) | decisión | enmienda 0027 |
 
 ## Un ADR nuevo
 
-1. Número: el siguiente libre mirando también `docs/adr/` raíz (hoy, 0038).
+1. Número: el siguiente libre mirando también `docs/adr/` raíz (hoy, 0039).
 2. Primeras líneas: `Fecha:` y `Estado:`, y `Deroga:`/`Enmienda a:` si toca.
 3. Si deroga o enmienda otro, añade la marca inversa en ese otro y actualiza esta tabla.

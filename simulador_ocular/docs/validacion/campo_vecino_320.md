@@ -199,6 +199,8 @@ aparte (`--solo … --dir <scratch>`), sin tocar el banco publicado.
   IC 0143 y NGC 2023.
 - **NGC 6888 cambia de lado** (12,73′ → 19,09′) por esa misma deuda, no por el
   vecino: su razón, el control negativo, queda por volver a medir.
+  *Medida el 2026-11-15 (#567): 2,36. Sale del lado, no del vecino, y el listón
+  se retira (ADR 0038, `control_negativo_6888_567.md`).*
 - **Las fixtures** (`scripts/fixtures/dso/`) pasan a la versión 3, y sus
   sidecars se copian también a `simulador_ocular/dso/`: allí estaban los de la
   versión 2, y como el desempate de `sidecarsUnicos` da prioridad al directorio

@@ -42,7 +42,8 @@
      node scripts/harness_suelo_cielo.js --e1 [--solo NGC1788]
      node scripts/harness_suelo_cielo.js --escala
      node scripts/harness_suelo_cielo.js --e3nativo
-     node scripts/harness_suelo_cielo.js --opciones
+     node scripts/harness_suelo_cielo.js --opciones [--solo NGC6888] [--dir <banco>]
+                                            [--recorte 12.728] [--quitar-todas] [--k 3]
      node scripts/harness_suelo_cielo.js --hash
      node scripts/harness_suelo_cielo.js --vecino [--solo NGC1788] [--sin-red]
 
@@ -592,8 +593,11 @@ function apagados(datos, ancho, alto, afin, ext, cielo, sigma) {
 
 /* El control negativo del prerregistro: con la σ de la opción, la razón entre el
    máximo de los anillos interiores (0–3 r_obj) y el exterior (3–4) de píxeles
-   por encima de 3σ. #263 midió que en NGC 6888 no decae —o sea, que no hay
-   estructura—; una σ que la «saque» está amplificando ruido. */
+   por encima de kσ (3 salvo `--k`). #263 midió que en NGC 6888 no decae. #567
+   midió que la razón SUBE con la profundidad del umbral (k = 2…5 da 1,68 → 2,70
+   en el mismo PNG): una σ estricta la sube y una que amplifique ruido la baja
+   hacia 1. Por eso, y por la máscara de estrellas, ya no es veredicto (ADR 0038). */
+var K_ANILLOS = parseFloat(arg('--k', '3'));
 function anillos3sigma(datos, ancho, alto, afin, escala, rObj, cielo, sigma) {
   var LIM = [0.5, 1, 1.5, 2, 3, 4], cubos = LIM.map(function () { return { n: 0, s3: 0 }; });
   for (var y = 0; y < alto; y++) {
@@ -604,7 +608,7 @@ function anillos3sigma(datos, ancho, alto, afin, escala, rObj, cielo, sigma) {
       while (k < LIM.length && r > LIM[k]) k++;
       if (k >= LIM.length) continue;
       cubos[k].n++;
-      if ((v - cielo) / sigma > 3) cubos[k].s3++;
+      if ((v - cielo) / sigma > K_ANILLOS) cubos[k].s3++;
     }
   }
   return cubos.map(function (c, i) {
@@ -628,17 +632,45 @@ function medirOpciones(nombre, patronDelObjeto) {
     /* Las estrellas se quitan donde hay fixture, con la función de producción,
        igual que en #263. Donde no lo hay, siguen dentro y empujan σ hacia
        ARRIBA en las tres estimaciones a la vez. */
+    /* Producción conserva las estrellas que caen dentro de la escena; en NGC 6888
+       la escena llega a 3,54 r_e y cubre todos los anillos interiores, así que
+       el control negativo comparaba anillos CON estrellas contra un anillo
+       exterior medio SIN ellas. `--quitar-todas` las quita todas (#567, ADR 0038). */
     var estrellas = PUB.estrellas(f[0]);
     if (estrellas) {
       datos = PS1.ps1QuitarEstrellas(datos, ancho, alto,
         PS1.ps1EstrellasEnPixeles(fits, gal, estrellas),
-        { afin: fits.afin, ba: gal.ba, pa: gal.pa, escena: escena });
+        { afin: fits.afin, ba: gal.ba, pa: gal.pa, escena: tiene('--quitar-todas') ? [] : escena });
       fits.datos = datos;
+    }
+
+    /* --recorte <′>: el centro del MISMO parche, ya sin estrellas, con otro
+       lado. Mismos píxeles, misma escala, mismo cielo de fondo: lo único que
+       cambia es dónde caen el marco del 6 % y el anillo exterior. Es la medida
+       que separa el lado de todo lo demás en el control negativo (#567). */
+    var recorte = parseFloat(arg('--recorte', ''));
+    if (recorte > 0) {
+      var lr = Math.round(recorte * 60 / F.escalaAs);
+      var x0 = Math.round(fits.afin.cx - (lr - 1) / 2), y0 = Math.round(fits.afin.cy - (lr - 1) / 2);
+      if (x0 < 0 || y0 < 0 || x0 + lr > ancho || y0 + lr > alto) {
+        return { nombre: f[0], motivo: 'el recorte de ' + recorte + '′ no cabe en el parche' };
+      }
+      var sub = new Float32Array(lr * lr);
+      for (var ry = 0; ry < lr; ry++) {
+        for (var rx = 0; rx < lr; rx++) sub[ry * lr + rx] = datos[(ry + y0) * ancho + rx + x0];
+      }
+      datos = fits.datos = sub;
+      ancho = alto = fits.ancho = fits.alto = lr;
+      fits.afin.cx -= x0; fits.afin.cy -= y0;
+      escena.forEach(function (c) { c.cx -= x0; c.cy -= y0; });
+      ext = extensionDe(gal, fits.afin);
     }
 
     var est = estimaciones(datos, ancho, alto, fits.afin, escena, ext);
     var rObj = radioObjetoAs(gal);
     var res = { nombre: f[0], clase: f[12] || 'gal', escala: F.escalaAs, rObj: rObj,
+                etiqueta: F.etiqueta + (recorte > 0 ? ' recortado' : ''),
+                lado: recorte > 0 ? recorte : F.side.ladoArcmin,
                 conFixture: !!estrellas, est: est, patron: patronDelObjeto || null,
                 opciones: {} };
 
@@ -820,10 +852,22 @@ function informeOpciones(todos) {
     console.log(l);
   });
 
-  /* Listón 4: el control negativo. */
-  console.log('\n── listón 4: control negativo NGC 6888 (razón interior/exterior de %>3σ ≤2,0)');
+  /* Listón 4: el control negativo. RETIRADO como veredicto (ADR 0038, #567): la
+     razón sigue a la máscara de estrellas, a la profundidad del umbral y a qué
+     trozo del anillo 3–4 cabe en el parche —que además está dentro del objeto—,
+     así que ningún número fijo viaja de una tirada a otra. Se imprime la medida
+     para poder repetir la de #567; el «ok/FUERA» de 1,80 queda como referencia
+     histórica y no aprueba ni suspende nada. */
+  console.log('\n── listón 4 (RETIRADO, ADR 0038): control negativo NGC 6888, razón interior/exterior de %>3σ');
   todos.forEach(function (r) {
     if (r.motivo || PUB.clave(r.nombre) !== PUB.clave('NGC6888')) return;
+    /* Qué fichero se midió y cuántos píxeles caben en cada anillo: sin esto, un
+       `--dir` que no encuentra su versión cae en la del árbol y la cifra se
+       atribuye a otro banco (#567). */
+    var a0 = (r.opciones.L0 || {}).anillos || [];
+    console.log('  ' + r.etiqueta + ' · lado ' + (r.lado || 0).toFixed(2) + '′ · ' +
+      r.escala.toFixed(3) + '″/px · r_obj ' + (r.rObj / 60).toFixed(2) + '′ · px por anillo ' +
+      a0.map(function (a) { return a.n; }).join('/'));
     OPS.forEach(function (op) {
       var o = r.opciones[op];
       if (!o || !o.anillos) return;
@@ -839,7 +883,7 @@ function informeOpciones(todos) {
          redondeados: la razón que da L0 de verdad es 1,85. */
       var dentroSinNucleo = dentro.slice(1).filter(function (v) { return v === v; });
       var maxSin = dentroSinNucleo.length ? Math.max.apply(null, dentroSinNucleo) : NaN;
-      var razonSin = maxSin / (ext || 1e-9);
+      var razonSin = maxSin / (ext || 1e-9), REF_274 = 1.8;   // histórico, no listón (ADR 0038)
       /* Un decimal, no cero: la razón se calcula con los porcentajes CRUDOS, y
          con los redondeados a entero sale otra —18/10 = 1,80 contra el 1,85 de
          verdad—. Publicar la tabla en enteros invitaba a rehacer la división a
@@ -847,12 +891,15 @@ function informeOpciones(todos) {
       console.log('  ' + op + ': anillos ' + o.anillos.map(function (a) {
         return a.pct.toFixed(1);
       }).join('/') + ' % · razón ' + (max / (ext || 1e-9)).toFixed(2) +
-        ' · ' + ((max / (ext || 1e-9)) <= 2.0 ? 'ok' : 'FUERA') +
         ' · sin el anillo 0–0,5 r_e: ' + razonSin.toFixed(2) +
-        ' · ' + (razonSin <= 1.8 ? 'ok (≤1,80 publicado en #274)' : 'FUERA de 1,80 publicado'));
+        ' · ' + (razonSin <= REF_274 ? '≤' : '>') + '1,80 de #274 (no es veredicto)');
     });
   });
 
+  if (arg('--recorte', '')) {
+    console.log('\n  con --recorte solo valen las tablas de anillos: el anclaje y los apagados' +
+                ' de abajo se calculan sobre un parche que no se publica.');
+  }
   /* Lo que cada opción le hace al objeto: cuánto de su extensión deja de apagar. */
   console.log('\n── qué deja de apagar cada opción (fracción de la extensión apagada)');
   console.log('objeto        producción      L0      E2      E3      E4      SC');
