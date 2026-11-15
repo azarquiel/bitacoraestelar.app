@@ -1,7 +1,11 @@
 # El anclaje a catálogo se mide en la apertura del objeto, no en el parche
 
-**Propuesto** el 2026-11-15, tras la republicación revertida de #320. Ticket: #560.
-Falta medirlo y que lo acepte el usuario.
+**Aceptado** el 2026-11-15, tras la republicación revertida de #320. Ticket: #560.
+Medido sobre el banco entero (§«Lo medido»). Al aceptarlo, el criterio 2 de #560
+se enmienda: la no regresión se mide **v2 → v3 con la ley nueva en los dos
+lados**, no contra producción. Que los 9 que ya crecieron en v2 se iluminen
+contra producción es esta misma ley arreglando una dilución ya publicada, no una
+regresión.
 
 ## El problema, en una línea
 
