@@ -44,7 +44,7 @@ try {
   p = PUB.parche('NGC6888');
   ok(p && p.png === path.join(dir, 'NGC6888.deadbeef.png'), 'con manifiesto.js en el dir, su versión');
   p = PUB.parche('NGC 5194');
-  ok(!p || path.dirname(p.png) !== dir, 'los demás directorios siguen con el manifiesto del árbol');
+  ok(p && path.dirname(p.png) !== dir, 'los demás objetos siguen con el manifiesto del árbol');
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
 }

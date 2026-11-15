@@ -76,7 +76,7 @@ Parche, cielo y anclaje:
 
 | ADR | Tipo | Estado |
 |---|---|---|
-| [0027 · De dónde salen el cielo y la σ de un parche](0027-preregistro-de-donde-sale-el-cielo-y-la-sigma-de-un-parche.md) | prerregistro | |
+| [0027 · De dónde salen el cielo y la σ de un parche](0027-preregistro-de-donde-sale-el-cielo-y-la-sigma-de-un-parche.md) | prerregistro | enmendado por 0038 |
 | [0028 · El cielo de un parche se mide fuera del objeto](0028-el-cielo-de-un-parche-se-mide-fuera-del-objeto.md) | decisión | |
 | [0031 · μ asumida en nebulosas de reflexión](0031-preregistro-mu-asumida-en-nebulosas-de-reflexion.md) | prerregistro | |
 | [0034 · El lado de una difusa sin borde se mide](0034-el-lado-de-una-difusa-sin-borde-se-mide.md) | decisión | |

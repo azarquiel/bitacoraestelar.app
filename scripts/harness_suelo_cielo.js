@@ -43,7 +43,7 @@
      node scripts/harness_suelo_cielo.js --escala
      node scripts/harness_suelo_cielo.js --e3nativo
      node scripts/harness_suelo_cielo.js --opciones [--solo NGC6888] [--dir <banco>]
-                                            [--recorte 12.728] [--quitar-todas]
+                                            [--recorte 12.728] [--quitar-todas] [--k 3]
      node scripts/harness_suelo_cielo.js --hash
      node scripts/harness_suelo_cielo.js --vecino [--solo NGC1788] [--sin-red]
 
@@ -593,11 +593,11 @@ function apagados(datos, ancho, alto, afin, ext, cielo, sigma) {
 
 /* El control negativo del prerregistro: con la σ de la opción, la razón entre el
    máximo de los anillos interiores (0–3 r_obj) y el exterior (3–4) de píxeles
-   por encima de 3σ. #263 midió que en NGC 6888 no decae —o sea, que no hay
-   estructura—; una σ que la «saque» está amplificando ruido. Medido en #567
-   (ADR 0038), es al revés: la razón SUBE con la profundidad del umbral (k = 2…5
-   da 1,68 → 2,70 en el mismo PNG), así que una σ más estricta la sube y una que
-   amplifique ruido la baja hacia 1. */
+   por encima de kσ (3 salvo `--k`). #263 midió que en NGC 6888 no decae. #567
+   midió que la razón SUBE con la profundidad del umbral (k = 2…5 da 1,68 → 2,70
+   en el mismo PNG): una σ estricta la sube y una que amplifique ruido la baja
+   hacia 1. Por eso, y por la máscara de estrellas, ya no es veredicto (ADR 0038). */
+var K_ANILLOS = parseFloat(arg('--k', '3'));
 function anillos3sigma(datos, ancho, alto, afin, escala, rObj, cielo, sigma) {
   var LIM = [0.5, 1, 1.5, 2, 3, 4], cubos = LIM.map(function () { return { n: 0, s3: 0 }; });
   for (var y = 0; y < alto; y++) {
@@ -608,7 +608,7 @@ function anillos3sigma(datos, ancho, alto, afin, escala, rObj, cielo, sigma) {
       while (k < LIM.length && r > LIM[k]) k++;
       if (k >= LIM.length) continue;
       cubos[k].n++;
-      if ((v - cielo) / sigma > 3) cubos[k].s3++;
+      if ((v - cielo) / sigma > K_ANILLOS) cubos[k].s3++;
     }
   }
   return cubos.map(function (c, i) {
@@ -883,7 +883,7 @@ function informeOpciones(todos) {
          redondeados: la razón que da L0 de verdad es 1,85. */
       var dentroSinNucleo = dentro.slice(1).filter(function (v) { return v === v; });
       var maxSin = dentroSinNucleo.length ? Math.max.apply(null, dentroSinNucleo) : NaN;
-      var razonSin = maxSin / (ext || 1e-9);
+      var razonSin = maxSin / (ext || 1e-9), REF_274 = 1.8;   // histórico, no listón (ADR 0038)
       /* Un decimal, no cero: la razón se calcula con los porcentajes CRUDOS, y
          con los redondeados a entero sale otra —18/10 = 1,80 contra el 1,85 de
          verdad—. Publicar la tabla en enteros invitaba a rehacer la división a
@@ -892,7 +892,7 @@ function informeOpciones(todos) {
         return a.pct.toFixed(1);
       }).join('/') + ' % · razón ' + (max / (ext || 1e-9)).toFixed(2) +
         ' · sin el anillo 0–0,5 r_e: ' + razonSin.toFixed(2) +
-        ' · ' + (razonSin <= 1.8 ? '≤' : '>') + '1,80 de #274 (no es veredicto)');
+        ' · ' + (razonSin <= REF_274 ? '≤' : '>') + '1,80 de #274 (no es veredicto)');
     });
   });
 

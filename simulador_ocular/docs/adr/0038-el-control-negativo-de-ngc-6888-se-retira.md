@@ -21,9 +21,9 @@ Sobre los cuatro PNG que ha tenido el objeto, y sobre el v3 recortado:
 
 - **1,85 → 2,10** (PNG de #274 → v2, mismo lado): sube la σ por píxel del PNG
   (L0: 98 → 127 DN). Con un par (cielo, σ) fijo no se mueve (1,39 → 1,34).
-- **2,10 → 2,36** (v2 → v3): el lado. El v3 recortado a 12,73′ da 1,76. A
-  12,73′ el anillo 3–4 `r_e` son solo las esquinas del parche; desde 17′ cabe
-  entero.
+- **2,10 → 2,36** (v2 → v3): el PNG de v3 tiene menos ruido y la baja
+  (recortado a 12,73′ da 1,76, −0,34). El lado la sube (+0,60): a 12,73′ el
+  anillo 3–4 `r_e` son solo las esquinas del parche, y desde 17′ cabe entero.
 - **La razón sube con el umbral**: kσ con k = 2…5 da 1,68 → 2,70 sobre el mismo
   PNG. Una σ estricta la sube y una que amplifique ruido la baja.
 - **Mide la máscara de estrellas**: la escena de NGC 6888 (3,54 `r_e`) conserva

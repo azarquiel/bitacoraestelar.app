@@ -37,7 +37,7 @@ sidecar.
 
 ## Primer salto, 1,85 → 2,10: la σ de L0, no el lado
 
-Mismo lado y mismo campo. Lo que cambia es el ruido por píxel del PNG:
+Mismo lado y mismo campo; otra descarga, remuestreada a 0,500″/px en vez de 0,746″/px. Lo que cambia es el ruido por píxel del PNG:
 
 | versión | σ de L0 | σ ciega a la estructura (E3) | razón L0 | razón E4 |
 |---|---|---|---|---|
@@ -63,12 +63,19 @@ el mismo PNG:
 
 **Es monótona.** Una σ más estricta sube la razón, y una que amplifique el ruido
 la baja hacia 1. Es lo contrario de lo que decía el comentario del arnés («una σ
-que la saque está amplificando ruido»). (El barrido se hizo con una copia del
-arnés que cambiaba el 3 de `anillos3sigma`; no está en el árbol.)
+que la saque está amplificando ruido»). Se repite con `--k <n>`.
 
-## Segundo salto, 2,10 → 2,36: el lado
+## Segundo salto, 2,10 → 2,36: dos cambios de signo contrario
 
-Recortando el parche v3 al lado de v2, con los mismos píxeles, la misma escala y
+v2 → v3 cambia a la vez el PNG y el lado, y la medida los separa:
+
+- **El PNG** (v2 → v3 recortado a 12,73′, mismo lado): 2,10 → 1,76. El de v3
+  tiene menos ruido por píxel (σ de L0: 127 → 94). Es el primer salto deshecho.
+- **El lado** (v3 recortado → v3 publicado): 1,76 → 2,36.
+
+El neto, +0,26, es −0,34 del PNG más +0,60 del lado.
+
+Para la parte del lado: recortando el parche v3 al lado de v2, con los mismos píxeles, la misma escala y
 las estrellas ya quitadas (`--recorte`), solo cambia dónde caen el marco del 6 %
 y el anillo exterior:
 
@@ -139,16 +146,20 @@ descansa en que r, con el Hα dentro, da lo mismo que g (30,0 contra 31,1 %).
 ## Criterios de #567
 
 - **Atribución:** 1,85 → 2,10 viene de la σ por píxel del PNG v2 (E4 fijo:
-  1,39 → 1,34). 2,10 → 2,36 viene del lado (v3 recortado a 12,73′: 1,76). Los
-  números están arriba.
+  1,39 → 1,34). 2,10 → 2,36 es −0,34 del PNG de v3, menos ruidoso (v3
+  recortado a 12,73′: 1,76), más +0,60 del lado. Los números están arriba.
 - **Listón:** reformulado en el ADR 0038 (retirado como veredicto). Un listón que
   la referencia no pasa no discrimina (ADR 0005), y este además mide la máscara.
 - **Núcleo de los otros 65:** no cambia, porque ninguna textura cambia un byte.
-  #567 toca el arnés y su cargador, no el generador ni el banco.
+  #567 toca el arnés y su cargador, no el generador ni el banco ni
+  `bitacora-ps1.js`. No se ha corrido `harness_nucleo_republicacion.js`: con
+  el mismo banco en `--antes` y `--despues` compararía un fichero consigo mismo,
+  y esa comprobación vacía no es evidencia (ADR 0005).
 
 ## Lo que no se cerró
 
-- Por qué el PNG v2 tiene un 60 % más de ruido por píxel que el de #274 y que v3.
+- Por qué el PNG v2 tiene más ruido por píxel: σ ciega a la estructura (E3)
+  +64 % frente al de #274 y +68 % frente a v3 recortado (102,9 / 62,9 / 61,1).
   Afecta a cualquier listón por píxel medido sobre v2.
 - La esquina NE de NGC 6888 tiene el doble de píxeles >3σ que las otras tres.
   Puede ser emisión del complejo de Cygnus o un resto de estrellas. No se ha
