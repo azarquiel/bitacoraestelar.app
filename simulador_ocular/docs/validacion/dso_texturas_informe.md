@@ -33,8 +33,8 @@ así que un objeto ya bajado no vuelve a la red.
 | medida | valor |
 |---|---|
 | texturas escritas | 68 |
-| total de los PNG | 137.7 MB |
-| bytes/px (mediana) | 1.92 |
+| total de los PNG | 214.7 MB |
+| bytes/px (mediana) | 1.91 |
 
 ## Histograma de `escalaAs`
 

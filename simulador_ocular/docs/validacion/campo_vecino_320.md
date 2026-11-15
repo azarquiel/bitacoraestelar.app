@@ -182,3 +182,26 @@ aparte (`--solo … --dir <scratch>`), sin tocar el banco publicado.
   «54 sin cambios» son 48.
 - **El retroceso cuando el vecino alejado falla** (`vecino-alejado-*`, vale la
   ronda anterior) no se ejercitó: las 12 midieron bien.
+
+## La republicación del banco (2026-11-15)
+
+`GENERADOR` = `gen_dso_texturas 3`, `node scripts/gen_dso_texturas.js --banco`:
+69 objetos, 0 fallos, 0 pendientes, 68 texturas. **214,7 MB, frente a 137,7.**
+
+- **17 objetos cambian de lado, no 2.** NGC 1788 (4,05′ → 20′, `llega = false`)
+  y NGC 2247 (4,05′ → 6,08′) son los del ADR 0036. Los otros 15 (IC 0063,
+  NGC 1555, NGC 1985, IC 0431, NGC 2149, NGC 2163, IC 0444, NGC 2282, IC 4684,
+  NGC 6857, NGC 6888, NGC 6914, IC 5076, IC 1470, NGC 7635) son **deuda del
+  ADR 0034**: su textura publicada no traía `marco` (era anterior a la ley del
+  lado medido) y esta es la primera tirada que les sube la escalera. Todos
+  llegan.
+- **Sin cielo medido**, los 4 de siempre (`vecina-dentro`): NGC 205, IC 0131,
+  IC 0143 y NGC 2023.
+- **NGC 6888 cambia de lado** (12,73′ → 19,09′) por esa misma deuda, no por el
+  vecino: su razón, el control negativo, queda por volver a medir.
+- **Las fixtures** (`scripts/fixtures/dso/`) pasan a la versión 3, y sus
+  sidecars se copian también a `simulador_ocular/dso/`: allí estaban los de la
+  versión 2, y como el desempate de `sidecarsUnicos` da prioridad al directorio
+  de salida, esos mandaban sobre las fixtures. Con la copia,
+  `test_dso_texturas.js` pasa entero, incluidos los dos «regenerarlo no cambia
+  un byte» que fallaban antes de #320.

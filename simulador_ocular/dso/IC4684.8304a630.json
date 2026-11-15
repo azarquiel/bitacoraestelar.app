@@ -1,0 +1,111 @@
+{
+ "nombre": "IC4684",
+ "version": "8304a630",
+ "generador": "gen_dso_texturas 3",
+ "ra": 272.28517,
+ "dec": -23.43544,
+ "fuente": {
+  "sondeo": "PS1 DR2 3π stack",
+  "banda": "g",
+  "descargado": "2026-11-15"
+ },
+ "ancho": 397,
+ "alto": 397,
+ "ladoArcmin": 3.308,
+ "escalaAs": 0.5000000121071928,
+ "wcs": {
+  "ra0": 274.28570556639,
+  "dec0": -21.9999999999992,
+  "x0": -13025.75,
+  "y0": 10627.25,
+  "gx": -0.000138888892251998,
+  "gy": 0.000138888892251998
+ },
+ "codificacion": {
+  "tipo": "asinh16",
+  "a": 126.42100858383178,
+  "uMin": -2.1722841629111587,
+  "uMax": 9.896305411047374,
+  "centinela": 0
+ },
+ "celdas": {
+  "pedidas": 1,
+  "cosidas": 1
+ },
+ "vecino": {
+  "ra": 272.28517,
+  "dec": -23.35274,
+  "direccion": "N",
+  "offsetArcmin": 4.962,
+  "ladoArcmin": 2.205,
+  "difusaMasCercaArcmin": 140.89455448796033,
+  "escalaAs": 0.49905664448153403,
+  "celdas": {
+   "pedidas": 1,
+   "cosidas": 1
+  },
+  "cielo": -17.562686920166016,
+  "sigma": 209.20624260177613,
+  "px": 70225
+ },
+ "marco": {
+  "regla": "lado-medido",
+  "ladoCatalogo": 2.205,
+  "peldanos": [
+   {
+    "lado": 2.205,
+    "ladoVecino": 2.205,
+    "escalaAs": 0.49905664448153403,
+    "llega": false,
+    "suelo": 300.382193465805,
+    "peor": {
+     "N": 1021.9268798828125,
+     "S": 1135.108154296875,
+     "E": 710.8556518554688,
+     "O": 551.396240234375
+    }
+   },
+   {
+    "lado": 3.308,
+    "ladoVecino": 2.205,
+    "escalaAs": 0.5000000121071928,
+    "llega": true,
+    "suelo": 300.382193465805,
+    "peor": {
+     "N": 73.49897003173828,
+     "S": 177.92532348632812,
+     "E": 281.0093994140625,
+     "O": 15.428268432617188
+    }
+   },
+   {
+    "lado": 3.308,
+    "ladoVecino": 3.308,
+    "escalaAs": 0.5000000121071928,
+    "llega": true,
+    "suelo": 296.2466769824982,
+    "peor": {
+     "N": 73.49897003173828,
+     "S": 177.92532348632812,
+     "E": 281.0093994140625,
+     "O": 15.428268432617188
+    }
+   }
+  ],
+  "llega": true,
+  "ladoVecino": 3.308,
+  "ladoElegido": 3.308
+ },
+ "auditoria": {
+  "cielo": -14.11135482788086,
+  "sigma": 126.42100858383178,
+  "fracAusencia": 0.0011737908368176944,
+  "fracAusenciaEscena": 0.0021549464757888853,
+  "bloqueMayorFrac": 0.0008628948854443591,
+  "bloqueRellenoCaja": 0.5666666666666667,
+  "bloqueComponentes": 2,
+  "bytes": 304330,
+  "errCuantMaxSigma": 0.0004625155292027788,
+  "errCuantMaxRel": 0.00009376441983133255
+ }
+}
