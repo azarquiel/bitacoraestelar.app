@@ -78,6 +78,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitleaks escanea el rango de commits de la PR: con 1 no lo encuentra
 
       # 1. ISO 25010 (Seguridad): Evita que la IA suba claves, rutas locales o tokens
       - name: Seguridad — Detección de secretos (Gitleaks)
