@@ -1,4 +1,4 @@
-# Informe E4 — barrido de niveles y veredicto del eje 2 (ADR 0012)
+# Informe E4 — barrido de niveles y veredicto del eje 2 (ADR 0030)
 
 **Veredicto del eje 2: NO PASA — el teselado queda descartado por el preregistro.**
 
@@ -40,7 +40,7 @@ G≤18 = 2,9 s / 11,6 MB; G≤20 = 5,3 s / **500 000 filas con TOP recortado / 3
   IP — cuesta sistemáticamente el doble o más que la consulta única de producción, aun
   sin ORDER BY y con menos profundidad.
 
-El ADR 0012 exige las seis condiciones **simultáneas**. El frío incumple en los 6 de 6
+El ADR 0030 exige las seis condiciones **simultáneas**. El frío incumple en los 6 de 6
 campos; el listón existía justo para esto y moverlo ahora invalidaría el estudio. No se
 ejecutan E5 (cargas sintéticas) ni E6 (reconstrucción en navegador): con una condición
 obligatoria caída, medir las demás sería pescar un pretexto.

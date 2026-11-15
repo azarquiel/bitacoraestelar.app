@@ -210,7 +210,7 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
 
 ## Adquisición de Gaia por celdas
 
-Vocabulario del estudio de la capa de adquisición y caché de Gaia DR3 para campo arbitrario (ver `especificacion_optimizacion_gaia.md` y ADR 0012). El estudio se cerró con veredicto NO PASA en sus dos ejes (informes `informe_gaia_e*.md`): nada de esto llegó a producción como adquisición en tiempo de petición; el vocabulario se conserva porque nombra los conceptos con los que se midió. La **celda** y el **histograma de profundidad** vuelven con el Avance de Gaia (ADR 0033), generado *offline*.
+Vocabulario del estudio de la capa de adquisición y caché de Gaia DR3 para campo arbitrario (ver `especificacion_optimizacion_gaia.md` y ADR 0030, dos ejes de Gaia). El estudio se cerró con veredicto NO PASA en sus dos ejes (informes en `simulador_ocular/docs/adr/0030-dos-ejes-gaia/`): nada de esto llegó a producción como adquisición en tiempo de petición; el vocabulario se conserva porque nombra los conceptos con los que se midió. La **celda** y el **histograma de profundidad** vuelven con el Avance de Gaia (ADR 0033), generado *offline*.
 
 - **Celda:** unidad de caché espacial del cielo, independiente del telescopio, ocular, aumento y objeto observado. Identificada por `(catálogo, nivel, ipix)` HEALPix nested. La semántica «las N más brillantes» pertenece al **campo**, no a la celda: la celda solo contiene «todas las estrellas hasta su Gmax». _Evitar_: tesela, tile, región.
 - **Profundidad monotónica:** el Gmax de una celda es **estado**, no parte de la clave: registra la profundidad más honda jamás pedida y solo crece (una re-consulta más honda reemplaza la entrada por su superconjunto). Evita la explosión `celda × magnitud`.

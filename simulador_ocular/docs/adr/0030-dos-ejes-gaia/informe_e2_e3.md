@@ -1,4 +1,4 @@
-# Informe E2+E3 — semántica y coste del rango source_id (eje 2, ADR 0012)
+# Informe E2+E3 — semántica y coste del rango source_id (eje 2, ADR 0030)
 
 Medido el 2026-08-18 contra `tapvizier.cds.unistra.fr` (`I/355/gaiadr3`), G≤20, sin
 `ORDER BY`, 3 repeticiones intercaladas, protocolo endurecido de E1 (pausas + backoff).

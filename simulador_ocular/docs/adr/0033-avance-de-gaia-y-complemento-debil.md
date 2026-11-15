@@ -67,7 +67,7 @@ Avance.
   caché (hoy al 99,4 %) se llenará más rápido.
 - El render depende de dos fuentes. La frontera G = 15 tiene que ser la misma con
   `dr3lite` (GAVO) y con `I/355/gaiadr3` (CDS), sin duplicar ni perder estrellas.
-- El estudio de celdas del ADR 0012 (NO PASA) no se contradice: falló la adquisición
+- El estudio de celdas del ADR 0030 (dos ejes de Gaia, NO PASA) no se contradice: falló la adquisición
   **en frío y en tiempo de petición**. El Avance no adquiere nada en tiempo de petición,
   y el mismo informe E4 midió las celdas ya en caché en 17-203 ms.
 - (#517) Con el Avance ya generado, sumar celdas **enteras** sobreestimaba entre ×1,3 y
