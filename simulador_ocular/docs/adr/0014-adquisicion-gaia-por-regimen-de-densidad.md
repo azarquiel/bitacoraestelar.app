@@ -1,12 +1,12 @@
 # 0014 — Adquisición de Gaia por régimen de densidad
 
-Fecha: 2026-08-19 · Estado: aceptada
+Fecha: 2026-08-19 · Estado: aceptada · Derogada en parte por: [ADR 0033](0033-avance-de-gaia-y-complemento-debil.md)
 
 ## Contexto
 
 La consulta de producción del proxy (`gaia_proxy.php`) era única para todo el
-cielo: `ORDER BY Gmag + TOP 40000`. El estudio preregistrado (ADR 0012, informes
-`informe_gaia_e{1,2_e3,4}.md`) midió que:
+cielo: `ORDER BY Gmag + TOP 40000`. El estudio preregistrado (ADR 0030 — dos ejes de Gaia —, informes
+`0030-dos-ejes-gaia/informe_e{1,2_e3,4}.md`) midió que:
 
 - el coste dominante del TAP es el `ORDER BY`, no el área ni las filas devueltas;
 - ~200 000 filas sin `ORDER BY` llegan en ~2-4 s;
@@ -111,7 +111,7 @@ Decisión:
   un borde de centésima (`b/100`), no en la estrella 40 000. Si el campo cabe
   entero en el TOP, se salta el espacial y no hay fondo. Esto autoriza el
   histograma previo en la vía asíncrona, que el ticket dejaba fuera de alcance
-  como «COUNT previo»; el ADR 0012 lo descartó por coste en síncrono, no aquí.
+  como «COUNT previo»; el ADR 0030 (dos ejes) lo descartó por coste en síncrono, no aquí.
 - **Un job por clave.** El estado de la cadena (paso, URL del job —la del
   `Location` del 303—, corte, momentos y celdas) se guarda como JSON en
   `<clave>.job`, junto a la entrada, con tmp + rename. Se lanza y se avanza con
