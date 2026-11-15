@@ -376,6 +376,7 @@ function bitacora_panel_legacy() {
                 "UPDATE $t_obs SET usuario_id = %d WHERE id IN ( SELECT observador_id FROM ( SELECT DISTINCT observador_id FROM $t WHERE origen = 'legacy' AND observador_id IS NOT NULL ) AS sub )",
                 $uid
             ) );
+            // nosemgrep: php.lang.security.injection.echoed-request.echoed-request — intval() y esc_html() ya escapan lo único que viene de la petición
             echo '<div class="notice notice-success"><p>Reasignadas <strong>' . intval( $n ) . '</strong> observaciones históricas a <strong>' . esc_html( $destino->display_name ) . '</strong>. Ya puedes editarlas y generar sus fichas desde ese usuario.</p></div>';
         } else {
             echo '<div class="notice notice-error"><p>Selecciona un usuario válido.</p></div>';

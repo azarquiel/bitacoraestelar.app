@@ -1141,6 +1141,7 @@ cache_lru_flujo(
             gaia_json_headers();
             header('Cache-Control: no-store');
             header('Retry-After: ' . GAIA_ASYNC_REINTENTAR);
+            // nosemgrep: php.lang.security.injection.echoed-request.echoed-request — JSON de constantes y un paso interno, servido como application/json
             echo json_encode(['pendiente' => true, 'reintentar_en' => GAIA_ASYNC_REINTENTAR,
                 'paso' => gaia_cadena_paso_num($e['paso'] ?? 'hist'), 'pasos' => count(GAIA_CADENA_PASOS)]);
             exit;
