@@ -205,3 +205,34 @@ aparte (`--solo … --dir <scratch>`), sin tocar el banco publicado.
   de salida, esos mandaban sobre las fixtures. Con la copia,
   `test_dso_texturas.js` pasa entero, incluidos los dos «regenerarlo no cambia
   un byte» que fallaban antes de #320.
+
+**Revertida el mismo día.** Con el banco v3 en producción, NGC 1788 dejó de verse
+en el render de Canvas 2D: el anclaje a catálogo repartía su V = 11,03 entre los
+20′ del parche, y el núcleo bajaba 1,3 mag/″². 13 de los 17 que crecieron se
+apagaron entre 0,5 y 3,3 mag/″² (tabla en #560). Producción volvió al manifiesto
+v2 (las texturas v2 seguían en el servidor) y la rama revirtió el commit de la
+tirada (`636e707`). El código del ADR 0036 se queda; `GENERADOR` sigue en 2
+hasta que #560 se resuelva y se republique todo junto.
+
+## Lo aprendido
+
+- **Una tirada que cambia lados exige medir el brillo del núcleo antes de
+  publicar.** Los tests miden geometría, cielo y bytes; ninguno mira cuánto
+  brilla el objeto en pantalla. El script que lo detectó (núcleo de 30″ con
+  `ps1AnclarACatalogo`, texturas viejas contra nuevas) pasa a `scripts/` con #560.
+- **Las predicciones del ADR se hacen sobre lo publicado, no sobre lo que la ley
+  haría hoy.** El ADR 0036 predijo «crecen 2» mirando las 12 que ya tenían
+  `marco`; 15 más no lo tenían y crecieron por primera vez. Antes de una tirada,
+  `--banco --seco` debería contar los sidecars sin `marco` en clases de lado
+  medido.
+- **No borrar las texturas viejas del servidor hasta verificar en producción.**
+  Fue lo que hizo la marcha atrás posible en dos minutos.
+- **Un fichero en rojo en la suite no es «el mismo fallo».** El bump de
+  `GENERADOR` mataba `test_dso_texturas.js` antes de los asserts nuevos, y la
+  comparación por fichero lo dio por igual que el fallo previo. Hay que comparar
+  por aserción.
+- **El desempate de `sidecarsUnicos` da prioridad al directorio de salida:** si
+  `simulador_ocular/dso/` tiene un sidecar viejo de un objeto golden, manda sobre
+  la fixture. Los dos «regenerarlo no cambia un byte» que fallan en `main` vienen
+  de ahí: en v3 se arreglaron copiando los sidecars de las fixtures también a
+  `dso/`.

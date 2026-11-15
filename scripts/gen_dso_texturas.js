@@ -63,7 +63,12 @@ var BANCO = require('./lib_banco_dso.js')(window.BitacoraGaiaRender);
 /* Versión del generador. Súbela cuando cambie lo que determina los píxeles: el
    nombre de fichero lleva el hash, así que subirla republica todas las
    texturas y deja las viejas huérfanas (la URL es inmutable a propósito). */
-var GENERADOR = 'gen_dso_texturas 3';   // 3: campo vecino según el lado publicado (ADR 0036, #320)
+/* shortcut: el ADR 0036 (#320) cambia el vecino de las 12 de lado medido y
+   exige subir esto a 'gen_dso_texturas 3', pero la subida va en el mismo commit
+   que la tirada del banco y sus fixtures: sin ellos el test se queda sin
+   fixture de NGC 5194. No lances --banco sin subirlo, y no antes de #560 (el
+   anclaje diluye el núcleo cuando el lado crece: la tirada v3 se revirtió). */
+var GENERADOR = 'gen_dso_texturas 2';
 var SONDEO = 'PS1 DR2 3π stack';
 var MANIFIESTO = path.join(RAIZ, 'simulador_ocular', 'resources', 'js', 'dso-texturas-datos.js');
 var FIXTURES = path.join(RAIZ, 'scripts', 'fixtures', 'dso');
