@@ -219,7 +219,7 @@ hasta que #560 se resuelva y se republique todo junto.
 - **Una tirada que cambia lados exige medir el brillo del núcleo antes de
   publicar.** Los tests miden geometría, cielo y bytes; ninguno mira cuánto
   brilla el objeto en pantalla. El script que lo detectó (núcleo de 30″ con
-  `ps1AnclarACatalogo`, texturas viejas contra nuevas) pasa a `scripts/` con #560.
+  `ps1AnclarACatalogo`, texturas viejas contra nuevas) es `scripts/harness_nucleo_republicacion.js` (#560).
 - **Las predicciones del ADR se hacen sobre lo publicado, no sobre lo que la ley
   haría hoy.** El ADR 0036 predijo «crecen 2» mirando las 12 que ya tenían
   `marco`; 15 más no lo tenían y crecieron por primera vez. Antes de una tirada,

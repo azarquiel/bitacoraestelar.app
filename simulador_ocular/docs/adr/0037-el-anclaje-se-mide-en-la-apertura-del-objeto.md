@@ -42,6 +42,35 @@ centrales; NGC 1788 dejó de verse) y hubo que revertirla en producción.
   peldaño 0. Equivalente si el suelo no cambia, pero exige bajar ese peldaño
   también en el runtime.
 
+## Lo medido (#560, 2026-11-15)
+
+`node scripts/harness_nucleo_republicacion.js --antes <v2> --despues <v3>`, banco
+entero en disco (66 texturas de imagen: 17 crecen, 49 no; el «51» del ticket
+estaba mal contado). Núcleo = 30″ centrales tras `ps1AnclarACatalogo`.
+
+| comparación | fuera de listón |
+|---|---|
+| v2 ley vieja → v3 ley vieja (lo que se publicó y se revirtió) | 14 de 17 que crecen, +0,50 a +3,30 |
+| v2 ley nueva → v3 ley nueva | 2: NGC 1788 −0,33, NGC 6590 −0,07 |
+| v2 ley vieja (producción hoy) → v3 ley nueva | 9 |
+
+- **Los 17 que crecen** quedan a ≤0,17 de su v2, salvo NGC 1788 (−0,33, más
+  brillante). Con el cielo del sidecar v2 puesto en el parche v3, NGC 1788 y
+  NGC 6590 dan Δ = 0,00: los dos residuos son el cielo del ADR 0036, no el anclaje.
+- **Las golden** (M51, M81, M101, M104): +0,00. Sin `marco`, sin apertura.
+- **Los 9 que ya habían crecido en v2** (su sidecar v2 ya trae `marco` con lado
+  de catálogo menor) **se iluminan contra producción**: NGC 2327 −2,86 (17,09′,
+  apertura 1,50′), IC 0466 −1,85, NGC 2261 −1,20, NGC 2245 −0,79, NGC 1788 −0,57,
+  NGC 2068 −0,33, NGC 2170 −0,29, NGC 6590 −0,18, NGC 2182 −0,09.
+  Es el punto 1 aplicado a una dilución que ya estaba publicada: su lado de
+  catálogo está en el `marco` desde v2. Choca con el criterio «los que no
+  cambian de lado, ±0,05» de #560 si se lee contra producción; **lo decide el
+  usuario al aceptar el ADR**.
+- **NGC 6888** (control negativo, razón sin el anillo 0–0,5 r_e de
+  `harness_suelo_cielo.js --opciones`): 2,10 en v2 y 2,36 en v3; las dos por
+  encima del 1,80 publicado en #274. No depende de `k` (cuenta píxeles en σ):
+  sale del lado y el cielo de la tirada, fuera del alcance de este ADR.
+
 ## Lo que cuesta
 
 - Toca el runtime (`bitacora-ps1.js`): sube `?v` en las dos páginas.

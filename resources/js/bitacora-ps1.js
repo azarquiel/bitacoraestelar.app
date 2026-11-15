@@ -1228,9 +1228,10 @@
      del catálogo. Orden obligatorio: cielo restado y estrellas quitadas ANTES de
      integrar; anclar antes metería la luz de las estrellas en el total y apagaría
      la galaxia.
-     o: {magV, n, reArcsec, ladoArcmin, escalaAs, [cielo], [sigma]}; `cielo` y
-     `sigma` son los del campo vecino, medidos fuera del objeto (#286), y van
-     juntos o no va ninguno. Devuelve Float32Array. */
+     o: {magV, n, reArcsec, ladoArcmin, escalaAs, [cielo], [sigma], [ladoApertura]};
+     `cielo` y `sigma` son los del campo vecino, medidos fuera del objeto (#286),
+     y van juntos o no va ninguno. `ladoApertura` (′), el lado de catálogo de un
+     parche que creció (ps1LadoApertura). Devuelve Float32Array. */
   function ps1AnclarACatalogo(datos, ancho, alto, o) {
     /* El cielo y la σ se miden FUERA del objeto cuando el sidecar los trae
        (#286, ADR 0028): el marco del 6 % que lee ps1Cielo supone que el borde
@@ -1271,8 +1272,26 @@
       neto[i] = d > 0 ? d : 0;
       suma += neto[i];
     }
+    /* La APERTURA del objeto (ADR 0037, #560): si el lado medido hizo crecer el
+       parche (ADR 0034), `k` se mide solo en el cuadrado del lado de catálogo y
+       se aplica al parche entero. Repartir la mag del catálogo entre todo el
+       parche —que con el lado medido trae nebulosidad del complejo— diluía el
+       núcleo: +3,3 mag/″² en NGC 1985, NGC 1788 invisible. */
+    var lado = o.ladoArcmin;
+    if (o.ladoApertura > 0 && o.ladoApertura < o.ladoArcmin && suma > 0) {
+      var med = (o.ladoApertura * 60 / 2) / o.escalaAs;
+      var cx = (ancho - 1) / 2, cy = (alto - 1) / 2, sumaAp = 0, x, y;
+      for (y = Math.ceil(cy - med); y <= cy + med; y++) {
+        for (x = Math.ceil(cx - med); x <= cx + med; x++) {
+          var w = neto[y * ancho + x];
+          if (w > 0) sumaAp += w;
+        }
+      }
+      // Sin luz dentro de la apertura no hay con qué medir: vale el parche.
+      if (sumaAp > 0) { suma = sumaAp; lado = o.ladoApertura; }
+    }
     if (!(suma > 0) || !(o.magV > 0)) return neto;
-    var radioEnRe = (o.reArcsec > 0) ? (o.ladoArcmin * 60 / 2) / o.reArcsec : Infinity;
+    var radioEnRe = (o.reArcsec > 0) ? (lado * 60 / 2) / o.reArcsec : Infinity;
     var frac = ps1FraccionLuz(o.n, radioEnRe);
     var Ftotal = Math.pow(10, -0.4 * o.magV) * (frac > 0.02 ? frac : 0.02);
     var areaPx = o.escalaAs * o.escalaAs;               // arcsec² por píxel del parche
@@ -1864,6 +1883,14 @@
      debería existir, y por eso se nombra en vez de colarse como cielo bueno.
 
      Los dos números van juntos o no va ninguno: medio par no es una medida. */
+  /* Lado de la apertura de anclaje (ADR 0037): el lado de catálogo del `marco`
+     si la escalera del ADR 0034 hizo crecer el parche; si no —galaxias,
+     compactas, difusas que no crecieron—, null y la apertura es el parche. */
+  function ps1LadoApertura(sc) {
+    var lc = sc && sc.marco && sc.marco.ladoCatalogo;
+    return (lc > 0 && lc < sc.ladoArcmin) ? lc : null;
+  }
+
   function ps1CieloDeSidecar(sc) {
     var vec = sc && sc.vecino;
     if (!vec) return null;
@@ -2004,6 +2031,7 @@
           escalaAs: sc.escalaAs, wcs: sc.wcs || null,
           cieloVecino: vec ? vec.cielo : null,
           sigmaVecino: vec ? vec.sigma : null,
+          ladoApertura: ps1LadoApertura(sc),
           // parseFITS lo lee de ZPT_0000 y no lo usa nadie: el nivel absoluto lo
           // pone el catálogo (ps1AnclarACatalogo). Mismo valor que allí sin la
           // tarjeta, para que la forma del objeto sea la misma.
@@ -2345,7 +2373,9 @@
         magV: gal.magV, n: gal.n, reArcsec: gal.reArcsec,
         ladoArcmin: gal.ladoArcmin, escalaAs: f.escalaAs,
         // Cielo y σ medidos fuera del objeto, si la textura los publica (#286).
-        cielo: f.cieloVecino, sigma: f.sigmaVecino
+        cielo: f.cieloVecino, sigma: f.sigmaVecino,
+        // Apertura de anclaje si el parche creció (ADR 0037, #560).
+        ladoApertura: f.ladoApertura
       });
       /* Peso y reanclaje de la mezcla: una vez por galaxia, no por fotograma ni
          por píxel. Dependen solo del parche y del catálogo, no de la escena. */
@@ -2646,6 +2676,7 @@
     ps1GalaxiasDelCampo: ps1GalaxiasDelCampo,
     ps1CampoVecino: ps1CampoVecino,
     ps1CieloDeSidecar: ps1CieloDeSidecar,
+    ps1LadoApertura: ps1LadoApertura,
     ps1CieloCampo: ps1CieloCampo,
     ps1EstrellasEnPixeles: ps1EstrellasEnPixeles,
     ps1EscenaEnParche: ps1EscenaEnParche,

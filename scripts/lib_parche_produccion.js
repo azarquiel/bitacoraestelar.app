@@ -41,7 +41,8 @@ module.exports = function (R) {
          undefined y manda el marco —igual que el parche del proxy—. Van aquí de
          todas formas: en cuanto un harness monte desde textura publicada, esta
          réplica mide la misma ley que producción y no otra (ADR 0008). */
-      cielo: F.cieloVecino, sigma: F.sigmaVecino
+      cielo: F.cieloVecino, sigma: F.sigmaVecino,
+      ladoApertura: F.ladoApertura
     });
     var peso = window.BitacoraPS1.ps1PesoImagen(datos, f.ancho, f.alto, f.escalaAs);
     var perfil = window.BitacoraPS1.ps1PerfilEnParche(comps, gal.pa, f.ancho, f.alto, f.afin);
