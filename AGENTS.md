@@ -8,7 +8,7 @@ Lo específico de Claude va en `CLAUDE.md`.
 - Tests Frontend (Node): `node scripts/bateria.js --rapida` (lo que corre CI); `node scripts/bateria.js` incluye los lentos; un test suelto: `node scripts/test_<nombre>.js`.
 - Tests Backend (PHP): `for f in scripts/test_*.php; do php "$f" || echo "FALLA $f"; done`; sintaxis con `php -l`.
 - Datos (Python): un generador por catálogo, `python3 scripts/gen_<catálogo>.py`. No hay generador global.
-- Rojos conocidos: `ESPERADOS` en `scripts/bateria.js`, cada uno con su issue. `main` tiene que estar en verde salvo esos. Un rojo nuevo se arregla o se registra ahí con ticket; nunca se ignora.
+- Rojos conocidos: `ESPERADOS` en `scripts/bateria.js`, cada uno con su issue. `main` tiene que estar en verde salvo esos. Un rojo nuevo se arregla o se registra ahí con ticket; nunca se ignora. Nunca `gh pr merge --admin` ni push directo a `main` para saltarse un check: `main` está protegida y esos dos atajos son los únicos que la esquivan.
 
 ## Arquitectura y estilo
 
@@ -46,16 +46,18 @@ Toda PR lleva el cuerpo de `.github/pull_request_template.md` completado por qui
 
 1. Copia la plantilla y escribe «Qué cambia».
 2. En «Conocimiento», marca `[x]` las dos casillas y contesta cada una:
-   - **ADR:** si el cambio toma una decisión difícil de revertir, escribe el ADR (ver «Documentación del dominio») y pon su ruta; si no, «no aplica: motivo».
+   - **ADR:** si el cambio toma una decisión difícil de revertir, escribe el ADR (ver «Domain docs») y pon su ruta; si no, «no aplica: motivo».
    - **Lección:** si hubo un error que se puede repetir, fíjalo con un test (mejor) o con una línea en este fichero, y pon su ruta; si no, «no aplica: motivo».
 3. Comprueba en local: `node scripts/plantilla_pr.js cuerpo.md`.
 4. Crea la PR con `gh pr create --body-file cuerpo.md`. Nunca con `--fill`: se salta la plantilla y el job «Plantilla de PR» sale rojo.
 
-## Issues
+## Agent skills
+
+### Issue tracker
 
 Issues live in GitHub Issues (`azarquiel/bitacoraestelar.app`), via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
-## Documentación del dominio
+### Domain docs
 
 Multi-context: `CONTEXT-MAP.md` at the repo root points to one `CONTEXT.md` per context (`registro/`, `mapa/`, `simulador_ocular/`); root `docs/adr/` for system-wide decisions, `<context>/docs/adr/` for context-scoped ones. See `docs/agents/domain.md`. Índice de los ADR del simulador: `simulador_ocular/docs/adr/README.md`.
 
