@@ -73,7 +73,7 @@ estaba mal contado). Núcleo = 30″ centrales tras `ps1AnclarACatalogo`.
 - **NGC 6888** (control negativo, razón sin el anillo 0–0,5 r_e de
   `harness_suelo_cielo.js --opciones`): 2,10 en v2 y 2,36 en v3; las dos por
   encima del 1,80 publicado en #274. No depende de `k` (cuenta píxeles en σ):
-  sale del lado y el cielo de la tirada, fuera del alcance de este ADR.
+  sale del lado y el cielo de la tirada, fuera del alcance de este ADR (#567).
 
 ## Lo que cuesta
 
