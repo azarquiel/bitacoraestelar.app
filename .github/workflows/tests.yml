@@ -54,11 +54,6 @@ jobs:
     name: Frontend (Node, batería rápida)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Informativo de momento: varios tests comparan contra valores «golden»
-    # calculados en un Mac, y aún no se ha visto esta batería en verde en el
-    # runner de Linux. El trabajo se pone rojo si falla, pero no bloquea el PR.
-    # Quitar esta línea en cuanto salga verde aquí.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
