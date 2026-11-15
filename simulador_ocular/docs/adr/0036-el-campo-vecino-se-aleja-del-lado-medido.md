@@ -2,8 +2,8 @@
 
 **Aceptado** el 2026-11-15. Propuesto el 2026-11-14 al cerrar la medida de #320.
 Implementado en `ps1CampoVecino(gal, rObj, catálogo, ladoPublicado)` y en el
-punto fijo de `medirLado` (`gen_dso_texturas.js`), con `GENERADOR` a
-`gen_dso_texturas 3`. La republicación del banco va aparte.
+punto fijo de `medirLado` (`gen_dso_texturas.js`). La subida de `GENERADOR` a
+`gen_dso_texturas 3` va con la republicación del banco, aparte.
 
 Medidas: `simulador_ocular/docs/validacion/campo_vecino_320.md`. Arnés:
 `node scripts/harness_suelo_cielo.js --vecino`.

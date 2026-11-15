@@ -152,6 +152,11 @@ codificación `asinh16` y su sidecar JSON, generados offline y servidos desde
   `cielo + kRuido·σ` del campo vecino. Sin eso, el recorte corta nebulosa con peso 1 y en
   pantalla sale un **canto recto** (M78, `scripts/test_costura_parches.js`). El lado con
   que se pinta lo dice el manifiesto (columna 7, `ps1LadoDeFila`), no el catálogo.
+  - El campo vecino se coloca según el **lado publicado** (el que eligió la escalera),
+    con el recorte del lado de catálogo (ADR 0036). Si el lado crece, el vecino se aleja
+    y la escalera se rejuzga desde ahí, hasta punto fijo; nunca baja. `marco.ladoVecino`
+    dice dónde quedó; si el vecino alejado no vale, el peldaño lleva motivo
+    `vecino-alejado-*` y se publica la ronda anterior.
   - Un parche medido que contiene el centro de otra difusa sin borde la deja como
     `cubierta`: no pinta (su luz va dentro del dueño, con el brillo de ese) y lo avisa.
   - _Evitar_: «tesela» o «tile» para el parche, y «solape» para la cobertura (los
