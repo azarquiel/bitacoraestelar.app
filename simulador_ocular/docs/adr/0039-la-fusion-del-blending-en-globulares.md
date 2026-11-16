@@ -97,7 +97,7 @@ dibujadas.
 
 ## Resultados (2026-11-16)
 
-Salida completa: `node scripts/harness_fusion_blending.js` (M13, 467 mm, 173×,
+Salida completa: `node scripts/harness_fusion_blending.js --banda G` (M13, 467 mm, 173×,
 SQM 21, `θ_sep = 1,043″`, 11 912 filas dentro de 8 r_h). Diagnóstico de banda:
 `--banda V`. Desde #574 el arnés corre en V por defecto (la conversión es la de
 producción, `magVGaia`) y la columna prerregistrada sale con `--banda G`.

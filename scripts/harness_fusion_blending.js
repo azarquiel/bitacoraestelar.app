@@ -41,7 +41,7 @@ var gaia = fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/valida
    G − V de Gaia EDR3; sin color o fuera de rango, G). --banda G reproduce la
    columna prerregistrada del ADR 0039 (G tratada como V). */
 var BANDA_G = process.argv.indexOf('--banda') > 0 && process.argv[process.argv.indexOf('--banda') + 1] === 'G';
-function magV(g) { return BANDA_G ? g[2] : R.magVGaia(g); }
+function magCatalogo(g) { return BANDA_G ? g[2] : R.magVGaia(g); }
 
 var cielo = { pupilaSalida: D / MAG, pupilaOjo: 7, sqm: SQM, transmision: 0.9,
               aumentos: MAG, perceptual: true };
@@ -124,7 +124,7 @@ gaia.forEach(function (g) {
   var x = (((g[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600, y = (g[1] - M13.dec) * 3600;
   var r = pob.radioPropio(x, y);
   if (!(r < pob.rtAs) || anillo(r) < 0) return;
-  var m = magV(g);
+  var m = magCatalogo(g);
   est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
 });
 
