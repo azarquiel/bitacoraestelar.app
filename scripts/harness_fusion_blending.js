@@ -75,15 +75,16 @@ var mAp = pob.magnitudes, num = pob.estrellasPorBin, NB = mAp.length;
 var fB = new Float64Array(NB);
 for (var b = 0; b < NB; b++) fB[b] = Math.pow(10, -0.4 * mAp[b]);
 function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catalogada de S2
-  var s = pob.sigma(rAs), v1 = 0, v2 = 0, s2 = 0, s2c = 0;
+  var s = pob.sigma(rAs), v1 = 0, v2 = 0, s2 = 0, s2c = 0, s2sub = 0, s2csub = 0, mR = mResEn(rAs);
   for (var k = 0; k < NB; k++) {
-    var c = pob.completitud(mAp[k], rAs), w = num[k];
+    var c = pob.completitud(mAp[k], rAs), w = num[k], f2b = fB[k] * fB[k];
     v1 += w * fB[k] * (1 - c);
-    v2 += w * fB[k] * fB[k] * (1 - c);
-    s2 += w * fB[k] * fB[k];
-    s2c += w * fB[k] * fB[k] * c;
+    v2 += w * f2b * (1 - c);
+    s2 += w * f2b;
+    s2c += w * f2b * c;
+    if (mAp[k] > mR) { s2sub += w * f2b; s2csub += w * f2b * c; }   // lo que no se resuelve
   }
-  return { v1: s * v1, v2: s * v2, s2: s * s2, s2c: s * s2c };
+  return { v1: s * v1, v2: s * v2, s2: s * s2, s2c: s * s2c, s2sub: s * s2sub, s2csub: s * s2csub };
 }
 var cacheMom = {};
 function mom(rAs) {               // cuantizado a 0,05″: el perfil no cambia a esa escala
@@ -275,9 +276,10 @@ console.log(fila);
 /* ── Criterio 3: el grano no cuenta dos veces la luz catalogada ───────────── */
 console.log('\n── Criterio 3: R2 = (∫V2 + ΣF_j²) / ∫Σ·S2_total  (listón R2 ≤ 1 + 2σ)');
 console.log('banda del catálogo: ' + (BANDA_V ? 'V (diagnóstico, G→V EDR3)' : 'G tratada como V (prerregistrada)'));
-console.log('anillo       R2       σ    1+2σ  veredicto     S2·c/S2   F²máx/ΣF²   m más brillante');
+console.log('anillo       R2       σ    1+2σ  veredicto     S2·c/S2   S2·c/S2 (m>m_res)  F²máx/ΣF²   m más brillante');
 for (k = 0; k < NA; k++) {
   var v2 = integralAnillo(k, campo('v2')), s2 = integralAnillo(k, campo('s2')), s2c = integralAnillo(k, campo('s2c'));
+  var sub = integralAnillo(k, campo('s2sub')), subc = integralAnillo(k, campo('s2csub'));
   var f2 = 0, f4 = 0, fmax = 0;
   est.forEach(function (s) {
     if (anillo(s.r) !== k) return;
@@ -286,7 +288,8 @@ for (k = 0; k < NA; k++) {
   var R2 = (v2 + f2) / s2, sd = Math.sqrt(f4) / s2;
   console.log(ETQ[k].padEnd(8) + R2.toFixed(3).padStart(8) + sd.toFixed(3).padStart(8) +
               (1 + 2 * sd).toFixed(3).padStart(8) + (R2 <= 1 + 2 * sd ? '  PASA' : '  NO PASA').padEnd(14) +
-              (100 * s2c / s2).toFixed(1).padStart(7) + ' %' + (100 * fmax * fmax / f2).toFixed(1).padStart(10) + ' %' +
+              (100 * s2c / s2).toFixed(1).padStart(7) + ' %' + (sub > 0 ? (100 * subc / sub).toFixed(1) + ' %' : '—').padStart(19) +
+              (100 * fmax * fmax / f2).toFixed(1).padStart(10) + ' %' +
               (-2.5 * Math.log10(fmax)).toFixed(2).padStart(12));
 }
 
@@ -345,33 +348,80 @@ function picos(pos, F) {
     for (var j = 0; j < pos.length; j++) I[i] += F[j] * Math.exp(-Math.pow(t - pos[j], 2) / (2 * SIG * SIG));
   }
   var p = [];
-  for (i = 1; i < N; i++) if (I[i] > I[i - 1] && I[i] >= I[i + 1]) p.push(lo + i * h);
-  return p;
+  for (i = 1; i < N; i++) if (I[i] > I[i - 1] && I[i] >= I[i + 1]) p.push(i);
+  /* Profundidad de valle exigida: dos picos vecinos cuentan como dos solo si el
+     mínimo entre ellos baja al menos `valle` por debajo del más débil. 0 es
+     Sparrow (basta un mínimo); 0,265 es la del par igual de Airy a Rayleigh. */
+  var fundido = true;
+  while (fundido && p.length > 1) {
+    fundido = false;
+    for (var q = 0; q + 1 < p.length; q++) {
+      var vmin = Infinity;
+      for (var t2 = p[q]; t2 <= p[q + 1]; t2++) vmin = Math.min(vmin, I[t2]);
+      if (1 - vmin / Math.min(I[p[q]], I[p[q + 1]]) < VALLE) {
+        p.splice(I[p[q]] >= I[p[q + 1]] ? q + 1 : q, 1);
+        fundido = true; break;
+      }
+    }
+  }
+  return p.map(function (ii) { return lo + ii * h; });
 }
+var VALLE = 0;
 function caso(nombre, pos, dm) {
   var F = dm.map(function (d) { return Math.pow(10, -0.4 * d); });
   var Ft = F.reduce(function (s, x) { return s + x; }, 0);
   var cen = pos.reduce(function (s, x, i) { return s + x * F[i]; }, 0) / Ft;
   var g = fof(pos.map(function (x) { return { x: x, y: 0 }; }), TH);
   var pk = picos(pos, F);
+  // La posición solo tiene sentido si el pico es UNO de verdad (sin mínimo); un
+  // par fundido por el umbral de valle es una mancha alargada sin pico único.
+  var guarda = VALLE; VALLE = 0; var natural = picos(pos, F).length === 1; VALLE = guarda;
   console.log(nombre.padEnd(34) + ('(a) ' + g.length + ' punto' + (g.length > 1 ? 's' : '')).padEnd(14) +
               ('(b) ' + pk.length + ' pico' + (pk.length > 1 ? 's' : '')).padEnd(13) +
-              (pk.length === 1 ? ('pico − centroide = ' + ((pk[0] - cen) / TH).toFixed(3) + ' θ') : ''));
+              (pk.length === 1 && natural ? ('pico − centroide = ' + ((pk[0] - cen) / TH).toFixed(3) + ' θ') :
+               pk.length === 1 ? 'mancha alargada (fundida por el valle)' : ''));
 }
-console.log('\n── Micro-casos (separaciones en θ_sep; Δm respecto a la más brillante)');
-caso('par igual, 0,50 θ', [0, 0.5 * TH], [0, 0]);
-caso('par igual, 0,70 θ', [0, 0.7 * TH], [0, 0]);
-caso('par igual, 0,75 θ', [0, 0.75 * TH], [0, 0]);
-caso('par igual, 0,95 θ', [0, 0.95 * TH], [0, 0]);
-caso('par Δm=2, 0,70 θ', [0, 0.7 * TH], [0, 2]);
-caso('par Δm=2, 0,95 θ', [0, 0.95 * TH], [0, 2]);
-caso('par Δm=2, 1,50 θ', [0, 1.5 * TH], [0, 2]);
-caso('par Δm=0,75, 0,95 θ', [0, 0.95 * TH], [0, 0.75]);
-caso('cadena A–B–C igual, paso 0,60 θ', [0, 0.6 * TH, 1.2 * TH], [0, 0, 0]);
-caso('cadena A–B–C igual, paso 0,90 θ', [0, 0.9 * TH, 1.8 * TH], [0, 0, 0]);
+function micro(valle, nombre) {
+  VALLE = valle;
+  console.log('\n── Micro-casos, valle exigido ' + valle.toFixed(3) + ' (' + nombre + ')');
+  caso('par igual, 0,50 θ', [0, 0.5 * TH], [0, 0]);
+  caso('par igual, 0,70 θ', [0, 0.7 * TH], [0, 0]);
+  caso('par igual, 0,75 θ', [0, 0.75 * TH], [0, 0]);
+  caso('par igual, 0,95 θ', [0, 0.95 * TH], [0, 0]);
+  caso('par Δm=2, 0,70 θ', [0, 0.7 * TH], [0, 2]);
+  caso('par Δm=2, 0,95 θ', [0, 0.95 * TH], [0, 2]);
+  caso('par Δm=2, 1,50 θ', [0, 1.5 * TH], [0, 2]);
+  caso('par Δm=0,75, 0,95 θ', [0, 0.95 * TH], [0, 0.75]);
+  caso('cadena A–B–C igual, paso 0,60 θ', [0, 0.6 * TH, 1.2 * TH], [0, 0, 0]);
+  caso('cadena A–B–C igual, paso 0,90 θ', [0, 0.9 * TH, 1.8 * TH], [0, 0, 0]);
+}
+micro(0, 'Sparrow: basta un mínimo');
+micro(0.265, 'Rayleigh: el valle del par igual de Airy al radio del primer anillo oscuro');
+// Valle de esta PSF para un par igual a 1 θ: comprueba que la gaussiana reproduce Rayleigh.
+var vm = Math.exp(-Math.pow(0.5 * TH, 2) / (2 * SIG * SIG)) * 2, pk1 = 1 + Math.exp(-TH * TH / (2 * SIG * SIG));
+console.log('valle de la gaussiana, par igual a 1 θ: ' + (100 * (1 - vm / pk1)).toFixed(1) + ' %');
+/* Criterio de la casa para el OJO (resolucionDoble, bitacora-ocular.js): hace
+   falta aum·sep ≥ 300″ para empezar a partir un par. Es la resolución angular
+   del ojo sobre la imagen aumentada, independiente de la PSF. */
+console.log('ojo (resolucionDoble): a ' + MAG + '× parte pares desde ' + (300 / MAG).toFixed(2) + '″ = ' +
+            (300 / MAG / TH).toFixed(2) + ' θ_sep; θ_sep·M = ' + (TH * MAG).toFixed(0) + '″');
 /* Dos estrellas bajo m_res cuya suma lo supera: cada una 0,6 mag más débil que
    m_res; juntas, 2,5·log10(2) − 0,6 = 0,15 mag más brillantes. */
 var dmSub = 0.6, mJuntas = -2.5 * Math.log10(2) + dmSub;
 console.log('dos a m_res+' + dmSub.toFixed(2) + ' a 0,5 θ: el par suma m_res' + (mJuntas >= 0 ? '+' : '') +
             mJuntas.toFixed(2) + '; la escala a la que el ojo suma la luz de un punto (θ_R/M) es ' +
             (res.thGranoAs / TH).toFixed(1) + ' θ_sep');
+
+/* Pregunta 6 leída de PRODUCCIÓN (ADR 0008): la visibilidad del grano con la ley
+   del ADR 0015 (`tabla.sGrano`, P(ver)) para el S2campo de producción, que es la
+   varianza ESPERADA de toda la luz sub-m_res. Bajo la partición, esa misma
+   varianza se reparte entre V2 (sintética) y la fluctuación real del catálogo
+   no resuelto, con el mismo valor esperado. */
+var sgMax = new Float64Array(NA);
+for (var it = 0; it < tabla.r.length; it++) {
+  var aa = anillo(tabla.r[it]);
+  if (aa >= 0 && tabla.sGrano[it] > sgMax[aa]) sgMax[aa] = tabla.sGrano[it];
+}
+console.log('\n── Pregunta 6 con la ley de producción: máx P(ver grano) = tabla.sGrano por anillo');
+console.log(ETQ.map(function (s3) { return s3.padStart(9); }).join(''));
+console.log(Array.prototype.map.call(sgMax, function (x) { return x.toExponential(1).padStart(9); }).join(''));

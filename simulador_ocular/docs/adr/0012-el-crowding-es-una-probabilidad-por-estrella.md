@@ -1,4 +1,4 @@
-> **Enmendado (propuesto) por el ADR 0039** (`0039-la-fusion-del-blending-en-globulares.md`): la sub-decisión A, `Δmag` y `aCrowd` como ley del catálogo se sustituyen por la imagen sumada. (B) se conserva con dominio local.
+> **Enmienda propuesta por el ADR 0039** (`0039-la-fusion-del-blending-en-globulares.md`, veredicto «no se puede todavía»): sustituiría la sub-decisión A, `Δmag` y `aCrowd` como ley del catálogo por la imagen sumada, y conservaría (B) con dominio local.
 
 # El crowding es una probabilidad por estrella, no un umbral duro
 
