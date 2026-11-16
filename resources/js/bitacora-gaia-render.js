@@ -1931,16 +1931,21 @@
     g.fillRect(0, 0, c.width, c.height);
     return (SPIKE_TINT[key] = c);
   }
-  function dibujarSpikes(ctx, x, y, g, escala, rgb) {
+  /* Largo de cada brazo en píxeles de lienzo; 0 si la estrella no lleva espigas. */
+  function largoSpikes(g, escala) {
     var cf = CFG.spikes, sobre = cf.magMax - g;
-    if (sobre <= 0) return;
+    if (sobre <= 0) return 0;
     /* L ∝ √flujo. El brazo difracta como una rendija (Babinet) y la envolvente
        del sinc² cae como 1/u², así que la espiga se ve hasta donde esa cola
        supera el umbral: ×10 de flujo alarga ×√10, no ×10. 10^(0,2·sobre) es
        justo √(10^(0,4·sobre)) = la raíz del flujo relativo a magMax.
        Como el radio: el tope, sobre la longitud nominal; la escala, después. */
     var L = Math.min(cf.longMax, cf.longRef * Math.pow(10, 0.2 * sobre)) * escala;
-    if (L < 3) return;
+    return (L < 3) ? 0 : L;
+  }
+  function dibujarSpikes(ctx, x, y, g, escala, rgb) {
+    var cf = CFG.spikes, sobre = cf.magMax - g, L = largoSpikes(g, escala);
+    if (!L) return;
     var alpha = Math.min(1, cf.intensidad * (sobre / cf.rango));
     var sp = spriteSpikeColor(rgb), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
     ctx.save();
@@ -2932,21 +2937,24 @@
     ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, radio, 0, 7); ctx.fill();
   }
 
-  /* ── Dibujo de las estrellas (tamaño = ctx.canvas.width, cuadrado) ── */
-  function dibujar(ctx, estrellas, o) {
+  /* ── Dibujo de las estrellas (tamaño = ctx.canvas.width, cuadrado) ──
+     planEstrellas decide QUÉ se pinta y dónde: una entrada por estrella con su
+     centro, `r` (radio del sprite más grande: glow, aureola, disco o espigas) y
+     lo que necesita pintarEstrella. La ganancia (ganActual) se aplica al pintar,
+     no al planear. dibujar() pinta el plan entero en un lienzo; capaEstrellas()
+     lo reparte en capas sin solape para sumar las estrellas en flujo (#541). */
+  function planEstrellas(estrellas, o, SIZE) {
     // Estrellas que Gaia DR3 no trae (satura por arriba: Vega, Arturo, Rigel...)
     // se concatenan aquí, no en consultar() -esa alimenta también la capa
     // difusa, y meterle otro catálogo rompería su función de luminosidad-.
     // Sin solapamiento que arbitrar: el fichero solo trae lo que Gaia no trae.
     // Issue #130 (azarquiel/bitacoraestelar.app).
     estrellas = estrellas.concat(window.BITACORA_ESTRELLAS_BRILLANTES || []);
-    var SIZE = ctx.canvas.width;
     var ra0 = o.ra, dec0 = o.dec, arcmin = o.arcmin, mlim = o.mlim;
     var conGlow = (o.conGlow !== false), objetoCarbono = !!o.carbono, arana = !!o.arana;
     var escv = SIZE / (arcmin / 60);
     var cos0 = Math.cos(dec0 * Math.PI / 180);
     function deltaRA(ra) { return ((ra - ra0 + 540) % 360) - 180; }
-    var glow = spriteGlow();
     // Umbral de color relativo al límite de ESTE equipo/cielo, no una magnitud
     // absoluta: ver CFG.margenColorMag.
     var magColorEfectivo = mlim - CFG.margenColorMag;
@@ -2978,9 +2986,6 @@
         } else if (d2 < mejorD2) { mejorD2 = d2; idxCarbono = c; }
       }
     }
-    // Ganancia global del dibujo: la usa la capa de rango extendido para hacer
-    // una segunda pasada atenuada que rescate los núcleos recortados.
-    ganActual = (o.ganancia > 0) ? o.ganancia : 1;
     // Tamaños APARENTES: van con el campo aparente del ocular, no con el real.
     var escala = escalaEstrellas(o.afov, SIZE);
     // El glow de las que no llegan a la magnitud límite se queda en el suelo
@@ -2988,7 +2993,7 @@
     // físico de una resuelta sería contarlas dos veces.
     var Rg = CFG.glowRadio * escala;
     var spikesOn = conGlow && arana;
-    ctx.globalCompositeOperation = 'lighter';
+    var plan = [];
     for (var i = 0; i < estrellas.length; i++) {
       var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2], bprp = estrellas[i][3];
       /* Magnitud con la que se DECIDE si la estrella se ve, separada de la que
@@ -3006,8 +3011,7 @@
         // g=mlim sea continuo: nada de "aparecer" más brillante al cruzar.
         var aGlow = CFG.alfaMin * Math.pow(10, -0.4 * (g - mlim));
         if (aGlow < CFG.glowCorte) continue;
-        ctx.globalAlpha = Math.min(1, aGlow) * ganActual;
-        ctx.drawImage(glow, x - Rg, y - Rg, Rg * 2, Rg * 2);
+        plan.push({ x: x, y: y, r: Rg, aGlow: aGlow });
         continue;
       }
       // Halo (blur) según el brillo ABSOLUTO -ver blurEstrella()-, no relativo
@@ -3035,24 +3039,53 @@
       // ('lighter') al disco de color y lo lavaba hacia blanco -justo las
       // estrellas donde más se nota el color real (p. ej. las B/A de M39)-.
       var aAur = alfaAureola(g, o.apertura);
-      if (aAur > 0.004) {
-        var Ra = CFG.aureolaRadio * escala;
-        dibujarAureola(ctx, x, y, Ra, colEstrella, aAur * ganActual);
-      }
-      ctx.globalAlpha = alfaEstrella(g, mlim, Rtot * arcmin * 60 / SIZE, dilucion) * ganActual;
-      dibujarEstrellaColor(ctx, x, y, Rtot, colEstrella, blurG, esCarbono);
-      if (spikesOn && g < CFG.spikes.magMax) dibujarSpikes(ctx, x, y, g, escala, colEstrella);
+      var Ra = (aAur > 0.004) ? CFG.aureolaRadio * escala : 0;
+      var spikes = spikesOn && g < CFG.spikes.magMax;
+      var L = spikes ? largoSpikes(g, escala) : 0;
+      plan.push({
+        x: x, y: y, g: g, escala: escala, Rtot: Rtot, blur: blurG, col: colEstrella, carbono: esCarbono,
+        aAur: aAur, Ra: Ra, spikes: spikes,
+        alfa: alfaEstrella(g, mlim, Rtot * arcmin * 60 / SIZE, dilucion),
+        // El brazo es un rectángulo de L × grosor que arranca en el centro.
+        r: Math.max(Rtot, Ra, L ? Math.sqrt(L * L + CFG.spikes.grosor * CFG.spikes.grosor / 4) : 0)
+      });
     }
+    return plan;
+  }
+
+  function pintarEstrella(ctx, e, glow) {
+    if (e.aGlow != null) {
+      ctx.globalAlpha = Math.min(1, e.aGlow) * ganActual;
+      ctx.drawImage(glow, e.x - e.r, e.y - e.r, e.r * 2, e.r * 2);
+      return;
+    }
+    if (e.Ra) dibujarAureola(ctx, e.x, e.y, e.Ra, e.col, e.aAur * ganActual);
+    ctx.globalAlpha = e.alfa * ganActual;
+    dibujarEstrellaColor(ctx, e.x, e.y, e.Rtot, e.col, e.blur, e.carbono);
+    if (e.spikes) dibujarSpikes(ctx, e.x, e.y, e.g, e.escala, e.col);
+  }
+
+  function pintarPlan(ctx, plan) {
+    var glow = spriteGlow();
+    ctx.globalCompositeOperation = 'lighter';
+    for (var i = 0; i < plan.length; i++) pintarEstrella(ctx, plan[i], glow);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
   }
 
+  function dibujar(ctx, estrellas, o) {
+    // Ganancia global del dibujo (o.ganancia): la usa la pasada atenuada del
+    // rescate HDR de capaEstrellas.
+    ganActual = (o.ganancia > 0) ? o.ganancia : 1;
+    pintarPlan(ctx, planEstrellas(estrellas, o, ctx.canvas.width));
+  }
+
   /* ═══════════ CAPA DE ESTRELLAS EN RANGO EXTENDIDO ═══════════════════════════
      Las estrellas se dibujan sumando sprites con 'lighter' sobre un lienzo de 8
-     bits. En el núcleo de un cúmulo se solapan cientos y la suma se RECORTA a
-     255: ahí se pierde la información, y ningún posprocesado la recupera porque
-     el recorte ya ocurrió al dibujar. Por eso un globular a pocos aumentos salía
-     como una mancha blanca sin estrellas distinguibles.
+     bits. Antes de #541 todo el campo iba al mismo lienzo y en el núcleo de un
+     cúmulo la suma se RECORTABA a 255; hoy el solape entre estrellas se suma en
+     flujo (ver capasSinSolape) y lo único que puede recortar es una estrella
+     muy brillante por sí sola (disco + aureola + espigas).
 
      Dos pasadas sobre el mismo dibujo:
        · ganancia 1 conserva lo tenue (el glow de las no resueltas baja a α≈0,004);
@@ -3066,41 +3099,94 @@
     desde: 230, hasta: 252   // banda donde se cruza de la pasada alta a la baja
   };
 
-  function lienzoEstrellas(estrellas, o, SIZE, ganancia) {
+  /* ═══════════ SOLAPE ENTRE ESTRELLAS: SE SUMA EN FLUJO (#541) ════════════════
+     La capa está en dominio logarítmico (pintarFot la relee con flujoDeValor),
+     así que sumar DN con 'lighter' entre dos estrellas es MULTIPLICAR flujos:
+     el solape salía más brillante que en el ocular. Entre estrellas se suma en
+     flujo; DENTRO de una estrella (disco, aureola, glow, espigas) se sigue
+     sumando con 'lighter', que es como están calibradas (ADR 0019).
+
+     capasSinSolape reparte el plan en capas donde ningún par comparte píxel:
+     dos sprites no se tocan si sus centros distan más que la suma de radios +
+     MARGEN_SOLAPE cada uno (el antialias alcanza ~0,71 px fuera del radio). La
+     rejilla solo sirve para encontrar vecinas. */
+  var MARGEN_SOLAPE = 1, CELDA_SOLAPE = 32;
+  function capasSinSolape(plan, SIZE) {
+    var nc = Math.ceil(SIZE / CELDA_SOLAPE) + 2, rej = new Array(nc * nc), capas = [];
+    function celda(v) { return Math.max(0, Math.min(nc - 1, Math.floor(v / CELDA_SOLAPE) + 1)); }
+    for (var i = 0; i < plan.length; i++) {
+      var e = plan[i], r = e.r + MARGEN_SOLAPE, ocupada = [];
+      var cx0 = celda(e.x - r), cx1 = celda(e.x + r), cy0 = celda(e.y - r), cy1 = celda(e.y + r), cx, cy, k;
+      for (cy = cy0; cy <= cy1; cy++) for (cx = cx0; cx <= cx1; cx++) {
+        var lista = rej[cy * nc + cx];
+        if (!lista) continue;
+        for (k = 0; k < lista.length; k++) {
+          var f = lista[k], d = r + f.r + MARGEN_SOLAPE, dx = e.x - f.x, dy = e.y - f.y;
+          if (dx * dx + dy * dy < d * d) ocupada[f.capa] = true;
+        }
+      }
+      for (k = 0; ocupada[k]; k++) {}
+      e.capa = k;
+      (capas[k] || (capas[k] = [])).push(e);
+      for (cy = cy0; cy <= cy1; cy++) for (cx = cx0; cx <= cx1; cx++) (rej[cy * nc + cx] || (rej[cy * nc + cx] = [])).push(e);
+    }
+    return capas;
+  }
+
+  /* Devuelve valores de pantalla por canal RGB, que pintarFot convierte a flujo.
+     Cada capa sin solape se pinta en el MISMO lienzo (negro opaco, como antes),
+     se lee solo su recuadro y se vuelve a dejar en negro. La primera capa entra
+     tal cual; las siguientes se suman en flujo donde caen sobre algo ya pintado.
+     Un píxel de una sola estrella sale con el mismo DN que con 'lighter', y el
+     solape ya no se recorta a 255 (el valor puede pasar de 255: pintarFot lo
+     decodifica igual). El rescate HDR (CFG.hdrRescate), si se enciende, se hace
+     por capa: lo que queda por rescatar es la saturación de una sola estrella. */
+  function capaEstrellas(estrellas, o, SIZE) {
+    var plan = planEstrellas(estrellas, o, SIZE), capas = capasSinSolape(plan, SIZE);
     var c = document.createElement('canvas'); c.width = c.height = SIZE;
     var ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, SIZE, SIZE);
-    var op = { ganancia: ganancia };
-    for (var kk in o) if (Object.prototype.hasOwnProperty.call(o, kk)) op[kk] = o[kk];
-    op.ganancia = ganancia;
-    dibujar(ctx, estrellas, op);
-    return ctx.getImageData(0, 0, SIZE, SIZE).data;
-  }
-
-  function capaEstrellas(estrellas, o, SIZE) {
-    var alta = lienzoEstrellas(estrellas, o, SIZE, 1);
-    var n = SIZE * SIZE, out = new Float32Array(n * 3);
-    if (!CFG.hdrRescate) {
-      // Sin el truco HDR: una sola pasada, se copia tal cual (sin blend).
-      for (var j0 = 0; j0 < n; j0++) {
-        var p0 = j0 * 4;
-        out[j0 * 3] = alta[p0]; out[j0 * 3 + 1] = alta[p0 + 1]; out[j0 * 3 + 2] = alta[p0 + 2];
-      }
-      return out;
+    var out = new Float32Array(SIZE * SIZE * 3), rango = FOT.SB_NEGRO - FOT.SB_BLANCO;
+    var inv = 1 / TONO.ganancia, ganPrevia = ganActual;
+    function leer(capa, x0, y0, w, h, ganancia) {
+      ganActual = ganancia;
+      pintarPlan(ctx, capa);
+      var d = ctx.getImageData(x0, y0, w, h).data;
+      ctx.fillStyle = '#000'; ctx.fillRect(x0, y0, w, h);
+      return d;
     }
-    var baja = lienzoEstrellas(estrellas, o, SIZE, TONO.ganancia);
-    var inv = 1 / TONO.ganancia;
-    for (var j = 0; j < n; j++) {
-      // El cruce se decide por el canal más alto: si uno satura, el píxel está
-      // recortado aunque los otros no, y hay que rescatar los tres a la vez para
-      // no torcer el color.
-      var p = j * 4;
-      var pico = Math.max(alta[p], Math.max(alta[p + 1], alta[p + 2]));
-      var t = suave((pico - TONO.desde) / (TONO.hasta - TONO.desde));
-      for (var ch = 0; ch < 3; ch++) {
-        out[j * 3 + ch] = alta[p + ch] * (1 - t) + baja[p + ch] * inv * t;
+    for (var k = 0; k < capas.length; k++) {
+      var capa = capas[k], x0 = SIZE, y0 = SIZE, x1 = 0, y1 = 0;
+      for (var i = 0; i < capa.length; i++) {
+        var e = capa[i], r = e.r + MARGEN_SOLAPE;
+        x0 = Math.min(x0, Math.floor(e.x - r)); x1 = Math.max(x1, Math.ceil(e.x + r));
+        y0 = Math.min(y0, Math.floor(e.y - r)); y1 = Math.max(y1, Math.ceil(e.y + r));
+      }
+      x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(SIZE, x1); y1 = Math.min(SIZE, y1);
+      var w = x1 - x0, h = y1 - y0;
+      if (w <= 0 || h <= 0) continue;
+      var alta = leer(capa, x0, y0, w, h, 1);
+      var baja = CFG.hdrRescate ? leer(capa, x0, y0, w, h, TONO.ganancia) : null;
+      for (var yy = 0; yy < h; yy++) for (var xx = 0; xx < w; xx++) {
+        var p = (yy * w + xx) * 4, q = ((y0 + yy) * SIZE + x0 + xx) * 3, t = 0;
+        if (baja) {
+          // El cruce se decide por el canal más alto: si uno satura, el píxel está
+          // recortado aunque los otros no, y hay que rescatar los tres a la vez
+          // para no torcer el color.
+          var pico = Math.max(alta[p], Math.max(alta[p + 1], alta[p + 2]));
+          t = suave((pico - TONO.desde) / (TONO.hasta - TONO.desde));
+        }
+        for (var ch = 0; ch < 3; ch++) {
+          var v = t > 0 ? alta[p + ch] * (1 - t) + baja[p + ch] * inv * t : alta[p + ch];
+          if (!(v > 0)) continue;
+          var prev = out[q + ch];
+          out[q + ch] = prev > 0
+            ? valorDeFlujo(flujoDeValor(prev, 1, rango) + flujoDeValor(v, 1, rango), 1, rango)
+            : v;
+        }
       }
     }
+    ganActual = ganPrevia;
     return out;
   }
 
