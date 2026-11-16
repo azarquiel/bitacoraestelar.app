@@ -430,7 +430,7 @@ ok(!R.difusoMarcado(mask, 2 * SIZE + 2), 'y no marca la esquina, fuera de r_t');
   var dn = function (k) { return n[k] ? suma[k] / n[k] : 0; };
   var borde = 0;
   for (var k = 0; k < 200; k++) if (dn(k) >= 1) borde = (k + 1) * 0.1;
-  ok(dn(60) <= 7.8, 'M13 200/100x: el halo a 6′ no pasa de su nivel lineal (' + dn(60).toFixed(1) + ' DN ≤ 7,8)');
+  // Que el halo no pase de su nivel lineal lo vigila test_halo_exterior_lineal.js (#536).
   ok(borde < 6.5, 'M13 200/100x: el borde pintado queda a menos de 6,5′ (' + borde.toFixed(1) + '′)');
   ok(Math.abs(dn(10) - sumaLin[10] / n[10]) <= 1, 'y a 1′ (s_halo = 1) el núcleo no cambia');
 })();
