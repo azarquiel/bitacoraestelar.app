@@ -1,3 +1,5 @@
+> **Enmendado (propuesto) por el ADR 0039** (`0039-la-fusion-del-blending-en-globulares.md`): la sub-decisión A, `Δmag` y `aCrowd` como ley del catálogo se sustituyen por la imagen sumada. (B) se conserva con dominio local.
+
 # El crowding es una probabilidad por estrella, no un umbral duro
 
 La Capa 1 decide qué estrella se resuelve con un umbral en densidad:
