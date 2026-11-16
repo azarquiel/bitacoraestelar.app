@@ -337,9 +337,15 @@ prerregistrado no pasa. Lo que sí queda decidido:
    Las dos anclas de la casa no coinciden.
 4. Un criterio 3 con potencia. El de este prerregistro dejaba pasar un doble
    conteo completo.
+5. La conservación contra el flujo del MODELO, que no es el criterio 2. El
+   criterio 2 solo prueba que la contabilidad cierra. El diagnóstico ADR 0003
+   `(ΣF_cat + ∫V1)/∫Σ·S1` da 1,29 / 1,13 / 1,11 / 1,02 / 0,95 / 4,08 por
+   anillo en G. El anillo del núcleo y el exterior quedan fuera del ±10 % de
+   la fase 1. Es la misma causa que el criterio 3 (banda y campo), y en V da
+   1,12 / 0,99 / 0,95 / 0,84 / 0,79 / 3,20.
 
 Abrir el ticket de implementación es decisión del dueño del spike, con estos
-cuatro puntos como prerrequisitos.
+cinco puntos como prerrequisitos.
 
 ## Qué sustituye del ADR 0012
 
@@ -365,6 +371,10 @@ Si se implementa (b):
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
 | `completitud` en el velo (`gaiaM50`, `gaiaAncho`, `gaiaFwhmAs`, `gaiaCrowdingK`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
 | G→V con BP−RP | entra (prerrequisito) | Gaia EDR3, doc. CU5, tabla 5.7 (σ = 0,03 mag) |
+| `mCutGeneracion = 18` como corte de `V1`/`V2` | entra en el velo | el existente de `CFG` (profundidad de la realización sintética); ancla no revisada aquí |
+| `pasadasPuntoFijo = 5` | se queda | ADR 0012 (B), medido en `punto_fijo.md`; con dominio local está sin volver a medir |
+| listón de la pregunta 5 (p95 < 0,1 mag) | solo del spike | sin ancla: prerregistrado como umbral de decisión, no entra en el modelo |
+| PSF gaussiana FWHM 0,84 θ (micro-casos) | solo del spike | razón FWHM/radio del primer anillo de Airy (1,03/1,22); atajo declarado |
 
 Ninguna cifra de estrellas dibujadas se usa en este ADR a favor ni en contra.
 
@@ -378,6 +388,19 @@ Ninguna cifra de estrellas dibujadas se usa en este ADR a favor ni en contra.
 - La pregunta 5 usa el `m_res` de producción para clasificar «no resuelta».
   Con el velo `V1` el `m_res` cambia algo.
 - Un solo cúmulo y un solo equipo. Generalizar es trabajo de la implementación.
+- **La parte sintética de la partición no se ha prototipado.** El arnés solo
+  carga Gaia y aplica `(1 − c)` a todos los bins. El corte
+  `[m_k > mCutGeneracion]` de la pregunta 4 es diseño, sin medida.
+- La decisión de la pregunta 5 («local») descansa en un solo anillo (0,111
+  contra 0,1). El anillo 0,25-0,5 r_h no tiene celdas a esa escala.
+- La pregunta 6 se cierra por eliminación del polvo, no con una fuente
+  positiva.
+- El FoF es código nuevo. El bucle de `harness_crowding_k.js:99` pregunta, para
+  cada estrella, si tiene vecina, pero no construye grupos transitivos, así que
+  no servía para agrupar. Las definiciones de anillo sí se reutilizan.
+- Los micro-casos cuentan picos de configuraciones sintéticas, no estrellas
+  dibujadas del catálogo. La conclusión de la pregunta 2 no se apoya en ese
+  número, sino en la conservación, la forma y la posición.
 
 ## Guardianes que la implementación tendrá que reescribir
 

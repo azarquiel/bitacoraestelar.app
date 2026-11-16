@@ -51,13 +51,20 @@ function magV(g) {
 var cielo = { pupilaSalida: D / MAG, pupilaOjo: 7, sqm: SQM, transmision: 0.9,
               aumentos: MAG, perceptual: true };
 var res = R.pintarCumulo(new Float32Array(PROC * PROC), M13, {
-  ra0: M13.ra, dec0: M13.dec, arcmin: ARCMIN, size: PROC, cielo: cielo, apertura: D, estrellas: []
+  ra0: M13.ra, dec0: M13.dec, arcmin: ARCMIN, size: PROC, cielo: cielo, apertura: D, estrellas: gaia
 });
+/* Lo que producción dibuja hoy, LEÍDO de su salida (ADR 0008): estrellasCumulo
+   devuelve las mismas filas que recibe, así que la identidad del array basta.
+   Sin `o.mlim` la rama #570 de la cola del glow no entra: es la llamada «a
+   pelo» que el propio render documenta. Realización 0. */
+var dibujadaProd = new Set(res.estrellas);
 var pob = res.poblacion, tabla = res.tabla;
 var TH = C.config.thetaSepRadios * res.radioImagenAs;      // θ_sep, arcsec
 
-/* Lectura de la tabla radial del render: la misma interpolación que mResEn
-   (no exportada). Es leer una tabla, no reimplementar la ley del cielo. */
+/* EXCEPCIÓN DECLARADA al ADR 0008: copia de `mResEn` (bitacora-gaia-render.js),
+   que producción no exporta y este spike no puede exportar (el ticket prohíbe
+   tocar producción). Interpola tabla.mRes sin añadir ley; si mResEn cambia,
+   esta copia se queda atrás: el arnés es desechable. */
 function mResEn(rAs) {
   var ult = tabla.r.length - 1;
   if (!(rAs >= 0) || rAs >= tabla.r[ult]) return Infinity;
@@ -80,10 +87,14 @@ function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catal
     var c = pob.completitud(mAp[k], rAs), w = num[k], f2b = fB[k] * fB[k];
     v1 += w * fB[k] * (1 - c);
     v2 += w * f2b * (1 - c);
-    s2 += w * f2b;
     s2c += w * f2b * c;
-    if (mAp[k] > mR) { s2sub += w * f2b; s2csub += w * f2b * c; }   // lo que no se resuelve
+    /* CONTRASTE declarado (ADR 0008): numerador y denominador de la fracción
+       catalogada bajo m_res con el MISMO corte (centro del bin). pob.S2(mR)
+       interpola dentro del bin y, mezclado con este numerador, da más del
+       100 % (medido: 104,6 % en 4-8 r_h). */
+    if (mAp[k] > mR) { s2sub += w * f2b; s2csub += w * f2b * c; }
   }
+  s2 = pob.S2(-Infinity);   // S2 de toda la LF, leído de la Capa 1
   return { v1: s * v1, v2: s * v2, s2: s * s2, s2c: s * s2c, s2sub: s * s2sub, s2csub: s * s2csub };
 }
 var cacheMom = {};
@@ -119,7 +130,7 @@ gaia.forEach(function (g) {
   var r = pob.radioPropio(x, y);
   if (!(r < pob.rtAs) || anillo(r) < 0) return;
   var m = magV(g);
-  est.push({ ra: g[0], dec: g[1], x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
+  est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
 });
 
 function celda(x, y, lado) { return Math.floor(x / lado) + ',' + Math.floor(y / lado); }
@@ -205,9 +216,7 @@ est.forEach(function (s) { apunta(Bl, s.x, s.y, s.F); });
 // Se mide con el MISMO criterio, no se usa como verdad.
 var P0 = libro(), perdidoAnillo = new Float64Array(NA);
 est.forEach(function (s) {
-  var dibuja = s.m <= mResEn(s.r) &&
-    C.sorteo(s.ra, s.dec, 0) < pob.aCrowd(s.m, s.r, res.radioImagenAs);
-  if (dibuja) apunta(P0, s.x, s.y, s.F); else perdidoAnillo[anillo(s.r)] += s.F;
+  if (dibujadaProd.has(s.fila)) apunta(P0, s.x, s.y, s.F); else perdidoAnillo[anillo(s.r)] += s.F;
 });
 var areaAnillo = [];
 for (var k = 0; k < NA; k++) {
@@ -265,7 +274,7 @@ console.log('(a) el grupo múltiple más ancho mide ' + (2 * extensionMax / TH).
    del modelo. Puede fallar (banda G/V, estrellas de campo, realización); el
    residuo se registra, no se corrige. */
 console.log('\n── Diagnóstico ADR 0003 (no es criterio): (ΣF_cat + ∫V1) / ∫Σ·S1_total por anillo');
-var S1tot = 0; for (b = 0; b < NB; b++) S1tot += num[b] * fB[b];
+var S1tot = pob.S1(-Infinity);   // flujo de toda la LF, leído de la Capa 1
 var fila = '               ';
 for (k = 0; k < NA; k++) {
   var modelo = integralAnillo(k, function (r) { return pob.sigma(r) * S1tot; });
@@ -296,8 +305,8 @@ for (k = 0; k < NA; k++) {
 /* ── Preguntas 5 y 6: el fondo local a la escala de integración del ojo ──── */
 var L5 = res.thGranoAs, Fcielo = res.cHalo.Fcielo, CminG = res.cGrano.Cmin;
 function mResLocal(I) {
-  var m = R.magLimite({ apertura: D, aumentos: MAG, transmision: 0.9,
-                        sqm: -2.5 * Math.log10(Fcielo + I), pupilaOjo: 7 });
+  var m = R.magLimite({ apertura: D, aumentos: cielo.aumentos, transmision: cielo.transmision,
+                        sqm: -2.5 * Math.log10(Fcielo + I), pupilaOjo: cielo.pupilaOjo });
   return m == null ? -Infinity : m;
 }
 // Luz no resuelta: catalogadas bajo m_res (aprox. de la detección de (b)) más V1.
@@ -340,7 +349,7 @@ for (k = 0; k < NA; k++) {
    estrellas son colineales, así que los picos viven en la recta que las une y
    un perfil 1D a lo largo de ella los encuentra todos. */
 var SIG = 0.84 * TH / 2.3548;
-function picos(pos, F) {
+function picos(pos, F, valle) {
   var lo = Math.min.apply(null, pos) - 4 * SIG, hi = Math.max.apply(null, pos) + 4 * SIG;
   var N = 4000, h = (hi - lo) / N, I = new Float64Array(N + 1);
   for (var i = 0; i <= N; i++) {
@@ -358,7 +367,7 @@ function picos(pos, F) {
     for (var q = 0; q + 1 < p.length; q++) {
       var vmin = Infinity;
       for (var t2 = p[q]; t2 <= p[q + 1]; t2++) vmin = Math.min(vmin, I[t2]);
-      if (1 - vmin / Math.min(I[p[q]], I[p[q + 1]]) < VALLE) {
+      if (1 - vmin / Math.min(I[p[q]], I[p[q + 1]]) < valle) {
         p.splice(I[p[q]] >= I[p[q + 1]] ? q + 1 : q, 1);
         fundido = true; break;
       }
@@ -366,34 +375,32 @@ function picos(pos, F) {
   }
   return p.map(function (ii) { return lo + ii * h; });
 }
-var VALLE = 0;
-function caso(nombre, pos, dm) {
+function caso(valle, nombre, pos, dm) {
   var F = dm.map(function (d) { return Math.pow(10, -0.4 * d); });
   var Ft = F.reduce(function (s, x) { return s + x; }, 0);
   var cen = pos.reduce(function (s, x, i) { return s + x * F[i]; }, 0) / Ft;
   var g = fof(pos.map(function (x) { return { x: x, y: 0 }; }), TH);
-  var pk = picos(pos, F);
+  var pk = picos(pos, F, valle);
   // La posición solo tiene sentido si el pico es UNO de verdad (sin mínimo); un
   // par fundido por el umbral de valle es una mancha alargada sin pico único.
-  var guarda = VALLE; VALLE = 0; var natural = picos(pos, F).length === 1; VALLE = guarda;
+  var natural = picos(pos, F, 0).length === 1;
   console.log(nombre.padEnd(34) + ('(a) ' + g.length + ' punto' + (g.length > 1 ? 's' : '')).padEnd(14) +
               ('(b) ' + pk.length + ' pico' + (pk.length > 1 ? 's' : '')).padEnd(13) +
               (pk.length === 1 && natural ? ('pico − centroide = ' + ((pk[0] - cen) / TH).toFixed(3) + ' θ') :
                pk.length === 1 ? 'mancha alargada (fundida por el valle)' : ''));
 }
 function micro(valle, nombre) {
-  VALLE = valle;
   console.log('\n── Micro-casos, valle exigido ' + valle.toFixed(3) + ' (' + nombre + ')');
-  caso('par igual, 0,50 θ', [0, 0.5 * TH], [0, 0]);
-  caso('par igual, 0,70 θ', [0, 0.7 * TH], [0, 0]);
-  caso('par igual, 0,75 θ', [0, 0.75 * TH], [0, 0]);
-  caso('par igual, 0,95 θ', [0, 0.95 * TH], [0, 0]);
-  caso('par Δm=2, 0,70 θ', [0, 0.7 * TH], [0, 2]);
-  caso('par Δm=2, 0,95 θ', [0, 0.95 * TH], [0, 2]);
-  caso('par Δm=2, 1,50 θ', [0, 1.5 * TH], [0, 2]);
-  caso('par Δm=0,75, 0,95 θ', [0, 0.95 * TH], [0, 0.75]);
-  caso('cadena A–B–C igual, paso 0,60 θ', [0, 0.6 * TH, 1.2 * TH], [0, 0, 0]);
-  caso('cadena A–B–C igual, paso 0,90 θ', [0, 0.9 * TH, 1.8 * TH], [0, 0, 0]);
+  caso(valle, 'par igual, 0,50 θ', [0, 0.5 * TH], [0, 0]);
+  caso(valle, 'par igual, 0,70 θ', [0, 0.7 * TH], [0, 0]);
+  caso(valle, 'par igual, 0,75 θ', [0, 0.75 * TH], [0, 0]);
+  caso(valle, 'par igual, 0,95 θ', [0, 0.95 * TH], [0, 0]);
+  caso(valle, 'par Δm=2, 0,70 θ', [0, 0.7 * TH], [0, 2]);
+  caso(valle, 'par Δm=2, 0,95 θ', [0, 0.95 * TH], [0, 2]);
+  caso(valle, 'par Δm=2, 1,50 θ', [0, 1.5 * TH], [0, 2]);
+  caso(valle, 'par Δm=0,75, 0,95 θ', [0, 0.95 * TH], [0, 0.75]);
+  caso(valle, 'cadena A–B–C igual, paso 0,60 θ', [0, 0.6 * TH, 1.2 * TH], [0, 0, 0]);
+  caso(valle, 'cadena A–B–C igual, paso 0,90 θ', [0, 0.9 * TH, 1.8 * TH], [0, 0, 0]);
 }
 micro(0, 'Sparrow: basta un mínimo');
 micro(0.265, 'Rayleigh: el valle del par igual de Airy al radio del primer anillo oscuro');
@@ -403,6 +410,8 @@ console.log('valle de la gaussiana, par igual a 1 θ: ' + (100 * (1 - vm / pk1))
 /* Criterio de la casa para el OJO (resolucionDoble, bitacora-ocular.js): hace
    falta aum·sep ≥ 300″ para empezar a partir un par. Es la resolución angular
    del ojo sobre la imagen aumentada, independiente de la PSF. */
+// Cita de la constante 300″ de resolucionDoble (bitacora-ocular.js, código de UI
+// no cargable en Node): el arnés la imprime, no la usa para decidir nada.
 console.log('ojo (resolucionDoble): a ' + MAG + '× parte pares desde ' + (300 / MAG).toFixed(2) + '″ = ' +
             (300 / MAG / TH).toFixed(2) + ' θ_sep; θ_sep·M = ' + (TH * MAG).toFixed(0) + '″');
 /* Dos estrellas bajo m_res cuya suma lo supera: cada una 0,6 mag más débil que
