@@ -2901,6 +2901,7 @@
      aumentos dentro, MEDIDO a 61/120/173/250×: 0 parpadeos de 1971—. */
   function estrellasCumulo(pob, cumulo, tabla, o, C, radioImagenAs) {
     var cos0 = Math.cos(o.dec0 * Math.PI / 180);
+    var nCatalogo = (o.estrellas || []).length;
     var lista = (o.estrellas || []).concat(pob.sinteticas({
       ra: cumulo.ra, dec: cumulo.dec, realization: o.realization
     }));
@@ -2912,7 +2913,14 @@
       var rAs = pob.radioPropio(dxAs, dyAs);
       var mRes = mResEn(tabla, rAs);
       if (!isFinite(mRes)) { fuera.push(e); continue; }    // fuera del cúmulo: ni velo ni mezcla
-      if (m > mRes) continue;                              // el cielo local no la levanta
+      /* La cola del glow (m > mlim) de una fila de CATÁLOGO pasa como fuera de
+         r_t (#570): Gaia no separa miembros de campo, y cortarla dibujaba un
+         disco oscuro del tamaño de r_t. Los miembros de esa cola ya están en
+         S1campo y se cuentan dos veces: riesgo asumido y medido en #570
+         (scripts/harness_doble_conteo_cola.js). Las sintéticas son miembros
+         por construcción y siguen cortándose. */
+      var colaCampo = i < nCatalogo && m > o.mlim;
+      if (m > mRes && !colaCampo) continue;                // el cielo local no la levanta
       if (!(C.sorteo(e[0], e[1], o.realization) < pob.aCrowd(m, rAs, radioImagenAs))) continue;
       fuera.push(e);                                       // entera: sin m_eff, sin banda
     }
@@ -3316,7 +3324,7 @@
       var cum = o.cumulo
         ? pintarCumulo(difuso, o.cumulo, {
             ra0: o.ra, dec0: o.dec, arcmin: o.arcmin, size: SIZE,
-            cielo: cielo, apertura: o.apertura, estrellas: estrellasDibujo
+            cielo: cielo, apertura: o.apertura, estrellas: estrellasDibujo, mlim: mlim
           })
         : null;
       if (cum) estrellasDibujo = cum.estrellas;
