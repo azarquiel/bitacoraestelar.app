@@ -38,11 +38,12 @@ Estado: `aceptada` si no se indica otra cosa. Tipo: **decisión** (fija cómo es
 | [0001 · H2c es la capa perceptual del modelo de cúmulos](0001-h2c-es-la-capa-perceptual-del-modelo-de-cumulos.md) | decisión | |
 | [0002 · Frontera entre `bitacora-cumulos.js` y `bitacora-gaia-render.js`](0002-frontera-cumulos-render.md) | decisión | |
 | [0011 · El `(1−a)` de la banda de transición es campo](0011-la-banda-de-transicion-es-parte-del-campo.md) | decisión | **derogada** por 0012 |
-| [0012 · El crowding es una probabilidad por estrella](0012-el-crowding-es-una-probabilidad-por-estrella.md) · [apoyo](0012-crowding/) | decisión | |
+| [0012 · El crowding es una probabilidad por estrella](0012-el-crowding-es-una-probabilidad-por-estrella.md) · [apoyo](0012-crowding/) | decisión | enmienda propuesta por 0039 (pendiente) |
 | [0015 · El grano SBF de los globulares tiene ley de umbral propia](0015-umbral-de-textura-para-el-grano-sbf.md) · [apoyo](0015-textura/) | decisión | |
 | [0016 · La rotura del núcleo se mide con Φ](0016-phi-metrica-de-veredicto-de-la-rotura-del-nucleo.md) · [apoyo](0016-rotura-nucleo/) | decisión | |
 | [0017 · La ausencia manda cuando la máscara pisa un borde real](0017-la-ausencia-manda-cuando-la-mascara-pisa-un-borde-real.md) | decisión | |
 | [0035 · La forma radial de los globulares sale del perfil de Trager 1995](0035-perfil-medido-de-trager-para-el-halo-de-los-globulares.md) | decisión | |
+| [0039 · La fusión del blending en globulares](0039-la-fusion-del-blending-en-globulares.md) | decisión | **propuesto**: «no se puede todavía»; gana la imagen sumada, enmendaría 0012 (A) |
 
 ## Niebla y velo de los cúmulos abiertos
 
@@ -86,6 +87,6 @@ Parche, cielo y anclaje:
 
 ## Un ADR nuevo
 
-1. Número: el siguiente libre mirando también `docs/adr/` raíz (hoy, 0039).
+1. Número: el siguiente libre mirando también `docs/adr/` raíz (hoy, 0040).
 2. Primeras líneas: `Fecha:` y `Estado:`, y `Deroga:`/`Enmienda a:` si toca.
 3. Si deroga o enmienda otro, añade la marca inversa en ese otro y actualiza esta tabla.
