@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /* Test del toggle CFG.hdrRescate en capaEstrellas() (resources/js/bitacora-gaia-render.js).
 
-   Por defecto (hdrRescate=false) capaEstrellas() debe hacer UNA sola pasada del
-   lienzo -una llamada a getImageData-, no dos; con hdrRescate=true, dos (el
-   truco de rescate de núcleos saturados). Node no tiene canvas real, así que
+   Por defecto (hdrRescate=false) capaEstrellas() lee cada capa sin solape UNA
+   vez; con hdrRescate=true, dos (el truco de rescate de núcleos saturados).
+   Node no tiene canvas real, así que
    se sustituye `document` por un stub mínimo (un Proxy que no hace nada salvo
    contar getImageData) -basta para comprobar que la segunda pasada de verdad
    no se dispara, sin necesitar comparar píxeles.
@@ -54,14 +54,18 @@ var o = { ra: 10, dec: 40, arcmin: 30, mlim: 14, afov: 60, apertura: 150, conGlo
 
 ok(C.hdrRescate === false, 'CFG.hdrRescate por defecto está OFF');
 
+/* Desde #541 capaEstrellas lee una vez por cada capa sin solape (estas dos
+   estrellas, a ~1,3 px, caen en capas distintas). Lo que fija el toggle es que
+   la pasada atenuada solo se hace con él encendido: el doble de lecturas. */
 counters.getImageData = 0;
 R.capaEstrellas(estrellas, o, SIZE);
-ok(counters.getImageData === 1, 'con hdrRescate OFF, capaEstrellas hace 1 sola pasada (getImageData x' + counters.getImageData + ')');
+var lecturasOff = counters.getImageData;
+ok(lecturasOff === 2, 'con hdrRescate OFF, una lectura por capa sin solape (getImageData x' + lecturasOff + ')');
 
 C.hdrRescate = true;
 counters.getImageData = 0;
 R.capaEstrellas(estrellas, o, SIZE);
-ok(counters.getImageData === 2, 'con hdrRescate ON, capaEstrellas hace 2 pasadas -idéntico al comportamiento de antes de este toggle- (getImageData x' + counters.getImageData + ')');
+ok(counters.getImageData === 2 * lecturasOff, 'con hdrRescate ON, capaEstrellas hace el doble de lecturas: la pasada atenuada por capa (getImageData x' + counters.getImageData + ')');
 C.hdrRescate = false;   // deja CFG como estaba, por si algo más se ejecuta después
 
 console.log('\n' + (fallos === 0 ? '✓ Todo correcto.' : '✗ ' + fallos + ' fallo(s).'));
