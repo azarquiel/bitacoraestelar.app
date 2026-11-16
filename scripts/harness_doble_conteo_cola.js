@@ -2,6 +2,9 @@
 /* Cuánto crece el halo de un globular si la cola del glow (mlim, mlim+colaGlow]
    deja de cortarse dentro de r_t: los MIEMBROS del cúmulo de esa cola ya están
    en S1campo y se contarían dos veces. Cota en flujo físico.
+   CONTRASTE DELIBERADO (ADR 0008): medir() reescribe a propósito la regla de
+   supervivencia de estrellasCumulo en media (LF × completitud × aCrowd) en vez
+   de sortear estrellas, para dar la cota esperada y no una realización.
    Uso: node scripts/harness_doble_conteo_cola.js (#570) */
 var RAIZ = require('path').join(__dirname, '..') + '/';
 global.window = {}; global.document = undefined;
@@ -9,9 +12,8 @@ require(RAIZ + 'resources/js/bitacora-gaia-render.js');
 require(RAIZ + 'resources/js/lf-globulares-datos.js');
 require(RAIZ + 'simulador_ocular/resources/js/globulares-datos.js');
 require(RAIZ + 'resources/js/bitacora-cumulos.js');
-var R = window.BitacoraGaiaRender, C = window.BitacoraCumulos;
-var COLA = -2.5 * Math.log10(0.006 / 0.05);   // colaGlowMag (CFG.glowCorte / CFG.alfaMin)
-var M_CUT = 18.0;                             // CFG.mCutGeneracion
+var R = window.BitacoraGaiaRender;
+var COLA = -2.5 * Math.log10(R.config.glowCorte / R.config.alfaMin);   // = colaGlowMag()
 
 var IDS = ['omega Cen', '47 Tuc', 'M 22', 'M 4', 'M 13', 'M 5', 'M 3', 'M 62', 'M 15', 'M 30', 'M 80', 'M 53', 'M 71', 'M 56'];
 var EQUIPOS = [

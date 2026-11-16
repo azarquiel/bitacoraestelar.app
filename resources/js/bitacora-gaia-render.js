@@ -2918,7 +2918,8 @@
          disco oscuro del tamaño de r_t. Los miembros de esa cola ya están en
          S1campo y se cuentan dos veces: riesgo asumido y medido en #570
          (scripts/harness_doble_conteo_cola.js). Las sintéticas son miembros
-         por construcción y siguen cortándose. */
+         por construcción y siguen cortándose. Sin `o.mlim` (arneses que
+         llaman a pintarCumulo a pelo) `m > undefined` es false: corte viejo. */
       var colaCampo = i < nCatalogo && m > o.mlim;
       if (m > mRes && !colaCampo) continue;                // el cielo local no la levanta
       if (!(C.sorteo(e[0], e[1], o.realization) < pob.aCrowd(m, rAs, radioImagenAs))) continue;

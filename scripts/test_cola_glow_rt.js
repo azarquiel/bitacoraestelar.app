@@ -72,10 +72,31 @@ ok(fFuera === 1, 'fuera de r_t sobrevive toda la cola (referencia)');
 ok(fHalo >= 0.95, 'halo 6′–11′: la cola del campo sobrevive como fuera (sin disco oscuro)');
 ok(fNucleo < fHalo, 'núcleo: la cola sigue pasando por el sorteo aCrowd');
 
+/* No vacuo (ADR 0005): la entrada SÍ trae sintéticas débiles que cortar. */
+var generadas = cum.poblacion.sinteticas({ ra: M62.ra, dec: M62.dec }).filter(function (f) {
+  return f[2] > mlim;
+}).length;
+ok(generadas > 0, 'la población genera sintéticas con m > mlim (' + generadas + ')');
 var sinteticasDebiles = cum.estrellas.filter(function (f) {
   return catalogo.indexOf(f) < 0 && f[2] > mlim;
 }).length;
 ok(sinteticasDebiles === 0, 'ninguna sintética sale con m > mlim (' + sinteticasDebiles + ')');
+
+/* Criterio 2 entero: tampoco las de la banda mRes(r) < m <= mlim (núcleo).
+   Cota conservadora: el mayor mRes de los dos nodos de la tabla que rodean r. */
+var t = cum.tabla, salenClave = new Set(cum.estrellas.map(function (f) { return f[0] + ',' + f[1] + ',' + f[2]; }));
+var enBanda = 0, cuelan = 0;
+cum.poblacion.sinteticas({ ra: M62.ra, dec: M62.dec }).forEach(function (f) {
+  var rAs = cum.poblacion.radioPropio((f[0] - M62.ra) * cos0 * 3600, (f[1] - M62.dec) * 3600);
+  var k = Math.floor(rAs / t.paso);
+  if (k + 1 >= t.mRes.length) return;
+  var mRes = Math.max(t.mRes[k], t.mRes[k + 1]);
+  if (!(f[2] > mRes && f[2] <= mlim)) return;
+  enBanda++;
+  if (salenClave.has(f[0] + ',' + f[1] + ',' + f[2])) cuelan++;
+});
+ok(enBanda > 0, 'hay sintéticas en la banda mRes < m <= mlim (' + enBanda + ')');
+ok(cuelan === 0, 'ninguna de esa banda sale (' + cuelan + ')');
 
 if (fallos) { console.error(fallos + ' fallos'); process.exit(1); }
 console.log('test_cola_glow_rt: todo ok');

@@ -7,7 +7,7 @@ require(RAIZ + 'resources/js/bitacora-gaia-render.js');
 require(RAIZ + 'resources/js/lf-globulares-datos.js');
 require(RAIZ + 'simulador_ocular/resources/js/globulares-datos.js');
 require(RAIZ + 'resources/js/bitacora-cumulos.js');
-var R = window.BitacoraGaiaRender, C = window.BitacoraCumulos;
+var R = window.BitacoraGaiaRender;
 var e = window.BITACORA_GLOBULARES.filter(function (f) { return f[1] === 'M 62'; })[0];
 var M62 = { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[7], Vt: e[8], dkpc: e[9],
   ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
