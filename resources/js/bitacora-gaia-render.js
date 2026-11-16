@@ -1004,10 +1004,10 @@
     // dispersada, proporcional a lo que recoge el objetivo (∝ D²), así que se escala
     // por (apertura/aureolaAperturaRef)². Sin dato de apertura, factor 1 (sin cambio).
     aureolaAperturaRef: 200,
-    /* Truco HDR de capaEstrellas: segunda pasada del lienzo entero para
-       rescatar núcleos saturados (ver TONO más abajo). Cuesta un render
-       completo + getImageData extra, así que por defecto va OFF -una sola
-       pasada-; actívalo solo si hace falta rescatar núcleos recortados. */
+    /* Truco HDR de capaEstrellas: segunda pasada atenuada de cada capa sin
+       solape para rescatar el disco de una estrella brillante que satura por sí
+       sola (ver TONO más abajo; el solape ya no recorta desde #541). Dobla los
+       render + getImageData de capaEstrellas, así que por defecto va OFF. */
     hdrRescate: false,
     /* longRef son los px de brazo de una estrella justo en magMax, y la ley que
        lo estira es L ∝ √flujo = 10^(0,2·(magMax − g)) -ver dibujarSpikes-, no
@@ -1943,8 +1943,10 @@
     var L = Math.min(cf.longMax, cf.longRef * Math.pow(10, 0.2 * sobre)) * escala;
     return (L < 3) ? 0 : L;
   }
-  function dibujarSpikes(ctx, x, y, g, escala, rgb) {
-    var cf = CFG.spikes, sobre = cf.magMax - g, L = largoSpikes(g, escala);
+  /* L: el de largoSpikes, calculado una vez en planEstrellas (el mismo que
+     fija el radio de solape de la estrella). */
+  function dibujarSpikes(ctx, x, y, g, L, rgb) {
+    var cf = CFG.spikes, sobre = cf.magMax - g;
     if (!L) return;
     var alpha = Math.min(1, cf.intensidad * (sobre / cf.rango));
     var sp = spriteSpikeColor(rgb), H = cf.grosor, paso = 2 * Math.PI / cf.brazos;
@@ -3040,11 +3042,10 @@
       // estrellas donde más se nota el color real (p. ej. las B/A de M39)-.
       var aAur = alfaAureola(g, o.apertura);
       var Ra = (aAur > 0.004) ? CFG.aureolaRadio * escala : 0;
-      var spikes = spikesOn && g < CFG.spikes.magMax;
-      var L = spikes ? largoSpikes(g, escala) : 0;
+      var L = (spikesOn && g < CFG.spikes.magMax) ? largoSpikes(g, escala) : 0;
       plan.push({
-        x: x, y: y, g: g, escala: escala, Rtot: Rtot, blur: blurG, col: colEstrella, carbono: esCarbono,
-        aAur: aAur, Ra: Ra, spikes: spikes,
+        x: x, y: y, g: g, Rtot: Rtot, blur: blurG, col: colEstrella, carbono: esCarbono,
+        aAur: aAur, Ra: Ra, L: L,
         alfa: alfaEstrella(g, mlim, Rtot * arcmin * 60 / SIZE, dilucion),
         // El brazo es un rectángulo de L × grosor que arranca en el centro.
         r: Math.max(Rtot, Ra, L ? Math.sqrt(L * L + CFG.spikes.grosor * CFG.spikes.grosor / 4) : 0)
@@ -3062,7 +3063,7 @@
     if (e.Ra) dibujarAureola(ctx, e.x, e.y, e.Ra, e.col, e.aAur * ganActual);
     ctx.globalAlpha = e.alfa * ganActual;
     dibujarEstrellaColor(ctx, e.x, e.y, e.Rtot, e.col, e.blur, e.carbono);
-    if (e.spikes) dibujarSpikes(ctx, e.x, e.y, e.g, e.escala, e.col);
+    if (e.L) dibujarSpikes(ctx, e.x, e.y, e.g, e.L, e.col);
   }
 
   function pintarPlan(ctx, plan) {
@@ -3087,7 +3088,7 @@
      flujo (ver capasSinSolape) y lo único que puede recortar es una estrella
      muy brillante por sí sola (disco + aureola + espigas).
 
-     Dos pasadas sobre el mismo dibujo:
+     Dos pasadas sobre cada capa sin solape (solo con CFG.hdrRescate):
        · ganancia 1 conserva lo tenue (el glow de las no resueltas baja a α≈0,004);
        · ganancia reducida rescata solo donde la primera satura.
      El empalme se hace con una transición suave, para que no se vea la costura.
@@ -3155,6 +3156,9 @@
       ctx.fillStyle = '#000'; ctx.fillRect(x0, y0, w, h);
       return d;
     }
+    // ganActual es global del módulo: si algo lanza a medias, no puede quedarse
+    // en 1/16 y apagar el siguiente dibujar().
+    try {
     for (var k = 0; k < capas.length; k++) {
       var capa = capas[k], x0 = SIZE, y0 = SIZE, x1 = 0, y1 = 0;
       for (var i = 0; i < capa.length; i++) {
@@ -3168,7 +3172,9 @@
       var alta = leer(capa, x0, y0, w, h, 1);
       var baja = CFG.hdrRescate ? leer(capa, x0, y0, w, h, TONO.ganancia) : null;
       for (var yy = 0; yy < h; yy++) for (var xx = 0; xx < w; xx++) {
-        var p = (yy * w + xx) * 4, q = ((y0 + yy) * SIZE + x0 + xx) * 3, t = 0;
+        var p = (yy * w + xx) * 4;
+        if (!(alta[p] | alta[p + 1] | alta[p + 2]) && !baja) continue;   // casi todo el recuadro es negro
+        var q = ((y0 + yy) * SIZE + x0 + xx) * 3, t = 0;
         if (baja) {
           // El cruce se decide por el canal más alto: si uno satura, el píxel está
           // recortado aunque los otros no, y hay que rescatar los tres a la vez
@@ -3186,7 +3192,7 @@
         }
       }
     }
-    ganActual = ganPrevia;
+    } finally { ganActual = ganPrevia; }
     return out;
   }
 
