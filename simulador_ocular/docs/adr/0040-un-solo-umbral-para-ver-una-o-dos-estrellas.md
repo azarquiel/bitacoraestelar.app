@@ -6,7 +6,8 @@ Enmienda a: 0039 (fija el umbral que dejaba «sin decidir»)
 
 Issue #576 (épica #578). El ADR 0039 elige la imagen sumada (b) para el
 blending, pero contar uno o dos picos en ella exige un umbral, y la casa tenía
-dos anclas que no coinciden:
+dos anclas que no coinciden (esta decisión vale aunque 0039 siga
+`propuesto`: las dobles la necesitan igual):
 
 - **Rayleigh sobre la PSF.** Valle de 0,265 en el par igual, el ancla de
   `θ_sep` (ADR 0012, `0012-crowding/ancla_thetasep.md` §4). No depende del
@@ -27,6 +28,13 @@ desplazado hacia la brillante o una mancha alargada (ADR 0039, respuesta 1).
 - **Ancla:** Rayleigh 1879 (Phil. Mag. 5ª serie, 8, 261): el valle del par
   igual de Airy cuando el centro de una cae en el primer anillo oscuro de la
   otra. Es la misma ancla de `θ_sep`; no entra ninguna constante nueva.
+- **Lo que es extrapolación, no Rayleigh:** Rayleigh habla del par igual con
+  PSF de Airy pura. Aplicar el valle 0,265 a Airy ⊕ seeing y medirlo contra
+  el pico más débil en pares desiguales es una convención de la casa. Es la
+  misma extrapolación que ya hizo `ancla_thetasep.md` §4 al llevar Rayleigh a
+  `radioImagenEstelar`. La parte de Δm **no tiene ancla propia**: se elige
+  «el más débil» porque es el hueco que tiene que ver el ojo, no porque lo
+  diga una fuente.
 - **El eje del ojo (`aum·sep`) no entra en el umbral.** Está **sin ancla**
   (ver «El 300″, revisado»). El ADR 0004 no deja meter en el modelo una
   constante sin procedencia física ni medida que la calibre.
@@ -43,24 +51,28 @@ desplazado hacia la brillante o una mancha alargada (ADR 0039, respuesta 1).
    más débil, un par desigual necesita más separación que uno igual (tabla:
    Δm = 2 sigue fundido a 0,95 θ y se parte a 1,50 θ). `resolucion-dobles.md`
    §4 dice que no hay fórmula canónica para Δm y solo ofrece penalizaciones
-   heurísticas. Con el valle no hace falta ninguna: es el mismo argumento con
-   el que el ADR 0039 (respuesta 3) quita `Δmag`.
+   heurísticas. Con el valle no entra un parámetro de Δm, que es el mismo
+   argumento con el que el ADR 0039 (respuesta 3) quita `Δmag`. La regla de
+   Δm sigue sin ancla (ver «Decisión»); lo que se gana es no añadir otra.
 4. **Es coherente con Dawes, no lo contradice.** Dawes (MmRAS 35, 137, 1867)
    es empírico, y en su límite no hay hueco: el par se ve como figura alargada
    (`resolucion-dobles.md` §1). Con este umbral, un par igual entre Sparrow y
    Rayleigh se dibuja como mancha alargada, no como un punto. La elongación
    que Dawes veía sigue en la imagen; lo que el umbral decide es cuándo hay
    hueco.
-5. **Sparrow (valle 0) no:** cuenta dos picos donde no hay hueco visible
-   (tabla, columna Sparrow), y su original (ApJ 44, 76, 1916) no se ha
-   abierto.
+5. **Sparrow (valle 0) no:** es el límite por debajo del cual el perfil no
+   tiene ninguna señal de dualidad (`resolucion-dobles.md` §3), no el de un
+   hueco. Usarlo para contar dos sería exigir al ojo un contraste de valle
+   nulo. Su original (ApJ 44, 76, 1916) no se ha abierto.
 
 ## Micro-casos con el umbral elegido
 
 `node scripts/harness_fusion_blending.js --todas`, M13, 467 mm, 173×,
 `θ_sep = 1,043″`, PSF gaussiana de FWHM 0,84 θ (valle del par igual a 1 θ:
 26,6 %, reproduce Rayleigh). Se añade la fila «par igual, 1,00 θ», que marca el
-borde del umbral.
+borde del umbral. **Ese borde es frágil:** la gaussiana da 26,6 % contra
+26,5 % exigido; un cambio pequeño de la FWHM de los micro-casos lo pasa a 1.
+Lo que fija el borde es la regla (el valle), no la fila.
 
 ```
 caso                               (a) FoF    (b) Sparrow   (b) Rayleigh (elegido)   pico − centroide
@@ -94,7 +106,9 @@ el umbral elegido no inventa picos donde la imagen no tiene hueco.
 - **Cloudy Nights, «On Magnification for Resolving Double Stars».** Responde
   403; no se ha podido abrir.
 
-Veredicto: **el 300″ está sin ancla.** No sale de la fuente abierta, que da 2′
+Veredicto: **el 300″ está sin ancla.** La fuente no abierta (Cloudy Nights)
+podría traerlo; aun así sería otro foro de aficionados, sin fuente primaria.
+No sale de la fuente abierta, que da 2′
 (120″) como mínimo y 4′ (240″) como difícil; es una interpolación de la nota.
 El 480″ (8′) sí está en la fuente, pero es una guía de aficionados sin fuente
 primaria. Esto confirma lo que ya decía `ancla_thetasep.md` §5 (sin fuente
@@ -103,10 +117,10 @@ primaria, contradicción con el dibujo, aumento contado dos veces).
 Lo que el umbral **no** modela por eso: la resolución del propio ojo sobre la
 imagen aumentada. Es física real y depende del aumento, pero sin ancla no
 entra. Orden de magnitud a 173×: el borde de Rayleigh (`θ_sep·M = 180″ = 3′`)
-cae entre el «bare minimum» de 2′ y el «difícil» de 4′ de la fuente abierta,
-así que con este equipo el término del ojo no es claramente el que manda. A
-aumentos bajos sí lo será, y ahí el simulador partirá pares que el ojo no
-parte. Se declara como límite. Una fuente primaria candidata sobre agudeza
+cae entre el «bare minimum» de 2′ y el «difícil» de 4′ de la fuente abierta.
+Ya a este aumento el término del ojo puede mandar, y a aumentos bajos
+mandará: ahí el simulador partirá pares que el ojo no parte. Se declara como
+límite. Una fuente primaria candidata sobre agudeza
 visual a baja luminancia es Shlaer 1937 (J. Gen. Physiol. 21, 165); **no
 abierta**, no se usa.
 

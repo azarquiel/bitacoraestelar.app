@@ -174,12 +174,8 @@ Reglas de bolsillo relacionadas (no confundir con lo anterior):
    ~300″ como mínimo marginal.
 Ambas deben cumplirse para "se ve el split".
 
-> **Revisado (2026-11-17, ADR 0040).** Abierta la fuente de milwaukeeastro:
-> 8′ fácil, 6′ desafiante, 4′ difícil, 2′ «bare minimum», sin fuente propia.
-> **El 300″ no aparece: está sin ancla** (interpolación de esta nota). Cloudy
-> Nights devuelve 403, no abierta. El ADR 0040 saca el eje del ojo del umbral
-> y usa Rayleigh (valle 0,265 sobre `radioImagenEstelar`) para dobles y
-> blending.
+> **Revisado (2026-11-17): el 300″ está sin ancla.** Fuentes abiertas, veredicto
+> y regla que lo sustituye: ADR 0040, «El 300″, revisado».
 
 ---
 
