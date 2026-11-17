@@ -129,7 +129,7 @@ console.log('  equipo          d (mm)  d0 (mm)  mlim actual  mlim corte  dibujad
 var V = censo.cargarRender(27);
 function clave(s) { return s[0] + ',' + s[1] + ',' + s[2]; }
 function dibujadas(esc) {
-  return esc.res.estrellas.filter(function (s) { return (s[4] != null ? s[4] : s[2]) <= esc.mlim; }).map(clave);
+  return esc.res.estrellas.filter(function (s) { return R.magVGaia(s) <= esc.mlim; }).map(clave);
 }
 [200, 450].forEach(function (D) {
   [250, 350].forEach(function (M) {

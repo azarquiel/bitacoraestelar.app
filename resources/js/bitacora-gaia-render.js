@@ -1079,7 +1079,7 @@
      Prerregistro y medida: harness_niebla_abiertos.js — la mancha es real en
      M11/NGC 7789 (exceso local sobre el campo) y nula en Pléyades/NGC 1664.
      Devuelve el flujo total enrutado SIN el parche estético (unidades de
-     estrella G=0): el contador sigue siendo fotometría real, y lo que se
+     estrella V=0, #579): el contador sigue siendo fotometría real, y lo que se
      desvía de ella es solo lo pintado. Ver FOT.NIEBLA_GANANCIA_ESTETICA. */
   /* Escala a la que la niebla se suaviza Y se juzga: θ_R(SBe) proyectada al
      cielo (ADR 0023). Es la misma regla que ya usa el grano SBF en
@@ -1121,7 +1121,9 @@
        y esto solo decide con qué Cmin se mira lo ya suavizado. */
     var mx = 0, my = 0, mr2 = 0;
     for (var i = 0; i < estrellas.length; i++) {
-      var g = estrellas[i][2];
+      // En V, como el glow de planEstrellas (#579): si no, una fila con
+      // G ≤ corte < V no la pintaría ninguno de los dos.
+      var g = magVGaia(estrellas[i]);
       if (!(g > corte)) continue;
       var x = SIZE / 2 - (((estrellas[i][0] - o.ra0 + 540) % 360) - 180) * cos0 * escv;
       var y = SIZE / 2 - (estrellas[i][1] - o.dec0) * escv;
@@ -2924,11 +2926,15 @@
     for (var i = 0; i < lista.length; i++) {
       // El catálogo, a V: m_res y aCrowd salen de la LF, que está en V (#574).
       var e = lista[i], m = i < nCatalogo ? magVGaia(e) : e[2];
+      /* Lo que sale va a planEstrellas, que pasa a V toda fila con magVGaia
+         (#579). La sintética nace en V: sale en G (V + (G − V)) para que esa
+         conversión le devuelva su V y no la convierta dos veces. */
+      var sale = i < nCatalogo ? e : [e[0], e[1], e[2] + (gMenosV(e[3]) || 0), e[3]];
       var dxAs = (((e[0] - cumulo.ra + 540) % 360) - 180) * cos0 * 3600;
       var dyAs = (e[1] - cumulo.dec) * 3600;
       var rAs = pob.radioPropio(dxAs, dyAs);
       var mRes = mResEn(tabla, rAs);
-      if (!isFinite(mRes)) { fuera.push(e); continue; }    // fuera del cúmulo: ni velo ni mezcla
+      if (!isFinite(mRes)) { fuera.push(sale); continue; }    // fuera del cúmulo: ni velo ni mezcla
       /* La cola del glow (m > mlim) de una fila de CATÁLOGO pasa como fuera de
          r_t (#570): Gaia no separa miembros de campo, y cortarla dibujaba un
          disco oscuro del tamaño de r_t. Los miembros de esa cola ya están en
@@ -2936,12 +2942,11 @@
          (scripts/harness_doble_conteo_cola.js). Las sintéticas son miembros
          por construcción y siguen cortándose. Sin `o.mlim` (arneses que
          llaman a pintarCumulo a pelo) `m > undefined` es false: corte viejo. */
-      // En G, no en V: es el mismo corte que la rama del glow de planEstrellas,
-      // y una fila con G ≤ mlim < V saltaría m_res y se pintaría resuelta.
-      var colaCampo = i < nCatalogo && e[2] > o.mlim;
+      // En V, el mismo corte que la rama del glow de planEstrellas (#579).
+      var colaCampo = i < nCatalogo && m > o.mlim;
       if (m > mRes && !colaCampo) continue;                // el cielo local no la levanta
       if (!(C.sorteo(e[0], e[1], o.realization) < pob.aCrowd(m, rAs, radioImagenAs))) continue;
-      fuera.push(e);                                       // entera: sin m_eff, sin banda
+      fuera.push(sale);                                    // entera: sin m_eff, sin banda
     }
     return fuera;
   }
@@ -3004,13 +3009,14 @@
       var tolPx2 = Math.pow(TOL_ARCSEC * escv / 3600, 2);
       var mejorD2 = Infinity, mejorDMag = Infinity;
       for (var c = 0; c < estrellas.length; c++) {
-        if (estrellas[c][2] >= magColorEfectivo) continue;
+        var vC = magVGaia(estrellas[c]);   // carbonoMag es visual: se empata en V
+        if (vC >= magColorEfectivo) continue;
         var cx = SIZE / 2 - deltaRA(estrellas[c][0]) * cos0 * escv;
         var cy = SIZE / 2 - (estrellas[c][1] - dec0) * escv;
         var d2 = (cx - SIZE / 2) * (cx - SIZE / 2) + (cy - SIZE / 2) * (cy - SIZE / 2);
         if (o.carbonoMag != null) {
           if (d2 > tolPx2) continue;
-          var dMag = Math.abs(estrellas[c][2] - o.carbonoMag);
+          var dMag = Math.abs(vC - o.carbonoMag);
           if (dMag < mejorDMag) { mejorDMag = dMag; idxCarbono = c; }
         } else if (d2 < mejorD2) { mejorD2 = d2; idxCarbono = c; }
       }
@@ -3024,18 +3030,14 @@
     var spikesOn = conGlow && arana;
     var plan = [];
     for (var i = 0; i < estrellas.length; i++) {
-      var ra = estrellas[i][0], dec = estrellas[i][1], g = estrellas[i][2], bprp = estrellas[i][3];
-      /* Magnitud con la que se DECIDE si la estrella se ve, separada de la que
-         se DIBUJA. Solo difieren en la banda de transición de un globular, que
-         entrega su m original en la 5ª casilla (ver estrellasCumulo): esa
-         estrella ya pasó el umbral del cielo una vez y no puede volver a
-         juzgarse con la magnitud atenuada que la propia atenuación produce. */
-      var gDet = (estrellas[i][4] != null) ? estrellas[i][4] : g;
-      if (gDet > mlim && !conGlow) continue;
+      // `g` es la V de la fila (#579): mlim es visual, y alfa, tamaño, blur,
+      // aureola y espigas son brillo para el ojo. Sin color, se queda en G.
+      var ra = estrellas[i][0], dec = estrellas[i][1], g = magVGaia(estrellas[i]), bprp = estrellas[i][3];
+      if (g > mlim && !conGlow) continue;
       var x = SIZE / 2 - deltaRA(ra) * cos0 * escv;
       var y = SIZE / 2 - (dec - dec0) * escv;
       if (x < -3 || y < -3 || x > SIZE + 3 || y > SIZE + 3) continue;
-      if (gDet > mlim) {
+      if (g > mlim) {
         // Ancla en alfaMin (el suelo de la rama resuelta) para que el cruce en
         // g=mlim sea continuo: nada de "aparecer" más brillante al cruzar.
         var aGlow = CFG.alfaMin * Math.pow(10, -0.4 * (g - mlim));
@@ -3513,6 +3515,7 @@
        sabido (`null`: sin Avance). Para tests y consola. */
     reiniciarAvance: function (m) { avanceManifiesto = m; avanceManifiestoPromesa = null; cacheAvance.clear(); },
     dibujar: dibujar,
+    planEstrellas: planEstrellas,
     vistaGaia: vistaGaia,
     render: render,
     magLimite: magLimite, fondoMagLimite: fondoMagLimite,

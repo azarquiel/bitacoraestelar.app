@@ -64,9 +64,9 @@ function barrido(R, D, sqm) {
 
 /* Criterio 2: la escena de M13 del embudo de maglimite_vs_schaefer.md (fixture
    Gaia, campo 28′, lienzo 720 px). Cuenta lo mismo que harness_halo_estrellas:
-   `censoLimpio` = Gaia con G ≤ mlim del cielo limpio; `dibujadas` = lo que
-   devuelve pintarCumulo y sobrevive al corte mlim de capaEstrellas (casilla 4,
-   la magnitud de detección). */
+   `censoLimpio` = Gaia con V ≤ mlim del cielo limpio; `dibujadas` = lo que
+   devuelve pintarCumulo y sobrevive al corte mlim de planEstrellas. Las dos en
+   V, como el pintor (#579): mlim es una magnitud visual. */
 var SIZE = 720, ARCMIN = 0.47 * 60;
 var GAIA = fs.readFileSync(path.join(RAIZ, 'simulador_ocular/docs/validacion/m13_gaia_dr3.csv'), 'utf8')
   .trim().split('\n').slice(1).map(function (l) {
@@ -87,12 +87,12 @@ function escenaM13(V, D, MAG, sqm, realization, campo) {
   var size = (campo && campo.size) || SIZE, arcmin = (campo && campo.arcmin) || ARCMIN;
   var cielo = { pupilaSalida: D / MAG, pupilaOjo: OJO, sqm: sqm, transmision: T, aumentos: MAG, perceptual: true };
   var mlim = V.R.magLimite({ apertura: D, aumentos: MAG, transmision: T, sqm: sqm, pupilaOjo: OJO });
-  var limpias = GAIA.filter(function (s) { return s[2] <= mlim; });
+  var limpias = GAIA.filter(function (s) { return V.R.magVGaia(s) <= mlim; });
   var res = V.R.pintarCumulo(new Float32Array(size * size), M13, {
     ra0: M13.ra, dec0: M13.dec, arcmin: arcmin, size: size, cielo: cielo, apertura: D,
     estrellas: limpias, realization: realization || 0
   });
-  var dibujadas = res.estrellas.filter(function (s) { return (s[4] != null ? s[4] : s[2]) <= mlim; }).length;
+  var dibujadas = res.estrellas.filter(function (s) { return V.R.magVGaia(s) <= mlim; }).length;
   return { techo: V.techo, D: D, MAG: MAG, sqm: sqm, mlim: mlim, censoLimpio: limpias.length, dibujadas: dibujadas,
            res: res, M13: M13, cielo: cielo, V: V };
 }
@@ -124,7 +124,7 @@ function niebla(V, esc) {
   // colaGlowMag() del render, que no se exporta: −2,5·log10(glowCorte/alfaMin).
   var corte = esc.mlim - 2.5 * Math.log10(V.R.config.glowCorte / V.R.config.alfaMin);
   var total = V.R.nieblaCampo(null, GAIA, o);
-  var nBanda = GAIA.filter(function (s) { return s[2] > corte; }).length;
+  var nBanda = GAIA.filter(function (s) { return V.R.magVGaia(s) > corte; }).length;   // en V, como nieblaCampo (#579)
   var mlimH2 = V.R.mlimNiebla(GAIA, o);
   return { mlim: esc.mlim, corte: corte, nBanda: nBanda, total: total, sb: V.R.sbNiebla(total, ARCMIN), mlimH2: mlimH2 };
 }

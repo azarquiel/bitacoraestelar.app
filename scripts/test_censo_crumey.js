@@ -45,9 +45,10 @@ ok(b450.plano === null && b450.aumentoMax === 600, '450 mm: sin plano en el barr
    Con la forma de Trager (#556, ADR 0035) dibuja 535: el censo no cambia, y el
    embudo de maglimite_vs_schaefer.md lleva la cifra nueva fechada. Juzgando
    el catálogo en V (#574) dibuja 439: salen gigantes rojas con G justo bajo
-   m_res, también fechado en ese embudo. */
+   m_res, también fechado en ese embudo. Con el pintor también en V (#579),
+   pasan el mlim 781 y no 891: las 110 que salen tienen G ≤ mlim < V. */
 var e250 = H.escenaM13(PROD, 200, 250, 21);
-ok(e250.censoLimpio === 891, '250×: 891 estrellas pasan el mlim del cielo limpio (' + e250.censoLimpio + ')');
+ok(e250.censoLimpio === 781, '250×: 781 estrellas pasan el mlim del cielo limpio, en V (' + e250.censoLimpio + ')');
 ok(e250.dibujadas === 439, '250×: el render dibuja 439 (' + e250.dibujadas + ')');
 cerca(e250.mlim, 15.23, 0.005, '250×: mlim puntual del embudo');
 
