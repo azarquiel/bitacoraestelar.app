@@ -332,7 +332,7 @@ var rNuc = 5, mResNuc = mResA({ res: Pnuc }, rNuc);
 var muestras = [], E = 0, V = 0;
 for (var jm = 0; jm < 200; jm++) {
   var eNuc = [M13.ra + (rNuc + jm * 0.02) / 3600 / Math.cos(M13.dec * Math.PI / 180),
-              M13.dec, mResNuc - 0.1, 0.8];
+              M13.dec, mResNuc - 0.1, null];   // sin color: m es G = V (#574)
   muestras.push(eNuc);
   var pNuc = Pnuc.poblacion.aCrowd(eNuc[2], rNuc + jm * 0.02, Pnuc.radioImagenAs);
   E += pNuc; V += pNuc * (1 - pNuc);

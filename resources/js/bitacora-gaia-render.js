@@ -2876,8 +2876,23 @@
       tabla: tabla, poblacion: pob, radioImagenAs: radioImagenAs, cHalo: cHalo, cGrano: cGrano,
       omegaBeam: omegaBeam, omegaRes: omegaRes, thBeamAs: thBeamAs, thGranoAs: thGranoAs, atenGrano: atenGrano,
       Fmedio: Fmedio, Fpintado: Fpintado, Fsingrano: Fsingrano, FpintadoGrano: FpintadoGrano,
-      estrellas: estrellasCumulo(pob, cumulo, tabla, o, C, radioImagenAs)
+      estrellas: estrellasCumulo(pob, cumulo, tabla, o, C, radioImagenAs),
+      // Filas del catálogo que entran en G por falta de color válido (#574).
+      filasEnG: (o.estrellas || []).filter(function (f) { return gMenosV(f[3]) == null; }).length
     };
+  }
+
+  /* G − V de Gaia EDR3 con BP−RP (doc. CU5, tabla 5.7; Riello et al. 2021),
+     σ = 0,030 mag, válida en −0,5 < BP−RP < 5. Sin color o fuera de rango no
+     hay conversión publicada: null, y la fila se queda en G (#574). */
+  function gMenosV(x) {
+    if (typeof x !== 'number' || !(x > -0.5 && x < 5)) return null;
+    return -0.02704 + 0.01424 * x - 0.2156 * x * x + 0.01426 * x * x * x;
+  }
+  // V de una fila de Gaia [ra, dec, G, BP−RP]: la banda de la LF de los cúmulos.
+  function magVGaia(fila) {
+    var d = gMenosV(fila[3]);
+    return d == null ? fila[2] : fila[2] - d;
   }
 
   /* Las estrellas del cúmulo que este equipo dibuja. Se juzga por estrella y CON
@@ -2907,7 +2922,8 @@
     }));
     var fuera = [];
     for (var i = 0; i < lista.length; i++) {
-      var e = lista[i], m = e[2];
+      // El catálogo, a V: m_res y aCrowd salen de la LF, que está en V (#574).
+      var e = lista[i], m = i < nCatalogo ? magVGaia(e) : e[2];
       var dxAs = (((e[0] - cumulo.ra + 540) % 360) - 180) * cos0 * 3600;
       var dyAs = (e[1] - cumulo.dec) * 3600;
       var rAs = pob.radioPropio(dxAs, dyAs);
@@ -2920,7 +2936,9 @@
          (scripts/harness_doble_conteo_cola.js). Las sintéticas son miembros
          por construcción y siguen cortándose. Sin `o.mlim` (arneses que
          llaman a pintarCumulo a pelo) `m > undefined` es false: corte viejo. */
-      var colaCampo = i < nCatalogo && m > o.mlim;
+      // En G, no en V: es el mismo corte que la rama del glow de planEstrellas,
+      // y una fila con G ≤ mlim < V saltaría m_res y se pintaría resuelta.
+      var colaCampo = i < nCatalogo && e[2] > o.mlim;
       if (m > mRes && !colaCampo) continue;                // el cielo local no la levanta
       if (!(C.sorteo(e[0], e[1], o.realization) < pob.aCrowd(m, rAs, radioImagenAs))) continue;
       fuera.push(e);                                       // entera: sin m_eff, sin banda
@@ -3510,6 +3528,7 @@
     nivelFondo: nivelFondo,
     tamLienzo: tamLienzo,
     capaEstrellas: capaEstrellas,
+    magVGaia: magVGaia,
     escalaEstrellas: escalaEstrellas,
     radioAiry: radioAiry,
     radioImagenEstelar: radioImagenEstelar,

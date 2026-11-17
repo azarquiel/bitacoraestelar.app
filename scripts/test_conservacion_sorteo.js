@@ -147,9 +147,9 @@ gaia.forEach(function (e) {
   var dxAs = (((e[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600;
   var dyAs = (e[1] - M13.dec) * 3600;
   var rAs = pob13.radioPropio(dxAs, dyAs);
-  var mRes = mResEn(rAs);
-  if (!isFinite(mRes) || e[2] > mRes) return;
-  cand.push({ e: e, p: pob13.aCrowd(e[2], rAs, rImg) });
+  var mRes = mResEn(rAs), mV = R.magVGaia(e);   // el render juzga en V (#574)
+  if (!isFinite(mRes) || mV > mRes) return;
+  cand.push({ e: e, p: pob13.aCrowd(mV, rAs, rImg) });
 });
 
 console.log('\nB2/B3/B4 · el sorteo (M13, 467 mm 173×, ' + cand.length + ' candidatas)\n');

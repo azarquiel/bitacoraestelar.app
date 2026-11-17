@@ -94,7 +94,7 @@ function escenaM13(V, D, MAG, sqm, realization, campo) {
   });
   var dibujadas = res.estrellas.filter(function (s) { return (s[4] != null ? s[4] : s[2]) <= mlim; }).length;
   return { techo: V.techo, D: D, MAG: MAG, sqm: sqm, mlim: mlim, censoLimpio: limpias.length, dibujadas: dibujadas,
-           res: res, M13: M13, cielo: cielo };
+           res: res, M13: M13, cielo: cielo, V: V };
 }
 
 /* Criterio 3a: frontera resuelta/no-resuelta, con las definiciones de
@@ -142,8 +142,9 @@ function sorteo(esc) {
     if (!(rAs >= 0) || rAs >= t.r[ult]) return;
     var u = rAs / t.paso, i = Math.floor(u), f = u - i, a = t.mRes[i], b = t.mRes[i + 1];
     var mRes = !isFinite(a) ? b : (!isFinite(b) ? a : a * (1 - f) + b * f);
-    if (!isFinite(mRes) || s[2] > mRes) return;
-    var p = pob.aCrowd(s[2], rAs, rImg);
+    var mV = esc.V.R.magVGaia(s);   // el render juzga el catálogo en V (#574)
+    if (!isFinite(mRes) || mV > mRes) return;
+    var p = pob.aCrowd(mV, rAs, rImg);
     n++; E += p; V += p * (1 - p);
   });
   return { candidatas: n, esperanza: E, sigma: Math.sqrt(V) };

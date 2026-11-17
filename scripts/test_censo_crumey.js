@@ -43,10 +43,12 @@ ok(b450.plano === null && b450.aumentoMax === 600, '450 mm: sin plano en el barr
    Embudo publicado en maglimite_vs_schaefer.md (200 mm, SQM 21, campo 28′,
    250×): 891 estrellas pasan el mlim del cielo limpio y el render dibuja 548.
    Con la forma de Trager (#556, ADR 0035) dibuja 535: el censo no cambia, y el
-   embudo de maglimite_vs_schaefer.md lleva la cifra nueva fechada. */
+   embudo de maglimite_vs_schaefer.md lleva la cifra nueva fechada. Juzgando
+   el catálogo en V (#574) dibuja 439: salen gigantes rojas con G justo bajo
+   m_res, también fechado en ese embudo. */
 var e250 = H.escenaM13(PROD, 200, 250, 21);
 ok(e250.censoLimpio === 891, '250×: 891 estrellas pasan el mlim del cielo limpio (' + e250.censoLimpio + ')');
-ok(e250.dibujadas === 535, '250×: el render dibuja 535 (' + e250.dibujadas + ')');
+ok(e250.dibujadas === 439, '250×: el render dibuja 439 (' + e250.dibujadas + ')');
 cerca(e250.mlim, 15.23, 0.005, '250×: mlim puntual del embudo');
 
 /* ── Criterio 3: frontera resuelta/no-resuelta y corte de la niebla ─────────
@@ -65,13 +67,14 @@ ok(n25.corte < n27.corte && n25.nBanda >= 0 && n27.total > 0, 'con el techo de C
 /* ── Criterio 4: ruido de la propia escena ───────────────────────────────────
    El sorteo del ADR 0012 es Poisson-binomial: E = Σa, σ = √Σa(1−a).
    test_conservacion_sorteo.js publica, para 467 mm, 173×, SQM 21, lienzo de
-   512 px y campo 2,4·r_t: 1050 candidatas, Σa = 1037,2 y σ = 3,5 con la forma
-   de Trager (#556, ADR 0035; con King 1962 eran 1097, 1083,5 y 3,6). */
+   512 px y campo 2,4·r_t: 926 candidatas, Σa = 914,5 y σ = 3,3 juzgando el
+   catálogo en V (#574; en G con Trager eran 1050, 1037,2 y 3,5, y con King
+   1962, 1097, 1083,5 y 3,6). */
 var campo = { size: 512, arcmin: Math.ceil(2.4 * H.m13(PROD).rtAs / 60) };
 var s467 = H.sorteo(H.escenaM13(PROD, 467, 173, 21, 0, campo));
-ok(s467.candidatas === 1050, 'sorteo: 1050 candidatas (' + s467.candidatas + ')');
-cerca(s467.esperanza, 1037.2, 0.05, 'sorteo: Σa');
-cerca(s467.sigma, 3.5, 0.05, 'sorteo: σ Poisson-binomial');
+ok(s467.candidatas === 926, 'sorteo: 926 candidatas (' + s467.candidatas + ')');
+cerca(s467.esperanza, 914.5, 0.05, 'sorteo: Σa');
+cerca(s467.sigma, 3.3, 0.05, 'sorteo: σ Poisson-binomial');
 
 console.log(fallos ? '\n' + fallos + ' fallo(s)' : '\nTodo correcto');
 process.exit(fallos ? 1 : 0);

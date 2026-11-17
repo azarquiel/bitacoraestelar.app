@@ -62,6 +62,12 @@ carencia acotada del modelo, no un ajuste pendiente, y queda anotada aquí. Hast
 > **2026-11-14 (#556, ADR 0035).** Con la forma de Trager para M13, el render
 > dibuja 535 a 250× en vez de 548; los 891 que pasan el mlim no cambian
 > (`harness_censo_crumey.js`). La conclusión de este documento sigue en pie.
+>
+> **2026-11-17 (#574, ADR 0039).** El render juzga el catálogo contra `m_res`
+> en V (G − V de Gaia EDR3) y no en G: dibuja 439 a 250× en vez de 535. Las
+> que salen son gigantes rojas con G justo por debajo de `m_res`, 0,2-0,45 mag
+> más débiles en V; su luz ya la lleva el velo. Los 891 que pasan el mlim no
+> cambian (el pintor sigue comparando G con mlim). La conclusión sigue en pie.
 
 Embudo medido sobre la fixture `simulador_ocular/docs/validacion/m13_gaia_dr3.csv` (11 970 estrellas
 en el campo, G < 18,5):

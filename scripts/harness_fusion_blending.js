@@ -9,7 +9,7 @@
    Imprime flujos, residuos, razones y magnitudes. NUNCA cuentas de estrellas
    dibujadas: el ADR prohíbe usarlas como argumento.
 
-   node scripts/harness_fusion_blending.js [--sqm N] [--D mm] [--mag N] */
+   node scripts/harness_fusion_blending.js [--sqm N] [--D mm] [--mag N] [--banda G] */
 'use strict';
 
 global.window = {};
@@ -37,16 +37,11 @@ var gaia = fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/valida
     return [+c[0], +c[1], +c[2], c[3] === '' ? null : +c[3]];
   });
 
-/* --banda V: DIAGNÓSTICO del criterio 3, no cambia el listón ni la convención
-   prerregistrada (G tratada como V, la de producción). Convierte G a V con el
-   polinomio de Gaia EDR3 (doc. CU5, tabla 5.7, Riello et al. 2021; σ = 0,030
-   mag, válido −0,5 < BP−RP < 5). Sin color, la fila se queda en G. */
-var BANDA_V = process.argv.indexOf('--banda') > 0 && process.argv[process.argv.indexOf('--banda') + 1] === 'V';
-function magV(g) {
-  var x = g[3];
-  if (!BANDA_V || x == null || !(x > -0.5 && x < 5)) return g[2];
-  return g[2] - (-0.02704 + 0.01424 * x - 0.2156 * x * x + 0.01426 * x * x * x);
-}
+/* Banda del catálogo: V por defecto, la de producción desde #574 (magVGaia,
+   G − V de Gaia EDR3; sin color o fuera de rango, G). --banda G reproduce la
+   columna prerregistrada del ADR 0039 (G tratada como V). */
+var BANDA_G = process.argv.indexOf('--banda') > 0 && process.argv[process.argv.indexOf('--banda') + 1] === 'G';
+function magCatalogo(g) { return BANDA_G ? g[2] : R.magVGaia(g); }
 
 var cielo = { pupilaSalida: D / MAG, pupilaOjo: 7, sqm: SQM, transmision: 0.9,
               aumentos: MAG, perceptual: true };
@@ -129,7 +124,7 @@ gaia.forEach(function (g) {
   var x = (((g[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600, y = (g[1] - M13.dec) * 3600;
   var r = pob.radioPropio(x, y);
   if (!(r < pob.rtAs) || anillo(r) < 0) return;
-  var m = magV(g);
+  var m = magCatalogo(g);
   est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
 });
 
@@ -284,7 +279,8 @@ console.log(fila);
 
 /* ── Criterio 3: el grano no cuenta dos veces la luz catalogada ───────────── */
 console.log('\n── Criterio 3: R2 = (∫V2 + ΣF_j²) / ∫Σ·S2_total  (listón R2 ≤ 1 + 2σ)');
-console.log('banda del catálogo: ' + (BANDA_V ? 'V (diagnóstico, G→V EDR3)' : 'G tratada como V (prerregistrada)'));
+console.log('banda del catálogo: ' + (BANDA_G ? 'G tratada como V (prerregistrada)' : 'V (G→V EDR3, producción #574)') +
+            '; filas en G por falta de color: ' + res.filasEnG + ' de ' + gaia.length);
 console.log('anillo       R2       σ    1+2σ  veredicto     S2·c/S2   S2·c/S2 (m>m_res)  F²máx/ΣF²   m más brillante');
 for (k = 0; k < NA; k++) {
   var v2 = integralAnillo(k, campo('v2')), s2 = integralAnillo(k, campo('s2')), s2c = integralAnillo(k, campo('s2c'));

@@ -97,9 +97,10 @@ dibujadas.
 
 ## Resultados (2026-11-16)
 
-Salida completa: `node scripts/harness_fusion_blending.js` (M13, 467 mm, 173×,
+Salida completa: `node scripts/harness_fusion_blending.js --banda G` (M13, 467 mm, 173×,
 SQM 21, `θ_sep = 1,043″`, 11 912 filas dentro de 8 r_h). Diagnóstico de banda:
-`--banda V`.
+`--banda V`. Desde #574 el arnés corre en V por defecto (la conversión es la de
+producción, `magVGaia`) y la columna prerregistrada sale con `--banda G`.
 
 ### Criterio 2: conservación por anillo y por celda (listón < 1e-6)
 
@@ -331,6 +332,8 @@ prerregistrado no pasa. Lo que sí queda decidido:
 
 1. El flujo del catálogo en la banda de la LF (G→V con BP−RP). Con eso, R2
    queda entre 0,75 y 1,13 en los cinco anillos interiores.
+   **Hecho en #574**: `estrellasCumulo` juzga el catálogo en V; sin color
+   válido la fila se queda en G (3 174 de 11 972 filas del fixture de M13).
 2. Separar miembros de campo en el halo exterior (#570).
 3. Fijar el umbral de resolución de (b): Rayleigh sobre la PSF (ancla de
    `θ_sep`) o la resolución del ojo `aum·sep ≥ 300″` (`resolucionDoble`).
