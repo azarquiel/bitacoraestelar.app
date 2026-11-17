@@ -101,6 +101,8 @@ Salida completa: `node scripts/harness_fusion_blending.js --banda G` (M13, 467 m
 SQM 21, `θ_sep = 1,043″`, 11 912 filas dentro de 8 r_h). Diagnóstico de banda:
 `--banda V`. Desde #574 el arnés corre en V por defecto (la conversión es la de
 producción, `magVGaia`) y la columna prerregistrada sale con `--banda G`.
+Desde #575 el arnés deja fuera las estrellas de campo. Las tablas de este ADR
+salen con `--todas`.
 
 ### Criterio 2: conservación por anillo y por celda (listón < 1e-6)
 
@@ -335,6 +337,12 @@ prerregistrado no pasa. Lo que sí queda decidido:
    **Hecho en #574**: `estrellasCumulo` juzga el catálogo en V; sin color
    válido la fila se queda en G (3 174 de 11 972 filas del fixture de M13).
 2. Separar miembros de campo en el halo exterior (#570).
+   **Hecho en #575** para el arnés: pertenencia de Vasiliev & Baumgardt 2021
+   (`memberprob < 0,5` y astrometría limpia o G < 13;
+   `simulador_ocular/docs/notas/pertenencia-vb21.md`). Con solo miembros, el
+   diagnóstico ADR 0003 de 4-8 r_h pasa de 3,20 a 0,985 en V, y R2 de 29,8 a
+   0,47. `estrellasCumulo` saca como campo la fila marcada. Las filas de
+   producción todavía no llevan la marca (#583).
 3. Fijar el umbral de resolución de (b): Rayleigh sobre la PSF (ancla de
    `θ_sep`) o la resolución del ojo `aum·sep ≥ 300″` (`resolucionDoble`).
    Las dos anclas de la casa no coinciden.

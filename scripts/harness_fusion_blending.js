@@ -9,7 +9,7 @@
    Imprime flujos, residuos, razones y magnitudes. NUNCA cuentas de estrellas
    dibujadas: el ADR prohíbe usarlas como argumento.
 
-   node scripts/harness_fusion_blending.js [--sqm N] [--D mm] [--mag N] [--banda G] */
+   node scripts/harness_fusion_blending.js [--sqm N] [--D mm] [--mag N] [--banda G] [--todas] */
 'use strict';
 
 global.window = {};
@@ -31,11 +31,20 @@ var M13 = { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[
             Vt: e[8], dkpc: e[9], ebv: e[10], feh: e[11], elip: e[12], pa: null, trager: e[13] || null };
 var rhAs = M13.rh * 60;
 
+/* Pertenencia (#575): filas de campo según Vasiliev & Baumgardt 2021
+   (scripts/gen_m13_pertenencia.py). --todas reproduce el arnés sin separar
+   miembros, que es lo que midió el ADR 0039. */
+var TODAS = process.argv.indexOf('--todas') > 0;
+var CAMPO = new Set(fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/validacion/m13_vb21_campo.csv'), 'utf8')
+  .trim().split('\n').slice(1).map(function (l) { var c = l.split(','); return c[0] + ',' + c[1]; }));
 var gaia = fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/validacion/m13_gaia_dr3.csv'), 'utf8')
   .trim().split('\n').slice(1).map(function (l) {
     var c = l.split(',');
-    return [+c[0], +c[1], +c[2], c[3] === '' ? null : +c[3]];
+    var f = [+c[0], +c[1], +c[2], c[3] === '' ? null : +c[3]];
+    if (!TODAS && CAMPO.has(c[0] + ',' + c[1])) f.push(true);   // campo (#575): 5º elemento
+    return f;
   });
+// Luz del cúmulo = solo miembros (#575): el campo sale de la partición (ley de producción, ADR 0008).
 
 /* Banda del catálogo: V por defecto, la de producción desde #574 (magVGaia,
    G − V de Gaia EDR3; sin color o fuera de rango, G). --banda G reproduce la
@@ -123,7 +132,7 @@ var est = [];
 gaia.forEach(function (g) {
   var x = (((g[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600, y = (g[1] - M13.dec) * 3600;
   var r = pob.radioPropio(x, y);
-  if (!(r < pob.rtAs) || anillo(r) < 0) return;
+  if (!(r < pob.rtAs) || anillo(r) < 0 || R.esCampo(g)) return;
   var m = magCatalogo(g);
   est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
 });
