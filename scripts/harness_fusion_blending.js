@@ -44,8 +44,7 @@ var gaia = fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/valida
     if (!TODAS && CAMPO.has(c[0] + ',' + c[1])) f.push(true);   // campo (#575): 5º elemento
     return f;
   });
-// Luz del cúmulo = solo miembros (#575): el campo sale de la partición.
-function deCampo(g) { return g[4] === true; }
+// Luz del cúmulo = solo miembros (#575): el campo sale de la partición (ley de producción, ADR 0008).
 
 /* Banda del catálogo: V por defecto, la de producción desde #574 (magVGaia,
    G − V de Gaia EDR3; sin color o fuera de rango, G). --banda G reproduce la
@@ -133,7 +132,7 @@ var est = [];
 gaia.forEach(function (g) {
   var x = (((g[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600, y = (g[1] - M13.dec) * 3600;
   var r = pob.radioPropio(x, y);
-  if (!(r < pob.rtAs) || anillo(r) < 0 || deCampo(g)) return;
+  if (!(r < pob.rtAs) || anillo(r) < 0 || R.esCampo(g)) return;
   var m = magCatalogo(g);
   est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
 });

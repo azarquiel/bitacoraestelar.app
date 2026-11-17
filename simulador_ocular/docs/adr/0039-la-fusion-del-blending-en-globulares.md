@@ -342,7 +342,7 @@ prerregistrado no pasa. Lo que sí queda decidido:
    `simulador_ocular/docs/notas/pertenencia-vb21.md`). Con solo miembros, el
    diagnóstico ADR 0003 de 4-8 r_h pasa de 3,20 a 0,985 en V, y R2 de 29,8 a
    0,47. `estrellasCumulo` saca como campo la fila marcada. Las filas de
-   producción todavía no llevan la marca.
+   producción todavía no llevan la marca (#583).
 3. Fijar el umbral de resolución de (b): Rayleigh sobre la PSF (ancla de
    `θ_sep`) o la resolución del ojo `aum·sep ≥ 300″` (`resolucionDoble`).
    Las dos anclas de la casa no coinciden.

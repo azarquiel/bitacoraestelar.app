@@ -36,14 +36,15 @@ var M13 = { id: e[0], ra: e[2], dec: e[3], rc: e[4], rh: e[5], c: e[6], muV0: e[
 var D = 457, SQM = 21.5, ARC = 30, SIZE = 240;
 var cos0 = Math.cos(M13.dec * Math.PI / 180);
 
-/* Filas en el núcleo (0,1′–1′), magnitudes repartidas en [12, mlim]. Sin color
+/* Filas en el núcleo (0,1′–1′), magnitudes repartidas en [12, mlim + 2]: también
+   la cola del glow, donde la rama de campo va antes que la de #570. Sin color
    (bp_rp null): la fila se juzga en G y la V no depende de la conversión. */
 function nucleo(n, mlim, campo) {
   var filas = [];
   for (var k = 0; k < n; k++) {
     var r = 0.1 + 0.9 * ((k * 0.618034) % 1), ang = k * 2.39996;
     var f = [M13.ra + r / 60 * Math.cos(ang) / cos0, M13.dec + r / 60 * Math.sin(ang),
-      12 + (mlim - 12) * ((k * 0.414214) % 1), null];
+      12 + (mlim + 2 - 12) * ((k * 0.414214) % 1), null];
     if (campo) f.push(true);
     filas.push(f);
   }
@@ -65,7 +66,7 @@ function salen(MAG, filas, mlim) {
   var campo = nucleo(300, mlim, true), miembros = nucleo(300, mlim, false);
   var nC = salen(MAG, campo, mlim), nM = salen(MAG, miembros, mlim);
   console.log(MAG + '×  mlim ' + mlim.toFixed(2) + ': campo sale ' + nC + '/300, sin marca ' + nM + '/300');
-  ok(nC === campo.length, MAG + '×: toda fila de campo del núcleo sale (sin m_res ni sorteo)');
+  ok(nC === campo.length, MAG + '×: toda fila de campo del núcleo sale, también la cola del glow (sin m_res ni sorteo)');
   ok(nM < miembros.length, MAG + '×: sin marca, el núcleo sí corta (no vacuo)');
 });
 

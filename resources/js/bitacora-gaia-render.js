@@ -2897,6 +2897,11 @@
     return d == null ? fila[2] : fila[2] - d;
   }
 
+  /* Fila de Gaia [ra, dec, G, BP−RP, campo?]: `true` en la 5ª casilla marca una
+     estrella que NO es del cúmulo (pertenencia de Vasiliev & Baumgardt 2021,
+     simulador_ocular/docs/notas/pertenencia-vb21.md, #575). Sin marca, miembro. */
+  function esCampo(fila) { return fila[4] === true; }
+
   /* Las estrellas del cúmulo que este equipo dibuja. Se juzga por estrella y CON
      SU RADIO: la misma m=16 puede resolverse a 8′ del centro y fundirse a 0,5′.
 
@@ -2938,7 +2943,7 @@
       /* Fila de CAMPO (5º elemento `true`, pertenencia de Vasiliev & Baumgardt
          2021, #575): no es luz del cúmulo, sale como fuera de r_t. Es una
          propiedad de la estrella, no del ocular: no cambia de canal (#575). */
-      if (i < nCatalogo && e[4] === true) { fuera.push(sale); continue; }
+      if (i < nCatalogo && esCampo(e)) { fuera.push(sale); continue; }
       /* La cola del glow (m > mlim) de una fila de CATÁLOGO pasa como fuera de
          r_t (#570): Gaia no separa miembros de campo, y cortarla dibujaba un
          disco oscuro del tamaño de r_t. Los miembros de esa cola ya están en
@@ -3536,6 +3541,7 @@
     tamLienzo: tamLienzo,
     capaEstrellas: capaEstrellas,
     magVGaia: magVGaia,
+    esCampo: esCampo,
     escalaEstrellas: escalaEstrellas,
     radioAiry: radioAiry,
     radioImagenEstelar: radioImagenEstelar,

@@ -4,11 +4,13 @@
    El campo es uniforme a la escala de r_t; la densidad de lo que el corte
    llama «campo» tiene que salir plana en r. Listón: en 0-2 r_h, como mucho el
    doble que en 4-8 r_h. El caso malo, memberprob < 0,5 sin exigir astrometría
-   limpia, da ~60 veces (1 145 filas del fixture en 0-2 r_h, medido al escribir
-   el generador): este listón lo rechaza (AGENTS.md, prerregistros).
+   limpia, da ~47 veces (31,9 contra 0,68 por arcmin²; 1 145 filas del fixture en
+   0-2 r_h, comprobado regenerando con ese corte): este listón lo rechaza
+   (AGENTS.md, prerregistros).
 
-   Además, la estrella más brillante del fixture en 4-8 r_h es de campo: es la
-   que el ADR 0039 señaló (V = 10,6) como luz que no es del cúmulo.
+   Además, la estrella más brillante del fixture en 4-8 r_h sale de campo. NO es
+   evidencia del corte (la excepción G < 13 se justificó en parte con ella): es
+   un guardián de regresión de esa excepción declarada.
 
    Regenerar: python3 scripts/gen_m13_pertenencia.py
    node scripts/test_pertenencia_m13.js */

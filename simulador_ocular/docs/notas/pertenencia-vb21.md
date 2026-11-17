@@ -65,12 +65,12 @@ Todas esas se quedan como miembros, que es lo que suponía producción hasta aho
 
 ## En producción
 
-- `estrellasCumulo` (`resources/js/bitacora-gaia-render.js`) acepta un 5º elemento `true` en la fila de catálogo: «es de campo».
+- `estrellasCumulo` (`resources/js/bitacora-gaia-render.js`) acepta un 5º elemento `true` en la fila de catálogo: «es de campo». La regla es `BitacoraGaiaRender.esCampo(fila)`, y el arnés la lee de ahí (ADR 0008).
   - Esa fila sale como si estuviera fuera de r_t: sin corte `m > m_res` y sin sorteo `aCrowd`. Se sigue pintando como estrella de campo, con su glow si es tenue, así que el disco oscuro de #570 no vuelve.
   - No cuenta como luz del cúmulo.
   - Es una propiedad de la estrella, no del ocular: no cambia de canal al cambiar de ocular.
   - Lo fija `scripts/test_campo_no_es_cumulo.js` a 61, 173 y 250×.
-- **Lo que falta:** las filas que trae `gaia_proxy.php` no llevan todavía la marca. Hoy no tienen ni `source_id` ni PM. Medido el tamaño: dentro de r_t y con G ≤ 20 hay 396 389 estrellas de campo en los 138 globulares de VB21 que están en `globulares-datos.js` (54 215 solo en M22). Llevarlas a producción es un ticket aparte.
+- **Lo que falta:** las filas que trae `gaia_proxy.php` no llevan todavía la marca. Hoy no tienen ni `source_id` ni PM. Medido el tamaño: dentro de r_t y con G ≤ 20 hay 396 389 estrellas de campo en los 138 globulares de VB21 que están en `globulares-datos.js` (54 215 solo en M22). Llevarlas a producción es #583.
 
 ## Resultado en M13 (criterio 2 de #575)
 
