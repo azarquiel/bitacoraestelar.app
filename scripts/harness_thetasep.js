@@ -152,7 +152,7 @@ console.log('M13 · D=' + D + 'mm  M=' + MAG + 'x  SQM=' + SQM.toFixed(1) +
 console.log('Gaia con G<=mlim: ' + visibles.length + ' (fixture ' + gaia.length + ')');
 console.log('Referencia: el render viejo con k=' + 30 +
             ' entrega ' + base.estrellas.filter(function (s) {
-              return (s[4] != null ? s[4] : s[2]) <= mlim && anillo(radio(s)) >= 0;
+              return R.magVGaia(s) <= mlim && anillo(radio(s)) >= 0;
             }).length + ' estrellas dentro de 8 r_h\n');
 
 console.log(' Gaia por anillo:' + nGaia.map(function (n) { return String(n).padStart(9); }).join('') +

@@ -68,6 +68,12 @@ carencia acotada del modelo, no un ajuste pendiente, y queda anotada aquí. Hast
 > que salen son gigantes rojas con G justo por debajo de `m_res`, 0,2-0,45 mag
 > más débiles en V; su luz ya la lleva el velo. Los 891 que pasan el mlim no
 > cambian (el pintor sigue comparando G con mlim). La conclusión sigue en pie.
+>
+> **2026-11-17 (#579).** El pintor también compara V con mlim (#545:
+> `simulador_ocular/docs/notas/sesgo-g-contra-v.md`). Pasan el mlim del cielo
+> limpio 781 y no 891: las 110 que salen tienen G ≤ mlim < V, casi todas
+> gigantes rojas. Las dibujadas siguen en 439, porque ya se juzgaban en V
+> contra `m_res`, que nunca pasa de mlim. La conclusión sigue en pie.
 
 Embudo medido sobre la fixture `simulador_ocular/docs/validacion/m13_gaia_dr3.csv` (11 970 estrellas
 en el campo, G < 18,5):
