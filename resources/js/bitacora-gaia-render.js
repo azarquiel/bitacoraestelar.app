@@ -2935,6 +2935,10 @@
       var rAs = pob.radioPropio(dxAs, dyAs);
       var mRes = mResEn(tabla, rAs);
       if (!isFinite(mRes)) { fuera.push(sale); continue; }    // fuera del cúmulo: ni velo ni mezcla
+      /* Fila de CAMPO (5º elemento `true`, pertenencia de Vasiliev & Baumgardt
+         2021, #575): no es luz del cúmulo, sale como fuera de r_t. Es una
+         propiedad de la estrella, no del ocular: no cambia de canal (#575). */
+      if (i < nCatalogo && e[4] === true) { fuera.push(sale); continue; }
       /* La cola del glow (m > mlim) de una fila de CATÁLOGO pasa como fuera de
          r_t (#570): Gaia no separa miembros de campo, y cortarla dibujaba un
          disco oscuro del tamaño de r_t. Los miembros de esa cola ya están en
