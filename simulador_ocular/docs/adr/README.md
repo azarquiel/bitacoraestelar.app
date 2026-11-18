@@ -43,7 +43,8 @@ Estado: `aceptada` si no se indica otra cosa. Tipo: **decisión** (fija cómo es
 | [0016 · La rotura del núcleo se mide con Φ](0016-phi-metrica-de-veredicto-de-la-rotura-del-nucleo.md) · [apoyo](0016-rotura-nucleo/) | decisión | |
 | [0017 · La ausencia manda cuando la máscara pisa un borde real](0017-la-ausencia-manda-cuando-la-mascara-pisa-un-borde-real.md) | decisión | |
 | [0035 · La forma radial de los globulares sale del perfil de Trager 1995](0035-perfil-medido-de-trager-para-el-halo-de-los-globulares.md) | decisión | |
-| [0039 · La fusión del blending en globulares](0039-la-fusion-del-blending-en-globulares.md) | decisión | **propuesto**: «no se puede todavía»; gana la imagen sumada, enmendaría 0012 (A) |
+| [0039 · La fusión del blending en globulares](0039-la-fusion-del-blending-en-globulares.md) | decisión | **propuesto**: «no se puede todavía»; gana la imagen sumada, enmendaría 0012 (A) · enmendado por 0040 |
+| [0040 · Un solo umbral para ver una o dos estrellas](0040-un-solo-umbral-para-ver-una-o-dos-estrellas.md) | decisión | enmienda 0039; Rayleigh también para las dobles |
 
 ## Niebla y velo de los cúmulos abiertos
 
@@ -87,6 +88,6 @@ Parche, cielo y anclaje:
 
 ## Un ADR nuevo
 
-1. Número: el siguiente libre mirando también `docs/adr/` raíz (hoy, 0040).
+1. Número: el siguiente libre mirando también `docs/adr/` raíz (hoy, 0041).
 2. Primeras líneas: `Fecha:` y `Estado:`, y `Deroga:`/`Enmienda a:` si toca.
 3. Si deroga o enmienda otro, añade la marca inversa en ese otro y actualiza esta tabla.

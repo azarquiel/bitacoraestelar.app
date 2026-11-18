@@ -174,6 +174,9 @@ Reglas de bolsillo relacionadas (no confundir con lo anterior):
    ~300″ como mínimo marginal.
 Ambas deben cumplirse para "se ve el split".
 
+> **Revisado (2026-11-17): el 300″ está sin ancla.** Fuentes abiertas, veredicto
+> y regla que lo sustituye: ADR 0040, «El 300″, revisado».
+
 ---
 
 ## Fuentes primarias vs. secundarias

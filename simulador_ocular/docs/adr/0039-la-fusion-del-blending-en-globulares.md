@@ -1,6 +1,7 @@
 Fecha: 2026-11-16
 Estado: propuesto
 Enmienda a: 0012 (ver «Qué sustituye»)
+Enmendado por: 0040 (fija el umbral de resolución)
 
 # La fusión del blending en globulares
 
@@ -346,6 +347,8 @@ prerregistrado no pasa. Lo que sí queda decidido:
 3. Fijar el umbral de resolución de (b): Rayleigh sobre la PSF (ancla de
    `θ_sep`) o la resolución del ojo `aum·sep ≥ 300″` (`resolucionDoble`).
    Las dos anclas de la casa no coinciden.
+   **Hecho en #576** (ADR 0040): valle 0,265 (Rayleigh) para el blending y
+   para las dobles; el `aum·sep ≥ 300″` del ojo queda sin ancla y fuera.
 4. Un criterio 3 con potencia. El de este prerregistro dejaba pasar un doble
    conteo completo.
 5. La conservación contra el flujo del MODELO, que no es el criterio 2. El
@@ -377,7 +380,7 @@ Si se implementa (b):
 | `Δmag = 0,75` | sale | sin ancla (ADR 0012 ya lo declaraba) |
 | `thetaSepRadios = 1` como ley de mezcla | sale | tenía ancla (Rayleigh); lo sustituye el umbral de valle sobre la PSF |
 | sorteo Bernoulli `C.sorteo` | sale | sin parámetro |
-| umbral de resolución de la imagen sumada (profundidad de valle, o `aum·sep` del ojo) | entra | **sin decidir**: Sparrow 1916 (valle 0; original no abierto, ApJ 44, 76, comprobado en citas secundarias), Rayleigh (valle 0,265, el ancla de `θ_sep`) o `resolucionDoble` (`aum·sep ≥ 300″`, de `notas-resolucion-dobles.md`, ancla no revisada) |
+| umbral de resolución de la imagen sumada (profundidad de valle, o `aum·sep` del ojo) | entra | **Rayleigh, valle 0,265** (ADR 0040), el ancla de `θ_sep`. Descartados: Sparrow 1916 (valle 0) y `resolucionDoble` (`aum·sep ≥ 300″`, sin ancla) |
 | forma de la PSF del pico | entra | `radioImagenEstelar` (Airy ⊕ seeing), ya anclado |
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
 | `completitud` en el velo (`gaiaM50`, `gaiaAncho`, `gaiaFwhmAs`, `gaiaCrowdingK`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
