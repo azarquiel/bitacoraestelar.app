@@ -3503,7 +3503,26 @@
     });
   }
 
+  /* Vuelca el lienzo de trabajo `off` (D×D) al círculo del ocular, centrado en
+     el lienzo de 900 px del modal, sobre negro. Por píxeles y no con drawImage
+     (#587): Firefox 160 + GPU AMD no copia canvas a canvas con drawImage y el
+     modal subía una imagen negra. El borde lleva medio píxel de suavizado, como
+     el clip con arc; la transparencia de `off` se compone sobre el negro. */
+  function volcarCirculo(ctx, off, D) {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 900, 900);
+    var im = off.getContext('2d').getImageData(0, 0, D, D), d = im.data, r = D / 2;
+    for (var j = 0; j < D; j++) {
+      for (var i = 0; i < D; i++) {
+        var k = (j * D + i) * 4;
+        var a = Math.min(1, Math.max(0, r + 0.5 - Math.hypot(i + 0.5 - r, j + 0.5 - r))) * d[k + 3] / 255;
+        d[k] *= a; d[k + 1] *= a; d[k + 2] *= a; d[k + 3] = 255;
+      }
+    }
+    ctx.putImageData(im, Math.round(450 - r), Math.round(450 - r));
+  }
+
   window.BitacoraGaiaRender = {
+    volcarCirculo: volcarCirculo,
     config: CFG,
     fot: FOT,
     consultar: consultar,

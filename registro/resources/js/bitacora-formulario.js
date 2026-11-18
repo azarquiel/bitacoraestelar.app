@@ -1560,10 +1560,7 @@
     // El círculo del ocular, recortado del lienzo de trabajo: lo usan la
     // provisional y la completa.
     function volcar(){
-      ctx.fillStyle='#000'; ctx.fillRect(0,0,900,900);
-      ctx.save(); ctx.beginPath(); ctx.arc(450,450,D/2,0,7); ctx.clip();
-      ctx.drawImage(off, 450-D/2, 450-D/2);
-      ctx.restore();
+      BitacoraGaiaRender.volcarCirculo(ctx, off, D);   // sin drawImage (#587)
     }
     var opciones={
       ra:centro.ra, dec:centro.dec, arcmin:arcmin, apertura:d.apertura, aumentos:d.aumentos,
