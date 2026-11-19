@@ -400,6 +400,7 @@ function micro(valle, nombre) {
   caso(valle, 'par igual, 0,70 θ', [0, 0.7 * TH], [0, 0]);
   caso(valle, 'par igual, 0,75 θ', [0, 0.75 * TH], [0, 0]);
   caso(valle, 'par igual, 0,95 θ', [0, 0.95 * TH], [0, 0]);
+  caso(valle, 'par igual, 1,00 θ', [0, 1.00 * TH], [0, 0]);  // borde de Rayleigh (ADR 0040)
   caso(valle, 'par Δm=2, 0,70 θ', [0, 0.7 * TH], [0, 2]);
   caso(valle, 'par Δm=2, 0,95 θ', [0, 0.95 * TH], [0, 2]);
   caso(valle, 'par Δm=2, 1,50 θ', [0, 1.5 * TH], [0, 2]);
