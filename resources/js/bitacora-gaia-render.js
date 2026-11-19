@@ -2841,7 +2841,6 @@
         if (rAs >= pob.rtAs) continue;
         var Im = interpTabla(tabla, tabla.I, rAs);
         if (!(Im > 0)) continue;
-        var sig = interpTabla(tabla, tabla.sigma, rAs);
         var sH = interpTabla(tabla, tabla.sHalo, rAs);
         var sG = interpTabla(tabla, tabla.sGrano, rAs);
         var sLn = interpTabla(tabla, tabla.lnS, rAs);
