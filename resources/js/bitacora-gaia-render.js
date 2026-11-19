@@ -2841,7 +2841,6 @@
         if (rAs >= pob.rtAs) continue;
         var Im = interpTabla(tabla, tabla.I, rAs);
         if (!(Im > 0)) continue;
-        var sig = interpTabla(tabla, tabla.sigma, rAs);
         var sH = interpTabla(tabla, tabla.sHalo, rAs);
         var sG = interpTabla(tabla, tabla.sGrano, rAs);
         var sLn = interpTabla(tabla, tabla.lnS, rAs);
@@ -3503,7 +3502,53 @@
     });
   }
 
+  /* ¿Copia drawImage de canvas a canvas en este lienzo? Firefox 160 + GPU AMD
+     no (#587): el destino se queda como estaba. Se prueba con la reproducción
+     del issue (cuadrado rojo de 50 px) sobre el propio lienzo, una vez por
+     lienzo; el negro de después borra la prueba. */
+  var drawImageCopia = new WeakMap();
+  function copiaDrawImage(ctx) {
+    if (!drawImageCopia.has(ctx)) {
+      var sana = false;
+      try {
+        var p = document.createElement('canvas'); p.width = p.height = 50;
+        var pc = p.getContext('2d'); pc.fillStyle = '#f00'; pc.fillRect(0, 0, 50, 50);
+        ctx.drawImage(p, 0, 0);
+        sana = ctx.getImageData(10, 10, 1, 1).data[0] > 200;
+      } catch (e) { /* sin prueba posible: el camino por píxeles siempre vale */ }
+      drawImageCopia.set(ctx, sana);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 50, 50);
+    }
+    return drawImageCopia.get(ctx);
+  }
+
+  /* Vuelca el lienzo de trabajo `off` (D×D) al círculo del ocular, centrado en
+     el lienzo de 900 px del modal, sobre negro. Con drawImage si el navegador
+     copia; si no (#587), por píxeles: el borde lleva medio píxel de suavizado,
+     como el clip con arc, y la transparencia de `off` se compone sobre negro.
+     Por píxeles cuesta ~30 ms en escritorio con D = 900; drawImage, < 1 ms. */
+  function volcarCirculo(ctx, off, D) {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 900, 900);
+    var r = D / 2;
+    if (copiaDrawImage(ctx)) {
+      ctx.save(); ctx.beginPath(); ctx.arc(450, 450, r, 0, 7); ctx.clip();
+      ctx.drawImage(off, 450 - r, 450 - r);
+      ctx.restore();
+      return;
+    }
+    var im = off.getContext('2d').getImageData(0, 0, D, D), d = im.data;
+    for (var j = 0; j < D; j++) {
+      for (var i = 0; i < D; i++) {
+        var k = (j * D + i) * 4;
+        var a = Math.min(1, Math.max(0, r + 0.5 - Math.hypot(i + 0.5 - r, j + 0.5 - r))) * d[k + 3] / 255;
+        d[k] *= a; d[k + 1] *= a; d[k + 2] *= a; d[k + 3] = 255;
+      }
+    }
+    ctx.putImageData(im, Math.round(450 - r), Math.round(450 - r));
+  }
+
   window.BitacoraGaiaRender = {
+    volcarCirculo: volcarCirculo,
     config: CFG,
     fot: FOT,
     consultar: consultar,
