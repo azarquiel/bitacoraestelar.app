@@ -109,7 +109,10 @@ regla; nadie lo decide a mano.
   1,10, diagnóstico ADR 0003 1,108 / 0,988 / 0,953 / 0,836 / 0,758 / 0,985,
   p95 |Δm_res| = 0,107 en ≤1. Con las sintéticas esas cifras cambian.
 - La tabla de potencia de abajo. Lleva la realización del catálogo dentro
-  (`R2cf = R2 + Δcf`), pero `Δcf` no se imprime, así que R2 no se lee de ella.
+  (`R2cf = R2 + Δcf`). En el dominio del velo `Δcf` no se imprime, así que
+  R2v no se lee de ella. En las columnas «LF entera» `Δcf` es despreciable,
+  así que sí dejan ver el R2 de §0 (ya visto arriba). Ese R2 no entra en el
+  veredicto.
 - Del arnés con sintéticas (AC1) solo se miró el criterio 2.
 
 **Partición (AC1).** Las sintéticas de producción (`pob.sinteticas`,
@@ -174,6 +177,13 @@ de medir.
 
 Salida: `node scripts/harness_fusion_blending.js` (M13, 467 mm, 173×, SQM 21,
 `θ_sep = 1,043″`, 11 634 filas de miembros + 845 sintéticas dentro de 8 r_h).
+La salida completa, con (a) FoF, producción, la pregunta 6 y los micro-casos,
+está en `simulador_ocular/docs/validacion/fusion_blending_577.txt`. Abajo va
+solo lo que decide.
+
+Interpretación de AC4 (#577): «p95 |Δm_res| ≤ 0,1» se aplica tal cual, con el
+estadístico de la pregunta 5 (local contra radial). El arnés no prototipa
+`m_res(x, y)`, así que esa condición mide si el radial basta (#591).
 
 ```
 ── Criterio 2 (listón < 1e-6)
