@@ -96,6 +96,80 @@ resueltos.
 prototipo imprime flujos, residuos, razones y magnitudes, no cuentas de
 dibujadas.
 
+## 0 bis. Segundo prerregistro (#577, 2026-11-19, escrito ANTES de medir)
+
+Repite el veredicto con criterios que puedan fallar. Arnés:
+`node scripts/harness_fusion_blending.js` (banda V por defecto, solo
+miembros, mismo equipo que §0). El arnés imprime el veredicto aplicando esta
+regla; nadie lo decide a mano.
+
+**Lo que ya se había visto al escribir esto** (ADR 0005, se declara):
+
+- La salida del arnés antes de las sintéticas (#575): R2 de §0 entre 0,47 y
+  1,10, diagnóstico ADR 0003 1,108 / 0,988 / 0,953 / 0,836 / 0,758 / 0,985,
+  p95 |Δm_res| = 0,107 en ≤1. Con las sintéticas esas cifras cambian.
+- La tabla de potencia de abajo. Lleva la realización del catálogo dentro
+  (`R2cf = R2 + Δcf`), pero `Δcf` no se imprime, así que R2 no se lee de ella.
+- Del arnés con sintéticas (AC1) solo se miró el criterio 2.
+
+**Partición (AC1).** Las sintéticas de producción (`pob.sinteticas`,
+realización 0, las que dibuja `pintarCumulo`) entran en la suma como cualquier
+estrella. `V1`/`V2` llevan solo los bins `m_k > mCutGeneracion`
+(`C.config.mCutGeneracion = 18`, leído de producción). Las LF van en bins de
+0,25 mag; el borde que parte el corte es 18,068 («borde» en lo que sigue).
+
+**Criterio 2.** Sin cambios: (b), `< 1e-6` en cada anillo y en cada celda.
+
+**Criterio 3, nuevo.** El doble conteo solo puede vivir donde hay velo,
+`m > borde`. Por encima no hay velo: la luz la traen catálogo y sintéticas.
+Dividir por el S2 de toda la LF lo diluye bajo las gigantes, y por eso §0 no
+tenía potencia. Por anillo:
+
+```
+R2v = ( ∫V2 dΩ + Σ_{j∈anillo, m_j>borde} F_j² ) / ∫ Σ·S2(m>borde) dΩ
+σ   = sqrt( Σ_{j∈anillo, m_j>borde} F_j⁴ ) / ∫ Σ·S2(m>borde) dΩ
+```
+
+Listón: **R2v ≤ 1 + 2σ**. `j` recorre catálogo y sintéticas (las sintéticas
+nacen ≤ 17,94 y no entran).
+
+**Doble conteo completo = contrafactual que se corre:** la misma partición con
+`V2` sin el factor `(1 − c)`, o sea, el velo vuelve a llevar la luz que el
+catálogo ya trae. Un anillo tiene potencia si su `R2cf` **no** pasa el listón.
+Un anillo sin potencia no cuenta ni a favor ni en contra. Tabla de potencia
+(corrida antes de medir):
+
+```
+              dominio del velo m > 18,068        LF entera (estadístico de §0)
+anillo     R2cf    1+2σ  potencia             R2cf    1+2σ  potencia
+≤0,25      1,013   1,008  sí                  1,099   1,566  NO
+≤0,5       1,051   1,010  sí                  0,938   1,476  NO
+≤1         1,289   1,017  sí                  0,958   1,352  NO
+≤2         1,421   1,020  sí                  0,996   1,370  NO
+≤4         1,483   1,030  sí                  0,700   1,427  NO
+≤8         1,603   1,061  sí                  0,476   1,198  NO
+```
+
+Los seis anillos tienen potencia con `R2v`. El de ≤0,25 la tiene por poco
+(1,013 contra 1,008): en el núcleo Gaia es incompleta y `c` es pequeña, así
+que el doble conteo allí es pequeño. El estadístico de §0 no tiene potencia
+en ninguno: confirma la lección de `AGENTS.md`.
+
+**Conservación contra el modelo (AC3).** `(ΣF_cat+sint + ∫V1) / ∫Σ·S1_total`
+por anillo. Listón **0,9-1,1** en cada anillo (fase 1 del ADR 0003). El arnés
+imprime al lado el mismo cociente con `V1` sin `(1 − c)`. Es solo
+informativo: el ±10 % busca deriva del modelo y no doble conteo, y no se
+fija con él.
+
+**Fondo local.** p95 |Δm_res| **≤ 0,1** en cada anillo con celdas (pregunta 5
+de §0, escala `θ_R/M`). Con las sintéticas, la luz no resuelta las incluye.
+
+**Regla del veredicto.** «Sí» exige las cuatro cosas: criterio 2, criterio 3
+en todos los anillos con potencia (si no hubiera ninguno con potencia, el
+criterio 3 cuenta como no pasado), conservación contra el modelo y p95 ≤ 0,1.
+Cualquier fallo da **«no se puede todavía»**. Ningún listón se mueve después
+de medir.
+
 ## Resultados (2026-11-16)
 
 Salida completa: `node scripts/harness_fusion_blending.js --banda G` (M13, 467 mm, 173×,
