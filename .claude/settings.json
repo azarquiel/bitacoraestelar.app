@@ -1,9 +1,4 @@
 {
-  "enabledPlugins": {
-    "mattpocock-skills@mattpocock": true,
-    "ponytail@ponytail": true,
-    "i-have-adhd@i-have-adhd": true
-  },
   "env": {
     "PONYTAIL_DEFAULT_MODE": "ultra"
   },
@@ -20,7 +15,34 @@
       }
     ]
   },
+  "enabledPlugins": {
+    "mattpocock-skills@mattpocock": true,
+    "ponytail@ponytail": true,
+    "i-have-adhd@i-have-adhd": true,
+    "vtsls@claude-code-lsps": true,
+    "php-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "vscode-langservers@claude-code-lsps": true
+  },
   "extraKnownMarketplaces": {
+    "claude-code-lsps": {
+      "source": {
+        "source": "github",
+        "repo": "Piebald-AI/claude-code-lsps"
+      }
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
+    },
+    "i-have-adhd": {
+      "source": {
+        "source": "github",
+        "repo": "ayghri/i-have-adhd"
+      }
+    },
     "mattpocock": {
       "source": {
         "source": "github",
