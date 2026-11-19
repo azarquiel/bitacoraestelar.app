@@ -58,12 +58,25 @@ var res = R.pintarCumulo(new Float32Array(PROC * PROC), M13, {
   ra0: M13.ra, dec0: M13.dec, arcmin: ARCMIN, size: PROC, cielo: cielo, apertura: D, estrellas: gaia
 });
 /* Lo que producción dibuja hoy, LEÍDO de su salida (ADR 0008): estrellasCumulo
-   devuelve las mismas filas que recibe, así que la identidad del array basta.
+   devuelve las mismas filas de catálogo que recibe; las sintéticas las
+   re-emite en G como filas nuevas (#579), así que se casan por posición.
    Sin `o.mlim` la rama #570 de la cola del glow no entra: es la llamada «a
    pelo» que el propio render documenta. Realización 0. */
-var dibujadaProd = new Set(res.estrellas);
+function clave(f) { return f[0] + ',' + f[1]; }
+var dibujadaProd = new Set(res.estrellas.map(clave));
 var pob = res.poblacion, tabla = res.tabla;
 var TH = C.config.thetaSepRadios * res.radioImagenAs;      // θ_sep, arcsec
+/* Parte sintética de la partición (#577): las sintéticas de producción
+   (realización 0, las mismas que dibuja pintarCumulo) entran en la suma como
+   cualquier estrella, y V1/V2 solo llevan los bins m_k > mCutGeneracion
+   (ADR 0039, pregunta 4). MBORDE es el borde de bin que parte ese corte: las
+   sintéticas nacen en el centro de su bin. */
+var MCUT = C.config.mCutGeneracion;
+var sint = pob.sinteticas({ ra: M13.ra, dec: M13.dec });
+var MBORDE = MCUT;
+for (var b0 = 0; b0 + 1 < pob.magnitudes.length; b0++)
+  if (pob.magnitudes[b0] <= MCUT && pob.magnitudes[b0 + 1] > MCUT)
+    MBORDE = (pob.magnitudes[b0] + pob.magnitudes[b0 + 1]) / 2;
 
 /* EXCEPCIÓN DECLARADA al ADR 0008: copia de `mResEn` (bitacora-gaia-render.js),
    que producción no exporta y este spike no puede exportar (el ticket prohíbe
@@ -89,8 +102,10 @@ function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catal
   var s = pob.sigma(rAs), v1 = 0, v2 = 0, s2 = 0, s2c = 0, s2sub = 0, s2csub = 0, mR = mResEn(rAs);
   for (var k = 0; k < NB; k++) {
     var c = pob.completitud(mAp[k], rAs), w = num[k], f2b = fB[k] * fB[k];
-    v1 += w * fB[k] * (1 - c);
-    v2 += w * f2b * (1 - c);
+    if (mAp[k] > MCUT) {          // [m_k > mCutGeneracion]: lo de arriba lo traen catálogo y sintéticas
+      v1 += w * fB[k] * (1 - c);
+      v2 += w * f2b * (1 - c);
+    }
     s2c += w * f2b * c;
     /* CONTRASTE declarado (ADR 0008): numerador y denominador de la fracción
        catalogada bajo m_res con el MISMO corte (centro del bin). pob.S2(mR)
@@ -129,13 +144,15 @@ function campo(nombre) { return function (r) { return mom(r)[nombre]; }; }
 /* ── Catálogo en el plano del cielo ───────────────────────────────────────── */
 var cos0 = Math.cos(M13.dec * Math.PI / 180);
 var est = [];
-gaia.forEach(function (g) {
+function mete(g, m) {
   var x = (((g[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600, y = (g[1] - M13.dec) * 3600;
   var r = pob.radioPropio(x, y);
-  if (!(r < pob.rtAs) || anillo(r) < 0 || R.esCampo(g)) return;
-  var m = magCatalogo(g);
+  if (!(r < pob.rtAs) || anillo(r) < 0) return;
   est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
-});
+}
+gaia.forEach(function (g) { if (!R.esCampo(g)) mete(g, magCatalogo(g)); });
+var nCat = est.length;
+sint.forEach(function (g) { mete(g, g[2]); });   // la sintética nace en V (LF)
 
 function celda(x, y, lado) { return Math.floor(x / lado) + ',' + Math.floor(y / lado); }
 function centroCelda(key, lado) {
@@ -220,7 +237,7 @@ est.forEach(function (s) { apunta(Bl, s.x, s.y, s.F); });
 // Se mide con el MISMO criterio, no se usa como verdad.
 var P0 = libro(), perdidoAnillo = new Float64Array(NA);
 est.forEach(function (s) {
-  if (dibujadaProd.has(s.fila)) apunta(P0, s.x, s.y, s.F); else perdidoAnillo[anillo(s.r)] += s.F;
+  if (dibujadaProd.has(clave(s.fila))) apunta(P0, s.x, s.y, s.F); else perdidoAnillo[anillo(s.r)] += s.F;
 });
 var areaAnillo = [];
 for (var k = 0; k < NA; k++) {
@@ -257,7 +274,8 @@ function residuos(L, repartoAnillo) {
 
 function e1(x) { return x.toExponential(1).padStart(9); }
 console.log('M13 · D=' + D + 'mm  M=' + MAG + 'x  SQM=' + SQM + '  θ_sep=' + TH.toFixed(3) +
-            '"  filas del catálogo dentro de 8 r_h: ' + est.length);
+            '"  dentro de 8 r_h: ' + nCat + ' filas del catálogo + ' +
+            (est.length - nCat) + ' sintéticas (mCutGeneracion = ' + MCUT + ', borde de bin ' + MBORDE.toFixed(3) + ')');
 console.log('\n── Criterio 2: |P − T| / T  (listón < 1e-6 en cada anillo y en cada celda)');
 console.log('ley            ' + ETQ.map(function (s) { return s.padStart(9); }).join('') +
             '   peor celda  celdas ≥1e-6');
