@@ -19,7 +19,6 @@
     "mattpocock-skills@mattpocock": true,
     "ponytail@ponytail": true,
     "i-have-adhd@i-have-adhd": true,
-    "ecc@ecc": true,
     "vtsls@claude-code-lsps": true,
     "php-lsp@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
@@ -42,12 +41,6 @@
       "source": {
         "source": "github",
         "repo": "ayghri/i-have-adhd"
-      }
-    },
-    "ecc": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/affaan-m/ECC.git"
       }
     },
     "mattpocock": {
