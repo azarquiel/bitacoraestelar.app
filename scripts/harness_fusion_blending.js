@@ -65,6 +65,19 @@ var res = R.pintarCumulo(new Float32Array(PROC * PROC), M13, {
 function clave(f) { return f[0] + ',' + f[1]; }
 var dibujadaProd = new Set(res.estrellas.map(clave));
 var pob = res.poblacion, tabla = res.tabla;
+/* Contrafactual de #590 (spike, NO es un arreglo): la consulta a Gaia corta en
+   G (fixture: G ≤ 18,50; producción: magConsultaGaia), y c(m, r) no lo sabe:
+   asume el codo gaiaM50 = 20. --corte-g G multiplica c por la fracción del bin
+   (en V) por encima de G + V−G, con V−G = 0,109, la mediana medida en el
+   fixture para G > 18,25. Solo afecta a la partición (V1/V2) y a la atribución:
+   pintarCumulo ya corrió y las sintéticas (m ≤ 18) no cruzan el corte. */
+var CORTE_G = arg('corte-g', NaN);
+if (CORTE_G === CORTE_G) {
+  var cOrig = pob.completitud, VCORTE = CORTE_G + 0.109, PASO_LF = pob.magnitudes[1] - pob.magnitudes[0];
+  pob.completitud = function (m, rAs) {
+    return cOrig(m, rAs) * Math.max(0, Math.min(1, (VCORTE - m) / PASO_LF + 0.5));
+  };
+}
 var TH = C.config.thetaSepRadios * res.radioImagenAs;      // θ_sep, arcsec
 /* Parte sintética de la partición (#577): las sintéticas de producción
    (realización 0, las mismas que dibuja pintarCumulo) entran en la suma como
@@ -415,6 +428,66 @@ else if (!pasaC3) fallos.push('criterio 3');
 if (!pasaCons) fallos.push('conservación contra el modelo');
 if (!pasaQ5) fallos.push('p95 |Δm_res| ≤ 0,1');
 console.log('\n══ Veredicto (§0 bis): ' + (fallos.length ? 'NO SE PUEDE TODAVÍA — falla: ' + fallos.join(', ') : 'SÍ'));
+
+/* ── Atribución (#590, spike): catálogo contra el modelo por anillo × rango ───
+   Solo con --atribucion. Mide, no corrige: no toca producción ni el velo
+   (ADR 0003). Para cada anillo y rango de magnitud compara lo que trae el
+   catálogo (miembros, banda V) con lo que el modelo dice que Gaia trae,
+   ∫Σ·num·c dΩ, en cuentas (N), flujo (F) y flujo² (F²). Por encima del borde
+   las sintéticas completan la LF, así que ahí el modelo es ∫Σ·num (sin c).
+   Rangos en bordes de bin (MBORDE ± k): cada bin cae entero en un rango.
+   ΔS1 y ΔR2v: lo que aporta cada rango al residuo de la conservación
+   (obs − mod, sobre ∫Σ·S1) y de R2v (ΣF²_cat − ∫Σ·num·f²·c, sobre
+   ∫Σ·S2(m>borde)). Suman, con V1/V2 que se cancelan, el residuo de §0 bis. */
+if (process.argv.indexOf('--atribucion') > 0) {
+  var BORDES = [-Infinity, MBORDE - 4, MBORDE - 2, MBORDE - 1, MBORDE, MBORDE + 1, MBORDE + 2, MBORDE + 3, Infinity];
+  var NR = BORDES.length - 1;
+  var rango = function (m) { for (var i = 0; i < NR; i++) if (m <= BORDES[i + 1]) return i; return NR - 1; };
+  var ETQR = [];
+  for (var q0 = 0; q0 < NR; q0++)
+    ETQR.push((isFinite(BORDES[q0]) ? BORDES[q0].toFixed(2) : '') + '–' + (isFinite(BORDES[q0 + 1]) ? BORDES[q0 + 1].toFixed(2) : ''));
+  var rBin = []; for (var kb = 0; kb < NB; kb++) rBin[kb] = rango(mAp[kb]);
+  console.log('\n── Atribución (#590): observado / modelo por anillo y rango (banda V, solo miembros)');
+  for (var ka = 0; ka < NA; ka++) {
+    var r0 = ANILLOS[ka], r1 = Math.min(ANILLOS[ka + 1], pob.rtAs), NT = 400, h = (r1 - r0) / NT;
+    var mN = new Float64Array(NR), mF = new Float64Array(NR), mF2 = new Float64Array(NR), mNt = new Float64Array(NR);
+    var mS = new Float64Array(NR), S1mod = 0, S2v = 0, S2tot = 0;
+    for (var it2 = 0; it2 <= NT; it2++) {
+      var rr = r0 + it2 * h, sg = pob.sigma(rr) * (it2 === 0 || it2 === NT ? 0.5 : 1) * 2 * Math.PI * rr * h;
+      for (kb = 0; kb < NB; kb++) {
+        var cc = pob.completitud(mAp[kb], rr), velo = mAp[kb] > MCUT, ex = velo ? cc : 1;
+        mN[rBin[kb]] += sg * num[kb] * cc;                       // lo que debe traer el catálogo
+        if (!velo) mS[rBin[kb]] += sg * num[kb] * (1 - cc);      // lo que deben traer las sintéticas
+        mF[rBin[kb]] += sg * num[kb] * fB[kb] * ex;
+        mNt[rBin[kb]] += sg * num[kb];
+        S1mod += sg * num[kb] * fB[kb];
+        S2tot += sg * num[kb] * fB[kb] * fB[kb];
+        if (velo) { mF2[rBin[kb]] += sg * num[kb] * fB[kb] * fB[kb] * cc; S2v += sg * num[kb] * fB[kb] * fB[kb]; }
+      }
+    }
+    var oN = new Float64Array(NR), oF = new Float64Array(NR), oF2 = new Float64Array(NR), oS = new Float64Array(NR);
+    est.forEach(function (s, i) {
+      if (anillo(s.r) !== ka) return;
+      var q = rango(s.m);
+      oF[q] += s.F;
+      if (i >= nCat) oS[q]++; else { oN[q]++; if (s.m > MBORDE) oF2[q] += s.F * s.F; }
+    });
+    console.log('\n' + ETQ[ka] + ' r_h   ∫Σ·S1 = ' + S1mod.toExponential(3) + '   ∫Σ·S2(m>borde) = ' + S2v.toExponential(3) +
+                '   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = ' + (Math.sqrt(S2tot) / S1mod).toFixed(3));
+    console.log('rango V        N cat  ∫Σ·num·c  cat/mod  ±1σ   N sint ∫Σ·num(1−c)  c medio  F o/m  F² o/m     ΔS1     ΔR2v');
+    for (var q2 = 0; q2 < NR; q2++) {
+      if (!(mNt[q2] > 0.5) && !oN[q2]) continue;
+      var arriba = BORDES[q2 + 1] <= MBORDE + 1e-9;
+      console.log(ETQR[q2].padEnd(13) + String(oN[q2]).padStart(7) + mN[q2].toFixed(1).padStart(10) +
+                  (oN[q2] / mN[q2]).toFixed(3).padStart(9) + (1 / Math.sqrt(Math.max(mN[q2], 1e-9))).toFixed(3).padStart(6) +
+                  (arriba ? String(oS[q2]).padStart(9) + mS[q2].toFixed(1).padStart(13) : '—'.padStart(9) + '—'.padStart(13)) +
+                  (mN[q2] / mNt[q2]).toFixed(3).padStart(9) + (oF[q2] / mF[q2]).toFixed(3).padStart(7) +
+                  (arriba ? '—' : (oF2[q2] / mF2[q2]).toFixed(3)).padStart(8) +
+                  ((oF[q2] - mF[q2]) / S1mod).toFixed(4).padStart(9) +
+                  (arriba ? '—' : ((oF2[q2] - mF2[q2]) / S2v).toFixed(4)).padStart(9));
+    }
+  }
+}
 
 /* ── Micro-casos de las preguntas 1-3 (sin catálogo, sin cuentas) ────────────
    PSF gaussiana de FWHM 0,84·θ_sep (FWHM de Airy / radio del primer anillo

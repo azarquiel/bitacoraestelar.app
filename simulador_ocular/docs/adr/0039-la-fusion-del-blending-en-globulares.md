@@ -236,6 +236,93 @@ mueven):
 - #591: que el arnés mida con `m_res(x, y)` y que la condición del fondo se
   vuelva a prerregistrar.
 
+## Atribución de los fallos del modelo (#590, spike, 2026-11-20)
+
+Solo mide (criterio 1 de #590). No toca producción, ni el velo, ni los
+listones de §0 bis, y no cambia el veredicto. Arnés:
+`node scripts/harness_fusion_blending.js --atribucion [--corte-g 18.5]`. Sin
+flags la salida es idéntica a `fusion_blending_577.txt`. Salida completa en
+`simulador_ocular/docs/validacion/atribucion_590.txt`.
+
+**Medida.** Por anillo y por rango de V (bordes en `borde ± 1, 2, 4` mag, en
+bordes de bin): catálogo contra `∫Σ·num·c dΩ`, sintéticas contra
+`∫Σ·num·(1 − c) dΩ`, en cuentas, flujo y flujo². `ΔS1` y `ΔR2v` son lo que
+aporta cada rango al residuo de la conservación y de R2v. Por construcción
+suman el residuo de §0 bis (≤4: `ΣΔS1 = −0,241` ⇒ 0,759).
+
+**1. Truncado de la consulta, que `c(m, r)` no conoce.** Es el fallo de
+≤2 y ≤4. El fixture llega a G ≤ 18,50 (V ≲ 18,61; V−G mediana 0,109 en
+G > 18,25), y `completitud` pone el codo en `gaiaM50 = 20`. Producción
+también corta: `magConsultaGaia(467, 0,9, 173) = 19,17`, techo
+`GAIA_MAG_TOPE = 20`.
+
+| anillo | cat/`num·c` 18,07-19,07 | 19,07-20,07 | ΣΔS1 (m > borde) | ΣΔR2v |
+|---|---|---|---|---|
+| ≤2 | 0,429 (c 0,91) | 2 de 3 684 | −0,103 | −0,366 |
+| ≤4 | 0,454 (c 1,00) | 2 de 3 838 | −0,147 | −0,436 |
+| ≤8 | 0,576 (c 1,00) | 4 de 1 123 | −0,128 | −0,316 |
+
+Contrafactual `c·[V ≤ 18,609]` (`--corte-g 18.5`, fracción del bin): la
+conservación de ≤2/≤4 pasa de 0,836/0,758 a 0,932/0,906 y R2v de
+0,634/0,564 a 0,954/1,007. Las cuatro pasan.
+
+**2. Completitud del núcleo demasiado pesimista.** Es el fallo de R2v en
+≤0,25 / ≤0,5 / ≤1. El catálogo trae más estrellas que `num·c` justo donde
+`c < 1`. En los brillantes con `c = 1` (14,07-16,07) cuadra: 0,96 / 0,99 /
+0,84. Así que no es ni el perfil ni la normalización.
+
+| anillo | 17,07-18,07 cat/mod (c medio) | 18,07-19,07 cat/mod (c medio) | ΔR2v 18-19 | R2v − 1 |
+|---|---|---|---|---|
+| ≤0,25 | 3,23 (0,16) | 3,9 (0,002) | 0,010 | 0,010 |
+| ≤0,5 | 1,70 (0,46) | 1,9 (0,02) | 0,028 | 0,028 |
+| ≤1 | 1,15 (0,88) | 1,04 (0,23) | 0,050 | 0,048 |
+
+El codo de crowding (`mCrowd` con `gaiaCrowdingK = 30` y
+`gaiaFwhmAs = 0,6`, ancla sin revisar) adelanta la pérdida de Gaia en el
+núcleo. Con el corte de 1, ≤1 sube a 1,30 y R2v a 1,073.
+
+**3. Anillo ≤8: exceso a toda magnitud.** Con `c = 1`, el catálogo da 1,01 /
+1,69 / 1,98 / 1,31 sobre el modelo en los rangos ≤18,07 (433 contra 295
+estrellas, 1,47), y 1,28 en 18-19 con el corte. En ≤4 da 1,03 y en ≤2 1,00.
+Es el perfil exterior o el campo residual tras VB21. El exceso crece hacia
+los brillantes, lo que encaja mejor con campo (LF más plana), pero esta
+medida no separa las dos causas. Con el corte, ≤8 se va al otro lado:
+conservación 1,133 y R2v 1,128.
+
+**4. Muestreo de las gigantes.** El σ de Poisson del flujo por anillo,
+`√(∫Σ·S2)/∫Σ·S1`, vale 0,077 / 0,054 / 0,041 / 0,042 / 0,058 / 0,107.
+- La conservación de ≤0,25 (1,110) está a 1,4σ. Aportan +0,076 las V < 14,07
+  (26 gigantes contra 18,8) y +0,065 el punto 2.
+- En ≤4, V < 14,07 aporta −0,102 (20 contra 33,7).
+- El listón ±10 % no tiene término de muestreo: en ≤8 es más estrecho que
+  1σ. No se mueve (#590, criterio 2). Se declara para quien prerregistre.
+
+**5. Forma de la LF en 14-17 (no decide ningún fallo).** 16,07-17,07 sale
+1,27-1,98 sobre el modelo en todos los anillos con `c ≈ 1` (≥ 3σ), y
+14,07-16,07 sale 0,84-0,86 en ≤1 y ≤2. Puede ser la LF o el G→V de las
+gigantes rojas (3 174 filas sin color se quedan en G). En flujo pesa poco:
+`|ΔS1| ≤ 0,03` por rango.
+
+**Veredicto.** Sin cambios: «no se puede todavía». Con el contrafactual
+también, porque fallan el criterio 3 en ≤0,25/≤0,5/≤1/≤8, la conservación
+en ≤0,25/≤8 y el p95. El criterio 3 de #590 (repetir el veredicto tras el
+arreglo) no aplica a este spike.
+
+**Lo que tendría que arreglar la implementación de #590** (criterio 2: cada
+parámetro con ancla):
+
+1. `c(m, r)` multiplicada por `[G ≤ G_consulta]`. El ancla es la propia
+   consulta: `magConsultaGaia` en producción y el corte del fixture en el
+   arnés. Mejor por fila (V−G de cada estrella) que con la mediana del
+   contrafactual.
+2. Completitud del núcleo: re-anclar `gaiaCrowdingK` y `gaiaFwhmAs` con una
+   medida externa de la completitud de Gaia en globulares. No vale ajustarlas
+   a este catálogo: sería calibrar con la misma realización que se mide.
+3. ≤8: separar perfil de campo, por ejemplo con la LF del exceso o con otra
+   pertenencia.
+4. El listón de conservación sin término de muestreo: lo decide el dueño,
+   con un prerregistro nuevo.
+
 ## Resultados (2026-11-16)
 
 Salida completa: `node scripts/harness_fusion_blending.js --banda G` (M13, 467 mm, 173×,
