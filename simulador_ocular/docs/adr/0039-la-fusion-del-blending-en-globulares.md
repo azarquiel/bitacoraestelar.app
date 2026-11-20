@@ -322,7 +322,7 @@ parámetro con ancla):
 3. ≤8: separar perfil de campo, por ejemplo con la LF del exceso o con otra
    pertenencia.
 4. El listón de conservación sin término de muestreo: lo decide el dueño,
-   con un prerregistro nuevo.
+   con un prerregistro nuevo. Hecho en §0 ter (#597).
 
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
@@ -397,7 +397,10 @@ detectaría.
 
 **Límites declarados.** Una deriva del 10 % confinada en ≤0,25, ≤0,5, ≤4 o
 ≤8 no la ve ningún anillo: solo entra en el total, diluida. El ruido de las
-gigantes no deja hacerlo mejor con un solo cúmulo. El contrafactual `V1` sin
+gigantes no deja hacerlo mejor con un solo cúmulo. `σ` trata todo el flujo
+como sorteo de Poisson, aunque `∫V1` es una esperanza: queda algo ancho (el
+listón, algo blando), poco, porque las débiles del velo apenas pesan en S2.
+El contrafactual `V1` sin
 `(1 − c)` sigue siendo informativo.
 
 **Arnés.** `node scripts/harness_fusion_blending.js` imprime `q`, `2σ` y

@@ -326,9 +326,9 @@ var S1tot = pob.S1(-Infinity), S2lf = pob.S2(-Infinity);   // flujo y flujo² de
 var filaC = 'medida         ', filaCf = 'contrafactual  ', filaS = '2σ             ', filaV = '               ';
 var pasaCons = true, potCons = false, sObs = 0, sMod = 0, sS2 = 0;
 function juzgaCons(q, mod, s2) {
-  var dos = 2 * Math.sqrt(s2) / mod, pot = dos < DERIVA, ok = Math.abs(q - 1) <= dos;
+  var dosSigma = 2 * Math.sqrt(s2) / mod, pot = dosSigma < DERIVA, ok = Math.abs(q - 1) <= dosSigma;
   if (pot) { potCons = true; pasaCons = pasaCons && ok; }
-  filaC += q.toFixed(3).padStart(9); filaS += dos.toFixed(3).padStart(9);
+  filaC += q.toFixed(3).padStart(9); filaS += dosSigma.toFixed(3).padStart(9);
   filaV += (!pot ? 'sin pot.' : ok ? 'PASA' : 'NO PASA').padStart(9);
 }
 for (k = 0; k < NA; k++) {
