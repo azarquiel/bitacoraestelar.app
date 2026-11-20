@@ -96,6 +96,146 @@ resueltos.
 prototipo imprime flujos, residuos, razones y magnitudes, no cuentas de
 dibujadas.
 
+## 0 bis. Segundo prerregistro (#577, 2026-11-19, escrito ANTES de medir)
+
+Repite el veredicto con criterios que puedan fallar. Arnés:
+`node scripts/harness_fusion_blending.js` (banda V por defecto, solo
+miembros, mismo equipo que §0). El arnés imprime el veredicto aplicando esta
+regla; nadie lo decide a mano.
+
+**Lo que ya se había visto al escribir esto** (ADR 0005, se declara):
+
+- La salida del arnés antes de las sintéticas (#575): R2 de §0 entre 0,47 y
+  1,10, diagnóstico ADR 0003 1,108 / 0,988 / 0,953 / 0,836 / 0,758 / 0,985,
+  p95 |Δm_res| = 0,107 en ≤1. Con las sintéticas esas cifras cambian.
+- La tabla de potencia de abajo. Lleva la realización del catálogo dentro
+  (`R2cf = R2 + Δcf`). En el dominio del velo `Δcf` no se imprime, así que
+  R2v no se lee de ella. En las columnas «LF entera» `Δcf` es despreciable,
+  así que sí dejan ver el R2 de §0 (ya visto arriba). Ese R2 no entra en el
+  veredicto.
+- Del arnés con sintéticas (AC1) solo se miró el criterio 2.
+
+**Partición (AC1).** Las sintéticas de producción (`pob.sinteticas`,
+realización 0, las que dibuja `pintarCumulo`) entran en la suma como cualquier
+estrella. `V1`/`V2` llevan solo los bins `m_k > mCutGeneracion`
+(`C.config.mCutGeneracion = 18`, leído de producción). Las LF van en bins de
+0,25 mag; el borde que parte el corte es 18,068 («borde» en lo que sigue).
+
+**Criterio 2.** Sin cambios: (b), `< 1e-6` en cada anillo y en cada celda.
+
+**Criterio 3, nuevo.** El doble conteo solo puede vivir donde hay velo,
+`m > borde`. Por encima no hay velo: la luz la traen catálogo y sintéticas.
+Dividir por el S2 de toda la LF lo diluye bajo las gigantes, y por eso §0 no
+tenía potencia. Por anillo:
+
+```
+R2v = ( ∫V2 dΩ + Σ_{j∈anillo, m_j>borde} F_j² ) / ∫ Σ·S2(m>borde) dΩ
+σ   = sqrt( Σ_{j∈anillo, m_j>borde} F_j⁴ ) / ∫ Σ·S2(m>borde) dΩ
+```
+
+Listón: **R2v ≤ 1 + 2σ**. `j` recorre catálogo y sintéticas (las sintéticas
+nacen ≤ 17,94 y no entran).
+
+**Doble conteo completo = contrafactual que se corre:** la misma partición con
+`V2` sin el factor `(1 − c)`, o sea, el velo vuelve a llevar la luz que el
+catálogo ya trae. Un anillo tiene potencia si su `R2cf` **no** pasa el listón.
+Un anillo sin potencia no cuenta ni a favor ni en contra. Tabla de potencia
+(corrida antes de medir):
+
+```
+              dominio del velo m > 18,068        LF entera (estadístico de §0)
+anillo     R2cf    1+2σ  potencia             R2cf    1+2σ  potencia
+≤0,25      1,013   1,008  sí                  1,099   1,566  NO
+≤0,5       1,051   1,010  sí                  0,938   1,476  NO
+≤1         1,289   1,017  sí                  0,958   1,352  NO
+≤2         1,421   1,020  sí                  0,996   1,370  NO
+≤4         1,483   1,030  sí                  0,700   1,427  NO
+≤8         1,603   1,061  sí                  0,476   1,198  NO
+```
+
+Los seis anillos tienen potencia con `R2v`. El de ≤0,25 la tiene por poco
+(1,013 contra 1,008): en el núcleo Gaia es incompleta y `c` es pequeña, así
+que el doble conteo allí es pequeño. El estadístico de §0 no tiene potencia
+en ninguno: confirma la lección de `AGENTS.md`.
+
+**Conservación contra el modelo (AC3).** `(ΣF_cat+sint + ∫V1) / ∫Σ·S1_total`
+por anillo. Listón **0,9-1,1** en cada anillo (fase 1 del ADR 0003). El arnés
+imprime al lado el mismo cociente con `V1` sin `(1 − c)`. Es solo
+informativo: el ±10 % busca deriva del modelo y no doble conteo, y no se
+fija con él.
+
+**Fondo local.** p95 |Δm_res| **≤ 0,1** en cada anillo con celdas (pregunta 5
+de §0, escala `θ_R/M`). Con las sintéticas, la luz no resuelta las incluye.
+
+**Regla del veredicto.** «Sí» exige las cuatro cosas: criterio 2, criterio 3
+en todos los anillos con potencia (si no hubiera ninguno con potencia, el
+criterio 3 cuenta como no pasado), conservación contra el modelo y p95 ≤ 0,1.
+Cualquier fallo da **«no se puede todavía»**. Ningún listón se mueve después
+de medir.
+
+## Resultados del segundo prerregistro (#577, 2026-11-19)
+
+Salida: `node scripts/harness_fusion_blending.js` (M13, 467 mm, 173×, SQM 21,
+`θ_sep = 1,043″`, 11 634 filas de miembros + 845 sintéticas dentro de 8 r_h).
+La salida completa, con (a) FoF, producción, la pregunta 6 y los micro-casos,
+está en `simulador_ocular/docs/validacion/fusion_blending_577.txt`. Abajo va
+solo lo que decide.
+
+Interpretación de AC4 (#577): «p95 |Δm_res| ≤ 0,1» se aplica tal cual, con el
+estadístico de la pregunta 5 (local contra radial). El arnés no prototipa
+`m_res(x, y)`, así que esa condición mide si el radial basta (#591).
+
+```
+── Criterio 2 (listón < 1e-6)
+(b) imagen   0 en los seis anillos, peor celda 0, 0/12099 celdas   PASA
+
+── Conservación contra el modelo (listón 0,9-1,1)
+                   ≤0,25     ≤0,5       ≤1       ≤2       ≤4       ≤8
+medida             1,110    0,986    0,953    0,836    0,758    0,985
+                 NO PASA     PASA     PASA  NO PASA  NO PASA     PASA
+contrafactual      1,110    0,990    0,990    1,003    0,978    1,205   (informativo)
+
+── Criterio 3 (listón R2v ≤ 1 + 2σ; los seis anillos con potencia)
+anillo      R2v       σ    1+2σ  veredicto     R2 LF entera (§0, sin potencia)
+≤0,25      1,010   0,004   1,008  NO PASA            1,099
+≤0,5       1,028   0,005   1,010  NO PASA            0,938
+≤1         1,048   0,009   1,017  NO PASA            0,957
+≤2         0,634   0,010   1,020  PASA               0,994
+≤4         0,564   0,015   1,030  PASA               0,697
+≤8         0,684   0,031   1,061  PASA               0,473
+
+── Fondo local, p95 |Δm_res| (listón ≤ 0,1)
+≤0,25 0,025 · ≤0,5 sin celdas · ≤1 0,109 · ≤2 0,084 · ≤4 0,046 · ≤8 0,014
+
+══ Veredicto (§0 bis): NO SE PUEDE TODAVÍA — falla: criterio 3,
+   conservación contra el modelo, p95 |Δm_res| ≤ 0,1
+```
+
+**Qué dicen los fallos** (lectura después de medir; los listones no se
+mueven):
+
+- **El criterio 3 no detecta doble conteo, detecta el modelo.** En ≤0,25 el
+  contrafactual solo suma 0,003 (1,013 contra 1,010). Lo que saca R2v de
+  `1 ± 2σ` es la realización del catálogo débil contra `LF·c`: exceso del
+  1-5 % dentro de 1 r_h y déficit del 32-44 % fuera. Con `σ` de solo muestreo,
+  el listón tiene potencia contra el doble conteo y también rechaza cualquier
+  desajuste del modelo de unos pocos por ciento. Los dos efectos no se
+  separan hasta que el modelo cuadre.
+- **La conservación falla igual que antes de las sintéticas** (1,108 / … /
+  0,758 sin ellas). #575 solo arregló el anillo exterior, como avisaba el
+  ticket. El contrafactual `V1` sin `(1 − c)` queda dentro del ±10 % en ≤2 y
+  ≤4: ese listón no distinguiría doble conteo (por eso era informativo).
+- **El fondo radial no vale en ≤1 r_h** (0,109). Ya lo decía el punto 5 con
+  0,111; el arnés todavía clasifica con el `m_res` radial.
+
+**Prerrequisitos nuevos:**
+
+- #590: que el modelo del cúmulo (perfil, normalización de la LF y
+  completitud `c(m, r)` para m > 18) cuadre con el catálogo de M13. Cubre el
+  criterio 3 y la conservación.
+- #591: que el arnés mida con `m_res(x, y)` y que la condición del fondo se
+  vuelva a prerregistrar.
+
 ## Resultados (2026-11-16)
 
 Salida completa: `node scripts/harness_fusion_blending.js --banda G` (M13, 467 mm, 173×,
@@ -351,15 +491,22 @@ prerregistrado no pasa. Lo que sí queda decidido:
    para las dobles; el `aum·sep ≥ 300″` del ojo queda sin ancla y fuera.
 4. Un criterio 3 con potencia. El de este prerregistro dejaba pasar un doble
    conteo completo.
+   **Hecho en #577** (§0 bis): R2v en el dominio del velo, con contrafactual
+   corrido; tiene potencia en los seis anillos.
 5. La conservación contra el flujo del MODELO, que no es el criterio 2. El
    criterio 2 solo prueba que la contabilidad cierra. El diagnóstico ADR 0003
    `(ΣF_cat + ∫V1)/∫Σ·S1` da 1,29 / 1,13 / 1,11 / 1,02 / 0,95 / 4,08 por
    anillo en G. El anillo del núcleo y el exterior quedan fuera del ±10 % de
    la fase 1. Es la misma causa que el criterio 3 (banda y campo), y en V da
    1,12 / 0,99 / 0,95 / 0,84 / 0,79 / 3,20.
+   **Medido en #577** como criterio (±10 %): con sintéticas y solo miembros,
+   1,110 / 0,986 / 0,953 / 0,836 / 0,758 / 0,985. No pasa (#590).
 
-Abrir el ticket de implementación es decisión del dueño del spike, con estos
-cinco puntos como prerrequisitos.
+**Veredicto repetido en #577 (§0 bis): sigue «no se puede todavía».** Fallan
+el criterio 3, la conservación contra el modelo y el fondo radial. Los
+prerrequisitos nuevos son #590 (el modelo cuadra con el catálogo) y #591
+(`m_res(x, y)` en el arnés). No se abre ticket de implementación y #542 sigue
+abierto.
 
 ## Qué sustituye del ADR 0012
 
@@ -402,9 +549,9 @@ Ninguna cifra de estrellas dibujadas se usa en este ADR a favor ni en contra.
 - La pregunta 5 usa el `m_res` de producción para clasificar «no resuelta».
   Con el velo `V1` el `m_res` cambia algo.
 - Un solo cúmulo y un solo equipo. Generalizar es trabajo de la implementación.
-- **La parte sintética de la partición no se ha prototipado.** El arnés solo
-  carga Gaia y aplica `(1 − c)` a todos los bins. El corte
-  `[m_k > mCutGeneracion]` de la pregunta 4 es diseño, sin medida.
+- ~~La parte sintética de la partición no se ha prototipado.~~ Prototipada en
+  #577: las sintéticas entran en la suma y `V1`/`V2` llevan solo
+  `m_k > mCutGeneracion`. Con `--banda G` las sintéticas siguen en V.
 - La decisión de la pregunta 5 («local») descansa en un solo anillo (0,111
   contra 0,1). El anillo 0,25-0,5 r_h no tiene celdas a esa escala.
 - La pregunta 6 se cierra por eliminación del polvo, no con una fuente

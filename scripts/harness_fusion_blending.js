@@ -58,12 +58,25 @@ var res = R.pintarCumulo(new Float32Array(PROC * PROC), M13, {
   ra0: M13.ra, dec0: M13.dec, arcmin: ARCMIN, size: PROC, cielo: cielo, apertura: D, estrellas: gaia
 });
 /* Lo que producción dibuja hoy, LEÍDO de su salida (ADR 0008): estrellasCumulo
-   devuelve las mismas filas que recibe, así que la identidad del array basta.
+   devuelve las mismas filas de catálogo que recibe; las sintéticas las
+   re-emite en G como filas nuevas (#579), así que se casan por posición.
    Sin `o.mlim` la rama #570 de la cola del glow no entra: es la llamada «a
    pelo» que el propio render documenta. Realización 0. */
-var dibujadaProd = new Set(res.estrellas);
+function clave(f) { return f[0] + ',' + f[1]; }
+var dibujadaProd = new Set(res.estrellas.map(clave));
 var pob = res.poblacion, tabla = res.tabla;
 var TH = C.config.thetaSepRadios * res.radioImagenAs;      // θ_sep, arcsec
+/* Parte sintética de la partición (#577): las sintéticas de producción
+   (realización 0, las mismas que dibuja pintarCumulo) entran en la suma como
+   cualquier estrella, y V1/V2 solo llevan los bins m_k > mCutGeneracion
+   (ADR 0039, pregunta 4). MBORDE es el borde de bin que parte ese corte: las
+   sintéticas nacen en el centro de su bin. */
+var MCUT = C.config.mCutGeneracion;
+var sint = pob.sinteticas({ ra: M13.ra, dec: M13.dec });
+var MBORDE = MCUT;
+for (var b0 = 0; b0 + 1 < pob.magnitudes.length; b0++)
+  if (pob.magnitudes[b0] <= MCUT && pob.magnitudes[b0 + 1] > MCUT)
+    MBORDE = (pob.magnitudes[b0] + pob.magnitudes[b0 + 1]) / 2;
 
 /* EXCEPCIÓN DECLARADA al ADR 0008: copia de `mResEn` (bitacora-gaia-render.js),
    que producción no exporta y este spike no puede exportar (el ticket prohíbe
@@ -87,10 +100,16 @@ var fB = new Float64Array(NB);
 for (var b = 0; b < NB; b++) fB[b] = Math.pow(10, -0.4 * mAp[b]);
 function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catalogada de S2
   var s = pob.sigma(rAs), v1 = 0, v2 = 0, s2 = 0, s2c = 0, s2sub = 0, s2csub = 0, mR = mResEn(rAs);
+  var v1cf = 0, v2cf = 0, s2v = 0;  // contrafactual sin (1 − c) y S2 del dominio del velo (#577)
   for (var k = 0; k < NB; k++) {
     var c = pob.completitud(mAp[k], rAs), w = num[k], f2b = fB[k] * fB[k];
-    v1 += w * fB[k] * (1 - c);
-    v2 += w * f2b * (1 - c);
+    if (mAp[k] > MCUT) {          // [m_k > mCutGeneracion]: lo de arriba lo traen catálogo y sintéticas
+      v1 += w * fB[k] * (1 - c);
+      v2 += w * f2b * (1 - c);
+      v1cf += w * fB[k];          // doble conteo completo: el velo lleva también lo que trae el catálogo
+      v2cf += w * f2b;
+      s2v += w * f2b;
+    }
     s2c += w * f2b * c;
     /* CONTRASTE declarado (ADR 0008): numerador y denominador de la fracción
        catalogada bajo m_res con el MISMO corte (centro del bin). pob.S2(mR)
@@ -99,7 +118,8 @@ function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catal
     if (mAp[k] > mR) { s2sub += w * f2b; s2csub += w * f2b * c; }
   }
   s2 = pob.S2(-Infinity);   // S2 de toda la LF, leído de la Capa 1
-  return { v1: s * v1, v2: s * v2, s2: s * s2, s2c: s * s2c, s2sub: s * s2sub, s2csub: s * s2csub };
+  return { v1: s * v1, v2: s * v2, s2: s * s2, s2c: s * s2c, s2sub: s * s2sub, s2csub: s * s2csub,
+           v1cf: s * v1cf, v2cf: s * v2cf, s2v: s * s2v };
 }
 var cacheMom = {};
 function mom(rAs) {               // cuantizado a 0,05″: el perfil no cambia a esa escala
@@ -129,13 +149,15 @@ function campo(nombre) { return function (r) { return mom(r)[nombre]; }; }
 /* ── Catálogo en el plano del cielo ───────────────────────────────────────── */
 var cos0 = Math.cos(M13.dec * Math.PI / 180);
 var est = [];
-gaia.forEach(function (g) {
+function mete(g, m) {
   var x = (((g[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600, y = (g[1] - M13.dec) * 3600;
   var r = pob.radioPropio(x, y);
-  if (!(r < pob.rtAs) || anillo(r) < 0 || R.esCampo(g)) return;
-  var m = magCatalogo(g);
+  if (!(r < pob.rtAs) || anillo(r) < 0) return;
   est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
-});
+}
+gaia.forEach(function (g) { if (!R.esCampo(g)) mete(g, magCatalogo(g)); });
+var nCat = est.length;
+sint.forEach(function (g) { mete(g, g[2]); });   // la sintética nace en V (LF)
 
 function celda(x, y, lado) { return Math.floor(x / lado) + ',' + Math.floor(y / lado); }
 function centroCelda(key, lado) {
@@ -220,7 +242,7 @@ est.forEach(function (s) { apunta(Bl, s.x, s.y, s.F); });
 // Se mide con el MISMO criterio, no se usa como verdad.
 var P0 = libro(), perdidoAnillo = new Float64Array(NA);
 est.forEach(function (s) {
-  if (dibujadaProd.has(s.fila)) apunta(P0, s.x, s.y, s.F); else perdidoAnillo[anillo(s.r)] += s.F;
+  if (dibujadaProd.has(clave(s.fila))) apunta(P0, s.x, s.y, s.F); else perdidoAnillo[anillo(s.r)] += s.F;
 });
 var areaAnillo = [];
 for (var k = 0; k < NA; k++) {
@@ -257,13 +279,16 @@ function residuos(L, repartoAnillo) {
 
 function e1(x) { return x.toExponential(1).padStart(9); }
 console.log('M13 · D=' + D + 'mm  M=' + MAG + 'x  SQM=' + SQM + '  θ_sep=' + TH.toFixed(3) +
-            '"  filas del catálogo dentro de 8 r_h: ' + est.length);
+            '"  dentro de 8 r_h: ' + nCat + ' filas del catálogo + ' +
+            (est.length - nCat) + ' sintéticas (mCutGeneracion = ' + MCUT + ', borde de bin ' + MBORDE.toFixed(3) + ')');
 console.log('\n── Criterio 2: |P − T| / T  (listón < 1e-6 en cada anillo y en cada celda)');
 console.log('ley            ' + ETQ.map(function (s) { return s.padStart(9); }).join('') +
             '   peor celda  celdas ≥1e-6');
+var pasaC2 = false;
 [['(b) imagen', Bl, null], ['(a) FoF', A, null], ['prod. 0012A', P0, perdidoAnillo]].forEach(function (t3) {
   var r = residuos(t3[1], t3[2]);
   var pasa = r.max < 1e-6 && r.anillo.every(function (x) { return x < 1e-6; });
+  if (t3[1] === Bl) pasaC2 = pasa;   // el veredicto juzga la ley candidata, (b)
   console.log(t3[0].padEnd(15) + r.anillo.map(e1).join('') + e1(r.max).padStart(12) +
               ('  ' + r.malas + '/' + r.total).padStart(14) + '  ' + (pasa ? 'PASA' : 'NO PASA'));
 });
@@ -274,37 +299,70 @@ console.log('(a) el grupo múltiple más ancho mide ' + (2 * extensionMax / TH).
             ' θ_sep; ' + (100 * cadenas / Math.max(1, multiples)).toFixed(1) +
             ' % de los grupos múltiples son más anchos que θ_sep (cadenas)');
 
-/* Diagnóstico ADR 0003, NO es el criterio 2: catálogo + velo contra el flujo
-   del modelo. Puede fallar (banda G/V, estrellas de campo, realización); el
-   residuo se registra, no se corrige. */
-console.log('\n── Diagnóstico ADR 0003 (no es criterio): (ΣF_cat + ∫V1) / ∫Σ·S1_total por anillo');
+/* Conservación contra el MODELO (#577, prerregistro §0 bis, fase 1 del ADR
+   0003): catálogo + sintéticas + velo contra el flujo de la LF. Listón ±10 %.
+   El residuo se registra, no se corrige tocando el flujo del campo. */
+console.log('\n── Conservación contra el modelo: (ΣF_cat+sint + ∫V1) / ∫Σ·S1_total  (listón 0,9-1,1)');
 var S1tot = pob.S1(-Infinity);   // flujo de toda la LF, leído de la Capa 1
-var fila = '               ';
+var filaC = 'medida         ', filaCf = 'contrafactual  ', filaV = '               ', pasaCons = true;
 for (k = 0; k < NA; k++) {
   var modelo = integralAnillo(k, function (r) { return pob.sigma(r) * S1tot; });
-  fila += ((T.anillo[k] + V1an[k]) / modelo).toFixed(3).padStart(9);
+  var q = (T.anillo[k] + V1an[k]) / modelo, qcf = (T.anillo[k] + integralAnillo(k, campo('v1cf'))) / modelo;
+  var ok = q >= 0.9 && q <= 1.1;
+  pasaCons = pasaCons && ok;
+  filaC += q.toFixed(3).padStart(9); filaCf += qcf.toFixed(3).padStart(9);
+  filaV += (ok ? 'PASA' : 'NO PASA').padStart(9);
 }
-console.log(fila);
+console.log('               ' + ETQ.map(function (s) { return s.padStart(9); }).join(''));
+console.log(filaC); console.log(filaV);
+console.log(filaCf + '   (V1 sin (1 − c): informativo, el ±10 % busca deriva del modelo)');
 
-/* ── Criterio 3: el grano no cuenta dos veces la luz catalogada ───────────── */
-console.log('\n── Criterio 3: R2 = (∫V2 + ΣF_j²) / ∫Σ·S2_total  (listón R2 ≤ 1 + 2σ)');
-console.log('banda del catálogo: ' + (BANDA_G ? 'G tratada como V (prerregistrada)' : 'V (G→V EDR3, producción #574)') +
-            '; filas en G por falta de color: ' + res.filasEnG + ' de ' + gaia.length);
-console.log('anillo       R2       σ    1+2σ  veredicto     S2·c/S2   S2·c/S2 (m>m_res)  F²máx/ΣF²   m más brillante');
-for (k = 0; k < NA; k++) {
-  var v2 = integralAnillo(k, campo('v2')), s2 = integralAnillo(k, campo('s2')), s2c = integralAnillo(k, campo('s2c'));
-  var sub = integralAnillo(k, campo('s2sub')), subc = integralAnillo(k, campo('s2csub'));
+/* ── Criterio 3: el grano no cuenta dos veces la luz catalogada ─────────────
+   Prerregistro §0 bis (#577). El doble conteo solo puede vivir donde hay velo,
+   m > MBORDE: arriba lo traen catálogo y sintéticas y el velo no tiene nada.
+   R2v = (∫V2 + Σ_{m_j>MBORDE} F_j²) / ∫Σ·S2(m>MBORDE), σ = sqrt(ΣF_j⁴)/∫Σ·S2(m>MBORDE).
+   Contrafactual: la misma partición con V2 sin (1 − c). Un anillo tiene potencia
+   si el contrafactual NO pasa el listón R2 ≤ 1 + 2σ. */
+function grano(k, soloVelo) {
   var f2 = 0, f4 = 0, fmax = 0;
   est.forEach(function (s) {
-    if (anillo(s.r) !== k) return;
+    if (anillo(s.r) !== k || (soloVelo && !(s.m > MBORDE))) return;
     f2 += s.F * s.F; f4 += Math.pow(s.F, 4); fmax = Math.max(fmax, s.F);
   });
-  var R2 = (v2 + f2) / s2, sd = Math.sqrt(f4) / s2;
-  console.log(ETQ[k].padEnd(8) + R2.toFixed(3).padStart(8) + sd.toFixed(3).padStart(8) +
-              (1 + 2 * sd).toFixed(3).padStart(8) + (R2 <= 1 + 2 * sd ? '  PASA' : '  NO PASA').padEnd(14) +
-              (100 * s2c / s2).toFixed(1).padStart(7) + ' %' + (sub > 0 ? (100 * subc / sub).toFixed(1) + ' %' : '—').padStart(19) +
-              (100 * fmax * fmax / f2).toFixed(1).padStart(10) + ' %' +
-              (-2.5 * Math.log10(fmax)).toFixed(2).padStart(12));
+  var den = integralAnillo(k, campo(soloVelo ? 's2v' : 's2'));
+  var v2 = integralAnillo(k, campo('v2')), v2cf = integralAnillo(k, campo('v2cf'));
+  var sd = Math.sqrt(f4) / den;
+  return { R2: (v2 + f2) / den, R2cf: (v2cf + f2) / den, liston: 1 + 2 * sd, sd: sd, f2: f2, fmax: fmax };
+}
+console.log('\n── Criterio 3, POTENCIA: R2 del contrafactual (V2 sin (1 − c)) contra 1 + 2σ');
+console.log('banda del catálogo: ' + (BANDA_G ? 'G tratada como V (prerregistrada en §0)' : 'V (G→V EDR3, producción #574)') +
+            '; filas en G por falta de color: ' + res.filasEnG + ' de ' + gaia.length);
+console.log('              dominio del velo m > ' + MBORDE.toFixed(3) + '        LF entera (estadístico de §0, referencia)');
+console.log('anillo     R2cf    1+2σ  potencia             R2cf    1+2σ  potencia');
+var potencia = [];
+for (k = 0; k < NA; k++) {
+  var gv = grano(k, true), gt = grano(k, false);
+  potencia[k] = gv.R2cf > gv.liston;
+  console.log(ETQ[k].padEnd(8) + gv.R2cf.toFixed(3).padStart(8) + gv.liston.toFixed(3).padStart(8) +
+              (potencia[k] ? '  sí' : '  NO').padEnd(19) + gt.R2cf.toFixed(3).padStart(8) +
+              gt.liston.toFixed(3).padStart(8) + (gt.R2cf > gt.liston ? '  sí' : '  NO'));
+}
+
+console.log('\n── Criterio 3, MEDIDA: R2v = (∫V2 + Σ_{m>borde} F_j²) / ∫Σ·S2(m>borde)  (listón R2v ≤ 1 + 2σ)');
+console.log('anillo      R2v       σ    1+2σ  veredicto        R2 LF entera   S2·c/S2 (m>m_res)  F²máx/ΣF²   m más brillante');
+var pasaC3 = potencia.some(Boolean);
+for (k = 0; k < NA; k++) {
+  var g3 = grano(k, true), gT = grano(k, false);
+  var sub = integralAnillo(k, campo('s2sub')), subc = integralAnillo(k, campo('s2csub'));
+  var pasa3 = g3.R2 <= g3.liston;
+  if (potencia[k]) pasaC3 = pasaC3 && pasa3;
+  console.log(ETQ[k].padEnd(8) + g3.R2.toFixed(3).padStart(8) + g3.sd.toFixed(3).padStart(8) +
+              g3.liston.toFixed(3).padStart(8) +
+              (!potencia[k] ? '  sin potencia' : pasa3 ? '  PASA' : '  NO PASA').padEnd(17) +
+              gT.R2.toFixed(3).padStart(13) +
+              (sub > 0 ? (100 * subc / sub).toFixed(1) + ' %' : '—').padStart(20) +
+              (100 * gT.fmax * gT.fmax / gT.f2).toFixed(1).padStart(10) + ' %' +
+              (-2.5 * Math.log10(gT.fmax)).toFixed(2).padStart(12));
 }
 
 /* ── Preguntas 5 y 6: el fondo local a la escala de integración del ojo ──── */
@@ -337,15 +395,26 @@ console.log('\n── Pregunta 5: |m_res(x,y) − m_res(r)| a la escala ' + L5.t
 console.log('── Pregunta 6: contraste RMS de la luz no resuelta δI/(Fcielo+⟨I⟩) contra Cmin del grano = ' +
             CminG.toExponential(2));
 console.log('anillo   celdas  p95|Δm|  máx|Δm|  pregunta 5      RMS δI/I   RMS/Cmin');
+var pasaQ5 = true;   // §0 bis: p95 ≤ 0,1 en todo anillo con celdas
 for (k = 0; k < NA; k++) {
   var c5 = p5[k];
   if (!c5.dm.length) { console.log(ETQ[k].padEnd(8) + '  (sin celdas)'); continue; }
   var q95 = p95(c5.dm), mx = Math.max.apply(null, c5.dm);
   var rms = Math.sqrt(c5.d.reduce(function (acc, d) { return acc + d * d; }, 0) / c5.d.length);
+  if (q95 > 0.1) pasaQ5 = false;
   console.log(ETQ[k].padEnd(8) + String(c5.dm.length).padStart(7) + q95.toFixed(3).padStart(9) +
               mx.toFixed(3).padStart(9) + (q95 < 0.1 ? '  radial vale' : '  local').padEnd(16) +
               rms.toExponential(2).padStart(11) + (rms / CminG).toFixed(3).padStart(11));
 }
+
+/* ── Veredicto: regla prerregistrada en §0 bis (#577), mecánica ─────────── */
+var fallos = [];
+if (!pasaC2) fallos.push('criterio 2');
+if (!potencia.some(Boolean)) fallos.push('criterio 3 sin potencia en ningún anillo');
+else if (!pasaC3) fallos.push('criterio 3');
+if (!pasaCons) fallos.push('conservación contra el modelo');
+if (!pasaQ5) fallos.push('p95 |Δm_res| ≤ 0,1');
+console.log('\n══ Veredicto (§0 bis): ' + (fallos.length ? 'NO SE PUEDE TODAVÍA — falla: ' + fallos.join(', ') : 'SÍ'));
 
 /* ── Micro-casos de las preguntas 1-3 (sin catálogo, sin cuentas) ────────────
    PSF gaussiana de FWHM 0,84·θ_sep (FWHM de Airy / radio del primer anillo

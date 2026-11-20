@@ -1,0 +1,80 @@
+M13 · D=467mm  M=173x  SQM=21  θ_sep=1.043"  dentro de 8 r_h: 11634 filas del catálogo + 845 sintéticas (mCutGeneracion = 18, borde de bin 18.068)
+
+── Criterio 2: |P − T| / T  (listón < 1e-6 en cada anillo y en cada celda)
+ley                ≤0,25     ≤0,5       ≤1       ≤2       ≤4       ≤8   peor celda  celdas ≥1e-6
+(b) imagen        0.0e+0   0.0e+0   0.0e+0   0.0e+0   0.0e+0   0.0e+0      0.0e+0       0/12099  PASA
+(a) FoF          1.9e-15  1.3e-14  8.1e-16  1.9e-16   0.0e+0  2.7e-16      4.2e+2     181/12105  NO PASA
+prod. 0012A      3.1e-15  1.7e-14  4.6e-15  1.9e-16  1.4e-15  6.7e-16      1.0e+0   12099/12099  NO PASA
+(a) flujo catalogado que acaba en blobs dibujados: 58.70 %; el que sale de la celda de su estrella: 1.969 % del catálogo
+(a) el grupo múltiple más ancho mide 5.52 θ_sep; 55.6 % de los grupos múltiples son más anchos que θ_sep (cadenas)
+
+── Conservación contra el modelo: (ΣF_cat+sint + ∫V1) / ∫Σ·S1_total  (listón 0,9-1,1)
+                   ≤0,25     ≤0,5       ≤1       ≤2       ≤4       ≤8
+medida             1.110    0.986    0.953    0.836    0.758    0.985
+                 NO PASA     PASA     PASA  NO PASA  NO PASA     PASA
+contrafactual      1.110    0.990    0.990    1.003    0.978    1.205   (V1 sin (1 − c): informativo, el ±10 % busca deriva del modelo)
+
+── Criterio 3, POTENCIA: R2 del contrafactual (V2 sin (1 − c)) contra 1 + 2σ
+banda del catálogo: V (G→V EDR3, producción #574); filas en G por falta de color: 3174 de 11972
+              dominio del velo m > 18.068        LF entera (estadístico de §0, referencia)
+anillo     R2cf    1+2σ  potencia             R2cf    1+2σ  potencia
+≤0,25      1.013   1.008  sí                  1.099   1.566  NO
+≤0,5       1.051   1.010  sí                  0.938   1.476  NO
+≤1         1.289   1.017  sí                  0.958   1.352  NO
+≤2         1.421   1.020  sí                  0.996   1.370  NO
+≤4         1.483   1.030  sí                  0.700   1.427  NO
+≤8         1.603   1.061  sí                  0.476   1.198  NO
+
+── Criterio 3, MEDIDA: R2v = (∫V2 + Σ_{m>borde} F_j²) / ∫Σ·S2(m>borde)  (listón R2v ≤ 1 + 2σ)
+anillo      R2v       σ    1+2σ  veredicto        R2 LF entera   S2·c/S2 (m>m_res)  F²máx/ΣF²   m más brillante
+≤0,25      1.010   0.004   1.008  NO PASA                1.099              96.4 %      16.9 %       12.21
+≤0,5       1.028   0.005   1.010  NO PASA                0.938              96.6 %      14.8 %       11.98
+≤1         1.048   0.009   1.017  NO PASA                0.957              95.2 %       9.3 %       11.92
+≤2         0.634   0.010   1.020  PASA                   0.994              95.9 %       7.2 %       12.06
+≤4         0.564   0.015   1.030  PASA                   0.697              97.7 %      19.1 %       12.07
+≤8         0.684   0.031   1.061  PASA                   0.473              97.7 %      10.1 %       13.29
+
+── Pregunta 5: |m_res(x,y) − m_res(r)| a la escala 32.5" (listón p95 < 0,1 mag)
+── Pregunta 6: contraste RMS de la luz no resuelta δI/(Fcielo+⟨I⟩) contra Cmin del grano = 6.22e-1
+anillo   celdas  p95|Δm|  máx|Δm|  pregunta 5      RMS δI/I   RMS/Cmin
+≤0,25         4    0.025    0.046  radial vale       4.16e-2      0.067
+≤0,5      (sin celdas)
+≤1           28    0.109    0.141  local             1.06e-1      0.171
+≤2           88    0.084    0.111  radial vale       9.43e-2      0.152
+≤4          364    0.046    0.100  radial vale       4.82e-2      0.077
+≤8         1484    0.014    0.044  radial vale       1.54e-2      0.025
+
+══ Veredicto (§0 bis): NO SE PUEDE TODAVÍA — falla: criterio 3, conservación contra el modelo, p95 |Δm_res| ≤ 0,1
+
+── Micro-casos, valle exigido 0.000 (Sparrow: basta un mínimo)
+par igual, 0,50 θ                 (a) 1 punto   (b) 1 pico   pico − centroide = -0.000 θ
+par igual, 0,70 θ                 (a) 1 punto   (b) 1 pico   pico − centroide = -0.000 θ
+par igual, 0,75 θ                 (a) 1 punto   (b) 2 picos  
+par igual, 0,95 θ                 (a) 1 punto   (b) 2 picos  
+par igual, 1,00 θ                 (a) 2 puntos  (b) 2 picos  
+par Δm=2, 0,70 θ                  (a) 1 punto   (b) 1 pico   pico − centroide = -0.078 θ
+par Δm=2, 0,95 θ                  (a) 1 punto   (b) 1 pico   pico − centroide = -0.126 θ
+par Δm=2, 1,50 θ                  (a) 2 puntos  (b) 2 picos  
+par Δm=0,75, 0,95 θ               (a) 1 punto   (b) 2 picos  
+cadena A–B–C igual, paso 0,60 θ   (a) 1 punto   (b) 1 pico   pico − centroide = 0.000 θ
+cadena A–B–C igual, paso 0,90 θ   (a) 1 punto   (b) 3 picos  
+
+── Micro-casos, valle exigido 0.265 (Rayleigh: el valle del par igual de Airy al radio del primer anillo oscuro)
+par igual, 0,50 θ                 (a) 1 punto   (b) 1 pico   pico − centroide = -0.000 θ
+par igual, 0,70 θ                 (a) 1 punto   (b) 1 pico   pico − centroide = -0.000 θ
+par igual, 0,75 θ                 (a) 1 punto   (b) 1 pico   mancha alargada (fundida por el valle)
+par igual, 0,95 θ                 (a) 1 punto   (b) 1 pico   mancha alargada (fundida por el valle)
+par igual, 1,00 θ                 (a) 2 puntos  (b) 2 picos  
+par Δm=2, 0,70 θ                  (a) 1 punto   (b) 1 pico   pico − centroide = -0.078 θ
+par Δm=2, 0,95 θ                  (a) 1 punto   (b) 1 pico   pico − centroide = -0.126 θ
+par Δm=2, 1,50 θ                  (a) 2 puntos  (b) 2 picos  
+par Δm=0,75, 0,95 θ               (a) 1 punto   (b) 1 pico   mancha alargada (fundida por el valle)
+cadena A–B–C igual, paso 0,60 θ   (a) 1 punto   (b) 1 pico   pico − centroide = 0.000 θ
+cadena A–B–C igual, paso 0,90 θ   (a) 1 punto   (b) 1 pico   mancha alargada (fundida por el valle)
+valle de la gaussiana, par igual a 1 θ: 26.6 %
+ojo (resolucionDoble): a 173× parte pares desde 1.73″ = 1.66 θ_sep; θ_sep·M = 180″
+dos a m_res+0.60 a 0,5 θ: el par suma m_res-0.15; la escala a la que el ojo suma la luz de un punto (θ_R/M) es 31.2 θ_sep
+
+── Pregunta 6 con la ley de producción: máx P(ver grano) = tabla.sGrano por anillo
+    ≤0,25     ≤0,5       ≤1       ≤2       ≤4       ≤8
+   0.0e+0   0.0e+0   0.0e+0   0.0e+0   0.0e+0   0.0e+0
