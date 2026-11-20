@@ -360,30 +360,40 @@ potencia se recalculan solos con el modelo nuevo; el listón no se toca a mano.
 0003). Si el modelo sobra un 10 %, `q` esperado es 1/1,1 = 0,909; si falta,
 1/0,9 = 1,111. La distancia menor a 1 es **0,091**. Un anillo tiene
 **potencia** si `2σ < 0,091`; sin potencia no cuenta ni a favor ni en contra
-(como en el criterio 3). Tabla de potencia (corrida antes de medir con las
-correcciones):
+(como en el criterio 3).
+
+**El ±10 % cambia de papel, y es una decisión consciente.** En la fase 1 del
+ADR 0003 (y en §0 bis) el ±10 % era la tolerancia: lo que se dejaba pasar.
+Aquí es la deriva que hay que detectar. Por eso el listón es más estricto que
+la fase 1: el total exige que el modelo cuadre al ~4,4 % (`2σ = 0,044`), y
+los anillos con potencia al ~8 %. Una deriva del 10 % que antes pasaba por
+definición ahora tiene que rechazarse.
+
+Tabla de potencia (corrida antes de medir con las correcciones):
 
 ```
-anillo     2σ     deriva 10 %   potencia   P(pasa | deriva 10 %)
-≤0,25    0,155      0,091        NO         —
-≤0,5     0,108      0,091        NO         —
-≤1       0,082      0,091        sí         ≈ 0,41
-≤2       0,084      0,091        sí         ≈ 0,43
-≤4       0,115      0,091        NO         —
-≤8       0,213      0,091        NO         —
-total    0,044      0,091        sí         ≈ 0,02
+anillo     2σ     deriva 10 %   con potencia   P(rechaza | q = 0,909)
+≤0,25    0,155      0,091        NO             —
+≤0,5     0,108      0,091        NO             —
+≤1       0,082      0,091        sí             ≈ 0,59
+≤2       0,084      0,091        sí             ≈ 0,57
+≤4       0,115      0,091        NO             —
+≤8       0,213      0,091        NO             —
+total    0,044      0,091        sí             ≈ 0,98
 ```
 
-`P(pasa | deriva 10 %)` es la probabilidad de que una deriva del 10 % caiga
-dentro de `±2σ` con ruido gaussiano de anchura σ. Por anillo la potencia es
-débil (≤1 y ≤2 dejan pasar una deriva del 10 % unas cuatro de cada diez
-veces); la que pesa es la del total, que la rechaza 98 de cada 100.
+`P(rechaza | q = 0,909)` es la probabilidad de que una deriva del 10 % caiga
+fuera de `±2σ` con ruido gaussiano de anchura σ. «Con potencia» significa
+que el listón rechaza la deriva **media** (`0,091 > 2σ`), no que la rechace
+siempre: ≤1 y ≤2 la cazan algo más de la mitad de las veces. **El que
+sostiene el criterio es el total**, que la rechaza 98 de cada 100.
 
 **Regla.** La conservación pasa si pasan todos los anillos con potencia y el
 total. Si nada tuviera potencia, cuenta como no pasada. Con un modelo
-perfecto, cada anillo juzgado falla un 5 % de las veces; con tres juzgados,
-una falsa alarma en torno al 14 %. Se acepta: un «no» de más se ve en la
-tabla, un «sí» de más no.
+perfecto, cada fila juzgada falla un 5 % de las veces; con tres juzgadas,
+una falsa alarma en torno al 13 %. Va en la dirección conservadora: un falso
+«no pasa» no aprueba nada, solo retrasa el «sí»; un «sí» de más no se
+detectaría.
 
 **Límites declarados.** Una deriva del 10 % confinada en ≤0,25, ≤0,5, ≤4 o
 ≤8 no la ve ningún anillo: solo entra en el total, diluida. El ruido de las
