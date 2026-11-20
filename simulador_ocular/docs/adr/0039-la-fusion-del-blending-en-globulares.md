@@ -556,6 +556,9 @@ prerregistrado no pasa. Lo que sí queda decidido:
 
 - **Pregunta 2: gana (b), la imagen sumada; (a) se descarta.** Es por
   conservación local, forma y posición, no por el número de puntos.
+  Esta parte no depende de #590 ni de #591 (2026-11-20). La partición
+  `(1 − c)` y la retirada de 0012 (A) siguen pendientes del criterio 3 de
+  §0 bis: con `c` mal, `(1 − c)` es un doble conteo (atribución de #590).
 - **La partición con `(1 − c)`** cierra por anillo y por celda.
 
 **Qué falta para el «sí»:**
