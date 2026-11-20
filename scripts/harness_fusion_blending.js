@@ -312,23 +312,38 @@ console.log('(a) el grupo múltiple más ancho mide ' + (2 * extensionMax / TH).
             ' θ_sep; ' + (100 * cadenas / Math.max(1, multiples)).toFixed(1) +
             ' % de los grupos múltiples son más anchos que θ_sep (cadenas)');
 
-/* Conservación contra el MODELO (#577, prerregistro §0 bis, fase 1 del ADR
-   0003): catálogo + sintéticas + velo contra el flujo de la LF. Listón ±10 %.
-   El residuo se registra, no se corrige tocando el flujo del campo. */
-console.log('\n── Conservación contra el modelo: (ΣF_cat+sint + ∫V1) / ∫Σ·S1_total  (listón 0,9-1,1)');
-var S1tot = pob.S1(-Infinity);   // flujo de toda la LF, leído de la Capa 1
-var filaC = 'medida         ', filaCf = 'contrafactual  ', filaV = '               ', pasaCons = true;
+/* Conservación contra el MODELO (fase 1 del ADR 0003): catálogo + sintéticas
+   + velo contra el flujo de la LF. Listón de §0 ter (#597), que sustituye al
+   ±10 % de §0 bis: |q − 1| ≤ 2σ, con σ = √(∫Σ·S2)/∫Σ·S1 el ruido de Poisson
+   del flujo (muestreo de las gigantes), leído del modelo y no del catálogo.
+   Caso malo: deriva del modelo del 10 %, |q − 1| = 1 − 1/1,1. Un anillo tiene
+   potencia si 2σ < 1 − 1/1,1; sin potencia no cuenta. La suma de los seis
+   (columna «total») también se juzga. El residuo se registra, no se
+   corrige tocando el flujo del campo. */
+var DERIVA = 1 - 1 / 1.1;
+console.log('\n── Conservación contra el modelo: (ΣF_cat+sint + ∫V1) / ∫Σ·S1_total  (listón |q − 1| ≤ 2σ, §0 ter)');
+var S1tot = pob.S1(-Infinity), S2lf = pob.S2(-Infinity);   // flujo y flujo² de toda la LF, Capa 1
+var filaC = 'medida         ', filaCf = 'contrafactual  ', filaS = '2σ             ', filaV = '               ';
+var pasaCons = true, potCons = false, sObs = 0, sMod = 0, sS2 = 0;
+function juzgaCons(q, mod, s2) {
+  var dos = 2 * Math.sqrt(s2) / mod, pot = dos < DERIVA, ok = Math.abs(q - 1) <= dos;
+  if (pot) { potCons = true; pasaCons = pasaCons && ok; }
+  filaC += q.toFixed(3).padStart(9); filaS += dos.toFixed(3).padStart(9);
+  filaV += (!pot ? 'sin pot.' : ok ? 'PASA' : 'NO PASA').padStart(9);
+}
 for (k = 0; k < NA; k++) {
   var modelo = integralAnillo(k, function (r) { return pob.sigma(r) * S1tot; });
-  var q = (T.anillo[k] + V1an[k]) / modelo, qcf = (T.anillo[k] + integralAnillo(k, campo('v1cf'))) / modelo;
-  var ok = q >= 0.9 && q <= 1.1;
-  pasaCons = pasaCons && ok;
-  filaC += q.toFixed(3).padStart(9); filaCf += qcf.toFixed(3).padStart(9);
-  filaV += (ok ? 'PASA' : 'NO PASA').padStart(9);
+  var s2an = integralAnillo(k, function (r) { return pob.sigma(r) * S2lf; });
+  var obs = T.anillo[k] + V1an[k];
+  juzgaCons(obs / modelo, modelo, s2an);
+  filaCf += ((T.anillo[k] + integralAnillo(k, campo('v1cf'))) / modelo).toFixed(3).padStart(9);
+  sObs += obs; sMod += modelo; sS2 += s2an;
 }
-console.log('               ' + ETQ.map(function (s) { return s.padStart(9); }).join(''));
-console.log(filaC); console.log(filaV);
-console.log(filaCf + '   (V1 sin (1 − c): informativo, el ±10 % busca deriva del modelo)');
+juzgaCons(sObs / sMod, sMod, sS2);
+console.log('               ' + ETQ.concat('total').map(function (s) { return s.padStart(9); }).join(''));
+console.log(filaC); console.log(filaS); console.log(filaV);
+console.log(filaCf + '   (V1 sin (1 − c): informativo)');
+console.log('potencia: 2σ < ' + DERIVA.toFixed(3) + ' (deriva del modelo del 10 %); sin potencia no cuenta');
 
 /* ── Criterio 3: el grano no cuenta dos veces la luz catalogada ─────────────
    Prerregistro §0 bis (#577). El doble conteo solo puede vivir donde hay velo,
@@ -425,9 +440,10 @@ var fallos = [];
 if (!pasaC2) fallos.push('criterio 2');
 if (!potencia.some(Boolean)) fallos.push('criterio 3 sin potencia en ningún anillo');
 else if (!pasaC3) fallos.push('criterio 3');
-if (!pasaCons) fallos.push('conservación contra el modelo');
+if (!potCons) fallos.push('conservación sin potencia en ningún anillo');
+else if (!pasaCons) fallos.push('conservación contra el modelo');
 if (!pasaQ5) fallos.push('p95 |Δm_res| ≤ 0,1');
-console.log('\n══ Veredicto (§0 bis): ' + (fallos.length ? 'NO SE PUEDE TODAVÍA — falla: ' + fallos.join(', ') : 'SÍ'));
+console.log('\n══ Veredicto (§0 bis, conservación de §0 ter): ' + (fallos.length ? 'NO SE PUEDE TODAVÍA — falla: ' + fallos.join(', ') : 'SÍ'));
 
 /* ── Atribución (#590, spike): catálogo contra el modelo por anillo × rango ───
    Solo con --atribucion. Mide, no corrige: no toca producción ni el velo

@@ -159,7 +159,8 @@ que el doble conteo allí es pequeño. El estadístico de §0 no tiene potencia
 en ninguno: confirma la lección de `AGENTS.md`.
 
 **Conservación contra el modelo (AC3).** `(ΣF_cat+sint + ∫V1) / ∫Σ·S1_total`
-por anillo. Listón **0,9-1,1** en cada anillo (fase 1 del ADR 0003). El arnés
+por anillo. Listón **0,9-1,1** en cada anillo (fase 1 del ADR 0003). **Sustituido por §0 ter (#597)** antes de medir con las
+correcciones de #590. El arnés
 imprime al lado el mismo cociente con `V1` sin `(1 − c)`. Es solo
 informativo: el ±10 % busca deriva del modelo y no doble conteo, y no se
 fija con él.
@@ -322,6 +323,78 @@ parámetro con ancla):
    pertenencia.
 4. El listón de conservación sin término de muestreo: lo decide el dueño,
    con un prerregistro nuevo.
+
+## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
+
+Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.
+El resto de §0 bis (criterio 2, criterio 3, fondo local, regla del veredicto)
+no cambia. Se fija antes de correr el arnés con #594, #595, #596 y #591.
+
+**Lo que ya se había visto al escribir esto** (ADR 0005, se declara):
+
+- Toda la salida de §0 bis y de la atribución de #590 (arriba), sin
+  correcciones: conservación 1,110 / 0,986 / 0,953 / 0,836 / 0,758 / 0,985.
+- El σ de Poisson del flujo por anillo, 0,077 / 0,054 / 0,041 / 0,042 /
+  0,058 / 0,107 (punto 4 de la atribución), y la tabla de potencia de abajo.
+- Con el arnés sin correcciones, la regla nueva da: ≤1 pasa, ≤2 no pasa,
+  total 0,912 no pasa, el resto sin potencia. No cambia el veredicto.
+
+**Por qué cambia.** El ±10 % de §0 bis no tiene término de muestreo. En ≤8 es
+más estrecho que 1σ: con un modelo perfecto ese anillo falla en torno a un
+tercio de las realizaciones. En ≤0,25 la conservación de 1,110 está a 1,4σ, y
++0,076 lo traen 26 gigantes contra 18,8 esperadas.
+
+**Listón.** Por anillo, y para la suma de los seis anillos (columna «total»):
+
+```
+q = (ΣF_cat+sint + ∫V1) / ∫Σ·S1_total        (igual que §0 bis)
+σ = sqrt( ∫Σ·S2_total dΩ ) / ∫Σ·S1_total dΩ    (Poisson del flujo, del modelo)
+pasa si |q − 1| ≤ 2σ
+```
+
+`σ` sale del modelo (perfil y LF de producción, Capa 1), no del catálogo: no
+se ajusta a la realización que se mide. Si #596 cambia el perfil, `σ` y la
+potencia se recalculan solos con el modelo nuevo; el listón no se toca a mano.
+
+**Caso malo: deriva del modelo del 10 %** (lo que busca la fase 1 del ADR
+0003). Si el modelo sobra un 10 %, `q` esperado es 1/1,1 = 0,909; si falta,
+1/0,9 = 1,111. La distancia menor a 1 es **0,091**. Un anillo tiene
+**potencia** si `2σ < 0,091`; sin potencia no cuenta ni a favor ni en contra
+(como en el criterio 3). Tabla de potencia (corrida antes de medir con las
+correcciones):
+
+```
+anillo     2σ     deriva 10 %   potencia   P(pasa | deriva 10 %)
+≤0,25    0,155      0,091        NO         —
+≤0,5     0,108      0,091        NO         —
+≤1       0,082      0,091        sí         ≈ 0,41
+≤2       0,084      0,091        sí         ≈ 0,43
+≤4       0,115      0,091        NO         —
+≤8       0,213      0,091        NO         —
+total    0,044      0,091        sí         ≈ 0,02
+```
+
+`P(pasa | deriva 10 %)` es la probabilidad de que una deriva del 10 % caiga
+dentro de `±2σ` con ruido gaussiano de anchura σ. Por anillo la potencia es
+débil (≤1 y ≤2 dejan pasar una deriva del 10 % unas cuatro de cada diez
+veces); la que pesa es la del total, que la rechaza 98 de cada 100.
+
+**Regla.** La conservación pasa si pasan todos los anillos con potencia y el
+total. Si nada tuviera potencia, cuenta como no pasada. Con un modelo
+perfecto, cada anillo juzgado falla un 5 % de las veces; con tres juzgados,
+una falsa alarma en torno al 14 %. Se acepta: un «no» de más se ve en la
+tabla, un «sí» de más no.
+
+**Límites declarados.** Una deriva del 10 % confinada en ≤0,25, ≤0,5, ≤4 o
+≤8 no la ve ningún anillo: solo entra en el total, diluida. El ruido de las
+gigantes no deja hacerlo mejor con un solo cúmulo. El contrafactual `V1` sin
+`(1 − c)` sigue siendo informativo.
+
+**Arnés.** `node scripts/harness_fusion_blending.js` imprime `q`, `2σ` y
+PASA / NO PASA / «sin pot.» por anillo y para el total, y aplica la regla en
+el veredicto. Nadie lo decide a mano. Ningún listón se mueve después de medir.
+Desde aquí, la salida sin flags difiere de `fusion_blending_577.txt` solo en
+el bloque de conservación y en la etiqueta del veredicto.
 
 ## Resultados (2026-11-16)
 
