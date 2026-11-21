@@ -70,7 +70,7 @@ Todas esas se quedan como miembros, que es lo que suponía producción hasta aho
   - No cuenta como luz del cúmulo.
   - Es una propiedad de la estrella, no del ocular: no cambia de canal al cambiar de ocular.
   - Lo fija `scripts/test_campo_no_es_cumulo.js` a 61, 173 y 250×.
-- **Lo que falta:** las filas que trae `gaia_proxy.php` no llevan todavía la marca. Hoy no tienen ni `source_id` ni PM. Medido el tamaño: dentro de r_t y con G ≤ 20 hay 396 389 estrellas de campo en los 138 globulares de VB21 que están en `globulares-datos.js` (54 215 solo en M22). Llevarlas a producción es #583.
+- **Lo que falta:** las filas que trae `gaia_proxy.php` no llevan todavía la marca. Hoy no tienen ni `source_id` ni PM. Medido el tamaño: dentro de r_t y con G ≤ 20 hay 396 389 estrellas de campo en los 138 globulares de VB21 que están en `globulares-datos.js` (#601 los recuenta: son los 143; ver ADR 0041) (54 215 solo en M22). Llevarlas a producción es #583.
 
 ## Resultado en M13 (criterio 2 de #575)
 
