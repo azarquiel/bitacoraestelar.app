@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """#601 · Spike: coste de Gaia en los globulares. Cono (A), anillo (B) o banco
 ampliado (C). Regla de decisión prerregistrada en la issue y en el ADR 0041
@@ -150,19 +151,21 @@ def muestra(pobl):
 # ───────────────────────── Campos de referencia ─────────────────────────
 
 def campos_referencia():
-    """[{campo, rad, mag}] con las funciones reales de bitacora-gaia-render.js
-    (radioConsulta no se exporta: es la misma fórmula, con su suelo y techo)."""
+    """[{campo, rad, mag}] leídos de producción (ADR 0008): radioConsulta y
+    magConsultaGaia de bitacora-gaia-render.js, cuantizados por gaia_cuantizar
+    de gaia_proxy.php."""
     js = ("global.window={};require('./resources/js/bitacora-gaia-render.js');"
           "var R=window.BitacoraGaiaRender,t=R.transmisionOptica(%r);"
           "console.log(JSON.stringify(%s.map(function(f){"
-          "return [f,R.magConsultaGaia(%d,t,%d*60/f)];})));" % (OPTICA, list(CAMPOS), APERTURA, AFOV))
-    pares = json.loads(subprocess.check_output(['node', '-e', js], cwd=RAIZ))
-    out = []
-    for f, mag in pares:
-        rad = min(6 * 0.72, max(0.12, f / 60 * 0.72))
-        out.append({'campo': f, 'rad': math.ceil(rad / 0.01 - 1e-9) * 0.01,     # gaia_cuantizar
-                    'mag': math.ceil(mag / 0.5 - 1e-9) * 0.5})
-    return out
+          "return [f,R.radioConsulta(f),R.magConsultaGaia(%d,t,%d*60/f)];})));"
+          % (OPTICA, list(CAMPOS), APERTURA, AFOV))
+    ternas = json.loads(subprocess.check_output(['node', '-e', js], cwd=RAIZ))
+    php = ("require 'simulador_ocular/gaia_proxy.php'; $o = [];"
+           "foreach (json_decode($argv[1]) as [$f, $rad, $mag]) {"
+           " [, , $r, $m] = gaia_cuantizar(0.0, 0.0, $rad, $mag); $o[] = [$f, $r, $m]; }"
+           "echo json_encode($o);")
+    cuant = json.loads(subprocess.check_output(['php', '-r', php, json.dumps(ternas)], cwd=RAIZ))
+    return [{'campo': f, 'rad': float(r), 'mag': float(m)} for f, r, m in cuant]
 
 
 # ───────────────────────── (A) y (B): histograma por píxel ─────────────────────────
@@ -179,8 +182,12 @@ def adql_pixeles(g, radio, mag_lo, mag_hi):
             % (g['ra'], c, g['dec'], mag_lo, int(mag_lo * 2) - 1, mag_hi, g['ra'], g['dec'], radio))
 
 
+def ruta_trabajo(sub, g):
+    return os.path.join(TRABAJO, sub, g['id'].replace(' ', '_') + '.json')
+
+
 def ruta_pixeles(g):
-    return os.path.join(TRABAJO, 'pix', g['id'].replace(' ', '_') + '.json')
+    return ruta_trabajo('pix', g)
 
 
 def bajar_pixeles(g, radio, mag_lo, mag_hi):
@@ -236,7 +243,7 @@ def filas_banco(avance, ra, dec, radio, g_max=20.0, paso=None):
 
 
 def ruta_cuenta(g):
-    return os.path.join(TRABAJO, 'c', g['id'].replace(' ', '_') + '.json')
+    return ruta_trabajo('c', g)
 
 
 def contar_banco(g, radio):
