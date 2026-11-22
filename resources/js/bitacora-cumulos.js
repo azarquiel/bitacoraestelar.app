@@ -389,11 +389,22 @@
 
     /* Completitud de Gaia. El codo es el del catálogo en campo abierto, salvo
        que la aglomeración lo adelante: en el núcleo Gaia pierde estrellas mucho
-       antes que en el halo, y eso ya lo dice m_crowd con el beam de Gaia. */
+       antes que en el halo, y eso ya lo dice m_crowd con el beam de Gaia.
+
+       `gCorte` (opcional, #594): la G hasta la que se PIDIÓ el catálogo, magQ
+       (magConsultaGaia cuantizada 0,5 hacia arriba, la que llega al proxy y al
+       banco; `estrellas.corte` en consultar). Por encima Gaia no trae nada:
+       c·[G(m) ≤ G_c], con G − V del color sintético del tramo de la LF (el
+       mismo que llevan las sintéticas) e interpolado dentro del bin como `cola`.
+       Sin gCorte, la c de siempre. Las sintéticas NO lo usan (ADR 0039
+       «Parámetros»): la realización no depende del equipo. */
     var omegaGaia = Math.PI * (CFG.gaiaFwhmAs / 2) * (CFG.gaiaFwhmAs / 2);
-    function completitud(m, rAs) {
+    function completitud(m, rAs, gCorte) {
       var m50 = Math.min(CFG.gaiaM50, mCrowd(rAs, omegaGaia, CFG.gaiaCrowdingK));
-      return 1 / (1 + Math.pow(10, (m - m50) / CFG.gaiaAncho));
+      var c = 1 / (1 + Math.pow(10, (m - m50) / CFG.gaiaAncho));
+      if (!(gCorte < Infinity)) return c;
+      var g = m + R.gMenosV(bprp(m - dm));
+      return c * Math.max(0, Math.min(1, (gCorte - g) / lf.paso + 0.5));
     }
 
     /* Muestreo radial: CDF numérica de 2·pi·r·perfil(r) sobre 1024 tramos. */

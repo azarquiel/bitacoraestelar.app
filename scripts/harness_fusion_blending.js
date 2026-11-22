@@ -9,7 +9,7 @@
    Imprime flujos, residuos, razones y magnitudes. NUNCA cuentas de estrellas
    dibujadas: el ADR prohíbe usarlas como argumento.
 
-   node scripts/harness_fusion_blending.js [--sqm N] [--D mm] [--mag N] [--banda G] [--todas] */
+   node scripts/harness_fusion_blending.js [--sqm N] [--D mm] [--mag N] [--banda G] [--todas] [--corte-g G] */
 'use strict';
 
 global.window = {};
@@ -65,19 +65,15 @@ var res = R.pintarCumulo(new Float32Array(PROC * PROC), M13, {
 function clave(f) { return f[0] + ',' + f[1]; }
 var dibujadaProd = new Set(res.estrellas.map(clave));
 var pob = res.poblacion, tabla = res.tabla;
-/* Contrafactual de #590 (spike, NO es un arreglo): la consulta a Gaia corta en
-   G (fixture: G ≤ 18,50; producción: magConsultaGaia), y c(m, r) no lo sabe:
-   asume el codo gaiaM50 = 20. --corte-g G multiplica c por la fracción del bin
-   (en V) por encima de G + V−G, con V−G = 0,109, la mediana medida en el
-   fixture para G > 18,25. Solo afecta a la partición (V1/V2) y a la atribución:
-   pintarCumulo ya corrió y las sintéticas (m ≤ 18) no cruzan el corte. */
-var CORTE_G = arg('corte-g', NaN);
-if (CORTE_G === CORTE_G) {
-  var cOrig = pob.completitud, VCORTE = CORTE_G + 0.109, PASO_LF = pob.magnitudes[1] - pob.magnitudes[0];
-  pob.completitud = function (m, rAs) {
-    return cOrig(m, rAs) * Math.max(0, Math.min(1, (VCORTE - m) / PASO_LF + 0.5));
-  };
-}
+/* Corte de la consulta (#594): el fixture se pidió hasta G ≤ 18,50 y c(m, r)
+   lo sabe ya en producción (pob.completitud(m, r, G_c), color del bin de la
+   LF). --corte-g G declara otro corte; --corte-g 99 reproduce el arnés sin
+   corte, el que midió #590. Solo afecta a la partición (V1/V2) y a la
+   atribución: pintarCumulo ya corrió y las sintéticas no lo usan (ADR 0039
+   «Parámetros»). */
+var CORTE_G = arg('corte-g', 18.5);
+var cOrig = pob.completitud;
+pob.completitud = function (m, rAs) { return cOrig(m, rAs, CORTE_G); };
 var TH = C.config.thetaSepRadios * res.radioImagenAs;      // θ_sep, arcsec
 /* Parte sintética de la partición (#577): las sintéticas de producción
    (realización 0, las mismas que dibuja pintarCumulo) entran en la suma como
