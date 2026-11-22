@@ -45,6 +45,7 @@
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
  *   BitacoraGaiaRender.magLimite({ apertura, aumentos, transmision, sqm }) → number|null
  *   BitacoraGaiaRender.magConsultaGaia(apertura, transmision, aumentos) → number (profundidad de consulta)
+ *   BitacoraGaiaRender.radioConsulta(arcmin) → number (radio del cono a Gaia, °; lo lee el spike #601)
  *   BitacoraGaiaRender.profundidadConsulta(apertura, transmision, aumentos, paraCapa) → number
  *   BitacoraGaiaRender.nivelFondo({ pupilaSalida, pupilaOjo, sqm }) → 0..255
  *   BitacoraGaiaRender.transmisionOptica(optica) → number|null
@@ -3582,6 +3583,7 @@
     veloEspacial: veloEspacial,
     sumaSB: sumaSB,
     magConsultaGaia: magConsultaGaia,
+    radioConsulta: radioConsulta,
     nivelFondo: nivelFondo,
     tamLienzo: tamLienzo,
     capaEstrellas: capaEstrellas,
