@@ -45,11 +45,11 @@ function cJuguete(m, rAs) { return 1 / (1 + Math.pow(10, (m - (19 + rAs / 100)) 
 function errorIdentidad(velo) {
   var peor = 0;
   [0, 10, 50, 200].forEach(function (r) {
-    [1, 2].forEach(function (exp) {
+    [1, 2, 4].forEach(function (exp) {
       var cat = 0;
       for (var k = 0; k < mAp.length; k++)
         if (mAp[k] > MCUT) cat += num[k] * Math.pow(10, -0.4 * exp * mAp[k]) * cJuguete(mAp[k], r);
-      var total = exp === 1 ? pob.S1(borde) : pob.S2(borde);
+      var total = exp === 1 ? pob.S1(borde) : exp === 2 ? pob.S2(borde) : pob.S4(borde);
       peor = Math.max(peor, Math.abs(velo(r, exp, cJuguete) + cat - total) / total);
     });
   });
@@ -60,7 +60,7 @@ console.log('T1 la Capa 1 expone el velo del catálogo y S4');
 eq(typeof pob.velo === 'function', 'pob.velo existe');
 eq(typeof pob.S4 === 'function', 'pob.S4 existe');
 
-console.log('T2 el velo de producción aplica (1 − c): V + Σ·S·c = Σ·S, en S1 y S2');
+console.log('T2 el velo de producción aplica (1 − c): V + Σ·S·c = Σ·S, en S1, S2 y S4 (el σ del criterio 3)');
 var e = errorIdentidad(pob.velo);
 eq(e < 1e-6, 'error relativo ' + e.toExponential(1) + ' < 1e-6');
 

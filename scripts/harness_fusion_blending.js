@@ -132,7 +132,7 @@ function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catal
   }
   s2 = pob.S2(-Infinity);   // S2 de toda la LF, leído de la Capa 1
   return { v1: s * v1, v2: s * v2, s2: s * s2, s2c: s * s2c, s2sub: s * s2sub, s2csub: s * s2csub,
-           v1cf: s * v1cf, v2cf: s * v2cf, s2v: s * s2v, s4v: s * pob.S4(MBORDE) };
+           v1cf: s * v1cf, v2cf: s * v2cf, s2v: s * s2v, s4v: s * (pob.S4(MBORDE) - pob.velo(rAs, 4, pob.completitud, MCUT)) };
 }
 var cacheMom = {};
 function mom(rAs) {               // cuantizado a 0,05″: el perfil no cambia a esa escala
@@ -349,7 +349,8 @@ console.log('potencia: 2σ < ' + DERIVA.toFixed(3) + ' (deriva del modelo del 10
    Prerregistro §0 quater (#599), que sustituye al listón de una cola de §0 bis.
    El doble conteo solo puede vivir donde hay velo, m > MBORDE.
      R2v = (∫V2 + Σ_{m_j>MBORDE} F_j²) / D,   D = ∫Σ·S2(m>MBORDE)
-     σ   = √(∫Σ·S4(m>MBORDE)) / D             (del modelo, no de la realización)
+     σ   = √(∫Σ·S4·c(m>MBORDE)) / D           (del modelo, no de la realización:
+                                              solo el catálogo es sorteo; el velo es esperanza)
    Pasa si |R2v − 1| ≤ 2σ (dos colas). Potencia: valor esperado de cada
    contrafactual corrido por la misma partición, con el catálogo en su media del
    modelo, ∫Σ·S2·c = D − ∫V2 (álgebra que fija test_velo_uno_menos_c.js):
