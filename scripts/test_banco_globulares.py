@@ -7,8 +7,10 @@ Fija:
     una fuente sin fila en VB21 es miembro;
   · el fichero va ordenado por G, con la marca en el bit alto, y su
     histograma suma las filas (el cliente pide por Range con él);
-  · un lote que no trae lo que contó el histograma (MAXREC) hace fallar;
-  · los lotes parten los tramos sin solaparse;
+  · la descarga por celdas de source_id: una celda que toca MAXREC o que
+    GAVO corta por tiempo se parte en sus 4 hijas, sin duplicados ni huecos;
+  · el total tiene que ser el COUNT del oráculo, o no se escribe nada;
+  · reanudar no repite celdas ya bajadas;
   · --validar (criterio 6): filas = COUNT del oráculo, radio de VB21 escrito,
     densidad de campo plana; el caso malo (campo sin exigir astrometría
     limpia, ~47× en M13) no pasa.
@@ -41,22 +43,16 @@ g = np.array([15.0, 15.0, 12.0, 15.0, 18.0])
 ok(B.es_campo(p, q, g).tolist() == [True, False, True, False, True],
    'p < 0,5 y (limpia o G < 13); limpia = bit 2 de qflag')
 
-print('Lotes:')
-h = [0] * B.NTRAMOS
-h[10], h[30], h[31], h[39] = 5, 1_000_000, 900_000, 7
-L = B.lotes(h)
-ok(L == [(10, 30, 1_000_005), (31, 39, 900_007)], 'tramos contiguos que caben en un lote: %s' % L)
-ok(sum(n for _, _, n in L) == sum(h), 'la suma de los lotes es la del histograma')
-
 # ── Un globular de mentira: 2000 estrellas hasta 1° ──
 rng = np.random.default_rng(1)
 G = {'id': 'NGC 9999', 'ra': 250.0, 'dec': 30.0, 'rh': 5.0, 'vb21': 'NGC_9999'}
 N = 2000
 r = 1.0 * np.sqrt(rng.random(N))
 th = 2 * np.pi * rng.random(N)
-sid = np.arange(1000, 1000 + N, dtype=np.int64)
 ra = G['ra'] + r * np.cos(th) / np.cos(np.radians(G['dec']))
 dec = G['dec'] + r * np.sin(th)
+# source_id como el de Gaia: celda HEALPix 12 de la posición × 2^35 + contador.
+sid = B.av.ang2pix_nest(12, ra, dec).astype(np.int64) * B.av.P235 + np.arange(N)
 gm = np.round(10 + 9.9 * rng.random(N), 4)
 bprp = np.where(rng.random(N) < 0.1, np.nan, np.round(rng.random(N) * 2, 3))
 # VB21 solo cubre 0,9°; de campo: una de cada 10 de las que cubre.
@@ -78,14 +74,20 @@ def zip_vb21(d):
     return ruta
 
 
-def tap_falso(trucar=0):
+LLAMADAS = []
+
+
+def tap_falso(plazo_nivel=None, perder=0):
+    """GAVO síncrono de mentira: filtra por el rango de source_id y respeta
+    MAXREC. `plazo_nivel`: corta por tiempo las celdas de ese nivel.
+    `perder`: se come filas (para el control del COUNT)."""
     def tap(adql, maxrec):
-        if 'COUNT(*)' in adql:
-            t = np.floor(gm * 2).astype(int)
-            return [['t', 'n']] + [[str(k), str(int((t == k).sum()))] for k in np.unique(t)]
-        t0, t1 = [int(x) for x in adql.split('BETWEEN ')[1].split(' AND ')[:2]]
-        sel = np.flatnonzero((np.floor(gm * 2) >= t0) & (np.floor(gm * 2) <= t1))
-        sel = sel[:len(sel) - trucar]
+        lo, hi = [int(x) for x in adql.split('BETWEEN ')[1].split(' AND ')[:2]]
+        nivel = 12 - int(round(np.log((hi - lo + 1) / B.av.P235) / np.log(4)))
+        LLAMADAS.append(nivel)
+        if nivel == plazo_nivel:
+            raise B.Plazo('Query timed out')
+        sel = np.flatnonzero((sid >= lo) & (sid <= hi))[perder:][:maxrec]
         return [['source_id', 'ra', 'dec', 'g', 'bprp']] + [
             [str(sid[k]), str(float(ra[k])), str(float(dec[k])), str(float(gm[k])), '' if np.isnan(bprp[k]) else str(float(bprp[k]))] for k in sel]
     return tap
@@ -95,7 +97,9 @@ d = tempfile.mkdtemp(prefix='banco_test_')
 try:
     zp = zip_vb21(d)
     print('Fichero:')
-    e = B.generar_uno(G, zp, os.path.join(d, 'out'), os.path.join(d, 'trabajo'), tap=tap_falso())
+    cuentas = {G['id']: N}
+    B.MAX_FILAS_TROZO = 120          # fuerza a partir celdas en un cielo de 2000
+    e = B.generar_uno(G, zp, os.path.join(d, 'out'), os.path.join(d, 'trabajo'), cuentas, tap=tap_falso(plazo_nivel=6))
     b = B.leer_banco(open(B.ruta_banco(os.path.join(d, 'out'), G['id']), 'rb').read())
     ok(b['n'] == N and e['filas'] == N, 'todas las filas (%d)' % b['n'])
     ok(int(b['hist'].sum()) == N, 'el histograma suma las filas')
@@ -111,13 +115,23 @@ try:
     ok(int(sinb.sum()) == int(np.isnan(bprp).sum()), 'BP−RP nulo con centinela')
     ok(abs(b['rmax'] - B.R_MAX) < 1e-6 and b['regla'] == B.REGLA, 'R_MAX y regla en la cabecera')
 
-    print('MAXREC:')
+    print('Celdas:')
+    ok(6 in LLAMADAS and 7 in LLAMADAS and max(LLAMADAS) >= 8,
+       'plazo en nivel 6 y MAXREC en 7 → se parte hasta nivel %d' % max(LLAMADAS))
+    f = np.frombuffer(open(B.ruta_banco(os.path.join(d, 'out'), G['id']), 'rb').read(),
+                      dtype=B.av.DTYPE_FILA, offset=B.TAM_CABECERA)
+    ok(len({(x['ra'], x['dec']) for x in f}) == N, 'sin duplicados ni huecos al partir')
+    del LLAMADAS[:]
+    B.generar_uno(G, zp, os.path.join(d, 'out'), os.path.join(d, 'trabajo'), cuentas, tap=tap_falso())
+    ok(LLAMADAS == [], 'reanudar no vuelve a preguntar por celdas ya bajadas')
+    print('COUNT:')
     shutil.rmtree(os.path.join(d, 'trabajo'))
     try:
-        B.generar_uno(G, zp, os.path.join(d, 'out2'), os.path.join(d, 'trabajo'), tap=tap_falso(trucar=1))
-        ok(False, 'un lote recortado tendría que fallar')
+        B.generar_uno(G, zp, os.path.join(d, 'out2'), os.path.join(d, 'trabajo'), cuentas, tap=tap_falso(perder=1))
+        ok(False, 'faltan filas y tendría que fallar')
     except RuntimeError as ex:
-        ok('histograma' in str(ex), 'un lote con una fila menos falla en voz alta')
+        ok('COUNT' in str(ex) and not os.path.exists(B.ruta_banco(os.path.join(d, 'out2'), G['id'])),
+           'menos filas que el COUNT → falla en voz alta y no escribe')
 
     print('--validar:')
     out = os.path.join(d, 'out')

@@ -1237,8 +1237,11 @@ En `/wp-content/uploads/bitacora/banco_globular/`:
 - `.htaccess` — como el del Avance: `.bin` inmutables un año, manifiesto
   `no-cache`.
 
-Generar (reanudable, ≤ 2 jobs en GAVO; trabajo en `.scratch/banco_globular/`;
-necesita `clusters.zip` de Zenodo 4891252):
+Generar (reanudable; ≤ 2 consultas a la vez en GAVO; trabajo en
+`.scratch/banco_globular/`; necesita `clusters.zip` de Zenodo 4891252). Va en
+**síncrono por celdas HEALPix de `source_id`**, partiendo la celda que no cabe:
+la cola asíncrona de GAVO llegó a ~9 h por job. Medido el 2026-11-22: M13 en
+16 s, M22 (1,64 M filas) en 3 min 41 s; los 143, unas 2 h.
 
 ```
 python3 scripts/gen_banco_globulares.py --zip clusters.zip --solo 'NGC 6205'   # uno, sin manifiesto

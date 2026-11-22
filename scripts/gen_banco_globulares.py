@@ -6,14 +6,15 @@ Vasiliev & Baumgardt 2021 (simulador_ocular/docs/notas/pertenencia-vb21.md).
 
 Glosario (simulador_ocular/CONTEXT.md): banco del globular, estrella de campo.
 
-Pasadas, todas reanudables (si se corta, se relanza igual y sigue):
+Descarga reanudable (si se corta, se relanza igual y sigue):
 
-  1. HISTOGRAMA por globular: un job con COUNT(*) GROUP BY FLOOR(G·2) en el
-     cono de R_MAX. Su suma es el COUNT del oráculo de #601
-     (banco_globular_601_c.tsv) y cada tramo es el oráculo de su lote.
-  2. LOTES: tramos de G contiguos que sumen ≤ MAX_FILAS_LOTE, un job cada uno.
-     Un lote solo vale si trae EXACTAMENTE las filas que contó el histograma
-     (MAXREC = esperado + 1: un recorte se ve).
+  1. CELDAS: el cono se parte en celdas HEALPix de nivel NIVEL_TROZO por
+     rango de source_id (indexado en GAVO: cada consulta recorre solo su
+     celda). Cada celda va en una consulta SÍNCRONA con MAXREC; si lo toca o
+     GAVO la corta por tiempo, se parte en sus 4 hijas. Nada de cola
+     asíncrona: el 2026-11-22 estaba a ~9 h por job.
+  2. COMPLETITUD: la suma tiene que ser el COUNT exacto del oráculo de #601
+     (banco_globular_601_c.tsv), o el globular falla y no se escribe.
   3. FICHERO (local): cruce con VB21 por source_id, marca de campo, filas
      ordenadas por G y cabecera con el histograma (el cliente pide por Range
      solo hasta su magnitud).
@@ -55,18 +56,23 @@ Publicar: primero r<REGLA>/*.bin por FTP a wp-content/uploads/bitacora/banco_glo
 luego .htaccess y el manifiesto el ÚLTIMO, y solo si --validar sale limpio.
 """
 import argparse
+import csv
 import datetime
+import io
 import json
 import math
 import os
 import struct
 import sys
+import time
+import urllib.error
+import urllib.parse
 import zipfile
 
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gen_avance_gaia as av  # noqa: E402  (tap_async, en_paralelo, escribir_atomico, codificar)
+import gen_avance_gaia as av  # noqa: E402  (_http, en_paralelo, escribir_atomico, celdas, HEALPix)
 import spike_601_banco_globular as spike  # noqa: E402  (población Harris ∩ VB21)
 
 RAIZ = av.RAIZ
@@ -83,7 +89,12 @@ CABECERA = struct.Struct('<4sHHddffIIHH')
 NTRAMOS, PASO_MIL = av.NTRAMOS, av.PASO_MIL
 TAM_CABECERA = CABECERA.size + 4 * NTRAMOS          # 212
 BIT_CAMPO = 0x8000
-MAX_FILAS_LOTE = 1_500_000
+# Descarga en síncrono por celdas de source_id (medido 2026-11-22 en GAVO: una
+# celda de nivel 6 con 124 k filas, 6 s; la cola asíncrona estaba a ~9 h).
+NIVEL_TROZO = 6
+MAX_FILAS_TROZO = 200_000      # MAXREC: tocarlo = partir la celda
+MARGEN_CELDAS = 0.05           # °: celdas_del_cono muestrea; sobran celdas, no faltan
+PLAZO_SYNC_S = 90
 
 
 def nombre_fichero(ident):
@@ -150,74 +161,89 @@ def cono(g):
     return "1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',%r,%r,%r))" % (g['ra'], g['dec'], R_MAX)
 
 
-def adql_hist(g):
-    return ('SELECT FLOOR(phot_g_mean_mag*2) AS t, COUNT(*) AS n FROM %s WHERE phot_g_mean_mag<=%r AND %s'
-            ' GROUP BY t' % (av.TABLA, G_MAX, cono(g)))
-
-
-def adql_lote(g, t0, t1):
-    """La MISMA celda FLOOR(G·2) que el histograma: la partición es exacta."""
+def adql_trozo(g, nivel, ipix):
+    """Las filas de una celda HEALPix de `nivel` (por source_id, indexado: la
+    consulta recorre solo su celda, no el cono entero) dentro del cono."""
+    lo, hi = av.rango_source_id(nivel, ipix)
     return ('SELECT source_id, ra, dec, phot_g_mean_mag AS g, phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
-            ' FROM %s WHERE phot_g_mean_mag<=%r AND FLOOR(phot_g_mean_mag*2) BETWEEN %d AND %d AND %s'
-            % (av.TABLA, G_MAX, t0, t1, cono(g)))
+            ' FROM %s WHERE source_id BETWEEN %d AND %d AND phot_g_mean_mag<=%r AND %s'
+            % (av.TABLA, lo, hi, G_MAX, cono(g)))
 
 
-def lotes(hist):
-    """Tramos contiguos [t0, t1] que suman ≤ MAX_FILAS_LOTE (un tramo solo
-    puede pasarse: va entero)."""
-    out, t0, ultimo, n = [], None, None, 0
-    for t in range(NTRAMOS):
-        if hist[t] == 0:
-            continue
-        if t0 is not None and n + hist[t] > MAX_FILAS_LOTE:
-            out.append((t0, ultimo, n))
-            t0, n = None, 0
-        if t0 is None:
-            t0 = t
-        n += int(hist[t])
-        ultimo = t
-    if t0 is not None:
-        out.append((t0, ultimo, n))
-    return out
+class Plazo(RuntimeError):
+    """GAVO cortó la consulta síncrona (~20 s): el trozo es demasiado grande."""
+
+
+def tap_sync(adql, maxrec):
+    """Una consulta síncrona en GAVO → filas CSV (con cabecera). Plazo si GAVO
+    corta por tiempo; reintenta lo que es red."""
+    datos = urllib.parse.urlencode({'REQUEST': 'doQuery', 'LANG': 'ADQL', 'FORMAT': 'csv',
+                                    'MAXREC': str(maxrec), 'QUERY': adql}).encode()
+    for intento in range(av.REINTENTOS + 1):
+        try:
+            return list(csv.reader(io.StringIO(av._http(av.TAP + '/sync', datos, timeout=PLAZO_SYNC_S).decode())))
+        except urllib.error.HTTPError as e:
+            cuerpo = e.read().decode('utf-8', 'replace')
+            if e.code >= 500 and 'timed out' in cuerpo.lower():
+                raise Plazo(cuerpo[:120])
+            error = e
+        except (urllib.error.URLError, OSError) as e:   # incluye el timeout del socket
+            error = e
+        if intento < av.REINTENTOS:
+            time.sleep(10 * 2 ** intento)
+    raise error
 
 
 def dir_trabajo(trabajo, g):
     return os.path.join(trabajo, g['id'].replace(' ', '_'))
 
 
-def bajar_hist(trabajo, g, tap=av.tap_async):
-    ruta = os.path.join(dir_trabajo(trabajo, g), 'hist.json')
-    if not os.path.exists(ruta):
-        filas = tap(adql_hist(g), 1000)
-        h = [0] * NTRAMOS
-        for t, n in filas[1:]:
-            h[int(float(t))] += int(n)
-        av.escribir_atomico(ruta, json.dumps({'radio': R_MAX, 'hist': h}).encode())
-    d = json.load(open(ruta))
-    assert abs(d['radio'] - R_MAX) < 1e-9, (g['id'], d['radio'])
-    return d['hist']
-
-
 DTYPE_LOTE = np.dtype([('sid', '<i8'), ('ra', '<f8'), ('dec', '<f8'), ('g', '<f8'), ('bprp', '<f8')])
 
 
-def bajar_lote(trabajo, g, t0, t1, n, tap=av.tap_async):
-    ruta = os.path.join(dir_trabajo(trabajo, g), 'lote_%02d_%02d.npy' % (t0, t1))
+def bajar_trozo(trabajo, g, nivel, ipix, tap=tap_sync):
+    """Filas de una celda, o None si hay que partirla: tocó MAXREC (un recorte
+    se ve: filas == MAXREC) o GAVO cortó por tiempo. Reanudable: cada celda
+    terminada queda en su .npy."""
+    ruta = os.path.join(dir_trabajo(trabajo, g), 't%02d_%d.npy' % (nivel, ipix))
+    partida = ruta[:-4] + '.partida'      # reanudar baja directo a las hijas
     if os.path.exists(ruta):
-        a = np.load(ruta)
-        if len(a) == n:
-            return a
-    filas = tap(adql_lote(g, t0, t1), n + 1)[1:]
-    if len(filas) != n:
-        raise RuntimeError('%s lote %d-%d: %d filas, el histograma dice %d' % (g['id'], t0, t1, len(filas), n))
-    a = np.empty(n, dtype=DTYPE_LOTE)
+        return np.load(ruta)
+    if os.path.exists(partida):
+        return None
+    try:
+        filas = tap(adql_trozo(g, nivel, ipix), MAX_FILAS_TROZO)[1:]
+    except Plazo:
+        filas = None
+    if filas is None or len(filas) >= MAX_FILAS_TROZO:
+        av.escribir_atomico(partida, b'')
+        return None
+    a = np.empty(len(filas), dtype=DTYPE_LOTE)
     for k, (sid, ra, dec, gm, bprp) in enumerate(filas):
         a[k] = (int(sid), float(ra), float(dec), float(gm), av._num(bprp))
-    tmp = ruta + '.tmp%d.npy' % os.getpid()
     os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    tmp = ruta + '.tmp%d.npy' % os.getpid()
     np.save(tmp, a)
     os.replace(tmp, ruta)
     return a
+
+
+def bajar_cono(trabajo, g, tap=tap_sync):
+    """Todas las filas del cono, celda a celda. Empieza en NIVEL_TROZO; una
+    celda que no cabe se parte en sus 4 hijas. Las celdas son rangos
+    disjuntos de source_id: la unión es exacta, sin duplicados."""
+    pendientes = [(NIVEL_TROZO, ip) for ip in av.celdas_del_cono(g['ra'], g['dec'], R_MAX + MARGEN_CELDAS, NIVEL_TROZO)]
+    partes = []
+    while pendientes:
+        nivel, ip = pendientes.pop()
+        a = bajar_trozo(trabajo, g, nivel, ip, tap)
+        if a is not None:
+            partes.append(a)
+        elif nivel >= 12:
+            raise RuntimeError('%s: la celda %d de nivel 12 no cabe en una consulta' % (g['id'], ip))
+        else:
+            pendientes += [(nivel + 1, int(h)) for h in av.celdas_hijas(nivel, ip, nivel + 1)]
+    return np.concatenate(partes) if partes else np.empty(0, dtype=DTYPE_LOTE)
 
 
 # ───────────────────────── Formato ─────────────────────────
@@ -268,10 +294,11 @@ def leer_banco(datos):
 
 # ───────────────────────── Generación ─────────────────────────
 
-def generar_uno(g, zip_path, salida, trabajo, tap=av.tap_async):
-    hist = bajar_hist(trabajo, g, tap)
-    partes = [bajar_lote(trabajo, g, t0, t1, n, tap) for t0, t1, n in lotes(hist)]
-    lote = np.concatenate(partes) if partes else np.empty(0, dtype=DTYPE_LOTE)
+def generar_uno(g, zip_path, salida, trabajo, cuentas, tap=tap_sync):
+    lote = bajar_cono(trabajo, g, tap)
+    # Completitud: el COUNT exacto de GAVO (#601). Un fallo aquí no escribe nada.
+    if len(lote) != cuentas[g['id']]:
+        raise RuntimeError('%s: %d filas, COUNT de Gaia %d' % (g['id'], len(lote), cuentas[g['id']]))
     campo, radio = leer_vb21(zip_path, g['vb21'])
     datos = bytes_banco(g, codificar(lote, campo), radio)
     av.escribir_atomico(ruta_banco(salida, g['id']), datos)
@@ -404,7 +431,8 @@ def main():
         pobl = [g for g in pobl if g['id'] in quiero]
         assert len(pobl) == len(quiero), 'ids desconocidos'
     entradas = []
-    for g, r in av.en_paralelo(lambda g: generar_uno(g, a.zip, a.salida, a.trabajo), pobl):
+    cuentas = oraculo()
+    for g, r in av.en_paralelo(lambda g: generar_uno(g, a.zip, a.salida, a.trabajo, cuentas), pobl):
         if isinstance(r, Exception):
             print('  ✗ %-10s %s' % (g['id'], r), flush=True)
         else:
