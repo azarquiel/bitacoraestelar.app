@@ -174,8 +174,10 @@ Lo que #583 decidió al construirlo, donde el texto de arriba no llegaba:
   - El cliente recorta la franja al círculo: un proxy viejo que ignore
     `excl` no duplica el núcleo. La regla de la cabecera tiene que ser la del
     manifiesto, o el banco no se usa.
-  - `--validar` no puede medir la densidad si el radio de VB21 es < 4 r_h:
-    no falla, pero lista esos globulares.
+  - `--validar` mide el campo de referencia en 4-8 r_h, o en 2-4 r_h si VB21
+    recorta el anillo a menos de la mitad (Terzan 3: 4,0008 r_h, 0,02′²; el
+    caso malo sigue fuera: 8,4× en M13). Con VB21 < 3 r_h o sin r_h en Harris
+    no mide: no falla, pero lista esos globulares (21 de 143).
 - **Range.** Las filas van ordenadas por G y la cabecera trae el histograma: el
   cliente pide la cabecera y después solo hasta su magnitud. A G ≤ 17 se baja
   una fracción del fichero (M22: 19,7 MB enteros).

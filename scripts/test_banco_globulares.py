@@ -136,6 +136,15 @@ try:
     print('--validar:')
     out = os.path.join(d, 'out')
     ok(B.validar_uno(G, out, {G['id']: N}) == [], 'pasa con el COUNT del oráculo')
+    # Terzan 3 real: radio de VB21 = 4,0008 r_h → anillo exterior de 0,02′² sobre 235′².
+    corto = dict(B.leer_banco(open(B.ruta_banco(out, G['id']), 'rb').read()), radio_vb21=4.0008 * G['rh'] / 60)
+    pasa, texto = B.densidad_plana(corto, G['rh'])
+    ok(pasa and '2-4 r_h' in texto, 'anillo 4-8 r_h recortado por VB21 a una tira → referencia 2-4 r_h (%s)' % texto)
+    pasa, texto = B.densidad_plana(dict(corto, radio_vb21=2.5 * G['rh'] / 60), G['rh'])
+    ok(pasa and texto.startswith('no medible'), 'VB21 por debajo de 3 r_h → no medible (%s)' % texto)
+    sin = []
+    ok(B.validar_uno(dict(G, rh=None), out, {G['id']: N}, sin) == [] and sin == [G['id']],
+       'sin r_h en Harris (Liller 1, UKS 1, NGC 6540): no medible, listado, sin romper')
     f = B.validar_uno(G, out, {G['id']: N + 1})
     ok(len(f) == 1 and 'COUNT' in f[0], 'filas ≠ COUNT → falla (%s)' % f)
     # Caso malo: todo el núcleo marcado de campo (p < 0,5 sin exigir limpia).
@@ -147,6 +156,9 @@ try:
     open(B.ruta_banco(out, G['id']), 'wb').write(bytes(malo))
     f = B.validar_uno(G, out, {G['id']: N})
     ok(any('densidad' in x for x in f), 'núcleo lleno de «campo» → densidad no plana, falla')
+    bm = dict(B.leer_banco(open(B.ruta_banco(out, G['id']), 'rb').read()), radio_vb21=4.0008 * G['rh'] / 60)
+    pasa, texto = B.densidad_plana(bm, G['rh'])
+    ok(not pasa and '2-4 r_h' in texto, 'y también con la referencia 2-4 r_h (%s)' % texto)
 finally:
     shutil.rmtree(d)
 

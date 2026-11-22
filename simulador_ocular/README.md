@@ -1252,7 +1252,7 @@ python3 scripts/gen_banco_globulares.py --validar                              #
 `--validar` exige por globular: filas = COUNT de Gaia
 (`docs/validacion/banco_globular_601_c.tsv`), histograma = filas, radio de VB21
 escrito y densidad de campo plana (0-2 r_h ≤ 2 × 4-8 r_h, con margen de
-Poisson). Test sin red: `python3 scripts/test_banco_globulares.py`.
+Poisson; si VB21 recorta 4-8 r_h a menos de la mitad, la referencia es 2-4 r_h). Test sin red: `python3 scripts/test_banco_globulares.py`.
 
 **Publicar: `r1/` entero, luego `.htaccess`, y el manifiesto el ÚLTIMO, solo con
 `--validar` limpio.** El proxy tiene que estar subido antes que el manifiesto:

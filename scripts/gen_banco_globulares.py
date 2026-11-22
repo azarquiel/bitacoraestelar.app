@@ -179,6 +179,7 @@ def tap_sync(adql, maxrec):
     corta por tiempo; reintenta lo que es red."""
     datos = urllib.parse.urlencode({'REQUEST': 'doQuery', 'LANG': 'ADQL', 'FORMAT': 'csv',
                                     'MAXREC': str(maxrec), 'QUERY': adql}).encode()
+    error = RuntimeError('tap_sync sin intentos')
     for intento in range(av.REINTENTOS + 1):
         try:
             return list(csv.reader(io.StringIO(av._http(av.TAP + '/sync', datos, timeout=PLAZO_SYNC_S).decode())))
@@ -356,13 +357,23 @@ def densidad_plana(b, rh_arcmin):
             return None, 0.0
         return int(np.count_nonzero(campo & (r >= a) & (r < z))), math.pi * (z * z - a * a)
 
+    if rh_arcmin is None:          # Harris no trae r_h (Liller 1, UKS 1, NGC 6540)
+        return True, 'no medible (sin r_h en Harris)'
     n_in, a_in = anillo(0, 2 * rh_arcmin)
-    n_out, a_out = anillo(4 * rh_arcmin, 8 * rh_arcmin)
-    if n_in is None or n_out is None:
-        return True, 'no medible (radio VB21 %.1f′ < 4 r_h)' % rv
+    if n_in is None:
+        return True, 'no medible (radio VB21 %.1f′ < 2 r_h)' % rv
+    # Referencia de campo: 4-8 r_h; si VB21 lo recorta a menos de la mitad de su
+    # área, 2-4 r_h (Terzan 3: VB21 en 4,0008 r_h, 0,02′² → 0 estrellas). El caso
+    # malo con 2-4 r_h sigue fuera: en M13, 48,5 contra 5,8/′² = 8,4× (nota de VB21).
+    for a0, z0 in ((4, 8), (2, 4)):
+        n_out, a_out = anillo(a0 * rh_arcmin, z0 * rh_arcmin)
+        if n_out is not None and a_out >= 0.5 * math.pi * (z0 * z0 - a0 * a0) * rh_arcmin ** 2:
+            break
+    else:
+        return True, 'no medible (radio VB21 %.1f′ < 3 r_h)' % rv
     lam = 2 * (n_out / a_out) * a_in               # el doble de lo esperado dentro
     techo = lam + 3 * math.sqrt(max(lam, 1.0))
-    texto = '0-2 r_h %d (%.3f/′²), 4-8 r_h %d (%.3f/′²), techo %.1f' % (n_in, n_in / a_in, n_out, n_out / a_out, techo)
+    texto = '0-2 r_h %d (%.3f/′²), %d-%d r_h %d (%.3f/′²), techo %.1f' % (n_in, n_in / a_in, a0, z0, n_out, n_out / a_out, techo)
     return n_in <= techo, texto
 
 
@@ -419,7 +430,7 @@ def main():
             fallos.append('falta manifiesto.json')
         if sin_medir:
             # No es un fallo (criterio 6 decidido en #583), pero se dice en voz alta.
-            print('\n⚠ %d sin densidad medible (radio de VB21 < 4 r_h): %s' % (len(sin_medir), ', '.join(sin_medir)))
+            print('\n⚠ %d sin densidad medible (VB21 < 3 r_h o sin r_h): %s' % (len(sin_medir), ', '.join(sin_medir)))
         print('\n' + ('✗ %d fallo(s):\n  ' % len(fallos) + '\n  '.join(fallos) if fallos else '✓ banco válido'))
         sys.exit(1 if fallos else 0)
 
