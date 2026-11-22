@@ -63,6 +63,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 26
+      # Tipos JS: con checkJs false solo mira los ficheros con // @ts-check, pero
+      # rompe si jsconfig.json deja de cargar (le pasó a baseUrl con TS 7, y vtsls
+      # se quedó sin proyecto sin que nada avisara). Misma versión que el tsc local.
+      - name: Tipos JS (tsc)
+        run: npx -y -p typescript@7.0.2 tsc -p jsconfig.json
       # --rapida salta los 13 tests de más de 30 s (ver LENTOS en bateria.js):
       # esos siguen siendo cosa de lanzarlos a mano antes de dar una rama por buena.
       - run: node scripts/bateria.js --rapida
