@@ -137,3 +137,46 @@ de las dos lecturas de GB: 1,123 GiB o 1,206 GB (10⁹ B).
     el recorte del Avance, con sus tests PHP;
   - `--validar`.
   La franja es lo que sube la estimación de los 8 pts sin ella a 13.
+
+## Implementación (#583, 2026-11-22)
+
+Lo que #583 decidió al construirlo, donde el texto de arriba no llegaba:
+
+- **Criterio 6.** Se adopta la propuesta: la cabecera lleva el radio de VB21
+  de cada globular y `--validar` exige que esté escrito (> 0), no que sea ≥ r_t.
+  Más allá de ese radio no hay `memberprob` y la estrella es miembro, como antes.
+  La densidad plana lleva margen de Poisson (3σ sobre el doble): en el test, el
+  caso malo (todo el núcleo marcado) da 52 contra un techo de 20.
+- **El Avance no se recorta en los campos con banco.** Arriba se decía que el
+  Avance se recortaría a la franja. No hace falta: las filas del banco salen al
+  instante y hasta G ≤ 20, así que **ellas** son la vista provisional mientras
+  llega la franja, y la franja va sin `desde`. Una pieza menos (no hay
+  `desde` + `excl` combinados en el cliente; el proxy los admite igual).
+- **El círculo excluido es R_MAX − 0,01°** con el centro al 0,001°: el proxy
+  redondea `r` hacia abajo, así que la franja siempre solapa el banco y nunca
+  deja un hueco; el cliente recorta el banco al mismo círculo, sin duplicados.
+  Si el cono cabe en el círculo, el proxy responde `{"data":[]}` sin caché ni TAP.
+- **Un banco por vista** (el más cercano). En las parejas del bulbo (NGC 6522 y
+  6528, a 0,27°) el segundo llega por la franja sin marca. Anotado como
+  `shortcut:` en `bancoDelCono`.
+- **Banco por encima del techo.** Si en el cono hay más de 200 000 filas, el
+  cliente hace lo mismo que la segura del proxy: las 40 000 más brillantes y el
+  resto como `fondo` (momentos y velo espacial N = 8), sobre el área del cono.
+- **Range.** Las filas van ordenadas por G y la cabecera trae el histograma: el
+  cliente pide la cabecera y después solo hasta su magnitud. A G ≤ 17 se baja
+  una fracción del fichero (M22: 19,7 MB enteros).
+
+### La caché, revisada al tocarla (nota `eliminar-cache-proxy.md`)
+
+- **La clave por vista sí se repite.** El desplazamiento del campo va en pasos
+  discretos del 10 % (`centroDesplazado`), así que dos observadores en el mismo
+  objeto, ocular y paso piden la misma clave. Una rejilla más gruesa del centro
+  no aporta: se descarta. El ratio bajo es diversidad de objetos y equipos.
+- **Lección 5 aplicada:** el cliente pide al proxy ya cuantizado (centro al
+  0,001°, radio al 0,01° ↑, mag al 0,5 ↑). La URL es la clave del disco y la
+  caché del navegador acierta lo mismo que la del servidor.
+- **Lo grande no es la caché:** el núcleo de los globulares, lo que costaba
+  ~40 s en cada desplazamiento, ya no pasa por el proxy. Es un fichero
+  estático inmutable con caché HTTP de un año.
+- **Queda fuera** (lección 7): separar el almacén del resultado asíncrono de la
+  caché de aciertos. No lo necesita #583.
