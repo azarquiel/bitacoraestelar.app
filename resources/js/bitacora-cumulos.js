@@ -249,10 +249,11 @@
 
     // Sumas de cola (de la más débil hacia arriba) para S1/S2, y acumulada por
     // el otro lado para los conteos de aglomeración.
-    var cola1 = new Float64Array(n + 1), cola2 = new Float64Array(n + 1);
+    var cola1 = new Float64Array(n + 1), cola2 = new Float64Array(n + 1), cola4 = new Float64Array(n + 1);
     for (i = n - 1; i >= 0; i--) {
       cola1[i] = cola1[i + 1] + num[i] * f[i];
       cola2[i] = cola2[i + 1] + num[i] * f[i] * f[i];
+      cola4[i] = cola4[i + 1] + num[i] * Math.pow(f[i], 4);
     }
     var acum = new Float64Array(n + 1);   // acum[i] = estrellas más brillantes que el bin i
     for (i = 0; i < n; i++) acum[i + 1] = acum[i] + num[i];
@@ -470,6 +471,19 @@
       S1: function (mlim) { return cola(cola1, mlim); },
       // Suma de flujos al cuadrado: la varianza del grano por unidad de perfil.
       S2: function (mlim) { return cola(cola2, mlim); },
+      // Momento cuarto: el ruido de Poisson de una suma de flujos al cuadrado (ADR 0039 §0 quater).
+      S4: function (mlim) { return cola(cola4, mlim); },
+      /* Velo del catálogo (ADR 0039, pregunta 4): la parte de la LF que el
+         catálogo no trae, Σ_{m_k > mCut} num·f^exp·(1 − c), por unidad de perfil.
+         Por encima de mCut la luz la traen catálogo y sintéticas. `c` por defecto
+         es la completitud de Gaia; se pasa otra para contrafactuales y tests. */
+      velo: function (rAs, exp, c, mCut) {
+        c = c || completitud;
+        mCut = mCut == null ? CFG.mCutGeneracion : mCut;
+        for (var k = 0, s = 0; k < n; k++)
+          if (mAp[k] > mCut) s += num[k] * Math.pow(f[k], exp) * (1 - c(mAp[k], rAs));
+        return s;
+      },
       // Flujo de las estrellas más brillantes que m_lim (las que se dibujan). Es
       // el complemento exacto de S1: lo que no va al campo se dibuja, sin que se
       // pierda ni se duplique el bin que m_lim parte.
