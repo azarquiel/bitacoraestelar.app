@@ -1671,11 +1671,13 @@
     }
     return false;
   }
-  function cabeceraBanco(buf) {
+  /* Cabecera íntegra y de la misma regla de pertenencia que anuncia el
+     manifiesto (criterio 7): una marca de otra regla no se usa. */
+  function cabeceraBanco(buf, regla) {
     if (!buf || buf.byteLength < BANCO_CABECERA) return null;
     var v = new DataView(buf);
     if (v.getUint32(0, false) !== 0x42474C4F || v.getUint16(4, true) !== 1 ||   // 'BGLO', versión 1
-        v.getUint16(40, true) !== 42 || v.getUint16(42, true) !== 500) return null;
+        v.getUint16(6, true) !== regla || v.getUint16(40, true) !== 42 || v.getUint16(42, true) !== 500) return null;
     var hist = [];
     for (var k = 0; k < 42; k++) hist.push(v.getUint32(44 + 4 * k, true));
     return { n: v.getUint32(32, true), hist: hist };
@@ -1692,7 +1694,7 @@
     nueva.promise = pedir(0, BANCO_CABECERA - 1).then(function (r) {
       if (!r.ok) throw new Error('banco ' + r.status);
       return r.arrayBuffer().then(function (buf) {
-        var cab = cabeceraBanco(buf);
+        var cab = cabeceraBanco(buf, man.regla);
         if (!cab) throw new Error('banco ilegible ' + g.archivo);
         if (r.status !== 206) {                      // sin Range: ya está entero
           if (buf.byteLength !== BANCO_CABECERA + 12 * cab.n) throw new Error('banco truncado ' + g.archivo);
@@ -1880,7 +1882,14 @@
         nueva.avance = dentro;
         nueva.alAvance.forEach(function (f) { f(dentro); });
         return fetchGaia(sRa, sDec, sRad, sMag, nueva.ctrl, alPendiente, null, b.excl).then(function (jj) {
-          var arr = dentro.concat((jj.data || []).filter(function (f) { return f[2] != null; }));
+          /* Solo lo de fuera del círculo: blinda contra un proxy viejo que
+             ignore `excl` (devolvería el cono entero y el núcleo saldría dos
+             veces), como unirConjunto con `desde`. */
+          var e = vectorDe(b.excl[0], b.excl[1]), cosE = Math.cos(b.excl[2] * Math.PI / 180);
+          var arr = dentro.concat((jj.data || []).filter(function (f) {
+            var p = vectorDe(f[0], f[1]);
+            return f[2] != null && p[0] * e[0] + p[1] * e[1] + p[2] * e[2] < cosE;
+          }));
           arr.fondo = unirFondos(dentro.fondo, jj.fondo || null);
           return arr;
         });

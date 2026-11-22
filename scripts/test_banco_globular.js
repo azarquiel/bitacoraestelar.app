@@ -115,7 +115,7 @@ function servidor(url, init) {
   var q = {};
   url.split('?')[1].split('&').forEach(function (kv) { var p = kv.split('='); q[p[0]] = decodeURIComponent(p[1]); });
   var cono = R.conoProxy(+q.ra, +q.dec, +q.rad), mag = Math.ceil(+q.mag / 0.5 - 1e-9) * 0.5;
-  var ex = q.excl ? q.excl.split(',').map(Number) : null;
+  var ex = (q.excl && !M.proxyViejo) ? q.excl.split(',').map(Number) : null;
   var data = CIELO.filter(function (s) {
     return distancia(cono.ra, cono.dec, s[0], s[1]) <= cono.rad && s[2] <= mag &&
            (!ex || distancia(ex[0], ex[1], s[0], s[1]) > ex[2]);
@@ -193,6 +193,16 @@ casos.push(function () {
   });
 });
 
+/* Proxy viejo (sin excl) con el manifiesto ya publicado: sin duplicados. */
+casos.push(function () {
+  console.log('Proxy que ignora excl (orden de despliegue mal):');
+  nuevoMundo({ proxyViejo: true });
+  var ra = G.ra, dec = G.dec + 0.5;
+  return R.consultar(ra, dec, 90, 17).then(function (lista) {
+    ok(mismas(lista, verdad(ra, dec, R.radioConsulta(90), 17)), 'el cliente recorta la franja al círculo: ninguna estrella dos veces (' + lista.length + ')');
+  });
+});
+
 /* Caché alineada: lo que se pide al proxy ya va cuantizado como gaia_cuantizar. */
 casos.push(function () {
   console.log('Petición ya cuantizada (caché del navegador = disco):');
@@ -239,6 +249,11 @@ casos.push(function () {
     return R.consultar(G.ra, G.dec, 30, 16.2);
   }).then(function () {
     ok(alProxy().length === 1 && alBanco().length === 0, 'manifiesto de otra versión: se ignora');
+    nuevoMundo({ manifiesto: Object.assign({}, MANIFIESTO, { regla: 2 }) });
+    return R.consultar(G.ra, G.dec, 30, 16.2);
+  }).then(function (lista) {
+    ok(alProxy().length === 1 && lista.every(function (f) { return f.length === 4; }),
+       'fichero de otra regla que la del manifiesto: no se usa su marca, camino de siempre');
     nuevoMundo({ sinRange: true });
     return R.consultar(G.ra, G.dec, 30, 16.2);
   }).then(function (lista) {

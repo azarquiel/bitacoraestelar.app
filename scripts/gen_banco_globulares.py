@@ -339,7 +339,7 @@ def densidad_plana(b, rh_arcmin):
     return n_in <= techo, texto
 
 
-def validar_uno(g, salida, cuentas):
+def validar_uno(g, salida, cuentas, sin_medir=None):
     """Lista de fallos (vacía si pasa)."""
     ruta = ruta_banco(salida, g['id'])
     try:
@@ -361,6 +361,8 @@ def validar_uno(g, salida, cuentas):
     if len(gm) and np.any(np.diff(gm.astype(np.int64)) < 0):
         fallos.append('%s: filas sin ordenar por G' % g['id'])
     pasa, texto = densidad_plana(b, g['rh'])
+    if sin_medir is not None and texto.startswith('no medible'):
+        sin_medir.append(g['id'])
     print('  %-10s %8d filas, %6d campo, VB21 %.2f°: %s' % (g['id'], b['n'], b['campo'], b['radio_vb21'], texto))
     if not pasa:
         fallos.append('%s: densidad de campo no plana (%s)' % (g['id'], texto))
@@ -382,12 +384,15 @@ def main():
         cuentas = oraculo()
         harris = {g['id']: g for g in leer_harris()}
         ids = a.solo.split(',') if a.solo else sorted(cuentas)
-        fallos = []
+        fallos, sin_medir = [], []
         for i in ids:
-            fallos += validar_uno(harris[i], a.salida, cuentas)
+            fallos += validar_uno(harris[i], a.salida, cuentas, sin_medir)
         man = os.path.join(a.salida, 'manifiesto.json')
         if not a.solo and not os.path.exists(man):
             fallos.append('falta manifiesto.json')
+        if sin_medir:
+            # No es un fallo (criterio 6 decidido en #583), pero se dice en voz alta.
+            print('\n⚠ %d sin densidad medible (radio de VB21 < 4 r_h): %s' % (len(sin_medir), ', '.join(sin_medir)))
         print('\n' + ('✗ %d fallo(s):\n  ' % len(fallos) + '\n  '.join(fallos) if fallos else '✓ banco válido'))
         sys.exit(1 if fallos else 0)
 

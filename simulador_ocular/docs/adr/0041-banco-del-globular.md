@@ -162,6 +162,20 @@ Lo que #583 decidió al construirlo, donde el texto de arriba no llegaba:
 - **Banco por encima del techo.** Si en el cono hay más de 200 000 filas, el
   cliente hace lo mismo que la segura del proxy: las 40 000 más brillantes y el
   resto como `fondo` (momentos y velo espacial N = 8), sobre el área del cono.
+- **Límites aceptados** (revisión de #583):
+  - El banco corta en G < mag y el proxy en G ≤ mag: solo difiere una estrella
+    con G exactamente igual a la mag cuantizada.
+  - El techo se aplica por mitades (banco y franja, 40 000 cada una) y el
+    `fondo` unido toma el corte menor. Solo pasa con un núcleo de más de
+    200 000 filas en el cono y además una franja densa.
+  - Por encima del techo, las estrellas de campo más débiles que las 40 000
+    primeras pasan al velo con las demás, como en la segura del proxy: no
+    cuentan como luz del cúmulo, pero dejan de pintarse una a una.
+  - El cliente recorta la franja al círculo: un proxy viejo que ignore
+    `excl` no duplica el núcleo. La regla de la cabecera tiene que ser la del
+    manifiesto, o el banco no se usa.
+  - `--validar` no puede medir la densidad si el radio de VB21 es < 4 r_h:
+    no falla, pero lista esos globulares.
 - **Range.** Las filas van ordenadas por G y la cabecera trae el histograma: el
   cliente pide la cabecera y después solo hasta su magnitud. A G ≤ 17 se baja
   una fracción del fichero (M22: 19,7 MB enteros).
