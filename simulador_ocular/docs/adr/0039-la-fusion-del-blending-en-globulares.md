@@ -133,7 +133,7 @@ R2v = ( ∫V2 dΩ + Σ_{j∈anillo, m_j>borde} F_j² ) / ∫ Σ·S2(m>borde) dΩ
 σ   = sqrt( Σ_{j∈anillo, m_j>borde} F_j⁴ ) / ∫ Σ·S2(m>borde) dΩ
 ```
 
-Listón: **R2v ≤ 1 + 2σ**. `j` recorre catálogo y sintéticas (las sintéticas
+Listón: **R2v ≤ 1 + 2σ**. **Sustituido por §0 quater (#599)** antes de medir con las correcciones de #590. `j` recorre catálogo y sintéticas (las sintéticas
 nacen ≤ 17,94 y no entran).
 
 **Doble conteo completo = contrafactual que se corre:** la misma partición con
@@ -407,7 +407,130 @@ El contrafactual `V1` sin
 PASA / NO PASA / «sin pot.» por anillo y para el total, y aplica la regla en
 el veredicto. Nadie lo decide a mano. Ningún listón se mueve después de medir.
 Desde aquí, la salida sin flags difiere de `fusion_blending_577.txt` solo en
-el bloque de conservación y en la etiqueta del veredicto.
+el bloque de conservación y en la etiqueta del veredicto (ampliado por §0
+quater, #599).
+
+## 0 quater. Cuarto prerregistro: criterio 3 de dos colas (#599, 2026-11-22, escrito ANTES de medir con las correcciones)
+
+Sustituye **solo** el listón y la potencia del criterio 3 de §0 bis. La
+definición de `R2v`, el dominio `m > borde`, el criterio 2, la conservación
+de §0 ter, el fondo local y la regla del veredicto no cambian. Se fija antes
+de correr el arnés con #594, #595, #596 y #591 (ninguna está en el código
+al escribir esto). Commit: el que introduce esta sección en la rama de #599,
+sobre `main` en `2bedfc4` o posterior y anterior a cualquier merge de #594.
+
+**Lo que ya se había visto al escribir esto** (ADR 0005, se declara):
+
+- Toda la salida de §0 bis, §0 ter y la atribución de #590. En concreto,
+  con el arnés de #577 (una cola, σ de la realización):
+
+  ```
+                ≤0,25   ≤0,5    ≤1     ≤2     ≤4     ≤8
+  R2v           1,010  1,028  1,048  0,634  0,564  0,684
+  σ realización 0,004  0,005  0,009  0,010  0,015  0,031
+  R2cf          1,013  1,051  1,289  1,421  1,483  1,603
+  ```
+
+- Las dos tablas de potencia de abajo y, con ellas, la medida del arnés sin
+  correcciones con la regla nueva: ≤0,5, ≤1, ≤2, ≤4 y ≤8 NO PASA; ≤0,25 sin
+  potencia. No cambia el veredicto (ya era «no se puede todavía»).
+- La variante de σ con `S4` sin `c` (la que pedía #599 al abrirse; límites,
+  abajo), corrida con el mismo arnés: juzgaba solo ≤1 a ≤8, con el mismo
+  veredicto. El dueño del spike eligió `S4·c` viendo las dos tablas, para
+  ganar potencia en ≤0,5 y ≤1.
+
+**Por qué cambia.** Con una cola, ≤2, ≤4 y ≤8 «pasan» con déficits del
+32-44 %: es el truncado de la consulta a Gaia (#594, atribución de #590,
+punto 1). Un déficit tan grande es un fallo del modelo de la partición y el
+criterio tiene que verlo. Y el doble conteo en sí es álgebra (`c + (1 − c) =
+1`): con los datos no se distingue de un desajuste del modelo de unos pocos
+por ciento, así que se fija con un test (abajo) y el criterio 3 pasa a medir
+lo que de verdad puede medir: que el segundo momento cuadra con el modelo.
+
+**Listón.** Por anillo:
+
+```
+R2v = ( ∫V2 dΩ + Σ_{j∈anillo, m_j>borde} F_j² ) / D,   D = ∫ Σ·S2(m>borde) dΩ   (igual que §0 bis)
+σ   = sqrt( ∫ Σ·S4·c(m>borde) dΩ ) / D                                     (del modelo, Capa 1: pob.S4 − pob.velo)
+pasa si |R2v − 1| ≤ 2σ
+```
+
+`σ` es el ruido de Poisson del único término sorteado, la suma del catálogo
+(`∫V2` es una esperanza): `Var(Σ F_j²) = ∫Σ·S4·c`, con `S4·c = S4 − velo₄`.
+Sale del modelo (perfil, LF y completitud de producción), no de la realización del
+catálogo: no se ajusta a lo que se mide, y si #596 cambia el perfil se
+recalcula solo. **No** se usa `sqrt(δ² + (kσ)²)`: con `δ` igual a la deriva
+buscada, no puede rechazarla (§0 ter).
+
+**Potencia: contrafactuales corridos.** Cada contrafactual pasa por la misma
+partición (`pob.velo`, la ley de la Capa 1) con el catálogo en su media del
+modelo, `∫Σ·S2·c = D − ∫V2`. Su valor esperado:
+
+- **doble conteo completo**, `V2` sin `(1 − c)`: `(D + Cat) / D`;
+- **deriva del modelo del 10 %**, `num × x` en `m > borde` (entra en `V2` y
+  en `D`), con `c` y el perfil sin tocar: `(x·V2 + Cat) / (x·D)`, con
+  `x = 1,1` y `x = 0,9`. Cuenta la dirección más débil (la de menor
+  `P(rechaza)`; con el mismo σ en las dos, la de menor `|E − 1|`). Lectura:
+  deriva el **modelo** y el cielo no (el catálogo sigue en `Cat`), que es lo
+  que la fase 1 del ADR 0003 busca. La otra lectura (deriva el cielo, modelo
+  fijo) da `1 ± 0,1·Cat/D`, casi igual. σ no se reescala con `x` (sería
+  `σ/√x`, efecto de ~5 %).
+
+Un anillo tiene potencia contra un contrafactual si su valor esperado cae
+fuera de `±2σ`. `P(rechaza)` es la probabilidad gaussiana (anchura σ) de caer
+fuera de `±2σ`, como en §0 ter. **Se juzga un anillo si tiene potencia contra
+al menos uno de los dos**; sin potencia contra ninguno, no cuenta ni a favor
+ni en contra. **Si ningún anillo tiene potencia contra la deriva, el criterio
+3 cuenta como no pasado.**
+
+Tabla de potencia (corrida antes de medir con las correcciones; arnés sin
+flags):
+
+```
+anillo     2σ   doble conteo  pot.  P(rech.)   deriva ×1,1  ×0,9  pot.  P(rech.)   juzgado
+≤0,25    0,003      1,003      NO     0,38        1,000    1,000   NO     0,05       NO
+≤0,5     0,006      1,024      sí     1,00        0,998    1,003   NO     0,09       sí
+≤1       0,015      1,240      sí     1,00        0,978    1,027   sí     0,82       sí
+≤2       0,023      1,787      sí     1,00        0,928    1,087   sí     1,00       sí
+≤4       0,033      1,919      sí     1,00        0,916    1,102   sí     1,00       sí
+≤8       0,061      1,919      sí     1,00        0,916    1,102   sí     0,77       sí
+```
+
+La deriva del 10 % mueve `R2v` en `0,1 × Cat/D` (≈ 0,091 o 0,111 veces la
+fracción catalogada del segundo momento): en el núcleo Gaia es incompleta,
+`Cat/D` es pequeña y la deriva no se ve. Los que sostienen el criterio contra
+la deriva son ≤1, ≤2, ≤4 y ≤8. ≤0,5 entra por el doble conteo.
+
+**Falsa alarma.** Con un modelo perfecto, cada anillo juzgado falla un 4,6 %
+de las veces (dos colas a 2σ). Con `n` juzgados, `1 − 0,954^n`: 21 % con los
+cinco de la tabla, ~24 % si fueran seis. Va en la dirección conservadora: un
+falso «no pasa» no aprueba nada, solo retrasa el «sí».
+
+**El doble conteo, en el código.** `scripts/test_velo_uno_menos_c.js` (batería
+rápida) comprueba que el velo de producción aplica `(1 − c)`: para una LF y
+una `c(m, r)` de juguete, `V1 + Σ·S1·c = Σ·S1` y `V2 + Σ·S2·c = Σ·S2` en
+`m > mCutGeneracion`, a `< 1e-6`. Lee la ley de la Capa 1 (`pob.velo`, ADR
+0008), que es la que usa el arnés. Control positivo: con `c ≡ 0` (velo sin
+`(1 − c)`) el test falla. `pob.velo` es nuevo (#599): antes la ley solo vivía
+en el arnés. El render todavía no la usa (su `S1campo` no lleva `c`); el test
+guarda la ley que la implementación del ADR tendrá que llamar.
+
+**Límites declarados.** `σ` usa la completitud del modelo: si `c` está mal
+(lo que corrige #594), σ y la fracción catalogada `Cat` también, y con ellas
+la potencia contra la deriva. La variante `sqrt(∫Σ·S4)/D` (sin `c`, la que
+pedía #599 al abrirse) trata el velo como sorteo y deja el listón mucho más
+ancho en el núcleo: 2σ = 0,044 / 0,031 / 0,024 en ≤0,25 / ≤0,5 / ≤1, contra
+0,003 / 0,006 / 0,015 con `S4·c`. Con ella ≤0,5 perdía la potencia contra el
+doble conteo y ≤1 contra la deriva. El listón estrecho tiene un coste: en el
+núcleo, un desajuste de `c` de unos pocos por ciento ya basta para el «no
+pasa». Va en la dirección conservadora.
+
+**Arnés.** `node scripts/harness_fusion_blending.js` imprime las dos tablas
+(potencia y medida), aplica la regla y la etiqueta del veredicto nombra
+«criterio 3 de §0 quater». Nadie lo decide a mano. Ningún listón se mueve
+después de medir. Desde aquí, la salida sin flags difiere de
+`fusion_blending_577.txt` en el bloque de conservación (§0 ter), en los dos
+bloques del criterio 3 y en la etiqueta del veredicto.
 
 ## Resultados (2026-11-16)
 

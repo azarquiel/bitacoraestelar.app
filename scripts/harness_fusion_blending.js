@@ -107,22 +107,22 @@ function mResEn(rAs) {
 
 /* ── La partición de la pregunta 4 ─────────────────────────────────────────
    Velo analítico = LF × perfil × (1 − completitud): solo lo que el catálogo no
-   trae. Código NUEVO del prototipo: el S1campo de producción no lleva c(m,r). */
+   trae. La ley vive en la Capa 1 (`pob.velo`, #599) y se lee de ahí (ADR 0008);
+   el S1campo del render no lleva c(m,r). Se le pasa pob.completitud para que
+   --corte-g llegue. */
 var mAp = pob.magnitudes, num = pob.estrellasPorBin, NB = mAp.length;
 var fB = new Float64Array(NB);
 for (var b = 0; b < NB; b++) fB[b] = Math.pow(10, -0.4 * mAp[b]);
+function CERO() { return 0; }
 function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catalogada de S2
   var s = pob.sigma(rAs), v1 = 0, v2 = 0, s2 = 0, s2c = 0, s2sub = 0, s2csub = 0, mR = mResEn(rAs);
-  var v1cf = 0, v2cf = 0, s2v = 0;  // contrafactual sin (1 − c) y S2 del dominio del velo (#577)
+  var s2v = pob.S2(MBORDE);         // S2 del dominio del velo (#577), Capa 1
+  v1 = pob.velo(rAs, 1, pob.completitud, MCUT);
+  v2 = pob.velo(rAs, 2, pob.completitud, MCUT);
+  // Doble conteo completo: el velo lleva también lo que trae el catálogo (c ≡ 0).
+  var v1cf = pob.velo(rAs, 1, CERO, MCUT), v2cf = pob.velo(rAs, 2, CERO, MCUT);
   for (var k = 0; k < NB; k++) {
     var c = pob.completitud(mAp[k], rAs), w = num[k], f2b = fB[k] * fB[k];
-    if (mAp[k] > MCUT) {          // [m_k > mCutGeneracion]: lo de arriba lo traen catálogo y sintéticas
-      v1 += w * fB[k] * (1 - c);
-      v2 += w * f2b * (1 - c);
-      v1cf += w * fB[k];          // doble conteo completo: el velo lleva también lo que trae el catálogo
-      v2cf += w * f2b;
-      s2v += w * f2b;
-    }
     s2c += w * f2b * c;
     /* CONTRASTE declarado (ADR 0008): numerador y denominador de la fracción
        catalogada bajo m_res con el MISMO corte (centro del bin). pob.S2(mR)
@@ -132,7 +132,7 @@ function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catal
   }
   s2 = pob.S2(-Infinity);   // S2 de toda la LF, leído de la Capa 1
   return { v1: s * v1, v2: s * v2, s2: s * s2, s2c: s * s2c, s2sub: s * s2sub, s2csub: s * s2csub,
-           v1cf: s * v1cf, v2cf: s * v2cf, s2v: s * s2v };
+           v1cf: s * v1cf, v2cf: s * v2cf, s2v: s * s2v, s4v: s * (pob.S4(MBORDE) - pob.velo(rAs, 4, pob.completitud, MCUT)) };
 }
 var cacheMom = {};
 function mom(rAs) {               // cuantizado a 0,05″: el perfil no cambia a esa escala
@@ -346,47 +346,73 @@ console.log(filaCf + '   (V1 sin (1 − c): informativo)');
 console.log('potencia: 2σ < ' + DERIVA.toFixed(3) + ' (deriva del modelo del 10 %); sin potencia no cuenta');
 
 /* ── Criterio 3: el grano no cuenta dos veces la luz catalogada ─────────────
-   Prerregistro §0 bis (#577). El doble conteo solo puede vivir donde hay velo,
-   m > MBORDE: arriba lo traen catálogo y sintéticas y el velo no tiene nada.
-   R2v = (∫V2 + Σ_{m_j>MBORDE} F_j²) / ∫Σ·S2(m>MBORDE), σ = sqrt(ΣF_j⁴)/∫Σ·S2(m>MBORDE).
-   Contrafactual: la misma partición con V2 sin (1 − c). Un anillo tiene potencia
-   si el contrafactual NO pasa el listón R2 ≤ 1 + 2σ. */
-function grano(k, soloVelo) {
-  var f2 = 0, f4 = 0, fmax = 0;
+   Prerregistro §0 quater (#599), que sustituye al listón de una cola de §0 bis.
+   El doble conteo solo puede vivir donde hay velo, m > MBORDE.
+     R2v = (∫V2 + Σ_{m_j>MBORDE} F_j²) / D,   D = ∫Σ·S2(m>MBORDE)
+     σ   = √(∫Σ·S4·c(m>MBORDE)) / D           (del modelo, no de la realización:
+                                              solo el catálogo es sorteo; el velo es esperanza)
+   Pasa si |R2v − 1| ≤ 2σ (dos colas). Potencia: valor esperado de cada
+   contrafactual corrido por la misma partición, con el catálogo en su media del
+   modelo, ∫Σ·S2·c = D − ∫V2 (álgebra que fija test_velo_uno_menos_c.js):
+   - doble conteo completo, V2 sin (1 − c):            (D + Cat) / D
+   - deriva del 10 %, num × x en m > MBORDE (V2 y D),   (x·V2 + Cat) / (x·D),
+     x = 1,1 y 0,9, con c y el perfil sin tocar. Cuenta la dirección más débil.
+   Un anillo se juzga si tiene potencia contra al menos uno de los dos. */
+function Phi(z) {                 // Φ normal, Abramowitz-Stegun 7.1.26 (|error| < 1,5e-7)
+  var t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2);
+  var y = 1 - t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) *
+          Math.exp(-z * z / 2);
+  return z >= 0 ? (1 + y) / 2 : (1 - y) / 2;
+}
+function pRechaza(E, sd) { return Phi((E - 1 - 2 * sd) / sd) + Phi((1 - E - 2 * sd) / sd); }
+function grano(k, soloVelo) {     // parte del catálogo (realización) por anillo
+  var f2 = 0, fmax = 0;
   est.forEach(function (s) {
     if (anillo(s.r) !== k || (soloVelo && !(s.m > MBORDE))) return;
-    f2 += s.F * s.F; f4 += Math.pow(s.F, 4); fmax = Math.max(fmax, s.F);
+    f2 += s.F * s.F; fmax = Math.max(fmax, s.F);
   });
   var den = integralAnillo(k, campo(soloVelo ? 's2v' : 's2'));
-  var v2 = integralAnillo(k, campo('v2')), v2cf = integralAnillo(k, campo('v2cf'));
-  var sd = Math.sqrt(f4) / den;
-  return { R2: (v2 + f2) / den, R2cf: (v2cf + f2) / den, liston: 1 + 2 * sd, sd: sd, f2: f2, fmax: fmax };
+  return { R2: (integralAnillo(k, campo('v2')) + f2) / den, f2: f2, fmax: fmax };
 }
-console.log('\n── Criterio 3, POTENCIA: R2 del contrafactual (V2 sin (1 − c)) contra 1 + 2σ');
+function modeloC3(k) {            // solo modelo: σ y valores esperados de los contrafactuales
+  var D = integralAnillo(k, campo('s2v')), V2 = integralAnillo(k, campo('v2'));
+  var cat = D - V2, sd = Math.sqrt(integralAnillo(k, campo('s4v'))) / D;
+  var der = function (x) { return (x * V2 + cat) / (x * D); };
+  return { sd: sd, Edc: (integralAnillo(k, campo('v2cf')) + cat) / D, Eup: der(1.1), Edn: der(0.9) };
+}
+console.log('\n── Criterio 3, POTENCIA (§0 quater): valor esperado de cada contrafactual contra ±2σ del modelo');
 console.log('banda del catálogo: ' + (BANDA_G ? 'G tratada como V (prerregistrada en §0)' : 'V (G→V EDR3, producción #574)') +
             '; filas en G por falta de color: ' + res.filasEnG + ' de ' + gaia.length);
-console.log('              dominio del velo m > ' + MBORDE.toFixed(3) + '        LF entera (estadístico de §0, referencia)');
-console.log('anillo     R2cf    1+2σ  potencia             R2cf    1+2σ  potencia');
-var potencia = [];
+console.log('dominio del velo m > ' + MBORDE.toFixed(3) + '; deriva: num × 1,1 y × 0,9 en m > borde, cuenta la más débil');
+console.log('anillo       2σ   doble conteo  pot.  P(rech.)   deriva ×1,1  ×0,9  pot.  P(rech.)   juzgado');
+var juzgado = [], potDeriva = [], M3 = [];
 for (k = 0; k < NA; k++) {
-  var gv = grano(k, true), gt = grano(k, false);
-  potencia[k] = gv.R2cf > gv.liston;
-  console.log(ETQ[k].padEnd(8) + gv.R2cf.toFixed(3).padStart(8) + gv.liston.toFixed(3).padStart(8) +
-              (potencia[k] ? '  sí' : '  NO').padEnd(19) + gt.R2cf.toFixed(3).padStart(8) +
-              gt.liston.toFixed(3).padStart(8) + (gt.R2cf > gt.liston ? '  sí' : '  NO'));
+  var m3 = M3[k] = modeloC3(k), dosS = 2 * m3.sd;
+  var potDc = Math.abs(m3.Edc - 1) > dosS;
+  var pUp = pRechaza(m3.Eup, m3.sd), pDn = pRechaza(m3.Edn, m3.sd);
+  var debil = pUp <= pDn ? m3.Eup : m3.Edn;
+  potDeriva[k] = Math.abs(debil - 1) > dosS;
+  juzgado[k] = potDc || potDeriva[k];
+  console.log(ETQ[k].padEnd(8) + dosS.toFixed(3).padStart(9) + m3.Edc.toFixed(3).padStart(15) +
+              (potDc ? 'sí' : 'NO').padStart(6) + pRechaza(m3.Edc, m3.sd).toFixed(2).padStart(10) +
+              m3.Eup.toFixed(3).padStart(14) + m3.Edn.toFixed(3).padStart(7) +
+              (potDeriva[k] ? 'sí' : 'NO').padStart(6) + Math.min(pUp, pDn).toFixed(2).padStart(10) +
+              (juzgado[k] ? 'sí' : 'NO').padStart(10));
 }
+var nJ = juzgado.filter(Boolean).length;
+console.log('falsa alarma con un modelo perfecto: 1 − 0,954^' + nJ + ' = ' + (100 * (1 - Math.pow(0.954, nJ))).toFixed(0) +
+            ' % (conservadora: un falso «no pasa» no aprueba nada)');
 
-console.log('\n── Criterio 3, MEDIDA: R2v = (∫V2 + Σ_{m>borde} F_j²) / ∫Σ·S2(m>borde)  (listón R2v ≤ 1 + 2σ)');
-console.log('anillo      R2v       σ    1+2σ  veredicto        R2 LF entera   S2·c/S2 (m>m_res)  F²máx/ΣF²   m más brillante');
-var pasaC3 = potencia.some(Boolean);
+console.log('\n── Criterio 3, MEDIDA: R2v = (∫V2 + Σ_{m>borde} F_j²) / ∫Σ·S2(m>borde)  (listón |R2v − 1| ≤ 2σ, §0 quater)');
+console.log('anillo      R2v       σ  veredicto        R2 LF entera   S2·c/S2 (m>m_res)  F²máx/ΣF²   m más brillante');
+var pasaC3 = true;
 for (k = 0; k < NA; k++) {
   var g3 = grano(k, true), gT = grano(k, false);
   var sub = integralAnillo(k, campo('s2sub')), subc = integralAnillo(k, campo('s2csub'));
-  var pasa3 = g3.R2 <= g3.liston;
-  if (potencia[k]) pasaC3 = pasaC3 && pasa3;
-  console.log(ETQ[k].padEnd(8) + g3.R2.toFixed(3).padStart(8) + g3.sd.toFixed(3).padStart(8) +
-              g3.liston.toFixed(3).padStart(8) +
-              (!potencia[k] ? '  sin potencia' : pasa3 ? '  PASA' : '  NO PASA').padEnd(17) +
+  var pasa3 = Math.abs(g3.R2 - 1) <= 2 * M3[k].sd;
+  if (juzgado[k]) pasaC3 = pasaC3 && pasa3;
+  console.log(ETQ[k].padEnd(8) + g3.R2.toFixed(3).padStart(8) + M3[k].sd.toFixed(3).padStart(8) +
+              (!juzgado[k] ? '  sin potencia' : pasa3 ? '  PASA' : '  NO PASA').padEnd(17) +
               gT.R2.toFixed(3).padStart(13) +
               (sub > 0 ? (100 * subc / sub).toFixed(1) + ' %' : '—').padStart(20) +
               (100 * gT.fmax * gT.fmax / gT.f2).toFixed(1).padStart(10) + ' %' +
@@ -438,12 +464,12 @@ for (k = 0; k < NA; k++) {
 /* ── Veredicto: regla prerregistrada en §0 bis (#577), mecánica ─────────── */
 var fallos = [];
 if (!pasaC2) fallos.push('criterio 2');
-if (!potencia.some(Boolean)) fallos.push('criterio 3 sin potencia en ningún anillo');
-else if (!pasaC3) fallos.push('criterio 3');
+if (!potDeriva.some(Boolean)) fallos.push('criterio 3 (§0 quater) sin potencia contra la deriva en ningún anillo');
+else if (!pasaC3) fallos.push('criterio 3 (§0 quater)');
 if (!potCons) fallos.push('conservación sin potencia en ningún anillo');
 else if (!pasaCons) fallos.push('conservación contra el modelo');
 if (!pasaQ5) fallos.push('p95 |Δm_res| ≤ 0,1');
-console.log('\n══ Veredicto (§0 bis, conservación de §0 ter): ' + (fallos.length ? 'NO SE PUEDE TODAVÍA — falla: ' + fallos.join(', ') : 'SÍ'));
+console.log('\n══ Veredicto (§0 bis, conservación de §0 ter, criterio 3 de §0 quater): ' + (fallos.length ? 'NO SE PUEDE TODAVÍA — falla: ' + fallos.join(', ') : 'SÍ'));
 
 /* ── Atribución (#590, spike): catálogo contra el modelo por anillo × rango ───
    Solo con --atribucion. Mide, no corrige: no toca producción ni el velo
