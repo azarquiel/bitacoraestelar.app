@@ -88,10 +88,18 @@ de las dos lecturas de GB: 1,123 GiB o 1,206 GB (10⁹ B).
 - **Lo que (C) no cubre.** R_MAX es el radio del campo de 90′ centrado. Un
   campo de 60′ cabe hasta medio radio de desplazamiento (0,36 + 0,72 =
   1,08°). Uno de 90′ deja de caber en cuanto se desplaza: con medio radio
-  llega a 1,62°. Cuando el cono se sale de R_MAX, el ocular sigue el camino
-  de (A): cono a Gaia con las filas del banco sustituidas. Cubrir el 90′
-  desplazado pediría R_MAX ≈ 1,62°, unas 2,25 veces el área, que no cabe en
-  1,25 GB.
+  llega a 1,62°. Cubrir el 90′ desplazado pediría R_MAX ≈ 1,62°, unas 2,25
+  veces el área, que no cabe en 1,25 GB.
+- **Fuera de R_MAX no se pide nada a Gaia** (decisión del dueño, 2026-11-22).
+  Con un globular de VB21 en el campo, el cono no va al proxy. Dentro de
+  R_MAX las filas salen del banco; fuera, solo del Avance (G < 15). Así el
+  cúmulo entero sigue saliendo del banco mientras esté en el campo. Lo que
+  falta es campo débil (G ≥ 15) en el borde del ocular, más allá de 1,08°
+  del centro del cúmulo. Si el cúmulo sale del campo, es normal que falten
+  datos, y no importa.
+- **Riesgo declarado:** a 1,08° del centro, la densidad de estrellas débiles
+  cae de golpe. En un campo rico, hacia el bulbo, ese borde podría verse como
+  un arco. No se ha medido; si se ve, se trata en su propia historia.
 
 ## Por qué va aparte del Avance
 
@@ -116,4 +124,5 @@ de las dos lecturas de GB: 1,123 GiB o 1,206 GB (10⁹ B).
   de Gaia» del `--validar`, mientras R_MAX siga en 1,08°.
 - **Estimación de #583:** 8 pts. Repartidos así: generador con descarga
   reanudable de ~100 M filas y cruce con VB21; formato `BGLO`; cliente que
-  sustituye dentro de R_MAX y cae a (A) fuera; y `--validar`.
+  sirve el banco dentro de R_MAX y solo el Avance fuera, sin consulta a
+  Gaia; y `--validar`.
