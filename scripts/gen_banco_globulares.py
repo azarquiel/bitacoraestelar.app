@@ -432,11 +432,19 @@ def main():
         assert len(pobl) == len(quiero), 'ids desconocidos'
     entradas = []
     cuentas = oraculo()
-    for g, r in av.en_paralelo(lambda g: generar_uno(g, a.zip, a.salida, a.trabajo, cuentas), pobl):
-        if isinstance(r, Exception):
-            print('  ✗ %-10s %s' % (g['id'], r), flush=True)
-        else:
-            print('  ✓ %-10s %8d filas %6d campo' % (g['id'], r['filas'], r['campo']), flush=True)
+    hechos = []                    # en_paralelo devuelve todo al final: se informa al terminar cada uno
+
+    def uno(g):
+        try:
+            r = generar_uno(g, a.zip, a.salida, a.trabajo, cuentas)
+            hechos.append(g)
+            print('  ✓ %3d/%d %-10s %8d filas %6d campo' % (len(hechos), len(pobl), g['id'], r['filas'], r['campo']), flush=True)
+            return r
+        except Exception as e:     # noqa: BLE001 — se informa y se sigue con los demás
+            print('  ✗ %-10s %s' % (g['id'], e), flush=True)
+            raise
+    for g, r in av.en_paralelo(uno, pobl):
+        if not isinstance(r, Exception):
             entradas.append(r)
     if len(entradas) != len(pobl):
         sys.exit('faltan %d globulares: relanzar (es reanudable)' % (len(pobl) - len(entradas)))
