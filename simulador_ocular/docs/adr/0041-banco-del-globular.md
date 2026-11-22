@@ -82,24 +82,31 @@ de las dos lecturas de GB: 1,123 GiB o 1,206 GB (10⁹ B).
 - **Esto no es la regla.** El listón de 1 GB (2³⁰ B) no pasó. La ampliación es una
   decisión de producto, posterior a la medida, y queda escrita aquí como tal.
 - **Por qué:** (A) no resuelve el problema de la historia. M13 o M22 a 60-90′
-  siguen pidiendo el cono denso a Gaia en cada desplazamiento del campo. (C)
-  lo quita mientras el cono de consulta quepa en R_MAX. El disco medido entra
-  en el margen elegido.
+  siguen pidiendo el cono denso a Gaia en cada desplazamiento del campo. Con (C)
+  y la franja, el núcleo no se pide nunca: dentro de R_MAX todo sale del
+  banco. El disco medido entra en el margen elegido.
 - **Lo que (C) no cubre.** R_MAX es el radio del campo de 90′ centrado. Un
   campo de 60′ cabe hasta medio radio de desplazamiento (0,36 + 0,72 =
   1,08°). Uno de 90′ deja de caber en cuanto se desplaza: con medio radio
   llega a 1,62°. Cubrir el 90′ desplazado pediría R_MAX ≈ 1,62°, unas 2,25
   veces el área, que no cabe en 1,25 GB.
-- **Fuera de R_MAX no se pide nada a Gaia** (decisión del dueño, 2026-11-22).
-  Con un globular de VB21 en el campo, el cono no va al proxy. Dentro de
-  R_MAX las filas salen del banco; fuera, solo del Avance (G < 15). Así el
-  cúmulo entero sigue saliendo del banco mientras esté en el campo. Lo que
-  falta es campo débil (G ≥ 15) en el borde del ocular, más allá de 1,08°
-  del centro del cúmulo. Si el cúmulo sale del campo, es normal que falten
-  datos, y no importa.
-- **Riesgo declarado:** a 1,08° del centro, la densidad de estrellas débiles
-  cae de golpe. En un campo rico, hacia el bulbo, ese borde podría verse como
-  un arco. No se ha medido; si se ve, se trata en su propia historia.
+- **Fuera de R_MAX, a Gaia solo la franja** (decisión del dueño, 2026-11-22).
+  Los datos del cúmulo no se piden nunca a Gaia. Si el cono del ocular se sale
+  de R_MAX, el proxy pide solo lo de fuera:
+  `CONTAINS(ocular) = 1 AND CONTAINS(R_MAX) = 0`, donde el círculo de R_MAX
+  está centrado en el cúmulo. Es la consulta de (B) con R_MAX en lugar de r_t.
+  Si el ocular cabe entero en R_MAX, no hay consulta.
+- **Qué cambia en el proxy.**
+  - Un parámetro nuevo con el círculo excluido: centro del cúmulo y R_MAX.
+  - Ese parámetro entra en la clave de caché. Una franja y un cono con el
+    mismo centro no son la misma entrada.
+  - El Avance (G < 15) se recorta igual: fuera de R_MAX y dentro del ocular.
+- **Lo que cuesta.** La franja está siempre a más de 1,08° del cúmulo: es
+  campo, sin núcleo denso. Hacia el bulbo puede seguir siendo densa. Los 5
+  anillos de (B) en el bulbo no terminaron en síncrono (HTTP 500 a ~21 s),
+  y la franja de un campo del bulbo irá también a la cadena asíncrona, como
+  hoy cualquier campo denso. No se ha medido su tiempo. Lo que sí se quita
+  siempre es el núcleo del globular.
 
 ## Por qué va aparte del Avance
 
@@ -122,7 +129,11 @@ de las dos lecturas de GB: 1,123 GiB o 1,206 GB (10⁹ B).
   fallar.
 - Los `COUNT` de `banco_globular_601_c.tsv` son el oráculo de «filas = COUNT
   de Gaia» del `--validar`, mientras R_MAX siga en 1,08°.
-- **Estimación de #583:** 8 pts. Repartidos así: generador con descarga
-  reanudable de ~100 M filas y cruce con VB21; formato `BGLO`; cliente que
-  sirve el banco dentro de R_MAX y solo el Avance fuera, sin consulta a
-  Gaia; y `--validar`.
+- **Estimación de #583: 13 pts.** Repartidos así:
+  - generador con descarga reanudable de ~100 M filas y cruce con VB21;
+  - formato `BGLO`;
+  - cliente que sirve el banco dentro de R_MAX y pide la franja fuera;
+  - proxy con el círculo excluido en la consulta, en la clave de caché y en
+    el recorte del Avance, con sus tests PHP;
+  - `--validar`.
+  La franja es lo que sube la estimación de los 8 pts sin ella a 13.
