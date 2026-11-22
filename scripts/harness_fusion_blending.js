@@ -116,14 +116,13 @@ for (var b = 0; b < NB; b++) fB[b] = Math.pow(10, -0.4 * mAp[b]);
 function CERO() { return 0; }
 function momentos(rAs) {          // por arcsec²: V1, V2, S2 total, parte catalogada de S2
   var s = pob.sigma(rAs), v1 = 0, v2 = 0, s2 = 0, s2c = 0, s2sub = 0, s2csub = 0, mR = mResEn(rAs);
-  var s2v = 0;                      // S2 del dominio del velo (#577)
+  var s2v = pob.S2(MBORDE);         // S2 del dominio del velo (#577), Capa 1
   v1 = pob.velo(rAs, 1, pob.completitud, MCUT);
   v2 = pob.velo(rAs, 2, pob.completitud, MCUT);
   // Doble conteo completo: el velo lleva también lo que trae el catálogo (c ≡ 0).
   var v1cf = pob.velo(rAs, 1, CERO, MCUT), v2cf = pob.velo(rAs, 2, CERO, MCUT);
   for (var k = 0; k < NB; k++) {
     var c = pob.completitud(mAp[k], rAs), w = num[k], f2b = fB[k] * fB[k];
-    if (mAp[k] > MCUT) s2v += w * f2b;
     s2c += w * f2b * c;
     /* CONTRASTE declarado (ADR 0008): numerador y denominador de la fracción
        catalogada bajo m_res con el MISMO corte (centro del bin). pob.S2(mR)
@@ -358,13 +357,13 @@ console.log('potencia: 2σ < ' + DERIVA.toFixed(3) + ' (deriva del modelo del 10
    - deriva del 10 %, num × x en m > MBORDE (V2 y D),   (x·V2 + Cat) / (x·D),
      x = 1,1 y 0,9, con c y el perfil sin tocar. Cuenta la dirección más débil.
    Un anillo se juzga si tiene potencia contra al menos uno de los dos. */
-function phi(z) {                 // Φ normal, Abramowitz-Stegun 7.1.26 (|error| < 1,5e-7)
+function Phi(z) {                 // Φ normal, Abramowitz-Stegun 7.1.26 (|error| < 1,5e-7)
   var t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2);
   var y = 1 - t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) *
           Math.exp(-z * z / 2);
   return z >= 0 ? (1 + y) / 2 : (1 - y) / 2;
 }
-function pRechaza(E, sd) { return phi((E - 1 - 2 * sd) / sd) + phi((1 - E - 2 * sd) / sd); }
+function pRechaza(E, sd) { return Phi((E - 1 - 2 * sd) / sd) + Phi((1 - E - 2 * sd) / sd); }
 function grano(k, soloVelo) {     // parte del catálogo (realización) por anillo
   var f2 = 0, fmax = 0;
   est.forEach(function (s) {

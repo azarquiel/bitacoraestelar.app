@@ -407,7 +407,8 @@ El contrafactual `V1` sin
 PASA / NO PASA / «sin pot.» por anillo y para el total, y aplica la regla en
 el veredicto. Nadie lo decide a mano. Ningún listón se mueve después de medir.
 Desde aquí, la salida sin flags difiere de `fusion_blending_577.txt` solo en
-el bloque de conservación y en la etiqueta del veredicto.
+el bloque de conservación y en la etiqueta del veredicto (ampliado por §0
+quater, #599).
 
 ## 0 quater. Cuarto prerregistro: criterio 3 de dos colas (#599, 2026-11-22, escrito ANTES de medir con las correcciones)
 
@@ -415,7 +416,8 @@ Sustituye **solo** el listón y la potencia del criterio 3 de §0 bis. La
 definición de `R2v`, el dominio `m > borde`, el criterio 2, la conservación
 de §0 ter, el fondo local y la regla del veredicto no cambian. Se fija antes
 de correr el arnés con #594, #595, #596 y #591 (ninguna está en el código
-al escribir esto).
+al escribir esto). Commit: el que introduce esta sección en la rama de #599,
+sobre `main` en `2bedfc4` o posterior y anterior a cualquier merge de #594.
 
 **Lo que ya se había visto al escribir esto** (ADR 0005, se declara):
 
@@ -463,7 +465,11 @@ modelo, `∫Σ·S2·c = D − ∫V2`. Su valor esperado:
 - **deriva del modelo del 10 %**, `num × x` en `m > borde` (entra en `V2` y
   en `D`), con `c` y el perfil sin tocar: `(x·V2 + Cat) / (x·D)`, con
   `x = 1,1` y `x = 0,9`. Cuenta la dirección más débil (la de menor
-  `P(rechaza)`).
+  `P(rechaza)`; con el mismo σ en las dos, la de menor `|E − 1|`). Lectura:
+  deriva el **modelo** y el cielo no (el catálogo sigue en `Cat`), que es lo
+  que la fase 1 del ADR 0003 busca. La otra lectura (deriva el cielo, modelo
+  fijo) da `1 ± 0,1·Cat/D`, casi igual. σ no se reescala con `x` (sería
+  `σ/√x`, efecto de ~5 %).
 
 Un anillo tiene potencia contra un contrafactual si su valor esperado cae
 fuera de `±2σ`. `P(rechaza)` es la probabilidad gaussiana (anchura σ) de caer
@@ -500,7 +506,9 @@ rápida) comprueba que el velo de producción aplica `(1 − c)`: para una LF y
 una `c(m, r)` de juguete, `V1 + Σ·S1·c = Σ·S1` y `V2 + Σ·S2·c = Σ·S2` en
 `m > mCutGeneracion`, a `< 1e-6`. Lee la ley de la Capa 1 (`pob.velo`, ADR
 0008), que es la que usa el arnés. Control positivo: con `c ≡ 0` (velo sin
-`(1 − c)`) el test falla.
+`(1 − c)`) el test falla. `pob.velo` es nuevo (#599): antes la ley solo vivía
+en el arnés. El render todavía no la usa (su `S1campo` no lleva `c`); el test
+guarda la ley que la implementación del ADR tendrá que llamar.
 
 **Límites declarados.** `σ` trata como sorteo de Poisson todo el segundo
 momento, también el velo, que es una esperanza. El ruido real es solo el del
