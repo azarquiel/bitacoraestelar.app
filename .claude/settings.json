@@ -1,4 +1,7 @@
 {
+  "permissions": {
+    "allow": ["LSP"]
+  },
   "env": {
     "PONYTAIL_DEFAULT_MODE": "ultra"
   },
