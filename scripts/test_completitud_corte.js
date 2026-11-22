@@ -95,15 +95,26 @@ function pinta(D, A) {
 }
 var chico = pinta(80, 40), grande = pinta(467, 173);
 ok(chico.poblacion === grande.poblacion, 'la misma población cacheada con 80 mm y con 467 mm');
-ok(JSON.stringify(chico.poblacion.sinteticas({ ra: M13.ra, dec: M13.dec })) ===
-   JSON.stringify(C.poblacion(M13).sinteticas({ ra: M13.ra, dec: M13.dec })),
+var libres = C.poblacion(M13).sinteticas({ ra: M13.ra, dec: M13.dec });
+ok(JSON.stringify(chico.poblacion.sinteticas({ ra: M13.ra, dec: M13.dec })) === JSON.stringify(libres),
    'y las mismas sintéticas que una población recién hecha: el corte no entra en la realización');
+/* Lo que pintarCumulo pide a la realización: solo dónde y cuál, nada del
+   equipo. (Contar las sintéticas dibujadas no sirve: en M13 ninguna pasa
+   m_res y aCrowd.) Si el corte entrara en las sintéticas por las opciones del
+   render, aparecería aquí una clave nueva. */
+[[80, 40], [467, 173]].forEach(function (eq) {
+  var pob0 = C.poblacionCacheada(M13), orig = pob0.sinteticas, claves = [];
+  pob0.sinteticas = function (o) { claves.push(Object.keys(o).sort().join(',')); return orig(o); };
+  try { pinta(eq[0], eq[1]); } finally { pob0.sinteticas = orig; }
+  ok(claves.length > 0 && claves.every(function (k) { return k === 'dec,ra,realization'; }),
+     eq[0] + ' mm: pintarCumulo pide sintéticas solo con {' + claves[0] + '}');
+});
 
 console.log('AC5 la banda (fondo.corte, magQ] no añade flujo al velo con G_c = magQ');
 /* Banco por encima del techo: filas hasta fondo.corte, el resto en fondo →
    veloSB. La luz de la banda ya entra por veloSB: el velo (1 − c) no puede
    añadirla otra vez. Referencia: el velo sin corte de consulta. */
-var MAGQ = 20, FCORTE = 17.2, R_AS = 300;
+var MAGQ = 18.5, FCORTE = 16.4, R_AS = 300;   // un magQ por debajo del techo de 20 (200 mm a 100×: 18,0)
 function enBanda(m) { var g = m + R.gMenosV(C.config.bprpSecuencia); return g > FCORTE + PASO && g < MAGQ - PASO; }
 function veloBanda(gC) {
   var cBanda = function (m, r) { return enBanda(m) ? pob.completitud(m, r, gC) : 1; };

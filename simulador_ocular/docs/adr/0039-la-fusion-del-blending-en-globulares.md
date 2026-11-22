@@ -241,8 +241,10 @@ mueven):
 
 Solo mide (criterio 1 de #590). No toca producción, ni el velo, ni los
 listones de §0 bis, y no cambia el veredicto. Arnés:
-`node scripts/harness_fusion_blending.js --atribucion [--corte-g 18.5]`. Sin
-flags la salida es idéntica a `fusion_blending_577.txt`. Desde #594 el arnés aplica el corte del fixture por defecto; `--corte-g 99` lo quita. Salida completa en
+`node scripts/harness_fusion_blending.js --atribucion [--corte-g 18.5]`.
+Cuando se escribió, sin flags la salida era idéntica a
+`fusion_blending_577.txt`. Desde #594 el arnés aplica por defecto el corte
+del fixture; `--corte-g 99` lo quita. Salida completa en
 `simulador_ocular/docs/validacion/atribucion_590.txt`.
 
 **Medida.** Por anillo y por rango de V (bordes en `borde ± 1, 2, 4` mag, en
@@ -331,6 +333,13 @@ sintético del tramo de la LF (el que llevan las sintéticas). En la gigante
 G − V = −0,366: con la mediana 0,109 del contrafactual el bin caería fuera
 entero (`scripts/test_completitud_corte.js`).
 
+**Por bin y no por fila (desviación de AC1 de #594).** El ticket pedía el
+V − G de cada estrella del catálogo. `completitud` se evalúa sobre los bins
+de la LF del modelo, que no tienen fila de catálogo detrás: el velo es
+`Σ num·f·(1 − c)` por bin. El color que corresponde es el del tramo de la LF,
+el mismo con que nacen las sintéticas. Las filas del catálogo no pasan por `c`:
+o llegaron (G ≤ magQ) o no.
+
 **Ancla.** `G_c = magQ`, lo que se pidió: `magConsultaGaia` cuantizada 0,5
 hacia arriba, la misma que llega al banco y al proxy. `consultar` la deja en
 `estrellas.corte` por los tres caminos (proxy, Avance, banco). Con banco
@@ -361,7 +370,14 @@ no cambia ningún píxel hasta que el velo `V1`/`V2` entre en el render.
 | ≤2 | 0,929 (0,836) | 0,941 (0,634) | 0,022 |
 | ≤4 | 0,903 (0,758) | 0,994 (0,564) | 0,030 |
 
-Con los listones sin mover, ≤2 y ≤4 quedan en 0,9-1,1 y `R2v ≤ 1 + 2σ`.
+Con los listones sin mover, ≤2 y ≤4 quedan en 0,9-1,1 y `R2v ≤ 1 + 2σ`,
+que es lo que pedía AC2. Margen justo: la conservación de ≤4 está 0,003 por
+encima del suelo (y sin potencia en §0 ter), y con el listón de dos colas de
+§0 quater ≤2 sigue sin pasar (0,941, 5σ por debajo). Las cuatro cifras
+salen algo peores que con el contrafactual de la mediana (0,932 / 0,906 /
+0,954 / 1,007): con el color del bin (|G − V| ≥ 0,132 contra 0,109) el
+corte cae algo más débil en V, el modelo da más estrellas por catalogadas y
+el velo lleva algo menos.
 El veredicto sigue en NO SE PUEDE TODAVÍA (criterio 3 en ≤0,5/≤1/≤8 y la
 pregunta 5): son las correcciones 2 y 3, fuera de #594.
 
