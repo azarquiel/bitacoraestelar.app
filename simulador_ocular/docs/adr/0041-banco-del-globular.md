@@ -137,3 +137,62 @@ de las dos lecturas de GB: 1,123 GiB o 1,206 GB (10⁹ B).
     el recorte del Avance, con sus tests PHP;
   - `--validar`.
   La franja es lo que sube la estimación de los 8 pts sin ella a 13.
+
+## Implementación (#583, 2026-11-22)
+
+Lo que #583 decidió al construirlo, donde el texto de arriba no llegaba:
+
+- **Criterio 6.** Se adopta la propuesta: la cabecera lleva el radio de VB21
+  de cada globular y `--validar` exige que esté escrito (> 0), no que sea ≥ r_t.
+  Más allá de ese radio no hay `memberprob` y la estrella es miembro, como antes.
+  La densidad plana lleva margen de Poisson (3σ sobre el doble): en el test, el
+  caso malo (todo el núcleo marcado) da 52 contra un techo de 20.
+- **El Avance no se recorta en los campos con banco.** Arriba se decía que el
+  Avance se recortaría a la franja. No hace falta: las filas del banco salen al
+  instante y hasta G ≤ 20, así que **ellas** son la vista provisional mientras
+  llega la franja, y la franja va sin `desde`. Una pieza menos (no hay
+  `desde` + `excl` combinados en el cliente; el proxy los admite igual).
+- **El círculo excluido es R_MAX − 0,01°** con el centro al 0,001°: el proxy
+  redondea `r` hacia abajo, así que la franja siempre solapa el banco y nunca
+  deja un hueco; el cliente recorta el banco al mismo círculo, sin duplicados.
+  Si el cono cabe en el círculo, el proxy responde `{"data":[]}` sin caché ni TAP.
+- **Un banco por vista** (el más cercano). En las parejas del bulbo (NGC 6522 y
+  6528, a 0,27°) el segundo llega por la franja sin marca. Anotado como
+  `shortcut:` en `bancoDelCono`.
+- **Banco por encima del techo.** Si en el cono hay más de 200 000 filas, el
+  cliente hace lo mismo que la segura del proxy: las 40 000 más brillantes y el
+  resto como `fondo` (momentos y velo espacial N = 8), sobre el área del cono.
+- **Límites aceptados** (revisión de #583):
+  - El banco corta en G < mag y el proxy en G ≤ mag: solo difiere una estrella
+    con G exactamente igual a la mag cuantizada.
+  - El techo se aplica por mitades (banco y franja, 40 000 cada una) y el
+    `fondo` unido toma el corte menor. Solo pasa con un núcleo de más de
+    200 000 filas en el cono y además una franja densa.
+  - Por encima del techo, las estrellas de campo más débiles que las 40 000
+    primeras pasan al velo con las demás, como en la segura del proxy: no
+    cuentan como luz del cúmulo, pero dejan de pintarse una a una.
+  - El cliente recorta la franja al círculo: un proxy viejo que ignore
+    `excl` no duplica el núcleo. La regla de la cabecera tiene que ser la del
+    manifiesto, o el banco no se usa.
+  - `--validar` mide el campo de referencia en 4-8 r_h, o en 2-4 r_h si VB21
+    recorta el anillo a menos de la mitad (Terzan 3: 4,0008 r_h, 0,02′²; el
+    caso malo sigue fuera: 8,4× en M13). Con VB21 < 3 r_h o sin r_h en Harris
+    no mide: no falla, pero lista esos globulares (21 de 143).
+- **Range.** Las filas van ordenadas por G y la cabecera trae el histograma: el
+  cliente pide la cabecera y después solo hasta su magnitud. A G ≤ 17 se baja
+  una fracción del fichero (M22: 19,7 MB enteros).
+
+### La caché, revisada al tocarla (nota `eliminar-cache-proxy.md`)
+
+- **La clave por vista sí se repite.** El desplazamiento del campo va en pasos
+  discretos del 10 % (`centroDesplazado`), así que dos observadores en el mismo
+  objeto, ocular y paso piden la misma clave. Una rejilla más gruesa del centro
+  no aporta: se descarta. El ratio bajo es diversidad de objetos y equipos.
+- **Lección 5 aplicada:** el cliente pide al proxy ya cuantizado (centro al
+  0,001°, radio al 0,01° ↑, mag al 0,5 ↑). La URL es la clave del disco y la
+  caché del navegador acierta lo mismo que la del servidor.
+- **Lo grande no es la caché:** el núcleo de los globulares, lo que costaba
+  ~40 s en cada desplazamiento, ya no pasa por el proxy. Es un fichero
+  estático inmutable con caché HTTP de un año.
+- **Queda fuera** (lección 7): separar el almacén del resultado asíncrono de la
+  caché de aciertos. No lo necesita #583.

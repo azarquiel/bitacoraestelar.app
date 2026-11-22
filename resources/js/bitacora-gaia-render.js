@@ -41,6 +41,7 @@
  *       Con el Avance de Gaia publicado (avance/manifiesto.json, ADR 0033) es
  *       Avance ∪ complemento débil (desde=15); sin él, la consulta de siempre.
  *   BitacoraGaiaRender.cacheAvance / reiniciarAvance(m) → celdas del Avance en memoria
+ *   BitacoraGaiaRender.cacheBanco / reiniciarBanco(m)   → banco del globular en memoria (#583)
  *   BitacoraGaiaRender.precalentar(opts) → void   (la consulta de render(), disparada antes)
  *   BitacoraGaiaRender.dibujar(ctx, estrellas, opts)   (dibujo puro, sin fondo ni query)
  *   BitacoraGaiaRender.magLimite({ apertura, aumentos, transmision, sqm }) → number|null
@@ -825,6 +826,10 @@
        del fotón, no de lo que ese equipo concreto es capaz de detectar).
        blur = el tope (estrellas brillantes); blurMin = el suelo (al límite). */
     blur: 1.1, blurMin: 0.15,
+    /* Banco del globular (#583): si en el cono pasa de techoBanco filas, se
+       sirve como la segura del proxy, las topBanco más brillantes y el resto
+       como fondo. Son GAIA_TECHO_FILAS y GAIA_MAX_ROWS de gaia_proxy.php. */
+    techoBanco: 200000, topBanco: 40000,
     // Ver fraccionFlujo(): potencia que levanta la fracción de flujo compartida
     // por blur y saturación de color para brillos medios (cúmulos típicos),
     // sin tocar los extremos ni la calibración de aureolaAlfaMax/AlfaK.
@@ -1276,7 +1281,7 @@
      Abortarlo es cancelar, y cancelar no es un fallo de red: el error sale con
      `cancelada` y sin `falloRed`, y no se reintenta. El timeout de 60 s sí es
      red, y se reintenta. */
-  function fetchGaiaUnaVez(ra, dec, rad, mag, cancel, desde) {
+  function fetchGaiaUnaVez(ra, dec, rad, mag, cancel, desde, excl) {
     var ctrl = new AbortController();
     var id = setTimeout(function () { ctrl.abort(); }, GAIA_FETCH_TIMEOUT);
     var alCancelar = function () { ctrl.abort(); };
@@ -1290,7 +1295,7 @@
     }
     var url = PROXY_URL + '?ra=' + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec) +
               '&rad=' + encodeURIComponent(rad) + '&mag=' + encodeURIComponent(mag) +
-              (desde ? '&desde=' + desde : '');
+              (desde ? '&desde=' + desde : '') + (excl ? '&excl=' + excl.join(',') : '');
     return fetch(url, { signal: ctrl.signal }).then(function (r) {
       suelta();
       if (!r.ok) throw new Error('gaia_proxy ' + r.status);
@@ -1333,10 +1338,11 @@
   // sin esto llegaba como una lista vacía. `alPendiente(info)` se llama en
   // cada 202.
   // `desde` ('15' o nada): con él, solo el complemento débil (#518).
-  function fetchGaia(ra, dec, rad, mag, cancel, alPendiente, desde) {
+  // `excl` ([ra, dec, r] o nada): con él, solo la franja fuera del banco (#583).
+  function fetchGaia(ra, dec, rad, mag, cancel, alPendiente, desde, excl) {
     var reintentado = false;
     function intento() {
-      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel, desde).then(function (jj) {
+      return fetchGaiaUnaVez(ra, dec, rad, mag, cancel, desde, excl).then(function (jj) {
         if (!jj || !jj.pendiente) return jj;
         if (alPendiente) alPendiente(jj);
         return esperarPendiente(jj.reintentar_en, cancel).then(intento);
@@ -1597,6 +1603,183 @@
     if (ent.avance) alAvance(ent.avance);
   }
 
+  /* ── Banco del globular (ADR 0041, #583) ────────────────────────────────────
+     Gaia DR3 con G ≤ 20 hasta R_MAX = 1,08° de cada globular, con la marca de
+     estrella de campo de VB21, un fichero por globular (formato en la cabecera
+     de scripts/gen_banco_globulares.py). Si el cono toca el círculo de un
+     banco, lo de dentro sale del fichero y al proxy solo se le pide la franja
+     de fuera (`excl`); si el cono cabe dentro, no se pide nada a Gaia. Sin
+     manifiesto, sin fichero o con uno ilegible, el camino de siempre.
+     El fichero va ordenado por G: se pide por Range solo hasta la magnitud de
+     la vista. La ruta lleva la versión de la regla de pertenencia (r1/…), así
+     que cada .bin es inmutable y lo invalida el manifiesto (criterio 7). */
+  var BANCO_URL      = '/wp-content/uploads/bitacora/banco_globular/';
+  var BANCO_CABECERA = 212;
+  var BANCO_MARGEN   = 0.01;          // °: el círculo excluido queda dentro del banco pese a cuantizar su centro
+  var BANCO_CAMPO    = 0x8000;        // bit alto de G: estrella de campo
+  var BANCO_ESPACIAL_N = 8;           // celdas del velo espacial: GAIA_ESPACIAL_N del proxy
+  var bancoManifiesto;                // undefined: sin saber; null: no hay; objeto: publicado
+  var bancoManifiestoPromesa = null;
+  /* Caché en window (regla de red): archivo → {tramos, promise<{v: DataView,
+     n}>}. Superconjunto por magnitud: una vista más honda vuelve a pedir. */
+  var cacheBanco = new Map();
+
+  function manifiestoBanco() {
+    if (bancoManifiesto !== undefined) return Promise.resolve(bancoManifiesto);
+    if (bancoManifiestoPromesa) return bancoManifiestoPromesa;
+    bancoManifiestoPromesa = Promise.resolve().then(function () {
+      return fetch(BANCO_URL + 'manifiesto.json');
+    }).then(function (r) {
+      if (!r || !r.ok) return null;
+      return r.json().then(function (m) {
+        return (m && m.version === 1 && m.formato === 'BGLO' && m.rmax > BANCO_MARGEN &&
+                typeof m.ruta === 'string' && m.ruta.indexOf('{archivo}') >= 0 && Array.isArray(m.globulares)) ? m : null;
+      });
+    }).then(function (m) { bancoManifiesto = m; return m; }, function () {
+      bancoManifiestoPromesa = null;
+      return null;
+    });
+    return bancoManifiestoPromesa;
+  }
+  function centro3(x) { var y = x / 0.001; return +((y < 0 ? -1 : 1) * Math.round(Math.abs(y)) * 0.001).toFixed(3); }
+  function separacion(ra1, de1, ra2, de2) {
+    var a = vectorDe(ra1, de1), b = vectorDe(ra2, de2);
+    return Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))) * 180 / Math.PI;
+  }
+  /* El globular cuyo banco toca el cono, el más cercano, con su círculo
+     excluido [ra, dec, r]. shortcut: un solo banco por vista; en las parejas
+     del bulbo (NGC 6522/6528, a 0,27°) el segundo llega por la franja sin
+     marca de campo. Si molesta, unir varios círculos excluidos. */
+  function bancoDelCono(man, cono) {
+    var mejor = null, dmin = Infinity, r = man.rmax - BANCO_MARGEN;
+    man.globulares.forEach(function (g) {
+      var ex = [centro3(g.ra), centro3(g.dec), +r.toFixed(2)];
+      var d = separacion(cono.ra, cono.dec, ex[0], ex[1]);
+      if (d - cono.rad < ex[2] && d < dmin) { dmin = d; mejor = { g: g, excl: ex, dentro: d + cono.rad <= ex[2] }; }
+    });
+    return mejor;
+  }
+  /* ¿Toca el cono el círculo de R_MAX de algún globular del catálogo Harris
+     (window.BITACORA_GLOBULARES: [id, nombre, ra, dec, …])? Sin catálogo
+     cargado, no: la página no tiene globulares que pintar. */
+  var BANCO_RMAX_PREVIO = 1.08;       // ° (ADR 0041), hasta que llega el manifiesto
+  function cercaDeGlobular(cono) {
+    var cat = window.BITACORA_GLOBULARES;
+    if (!cat || !cat.length) return false;
+    for (var i = 0; i < cat.length; i++) {
+      if (separacion(cono.ra, cono.dec, cat[i][2], cat[i][3]) < cono.rad + BANCO_RMAX_PREVIO) return true;
+    }
+    return false;
+  }
+  /* Cabecera íntegra y de la misma regla de pertenencia que anuncia el
+     manifiesto (criterio 7): una marca de otra regla no se usa. */
+  function cabeceraBanco(buf, regla) {
+    if (!buf || buf.byteLength < BANCO_CABECERA) return null;
+    var v = new DataView(buf);
+    if (v.getUint32(0, false) !== 0x42474C4F || v.getUint16(4, true) !== 1 ||   // 'BGLO', versión 1
+        v.getUint16(6, true) !== regla || v.getUint16(40, true) !== 42 || v.getUint16(42, true) !== 500) return null;
+    var hist = [];
+    for (var k = 0; k < 42; k++) hist.push(v.getUint32(44 + 4 * k, true));
+    return { n: v.getUint32(32, true), hist: hist };
+  }
+  /* Filas del banco hasta el tramo `tramos` (excluido): DataView cuya fila 0
+     empieza en el byte `off`. Dos Range; un servidor sin Range (200) da el
+     fichero entero, y vale igual. Rechaza si falta o no se lee. */
+  function filasBanco(man, g, tramos) {
+    var ent = cacheBanco.get(g.archivo);
+    if (ent && ent.tramos >= tramos) return ent.promise;
+    var url = BANCO_URL + man.ruta.replace('{archivo}', g.archivo);
+    function pedir(desde, hasta) { return fetch(url, { headers: { Range: 'bytes=' + desde + '-' + hasta } }); }
+    var nueva = { tramos: tramos };
+    nueva.promise = pedir(0, BANCO_CABECERA - 1).then(function (r) {
+      if (!r.ok) throw new Error('banco ' + r.status);
+      return r.arrayBuffer().then(function (buf) {
+        var cab = cabeceraBanco(buf, man.regla);
+        if (!cab) throw new Error('banco ilegible ' + g.archivo);
+        if (r.status !== 206) {                      // sin Range: ya está entero
+          if (buf.byteLength !== BANCO_CABECERA + 12 * cab.n) throw new Error('banco truncado ' + g.archivo);
+          nueva.tramos = 42;
+          return { v: new DataView(buf), off: BANCO_CABECERA, n: cab.n };
+        }
+        var n = 0;
+        for (var k = 0; k < Math.min(tramos, 42); k++) n += cab.hist[k];
+        if (n === 0) return { v: null, off: 0, n: 0 };
+        return pedir(BANCO_CABECERA, BANCO_CABECERA + 12 * n - 1).then(function (r2) {
+          if (r2.status !== 206 && !r2.ok) throw new Error('banco ' + r2.status);
+          return r2.arrayBuffer().then(function (b2) {
+            var off = r2.status === 206 ? 0 : BANCO_CABECERA;
+            if (b2.byteLength < off + 12 * n) throw new Error('banco truncado ' + g.archivo);
+            return { v: new DataView(b2), off: off, n: n };
+          });
+        });
+      });
+    });
+    nueva.promise.catch(function () { if (cacheBanco.get(g.archivo) === nueva) cacheBanco.delete(g.archivo); });
+    cacheBanco.set(g.archivo, nueva);
+    return nueva.promise;
+  }
+  /* Filas del banco dentro del cono Y del círculo excluido, con G < mag (mag
+     ya cuantizada a 0,5, como el proxy), en la forma del proxy más la marca:
+     [ra, dec, G, BP−RP|null] o [ra, dec, G, BP−RP|null, true] si es de campo.
+     Ordenadas por G (las trae así el fichero). Por encima de techoBanco se
+     corta como la segura del proxy: las topBanco más brillantes, y el resto
+     en `fondo` (momentos y velo espacial, mismas unidades que el proxy). */
+  function bancoEnCono(datos, cono, excl, mag) {
+    var c = vectorDe(cono.ra, cono.dec), cosR = Math.cos(cono.rad * Math.PI / 180);
+    var e = vectorDe(excl[0], excl[1]), cosE = Math.cos(excl[2] * Math.PI / 180);
+    var filas = [], gTope = Math.round(mag * 1000), v = datos.v;
+    var fondo = null, celdas = null, N = BANCO_ESPACIAL_N;
+    for (var k = 0, off = datos.off; k < datos.n; k++, off += 12) {
+      var gc = v.getUint16(off + 8, true), gm = gc & 0x7FFF;
+      if (gm >= gTope) break;                         // ordenado por G
+      var ra1 = v.getFloat32(off, true), de1 = v.getFloat32(off + 4, true), p = vectorDe(ra1, de1);
+      if (p[0] * c[0] + p[1] * c[1] + p[2] * c[2] < cosR || p[0] * e[0] + p[1] * e[1] + p[2] * e[2] < cosE) continue;
+      var G = gm / 1000;
+      if (filas.length < CFG.topBanco || !fondo && filas.length < CFG.techoBanco) {
+        var bprp = v.getInt16(off + 10, true);
+        var f = [ra1, de1, G, bprp === AVANCE_SIN_BPRP ? null : bprp / 1000];
+        if (gc & BANCO_CAMPO) f.push(true);
+        filas.push(f);
+        continue;
+      }
+      if (!fondo) {
+        // Pasa del techo: lo de detrás de las topBanco primeras pasa a fondo.
+        fondo = { corte: 0, n: 0, flujo: 0, m2: 0, rad: cono.rad };
+        celdas = {};
+        filas.splice(CFG.topBanco).forEach(function (x) { acumular(x[0], x[1], x[2]); });
+      }
+      acumular(ra1, de1, G);
+    }
+    function acumular(ra, dec, G) {
+      var fl = Math.pow(10, -0.4 * G), cl = Math.floor(ra * N) + ',' + Math.floor(dec * N);
+      fondo.n++; fondo.flujo += fl; fondo.m2 += fl * fl;
+      var x = celdas[cl] || (celdas[cl] = [Math.floor(ra * N), Math.floor(dec * N), 0, 0, 0]);
+      x[2]++; x[3] += fl; x[4] += fl * fl;
+    }
+    if (fondo) {
+      fondo.corte = filas.length ? filas[filas.length - 1][2] : 0;
+      fondo.espacial = { N: N, celdas: Object.keys(celdas).map(function (k) { return celdas[k]; }) };
+    }
+    filas.fondo = fondo;
+    return filas;
+  }
+  /* Une el fondo del banco y el de la franja: los momentos se suman (misma
+     área, el cono) y las celdas del velo se suman por celda. */
+  function unirFondos(a, b) {
+    if (!a || !b) return a || b || null;
+    var u = { corte: Math.min(a.corte, b.corte), n: a.n + b.n, flujo: a.flujo + b.flujo, m2: (a.m2 || 0) + (b.m2 || 0), rad: a.rad };
+    var esp = {};
+    [a, b].forEach(function (f) {
+      ((f.espacial && f.espacial.celdas) || []).forEach(function (c) {
+        var k = c[0] + ',' + c[1], x = esp[k] || (esp[k] = [c[0], c[1], 0, 0, 0]);
+        x[2] += c[2]; x[3] += c[3]; x[4] += c[4] || 0;
+      });
+    });
+    var celdas = Object.keys(esp).map(function (k) { return esp[k]; });
+    if (celdas.length) u.espacial = { N: BANCO_ESPACIAL_N, celdas: celdas };
+    return u;
+  }
+
   /* `o.signal` (opcional): aborta la petición si se queda sin usuarios (ver
      `unirse`). Sin él, la consulta no se cancela nunca.
      `o.alAvance(filas)` (opcional): las filas del Avance recortadas al cono,
@@ -1629,7 +1812,12 @@
     unirse(nueva, signal);
     avisarPendiente(nueva, o && o.alPendiente);
     avisarAvance(nueva, o && o.alAvance);
-    var sRa = ra0.toFixed(5), sDec = dec0.toFixed(5), sRad = rad.toFixed(5), sMag = prof.toFixed(2);
+    /* Se pide ya cuantizado como gaia_cuantizar: la URL es entonces la clave
+       del disco, y la caché del navegador (Cache-Control del proxy) acierta
+       lo mismo que la del servidor (lección 5 de eliminar-cache-proxy.md).
+       Radio y mag por arriba: superconjunto de lo pedido. */
+    var cono = conoProxy(ra0, dec0, rad), magQ = Math.ceil(prof / 0.5 - 1e-9) * 0.5;
+    var sRa = cono.ra.toFixed(3), sDec = cono.dec.toFixed(3), sRad = cono.rad.toFixed(2), sMag = magQ.toFixed(2);
     function alPendiente(info) {
       nueva.pendiente = info;
       nueva.avisos.forEach(function (f) { f(info); });
@@ -1673,9 +1861,49 @@
        el complemento estaría vacío y la consulta de siempre es más corta.
        Con el manifiesto ya conocido todo sale en este mismo turno (el
        precalentado y `lanzar` cuentan con ello); la primera vez espera a él. */
-    nueva.promise = (prof <= AVANCE_FRONTERA) ? sinAvance()
-      : (avanceManifiesto !== undefined) ? conAvance(avanceManifiesto)
-      : manifiestoAvance().then(conAvance);
+    function caminoDeSiempre() {
+      return (prof <= AVANCE_FRONTERA) ? sinAvance()
+        : (avanceManifiesto !== undefined) ? conAvance(avanceManifiesto)
+        : manifiestoAvance().then(conAvance);
+    }
+    /* Banco del globular (#583): dentro de su círculo, las filas del fichero
+       (con la marca de campo); fuera, solo la franja al proxy, sin `desde`:
+       es campo lejano y el núcleo no se pide nunca. Las filas del banco son
+       la vista provisional mientras llega la franja (sustituyen al Avance:
+       traen hasta G ≤ 20 al instante). Un banco que falla → el camino de
+       siempre. */
+    function conBanco(man) {
+      var b = man && bancoDelCono(man, cono);
+      if (!b) return caminoDeSiempre();
+      return filasBanco(man, b.g, Math.ceil(magQ * 2 - 1e-9)).then(function (datos) {
+        if (nueva.ctrl.signal.aborted) throw cancelada();
+        var dentro = bancoEnCono(datos, cono, b.excl, magQ);
+        if (b.dentro) return dentro;
+        nueva.avance = dentro;
+        nueva.alAvance.forEach(function (f) { f(dentro); });
+        return fetchGaia(sRa, sDec, sRad, sMag, nueva.ctrl, alPendiente, null, b.excl).then(function (jj) {
+          /* Solo lo de fuera del círculo: blinda contra un proxy viejo que
+             ignore `excl` (devolvería el cono entero y el núcleo saldría dos
+             veces), como unirConjunto con `desde`. */
+          var e = vectorDe(b.excl[0], b.excl[1]), cosE = Math.cos(b.excl[2] * Math.PI / 180);
+          var arr = dentro.concat((jj.data || []).filter(function (f) {
+            var p = vectorDe(f[0], f[1]);
+            return f[2] != null && p[0] * e[0] + p[1] * e[1] + p[2] * e[2] < cosE;
+          }));
+          arr.fondo = unirFondos(dentro.fondo, jj.fondo || null);
+          return arr;
+        });
+      }, function () {
+        if (nueva.ctrl.signal.aborted) throw cancelada();
+        return caminoDeSiempre();
+      });
+    }
+    /* Con el manifiesto aún en vuelo solo espera una vista que toca un
+       globular: las demás salen en este mismo turno, a la vez que la placa
+       (scripts/test_peticion_vista.js). */
+    nueva.promise = (bancoManifiesto !== undefined) ? conBanco(bancoManifiesto)
+      : cercaDeGlobular(cono) ? manifiestoBanco().then(conBanco)
+      : caminoDeSiempre();
     cacheGaia[clave] = nueva;
     // Resuelta (o caída), ya no está pendiente: una vista posterior no debe
     // recibir el aviso viejo ni la provisional, ni la entrada retener oyentes.
@@ -1689,7 +1917,7 @@
   }
   // En el navegador el manifiesto sale ya al cargar, para que la primera vista
   // no lo espere. (Los tests cargan el módulo sin fetch en window.)
-  if (typeof window.fetch === 'function') manifiestoAvance();
+  if (typeof window.fetch === 'function') { manifiestoAvance(); manifiestoBanco(); }
 
   /* ── Placas del DSS: URL del proxy ──────────────────────────────────────────
      Fuente única de la petición a dss-proxy.php, compartida por el simulador y
@@ -3569,6 +3797,9 @@
        p. ej. tras publicar el Avance con la página abierta) o fija uno ya
        sabido (`null`: sin Avance). Para tests y consola. */
     reiniciarAvance: function (m) { avanceManifiesto = m; avanceManifiestoPromesa = null; cacheAvance.clear(); },
+    /* Lo mismo para el banco del globular (#583). */
+    cacheBanco: cacheBanco,
+    reiniciarBanco: function (m) { bancoManifiesto = m; bancoManifiestoPromesa = null; cacheBanco.clear(); },
     dibujar: dibujar,
     planEstrellas: planEstrellas,
     vistaGaia: vistaGaia,

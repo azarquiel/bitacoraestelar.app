@@ -38,6 +38,10 @@ simulador_ocular/dso/*.png
 # entran en git. Solo su .htaccess, que es fuente.
 simulador_ocular/avance/*
 !simulador_ocular/avance/.htaccess
+# El banco del globular (#583, ADR 0041) de scripts/gen_banco_globulares.py:
+# 143 ficheros (~1,1 GiB), por FTP a uploads/bitacora/banco_globular/. Igual.
+simulador_ocular/banco_globular/*
+!simulador_ocular/banco_globular/.htaccess
 
 # Caché local de los arneses de canales (harness_canales_g.js /
 # harness_auditoria_canales.js): son respuestas del proxy de producción, 30 MB
