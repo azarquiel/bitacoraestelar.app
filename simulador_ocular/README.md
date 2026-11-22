@@ -1214,6 +1214,52 @@ Avance tiene que cambiar de ruta (p. ej. `n6v2/`) y anunciarse en el manifiesto.
 
 ---
 
+### Banco del globular (`banco_globular/`)
+
+Gaia DR3 con G ≤ 20 hasta **R_MAX = 1,08°** de cada uno de los 143 globulares
+de `globulares-datos.js` (~100 M de filas, ~1,12 GiB), con la marca de estrella
+de campo de Vasiliev & Baumgardt 2021 (ADR 0041, #583;
+`docs/notas/pertenencia-vb21.md`). Si el cono del ocular cae dentro del círculo
+de un banco, el cliente no pide nada a Gaia; si se sale, pide al proxy solo la
+franja de fuera (`excl=ra,dec,r`). Sin manifiesto o sin fichero, el camino de
+siempre.
+
+En `/wp-content/uploads/bitacora/banco_globular/`:
+
+- `r1/<id>.bin` — un fichero por globular (`NGC_6205.bin`). Cabecera de 212 B
+  (firma `BGLO`, versión, regla, centro, R_MAX, radio de VB21, filas, filas de
+  campo e histograma de 42 tramos de 0,5 mag) y filas de 12 B **ordenadas por
+  G**, las del Avance con la marca de campo en el bit alto de G. El cliente pide
+  por `Range` la cabecera y luego solo las filas hasta su magnitud. `r1` es la
+  versión de la regla de pertenencia: otra regla (#596) va a `r2/`.
+- `manifiesto.json` — versión, regla, R_MAX y la lista de globulares (id,
+  centro, fichero, filas). Lo pide el cliente al cargar.
+- `.htaccess` — como el del Avance: `.bin` inmutables un año, manifiesto
+  `no-cache`.
+
+Generar (reanudable; ≤ 2 consultas a la vez en GAVO; trabajo en
+`.scratch/banco_globular/`; necesita `clusters.zip` de Zenodo 4891252). Va en
+**síncrono por celdas HEALPix de `source_id`**, partiendo la celda que no cabe:
+la cola asíncrona de GAVO llegó a ~9 h por job. Medido el 2026-11-22: M13 en
+16 s, M22 (1,64 M filas) en 3 min 41 s; los 143, unas 2 h.
+
+```
+python3 scripts/gen_banco_globulares.py --zip clusters.zip --solo 'NGC 6205'   # uno, sin manifiesto
+python3 scripts/gen_banco_globulares.py --zip clusters.zip                     # los 143 + manifiesto
+python3 scripts/gen_banco_globulares.py --validar                              # criterio 6, antes del FTP
+```
+
+`--validar` exige por globular: filas = COUNT de Gaia
+(`docs/validacion/banco_globular_601_c.tsv`), histograma = filas, radio de VB21
+escrito y densidad de campo plana (0-2 r_h ≤ 2 × 4-8 r_h, con margen de
+Poisson; si VB21 recorta 4-8 r_h a menos de la mitad, la referencia es 2-4 r_h). Test sin red: `python3 scripts/test_banco_globulares.py`.
+
+**Publicar: `r1/` entero, luego `.htaccess`, y el manifiesto el ÚLTIMO, solo con
+`--validar` limpio.** El proxy tiene que estar subido antes que el manifiesto:
+uno viejo ignora `excl` y devolvería el cono entero (filas repetidas).
+
+---
+
 ## Despliegue
 
 1. **JS y CSS** → por FTP a `/wp-content/uploads/bitacora/`.

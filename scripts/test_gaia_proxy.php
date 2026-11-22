@@ -612,6 +612,57 @@ $lin = json_decode(cache_lru_log_linea(1.0, 'k', 'miss', 'sonda', 1, 1.0, null,
     gaia_pista_log(4000, false, false, 9000) + gaia_log_peticion(18.0, 15.0)), true);
 eq([$lin['mag'], $lin['desde'], $lin['prevision']], [18, 15, 4000], 'la línea lleva mag, desde y la pista');
 
+/* #583, ADR 0041: fuera de R_MAX solo la franja ocular ∖ círculo del banco. */
+echo "excl: validación y cuantización (#583):\n";
+eq(gaia_excl(null), null, 'sin excl → null (el contrato de hoy)');
+eq(gaia_excl('250.4236,36.4613,1.07'), [250.424, 36.461, 1.07], 'centro al 0,001°');
+eq(gaia_excl('250.42,36.46,1.079'), [250.42, 36.46, 1.07], 'radio redondea HACIA ABAJO: nunca abre un hueco con el banco');
+foreach (['', '1,2', '1,2,3,4', 'a,2,1', '361,0,1', '10,91,1', '10,0,0', '10,0,-1', '10,0,' . (GAIA_MAX_RAD + 1), '10,0,0.004'] as $malo) {
+    eq(gaia_excl($malo), false, "excl «{$malo}» → 400");
+}
+eq(gaia_excl(['1,2,3']), false, 'excl[] (array) → 400');
+
+echo "excl en la clave (#583):\n";
+$k0 = gaia_clave(250.5, 36.9, 0.72, 17.0);
+eq(gaia_clave(250.5, 36.9, 0.72, 17.0, null, null), $k0, 'excl null → la clave de hoy');
+$kx = gaia_clave(250.5, 36.9, 0.72, 17.0, null, [250.424, 36.461, 1.07]);
+ok($kx !== $k0, 'franja y cono con el mismo centro → claves distintas');
+ok($kx !== gaia_clave(250.5, 36.9, 0.72, 17.0, 15.0, [250.424, 36.461, 1.07]), 'franja con y sin desde → claves distintas');
+ok($kx !== gaia_clave(250.5, 36.9, 0.72, 17.0, null, [250.424, 36.461, 1.06]), 'otro círculo → otra clave');
+
+echo "excl en todas las consultas (#583):\n";
+$EX = [250.424, 36.461, 1.07];
+$frx = "0=CONTAINS(POINT('ICRS',ra,dec), CIRCLE('ICRS',250.424,36.461,1.07))";
+$frc = "0=CONTAINS(POINT('ICRS',RA_ICRS,DE_ICRS), CIRCLE('ICRS',250.424,36.461,1.07))";
+foreach ([false, true] as $seg) {
+    [$c0, $g0] = gaia_consultas(250.5, 36.9, 1.2, 17.0, $seg, 15.0);
+    [$c1, $g1] = gaia_consultas(250.5, 36.9, 1.2, 17.0, $seg, 15.0, $EX);
+    eq(gaia_consultas(250.5, 36.9, 1.2, 17.0, $seg, 15.0, null), [$c0, $g0], ($seg ? 'segura' : 'sonda') . ': excl null = consulta de hoy');
+    ok(strpos($g1, $frx) !== false && strpos($c1, $frc) !== false, ($seg ? 'segura' : 'sonda') . ': GAVO y CDS excluyen el círculo');
+    eq(str_replace(' AND ' . $frx, '', $g1), $g0, ($seg ? 'segura' : 'sonda') . ' GAVO: solo cambia la exclusión');
+}
+[$fc, $fg] = gaia_fondo_consultas(250.5, 36.9, 1.2, 17.0, 16.0, $EX);
+ok(strpos($fg, $frx) !== false && strpos($fc, $frc) !== false, 'fondo: excluye el círculo');
+[$ec, $eg] = gaia_espacial_consultas(250.5, 36.9, 1.2, 17.0, 16.0, 8, $EX);
+ok(strpos($eg, $frx) !== false && strpos($ec, $frc) !== false, 'espacial: excluye el círculo');
+foreach (['hist' => null, 'espacial' => 1700, 'datos' => 1700] as $paso => $b) {
+    $q0 = gaia_cadena_consulta($paso, 250.5, 36.9, 1.2, 17.0, $b, 15.0);
+    $q1 = gaia_cadena_consulta($paso, 250.5, 36.9, 1.2, 17.0, $b, 15.0, $EX);
+    eq(str_replace(' AND ' . $frx, '', $q1), $q0, "cadena $paso: solo cambia la exclusión");
+    ok(strpos($q1, $frx) !== false, "cadena $paso: excluye el círculo");
+    eq(gaia_job_parametros($paso, 250.5, 36.9, 1.2, 17.0, $b, 15.0, $EX)['QUERY'], $q1, "cadena $paso: el job lleva la exclusión");
+}
+
+echo "excl: franja vacía y pista (#583):\n";
+ok(gaia_franja_vacia(250.5, 36.9, 0.36, $EX), 'cono dentro del círculo → franja vacía (no se pregunta al TAP)');
+ok(!gaia_franja_vacia(250.5, 36.9, 1.2, $EX), 'cono que se sale → hay franja');
+ok(!gaia_franja_vacia(250.5, 36.9, 0.36, null), 'sin excl → nunca vacía');
+$fsin = array_sum(gaia_fracciones_cono(268.447, -34.841, 0.89));
+$fcon = array_sum(gaia_fracciones_cono(268.447, -34.841, 0.89, GAIA_AVANCE_NIVEL, [268.447, -34.841, 0.63]));
+$esperada = 1 - (1 - cos(deg2rad(0.63))) / (1 - cos(deg2rad(0.89)));   // fracción de área fuera del círculo
+ok(abs($fcon / $fsin - $esperada) < 0.03, sprintf('pista: las fracciones solo cuentan la franja (%.3f, área %.3f)', $fcon / $fsin, $esperada));
+eq(gaia_log_peticion(17.0, null, $EX), ['mag' => 17.0, 'desde' => null, 'excl' => $EX], 'el log lleva el círculo excluido');
+
 echo "tope de la caché (AC8):\n";
 eq(GAIA_CACHE_MAX_BYTES, 1536 * 1024 * 1024, 'GAIA_CACHE_MAX_BYTES = 1,5 GB');
 

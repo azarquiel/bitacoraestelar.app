@@ -36,6 +36,9 @@ declare(strict_types=1);
                                          corre como job asíncrono (ADR 0014, #505)
          [&desde=15]                   → solo el complemento débil, 15 ≤ G ≤ mag
                                          (ADR 0033, #518); otro valor da 400
+         [&excl=ra,dec,r]              → solo la franja: fuera del círculo que
+                                         sirve el banco del globular (ADR 0041,
+                                         #583); entra en la clave
      GET ?stats=1                      → estado de la caché y agregado del log
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -123,6 +126,56 @@ function gaia_filtro_desde(string $col, ?float $desde): string {
 }
 
 /**
+ * Valida el parámetro `excl` (#583, ADR 0041): «ra,dec,r» del círculo que ya
+ * sirve el banco del globular. null si no viene, false si no vale (400), o
+ * [ra, dec, r] con el centro al 0,001° y el radio redondeado HACIA ABAJO a
+ * 0,01°: excluir de menos solo repite filas que el cliente recorta; excluir de
+ * más abriría un hueco entre la franja y el banco. Pura.
+ */
+function gaia_excl(mixed $v): array|false|null {
+    if ($v === null) {
+        return null;
+    }
+    if (!is_string($v)) {
+        return false;
+    }
+    $p = explode(',', $v);
+    if (count($p) !== 3) {
+        return false;
+    }
+    foreach ($p as $x) {
+        if (!is_numeric($x)) {
+            return false;
+        }
+    }
+    [$ra, $dec, $r] = array_map('floatval', $p);
+    $r = round(floor($r / GAIA_QUANT_RAD + 1e-9) * GAIA_QUANT_RAD, 2);
+    if ($ra < 0 || $ra > 360 || $dec < -90 || $dec > 90 || $r <= 0 || $r > GAIA_MAX_RAD) {
+        return false;
+    }
+    $q = static fn(float $x): float => round(round($x / GAIA_QUANT_RADEC) * GAIA_QUANT_RADEC, 3);
+    return [$q($ra), $q($dec), $r];
+}
+
+/** Condición ADQL que deja fuera el círculo de `excl`, con el AND delante, o
+    vacía sin él: la consulta sin `excl` es byte a byte la de hoy. */
+function gaia_filtro_excl(string $ra_col, string $dec_col, ?array $excl): string {
+    return $excl === null ? '' : ' AND 0=CONTAINS(POINT(\'ICRS\',' . $ra_col . ',' . $dec_col . '),'
+        . ' CIRCLE(\'ICRS\',' . $excl[0] . ',' . $excl[1] . ',' . $excl[2] . '))';
+}
+
+/** ¿El cono cabe entero en el círculo excluido? Entonces la franja está vacía
+    y no se pregunta al TAP. Pura. */
+function gaia_franja_vacia(float $ra, float $dec, float $rad, ?array $excl): bool {
+    if ($excl === null) {
+        return false;
+    }
+    $c = sin(deg2rad($dec)) * sin(deg2rad($excl[1]))
+        + cos(deg2rad($dec)) * cos(deg2rad($excl[1])) * cos(deg2rad($ra - $excl[0]));
+    return rad2deg(acos(max(-1.0, min(1.0, $c)))) + $rad <= $excl[2];
+}
+
+/**
  * Cuantiza los parámetros para agrupar consultas cercanas en la misma entrada de
  * caché. El CENTRO se redondea (desplazamiento ≤ medio cuanto, despreciable frente
  * al radio). El RADIO y la MAGNITUD se redondean HACIA ARRIBA, para que la región
@@ -148,9 +201,10 @@ require_once __DIR__ . '/bitacora-cache-lru.php';
 
 /** Clave de caché determinista a partir de los parámetros ya cuantizados. Con
     `desde` es otra entrada (y otro ETag, que es la clave); sin él, la de hoy. */
-function gaia_clave(float $ra, float $dec, float $rad, float $mag, ?float $desde = null): string {
+function gaia_clave(float $ra, float $dec, float $rad, float $mag, ?float $desde = null, ?array $excl = null): string {
     return sha1(sprintf('%.3f_%.3f_%.2f_%.2f', $ra, $dec, $rad, $mag)
-        . ($desde === null ? '' : sprintf('_d%.2f', $desde)));
+        . ($desde === null ? '' : sprintf('_d%.2f', $desde))
+        . ($excl === null ? '' : sprintf('_x%.3f_%.3f_%.2f', $excl[0], $excl[1], $excl[2])));
 }
 
 /** Ruta del fichero de caché (gzip) de una clave. */
@@ -169,22 +223,22 @@ function gaia_ruta(string $clave): string {
  * Con `$desde` (#518) las dos piden solo el complemento débil, G ≥ desde: el
  * TOP 40000 de la segura se aplica entonces al complemento (ADR 0033 punto 4).
  */
-function gaia_consultas(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null): array {
+function gaia_consultas(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
     $top   = $segura ? GAIA_MAX_ROWS : GAIA_TECHO_FILAS;
     $orden = $segura ? ' ORDER BY ' : '';
     $cds = 'SELECT TOP ' . $top . ' RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3"'
         . ' WHERE ' . gaia_filtro_desde('Gmag', $desde) . 'Gmag<=' . $mag . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS),'
-        . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . ($orden ? $orden . 'Gmag' : '');
+        . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . gaia_filtro_excl('RA_ICRS', 'DE_ICRS', $excl) . ($orden ? $orden . 'Gmag' : '');
     $gavo = 'SELECT TOP ' . $top . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
         . ' FROM gaia.dr3lite WHERE ' . gaia_filtro_desde('phot_g_mean_mag', $desde) . 'phot_g_mean_mag<=' . $mag
         . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec),'
-        . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . ($orden ? $orden . 'phot_g_mean_mag' : '');
+        . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . gaia_filtro_excl('ra', 'dec', $excl) . ($orden ? $orden . 'phot_g_mean_mag' : '');
     return [$cds, $gavo];
 }
 
 /** URLs de proveedores TAP (failover), en orden de preferencia. */
-function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null): array {
-    [$cds, $gavo] = gaia_consultas($ra, $dec, $rad, $mag, $segura, $desde);
+function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
+    [$cds, $gavo] = gaia_consultas($ra, $dec, $rad, $mag, $segura, $desde, $excl);
     // MAXREC en la sonda: si el servidor recorta por su cuenta, que recorte
     // exactamente en el techo y el recorte sea detectable (filas == techo).
     $maxrec = $segura ? '' : '&MAXREC=' . GAIA_TECHO_FILAS;
@@ -200,8 +254,8 @@ function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $s
    también (#505): la única densa que terminó en producción la sirvió GAVO en
    16 s, y un CDS colgado retrasaría 55 s el 202 de la cadena asíncrona.
    Ambas consultas devuelven las mismas 4 columnas en el mismo orden. */
-function gaia_proveedores_gavo_primero(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null): array {
-    return array_reverse(gaia_proveedores($ra, $dec, $rad, $mag, $segura, $desde));
+function gaia_proveedores_gavo_primero(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
+    return array_reverse(gaia_proveedores($ra, $dec, $rad, $mag, $segura, $desde, $excl));
 }
 
 /**
@@ -209,21 +263,23 @@ function gaia_proveedores_gavo_primero(float $ra, float $dec, float $rad, float 
  * fuentes, flujo G total (en unidades de una estrella G=0) y segundo momento
  * (para SBF). Sin ORDER BY: agrega el servidor, no viaja una fila por estrella.
  */
-function gaia_fondo_consultas(float $ra, float $dec, float $rad, float $mag, float $corte): array {
+function gaia_fondo_consultas(float $ra, float $dec, float $rad, float $mag, float $corte, ?array $excl = null): array {
     $cds = 'SELECT COUNT(*) AS n, SUM(POWER(10,-0.4*Gmag)) AS flujo, SUM(POWER(10,-0.8*Gmag)) AS m2'
         . ' FROM "I/355/gaiadr3" WHERE Gmag>' . $corte . ' AND Gmag<=' . $mag
-        . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))';
+        . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
+        . gaia_filtro_excl('RA_ICRS', 'DE_ICRS', $excl);
     $gavo = 'SELECT COUNT(*) AS n, SUM(POWER(10,-0.4*phot_g_mean_mag)) AS flujo, SUM(POWER(10,-0.8*phot_g_mean_mag)) AS m2'
         . ' FROM gaia.dr3lite WHERE phot_g_mean_mag>' . $corte . ' AND phot_g_mean_mag<=' . $mag
-        . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))';
+        . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
+        . gaia_filtro_excl('ra', 'dec', $excl);
     return [$cds, $gavo];
 }
 
 /** URLs de proveedores del agregado (failover), en orden de preferencia. GAVO
     primero (#505): los pide la petición que recoge el job con el lock tomado, y
     en GAVO cuestan ~0,7 s; un CDS colgado costaría 55 s. */
-function gaia_fondo_urls(float $ra, float $dec, float $rad, float $mag, float $corte): array {
-    [$cds, $gavo] = gaia_fondo_consultas($ra, $dec, $rad, $mag, $corte);
+function gaia_fondo_urls(float $ra, float $dec, float $rad, float $mag, float $corte, ?array $excl = null): array {
+    [$cds, $gavo] = gaia_fondo_consultas($ra, $dec, $rad, $mag, $corte, $excl);
     return [
         'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' . rawurlencode($gavo),
         'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
@@ -279,23 +335,23 @@ function gaia_mezclar_fondo(string $json, ?array $fila, float $corte, float $rad
  * el conjunto físico es idéntico, solo cambia el agrupamiento (Σ celdas ==
  * fondo.flujo, listón L1 del prerregistro).
  */
-function gaia_espacial_consultas(float $ra, float $dec, float $rad, float $mag, float $corte, int $N): array {
+function gaia_espacial_consultas(float $ra, float $dec, float $rad, float $mag, float $corte, int $N, ?array $excl = null): array {
     $cds = 'SELECT FLOOR(RA_ICRS*' . $N . ') AS rx, FLOOR(DE_ICRS*' . $N . ') AS dy,'
         . ' COUNT(*) AS n, SUM(POWER(10,-0.4*Gmag)) AS flujo, SUM(POWER(10,-0.8*Gmag)) AS m2'
         . ' FROM "I/355/gaiadr3" WHERE Gmag>' . $corte . ' AND Gmag<=' . $mag
         . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
-        . ' GROUP BY rx, dy';
+        . gaia_filtro_excl('RA_ICRS', 'DE_ICRS', $excl) . ' GROUP BY rx, dy';
     $gavo = 'SELECT FLOOR(ra*' . $N . ') AS rx, FLOOR(dec*' . $N . ') AS dy,'
         . ' COUNT(*) AS n, SUM(POWER(10,-0.4*phot_g_mean_mag)) AS flujo, SUM(POWER(10,-0.8*phot_g_mean_mag)) AS m2'
         . ' FROM gaia.dr3lite WHERE phot_g_mean_mag>' . $corte . ' AND phot_g_mean_mag<=' . $mag
         . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
-        . ' GROUP BY rx, dy';
+        . gaia_filtro_excl('ra', 'dec', $excl) . ' GROUP BY rx, dy';
     return [$cds, $gavo];
 }
 
 /** URLs de proveedores del agregado espacial (failover), GAVO primero como el fondo. */
-function gaia_espacial_urls(float $ra, float $dec, float $rad, float $mag, float $corte, int $N): array {
-    [$cds, $gavo] = gaia_espacial_consultas($ra, $dec, $rad, $mag, $corte, $N);
+function gaia_espacial_urls(float $ra, float $dec, float $rad, float $mag, float $corte, int $N, ?array $excl = null): array {
+    [$cds, $gavo] = gaia_espacial_consultas($ra, $dec, $rad, $mag, $corte, $N, $excl);
     return [
         'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=' . rawurlencode($gavo),
         'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json&query=' . rawurlencode($cds),
@@ -364,9 +420,10 @@ const GAIA_CADENA_PASOS = ['hist' => 1, 'espacial' => 2, 'datos' => 3];
 /** Consulta ADQL (GAVO) de un paso de la cadena. `$b` = celda de corte, o null
     si el campo cabe entero en el TOP. Con `$desde` (#518) los tres pasos, hist
     incluido, cuentan solo el complemento: el corte sale del complemento. Pura. */
-function gaia_cadena_consulta(string $paso, float $ra, float $dec, float $rad, float $mag, ?int $b, ?float $desde = null): string {
+function gaia_cadena_consulta(string $paso, float $ra, float $dec, float $rad, float $mag, ?int $b, ?float $desde = null, ?array $excl = null): string {
     $donde = ' FROM gaia.dr3lite WHERE ' . gaia_filtro_desde('phot_g_mean_mag', $desde) . 'phot_g_mean_mag<=' . $mag
-        . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))';
+        . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec), CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))'
+        . gaia_filtro_excl('ra', 'dec', $excl);
     $celda = 'FLOOR(phot_g_mean_mag*100)';
     switch ($paso) {
         case 'hist':
@@ -392,12 +449,12 @@ function gaia_cadena_top(?int $b): int {
 
 /** Parámetros del POST que crea el job de un paso. MAXREC va explícito porque
     el del servidor queda vacío en el job. Pura. */
-function gaia_job_parametros(string $paso, float $ra, float $dec, float $rad, float $mag, ?int $b, ?float $desde = null): array {
+function gaia_job_parametros(string $paso, float $ra, float $dec, float $rad, float $mag, ?int $b, ?float $desde = null, ?array $excl = null): array {
     return [
         'REQUEST' => 'doQuery', 'LANG' => 'ADQL', 'FORMAT' => 'json',
         // Los agregados no se recortan: un espacial de 4,5° a |dec| alto pasa de 10 000 celdas.
         'MAXREC' => $paso === 'datos' ? gaia_cadena_top($b) : GAIA_TECHO_FILAS,
-        'QUERY' => gaia_cadena_consulta($paso, $ra, $dec, $rad, $mag, $b, $desde),
+        'QUERY' => gaia_cadena_consulta($paso, $ra, $dec, $rad, $mag, $b, $desde, $excl),
     ];
 }
 
@@ -620,7 +677,10 @@ function gaia_ang2pix_nest(int $nivel, float $ra, float $dec): int {
  * áreas sea exactamente la del cono. Una celda que solo roza el cono puede no
  * recibir puntos: su área es despreciable para una previsión. Pura.
  */
-function gaia_fracciones_cono(float $ra, float $dec, float $rad, int $nivel = GAIA_AVANCE_NIVEL): array {
+function gaia_fracciones_cono(float $ra, float $dec, float $rad, int $nivel = GAIA_AVANCE_NIVEL, ?array $excl = null): array {
+    // Con `excl` (#583) un punto dentro del círculo cuenta en el área del cono pero no en su celda.
+    $ex = $excl === null ? null : [cos(deg2rad($excl[1])) * cos(deg2rad($excl[0])),
+        cos(deg2rad($excl[1])) * sin(deg2rad($excl[0])), sin(deg2rad($excl[1])), cos(deg2rad($excl[2]))];
     [$sa, $ca, $sd, $cd] = [sin(deg2rad($ra)), cos(deg2rad($ra)), sin(deg2rad($dec)), cos(deg2rad($dec))];
     $centro = [$cd * $ca, $cd * $sa, $sd];
     $norte = [-$sd * $ca, -$sd * $sa, $cd];
@@ -642,9 +702,12 @@ function gaia_fracciones_cono(float $ra, float $dec, float $rad, int $nivel = GA
             for ($k = 0; $k < 3; $k++) {
                 $v[$k] = $cp * $centro[$k] + $sn * $norte[$k] + $se * $este[$k];
             }
+            $total++;
+            if ($ex !== null && $v[0] * $ex[0] + $v[1] * $ex[1] + $v[2] * $ex[2] >= $ex[3]) {
+                continue;
+            }
             $c = gaia_ang2pix_nest($nivel, rad2deg(atan2($v[1], $v[0])), rad2deg(asin(max(-1.0, min(1.0, $v[2])))));
             $cuenta[$c] = ($cuenta[$c] ?? 0) + 1;
-            $total++;
         }
     }
     $area_cono = 2 * M_PI * (1 - cos(deg2rad($rad))) * (180 / M_PI) ** 2;
@@ -708,8 +771,8 @@ function gaia_pista_log(?int $prevision, bool $usada, bool $fallida = false, ?in
 
 /** `mag` (cuantizada) y `desde` de la petición en la línea del log (#518, AC6):
     con ellos se mide el ahorro real del complemento. Pura. */
-function gaia_log_peticion(float $mag, ?float $desde): array {
-    return ['mag' => $mag, 'desde' => $desde];
+function gaia_log_peticion(float $mag, ?float $desde, ?array $excl = null): array {
+    return ['mag' => $mag, 'desde' => $desde] + ($excl === null ? [] : ['excl' => $excl]);
 }
 
 // ───────────────────────── EFECTOS (disco / red) ─────────────────────────────
@@ -723,7 +786,7 @@ function gaia_log_peticion(float $mag, ?float $desde): array {
  * suma parcial. No lanza: una pista rota no puede ser un 500. En `$cono`
  * deja, con las mismas cabeceras, la previsión del cono entero (G ≤ 21, #526).
  */
-function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, float $desde = 0.0, string $dir = GAIA_AVANCE_DIR, ?int &$cono = null): ?int {
+function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, float $desde = 0.0, string $dir = GAIA_AVANCE_DIR, ?int &$cono = null, ?array $excl = null): ?int {
     $cono = null;
     try {
         $m = json_decode((string) @file_get_contents($dir . '/manifiesto.json'), true);
@@ -731,7 +794,7 @@ function gaia_pista_prevision(float $ra, float $dec, float $rad, float $mag, flo
         if (($m['nivel'] ?? null) !== GAIA_AVANCE_NIVEL || !preg_match('#^[a-z0-9_]+/\{ipix\}\.bin$#', $ruta)) {
             return null;
         }
-        $fracciones = gaia_fracciones_cono($ra, $dec, $rad);
+        $fracciones = gaia_fracciones_cono($ra, $dec, $rad, GAIA_AVANCE_NIVEL, $excl);
         $hists = [];
         foreach (array_keys($fracciones) as $ipix) {
             $fh = @fopen($dir . '/' . str_replace('{ipix}', (string) $ipix, $ruta), 'rb');
@@ -790,17 +853,17 @@ function gaia_json_headers(): void {
  * Con `$desde` (#518) todas las vías piden solo el complemento débil.
  * Devuelve el JSON, false si la cadena sigue en marcha, o null si falla.
  */
-function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_job, ?string &$etapa = null, ?int $prevision = null, ?float $desde = null): string|false|null {
+function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_job, ?string &$etapa = null, ?int $prevision = null, ?float $desde = null, ?array $excl = null): string|false|null {
     $etapa = 'async';
     if (is_file($ruta_job)) {
-        return gaia_cadena_avanzar($ruta_job, $ra, $dec, $rad, $mag, $desde);
+        return gaia_cadena_avanzar($ruta_job, $ra, $dec, $rad, $mag, $desde, $excl);
     }
     /* Pista de densidad (#517): previsión > umbral → directo a la cadena, sin
        sonda ni segura. Si no se puede lanzar, el flujo de siempre: la pista
        solo ahorra tiempo, nunca quita la vía síncrona. */
     if (gaia_pista_densa($prevision)) {
         $lanzada = is_writable(dirname($ruta_job))
-            && gaia_cadena_lanzar($ruta_job, ['paso' => 'hist'], $ra, $dec, $rad, $mag, $desde);
+            && gaia_cadena_lanzar($ruta_job, ['paso' => 'hist'], $ra, $dec, $rad, $mag, $desde, $excl);
         // Se fusiona: el resto del extra (mag, desde) sigue en la línea del log.
         $GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, $lanzada, !$lanzada, $GLOBALS['cache_lru_extra']['prevision_cono'] ?? null)
             + ($GLOBALS['cache_lru_extra'] ?? []);
@@ -809,7 +872,7 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_
         }
     }
     $etapa = 'densa';
-    $json = gaia_fetch_urls(gaia_proveedores_gavo_primero($ra, $dec, $rad, $mag, false, $desde), 'sonda', true);
+    $json = gaia_fetch_urls(gaia_proveedores_gavo_primero($ra, $dec, $rad, $mag, false, $desde, $excl), 'sonda', true);
     if ($json !== null) {
         $filas = gaia_num_filas($json);
         if ($filas !== null && !gaia_truncada($filas)) {
@@ -818,18 +881,18 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_
         }
         unset($json);   // libera el cuerpo de la sonda (~14 MB) antes de la 2ª pasada
     }
-    $json = gaia_fetch_urls(gaia_proveedores_gavo_primero($ra, $dec, $rad, $mag, true, $desde), 'segura', true);
+    $json = gaia_fetch_urls(gaia_proveedores_gavo_primero($ra, $dec, $rad, $mag, true, $desde, $excl), 'segura', true);
     if ($json !== null) {
         // Con desde, las filas son todas G ≥ 15: el corte (la más débil) también,
         // así que el fondo (corte, mag] no necesita la frontera.
-        return gaia_completar_densa($json, $ra, $dec, $rad, $mag);
+        return gaia_completar_densa($json, $ra, $dec, $rad, $mag, $excl);
     }
     // Sin .job escrito nadie volvería a preguntar por la cadena: no se lanza.
     $etapa = 'async';
     if (!is_writable(dirname($ruta_job))) {
         return null;
     }
-    return gaia_cadena_lanzar($ruta_job, ['paso' => 'hist'], $ra, $dec, $rad, $mag, $desde) ? false : null;
+    return gaia_cadena_lanzar($ruta_job, ['paso' => 'hist'], $ra, $dec, $rad, $mag, $desde, $excl) ? false : null;
 }
 
 /**
@@ -840,8 +903,8 @@ function gaia_fetch(float $ra, float $dec, float $rad, float $mag, string $ruta_
  * 2026-10-24), así que el RUN va en un segundo POST; si se pierde, la fase
  * PENDING lo reenvía.
  */
-function gaia_cadena_lanzar(string $ruta_job, array $e, float $ra, float $dec, float $rad, float $mag, ?float $desde = null): bool {
-    $param = gaia_job_parametros($e['paso'], $ra, $dec, $rad, $mag, $e['b'] ?? null, $desde);
+function gaia_cadena_lanzar(string $ruta_job, array $e, float $ra, float $dec, float $rad, float $mag, ?float $desde = null, ?array $excl = null): bool {
+    $param = gaia_job_parametros($e['paso'], $ra, $dec, $rad, $mag, $e['b'] ?? null, $desde, $excl);
     [$http, , $job] = gaia_uws(GAIA_ASYNC_URL, $param, GAIA_UWS_TIMEOUT);
     if ($http !== 303 || !gaia_job_valido($job)) {
         return false;
@@ -863,7 +926,7 @@ function gaia_cadena_estado(string $ruta_job): ?array {
  * .job y la siguiente petición podrá lanzar otra), o el JSON final. El .job de
  * una cadena terminada lo borra cache_lru_flujo DESPUÉS de escribir la entrada.
  */
-function gaia_cadena_avanzar(string $ruta_job, float $ra, float $dec, float $rad, float $mag, ?float $desde = null): string|false|null {
+function gaia_cadena_avanzar(string $ruta_job, float $ra, float $dec, float $rad, float $mag, ?float $desde = null, ?array $excl = null): string|false|null {
     $e = gaia_cadena_estado($ruta_job);
     if ($e === null) {
         // También el .job de una versión anterior (una URL suelta): un 502 y el
@@ -906,7 +969,7 @@ function gaia_cadena_avanzar(string $ruta_job, float $ra, float $dec, float $rad
     if (isset($a['listo'])) {
         return $a['listo'];
     }
-    if (isset($a['lanzar']) && gaia_cadena_lanzar($ruta_job, $a['estado'], $ra, $dec, $rad, $mag, $desde)) {
+    if (isset($a['lanzar']) && gaia_cadena_lanzar($ruta_job, $a['estado'], $ra, $dec, $rad, $mag, $desde, $excl)) {
         return false;
     }
     @unlink($ruta_job);
@@ -937,7 +1000,7 @@ function gaia_uws(string $url, ?array $post, int $timeout): array {
 
 /** Añade a la respuesta segura de un campo denso el fondo y el velo espacial
     de la banda que el TOP dejó fuera. */
-function gaia_completar_densa(string $json, float $ra, float $dec, float $rad, float $mag): string {
+function gaia_completar_densa(string $json, float $ra, float $dec, float $rad, float $mag, ?array $excl = null): string {
     /* Campo denso: el TOP recortó una banda cuya luz es físicamente relevante
        (en M7, SB ~21 mag/arcsec², más brillante que un cielo oscuro). Se piden
        sus momentos agregados (medidos: ~39 s en M7, una vez por región, caché
@@ -946,12 +1009,12 @@ function gaia_completar_densa(string $json, float $ra, float $dec, float $rad, f
     if ($corte === null || $corte >= $mag) {
         return $json;
     }
-    $agg = gaia_fetch_urls(gaia_fondo_urls($ra, $dec, $rad, $mag, $corte), 'fondo', true);
+    $agg = gaia_fetch_urls(gaia_fondo_urls($ra, $dec, $rad, $mag, $corte, $excl), 'fondo', true);
     $fila = ($agg !== null) ? (json_decode($agg, true)['data'][0] ?? null) : null;
     $json = gaia_mezclar_fondo($json, is_array($fila) ? $fila : null, $corte, $rad, $mag);
     /* ADR 0029: velo espacial por celdas. Un fallo aquí degrada a velo uniforme
        (el escalar ya está servido), nunca bloquea los datos. */
-    $esp = gaia_fetch_urls(gaia_espacial_urls($ra, $dec, $rad, $mag, $corte, GAIA_ESPACIAL_N), 'espacial', true);
+    $esp = gaia_fetch_urls(gaia_espacial_urls($ra, $dec, $rad, $mag, $corte, GAIA_ESPACIAL_N, $excl), 'espacial', true);
     return gaia_mezclar_espacial($json, $esp, GAIA_ESPACIAL_N);
 }
 
@@ -1118,15 +1181,29 @@ if ($desde === false) {
     exit(json_encode(['error' => 'Parámetro desde incorrecto (solo se admite desde=15)']));
 }
 
+/* Franja (#583, ADR 0041): `excl=ra,dec,r` deja fuera el círculo que sirve el
+   banco del globular. Mal formado, 400; si el cono cabe dentro, la franja está
+   vacía y se responde sin tocar caché ni TAP. */
+$excl = gaia_excl($_GET['excl'] ?? null);
+if ($excl === false) {
+    http_response_code(400);
+    gaia_json_headers();
+    exit(json_encode(['error' => 'Parámetro excl incorrecto (ra,dec,r en grados)']));
+}
+
 [$qra, $qdec, $qrad, $qmag] = gaia_cuantizar((float) $ra, (float) $dec, (float) $rad, (float) $mag);
-$clave = gaia_clave($qra, $qdec, $qrad, $qmag, $desde);
+if (gaia_franja_vacia($qra, $qdec, $qrad, $excl)) {
+    gaia_json_headers();
+    exit('{"data":[]}');
+}
+$clave = gaia_clave($qra, $qdec, $qrad, $qmag, $desde, $excl);
 $ruta = gaia_ruta($clave);
 $ruta_job = gaia_ruta_job($clave);
 /* Pista de densidad (#517): en toda petición, para que el log la registre
    (AC4); solo la usa gaia_fetch al lanzar un campo nuevo. Con `desde` prevé
    solo el complemento, que es lo que se le pide al TAP. */
-$prevision = gaia_pista_prevision($qra, $qdec, $qrad, $qmag, $desde ?? 0.0, GAIA_AVANCE_DIR, $prevision_cono);
-$GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, false, false, $prevision_cono) + gaia_log_peticion($qmag, $desde);
+$prevision = gaia_pista_prevision($qra, $qdec, $qrad, $qmag, $desde ?? 0.0, GAIA_AVANCE_DIR, $prevision_cono, $excl);
+$GLOBALS['cache_lru_extra'] = gaia_pista_log($prevision, false, false, $prevision_cono) + gaia_log_peticion($qmag, $desde, $excl);
 
 cache_lru_flujo(
     [
@@ -1147,8 +1224,8 @@ cache_lru_flujo(
             exit;
         },
     ],
-    static function (?string &$etapa) use ($qra, $qdec, $qrad, $qmag, $ruta_job, $prevision, $desde): string|false|null {
-        return gaia_fetch($qra, $qdec, $qrad, $qmag, $ruta_job, $etapa, $prevision, $desde);
+    static function (?string &$etapa) use ($qra, $qdec, $qrad, $qmag, $ruta_job, $prevision, $desde, $excl): string|false|null {
+        return gaia_fetch($qra, $qdec, $qrad, $qmag, $ruta_job, $etapa, $prevision, $desde, $excl);
     },
     static fn(string $estado, ?string $etapa) => gaia_servir($ruta, $clave, $estado, $etapa),
     static function (string $json): void {

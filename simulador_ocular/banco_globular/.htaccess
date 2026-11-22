@@ -1,0 +1,17 @@
+# Banco del globular (#583, ADR 0041): uploads/bitacora/banco_globular/.
+# Los r<regla>/<id>.bin no cambian nunca para una versión de la regla de
+# pertenencia (otra regla = otra carpeta): se cachean un año sin revalidar. El
+# cliente los pide por Range (cabecera y filas hasta su magnitud), que Apache
+# sirve de serie para ficheros estáticos. El manifiesto NO es inmutable: es lo
+# que dice al cliente que el banco existe y qué regla vale (criterio 7).
+<FilesMatch "\.bin$">
+    ForceType application/octet-stream
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </IfModule>
+</FilesMatch>
+<Files "manifiesto.json">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-cache"
+    </IfModule>
+</Files>
