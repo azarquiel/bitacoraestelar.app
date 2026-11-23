@@ -44,3 +44,5 @@ Texto plano, claro, sin jerga. Estas secciones, en este orden:
 4. **Ficheros a subir a producción.** Ruta exacta de cada fichero desplegable que cambió (`git diff --name-only <base>...HEAD`), excluyendo tests, scripts, docs y ADR. Si toca el plugin de WordPress, recuerda subir TODOS sus ficheros y comprobar que `Version:` de `bitacora-registro.php` subió (ver AGENTS.md).
 5. **Qué probar en producción.** Solo si hay algo visible o una ganancia para el usuario final; si no, una línea: «Sin impacto visible para el usuario final». Si lo hay, paso a paso y detallado: URL en `bitacoraestelar.app`, qué hacer, qué debe verse, y qué indicaría fallo.
 6. **Siguientes pasos.** 3-5 pasos concretos de desarrollo, ordenados por prioridad (criterios parciales, deuda `shortcut:`, tickets de seguimiento a abrir).
+
+Cierra el informe con esta línea, tal cual: «Estado: verificado, pendiente de aceptación por el dueño del ticket». La verificación la hace el eje Spec; aceptar es decisión del dueño tras probar en producción. No cierres el ticket ni lo des por aceptado.
