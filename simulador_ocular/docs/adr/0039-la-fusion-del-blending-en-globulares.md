@@ -461,6 +461,75 @@ núcleo (M13 dentro de 8 r_h: 845 → 2 204). El velo `V1`/`V2` sigue fuera del
 render (ADR 0012), así que la `c` nueva cambia las sintéticas que se dibujan,
 no el difuso.
 
+## Filas mezcladas del núcleo (#611, 2026-11-23)
+Tercera corrección de la atribución: el doble conteo de flujo que dejó #595.
+
+**Criterio (AC1).** Fila mezclada = la que no pasa el filtro de fuente única
+de Fabricius et al. 2021, §3.3: `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y
+`ipd_gof_harmonic_amplitude < 0,1`. Sin `ruwe` (solución 2p) también es
+mezcla: más de la mitad de las 2p a G < 19 se deben a una vecina (mismo
+artículo, §2.6). Es la fuente que ancla `gaiaCrowdingK`, y ningún umbral se
+ha tocado. Descartados: `ipd_frac_multi_peak > 2` solo (Tokovinin 2023; marca
+el 64 % de ≤2, donde el catálogo ya cuadra) y el exceso corregido C*
+(Riello et al. 2021), que necesita BP−RP: justo lo que les falta a las
+mezclas. Columnas en `m13_gaia_dr3_mezcla.csv` (`scripts/gen_m13_mezcla.py`,
+Gaia DR3, cruce 1:1 con el fixture).
+
+**Qué hace con ellas.** Una fila mezclada pesa `c(m, r)` de su propia
+magnitud en la contabilidad de luz del arnés (conservación, R2v, pregunta 5 y
+atribución). `c` es la fracción que Fabricius cuenta como estrella recuperada;
+la parte `(1 − c)` ya la ponen las sintéticas y el velo. Sin parámetro nuevo.
+Donde `c ≈ 1` (fuera del núcleo, brillantes) la fila queda entera. El
+criterio 2 (dibujo) no cambia: la mezcla se dibuja igual.
+`--mezcla 0` reproduce `fusion_blending_595.txt` byte a byte.
+
+**Marcadas** (G 16,5-18,5, miembros y campo): 260/260 en ≤0,25, 804/804 en
+≤0,5, 2 629/2 683 en ≤1, 2 296/3 230 en ≤2, 437/1 891 en ≤4, 41/847 en ≤8.
+Dentro de 1 r_h el filtro marca casi todo, porque ahí toda fila tiene vecina.
+
+**AC2, atribución en 17-19** (`fusion_blending_611.txt`), cat/`num·c` ± 1σ:
+
+| anillo | 17,07-18,07 (#595 → #611) | 18,07-19,07 (#595 → #611) |
+|---|---|---|
+| ≤0,25 | 68 000 → 0 filas contra 0,07 (sin potencia) | 2·10⁵ → 0,08 ± 131 (sin potencia) |
+| ≤0,5 | 285 → 0,95 ± 0,70 | 2 357 → 0,30 ± 4,7 (sin potencia) |
+| ≤1 | 2,79 → **1,06 ± 0,046** | 13,7 → **1,05 ± 0,11** |
+
+Dentro de ±2σ en los tres. Potencia real solo en ≤1: en ≤0,25 y ≤0,5 el
+modelo espera 0,07 y 2 estrellas. **El criterio aporta**: con todas las filas
+pesadas por `c` (contrafactual, sin marcar), ≤1 18-19 cae a 0,84 y ≤2 18-19 a
+0,85 (−5,8σ); con el criterio, 1,05 y 0,91.
+
+**AC3, arnés de #577 con los listones de §0 bis/ter/quater sin mover:**
+
+| anillo | conservación #595 → #611 (2σ) | R2v #595 → #611 (2σ) |
+|---|---|---|
+| ≤0,25 | 1,232 → 1,052 (0,155, sin potencia) | 1,013 → 1,000 (sin potencia) |
+| ≤0,5 | 1,062 → 0,941 (0,108, sin potencia) | 1,051 → 1,000 (sin potencia) |
+| ≤1 | 1,024 → 0,939 (0,082, **PASA**) | 1,267 → **1,002** (0,005, **PASA**) |
+
+Fuera de 1 r_h (informativo): R2v de ≤2 pasa de 1,084 a 0,977 (sigue NO
+PASA, ahora por debajo: −2,6σ), ≤4 0,994 → 0,989 (PASA), ≤8 1,114 → 1,111.
+
+**Coste declarado: la conservación total pasa de 1,015 (PASA) a 0,950
+(NO PASA, 2σ = 0,044).** No es la corrección la que falta: el total de #595
+pasaba porque el doble conteo del núcleo (≤0,25 a 1,232) tapaba el déficit
+que ya tenían ≤2 y ≤4 (0,955 y 0,903, punto 4 de la atribución: muestreo de
+las gigantes). Con el doble conteo fuera, ese déficit se ve. Contra el
+contrafactual «todas por `c`» el total no cambia (0,949): no lo produce el
+criterio sino quitar el doble conteo.
+
+**Veredicto.** Sigue NO SE PUEDE TODAVÍA. Falla el criterio 3 en ≤2 y ≤8
+(≤1 ya pasa) y la conservación total. El p95 de la pregunta 5 pasa (≤1:
+0,121 → 0,097). Queda #596 (≤8) y el déficit de ≤2/≤4.
+
+**Producción, sin cambios.** La consulta a Gaia no pide `ruwe` ni las `ipd_*`
+y el velo `V1`/`V2` sigue fuera del render (ADR 0012). Llevarlo a
+producción es pedir esas tres columnas (proxy, banco, Avance) y pesar las
+mezclas al entrar el velo en el render. Ningún guardián del ADR cambia de
+valor: el arnés no lo vigila ningún test salvo `test_filas_mezcladas.js`
+(nuevo), que fija R2v ≤1 dentro de 2σ y rechaza `--mezcla 0` (1,267).
+
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
 Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.
@@ -968,6 +1037,7 @@ Si se implementa (b):
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
 | `completitud` en el velo (`gaiaM50`, `gaiaAncho`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
 | `gaiaCrowdingK = 75` con `gaiaFwhmAs = 0,6″` en `completitud` (#595) | entra en el velo y en las sintéticas | Fabricius et al. 2021, Tabla A.1 (Gaia EDR3 contra HST en 24 globulares sin M13): sesgo −0,4 puntos. Ver «Completitud del núcleo con medida externa» |
+| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | entra en la contabilidad de luz del arnés (peso `c(m, r)`), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de fuente única; la misma fuente que `gaiaCrowdingK`). Ver «Filas mezcladas del núcleo» |
 | corte de la consulta `G_c` en `completitud(m, r, G_c)` (#594) | entra en el velo, **no** en las sintéticas | lo pedido: `magQ` en producción (`estrellas.corte`), G ≤ 18,50 en el fixture; G − V del color sintético del bin (Riello et al. 2021). Ver «Corte de la consulta» |
 | G→V con BP−RP | entra (prerrequisito) | Gaia EDR3, doc. CU5, tabla 5.7 (σ = 0,03 mag) |
 | `mCutGeneracion = 18` como corte de `V1`/`V2` | entra en el velo | el existente de `CFG` (profundidad de la realización sintética); ancla no revisada aquí |
