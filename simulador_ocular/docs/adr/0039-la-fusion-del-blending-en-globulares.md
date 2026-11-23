@@ -863,6 +863,47 @@ la misma c_mod. Como N_HST y `num` no dependen del criterio, R_num no cambia
 **Prohibido** (ticket): elegir el criterio por lo cerca que deja el 47 %;
 mover listón, región o tramo tras contar; cifras de estrellas dibujadas.
 
+### Resultado (`simulador_ocular/docs/validacion/exceso_619.txt`)
+`node scripts/spike_617_exceso.js <.zpt> --619`. Sin `--619`, la salida de
+#617 sale byte a byte igual. Cumplen el criterio 8 071 de las 11 972 filas del
+fixture.
+
+| medida | valor | regla |
+|---|---|---|
+| control, 0,5-2,2′ ∩ ACS, G 16-18 | N_crit / N_HST = 1 186 / 2 643 = **44,9 %** (Fabricius 47 %) | **VALE** |
+| informativo, r < 0,5′ ∩ ACS | 58 / 685 = 8,5 % (Fabricius 7 %) | sin voto |
+| R_num (0,5-1 r_h, V 17,07-18,07) | 0,927 ± 0,027 | `num` vale |
+| c_crit / c_mod | 0,418 / 0,362 = **1,154 ± 0,062** | k vale |
+| todas las filas: c_emp / c_mod | 3,016 ± 0,121 | fuera |
+
+**Veredicto (AC4): lo que cuenta `c`.** El modelo de densidad está bien, y
+`gaiaCrowdingK = 75` reproduce lo que mide la Tabla A.1. Lo que no casa es la
+cantidad: la Tabla A.1 cuenta las fuentes con astrometría 5/6p y BP−RP, y
+el arnés y producción cuentan todas las filas, incluidas las 2p y las que no
+tienen color. En 0,5-1 r_h, V 17-18, son 1 296 filas, y solo 496 cumplen el
+criterio. `(1 − c)` repone las otras 800 como sintéticas o velo, y el
+catálogo ya las trae. Ese es el 2,79 de #595.
+
+**Cierra #617.** Con el control de #619, sus AC1-3 tienen veredicto:
+`num` vale (AC1), k vale (AC2) y falla lo que cuenta `c`, que no es ninguna de
+las dos salidas del AC3 de #617. Su sustituto es la historia del AC5 de
+aquí.
+
+**AC5.** Historia que hace que `c` y el catálogo cuenten lo mismo. Hay dos
+caminos, y la historia elige con prerregistro:
+1. una `c` de filas (N_filas / N_HST), con ancla externa nueva, porque la
+   Tabla A.1 no la da;
+2. que el arnés y producción cuenten como «catálogo» solo las filas con el
+   criterio, y que las demás entren por `(1 − c)`. Producción tendría que
+   pedir `ruwe` o `astrometric_params_solved`.
+
+En la misma historia se retira el peso de #611 (AC4 de #617).
+
+**Qué no dice.** El criterio es una hipótesis fijada antes de contar, no una
+frase del artículo (AC1). Pasa el control en 0,5-2,2′ y queda a 1,5 puntos
+en r < 0,5′, pero un solo cúmulo no prueba que Fabricius contara así. La
+historia del AC5 puede repetirlo en otro globular de la Tabla A.1 con HST.
+
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
 Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.

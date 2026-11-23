@@ -36,5 +36,21 @@ ok(X.veredicto({ nHst: 1300, nMod: 466, nGaia: 1300, cMod: 0.98 }).cuadra, 'prod
 // Control: 47 ± 10 puntos; el 95,6 % de «todas las filas» no pasa.
 ok(X.control(47, 100) && X.control(57, 100) && !X.control(58, 100) && !X.control(2527, 2643), 'control 47 ± 10: 57 sí, 58 y 95,6 no');
 
+// #619: criterio de recuento (5/6 parámetros = ruwe no nulo, y BP−RP).
+ok(X.recuperada({ ruwe: 1.0, color: true }) && !X.recuperada({ ruwe: null, color: true }) &&
+   !X.recuperada({ ruwe: 1.0, color: false }) && !X.recuperada({ ruwe: 5, color: false }), 'recuperada: ruwe no nulo y BP−RP; ruwe alto no excluye');
+
+// #619: lectura con el criterio y con todas las filas.
+var M = { nHst: 1187, nMod: 1281 }, CM = 0.362;
+function lee(nCrit, nTodas) {
+  return X.lectura619(X.veredicto({ nHst: M.nHst, nMod: M.nMod, nGaia: nCrit, cMod: CM }),
+                      X.veredicto({ nHst: M.nHst, nMod: M.nMod, nGaia: nTodas, cMod: CM }));
+}
+ok(lee(430, 1296) === 'c-cuenta', 'criterio cuadra con c_mod y todas las filas no: falla lo que cuenta c');
+ok(lee(1000, 1296) === 'k', 'criterio también lejos de c_mod: falla k');
+ok(lee(430, 430) === 'ninguno', 'criterio y todas cuadran: ninguno');
+ok(X.lectura619(X.veredicto({ nHst: 1187, nMod: 400, nGaia: 430, cMod: CM }), X.veredicto({ nHst: 1187, nMod: 400, nGaia: 1296, cMod: CM })) === 'num',
+   'R_num 2,97: falla num (manda sobre el resto)');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\ntodo ok');

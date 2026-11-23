@@ -46,9 +46,16 @@ lineas.slice(1).forEach(function (l) {
 // Gaia: fixture entero (miembros y campo, como HST).
 var VAL = path.join(__dirname, '../simulador_ocular/docs/validacion');
 var esMezcla = require('./mezcla_gaia.js').leer(path.join(VAL, 'm13_gaia_dr3_mezcla.csv'));
+var ruwe = new Map();   // #619: ruwe del sidecar (nulo = solución 2p)
+fs.readFileSync(path.join(VAL, 'm13_gaia_dr3_mezcla.csv'), 'utf8').trim().split('\n').slice(1).forEach(function (l) {
+  var c = l.split(',');
+  ruwe.set(c[0] + ',' + c[1], c[2] === '' ? null : +c[2]);
+});
 var gaia = fs.readFileSync(path.join(VAL, 'm13_gaia_dr3.csv'), 'utf8').trim().split('\n').slice(1).map(function (l) {
   var c = l.split(','), fila = [+c[0], +c[1], +c[2], c[3] === '' ? null : +c[3]], p = plano(fila[0], fila[1]);
   p.g = fila[2]; p.vGaia = R.magVGaia(fila); p.color = fila[3] != null; p.mezcla = esMezcla.get(c[0] + ',' + c[1]); p.r = Math.hypot(p.x, p.y);
+  if (!ruwe.has(c[0] + ',' + c[1])) throw new Error('fila sin sidecar: ' + c[0] + ',' + c[1]);
+  p.ruwe = ruwe.get(c[0] + ',' + c[1]);
   return p;
 });
 
@@ -136,3 +143,29 @@ console.log('\nDiagnóstico post hoc (sin voto): G 16-18, N_Gaia / N_HST, todas 
 });
 console.log('Veredicto: ' + (!pasaControl ? 'sin veredicto (control)' :
   (v.noCuadra || !v.cuadra) ? 'el método no cuadra' : [v.num.falla && 'falla num', v.k.falla && 'falla k'].filter(Boolean).join(' y ')));
+
+/* #619 · --619: el control y el reparto con el criterio de recuento del
+   prerregistro (ADR 0039, «Qué cuenta como recuperada la Tabla A.1»):
+   astrometría 5/6p (ruwe no nulo) y BP−RP. Sin el flag, la salida de #617 no cambia. */
+if (process.argv.indexOf('--619') > 0) {
+  var crit = gaia.filter(X.recuperada);
+  console.log('\n══ #619 · criterio: astrometría 5/6p (ruwe no nulo) y BP−RP; ' + crit.length + ' de ' + gaia.length + ' filas del fixture');
+  var c19 = crit.filter(function (p) { return p.g >= 16 && p.g < 18 && enA1(p); }).length;
+  var pasa19 = X.control(c19, ch);
+  console.log('Control (0,5-2,2′ ∩ ACS, G 16-18): N_crit / N_HST = ' + c19 + ' / ' + ch + ' = ' + f(100 * c19 / ch, 1) +
+              ' %  (Fabricius 47 %, ±10; todas las filas ' + f(100 * cg / ch, 1) + ' %) → ' + (pasa19 ? 'VALE' : 'NO VALE'));
+  var en05 = enAnillo(0, 30);
+  var h05 = hst.filter(function (s) { return s.g >= 16 && s.g < 18 && en05(s); }).length;
+  var c05 = crit.filter(function (p) { return p.g >= 16 && p.g < 18 && en05(p); }).length;
+  console.log('Informativo (sin voto), r < 0,5′ ∩ ACS: ' + c05 + ' / ' + h05 + ' = ' + f(100 * c05 / h05, 1) + ' %  (Fabricius 7 %)');
+  if (!pasa19) console.log('Veredicto #619: el control no vale; se cierra sin tocar c (AC5)');
+  else {
+    var nCrit = crit.filter(function (p) { return p.vGaia > V0 && p.vGaia <= V1 && en(p); }).length;
+    var vc = X.veredicto({ nHst: nHst, nMod: mod.n, nGaia: nCrit, cMod: mod.c });
+    console.log('Reparto (0,5-1 r_h ∩ ACS, V ' + f(V0, 2) + '-' + f(V1, 2) + '): N_crit = ' + nCrit + ', N_HST = ' + nHst + ', num = ' + f(mod.n, 1) + ', c_mod = ' + f(mod.c));
+    console.log('  R_num = ' + f(vc.num.q) + ' ± ' + f(vc.num.sigma) + (vc.num.falla ? '  → FALLA num' : '  → num vale'));
+    console.log('  c_crit / c_mod = ' + f(vc.cEmp) + ' / ' + f(mod.c) + ' = ' + f(vc.k.q) + ' ± ' + f(vc.k.sigma) + (vc.k.falla ? '  → FALLA k' : '  → k vale'));
+    console.log('  todas las filas: c_emp / c_mod = ' + f(v.k.q) + ' ± ' + f(v.k.sigma) + (v.k.falla ? '  → fuera' : '  → dentro'));
+    console.log('Veredicto #619: ' + ({ num: '`num`', k: 'k', 'c-cuenta': 'lo que cuenta `c` (el catálogo cuenta filas que `c` no cuenta)', ninguno: 'ninguno' })[X.lectura619(vc, v)]);
+  }
+}

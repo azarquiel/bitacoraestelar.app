@@ -47,4 +47,17 @@ function veredicto(m) {
 var FABRICIUS = 47, TOL = 10;
 function control(nGaia, nHst) { return Math.abs(100 * nGaia / nHst - FABRICIUS) <= TOL; }
 
-module.exports = { huella: huella, veredicto: veredicto, control: control, BANDA: BANDA };
+/* #619 · Criterio de recuento: astrometría 5/6p (ruwe no nulo, esquema de DR3) y
+   BP−RP. f = { ruwe: número o null, color: bool }. */
+function recuperada(f) { return f.ruwe != null && f.color; }
+
+/* #619 · Veredicto con el criterio (vCrit) y con todas las filas (vTodas), tabla
+   del prerregistro. `num` no depende del criterio: se lee de vCrit. */
+function lectura619(vCrit, vTodas) {
+  if (vCrit.num.falla) return 'num';
+  if (vCrit.k.falla) return 'k';
+  return vTodas.k.falla ? 'c-cuenta' : 'ninguno';
+}
+
+module.exports = { huella: huella, veredicto: veredicto, control: control, BANDA: BANDA,
+  recuperada: recuperada, lectura619: lectura619 };
