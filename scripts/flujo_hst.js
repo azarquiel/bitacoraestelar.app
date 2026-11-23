@@ -36,6 +36,16 @@ function vecinas(p, idx, r) {
   return out;
 }
 
+// Estrella de `idx` más cercana a p a ≤ r (null si ninguna).
+function masCercana(p, idx, r) {
+  var best = null, dm = r;
+  vecinas(p, idx, r).forEach(function (s) {
+    var d = Math.hypot(s.x - p.x, s.y - p.y);
+    if (d <= dm) { dm = d; best = s; }
+  });
+  return best;
+}
+
 // p = {x, y, g} de Gaia; estrellas HST con g ya transformada.
 function cocientes(p, idx, r) {
   var v = vecinas(p, idx, r);
@@ -111,5 +121,5 @@ function veredicto(q1, nboot) {
   return { mediana: mediana(q1), lo: lo, hi: hi, lectura: lo > T ? 'a' : hi < T ? 'b' : 'inconcluso' };
 }
 
-module.exports = { R_AS: R_AS, T: T, indice: indice, cocientes: cocientes, alinear: alinear,
+module.exports = { R_AS: R_AS, T: T, indice: indice, cocientes: cocientes, masCercana: masCercana, alinear: alinear,
   ajustarG: ajustarG, veredicto: veredicto, mediana: mediana };

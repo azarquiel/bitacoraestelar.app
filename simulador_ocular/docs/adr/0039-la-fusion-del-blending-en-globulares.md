@@ -678,7 +678,251 @@ radial de `c`, no en k. Lo separa **#617**.
 **Peso de #611: en revisión (#617).** El código no cambia (el spike decide,
 no corrige). Hasta #617, los números de «Filas mezcladas del núcleo» que
 dependen del peso `c` (atribución en 17-19, R2v y conservación de ≤1) quedan
-condicionados a ese peso.
+condicionados a ese peso. Decidido en «El exceso de filas en 0,5-1 r_h» (AC4): se mantiene como compensación declarada; se retira en #621.
+
+## El exceso de filas en 0,5-1 r_h: `num` o `c` (#617, 2026-11-23)
+
+Sale de #614: las filas de ≤1 son estrellas sueltas, y el cociente cat/`num·c`
+de 17,07-18,07 (2,79, `fusion_blending_595.txt`) sigue sin dueño. Aquí no se
+toca `gaiaCrowdingK` ni el código del arnés: se mide y se decide.
+
+### Prerregistro (escrito ANTES de contar)
+
+**Identidad que se usa.** Con N_HST las estrellas reales del tramo,
+cat/`num·c` = (N_cat / N_HST) / c_mod × N_HST / `num`. El primer factor es
+c_emp / c_mod (¿falla `c`, es decir k?); el segundo es R_num = N_HST / `num`
+(¿falla el modelo de densidad?). El producto tiene que dar del orden de 2,8;
+si no, el método no cuadra y no hay veredicto.
+
+**Dominio.** Anillo 0,5-1 r_h (50,7-101,4″ del centro de Harris, radio
+circular como el del arnés) **dentro del campo ACS**. El campo se fija con
+las estrellas HST, sin mirar Gaia: celdas de 4″ con ≥ 3 estrellas HST
+(cualquier magnitud) cuyas 8 vecinas también cumplen (borde erosionado). Se
+declara la fracción del anillo que cubre.
+
+**Medidas** (`scripts/spike_617_exceso.js`, mismo `.zpt` de MAST que #614 y
+el mismo alineado):
+
+- **Tramo V 17,07-18,07**, los bordes de bin del arnés. Para HST, la V de
+  tierra del propio catálogo (`Vground`, la que dan los autores); para
+  Gaia, `magVGaia`, la de producción y el arnés.
+- N_HST: estrellas HST del tramo en el dominio. N_Gaia: filas del fixture
+  (miembros y campo, como HST) del tramo en el dominio.
+- `num` del dominio: Σ celdas Σ(r)·A_celda·Σ `num`_k de los bins del tramo;
+  c_mod: la media de `pob.completitud` (k = 75, corte G 18,5 como el arnés)
+  con el mismo peso.
+- R_num = N_HST / `num`; c_emp = N_Gaia / N_HST.
+
+**Regla** (σ de Poisson; para c_emp, binomial sobre N_HST):
+
+| término | falla si | entonces |
+|---|---|---|
+| `num` | R_num fuera de [0,80, 1,25] **y** a más de 2σ de 1 | ticket sobre el modelo de densidad (AC3) |
+| k | c_emp / c_mod fuera de [0,80, 1,25] **y** a más de 2σ de 1 | cambio de k con listón propio, antes de medirlo (AC3) |
+
+Pueden fallar los dos. Si no falla ninguno, el producto no explica el 2,79 y
+se declara que el método no cuadra.
+
+**Por qué [0,80, 1,25].** Simétrico en log y lejos del caso malo: si todo el
+exceso fuera de un término, ese término valdría 2,79 y el otro 1; el listón
+rechaza 2,79 en el que falla y deja pasar el que no. Cabe el sistemático de
+banda (V de tierra contra `magVGaia`, ≈ 0,1 mag en un tramo de 1 mag, que en
+la LF de la subgigante mueve la cuenta ≲ 15 %).
+
+**Control del método** (sin él no hay veredicto). La misma cuenta, en G
+(G de HST con el ajuste de #614) y en la región de la Tabla A.1 (0,5-2,2′ ∩
+campo ACS), en el tramo G 16-18, tiene que dar la completitud de Fabricius
+para M13, **47 %**, a ±10 puntos. G 17-19 no sirve: el fixture se pidió hasta
+G 18,5.
+
+**Prohibido** (ticket): cifras de estrellas dibujadas; ajustar k a este
+fixture (M13 es la prueba fuera de muestra de #595); mover listón o dominio
+tras contar.
+
+### Resultado (`simulador_ocular/docs/validacion/exceso_617.txt`)
+
+| medida | valor | regla |
+|---|---|---|
+| control, 0,5-2,2′ ∩ ACS (cobertura 75,5 %), G 16-18 | N_Gaia / N_HST = 2 527 / 2 643 = **95,6 %** (Fabricius 47 %) | **NO VALE** |
+| anillo 0,5-1 r_h ∩ ACS (cobertura 99,8 %), V 17,07-18,07 | N_HST 1 187, N_Gaia 1 296, `num` 1 281,0, c_mod 0,362 | — |
+| AC1, R_num = N_HST / `num` | **0,927 ± 0,027** | dentro de [0,80, 1,25] (sin voto) |
+| AC2, c_emp / c_mod | 1,092 / 0,362 = **3,02 ± 0,12** | fuera (sin voto) |
+| producto | 2,795 (arnés 2,79) | cuadra |
+
+Informativo: en G 17-18, mismo dominio, N_Gaia / N_HST = 1 205 / 1 214 = 0,993.
+
+**Veredicto formal: sin veredicto.** El control no vale. La regla dice que,
+sin control, ningún término falla ni pasa. Lo que sigue es lectura de las
+cifras, no veredicto.
+
+**Tres cosas que el prerregistro no fijaba** (se declaran; ninguna cambia
+qué término sale de la banda):
+- El código del spike se escribió después del prerregistro, sin mover
+  dominio, tramo ni listón.
+- La σ de c_emp / c_mod era binomial y daba ±0,002. La binomial supone que
+  las filas de Gaia son un subconjunto de las estrellas HST, y c_emp = 1,092
+  dice que no lo son: el fixture lleva campo y la V de las dos bandas no es la
+  misma. Se pasa a Poisson de las dos cuentas: ±0,12.
+- «Del orden de 2,8» se lee con la misma banda: producto / 2,79 dentro de
+  [0,80, 1,25].
+
+**Qué no se puede leer.** c_emp = 1,092 en V y 0,993 en G, en el mismo
+dominio: el sistemático de banda es de ≈ 9 %. Cabe en el ≲ 15 % que admite la
+banda, pero tampoco es pequeño. Ninguna de las dos cifras dice que `c`
+sea 1. Dicen que Gaia trae aquí tantas filas como estrellas tiene HST.
+
+**Lectura (sin voto).** `num` sale a −7 %, dentro de la banda; el término
+que se aleja es c_emp / c_mod, a 3. Si el control valiera, el 2,79 sería de
+`c` y no de `num`.
+
+**Hipótesis del control fallido (post hoc, sin voto, sin comprobar).**
+Fabricius describe la Tabla A.1 como «the combined completeness of the
+astrometry and the photometry». Con solo las filas con BP−RP, la cuenta baja
+a 57,0 % en 0,5-2,2′ (Fabricius 47 %, justo en el borde de ±10) y a 17,1 %
+en r < 0,5′ (Fabricius 7 %). No cuadra del todo. Faltaría exigir además
+astrometría de 5 o 6 parámetros, pero el fixture no trae
+`astrometric_params_solved`. Si se confirma, la `c` de la tabla mide «fuente
+con astrometría completa y BP−RP», no «fila en el catálogo». El arnés y
+producción cuentan todas las filas, y `gaiaCrowdingK = 75` estaría ajustado a
+otra cantidad. Eso explicaría el 3.
+
+**AC3.** No se abre ticket de `num`: sale dentro de la banda, aunque sin voto.
+Tampoco se propone un k nuevo: sin control, no hay base para mover k, y si la
+hipótesis vale, reajustar k a la Tabla A.1 no arregla nada. Siguiente paso,
+en **#619**: confirmar la hipótesis con una cuenta que se compare con
+la Tabla A.1. Se pide `astrometric_params_solved` para el fixture y se repite
+el control con «5/6 parámetros + BP−RP». Si el control vale, se repite este
+reparto con su veredicto. Si además falla `c`, en ese ticket se escribe el
+prerregistro de una `c` de filas (N_filas / N_HST).
+
+**AC4, peso `c` de las marcadas por #611: decisión, se mantiene.** Motivo:
+con la `c` de hoy, cat·c ≈ `num`·c en ≤1 (#611, 1,06 ± 0,046). Quitar el peso
+sin cambiar `c` devuelve el 2,79 de #595. Se retirará en el mismo cambio que
+toque `c`, y no antes. El texto de #614 que lo justificaba («cada fila marcada
+es una mezcla») ya no vale: el peso queda como compensación declarada, no
+como ley.
+
+## Qué cuenta como recuperada la Tabla A.1 (#619, 2026-11-23)
+
+Sale de #617: su control falló (todas las filas, 95,6 % contra 47 %), así que
+no dio veredicto. Aquí no se toca `gaiaCrowdingK`, `completitud` ni el peso de
+#611.
+
+### Lo que dicen los textos (AC1)
+Fabricius et al. 2021 (arXiv:2012.06242), §2.4: Table A.1 «shows the
+combined completeness of the astrometry and the photometry». A continuación:
+«the Gaia photometry is only published for sources with an astrometric
+solution», y la completitud fotométrica «can, however, be lower, in
+particular in high density regions for the GBP and GRP photometry». También:
+«in globular clusters, a percentage of about 20%-30% of stars having five or
+six parameter solutions … do not have GBP and GRP magnitudes». El pie de la
+tabla solo da las regiones: «Core: r<0.5 arcmin. Out: 0.5<r<2.2 arcmin».
+Arenou et al. 2018, §3.2 y Tabla B.1: «we compared the number of sources in
+various magnitude slices», sin más condición.
+
+**El texto no dice qué fuente cuenta como recuperada.** No define si
+«astrometry» es cualquier solución (2p incluida) o solo 5p/6p, ni si
+«photometry» es G o G + BP + RP. Se declara y se pasa a la hipótesis (AC2).
+
+### Prerregistro (AC2, escrito ANTES de contar con el criterio)
+**Criterio.** Cuenta como recuperada la fila con astrometría de 5 o 6
+parámetros **y** BP−RP. Es la lectura literal de «combined completeness of
+the astrometry and the photometry», con la astrometría y la fotometría
+completas.
+- **5/6 parámetros = `ruwe` no nulo.** Esquema de `gaia_source` de DR3:
+  `ruwe` «is set to null for sources with only a two-parameter solution», y
+  «all the sources in DR3 have only values of 3, 31 or 95 for the
+  astrometric_params_solved». El sidecar `m13_gaia_dr3_mezcla.csv` ya trae
+  `ruwe` para las 11 972 filas del fixture (comprobado: ninguna sin cruce).
+  No se pide el fixture de nuevo.
+- BP−RP: la columna `bp_rp` del fixture, no vacía.
+
+**Lo que ya se había visto** (ADR 0005, se declara): con todas las filas,
+95,6 % en 0,5-2,2′ y 59,7 % en r < 0,5′. Con solo BP−RP, 57,0 % y 17,1 %
+(diagnóstico post hoc de #617). La cuenta con `ruwe` no se ha hecho.
+
+**Control** (el de #617, sin mover nada): región 0,5-2,2′ ∩ campo ACS, G
+16-18, N_crit / N_HST contra el 47 % de Fabricius, **±10 puntos**. Rechaza el
+caso malo «todas las filas» (95,6 %, a 48,6 puntos). Informativo, sin voto:
+r < 0,5′ contra el 7 %.
+
+**Si el control vale** (AC4), se repite el reparto de #617 con su regla y su
+banda [0,80, 1,25]: dominio 0,5-1 r_h ∩ ACS, V 17,07-18,07, la misma `num` y
+la misma c_mod. Como N_HST y `num` no dependen del criterio, R_num no cambia
+(0,927). Lo nuevo es c_crit / c_mod, con c_crit = N_crit / N_HST. Veredicto:
+
+| resultado | veredicto | qué sigue (AC5) |
+|---|---|---|
+| R_num falla | `num` | ticket sobre el modelo de densidad |
+| c_crit / c_mod falla | **k** | historia que cambia k, con prerregistro |
+| ninguno falla, y todas las filas sí (c_emp / c_mod = 3,02 en #617) | **lo que cuenta `c`** | historia que hace que `c` y el catálogo cuenten lo mismo; decide k y retira el peso de #611 |
+| ninguno falla, y todas las filas tampoco | ninguno | se declara |
+
+**Si el control no vale**, se declara y se cierra sin tocar `c` (AC5).
+
+**Prohibido** (ticket): elegir el criterio por lo cerca que deja el 47 %;
+mover listón, región o tramo tras contar; cifras de estrellas dibujadas.
+
+### Resultado (`simulador_ocular/docs/validacion/exceso_619.txt`)
+`node scripts/spike_617_exceso.js <.zpt> --619`. Sin `--619`, la salida de
+#617 sale byte a byte igual. Cumplen el criterio 8 071 de las 11 972 filas del
+fixture.
+
+| medida | valor | regla |
+|---|---|---|
+| control, 0,5-2,2′ ∩ ACS, G 16-18 | N_crit / N_HST = 1 186 / 2 643 = **44,9 %** (Fabricius 47 %) | **VALE** |
+| informativo, r < 0,5′ ∩ ACS | 58 / 685 = 8,5 % (Fabricius 7 %) | sin voto |
+| R_num (0,5-1 r_h, V 17,07-18,07) | 0,927 ± 0,027 | `num` vale |
+| c_crit / c_mod | 0,418 / 0,362 = **1,154 ± 0,062** | k vale |
+| todas las filas: c_emp / c_mod | 3,016 ± 0,121 | fuera |
+
+**Veredicto (AC4): `c`, por lo que cuenta.** Es la salida «`c`» del AC4 del
+ticket, en la fila «lo que cuenta `c`» de la tabla del prerregistro. Con el
+criterio, `num` y k quedan dentro de la banda. Con todas las filas, `c` sale a
+3. Si el criterio es el de Fabricius (hipótesis, ver «Qué no dice»), el
+modelo de densidad y `gaiaCrowdingK = 75` están bien, y lo que no casa es la
+cantidad: el arnés y producción cuentan todas las filas, incluidas las 2p y
+las que no tienen color. En 0,5-1 r_h, V 17-18, son 1 296 filas, y solo 496
+cumplen el criterio. `(1 − c)` repone las otras 800 como sintéticas o velo,
+y el catálogo ya las trae. Ese sería el 2,79 de #595.
+
+**La comprobación «cuadra» de #617 no se aplica aquí.** Con el criterio, el
+producto R_num · c_crit / c_mod vale ≈ 1,07, no 2,8. Es lo esperado: el 2,79
+es de todas las filas, y la regla de #619 lo lee en la fila «todas las filas»
+de su tabla, no en el producto.
+
+**AC1-3 de #617.** Con el control de #619 tienen veredicto: `num` vale (AC1),
+k vale (AC2), y falla lo que cuenta `c`, que no es ninguna de las dos salidas
+del AC3 de #617. Su sustituto es la historia del AC5 de aquí.
+
+**AC5: #621.** Historia que hace que `c` y el catálogo cuenten lo mismo. Hay dos
+caminos, y la historia elige con prerregistro:
+1. una `c` de filas (N_filas / N_HST), con ancla externa nueva, porque la
+   Tabla A.1 no la da;
+2. que el arnés y producción cuenten como «catálogo» solo las filas con el
+   criterio, y que las demás entren por `(1 − c)`. Producción tendría que
+   pedir `ruwe` o `astrometric_params_solved`.
+
+En la misma historia se retira el peso de #611 (AC4 de #617).
+
+**Qué no dice.** El criterio es una hipótesis fijada antes de contar, no una
+frase del artículo (AC1). Pasa el control en 0,5-2,2′ y queda a 1,5 puntos
+en r < 0,5′, pero un solo cúmulo no prueba que Fabricius contara así. La
+historia del AC5 lo repite en otro globular de la Tabla A.1 con HST (#621,
+AC4).
+- **El control no prueba la parte 5/6p.** «Solo BP−RP» daba 57,0 %
+  (diagnóstico post hoc de #617), y `control(57, 100)` pasa: |57 − 47| = 10.
+  El listón rechaza el caso malo que nombra el ticket (todas las filas,
+  95,6 %), pero no separa el criterio de esa variante. El criterio sale del
+  texto del ticket y de la lectura literal de §2.4, no de este control.
+- **El orden lo prueba solo git.** El prerregistro (`511b19c`) y el resultado
+  (`dcff65d`) se commitearon con minutos de diferencia. No hay otra prueba de
+  que se contó después.
+- **Uno de los dos datos ya se conocía.** El 3,02 de «todas las filas» es de
+  #617. El veredicto dependía solo de si c_crit / c_mod caía en
+  [0,80, 1,25].
+- Si fallan `num` y k a la vez, la regla devuelve los dos (`lectura619`). No
+  ha pasado.
 
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
@@ -1187,7 +1431,7 @@ Si se implementa (b):
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
 | `completitud` en el velo (`gaiaM50`, `gaiaAncho`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
 | `gaiaCrowdingK = 75` con `gaiaFwhmAs = 0,6″` en `completitud` (#595) | entra en el velo y en las sintéticas | Fabricius et al. 2021, Tabla A.1 (Gaia EDR3 contra HST en 24 globulares sin M13): sesgo −0,4 puntos. Ver «Completitud del núcleo con medida externa» |
-| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | entra en la contabilidad de luz del arnés (peso `c(m, r)`, **en revisión por #617**), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de la muestra de QSO; el artículo es el de `gaiaCrowdingK`, la Tabla A.1 no lo aplica). Ver «Filas mezcladas del núcleo» y «Mezclas o completitud baja (#614)» |
+| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | entra en la contabilidad de luz del arnés (peso `c(m, r)`, **compensación declarada** por #617: se retira con el cambio de `c`, #621), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de la muestra de QSO; el artículo es el de `gaiaCrowdingK`, la Tabla A.1 no lo aplica). Ver «Filas mezcladas del núcleo» y «Mezclas o completitud baja (#614)» |
 | corte de la consulta `G_c` en `completitud(m, r, G_c)` (#594) | entra en el velo, **no** en las sintéticas | lo pedido: `magQ` en producción (`estrellas.corte`), G ≤ 18,50 en el fixture; G − V del color sintético del bin (Riello et al. 2021). Ver «Corte de la consulta» |
 | G→V con BP−RP | entra (prerrequisito) | Gaia EDR3, doc. CU5, tabla 5.7 (σ = 0,03 mag) |
 | `mCutGeneracion = 18` como corte de `V1`/`V2` | entra en el velo | el existente de `CFG` (profundidad de la realización sintética); ancla no revisada aquí |
