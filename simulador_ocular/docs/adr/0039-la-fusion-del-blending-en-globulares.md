@@ -802,6 +802,67 @@ toque `c`, y no antes. El texto de #614 que lo justificaba («cada fila marcada
 es una mezcla») ya no vale: el peso queda como compensación declarada, no
 como ley.
 
+## Qué cuenta como recuperada la Tabla A.1 (#619, 2026-11-23)
+
+Sale de #617: su control falló (todas las filas, 95,6 % contra 47 %), así que
+no dio veredicto. Aquí no se toca `gaiaCrowdingK`, `completitud` ni el peso de
+#611.
+
+### Lo que dicen los textos (AC1)
+Fabricius et al. 2021 (arXiv:2012.06242), §2.4: Table A.1 «shows the
+combined completeness of the astrometry and the photometry». A continuación:
+«the Gaia photometry is only published for sources with an astrometric
+solution», y la completitud fotométrica «can, however, be lower, in
+particular in high density regions for the GBP and GRP photometry». También:
+«in globular clusters, a percentage of about 20%-30% of stars having five or
+six parameter solutions … do not have GBP and GRP magnitudes». El pie de la
+tabla solo da las regiones: «Core: r<0.5 arcmin. Out: 0.5<r<2.2 arcmin».
+Arenou et al. 2018, §3.2 y Tabla B.1: «we compared the number of sources in
+various magnitude slices», sin más condición.
+
+**El texto no dice qué fuente cuenta como recuperada.** No define si
+«astrometry» es cualquier solución (2p incluida) o solo 5p/6p, ni si
+«photometry» es G o G + BP + RP. Se declara y se pasa a la hipótesis (AC2).
+
+### Prerregistro (AC2, escrito ANTES de contar con el criterio)
+**Criterio.** Cuenta como recuperada la fila con astrometría de 5 o 6
+parámetros **y** BP−RP. Es la lectura literal de «combined completeness of
+the astrometry and the photometry», con la astrometría y la fotometría
+completas.
+- **5/6 parámetros = `ruwe` no nulo.** Esquema de `gaia_source` de DR3:
+  `ruwe` «is set to null for sources with only a two-parameter solution», y
+  «all the sources in DR3 have only values of 3, 31 or 95 for the
+  astrometric_params_solved». El sidecar `m13_gaia_dr3_mezcla.csv` ya trae
+  `ruwe` para las 11 972 filas del fixture (comprobado: ninguna sin cruce).
+  No se pide el fixture de nuevo.
+- BP−RP: la columna `bp_rp` del fixture, no vacía.
+
+**Lo que ya se había visto** (ADR 0005, se declara): con todas las filas,
+95,6 % en 0,5-2,2′ y 59,7 % en r < 0,5′. Con solo BP−RP, 57,0 % y 17,1 %
+(diagnóstico post hoc de #617). La cuenta con `ruwe` no se ha hecho.
+
+**Control** (el de #617, sin mover nada): región 0,5-2,2′ ∩ campo ACS, G
+16-18, N_crit / N_HST contra el 47 % de Fabricius, **±10 puntos**. Rechaza el
+caso malo «todas las filas» (95,6 %, a 48,6 puntos). Informativo, sin voto:
+r < 0,5′ contra el 7 %.
+
+**Si el control vale** (AC4), se repite el reparto de #617 con su regla y su
+banda [0,80, 1,25]: dominio 0,5-1 r_h ∩ ACS, V 17,07-18,07, la misma `num` y
+la misma c_mod. Como N_HST y `num` no dependen del criterio, R_num no cambia
+(0,927). Lo nuevo es c_crit / c_mod, con c_crit = N_crit / N_HST. Veredicto:
+
+| resultado | veredicto | qué sigue (AC5) |
+|---|---|---|
+| R_num falla | `num` | ticket sobre el modelo de densidad |
+| c_crit / c_mod falla | **k** | historia que cambia k, con prerregistro |
+| ninguno falla, y todas las filas sí (c_emp / c_mod = 3,02 en #617) | **lo que cuenta `c`** | historia que hace que `c` y el catálogo cuenten lo mismo; decide k y retira el peso de #611 |
+| ninguno falla, y todas las filas tampoco | ninguno | se declara |
+
+**Si el control no vale**, se declara y se cierra sin tocar `c` (AC5).
+
+**Prohibido** (ticket): elegir el criterio por lo cerca que deja el 47 %;
+mover listón, región o tramo tras contar; cifras de estrellas dibujadas.
+
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
 Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.
