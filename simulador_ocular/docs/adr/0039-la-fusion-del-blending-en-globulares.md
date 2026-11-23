@@ -889,7 +889,7 @@ catálogo ya las trae. Ese es el 2,79 de #595.
 las dos salidas del AC3 de #617. Su sustituto es la historia del AC5 de
 aquí.
 
-**AC5.** Historia que hace que `c` y el catálogo cuenten lo mismo. Hay dos
+**AC5: #621.** Historia que hace que `c` y el catálogo cuenten lo mismo. Hay dos
 caminos, y la historia elige con prerregistro:
 1. una `c` de filas (N_filas / N_HST), con ancla externa nueva, porque la
    Tabla A.1 no la da;
