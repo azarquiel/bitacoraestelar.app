@@ -69,12 +69,12 @@
     // adelanta la propia aglomeración (m_crowd con el beam de Gaia), así que el
     // "endurecimiento con la densidad local" no trae constante nueva.
     //
-    // El k = 30 de aquí abajo es de GAIA, no del render: es el criterio con el
+    // El k de aquí abajo es de GAIA, no del render: es el criterio con el
     // que el CATÁLOGO deja de separar fuentes en su beam de 0,6". Sobrevive al
     // ADR 0012 porque describe otro instrumento, no la vista por el ocular.
     //
     // k = 75 (#595): completitud de Gaia EDR3 contra HST en 24 globulares SIN
-    // M13 (Fabricius et al. 2021, Tabla A.1): sesgo −0,4 puntos, rms mínimo
+    // M13 (Fabricius et al. 2021, Tabla A.1): sesgo −0,4 puntos, rms plano
     // entre 70 y 90. Solo cuenta k·FWHM²: el 0,6″ se queda. ADR 0039 «Parámetros»;
     // lo fija scripts/test_completitud_fabricius.js.
     gaiaCrowdingK: 75,

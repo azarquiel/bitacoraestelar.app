@@ -49,6 +49,10 @@ anillo   celdas  p95|Δm|  máx|Δm|  pregunta 5      RMS δI/I   RMS/Cmin
 
 ══ Veredicto (§0 bis, conservación de §0 ter, criterio 3 de §0 quater): NO SE PUEDE TODAVÍA — falla: criterio 3 (§0 quater), p95 |Δm_res| ≤ 0,1
 
+── Filas sin BP−RP con G 16,5-18,5 (#595, solo miembros)
+                      ≤0,25        ≤0,5          ≤1          ≤2          ≤4          ≤8
+sin color / N      205/260     597/804   1486/2683    702/3230     65/1856       9/707
+
 ── Atribución (#590): observado / modelo por anillo y rango (banda V, solo miembros)
 
 ≤0,25 r_h   ∫Σ·S1 = 3.921e-4   ∫Σ·S2(m>borde) = 2.771e-12   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = 0.077

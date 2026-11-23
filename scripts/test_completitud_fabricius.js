@@ -9,6 +9,8 @@
    Por la interfaz pública (pob.completitud):
      A  SESGO del conjunto SIN M13 (c_modelo − c_Fabricius, puntos %) dentro
         de ±3. M13 fuera: es el cúmulo del fixture que mide el arnés (#595 AC1).
+        A es DENTRO de muestra (k se eligió sobre estas celdas): guarda que
+        nadie mueva k sin volver a la tabla, no valida. Valida B.
         Caso malo de referencia (AGENTS.md, prerregistros): el k = 30 de antes
         da +10,2 y el listón lo rechaza.
      B  M13, que no entra en el ajuste: rms ≤ 10 puntos contra su fila de la
@@ -48,9 +50,22 @@ function nombre(n) {
 var LADO = 202, H = 4, REGIONES = { core: [0, 30], out: [30, 132] }, G0 = 11, NB = 10;
 
 function bprp(Mv) { return Mv < 0 ? C.config.bprpGigante : Mv < 3.5 ? C.config.bprpSubgigante : C.config.bprpSecuencia; }
+/* La copia de `bprp` no puede derivar de la de producción: con G_c = G del
+   test, `completitud(m, r, G_c)` vale la mitad de `completitud(m, r)` en cada
+   bin (#594). Si producción mueve un tramo, esto falla. */
+(function () {
+  var pob = C.poblacion(C.fichaDeFila(global.window.BITACORA_GLOBULARES.filter(function (x) { return x[0] === 'NGC 6205'; })[0]));
+  var malos = 0;
+  Array.prototype.forEach.call(pob.magnitudes, function (m) {
+    var c = pob.completitud(m, 600);
+    if (c > 1e-6 && Math.abs(pob.completitud(m, 600, m + R.gMenosV(bprp(m - pob.dm))) / c - 0.5) > 1e-9) malos++;
+  });
+  ok(malos === 0, 'el G por bin del test es el de producción (' + malos + ' bins distintos)');
+})();
 
 // Diferencias modelo − tabla (puntos %) de un cúmulo, con el CFG del momento.
-function diferencias(fila) {
+function diferencias(t) {
+  var fila = t.fila;
   var pob = C.poblacion(C.fichaDeFila(fila));
   var mAp = pob.magnitudes, nb = pob.estrellasPorBin, dm = pob.dm, d = [];
   var bin = Array.prototype.map.call(mAp, function (m) {
@@ -70,7 +85,7 @@ function diferencias(fila) {
         }
       }
     }
-    tabla[fila.nombreTabla][reg].forEach(function (o, b) {
+    tabla[t.n][reg].forEach(function (o, b) {
       if (o != null && sn[b] > 0) d.push(100 * sc[b] / sn[b] - o);
     });
   });
@@ -78,8 +93,7 @@ function diferencias(fila) {
 }
 var filas = Object.keys(tabla).map(function (n) {
   var f = global.window.BITACORA_GLOBULARES.filter(function (x) { return x[0] === nombre(n); })[0];
-  if (f) f.nombreTabla = n;
-  return f;
+  return f && { fila: f, n: n };
 }).filter(Boolean);
 function media(d) { return d.reduce(function (a, x) { return a + x; }, 0) / d.length; }
 function rms(d) { return Math.sqrt(media(d.map(function (x) { return x * x; }))); }
@@ -90,7 +104,7 @@ function mide(k) {
     var resto = [], m13 = null;
     filas.forEach(function (f) {
       var d = diferencias(f);
-      if (f[0] === 'NGC 6205') m13 = d; else resto = resto.concat(d);
+      if (f.n === 'NGC6205') m13 = d; else resto = resto.concat(d);
     });
     return { sesgo: media(resto), m13: rms(m13), n: resto.length };
   } finally { C.config.gaiaCrowdingK = guardado; }

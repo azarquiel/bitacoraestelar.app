@@ -403,8 +403,9 @@ M13 (Lynga 7 no está en el catálogo), 327 celdas:
 | 75 | −0,4 | 17,7 |
 | 100 | −4,0 | 18,0 |
 
-El sesgo se anula en k ≈ 72 y el rms es plano entre 70 y 90: k = 75. M13
-queda fuera del ajuste y sirve de prueba: rms 7,6 puntos con k = 75 y 19,8
+El sesgo se anula en k ≈ 72 y el rms es plano entre 70 y 90: k = 75. El
+listón de sesgo del test es dentro de muestra (guarda k, no lo valida). M13
+queda fuera del ajuste y es la prueba: rms 7,6 puntos con k = 75 y 19,8
 con k = 30. Los cúmulos poco densos (NGC 5053, NGC 5466, Pal 1, Pal 2)
 prefieren k → 0: ahí no manda el crowding sino el codo de campo abierto
 (`gaiaM50`, `gaiaAncho`), que no se toca aquí.
@@ -425,8 +426,9 @@ estrellas de las que el modelo creía. Con k = 75 el cociente catálogo /
 AC2 no se cumple dentro de ±2σ y **se declara el residuo**: no es `c`. El
 catálogo trae en el núcleo filas que no son una estrella recuperada con su
 magnitud. Indicios:
-- En ≤0,25 r_h, el 80 % de las filas con G 16,5-18,5 no tiene BP−RP (215 de
-  270); en > 2 r_h, el 3 % (73 de 2 788). Es la firma de fuentes mezcladas:
+- Filas miembro con G 16,5-18,5 sin BP−RP (`fusion_blending_595.txt`,
+  «Filas sin BP−RP»): 205/260 (79 %) en ≤0,25, 597/804 (74 %) en ≤0,5,
+  1 486/2 683 (55 %) en ≤1, 702/3 230 (22 %) en ≤2, 9/707 (1 %) en ≤8. Es la firma de fuentes mezcladas:
   Fabricius et al. 2021 dan 20-30 % sin BP/RP en globulares y fotometría del
   núcleo desplazada en color y magnitud.
 - Esas filas quedan en G (sin color no hay G→V) y su flujo incluye el de
@@ -438,12 +440,21 @@ necesita), y la cuenta del catálogo mezcla esas con mezclas. Arreglarlo es
 quitar al velo el flujo que las filas mezcladas ya traen; queda como
 corrección nueva, fuera de #595.
 
-**Lo que sí mejora.** Conservación total 0,966 → 1,015. Por anillo, ≤0,25
-1,110 → 1,232 y ≤1 0,958 → 1,024 (§0 ter: ≤0,25 sin potencia, ≤1 pasa).
+**Conservación (§0 ter).** Mejora el total (0,966 → 1,015) y ≤1
+(0,958 → 1,024, pasa). **Empeora** ≤0,25 (1,110 → 1,232, sin potencia) y
+≤0,5 (0,987 → 1,062, sin potencia): es el mismo doble conteo de mezclas.
 
-**R2v (AC3, listones sin mover).** ≤0,25 1,013 y ≤0,5 1,051, sin potencia
-(2σ ≈ 0: con `c ≈ 0` no hay catalogadas en el dominio del velo); ≤1 1,267,
-NO PASA. El veredicto sigue en NO SE PUEDE TODAVÍA.
+**R2v (AC3, listones sin mover).** Coste declarado:
+
+| anillo | k = 30 | k = 75 |
+|---|---|---|
+| ≤0,25 | 1,011, sin potencia | 1,013, sin potencia |
+| ≤0,5 | 1,028, **NO PASA** | 1,051, sin potencia |
+| ≤1 | 1,071, NO PASA | **1,267**, NO PASA |
+
+≤0,5 no pasa a aprobar: sale del juicio, porque con `c ≈ 0` no quedan
+catalogadas en el dominio del velo y 2σ ≈ 0. ≤1 empeora por el doble conteo
+de las mezclas. El veredicto sigue en NO SE PUEDE TODAVÍA.
 
 **En producción.** `c` decide qué sintéticas nacen: con k = 75 nacen más en el
 núcleo (M13 dentro de 8 r_h: 845 → 2 204). El velo `V1`/`V2` sigue fuera del

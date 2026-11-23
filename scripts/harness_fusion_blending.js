@@ -485,6 +485,18 @@ if (process.argv.indexOf('--atribucion') > 0) {
   for (var q0 = 0; q0 < NR; q0++)
     ETQR.push((isFinite(BORDES[q0]) ? BORDES[q0].toFixed(2) : '') + '–' + (isFinite(BORDES[q0 + 1]) ? BORDES[q0 + 1].toFixed(2) : ''));
   var rBin = []; for (var kb = 0; kb < NB; kb++) rBin[kb] = rango(mAp[kb]);
+  /* #595: filas sin BP−RP con G 16,5-18,5 por anillo. Firma de fuentes mezcladas
+     (Fabricius et al. 2021: 20-30 % sin BP/RP en globulares). */
+  var sinColor = ETQ.map(function () { return [0, 0]; });
+  for (var ic = 0; ic < nCat; ic++) {
+    var gc = est[ic].fila[2];
+    if (gc < 16.5 || gc > 18.5) continue;
+    sinColor[anillo(est[ic].r)][0]++;
+    if (est[ic].fila[3] == null) sinColor[anillo(est[ic].r)][1]++;
+  }
+  console.log('\n── Filas sin BP−RP con G 16,5-18,5 (#595, solo miembros)');
+  console.log('               ' + ETQ.map(function (s) { return s.padStart(12); }).join(''));
+  console.log('sin color / N ' + sinColor.map(function (p) { return (p[1] + '/' + p[0]).padStart(12); }).join(''));
   console.log('\n── Atribución (#590): observado / modelo por anillo y rango (banda V, solo miembros)');
   for (var ka = 0; ka < NA; ka++) {
     var r0 = ANILLOS[ka], r1 = Math.min(ANILLOS[ka + 1], pob.rtAs), NT = 400, h = (r1 - r0) / NT;
