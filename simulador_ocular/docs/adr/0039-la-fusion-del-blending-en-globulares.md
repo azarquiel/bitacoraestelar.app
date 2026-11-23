@@ -680,6 +680,65 @@ no corrige). Hasta #617, los números de «Filas mezcladas del núcleo» que
 dependen del peso `c` (atribución en 17-19, R2v y conservación de ≤1) quedan
 condicionados a ese peso.
 
+## El exceso de filas en 0,5-1 r_h: `num` o `c` (#617, 2026-11-23)
+
+Sale de #614: las filas de ≤1 son estrellas sueltas, y el cociente cat/`num·c`
+de 17,07-18,07 (2,79, `fusion_blending_595.txt`) sigue sin dueño. Aquí no se
+toca `gaiaCrowdingK` ni el código del arnés: se mide y se decide.
+
+### Prerregistro (escrito ANTES de contar)
+
+**Identidad que se usa.** Con N_HST las estrellas reales del tramo,
+cat/`num·c` = (N_cat / N_HST) / c_mod × N_HST / `num`. El primer factor es
+c_emp / c_mod (¿falla `c`, es decir k?); el segundo es R_num = N_HST / `num`
+(¿falla el modelo de densidad?). El producto tiene que dar del orden de 2,8;
+si no, el método no cuadra y no hay veredicto.
+
+**Dominio.** Anillo 0,5-1 r_h (50,7-101,4″ del centro de Harris, radio
+circular como el del arnés) **dentro del campo ACS**. El campo se fija con
+las estrellas HST, sin mirar Gaia: celdas de 4″ con ≥ 3 estrellas HST
+(cualquier magnitud) cuyas 8 vecinas también cumplen (borde erosionado). Se
+declara la fracción del anillo que cubre.
+
+**Medidas** (`scripts/spike_617_exceso.js`, mismo `.zpt` de MAST que #614 y
+el mismo alineado):
+
+- **Tramo V 17,07-18,07**, los bordes de bin del arnés. Para HST, la V de
+  tierra del propio catálogo (`Vground`, la que dan los autores); para
+  Gaia, `magVGaia`, la de producción y el arnés.
+- N_HST: estrellas HST del tramo en el dominio. N_Gaia: filas del fixture
+  (miembros y campo, como HST) del tramo en el dominio.
+- `num` del dominio: Σ celdas Σ(r)·A_celda·Σ `num`_k de los bins del tramo;
+  c_mod: la media de `pob.completitud` (k = 75, corte G 18,5 como el arnés)
+  con el mismo peso.
+- R_num = N_HST / `num`; c_emp = N_Gaia / N_HST.
+
+**Regla** (σ de Poisson; para c_emp, binomial sobre N_HST):
+
+| término | falla si | entonces |
+|---|---|---|
+| `num` | R_num fuera de [0,80, 1,25] **y** a más de 2σ de 1 | ticket sobre el modelo de densidad (AC3) |
+| k | c_emp / c_mod fuera de [0,80, 1,25] **y** a más de 2σ de 1 | cambio de k con listón propio, antes de medirlo (AC3) |
+
+Pueden fallar los dos. Si no falla ninguno, el producto no explica el 2,79 y
+se declara que el método no cuadra.
+
+**Por qué [0,80, 1,25].** Simétrico en log y lejos del caso malo: si todo el
+exceso fuera de un término, ese término valdría 2,79 y el otro 1; el listón
+rechaza 2,79 en el que falla y deja pasar el que no. Cabe el sistemático de
+banda (V de tierra contra `magVGaia`, ≈ 0,1 mag en un tramo de 1 mag, que en
+la LF de la subgigante mueve la cuenta ≲ 15 %).
+
+**Control del método** (sin él no hay veredicto). La misma cuenta, en G
+(G de HST con el ajuste de #614) y en la región de la Tabla A.1 (0,5-2,2′ ∩
+campo ACS), en el tramo G 16-18, tiene que dar la completitud de Fabricius
+para M13, **47 %**, a ±10 puntos. G 17-19 no sirve: el fixture se pidió hasta
+G 18,5.
+
+**Prohibido** (ticket): cifras de estrellas dibujadas; ajustar k a este
+fixture (M13 es la prueba fuera de muestra de #595); mover listón o dominio
+tras contar.
+
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
 Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.
