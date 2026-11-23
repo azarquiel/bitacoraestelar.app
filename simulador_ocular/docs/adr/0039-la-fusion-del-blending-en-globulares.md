@@ -876,18 +876,24 @@ fixture.
 | c_crit / c_mod | 0,418 / 0,362 = **1,154 ± 0,062** | k vale |
 | todas las filas: c_emp / c_mod | 3,016 ± 0,121 | fuera |
 
-**Veredicto (AC4): lo que cuenta `c`.** El modelo de densidad está bien, y
-`gaiaCrowdingK = 75` reproduce lo que mide la Tabla A.1. Lo que no casa es la
-cantidad: la Tabla A.1 cuenta las fuentes con astrometría 5/6p y BP−RP, y
-el arnés y producción cuentan todas las filas, incluidas las 2p y las que no
-tienen color. En 0,5-1 r_h, V 17-18, son 1 296 filas, y solo 496 cumplen el
-criterio. `(1 − c)` repone las otras 800 como sintéticas o velo, y el
-catálogo ya las trae. Ese es el 2,79 de #595.
+**Veredicto (AC4): `c`, por lo que cuenta.** Es la salida «`c`» del AC4 del
+ticket, en la fila «lo que cuenta `c`» de la tabla del prerregistro. Con el
+criterio, `num` y k quedan dentro de la banda. Con todas las filas, `c` sale a
+3. Si el criterio es el de Fabricius (hipótesis, ver «Qué no dice»), el
+modelo de densidad y `gaiaCrowdingK = 75` están bien, y lo que no casa es la
+cantidad: el arnés y producción cuentan todas las filas, incluidas las 2p y
+las que no tienen color. En 0,5-1 r_h, V 17-18, son 1 296 filas, y solo 496
+cumplen el criterio. `(1 − c)` repone las otras 800 como sintéticas o velo,
+y el catálogo ya las trae. Ese sería el 2,79 de #595.
 
-**Cierra #617.** Con el control de #619, sus AC1-3 tienen veredicto:
-`num` vale (AC1), k vale (AC2) y falla lo que cuenta `c`, que no es ninguna de
-las dos salidas del AC3 de #617. Su sustituto es la historia del AC5 de
-aquí.
+**La comprobación «cuadra» de #617 no se aplica aquí.** Con el criterio, el
+producto R_num · c_crit / c_mod vale ≈ 1,07, no 2,8. Es lo esperado: el 2,79
+es de todas las filas, y la regla de #619 lo lee en la fila «todas las filas»
+de su tabla, no en el producto.
+
+**AC1-3 de #617.** Con el control de #619 tienen veredicto: `num` vale (AC1),
+k vale (AC2), y falla lo que cuenta `c`, que no es ninguna de las dos salidas
+del AC3 de #617. Su sustituto es la historia del AC5 de aquí.
 
 **AC5: #621.** Historia que hace que `c` y el catálogo cuenten lo mismo. Hay dos
 caminos, y la historia elige con prerregistro:
@@ -902,7 +908,21 @@ En la misma historia se retira el peso de #611 (AC4 de #617).
 **Qué no dice.** El criterio es una hipótesis fijada antes de contar, no una
 frase del artículo (AC1). Pasa el control en 0,5-2,2′ y queda a 1,5 puntos
 en r < 0,5′, pero un solo cúmulo no prueba que Fabricius contara así. La
-historia del AC5 puede repetirlo en otro globular de la Tabla A.1 con HST.
+historia del AC5 lo repite en otro globular de la Tabla A.1 con HST (#621,
+AC4).
+- **El control no prueba la parte 5/6p.** «Solo BP−RP» daba 57,0 %
+  (diagnóstico post hoc de #617), y `control(57, 100)` pasa: |57 − 47| = 10.
+  El listón rechaza el caso malo que nombra el ticket (todas las filas,
+  95,6 %), pero no separa el criterio de esa variante. El criterio sale del
+  texto del ticket y de la lectura literal de §2.4, no de este control.
+- **El orden lo prueba solo git.** El prerregistro (`511b19c`) y el resultado
+  (`dcff65d`) se commitearon con minutos de diferencia. No hay otra prueba de
+  que se contó después.
+- **Uno de los dos datos ya se conocía.** El 3,02 de «todas las filas» es de
+  #617. El veredicto dependía solo de si c_crit / c_mod caía en
+  [0,80, 1,25].
+- Si fallan `num` y k a la vez, la regla devuelve los dos (`lectura619`). No
+  ha pasado.
 
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 

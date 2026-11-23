@@ -54,7 +54,7 @@ function recuperada(f) { return f.ruwe != null && f.color; }
 /* #619 · Veredicto con el criterio (vCrit) y con todas las filas (vTodas), tabla
    del prerregistro. `num` no depende del criterio: se lee de vCrit. */
 function lectura619(vCrit, vTodas) {
-  if (vCrit.num.falla) return 'num';
+  if (vCrit.num.falla) return vCrit.k.falla ? 'num y k' : 'num';
   if (vCrit.k.falla) return 'k';
   return vTodas.k.falla ? 'c-cuenta' : 'ninguno';
 }

@@ -166,6 +166,6 @@ if (process.argv.indexOf('--619') > 0) {
     console.log('  R_num = ' + f(vc.num.q) + ' ± ' + f(vc.num.sigma) + (vc.num.falla ? '  → FALLA num' : '  → num vale'));
     console.log('  c_crit / c_mod = ' + f(vc.cEmp) + ' / ' + f(mod.c) + ' = ' + f(vc.k.q) + ' ± ' + f(vc.k.sigma) + (vc.k.falla ? '  → FALLA k' : '  → k vale'));
     console.log('  todas las filas: c_emp / c_mod = ' + f(v.k.q) + ' ± ' + f(v.k.sigma) + (v.k.falla ? '  → fuera' : '  → dentro'));
-    console.log('Veredicto #619: ' + ({ num: '`num`', k: 'k', 'c-cuenta': 'lo que cuenta `c` (el catálogo cuenta filas que `c` no cuenta)', ninguno: 'ninguno' })[X.lectura619(vc, v)]);
+    console.log('Veredicto #619: ' + ({ num: '`num`', 'num y k': '`num` y k', k: 'k', 'c-cuenta': 'lo que cuenta `c` (el catálogo cuenta filas que `c` no cuenta)', ninguno: 'ninguno' })[X.lectura619(vc, v)]);
   }
 }

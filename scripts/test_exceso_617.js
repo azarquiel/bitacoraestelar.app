@@ -38,7 +38,7 @@ ok(X.control(47, 100) && X.control(57, 100) && !X.control(58, 100) && !X.control
 
 // #619: criterio de recuento (5/6 parámetros = ruwe no nulo, y BP−RP).
 ok(X.recuperada({ ruwe: 1.0, color: true }) && !X.recuperada({ ruwe: null, color: true }) &&
-   !X.recuperada({ ruwe: 1.0, color: false }) && !X.recuperada({ ruwe: 5, color: false }), 'recuperada: ruwe no nulo y BP−RP; ruwe alto no excluye');
+   !X.recuperada({ ruwe: 1.0, color: false }) && X.recuperada({ ruwe: 5, color: true }), 'recuperada: ruwe no nulo y BP−RP; ruwe alto no excluye');
 
 // #619: lectura con el criterio y con todas las filas.
 var M = { nHst: 1187, nMod: 1281 }, CM = 0.362;
@@ -50,7 +50,9 @@ ok(lee(430, 1296) === 'c-cuenta', 'criterio cuadra con c_mod y todas las filas n
 ok(lee(1000, 1296) === 'k', 'criterio también lejos de c_mod: falla k');
 ok(lee(430, 430) === 'ninguno', 'criterio y todas cuadran: ninguno');
 ok(X.lectura619(X.veredicto({ nHst: 1187, nMod: 400, nGaia: 430, cMod: CM }), X.veredicto({ nHst: 1187, nMod: 400, nGaia: 1296, cMod: CM })) === 'num',
-   'R_num 2,97: falla num (manda sobre el resto)');
+   'R_num 2,97 con k dentro: falla num');
+ok(X.lectura619(X.veredicto({ nHst: 1187, nMod: 400, nGaia: 1000, cMod: CM }), X.veredicto({ nHst: 1187, nMod: 400, nGaia: 1296, cMod: CM })) === 'num y k',
+   'R_num 2,97 y c_crit/c_mod 2,33: fallan los dos');
 
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\ntodo ok');
