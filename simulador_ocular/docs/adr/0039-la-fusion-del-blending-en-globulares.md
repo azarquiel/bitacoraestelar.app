@@ -381,6 +381,75 @@ el velo lleva algo menos.
 El veredicto sigue en NO SE PUEDE TODAVÍA (criterio 3 en ≤0,5/≤1/≤8 y la
 pregunta 5): son las correcciones 2 y 3, fuera de #594.
 
+## Completitud del núcleo con medida externa (#595, 2026-11-23)
+Segunda corrección de la atribución. `gaiaCrowdingK` pasa de 30 a **75**;
+`gaiaFwhmAs` se queda en 0,6″ y la forma de `c` no cambia.
+
+**Medida.** Fabricius et al. 2021 (A&A 649, A5), Tabla A.1: completitud de
+Gaia EDR3 contra HST/ACS (Sarajedini et al. 2007) en 26 globulares, por bins
+de G de 2 mag, en el núcleo (r < 0,5′) y fuera (0,5′-2,2′). Copia en
+`simulador_ocular/docs/validacion/fabricius2021_tabla_a1.csv`. El modelo se
+promedia como mide la tabla: campo ACS de 202″ centrado, pesos `Σ(r)·num(m)`,
+G del color sintético del bin.
+
+**Ajuste sin M13.** `c` solo depende de `k·FWHM²` (`mCrowd` usa
+`1/(k·Σ·Ω)`), así que basta un parámetro. Sobre los 24 cúmulos que no son
+M13 (Lynga 7 no está en el catálogo), 327 celdas:
+
+| k | sesgo (puntos %) | rms |
+|---|---|---|
+| 30 (antes) | +10,2 | 23,5 |
+| 50 | +4,4 | 19,3 |
+| 75 | −0,4 | 17,7 |
+| 100 | −4,0 | 18,0 |
+
+El sesgo se anula en k ≈ 72 y el rms es plano entre 70 y 90: k = 75. M13
+queda fuera del ajuste y sirve de prueba: rms 7,6 puntos con k = 75 y 19,8
+con k = 30. Los cúmulos poco densos (NGC 5053, NGC 5466, Pal 1, Pal 2)
+prefieren k → 0: ahí no manda el crowding sino el codo de campo abierto
+(`gaiaM50`, `gaiaAncho`), que no se toca aquí.
+`scripts/test_completitud_fabricius.js` fija sesgo |·| ≤ 3 y rms de M13
+≤ 10, con k = 30 como caso malo (lo rechazan los dos).
+
+**La hipótesis del ticket era la contraria.** La medida externa dice que con
+k = 30 la `c` del núcleo era **optimista**, no pesimista: Gaia pierde más
+estrellas de las que el modelo creía. Con k = 75 el cociente catálogo /
+`∫Σ·num·c` en 17-19 se aleja de 1 (`fusion_blending_595.txt`):
+
+| anillo | 17,07-18,07 k=30 → 75 | 18,07-19,07 k=30 → 75 | R2v k=30 → 75 |
+|---|---|---|---|
+| ≤0,25 | 3,2 → 68 000 (c 0,16 → 0,000) | 4,2 → 2·10⁵ | 1,011 → 1,013 |
+| ≤0,5 | 1,7 → 285 (c 0,46 → 0,003) | 2,1 → 2 400 | 1,028 → 1,051 |
+| ≤1 | 1,15 → 2,8 (c 0,88 → 0,36) | 1,28 → 13,7 | 1,071 → 1,267 |
+
+AC2 no se cumple dentro de ±2σ y **se declara el residuo**: no es `c`. El
+catálogo trae en el núcleo filas que no son una estrella recuperada con su
+magnitud. Indicios:
+- En ≤0,25 r_h, el 80 % de las filas con G 16,5-18,5 no tiene BP−RP (215 de
+  270); en > 2 r_h, el 3 % (73 de 2 788). Es la firma de fuentes mezcladas:
+  Fabricius et al. 2021 dan 20-30 % sin BP/RP en globulares y fotometría del
+  núcleo desplazada en color y magnitud.
+- Esas filas quedan en G (sin color no hay G→V) y su flujo incluye el de
+  vecinas más débiles, que el velo `(1 − c)` también cuenta.
+
+El doble conteo es de **flujo de las mezclas**, no de `c`: la `c` de
+Fabricius es la de una estrella recuperada con su magnitud (lo que el velo
+necesita), y la cuenta del catálogo mezcla esas con mezclas. Arreglarlo es
+quitar al velo el flujo que las filas mezcladas ya traen; queda como
+corrección nueva, fuera de #595.
+
+**Lo que sí mejora.** Conservación total 0,966 → 1,015. Por anillo, ≤0,25
+1,110 → 1,232 y ≤1 0,958 → 1,024 (§0 ter: ≤0,25 sin potencia, ≤1 pasa).
+
+**R2v (AC3, listones sin mover).** ≤0,25 1,013 y ≤0,5 1,051, sin potencia
+(2σ ≈ 0: con `c ≈ 0` no hay catalogadas en el dominio del velo); ≤1 1,267,
+NO PASA. El veredicto sigue en NO SE PUEDE TODAVÍA.
+
+**En producción.** `c` decide qué sintéticas nacen: con k = 75 nacen más en el
+núcleo (M13 dentro de 8 r_h: 845 → 2 204). El velo `V1`/`V2` sigue fuera del
+render (ADR 0012), así que la `c` nueva cambia las sintéticas que se dibujan,
+no el difuso.
+
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
 Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.
@@ -886,7 +955,8 @@ Si se implementa (b):
 | umbral de resolución de la imagen sumada (profundidad de valle, o `aum·sep` del ojo) | entra | **Rayleigh, valle 0,265** (ADR 0040), el ancla de `θ_sep`. Descartados: Sparrow 1916 (valle 0) y `resolucionDoble` (`aum·sep ≥ 300″`, sin ancla) |
 | forma de la PSF del pico | entra | `radioImagenEstelar` (Airy ⊕ seeing), ya anclado |
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
-| `completitud` en el velo (`gaiaM50`, `gaiaAncho`, `gaiaFwhmAs`, `gaiaCrowdingK`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
+| `completitud` en el velo (`gaiaM50`, `gaiaAncho`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
+| `gaiaCrowdingK = 75` con `gaiaFwhmAs = 0,6″` en `completitud` (#595) | entra en el velo y en las sintéticas | Fabricius et al. 2021, Tabla A.1 (Gaia EDR3 contra HST en 24 globulares sin M13): sesgo −0,4 puntos. Ver «Completitud del núcleo con medida externa» |
 | corte de la consulta `G_c` en `completitud(m, r, G_c)` (#594) | entra en el velo, **no** en las sintéticas | lo pedido: `magQ` en producción (`estrellas.corte`), G ≤ 18,50 en el fixture; G − V del color sintético del bin (Riello et al. 2021). Ver «Corte de la consulta» |
 | G→V con BP−RP | entra (prerrequisito) | Gaia EDR3, doc. CU5, tabla 5.7 (σ = 0,03 mag) |
 | `mCutGeneracion = 18` como corte de `V1`/`V2` | entra en el velo | el existente de `CFG` (profundidad de la realización sintética); ancla no revisada aquí |

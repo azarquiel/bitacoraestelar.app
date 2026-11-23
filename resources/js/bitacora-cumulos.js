@@ -72,7 +72,12 @@
     // El k = 30 de aquí abajo es de GAIA, no del render: es el criterio con el
     // que el CATÁLOGO deja de separar fuentes en su beam de 0,6". Sobrevive al
     // ADR 0012 porque describe otro instrumento, no la vista por el ocular.
-    gaiaCrowdingK: 30,
+    //
+    // k = 75 (#595): completitud de Gaia EDR3 contra HST en 24 globulares SIN
+    // M13 (Fabricius et al. 2021, Tabla A.1): sesgo −0,4 puntos, rms mínimo
+    // entre 70 y 90. Solo cuenta k·FWHM²: el 0,6″ se queda. ADR 0039 «Parámetros»;
+    // lo fija scripts/test_completitud_fabricius.js.
+    gaiaCrowdingK: 75,
     gaiaM50: 20.0,
     gaiaAncho: 0.4,
     gaiaFwhmAs: 0.6,
