@@ -52,6 +52,17 @@ Texto plano, claro, sin jerga. Estas secciones, en este orden:
    - **Puerta:** de doble sentido (se revierte subiendo los ficheros anteriores) o de un solo sentido (migración de esquema, datos borrados o reescritos, URL o formato OAL que ya usan otros). Si es de un solo sentido, di qué no se puede deshacer.
    - **Alcance:** qué parte deja de funcionar si sale mal (p. ej. «solo el simulador de dobles», «todo el plugin»).
 6. **Qué probar en producción.** Solo si hay algo visible o una ganancia para el usuario final; si no, una línea: «Sin impacto visible para el usuario final». Si lo hay, paso a paso y detallado: URL en `bitacoraestelar.app`, qué hacer, qué debe verse, y qué indicaría fallo.
-7. **Siguientes pasos.** 3-5 pasos concretos de desarrollo, ordenados por prioridad (criterios parciales, deuda `shortcut:`, tickets de seguimiento a abrir).
+7. **Siguientes pasos.** 3-5 pasos concretos de desarrollo, ordenados por prioridad (criterios parciales, tickets de seguimiento a abrir).
+8. **Deuda técnica.** Cada atajo que queda: qué limita, cuándo pagarlo, y dónde está (`fichero:línea` del comentario `shortcut:`). Busca los nuevos con `git diff main...HEAD | grep '^+.*shortcut:'`. Si no hay, «Sin deuda nueva».
+9. **Notas de retro.** Sobre el proceso, no sobre el código; una línea cada una, «nada» si no hubo:
+   - **Sorpresa:** lo que el ticket o el plan no preveían.
+   - **Fricción:** dónde se fue el tiempo (buscar, una herramienta, un test lento, una trampa de `gh`), con la cifra si la hay.
+   - **Se escapó:** un fallo que llegó a la revisión o a producción, y qué check lo habría cazado antes.
+   - **Lección fijada:** ruta del test o de la línea de AGENTS.md que la evita.
+   - **Sesión:** `$CLAUDE_CODE_SESSION_ID`, para que `/retro` lea el log.
 
 Cierra el informe con esta línea, tal cual: «Estado: verificado, pendiente de aceptación por el dueño del ticket». La verificación la hace el eje Spec; aceptar es decisión del dueño tras probar en producción. No cierres el ticket ni lo des por aceptado.
+
+## 4. Publicar
+
+Publica el informe completo como comentario en el ticket, con `## Informe de /burn` como primer título: escríbelo a fichero y usa `GH_REPO=azarquiel/bitacoraestelar.app gh api repos/azarquiel/bitacoraestelar.app/issues/$ARGUMENTS/comments -F body=@<fichero>`. `/done-done` lo lee de ahí, y es lo que queda para la retrospectiva.
