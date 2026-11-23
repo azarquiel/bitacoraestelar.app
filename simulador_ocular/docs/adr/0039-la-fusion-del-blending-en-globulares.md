@@ -789,7 +789,7 @@ otra cantidad. Eso explicaría el 3.
 **AC3.** No se abre ticket de `num`: sale dentro de la banda, aunque sin voto.
 Tampoco se propone un k nuevo: sin control, no hay base para mover k, y si la
 hipótesis vale, reajustar k a la Tabla A.1 no arregla nada. Siguiente paso,
-como ticket nuevo: confirmar la hipótesis con una cuenta que se compare con
+en **#619**: confirmar la hipótesis con una cuenta que se compare con
 la Tabla A.1. Se pide `astrometric_params_solved` para el fixture y se repite
 el control con «5/6 parámetros + BP−RP». Si el control vale, se repite este
 reparto con su veredicto. Si además falla `c`, en ese ticket se escribe el
