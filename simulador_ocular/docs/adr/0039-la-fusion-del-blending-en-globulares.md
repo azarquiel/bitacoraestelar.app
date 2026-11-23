@@ -678,7 +678,7 @@ radial de `c`, no en k. Lo separa **#617**.
 **Peso de #611: en revisión (#617).** El código no cambia (el spike decide,
 no corrige). Hasta #617, los números de «Filas mezcladas del núcleo» que
 dependen del peso `c` (atribución en 17-19, R2v y conservación de ≤1) quedan
-condicionados a ese peso.
+condicionados a ese peso. Decidido en «El exceso de filas en 0,5-1 r_h» (AC4): se mantiene como compensación declarada.
 
 ## El exceso de filas en 0,5-1 r_h: `num` o `c` (#617, 2026-11-23)
 
