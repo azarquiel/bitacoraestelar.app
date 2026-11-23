@@ -1,0 +1,22 @@
+#614 · cruce Gaia–HST en M13 (prerregistro ADR 0039)
+HST: 152392 estrellas; centro Harris 250.42183, 36.45986; r_h = 101.4″
+alineado HST → Gaia: dx = -0.193″, dy = -0.143″
+G − V = 0.0034 + 0.0726(V−I) + -0.0955(V−I)²  sobre 168 de 3292 filas de control
+
+R = 0,4″ (veredicto)
+  marcadas en ≤1 (0,5-1 r_h), G 16,5-18,5: 2629 filas, 2628 con HST a ≤ R, 1 sin
+  mediana Q1 = 1,028  [95 %: 1,026-1,030]  listón 1,1
+  mediana Qs = 0,972  (informativo)
+  control: mediana Q1 = 1,000 en 168 filas (≈ 1 si el ajuste vale)
+  lectura: (b) c baja
+
+R = 0,6″ (sensibilidad, sin voto)
+  marcadas en ≤1 (0,5-1 r_h), G 16,5-18,5: 2629 filas, 2629 con HST a ≤ R, 0 sin
+  mediana Q1 = 1,028  [95 %: 1,026-1,029]  listón 1,1
+  mediana Qs = 0,856  (informativo)
+  control: mediana Q1 = 1,000 en 168 filas (≈ 1 si el ajuste vale)
+  lectura: (b) c baja
+
+Anillos interiores (informativo, sin voto; R = 0,4″)
+  ≤0,25: 260 filas, mediana Q1 = 1,088, Qs = 0,848
+  ≤0,5: 804 filas, mediana Q1 = 1,057, Qs = 0,892
