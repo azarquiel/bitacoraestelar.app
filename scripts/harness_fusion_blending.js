@@ -51,8 +51,9 @@ var gaia = fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/valida
    mezcla pesa c(m, r) de su magnitud en la contabilidad de luz (conservación,
    R2v, pregunta 5, atribución): esa es la fracción que Fabricius cuenta como
    estrella recuperada, y la (1 − c) ya la llevan sintéticas y velo. El dibujo
-   (criterio 2) no cambia. --mezcla 0 reproduce el arnés de #595. */
-var MEZCLA = arg('mezcla', 1) !== 0;
+   (criterio 2) no cambia. --mezcla 0 reproduce el arnés de #595; --mezcla 2
+   es el contrafactual sin criterio: toda fila del catálogo pesa c. */
+var MEZCLA = arg('mezcla', 1);
 var esMezcla = require('./mezcla_gaia.js').leer(path.join(__dirname, '../simulador_ocular/docs/validacion/m13_gaia_dr3_mezcla.csv'));
 
 /* Banda del catálogo: V por defecto, la de producción desde #574 (magVGaia,
@@ -167,13 +168,13 @@ function campo(nombre) { return function (r) { return mom(r)[nombre]; }; }
 /* ── Catálogo en el plano del cielo ───────────────────────────────────────── */
 var cos0 = Math.cos(M13.dec * Math.PI / 180);
 var est = [];
-function mete(g, m, cat) {
+function mete(g, m, esFilaCatalogo) {
   var x = (((g[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600, y = (g[1] - M13.dec) * 3600;
   var r = pob.radioPropio(x, y);
   if (!(r < pob.rtAs) || anillo(r) < 0) return;
-  var mz = cat && esMezcla.get(clave(g));
-  est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m), mz: mz,
-             w: MEZCLA && mz ? pob.completitud(m, r) : 1 });   // peso en la luz (#611)
+  var pesa = esFilaCatalogo && (MEZCLA === 2 || (MEZCLA === 1 && esMezcla.get(clave(g))));
+  est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m),
+             w: pesa ? pob.completitud(m, r) : 1 });   // peso en la luz (#611)
 }
 gaia.forEach(function (g) { if (!R.esCampo(g)) mete(g, magCatalogo(g), true); });
 var nCat = est.length;

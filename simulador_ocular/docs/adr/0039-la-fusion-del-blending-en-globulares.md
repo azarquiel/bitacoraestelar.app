@@ -469,8 +469,9 @@ de Fabricius et al. 2021, §3.3: `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y
 `ipd_gof_harmonic_amplitude < 0,1`. Sin `ruwe` (solución 2p) también es
 mezcla: más de la mitad de las 2p a G < 19 se deben a una vecina (mismo
 artículo, §2.6). Es la fuente que ancla `gaiaCrowdingK`, y ningún umbral se
-ha tocado. Descartados: `ipd_frac_multi_peak > 2` solo (Tokovinin 2023; marca
-el 64 % de ≤2, donde el catálogo ya cuadra) y el exceso corregido C*
+ha tocado. Descartados por definición, no por su resultado en M13:
+`ipd_frac_multi_peak > 2` solo (Tokovinin 2023: criterio de pares resueltos
+de binarias, no un filtro de fuente única publicado para cúmulos) y el exceso corregido C*
 (Riello et al. 2021), que necesita BP−RP: justo lo que les falta a las
 mezclas. Columnas en `m13_gaia_dr3_mezcla.csv` (`scripts/gen_m13_mezcla.py`,
 Gaia DR3, cruce 1:1 con el fixture).
@@ -481,7 +482,8 @@ atribución). `c` es la fracción que Fabricius cuenta como estrella recuperada;
 la parte `(1 − c)` ya la ponen las sintéticas y el velo. Sin parámetro nuevo.
 Donde `c ≈ 1` (fuera del núcleo, brillantes) la fila queda entera. El
 criterio 2 (dibujo) no cambia: la mezcla se dibuja igual.
-`--mezcla 0` reproduce `fusion_blending_595.txt` byte a byte.
+`--mezcla 0` reproduce `fusion_blending_595.txt` byte a byte; `--mezcla 2`
+pesa todas las filas por `c` (contrafactual sin criterio).
 
 **Marcadas** (G 16,5-18,5, miembros y campo): 260/260 en ≤0,25, 804/804 en
 ≤0,5, 2 629/2 683 en ≤1, 2 296/3 230 en ≤2, 437/1 891 en ≤4, 41/847 en ≤8.
@@ -496,9 +498,24 @@ Dentro de 1 r_h el filtro marca casi todo, porque ahí toda fila tiene vecina.
 | ≤1 | 2,79 → **1,06 ± 0,046** | 13,7 → **1,05 ± 0,11** |
 
 Dentro de ±2σ en los tres. Potencia real solo en ≤1: en ≤0,25 y ≤0,5 el
-modelo espera 0,07 y 2 estrellas. **El criterio aporta**: con todas las filas
-pesadas por `c` (contrafactual, sin marcar), ≤1 18-19 cae a 0,84 y ≤2 18-19 a
-0,85 (−5,8σ); con el criterio, 1,05 y 0,91.
+modelo espera 0,07 y 2 estrellas. **El criterio aporta fuera del núcleo**: con
+todas las filas pesadas por `c` (`--mezcla 2`, contrafactual sin marcar), ≤1
+18-19 cae a 0,84 y ≤2 18-19 a 0,85 (−5,8σ); con el criterio, 1,05 y 0,91.
+El 0,91 de ≤2 sigue a −3,5σ: no pasa, y ≤2 está fuera de AC2.
+
+**Límite: dentro de 1 r_h la prueba es débil.** El filtro marca casi todas las
+filas (2 629 de 2 683 en ≤1), así que el catálogo pesado vale ≈ N_filas·c̄ y
+`c` se cancela en cat/`num·c`: el cociente pasa a medir N_filas / `num`
+(≤1 17-18: 2,79 × 0,363 = 1,01). Que pase dice que hay tantas filas como
+estrellas del modelo, no que sean mezclas. Las dos lecturas siguen abiertas:
+(a) mezclas, con la `c` de Fabricius buena (79 % sin BP−RP, filtro de fuente
+única fallado), o (b) la `c` del núcleo demasiado baja para M13, que es
+`gaiaCrowdingK` (#595, fuera de alcance). En ≤0,25 y ≤0,5, `c ≈ 0` borra el
+catálogo del dominio del velo, y por eso R2v sale 1,000. Las separaría una
+medida que no pase por `c`: el G de las filas mezcladas contra la suma de
+sus vecinas en HST (Sarajedini et al. 2007). Tampoco se ha comprobado si la
+Tabla A.1 de Fabricius cuenta como recuperadas las fuentes que no pasan el
+filtro de §3.3; si las cuenta, pesar las marcadas con `c` descuenta de más.
 
 **AC3, arnés de #577 con los listones de §0 bis/ter/quater sin mover:**
 

@@ -35,20 +35,24 @@ ok(M.esMezcla(null, 0, 0), 'sin ruwe (solución 2p) es mezcla');
 console.log('B · el sidecar cubre el fixture');
 var VAL = path.join(__dirname, '../simulador_ocular/docs/validacion');
 var fixture = fs.readFileSync(path.join(VAL, 'm13_gaia_dr3.csv'), 'utf8').trim().split('\n').slice(1)
-  .map(function (l) { var c = l.split(','); return c[0] + ',' + c[1]; });
+  .map(function (l) { var c = l.split(','); return { clave: c[0] + ',' + c[1], ra: +c[0], dec: +c[1] }; });
 var mezcla = M.leer(path.join(VAL, 'm13_gaia_dr3_mezcla.csv'));
 ok(mezcla.size === fixture.length, 'mismo número de filas: ' + mezcla.size + ' de ' + fixture.length);
-ok(fixture.every(function (k) { return mezcla.has(k); }), 'cada fila del fixture tiene su indicador');
+ok(fixture.every(function (f) { return mezcla.has(f.clave); }), 'cada fila del fixture tiene su indicador');
 
 console.log('C · las mezclas se concentran en el núcleo');
-/* Centro y r_h de M13 (Harris, globulares-datos.js: 250,42183 36,45986, r_h 1,69′). */
-var RA0 = 250.42183, DE0 = 36.45986, RH = 1.69 * 60, cos0 = Math.cos(DE0 * Math.PI / 180);
+/* Guardia del fixture, no validación: los listones 90 % / 15 % se leyeron de
+   este mismo M13 (99,8 % / 6,2 %). Centro y r_h de producción, como el arnés. */
+global.window = {};
+require('../simulador_ocular/resources/js/globulares-datos.js');
+var e = global.window.BITACORA_GLOBULARES.filter(function (f) { return f[0] === 'NGC 6205'; })[0];
+var RA0 = e[2], DE0 = e[3], RH = e[5] * 60, cos0 = Math.cos(DE0 * Math.PI / 180);
 var nucleo = [0, 0], halo = [0, 0];
-fs.readFileSync(path.join(VAL, 'm13_gaia_dr3.csv'), 'utf8').trim().split('\n').slice(1).forEach(function (l) {
-  var c = l.split(','), r = Math.hypot((c[0] - RA0) * cos0, c[1] - DE0) * 3600 / RH;
+fixture.forEach(function (f) {
+  var r = Math.hypot((f.ra - RA0) * cos0, f.dec - DE0) * 3600 / RH;
   var t = r <= 0.5 ? nucleo : r > 4 && r <= 8 ? halo : null;
   if (!t) return;
-  t[0]++; if (mezcla.get(c[0] + ',' + c[1])) t[1]++;
+  t[0]++; if (mezcla.get(f.clave)) t[1]++;
 });
 var fN = nucleo[1] / nucleo[0], fH = halo[1] / halo[0];
 console.log('       ≤0,5 r_h: ' + (100 * fN).toFixed(1) + ' %   4-8 r_h: ' + (100 * fH).toFixed(1) + ' %');
@@ -63,7 +67,9 @@ function r2v(extra) {
   var out = spawn(process.execPath, [path.join(__dirname, 'harness_fusion_blending.js')].concat(extra),
                   { encoding: 'utf8', maxBuffer: 1 << 26 }).stdout;
   var tramo = out.slice(out.indexOf('Criterio 3, MEDIDA'));
-  var f = tramo.split('\n').filter(function (l) { return /^≤1 /.test(l); })[0].trim().split(/\s+/);
+  var linea = tramo.split('\n').filter(function (l) { return /^≤1 /.test(l); })[0];
+  if (!linea) throw new Error('el arnés ya no imprime la fila ≤1 de «Criterio 3, MEDIDA» (' + extra.join(' ') + ')');
+  var f = linea.trim().split(/\s+/);
   return { R2v: +f[1], sd: +f[2] };
 }
 var con = r2v([]), sin = r2v(['--mezcla', '0']);
