@@ -1901,9 +1901,16 @@
     /* Con el manifiesto aún en vuelo solo espera una vista que toca un
        globular: las demás salen en este mismo turno, a la vez que la placa
        (scripts/test_peticion_vista.js). */
-    nueva.promise = (bancoManifiesto !== undefined) ? conBanco(bancoManifiesto)
+    nueva.promise = ((bancoManifiesto !== undefined) ? conBanco(bancoManifiesto)
       : cercaDeGlobular(cono) ? manifiestoBanco().then(conBanco)
-      : caminoDeSiempre();
+      : caminoDeSiempre()).then(function (arr) {
+        /* Corte del catálogo (#594): lo que se PIDIÓ, magQ, por todos los
+           caminos. Con banco por encima del techo NO es fondo.corte: la banda
+           (fondo.corte, magQ] ya entra por veloSB y el velo (1 − c) no puede
+           llevarla otra vez. */
+        arr.corte = magQ;
+        return arr;
+      });
     cacheGaia[clave] = nueva;
     // Resuelta (o caída), ya no está pendiente: una vista posterior no debe
     // recibir el aviso viejo ni la provisional, ni la entrada retener oyentes.
@@ -3819,6 +3826,7 @@
     tamLienzo: tamLienzo,
     capaEstrellas: capaEstrellas,
     magVGaia: magVGaia,
+    gMenosV: gMenosV,
     esCampo: esCampo,
     escalaEstrellas: escalaEstrellas,
     radioAiry: radioAiry,

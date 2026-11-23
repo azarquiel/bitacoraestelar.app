@@ -257,6 +257,7 @@ casos.push(function () {
     nuevoMundo({ sinRange: true });
     return R.consultar(G.ra, G.dec, 30, 16.2);
   }).then(function (lista) {
+    ok(lista.corte === 16.5, 'corte del catálogo = magQ, 16,2 cuantizada a 16,5 (' + lista.corte + ')');
     ok(alProxy().length === 0 && mismas(lista, verdad(G.ra, G.dec, rad, 16.2)), 'servidor sin Range (200 entero): sirve igual');
   });
 });
@@ -272,6 +273,9 @@ casos.push(function () {
     var todas = verdad(G.ra, G.dec, R.radioConsulta(30), 19.9).sort(function (a, b) { return a[2] - b[2]; });
     ok(todas.length > 100, 'el fixture pasa del techo (' + todas.length + ')');
     ok(lista.length === 40, 'se sirven las 40 más brillantes (' + lista.length + ')');
+    // #594 AC5: el corte del catálogo es magQ (lo pedido), no fondo.corte.
+    ok(lista.corte === 20 && lista.fondo && lista.fondo.corte < lista.corte,
+       'corte del catálogo = magQ (' + lista.corte + '), no fondo.corte (' + (lista.fondo && lista.fondo.corte) + ')');
     var fo = lista.fondo || {}, resto = todas.slice(40);
     var flujo = resto.reduce(function (s, f) { return s + Math.pow(10, -0.4 * f[2]); }, 0);
     ok(fo.n === resto.length && Math.abs(fo.flujo / flujo - 1) < 1e-3, 'fondo con los momentos del resto (n ' + fo.n + ' de ' + resto.length + ')');

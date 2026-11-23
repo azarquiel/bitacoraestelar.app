@@ -241,8 +241,10 @@ mueven):
 
 Solo mide (criterio 1 de #590). No toca producción, ni el velo, ni los
 listones de §0 bis, y no cambia el veredicto. Arnés:
-`node scripts/harness_fusion_blending.js --atribucion [--corte-g 18.5]`. Sin
-flags la salida es idéntica a `fusion_blending_577.txt`. Salida completa en
+`node scripts/harness_fusion_blending.js --atribucion [--corte-g 18.5]`.
+Cuando se escribió, sin flags la salida era idéntica a
+`fusion_blending_577.txt`. Desde #594 el arnés aplica por defecto el corte
+del fixture; `--corte-g 99` lo quita. Salida completa en
 `simulador_ocular/docs/validacion/atribucion_590.txt`.
 
 **Medida.** Por anillo y por rango de V (bordes en `borde ± 1, 2, 4` mag, en
@@ -323,6 +325,61 @@ parámetro con ancla):
    pertenencia.
 4. El listón de conservación sin término de muestreo: lo decide el dueño,
    con un prerregistro nuevo. Hecho en §0 ter (#597).
+
+## Corte de la consulta en la completitud (#594, 2026-11-23)
+Primera corrección de la atribución. `pob.completitud(m, r, G_c)` vale
+`c(m, r)·[G(m) ≤ G_c]`, interpolado dentro del bin con G − V del color
+sintético del tramo de la LF (el que llevan las sintéticas). En la gigante
+G − V = −0,366: con la mediana 0,109 del contrafactual el bin caería fuera
+entero (`scripts/test_completitud_corte.js`).
+
+**Por bin y no por fila (desviación de AC1 de #594).** El ticket pedía el
+V − G de cada estrella del catálogo. `completitud` se evalúa sobre los bins
+de la LF del modelo, que no tienen fila de catálogo detrás: el velo es
+`Σ num·f·(1 − c)` por bin. El color que corresponde es el del tramo de la LF,
+el mismo con que nacen las sintéticas. Las filas del catálogo no pasan por `c`:
+o llegaron (G ≤ magQ) o no.
+
+**Ancla.** `G_c = magQ`, lo que se pidió: `magConsultaGaia` cuantizada 0,5
+hacia arriba, la misma que llega al banco y al proxy. `consultar` la deja en
+`estrellas.corte` por los tres caminos (proxy, Avance, banco). Con banco
+por encima del techo **no** es `fondo.corte`: la banda
+`(fondo.corte, magQ]` entra por `veloSB`, y `G_c = fondo.corte` la metería
+otra vez en `(1 − c)` (×54 en la banda; test con su caso malo). En el arnés,
+el corte declarado del fixture (`--corte-g`, 18,5 por defecto; `--corte-g 99`
+reproduce el arnés de #590).
+
+**Decisión: el corte entra solo en el velo, no en la realización.** Las
+sintéticas siguen con `c` sin corte y la clave de `poblacionCacheada` no
+lleva el equipo («cambiar de telescopio reclasifica, no regenera»). Coste:
+con `magQ < mCutGeneracion` las estrellas con G entre `magQ` y 18 no se
+generan ni las trae Gaia. Medido que ese hueco queda bajo `m_res` en todo
+radio, con el cielo más oscuro de la UI: 80 mm 40× (`magQ` 16,0, `m_res`
+máx 12,95 contra V ≥ 16,37), 80/20×, 120/60×, 150/75×. El margen es la
+cola del glow + 0,3 de `magConsultaGaia`; el test lo vigila. Revertir esta
+decisión es meter el corte en la clave de la caché y regenerar por equipo.
+
+**Producción hoy.** `S1campo`/`S2campo` siguen sin `c` (ADR 0012): el corte
+no cambia ningún píxel hasta que el velo `V1`/`V2` entre en el render.
+
+**Arnés con el corte del fixture** (`fusion_blending_594.txt`, sobre el de
+#590):
+
+| anillo | conservación (antes) | R2v (antes) | 2σ de R2v |
+|---|---|---|---|
+| ≤2 | 0,929 (0,836) | 0,941 (0,634) | 0,022 |
+| ≤4 | 0,903 (0,758) | 0,994 (0,564) | 0,030 |
+
+Con los listones sin mover, ≤2 y ≤4 quedan en 0,9-1,1 y `R2v ≤ 1 + 2σ`,
+que es lo que pedía AC2. Margen justo: la conservación de ≤4 está 0,003 por
+encima del suelo (y sin potencia en §0 ter), y con el listón de dos colas de
+§0 quater ≤2 sigue sin pasar (0,941, 5σ por debajo). Las cuatro cifras
+salen algo peores que con el contrafactual de la mediana (0,932 / 0,906 /
+0,954 / 1,007): con el color del bin (|G − V| ≥ 0,132 contra 0,109) el
+corte cae algo más débil en V, el modelo da más estrellas por catalogadas y
+el velo lleva algo menos.
+El veredicto sigue en NO SE PUEDE TODAVÍA (criterio 3 en ≤0,5/≤1/≤8 y la
+pregunta 5): son las correcciones 2 y 3, fuera de #594.
 
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
@@ -830,6 +887,7 @@ Si se implementa (b):
 | forma de la PSF del pico | entra | `radioImagenEstelar` (Airy ⊕ seeing), ya anclado |
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
 | `completitud` en el velo (`gaiaM50`, `gaiaAncho`, `gaiaFwhmAs`, `gaiaCrowdingK`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
+| corte de la consulta `G_c` en `completitud(m, r, G_c)` (#594) | entra en el velo, **no** en las sintéticas | lo pedido: `magQ` en producción (`estrellas.corte`), G ≤ 18,50 en el fixture; G − V del color sintético del bin (Riello et al. 2021). Ver «Corte de la consulta» |
 | G→V con BP−RP | entra (prerrequisito) | Gaia EDR3, doc. CU5, tabla 5.7 (σ = 0,03 mag) |
 | `mCutGeneracion = 18` como corte de `V1`/`V2` | entra en el velo | el existente de `CFG` (profundidad de la realización sintética); ancla no revisada aquí |
 | `pasadasPuntoFijo = 5` | se queda | ADR 0012 (B), medido en `punto_fijo.md`; con dominio local está sin volver a medir |
