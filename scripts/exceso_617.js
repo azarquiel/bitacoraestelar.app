@@ -24,20 +24,27 @@ function huella(hst, lado, min) {
   };
 }
 
-var BANDA = [0.80, 1.25];
+var BANDA = [0.80, 1.25], EXCESO = 2.79;   // cat/num·c de 17,07-18,07 en ≤1 (#595)
 function termino(q, s) {
   var fuera = q < BANDA[0] || q > BANDA[1];
   return { q: q, sigma: s, falla: fuera && Math.abs(q - 1) > 2 * s };
 }
 
-/* R_num = N_HST/num con σ de Poisson; c_emp/c_mod con σ binomial sobre N_HST
-   (c_emp recortada a [1/N, 1 − 1/N] para que σ no se anule en los extremos). */
+/* R_num = N_HST/num con σ de Poisson. c_emp/c_mod con σ de Poisson de las dos
+   cuentas: no binomial, porque en otra banda c_emp puede pasar de 1 (#617). */
 function veredicto(m) {
   var rNum = m.nHst / m.nMod, cEmp = m.nGaia / m.nHst;
-  var cb = Math.min(1 - 1 / m.nHst, Math.max(1 / m.nHst, cEmp));
   var num = termino(rNum, rNum / Math.sqrt(m.nHst));
-  var k = termino(cEmp / m.cMod, Math.sqrt(cb * (1 - cb) / m.nHst) / m.cMod);
-  return { num: num, k: k, cEmp: cEmp, producto: rNum * cEmp / m.cMod, noCuadra: !num.falla && !k.falla };
+  var k = termino(cEmp / m.cMod, cEmp / m.cMod * Math.sqrt(1 / Math.max(m.nGaia, 1) + 1 / m.nHst));
+  var producto = rNum * cEmp / m.cMod;
+  return { num: num, k: k, cEmp: cEmp, producto: producto,
+           // «del orden de 2,8» del prerregistro, leído con la misma banda.
+           cuadra: producto / EXCESO >= BANDA[0] && producto / EXCESO <= BANDA[1],
+           noCuadra: !num.falla && !k.falla };
 }
 
-module.exports = { huella: huella, veredicto: veredicto, BANDA: BANDA };
+// Control del método: completitud de Fabricius (Tabla A.1, M13, 0,5-2,2′, G 16-18) ± 10 puntos.
+var FABRICIUS = 47, TOL = 10;
+function control(nGaia, nHst) { return Math.abs(100 * nGaia / nHst - FABRICIUS) <= TOL; }
+
+module.exports = { huella: huella, veredicto: veredicto, control: control, BANDA: BANDA };

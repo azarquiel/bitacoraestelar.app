@@ -7,9 +7,9 @@ Control (Tabla A.1, 0,5-2,2′ ∩ ACS, cobertura 75,5 %), G 16-18:
 
 Anillo 0,5-1 r_h (50,7-101,4″) ∩ ACS, cobertura 99,8 %, V 17,07-18,07:
   N_HST (Vground) = 1187   N_Gaia (magVGaia) = 1296   num del modelo = 1281,0   c_mod = 0,362
-  AC1  R_num = N_HST / num = 0,927 ± 0,027  → num vale
-  AC2  c_emp = N_Gaia / N_HST = 1,092;  c_emp / c_mod = 3,016 ± 0,002  → FALLA k
-  producto R_num · c_emp / c_mod = 2,795  (arnés: cat/num·c 2,79, solo miembros)
+  AC1  R_num = N_HST / num = 0,927 ± 0,027  → fuera de banda: false (sin voto)
+  AC2  c_emp = N_Gaia / N_HST = 1,092;  c_emp / c_mod = 3,016 ± 0,121  → fuera de banda: true (sin voto)
+  producto R_num · c_emp / c_mod = 2,795  (arnés: cat/num·c 2,79, solo miembros) → cuadra
 
 Informativo (sin voto), mismo dominio, G 17-18: N_Gaia / N_HST = 1205 / 1214 = 0,993
 

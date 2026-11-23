@@ -26,6 +26,7 @@ var mAp = pob.magnitudes, num = pob.estrellasPorBin, NB = mAp.length, CORTE_G = 
 var MBORDE = C.config.mCutGeneracion;   // borde de bin del arnés (harness_fusion_blending.js)
 for (var b0 = 0; b0 + 1 < NB; b0++)
   if (mAp[b0] <= MBORDE && mAp[b0 + 1] > MBORDE) { MBORDE = (mAp[b0] + mAp[b0 + 1]) / 2; break; }
+if (b0 + 1 >= NB) throw new Error('mCutGeneracion fuera de la LF: sin borde de bin');
 var V0 = MBORDE - 1, V1 = MBORDE;       // «17.07–18.07» del arnés
 
 // HST.
@@ -57,12 +58,8 @@ var d = F.alinear(control, hst.filter(function (s) { return s.v < 20; }));
 hst.forEach(function (s) { s.x += d.dx; s.y += d.dy; s.r = Math.hypot(s.x, s.y); });
 var idx01 = F.indice(hst, 0.1), pares = [];
 control.forEach(function (p) {
-  var mejor = null, dm = 0.1;
-  (idx01.m.get(Math.floor(p.x / 0.1) + ',' + Math.floor(p.y / 0.1)) || []).concat(
-    [-1, 0, 1].reduce(function (a, i) { return a.concat([-1, 0, 1].reduce(function (b, j) {
-      return (i || j) ? b.concat(idx01.m.get((Math.floor(p.x / 0.1) + i) + ',' + (Math.floor(p.y / 0.1) + j)) || []) : b; }, [])); }, []))
-    .forEach(function (s) { var dd = Math.hypot(s.x - p.x, s.y - p.y); if (dd <= dm) { dm = dd; mejor = s; } });
-  if (mejor) pares.push({ g: p.g, v: mejor.v, i: mejor.i });
+  var s = F.masCercana(p, idx01, 0.1);
+  if (s) pares.push({ g: p.g, v: s.v, i: s.i });
 });
 var t = F.ajustarG(pares);
 hst.forEach(function (s) { s.g = t.g(s.v, s.i); });
@@ -70,7 +67,7 @@ hst.forEach(function (s) { s.g = t.g(s.v, s.i); });
 // Dominio: huella ACS (celdas de 4″, ≥ 3 HST, borde erosionado).
 var LADO = 4, H = X.huella(hst, LADO, 3);
 function enAnillo(r0, r1) { return function (p) { return p.r > r0 && p.r <= r1 && H.dentro(p); }; }
-function cobertura(r0, r1) {   // fracción del anillo dentro de la huella, por Monte Carlo en rejilla de 1″
+function cobertura(r0, r1) {   // fracción del anillo dentro de la huella, en rejilla fija de 1″
   var n = 0, s = 0;
   for (var x = -r1; x <= r1; x += 1) for (var y = -r1; y <= r1; y += 1) {
     var r = Math.hypot(x, y);
@@ -105,7 +102,7 @@ console.log('k = ' + C.config.gaiaCrowdingK + '; tramo V ' + f(V0, 2) + '-' + f(
 var enA1 = enAnillo(30, 132);
 var cg = gaia.filter(function (p) { return p.g >= 16 && p.g < 18 && enA1(p); }).length;
 var ch = hst.filter(function (s) { return s.g >= 16 && s.g < 18 && enA1(s); }).length;
-var pasaControl = Math.abs(100 * cg / ch - 47) <= 10;
+var pasaControl = X.control(cg, ch);
 console.log('\nControl (Tabla A.1, 0,5-2,2′ ∩ ACS, cobertura ' + f(100 * cobertura(30, 132), 1) + ' %), G 16-18:');
 console.log('  N_Gaia / N_HST = ' + cg + ' / ' + ch + ' = ' + f(100 * cg / ch, 1) + ' %  (Fabricius 47 %, ±10) → ' + (pasaControl ? 'VALE' : 'NO VALE: sin veredicto'));
 
@@ -117,9 +114,9 @@ var mod = modelo(r0, r1, function (k) { return mAp[k] > V0 && mAp[k] <= V1; });
 var v = X.veredicto({ nHst: nHst, nMod: mod.n, nGaia: nGaia, cMod: mod.c });
 console.log('\nAnillo 0,5-1 r_h (' + f(r0, 1) + '-' + f(r1, 1) + '″) ∩ ACS, cobertura ' + f(100 * cobertura(r0, r1), 1) + ' %, V ' + f(V0, 2) + '-' + f(V1, 2) + ':');
 console.log('  N_HST (Vground) = ' + nHst + '   N_Gaia (magVGaia) = ' + nGaia + '   num del modelo = ' + f(mod.n, 1) + '   c_mod = ' + f(mod.c));
-console.log('  AC1  R_num = N_HST / num = ' + f(v.num.q) + ' ± ' + f(v.num.sigma) + '  → ' + (v.num.falla ? 'FALLA num' : 'num vale'));
-console.log('  AC2  c_emp = N_Gaia / N_HST = ' + f(v.cEmp) + ';  c_emp / c_mod = ' + f(v.k.q) + ' ± ' + f(v.k.sigma) + '  → ' + (v.k.falla ? 'FALLA k' : 'k vale'));
-console.log('  producto R_num · c_emp / c_mod = ' + f(v.producto) + '  (arnés: cat/num·c 2,79, solo miembros)' + (v.noCuadra ? '  → el método no cuadra' : ''));
+console.log('  AC1  R_num = N_HST / num = ' + f(v.num.q) + ' ± ' + f(v.num.sigma) + '  → ' + (!pasaControl ? 'fuera de banda: ' + !(!v.num.falla) + ' (sin voto)' : v.num.falla ? 'FALLA num' : 'num vale'));
+console.log('  AC2  c_emp = N_Gaia / N_HST = ' + f(v.cEmp) + ';  c_emp / c_mod = ' + f(v.k.q) + ' ± ' + f(v.k.sigma) + '  → ' + (!pasaControl ? 'fuera de banda: ' + !(!v.k.falla) + ' (sin voto)' : v.k.falla ? 'FALLA k' : 'k vale'));
+console.log('  producto R_num · c_emp / c_mod = ' + f(v.producto) + '  (arnés: cat/num·c 2,79, solo miembros) → ' + (v.cuadra ? 'cuadra' : 'NO cuadra'));
 
 // Informativo, sin voto: la misma cuenta en G (G de HST del ajuste de #614).
 var gH = hst.filter(function (s) { return s.g >= 17 && s.g < 18 && en(s); }).length;
@@ -138,4 +135,4 @@ console.log('\nDiagnóstico post hoc (sin voto): G 16-18, N_Gaia / N_HST, todas 
   console.log('  ' + z[2].padEnd(9) + f(100 * g2.length / nh, 1).padStart(6) + ' % | ' + f(100 * gc2 / nh, 1).padStart(5) + ' % | ' + z[3] + ' %   (N_HST ' + nh + ')');
 });
 console.log('Veredicto: ' + (!pasaControl ? 'sin veredicto (control)' :
-  v.noCuadra ? 'el método no cuadra' : [v.num.falla && 'falla num', v.k.falla && 'falla k'].filter(Boolean).join(' y ')));
+  (v.noCuadra || !v.cuadra) ? 'el método no cuadra' : [v.num.falla && 'falla num', v.k.falla && 'falla k'].filter(Boolean).join(' y ')));

@@ -30,5 +30,11 @@ ok(!v.num.falla && !v.k.falla && v.noCuadra, 'ninguno falla: el método no cuadr
 v = X.veredicto({ nHst: 10, nMod: 7, nGaia: 5, cMod: 0.5 });
 ok(!v.num.falla, 'R_num 1,43 con N = 10 (σ 0,45): no falla');
 
+ok(v.cuadra === false, 'producto 1,43 no cuadra con 2,79');
+ok(X.veredicto({ nHst: 1300, nMod: 466, nGaia: 1300, cMod: 0.98 }).cuadra, 'producto 2,85 cuadra');
+
+// Control: 47 ± 10 puntos; el 95,6 % de «todas las filas» no pasa.
+ok(X.control(47, 100) && X.control(57, 100) && !X.control(58, 100) && !X.control(2527, 2643), 'control 47 ± 10: 57 sí, 58 y 95,6 no');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\ntodo ok');
