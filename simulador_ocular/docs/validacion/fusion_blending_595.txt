@@ -1,0 +1,155 @@
+M13 · D=467mm  M=173x  SQM=21  θ_sep=1.043"  dentro de 8 r_h: 11634 filas del catálogo + 2204 sintéticas (mCutGeneracion = 18, borde de bin 18.068)
+
+── Criterio 2: |P − T| / T  (listón < 1e-6 en cada anillo y en cada celda)
+ley                ≤0,25     ≤0,5       ≤1       ≤2       ≤4       ≤8   peor celda  celdas ≥1e-6
+(b) imagen        0.0e+0   0.0e+0   0.0e+0   0.0e+0   0.0e+0   0.0e+0      0.0e+0       0/13118  PASA
+(a) FoF           3.3e-3   1.9e-3   5.8e-5   6.5e-5   0.0e+0  2.3e-16      2.1e+2     290/13127  NO PASA
+prod. 0012A      1.6e-15  2.1e-14  1.7e-14  2.4e-15  1.0e-15  5.8e-16      1.0e+0   13118/13118  NO PASA
+(a) flujo catalogado que acaba en blobs dibujados: 56.89 %; el que sale de la celda de su estrella: 2.704 % del catálogo
+(a) el grupo múltiple más ancho mide 7.16 θ_sep; 53.6 % de los grupos múltiples son más anchos que θ_sep (cadenas)
+
+── Conservación contra el modelo: (ΣF_cat+sint + ∫V1) / ∫Σ·S1_total  (listón |q − 1| ≤ 2σ, §0 ter)
+                   ≤0,25     ≤0,5       ≤1       ≤2       ≤4       ≤8    total
+medida             1.232    1.062    1.024    0.955    0.903    1.130    1.015
+2σ                 0.155    0.108    0.082    0.084    0.115    0.213    0.044
+                sin pot. sin pot.     PASA     PASA sin pot. sin pot.     PASA
+contrafactual      1.232    1.062    1.028    1.006    0.978    1.205   (V1 sin (1 − c): informativo)
+potencia: 2σ < 0.091 (deriva del modelo del 10 %); sin potencia no cuenta
+
+── Criterio 3, POTENCIA (§0 quater): valor esperado de cada contrafactual contra ±2σ del modelo
+banda del catálogo: V (G→V EDR3, producción #574); filas en G por falta de color: 3174 de 11972
+dominio del velo m > 18.068; deriva: num × 1,1 y × 0,9 en m > borde, cuenta la más débil
+anillo       2σ   doble conteo  pot.  P(rech.)   deriva ×1,1  ×0,9  pot.  P(rech.)   juzgado
+≤0,25       0.000          1.000    NO      0.05         1.000  1.000    NO      0.05        NO
+≤0,5        0.000          1.000    NO      0.05         1.000  1.000    NO      0.05        NO
+≤1          0.005          1.022    sí      1.00         0.998  1.002    NO      0.12        sí
+≤2          0.018          1.337    sí      1.00         0.969  1.037    sí      0.91        sí
+≤4          0.030          1.489    sí      1.00         0.956  1.054    sí      0.84        sí
+≤8          0.055          1.489    sí      1.00         0.956  1.054    NO      0.35        sí
+falsa alarma con un modelo perfecto: 1 − 0,954^4 = 17 % (conservadora: un falso «no pasa» no aprueba nada)
+
+── Criterio 3, MEDIDA: R2v = (∫V2 + Σ_{m>borde} F_j²) / ∫Σ·S2(m>borde)  (listón |R2v − 1| ≤ 2σ, §0 quater)
+anillo      R2v       σ  veredicto        R2 LF entera   S2·c/S2 (m>m_res)  F²máx/ΣF²   m más brillante
+≤0,25      1.013   0.000  sin potencia           1.119              83.3 %      16.6 %       12.21
+≤0,5       1.051   0.000  sin potencia           0.943              91.8 %      14.7 %       11.98
+≤1         1.267   0.002  NO PASA                0.959              91.3 %       9.2 %       11.92
+≤2         1.084   0.009  NO PASA                0.995              86.7 %       7.2 %       12.06
+≤4         0.994   0.015  PASA                   0.699              85.8 %      19.1 %       12.07
+≤8         1.114   0.027  NO PASA                0.475              85.6 %      10.1 %       13.29
+
+── Pregunta 5: |m_res(x,y) − m_res(r)| a la escala 32.5" (listón p95 < 0,1 mag)
+── Pregunta 6: contraste RMS de la luz no resuelta δI/(Fcielo+⟨I⟩) contra Cmin del grano = 6.22e-1
+anillo   celdas  p95|Δm|  máx|Δm|  pregunta 5      RMS δI/I   RMS/Cmin
+≤0,25         4    0.037    0.049  radial vale       4.85e-2      0.078
+≤0,5      (sin celdas)
+≤1           28    0.121    0.143  local             1.13e-1      0.182
+≤2           88    0.077    0.095  radial vale       8.11e-2      0.130
+≤4          364    0.042    0.093  radial vale       4.48e-2      0.072
+≤8         1484    0.014    0.044  radial vale       1.53e-2      0.025
+
+══ Veredicto (§0 bis, conservación de §0 ter, criterio 3 de §0 quater): NO SE PUEDE TODAVÍA — falla: criterio 3 (§0 quater), p95 |Δm_res| ≤ 0,1
+
+── Filas sin BP−RP con G 16,5-18,5 (#595, solo miembros)
+                      ≤0,25        ≤0,5          ≤1          ≤2          ≤4          ≤8
+sin color / N      205/260     597/804   1486/2683    702/3230     65/1856       9/707
+
+── Atribución (#590): observado / modelo por anillo y rango (banda V, solo miembros)
+
+≤0,25 r_h   ∫Σ·S1 = 3.921e-4   ∫Σ·S2(m>borde) = 2.771e-12   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = 0.077
+rango V        N cat  ∫Σ·num·c  cat/mod  ±1σ   N sint ∫Σ·num(1−c)  c medio  F o/m  F² o/m     ΔS1     ΔR2v
+–14.07            26      18.8    1.385 0.231        0          0.0    1.000  1.287       —   0.0759        —
+14.07–16.07      100      74.1    1.350 0.116       42         29.7    0.714  1.108       —   0.0288        —
+16.07–17.07      124       0.4  350.651 1.682       81         79.3    0.004  2.631       —   0.0767        —
+17.07–18.07      183       0.068014.58719.279      375        359.7    0.000  1.657       —   0.0492        —
+18.07–19.07       12       0.0207232.496131.413        —            —    0.000227162.963248452.466   0.0017   0.0131
+19.07–20.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+20.07–21.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+21.07–             0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+
+≤0,5 r_h   ∫Σ·S1 = 8.075e-4   ∫Σ·S2(m>borde) = 5.707e-12   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = 0.054
+rango V        N cat  ∫Σ·num·c  cat/mod  ±1σ   N sint ∫Σ·num(1−c)  c medio  F o/m  F² o/m     ΔS1     ΔR2v
+–14.07            33      38.7    0.853 0.161        0          0.0    1.000  0.899       —  -0.0268        —
+14.07–16.07      212     205.4    1.032 0.070        8          8.3    0.961  0.901       —  -0.0264        —
+16.07–17.07      227      44.4    5.108 0.150      116        119.6    0.271  2.049       —   0.0493        —
+17.07–18.07      577       2.0  285.087 0.703      710        738.8    0.003  1.783       —   0.0587        —
+18.07–19.07      107       0.0 2356.523 4.693        —            —    0.0002453.8252555.315   0.0069   0.0514
+19.07–20.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+20.07–21.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+21.07–             0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+
+≤1 r_h   ∫Σ·S1 = 1.397e-3   ∫Σ·S2(m>borde) = 9.876e-12   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = 0.041
+rango V        N cat  ∫Σ·num·c  cat/mod  ±1σ   N sint ∫Σ·num(1−c)  c medio  F o/m  F² o/m     ΔS1     ΔR2v
+–14.07            68      66.9    1.016 0.122        0          0.0    1.000  1.006       —   0.0015        —
+14.07–16.07      310     369.7    0.838 0.052        0          0.0    1.000  0.714       —  -0.0760        —
+16.07–17.07      360     271.2    1.327 0.061        6         12.6    0.955  1.273       —   0.0128        —
+17.07–18.07     1298     464.8    2.792 0.046      805        817.2    0.363  1.638       —   0.0477        —
+18.07–19.07     1196      87.2   13.719 0.107        —            —    0.018 13.374  13.087   0.0384   0.2665
+19.07–20.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+20.07–21.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+21.07–             0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+
+≤2 r_h   ∫Σ·S1 = 1.340e-3   ∫Σ·S2(m>borde) = 9.470e-12   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = 0.042
+rango V        N cat  ∫Σ·num·c  cat/mod  ±1σ   N sint ∫Σ·num(1−c)  c medio  F o/m  F² o/m     ΔS1     ΔR2v
+–14.07            57      64.2    0.888 0.125        0          0.0    1.000  0.965       —  -0.0093        —
+14.07–16.07      306     354.6    0.863 0.053        0          0.0    1.000  0.755       —  -0.0652        —
+16.07–17.07      367     272.2    1.349 0.061        0          0.0    1.000  1.336       —   0.0158        —
+17.07–18.07     1184    1171.0    1.011 0.029       61         58.4    0.952  1.015       —   0.0011        —
+18.07–19.07     1853    1471.9    1.259 0.026        —            —    0.310  1.255   1.249   0.0129   0.0840
+19.07–20.07        2       0.0 Infinity31622.777        —            —    0.000InfinityInfinity   0.0000   0.0001
+20.07–21.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+21.07–             0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+
+≤4 r_h   ∫Σ·S1 = 7.039e-4   ∫Σ·S2(m>borde) = 4.974e-12   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = 0.058
+rango V        N cat  ∫Σ·num·c  cat/mod  ±1σ   N sint ∫Σ·num(1−c)  c medio  F o/m  F² o/m     ΔS1     ΔR2v
+–14.07            20      33.7    0.593 0.172        0          0.0    1.000  0.614       —  -0.1022        —
+14.07–16.07      211     186.2    1.133 0.073        0          0.0    1.000  0.984       —  -0.0042        —
+16.07–17.07      183     143.0    1.280 0.084        0          0.0    1.000  1.270       —   0.0127        —
+17.07–18.07      627     645.8    0.971 0.039        0          0.0    1.000  0.983       —  -0.0013        —
+18.07–19.07     1132    1185.4    0.955 0.029        —            —    0.475  0.972   0.986  -0.0021  -0.0066
+19.07–20.07        2       0.0 Infinity31622.777        —            —    0.000InfinityInfinity   0.0001   0.0002
+20.07–21.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+21.07–             0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+
+≤8 r_h   ∫Σ·S1 = 2.059e-4   ∫Σ·S2(m>borde) = 1.455e-12   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = 0.107
+rango V        N cat  ∫Σ·num·c  cat/mod  ±1σ   N sint ∫Σ·num(1−c)  c medio  F o/m  F² o/m     ΔS1     ΔR2v
+–14.07            10       9.9    1.014 0.318        0          0.0    1.000  0.649       —  -0.0929        —
+14.07–16.07       92      54.5    1.688 0.135        0          0.0    1.000  1.490       —   0.1302        —
+16.07–17.07       83      41.8    1.984 0.155        0          0.0    1.000  2.010       —   0.0475        —
+17.07–18.07      248     188.9    1.313 0.073        0          0.0    1.000  1.376       —   0.0282        —
+18.07–19.07      420     346.8    1.211 0.054        —            —    0.475  1.222   1.231   0.0168   0.1130
+19.07–20.07        4       0.0 Infinity31622.777        —            —    0.000InfinityInfinity   0.0003   0.0009
+20.07–21.07        0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+21.07–             0       0.0      NaN31622.777        —            —    0.000    NaN     NaN   0.0000   0.0000
+
+── Micro-casos, valle exigido 0.000 (Sparrow: basta un mínimo)
+par igual, 0,50 θ                 (a) 1 punto   (b) 1 pico   pico − centroide = -0.000 θ
+par igual, 0,70 θ                 (a) 1 punto   (b) 1 pico   pico − centroide = -0.000 θ
+par igual, 0,75 θ                 (a) 1 punto   (b) 2 picos  
+par igual, 0,95 θ                 (a) 1 punto   (b) 2 picos  
+par igual, 1,00 θ                 (a) 2 puntos  (b) 2 picos  
+par Δm=2, 0,70 θ                  (a) 1 punto   (b) 1 pico   pico − centroide = -0.078 θ
+par Δm=2, 0,95 θ                  (a) 1 punto   (b) 1 pico   pico − centroide = -0.126 θ
+par Δm=2, 1,50 θ                  (a) 2 puntos  (b) 2 picos  
+par Δm=0,75, 0,95 θ               (a) 1 punto   (b) 2 picos  
+cadena A–B–C igual, paso 0,60 θ   (a) 1 punto   (b) 1 pico   pico − centroide = 0.000 θ
+cadena A–B–C igual, paso 0,90 θ   (a) 1 punto   (b) 3 picos  
+
+── Micro-casos, valle exigido 0.265 (Rayleigh: el valle del par igual de Airy al radio del primer anillo oscuro)
+par igual, 0,50 θ                 (a) 1 punto   (b) 1 pico   pico − centroide = -0.000 θ
+par igual, 0,70 θ                 (a) 1 punto   (b) 1 pico   pico − centroide = -0.000 θ
+par igual, 0,75 θ                 (a) 1 punto   (b) 1 pico   mancha alargada (fundida por el valle)
+par igual, 0,95 θ                 (a) 1 punto   (b) 1 pico   mancha alargada (fundida por el valle)
+par igual, 1,00 θ                 (a) 2 puntos  (b) 2 picos  
+par Δm=2, 0,70 θ                  (a) 1 punto   (b) 1 pico   pico − centroide = -0.078 θ
+par Δm=2, 0,95 θ                  (a) 1 punto   (b) 1 pico   pico − centroide = -0.126 θ
+par Δm=2, 1,50 θ                  (a) 2 puntos  (b) 2 picos  
+par Δm=0,75, 0,95 θ               (a) 1 punto   (b) 1 pico   mancha alargada (fundida por el valle)
+cadena A–B–C igual, paso 0,60 θ   (a) 1 punto   (b) 1 pico   pico − centroide = 0.000 θ
+cadena A–B–C igual, paso 0,90 θ   (a) 1 punto   (b) 1 pico   mancha alargada (fundida por el valle)
+valle de la gaussiana, par igual a 1 θ: 26.6 %
+ojo (resolucionDoble): a 173× parte pares desde 1.73″ = 1.66 θ_sep; θ_sep·M = 180″
+dos a m_res+0.60 a 0,5 θ: el par suma m_res-0.15; la escala a la que el ojo suma la luz de un punto (θ_R/M) es 31.2 θ_sep
+
+── Pregunta 6 con la ley de producción: máx P(ver grano) = tabla.sGrano por anillo
+    ≤0,25     ≤0,5       ≤1       ≤2       ≤4       ≤8
+   0.0e+0   0.0e+0   0.0e+0   0.0e+0   0.0e+0   0.0e+0

@@ -174,7 +174,8 @@ ok(monotona, 'crece hacia fuera: en el núcleo se resuelven menos estrellas');
 ok(saltoMax < 0.2, 'sin escalones en r (segunda diferencia máxima ' + saltoMax.toFixed(3) + ' mag entre arcsec contiguos)');
 var mNucleo = pobM13.mCrowd(2, omega);
 ok(pobM13.mCrowd(2, omega * 4) < mNucleo, 'un beam más ancho aglomera antes (m_crowd más brillante)');
-ok(pobM13.mCrowd(2, omega, 60) < mNucleo, 'un criterio k más exigente también');
+// El doble del k por defecto, no un 60 fijo: el defecto pasó de 30 a 75 (#595).
+ok(pobM13.mCrowd(2, omega, 2 * C.config.gaiaCrowdingK) < mNucleo, 'un criterio k más exigente también');
 ok(!isFinite(pobM13.mCrowd(pobM13.rtAs * 1.05, omega)), 'fuera del cúmulo no hay aglomeración ninguna');
 
 /* ── 6. Estrellas sintéticas: deterministas y ajenas al instrumento ─────── */
