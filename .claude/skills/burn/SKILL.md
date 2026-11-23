@@ -38,11 +38,20 @@ Texto plano, claro, sin jerga. Estas secciones, en este orden:
 
 **Informe ejecutivo — ticket #N: <título>**
 
+**TL;DR:** 🟢/🟡/🔴 + una frase con lo que cambia para el usuario. El color sale de hechos, no de opinión:
+
+- 🟢 todos los criterios cumplidos y la batería en verde (salvo `ESPERADOS`).
+- 🟡 algún criterio parcial, o deuda `shortcut:` nueva.
+- 🔴 algún criterio no cumplido, o un rojo nuevo en la batería.
+
 1. **Valor de negocio.** 2-4 frases: qué problema del usuario resuelve y por qué importa.
 2. **Qué se ha implementado.** Lista corta de cambios, en lenguaje de producto.
 3. **Acceptance criteria.** Cada criterio: cumplido / parcial / no cumplido + motivo breve.
 4. **Ficheros a subir a producción.** Ruta exacta de cada fichero desplegable que cambió (`git diff --name-only <base>...HEAD`), excluyendo tests, scripts, docs y ADR. Si toca el plugin de WordPress, recuerda subir TODOS sus ficheros y comprobar que `Version:` de `bitacora-registro.php` subió (ver AGENTS.md).
-5. **Qué probar en producción.** Solo si hay algo visible o una ganancia para el usuario final; si no, una línea: «Sin impacto visible para el usuario final». Si lo hay, paso a paso y detallado: URL en `bitacoraestelar.app`, qué hacer, qué debe verse, y qué indicaría fallo.
-6. **Siguientes pasos.** 3-5 pasos concretos de desarrollo, ordenados por prioridad (criterios parciales, deuda `shortcut:`, tickets de seguimiento a abrir).
+5. **Riesgo.** Dos líneas:
+   - **Puerta:** de doble sentido (se revierte subiendo los ficheros anteriores) o de un solo sentido (migración de esquema, datos borrados o reescritos, URL o formato OAL que ya usan otros). Si es de un solo sentido, di qué no se puede deshacer.
+   - **Alcance:** qué parte deja de funcionar si sale mal (p. ej. «solo el simulador de dobles», «todo el plugin»).
+6. **Qué probar en producción.** Solo si hay algo visible o una ganancia para el usuario final; si no, una línea: «Sin impacto visible para el usuario final». Si lo hay, paso a paso y detallado: URL en `bitacoraestelar.app`, qué hacer, qué debe verse, y qué indicaría fallo.
+7. **Siguientes pasos.** 3-5 pasos concretos de desarrollo, ordenados por prioridad (criterios parciales, deuda `shortcut:`, tickets de seguimiento a abrir).
 
 Cierra el informe con esta línea, tal cual: «Estado: verificado, pendiente de aceptación por el dueño del ticket». La verificación la hace el eje Spec; aceptar es decisión del dueño tras probar en producción. No cierres el ticket ni lo des por aceptado.
