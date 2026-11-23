@@ -3,7 +3,8 @@
    el prerregistro de ADR 0039, «El exceso de filas en 0,5-1 r_h», sin mover
    dominio ni listón.
 
-   node scripts/spike_617_exceso.js ruta/hlsp_acsggct_hst_acs-wfc_ngc6205_r.rdviq.cal.adj.zpt
+   node scripts/spike_617_exceso.js ruta/hlsp_acsggct_hst_acs-wfc_ngc6205_r.rdviq.cal.adj.zpt [--619]
+   --619: control y reparto con 5/6p + BP−RP (ADR 0039, «Qué cuenta como recuperada la Tabla A.1»)
    (el .zpt no está en el repo: 26 MB, MAST /pub/hlsp/acsggct/ngc6205/) */
 'use strict';
 var fs = require('fs'), path = require('path');

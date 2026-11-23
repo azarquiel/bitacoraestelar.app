@@ -678,7 +678,7 @@ radial de `c`, no en k. Lo separa **#617**.
 **Peso de #611: en revisión (#617).** El código no cambia (el spike decide,
 no corrige). Hasta #617, los números de «Filas mezcladas del núcleo» que
 dependen del peso `c` (atribución en 17-19, R2v y conservación de ≤1) quedan
-condicionados a ese peso. Decidido en «El exceso de filas en 0,5-1 r_h» (AC4): se mantiene como compensación declarada.
+condicionados a ese peso. Decidido en «El exceso de filas en 0,5-1 r_h» (AC4): se mantiene como compensación declarada; se retira en #621.
 
 ## El exceso de filas en 0,5-1 r_h: `num` o `c` (#617, 2026-11-23)
 
@@ -1431,7 +1431,7 @@ Si se implementa (b):
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
 | `completitud` en el velo (`gaiaM50`, `gaiaAncho`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
 | `gaiaCrowdingK = 75` con `gaiaFwhmAs = 0,6″` en `completitud` (#595) | entra en el velo y en las sintéticas | Fabricius et al. 2021, Tabla A.1 (Gaia EDR3 contra HST en 24 globulares sin M13): sesgo −0,4 puntos. Ver «Completitud del núcleo con medida externa» |
-| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | entra en la contabilidad de luz del arnés (peso `c(m, r)`, **compensación declarada** por #617: se retira con el cambio de `c`), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de la muestra de QSO; el artículo es el de `gaiaCrowdingK`, la Tabla A.1 no lo aplica). Ver «Filas mezcladas del núcleo» y «Mezclas o completitud baja (#614)» |
+| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | entra en la contabilidad de luz del arnés (peso `c(m, r)`, **compensación declarada** por #617: se retira con el cambio de `c`, #621), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de la muestra de QSO; el artículo es el de `gaiaCrowdingK`, la Tabla A.1 no lo aplica). Ver «Filas mezcladas del núcleo» y «Mezclas o completitud baja (#614)» |
 | corte de la consulta `G_c` en `completitud(m, r, G_c)` (#594) | entra en el velo, **no** en las sintéticas | lo pedido: `magQ` en producción (`estrellas.corte`), G ≤ 18,50 en el fixture; G − V del color sintético del bin (Riello et al. 2021). Ver «Corte de la consulta» |
 | G→V con BP−RP | entra (prerrequisito) | Gaia EDR3, doc. CU5, tabla 5.7 (σ = 0,03 mag) |
 | `mCutGeneracion = 18` como corte de `V1`/`V2` | entra en el velo | el existente de `CFG` (profundidad de la realización sintética); ancla no revisada aquí |
