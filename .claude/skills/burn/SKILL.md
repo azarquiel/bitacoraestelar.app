@@ -14,18 +14,23 @@ Sigue la skill `mattpocock-skills:implement` sobre el ticket (`gh issue view $AR
 
 - Usa `mattpocock-skills:tdd` donde se pueda, en las costuras acordadas.
 - Pasa a menudo el typecheck y los tests sueltos (`node scripts/test_<nombre>.js`); la batería completa una vez al final (comandos en AGENTS.md).
-- Al terminar, revisa con `mattpocock-skills:code-review`.
 - Haz commit en la rama actual.
 
 No sigas al paso 2 hasta que esté implementado y los tests en verde.
 
-## 2. Revisar acceptance criteria
+## 2. Revisar
 
-Invoca la skill `agile-product-owner:agile-product-owner` pidiéndole que:
+Invoca `mattpocock-skills:code-review` sin dejar que pregunte nada:
 
-- lea el ticket (`gh issue view $ARGUMENTS`) y sus acceptance criteria;
-- compare cada criterio con lo implementado (`git diff` contra la rama base);
-- marque cada criterio como cumplido / parcial / no cumplido, con la prueba (test, fichero:línea).
+- Punto fijo: `main`.
+- Spec: el ticket, `gh issue view $ARGUMENTS`.
+- Pide al eje Spec que, además de su informe, marque cada acceptance criterion del ticket como cumplido / parcial / no cumplido, con la prueba (test o `fichero:línea`). Esa lista es la sección 3 del informe.
+
+Qué hacer con los hallazgos:
+
+- Fallo del eje Spec (criterio no cumplido, o implementado mal): arréglalo, vuelve a pasar los tests y haz commit antes del paso 3.
+- Smell del eje Standards (siempre juicio, no violación): no lo arregles; va a «Siguientes pasos».
+- Violación de un estándar documentado: arréglala.
 
 ## 3. Informe final
 
