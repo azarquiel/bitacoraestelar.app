@@ -633,13 +633,52 @@ ya en el modelo) como segunda columna; el veredicto es el de 0,4″.
 **Prohibido** (ticket): cifras de estrellas dibujadas; mover R o el listón tras
 ver Q1.
 
-### Estado
-AC3 y AC2 hechos. **El cruce (AC1) no se ha corrido**: el catálogo de
-Sarajedini solo está en MAST (`archive.stsci.edu/pub/hlsp/acsggct/ngc6205/`,
-26 MB, no está en VizieR) y no se pudo bajar desde el entorno del spike. El
-sustituto disponible, el Hubble Source Catalog (ESA HST TAP), se descarta:
-fotometría de apertura de HLA que pierde vecinas débiles en el núcleo e
-inflaría Q1 hacia (a). Sin veredicto de AC4 hasta correr el cruce.
+### Resultado del cruce (AC1)
+`scripts/spike_614_cruce.js` sobre el `.zpt` de MAST (152 392 estrellas, no
+está en el repo: 26 MB; tampoco en VizieR). Salida:
+`simulador_ocular/docs/validacion/cruce_hst_614.txt`. Se descartó el Hubble
+Source Catalog como sustituto: su fotometría de apertura pierde las vecinas
+débiles del núcleo y empujaría Q1 hacia (a).
+
+**Dominio.** «Dentro de 1 r_h» es el anillo «≤1» del arnés, 0,5-1 r_h:
+2 629 filas marcadas, las que da el «Límite» de #611. Las 260 de ≤0,25 y las
+804 de ≤0,5 van aparte, como información.
+
+**Dos detalles que el prerregistro no fijaba.** Se declaran, no se ajustaron a
+Q1:
+- En el alineado, las HST se limitan a V < 20: con todas, ninguna pareja a
+  ≤ 1″ es única (≈ 3,7 estrellas HST por segundo de arco cuadrado).
+- El control dentro del campo ACS son ≈ 300 filas (el resto del fixture cae
+  fuera del campo); 168 tienen HST a ≤ 0,1″ y entran en el ajuste.
+
+Alineado: −0,193″, −0,143″. G − V = 0,0034 + 0,0726(V−I) − 0,0955(V−I)²
+(V, I = F606W, F814W VEGA). Control: Q1 = 1,000. El ajuste vale.
+
+| R | filas con HST a ≤ R | mediana Q1 [95 %] | mediana Qs | lectura |
+|---|---|---|---|---|
+| **0,4″** (veredicto) | 2 628 de 2 629 | **1,028 [1,026-1,030]** | 0,972 | **(b)** |
+| 0,6″ (sin voto) | 2 629 | 1,028 [1,026-1,029] | 0,856 | (b) |
+
+Anillos interiores, sin voto (R = 0,4″): ≤0,25 Q1 = 1,088, Qs = 0,848;
+≤0,5 Q1 = 1,057, Qs = 0,892. Los dos quedan por debajo del listón.
+
+**Veredicto (AC4): (b).** Cada fila marcada lleva el flujo de su estrella HST
+principal más un ≈ 3 %, y menos que la suma de sus vecinas a 0,4″ (Qs < 1):
+Gaia ajusta una estrella, no la mezcla. El filtro de §3.3 marca en el núcleo
+filas que tienen vecina, no filas mezcladas. Con el punto 2 de AC3, que dice
+que Fabricius ya las cuenta como recuperadas, pesar las marcadas por `c`
+descuenta de más.
+
+**Qué no dice.** La regla llama a (b) «`c` baja», pero el cruce no mide `c`.
+En #595, k = 75 reproduce la fila de M13 de la Tabla A.1 fuera de muestra
+(rms 7,6). Si las filas son estrellas y la `c` cuadra con Fabricius, el
+exceso de cat/`num·c` (2,79 en 17-18) puede estar en `num` o en el promedio
+radial de `c`, no en k. Lo separa **#617**.
+
+**Peso de #611: en revisión (#617).** El código no cambia (el spike decide,
+no corrige). Hasta #617, los números de «Filas mezcladas del núcleo» que
+dependen del peso `c` (atribución en 17-19, R2v y conservación de ≤1) quedan
+condicionados a ese peso.
 
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
@@ -1148,7 +1187,7 @@ Si se implementa (b):
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
 | `completitud` en el velo (`gaiaM50`, `gaiaAncho`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
 | `gaiaCrowdingK = 75` con `gaiaFwhmAs = 0,6″` en `completitud` (#595) | entra en el velo y en las sintéticas | Fabricius et al. 2021, Tabla A.1 (Gaia EDR3 contra HST en 24 globulares sin M13): sesgo −0,4 puntos. Ver «Completitud del núcleo con medida externa» |
-| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | entra en la contabilidad de luz del arnés (peso `c(m, r)`), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de fuente única; la misma fuente que `gaiaCrowdingK`). Ver «Filas mezcladas del núcleo» |
+| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | entra en la contabilidad de luz del arnés (peso `c(m, r)`, **en revisión por #617**), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de la muestra de QSO; el artículo es el de `gaiaCrowdingK`, la Tabla A.1 no lo aplica). Ver «Filas mezcladas del núcleo» y «Mezclas o completitud baja (#614)» |
 | corte de la consulta `G_c` en `completitud(m, r, G_c)` (#594) | entra en el velo, **no** en las sintéticas | lo pedido: `magQ` en producción (`estrellas.corte`), G ≤ 18,50 en el fixture; G − V del color sintético del bin (Riello et al. 2021). Ver «Corte de la consulta» |
 | G→V con BP−RP | entra (prerrequisito) | Gaia EDR3, doc. CU5, tabla 5.7 (σ = 0,03 mag) |
 | `mCutGeneracion = 18` como corte de `V1`/`V2` | entra en el velo | el existente de `CFG` (profundidad de la realización sintética); ancla no revisada aquí |
