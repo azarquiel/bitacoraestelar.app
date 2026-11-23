@@ -437,8 +437,8 @@ magnitud. Indicios:
 El doble conteo es de **flujo de las mezclas**, no de `c`: la `c` de
 Fabricius es la de una estrella recuperada con su magnitud (lo que el velo
 necesita), y la cuenta del catálogo mezcla esas con mezclas. Arreglarlo es
-quitar al velo el flujo que las filas mezcladas ya traen; queda como
-corrección nueva, fuera de #595.
+quitar al velo el flujo que las filas mezcladas ya traen: #611, fuera de
+#595.
 
 **Conservación (§0 ter).** Mejora el total (0,966 → 1,015) y ≤1
 (0,958 → 1,024, pasa). **Empeora** ≤0,25 (1,110 → 1,232, sin potencia) y
