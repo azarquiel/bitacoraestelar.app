@@ -49,3 +49,5 @@ simulador_ocular/banco_globular/*
 # harness_auditoria_canales.js): son respuestas del proxy de producción, 30 MB
 # en el banco actual. No son fixtures pineadas — se vuelven a bajar solas.
 scripts/fixtures/gaia/canales_*.json
+# API keys (written by ccmr init) - never commit
+.env
