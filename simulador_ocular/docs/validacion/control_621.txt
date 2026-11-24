@@ -1,0 +1,14 @@
+#621 · control del criterio 5/6p + BP−RP fuera de M13 (prerregistro ADR 0039, AC4)
+Región 0,5-2,2′ ∩ ACS, G 16-18, contra la fila «out» de la Tabla A.1 (±10 puntos)
+
+NGC 6752: HST 52817 estrellas, Gaia 7888 filas; alineado dx = 0,023″, dy = -0,018″; G − V sobre 672 pares, mediana G_Gaia − G_HST = 0,002
+  out (Tabla A.1 48 %): N_HST 4040  todas 3401 = 84,2 %  criterio 1556 = 38,5 %
+  core, sin voto (Tabla A.1 3 %): N_HST 1682  todas 29,1 %  criterio 2,7 %
+
+NGC 7099: HST 73710 estrellas, Gaia 1973 filas; alineado dx = -0,024″, dy = -0,147″; G − V sobre 299 pares, mediana G_Gaia − G_HST = -0,001
+  out (Tabla A.1 77 %): N_HST 450  todas 438 = 97,3 %  criterio 361 = 80,2 %
+  core, sin voto (Tabla A.1 17 %): N_HST 326  todas 78,2 %  criterio 19,0 %
+
+NGC 6752: con potencia, el criterio VALE
+NGC 7099: con potencia, el criterio VALE
+Veredicto AC4: el criterio VALE fuera de M13

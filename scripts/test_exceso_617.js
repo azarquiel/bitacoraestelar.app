@@ -54,5 +54,14 @@ ok(X.lectura619(X.veredicto({ nHst: 1187, nMod: 400, nGaia: 430, cMod: CM }), X.
 ok(X.lectura619(X.veredicto({ nHst: 1187, nMod: 400, nGaia: 1000, cMod: CM }), X.veredicto({ nHst: 1187, nMod: 400, nGaia: 1296, cMod: CM })) === 'num y k',
    'R_num 2,97 y c_crit/c_mod 2,33: fallan los dos');
 
+console.log('#621 · control fuera de M13');
+var cf = X.controlFuera;
+ok(X.control(70, 100, 77) && !X.control(66, 100, 77), 'control con la Tabla A.1 del cúmulo: 77 ± 10');
+ok(cf([{ a1: 48, nHst: 100, nCrit: 50, nTodas: 95 }]).lectura === 'vale', 'con potencia y N_crit dentro: vale');
+ok(cf([{ a1: 48, nHst: 100, nCrit: 50, nTodas: 95 }, { a1: 77, nHst: 100, nCrit: 50, nTodas: 99 }]).lectura === 'no vale', 'falla en uno con potencia: no vale');
+var sp = cf([{ a1: 77, nHst: 100, nCrit: 50, nTodas: 85 }, { a1: 48, nHst: 100, nCrit: 50, nTodas: 95 }]);
+ok(sp.lectura === 'vale' && sp.votos[0].potencia === false, 'sin potencia no vota (todas las filas dentro de ±10)');
+ok(cf([{ a1: 77, nHst: 100, nCrit: 70, nTodas: 85 }]).lectura === 'sin veredicto', 'nadie con potencia: sin veredicto');
+
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\ntodo ok');
