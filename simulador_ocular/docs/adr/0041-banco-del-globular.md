@@ -222,3 +222,14 @@ hasta G = 20 y el alto es la marca de campo.
 - **El proxy** trae la marca como 5ª columna (`Solved` en VizieR,
   `astrometric_params_solved` en GAVO). La caché de disco no cambia de clave:
   sus entradas viejas, de 4 columnas, llegan sin marca.
+- **Cuándo se nota.** Dentro del círculo del banco las filas salen del fichero.
+  Hasta que se publique el formato 2, el filtro no actúa en ningún globular con
+  banco. La clave de la caché del proxy no se versiona: costaría vaciar 1,5 GB
+  de caché (campos densos de minutos) para filas que, en los globulares, ya da
+  el banco.
+- **La cola del glow (#570) también se filtra.** Una fila miembro 2p o sin
+  color con m > mlim dentro de r_t ya no sale como cola: su luz está en el
+  velo por (1 − c), como la del resto de las filas que `c` no cuenta.
+- **Sin comprobar:** el nombre `Solved` en el TAP de CDS. Por ASU (espejo
+  CfA) sí sale; el TAP de CDS no respondió el 2026-11-24. Si TAP no lo
+  conociera, fallaría la consulta CDS entera, que es el failover de GAVO.
