@@ -34,6 +34,8 @@ window.BitacoraBase = (function () {
    *               (por defecto, input.parentNode)
    *   fuente:     function() -> [items]   (se llama en cada búsqueda)
    *   texto:      function(item) -> nombre visible
+   *   buscarPor:  function(item) -> texto donde buscar (opcional; por defecto
+   *               `texto`). La búsqueda ignora mayúsculas y espacios.
    *   specs:      function(item) -> texto de specs (columna derecha, opcional)
    *   onElegir:   function(item)
    *   max:        nº máximo de resultados (por defecto 12)
@@ -58,8 +60,11 @@ window.BitacoraBase = (function () {
       if (!q) {
         if (!opts.todosSiVacio) { sugg.style.display = 'none'; return; }
       }
+      // Sin espacios a los dos lados: el catálogo dice «M 13» y se teclea «M13».
+      var sinEsp = function (s) { return s.toLowerCase().replace(/\s+/g, ''); };
+      var qs = sinEsp(q), campo = opts.buscarPor || opts.texto;
       var res = (opts.fuente() || []).filter(function (it) {
-        return !q || opts.texto(it).toLowerCase().indexOf(q) !== -1;
+        return !qs || sinEsp(campo(it)).indexOf(qs) !== -1;
       }).slice(0, max);
 
       if (!res.length) {
@@ -663,6 +668,20 @@ window.BitacoraBase = (function () {
     return { ra: ra, dec: dec, otype: t ? t[1] : '' };
   }
 
+  /* Respuesta ASCII de `sim-id` de SIMBAD → { ra, dec (grados), otype }, o
+     null si no trae coordenadas («!! … not found» o una página de error).
+     Lee «Object M 13  ---  GlC  ---» y la línea
+     «Coordinates(ICRS,ep=J2000,eq=2000): 16 41 41.634  +36 27 40.75». */
+  function leerSimbad(txt) {
+    var c = String(txt || '').match(/^Coordinates\(ICRS,ep=J2000,eq=2000\):\s+(\d+) (\d+) ([\d.]+)\s+([-+])(\d+) (\d+) ([\d.]+)/m);
+    if (!c) return null;
+    var ra = 15 * (+c[1] + c[2] / 60 + c[3] / 3600);
+    var dec = (c[4] === '-' ? -1 : 1) * (+c[5] + c[6] / 60 + c[7] / 3600);
+    if (!isFinite(ra) || !isFinite(dec)) return null;
+    var t = String(txt).match(/^Object .+?\s+---\s+(\S+)\s+---/m);
+    return { ra: ra, dec: dec, otype: t ? t[1] : '' };
+  }
+
   /* ── Resolvedor de objeto por nombre ────────────────────────────────────────
      El ciclo completo de «el observador escribe un nombre → salen su RA y su
      Dec»: espera a que deje de teclear, no repite la misma consulta, no pisa lo
@@ -690,13 +709,20 @@ window.BitacoraBase = (function () {
 
      Solo cuenta la respuesta del último nombre escrito: cada tecla aborta la
      consulta que siga en camino, y si su respuesta llega igual se descarta. */
-  /* Espejos de Sesame por orden. El CDS se cuelga a veces (timeout sin
-     respuesta) y entonces el formulario se quedaba mudo: si falla la red, el
-     timeout o el HTTP, se prueba el siguiente. «Nada encontrado» es respuesta
-     válida y NO pasa al siguiente. Ambos sirven CORS abierto. */
-  var SESAME_URLS = [
-    'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?',
-    'https://vizier.cfa.harvard.edu/viz-bin/nph-sesame/-oI/S?'
+  /* Espejos por orden, cada uno con su lector. El CDS se cuelga a veces
+     (timeout sin respuesta) y entonces el formulario se quedaba mudo: si falla
+     la red, el timeout o el HTTP, se prueba el siguiente. «Nada encontrado» es
+     respuesta válida y NO pasa al siguiente. Los tres sirven CORS abierto.
+     El SIMBAD de Harvard va antes que el Sesame del CfA: el 2026-11-24 el CDS
+     redirigía al CfA y el CfA no contestaba, así que pedirle otra vez era
+     esperar otro timeout. */
+  var SIMBAD_HARVARD = 'https://simbad.harvard.edu/simbad/sim-id?output.format=ASCII' +
+    '&obj.coo2=off&obj.coo3=off&obj.coo4=off&obj.bibsel=off&obj.messel=off&obj.notesel=off' +
+    '&obj.sizesel=off&obj.mtsel=off&obj.fluxsel=off&obj.pmsel=off&obj.plxsel=off&obj.rvsel=off&obj.spsel=off&Ident=';
+  var ESPEJOS_NOMBRE = [
+    { url: 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?', leer: leerSesame },
+    { url: SIMBAD_HARVARD, leer: leerSimbad },
+    { url: 'https://vizier.cfa.harvard.edu/viz-bin/nph-sesame/-oI/S?', leer: leerSesame }
   ];
 
   function resolutorNombre(opts) {
@@ -724,21 +750,21 @@ window.BitacoraBase = (function () {
         enVuelo = ctrl;
         corte = setTimeout(function () { ctrl.abort(); }, timeout);
         // La consulta viaja canonicalizada (aliasAbell); q sigue siendo lo escrito.
-        return fetch(SESAME_URLS[i] + encodeURIComponent(aliasAbell(q) || q), { signal: ctrl.signal })
+        var espejo = ESPEJOS_NOMBRE[i];
+        return fetch(espejo.url + encodeURIComponent(aliasAbell(q) || q), { signal: ctrl.signal })
           .then(function (r) {
             if (!r.ok) throw new Error('Sesame HTTP ' + r.status);
             return r.text();
           })
-          .then(function (t) { clearTimeout(corte); return t; }, function (e) {
+          .then(function (t) { clearTimeout(corte); return espejo.leer(t); }, function (e) {
             clearTimeout(corte);
             // Si ya no somos el último nombre, no se gasta otro espejo.
-            if (mio !== turno || i + 1 >= SESAME_URLS.length) throw e;
+            if (mio !== turno || i + 1 >= ESPEJOS_NOMBRE.length) throw e;
             return pedir(i + 1);
           });
       }
       onEstado('buscando', q);
       pedir(0)
-        .then(leerSesame)
         // Los avisos van en el segundo argumento y no en un .catch: un fallo
         // dentro de onResuelto no debe acabar avisando de que Sesame falló.
         .then(function (d) {
@@ -929,6 +955,7 @@ window.BitacoraBase = (function () {
     aliasMessier: aliasMessier,
     aliasAbell: aliasAbell,
     leerSesame: leerSesame,
+    leerSimbad: leerSimbad,
     resolutorNombre: resolutorNombre,
     montarBuscadorCatalogo: montarBuscadorCatalogo,
     BORTLE: BORTLE,
