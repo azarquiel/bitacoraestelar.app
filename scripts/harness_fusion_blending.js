@@ -9,7 +9,7 @@
    Imprime flujos, residuos, razones y magnitudes. NUNCA cuentas de estrellas
    dibujadas: el ADR prohíbe usarlas como argumento.
 
-   node scripts/harness_fusion_blending.js [--sqm N] [--D mm] [--mag N] [--banda G] [--todas] [--corte-g G] [--mezcla 0] */
+   node scripts/harness_fusion_blending.js [--sqm N] [--D mm] [--mag N] [--banda G] [--todas] [--corte-g G] [--criterio 0] [--atribucion] */
 'use strict';
 
 global.window = {};
@@ -46,15 +46,17 @@ var gaia = fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/valida
   });
 // Luz del cúmulo = solo miembros (#575): el campo sale de la partición (ley de producción, ADR 0008).
 
-/* Filas mezcladas (#611): no cumplen el criterio de fuente única de Fabricius
-   et al. 2021 §3.3 (scripts/mezcla_gaia.js, sidecar de gen_m13_mezcla.py). Una
-   mezcla pesa c(m, r) de su magnitud en la contabilidad de luz (conservación,
-   R2v, pregunta 5, atribución): esa es la fracción que Fabricius cuenta como
-   estrella recuperada, y la (1 − c) ya la llevan sintéticas y velo. El dibujo
-   (criterio 2) no cambia. --mezcla 0 reproduce el arnés de #595; --mezcla 2
-   es el contrafactual sin criterio: toda fila del catálogo pesa c. */
-var MEZCLA = arg('mezcla', 1);
-var esMezcla = require('./mezcla_gaia.js').leer(path.join(__dirname, '../simulador_ocular/docs/validacion/m13_gaia_dr3_mezcla.csv'));
+/* Criterio de recuento (#621, ADR 0039 «`c` y el catálogo cuentan lo mismo»):
+   cuenta como catálogo la fila con astrometría 5/6p (ruwe no nulo, sidecar de
+   gen_m13_mezcla.py) y BP−RP, lo que cuenta la Tabla A.1 que ancla c (#619).
+   Las demás salen del catálogo: su luz la ponen sintéticas y velo por (1 − c).
+   Sustituye al peso c de las mezclas de #611. --criterio 0 cuenta todas las
+   filas sin peso: el arnés de #595. */
+var CRITERIO = arg('criterio', 1);
+var RUWE = new Set(fs.readFileSync(path.join(__dirname, '../simulador_ocular/docs/validacion/m13_gaia_dr3_mezcla.csv'), 'utf8')
+  .trim().split('\n').slice(1).filter(function (l) { return l.split(',')[2] !== ''; })
+  .map(function (l) { var c = l.split(','); return c[0] + ',' + c[1]; }));
+function cuentaComoCatalogo(g) { return !CRITERIO || (RUWE.has(g[0] + ',' + g[1]) && g[3] != null); }
 
 /* Banda del catálogo: V por defecto, la de producción desde #574 (magVGaia,
    G − V de Gaia EDR3; sin color o fuera de rango, G). --banda G reproduce la
@@ -168,15 +170,13 @@ function campo(nombre) { return function (r) { return mom(r)[nombre]; }; }
 /* ── Catálogo en el plano del cielo ───────────────────────────────────────── */
 var cos0 = Math.cos(M13.dec * Math.PI / 180);
 var est = [];
-function mete(g, m, esFilaCatalogo) {
+function mete(g, m) {
   var x = (((g[0] - M13.ra + 540) % 360) - 180) * cos0 * 3600, y = (g[1] - M13.dec) * 3600;
   var r = pob.radioPropio(x, y);
   if (!(r < pob.rtAs) || anillo(r) < 0) return;
-  var pesa = esFilaCatalogo && (MEZCLA === 2 || (MEZCLA === 1 && esMezcla.get(clave(g))));
-  est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m),
-             w: pesa ? pob.completitud(m, r) : 1 });   // peso en la luz (#611)
+  est.push({ fila: g, x: x, y: y, r: r, m: m, F: Math.pow(10, -0.4 * m) });
 }
-gaia.forEach(function (g) { if (!R.esCampo(g)) mete(g, magCatalogo(g), true); });
+gaia.forEach(function (g) { if (!R.esCampo(g) && cuentaComoCatalogo(g)) mete(g, magCatalogo(g)); });
 var nCat = est.length;
 sint.forEach(function (g) { mete(g, g[2]); });   // la sintética nace en V (LF)
 
@@ -331,8 +331,6 @@ console.log('(a) el grupo múltiple más ancho mide ' + (2 * extensionMax / TH).
 var DERIVA = 1 - 1 / 1.1;
 console.log('\n── Conservación contra el modelo: (ΣF_cat+sint + ∫V1) / ∫Σ·S1_total  (listón |q − 1| ≤ 2σ, §0 ter)');
 var S1tot = pob.S1(-Infinity), S2lf = pob.S2(-Infinity);   // flujo y flujo² de toda la LF, Capa 1
-var Tw = new Float64Array(NA);    // T con las mezclas pesadas (#611)
-est.forEach(function (s) { Tw[anillo(s.r)] += s.w * s.F; });
 var filaC = 'medida         ', filaCf = 'contrafactual  ', filaS = '2σ             ', filaV = '               ';
 var pasaCons = true, potCons = false, sObs = 0, sMod = 0, sS2 = 0;
 function juzgaCons(q, mod, s2) {
@@ -344,9 +342,9 @@ function juzgaCons(q, mod, s2) {
 for (k = 0; k < NA; k++) {
   var modelo = integralAnillo(k, function (r) { return pob.sigma(r) * S1tot; });
   var s2an = integralAnillo(k, function (r) { return pob.sigma(r) * S2lf; });
-  var obs = Tw[k] + V1an[k];
+  var obs = T.anillo[k] + V1an[k];
   juzgaCons(obs / modelo, modelo, s2an);
-  filaCf += ((Tw[k] + integralAnillo(k, campo('v1cf'))) / modelo).toFixed(3).padStart(9);
+  filaCf += ((T.anillo[k] + integralAnillo(k, campo('v1cf'))) / modelo).toFixed(3).padStart(9);
   sObs += obs; sMod += modelo; sS2 += s2an;
 }
 juzgaCons(sObs / sMod, sMod, sS2);
@@ -379,7 +377,7 @@ function grano(k, soloVelo) {     // parte del catálogo (realización) por anil
   var f2 = 0, fmax = 0;
   est.forEach(function (s) {
     if (anillo(s.r) !== k || (soloVelo && !(s.m > MBORDE))) return;
-    f2 += s.w * s.F * s.F; fmax = Math.max(fmax, s.F);
+    f2 += s.F * s.F; fmax = Math.max(fmax, s.F);
   });
   var den = integralAnillo(k, campo(soloVelo ? 's2v' : 's2'));
   return { R2: (integralAnillo(k, campo('v2')) + f2) / den, f2: f2, fmax: fmax };
@@ -440,8 +438,8 @@ function mResLocal(I) {
 var noRes = {}, radialNoRes = {};
 est.forEach(function (s) {
   if (s.m <= mResEn(s.r)) return;
-  var kc = celda(s.x, s.y, L5); noRes[kc] = (noRes[kc] || 0) + s.w * s.F;
-  var kr = Math.floor(s.r / L5); radialNoRes[kr] = (radialNoRes[kr] || 0) + s.w * s.F;
+  var kc = celda(s.x, s.y, L5); noRes[kc] = (noRes[kc] || 0) + s.F;
+  var kr = Math.floor(s.r / L5); radialNoRes[kr] = (radialNoRes[kr] || 0) + s.F;
 });
 var p5 = []; for (k = 0; k < NA; k++) p5.push({ dm: [], d: [] });
 var nx = Math.ceil(ANILLOS[NA] / L5);
@@ -533,8 +531,8 @@ if (process.argv.indexOf('--atribucion') > 0) {
     est.forEach(function (s, i) {
       if (anillo(s.r) !== ka) return;
       var q = rango(s.m);
-      oF[q] += s.w * s.F;
-      if (i >= nCat) oS[q]++; else { oN[q] += s.w; if (s.m > MBORDE) oF2[q] += s.w * s.F * s.F; }
+      oF[q] += s.F;
+      if (i >= nCat) oS[q]++; else { oN[q]++; if (s.m > MBORDE) oF2[q] += s.F * s.F; }
     });
     console.log('\n' + ETQ[ka] + ' r_h   ∫Σ·S1 = ' + S1mod.toExponential(3) + '   ∫Σ·S2(m>borde) = ' + S2v.toExponential(3) +
                 '   σ Poisson del flujo √(∫Σ·S2)/∫Σ·S1 = ' + (Math.sqrt(S2tot) / S1mod).toFixed(3));

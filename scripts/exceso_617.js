@@ -45,7 +45,7 @@ function veredicto(m) {
 
 // Control del método: completitud de Fabricius (Tabla A.1, M13, 0,5-2,2′, G 16-18) ± 10 puntos.
 var FABRICIUS = 47, TOL = 10;
-function control(nGaia, nHst) { return Math.abs(100 * nGaia / nHst - FABRICIUS) <= TOL; }
+function control(nGaia, nHst, a1) { return Math.abs(100 * nGaia / nHst - (a1 == null ? FABRICIUS : a1)) <= TOL; }
 
 /* #619 · Criterio de recuento: astrometría 5/6p (ruwe no nulo, esquema de DR3) y
    BP−RP. f = { ruwe: número o null, color: bool }. */
@@ -59,5 +59,19 @@ function lectura619(vCrit, vTodas) {
   return vTodas.k.falla ? 'c-cuenta' : 'ninguno';
 }
 
-module.exports = { huella: huella, veredicto: veredicto, control: control, BANDA: BANDA,
+/* #621 · Control fuera de M13 (ADR 0039, «`c` y el catálogo cuentan lo mismo»,
+   AC4). c = [{ a1, nHst, nCrit, nTodas }]: un cúmulo vota solo si «todas las
+   filas» cae fuera de ±10 de su Tabla A.1 (potencia); vale si su N_crit cae
+   dentro. Vale fuera de M13 si vale en todos los que votan y vota alguno. */
+function controlFuera(cumulos) {
+  var votos = cumulos.map(function (c) {
+    var potencia = !control(c.nTodas, c.nHst, c.a1);
+    return { potencia: potencia, vale: potencia ? control(c.nCrit, c.nHst, c.a1) : null };
+  });
+  var conPot = votos.filter(function (v) { return v.potencia; });
+  return { votos: votos,
+           lectura: !conPot.length ? 'sin veredicto' : conPot.every(function (v) { return v.vale; }) ? 'vale' : 'no vale' };
+}
+
+module.exports = { huella: huella, controlFuera: controlFuera, veredicto: veredicto, control: control, BANDA: BANDA,
   recuperada: recuperada, lectura619: lectura619 };

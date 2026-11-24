@@ -678,7 +678,7 @@ radial de `c`, no en k. Lo separa **#617**.
 **Peso de #611: en revisión (#617).** El código no cambia (el spike decide,
 no corrige). Hasta #617, los números de «Filas mezcladas del núcleo» que
 dependen del peso `c` (atribución en 17-19, R2v y conservación de ≤1) quedan
-condicionados a ese peso. Decidido en «El exceso de filas en 0,5-1 r_h» (AC4): se mantiene como compensación declarada; se retira en #621.
+condicionados a ese peso. Decidido en «El exceso de filas en 0,5-1 r_h» (AC4): se mantiene como compensación declarada. **Retirado en #621** (ver «`c` y el catálogo cuentan lo mismo»).
 
 ## El exceso de filas en 0,5-1 r_h: `num` o `c` (#617, 2026-11-23)
 
@@ -923,6 +923,183 @@ AC4).
   [0,80, 1,25].
 - Si fallan `num` y k a la vez, la regla devuelve los dos (`lectura619`). No
   ha pasado.
+
+## `c` y el catálogo cuentan lo mismo (#621, 2026-11-24)
+
+Sale del AC5 de #619. Aquí se elige camino, se fija el listón antes de medir,
+se cambia el arnés y se repite el control fuera de M13.
+`gaiaCrowdingK` no se toca (#619 dice que vale).
+
+### Camino elegido (AC1): el 2, contar como catálogo solo las filas con el criterio
+Una fila del catálogo cuenta como catálogo si tiene astrometría 5/6p (`ruwe`
+no nulo) **y** BP−RP. Es el criterio de #619 (`exceso_617.js`, `recuperada`).
+Las demás filas salen del catálogo, y su luz la ponen las sintéticas y el
+velo por `(1 − c)`, como la de cualquier estrella que Gaia no trae.
+
+**Motivo.** El camino 1 necesita un ancla para una `c` de filas
+(N_filas / N_HST por magnitud y radio), y no existe: la Tabla A.1 cuenta con
+el criterio (#619), y no hay otra tabla publicada de completitud de Gaia en
+globulares contra HST. Construirla sería medirla con el `.zpt` de MAST en los
+mismos cúmulos que la validan. El camino 2 conserva la `c` de hoy,
+`gaiaCrowdingK = 75` y su ancla.
+
+**Coste.**
+- Arnés (este cambio): lee `ruwe` del sidecar `m13_gaia_dr3_mezcla.csv`, que
+  ya existe. Sin datos nuevos.
+- Producción (historia aparte, solo si AC4 vale): la consulta a Gaia tiene que
+  pedir `ruwe` (o `astrometric_params_solved`). Eso toca el proxy de Gaia, el
+  banco de catálogos cacheados y el Avance, y el cliente tiene que aplicar el
+  criterio antes de `pintarCumulo`. Las filas sin el criterio dejan de
+  dibujarse como catálogo.
+- Se pierden como estrellas con posición real las 2p brillantes y las que no
+  tienen color. Las sustituyen sintéticas en posición aleatoria con la misma
+  LF.
+
+**Peso de #611: retirado.** La compensación declarada de #617 (AC4) deja de
+existir: ninguna fila del catálogo pesa `c`. `--mezcla` desaparece del arnés.
+`--criterio 0` cuenta todas las filas sin peso, que es el arnés de #595
+(`--mezcla 0` de antes), byte a byte.
+
+### Prerregistro (AC2, escrito ANTES de correr el arnés con el criterio)
+**Medida.** Atribución del arnés (`--atribucion`), anillo ≤1 (0,5-1 r_h),
+rango V 17,07-18,07: cat/`num·c`, con su ±1σ de la columna del arnés
+(σ = 1/√(∫Σ·num·c), Poisson del modelo).
+
+**Listón.** Pasa si |cat/`num·c` − 1| ≤ 2σ. Con la `c` de hoy, σ = 0,046
+(#611), así que 2σ ≈ 0,09.
+- Caso malo: el 2,79 de #595 (todas las filas sin peso) está a 1,79 de 1,
+  unas 39σ. El listón lo rechaza.
+- Caso bueno: 1 pasa por construcción.
+
+**Lo que ya se había visto** (ADR 0005, se declara). El reparto de #619 en
+el dominio ACS, con todas las filas del fixture (miembros y campo) y V de
+tierra para HST, dio R_num · c_crit / c_mod ≈ 0,927 × 1,154 ≈ 1,07. Si el arnés
+da lo mismo, queda a ≈ 1,5σ y pasa. El arnés usa solo miembros y el anillo
+entero, así que la cifra puede moverse. No se toca el listón si se mueve.
+
+**Contrafactual que se imprime.** `--criterio 0` (todas las filas sin peso)
+tiene que salir a 2,79 y el listón tiene que rechazarlo.
+
+**Prohibido** (ticket): cifras de estrellas dibujadas; ajustar k o el criterio
+a M13; mover listón o tramo tras correr.
+
+### Prerregistro del control fuera de M13 (AC4, escrito ANTES de contar)
+**Cúmulos.** NGC 6752 y NGC 7099 (M30). Están en el ACS Survey de Sarajedini
+et al. 2007 y en la Tabla A.1. Se eligieron por su Tabla A.1 en 0,5-2,2′,
+G 16-18, sin mirar Gaia: NGC 6752 tiene 48 %, el régimen de M13 (47 %); M30
+tiene 77 %, otro régimen.
+
+**Datos.** El `.zpt` de MAST de cada cúmulo
+(`hlsp_acsggct_hst_acs-wfc_<ngc>_r.rdviq.cal.adj.zpt`, fuera del repo). Una
+consulta a `gaiadr3.gaia_source` en un cono de 2,5′ alrededor del centro de
+Harris, G ≤ 18,5, con `ra, dec, phot_g_mean_mag, bp_rp, ruwe` y las dos
+`ipd_*` (`scripts/gen_gaia_a1_621.py`, a `<ngc>_gaia_dr3_621.csv`).
+
+**Método.** El de #617/#619 sin mover nada: alineado y G de HST como en #614,
+con las filas que pasan el filtro de §3.3 como control del ajuste. Huella ACS
+con celdas de 4″ y borde erosionado. Región 0,5-2,2′ ∩ ACS, G 16-18.
+N_crit / N_HST y N_todas / N_HST contra la fila «out» del cúmulo en la Tabla
+A.1, ±10 puntos.
+
+**Regla.**
+- Un cúmulo **tiene potencia** si «todas las filas» queda a más de 10 puntos
+  de su Tabla A.1. Sin potencia no vota, porque no separa el criterio del caso
+  malo.
+- Con potencia, el criterio **vale** en ese cúmulo si N_crit / N_HST queda a
+  ≤ 10 puntos.
+- **El criterio vale fuera de M13** si vale en todos los cúmulos con potencia
+  y al menos uno la tiene. Si falla en alguno, se declara y la historia no
+  pasa a producción. Si ninguno tiene potencia, se declara «sin veredicto», y
+  tampoco pasa.
+
+Informativo, sin voto: r < 0,5′ contra la fila «core».
+
+**Prohibido:** cambiar de cúmulo, de región o de tramo tras contar.
+
+
+### Resultado del arnés (AC3, `simulador_ocular/docs/validacion/fusion_blending_621.txt`)
+`node scripts/harness_fusion_blending.js --atribucion`. Dentro de 8 r_h quedan
+7 735 filas de catálogo (miembros) de 11 634; las sintéticas no cambian
+(2 204). `--criterio 0` reproduce byte a byte el `--mezcla 0` de antes (el
+arnés de #595), comprobado contra `main`.
+
+**Listón de AC2: PASA.** ≤1, V 17,07-18,07: cat/`num·c` = 497 / 464,8 =
+**1,069 ± 0,046** (1,5σ). `--criterio 0`: 2,792, rechazado. Lo fija
+`scripts/test_criterio_recuento.js`. Es la cifra que anticipaba #619 (1,07).
+
+**Atribución, informativa** (cat/`num·c` ± 1σ, #611 → #621):
+
+| anillo | 17,07-18,07 | 18,07-19,07 |
+|---|---|---|
+| ≤0,5 | 0,95 → 18,3 (37 filas contra 2,0; sin potencia) | 0,30 → 66 (3 contra 0,05) |
+| ≤1 | 1,058 → **1,069 ± 0,046** | 1,045 → **2,21 ± 0,11** |
+| ≤2 | 0,970 → **0,819 ± 0,029** | 0,910 → 0,838 ± 0,026 |
+| ≤4 | 0,971 → 0,934 ± 0,039 | 0,943 → 0,918 ± 0,029 |
+| ≤8 | 1,313 → 1,297 | 1,200 → 1,197 |
+
+Dos cosas nuevas, fuera del listón (no votan, se declaran):
+- **≤1, 18-19: 2,21.** El modelo espera 87 filas (c ≈ 0,02 por el corte
+  G 18,5 y el crowding) y hay 193 con el criterio. Con #611 salía 1,05 porque
+  el peso `c` hundía esas filas. Sin peso, el exceso del borde del corte
+  vuelve a verse.
+- **≤2, 17-18: 0,82, a −6σ.** En 1-2 r_h (101-203″) la `c` del modelo
+  vale 0,95, y solo el 82 % de las estrellas del modelo traen el criterio.
+  La región «out» de la Tabla A.1 (0,5-2,2′ = 30-132″) cubre solo el borde
+  interior de este anillo. Fuera de ella, la `c` del modelo no está anclada
+  a lo que cuenta el criterio.
+
+**Conservación (§0 ter, listones sin mover), #611 → #621:**
+
+| anillo | ≤0,25 | ≤0,5 | ≤1 | ≤2 | ≤4 | ≤8 | total |
+|---|---|---|---|---|---|---|---|
+| q | 1,052 → 1,092 | 0,941 → 0,951 | 0,939 → **0,926** | 0,936 → **0,914** | 0,902 → 0,894 | 1,129 → 1,112 | 0,950 → **0,944** |
+| 2σ | 0,155 | 0,108 | 0,082 | 0,084 | 0,115 | 0,213 | 0,044 |
+| #621 | sin pot. | sin pot. | PASA | **NO PASA** (antes PASA) | sin pot. | sin pot. | NO PASA |
+
+**R2v (§0 quater), #611 → #621:** ≤0,25 1,000 → 1,000 y ≤0,5 1,000 → 1,002
+(sin potencia); **≤1 1,002 (PASA) → 1,024 (NO PASA, 2σ = 0,004)**; ≤2
+0,977 → 0,943 (NO PASA); ≤4 0,989 → 0,973 (PASA); ≤8 1,111 → 1,107 (NO
+PASA).
+
+**Coste declarado.** La conservación de ≤2 deja de pasar (0,936 → 0,914,
+a 2σ = 0,084 justo fuera): es el déficit de 17-19 en ≤2 de la atribución. R2v de ≤1 deja de pasar: el peso de #611 lo dejaba en
+1,002 descontando de más (#614). Ahora sobra un 2,4 % de F² en el dominio del
+velo, el que trae el exceso de ≤1 18-19. La pregunta 5 sigue pasando (≤1:
+p95 0,094).
+
+**Veredicto del arnés.** Sigue NO SE PUEDE TODAVÍA. Fallan el criterio 3
+(≤1, ≤2, ≤8) y la conservación (≤2 y total). El listón de AC2 pasa, sin
+compensación.
+
+### Resultado del control fuera de M13 (AC4, `simulador_ocular/docs/validacion/control_621.txt`)
+`node scripts/control_621.js <dir de los .zpt>`, con `<ngc>_gaia_dr3_621.csv`
+de `scripts/gen_gaia_a1_621.py`. Ajuste G − V: 672 pares en NGC 6752 y 299
+en M30, con mediana de G_Gaia − G_HST de 0,002 y −0,001. El ajuste vale.
+
+| cúmulo | Tabla A.1 out | N_HST | todas las filas | criterio | voto |
+|---|---|---|---|---|---|
+| NGC 6752 | 48 % | 4 040 | 84,2 % (potencia) | **38,5 %** (−9,5) | **vale** |
+| NGC 7099 (M30) | 77 % | 450 | 97,3 % (potencia) | **80,2 %** (+3,2) | **vale** |
+
+Informativo, sin voto, r < 0,5′: NGC 6752 2,7 % (Tabla A.1 3 %), M30 19,0 %
+(17 %). Con todas las filas, 29,1 % y 78,2 %.
+
+**Veredicto (AC4): el criterio vale fuera de M13.** Puede pasar a producción.
+
+**Qué no dice.**
+- NGC 6752 pasa a 0,5 puntos del borde. El criterio cuenta allí 9,5 puntos
+  menos que Fabricius. En M13 contaba 2,1 menos. Si Fabricius contase algo más
+  ancho, como «5/6p o BP−RP», saldría por encima, pero eso no se ha contado:
+  contarlo ahora sería elegir el criterio por el resultado.
+- La σ de Poisson de M30 es de ±4 puntos (450 estrellas HST). La de NGC 6752
+  es de ±1.
+- La región es la de la Tabla A.1. No dice nada de la `c` del modelo fuera de
+  2,2′, que es el déficit de ≤2 de arriba.
+
+### Producción (siguiente historia)
+El camino 2 en producción es pedir `ruwe` a Gaia (proxy, banco, Avance) y
+pasar a `pintarCumulo` solo las filas con el criterio. Ningún guardián del
+render cambia en esta historia: el código de producción no se ha tocado.
 
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
@@ -1431,7 +1608,8 @@ Si se implementa (b):
 | escala del fondo local `θ_R/M` | entra | Riccò, la de H2c (ya calibrada) |
 | `completitud` en el velo (`gaiaM50`, `gaiaAncho`) | entra en el velo | los existentes de `CFG`; su ancla no se revisa aquí |
 | `gaiaCrowdingK = 75` con `gaiaFwhmAs = 0,6″` en `completitud` (#595) | entra en el velo y en las sintéticas | Fabricius et al. 2021, Tabla A.1 (Gaia EDR3 contra HST en 24 globulares sin M13): sesgo −0,4 puntos. Ver «Completitud del núcleo con medida externa» |
-| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | entra en la contabilidad de luz del arnés (peso `c(m, r)`, **compensación declarada** por #617: se retira con el cambio de `c`, #621), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de la muestra de QSO; el artículo es el de `gaiaCrowdingK`, la Tabla A.1 no lo aplica). Ver «Filas mezcladas del núcleo» y «Mezclas o completitud baja (#614)» |
+| criterio de fila mezclada (#611): no cumple `ruwe < 1,4` y `ipd_frac_multi_peak ≤ 2` y `ipd_gof_harmonic_amplitude < 0,1`; sin `ruwe`, también | **ya no entra en el arnés**: el peso `c(m, r)` de #611 se retiró en #621, que cuenta como catálogo solo las filas 5/6p + BP−RP; el predicado queda para `control_621.js` (control del ajuste G − V), **no** en producción | Fabricius et al. 2021, §3.3 (filtro de la muestra de QSO; el artículo es el de `gaiaCrowdingK`, la Tabla A.1 no lo aplica). Ver «Filas mezcladas del núcleo» y «Mezclas o completitud baja (#614)» |
+| criterio de recuento (#621): fila con astrometría 5/6p (`ruwe` no nulo) y BP−RP | entra en el arnés (solo esas filas son catálogo; el resto va por `(1 − c)`); **no** en producción todavía | lo que cuenta la Tabla A.1 de Fabricius et al. 2021: hipótesis de #619, control en M13 (#619), NGC 6752 y M30 (#621). Ver «`c` y el catálogo cuentan lo mismo» |
 | corte de la consulta `G_c` en `completitud(m, r, G_c)` (#594) | entra en el velo, **no** en las sintéticas | lo pedido: `magQ` en producción (`estrellas.corte`), G ≤ 18,50 en el fixture; G − V del color sintético del bin (Riello et al. 2021). Ver «Corte de la consulta» |
 | G→V con BP−RP | entra (prerrequisito) | Gaia EDR3, doc. CU5, tabla 5.7 (σ = 0,03 mag) |
 | `mCutGeneracion = 18` como corte de `V1`/`V2` | entra en el velo | el existente de `CFG` (profundidad de la realización sintética); ancla no revisada aquí |
