@@ -10,8 +10,8 @@
      B  El sidecar cubre el fixture fila a fila (mismo ra,dec en texto).
      C  Firma radial: las mezclas se concentran en el núcleo. Caso malo: un
         criterio que marcase todo (o nada) por igual no separa núcleo de halo.
-     D  Arnés: R2v en ≤1 r_h pasa con el criterio y, sin él, el listón lo
-        rechaza (corre el arnés dos veces, ~18 s).
+     (El bloque D, R2v del arnés con las mezclas pesadas por c, se retiró con
+     el peso en #621: el arnés ya no pesa filas. Ver test_criterio_recuento.js.)
 
    node scripts/test_filas_mezcladas.js */
 'use strict';
@@ -58,24 +58,6 @@ var fN = nucleo[1] / nucleo[0], fH = halo[1] / halo[0];
 console.log('       ≤0,5 r_h: ' + (100 * fN).toFixed(1) + ' %   4-8 r_h: ' + (100 * fH).toFixed(1) + ' %');
 ok(fN > 0.9, 'en ≤0,5 r_h más del 90 % son mezcla');
 ok(fH < 0.15, 'en 4-8 r_h menos del 15 % son mezcla');
-
-console.log('D · arnés de #577: R2v en ≤1 r_h con las mezclas pesadas (AC3, listón de §0 quater sin mover)');
-/* Caso malo (AGENTS.md, prerregistros): --mezcla 0, el doble conteo de #595,
-   da 1,267 con 2σ = 0,005 y el listón lo rechaza. Con el criterio: 1,002. */
-var spawn = require('child_process').spawnSync;
-function r2v(extra) {
-  var out = spawn(process.execPath, [path.join(__dirname, 'harness_fusion_blending.js')].concat(extra),
-                  { encoding: 'utf8', maxBuffer: 1 << 26 }).stdout;
-  var tramo = out.slice(out.indexOf('Criterio 3, MEDIDA'));
-  var linea = tramo.split('\n').filter(function (l) { return /^≤1 /.test(l); })[0];
-  if (!linea) throw new Error('el arnés ya no imprime la fila ≤1 de «Criterio 3, MEDIDA» (' + extra.join(' ') + ')');
-  var f = linea.trim().split(/\s+/);
-  return { R2v: +f[1], sd: +f[2] };
-}
-var con = r2v([]), sin = r2v(['--mezcla', '0']);
-console.log('       con mezclas pesadas: ' + con.R2v + ' ± ' + con.sd + '   sin (#595): ' + sin.R2v);
-ok(Math.abs(con.R2v - 1) <= 2 * con.sd, 'con el criterio, |R2v − 1| ≤ 2σ en ≤1');
-ok(Math.abs(sin.R2v - 1) > 2 * sin.sd, 'caso malo (--mezcla 0): el listón lo rechaza');
 
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\nTodo verde.');
