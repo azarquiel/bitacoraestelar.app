@@ -924,6 +924,98 @@ AC4).
 - Si fallan `num` y k a la vez, la regla devuelve los dos (`lectura619`). No
   ha pasado.
 
+## `c` y el catálogo cuentan lo mismo (#621, 2026-11-24)
+
+Sale del AC5 de #619. Aquí se elige camino, se fija el listón antes de medir,
+se cambia el arnés y se repite el control fuera de M13.
+`gaiaCrowdingK` no se toca (#619 dice que vale).
+
+### Camino elegido (AC1): el 2, contar como catálogo solo las filas con el criterio
+Una fila del catálogo cuenta como catálogo si tiene astrometría 5/6p (`ruwe`
+no nulo) **y** BP−RP. Es el criterio de #619 (`exceso_617.js`, `recuperada`).
+Las demás filas salen del catálogo, y su luz la ponen las sintéticas y el
+velo por `(1 − c)`, como la de cualquier estrella que Gaia no trae.
+
+**Motivo.** El camino 1 necesita un ancla para una `c` de filas
+(N_filas / N_HST por magnitud y radio), y no existe: la Tabla A.1 cuenta con
+el criterio (#619), y no hay otra tabla publicada de completitud de Gaia en
+globulares contra HST. Construirla sería medirla con el `.zpt` de MAST en los
+mismos cúmulos que la validan. El camino 2 conserva la `c` de hoy,
+`gaiaCrowdingK = 75` y su ancla.
+
+**Coste.**
+- Arnés (este cambio): lee `ruwe` del sidecar `m13_gaia_dr3_mezcla.csv`, que
+  ya existe. Sin datos nuevos.
+- Producción (historia aparte, solo si AC4 vale): la consulta a Gaia tiene que
+  pedir `ruwe` (o `astrometric_params_solved`). Eso toca el proxy de Gaia, el
+  banco de catálogos cacheados y el Avance, y el cliente tiene que aplicar el
+  criterio antes de `pintarCumulo`. Las filas sin el criterio dejan de
+  dibujarse como catálogo.
+- Se pierden como estrellas con posición real las 2p brillantes y las que no
+  tienen color. Las sustituyen sintéticas en posición aleatoria con la misma
+  LF.
+
+**Peso de #611: retirado.** La compensación declarada de #617 (AC4) deja de
+existir: ninguna fila del catálogo pesa `c`. `--mezcla` desaparece del arnés.
+`--criterio 0` cuenta todas las filas sin peso, que es el arnés de #595
+(`--mezcla 0` de antes), byte a byte.
+
+### Prerregistro (AC2, escrito ANTES de correr el arnés con el criterio)
+**Medida.** Atribución del arnés (`--atribucion`), anillo ≤1 (0,5-1 r_h),
+rango V 17,07-18,07: cat/`num·c`, con su ±1σ de la columna del arnés
+(σ = 1/√(∫Σ·num·c), Poisson del modelo).
+
+**Listón.** Pasa si |cat/`num·c` − 1| ≤ 2σ. Con la `c` de hoy, σ = 0,046
+(#611), así que 2σ ≈ 0,09.
+- Caso malo: el 2,79 de #595 (todas las filas sin peso) está a 1,79 de 1,
+  unas 39σ. El listón lo rechaza.
+- Caso bueno: 1 pasa por construcción.
+
+**Lo que ya se había visto** (ADR 0005, se declara). El reparto de #619 en
+el dominio ACS, con todas las filas del fixture (miembros y campo) y V de
+tierra para HST, dio R_num · c_crit / c_mod ≈ 0,927 × 1,154 ≈ 1,07. Si el arnés
+da lo mismo, queda a ≈ 1,5σ y pasa. El arnés usa solo miembros y el anillo
+entero, así que la cifra puede moverse. No se toca el listón si se mueve.
+
+**Contrafactual que se imprime.** `--criterio 0` (todas las filas sin peso)
+tiene que salir a 2,79 y el listón tiene que rechazarlo.
+
+**Prohibido** (ticket): cifras de estrellas dibujadas; ajustar k o el criterio
+a M13; mover listón o tramo tras correr.
+
+### Prerregistro del control fuera de M13 (AC4, escrito ANTES de contar)
+**Cúmulos.** NGC 6752 y NGC 7099 (M30). Están en el ACS Survey de Sarajedini
+et al. 2007 y en la Tabla A.1. Se eligieron por su Tabla A.1 en 0,5-2,2′,
+G 16-18, sin mirar Gaia: NGC 6752 tiene 48 %, el régimen de M13 (47 %); M30
+tiene 77 %, otro régimen.
+
+**Datos.** El `.zpt` de MAST de cada cúmulo
+(`hlsp_acsggct_hst_acs-wfc_<ngc>_r.rdviq.cal.adj.zpt`, fuera del repo). Una
+consulta a `gaiadr3.gaia_source` en un cono de 2,5′ alrededor del centro de
+Harris, G ≤ 18,5, con `ra, dec, phot_g_mean_mag, bp_rp, ruwe` y las dos
+`ipd_*` (`scripts/gen_gaia_a1_621.py`, a `<ngc>_gaia_dr3_621.csv`).
+
+**Método.** El de #617/#619 sin mover nada: alineado y G de HST como en #614,
+con las filas que pasan el filtro de §3.3 como control del ajuste. Huella ACS
+con celdas de 4″ y borde erosionado. Región 0,5-2,2′ ∩ ACS, G 16-18.
+N_crit / N_HST y N_todas / N_HST contra la fila «out» del cúmulo en la Tabla
+A.1, ±10 puntos.
+
+**Regla.**
+- Un cúmulo **tiene potencia** si «todas las filas» queda a más de 10 puntos
+  de su Tabla A.1. Sin potencia no vota, porque no separa el criterio del caso
+  malo.
+- Con potencia, el criterio **vale** en ese cúmulo si N_crit / N_HST queda a
+  ≤ 10 puntos.
+- **El criterio vale fuera de M13** si vale en todos los cúmulos con potencia
+  y al menos uno la tiene. Si falla en alguno, se declara y la historia no
+  pasa a producción. Si ninguno tiene potencia, se declara «sin veredicto», y
+  tampoco pasa.
+
+Informativo, sin voto: r < 0,5′ contra la fila «core».
+
+**Prohibido:** cambiar de cúmulo, de región o de tramo tras contar.
+
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
 Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.
