@@ -35,11 +35,13 @@ function ok(cond, etiqueta) {
 
 /* ── Banco BGLO de mentira (formato de scripts/gen_banco_globulares.py) ── */
 var CAB = 212;
-function bancoBin(g, filas) {
+/* Formato 2 (#623): fila de 13 B, el último byte es la marca 5/6p (f[5]). */
+function bancoBin(g, filas, version) {
+  var T = version === 2 ? 13 : 12;
   filas = filas.slice().sort(function (a, b) { return a[2] - b[2]; });
-  var buf = new ArrayBuffer(CAB + 12 * filas.length), v = new DataView(buf);
+  var buf = new ArrayBuffer(CAB + T * filas.length), v = new DataView(buf);
   'BGLO'.split('').forEach(function (ch, i) { v.setUint8(i, ch.charCodeAt(0)); });
-  v.setUint16(4, 1, true); v.setUint16(6, 1, true);
+  v.setUint16(4, version || 1, true); v.setUint16(6, 1, true);
   v.setFloat64(8, g.ra, true); v.setFloat64(16, g.dec, true);
   v.setFloat32(24, 1.08, true); v.setFloat32(28, 0.4, true);
   v.setUint32(32, filas.length, true);
@@ -49,7 +51,8 @@ function bancoBin(g, filas) {
   filas.forEach(function (f) { hist[Math.floor(Math.floor(f[2] * 1000 + 1e-6) / 500)]++; });
   hist.forEach(function (n, k) { v.setUint32(44 + 4 * k, n, true); });
   filas.forEach(function (f, k) {
-    var o = CAB + 12 * k;
+    var o = CAB + T * k;
+    if (T === 13) v.setUint8(o + 12, f[5] ? 1 : 0);
     v.setFloat32(o, f[0], true); v.setFloat32(o + 4, f[1], true);
     v.setUint16(o + 8, Math.floor(f[2] * 1000 + 1e-6) | (f[4] ? 0x8000 : 0), true);
     v.setInt16(o + 10, f[3] == null ? -32768 : Math.round(f[3] * 1000), true);
@@ -79,7 +82,8 @@ function estrellas() {
     var r = (k < 600 ? 2 : 0.3) * Math.sqrt(rnd()), th = 2 * Math.PI * rnd();
     var dec = G.dec + r * Math.sin(th), ra = G.ra + r * Math.cos(th) / Math.cos(G.dec * Math.PI / 180);
     var g = Math.round((6 + 13.9 * rnd()) * 1000) / 1000;
-    out.push([Math.fround(ra), Math.fround(dec), g, Math.round(rnd() * 2000) / 1000, rnd() < 0.2]);
+    // 6º: astrometría 5/6p (#623); una de cada tres es 2p.
+    out.push([Math.fround(ra), Math.fround(dec), g, Math.round(rnd() * 2000) / 1000, rnd() < 0.2, k % 3 !== 0]);
   }
   return out;
 }
@@ -101,11 +105,11 @@ function servidor(url, init) {
   if (/banco_globular\/manifiesto\.json$/.test(url)) {
     return Promise.resolve(M.manifiesto ? respuesta(200, M.manifiesto) : respuesta(404, null));
   }
-  if (/banco_globular\/r1\//.test(url)) {
+  if (/banco_globular\/r1(v2)?\//.test(url)) {
     if (M.binStatus !== 200) return Promise.resolve(respuesta(M.binStatus, null));
     var bin = M.roto ? new ArrayBuffer(100) : bancoBin(G, M.banco.filter(function (s) {
       return distancia(G.ra, G.dec, s[0], s[1]) <= 1.08;
-    }));
+    }), M.manifiesto.version);
     var rg = init.headers && init.headers.Range;
     if (!rg || M.sinRange) return Promise.resolve(respuesta(200, bin));
     var m = /bytes=(\d+)-(\d+)/.exec(rg);
@@ -119,7 +123,10 @@ function servidor(url, init) {
   var data = CIELO.filter(function (s) {
     return distancia(cono.ra, cono.dec, s[0], s[1]) <= cono.rad && s[2] <= mag &&
            (!ex || distancia(ex[0], ex[1], s[0], s[1]) > ex[2]);
-  }).map(function (s) { return s.slice(0, 4); });          // Gaia no trae la marca
+  }).map(function (s) {
+    // Gaia no trae la marca de campo; la de astrometría, solo el proxy nuevo (#623).
+    return M.proxyMarca ? s.slice(0, 4).concat([s[5] ? 95 : 3]) : s.slice(0, 4);
+  });
   return Promise.resolve(respuesta(200, { data: data, fondo: null }));
 }
 function nuevoMundo(extra) {
@@ -128,7 +135,7 @@ function nuevoMundo(extra) {
   R.reiniciarBanco();
 }
 function alProxy() { return PETICIONES.filter(function (p) { return p.url.indexOf('gaia_proxy.php') >= 0; }); }
-function alBanco() { return PETICIONES.filter(function (p) { return /banco_globular\/r1\//.test(p.url); }); }
+function alBanco() { return PETICIONES.filter(function (p) { return /banco_globular\/r1(v2)?\//.test(p.url); }); }
 function verdad(ra, dec, rad, mag) {
   var c = R.conoProxy(ra, dec, rad), m = Math.ceil(mag / 0.5 - 1e-9) * 0.5;
   return CIELO.filter(function (s) { return distancia(c.ra, c.dec, s[0], s[1]) <= c.rad && s[2] < m; });
@@ -259,6 +266,40 @@ casos.push(function () {
   }).then(function (lista) {
     ok(lista.corte === 16.5, 'corte del catálogo = magQ, 16,2 cuantizada a 16,5 (' + lista.corte + ')');
     ok(alProxy().length === 0 && mismas(lista, verdad(G.ra, G.dec, rad, 16.2)), 'servidor sin Range (200 entero): sirve igual');
+  });
+});
+
+/* #623 AC3: el banco del formato 2 trae la marca 5/6p en f[5]; el del 1 no la
+   trae (se desconoce): sus filas siguen siendo de 4 o de 5 elementos. */
+casos.push(function () {
+  console.log('Marca de astrometría 5/6p en el banco (#623):');
+  var astro = {};
+  CIELO.forEach(function (s) { astro[clave(s)] = s[5]; });
+  nuevoMundo({ manifiesto: Object.assign({}, MANIFIESTO, { version: 2, ruta: 'r1v2/{archivo}' }) });
+  return R.consultar(G.ra, G.dec, 30, 16.2).then(function (lista) {
+    var rad = R.radioConsulta(30);
+    ok(alProxy().length === 0 && mismas(lista, verdad(G.ra, G.dec, rad, 16.2)), 'formato 2: las mismas filas, sin proxy');
+    ok(lista.length > 0 && lista.every(function (f) { return f[5] === astro[clave(f)]; }),
+       'cada fila lleva su marca 5/6p (' + lista.filter(function (f) { return f[5]; }).length + ' 5/6p de ' + lista.length + ')');
+    ok(lista.some(function (f) { return f[5] === false; }), 'y las 2p llegan como 2p, no como desconocidas');
+    ok(lista.filter(R.esCampo).length > 0 && lista.every(function (f) { return R.esCampo(f) === (CIELO.some(function (s) { return s[4] && clave(s) === clave(f); })); }),
+       'la marca de campo no cambia');
+    var rg = alBanco().map(function (p) { return p.range; }), hasta = +/-(\d+)$/.exec(rg[1] || '-0')[1];
+    var n16 = CIELO.filter(function (s) { return distancia(G.ra, G.dec, s[0], s[1]) <= 1.08 && s[2] < 16.5; }).length;
+    ok(hasta === 211 + 13 * n16, 'Range con filas de 13 B (' + rg[1] + ')');
+    nuevoMundo();
+    return R.consultar(G.ra, G.dec, 30, 16.2);
+  }).then(function (lista) {
+    ok(lista.every(function (f) { return f[5] === undefined; }), 'formato 1: sin marca (se desconoce), nunca «no cumple»');
+    nuevoMundo({ manifiesto: null, proxyMarca: true });
+    return R.consultar(G.ra, G.dec, 30, 16.2);
+  }).then(function (lista) {
+    ok(alProxy().length === 1 && lista.length > 0 && lista.every(function (f) { return f[5] === astro[clave(f)] && !R.esCampo(f); }),
+       'proxy con la 5ª columna: astrometric_params_solved > 3 → marca 5/6p, sin tocar la de campo');
+    nuevoMundo({ manifiesto: null });
+    return R.consultar(G.ra, G.dec, 30, 16.2);
+  }).then(function (lista) {
+    ok(lista.every(function (f) { return f.length === 4; }), 'proxy de caché vieja (4 columnas): sin marca');
   });
 });
 

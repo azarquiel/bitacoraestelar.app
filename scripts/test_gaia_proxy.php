@@ -156,10 +156,16 @@ eq(gaia_proveedor('https://otro.example.org/tap/sync'), 'otro.example.org', 'hos
 $provs = [];
 foreach (gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, false) as $u) { $provs[] = gaia_proveedor($u); }
 eq($provs, ['gavo', 'cds'], 'sonda: GAVO primero, CDS de failover');
-// El cliente lee por posición: las dos consultas devuelven ra, dec, G, BP-RP en ese orden.
-[$cds_q, $gavo_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, false);
-ok(preg_match('/^SELECT TOP \d+ RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM/', $cds_q) === 1, 'columnas CDS: ra, dec, G, BP-RP');
-ok(preg_match('/^SELECT TOP \d+ ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM/', $gavo_q) === 1, 'columnas GAVO: ra, dec, G, BP-RP');
+/* El cliente lee por posición: las dos consultas devuelven ra, dec, G, BP-RP y
+   la marca de astrometría (#623) en ese orden, en la sonda y en la segura. La
+   marca es la misma cantidad en los dos espejos: `astrometric_params_solved` en
+   GAVO y su nombre en VizieR, `Solved` (3 = 2p, 31 = 5p, 95 = 6p). */
+foreach ([false => 'sonda', true => 'segura'] as $segura => $modo) {
+    [$cds_q, $gavo_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, (bool) $segura);
+    ok(preg_match('/^SELECT TOP \d+ RA_ICRS, DE_ICRS, Gmag, "BP-RP", Solved FROM/', $cds_q) === 1, "$modo CDS: ra, dec, G, BP-RP, Solved");
+    ok(preg_match('/^SELECT TOP \d+ ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp,astrometric_params_solved FROM/', $gavo_q) === 1,
+        "$modo GAVO: ra, dec, G, BP-RP, astrometric_params_solved");
+}
 
 echo "campos densos por TAP asíncrono (#505):\n";
 // El job lo crea dc.zah… pero vive en dc.g-vo.org: también es GAVO en la traza.
@@ -189,8 +195,8 @@ ok(strpos($h, 'phot_g_mean_mag<=19.5') !== false, 'histograma: acotado por el ma
 $d = gaia_cadena_consulta('datos', 268.463, -34.793, 0.89, 19.5, 1520);
 ok(stripos($d, 'ORDER BY') === false, 'datos: sin ORDER BY');
 ok(strpos($d, 'FLOOR(phot_g_mean_mag*100)<1520') !== false, 'datos: G por debajo de la celda de corte');
-ok(preg_match('/^SELECT TOP \d+ ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp FROM/', $d) === 1,
-    'datos: mismas 4 columnas, mismo orden que la segura de hoy');
+ok(preg_match('/^SELECT TOP \d+ ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp,astrometric_params_solved FROM/', $d) === 1,
+    'datos: mismas 5 columnas (marca 5/6p incluida, #623), mismo orden que la segura');
 ok(strpos(gaia_cadena_consulta('datos', 10.0, 20.0, 0.5, 16.0, null), 'FLOOR') === false, 'datos sin corte: todo hasta mag');
 $e = gaia_cadena_consulta('espacial', 268.463, -34.793, 0.89, 19.5, 1520);
 ok(strpos($e, 'FLOOR(phot_g_mean_mag*100)>=1520') !== false && strpos($e, 'GROUP BY rx, dy') !== false,

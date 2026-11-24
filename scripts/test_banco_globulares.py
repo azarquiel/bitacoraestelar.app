@@ -55,6 +55,8 @@ dec = G['dec'] + r * np.sin(th)
 sid = B.av.ang2pix_nest(12, ra, dec).astype(np.int64) * B.av.P235 + np.arange(N)
 gm = np.round(10 + 9.9 * rng.random(N), 4)
 bprp = np.where(rng.random(N) < 0.1, np.nan, np.round(rng.random(N) * 2, 3))
+# astrometric_params_solved (#623): 3 = 2p, 31 = 5p, 95 = 6p; un tercio de 2p.
+sol = rng.choice([3, 31, 95], N)
 # VB21 solo cubre 0,9°; de campo: una de cada 10 de las que cubre.
 cubre = r < 0.9
 campo_vb = np.zeros(N, bool)
@@ -75,6 +77,7 @@ def zip_vb21(d):
 
 
 LLAMADAS = []
+CONSULTAS = []
 
 
 def tap_falso(plazo_nivel=None, perder=0):
@@ -88,8 +91,10 @@ def tap_falso(plazo_nivel=None, perder=0):
         if nivel == plazo_nivel:
             raise B.Plazo('Query timed out')
         sel = np.flatnonzero((sid >= lo) & (sid <= hi))[perder:][:maxrec]
-        return [['source_id', 'ra', 'dec', 'g', 'bprp']] + [
-            [str(sid[k]), str(float(ra[k])), str(float(dec[k])), str(float(gm[k])), '' if np.isnan(bprp[k]) else str(float(bprp[k]))] for k in sel]
+        CONSULTAS.append(adql)
+        return [['source_id', 'ra', 'dec', 'g', 'bprp', 'astrometric_params_solved']] + [
+            [str(sid[k]), str(float(ra[k])), str(float(dec[k])), str(float(gm[k])), '' if np.isnan(bprp[k]) else str(float(bprp[k])),
+             str(sol[k])] for k in sel]
     return tap
 
 
@@ -114,12 +119,19 @@ try:
     sinb = b['filas']['bprp'] == -32768
     ok(int(sinb.sum()) == int(np.isnan(bprp).sum()), 'BP−RP nulo con centinela')
     ok(abs(b['rmax'] - B.R_MAX) < 1e-6 and b['regla'] == B.REGLA, 'R_MAX y regla en la cabecera')
+    ok(CONSULTAS and all('astrometric_params_solved' in q for q in CONSULTAS), 'la consulta pide la marca de astrometría (#623)')
+    # #623: formato 2, fila de 13 B con la marca 5/6p en el último byte.
+    ok(B.VERSION_FORMATO == 2 and B.DTYPE_FILA.itemsize == 13, 'formato 2: fila de 13 B')
+    por_pos = {(np.float32(ra[k]), np.float32(dec[k])): sol[k] > 3 for k in range(N)}
+    ok(all(bool(x['astro']) == por_pos[(x['ra'], x['dec'])] for x in b['filas']),
+       'marca 5/6p en las filas con astrometric_params_solved > 3 (%d de %d)' % (int(b['filas']['astro'].sum()), N))
+    ok(int(b['filas']['astro'].sum()) == int((sol > 3).sum()), 'ni una 2p marcada como 5/6p')
 
     print('Celdas:')
     ok(6 in LLAMADAS and 7 in LLAMADAS and max(LLAMADAS) >= 8,
        'plazo en nivel 6 y MAXREC en 7 → se parte hasta nivel %d' % max(LLAMADAS))
     f = np.frombuffer(open(B.ruta_banco(os.path.join(d, 'out'), G['id']), 'rb').read(),
-                      dtype=B.av.DTYPE_FILA, offset=B.TAM_CABECERA)
+                      dtype=B.DTYPE_FILA, offset=B.TAM_CABECERA)
     ok(len({(x['ra'], x['dec']) for x in f}) == N, 'sin duplicados ni huecos al partir')
     del LLAMADAS[:]
     B.generar_uno(G, zp, os.path.join(d, 'out'), os.path.join(d, 'trabajo'), cuentas, tap=tap_falso())
@@ -149,7 +161,7 @@ try:
     ok(len(f) == 1 and 'COUNT' in f[0], 'filas ≠ COUNT → falla (%s)' % f)
     # Caso malo: todo el núcleo marcado de campo (p < 0,5 sin exigir limpia).
     malo = bytearray(open(B.ruta_banco(out, G['id']), 'rb').read())
-    filas = np.frombuffer(malo, dtype=B.av.DTYPE_FILA, offset=B.TAM_CABECERA).copy()
+    filas = np.frombuffer(malo, dtype=B.DTYPE_FILA, offset=B.TAM_CABECERA).copy()
     rr = np.hypot((filas['ra'] - G['ra']) * np.cos(np.radians(G['dec'])), filas['dec'] - G['dec']) * 60
     filas['g'][rr < 2 * G['rh']] |= B.BIT_CAMPO
     malo[B.TAM_CABECERA:] = filas.tobytes()

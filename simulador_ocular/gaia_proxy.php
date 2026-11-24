@@ -226,10 +226,14 @@ function gaia_ruta(string $clave): string {
 function gaia_consultas(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
     $top   = $segura ? GAIA_MAX_ROWS : GAIA_TECHO_FILAS;
     $orden = $segura ? ' ORDER BY ' : '';
-    $cds = 'SELECT TOP ' . $top . ' RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3"'
+    /* 5ª columna (#623): la marca de astrometría, la misma cantidad en los dos
+       espejos (`Solved` es el nombre de astrometric_params_solved en VizieR):
+       3 = 2p, 31 = 5p, 95 = 6p. El cliente solo cuenta como catálogo de un
+       globular las filas 5/6p con BP−RP (ADR 0039). */
+    $cds = 'SELECT TOP ' . $top . ' RA_ICRS, DE_ICRS, Gmag, "BP-RP", Solved FROM "I/355/gaiadr3"'
         . ' WHERE ' . gaia_filtro_desde('Gmag', $desde) . 'Gmag<=' . $mag . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS),'
         . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . gaia_filtro_excl('RA_ICRS', 'DE_ICRS', $excl) . ($orden ? $orden . 'Gmag' : '');
-    $gavo = 'SELECT TOP ' . $top . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
+    $gavo = 'SELECT TOP ' . $top . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp,astrometric_params_solved'
         . ' FROM gaia.dr3lite WHERE ' . gaia_filtro_desde('phot_g_mean_mag', $desde) . 'phot_g_mean_mag<=' . $mag
         . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec),'
         . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . gaia_filtro_excl('ra', 'dec', $excl) . ($orden ? $orden . 'phot_g_mean_mag' : '');
@@ -253,7 +257,7 @@ function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $s
    responde en ≤3,4 s. CDS sigue de failover con su plazo íntegro. La segura
    también (#505): la única densa que terminó en producción la sirvió GAVO en
    16 s, y un CDS colgado retrasaría 55 s el 202 de la cadena asíncrona.
-   Ambas consultas devuelven las mismas 4 columnas en el mismo orden. */
+   Ambas consultas devuelven las mismas 5 columnas en el mismo orden. */
 function gaia_proveedores_gavo_primero(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
     return array_reverse(gaia_proveedores($ra, $dec, $rad, $mag, $segura, $desde, $excl));
 }
@@ -435,7 +439,7 @@ function gaia_cadena_consulta(string $paso, float $ra, float $dec, float $rad, f
                 . ' SUM(POWER(10,-0.4*phot_g_mean_mag)) AS flujo, SUM(POWER(10,-0.8*phot_g_mean_mag)) AS m2'
                 . $donde . ' AND ' . $celda . '>=' . $b . ' GROUP BY rx, dy';
         default:
-            return 'SELECT TOP ' . gaia_cadena_top($b) . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
+            return 'SELECT TOP ' . gaia_cadena_top($b) . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp,astrometric_params_solved'
                 . $donde . ($b === null ? '' : ' AND ' . $celda . '<' . $b);
     }
 }

@@ -1299,7 +1299,7 @@
     return fetch(url, { signal: ctrl.signal }).then(function (r) {
       suelta();
       if (!r.ok) throw new Error('gaia_proxy ' + r.status);
-      return r.json();
+      return r.json().then(filasProxy);
     }, function (err) { suelta(); throw err; }).catch(function (err) {
       err = err || new Error('gaia_proxy');
       if (cancel && cancel.signal.aborted) { err.cancelada = true; throw err; }
@@ -1308,6 +1308,18 @@
       err.falloRed = true;
       throw err;
     });
+  }
+  /* Fila del proxy [ra, dec, G, BP−RP, astrometric_params_solved] → la del
+     cliente [ra, dec, G, BP−RP, campo, 5/6p] (#623): 3 es 2p; 31 y 95, 5/6p.
+     Una respuesta de 4 columnas (caché anterior a #623) se queda igual: sin
+     marca, que es «se desconoce». */
+  function filasProxy(jj) {
+    if (jj && Array.isArray(jj.data)) {
+      jj.data = jj.data.map(function (f) {
+        return f.length > 4 && typeof f[4] === 'number' ? [f[0], f[1], f[2], f[3], false, f[4] > 3] : f;
+      });
+    }
+    return jj;
   }
   function esFalloRed(err) { return !!(err && err.falloRed); }
   function esCancelada(err) { return !!(err && err.cancelada); }
@@ -1632,7 +1644,7 @@
     }).then(function (r) {
       if (!r || !r.ok) return null;
       return r.json().then(function (m) {
-        return (m && m.version === 1 && m.formato === 'BGLO' && m.rmax > BANCO_MARGEN &&
+        return (m && (m.version === 1 || m.version === 2) && m.formato === 'BGLO' && m.rmax > BANCO_MARGEN &&
                 typeof m.ruta === 'string' && m.ruta.indexOf('{archivo}') >= 0 && Array.isArray(m.globulares)) ? m : null;
       });
     }).then(function (m) { bancoManifiesto = m; return m; }, function () {
@@ -1672,15 +1684,17 @@
     return false;
   }
   /* Cabecera íntegra y de la misma regla de pertenencia que anuncia el
-     manifiesto (criterio 7): una marca de otra regla no se usa. */
+     manifiesto (criterio 7): una marca de otra regla no se usa. El formato 2
+     (#623) añade a la fila un byte con la marca de astrometría 5/6p; el 1 no
+     la trae y sus filas llegan sin ella (se desconoce). */
   function cabeceraBanco(buf, regla) {
     if (!buf || buf.byteLength < BANCO_CABECERA) return null;
-    var v = new DataView(buf);
-    if (v.getUint32(0, false) !== 0x42474C4F || v.getUint16(4, true) !== 1 ||   // 'BGLO', versión 1
+    var v = new DataView(buf), ver = v.getUint16(4, true);
+    if (v.getUint32(0, false) !== 0x42474C4F || (ver !== 1 && ver !== 2) ||   // 'BGLO', versión 1 o 2
         v.getUint16(6, true) !== regla || v.getUint16(40, true) !== 42 || v.getUint16(42, true) !== 500) return null;
     var hist = [];
     for (var k = 0; k < 42; k++) hist.push(v.getUint32(44 + 4 * k, true));
-    return { n: v.getUint32(32, true), hist: hist };
+    return { n: v.getUint32(32, true), hist: hist, fila: ver === 2 ? 13 : 12 };
   }
   /* Filas del banco hasta el tramo `tramos` (excluido): DataView cuya fila 0
      empieza en el byte `off`. Dos Range; un servidor sin Range (200) da el
@@ -1697,19 +1711,19 @@
         var cab = cabeceraBanco(buf, man.regla);
         if (!cab) throw new Error('banco ilegible ' + g.archivo);
         if (r.status !== 206) {                      // sin Range: ya está entero
-          if (buf.byteLength !== BANCO_CABECERA + 12 * cab.n) throw new Error('banco truncado ' + g.archivo);
+          if (buf.byteLength !== BANCO_CABECERA + cab.fila * cab.n) throw new Error('banco truncado ' + g.archivo);
           nueva.tramos = 42;
-          return { v: new DataView(buf), off: BANCO_CABECERA, n: cab.n };
+          return { v: new DataView(buf), off: BANCO_CABECERA, n: cab.n, fila: cab.fila };
         }
         var n = 0;
         for (var k = 0; k < Math.min(tramos, 42); k++) n += cab.hist[k];
-        if (n === 0) return { v: null, off: 0, n: 0 };
-        return pedir(BANCO_CABECERA, BANCO_CABECERA + 12 * n - 1).then(function (r2) {
+        if (n === 0) return { v: null, off: 0, n: 0, fila: cab.fila };
+        return pedir(BANCO_CABECERA, BANCO_CABECERA + cab.fila * n - 1).then(function (r2) {
           if (r2.status !== 206 && !r2.ok) throw new Error('banco ' + r2.status);
           return r2.arrayBuffer().then(function (b2) {
             var off = r2.status === 206 ? 0 : BANCO_CABECERA;
-            if (b2.byteLength < off + 12 * n) throw new Error('banco truncado ' + g.archivo);
-            return { v: new DataView(b2), off: off, n: n };
+            if (b2.byteLength < off + cab.fila * n) throw new Error('banco truncado ' + g.archivo);
+            return { v: new DataView(b2), off: off, n: n, fila: cab.fila };
           });
         });
       });
@@ -1720,7 +1734,8 @@
   }
   /* Filas del banco dentro del cono Y del círculo excluido, con G < mag (mag
      ya cuantizada a 0,5, como el proxy), en la forma del proxy más la marca:
-     [ra, dec, G, BP−RP|null] o [ra, dec, G, BP−RP|null, true] si es de campo.
+     [ra, dec, G, BP−RP|null] o [ra, dec, G, BP−RP|null, true] si es de campo;
+     con el formato 2, [ra, dec, G, BP−RP|null, campo, 5/6p] (#623).
      Ordenadas por G (las trae así el fichero). Por encima de techoBanco se
      corta como la segura del proxy: las topBanco más brillantes, y el resto
      en `fondo` (momentos y velo espacial, mismas unidades que el proxy). */
@@ -1729,7 +1744,7 @@
     var e = vectorDe(excl[0], excl[1]), cosE = Math.cos(excl[2] * Math.PI / 180);
     var filas = [], gTope = Math.round(mag * 1000), v = datos.v;
     var fondo = null, celdas = null, N = BANCO_ESPACIAL_N;
-    for (var k = 0, off = datos.off; k < datos.n; k++, off += 12) {
+    for (var k = 0, off = datos.off; k < datos.n; k++, off += datos.fila) {
       var gc = v.getUint16(off + 8, true), gm = gc & 0x7FFF;
       if (gm >= gTope) break;                         // ordenado por G
       var ra1 = v.getFloat32(off, true), de1 = v.getFloat32(off + 4, true), p = vectorDe(ra1, de1);
@@ -1738,7 +1753,8 @@
       if (filas.length < CFG.topBanco || !fondo && filas.length < CFG.techoBanco) {
         var bprp = v.getInt16(off + 10, true);
         var f = [ra1, de1, G, bprp === AVANCE_SIN_BPRP ? null : bprp / 1000];
-        if (gc & BANCO_CAMPO) f.push(true);
+        if (datos.fila === 13) f.push((gc & BANCO_CAMPO) !== 0, v.getUint8(off + 12) === 1);
+        else if (gc & BANCO_CAMPO) f.push(true);
         filas.push(f);
         continue;
       }
@@ -3137,6 +3153,15 @@
      simulador_ocular/docs/notas/pertenencia-vb21.md, #575). Sin marca, miembro. */
   function esCampo(fila) { return fila[4] === true; }
 
+  /* ¿Cuenta la fila en la completitud `c`? Astrometría 5/6p (6ª casilla) y
+     BP−RP, el criterio de la Tabla A.1 de Fabricius (ADR 0039, #619, #621).
+     null si la fila no trae la marca (banco del formato 1, Avance, caché del
+     proxy anterior a #623): se desconoce y no se aplica el criterio; tratarla
+     como «no cumple» borraría el catálogo entero de los bancos viejos. */
+  function cuentaEnC(fila) {
+    return typeof fila[5] === 'boolean' ? fila[5] && fila[3] != null : null;
+  }
+
   /* Las estrellas del cúmulo que este equipo dibuja. Se juzga por estrella y CON
      SU RADIO: la misma m=16 puede resolverse a 8′ del centro y fundirse a 0,5′.
 
@@ -3179,6 +3204,10 @@
          2021, #575): no es luz del cúmulo, sale como fuera de r_t. Es una
          propiedad de la estrella, no del ocular: no cambia de canal (#575). */
       if (i < nCatalogo && esCampo(e)) { fuera.push(sale); continue; }
+      /* Fila miembro que `c` no cuenta (2p o sin BP−RP, #623): su luz ya la
+         ponen las sintéticas y el velo por (1 − c); dibujarla como catálogo
+         la contaba dos veces. Sin marca, se desconoce: sigue el camino. */
+      if (i < nCatalogo && cuentaEnC(e) === false) continue;
       /* La cola del glow (m > mlim) de una fila de CATÁLOGO pasa como fuera de
          r_t (#570): Gaia no separa miembros de campo, y cortarla dibujaba un
          disco oscuro del tamaño de r_t. Los miembros de esa cola ya están en
@@ -3828,6 +3857,7 @@
     magVGaia: magVGaia,
     gMenosV: gMenosV,
     esCampo: esCampo,
+    cuentaEnC: cuentaEnC,
     escalaEstrellas: escalaEstrellas,
     radioAiry: radioAiry,
     radioImagenEstelar: radioImagenEstelar,
