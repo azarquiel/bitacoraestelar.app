@@ -1226,12 +1226,15 @@ siempre.
 
 En `/wp-content/uploads/bitacora/banco_globular/`:
 
-- `r1/<id>.bin` — un fichero por globular (`NGC_6205.bin`). Cabecera de 212 B
+- `r1v2/<id>.bin` — un fichero por globular (`NGC_6205.bin`). Cabecera de 212 B
   (firma `BGLO`, versión, regla, centro, R_MAX, radio de VB21, filas, filas de
-  campo e histograma de 42 tramos de 0,5 mag) y filas de 12 B **ordenadas por
-  G**, las del Avance con la marca de campo en el bit alto de G. El cliente pide
-  por `Range` la cabecera y luego solo las filas hasta su magnitud. `r1` es la
-  versión de la regla de pertenencia: otra regla (#596) va a `r2/`.
+  campo e histograma de 42 tramos de 0,5 mag) y filas de 13 B **ordenadas por
+  G**: las 12 del Avance, con la marca de campo en el bit alto de G, y 1 B de
+  astrometría (1 = 5/6p, 0 = 2p; #623). El cliente pide por `Range` la cabecera
+  y luego solo las filas hasta su magnitud. `r1v2` = regla de pertenencia 1,
+  formato 2: otra regla (#596) u otro formato cambia de carpeta, y el
+  manifiesto la anuncia en `ruta`. El cliente sigue leyendo el formato 1
+  (`r1/`, 12 B): sus filas llegan sin marca y no se filtran.
 - `manifiesto.json` — versión, regla, R_MAX y la lista de globulares (id,
   centro, fichero, filas). Lo pide el cliente al cargar.
 - `.htaccess` — como el del Avance: `.bin` inmutables un año, manifiesto
@@ -1241,7 +1244,8 @@ Generar (reanudable; ≤ 2 consultas a la vez en GAVO; trabajo en
 `.scratch/banco_globular/`; necesita `clusters.zip` de Zenodo 4891252). Va en
 **síncrono por celdas HEALPix de `source_id`**, partiendo la celda que no cabe:
 la cola asíncrona de GAVO llegó a ~9 h por job. Medido el 2026-11-22: M13 en
-16 s, M22 (1,64 M filas) en 3 min 41 s; los 143, unas 2 h.
+16 s, M22 (1,64 M filas) en 3 min 41 s; los 143, unas 2 h (el 2026-11-24, con
+el formato 2, unas 5 h).
 
 ```
 python3 scripts/gen_banco_globulares.py --zip clusters.zip --solo 'NGC 6205'   # uno, sin manifiesto
@@ -1254,8 +1258,9 @@ python3 scripts/gen_banco_globulares.py --validar                              #
 escrito y densidad de campo plana (0-2 r_h ≤ 2 × 4-8 r_h, con margen de
 Poisson; si VB21 recorta 4-8 r_h a menos de la mitad, la referencia es 2-4 r_h). Test sin red: `python3 scripts/test_banco_globulares.py`.
 
-**Publicar: `r1/` entero, luego `.htaccess`, y el manifiesto el ÚLTIMO, solo con
-`--validar` limpio.** El proxy tiene que estar subido antes que el manifiesto:
+**Publicar: `r1v2/` entero, luego `.htaccess`, y el manifiesto el ÚLTIMO, solo
+con `--validar` limpio.** Pasar de formato es regenerar los 143 desde cero: los
+`.npy` del formato 1 no traen la columna de astrometría. El proxy tiene que estar subido antes que el manifiesto:
 uno viejo ignora `excl` y devolvería el cono entero (filas repetidas).
 
 ---
