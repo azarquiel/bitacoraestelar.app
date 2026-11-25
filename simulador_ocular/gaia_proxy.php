@@ -238,7 +238,8 @@ function gaia_consultas(float $ra, float $dec, float $rad, float $mag, bool $seg
     return [$cds, $gavo, str_replace('gaia.dr3lite', 'gaiadr3.gaia_source', $gavo)];
 }
 
-/** URLs de proveedores TAP (failover), en orden de preferencia. */
+/** URLs de proveedores TAP: CDS, GAVO y, solo en la sonda, ARI. El orden de
+    uso lo pone gaia_proveedores_gavo_primero. */
 function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
     [$cds, $gavo, $ari] = gaia_consultas($ra, $dec, $rad, $mag, $segura, $desde, $excl);
     // MAXREC en la sonda: si el servidor recorta por su cuenta, que recorte
@@ -282,15 +283,17 @@ function gaia_timeout(string $proveedor): int {
 
 /**
  * ARI devuelve `data` como objetos ({"ra": …}); el cliente y gaia_corte leen
- * filas posicionales [ra, dec, G, bprp]. Normaliza (el orden de las claves es
- * el del SELECT) o devuelve null si no es una respuesta TAP válida. Pura.
+ * filas posicionales [ra, dec, G, bprp]. Normaliza en el orden de
+ * `metadata[].name` (una clave ausente es null), o devuelve null si no es una
+ * respuesta TAP válida. Pura.
  */
 function gaia_filas_posicionales(string $json): ?string {
     $j = json_decode($json, true);
-    if (!is_array($j) || !isset($j['data']) || !is_array($j['data'])) {
+    if (!is_array($j) || !isset($j['data'], $j['metadata']) || !is_array($j['data']) || !is_array($j['metadata'])) {
         return null;
     }
-    $j['data'] = array_map(static fn($f) => is_array($f) ? array_values($f) : $f, $j['data']);
+    $cols = array_column($j['metadata'], 'name');
+    $j['data'] = array_map(static fn($f) => array_map(static fn($c) => $f[$c] ?? null, $cols), $j['data']);
     return json_encode($j);
 }
 
@@ -1057,31 +1060,38 @@ function gaia_completar_densa(string $json, float $ra, float $dec, float $rad, f
     return gaia_mezclar_espacial($json, $esp, GAIA_ESPACIAL_N);
 }
 
+/** GET al TAP: [código HTTP, cuerpo o false]. */
+function gaia_pedir(string $url, int $timeout): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => CACHE_LRU_CONNECT_TIMEOUT,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_ENCODING       => '',   // acepta gzip del TAP y lo descomprime
+        CURLOPT_USERAGENT      => 'simulador-ocular/1.0',
+    ]);
+    // Sin curl_close(): no-op desde PHP 8, y en PHP 8.5 emite un deprecation
+    // notice que se cuela en la respuesta JSON si display_errors está On.
+    $body = curl_exec($ch);
+    return [(int) curl_getinfo($ch, CURLINFO_HTTP_CODE), $body];
+}
+
 /**
  * Recorre URLs de TAP en orden (failover) con timeouts de conexión y de petición
  * separados. Devuelve el primer cuerpo de una respuesta 2xx no vacía, o null.
  * Cada intento se anota en $GLOBALS['cache_lru_traza'] (#429): sin él, un CDS que
  * agota los 55 s y un GAVO que responde en 1 s se ven como una sonda de 56 s.
- * Con `$cortar_en_plazo`, un 500 por el límite síncrono del TAP corta el
- * failover (#505): el campo es denso y el siguiente tampoco terminaría.
+ * Con `$cortar_en_plazo`, un 500 por el límite síncrono del TAP deja en la cola
+ * solo a ARI (#505, ADR 0042): CDS tampoco terminaría, ARI a veces sí.
+ * `$pedir(url, timeout)` → [http, cuerpo|false] es la costura de los tests.
  */
-function gaia_fetch_urls(array $urls, string $etapa, bool $cortar_en_plazo = false): ?string {
+function gaia_fetch_urls(array $urls, string $etapa, bool $cortar_en_plazo = false, ?callable $pedir = null): ?string {
+    $pedir ??= 'gaia_pedir';
     while (($url = array_shift($urls)) !== null) {
         $prov = gaia_proveedor($url);
         $t0 = microtime(true);
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => CACHE_LRU_CONNECT_TIMEOUT,
-            CURLOPT_TIMEOUT        => gaia_timeout($prov),
-            CURLOPT_ENCODING       => '',   // acepta gzip del TAP y lo descomprime
-            CURLOPT_USERAGENT      => 'simulador-ocular/1.0',
-        ]);
-        $body = curl_exec($ch);
-        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        [$http, $body] = $pedir($url, gaia_timeout($prov));
         cache_lru_traza($etapa, $prov, (int) $http, $t0);
-        // Sin curl_close(): no-op desde PHP 8, y en PHP 8.5 emite un deprecation
-        // notice que se cuela en la respuesta JSON si display_errors está On.
         if ($http >= 200 && $http < 300 && $body !== false && $body !== '') {
             $body = ($prov === 'ari') ? gaia_filas_posicionales($body) : $body;
             if ($body !== null) {

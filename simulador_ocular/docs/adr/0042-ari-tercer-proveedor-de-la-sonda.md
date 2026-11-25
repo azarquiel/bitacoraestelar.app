@@ -29,5 +29,6 @@ En polo, M13 y Cygnus, ARI devuelve las mismas estrellas que GAVO, con posición
 
 - Un campo denso donde GAVO da plazo y ARI termina se sirve desde la sonda, sin pasar por la cadena asíncrona (Carina: 20,7 s + 9 s, en vez de 202 y minutos de cadena).
 - Un campo donde nadie termina (M6, M7 a 0,89°) recibe el 202 hasta 40 s más tarde: ~20 s de sonda en GAVO, 40 s de ARI y ~20 s de segura, unos 80 s en lugar de ~41 s. La pista de densidad (#517, ADR 0033) manda los más densos directos a la cadena, así que este coste lo pagan solo los campos por debajo de su umbral.
+- Si GAVO cae sin el 500 de plazo (conexión cortada o colgado), la sonda prueba ARI y después CDS: en el peor caso, 55 + 40 + 55 s antes de la segura. Antes eran 55 + 55 s.
 - La traza del log anota `ari` como proveedor. Con dos semanas de log se puede revisar el plazo de 40 s y el orden GAVO/ARI.
 - Una tirada, un día. Si el log muestra que ARI se cuelga más de lo medido, se baja el plazo o se quita, y basta con volver a subir el proxy anterior.

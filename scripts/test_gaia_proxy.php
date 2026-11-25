@@ -183,7 +183,7 @@ eq($provs, ['gavo', 'ari', 'cds'], 'sonda: GAVO, ARI, CDS');
 eq(gaia_proveedor('https://gaia.ari.uni-heidelberg.de/tap/sync?QUERY=x'), 'ari', 'host de ARI → ari (no gavo, aunque sea uni-heidelberg.de)');
 eq(gaia_proveedor('https://dc.zah.uni-heidelberg.de/tap/sync'), 'gavo', 'GAVO sigue siendo gavo');
 // Misma consulta que GAVO salvo la tabla: mismo WHERE, mismas columnas y orden.
-[, $gavo_q, $ari_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, false, 15.0, [[10.1, 20.1, 0.01]]);
+[, $gavo_q, $ari_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, false, 15.0, [10.1, 20.1, 0.01]);
 eq($ari_q, str_replace('gaia.dr3lite', 'gaiadr3.gaia_source', $gavo_q), 'consulta ARI = la de GAVO sobre gaiadr3.gaia_source');
 ok(str_contains($ari_q, 'FROM gaiadr3.gaia_source'), 'ARI consulta gaiadr3.gaia_source');
 ok(stripos(gaia_proveedores(10.0, 20.0, 0.5, 16.0, false)[2], 'MAXREC=' . GAIA_TECHO_FILAS) !== false, 'URL de ARI lleva MAXREC = techo');
@@ -203,6 +203,46 @@ eq(gaia_corte((string) gaia_filas_posicionales($ari_json)), 19.1, 'gaia_corte le
 eq(gaia_num_filas((string) gaia_filas_posicionales('{"metadata":[],"data":[]}')), 0, 'campo vacío → 0 filas');
 eq(gaia_filas_posicionales('<html>mantenimiento</html>'), null, 'no JSON → null (cuenta como fallo del proveedor)');
 eq(gaia_filas_posicionales('{"otro":1}'), null, 'sin data → null');
+$desorden = '{"metadata":[{"name":"ra"},{"name":"dec"},{"name":"phot_g_mean_mag"},{"name":"bprp"}],'
+    . '"data":[{"phot_g_mean_mag":19.1,"dec":27.9,"ra":193.3}]}';
+eq(json_decode((string) gaia_filas_posicionales($desorden), true)['data'], [[193.3, 27.9, 19.1, null]],
+    'claves desordenadas o ausentes → orden de metadata, la que falta a null');
+
+echo "failover de la sonda con ARI (#629, AC4):\n";
+$GAVO_PLAZO = [500, '<INFO name="QUERY_STATUS" value="ERROR">Query timed out (took too long). Use TAP\'s async mode</INFO>'];
+$ARI_OK = [200, $ari_json];
+$falso = static function (array $resp, array &$pedidas): callable {
+    return static function (string $url, int $timeout) use ($resp, &$pedidas): array {
+        $p = gaia_proveedor($url);
+        $pedidas[] = [$p, $timeout];
+        return $resp[$p] ?? [0, false];
+    };
+};
+$cola = gaia_proveedores_gavo_primero(161.0, -59.9, 0.36, 20.0, false);
+// GAVO da el 500 de plazo: se prueba ARI y no CDS; la traza lo anota.
+$GLOBALS['cache_lru_traza'] = []; $pedidas = [];
+$r = gaia_fetch_urls($cola, 'sonda', true, $falso(['gavo' => $GAVO_PLAZO, 'ari' => $ARI_OK], $pedidas));
+eq(array_column($pedidas, 0), ['gavo', 'ari'], 'plazo de GAVO → ARI, sin CDS');
+eq($pedidas[1][1], GAIA_ARI_TIMEOUT, 'ARI se pide con su plazo');
+eq(json_decode((string) $r, true)['data'][0], [193.3, 27.9, 19.1, 0.5], 'sirve la respuesta de ARI ya posicional');
+eq(array_column($GLOBALS['cache_lru_traza'], 1), ['gavo', 'ari'], 'la traza anota gavo y ari');
+// GAVO y CDS no responden: ARI responde.
+$pedidas = [];
+$r = gaia_fetch_urls($cola, 'sonda', true, $falso(['ari' => $ARI_OK], $pedidas));
+ok($r !== null, 'GAVO sin respuesta → ARI responde');
+// ARI con 200 que no es TAP (página de mantenimiento): se sigue a CDS.
+$pedidas = [];
+$r = gaia_fetch_urls($cola, 'sonda', true, $falso(['ari' => [200, '<html>mantenimiento</html>'], 'cds' => [200, '{"data":[[1,2,3,4]]}']], $pedidas));
+eq(array_column($pedidas, 0), ['gavo', 'ari', 'cds'], 'ARI con HTML → CDS');
+eq($r, '{"data":[[1,2,3,4]]}', 'sirve CDS');
+// Plazo de GAVO y ARI colgado: null, sin probar CDS.
+$pedidas = [];
+eq(gaia_fetch_urls($cola, 'sonda', true, $falso(['gavo' => $GAVO_PLAZO], $pedidas)), null, 'nadie termina → null');
+eq(array_column($pedidas, 0), ['gavo', 'ari'], 'nadie termina: CDS no se prueba');
+// La segura no lleva ARI: tras el plazo no queda nadie (como antes de #629).
+$pedidas = [];
+gaia_fetch_urls(gaia_proveedores_gavo_primero(161.0, -59.9, 0.36, 20.0, true), 'segura', true, $falso(['gavo' => $GAVO_PLAZO], $pedidas));
+eq(array_column($pedidas, 0), ['gavo'], 'segura: plazo de GAVO corta, como antes');
 
 echo "cadena asíncrona de un campo denso (#505): histograma → espacial → datos:\n";
 /* Ningún paso lleva ORDER BY: la segura ordenada no terminó ni en 2 h de job
