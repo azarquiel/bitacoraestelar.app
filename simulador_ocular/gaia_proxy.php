@@ -57,6 +57,7 @@ const GAIA_CACHE_LOWWATER  = 0.90;                // tras evict, bajar hasta el 
    25 s y volver a empezar. El cliente reintenta una vez, así que con 25 s el
    observador ya esperaba ~56 s para acabar SIN datos. */
 const GAIA_REQUEST_TIMEOUT = 55;                  // s: timeout TOTAL de la petición
+const GAIA_ARI_TIMEOUT     = 40;                  // s: ARI en la sonda (ADR 0042); su denso más lento que terminó, 32,6 s
 const GAIA_QUANT_RADEC     = 0.001;               // ° : cuantización del centro (~3,6")
 const GAIA_QUANT_RAD       = 0.01;                // ° : cuantización del radio (se redondea ↑)
 const GAIA_QUANT_MAG       = 0.5;                 // mag: cuantización del límite (se redondea ↑)
@@ -240,19 +241,26 @@ function gaia_consultas(float $ra, float $dec, float $rad, float $mag, bool $seg
         . ' FROM gaia.dr3lite WHERE ' . gaia_filtro_desde('phot_g_mean_mag', $desde) . 'phot_g_mean_mag<=' . $mag
         . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec),'
         . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . gaia_filtro_excl('ra', 'dec', $excl) . ($orden ? $orden . 'phot_g_mean_mag' : '');
-    return [$cds, $gavo];
+    // ARI (#629): las columnas de dr3lite existen en gaia_source; solo cambia la tabla.
+    return [$cds, $gavo, str_replace('gaia.dr3lite', 'gaiadr3.gaia_source', $gavo)];
 }
 
-/** URLs de proveedores TAP (failover), en orden de preferencia. */
+/** URLs de proveedores TAP: CDS, GAVO y, solo en la sonda, ARI. El orden de
+    uso lo pone gaia_proveedores_gavo_primero. */
 function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
-    [$cds, $gavo] = gaia_consultas($ra, $dec, $rad, $mag, $segura, $desde, $excl);
+    [$cds, $gavo, $ari] = gaia_consultas($ra, $dec, $rad, $mag, $segura, $desde, $excl);
     // MAXREC en la sonda: si el servidor recorta por su cuenta, que recorte
     // exactamente en el techo y el recorte sea detectable (filas == techo).
     $maxrec = $segura ? '' : '&MAXREC=' . GAIA_TECHO_FILAS;
-    return [
+    $urls = [
         'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?request=doQuery&lang=adql&format=json' . $maxrec . '&query=' . rawurlencode($cds),
         'https://dc.zah.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json' . $maxrec . '&QUERY=' . rawurlencode($gavo),
     ];
+    // ARI solo en la sonda (ADR 0042): la segura lleva ORDER BY y en ARI no está medida.
+    if (!$segura) {
+        $urls[] = 'https://gaia.ari.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=json' . $maxrec . '&QUERY=' . rawurlencode($ari);
+    }
+    return $urls;
 }
 
 /* Sonda (#429): GAVO primero. CDS se cuelga de forma errática hasta el timeout
@@ -260,10 +268,41 @@ function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $s
    responde en ≤3,4 s. CDS sigue de failover con su plazo íntegro. La segura
    también (#505): la única densa que terminó en producción la sirvió GAVO en
    16 s, y un CDS colgado retrasaría 55 s el 202 de la cadena asíncrona.
-   Ambas consultas devuelven ra, dec, G, BP-RP en el mismo orden; GAVO añade
-   la marca de astrometría como 5ª (#623). */
+   Las consultas devuelven ra, dec, G, BP-RP en el mismo orden; GAVO y ARI
+   añaden la marca de astrometría como 5ª (#623). En la sonda, ARI va entre
+   los dos (ADR 0042): GAVO, ARI, CDS. */
 function gaia_proveedores_gavo_primero(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
-    return array_reverse(gaia_proveedores($ra, $dec, $rad, $mag, $segura, $desde, $excl));
+    $u = gaia_proveedores($ra, $dec, $rad, $mag, $segura, $desde, $excl);
+    return $segura ? [$u[1], $u[0]] : [$u[1], $u[2], $u[0]];
+}
+
+/** URLs que siguen tras un 500 de plazo síncrono: solo ARI. CDS tampoco
+    termina (#505); ARI terminó 3 de 5 densos en los que GAVO dio plazo
+    (2026-11-25, ADR 0042). Pura. */
+function gaia_tras_plazo(array $restantes): array {
+    return array_values(array_filter($restantes, static fn(string $u): bool => gaia_proveedor($u) === 'ari'));
+}
+
+/** Plazo de curl por proveedor. ARI no da 500 de plazo: se cuelga, así que
+    lleva uno propio y más corto. Pura. */
+function gaia_timeout(string $proveedor): int {
+    return $proveedor === 'ari' ? GAIA_ARI_TIMEOUT : GAIA_REQUEST_TIMEOUT;
+}
+
+/**
+ * ARI devuelve `data` como objetos ({"ra": …}); el cliente y gaia_corte leen
+ * filas posicionales [ra, dec, G, bprp, astrometric_params_solved]. Normaliza en el orden de
+ * `metadata[].name` (una clave ausente es null), o devuelve null si no es una
+ * respuesta TAP válida. Pura.
+ */
+function gaia_filas_posicionales(string $json): ?string {
+    $j = json_decode($json, true);
+    if (!is_array($j) || !isset($j['data'], $j['metadata']) || !is_array($j['data']) || !is_array($j['metadata'])) {
+        return null;
+    }
+    $cols = array_column($j['metadata'], 'name');
+    $j['data'] = array_map(static fn($f) => array_map(static fn($c) => $f[$c] ?? null, $cols), $j['data']);
+    return json_encode($j);
 }
 
 /**
@@ -396,6 +435,9 @@ function gaia_proveedor(string $url): string {
     $host = (string) parse_url($url, PHP_URL_HOST);
     if (str_contains($host, 'cds.unistra.fr')) {
         return 'cds';
+    }
+    if ($host === 'gaia.ari.uni-heidelberg.de') {   // antes que GAVO: también es uni-heidelberg.de
+        return 'ari';
     }
     // El job UWS se crea en dc.zah.uni-heidelberg.de pero vive en dc.g-vo.org.
     return (str_contains($host, 'uni-heidelberg.de') || str_contains($host, 'g-vo.org')) ? 'gavo' : $host;
@@ -1026,35 +1068,47 @@ function gaia_completar_densa(string $json, float $ra, float $dec, float $rad, f
     return gaia_mezclar_espacial($json, $esp, GAIA_ESPACIAL_N);
 }
 
+/** GET al TAP: [código HTTP, cuerpo o false]. */
+function gaia_pedir(string $url, int $timeout): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => CACHE_LRU_CONNECT_TIMEOUT,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_ENCODING       => '',   // acepta gzip del TAP y lo descomprime
+        CURLOPT_USERAGENT      => 'simulador-ocular/1.0',
+    ]);
+    // Sin curl_close(): no-op desde PHP 8, y en PHP 8.5 emite un deprecation
+    // notice que se cuela en la respuesta JSON si display_errors está On.
+    $body = curl_exec($ch);
+    return [(int) curl_getinfo($ch, CURLINFO_HTTP_CODE), $body];
+}
+
 /**
  * Recorre URLs de TAP en orden (failover) con timeouts de conexión y de petición
  * separados. Devuelve el primer cuerpo de una respuesta 2xx no vacía, o null.
  * Cada intento se anota en $GLOBALS['cache_lru_traza'] (#429): sin él, un CDS que
  * agota los 55 s y un GAVO que responde en 1 s se ven como una sonda de 56 s.
- * Con `$cortar_en_plazo`, un 500 por el límite síncrono del TAP corta el
- * failover (#505): el campo es denso y el siguiente tampoco terminaría.
+ * Con `$cortar_en_plazo`, un 500 por el límite síncrono del TAP deja en la cola
+ * solo a ARI (#505, ADR 0042): CDS tampoco terminaría, ARI a veces sí.
+ * `$pedir(url, timeout)` → [http, cuerpo|false] es la costura de los tests.
  */
-function gaia_fetch_urls(array $urls, string $etapa, bool $cortar_en_plazo = false): ?string {
-    foreach ($urls as $url) {
+function gaia_fetch_urls(array $urls, string $etapa, bool $cortar_en_plazo = false, ?callable $pedir = null): ?string {
+    $pedir ??= 'gaia_pedir';
+    while (($url = array_shift($urls)) !== null) {
+        $prov = gaia_proveedor($url);
         $t0 = microtime(true);
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => CACHE_LRU_CONNECT_TIMEOUT,
-            CURLOPT_TIMEOUT        => GAIA_REQUEST_TIMEOUT,
-            CURLOPT_ENCODING       => '',   // acepta gzip del TAP y lo descomprime
-            CURLOPT_USERAGENT      => 'simulador-ocular/1.0',
-        ]);
-        $body = curl_exec($ch);
-        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        cache_lru_traza($etapa, gaia_proveedor($url), (int) $http, $t0);
-        // Sin curl_close(): no-op desde PHP 8, y en PHP 8.5 emite un deprecation
-        // notice que se cuela en la respuesta JSON si display_errors está On.
+        [$http, $body] = $pedir($url, gaia_timeout($prov));
+        cache_lru_traza($etapa, $prov, (int) $http, $t0);
         if ($http >= 200 && $http < 300 && $body !== false && $body !== '') {
-            return $body;
+            $body = ($prov === 'ari') ? gaia_filas_posicionales($body) : $body;
+            if ($body !== null) {
+                return $body;
+            }
+            continue;   // ARI con 200 que no es TAP: siguiente proveedor
         }
         if ($cortar_en_plazo && gaia_es_plazo_sync((int) $http, (string) $body)) {
-            return null;
+            $urls = gaia_tras_plazo($urls);
         }
     }
     return null;

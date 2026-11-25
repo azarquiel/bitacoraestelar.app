@@ -145,7 +145,7 @@ Así, un cielo urbano **lava** los objetos tenues igual que en el ocular real.
 > **formulario de registro** lo reutiliza para *Generar con el simulador*. Sus ajustes
 > (`GAIA_CFG`) son `BitacoraGaiaRender.config`. El color sigue en `BitacoraGaiaColor`.
 
-- **Consulta** a Gaia DR3 vía VizieR TAP, una vez por objeto, al radio máximo
+- **Consulta** a Gaia DR3 por TAP (GAVO, ARI o CDS, ver ADR 0042), una vez por objeto, al radio máximo
   (`GAIA_RADIO_MAX ≈ 1,44°`) y hasta `magConsultaGaia(apertura, transmision)` —
   la profundidad depende del EQUIPO, no es una magnitud fija: un 8" y un 20" ya
   no piden ni "ven" el mismo catálogo. `GAIA_MAG_TOPE` (20,0, = `GAIA_MAX_MAG`
@@ -1325,7 +1325,7 @@ desplegado con el permiso público.
   `mapa/datos/estrellas_dobles.csv` con `python3 scripts/gen_dobles.py` (no editar el
   `.js` a mano). Física de resolución: ver [`docs/notas/resolucion-dobles.md`](docs/notas/resolucion-dobles.md).
 - **Hipparcos** (`public.hipparcos`, Hp<9) vía el [TAP de Gaia](https://gea.esac.esa.int/tap-server/tap), cruzado en local contra `gaiadr3.gaia_source` para quedarse **solo con lo que Gaia no trae**: `resources/js/estrellas-brillantes-datos.js` se **regenera** con `python3 scripts/gen_hipparcos.py` (no editar el `.js` a mano). Comprobación: `python3 scripts/test_hipparcos.py`. Por qué es un catálogo aparte y no un parche del dibujo: [`docs/adr/0018-las-estrellas-que-gaia-dr3-no-trae-son-un-catalogo-aparte.md`](docs/adr/0018-las-estrellas-que-gaia-dr3-no-trae-son-un-catalogo-aparte.md).
-- **Gaia DR3** vía [VizieR TAP](https://tapvizier.cds.unistra.fr/) (CDS).
+- **Gaia DR3** vía TAP: GAVO (`gaia.dr3lite`), ARI Heidelberg (`gaiadr3.gaia_source`, solo en la sonda) y [VizieR TAP](https://tapvizier.cds.unistra.fr/) (CDS, `I/355`), en ese orden (ADR 0014 y ADR 0042).
 - **Colores estelares**: J.-V. Harre &amp; R. Heller (2021), *«Digital color codes of
   stars»*, Astron. Nachr. ([arXiv:2101.06254](https://arxiv.org/abs/2101.06254);
   código [spec2col](https://github.com/janvincentharre/spec2col)).

@@ -219,8 +219,9 @@ hasta G = 20 y el alto es la marca de campo.
   marca y no se filtran; el complemento del proxy (G ≥ 15) sí la trae. Son las
   gigantes brillantes, casi todas 5/6p con color: regenerar el Avance entero
   (todo el cielo) no compensa.
-- **El proxy** trae la marca como 5ª columna solo desde GAVO
-  (`astrometric_params_solved`). La caché de disco no cambia de clave: sus
+- **El proxy** trae la marca como 5ª columna desde GAVO y desde ARI (ADR
+  0042), las dos con `astrometric_params_solved`; comprobado en vivo el
+  2026-11-25 en M13, con el mismo reparto 3/31/95 en las dos. La caché de disco no cambia de clave: sus
   entradas viejas, de 4 columnas, llegan sin marca.
 - **Cuándo se nota.** Dentro del círculo del banco las filas salen del fichero.
   Hasta que se publique el formato 2, el filtro no actúa en ningún globular con

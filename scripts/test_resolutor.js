@@ -25,6 +25,17 @@ function ok(cond, etiqueta) {
 /* Respuesta real del CDS para M42, recortada a lo que lee leerSesame. */
 var M42 = '%C.0 HII\n%J 83.82010000 -5.38760000 = 05 35 16.8    -05 23 15\n';
 var SIN_RESULTADO = '#!Sesame: nothing found\n';
+/* Respuestas reales del espejo SIMBAD de Harvard (sim-id, ASCII), recortadas. */
+var M13_SIMBAD = 'C.D.S.  -  SIMBAD4 rel 1.8  -  2026.11.24CET21:56:40\n\nM13\n---\n\n' +
+  'Object M 13  ---  GlC  ---  OID=@2894585   (@@134462,0)  ---  coobox=18253\n\n' +
+  'Coordinates(ICRS,ep=J2000,eq=2000): 16 41 41.634  +36 27 40.75 (IR  ) C [~ ~ ] 2006AJ....131.1163S\n';
+var M42_SIMBAD = 'Object M 42  ---  HII  ---  OID=@810146\n' +
+  'Coordinates(ICRS,ep=J2000,eq=2000): 05 35 16.8  -05 23 15 (Xray) D [5000 5000 90] 2022A&A...661A..38P\n';
+var NADA_SIMBAD = "!! 'zzqx99': No known catalog could be found\n query string: zzqx99\n";
+function cuelga(init) {
+  return new Promise(function (_r, rej) { init.signal.addEventListener('abort', function () { rej(new Error('abort')); }); });
+}
+function responde(txt) { return Promise.resolve({ ok: true, text: function () { return Promise.resolve(txt); } }); }
 
 var consultas = [];      // cada URL pedida
 var respuesta = M42;
@@ -180,31 +191,63 @@ Promise.resolve()
       });
     };
     v.resolutor.programar('M42');
-    return tras(ESPERA * 6, function () {
+    // Tres espejos colgados: tres timeouts de ESPERA·2 antes del error.
+    return tras(ESPERA * 10, function () {
       ok(abortada, 'la consulta colgada se aborta');
       ok(v.estados[v.estados.length - 1] === 'error:M42', 'y avisa como error');
     });
   })
 
   .then(function () {
-    seccion('Respaldo al segundo espejo:');
+    seccion('Respaldo a los otros espejos:');
     var v = nuevo({ timeout: ESPERA * 2 });
     consultas = [];
-    // El CDS se cuelga; el espejo CfA contesta.
+    // El CDS se cuelga; el SIMBAD de Harvard contesta (2026-11-24: el CDS
+    // redirigía a un CfA que tampoco contestaba).
     global.fetch = function (url, init) {
       consultas.push(url);
-      if (/cds\.unistra\.fr/.test(url)) {
-        return new Promise(function (_r, rej) {
-          init.signal.addEventListener('abort', function () { rej(new Error('abort')); });
-        });
-      }
-      return Promise.resolve({ ok: true, text: function () { return Promise.resolve(M42); } });
+      return /simbad\.harvard\.edu/.test(url) ? responde(M13_SIMBAD) : cuelga(init);
     };
+    v.resolutor.programar('M13');
+    return tras(ESPERA * 8, function () {
+      ok(consultas.length === 2 && /simbad\.harvard\.edu\/simbad\/sim-id/.test(consultas[1]), 'tras el timeout del CDS pide al SIMBAD de Harvard');
+      ok(/Ident=M13/.test(consultas[1]), 'con el nombre en Ident');
+      var r = v.resueltos[0];
+      ok(r && Math.abs(r.ra - 250.42347) < 1e-4 && Math.abs(r.dec - 36.46132) < 1e-4,
+        'RA/Dec en grados desde «16 41 41.634 +36 27 40.75» (' + (r && r.ra.toFixed(5) + ', ' + r.dec.toFixed(5)) + ')');
+      ok(r && r.otype === 'GlC', 'y el tipo de objeto');
+      ok(v.estados.indexOf('error:M13') < 0, 'sin avisar de error');
+    });
+  })
+  .then(function () {
+    // Declinación negativa por SIMBAD: el signo afecta a minutos y segundos.
+    var v = nuevo({ timeout: ESPERA * 2 });
+    global.fetch = function (url, init) { return /simbad\.harvard/.test(url) ? responde(M42_SIMBAD) : cuelga(init); };
     v.resolutor.programar('M42');
     return tras(ESPERA * 8, function () {
-      ok(consultas.length === 2 && /harvard/.test(consultas[1]), 'tras el timeout del CDS pide al espejo CfA');
-      ok(v.resueltos.length === 1, 'y las coordenadas llegan');
-      ok(v.estados.indexOf('error:M42') < 0, 'sin avisar de error');
+      var r = v.resueltos[0];
+      ok(r && Math.abs(r.ra - 83.82) < 1e-4 && Math.abs(r.dec + 5.3875) < 1e-4, 'dec negativa: −05 23 15 = −5,3875° (' + (r && r.dec.toFixed(4)) + ')');
+    });
+  })
+  .then(function () {
+    // «No encontrado» de SIMBAD es «nada», y no se pregunta al tercero.
+    var v = nuevo({ timeout: ESPERA * 2 });
+    consultas = [];
+    global.fetch = function (url, init) { consultas.push(url); return /simbad\.harvard/.test(url) ? responde(NADA_SIMBAD) : cuelga(init); };
+    v.resolutor.programar('zzqx99');
+    return tras(ESPERA * 8, function () {
+      ok(consultas.length === 2 && v.estados[v.estados.length - 1] === 'nada:zzqx99', '«!!» de SIMBAD avisa de «nada» y no sigue');
+    });
+  })
+  .then(function () {
+    // CDS y SIMBAD de Harvard caídos: el CfA, con el formato de Sesame.
+    var v = nuevo({ timeout: ESPERA * 2 });
+    consultas = [];
+    global.fetch = function (url, init) { consultas.push(url); return /cfa\.harvard/.test(url) ? responde(M42) : cuelga(init); };
+    v.resolutor.programar('M42');
+    return tras(ESPERA * 12, function () {
+      ok(consultas.length === 3 && /vizier\.cfa\.harvard\.edu/.test(consultas[2]), 'tercero: el Sesame del CfA');
+      ok(v.resueltos.length === 1 && Math.abs(v.resueltos[0].ra - 83.8201) < 1e-6, 'y las coordenadas llegan');
     });
   })
   .then(function () {
@@ -341,8 +384,8 @@ Promise.resolve()
       v.resolutor.programar('M42');
     }).then(function () {
       return tras(ESPERA * 3, function () {
-        // 2 espejos fallidos + 1 reintento que acierta.
-        ok(consultas.length === 3, 'el mismo nombre se puede reintentar (' + consultas.length + ')');
+        // 3 espejos fallidos + 1 reintento que acierta.
+        ok(consultas.length === 4, 'el mismo nombre se puede reintentar (' + consultas.length + ')');
         ok(v.resueltos.length === 1, 'y el reintento escribe las coordenadas');
       });
     });
