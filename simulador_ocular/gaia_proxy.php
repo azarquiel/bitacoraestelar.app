@@ -226,11 +226,14 @@ function gaia_ruta(string $clave): string {
 function gaia_consultas(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
     $top   = $segura ? GAIA_MAX_ROWS : GAIA_TECHO_FILAS;
     $orden = $segura ? ' ORDER BY ' : '';
-    /* 5ª columna (#623): la marca de astrometría, la misma cantidad en los dos
-       espejos (`Solved` es el nombre de astrometric_params_solved en VizieR):
-       3 = 2p, 31 = 5p, 95 = 6p. El cliente solo cuenta como catálogo de un
-       globular las filas 5/6p con BP−RP (ADR 0039). */
-    $cds = 'SELECT TOP ' . $top . ' RA_ICRS, DE_ICRS, Gmag, "BP-RP", Solved FROM "I/355/gaiadr3"'
+    /* 5ª columna (#623), solo en GAVO: la marca de astrometría
+       (astrometric_params_solved: 3 = 2p, 31 = 5p, 95 = 6p). El cliente solo
+       cuenta como catálogo de un globular las filas 5/6p con BP−RP (ADR 0039).
+       CDS no la pide: en VizieR se llama `Solved` por ASU, pero en su TAP no
+       se pudo comprobar (apagado por el incidente del CDS de 2026-11), y una
+       columna desconocida tumbaría el respaldo entero. Sus filas llegan sin
+       marca y el cliente no les aplica el criterio. */
+    $cds = 'SELECT TOP ' . $top . ' RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3"'
         . ' WHERE ' . gaia_filtro_desde('Gmag', $desde) . 'Gmag<=' . $mag . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS),'
         . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . gaia_filtro_excl('RA_ICRS', 'DE_ICRS', $excl) . ($orden ? $orden . 'Gmag' : '');
     $gavo = 'SELECT TOP ' . $top . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp,astrometric_params_solved'
@@ -257,7 +260,8 @@ function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $s
    responde en ≤3,4 s. CDS sigue de failover con su plazo íntegro. La segura
    también (#505): la única densa que terminó en producción la sirvió GAVO en
    16 s, y un CDS colgado retrasaría 55 s el 202 de la cadena asíncrona.
-   Ambas consultas devuelven las mismas 5 columnas en el mismo orden. */
+   Ambas consultas devuelven ra, dec, G, BP-RP en el mismo orden; GAVO añade
+   la marca de astrometría como 5ª (#623). */
 function gaia_proveedores_gavo_primero(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
     return array_reverse(gaia_proveedores($ra, $dec, $rad, $mag, $segura, $desde, $excl));
 }

@@ -156,13 +156,16 @@ eq(gaia_proveedor('https://otro.example.org/tap/sync'), 'otro.example.org', 'hos
 $provs = [];
 foreach (gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, false) as $u) { $provs[] = gaia_proveedor($u); }
 eq($provs, ['gavo', 'cds'], 'sonda: GAVO primero, CDS de failover');
-/* El cliente lee por posición: las dos consultas devuelven ra, dec, G, BP-RP y
-   la marca de astrometría (#623) en ese orden, en la sonda y en la segura. La
-   marca es la misma cantidad en los dos espejos: `astrometric_params_solved` en
-   GAVO y su nombre en VizieR, `Solved` (3 = 2p, 31 = 5p, 95 = 6p). */
+/* El cliente lee por posición: ra, dec, G, BP-RP en ese orden, en la sonda y
+   en la segura. GAVO añade la marca de astrometría (#623,
+   `astrometric_params_solved`: 3 = 2p, 31 = 5p, 95 = 6p). CDS NO la pide: su
+   nombre en el TAP de VizieR (`Solved`) no se pudo comprobar (TAP apagado por
+   el incidente del CDS, 2026-11), y una columna desconocida tumbaría el
+   respaldo entero. Sus filas llegan sin marca: «se desconoce» (AC1 de #623). */
 foreach ([false => 'sonda', true => 'segura'] as $segura => $modo) {
     [$cds_q, $gavo_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, (bool) $segura);
-    ok(preg_match('/^SELECT TOP \d+ RA_ICRS, DE_ICRS, Gmag, "BP-RP", Solved FROM/', $cds_q) === 1, "$modo CDS: ra, dec, G, BP-RP, Solved");
+    ok(preg_match('/^SELECT TOP \d+ RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM/', $cds_q) === 1, "$modo CDS: ra, dec, G, BP-RP, sin marca");
+    ok(stripos($cds_q, 'Solved') === false, "$modo CDS: no pide Solved (sin comprobar en el TAP)");
     ok(preg_match('/^SELECT TOP \d+ ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp,astrometric_params_solved FROM/', $gavo_q) === 1,
         "$modo GAVO: ra, dec, G, BP-RP, astrometric_params_solved");
 }

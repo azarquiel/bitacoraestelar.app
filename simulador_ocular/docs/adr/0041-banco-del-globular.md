@@ -219,9 +219,9 @@ hasta G = 20 y el alto es la marca de campo.
   marca y no se filtran; el complemento del proxy (G ≥ 15) sí la trae. Son las
   gigantes brillantes, casi todas 5/6p con color: regenerar el Avance entero
   (todo el cielo) no compensa.
-- **El proxy** trae la marca como 5ª columna (`Solved` en VizieR,
-  `astrometric_params_solved` en GAVO). La caché de disco no cambia de clave:
-  sus entradas viejas, de 4 columnas, llegan sin marca.
+- **El proxy** trae la marca como 5ª columna solo desde GAVO
+  (`astrometric_params_solved`). La caché de disco no cambia de clave: sus
+  entradas viejas, de 4 columnas, llegan sin marca.
 - **Cuándo se nota.** Dentro del círculo del banco las filas salen del fichero.
   Hasta que se publique el formato 2, el filtro no actúa en ningún globular con
   banco. La clave de la caché del proxy no se versiona: costaría vaciar 1,5 GB
@@ -230,6 +230,13 @@ hasta G = 20 y el alto es la marca de campo.
 - **La cola del glow (#570) también se filtra.** Una fila miembro 2p o sin
   color con m > mlim dentro de r_t ya no sale como cola: su luz está en el
   velo por (1 − c), como la del resto de las filas que `c` no cuenta.
-- **Sin comprobar:** el nombre `Solved` en el TAP de CDS. Por ASU (espejo
-  CfA) sí sale; el TAP de CDS no respondió el 2026-11-24. Si TAP no lo
-  conociera, fallaría la consulta CDS entera, que es el failover de GAVO.
+- **CDS va sin marca.** En VizieR la columna se llama `Solved` por ASU
+  (espejo CfA, 3/31/95), pero su nombre en el TAP no se pudo comprobar: el CDS
+  apagó sus TAP por un incidente de ciberseguridad (aviso del 2026-11-09 en
+  la portada de VizieR), y ninguno de los cuatro espejos de VizieR (CfA, IDIA,
+  NAO, China-VO) sirve TAP. Una columna desconocida tumbaría la consulta
+  entera y con ella el respaldo de GAVO, así que CDS pide las 4 columnas de
+  siempre y sus filas llegan «sin marca»: el cliente no les aplica el
+  criterio (AC1 de #623). Solo se nota con GAVO caído y fuera del banco.
+  Cuando el TAP vuelva, añadir `Solved` es una línea en `gaia_consultas` y su
+  test, tras comprobarlo con una consulta real.
