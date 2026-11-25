@@ -28,7 +28,8 @@ menor que r_t en 102 de los 143. Más allá de ese radio no hay memberprob y la
 estrella cuenta como miembro, como antes. Por eso la cabecera lleva el radio
 de VB21 y --validar exige que esté escrito (> 0), no que sea ≥ r_t.
 
-Formato (little-endian), banco_globular/r<REGLA>/<id con _>.bin:
+Formato (little-endian), banco_globular/r<REGLA>v<VERSION>/<id con _>.bin
+(el formato 1 iba en r<REGLA>/):
   cabecera (212 B):
     firma   4s  b'BGLO'
     versión u16 VERSION_FORMATO
@@ -42,9 +43,11 @@ Formato (little-endian), banco_globular/r<REGLA>/<id con _>.bin:
     paso    u16 500 (milésimas de mag; tramo k = [k/2, (k+1)/2))
     hist    42 × u32 filas por tramo (las filas van ordenadas por G: el
             tramo k empieza en la fila Σ hist[0..k-1])
-  filas (12 B, las del Avance):
+  filas (13 B; las 12 primeras, las del Avance):
     ra f32 · dec f32 · G u16 = floor(G·1000) | 0x8000 si es de campo ·
-    BP−RP i16 = round(BP−RP·1000), −32768 si es nulo.
+    BP−RP i16 = round(BP−RP·1000), −32768 si es nulo ·
+    astro u8 = 1 si astrometric_params_solved > 3 (5/6p), 0 si es 2p (#623).
+    El formato 1 no lleva el último byte (filas de 12 B).
 
 Uso:
   python3 scripts/gen_banco_globulares.py --zip clusters.zip            # los 143
@@ -52,7 +55,7 @@ Uso:
   python3 scripts/gen_banco_globulares.py --validar [--solo …]          # antes del FTP
 Opciones: --salida DIR (simulador_ocular/banco_globular) · --trabajo DIR (.scratch/banco_globular)
 
-Publicar: primero r<REGLA>/*.bin por FTP a wp-content/uploads/bitacora/banco_globular/,
+Publicar: primero r<REGLA>v<VERSION>/*.bin por FTP a wp-content/uploads/bitacora/banco_globular/,
 luego .htaccess y el manifiesto el ÚLTIMO, y solo si --validar sale limpio.
 """
 import argparse
@@ -83,12 +86,17 @@ ORACULO = spike.SALIDA_C
 R_MAX = 1.08                 # ° (ADR 0041): radioConsulta(90′) cuantizado
 G_MAX = 20.0
 FIRMA = b'BGLO'
-VERSION_FORMATO = 1
+# 2 (#623): la fila lleva la marca de astrometría 5/6p. Los ficheros de la 1
+# siguen valiendo: el cliente lee sus filas con la marca «se desconoce».
+VERSION_FORMATO = 2
 REGLA = 1                    # pertenencia-vb21.md; #596 la cambiará → REGLA 2, otra carpeta
 CABECERA = struct.Struct('<4sHHddffIIHH')
 NTRAMOS, PASO_MIL = av.NTRAMOS, av.PASO_MIL
 TAM_CABECERA = CABECERA.size + 4 * NTRAMOS          # 212
 BIT_CAMPO = 0x8000
+# Fila del Avance + 1 B: 1 si la astrometría es de 5 o 6 parámetros
+# (astrometric_params_solved > 3), 0 si es de 2 (#623, ADR 0039).
+DTYPE_FILA = np.dtype(av.DTYPE_FILA.descr + [('astro', 'u1')])
 # Descarga en síncrono por celdas de source_id (medido 2026-11-22 en GAVO: una
 # celda de nivel 6 con 124 k filas, 6 s; la cola asíncrona estaba a ~9 h).
 NIVEL_TROZO = 6
@@ -102,7 +110,13 @@ def nombre_fichero(ident):
 
 
 def ruta_banco(salida, ident):
-    return os.path.join(salida, 'r%d' % REGLA, nombre_fichero(ident))
+    return os.path.join(salida, carpeta(), nombre_fichero(ident))
+
+
+def carpeta():
+    """r<REGLA> en el formato 1; desde el 2, otra carpeta: cada .bin publicado
+    es inmutable y un fichero viejo en una caché no se mezcla con el nuevo."""
+    return 'r%d' % REGLA if VERSION_FORMATO == 1 else 'r%dv%d' % (REGLA, VERSION_FORMATO)
 
 
 # ───────────────────────── Población ─────────────────────────
@@ -165,8 +179,8 @@ def adql_trozo(g, nivel, ipix):
     """Las filas de una celda HEALPix de `nivel` (por source_id, indexado: la
     consulta recorre solo su celda, no el cono entero) dentro del cono."""
     lo, hi = av.rango_source_id(nivel, ipix)
-    return ('SELECT source_id, ra, dec, phot_g_mean_mag AS g, phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
-            ' FROM %s WHERE source_id BETWEEN %d AND %d AND phot_g_mean_mag<=%r AND %s'
+    return ('SELECT source_id, ra, dec, phot_g_mean_mag AS g, phot_bp_mean_mag-phot_rp_mean_mag AS bprp,'
+            ' astrometric_params_solved AS sol FROM %s WHERE source_id BETWEEN %d AND %d AND phot_g_mean_mag<=%r AND %s'
             % (av.TABLA, lo, hi, G_MAX, cono(g)))
 
 
@@ -199,14 +213,15 @@ def dir_trabajo(trabajo, g):
     return os.path.join(trabajo, g['id'].replace(' ', '_'))
 
 
-DTYPE_LOTE = np.dtype([('sid', '<i8'), ('ra', '<f8'), ('dec', '<f8'), ('g', '<f8'), ('bprp', '<f8')])
+DTYPE_LOTE = np.dtype([('sid', '<i8'), ('ra', '<f8'), ('dec', '<f8'), ('g', '<f8'), ('bprp', '<f8'), ('sol', '<i2')])
 
 
 def bajar_trozo(trabajo, g, nivel, ipix, tap=tap_sync):
     """Filas de una celda, o None si hay que partirla: tocó MAXREC (un recorte
     se ve: filas == MAXREC) o GAVO cortó por tiempo. Reanudable: cada celda
     terminada queda en su .npy."""
-    ruta = os.path.join(dir_trabajo(trabajo, g), 't%02d_%d.npy' % (nivel, ipix))
+    # Con la versión en el nombre: un .npy del formato 1 no trae `sol`.
+    ruta = os.path.join(dir_trabajo(trabajo, g), 'v%d_t%02d_%d.npy' % (VERSION_FORMATO, nivel, ipix))
     partida = ruta[:-4] + '.partida'      # reanudar baja directo a las hijas
     if os.path.exists(ruta):
         return np.load(ruta)
@@ -220,8 +235,9 @@ def bajar_trozo(trabajo, g, nivel, ipix, tap=tap_sync):
         av.escribir_atomico(partida, b'')
         return None
     a = np.empty(len(filas), dtype=DTYPE_LOTE)
-    for k, (sid, ra, dec, gm, bprp) in enumerate(filas):
-        a[k] = (int(sid), float(ra), float(dec), float(gm), av._num(bprp))
+    for k, (sid, ra, dec, gm, bprp, sol) in enumerate(filas):
+        # Sin marca (no pasa en dr3lite) = 0: nunca cuenta como 5/6p sin serlo.
+        a[k] = (int(sid), float(ra), float(dec), float(gm), av._num(bprp), int(sol or 0))
     os.makedirs(os.path.dirname(ruta), exist_ok=True)
     tmp = ruta + '.tmp%d.npy' % os.getpid()
     np.save(tmp, a)
@@ -250,10 +266,12 @@ def bajar_cono(trabajo, g, tap=tap_sync):
 # ───────────────────────── Formato ─────────────────────────
 
 def codificar(lote, campo_sids):
-    """Filas de 12 B ordenadas por G, con la marca en el bit alto de G."""
+    """Filas de 13 B ordenadas por G, con la marca de campo en el bit alto de G
+    y la de astrometría 5/6p en el último byte."""
     orden = np.lexsort((lote['dec'], lote['ra'], lote['g']))
     lote = lote[orden]
-    filas = np.empty(len(lote), dtype=av.DTYPE_FILA)
+    filas = np.empty(len(lote), dtype=DTYPE_FILA)
+    filas['astro'] = lote['sol'] > 3
     filas['ra'] = np.mod(lote['ra'], 360.0)
     filas['ra'][filas['ra'] >= np.float32(360.0)] = 0.0
     filas['dec'] = lote['dec']
@@ -285,10 +303,10 @@ def leer_banco(datos):
     firma, ver, regla, ra, dec, rmax, rvb, n, campo, nt, paso = CABECERA.unpack_from(datos)
     if firma != FIRMA or ver != VERSION_FORMATO or nt != NTRAMOS or paso != PASO_MIL:
         raise ValueError('cabecera desconocida')
-    if len(datos) != TAM_CABECERA + av.DTYPE_FILA.itemsize * n:
+    if len(datos) != TAM_CABECERA + DTYPE_FILA.itemsize * n:
         raise ValueError('tamaño incoherente con el nº de filas')
     hist = np.frombuffer(datos, dtype='<u4', count=NTRAMOS, offset=CABECERA.size).astype(np.int64)
-    filas = np.frombuffer(datos, dtype=av.DTYPE_FILA, count=n, offset=TAM_CABECERA)
+    filas = np.frombuffer(datos, dtype=DTYPE_FILA, count=n, offset=TAM_CABECERA)
     return {'regla': regla, 'ra': ra, 'dec': dec, 'rmax': rmax, 'radio_vb21': rvb, 'n': n,
             'campo': campo, 'hist': hist, 'filas': filas}
 
@@ -318,7 +336,7 @@ def manifiesto(entradas):
         'tabla': av.TABLA + ' (GAVO)',
         'rmax': R_MAX,
         'gmax': G_MAX,
-        'ruta': 'r%d/{archivo}' % REGLA,
+        'ruta': carpeta() + '/{archivo}',
         'filas': sum(e['filas'] for e in entradas),
         'globulares': sorted(entradas, key=lambda e: e['id']),
         'fecha': datetime.date.today().isoformat(),

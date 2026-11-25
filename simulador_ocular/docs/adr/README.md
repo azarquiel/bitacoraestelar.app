@@ -63,7 +63,7 @@ Estado: `aceptada` si no se indica otra cosa. Tipo: **decisión** (fija cómo es
 | [0018 · Las estrellas que Gaia DR3 no trae son un catálogo aparte](0018-las-estrellas-que-gaia-dr3-no-trae-son-un-catalogo-aparte.md) | decisión | |
 | [0030 · Dos ejes ortogonales para Gaia](0030-dos-ejes-gaia-preregistro-de-listones.md) · [informes](0030-dos-ejes-gaia/) | prerregistro | cerrado: NO PASA |
 | [0033 · Avance de Gaia y complemento débil](0033-avance-de-gaia-y-complemento-debil.md) | decisión | |
-| [0041 · Banco del globular: qué pasa fuera de r_t](0041-banco-del-globular.md) | prerregistro y decisión | la regla de #601 da (A); el dueño amplía a 1,25 GB y elige (C) |
+| [0041 · Banco del globular: qué pasa fuera de r_t](0041-banco-del-globular.md) | prerregistro y decisión | la regla de #601 da (A); el dueño amplía a 1,25 GB y elige (C); formato 2: fila de 13 B con marca 5/6p (#623) |
 | [0042 · ARI, tercer proveedor de la sonda](0042-ari-tercer-proveedor-de-la-sonda.md) | decisión | enmienda 0014 |
 
 ## Objetos difusos: fila de catálogo, textura DSO y parche

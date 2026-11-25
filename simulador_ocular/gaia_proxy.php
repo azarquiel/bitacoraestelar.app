@@ -227,10 +227,17 @@ function gaia_ruta(string $clave): string {
 function gaia_consultas(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
     $top   = $segura ? GAIA_MAX_ROWS : GAIA_TECHO_FILAS;
     $orden = $segura ? ' ORDER BY ' : '';
+    /* 5ª columna (#623), solo en GAVO: la marca de astrometría
+       (astrometric_params_solved: 3 = 2p, 31 = 5p, 95 = 6p). El cliente solo
+       cuenta como catálogo de un globular las filas 5/6p con BP−RP (ADR 0039).
+       CDS no la pide: en VizieR se llama `Solved` por ASU, pero en su TAP no
+       se pudo comprobar (apagado por el incidente del CDS de 2026-11), y una
+       columna desconocida tumbaría el respaldo entero. Sus filas llegan sin
+       marca y el cliente no les aplica el criterio. */
     $cds = 'SELECT TOP ' . $top . ' RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM "I/355/gaiadr3"'
         . ' WHERE ' . gaia_filtro_desde('Gmag', $desde) . 'Gmag<=' . $mag . ' AND 1=CONTAINS(POINT(\'ICRS\',RA_ICRS,DE_ICRS),'
         . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . gaia_filtro_excl('RA_ICRS', 'DE_ICRS', $excl) . ($orden ? $orden . 'Gmag' : '');
-    $gavo = 'SELECT TOP ' . $top . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
+    $gavo = 'SELECT TOP ' . $top . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp,astrometric_params_solved'
         . ' FROM gaia.dr3lite WHERE ' . gaia_filtro_desde('phot_g_mean_mag', $desde) . 'phot_g_mean_mag<=' . $mag
         . ' AND 1=CONTAINS(POINT(\'ICRS\',ra,dec),'
         . ' CIRCLE(\'ICRS\',' . $ra . ',' . $dec . ',' . $rad . '))' . gaia_filtro_excl('ra', 'dec', $excl) . ($orden ? $orden . 'phot_g_mean_mag' : '');
@@ -261,8 +268,9 @@ function gaia_proveedores(float $ra, float $dec, float $rad, float $mag, bool $s
    responde en ≤3,4 s. CDS sigue de failover con su plazo íntegro. La segura
    también (#505): la única densa que terminó en producción la sirvió GAVO en
    16 s, y un CDS colgado retrasaría 55 s el 202 de la cadena asíncrona.
-   Las consultas devuelven las mismas 4 columnas en el mismo orden.
-   En la sonda, ARI va entre los dos (ADR 0042): GAVO, ARI, CDS. */
+   Las consultas devuelven ra, dec, G, BP-RP en el mismo orden; GAVO y ARI
+   añaden la marca de astrometría como 5ª (#623). En la sonda, ARI va entre
+   los dos (ADR 0042): GAVO, ARI, CDS. */
 function gaia_proveedores_gavo_primero(float $ra, float $dec, float $rad, float $mag, bool $segura, ?float $desde = null, ?array $excl = null): array {
     $u = gaia_proveedores($ra, $dec, $rad, $mag, $segura, $desde, $excl);
     return $segura ? [$u[1], $u[0]] : [$u[1], $u[2], $u[0]];
@@ -283,7 +291,7 @@ function gaia_timeout(string $proveedor): int {
 
 /**
  * ARI devuelve `data` como objetos ({"ra": …}); el cliente y gaia_corte leen
- * filas posicionales [ra, dec, G, bprp]. Normaliza en el orden de
+ * filas posicionales [ra, dec, G, bprp, astrometric_params_solved]. Normaliza en el orden de
  * `metadata[].name` (una clave ausente es null), o devuelve null si no es una
  * respuesta TAP válida. Pura.
  */
@@ -477,7 +485,7 @@ function gaia_cadena_consulta(string $paso, float $ra, float $dec, float $rad, f
                 . ' SUM(POWER(10,-0.4*phot_g_mean_mag)) AS flujo, SUM(POWER(10,-0.8*phot_g_mean_mag)) AS m2'
                 . $donde . ' AND ' . $celda . '>=' . $b . ' GROUP BY rx, dy';
         default:
-            return 'SELECT TOP ' . gaia_cadena_top($b) . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp'
+            return 'SELECT TOP ' . gaia_cadena_top($b) . ' ra,dec,phot_g_mean_mag,phot_bp_mean_mag-phot_rp_mean_mag AS bprp,astrometric_params_solved'
                 . $donde . ($b === null ? '' : ' AND ' . $celda . '<' . $b);
     }
 }

@@ -196,3 +196,48 @@ Lo que #583 decidió al construirlo, donde el texto de arriba no llegaba:
   estático inmutable con caché HTTP de un año.
 - **Queda fuera** (lección 7): separar el almacén del resultado asíncrono de la
   caché de aciertos. No lo necesita #583.
+
+## Formato 2: la marca de astrometría (#623, 2026-11-24)
+
+El cliente solo dibuja como catálogo de un globular las filas que la
+completitud `c` cuenta: astrometría 5/6p y BP−RP (ADR 0039). La fila del banco
+necesita esa marca, y no cabe en los 12 B: los 15 bits bajos de G van llenos
+hasta G = 20 y el alto es la marca de campo.
+
+- **Fila de 13 B.** Los 12 de siempre y 1 B más: 1 si
+  `astrometric_params_solved > 3` (5p o 6p), 0 si es 2p. +8 % de peso.
+- **Otra carpeta, `r1v2/`.** El manifiesto la anuncia en `ruta`. Los `.bin` del
+  formato 1 en las cachés de un año no se mezclan con los nuevos.
+- **El formato 1 sigue valiendo.** El cliente lee sus filas sin marca: «se
+  desconoce», y el criterio no se aplica. Nunca como «no cumple»: eso borraría
+  el catálogo entero de los bancos viejos (AC3 de #623).
+- **Publicar** el formato 2 es regenerar los 143 (la descarga empieza de cero:
+  los `.npy` del formato 1 no traen la columna) y subir `r1v2/*.bin` antes del
+  manifiesto, como siempre.
+- **El Avance no lleva la marca.** Con banco, el Avance no se usa en el
+  globular. Sin banco (manifiesto o fichero caído), sus filas G < 15 llegan sin
+  marca y no se filtran; el complemento del proxy (G ≥ 15) sí la trae. Son las
+  gigantes brillantes, casi todas 5/6p con color: regenerar el Avance entero
+  (todo el cielo) no compensa.
+- **El proxy** trae la marca como 5ª columna desde GAVO y desde ARI (ADR
+  0042), las dos con `astrometric_params_solved`; comprobado en vivo el
+  2026-11-25 en M13, con el mismo reparto 3/31/95 en las dos. La caché de disco no cambia de clave: sus
+  entradas viejas, de 4 columnas, llegan sin marca.
+- **Cuándo se nota.** Dentro del círculo del banco las filas salen del fichero.
+  Hasta que se publique el formato 2, el filtro no actúa en ningún globular con
+  banco. La clave de la caché del proxy no se versiona: costaría vaciar 1,5 GB
+  de caché (campos densos de minutos) para filas que, en los globulares, ya da
+  el banco.
+- **La cola del glow (#570) también se filtra.** Una fila miembro 2p o sin
+  color con m > mlim dentro de r_t ya no sale como cola: su luz está en el
+  velo por (1 − c), como la del resto de las filas que `c` no cuenta.
+- **CDS va sin marca.** En VizieR la columna se llama `Solved` por ASU
+  (espejo CfA, 3/31/95), pero su nombre en el TAP no se pudo comprobar: el CDS
+  apagó sus TAP por un incidente de ciberseguridad (aviso del 2026-11-09 en
+  la portada de VizieR), y ninguno de los cuatro espejos de VizieR (CfA, IDIA,
+  NAO, China-VO) sirve TAP. Una columna desconocida tumbaría la consulta
+  entera y con ella el respaldo de GAVO, así que CDS pide las 4 columnas de
+  siempre y sus filas llegan «sin marca»: el cliente no les aplica el
+  criterio (AC1 de #623). Solo se nota con GAVO caído y fuera del banco.
+  Cuando el TAP vuelva, añadir `Solved` es una línea en `gaia_consultas` y su
+  test, tras comprobarlo con una consulta real.
