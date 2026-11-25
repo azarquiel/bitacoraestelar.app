@@ -149,13 +149,13 @@ eq(json_decode(trim(cache_lru_log_linea(1.0, 'k', 'miss', 'sonda', 10, 55800.0, 
 
 echo "gaia_proveedor (por host):\n";
 foreach (gaia_proveedores(10.0, 20.0, 0.5, 16.0, false) as $u) { $provs[] = gaia_proveedor($u); }
-eq($provs, ['cds', 'gavo'], 'las URLs de la sonda son CDS y GAVO, en ese orden');
+eq($provs, ['cds', 'gavo', 'ari'], 'las URLs de la sonda son CDS, GAVO y ARI (#629), en ese orden');
 eq(gaia_proveedor('https://otro.example.org/tap/sync'), 'otro.example.org', 'host desconocido → el host tal cual');
 
 // #429: la sonda va GAVO primero, CDS de failover; no se quita ninguno.
 $provs = [];
 foreach (gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, false) as $u) { $provs[] = gaia_proveedor($u); }
-eq($provs, ['gavo', 'cds'], 'sonda: GAVO primero, CDS de failover');
+eq(array_values(array_diff($provs, ['ari'])), ['gavo', 'cds'], 'sonda: GAVO primero, CDS de failover');
 // El cliente lee por posición: las dos consultas devuelven ra, dec, G, BP-RP en ese orden.
 [$cds_q, $gavo_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, false);
 ok(preg_match('/^SELECT TOP \d+ RA_ICRS, DE_ICRS, Gmag, "BP-RP" FROM/', $cds_q) === 1, 'columnas CDS: ra, dec, G, BP-RP');
@@ -175,6 +175,34 @@ ok(!gaia_es_plazo_sync(0, ''), 'sin respuesta (red) → no corta el failover');
 $provs = [];
 foreach (gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, true) as $u) { $provs[] = gaia_proveedor($u); }
 eq($provs, ['gavo', 'cds'], 'segura síncrona: GAVO primero, CDS de failover');
+
+echo "ARI Heidelberg, tercer proveedor de la sonda (#629):\n";
+$provs = [];
+foreach (gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, false) as $u) { $provs[] = gaia_proveedor($u); }
+eq($provs, ['gavo', 'ari', 'cds'], 'sonda: GAVO, ARI, CDS');
+eq(gaia_proveedor('https://gaia.ari.uni-heidelberg.de/tap/sync?QUERY=x'), 'ari', 'host de ARI → ari (no gavo, aunque sea uni-heidelberg.de)');
+eq(gaia_proveedor('https://dc.zah.uni-heidelberg.de/tap/sync'), 'gavo', 'GAVO sigue siendo gavo');
+// Misma consulta que GAVO salvo la tabla: mismo WHERE, mismas columnas y orden.
+[, $gavo_q, $ari_q] = gaia_consultas(10.0, 20.0, 0.5, 16.0, false, 15.0, [[10.1, 20.1, 0.01]]);
+eq($ari_q, str_replace('gaia.dr3lite', 'gaiadr3.gaia_source', $gavo_q), 'consulta ARI = la de GAVO sobre gaiadr3.gaia_source');
+ok(str_contains($ari_q, 'FROM gaiadr3.gaia_source'), 'ARI consulta gaiadr3.gaia_source');
+ok(stripos(gaia_proveedores(10.0, 20.0, 0.5, 16.0, false)[2], 'MAXREC=' . GAIA_TECHO_FILAS) !== false, 'URL de ARI lleva MAXREC = techo');
+// Tras el 500 de plazo de GAVO solo queda ARI: CDS tampoco termina (#505), ARI sí en 3 de 5 densos.
+$cola = gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, false);
+eq(array_map('gaia_proveedor', gaia_tras_plazo(array_slice($cola, 1))), ['ari'], 'tras el plazo de GAVO: solo ARI');
+eq(gaia_tras_plazo(array_slice(gaia_proveedores_gavo_primero(10.0, 20.0, 0.5, 16.0, true), 1)), [], 'segura: tras el plazo no queda nadie (como antes)');
+eq(gaia_timeout('ari'), GAIA_ARI_TIMEOUT, 'ARI con su plazo corto');
+eq(gaia_timeout('gavo'), GAIA_REQUEST_TIMEOUT, 'GAVO con el plazo de siempre');
+ok(GAIA_ARI_TIMEOUT < GAIA_REQUEST_TIMEOUT, 'el plazo de ARI es menor que el general');
+// ARI devuelve las filas como objetos; el cliente y gaia_corte leen por posición.
+$ari_json = '{"metadata":[{"name":"ra"},{"name":"dec"},{"name":"phot_g_mean_mag"},{"name":"bprp"}],'
+    . '"data":[{"ra":193.3,"dec":27.9,"phot_g_mean_mag":19.1,"bprp":0.5},{"ra":193.6,"dec":27.1,"phot_g_mean_mag":18.2,"bprp":null}]}';
+$pos = json_decode((string) gaia_filas_posicionales($ari_json), true);
+eq($pos['data'], [[193.3, 27.9, 19.1, 0.5], [193.6, 27.1, 18.2, null]], 'filas objeto → [ra, dec, G, bprp], BP-RP nulo se conserva');
+eq(gaia_corte((string) gaia_filas_posicionales($ari_json)), 19.1, 'gaia_corte lee la respuesta normalizada');
+eq(gaia_num_filas((string) gaia_filas_posicionales('{"metadata":[],"data":[]}')), 0, 'campo vacío → 0 filas');
+eq(gaia_filas_posicionales('<html>mantenimiento</html>'), null, 'no JSON → null (cuenta como fallo del proveedor)');
+eq(gaia_filas_posicionales('{"otro":1}'), null, 'sin data → null');
 
 echo "cadena asíncrona de un campo denso (#505): histograma → espacial → datos:\n";
 /* Ningún paso lleva ORDER BY: la segura ordenada no terminó ni en 2 h de job
@@ -576,7 +604,7 @@ echo "consultas con desde (AC1, AC2):\n";
 foreach ([false, true] as $seg) {
     $nom = $seg ? 'segura' : 'sonda';
     [$c0, $g0] = gaia_consultas(56.75, 24.115, 0.36, 16.5, $seg);
-    eq([$c0, $g0], gaia_consultas(56.75, 24.115, 0.36, 16.5, $seg, null), "$nom: desde null = consulta de hoy");
+    eq(gaia_consultas(56.75, 24.115, 0.36, 16.5, $seg), gaia_consultas(56.75, 24.115, 0.36, 16.5, $seg, null), "$nom: desde null = consulta de hoy");
     ok(stripos($c0 . $g0, '>=15') === false, "$nom: sin desde no hay frontera");
     [$c1, $g1] = gaia_consultas(56.75, 24.115, 0.36, 16.5, $seg, 15.0);
     ok(strpos($c1, 'Gmag>=15 AND') !== false, "$nom CDS: Gmag>=15");
@@ -586,8 +614,8 @@ foreach ([false, true] as $seg) {
     eq(gaia_proveedores_gavo_primero(56.75, 24.115, 0.36, 16.5, $seg), gaia_proveedores_gavo_primero(56.75, 24.115, 0.36, 16.5, $seg, null),
         "$nom: URLs sin desde, las de hoy");
     $urls = gaia_proveedores_gavo_primero(56.75, 24.115, 0.36, 16.5, $seg, 15.0);
-    ok(strpos(rawurldecode($urls[0]), 'phot_g_mean_mag>=15') !== false && strpos(rawurldecode($urls[1]), 'Gmag>=15') !== false,
-        "$nom: las dos URLs llevan la frontera");
+    ok(array_filter($urls, static fn($u) => strpos(rawurldecode($u), 'mag>=15') === false) === [],
+        "$nom: todas las URLs llevan la frontera");
 }
 // Campos densos (AC4): el TOP ordenado se aplica al complemento.
 [$cs] = gaia_consultas(268.447, -34.841, 0.89, 19.5, true, 15.0);
@@ -637,7 +665,7 @@ $frc = "0=CONTAINS(POINT('ICRS',RA_ICRS,DE_ICRS), CIRCLE('ICRS',250.424,36.461,1
 foreach ([false, true] as $seg) {
     [$c0, $g0] = gaia_consultas(250.5, 36.9, 1.2, 17.0, $seg, 15.0);
     [$c1, $g1] = gaia_consultas(250.5, 36.9, 1.2, 17.0, $seg, 15.0, $EX);
-    eq(gaia_consultas(250.5, 36.9, 1.2, 17.0, $seg, 15.0, null), [$c0, $g0], ($seg ? 'segura' : 'sonda') . ': excl null = consulta de hoy');
+    eq(gaia_consultas(250.5, 36.9, 1.2, 17.0, $seg, 15.0, null), gaia_consultas(250.5, 36.9, 1.2, 17.0, $seg, 15.0), ($seg ? 'segura' : 'sonda') . ': excl null = consulta de hoy');
     ok(strpos($g1, $frx) !== false && strpos($c1, $frc) !== false, ($seg ? 'segura' : 'sonda') . ': GAVO y CDS excluyen el círculo');
     eq(str_replace(' AND ' . $frx, '', $g1), $g0, ($seg ? 'segura' : 'sonda') . ' GAVO: solo cambia la exclusión');
 }

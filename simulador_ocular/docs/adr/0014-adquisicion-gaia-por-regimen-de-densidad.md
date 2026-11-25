@@ -1,6 +1,6 @@
 # 0014 — Adquisición de Gaia por régimen de densidad
 
-Fecha: 2026-08-19 · Estado: aceptada · Derogada en parte por: [ADR 0033](0033-avance-de-gaia-y-complemento-debil.md)
+Fecha: 2026-08-19 · Estado: aceptada · Derogada en parte por: [ADR 0033](0033-avance-de-gaia-y-complemento-debil.md) · Enmendada por: [ADR 0042](0042-ari-tercer-proveedor-de-la-sonda.md) (tras el plazo de GAVO, la sonda prueba ARI)
 
 ## Contexto
 
