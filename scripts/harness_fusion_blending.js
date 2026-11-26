@@ -64,10 +64,6 @@ function cuentaComoCatalogo(g) { return !CRITERIO || (RUWE.has(g[0] + ',' + g[1]
 var BANDA_G = process.argv.indexOf('--banda') > 0 && process.argv[process.argv.indexOf('--banda') + 1] === 'G';
 function magCatalogo(g) { return BANDA_G ? g[2] : R.magVGaia(g); }
 
-/* --ancho-crowding X: cola del factor de crowding de c (#624). 0.4 reproduce
-   la cola estrecha de antes, el caso malo de su prerregistro. */
-C.config.gaiaAnchoCrowding = arg('ancho-crowding', C.config.gaiaAnchoCrowding);
-
 var cielo = { pupilaSalida: D / MAG, pupilaOjo: 7, sqm: SQM, transmision: 0.9,
               aumentos: MAG, perceptual: true };
 var res = R.pintarCumulo(new Float32Array(PROC * PROC), M13, {

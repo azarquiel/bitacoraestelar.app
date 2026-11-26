@@ -1173,6 +1173,41 @@ ha corrido con el arreglo.
 `gaiaAnchoCrowding` o k al arnés de M13; mover listón o tramo tras correr;
 ampliar el fixture más allá de G 18,5.
 
+### Resultado (AC3, `simulador_ocular/docs/validacion/fusion_blending_624.txt`)
+Arnés del commit 2a4f5e7 (`gaiaAnchoCrowding = 1,2`), `--atribucion`.
+
+**Listón de AC2: NO PASA, por el otro lado.** ≤1, V 18,07-19,07:
+cat/`num·c` = 193 / 453,5 = **0,426 ± 0,047** (−12σ). Caso malo
+(`--ancho-crowding 0.4`): 2,214 ± 0,107, el de #621 byte a byte; el listón
+lo rechaza.
+
+| medida (≤1) | #621 | #624 (1,2) | listón |
+|---|---|---|---|
+| cat/`num·c` 18-19 | 2,214 ± 0,107 | **0,426 ± 0,047** | NO PASA |
+| cat/`num·c` 17-18 (#621) | 1,069 ± 0,046 | 0,919 ± 0,043 | pasa (1,9σ) |
+| R2v (§0 quater) | 1,024 (2σ 0,004) | **0,945** (2σ 0,010) | NO PASA |
+| conservación | 0,926 | 0,918 | pasa |
+| p95 pregunta 5 | 0,094 | **0,100** | NO PASA (antes pasaba) |
+
+**Dónde se pasa** (rejilla r × V, obs / modelo): 0,5-0,7 r_h 0,05-0,18;
+0,7-0,85 r_h 0,03-0,49; 0,85-1 r_h 0,53-0,69. El defecto se invierte donde el
+crowding es más hondo. Con la cola de 0,4 el modelo cae demasiado deprisa en
+m; con la de 1,2, `c` sube demasiado en el radio interior. Una sola cola no
+reproduce a la vez la Tabla A.1 (que pide 1,2) y el gradiente radial de M13
+dentro de 1 r_h. Dentro de M13 la tabla ya lo apuntaba: con 1,2, «core»
+G 16-18 sale 0,43× y «out» G 18-20 1,37×.
+
+**Veredicto (#624).** La atribución vale: el exceso es de (b), la forma de
+`c` en el crowding, no del corte ni de `num`. El arreglo de una constante
+no vale. **No pasa a producción: el código vuelve a `main`**
+(`gaiaAnchoCrowding`, el test C y `--ancho-crowding` se retiran). El
+prerregistro prohíbe ajustar la cola al arnés.
+
+**Siguiente.** Hacen falta dos grados de libertad en `c(m, r)` (codo y cola
+juntos, o la cola en función de la densidad) ajustados a la Tabla A.1 sin
+M13, con M13 y este arnés fuera de muestra. El listón de AC2 se reutiliza tal
+cual.
+
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
 Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.
