@@ -1108,8 +1108,10 @@ Sale de #621: en ≤1 (0,5-1 r_h), V 18,07-19,07, cat/`num·c` = 193 / 87,2 =
 
 ### Atribución (AC1)
 Medido con el fixture de #621 (miembros, criterio 5/6p + BP−RP): 196 filas en
-el rango (193 en el arnés, que reparte por bordes de bin). Exploración en
-`.scratch/624/` (fuera del repo).
+el rango (193 en el arnés, que reparte por bordes de bin).
+`node scripts/spike_624_borde.js`, salida en
+`simulador_ocular/docs/validacion/spike_624_borde.txt`. El barrido de
+`gaiaAnchoCrowding` contra la Tabla A.1 se hizo con el código de 2a4f5e7.
 
 - **(a) Corte G → V.** El color del bin de la LF da G − V = −0,132 (BP−RP
   0,75, secuencia principal); las filas, mediana −0,129 (p10-p90 −0,175 a
@@ -1145,8 +1147,9 @@ c_modelo/c_tabla en las 33 celdas de la Tabla A.1 sin M13 con tabla 1-30 % y
 G ≤ 19 (barrido en pasos de 0,1-0,4): 1,0 → 0,47 sin separar G; separando,
 1,2 → **0,96**, 1,6 → 1,33. Se fija **1,2**. Dentro de muestra para el
 conjunto; M13 queda fuera del ajuste y su rms (criterio B) baja de 7,6 a 5,8
-puntos. El sesgo A pasa de −0,44 a −1,08 (listón ±3). Lo fija
-`scripts/test_completitud_fabricius.js` (C, caso malo 0,4 → 0,60).
+puntos. El sesgo A pasa de −0,44 a −1,08 (listón ±3). Lo fijaba, en
+2a4f5e7, el criterio C de `scripts/test_completitud_fabricius.js` (caso malo
+0,4 → 0,60); se retiró con el arreglo.
 
 **Lo que no arregla.** Las celdas de G > 19 siguen bajas (mediana 0,31 con
 1,2) con cualquier ancho del crowding: es el codo del campo abierto
@@ -1174,7 +1177,9 @@ ha corrido con el arreglo.
 ampliar el fixture más allá de G 18,5.
 
 ### Resultado (AC3, `simulador_ocular/docs/validacion/fusion_blending_624.txt`)
-Arnés del commit 2a4f5e7 (`gaiaAnchoCrowding = 1,2`), `--atribucion`.
+`git checkout 2a4f5e7 && node scripts/harness_fusion_blending.js --atribucion`
+(`gaiaAnchoCrowding = 1,2`); con `--ancho-crowding 0.4`, el caso malo
+(`fusion_blending_624_cola04.txt`).
 
 **Listón de AC2: NO PASA, por el otro lado.** ≤1, V 18,07-19,07:
 cat/`num·c` = 193 / 453,5 = **0,426 ± 0,047** (−12σ). Caso malo
@@ -1189,7 +1194,8 @@ lo rechaza.
 | conservación | 0,926 | 0,918 | pasa |
 | p95 pregunta 5 | 0,094 | **0,100** | NO PASA (antes pasaba) |
 
-**Dónde se pasa** (rejilla r × V, obs / modelo): 0,5-0,7 r_h 0,05-0,18;
+**Dónde se pasa** (rejilla r × V, obs / modelo; `spike_624_borde.js` sobre
+2a4f5e7): 0,5-0,7 r_h 0,05-0,18;
 0,7-0,85 r_h 0,03-0,49; 0,85-1 r_h 0,53-0,69. El defecto se invierte donde el
 crowding es más hondo. Con la cola de 0,4 el modelo cae demasiado deprisa en
 m; con la de 1,2, `c` sube demasiado en el radio interior. Una sola cola no
