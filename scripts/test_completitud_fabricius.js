@@ -64,7 +64,7 @@ function bprp(Mv) { return Mv < 0 ? C.config.bprpGigante : Mv < 3.5 ? C.config.b
 })();
 
 // Diferencias modelo − tabla (puntos %) de un cúmulo, con el CFG del momento.
-function diferencias(t) {
+function diferencias(t, pares) {
   var fila = t.fila;
   var pob = C.poblacion(C.fichaDeFila(fila));
   var mAp = pob.magnitudes, nb = pob.estrellasPorBin, dm = pob.dm, d = [];
@@ -86,7 +86,7 @@ function diferencias(t) {
       }
     }
     tabla[t.n][reg].forEach(function (o, b) {
-      if (o != null && sn[b] > 0) d.push(100 * sc[b] / sn[b] - o);
+      if (o != null && sn[b] > 0) { d.push(100 * sc[b] / sn[b] - o); if (pares) pares.push([100 * sc[b] / sn[b], o, G0 + b + 2]); }
     });
   });
   return d;
@@ -118,6 +118,33 @@ ok(Math.abs(malo.sesgo) > 3, 'caso malo k = 30: sesgo ' + malo.sesgo.toFixed(2) 
 console.log('B  M13, fuera del ajuste');
 ok(hoy.m13 <= 10, 'k = ' + C.config.gaiaCrowdingK + ': rms ' + hoy.m13.toFixed(1) + ' puntos (≤ 10)');
 ok(malo.m13 > 10, 'caso malo k = 30: rms ' + malo.m13.toFixed(1) + ', el listón lo rechaza');
+
+/* C (#624) · FORMA de la cola del crowding: en las celdas donde la tabla da
+   1-30 % y el bin acaba en G ≤ 19 (régimen de crowding: el campo abierto
+   aún da c ≈ 1), la mediana de c_modelo/c_tabla del conjunto SIN M13 dentro
+   de [0,8; 1,25]. Las celdas de G > 19 son el codo del campo (gaiaM50,
+   gaiaAncho) y no entran: ningún ancho de crowding las arregla. Dentro de muestra (gaiaAnchoCrowding se eligió con esta misma
+   mediana): guarda que nadie vuelva a la cola estrecha. Caso malo: la cola
+   estrecha de antes (gaiaAnchoCrowding = gaiaAncho = 0,4) da 0,60 y el listón
+   la rechaza. ADR 0039 «La cola de `c` en el borde del corte (#624)». */
+function colaMediana(ancho) {
+  var guardado = C.config.gaiaAnchoCrowding;
+  if (ancho != null) C.config.gaiaAnchoCrowding = ancho;
+  try {
+    var pares = [];
+    filas.forEach(function (f) { if (f.n !== 'NGC6205') diferencias(f, pares); });
+    var lr = pares.filter(function (p) { return p[1] >= 1 && p[1] < 30 && p[2] <= 19; })
+                  .map(function (p) { return Math.log(Math.max(p[0], 0.01) / p[1]); });
+    lr.sort(function (a, b) { return a - b; });
+    return { mediana: Math.exp(lr[lr.length >> 1]), n: lr.length };
+  } finally { C.config.gaiaAnchoCrowding = guardado; }
+}
+console.log('C  forma de la cola: mediana c_modelo/c_tabla en celdas de la tabla 1-30 % con G ≤ 19, sin M13');
+var colaHoy = colaMediana(null), colaMala = colaMediana(C.config.gaiaAncho);
+ok(colaHoy.mediana >= 0.8 && colaHoy.mediana <= 1.25, 'gaiaAnchoCrowding = ' + C.config.gaiaAnchoCrowding + ': mediana ' +
+   colaHoy.mediana.toFixed(2) + ' (' + colaHoy.n + ' celdas, en [0,8; 1,25])');
+ok(!(colaMala.mediana >= 0.8 && colaMala.mediana <= 1.25), 'caso malo, cola estrecha ' + C.config.gaiaAncho + ': mediana ' +
+   colaMala.mediana.toFixed(2) + ', el listón la rechaza');
 
 if (fallos) { console.error('\n' + fallos + ' fallo(s)'); process.exit(1); }
 console.log('\ntodo ok');

@@ -80,6 +80,10 @@
     gaiaCrowdingK: 75,
     gaiaM50: 20.0,
     gaiaAncho: 0.4,
+    // Cola del factor de crowding (#624): la que hace 1 la mediana de
+    // c_modelo/c_tabla en las celdas 1-30 % y G ≤ 19 de la Tabla A.1 de Fabricius sin
+    // M13. Con 0,4 (la del campo) daba 0,15. Lo fija test_completitud_fabricius.js (C).
+    gaiaAnchoCrowding: 1.2,
     gaiaFwhmAs: 0.6,
     // Profundidad de generación de estrellas sintéticas. La realización se
     // genera UNA vez, con el instrumento más profundo que el simulador admite
@@ -404,9 +408,14 @@
        Sin gCorte, la c de siempre. Las sintéticas NO lo usan (ADR 0039
        «Parámetros»): la realización no depende del equipo. */
     var omegaGaia = Math.PI * (CFG.gaiaFwhmAs / 2) * (CFG.gaiaFwhmAs / 2);
+    /* #624: dos sigmoides en producto, no una con m50 = min(campo, crowding).
+       La del crowding tiene cola propia (gaiaAnchoCrowding): con la del campo
+       abierto (0,4) la cola caía a 0,6× la Tabla A.1 donde esta da
+       1-30 %. Continua en r: lejos del núcleo mCrowd → ∞ y el factor vale 1. */
     function completitud(m, rAs, gCorte) {
-      var m50 = Math.min(CFG.gaiaM50, mCrowd(rAs, omegaGaia, CFG.gaiaCrowdingK));
-      var c = 1 / (1 + Math.pow(10, (m - m50) / CFG.gaiaAncho));
+      var mC = mCrowd(rAs, omegaGaia, CFG.gaiaCrowdingK);
+      var c = 1 / (1 + Math.pow(10, (m - CFG.gaiaM50) / CFG.gaiaAncho));
+      if (mC < Infinity) c /= 1 + Math.pow(10, (m - mC) / CFG.gaiaAnchoCrowding);
       if (!(gCorte < Infinity)) return c;
       var g = m + R.gMenosV(bprp(m - dm));
       return c * Math.max(0, Math.min(1, (gCorte - g) / lf.paso + 0.5));
