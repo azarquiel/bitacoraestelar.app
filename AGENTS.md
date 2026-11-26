@@ -11,6 +11,7 @@ Lo específico de Claude va en `CLAUDE.md`.
 - Rojos conocidos: `ESPERADOS` en `scripts/bateria.js`, cada uno con su issue. `main` tiene que estar en verde salvo esos. Un rojo nuevo se arregla o se registra ahí con ticket; nunca se ignora. Nunca `gh pr merge --admin` ni push directo a `main` para saltarse un check: `main` está protegida y esos dos atajos son los únicos que la esquivan.
 
 - Prerregistros: un listón con tolerancia estadística tiene que rechazar el fallo que busca. Antes de fijarlo, calcula qué valor daría el caso malo (p. ej. un doble conteo completo) y comprueba que el listón no lo deja pasar (ADR 0039, criterio 3 de `simulador_ocular/docs/adr/0039-la-fusion-del-blending-en-globulares.md`).
+- Cifras de un ADR: cada una sale de un fichero versionado (`docs/validacion/`, un test o un `scripts/spike_*.js`), nunca de `.scratch/` (está en `.gitignore`). Si sale de un commit revertido, el ADR da su SHA y la orden exacta (#624).
 
 ## Arquitectura y estilo
 

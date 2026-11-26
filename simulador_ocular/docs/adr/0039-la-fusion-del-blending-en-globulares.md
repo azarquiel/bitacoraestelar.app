@@ -1101,6 +1101,119 @@ El camino 2 en producción es pedir `ruwe` a Gaia (proxy, banco, Avance) y
 pasar a `pintarCumulo` solo las filas con el criterio. Ningún guardián del
 render cambia en esta historia: el código de producción no se ha tocado.
 
+## La cola de `c` en el borde del corte (#624, 2026-11-26)
+
+Sale de #621: en ≤1 (0,5-1 r_h), V 18,07-19,07, cat/`num·c` = 193 / 87,2 =
+**2,21 ± 0,11**, y ese rango es todo el residuo de R2v de ≤1 (ΔR2v = +0,024).
+
+### Atribución (AC1)
+Medido con el fixture de #621 (miembros, criterio 5/6p + BP−RP): 196 filas en
+el rango (193 en el arnés, que reparte por bordes de bin).
+`node scripts/spike_624_borde.js`, salida en
+`simulador_ocular/docs/validacion/spike_624_borde.txt`. El barrido de
+`gaiaAnchoCrowding` contra la Tabla A.1 se hizo con el código de 2a4f5e7.
+
+- **(a) Corte G → V.** El color del bin de la LF da G − V = −0,132 (BP−RP
+  0,75, secuencia principal); las filas, mediana −0,129 (p10-p90 −0,175 a
+  −0,095). El error de color es de 0,003 mag. Quitar el corte entero sube el
+  modelo de 87,2 a 93,9; integrar el corte dentro del bin en vez de en su
+  centro, a 92,7. **(a) explica ≤ 7 de las 106 filas de exceso.**
+- **(c) `num`.** El mismo rango de V fuera del crowding sale por debajo, no
+  por encima: ≤2 0,838 ± 0,026 y ≤4 0,918 ± 0,029. Un `num` alto en 18-19
+  que diera 2,21 en ≤1 daría > 2 también ahí. **(c) no explica nada** (el
+  signo es el contrario; ese déficit es #615).
+- **(b) Crowding en el borde.** El cociente sube cuando `c` baja, en una
+  rejilla r × V dentro del anillo (obs / modelo, `c` media):
+  0,85-1 r_h, V 18,07-18,3: 1,21 (c 0,21); 0,7-0,85, 18,07-18,3: 1,99 (c 0,07);
+  0,7-0,85, 18,3-18,5: 4,58 (c 0,02); 0,85-1, 18,5-19,07: 4,75 (c 0,005). Es
+  la firma de una cola de `c(m)` demasiado estrecha: con `gaiaAncho = 0,4`,
+  `c` cae ×316 por magnitud pasado el codo del crowding. Lo confirma el ancla
+  externa: en la Tabla A.1 sin M13, donde la tabla da 1-30 % y G ≤ 19, la
+  mediana de c_modelo/c_tabla es **0,60** (33 celdas), y en M13 «out»
+  G 17-19 el modelo da 7,3 % contra 16 % y en G 18-20 0,9 % contra 4 %.
+  **(b) explica el resto: ≈ 99 de las 106 filas.** No es k (el codo):
+  con k = 75, el sesgo del conjunto es −0,4 puntos y el 17-18 de ≤1 da 1,069.
+  Es la forma de la cola.
+
+### Arreglo
+`completitud` pasa de una sigmoide con `m50 = min(gaiaM50, m_crowd)` a dos
+en producto: la del campo abierto (`gaiaM50 = 20`, `gaiaAncho = 0,4`, sin
+tocar) por la del crowding (codo `m_crowd`, cola **`gaiaAnchoCrowding`**).
+Lejos del núcleo `m_crowd` → ∞ y el factor vale 1: continua en r
+(invariante 7). k = 75 no se mueve.
+
+**Ancla.** `gaiaAnchoCrowding` es el valor que hace 1 la mediana de
+c_modelo/c_tabla en las 33 celdas de la Tabla A.1 sin M13 con tabla 1-30 % y
+G ≤ 19 (barrido en pasos de 0,1-0,4): 1,0 → 0,47 sin separar G; separando,
+1,2 → **0,96**, 1,6 → 1,33. Se fija **1,2**. Dentro de muestra para el
+conjunto; M13 queda fuera del ajuste y su rms (criterio B) baja de 7,6 a 5,8
+puntos. El sesgo A pasa de −0,44 a −1,08 (listón ±3). Lo fijaba, en
+2a4f5e7, el criterio C de `scripts/test_completitud_fabricius.js` (caso malo
+0,4 → 0,60); se retiró con el arreglo.
+
+**Lo que no arregla.** Las celdas de G > 19 siguen bajas (mediana 0,31 con
+1,2) con cualquier ancho del crowding: es el codo del campo abierto
+(`gaiaM50`, `gaiaAncho`). No afecta al fixture (G ≤ 18,5) y queda fuera.
+
+### Prerregistro (AC2, escrito ANTES de correr el arnés con el arreglo)
+**Medida.** Atribución del arnés (`--atribucion`), anillo ≤1, rango V
+18,07-19,07: cat/`num·c`, ±1σ de la columna del arnés (σ = 1/√(∫Σ·num·c),
+Poisson del modelo).
+
+**Listón.** Pasa si |cat/`num·c` − 1| ≤ 2σ.
+- Caso malo: la cola estrecha (`--ancho-crowding 0.4`) tiene que reproducir
+  el 2,21 ± 0,11 de #621. Está a 11σ de 1: el listón lo rechaza.
+- Caso bueno: 1 pasa por construcción.
+
+**Lo que ya se había visto** (ADR 0005, se declara). La rejilla de la
+atribución y M13 «out» G 17-19 en la Tabla A.1 (0,99 con 1,2). El arnés no se
+ha corrido con el arreglo.
+
+**Además, sin mover listones:** R2v de ≤1 contra su listón de §0 quater, y
+≤1 17-18 contra el de #621 (`test_criterio_recuento.js`).
+
+**Prohibido** (ticket): cifras de estrellas dibujadas; ajustar
+`gaiaAnchoCrowding` o k al arnés de M13; mover listón o tramo tras correr;
+ampliar el fixture más allá de G 18,5.
+
+### Resultado (AC3, `simulador_ocular/docs/validacion/fusion_blending_624.txt`)
+`git checkout 2a4f5e7 && node scripts/harness_fusion_blending.js --atribucion`
+(`gaiaAnchoCrowding = 1,2`); con `--ancho-crowding 0.4`, el caso malo
+(`fusion_blending_624_cola04.txt`).
+
+**Listón de AC2: NO PASA, por el otro lado.** ≤1, V 18,07-19,07:
+cat/`num·c` = 193 / 453,5 = **0,426 ± 0,047** (−12σ). Caso malo
+(`--ancho-crowding 0.4`): 2,214 ± 0,107, el de #621 byte a byte; el listón
+lo rechaza.
+
+| medida (≤1) | #621 | #624 (1,2) | listón |
+|---|---|---|---|
+| cat/`num·c` 18-19 | 2,214 ± 0,107 | **0,426 ± 0,047** | NO PASA |
+| cat/`num·c` 17-18 (#621) | 1,069 ± 0,046 | 0,919 ± 0,043 | pasa (1,9σ) |
+| R2v (§0 quater) | 1,024 (2σ 0,004) | **0,945** (2σ 0,010) | NO PASA |
+| conservación | 0,926 | 0,918 | pasa |
+| p95 pregunta 5 | 0,094 | **0,100** | NO PASA (antes pasaba) |
+
+**Dónde se pasa** (rejilla r × V, obs / modelo; `spike_624_borde.js` sobre
+2a4f5e7): 0,5-0,7 r_h 0,05-0,18;
+0,7-0,85 r_h 0,03-0,49; 0,85-1 r_h 0,53-0,69. El defecto se invierte donde el
+crowding es más hondo. Con la cola de 0,4 el modelo cae demasiado deprisa en
+m; con la de 1,2, `c` sube demasiado en el radio interior. Una sola cola no
+reproduce a la vez la Tabla A.1 (que pide 1,2) y el gradiente radial de M13
+dentro de 1 r_h. Dentro de M13 la tabla ya lo apuntaba: con 1,2, «core»
+G 16-18 sale 0,43× y «out» G 18-20 1,37×.
+
+**Veredicto (#624).** La atribución vale: el exceso es de (b), la forma de
+`c` en el crowding, no del corte ni de `num`. El arreglo de una constante
+no vale. **No pasa a producción: el código vuelve a `main`**
+(`gaiaAnchoCrowding`, el test C y `--ancho-crowding` se retiran). El
+prerregistro prohíbe ajustar la cola al arnés.
+
+**Siguiente.** Hacen falta dos grados de libertad en `c(m, r)` (codo y cola
+juntos, o la cola en función de la densidad) ajustados a la Tabla A.1 sin
+M13, con M13 y este arnés fuera de muestra. El listón de AC2 se reutiliza tal
+cual.
+
 ## 0 ter. Tercer prerregistro: listón de conservación (#597, 2026-11-20, escrito ANTES de medir con las correcciones)
 
 Sustituye **solo** el listón de la conservación contra el modelo de §0 bis.
